@@ -23,13 +23,15 @@ if [ ! -f node_modules/@novnc/novnc/core/rfb.js ] || [ ! -d node_modules/ws ] ||
 fi
 
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "⚠️  端口 $PORT 已被占用（可能已在运行）。"
-  echo "    如需重启：先 Ctrl+C 或结束旧进程，再重新双击本脚本。"
+  echo "✅ 码境 CodeScope 已在运行（端口 $PORT），直接打开页面…"
+  ( sleep 0.6; open "http://127.0.0.1:$PORT" ) &
   read -r -p "按回车退出"
-  exit 1
+  exit 0
 fi
 
 echo "启动码境 CodeScope（前台运行，Ctrl+C 停止）"
 echo "页面：http://127.0.0.1:$PORT"
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)"
+[ -n "$LAN_IP" ] && echo "局域网：http://$LAN_IP:$PORT（同一 Wi-Fi 下其他设备可访问）"
 ( sleep 1.2; open "http://127.0.0.1:$PORT" ) &
 exec node server.js

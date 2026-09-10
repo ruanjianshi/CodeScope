@@ -53,6 +53,7 @@ if not defined CODESCOPE_PORT set "CODESCOPE_PORT=4877"
 set "PORT=%CODESCOPE_PORT%"
 echo 启动码境 CodeScope（前台运行，Ctrl+C 停止）
 echo 页面：http://127.0.0.1:%PORT%
+echo 局域网：http://<本机IP>:%PORT% （同一局域网下其他设备可访问；本机 IP 用 ipconfig 查看）
 start "" "http://127.0.0.1:%PORT%"
 
 node server.js

@@ -536,6 +536,7 @@
   .latex-preview-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; color: var(--dim); text-align: center; }
   .latex-preview-error { flex: none; display: none; max-height: 38%; overflow: auto; margin: 0; padding: 10px 12px; color: #ffb4b4; background: #21171a; border-top: 1px solid rgba(255,90,90,.28); font: 11px/1.55 var(--mono); white-space: pre-wrap; }
   .latex-preview-error.only { display: block; flex: 1; max-height: none; border-top: 0; }
+  .html-preview-frame { width:100%; height:100%; border:0; background:#fff; display:block; }
   #resource-viewer { display: none; flex: 1; min-height: 0; margin: 10px 14px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--panel2); overflow: hidden; flex-direction: column; }
   #resource-head { flex: none; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
   #resource-head .name { font-weight: 600; }
@@ -1390,6 +1391,15 @@
   #tabs { gap:2px; padding:7px 12px 0; border-bottom:1px solid var(--border); background:#10151c; overflow-x:auto; }
   .tab { position:relative; min-height:34px; padding:7px 12px 8px; border:none; border-radius:6px 6px 0 0; background:transparent; box-shadow:none; color:#7f8a9b; white-space:nowrap; }
   .tab:hover { background:rgba(255,255,255,.035); border-color:transparent; color:#cbd5e1; }
+  .tab .frag-ren { opacity:0; margin-left:6px; cursor:pointer; font-size:11px; transition:opacity .12s; user-select:none; }
+  .tab:hover .frag-ren { opacity:.75; }
+  .tab .frag-ren:hover { opacity:1; color:#ffb454; }
+  .tab .frag-lang { cursor:pointer; border-bottom:1px dashed rgba(255,255,255,.28); }
+  .tab .frag-lang:hover { color:#7dd3fc; }
+  .tab .frag-lang-sel { font-size:11px; background:#1a1f29; color:#cbd5e1; border:1px solid #3b4453; border-radius:4px; padding:0 2px; }
+  .tab .frag-del { opacity:0; margin-left:5px; cursor:pointer; font-size:12px; transition:opacity .12s; user-select:none; }
+  .tab:hover .frag-del { opacity:.75; }
+  .tab .frag-del:hover { opacity:1; color:#ff6b6b; }
   .tab.active { background:#19202a; color:#eef3f9; }
   .tab.active::after { content:''; position:absolute; left:10px; right:10px; bottom:0; height:2px; border-radius:2px 2px 0 0; background:var(--accent); }
   .tab.add-frag-tab { border-style: dashed !important; color: var(--dim); font-size: 12px; }
@@ -2549,13 +2559,16 @@ function confirmLeaveEdit() {
 
 async function api(path, body) {
   let response;
+  // 统一 65 秒超时：服务无响应（例如旧服务进程已僵死）时明确报错返回，
+  // 而不是让界面永久停在“编译中…/运行中…”等状态。
+  const opts = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined;
   try {
-    response = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
-  } catch (error) {
-    try { response = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined); }
-    catch (error2) {
-      return { ok:false, networkError:true, error:'无法连接 CodeScope 后端（' + String((error2&&error2.message)||error2) + '）。请确认码境服务仍在运行（原启动终端未被关闭），然后刷新页面重试。' };
-    }
+    response = await fetch(path, Object.assign({}, opts, { signal: AbortSignal.timeout(120000) }));
+  } catch (error2) {
+    const timedOut = /aborted|timeout/i.test(String((error2 && error2.name) || '') + ' ' + String((error2 && error2.message) || ''));
+    return { ok:false, networkError:true, error: timedOut
+      ? '请求超时（后端 ' + path + ' 120 秒无响应），可能是服务已卡死或文档编译过慢。请刷新页面；若仍超时，重启码境服务。'
+      : '无法连接 CodeScope 后端（' + String((error2&&error2.message)||error2) + '）。请确认码境服务仍在运行（原启动终端未被关闭），然后刷新页面重试。' };
   }
   const text = await response.text();
   let data;
@@ -8101,8 +8114,28 @@ function renderCode() {
   s.fragments.forEach((f, i) => {
     const t = document.createElement('button');
     t.className = 'tab' + (i === CINDEX ? ' active' : '');
-    t.textContent = `${f.label || ('片段 ' + (i + 1))} · ${f.language}`;
-    t.title = '文件: ' + f.filename + '\n拖到编辑区可并排打开' + (s.fragments.length > 1 ? '\n拖到其他标签可调整片段顺序' : '');
+    const lb = document.createElement('span');
+    lb.textContent = (f.label || ('片段 ' + (i + 1))) + ' · ';
+    t.appendChild(lb);
+    const lv = document.createElement('span');
+    lv.className = 'frag-lang';
+    lv.textContent = f.language || 'plain_text';
+    lv.title = '点击修改片段类型';
+    lv.onclick = (ev) => { ev.stopPropagation(); openLangPicker(s, f, i, lv); };
+    t.appendChild(lv);
+    const fr = document.createElement('span');
+    fr.className = 'frag-ren';
+    fr.textContent = '\u270e';
+    fr.title = '重命名片段';
+    fr.onclick = (ev) => { ev.stopPropagation(); renameFragment(s.file, f.id, i); };
+    t.appendChild(fr);
+    const del = document.createElement('span');
+    del.className = 'frag-del';
+    del.textContent = '\u00d7';
+    del.title = '删除片段';
+    del.onclick = (ev) => { ev.stopPropagation(); deleteFragment(s.file, f.id, i, f.label || ('片段 ' + (i + 1))); };
+    t.appendChild(del);
+    t.title = '文件: ' + f.filename + '\n悬停 ✎ 重命名 · × 删除 · 点击语言改类型\n拖到编辑区可并排打开' + (s.fragments.length > 1 ? '\n拖到其他标签可调整片段顺序' : '');
     t.onclick = () => {
       const openGroup=SPLIT_EDITORS.findIndex((entry)=>entry.file===s.file&&entry.fragment===i);
       if(openGroup>=0){promoteSplitEditor(openGroup);return;}
@@ -8190,6 +8223,74 @@ function renderCode() {
   updateNavigationButtons();
   refreshReadingPanels();
   applyMdView();
+}
+
+// 重命名单个片段（label）：不动文件名、不动其它片段；同步正文 Fragment 标题 + state.json
+async function renameFragment(file, fragId, idx) {
+  const sn = SNIPPETS && SNIPPETS.find((x) => x.file === file);
+  if (!sn || !sn.fragments[idx]) return;
+  const old = sn.fragments[idx].label || ('片段 ' + (idx + 1));
+  const name = window.prompt('重命名片段：', old);
+  if (name === null) return;
+  const label = name.trim();
+  if (!label) { setStatus('err', '片段名不能为空'); return; }
+  if (label === old) return;
+  const r = await api('/api/fs/update', { file, fragmentId: fragId, label });
+  if (!r.ok) { setStatus('err', r.error || '重命名失败'); return; }
+  await refresh();
+  // refresh() 非静默分支不更新 CURRENT；这里从新数据重取，确保 tabs / 代码区用新 label 渲染
+  const n = SNIPPETS && SNIPPETS.find((x) => x.file === file);
+  if (n) { CURRENT = n; CINDEX = Math.min(idx, n.fragments.length - 1); renderMain(); }
+  setStatus('ok', '片段已重命名为「' + (r.label || label) + '」');
+}
+
+// 修改片段类型：在标签语言处点开内联下拉，选择后立即生效
+async function openLangPicker(s, f, idx, langSpan) {
+  if (!langSpan || langSpan.querySelector('select')) return;
+  const sel = document.createElement('select');
+  sel.className = 'frag-lang-sel';
+  sel.title = '修改片段类型';
+  const cur = f.language || 'plain_text';
+  for (const l of ND_LANGS) {
+    const o = document.createElement('option');
+    o.value = l; o.textContent = l;
+    if (l === cur) o.selected = true;
+    sel.appendChild(o);
+  }
+  langSpan.textContent = '';
+  langSpan.appendChild(sel);
+  sel.onclick = (ev) => ev.stopPropagation();
+  const finish = async (changed) => {
+    if (changed && sel.value !== cur) {
+      const r = await api('/api/fs/update', { file: s.file, fragmentId: f.id, language: sel.value });
+      if (!r.ok) { setStatus('err', r.error || '修改类型失败'); renderMain(); return; }
+      await refresh();
+      const n = SNIPPETS && SNIPPETS.find((x) => x.file === s.file);
+      if (n) { CURRENT = n; CINDEX = Math.min(idx, n.fragments.length - 1); renderMain(); }
+      setStatus('ok', '片段类型已改为 ' + r.language);
+    } else {
+      renderMain();
+    }
+  };
+  sel.addEventListener('change', () => finish(true));
+  sel.addEventListener('blur', () => { if (sel.parentNode) finish(false); });
+  sel.focus();
+}
+
+// 删除片段：确认弹窗 → 后端删除（正文段 + frontmatter + state.json）→ 刷新
+function deleteFragment(file, fragId, idx, label) {
+  openConfirm({
+    title: '删除片段',
+    message: '确定删除片段「' + label + '」？\n将同时从文件中移除对应代码块，不可恢复。',
+    onOk: async () => {
+      const r = await api('/api/fs/delfragment', { file, fragmentId: fragId });
+      if (!r.ok) { setStatus('err', r.error || '删除失败'); return; }
+      await refresh();
+      const n = SNIPPETS && SNIPPETS.find((x) => x.file === file);
+      if (n) { CURRENT = n; CINDEX = Math.max(0, Math.min(idx, n.fragments.length - 1)); renderMain(); }
+      setStatus('ok', '已删除片段「' + label + '」');
+    },
+  });
 }
 
 // 只读按钮（固定标签）：默认可编辑（不高亮）；点击进入只读状态并高亮，再点击退出只读
@@ -8444,7 +8545,7 @@ function applyMdView() {
     $('md-view').style.display = 'none';
     $('md-view').innerHTML = '';
     $('code-wrap').style.display = '';          /* 关键：编辑时必须显示编辑器（否则 markdown 编辑会整个不可见） */
-    const split = f && (f.language === 'markdown' || f.language === 'latex') && !SPLIT_EDITORS.length;
+    const split = f && (f.language === 'markdown' || f.language === 'latex' || f.language === 'html') && !SPLIT_EDITORS.length;
     applyEditSplit(split);
     if (split) {
       updateEditPreview();
@@ -8472,6 +8573,31 @@ function applyEditSplit(splitMode) {
 }
 
 let LATEX_TIMER = 0, LATEX_SEQ = 0, LATEX_PDF_URL = '', LATEX_LAST_OK = '';
+let HTML_PREVIEW_TIMER = 0;
+
+// HTML 预览容器：右上渲染 iframe（srcdoc 直接跑用户代码；脚本/弹窗/表单可用，不共享父页面源）
+function ensureHtmlPreview() {
+  const p = $('edit-preview');
+  if (p.dataset.mode === 'html') return;
+  p.dataset.mode = 'html';
+  p.classList.remove('latex-preview', 'md-doc');
+  p.innerHTML = '<iframe id="html-preview-frame" class="html-preview-frame" title="HTML 渲染预览" sandbox="allow-scripts allow-modals allow-forms allow-popups allow-same-origin"></iframe>';
+}
+function updateHtmlPreview() {
+  const p = $('edit-preview');
+  const f = CURRENT && CURRENT.fragments[CINDEX];
+  if (!p || p.dataset.mode !== 'html' || !f || f.language !== 'html') return;
+  const frame = document.getElementById('html-preview-frame');
+  if (!frame) return;
+  const src = editText();
+  if (frame.__src === src) return;   // 内容没变不复建 iframe（避免每次击键都整页重载）
+  frame.__src = src;
+  frame.srcdoc = src;
+}
+function scheduleHtmlPreview() {
+  clearTimeout(HTML_PREVIEW_TIMER);
+  HTML_PREVIEW_TIMER = setTimeout(updateHtmlPreview, 100);
+}
 
 function ensureLatexPreview() {
   const p = $('edit-preview');
@@ -8556,12 +8682,18 @@ async function compileLatexPreview(force) {
 function updateEditPreview() {
   const p = $('edit-preview');
   const f = CURRENT && CURRENT.fragments[CINDEX];
-  if (!EDITING || !f || (f.language !== 'markdown' && f.language !== 'latex')) { p.style.display = 'none'; return; }
+  if (!EDITING || !f || (f.language !== 'markdown' && f.language !== 'latex' && f.language !== 'html')) { p.style.display = 'none'; return; }
   if (MM_ACTIVE) { p.style.display = 'none'; return; }   /* 导图模式下不弹预览，避免三窗口 */
   if (f.language === 'latex') {
     ensureLatexPreview();
     p.style.display = 'flex';
     scheduleLatexCompile(LATEX_PDF_URL ? 650 : 80);
+    return;
+  }
+  if (f.language === 'html') {
+    ensureHtmlPreview();
+    p.style.display = 'block';
+    scheduleHtmlPreview();
     return;
   }
   p.dataset.mode = 'markdown';

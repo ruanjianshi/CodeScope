@@ -23,8 +23,8 @@ const APP_VERSION = require('./package.json').version;
 
 const PORT_VALUE = Number(process.env.CODESCOPE_PORT || process.env.MASSCODE_RUNNER_PORT || 4877);
 const PORT = Number.isInteger(PORT_VALUE) && PORT_VALUE > 0 && PORT_VALUE <= 65535 ? PORT_VALUE : 4877;
-// 默认仅本机访问；显式设置 CODESCOPE_HOST=0.0.0.0 时允许局域网访问。
-const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
+// 默认监听所有网卡（允许局域网内其他设备访问）；如需仅本机使用，显式设置 CODESCOPE_HOST=127.0.0.1。
+const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '0.0.0.0';
 
 /* ---------------------------------- 路径发现 ---------------------------------- */
 
@@ -318,13 +318,26 @@ function deploymentInfo(env, requiredKeys) {
 }
 
 let envCache = null;
-async function detectEnv() {
+const NET_PROBE_FAIL = {};   // 网络型工具（Draw.io 等）探测失败时间戳，短缓存避免反复等待超时
+async function detectEnv({ skipNet } = {}) {
   const project = projectToolKeys();
   const results = await Promise.all(TOOLS.map(async (t) => {
     const started = Date.now();
     if (t.probeUrl) {
+      if (skipNet) {
+        // 本地模式下不访问网络：在线编辑器状态按需在刷新时探测
+        return { key:t.key, label:t.label, for:t.for, group:t.group, available:true, installed:true,
+          required:project.keys.has(t.key), version:'在线编辑（按需检测）', minVersion:'',
+          issue:'', path:t.probeUrl, elapsedMs:0, installable:false };
+      }
+      if (NET_PROBE_FAIL[t.key] && Date.now() - NET_PROBE_FAIL[t.key] < 120000) {
+        return { key:t.key, label:t.label, for:t.for, group:t.group, available:false, installed:false,
+          required:project.keys.has(t.key), version:'', minVersion:'',
+          issue:'无法连接 embed.diagrams.net（' + (t.probeUrl||'').replace(/^https?:\/\//, '') + '，2 分钟内不再重试）',
+          path:t.probeUrl, elapsedMs:0, installable:false };
+      }
       try {
-        const response = await fetch(t.probeUrl, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(8000) });
+        const response = await fetch(t.probeUrl, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(3000) });
         try { if (response.body) await response.body.cancel(); } catch (_) {}
         const available = response.ok;
         return {
@@ -334,6 +347,7 @@ async function detectEnv() {
           path:t.probeUrl, elapsedMs:Date.now()-started, installable:false,
         };
       } catch (error) {
+        NET_PROBE_FAIL[t.key] = Date.now();
         return {
           key:t.key, label:t.label, for:t.for, group:t.group, available:false, installed:false,
           required:project.keys.has(t.key), version:'', minVersion:'',
@@ -368,7 +382,9 @@ async function detectEnv() {
   return { tools: map, project };
 }
 async function getEnv(force) {
-  if (force || !envCache) envCache = await detectEnv();
+  // 默认只做本地工具探测（无网络请求）：运行/编译各入口调用频繁，绝不能被 drawio 等
+  // 在线探测的网络超时拖慢。网络型工具仅在 force（环境检测界面点刷新）时探测。
+  if (force || !envCache) envCache = await detectEnv({ skipNet: !force });
   return envCache;
 }
 
@@ -847,7 +863,7 @@ const LATEX_RESOURCE_FILE_LIMIT = 32 * 1024 * 1024;
 const LATEX_RESOURCE_TOTAL_LIMIT = 96 * 1024 * 1024;
 
 // 在独立临时目录编译 LaTeX，并禁用 shell escape。额外拦截显式绝对路径/上级目录引用。
-function copyLatexResources(sourceFile, targetDir) {
+async function copyLatexResources(sourceFile, targetDir) {
   const result = { copied: 0, bytes: 0, skipped: [] };
   if (!sourceFile) return result;
   const codeRoot = path.resolve(path.join(vaultPath(), 'code'));
@@ -856,44 +872,58 @@ function copyLatexResources(sourceFile, targetDir) {
   const sourceDir = path.dirname(resolved);
   const allowed = new Set(['.tex', '.sty', '.cls', '.bib', '.bst', '.csv', '.png', '.jpg', '.jpeg', '.pdf', '.eps', '.otf', '.ttf', '.ttc']);
   let total = 0;
-  const copyDir = (from, to, depth) => {
+  // 全程异步 fs：云盘（iCloud 等）目录枚举/stat 也可能同步挂起主线程从而卡死整个服务，
+  // 一律交给 libuv 线程池执行，任何文件系统卡顿只影响当前请求（由外层超时兜底）。
+  const copyDir = async (from, to, depth) => {
     if (depth > 4) return;
     let entries = [];
-    try { entries = fs.readdirSync(from, { withFileTypes: true }); } catch (_) { return; }
+    try { entries = await fs.promises.readdir(from, { withFileTypes: true }); } catch (_) { return; }
     for (const entry of entries) {
       if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
       const src = path.join(from, entry.name), dst = path.join(to, entry.name);
-      if (entry.isDirectory()) { fs.mkdirSync(dst, { recursive: true }); copyDir(src, dst, depth + 1); continue; }
+      if (entry.isDirectory()) { try { await fs.promises.mkdir(dst, { recursive: true }); } catch (_) {} await copyDir(src, dst, depth + 1); continue; }
       if (!entry.isFile() || !allowed.has(path.extname(entry.name).toLowerCase())) continue;
-      let size = 0; try { size = fs.statSync(src).size; } catch (_) { continue; }
+      let size = 0; try { size = (await fs.promises.stat(src)).size; } catch (_) { continue; }
       const relative = path.relative(sourceDir, src).split(path.sep).join('/');
       if (size > LATEX_RESOURCE_FILE_LIMIT) { result.skipped.push(relative + '（单文件超过 32 MB）'); continue; }
       if (total + size > LATEX_RESOURCE_TOTAL_LIMIT) { result.skipped.push(relative + '（工程资源总量超过 96 MB）'); continue; }
-      fs.copyFileSync(src, dst); total += size; result.copied++;
+      // 异步复制：云盘文件若未下载到本地，pread 会挂起——挂在 libuv 线程池线程上，
+      // 而不是主线程，服务其余请求不受影响。同时给单文件复制加 10 秒硬超时：
+      // 云盘资源长期拉不下来就直接跳过该资源继续编译，编译请求必须会结束，
+      // 绝不会无限等待（前端请求因此不会再被拖到超时）。
+      try {
+        await Promise.race([
+          fs.promises.copyFile(src, dst),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('copy timeout')), 10000)),
+        ]);
+        total += size; result.copied++;
+      }
+      catch (_) { result.skipped.push(relative + '（复制超时或失败）'); }
     }
   };
-  copyDir(sourceDir, targetDir, 0);
+  await copyDir(sourceDir, targetDir, 0);
   result.bytes = total;
   return result;
 }
 
 const LATEX_BIB_CACHE = new Map();
-function latexBibliographyKey(dir, sourceFile, code) {
+async function latexBibliographyKey(dir, sourceFile, code) {
   const parts = [String(sourceFile || '')];
   const commands = String(code || '').match(/\\(?:addbibresource|bibliography|bibliographystyle|nocite|[A-Za-z]*cite[A-Za-z]*)\*?(?:\[[^\]]*\])?\{[^}]*\}/g) || [];
   parts.push(commands.join('|'));
-  const walk = (folder) => {
-    let entries = []; try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch (_) { return; }
+  const walk = async (folder) => {
+    let entries = [];
+    try { entries = await fs.promises.readdir(folder, { withFileTypes: true }); } catch (_) { return; }
     for (const entry of entries) {
       const full = path.join(folder, entry.name);
-      if (entry.isDirectory()) walk(full);
+      if (entry.isDirectory()) await walk(full);
       else if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.bib') {
         // 资源每次都会复制进新的临时目录，mtime 会随复制而变化；按内容计算才能稳定命中缓存。
-        try { parts.push(path.relative(dir, full) + ':' + fs.readFileSync(full, 'utf8')); } catch (_) {}
+        try { parts.push(path.relative(dir, full) + ':' + await fs.promises.readFile(full, 'utf8')); } catch (_) {}
       }
     }
   };
-  walk(dir);
+  await walk(dir);
   let hash = 5381, joined = parts.sort().join('|');
   for (let i = 0; i < joined.length; i++) hash = ((hash * 33) ^ joined.charCodeAt(i)) >>> 0;
   return hash.toString(36);
@@ -912,8 +942,8 @@ async function compileLatex(code, sourceFile) {
   const source = path.join(dir, 'main.tex');
   const pdf = path.join(dir, 'main.pdf');
   const cmd = latexCmd();
-  const copiedResources = copyLatexResources(sourceFile, dir);
-  const bibKey = latexBibliographyKey(dir, sourceFile, code), cachedBbl = LATEX_BIB_CACHE.get(bibKey);
+  const copiedResources = await copyLatexResources(sourceFile, dir);
+  const bibKey = await latexBibliographyKey(dir, sourceFile, code), cachedBbl = LATEX_BIB_CACHE.get(bibKey);
   if (cachedBbl) fs.writeFileSync(path.join(dir, 'main.bbl'), cachedBbl);
   fs.writeFileSync(source, code, 'utf8');
   const started = Date.now();
@@ -1764,10 +1794,16 @@ async function streamRemoteDownload(res, body) {
 let GIT_ROOT = null;   // 缓存仓库根（vault 所在 git 仓库，通常在其上级目录）
 function gitRoot() {
   if (GIT_ROOT) return GIT_ROOT;
-  try {
-    const out = execFileSync('git', ['-C', vaultPath(), 'rev-parse', '--show-toplevel'], { encoding: 'utf8', timeout: 10000 }).trim();
-    return (GIT_ROOT = out) || null;
-  } catch (_) { return null; }
+  // 纯文件系统探测：向上查找 .git（目录或 worktree 指针文件），不执行任何 git 命令，
+  // 避免同步命令在云盘大仓库上卡住拖死整个服务。
+  let dir = vaultPath();
+  for (let i = 0; i < 8; i++) {
+    try { if (fs.existsSync(path.join(dir, '.git'))) return (GIT_ROOT = dir); } catch (_) {}
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
 function gitRun(args, timeout) {
   const root = gitRoot();
@@ -1778,12 +1814,39 @@ function gitRun(args, timeout) {
     });
   });
 }
-function gitStatus() {
+// git 命令执行器：spawn 异步执行 + 硬超时。子进程即使卡死（例如云盘文件 IO 不可中断），
+// 超时一到也立即 resolve 返回，绝不阻塞 Node 事件循环（同步 execFileSync 无法做到这一点）。
+function runGit(args, opts = {}) {
+  const { cwd, timeout = 15000 } = opts;
+  return new Promise((resolve) => {
+    let cp;
+    try { cp = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    catch (e) { return resolve({ err: e, stdout: '', stderr: '' }); }
+    let stdout = '', stderr = '', done = false;
+    const finish = (err) => {
+      if (done) return; done = true;
+      clearTimeout(timer);
+      try { cp.kill('SIGKILL'); } catch (_) {}
+      resolve({ err, stdout, stderr });
+    };
+    const timer = setTimeout(() => finish(Object.assign(new Error('git 命令超时（' + timeout + 'ms）'), { code: 'ETIMEDOUT', killed: true })), timeout);
+    cp.stdout.on('data', (d) => { stdout += String(d); });
+    cp.stderr.on('data', (d) => { stderr += String(d); });
+    cp.on('error', (e) => finish(e));
+    cp.on('close', (code, signal) => {
+      if (done) return;
+      finish(code === 0 ? null : Object.assign(new Error('git 退出码 ' + code + (signal ? '（信号 ' + signal + '）' : '')), { code }));
+    });
+  });
+}
+async function gitStatus() {
   const root = gitRoot();
   if (!root) return { ok: false, error: '未找到 Git 仓库（vault 上级无 .git）' };
   try {
     // -z + core.quotepath=false：路径按 UTF-8 原样输出、NUL 分隔，避免中文被转义
-    const out = execFileSync('git', ['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-b', '-z'], { cwd: root, encoding: 'utf8', timeout: 15000 });
+    const g = await runGit(['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-b', '-z'], { cwd: root, timeout: 15000 });
+    if (g.err) throw g.err;
+    const out = g.stdout;
     const recs = out.split('\0').filter(Boolean);
     const changes = [];
     let branch = '', ahead = 0, behind = 0, upstream = '', remote = '', hasRemote = false;
@@ -1806,26 +1869,20 @@ function gitStatus() {
       else if (xy[0] === 'R') kind = 'renamed';
       changes.push({ status: xy.trim() || '?', idx: xy[0], wt: xy[1], path, kind });
     }
-    try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root, encoding: 'utf8', timeout: 10000 }).trim() || branch; } catch (_) {}
-    try { upstream = execFileSync('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { cwd: root, encoding: 'utf8', timeout: 10000 }).trim(); } catch (_) {}
-    try { const remotes=execFileSync('git', ['remote'], { cwd:root, encoding:'utf8', timeout:10000 }).trim().split(/\s+/).filter(Boolean);hasRemote=remotes.length>0;remote=upstream.includes('/')?upstream.split('/')[0]:(remotes[0]||''); } catch (_) {}
-    if(upstream){try{const counts=execFileSync('git',['rev-list','--left-right','--count','HEAD...'+upstream],{cwd:root,encoding:'utf8',timeout:10000}).trim().split(/\s+/);ahead=Number(counts[0])||0;behind=Number(counts[1])||0;}catch(_){}}
+    { const r = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root, timeout: 10000 }); if (!r.err) branch = r.stdout.trim() || branch; }
+    { const r = await runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { cwd: root, timeout: 10000 }); if (!r.err) upstream = r.stdout.trim(); }
+    { const r = await runGit(['remote'], { cwd: root, timeout: 10000 }); if (!r.err) { const remotes = r.stdout.trim().split(/\s+/).filter(Boolean); hasRemote = remotes.length > 0; remote = upstream.includes('/') ? upstream.split('/')[0] : (remotes[0] || ''); } }
+    if (upstream) { const r = await runGit(['rev-list', '--left-right', '--count', 'HEAD...' + upstream], { cwd: root, timeout: 10000 }); if (!r.err) { const counts = r.stdout.trim().split(/\s+/); ahead = Number(counts[0]) || 0; behind = Number(counts[1]) || 0; } }
     let lastCommit = null;
     let commits = [];
-    try {
-      const lg = execFileSync('git', ['log', '-1', '--format=%h%x09%s'], { cwd: root, encoding: 'utf8', timeout: 10000 }).trim();
-      const sp = lg.indexOf('\t');
-      lastCommit = sp >= 0 ? { hash: lg.slice(0, sp), subject: lg.slice(sp + 1) } : { hash: lg };
-    } catch (_) {}
-    try {
+    { const r = await runGit(['log', '-1', '--format=%h%x09%s'], { cwd: root, timeout: 10000 }); if (!r.err) { const lg = r.stdout.trim(); const sp = lg.indexOf('\t'); lastCommit = sp >= 0 ? { hash: lg.slice(0, sp), subject: lg.slice(sp + 1) } : { hash: lg }; } }
+    {
       // 最近 10 条提交记录：短hash|主题|时间戳
-      const lout = execFileSync('git', ['log', '--pretty=format:%H%x09%h%x09%s%x09%at', '-n', '10'], { cwd: root, encoding: 'utf8', timeout: 10000 }).trim();
-      let unpushed=new Set();if(upstream){try{unpushed=new Set(execFileSync('git',['rev-list','--left-only','HEAD...'+upstream],{cwd:root,encoding:'utf8',timeout:15000}).trim().split('\n').filter(Boolean));}catch(_){}}
-      if (lout) commits = lout.split('\n').map(line => {
-        const p = line.split('\t');
-        return { hash:p[0]||'', short:p[1]||'', subject:p[2]||'', ts:+(p[3]||0), pushed:upstream?!unpushed.has(p[0]):null };
-      });
-    } catch (_) {}
+      let unpushed = new Set();
+      if (upstream) { const u = await runGit(['rev-list', '--left-only', 'HEAD...' + upstream], { cwd: root, timeout: 15000 }); if (!u.err) unpushed = new Set(u.stdout.trim().split('\n').filter(Boolean)); }
+      const l = await runGit(['log', '--pretty=format:%H%x09%h%x09%s%x09%at', '-n', '10'], { cwd: root, timeout: 10000 });
+      if (!l.err && l.stdout.trim()) { const lout = l.stdout.trim(); commits = lout.split('\n').map(line => { const p = line.split('\t'); return { hash:p[0]||'', short:p[1]||'', subject:p[2]||'', ts:+(p[3]||0), pushed:upstream?!unpushed.has(p[0]):null }; }); }
+    }
     return { ok: true, root, branch, upstream, remote, hasRemote, ahead, behind, changes, lastCommit, commits };
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e) };
@@ -1842,23 +1899,24 @@ function safeGitPath(input) {
   return { root, full, relative: path.relative(root, full).split(path.sep).join('/') };
 }
 
-function unifiedTextDiff(before, after, beforeLabel, afterLabel) {
+async function unifiedTextDiff(before, after, beforeLabel, afterLabel) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-diff-'));
   const left = path.join(dir, 'before.txt'), right = path.join(dir, 'after.txt');
   try {
     fs.writeFileSync(left, String(before || ''), 'utf8');
     fs.writeFileSync(right, String(after || ''), 'utf8');
-    let output = '';
-    try {
-      output = execFileSync('git', ['diff', '--no-index', '--no-color', '--no-ext-diff', '--unified=3', '--', left, right], {
-        encoding: 'utf8', timeout: 15000, maxBuffer: 4 * 1024 * 1024,
-      });
-    } catch (e) {
-      // git diff 用退出码 1 表示“存在差异”，并非执行失败。
-      if (e && e.status === 1) output = String(e.stdout || '');
-      else throw e;
-    }
-    return output
+    const raw = await new Promise((resolve) => {
+      let out = '';
+      const cp = spawn('git', ['diff', '--no-index', '--no-color', '--no-ext-diff', '--unified=3', '--', left, right], { stdio: ['ignore', 'pipe', 'pipe'] });
+      const t = setTimeout(() => { try { cp.kill('SIGKILL'); } catch (_) {} }, 15000);
+      cp.stdout.on('data', (d) => { out += String(d); });
+      cp.stderr.on('data', () => {});
+      cp.on('error', (e) => { clearTimeout(t); resolve({ out, code: null, err: e }); });
+      cp.on('close', (code) => { clearTimeout(t); resolve({ out, code, err: null }); });
+    });
+    // git diff 用退出码 1 表示“存在差异”，并非执行失败。
+    if (raw.err && raw.code !== 1) throw raw.err;
+    return (raw.out || '')
       .split(left).join(beforeLabel || '旧版本')
       .split(right).join(afterLabel || '当前版本')
       .slice(0, 2 * 1024 * 1024);
@@ -1867,23 +1925,37 @@ function unifiedTextDiff(before, after, beforeLabel, afterLabel) {
   }
 }
 
-function gitFileDiff(input) {
+async function gitFileDiff(input) {
   const item = safeGitPath(input);
-  let tracked = true;
-  try { execFileSync('git', ['ls-files', '--error-unmatch', '--', item.relative], { cwd: item.root, stdio: 'ignore', timeout: 10000 }); }
-  catch (_) { tracked = false; }
+  let tracked = false;
+  {
+    const code = await new Promise((resolve) => {
+      const cp = spawn('git', ['ls-files', '--error-unmatch', '--', item.relative], { cwd: item.root, stdio: ['ignore', 'ignore', 'ignore'] });
+      const t = setTimeout(() => { try { cp.kill('SIGKILL'); } catch (_) {} }, 10000);
+      cp.on('error', () => { clearTimeout(t); resolve(null); });
+      cp.on('close', (c) => { clearTimeout(t); resolve(c); });
+    });
+    tracked = code === 0;
+  }
   let diff = '', binary = false;
   if (tracked) {
-    try {
-      diff = execFileSync('git', ['-c', 'core.quotepath=false', 'diff', '--no-color', '--no-ext-diff', '--unified=3', 'HEAD', '--', item.relative], {
-        cwd: item.root, encoding: 'utf8', timeout: 20000, maxBuffer: 4 * 1024 * 1024,
-      });
-    } catch (e) { throw new Error(String((e && e.stderr) || e.message || e).slice(0, 600)); }
+    const r = await new Promise((resolve) => {
+      let out = '';
+      const cp = spawn('git', ['-c', 'core.quotepath=false', 'diff', '--no-color', '--no-ext-diff', '--unified=3', 'HEAD', '--', item.relative], { cwd: item.root, stdio: ['ignore', 'pipe', 'pipe'] });
+      const t = setTimeout(() => { try { cp.kill('SIGKILL'); } catch (_) {} }, 20000);
+      cp.stdout.on('data', (d) => { out += String(d); });
+      cp.stderr.on('data', (d) => { out += String(d); });
+      cp.on('error', (e) => { clearTimeout(t); resolve({ out, code: null, err: e }); });
+      cp.on('close', (c) => { clearTimeout(t); resolve({ out, code: c, err: null }); });
+    });
+    if (r.err && r.code !== 1) throw new Error(String((r.err && r.err.message) || 'git diff 失败').slice(0, 600));
+    diff = r.out || '';
     binary = /^(?:Binary files .* differ|GIT binary patch)$/m.test(diff);
   } else if (fs.existsSync(item.full) && fs.statSync(item.full).isFile()) {
-    const data = fs.readFileSync(item.full);
+    let data = Buffer.alloc(0);
+    try { data = await fs.promises.readFile(item.full); } catch (_) { data = Buffer.alloc(0); }
     binary = data.includes(0);
-    if (!binary && data.length <= 2 * 1024 * 1024) diff = unifiedTextDiff('', data.toString('utf8'), '/dev/null', 'b/' + item.relative);
+    if (!binary && data.length <= 2 * 1024 * 1024) diff = await unifiedTextDiff('', data.toString('utf8'), '/dev/null', 'b/' + item.relative);
   }
   const lines = diff.split('\n');
   const additions = lines.filter((line) => line.startsWith('+') && !line.startsWith('+++')).length;
@@ -1973,7 +2045,7 @@ function recordTimeline(file, fragment, code, reason, force) {
   } catch (_) { /* 时间线失败不能阻断正常保存 */ }
 }
 
-function timelineItem(file, fragment, id, currentCode) {
+async function timelineItem(file, fragment, id, currentCode) {
   const target = timelineTarget(file, fragment);
   if (!/^\d+-[a-z0-9]+$/i.test(String(id || ''))) throw new Error('时间线版本标识不合法');
   const value = JSON.parse(fs.readFileSync(path.join(target.dir, id + '.json'), 'utf8'));
@@ -1981,7 +2053,7 @@ function timelineItem(file, fragment, id, currentCode) {
   return {
     ok: true, id, timestamp: Number(value.timestamp || 0), reason: String(value.reason || '自动保存'),
     size: Buffer.byteLength(code, 'utf8'), code,
-    diff: unifiedTextDiff(code, String(currentCode || ''), '历史版本', '当前版本'),
+    diff: await unifiedTextDiff(code, String(currentCode || ''), '历史版本', '当前版本'),
   };
 }
 
@@ -2384,6 +2456,11 @@ async function liveWebSearch(provider, key, query) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // 请求级熔断：任何请求最长 90 秒（覆盖云盘 git 卡死等极端场景），超时即断开该连接，
+  // 页面永远不会无限“转圈”，也不拖累其他请求。
+  const _reqGuard = setTimeout(() => { try { res.destroy(); } catch (_) {} }, 90000);
+  res.on('finish', () => clearTimeout(_reqGuard));
+  res.on('close', () => clearTimeout(_reqGuard));
   const u = new URL(req.url, 'http://' + HOST + ':' + PORT);
   try {
     if (req.method === 'GET' && u.pathname === '/') {
@@ -2993,6 +3070,12 @@ const server = http.createServer(async (req, res) => {
           tgt.label = newName;
         }
       }
+      // 片段名（label）：只重命名【目标片段】，不改文件名、不影响其它片段
+      if (b.label !== undefined) {
+        const newLabel = String(b.label).trim();
+        if (!newLabel) return send(res, 200, { ok: false, error: '片段名不能为空' });
+        tgt.label = newLabel;
+      }
       // 类型（语言）
       if (b.language !== undefined) {
         const lang = String(b.language).trim() || 'plain_text';
@@ -3011,7 +3094,7 @@ const server = http.createServer(async (req, res) => {
         while ((hm = headingRe.exec(fm.body))) headsPos.push({ label: hm[1].trim(), start: hm.index, len: hm[0].length });
         if (headsPos[tgtIdx]) {
           const h = headsPos[tgtIdx];
-          const changedHead = b.name !== undefined && tgt.label !== h.label;
+          const changedHead = (b.name !== undefined || b.label !== undefined) && tgt.label !== h.label;
           let delta = 0;
           if (changedHead) {
             const newHead = '## Fragment: ' + tgt.label;
@@ -3041,11 +3124,12 @@ const server = http.createServer(async (req, res) => {
       const sic = sm.contents.find((c) => String(c.id) === String(fragId)) || sm.contents[0];
       if (b.language !== undefined) sic.language = tgt.language;
       if (b.name !== undefined && tgt.label) sic.label = tgt.label;
+      if (b.label !== undefined && tgt.label) sic.label = tgt.label;
       if (b.description !== undefined) sm.description = fm.meta.description ? fm.meta.description : null;
       if (Array.isArray(b.tags)) sm.tags = fm.meta.tags;
       sm.mtimeMs = now; sm.updatedAt = now; sm.size = Buffer.byteLength(newMd);
       writeState(st);
-      return send(res, 200, { ok: true, file: full, name: fm.meta.name, language: tgt.language, tags: fm.meta.tags, description: fm.meta.description });
+      return send(res, 200, { ok: true, file: full, name: fm.meta.name, label: tgt.label, language: tgt.language, tags: fm.meta.tags, description: fm.meta.description });
     }
     // 新增片段：在当前文件末尾追加一个 Fragment（正文 + frontmatter contents + state.json 同步）
     if (req.method === 'POST' && u.pathname === '/api/fs/addfragment') {
@@ -3074,11 +3158,48 @@ const server = http.createServer(async (req, res) => {
       writeState(st);
       return send(res, 200, { ok: true, file: full, fragment: newItem, index: fm.meta.contents.length - 1 });
     }
+    // 删除片段：从正文移除对应 "## Fragment: xxx" 段 + frontmatter contents 移除 + state.json 同步
+    if (req.method === 'POST' && u.pathname === '/api/fs/delfragment') {
+      const b = await readBody(req);
+      const codeRoot = path.join(vaultPath(), 'code');
+      const st = readState();
+      const snip = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === path.resolve(String(b.file || '')));
+      if (!snip) return send(res, 200, { ok: false, error: '片段不在状态库中（可能尚未同步）' });
+      const full = path.resolve(codeRoot, snip.filePath);
+      if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
+      const fragId = Number(b.fragmentId);
+      const text = fs.readFileSync(full, 'utf8');
+      const fm = parseFrontmatter(text);
+      if (!fm.meta || !Array.isArray(fm.meta.contents) || !fm.meta.contents.length) return send(res, 200, { ok: false, error: 'frontmatter 解析失败' });
+      const idx = fm.meta.contents.findIndex((c) => String(c.id) === String(fragId));
+      if (idx < 0) return send(res, 200, { ok: false, error: '片段不存在' });
+      if (fm.meta.contents.length <= 1) return send(res, 200, { ok: false, error: '文件至少保留一个片段（可删除整个文件）' });
+      const removed = fm.meta.contents[idx];
+      fm.meta.contents.splice(idx, 1);
+      // 删除正文对应段：从 "## Fragment:" 标题行首 到 下一个标题行首（内容随标题一并移除）
+      const headingRe = /^##\s*Fragment:\s*(.*)$/gm;
+      const headsPos = [];
+      let hm;
+      while ((hm = headingRe.exec(fm.body))) headsPos.push({ start: hm.index });
+      if (headsPos[idx]) {
+        const h = headsPos[idx];
+        const segEnd = headsPos[idx + 1] ? headsPos[idx + 1].start : fm.body.length;
+        fm.body = fm.body.slice(0, h.start) + fm.body.slice(segEnd);
+        fm.body = fm.body.replace(/\n{3,}/g, '\n\n');
+      }
+      const newMd = stringifyFrontmatter(fm);
+      fs.writeFileSync(full, newMd, 'utf8');
+      const now = Date.now();
+      snip.meta.contents = snip.meta.contents.filter((c) => String(c.id) !== String(fragId));
+      snip.meta.mtimeMs = now; snip.meta.updatedAt = now; snip.meta.size = Buffer.byteLength(newMd);
+      writeState(st);
+      return send(res, 200, { ok: true, file: full, removed: removed, remaining: fm.meta.contents.length });
+    }
     if (req.method === 'GET' && u.pathname === '/api/git') {
-      return send(res, 200, gitStatus());
+      return send(res, 200, await gitStatus());
     }
     if (req.method === 'GET' && u.pathname === '/api/git/diff') {
-      try { return send(res, 200, gitFileDiff(u.searchParams.get('path'))); }
+      try { return send(res, 200, await gitFileDiff(u.searchParams.get('path'))); }
       catch (e) { return send(res, 400, { ok: false, error: String((e && e.message) || e) }); }
     }
     if (req.method === 'GET' && u.pathname === '/api/timeline') {
@@ -3095,7 +3216,7 @@ const server = http.createServer(async (req, res) => {
         const file = u.searchParams.get('file'), fragment = Number(u.searchParams.get('fragment'));
         const snip = walkSnippets().find((item) => item.file === file);
         if (!snip || !snip.fragments[fragment]) return send(res, 404, { ok: false, error: '片段不存在' });
-        return send(res, 200, timelineItem(file, fragment, u.searchParams.get('id'), snip.fragments[fragment].code));
+        return send(res, 200, await timelineItem(file, fragment, u.searchParams.get('id'), snip.fragments[fragment].code));
       } catch (e) { return send(res, 400, { ok: false, error: String((e && e.message) || e) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/timeline/restore') {
@@ -3103,7 +3224,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const fragment = Number(b.fragment), snip = walkSnippets().find((item) => item.file === b.file);
         if (!snip || !snip.fragments[fragment]) return send(res, 404, { ok: false, error: '片段不存在' });
-        const saved = timelineItem(b.file, fragment, b.id, snip.fragments[fragment].code);
+        const saved = await timelineItem(b.file, fragment, b.id, snip.fragments[fragment].code);
         recordTimeline(b.file, fragment, snip.fragments[fragment].code, '恢复前版本', true);
         const written = writeBackFragment(b.file, snip.fragments[fragment], saved.code.replace(/\n+$/, ''));
         if (!written) return send(res, 500, { ok: false, error: '恢复失败：未能定位片段代码块' });
@@ -3569,18 +3690,18 @@ const server = http.createServer(async (req, res) => {
       if (!add.ok) return send(res, 200, { ok: false, error: 'git add 失败: ' + add.error });
       const cm = await gitRun(['commit', '-m', msg]);
       if (!cm.ok) return send(res, 200, { ok: false, error: 'git commit 失败: ' + cm.error, output: (cm.stdout + cm.stderr).trim() });
-      return send(res, 200, { ok: true, message: '已提交', output: (cm.stdout + cm.stderr).trim(), status: gitStatus() });
+      return send(res, 200, { ok: true, message: '已提交', output: (cm.stdout + cm.stderr).trim(), status: await gitStatus() });
     }
     if (req.method === 'POST' && u.pathname === '/api/git/push') {
       const r = await gitRun(['push'], 120000);
       return send(res, 200, r.ok
-        ? { ok: true, message: '推送成功', output: (r.stdout + r.stderr).trim(), status: gitStatus() }
+        ? { ok: true, message: '推送成功', output: (r.stdout + r.stderr).trim(), status: await gitStatus() }
         : { ok: false, error: r.error, output: (r.stdout + r.stderr).trim() });
     }
     if (req.method === 'POST' && u.pathname === '/api/git/pull') {
       const r = await gitRun(['pull'], 120000);
       return send(res, 200, r.ok
-        ? { ok: true, message: '拉取成功', output: (r.stdout + r.stderr).trim(), status: gitStatus() }
+        ? { ok: true, message: '拉取成功', output: (r.stdout + r.stderr).trim(), status: await gitStatus() }
         : { ok: false, error: r.error, output: (r.stdout + r.stderr).trim() });
     }
     if (req.method === 'POST' && u.pathname === '/api/git/reset') {
@@ -3589,7 +3710,7 @@ const server = http.createServer(async (req, res) => {
       if (!/^[0-9a-f]{4,40}$/i.test(hash)) return send(res, 200, { ok: false, error: '提交标识不合法' });
       const r = await gitRun(['reset', '--hard', hash], 60000);
       return send(res, 200, r.ok
-        ? { ok: true, message: '已回退到 ' + hash, output: (r.stdout + r.stderr).trim(), status: gitStatus() }
+        ? { ok: true, message: '已回退到 ' + hash, output: (r.stdout + r.stderr).trim(), status: await gitStatus() }
         : { ok: false, error: r.error, output: (r.stdout + r.stderr).trim() });
     }
     // ===== 通用工程能力 =====
@@ -3766,7 +3887,7 @@ server.listen(PORT, HOST, () => {
   }
   try { console.log('Vault: ' + vaultPath()); } catch (e) { console.log('Vault: ' + e.message); }
   console.log('正在检测本机环境…');
-  getEnv(true).then(({ tools: env, project }) => {
+  getEnv(false).then(({ tools: env, project }) => {
     const all = Object.values(env);
     const missing = all.filter((e) => e.required && !e.available);
     const needed = all.filter((e) => e.required);

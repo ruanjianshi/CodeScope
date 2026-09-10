@@ -603,17 +603,18 @@ tags:
         {\small
         \contactline{\faPhone}{15347348975}
         \contactline{\faEnvelope}{\href{mailto:2408128687@qq.com}{2408128687@qq.com}}
-        \contactline{\faWeixin}{15096010804}
-        \contactline{\faMapMarker*}{湖南衡阳}}
+        \contactline{\faWeixin}{xiao15096010804}
+        \contactline{\faMapMarker*}{湖南省衡阳}}
 
         \sidesection{\faGraduationCap}{教育背景}
         {\bfseries 武汉科技大学}\hfill
-        {\scriptsize\color{white!72}2024.09 -- 2027.06}\par
+        {\scriptsize\color{white!82}2024.09 -- 2027.06}\par
         {\small\color{white!82}机械专业硕士（专硕）\par
-        综合排名 5/176 · 均分 83.5\par}
+        研究生初试总分：363,   位列前十\par
+        综合排名 5/172 · 均分 83.5\par}
         \vspace{0.55em}
         {\bfseries 湖南工学院}\hfill
-        {\scriptsize\color{white!72}2020.09 -- 2024.06}\par
+        {\scriptsize\color{white!82}2020.09 -- 2024.06}\par
         {\small\color{white!82}机械设计制造及其自动化\par
         班级 1/43 · 专业 3/164\par}
 
@@ -621,15 +622,15 @@ tags:
         \skill{编程与构建}{C / C++、Python、Shell；CMake / Makefile、Git}
         \skill{嵌入式 Linux}{系统调用、文件I/O、进程/线程、Socket；交叉编译、GDB与设备接口调试}
         \skill{MCU 与 RTOS}{STM32、FreeRTOS / RT-Thread；中断、DMA、Bootloader与状态机}
-        \skill{通信与现场总线}{CAN / CAN FD / CANopen、EtherCAT、RS485、SPI、I\textsuperscript{2}C、UART}
+        \skill{通信与现场总线}{CAN / CANFD / CANopen、EtherCAT、RS485、SPI、I\textsuperscript{2}C、UART}
         \skill{控制与机器人}{FOC、PID、MIT、LQR、MPC、VMC；ROS1 / ROS2、PPO与sim2real}
         \skill{仿真与硬件工具}{Isaac Gym、MuJoCo、UniLab；SolidWorks、嘉立创EDA / AD}
 
         \sidesection{\faCertificate}{证书与身份}
         {\small
         中共党员\par
-        \vspace{0.25em}
-        大学英语六级（CET-6）\par
+        % \vspace{0.25em}
+        % 大学英语六级（CET-6）\par
         \vspace{0.25em}
         大学英语四级（CET-4）\par
         \vspace{0.25em}
@@ -659,7 +660,7 @@ tags:
         {\color{accent}\rule{2.5cm}{2pt}}\par
         \vspace{0.35em}
         {\small\color{ink}
-        聚焦嵌入式底层、Linux驱动及机器人控制，具备从硬件接口、实时固件、
+        聚焦嵌入式底层、Linux应用驱动及机器人姿态控制，具备从硬件接口、实时固件、
         通信协议到ROS系统集成与实机部署的完整开发经验，能够独立完成方案验证、联调与问题定位。}
 
         \mainsection{\faBriefcase}{实习经历}
@@ -682,7 +683,7 @@ tags:
           {独立开发 · 结构 / 硬件 / 控制 / 部署}
           {2026.01 -- 2026.09}
         \begin{itemize}
-            \item \textbf{技术栈：}Jetson Nano、ROS1、EtherCAT、CAN FD、UniLab（PPO）、MuJoCo、智元R86 / R52。
+            \item \textbf{技术栈：}Jetson Nano、ROS1、EtherCAT、CANFD、UniLab（PPO）、MuJoCo、智元R86 / R52。
             \item 完成SolidWorks整机结构、URDF、STL碰撞简化和四层板卡设计，并集成7寸屏幕、雷达与RGB-D相机。
             \item 开发Jetson Nano拓展板、EtherCAT转4路CAN FD的DCU及安全BMS，完成供电、通信、急停与保护链路联调。
             \item 编写智元R86 / R52电机MIT模式驱动和IMU接口；完成PPO步态训练、sim2sim验证、sim2real迁移与PD参数调优。

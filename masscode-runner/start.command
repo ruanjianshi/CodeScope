@@ -22,5 +22,7 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 echo "启动码境 CodeScope（前台运行，Ctrl+C 停止）"
 echo "页面：http://127.0.0.1:$PORT"
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)"
+[ -n "$LAN_IP" ] && echo "局域网：http://$LAN_IP:$PORT（同一 Wi-Fi 下其他设备可访问）"
 ( sleep 1.2; open "http://127.0.0.1:$PORT" ) &
 exec node server.js

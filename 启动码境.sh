@@ -46,5 +46,7 @@ fi
 echo "启动码境 CodeScope（Linux，Ctrl+C 停止）"
 echo "Vault：$CODESCOPE_VAULT"
 echo "页面：$URL"
+LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+[ -n "$LAN_IP" ] && echo "局域网：http://$LAN_IP:$PORT（同一局域网下其他设备可访问）"
 ( sleep 1; open_browser ) &
 exec node server.js
