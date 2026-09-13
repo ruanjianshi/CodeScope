@@ -202,6 +202,12 @@ print(r.run())
   await page.locator('[data-doc-mode="split"]').click();
   await page.locator('#edit-preview .md-code-ref').click();
   if(!(await page.locator('#tabs .tab.active').innerText()).includes('led.h')){const jumpState=await page.evaluate(()=>({current:CURRENT&&CURRENT.file,index:CINDEX,active:document.querySelector('#tabs .tab.active')&&document.querySelector('#tabs .tab.active').textContent,status:document.getElementById('status').textContent,refs:[...document.querySelectorAll('.md-code-ref')].map(node=>({...node.dataset,text:node.textContent}))}));throw new Error('Markdown 代码引用无法回跳到原代码片段：'+JSON.stringify(jumpState));}
+  await page.locator('#btn-backlinks').click();
+  await page.locator('#backlink-dialog.on').waitFor({state:'visible'});
+  await page.locator('#backlink-list .backlink-row').filter({hasText:'README.md'}).waitFor({state:'visible'});
+  await page.locator('#backlink-close').click();
+  const workspaceInterop=await page.evaluate(()=>({codeLink:workspaceLinkMarkdown(currentWorkspaceTarget()),outline:mmMarkdownOutline('# Root\n\n## Child\n\n- Leaf'),snapshotKey:WORKSPACE_SNAPSHOT_KEY}));
+  if(!workspaceInterop.codeLink.startsWith('[[code-ref:')||workspaceInterop.outline.length!==3||workspaceInterop.snapshotKey!=='mc-workspace-snapshot-v1')throw new Error('内部链接、XMind 大纲或工作台快照基础能力异常：'+JSON.stringify(workspaceInterop));
   await page.locator('#tabs .tab').filter({hasText:'demo.html'}).locator('span').first().click();
   await page.locator('#html-preview-frame').waitFor({state:'visible'});
   await page.locator('#edit-preview .edit-preview-close').click();

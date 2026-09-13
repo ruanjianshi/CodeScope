@@ -2543,6 +2543,49 @@ function searchReadingLibrary(query, sensitive) {
   return hits;
 }
 
+function decodeWorkspaceRef(value) {
+  try { return decodeURIComponent(String(value || '')); } catch (_) { return String(value || ''); }
+}
+function workspaceBacklinks(kind, targetPath, targetFragment) {
+  const hits = [], wanted = String(targetPath || ''), wantedFragment = Number(targetFragment);
+  const addMatches = (content, source) => {
+    const text = String(content || ''), lines = text.replace(/\r\n/g, '\n').split('\n');
+    const patterns = kind === 'code'
+      ? [/\[\[code-ref:([^#|\]]+)#fragment=(\d+)(?:&amp;|&)line=(\d+)(?:(?:&amp;|&)end=(\d+))?\|([^\]]+)\]\]/g]
+      : kind === 'pdf'
+        ? [/\[\[pdf-ref:([^#|\]]+)#page=(\d+)(?:&amp;|&)fragment=([^|\]]*)\|([^\]]+)\]\]/g]
+        : [/\[\[note-ref:([^|\]]+)\|([^\]]+)\]\]/g];
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(text)) && hits.length < 300) {
+        const refPath = decodeWorkspaceRef(match[1]);
+        const fragment = kind === 'code' ? Number(match[2]) : null;
+        if (refPath !== wanted || (kind === 'code' && Number.isFinite(wantedFragment) && fragment !== wantedFragment)) continue;
+        const line = text.slice(0, match.index).split('\n').length;
+        hits.push({ ...source, line, label:match[match.length - 1], preview:(lines[line - 1] || '').trim().slice(0, 600) });
+      }
+    }
+  };
+  for (const snippet of walkSnippets()) {
+    (snippet.fragments || []).forEach((fragment, index) => {
+      if (fragment.language === 'markdown') addMatches(fragment.code, { sourceKind:'code-note', file:snippet.file, fragment:index, name:(fragment.label || snippet.name), project:snippet.name });
+    });
+  }
+  const root = readingsDir();
+  const walk = (dir, prefix) => {
+    let entries = []; try { entries = fs.readdirSync(dir, { withFileTypes:true }); } catch (_) { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || hits.length >= 300) continue;
+      const rel = prefix ? prefix + '/' + entry.name : entry.name, full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full, rel); continue; }
+      if (!['.md','.markdown'].includes(path.extname(entry.name).toLowerCase())) continue;
+      try { const stat = fs.statSync(full); if (stat.size <= 8 * 1024 * 1024) addMatches(fs.readFileSync(full, 'utf8'), { sourceKind:'reading-note', path:rel, name:path.basename(rel), project:path.posix.dirname(rel) }); } catch (_) {}
+    }
+  };
+  walk(root, '');
+  return hits;
+}
+
 function send(res, code, obj) {
   if (res.writableEnded || res.destroyed) return false;
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
@@ -2677,7 +2720,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
@@ -2689,6 +2732,12 @@ const server = http.createServer(async (req, res) => {
       if (!query) return send(res, 200, { ok:true, hits:[] });
       if (query.length > 240) return send(res, 400, { ok:false, error:'搜索内容不能超过 240 个字符' });
       return send(res, 200, { ok:true, hits:searchReadingLibrary(query, u.searchParams.get('case') === '1') });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/workspace/backlinks') {
+      const kind = String(u.searchParams.get('kind') || ''), targetPath = String(u.searchParams.get('path') || '');
+      if (!['code','pdf','note'].includes(kind) || !targetPath || targetPath.length > 4096) return send(res, 400, { ok:false, error:'反向链接目标不合法' });
+      const fragmentRaw = u.searchParams.get('fragment'), fragment = fragmentRaw == null ? NaN : Number(fragmentRaw);
+      return send(res, 200, { ok:true, kind, path:targetPath, fragment:Number.isFinite(fragment) ? fragment : null, hits:workspaceBacklinks(kind, targetPath, fragment) });
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/folder') {
       const b = await readBody(req);

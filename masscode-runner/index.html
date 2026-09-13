@@ -580,6 +580,21 @@
   .md-code-ref { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border)); border-radius:999px; background:var(--accent-soft); color:var(--accent); font:600 10px/1.45 var(--mono); text-decoration:none; cursor:pointer; vertical-align:baseline; }
   .md-code-ref::before { content:'↗'; opacity:.85; }
   .md-code-ref:hover,.md-code-ref:focus { color:var(--text); border-color:var(--accent); outline:none; }
+  .md-note-ref { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border:1px solid color-mix(in srgb,#a6e3a1 42%,var(--border)); border-radius:999px; background:color-mix(in srgb,#a6e3a1 10%,transparent); color:#a6e3a1; font:600 10px/1.45 var(--mono); text-decoration:none; cursor:pointer; vertical-align:baseline; }
+  .md-note-ref::before { content:'↩'; opacity:.9; }
+  .md-note-ref:hover,.md-note-ref:focus { color:var(--text); border-color:#a6e3a1; outline:none; }
+  #backlink-dialog { position:fixed; inset:0; z-index:1500; display:none; place-items:start center; padding-top:min(13vh,120px); background:rgba(4,8,13,.58); backdrop-filter:blur(5px); }
+  #backlink-dialog.on { display:grid; }
+  #backlink-panel { width:min(760px,calc(100vw - 28px)); max-height:min(70vh,680px); display:flex; flex-direction:column; overflow:hidden; border:1px solid color-mix(in srgb,var(--accent) 34%,var(--border)); border-radius:14px; background:var(--theme-elevated,var(--panel)); box-shadow:0 24px 70px rgba(0,0,0,.55); }
+  .backlink-head { display:flex; align-items:center; gap:10px; min-height:48px; padding:8px 12px; border-bottom:1px solid var(--border); }
+  .backlink-head strong { color:var(--text); } .backlink-head .target { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); font-size:11px; }
+  .backlink-head .sp { flex:1; } .backlink-list { min-height:120px; overflow:auto; padding:8px; }
+  .backlink-row { width:100%; display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:9px; align-items:center; padding:9px 10px; border:1px solid transparent; border-radius:9px; background:transparent; text-align:left; }
+  .backlink-row:hover,.backlink-row:focus { border-color:var(--border); background:var(--hover); outline:none; }
+  .backlink-row .icon { color:var(--accent); font:700 11px var(--mono); } .backlink-row .main { min-width:0; }
+  .backlink-row .name,.backlink-row .preview { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .backlink-row .name { color:var(--text); font-weight:650; } .backlink-row .preview,.backlink-row .where { color:var(--dim); font-size:10px; }
+  .backlink-empty { padding:36px 18px; color:var(--dim); text-align:center; line-height:1.8; }
   #resource-viewer { display: none; flex: 1; min-height: 0; margin: 10px 14px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--panel2); overflow: hidden; flex-direction: column; }
   #resource-head { flex: none; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
   #resource-head .name { font-weight: 600; }
@@ -2504,6 +2519,7 @@
       <button id="btn-nav-back" disabled title="返回上一个代码位置（Ctrl/⌘+-）">‹</button>
       <button id="btn-nav-forward" disabled title="前进到下一个代码位置（Ctrl/⌘+Shift+-）">›</button>
       <button id="btn-pair-switch" disabled title="在同名头文件和源文件之间切换（Alt+O）">⇄ 头/源</button>
+      <button id="btn-backlinks" disabled title="查看引用当前代码或文档的位置">↩ 引用</button>
       <button id="btn-symbols" title="AI、符号、全文和文件搜索；Ctrl/⌘+P 快速打开，Ctrl/⌘+Shift+F 全文搜索">AI 搜索</button>
       <button id="btn-outline" title="显示/隐藏代码大纲">大纲</button>
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
@@ -2551,6 +2567,7 @@
     <section id="reading-workspace" aria-label="PDF 阅读工作区">
       <div class="reading-toolbar">
         <button id="reading-back">← 返回代码</button><span class="title" id="reading-title">阅读</span><span id="reading-project-context"></span><span class="sp"></span>
+        <button id="reading-backlinks" title="查看引用当前 PDF 或 Markdown 笔记的位置">↩ 引用</button><button id="reading-copy-link" title="复制当前 PDF、Markdown 或代码片段的内部链接">🔗 复制链接</button>
         <button id="reading-add-fragment" title="保存当前选中的原文为阅读片段">✂ 摘录</button><button id="reading-translate-selection" title="AI 翻译当前选中文字">译选中</button>
         <button id="reading-translate-page" title="AI 翻译当前页">译本页</button><button id="reading-translate-all" title="逐页 AI 翻译整篇 PDF，并保存中文版与双语版数据">译全文</button>
         <button id="reading-frag-toggle" class="on">☷ 摘录</button><span id="reading-status"></span>
@@ -2581,6 +2598,8 @@
           <span class="sp"></span>
           <button id="mm-export-png" title="导出为 PNG 图片">⤓ PNG</button>
           <button id="mm-export-svg" title="导出为 SVG 图片">⤓ SVG</button>
+          <button id="mm-export-md" title="导出为 XMind 可导入的 Markdown">⤓ XMind MD</button>
+          <button id="mm-export-opml" title="导出为 XMind、OmniOutliner 等可导入的 OPML">⤓ OPML</button>
           <span class="sp"></span>
           <div class="mm-theme-wrap">
             <button id="mm-theme-btn" title="选择配色主题">🎨 配色</button>
@@ -2758,6 +2777,12 @@
   <span id="code-ref-selection-label">已选中代码</span>
   <button id="code-ref-add" type="button" title="把当前选中的代码引用到本项目 Markdown">↗ 引用</button>
   <div id="code-ref-targets" class="hidden" role="menu" aria-label="选择 Markdown 目标"></div>
+</div>
+<div id="backlink-dialog" role="dialog" aria-modal="true" aria-labelledby="backlink-title">
+  <section id="backlink-panel">
+    <div class="backlink-head"><strong id="backlink-title">反向链接</strong><span id="backlink-target" class="target"></span><span class="sp"></span><button id="backlink-copy" type="button" title="复制当前内容的内部链接">复制链接</button><button id="backlink-close" type="button" title="关闭">×</button></div>
+    <div id="backlink-list" class="backlink-list"><div class="backlink-empty">正在建立引用索引…</div></div>
+  </section>
 </div>
 <div id="ai-apply-opt" class="hidden">
   <span>AI 结果如何放入片段？</span>
@@ -3481,7 +3506,7 @@ async function openLatexResource(r) {
   $('resource-save').style.display = 'none'; $('resource-body').innerHTML = '<span class="empty">正在加载资源…</span>';
   $('resource-rename').onclick = () => renameLatexResource(r);
   $('resource-replace').onclick = () => chooseLatexResource(r.folder, r.kind);
-  $('btn-edit').disabled = $('btn-history').disabled = $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = $('btn-info').disabled = true;
+  $('btn-edit').disabled = $('btn-history').disabled = $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = $('btn-info').disabled = $('btn-backlinks').disabled = true;
   const raw = latexRawUrl(r.path), ext = r.ext.toLowerCase();
   if (r.text) {
     const data = await api('/api/latex/resource?path=' + encodeURIComponent(r.path));
@@ -3971,7 +3996,7 @@ function removeReadingMarkdownBlock(content,start,end){const lines=String(conten
 function readingLiveCaret(editor){const selection=window.getSelection();if(!selection||!selection.rangeCount||!selection.isCollapsed)return null;const range=selection.getRangeAt(0);if(!editor.contains(range.startContainer))return null;let block=range.startContainer;while(block.parentNode&&block.parentNode!==editor)block=block.parentNode;let index=[...editor.childNodes].indexOf(block);if(index<0)index=Math.max(0,editor.childNodes.length-1);const before=document.createRange();try{before.selectNodeContents(block);before.setEnd(range.startContainer,range.startOffset);return{index,offset:before.toString().length};}catch(_){return{index,offset:0};}}
 function restoreReadingLiveCaret(editor,bookmark){if(!bookmark||!editor.childNodes.length)return;const block=editor.childNodes[Math.min(bookmark.index,editor.childNodes.length-1)],walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);let left=bookmark.offset,node=walker.nextNode();while(node&&left>node.textContent.length){left-=node.textContent.length;node=walker.nextNode();}const range=document.createRange(),selection=window.getSelection();if(node)range.setStart(node,Math.min(left,node.textContent.length));else{range.selectNodeContents(block);range.collapse(false);}range.collapse(true);selection.removeAllRanges();selection.addRange(range);}
 function readingLiveCanRender(content){const text=String(content||'');if(/[ \t\n]$/.test(text))return false;for(const token of ['```','**','~~'])if(((text.split(token).length-1)%2)!==0)return false;const ticks=(text.replace(/```/g,'').match(/`/g)||[]).length;return ticks%2===0;}
-function renderReadingLive(editor,content,keepCaret){const bookmark=keepCaret?readingLiveCaret(editor):null,tools=editor.parentElement&&editor.parentElement.querySelector('.reading-block-tools');if(tools)tools.classList.remove('on');editor.innerHTML=renderMd(content||'');if(bookmark)restoreReadingLiveCaret(editor,bookmark);}
+function renderReadingLive(editor,content,keepCaret){const bookmark=keepCaret?readingLiveCaret(editor):null,tools=editor.parentElement&&editor.parentElement.querySelector('.reading-block-tools');if(tools)tools.classList.remove('on');editor.innerHTML=renderMd(content||'');decorateMarkdownLinks(editor);if(bookmark)restoreReadingLiveCaret(editor,bookmark);}
 function readingLiveEnter(editor,event){if(event.shiftKey)return false;const selection=window.getSelection();if(!selection||!selection.rangeCount)return false;let node=selection.anchorNode&&selection.anchorNode.nodeType===3?selection.anchorNode.parentElement:selection.anchorNode;if(!node||!editor.contains(node))return false;const pre=node.closest&&node.closest('pre');if(pre&&editor.contains(pre))return false;const li=node.closest&&node.closest('li');if(li&&editor.contains(li)){const list=li.parentElement;if(!String(li.textContent||'').trim()){const paragraph=document.createElement('p');paragraph.appendChild(document.createElement('br'));list.after(paragraph);li.remove();if(!list.children.length)list.remove();focusReadingBlock(paragraph);}else{const next=document.createElement('li');if(li.classList.contains('md-task')){next.className='md-task';const check=document.createElement('input');check.type='checkbox';check.disabled=true;const text=document.createElement('span');text.appendChild(document.createElement('br'));next.append(check,text);li.after(next);focusReadingBlock(text);}else{next.appendChild(document.createElement('br'));li.after(next);focusReadingBlock(next);}}return true;}let block=node;while(block.parentNode&&block.parentNode!==editor)block=block.parentNode;const paragraph=document.createElement('p');paragraph.appendChild(document.createElement('br'));if(block===editor)editor.appendChild(paragraph);else block.after(paragraph);focusReadingBlock(paragraph);return true;}
 function readingLiveBlock(target,editor){if(!target)return null;let node=target.nodeType===3?target.parentElement:target;if(!node||!editor.contains(node))return null;const item=node.closest&&node.closest('li');if(item&&editor.contains(item)){const list=item.parentElement;if(list&&/^(UL|OL)$/.test(list.tagName)&&list.parentElement===editor)return item;}let block=node;while(block&&block.parentElement!==editor)block=block.parentElement;if(!block||block.parentElement!==editor||block.classList.contains('reading-md-properties'))return null;return /^(H[1-6]|P|BLOCKQUOTE|PRE|UL|OL|TABLE|HR)$/.test(block.tagName)?block:null;}
 function readingOrderedBlocks(editor){const blocks=[];for(const node of editor.children){if(node.classList.contains('reading-md-properties'))continue;if(/^(UL|OL)$/.test(node.tagName)){const items=[...node.children].filter((item)=>item.tagName==='LI');if(items.length)blocks.push(...items);else blocks.push(node);}else blocks.push(node);}return blocks;}
@@ -4086,7 +4111,7 @@ async function renderReadingSlot(slot) {
       const workbench=document.createElement('div');workbench.className='reading-md-workbench';const source=document.createElement('textarea');source.className='reading-md-source';source.spellcheck=false;source.value=record.content||'';source.placeholder='# 从这里开始写 Markdown…\n\n输入 / 可插入标题、列表、引用与提示块';source.setAttribute('aria-label','Markdown 源码编辑器');
       const live=document.createElement('div');live.className='reading-md-editor reading-md-live';live.contentEditable='true';live.spellcheck=false;live.dataset.readingPath=path;live.setAttribute('aria-label','Markdown 实时预览编辑器');
       const preview=document.createElement('div');preview.className='reading-md-editor reading-md-preview';preview.dataset.readingPath=path;preview.setAttribute('aria-label','Markdown 阅读视图');
-      let liveComposing=false,liveRenderTimer=0;const renderPreview=()=>{preview.innerHTML=renderMd(record.content||'');};const renderLive=(keepCaret)=>renderReadingLive(live,record.content||'',keepCaret);
+      let liveComposing=false,liveRenderTimer=0;const renderPreview=()=>{preview.innerHTML=renderMd(record.content||'');decorateMarkdownLinks(preview);};const renderLive=(keepCaret)=>renderReadingLive(live,record.content||'',keepCaret);
       const applyMode=(mode,persist)=>{hideReadingSlashMenu();if(!['edit','live','preview'].includes(mode))mode='live';shell.dataset.mdMode=mode;for(const [name,button] of modeButtons){const active=name===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}if(persist)saveReadingMarkdownMode(path,mode);if(mode==='edit')setTimeout(()=>source.focus(),0);if(mode==='live'){renderLive(false);setTimeout(()=>live.focus(),0);}if(mode==='preview')renderPreview();};
       const contentChanged=()=>{record.content=source.value;renderLive(false);renderPreview();foot.textContent='正在编辑… · '+record.content.length+' 字符';scheduleSave();updateReadingSlashMenu(source,slot);};
       source.addEventListener('input',contentChanged);
@@ -4240,6 +4265,7 @@ function wireReadingPanel() {
   $('reading-new-folder').onclick=(e)=>{e.stopPropagation();createReadingProject('');};$('reading-new-library-folder').onclick=(e)=>{e.stopPropagation();createReadingFolder('');};
   $('reading-new-kind').onchange=()=>{$('reading-new-name').value=READING_NEW_DEFAULTS[$('reading-new-kind').value]||'';$('reading-new-name').disabled=$('reading-new-kind').value==='pdf';};$('reading-new-cancel').onclick=closeReadingNewDialog;$('reading-new-submit').onclick=submitReadingNewFragment;$('reading-new-name').onkeydown=(e)=>{if(e.key==='Enter')submitReadingNewFragment();};$('reading-new-dialog').addEventListener('mousedown',(e)=>{if(e.target===$('reading-new-dialog'))closeReadingNewDialog();});
   $('reading-back').onclick=closeReading;
+  $('reading-backlinks').onclick=showBacklinks;$('reading-copy-link').onclick=copyCurrentWorkspaceLink;
   $('reading-add-fragment').onclick=addReadingFragment;$('reading-translate-selection').onclick=translateReadingSelection;$('reading-translate-page').onclick=translateReadingPage;$('reading-translate-all').onclick=translateReadingAll;
   $('reading-frag-toggle').onclick=()=>{const hidden=$('reading-fragments').classList.toggle('hidden');$('reading-fragments-resizer').classList.toggle('hidden',hidden);$('reading-frag-toggle').classList.toggle('on',!hidden);};
   document.querySelectorAll('.reading-col').forEach((col)=>{const slot=Number(col.dataset.slot),els=readingSlotElements(slot);col.addEventListener('mousedown',()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=READING_SLOTS[slot]||READING_CURRENT;renderReadingProjectTabs();syncReadingTools();renderReadingFragments();});els.view.onchange=()=>renderReadingSlot(slot);els.page.onchange=()=>setReadingPage(slot,els.page.value);col.querySelector('.reading-prev').onclick=()=>setReadingPage(slot,Number(els.page.value)-1);col.querySelector('.reading-next').onclick=()=>setReadingPage(slot,Number(els.page.value)+1);col.querySelector('.reading-close-col').onclick=(e)=>{e.stopPropagation();closeReadingColumn(slot);};col.addEventListener('dragover',(e)=>{if(e.dataTransfer.types.includes('application/x-codescope-reading')){e.preventDefault();col.classList.add('drag-over');}});col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));col.addEventListener('drop',(e)=>{e.preventDefault();col.classList.remove('drag-over');$('reading-columns').classList.remove('fragment-dragging');const path=e.dataTransfer.getData('application/x-codescope-reading');if(path)openReading(path,slot);});});
@@ -6813,8 +6839,9 @@ function mdInline(s) {
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   s = s.replace(/!\[([^\]]*)\]\((https?:[^)\s]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
-  s = s.replace(/\[\[pdf-ref:([^#|\]]+)#page=(\d+)(?:&amp;|&)fragment=([^|\]]+)\|([^\]]+)\]\]/g, '<a href="#" class="reading-pdf-ref" data-pdf-path="$1" data-page="$2" data-fragment="$3" title="在 PDF 中定位原文">$4</a>');
+  s = s.replace(/\[\[pdf-ref:([^#|\]]+)#page=(\d+)(?:&amp;|&)fragment=([^|\]]*)\|([^\]]+)\]\]/g, '<a href="#" class="reading-pdf-ref" data-pdf-path="$1" data-page="$2" data-fragment="$3" title="在 PDF 中定位原文">$4</a>');
   s = s.replace(/\[\[code-ref:([^#|\]]+)#fragment=(\d+)(?:&amp;|&)line=(\d+)(?:(?:&amp;|&)end=(\d+))?\|([^\]]+)\]\]/g, '<a href="#" class="md-code-ref" data-code-file="$1" data-code-fragment="$2" data-code-line="$3" data-code-end="$4" title="定位到代码定义">$5</a>');
+  s = s.replace(/\[\[note-ref:([^|\]]+)\|([^\]]+)\]\]/g, '<a href="#" class="md-note-ref" data-note-path="$1" title="打开关联笔记">$2</a>');
   s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   s = s.replace(/\n/g, '<br>');
   return s;
@@ -6931,6 +6958,7 @@ function renderMd(txt) {
       if (tag === 'a') {
         if (node.classList.contains('reading-pdf-ref')) return '[[pdf-ref:' + (node.dataset.pdfPath || '') + '#page=' + (node.dataset.page || '1') + '&fragment=' + (node.dataset.fragment || '') + '|' + inner + ']]';
         if (node.classList.contains('md-code-ref')) return '[[code-ref:' + (node.dataset.codeFile || '') + '#fragment=' + (node.dataset.codeFragment || '0') + '&line=' + (node.dataset.codeLine || '1') + '&end=' + (node.dataset.codeEnd || node.dataset.codeLine || '1') + '|' + inner + ']]';
+        if (node.classList.contains('md-note-ref')) return '[[note-ref:' + (node.dataset.notePath || '') + '|' + inner + ']]';
         const href = node.getAttribute('href') || ''; return href ? '[' + inner + '](' + href + ')' : inner;
       }
       if (tag === 'br') return '  \n';
@@ -7729,12 +7757,27 @@ function mmExportSvg() {
     setStatus('err', 'SVG 导出失败：' + (e.message || e));
   }
 }
+function mmCurrentMarkdown(){const fragment=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];return fragment&&fragment.language==='markdown'?(EDITING?editText():String(fragment.code||'')):'';}
+function mmExportMarkdown(){const source=mmCurrentMarkdown();if(!source){setStatus('err','当前没有可导出的 Markdown');return;}mmDownloadBlob(new Blob(['\uFEFF'+source],{type:'text/markdown;charset=utf-8'}),mmExportName('md'));setStatus('ok','已导出 XMind 可导入的 Markdown');}
+function mmMarkdownOutline(source){
+  const rows=[],lines=String(source||'').replace(/\r\n/g,'\n').split('\n');let inFence=false,inFrontmatter=lines[0]&&lines[0].trim()==='---',headingDepth=0;
+  for(let index=0;index<lines.length;index++){const line=lines[index];if(inFrontmatter){if(index>0&&line.trim()==='---')inFrontmatter=false;continue;}if(/^\s*```/.test(line)){inFence=!inFence;continue;}if(inFence)continue;let match=line.match(/^(#{1,6})\s+(.+)$/);if(match){headingDepth=match[1].length;rows.push({depth:headingDepth,text:stripMd(match[2])});continue;}match=line.match(/^(\s*)[-*+]\s+(?:\[[ xX]\]\s+)?(.+)$/)||line.match(/^(\s*)\d+[.)]\s+(.+)$/);if(match)rows.push({depth:Math.max(1,headingDepth)+1+Math.floor(match[1].replace(/\t/g,'  ').length/2),text:stripMd(match[2])});}
+  if(!rows.length)rows.push({depth:1,text:(CURRENT&&CURRENT.name)||'CodeScope 导图'});const min=Math.min(...rows.map(row=>row.depth));rows.forEach(row=>row.depth=Math.max(1,row.depth-min+1));return rows;
+}
+function mmExportOpml(){
+  const source=mmCurrentMarkdown();if(!source){setStatus('err','当前没有可导出的 Markdown');return;}const rows=mmMarkdownOutline(source),xmlEscape=(value)=>String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));let body='',depth=0;
+  for(const row of rows){const next=Math.max(1,row.depth);while(depth>=next){body+='</outline>';depth--;}while(depth<next-1){body+='<outline text="">';depth++;}body+='<outline text="'+xmlEscape(row.text||'未命名')+'">';depth=next;}while(depth>0){body+='</outline>';depth--;}
+  const title=xmlEscape((CURRENT&&CURRENT.name)||'CodeScope 导图'),xml='<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0"><head><title>'+title+'</title></head><body>'+body+'</body></opml>';
+  mmDownloadBlob(new Blob([xml],{type:'text/x-opml;charset=utf-8'}),mmExportName('opml'));setStatus('ok','已导出 OPML · 可导入 XMind 或大纲工具');
+}
 function wireMindmapEvents() {
   $('mm-zoom-in').onclick = mmZoomIn;
   $('mm-zoom-out').onclick = mmZoomOut;
   $('mm-fit').onclick = mmFit;
   $('mm-export-png').onclick = mmExportPng;
   $('mm-export-svg').onclick = mmExportSvg;
+  $('mm-export-md').onclick = mmExportMarkdown;
+  $('mm-export-opml').onclick = mmExportOpml;
   initMmTheme();
   $('mm-back').onclick = () => { MM_ACTIVE = false; applyMmMode(); };
   // Esc 返回渲染（与 massCode 一致）
@@ -8508,9 +8551,39 @@ function renderFileResults(query) {
   const selectable=[...box.querySelectorAll('.symr')];SYM_ACTIVE=0;if(selectable.length)selectable[0].classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的代码、阅读资料或绘图</span>';
   const counts=items.reduce((out,row)=>(out[row.item.kind]=(out[row.item.kind]||0)+1,out),{});$('sym-modal-status').textContent=(counts.code||0)+' 代码 · '+(counts.reading||0)+' 阅读 · '+(counts.drawing||0)+' 绘图 · Ctrl/⌘+P';
 }
+const WORKSPACE_SNAPSHOT_KEY='mc-workspace-snapshot-v1';
+function currentWorkspaceTarget(){
+  if(document.body.classList.contains('reading-mode')&&READING_CURRENT){const fragment=readingFragment(READING_CURRENT);if(fragment&&fragment.kind==='pdf')return{kind:'pdf',path:READING_CURRENT,page:currentReadingPage(),label:readingBase(READING_CURRENT)};return{kind:'note',path:'reading:'+READING_CURRENT,openPath:READING_CURRENT,label:readingBase(READING_CURRENT)};}
+  if(DRAW_FILE)return{kind:'drawing',path:DRAW_FILE,label:drawBase(DRAW_FILE)};
+  const context=readingContext();if(!context)return null;
+  if(context.fragment.language==='markdown')return{kind:'note',path:'code-note:'+context.snippet.file+'#fragment='+context.index,file:context.snippet.file,fragment:context.index,line:context.line,label:fragmentDisplayName(context.fragment,context.snippet.name)};
+  return{kind:'code',path:context.snippet.file,file:context.snippet.file,fragment:context.index,line:context.line,label:fragmentDisplayName(context.fragment,context.snippet.name)};
+}
+function workspaceLinkMarkdown(target){
+  if(!target)return'';const label=String(target.label||'内容').replace(/[\]|]/g,' ');
+  if(target.kind==='code'){const file=encodeURIComponent(target.path).replace(/_/g,'%5F').replace(/\*/g,'%2A'),line=Math.max(1,Number(target.line)||1);return'[[code-ref:'+file+'#fragment='+(Number(target.fragment)||0)+'&line='+line+'&end='+line+'|'+label+':'+line+']]';}
+  if(target.kind==='pdf'){const page=Math.max(1,Number(target.page)||1);return'[[pdf-ref:'+readingPdfRefPath(target.path)+'#page='+page+'&fragment=|'+label+' · P.'+page+']]';}
+  if(target.kind==='note')return'[[note-ref:'+encodeURIComponent(target.path)+'|'+label+']]';
+  return'';
+}
+async function copyTextValue(value){if(!value)return false;try{await navigator.clipboard.writeText(value);return true;}catch(_){const input=document.createElement('textarea');input.value=value;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();let ok=false;try{ok=document.execCommand('copy');}catch(__){}input.remove();return ok;}}
+async function copyCurrentWorkspaceLink(){const target=currentWorkspaceTarget(),value=workspaceLinkMarkdown(target);if(!value){setStatus('err','当前内容不能生成内部链接');return false;}const ok=await copyTextValue(value);const message=ok?'内部链接已复制，可粘贴到任意 Markdown':'复制失败，请检查浏览器剪贴板权限';if(document.body.classList.contains('reading-mode'))readingStatus(message,!ok);else setStatus(ok?'ok':'err',message);return ok;}
+function closeBacklinks(){const dialog=$('backlink-dialog');dialog.classList.remove('on');}
+async function openBacklinkSource(hit){closeBacklinks();if(hit.sourceKind==='code-note'){const snippet=SNIPPETS.find((item)=>item.file===hit.file);if(snippet)goToLocation({snippet,frag:Number(hit.fragment)||0,line:Number(hit.line)||1});else setStatus('err','引用来源已移动或不存在');return;}if(hit.sourceKind==='reading-note'){await openReading(hit.path,READING_ACTIVE_SLOT);setTimeout(()=>{const col=document.querySelector('.reading-col[data-slot="'+READING_ACTIVE_SLOT+'"]'),mode=col&&col.querySelector('[data-mode="edit"]'),source=col&&col.querySelector('.reading-md-source');if(mode)mode.click();if(source){const lines=source.value.split('\n'),offset=lines.slice(0,Math.max(0,(Number(hit.line)||1)-1)).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);source.scrollTop=Math.max(0,(Number(hit.line)||1)*20-source.clientHeight/3);}},60);}}
+async function showBacklinks(){
+  const target=currentWorkspaceTarget();if(!target||target.kind==='drawing'){setStatus('err','当前绘图暂不支持反向链接');return;}
+  const dialog=$('backlink-dialog'),list=$('backlink-list');$('backlink-target').textContent=target.label||target.path;dialog.classList.add('on');list.innerHTML='<div class="backlink-empty">正在扫描代码笔记与阅读笔记…</div>';dialog.dataset.target=JSON.stringify(target);
+  const params=new URLSearchParams({kind:target.kind,path:target.path});if(target.kind==='code')params.set('fragment',String(Number(target.fragment)||0));const result=await api('/api/workspace/backlinks?'+params.toString());
+  if(!result.ok){list.innerHTML='<div class="backlink-empty">索引失败：'+escapeHtml(result.error||'未知错误')+'</div>';return;}list.replaceChildren();
+  if(!result.hits.length){list.innerHTML='<div class="backlink-empty">还没有内容引用这里。<br>使用“复制链接”，粘贴到 Markdown 后即可建立双向关联。</div>';return;}
+  for(const hit of result.hits){const row=document.createElement('button');row.type='button';row.className='backlink-row';const icon=document.createElement('span');icon.className='icon';icon.textContent=hit.sourceKind==='code-note'?'M↓':'▤';const main=document.createElement('span');main.className='main';const name=document.createElement('span');name.className='name';name.textContent=hit.name||'Markdown';const preview=document.createElement('span');preview.className='preview';preview.textContent=hit.preview||hit.label||'';main.append(name,preview);const where=document.createElement('span');where.className='where';where.textContent=(hit.project||'')+' · L'+(hit.line||1);row.append(icon,main,where);row.onclick=()=>openBacklinkSource(hit);list.appendChild(row);}
+}
+function workspaceSnapshotStatus(kind,message){if(document.body.classList.contains('reading-mode'))readingStatus(message,kind==='err');else setStatus(kind,message);}
+function saveWorkspaceSnapshot(){const target=currentWorkspaceTarget();if(!target){setStatus('err','没有可保存的工作台内容');return;}const snapshot={version:1,target,sideWidth:localStorage.getItem('mc-side-w')||'',outlineWidth:localStorage.getItem('mc-outline-w')||'',outputHeight:localStorage.getItem('mc-out-h')||'',readingFragmentsWidth:localStorage.getItem('mc-reading-fragments-width')||'',theme:APP_THEME,updatedAt:Date.now()};try{localStorage.setItem(WORKSPACE_SNAPSHOT_KEY,JSON.stringify(snapshot));workspaceSnapshotStatus('ok','工作台快照已保存 · '+target.label);}catch(error){workspaceSnapshotStatus('err','工作台快照保存失败：'+error.message);}}
+async function restoreWorkspaceSnapshot(){let snapshot=null;try{snapshot=JSON.parse(localStorage.getItem(WORKSPACE_SNAPSHOT_KEY)||'null');}catch(_){}if(!snapshot||!snapshot.target){setStatus('err','还没有保存工作台快照');return;}const target=snapshot.target;if(snapshot.theme)applyAppTheme(snapshot.theme);if(snapshot.sideWidth)$('side').style.width=snapshot.sideWidth+'px';if(snapshot.outlineWidth)$('outline-panel').style.width=snapshot.outlineWidth+'px';if(snapshot.outputHeight)$('output').style.height=snapshot.outputHeight+'px';if(snapshot.readingFragmentsWidth)$('reading-stage').style.setProperty('--reading-fragments-width',snapshot.readingFragmentsWidth+'px');if(target.kind==='drawing')await openDrawing(target.path);else if(target.kind==='pdf'){await openReading(target.path,0);await setReadingPage(0,target.page||1);}else if(target.kind==='note'&&target.openPath)await openReading(target.openPath,0);else{const snippet=SNIPPETS.find((item)=>item.file===(target.file||target.path));if(snippet)goToLocation({snippet,frag:Number(target.fragment)||0,line:Number(target.line)||1});else{setStatus('err','快照中的内容已移动或不存在');return;}}workspaceSnapshotStatus('ok','已恢复工作台快照 · '+(target.label||target.path));}
 function goToLinePrompt(){const context=readingContext();if(!context)return;const value=prompt('跳转到行：',String(context.line||1));if(value===null)return;const line=Math.max(1,Number.parseInt(value,10)||1);if(activeSplitContext())activateOpenSplitLocation(SPLIT_EDITORS.findIndex(item=>splitKey(item.file,item.fragment)===ACTIVE_SPLIT_KEY),line);else jumpToLine(line);}
 function commandPaletteItems(){return[
-  {name:'工作台：快速打开代码、阅读资料或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
+  {name:'工作台：快速打开代码、阅读资料或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'工作台：保存当前快照',key:'',run:saveWorkspaceSnapshot},{name:'工作台：恢复最近快照',key:'',run:restoreWorkspaceSnapshot},{name:'引用：复制当前内容链接',key:'',run:copyCurrentWorkspaceLink},{name:'引用：查看当前内容的反向链接',key:'',run:showBacklinks},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
 ];}
 function renderCommandResults(query){const box=$('sym-modal-res');box.replaceChildren();const q=String(query||'').trim(),items=commandPaletteItems().map(item=>({item,score:q?fuzzyScore(q,item.name+' '+item.key):0})).filter(row=>!q||row.score>=0).sort((a,b)=>b.score-a.score);for(const {item} of items){const row=searchResultRow('›',item.name,'',item.key,()=>{closeSymModal();item.run();});row.classList.add('command-result');box.appendChild(row);}SYM_ACTIVE=0;if(items.length)box.firstElementChild.classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的命令</span>';$('sym-modal-status').textContent=items.length+' 个命令 · Ctrl/⌘+Shift+P';}
 function textSearchMatcher(query) {
@@ -9112,7 +9185,7 @@ function renderCode() {
     $('ln').textContent = f ? (view.lineNos || f.code.split('\n').map((_, i) => i + 1)).join('\n') : '';
     try { refreshCodeHierarchy(); } catch (_) {}
   }
-  $('btn-edit').disabled = !f;
+  $('btn-edit').disabled = !f;$('btn-backlinks').disabled=!f;
   $('btn-history').disabled = !f;
   $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = $('btn-info').disabled = !f;
   $('btn-run').textContent = isLatex ? '▶ PDF' : '▶';
@@ -9416,6 +9489,7 @@ function renderMarkdown(md, baseLine) {
     t = t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (_, alt, u) => { u = safeMdUrl(u); return u ? `<img src="${u}" alt="${esc(alt)}">` : ''; });
     t = t.replace(/\[\[code-ref:([^#|\]]+)#fragment=(\d+)(?:&amp;|&)line=(\d+)(?:(?:&amp;|&)end=(\d+))?\|([^\]]+)\]\]/g, (_,file,frag,line,end,label) => '<a href="#" class="md-code-ref" data-code-file="'+file+'" data-code-fragment="'+frag+'" data-code-line="'+line+'" data-code-end="'+(end||line)+'" title="定位到代码定义">'+label+'</a>');
+    t = t.replace(/\[\[note-ref:([^|\]]+)\|([^\]]+)\]\]/g, (_,path,label) => '<a href="#" class="md-note-ref" data-note-path="'+path+'" title="打开关联笔记">'+label+'</a>');
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (_, tx, u) => { u = safeMdUrl(u); return u ? `<a href="${u}" target="_blank" rel="noopener">${tx}</a>` : tx; });
     t = t.replace(/\u0001(\d+)\u0001/g, (_, n) => '<code>' + codes[+n] + '</code>');
     return t;
@@ -9513,6 +9587,11 @@ function renderMarkdown(md, baseLine) {
 
 function decorateMarkdownLinks(root) {
   if (!root) return;
+  root.querySelectorAll('.md-note-ref').forEach((node) => {
+    if(node.dataset.bound==='1')return;node.dataset.bound='1';node.tabIndex=0;
+    const jump=async()=>{let key='';try{key=decodeURIComponent(node.dataset.notePath||'');}catch(_){key=node.dataset.notePath||'';}if(key.startsWith('reading:')){await openReading(key.slice(8),READING_ACTIVE_SLOT);return;}if(key.startsWith('code-note:')){const match=key.slice(10).match(/^(.*)#fragment=(\d+)$/),snippet=match&&SNIPPETS.find((item)=>item.file===match[1]);if(snippet){goToLocation({snippet,frag:Number(match[2])||0,line:1});return;}}setStatus('err','关联笔记已移动或不存在');};
+    node.onclick=(event)=>{event.preventDefault();event.stopPropagation();jump();};node.onkeydown=(event)=>{if(event.key==='Enter'){event.preventDefault();jump();}};
+  });
   root.querySelectorAll('.md-code-ref').forEach((node) => {
     if(node.dataset.bound==='1')return;node.dataset.bound='1';node.tabIndex=0;
     const jump=()=>{let file='';try{file=decodeURIComponent(node.dataset.codeFile||'');}catch(_){file=node.dataset.codeFile||'';}const snippet=SNIPPETS.find((item)=>item.file===file);if(!snippet){setStatus('err','引用的代码文件已移动或不存在');return;}goToLocation({snippet,frag:Number(node.dataset.codeFragment)||0,line:Number(node.dataset.codeLine)||1});};
@@ -11421,6 +11500,8 @@ applyEditorWordWrap();
 $('btn-edit').onclick = toggleEdit;
 $('btn-history').onclick = openTimeline;
 $('btn-info').onclick = openEditDialog;
+$('btn-backlinks').onclick = showBacklinks;
+$('backlink-close').onclick=closeBacklinks;$('backlink-copy').onclick=copyCurrentWorkspaceLink;$('backlink-dialog').addEventListener('mousedown',(event)=>{if(event.target===$('backlink-dialog'))closeBacklinks();});document.addEventListener('keydown',(event)=>{if(event.key==='Escape'&&$('backlink-dialog').classList.contains('on'))closeBacklinks();});
 $('review-close').onclick = closeReview;
 $('review-restore').onclick = restoreTimeline;
 $('review-dialog').addEventListener('click', (event) => { if (event.target === $('review-dialog')) closeReview(); });
