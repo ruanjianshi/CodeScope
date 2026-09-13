@@ -1002,9 +1002,9 @@
   #excal-root .excalidraw { position: absolute; inset: 0; }
   #drawio-root { flex:1; min-height:0; position:relative; display:none; background:#1e1e1e; }
   #drawio-root iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
-  #xmind-root { flex:1; min-height:0; display:none; flex-direction:column; background:#0b1017; }
+  #xmind-root { position:relative; flex:1; min-height:0; display:none; flex-direction:column; background:#0b1017; }
   .xmind-toolbar { display:flex; align-items:center; gap:6px; min-height:42px; padding:6px 12px; border-bottom:1px solid var(--border); background:#111821; }
-  .xmind-toolbar button { padding:4px 9px; font-size:11px; }
+  .xmind-toolbar button { flex:none; padding:4px 9px; font-size:11px; white-space:nowrap; }
   .xmind-toolbar button:disabled { opacity:.42; cursor:default; }
   #xmind-sheet-select { max-width:150px; padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:#0b1119; color:var(--dim); font:11px var(--font); }
   #xmind-sheet-title { min-width:130px; max-width:220px; padding:5px 8px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); font:600 12px var(--font); }
@@ -1014,26 +1014,52 @@
   #xmind-preview { position:relative; min-width:0; min-height:0; overflow:hidden; background:radial-gradient(circle at 50% 45%,rgba(45,72,108,.18),transparent 46%),#0b1017; }
   #xmind-svg { display:block; width:100%; height:100%; }
   #xmind-svg .markmap-node { cursor:pointer; }
-  #xmind-svg .markmap-link, #xmind-svg .markmap-node line { stroke:#405672; }
-  #xmind-svg .markmap-node circle { fill:rgba(120,169,255,.2); stroke:#78a9ff; }
-  #xmind-svg .markmap-foreign { color:#e4ebf4; }
+  #xmind-root { --xm-bg:#0b1017; --xm-glow:rgba(45,72,108,.2); --xm-outline:#0e151e; --xm-row:#151f2a; --xm-link:#405672; --xm-dot:#78a9ff; --xm-node:rgba(120,169,255,.2); --xm-text:#e4ebf4; --xm-muted:#71839a; --xm-control:#0b1119; --xm-border:#34465c; --xm-selected:rgba(120,169,255,.14); --xm-accent:#78a9ff; }
+  #xmind-preview { background:radial-gradient(circle at 50% 45%,var(--xm-glow),transparent 48%),var(--xm-bg); }
+  #xmind-outline { background:var(--xm-outline); }
+  .xmind-row:hover { background:var(--xm-row); }
+  #xmind-svg .markmap-link, #xmind-svg .markmap-node line { stroke:var(--xm-link); }
+  #xmind-svg .markmap-node circle { fill:var(--xm-node); stroke:var(--xm-dot); }
+  #xmind-svg .markmap-foreign { color:var(--xm-text); }
+  #xmind-root[data-xmind-theme="classic"] { --xm-bg:#f4f7fb; --xm-glow:rgba(65,105,225,.1); --xm-outline:#e9eef6; --xm-row:#dce6f4; --xm-link:#7c94b4; --xm-dot:#316fc5; --xm-node:#e2ecfb; --xm-text:#243248; --xm-muted:#62738b; --xm-control:rgba(255,255,255,.72); --xm-border:#9db0ca; --xm-selected:rgba(49,111,197,.13); --xm-accent:#316fc5; }
+  #xmind-root[data-xmind-theme="forest"] { --xm-bg:#09140f; --xm-glow:rgba(42,195,160,.14); --xm-outline:#0d1b15; --xm-row:#14291f; --xm-link:#326c58; --xm-dot:#52d6a4; --xm-node:rgba(82,214,164,.17); --xm-text:#dcf7eb; --xm-muted:#75a591; --xm-control:#091710; --xm-border:#315a49; --xm-selected:rgba(82,214,164,.13); --xm-accent:#52d6a4; }
+  #xmind-root[data-xmind-theme="sunset"] { --xm-bg:#17100d; --xm-glow:rgba(255,158,100,.15); --xm-outline:#201510; --xm-row:#302019; --xm-link:#8a593b; --xm-dot:#ff9e64; --xm-node:rgba(255,158,100,.18); --xm-text:#fff0e5; --xm-muted:#bd9076; --xm-control:#190f0b; --xm-border:#714a36; --xm-selected:rgba(255,158,100,.13); --xm-accent:#ff9e64; }
+  #xmind-root[data-xmind-theme="violet"] { --xm-bg:#120f1c; --xm-glow:rgba(187,154,247,.16); --xm-outline:#181326; --xm-row:#251d37; --xm-link:#665286; --xm-dot:#bb9af7; --xm-node:rgba(187,154,247,.18); --xm-text:#f0e9ff; --xm-muted:#9585af; --xm-control:#120e1d; --xm-border:#584773; --xm-selected:rgba(187,154,247,.13); --xm-accent:#bb9af7; }
+  #xmind-root[data-xmind-theme="paper"] { --xm-bg:#f5f0e5; --xm-glow:rgba(162,118,55,.08); --xm-outline:#ebe3d4; --xm-row:#ded3c0; --xm-link:#98856b; --xm-dot:#9b6d32; --xm-node:#efe1c8; --xm-text:#382e24; --xm-muted:#766957; --xm-control:rgba(255,252,244,.68); --xm-border:#b7a68c; --xm-selected:rgba(155,109,50,.13); --xm-accent:#9b6d32; }
+  #xmind-root[data-xmind-theme="spectrum"] { --xm-bg:#0c1018; --xm-glow:rgba(111,85,255,.16); --xm-outline:#111723; --xm-row:#1a2231; --xm-link:#526078; --xm-dot:#7dd3fc; --xm-node:rgba(125,211,252,.16); --xm-text:#eef4ff; --xm-muted:#8290a9; --xm-control:#0b111b; --xm-border:#40516c; --xm-selected:rgba(125,211,252,.12); --xm-accent:#7dd3fc; }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="1"] circle { stroke:#ff7b72;fill:rgba(255,123,114,.18) }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="2"] circle { stroke:#7ee787;fill:rgba(126,231,135,.17) }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="3"] circle { stroke:#ffa657;fill:rgba(255,166,87,.18) }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="4"] circle { stroke:#d2a8ff;fill:rgba(210,168,255,.18) }
   #xmind-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); font-size:12px; pointer-events:none; }
   .xmind-row { position:relative; display:flex; align-items:center; gap:4px; min-height:31px; margin:1px 0; padding:2px 5px; border:1px solid transparent; border-radius:6px; }
-  .xmind-row:hover { border-color:#29384a; background:#151f2a; }
-  .xmind-row.selected { border-color:rgba(120,169,255,.5); background:rgba(120,169,255,.14); }
+  .xmind-row:hover { border-color:var(--xm-border); background:var(--xm-row); }
+  .xmind-row.selected { border-color:var(--xm-accent); background:var(--xm-selected); }
   .xmind-row.dragging { opacity:.45; }
   .xmind-row.drop-child { box-shadow:inset 0 0 0 1px #78a9ff; }
   .xmind-row.drop-before::before, .xmind-row.drop-after::after { content:''; position:absolute; left:5px; right:5px; height:2px; background:#78a9ff; border-radius:2px; }
   .xmind-row.drop-before::before { top:-2px; } .xmind-row.drop-after::after { bottom:-2px; }
-  .xmind-toggle, .xmind-grip { flex:none; width:20px; height:24px; padding:0; border:0; background:transparent; color:#71839a; }
-  .xmind-toggle:hover, .xmind-grip:hover { color:#c9d5e5; background:#1d2936; }
+  .xmind-toggle, .xmind-grip { flex:none; width:20px; height:24px; padding:0; border:0; background:transparent; color:var(--xm-muted); }
+  .xmind-toggle:hover, .xmind-grip:hover { color:var(--xm-text); background:var(--xm-row); }
   .xmind-toggle.empty { visibility:hidden; }
   .xmind-grip { cursor:grab; font-size:13px; }
-  .xmind-title { flex:1; min-width:0; padding:4px 6px; border:1px solid transparent; border-radius:5px; outline:none; background:transparent; color:#dce5f1; font:12px/1.35 var(--font); }
-  .xmind-title:hover, .xmind-title:focus { border-color:#34465c; background:#0b1119; }
-  .xmind-depth { flex:none; color:#56667a; font:9px var(--mono); }
+  #xmind-root .xmind-title { flex:1; min-width:0; padding:4px 6px; border:1px solid transparent; border-radius:5px; outline:none; background:transparent; color:var(--xm-text); font:12px/1.35 var(--font); }
+  textarea.xmind-title { min-height:26px; max-height:112px; resize:none; overflow:hidden; box-sizing:border-box; }
+  #xmind-root .xmind-title:hover, #xmind-root .xmind-title:focus { border-color:var(--xm-border); background:var(--xm-control); }
+  .xmind-depth { flex:none; color:var(--xm-muted); font:9px var(--mono); }
   .xmind-help { margin-left:auto; color:#758399; font-size:10px; }
-  @media(max-width:900px){.xmind-workspace{grid-template-columns:minmax(220px,42%) minmax(0,1fr)}.xmind-help{display:none}}
+  .xmind-theme-wrap { position:relative; }
+  #xmind-theme-menu { position:absolute; z-index:80; top:calc(100% + 7px); right:0; display:grid; grid-template-columns:repeat(2,minmax(112px,1fr)); gap:5px; width:250px; padding:8px; border:1px solid var(--border); border-radius:10px; background:#111821; box-shadow:0 14px 38px rgba(0,0,0,.48); }
+  #xmind-theme-menu.hidden, #xmind-shortcuts.hidden { display:none; }
+  #xmind-theme-menu button { display:flex; align-items:center; gap:7px; padding:7px 8px; border-color:transparent; text-align:left; }
+  #xmind-theme-menu button.on { border-color:var(--xm-accent); background:rgba(120,169,255,.13); }
+  .xmind-swatch { width:20px; height:14px; border-radius:4px; border:1px solid rgba(255,255,255,.2); }
+  #xmind-shortcuts { position:absolute; z-index:75; top:54px; right:14px; width:min(430px,calc(100% - 28px)); padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:#111821; box-shadow:0 16px 45px rgba(0,0,0,.52); }
+  .xmind-shortcut-head { display:flex; align-items:center; margin-bottom:8px; color:var(--text); font-size:12px; font-weight:700; }
+  .xmind-shortcut-grid { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 12px; color:var(--dim); font-size:11px; }
+  .xmind-shortcut-grid kbd { min-width:90px; padding:2px 6px; border:1px solid #344253; border-bottom-width:2px; border-radius:5px; background:#0a1017; color:#dce5f1; font:10px var(--mono); text-align:center; }
+  @media(max-width:1400px){.xmind-help{display:none}}
+  @media(max-width:900px){.xmind-workspace{grid-template-columns:minmax(220px,42%) minmax(0,1fr)}}
   #draw-ai-btn, #draw-xml-btn { display:none; }
   #draw-tool-dialog { position:absolute; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(3,7,12,.72); backdrop-filter:blur(5px); }
   #draw-tool-dialog.open { display:flex; }
@@ -2596,12 +2622,26 @@
           <button id="xmind-undo" title="撤销（Ctrl/⌘+Z）">撤销</button>
           <button id="xmind-redo" title="重做（Ctrl/⌘+Shift+Z）">重做</button>
           <button id="xmind-fit" title="将导图适应可视区域">适应</button>
-          <span class="xmind-help">拖到主题中部成为子级，拖到上/下边缘调整顺序</span>
+          <div class="xmind-theme-wrap"><button id="xmind-theme-btn" title="选择导图外观">主题 · 深海</button><div id="xmind-theme-menu" class="hidden">
+            <button data-theme="midnight"><i class="xmind-swatch" style="background:linear-gradient(135deg,#0b1017,#78a9ff)"></i>深海</button>
+            <button data-theme="classic"><i class="xmind-swatch" style="background:linear-gradient(135deg,#f4f7fb,#316fc5)"></i>经典亮色</button>
+            <button data-theme="forest"><i class="xmind-swatch" style="background:linear-gradient(135deg,#09140f,#52d6a4)"></i>森林</button>
+            <button data-theme="sunset"><i class="xmind-swatch" style="background:linear-gradient(135deg,#17100d,#ff9e64)"></i>日落</button>
+            <button data-theme="violet"><i class="xmind-swatch" style="background:linear-gradient(135deg,#120f1c,#bb9af7)"></i>紫罗兰</button>
+            <button data-theme="paper"><i class="xmind-swatch" style="background:linear-gradient(135deg,#f5f0e5,#9b6d32)"></i>纸张</button>
+            <button data-theme="spectrum"><i class="xmind-swatch" style="background:linear-gradient(90deg,#ff7b72,#7ee787,#7dd3fc,#d2a8ff)"></i>彩虹分支</button>
+          </div></div>
+          <button id="xmind-shortcuts-btn" title="查看 XMind 同款快捷键">⌨ 快捷键</button>
+          <span class="xmind-help">Enter 同级 · Tab 子级 · 拖拽调整层级</span>
         </div>
         <div class="xmind-workspace">
           <aside id="xmind-outline" aria-label="XMind 大纲"></aside>
           <section id="xmind-preview" aria-label="XMind 导图预览"><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
         </div>
+        <aside id="xmind-shortcuts" class="hidden" aria-label="XMind 快捷键">
+          <div class="xmind-shortcut-head"><span>XMind 快捷操作</span><span class="sp"></span><button id="xmind-shortcuts-close">✕</button></div>
+          <div class="xmind-shortcut-grid"><kbd>Enter</kbd><span>新建同级主题</span><kbd>Tab</kbd><span>新建子主题</span><kbd>Ctrl/⌘ + Enter</kbd><span>新建父主题</span><kbd>Shift + Tab</kbd><span>提升一级</span><kbd>Space / F2</kbd><span>编辑选中主题</span><kbd>Alt/⌥ + ↑↓</kbd><span>上下重排主题</span><kbd>Delete</kbd><span>删除主题及子级</span><kbd>Ctrl/⌘ + Delete</kbd><span>仅删除当前主题</span><kbd>Ctrl/⌘ + /</kbd><span>折叠/展开子主题</span><kbd>Ctrl/⌘ + R</kbd><span>回到中心主题</span><kbd>↑ ↓ ← →</kbd><span>在大纲中导航</span><kbd>Ctrl/⌘ + Z</kbd><span>撤销；加 Shift 重做</span></div>
+        </aside>
       </div>
       <div id="draw-tool-dialog" role="dialog" aria-modal="true" aria-labelledby="draw-tool-title">
         <div class="draw-tool-panel">
@@ -4546,8 +4586,14 @@ async function generateDrawioWithAi(){
 
 /* ---- XMind：标准 .xmind 工作簿 + 可拖拽大纲 + Markmap 预览 ---- */
 let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set();
+const XMIND_THEMES={midnight:'深海',classic:'经典亮色',forest:'森林',sunset:'日落',violet:'紫罗兰',paper:'纸张',spectrum:'彩虹分支'};
 function xmindClone(value){return JSON.parse(JSON.stringify(value));}
 function xmindId(){return 'cs'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
+function xmindThemeStorageKey(){return 'mc-xmind-theme:'+(DRAW_FILE||'default');}
+function setXmindTheme(theme){
+  const id=XMIND_THEMES[theme]?theme:'midnight',root=$('xmind-root');root.dataset.xmindTheme=id;$('xmind-theme-btn').textContent='主题 · '+XMIND_THEMES[id];$('xmind-theme-menu').querySelectorAll('button').forEach(button=>button.classList.toggle('on',button.dataset.theme===id));try{localStorage.setItem(xmindThemeStorageKey(),id);}catch(_){}setTimeout(()=>{if(XMIND_MAP)XMIND_MAP.fit();},80);
+}
+function loadXmindTheme(){let theme='midnight';try{theme=localStorage.getItem(xmindThemeStorageKey())||localStorage.getItem('mc-xmind-theme:default')||'midnight';}catch(_){}setXmindTheme(theme);}
 function xmindSheet(){return XMIND_WORKBOOK&&XMIND_WORKBOOK[XMIND_SHEET_INDEX];}
 function xmindRootTopic(){const sheet=xmindSheet();return sheet&&sheet.rootTopic;}
 function xmindChildren(topic,create=false){
@@ -4584,7 +4630,7 @@ function xmindUndo(direction){
   DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();renderXmindSheets();renderXmindOutline();scheduleXmindPreview();xmindUpdateUndo();
 }
 function xmindMarkdown(){
-  const lines=[];const clean=(value)=>String(value||'未命名主题').replace(/[\r\n]+/g,' ').replace(/([\\`*_{}\[\]<>])/g,'\\$1').trim()||'未命名主题';
+  const lines=[];const clean=(value)=>String(value||'未命名主题').split(/\r?\n/).map(line=>line.replace(/([\\`*_{}\[\]<>])/g,'\\$1').trim()).filter(Boolean).join('<br>')||'未命名主题';
   const walk=(topic,depth)=>{if(depth<=6)lines.push('#'.repeat(Math.max(1,depth))+' '+clean(topic.title));else lines.push('  '.repeat(depth-7)+'- '+clean(topic.title));for(const child of xmindChildren(topic))walk(child,depth+1);};
   const root=xmindRootTopic();if(root)walk(root,1);return lines.join('\n');
 }
@@ -4596,16 +4642,16 @@ function renderXmindPreview(){
   }
   empty.style.display='none';try{const{root}=new window.MarkmapLib.Transformer().transform(xmindMarkdown()||'# 空导图');if(!XMIND_MAP)XMIND_MAP=window.MarkmapView.Markmap.create(svg,{duration:160,maxWidth:300});XMIND_MAP.setData(root);XMIND_MAP.fit();}catch(error){empty.style.display='grid';empty.textContent='导图渲染失败：'+error.message;}
 }
+function xmindResizeTitle(input){input.style.height='26px';input.style.height=Math.min(112,Math.max(26,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>112?'auto':'hidden';}
 function renderXmindOutline(){
   const box=$('xmind-outline');if(!box||DRAW_KIND!=='xmind')return;box.innerHTML='';const root=xmindRootTopic();if(!root)return;
   const walk=(topic,parent,depth)=>{
     const row=document.createElement('div');row.className='xmind-row'+(topic.id===XMIND_SELECTED?' selected':'');row.dataset.id=topic.id;row.style.paddingLeft=(5+Math.min(depth,12)*14)+'px';row.draggable=!!parent;
     const toggle=document.createElement('button');toggle.className='xmind-toggle'+(xmindChildren(topic).length?'':' empty');toggle.textContent=XMIND_COLLAPSED.has(topic.id)?'▸':'▾';toggle.title=XMIND_COLLAPSED.has(topic.id)?'展开子主题':'收起子主题';toggle.onclick=(event)=>{event.stopPropagation();if(XMIND_COLLAPSED.has(topic.id))XMIND_COLLAPSED.delete(topic.id);else XMIND_COLLAPSED.add(topic.id);renderXmindOutline();};
     const grip=document.createElement('button');grip.className='xmind-grip';grip.textContent='⠇';grip.title=parent?'拖拽调整层级或顺序':'根主题';grip.disabled=!parent;
-    const input=document.createElement('input');input.className='xmind-title';input.value=topic.title||'';input.setAttribute('aria-label','主题名称');input.onfocus=()=>{XMIND_SELECTED=topic.id;renderXmindOutlineSelection();};input.oninput=()=>{topic.title=input.value;DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();scheduleXmindPreview();xmindQueueRecord();};input.onblur=xmindRecord;
-    input.onkeydown=(event)=>{if(event.key==='Enter'){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();xmindAddChild();}else if((event.key==='Backspace'||event.key==='Delete')&&!input.value&&parent){event.preventDefault();xmindDelete();}};
+    const input=document.createElement('textarea');input.rows=1;input.className='xmind-title';input.value=topic.title||'';input.setAttribute('aria-label','主题名称');input.onfocus=()=>{XMIND_SELECTED=topic.id;renderXmindOutlineSelection();};input.oninput=()=>{topic.title=input.value;xmindResizeTitle(input);DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();scheduleXmindPreview();xmindQueueRecord();};input.onblur=xmindRecord;
     const level=document.createElement('span');level.className='xmind-depth';level.textContent=depth===0?'中心':'L'+depth;
-    row.append(toggle,grip,input,level);row.onclick=(event)=>{if(event.target!==input){XMIND_SELECTED=topic.id;renderXmindOutlineSelection();}};
+    row.append(toggle,grip,input,level);requestAnimationFrame(()=>xmindResizeTitle(input));row.onclick=(event)=>{if(event.target!==input){XMIND_SELECTED=topic.id;renderXmindOutlineSelection();}};
     row.addEventListener('dragstart',(event)=>{if(!parent){event.preventDefault();return;}XMIND_DRAG=topic.id;row.classList.add('dragging');event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-codescope-xmind',topic.id);});
     row.addEventListener('dragend',()=>{XMIND_DRAG=null;document.querySelectorAll('.xmind-row').forEach(node=>node.classList.remove('dragging','drop-before','drop-after','drop-child'));});
     row.addEventListener('dragover',(event)=>{const source=XMIND_DRAG||event.dataTransfer.getData('application/x-codescope-xmind');if(!source||source===topic.id||xmindContains(xmindFind(source)?.topic,topic.id))return;event.preventDefault();const rect=row.getBoundingClientRect(),ratio=(event.clientY-rect.top)/Math.max(1,rect.height),mode=ratio<.27?'before':(ratio>.73?'after':'child');row.classList.remove('drop-before','drop-after','drop-child');row.classList.add('drop-'+mode);row.dataset.dropMode=mode;});
@@ -4620,8 +4666,21 @@ function xmindNewTopic(title='新主题'){return{id:xmindId(),class:'topic',titl
 function xmindAddSheet(){const number=XMIND_WORKBOOK.length+1;XMIND_WORKBOOK.push({id:xmindId(),class:'sheet',title:'画布 '+number,rootTopic:{...xmindNewTopic('中心主题'),structureClass:'org.xmind.ui.logic.right'}});XMIND_SHEET_INDEX=XMIND_WORKBOOK.length-1;XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
 function xmindDeleteSheet(){if(!XMIND_WORKBOOK||XMIND_WORKBOOK.length<=1)return;XMIND_WORKBOOK.splice(XMIND_SHEET_INDEX,1);XMIND_SHEET_INDEX=Math.max(0,Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1));XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
 function xmindAddChild(){const hit=xmindFind(XMIND_SELECTED)||xmindFind(xmindRootTopic()?.id);if(!hit)return;const topic=xmindNewTopic();xmindChildren(hit.topic,true).push(topic);XMIND_COLLAPSED.delete(hit.topic.id);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
-function xmindAddSibling(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return xmindAddChild();const list=xmindChildren(hit.parent,true),topic=xmindNewTopic(),index=list.indexOf(hit.topic);list.splice(index+1,0,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindAddSibling(before=false){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return xmindAddChild();const list=xmindChildren(hit.parent,true),topic=xmindNewTopic(),index=list.indexOf(hit.topic);list.splice(index+(before?0:1),0,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindAddParent(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic),topic=xmindNewTopic('新父主题');topic.children.attached.push(hit.topic);list.splice(index,1,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
 function xmindDelete(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic);if(index>=0)list.splice(index,1);XMIND_SELECTED=hit.parent.id;xmindChanged();}
+function xmindDeleteSingle(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic);if(index<0)return;list.splice(index,1,...xmindChildren(hit.topic));XMIND_SELECTED=hit.parent.id;xmindChanged();}
+function xmindReorder(delta){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic),next=index+delta;if(index<0||next<0||next>=list.length)return;[list[index],list[next]]=[list[next],list[index]];xmindChanged();}
+function xmindUnindent(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const parentHit=xmindFind(hit.parent.id);if(!parentHit||!parentHit.parent)return;const from=xmindChildren(hit.parent,true),index=from.indexOf(hit.topic);if(index<0)return;from.splice(index,1);const to=xmindChildren(parentHit.parent,true),parentIndex=to.indexOf(hit.parent);to.splice(parentIndex+1,0,hit.topic);xmindChanged();}
+function xmindToggleFold(all=false){
+  if(all){const foldable=[];(function walk(topic){if(xmindChildren(topic).length)foldable.push(topic.id);xmindChildren(topic).forEach(walk);})(xmindRootTopic());const shouldFold=foldable.some(id=>!XMIND_COLLAPSED.has(id));XMIND_COLLAPSED=shouldFold?new Set(foldable):new Set();}
+  else{const hit=xmindFind(XMIND_SELECTED);if(!hit||!xmindChildren(hit.topic).length)return;if(XMIND_COLLAPSED.has(hit.topic.id))XMIND_COLLAPSED.delete(hit.topic.id);else XMIND_COLLAPSED.add(hit.topic.id);}
+  renderXmindOutline();
+}
+function xmindSelectVisible(delta){const rows=[...document.querySelectorAll('#xmind-outline .xmind-row')],index=rows.findIndex(row=>row.dataset.id===XMIND_SELECTED),next=rows[Math.max(0,Math.min(rows.length-1,(index<0?0:index)+delta))];if(!next)return;XMIND_SELECTED=next.dataset.id;renderXmindOutlineSelection();next.scrollIntoView({block:'nearest'});}
+function xmindSelectParent(){const hit=xmindFind(XMIND_SELECTED);if(!hit)return;if(xmindChildren(hit.topic).length&&!XMIND_COLLAPSED.has(hit.topic.id)){XMIND_COLLAPSED.add(hit.topic.id);renderXmindOutline();return;}if(hit.parent){XMIND_SELECTED=hit.parent.id;renderXmindOutlineSelection();}}
+function xmindSelectChild(){const hit=xmindFind(XMIND_SELECTED);if(!hit)return;if(XMIND_COLLAPSED.has(hit.topic.id)){XMIND_COLLAPSED.delete(hit.topic.id);renderXmindOutline();return;}const child=xmindChildren(hit.topic)[0];if(child){XMIND_SELECTED=child.id;renderXmindOutlineSelection();}}
+function xmindFocusTitle(){const row=document.querySelector('.xmind-row[data-id="'+CSS.escape(XMIND_SELECTED||'')+'"]'),input=row&&row.querySelector('.xmind-title');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
 function xmindMove(sourceId,targetId,mode){
   const source=xmindFind(sourceId),target=xmindFind(targetId);if(!source||!source.parent||!target||sourceId===targetId||xmindContains(source.topic,targetId))return;
   const old=xmindChildren(source.parent,true),oldIndex=old.indexOf(source.topic);if(oldIndex<0)return;old.splice(oldIndex,1);
@@ -4632,9 +4691,9 @@ function xmindMove(sourceId,targetId,mode){
 function openXmindEditor(workbook){
   XMIND_WORKBOOK=xmindClone(workbook);XMIND_SHEET_INDEX=0;xmindNormalize();XMIND_SELECTED=xmindRootTopic().id;XMIND_HISTORY=[JSON.stringify(XMIND_WORKBOOK)];XMIND_HISTORY_INDEX=0;XMIND_MAP=null;XMIND_COLLAPSED=new Set();
   $('xmind-root').style.display='flex';$('drawio-root').style.display='none';$('excal-root').style.display='none';$('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
-  renderXmindSheets();renderXmindOutline();renderXmindPreview();setDrawStatus('XMind 已加载 · 自动保存','ok');
+  loadXmindTheme();renderXmindSheets();renderXmindOutline();renderXmindPreview();setDrawStatus('XMind 已加载 · 自动保存','ok');
 }
-function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();$('xmind-outline').innerHTML='';$('xmind-svg').innerHTML='';$('xmind-root').style.display='none';}
+function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();$('xmind-outline').innerHTML='';$('xmind-svg').innerHTML='';$('xmind-theme-menu').classList.add('hidden');$('xmind-shortcuts').classList.add('hidden');$('xmind-root').style.display='none';}
 
 function scheduleDrawSave() {
   DRAW_DIRTY = true; setDrawStatus('未保存…', 'dirty');
@@ -5169,7 +5228,17 @@ function wireDrawingPanel() {
   $('xmind-add-child').onclick=xmindAddChild;$('xmind-add-sibling').onclick=xmindAddSibling;$('xmind-delete').onclick=xmindDelete;$('xmind-add-sheet').onclick=xmindAddSheet;$('xmind-delete-sheet').onclick=xmindDeleteSheet;$('xmind-undo').onclick=()=>xmindUndo(-1);$('xmind-redo').onclick=()=>xmindUndo(1);$('xmind-fit').onclick=()=>{if(XMIND_MAP)XMIND_MAP.fit();};
   $('xmind-sheet-select').onchange=()=>{XMIND_SHEET_INDEX=Math.max(0,Number($('xmind-sheet-select').value)||0);XMIND_SELECTED=xmindRootTopic().id;renderXmindSheets();renderXmindOutline();renderXmindPreview();};
   $('xmind-sheet-title').oninput=()=>{const sheet=xmindSheet();if(!sheet)return;sheet.title=$('xmind-sheet-title').value;DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();xmindQueueRecord();};$('xmind-sheet-title').onblur=()=>{xmindRecord();renderXmindSheets();};
-  $('xmind-root').addEventListener('keydown',(event)=>{if(DRAW_KIND!=='xmind')return;const mod=event.metaKey||event.ctrlKey;if(mod&&event.key.toLowerCase()==='z'){event.preventDefault();xmindUndo(event.shiftKey?1:-1);}else if(mod&&event.key.toLowerCase()==='y'){event.preventDefault();xmindUndo(1);}else if(event.key==='Delete'&&!event.target.classList.contains('xmind-title'))xmindDelete();});
+  const themeMenu=$('xmind-theme-menu');$('xmind-theme-btn').onclick=(event)=>{event.stopPropagation();themeMenu.classList.toggle('hidden');$('xmind-shortcuts').classList.add('hidden');};themeMenu.querySelectorAll('button').forEach(button=>button.onclick=(event)=>{event.stopPropagation();setXmindTheme(button.dataset.theme);themeMenu.classList.add('hidden');});
+  $('xmind-shortcuts-btn').onclick=(event)=>{event.stopPropagation();$('xmind-shortcuts').classList.toggle('hidden');themeMenu.classList.add('hidden');};$('xmind-shortcuts-close').onclick=()=>$('xmind-shortcuts').classList.add('hidden');document.addEventListener('click',(event)=>{if(!event.target.closest('.xmind-theme-wrap'))themeMenu.classList.add('hidden');if(!event.target.closest('#xmind-shortcuts')&&!event.target.closest('#xmind-shortcuts-btn'))$('xmind-shortcuts').classList.add('hidden');});
+  $('xmind-root').addEventListener('keydown',(event)=>{
+    if(DRAW_KIND!=='xmind')return;const mod=event.metaKey||event.ctrlKey,key=event.key.toLowerCase(),editing=event.target.classList.contains('xmind-title');
+    if(mod&&key==='z'){event.preventDefault();xmindUndo(event.shiftKey?1:-1);return;}if(mod&&key==='y'){event.preventDefault();xmindUndo(1);return;}
+    if(mod&&event.key==='Enter'){event.preventDefault();xmindAddParent();return;}if(event.altKey&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();xmindReorder(event.key==='ArrowUp'?-1:1);return;}
+    if(mod&&key==='/'){event.preventDefault();xmindToggleFold(event.altKey||event.shiftKey);return;}if(mod&&key==='r'){event.preventDefault();XMIND_SELECTED=xmindRootTopic().id;XMIND_COLLAPSED.delete(XMIND_SELECTED);renderXmindOutline();xmindFocusTitle();return;}
+    if(mod&&(event.key==='Delete'||event.key==='Backspace')){event.preventDefault();xmindDeleteSingle();return;}
+    if(editing){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();if(event.shiftKey)xmindUnindent();else xmindAddChild();}else if(event.key==='Escape'){event.preventDefault();event.target.blur();}else if(event.key==='Enter'&&event.shiftKey)setTimeout(()=>xmindResizeTitle(event.target),0);return;}
+    if(event.key==='Enter'){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();event.shiftKey?xmindUnindent():xmindAddChild();}else if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();xmindDelete();}else if(event.key===' '||event.key==='F2'){event.preventDefault();xmindFocusTitle();}else if(event.key==='ArrowUp'){event.preventDefault();xmindSelectVisible(-1);}else if(event.key==='ArrowDown'){event.preventDefault();xmindSelectVisible(1);}else if(event.key==='ArrowLeft'){event.preventDefault();xmindSelectParent();}else if(event.key==='ArrowRight'){event.preventDefault();xmindSelectChild();}else if(event.key==='Escape'){$('xmind-shortcuts').classList.add('hidden');themeMenu.classList.add('hidden');}
+  });
   $('draw-tool-dialog').addEventListener('mousedown',(event)=>{if(event.target===$('draw-tool-dialog'))hideDrawTool();});
   document.addEventListener('keydown',(event)=>{if(event.key==='Escape'&&$('draw-tool-dialog').classList.contains('open'))hideDrawTool();});
   $('pane-draw').classList.toggle('collapsed', !DRAW_OPEN);
