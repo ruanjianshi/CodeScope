@@ -46,6 +46,23 @@ function hoverText(contents) {
   return '';
 }
 
+function markupText(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.value === 'string') return value.value;
+  return '';
+}
+
+function completionKind(kind) {
+  return ({
+    1:'text', 2:'method', 3:'function', 4:'constructor', 5:'field', 6:'var',
+    7:'class', 8:'interface', 9:'module', 10:'property', 11:'unit', 12:'value',
+    13:'enum', 14:'keyword', 15:'snippet', 16:'color', 17:'file', 18:'reference',
+    19:'folder', 20:'enum', 21:'constant', 22:'struct', 23:'event', 24:'operator',
+    25:'typeParameter',
+  })[Number(kind)] || 'text';
+}
+
 class LspSession {
   constructor(config, root) {
     this.config = config;
@@ -80,8 +97,13 @@ class LspSession {
             hover: { contentFormat: ['markdown', 'plaintext'] },
             definition: { linkSupport: true },
             publishDiagnostics: { relatedInformation: true },
+            completion: { completionItem: { documentationFormat: ['markdown', 'plaintext'], snippetSupport: true } },
+            signatureHelp: { signatureInformation: { documentationFormat: ['markdown', 'plaintext'], parameterInformation: { labelOffsetSupport: true } } },
+            rename: { prepareSupport: true },
+            codeAction: { codeActionLiteralSupport: { codeActionKind: { valueSet: ['quickfix', 'refactor', 'source'] } } },
+            documentHighlight: { dynamicRegistration: false },
           },
-          workspace: { workspaceFolders: true },
+          workspace: { workspaceFolders: true, applyEdit: true, workspaceEdit: { documentChanges: true } },
         },
         clientInfo: { name: 'CodeScope', version: '1.2.0' },
       }, 12000).then(() => {
@@ -186,7 +208,12 @@ function createLspService(options = {}) {
       fs.writeFileSync(full, code, 'utf8');
       files.push({ index, filename, full, uri: pathToFileURL(full).href, code, language: fragment.language });
     });
-    fs.writeFileSync(path.join(root, 'compile_flags.txt'), '-I.\n', 'utf8');
+    const hasCpp = files.some((file) => file.language === 'c_cpp');
+    const hasC = files.some((file) => file.language === 'c');
+    const flags = hasCpp
+      ? ['-xc++', '-std=c++17', '-I.']
+      : hasC ? ['-xc', '-std=c11', '-I.'] : ['-I.'];
+    fs.writeFileSync(path.join(root, 'compile_flags.txt'), flags.join('\n') + '\n', 'utf8');
     return { key, root, files, selected: files.find((file) => file.index === selectedIndex) };
   }
 
@@ -199,6 +226,29 @@ function createLspService(options = {}) {
     const canonical = (value) => { try { return fs.realpathSync(value); } catch (_) { return path.resolve(value); } };
     const wanted = canonical(full), found = workspace.files.find((file) => canonical(file.full) === wanted);
     return { uri, file: found ? found.filename : path.basename(full), fragment: found ? found.index : -1, line: range.start.line + 1, column: range.start.character + 1 };
+  }
+
+  function mapWorkspaceEdit(edit, workspace) {
+    const rows = [];
+    const append = (uri, edits) => {
+      const found = workspace.files.find((file) => file.uri === uri);
+      if (!found) return;
+      for (const item of Array.isArray(edits) ? edits : []) {
+        if (!item || !item.range) continue;
+        rows.push({
+          fragment: found.index,
+          file: found.filename,
+          start: item.range.start,
+          end: item.range.end,
+          newText: String(item.newText == null ? '' : item.newText),
+        });
+      }
+    };
+    if (edit && edit.changes) for (const [uri, edits] of Object.entries(edit.changes)) append(uri, edits);
+    for (const change of (edit && Array.isArray(edit.documentChanges) ? edit.documentChanges : [])) {
+      if (change && change.textDocument) append(change.textDocument.uri, change.edits);
+    }
+    return rows;
   }
 
   async function query(input) {
@@ -226,6 +276,57 @@ function createLspService(options = {}) {
         const result = await session.request(method, action === 'references' ? { ...params, context: { includeDeclaration: true } } : params);
         const rows = (Array.isArray(result) ? result : result ? [result] : []).map((item) => mapLocation(item, workspace)).filter(Boolean);
         return { ok: true, available: true, server: config.command, locations: rows };
+      }
+      if (action === 'completion') {
+        const result = await session.request('textDocument/completion', { ...params, context: { triggerKind: Number(input.triggerKind) || 1, ...(input.triggerCharacter ? { triggerCharacter:String(input.triggerCharacter) } : {}) } });
+        const list = Array.isArray(result) ? result : result && Array.isArray(result.items) ? result.items : [];
+        const items = list.slice(0, 120).map((item) => ({
+          label: String(item.label || ''),
+          kind: completionKind(item.kind),
+          detail: String(item.detail || ''),
+          documentation: markupText(item.documentation),
+          insertText: String((item.textEdit && item.textEdit.newText) || item.insertText || item.label || ''),
+          insertTextFormat: Number(item.insertTextFormat) || 1,
+          sortText: String(item.sortText || item.label || ''),
+          filterText: String(item.filterText || item.label || ''),
+        })).filter((item) => item.label);
+        return { ok:true, available:true, server:config.command, incomplete:!!(result && result.isIncomplete), items };
+      }
+      if (action === 'signature') {
+        const result = await session.request('textDocument/signatureHelp', { ...params, context: { triggerKind:1, isRetrigger:false } });
+        return { ok:true, available:true, server:config.command, signature: result ? {
+          activeSignature:Number(result.activeSignature)||0,
+          activeParameter:Number(result.activeParameter)||0,
+          signatures:(result.signatures||[]).map((item)=>({ label:String(item.label||''), documentation:markupText(item.documentation), parameters:(item.parameters||[]).map((parameter)=>({label:parameter.label,documentation:markupText(parameter.documentation)})) })),
+        } : null };
+      }
+      if (action === 'highlights') {
+        const result = await session.request('textDocument/documentHighlight', params);
+        return { ok:true, available:true, server:config.command, highlights:(Array.isArray(result)?result:[]).map((item)=>({range:item.range,kind:Number(item.kind)||1})) };
+      }
+      if (action === 'rename') {
+        const newName = String(input.newName || '').trim();
+        if (!newName) return { ok:false, available:true, error:'新名称不能为空' };
+        try { await session.request('textDocument/prepareRename', params, 5000); } catch (_) {}
+        const result = await session.request('textDocument/rename', { ...params, newName }, 12000);
+        return { ok:true, available:true, server:config.command, edits:mapWorkspaceEdit(result, workspace) };
+      }
+      if (action === 'codeAction') {
+        const line = position.line, character = position.character;
+        const diagnostics = session.diagnostics.get(workspace.selected.uri) || [];
+        const result = await session.request('textDocument/codeAction', {
+          textDocument:params.textDocument,
+          range:input.range || { start:{line,character}, end:{line,character} },
+          context:{ diagnostics, only:Array.isArray(input.only)?input.only:undefined },
+        }, 10000);
+        const actions = (Array.isArray(result)?result:[]).slice(0,40).map((item)=>({
+          title:String(item.title || (item.command && item.command.title) || '代码操作'),
+          kind:String(item.kind||''), preferred:!!item.isPreferred,
+          disabled:item.disabled && String(item.disabled.reason||''),
+          edits:mapWorkspaceEdit(item.edit, workspace),
+          command:item.command ? { title:String(item.command.title||''), command:String(item.command.command||'') } : null,
+        }));
+        return { ok:true, available:true, server:config.command, actions };
       }
       if (action === 'diagnostics') {
         await new Promise((resolve) => setTimeout(resolve, 220));

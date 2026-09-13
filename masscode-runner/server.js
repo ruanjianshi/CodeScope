@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { StringDecoder } = require('string_decoder');
 const { spawn, execFile, execFileSync } = require('child_process');
 const { pipeline } = require('stream/promises');
@@ -23,8 +24,9 @@ const APP_VERSION = require('./package.json').version;
 
 const PORT_VALUE = Number(process.env.CODESCOPE_PORT || process.env.MASSCODE_RUNNER_PORT || 4877);
 const PORT = Number.isInteger(PORT_VALUE) && PORT_VALUE > 0 && PORT_VALUE <= 65535 ? PORT_VALUE : 4877;
-// 默认监听所有网卡（允许局域网内其他设备访问）；如需仅本机使用，显式设置 CODESCOPE_HOST=127.0.0.1。
-const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '0.0.0.0';
+// 默认仅监听本机，避免终端、文件编辑与代码执行接口意外暴露到局域网。
+// 确实需要跨设备访问时，可显式设置 CODESCOPE_HOST=0.0.0.0，并配合受信网络使用。
+const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
 
 /* ---------------------------------- 路径发现 ---------------------------------- */
 
@@ -517,7 +519,9 @@ const EXT_FOR_LANG = {
 const KNOWN_EXT = /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|py|js|mjs|cjs|ts|sh|go|java|rb|swift|json|html|css|yml|yaml|md|tex|txt|draw)$/i;
 function computeFilename(label, language, index, total) {
   const lbl = (label || '').trim();
-  if (lbl && KNOWN_EXT.test(lbl)) return lbl;
+  // 仅当 label 本身就是一个「纯文件名」时才直接使用：含路径分隔符、上跳或隐藏前缀的一律回落到默认名，
+  // 否则片段名可以控制写入路径（例如 ../../x.py 写出临时目录）。
+  if (lbl && !/[/\\]/.test(lbl) && !lbl.startsWith('.') && KNOWN_EXT.test(lbl)) return lbl;
   const ext = EXT_FOR_LANG[(language || '').toLowerCase()] || 'txt';
   return total === 1 ? 'main.' + ext : 'file' + (index + 1) + '.' + ext;
 }
@@ -800,6 +804,33 @@ function computeRev() {
 
 /* --------------------------------- 执行引擎 ---------------------------------- */
 
+const RUN_OUTPUT_LIMIT = 2 * 1024 * 1024;   // 单流输出上限 2 MB（超出截断并标记）
+// 运行/检查产生的临时目录保留时长：到期自动回收（可用环境变量覆盖，便于测试）
+const TMP_TTL_MS = Math.max(1000, Number(process.env.CODESCOPE_TMP_TTL_MS) || 30 * 60 * 1000);
+
+// 到期回收临时目录（unref，不阻塞进程退出）；服务每次运行都会新建目录，必须回收
+function scheduleTempCleanup(dir) {
+  const timer = setTimeout(() => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {} }, TMP_TTL_MS);
+  if (timer.unref) timer.unref();
+}
+
+// 启动时清扫历史残留（例如服务被强杀时留下的目录）
+function sweepTempDirs() {
+  try {
+    const root = os.tmpdir();
+    const now = Date.now();
+    let removed = 0;
+    for (const name of fs.readdirSync(root)) {
+      if (!name.startsWith('mscr-')) continue;
+      const full = path.join(root, name);
+      try {
+        if (now - fs.statSync(full).mtimeMs > TMP_TTL_MS) { fs.rmSync(full, { recursive: true, force: true }); removed++; }
+      } catch (_) {}
+    }
+    return removed;
+  } catch (_) { return 0; }
+}
+
 function run(interp, args, opts = {}) {
   return new Promise((resolve) => {
     const timeoutMs = opts.timeoutMs || 10000;
@@ -810,15 +841,26 @@ function run(interp, args, opts = {}) {
       detached: process.platform !== 'win32',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    let stdout = '', stderr = '';
+    let stdout = '', stderr = '', truncated = false;
+    // 输出上限：单流最多保留 OUTPUT_LIMIT，避免用户打印海量内容时把服务内存吃满
+    const collect = (chunk, isErr) => {
+      const text = String(chunk);
+      const current = isErr ? stderr : stdout;
+      if (current.length >= RUN_OUTPUT_LIMIT) { truncated = true; return; }
+      const room = RUN_OUTPUT_LIMIT - current.length;
+      const next = text.length > room ? text.slice(0, room) : text;
+      if (text.length > room) truncated = true;
+      if (isErr) stderr = current + next; else stdout = current + next;
+    };
+    const tail = () => truncated ? '\n…（输出超过 ' + Math.round(RUN_OUTPUT_LIMIT / 1048576) + ' MB 已截断）' : '';
     const timer = setTimeout(() => {
       // 超时终止：POSIX 用进程组(负 pid)，Windows 无进程组概念，退回 child.kill()
       try { if (process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL'); } catch (_) {}
       try { child.kill('SIGKILL'); } catch (_) {}
-      resolve({ ok: false, timedOut: true, stdout, stderr, code: null });
+      resolve({ ok: false, timedOut: true, stdout: stdout + tail(), stderr, code: null, truncated });
     }, timeoutMs);
-    child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
+    child.stdout.on('data', (d) => collect(d, false));
+    child.stderr.on('data', (d) => collect(d, true));
     // 写入 stdin（无输入时也立即关闭，避免 `while(cin>>x)` 挂起）
     try {
       if (opts.input) child.stdin.write(opts.input);
@@ -826,11 +868,11 @@ function run(interp, args, opts = {}) {
     try { child.stdin.end(); } catch (_) {}
     child.on('error', (err) => {
       clearTimeout(timer);
-      resolve({ ok: false, error: String(err.message || err), stdout, stderr, code: null });
+      resolve({ ok: false, error: String(err.message || err), stdout: stdout + tail(), stderr, code: null, truncated });
     });
     child.on('close', (code, signal) => {
       clearTimeout(timer);
-      resolve({ ok: code === 0, code, signal, stdout, stderr });
+      resolve({ ok: code === 0, code, signal, stdout: stdout + tail(), stderr, truncated });
     });
   });
 }
@@ -839,6 +881,7 @@ function writeTemp(name, content) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mscr-'));
   const f = path.join(dir, name);
   fs.writeFileSync(f, content);
+  scheduleTempCleanup(dir);
   return { dir, file: f };
 }
 
@@ -1032,8 +1075,12 @@ function writeFragments(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mscr-'));
   for (const f of files || []) {
     if (!f.filename) continue;
-    fs.writeFileSync(path.join(dir, f.filename), f.code || '');
+    // 兜底：文件名只取 basename，任何情况下都不得写出临时目录之外
+    const safeName = path.basename(String(f.filename));
+    if (!safeName || safeName === '.' || safeName === '..') continue;
+    fs.writeFileSync(path.join(dir, safeName), f.code || '');
   }
+  scheduleTempCleanup(dir);
   return dir;
 }
 
@@ -1175,9 +1222,10 @@ function runnerFor(language) {
           const { dir, file } = javaFile(code, 'Check');
           return run('javac', ['-d', dir, file], { timeoutMs: 30000 });
         }),
-        run: (code, input) => guard('java', () => {
-          const { file } = javaFile(code, 'Main');
-          return run('java', [file], { timeoutMs: 20000, input }); // Java 11+ 单文件源码运行
+        run: (code, opts) => guard('java', () => {
+          const { dir, file } = javaFile(code, 'Main');
+          // 注意：第二参数是 { input, selIndex, files }，之前误把整个对象当 input 写入 stdin
+          return run('java', [file], { cwd: dir, timeoutMs: 20000, input: opts && opts.input }); // Java 11+ 单文件源码运行
         }),
       };
     }
@@ -2084,10 +2132,10 @@ function walkProject(limit = 6000) {
   visit(root, 0);
   return out;
 }
-function taskCatalog() {
+function taskCatalog(projectFiles) {
   const root = projectRoot(), tasks = [];
   const add = (id, name, command, cwd = '.') => tasks.push({ id:id + '@' + cwd, name, command, cwd, detected:true });
-  const markers = walkProject(4000).filter((f) => ['CMakeLists.txt','Makefile','makefile','build.ninja','package.json','pyproject.toml','requirements.txt'].includes(f.name)).slice(0,100);
+  const markers = (projectFiles || walkProject(4000)).filter((f) => ['CMakeLists.txt','Makefile','makefile','build.ninja','package.json','pyproject.toml','requirements.txt'].includes(f.name)).slice(0,100);
   for (const file of markers) {
     const cwd = path.posix.dirname(file.relative) === '.' ? '.' : path.posix.dirname(file.relative), suffix = cwd === '.' ? '' : ` · ${cwd}`;
     if (file.name === 'CMakeLists.txt') { add('cmake-configure','CMake 配置'+suffix,'cmake -S . -B build',cwd); add('cmake-build','CMake 构建'+suffix,'cmake --build build',cwd); }
@@ -2099,6 +2147,20 @@ function taskCatalog() {
     else if (file.name === 'requirements.txt') add('python-install','Python 安装依赖'+suffix,'python -m pip install -r requirements.txt',cwd);
   }
   return { ok: true, root, tasks };
+}
+function testCatalog() {
+  const catalog = taskCatalog(), tests = catalog.tasks.filter((task) => /(?:^|\b)(test|pytest|ctest|jest|vitest|mocha)(?:\b|:)/i.test(task.name + ' ' + task.command));
+  const root = projectRoot(), files = walkProject(4000), seen = new Set(tests.map((item) => item.command + '@' + item.cwd));
+  const add = (id, name, command, cwd='.') => { const key=command+'@'+cwd;if(!seen.has(key)){seen.add(key);tests.push({id,name,command,cwd,detected:true});} };
+  if (files.some((file) => /^(?:pytest\.ini|tox\.ini)$/.test(file.name) || file.name === 'conftest.py')) add('pytest','Python · pytest','python -m pytest');
+  if (files.some((file) => file.name === 'CTestTestfile.cmake' || file.name === 'CTestConfig.cmake')) add('ctest','CMake · CTest','ctest --test-dir build --output-on-failure');
+  if (files.some((file) => file.name === 'go.mod')) add('go-test','Go · 全部测试','go test ./...');
+  if (files.some((file) => file.name === 'Cargo.toml')) add('cargo-test','Rust · cargo test','cargo test');
+  return {ok:true,root,tests};
+}
+function debugCatalog() {
+  const commands=[['node','Node.js','node inspect'],['python','Python','python -m pdb'],['lldb','LLDB','lldb'],['gdb','GDB','gdb']].map(([id,name,command])=>({id,name,command,available:!!executablePath(command.split(' ')[0])}));
+  return {ok:true,root:projectRoot(),adapters:commands};
 }
 function runProjectCommand(command, cwd) {
   const value = String(command || '').trim();
@@ -2112,17 +2174,17 @@ function runProjectCommand(command, cwd) {
     exitCode: error && Number.isInteger(error.code) ? error.code : 0, stdout: String(stdout || ''), stderr: String(stderr || ''), error: error ? String(error.killed ? '任务超时（120 秒）' : error.message || error).slice(0, 500) : '',
   })));
 }
-function findCompileDatabase() {
+function findCompileDatabase(projectFiles) {
   const root = projectRoot();
   const direct = [path.join(root, 'compile_commands.json'), path.join(root, 'build', 'compile_commands.json')].find((file) => fs.existsSync(file));
   if (direct) return direct;
-  return (walkProject(3000).find((item) => item.name === 'compile_commands.json') || {}).full || '';
+  return ((projectFiles || walkProject(3000)).find((item) => item.name === 'compile_commands.json') || {}).full || '';
 }
 function shellWords(command) {
   return String(command || '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((v) => v.replace(/^(?:"(.*)"|'(.*)')$/, '$1$2')) || [];
 }
-function compileDatabaseInfo() {
-  const file = findCompileDatabase();
+function compileDatabaseInfo(projectFiles) {
+  const file = findCompileDatabase(projectFiles);
   if (!file) return { ok: true, found: false, entries: 0, path: '', includePaths: [], defines: [], languages: {} };
   const st = fs.statSync(file); if (st.size > 20 * 1024 * 1024) throw new Error('compile_commands.json 超过 20 MB');
   const rows = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -2143,14 +2205,17 @@ function compileDatabaseInfo() {
 }
 const LANGUAGE_BY_EXT = { '.js':'JavaScript','.mjs':'JavaScript','.cjs':'JavaScript','.ts':'TypeScript','.tsx':'TypeScript','.jsx':'JavaScript','.py':'Python','.c':'C','.h':'C/C++','.cc':'C++','.cpp':'C++','.cxx':'C++','.hpp':'C++','.java':'Java','.go':'Go','.rs':'Rust','.rb':'Ruby','.php':'PHP','.swift':'Swift','.kt':'Kotlin','.sh':'Shell','.md':'Markdown','.tex':'LaTeX','.html':'HTML','.css':'CSS','.json':'JSON','.yaml':'YAML','.yml':'YAML' };
 async function projectHealth() {
-  const files = walkProject(), languages = {}, issues = [], includeGraph = new Map();
+  const scannedFiles = walkProject();
+  const generatedPath = /(?:^|\/)(?:vendor|assets\/pdfjs|mscdex-ssh2-[^/]+)(?:\/|$)|^markdown-vault\/(?:readings|libraries|drawings|\.timeline)(?:\/|$)/;
+  const files = scannedFiles.filter((file) => !generatedPath.test(file.relative));
+  const languages = {}, issues = [], includeGraph = new Map();
   let lines = 0, bytes = 0, todos = 0;
   const byBase = new Map(files.map((f) => [f.name, f.relative]));
   for (const file of files) {
     let st; try { st = fs.statSync(file.full); } catch (_) { continue; }
-    bytes += st.size;
     const lang = LANGUAGE_BY_EXT[file.ext] || 'Other'; languages[lang] = (languages[lang] || 0) + 1;
     if (st.size > 1024 * 1024 || (!LANGUAGE_BY_EXT[file.ext] && !['.txt','.cmake'].includes(file.ext))) continue;
+    bytes += st.size;
     let text = ''; try { text = fs.readFileSync(file.full, 'utf8'); } catch (_) { continue; }
     lines += text.split(/\r?\n/).length;
     todos += (text.match(/\b(?:TODO|FIXME|XXX)\b/g) || []).length;
@@ -2168,16 +2233,82 @@ async function projectHealth() {
     visiting.add(node); stack.push(node); for (const dep of includeGraph.get(node) || []) dfs(dep, stack); stack.pop(); visiting.delete(node); visited.add(node);
   };
   for (const node of includeGraph.keys()) dfs(node, []);
-  let compileDb; try { compileDb = compileDatabaseInfo(); } catch (error) { compileDb = { ok:false, found:true, error:String(error.message || error) }; }
-  const tasks = taskCatalog();
+  let compileDb; try { compileDb = compileDatabaseInfo(scannedFiles); } catch (error) { compileDb = { ok:false, found:true, error:String(error.message || error) }; }
+  const tasks = taskCatalog(scannedFiles);
   if (!tasks.tasks.length) issues.push({ level:'info', message:'未检测到常见构建入口，可使用自定义命令' });
   if (cycles.length) issues.push({ level:'warn', message:`检测到 ${cycles.length} 条 C/C++ 头文件循环依赖` });
-  return { ok:true, root:projectRoot(), generatedAt:Date.now(), summary:{ files:files.length, lines, bytes, todos, cycles:cycles.length }, languages, issues:issues.slice(0,100), cycles, compileDb, tasks:tasks.tasks.length };
+  return { ok:true, root:projectRoot(), generatedAt:Date.now(), summary:{ files:files.length, ignoredFiles:scannedFiles.length-files.length, lines, bytes, todos, cycles:cycles.length }, languages, issues:issues.slice(0,100), cycles, compileDb, tasks:tasks.tasks.length };
 }
 
 /* --------------------------------- HTTP 服务 ---------------------------------- */
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
+
+let INDEX_CACHE = null;
+function indexAsset() {
+  const file = path.join(__dirname, 'index.html');
+  const stat = fs.statSync(file);
+  if (!INDEX_CACHE || INDEX_CACHE.mtimeMs !== stat.mtimeMs || INDEX_CACHE.size !== stat.size) {
+    const raw = fs.readFileSync(file);
+    INDEX_CACHE = {
+      mtimeMs: stat.mtimeMs,
+      size: stat.size,
+      raw,
+      gzip: zlib.gzipSync(raw, { level: zlib.constants.Z_BEST_SPEED }),
+      etag: `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`,
+    };
+  }
+  return INDEX_CACHE;
+}
+function sendIndex(req, res) {
+  const asset = indexAsset();
+  if (req.headers['if-none-match'] === asset.etag) {
+    res.writeHead(304, { ETag: asset.etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding' });
+    return res.end();
+  }
+  const gzip = /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(req.headers['accept-encoding'] || ''));
+  const body = gzip ? asset.gzip : asset.raw;
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': body.length,
+    'Cache-Control': 'no-cache',
+    ETag: asset.etag,
+    Vary: 'Accept-Encoding',
+    ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
+  });
+  if (req.method === 'HEAD') return res.end();
+  res.end(body);
+}
+function streamStatic(req, res, root, relative, options = {}) {
+  const file = path.resolve(root, relative);
+  if (file !== root && !file.startsWith(root + path.sep)) return send(res, 403, { ok:false, error:'forbidden' });
+  fs.stat(file, (error, stat) => {
+    if (error || !stat.isFile()) return send(res, 404, { ok:false, error:options.notFound || 'not found' });
+    const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag:etag, 'Cache-Control':options.cacheControl || 'no-cache' });
+      return res.end();
+    }
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+      'Content-Length': stat.size,
+      'Cache-Control': options.cacheControl || 'no-cache',
+      ETag: etag,
+      'X-Content-Type-Options': 'nosniff',
+    });
+    if (req.method === 'HEAD') return res.end();
+    const input = fs.createReadStream(file);
+    input.on('error', () => { if (!res.headersSent) send(res, 500, { ok:false, error:'读取静态资源失败' }); else res.destroy(); });
+    input.pipe(res);
+  });
+}
+function trustedHttpOrigin(req) {
+  if (String(req.headers['sec-fetch-site'] || '').toLowerCase() === 'cross-site') return false;
+  const origin = String(req.headers.origin || '').trim();
+  if (!origin) return true; // 保留本机 CLI、测试脚本和桌面壳调用。
+  try { return new URL(origin).host === String(req.headers.host || ''); }
+  catch (_) { return false; }
+}
 
 /* ------------------------------- PDF 阅读文库 ------------------------------- */
 
@@ -2463,47 +2594,31 @@ const server = http.createServer(async (req, res) => {
   res.on('close', () => clearTimeout(_reqGuard));
   const u = new URL(req.url, 'http://' + HOST + ':' + PORT);
   try {
-    if (req.method === 'GET' && u.pathname === '/') {
-      const f = path.join(__dirname, 'index.html');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(fs.readFileSync(f));
-      return;
+    if (req.method !== 'GET' && u.pathname.startsWith('/api/') && !trustedHttpOrigin(req)) {
+      return send(res, 403, { ok:false, error:'已拒绝跨站写入请求' });
     }
-    if (req.method === 'GET' && u.pathname.startsWith('/assets/')) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/') {
+      return sendIndex(req, res);
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/assets/')) {
       const assetsRoot = path.join(__dirname, 'assets');
       const rel = u.pathname.slice('/assets/'.length);
-      const p = path.resolve(assetsRoot, rel);
-      if (!p.startsWith(assetsRoot + path.sep) && p !== assetsRoot) return send(res, 403, { ok: false, error: 'forbidden' });
-      try {
-        const data = fs.readFileSync(p);
-        res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-        res.end(data);
-      } catch (_) { send(res, 404, { ok: false, error: 'not found' }); }
-      return;
+      return streamStatic(req, res, assetsRoot, rel, { cacheControl:'no-cache' });
     }
-    if (req.method === 'GET' && u.pathname.startsWith('/vendor/')) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/vendor/')) {
       const assetsRoot = path.join(__dirname, 'vendor');
       const rel = u.pathname.slice('/vendor/'.length);
-      const p = path.resolve(assetsRoot, rel);
-      if (!p.startsWith(assetsRoot + path.sep) && p !== assetsRoot) return send(res, 403, { ok: false, error: 'forbidden' });
-      try {
-        const data = fs.readFileSync(p);
-        res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-        res.end(data);
-      } catch (_) { send(res, 404, { ok: false, error: 'not found' }); }
-      return;
+      return streamStatic(req, res, assetsRoot, rel, { cacheControl:'public, max-age=86400' });
     }
-    if (req.method === 'GET' && u.pathname.startsWith('/novnc/')) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/novnc/')) {
       const novncRoot = path.join(__dirname, 'node_modules', '@novnc', 'novnc');
       const rel = u.pathname.slice('/novnc/'.length);
-      const p = path.resolve(novncRoot, rel);
-      if (!p.startsWith(novncRoot + path.sep) && p !== novncRoot) return send(res, 403, { ok: false, error: 'forbidden' });
-      try {
-        const data = fs.readFileSync(p);
-        res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-        res.end(data);
-      } catch (_) { send(res, 404, { ok: false, error: 'noVNC asset not found；请先运行 npm install' }); }
-      return;
+      return streamStatic(req, res, novncRoot, rel, { cacheControl:'public, max-age=86400', notFound:'noVNC asset not found；请先运行 npm install' });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/monaco/')) {
+      const monacoRoot = path.join(__dirname, 'node_modules', 'monaco-editor', 'min');
+      const rel = u.pathname.slice('/monaco/'.length);
+      return streamStatic(req, res, monacoRoot, rel, { cacheControl:'public, max-age=86400', notFound:'Monaco asset not found；请先运行 npm install' });
     }
     if (req.method === 'GET' && u.pathname === '/api/system/status') {
       return send(res, 200, await systemStatus());
@@ -2518,7 +2633,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'compile-database', 'project-health', 'markdown-code-links', 'live-web-search', 'search-history', 'editor-groups', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
@@ -3715,6 +3830,13 @@ const server = http.createServer(async (req, res) => {
     }
     // ===== 通用工程能力 =====
     if (req.method === 'GET' && u.pathname === '/api/project/tasks') return send(res, 200, taskCatalog());
+    if (req.method === 'GET' && u.pathname === '/api/project/tests') return send(res, 200, testCatalog());
+    if (req.method === 'POST' && u.pathname === '/api/project/tests/run') {
+      const b=await readBody(req),catalog=testCatalog(),test=catalog.tests.find((item)=>item.id===String(b.id||''));
+      if(!test)return send(res,400,{ok:false,error:'测试任务不存在，请刷新后重试'});
+      return send(res,200,await runProjectCommand(test.command,test.cwd));
+    }
+    if (req.method === 'GET' && u.pathname === '/api/project/debug') return send(res, 200, debugCatalog());
     if (req.method === 'POST' && u.pathname === '/api/project/tasks/run') {
       const b = await readBody(req), catalog = taskCatalog();
       let command = String(b.command || '').trim(), cwd = String(b.cwd || '.');
@@ -3739,10 +3861,10 @@ const server = http.createServer(async (req, res) => {
       if (!Number.isInteger(fragment) || fragment < 0 || fragment >= snippet.fragments.length) return send(res, 400, { ok:false, error:'片段索引无效' });
       const source = snippet.fragments[fragment];
       const action = String(b.action || 'hover');
-      if (!['hover', 'definition', 'references', 'diagnostics'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 LSP 操作' });
+      if (!['hover', 'definition', 'references', 'diagnostics', 'completion', 'signature', 'highlights', 'rename', 'codeAction'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 LSP 操作' });
       const code = typeof b.code === 'string' ? b.code : source.code;
       if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'LSP 文件内容超过 2 MB' });
-      return send(res, 200, await LSP.query({ snippet, fragment, language:source.language, code, action, line:b.line, column:b.column }));
+      return send(res, 200, await LSP.query({ snippet, fragment, language:source.language, code, action, line:b.line, column:b.column, newName:b.newName, triggerKind:b.triggerKind, triggerCharacter:b.triggerCharacter, range:b.range, only:b.only }));
     }
     // ===== 远程开发：SSH 复用底部 PTY 终端；SFTP 浏览文件；VNC 由 WebSocket 代理 =====
     if (req.method === 'GET' && u.pathname === '/api/remote/status') {
@@ -3886,6 +4008,8 @@ server.listen(PORT, HOST, () => {
     console.log('⚠ 当前为局域网模式：终端、代码运行和文件修改接口可被同网段设备访问。');
   }
   try { console.log('Vault: ' + vaultPath()); } catch (e) { console.log('Vault: ' + e.message); }
+  // 清扫上次服务留下的运行临时目录（正常退出会由 TTL 回收，强杀则依赖这里）
+  try { const swept = sweepTempDirs(); if (swept) console.log('已清理运行临时目录: ' + swept + ' 个'); } catch (_) {}
   console.log('正在检测本机环境…');
   getEnv(false).then(({ tools: env, project }) => {
     const all = Object.values(env);

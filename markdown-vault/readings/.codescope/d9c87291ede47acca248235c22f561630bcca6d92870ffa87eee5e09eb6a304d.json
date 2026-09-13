@@ -1,7 +1,7 @@
 {
   "version": 1,
   "path": "我的论文/TEST/SRL强化学习跳跃/Hu_2026_SRL_SLIP_RL_Agile_Jumping_中文.pdf",
-  "page": 1,
+  "page": 4,
   "view": "translation",
   "translations": {},
   "fragments": [
@@ -11,8 +11,10 @@
       "source": "S R L ： 结 合   S L I P   模 型 与 强 化 学 习 的 敏 捷 机 器 人 跳 跃",
       "translation": "",
       "note": "这是测试",
-      "createdAt": 1788667767234
+      "createdAt": 1788667767234,
+      "rects": [],
+      "scale": 1
     }
   ],
-  "updatedAt": 1788699362287
+  "updatedAt": 1789227097251
 }

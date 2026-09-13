@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node tests/smoke.js",
-    "test:browser": "node tests/browser-smoke.js"
+    "test:browser": "node tests/browser-smoke.js",
+    "test:run": "node tests/run.js"
   },
   "engines": {
     "node": ">=18"
@@ -15,6 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
+    "monaco-editor": "^0.52.2",
     "pdfjs-dist": "^4.10.38",
     "saxes": "^6.0.0",
     "ssh2": "^1.17.0",

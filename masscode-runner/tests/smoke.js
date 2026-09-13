@@ -99,7 +99,7 @@ async function main() {
   fs.writeFileSync(snippetFile, `---
 contents:
   - id: 1
-    label: demo.c
+    label: 中文片段
     language: c
 createdAt: 1
 description: timeline test
@@ -112,13 +112,40 @@ tags:
 updatedAt: 1
 ---
 
-## Fragment: demo.c
+## Fragment: 中文片段
 \`\`\`c
 int main(void) { return 0; }
 \`\`\`
 `);
+  const cppHeaderFile = path.join(vault, 'code', 'cpp-header.md');
+  fs.writeFileSync(cppHeaderFile, `---
+contents:
+  - id: 1
+    label: Sort.cpp
+    language: c_cpp
+  - id: 2
+    label: Sort.h
+    language: c_cpp
+name: C++ Header Demo
+isDeleted: 0
+tags:
+---
+
+## Fragment: Sort.cpp
+\`\`\`c_cpp
+#include "Sort.h"
+\`\`\`
+
+## Fragment: Sort.h
+\`\`\`c_cpp
+#pragma once
+#include <vector>
+using Array = std::vector<int>;
+void bubbleSort(Array& values);
+\`\`\`
+`);
   fs.mkdirSync(path.join(tempRoot, 'sample'), { recursive: true });
-  fs.writeFileSync(path.join(tempRoot, 'sample', 'package.json'), JSON.stringify({ scripts: { check: 'node -e "process.stdout.write(\'task-ok\')"' } }));
+  fs.writeFileSync(path.join(tempRoot, 'sample', 'package.json'), JSON.stringify({ scripts: { check: 'node -e "process.stdout.write(\'task-ok\')"', test: 'node -e "process.stdout.write(\'test-ok\')"' } }));
   fs.writeFileSync(path.join(tempRoot, 'compile_commands.json'), JSON.stringify([{
     directory: tempRoot, file: path.join(tempRoot, 'sample.c'), arguments: ['cc', '-I', 'include', '-DDEMO_FEATURE=1', '-c', 'sample.c'],
   }]));
@@ -142,8 +169,12 @@ int main(void) { return 0; }
 
   await waitForServer(baseUrl, output);
 
+  const unicodeSnippets = await requestJson(baseUrl, '/api/snippets');
+  const unicodeFragment = unicodeSnippets.snippets.find((item) => item.name === 'Timeline Demo').fragments[0];
+  assert(unicodeFragment.label === '中文片段', '片段中文名称解析或重新读取后丢失');
+
   const version = await requestJson(baseUrl, '/api/version');
-  assert(version.ok && version.name === '码境 CodeScope' && version.version === '1.2.0' && version.apiRevision >= 2 && version.features.includes('project-health') && version.features.includes('live-web-search') && version.features.includes('search-history') && version.features.includes('editor-groups') && version.features.includes('drawio') && version.features.includes('drawio-xml') && version.features.includes('ai-drawio') && version.features.includes('full-text-search') && version.features.includes('quick-open') && version.features.includes('navigation-history') && version.features.includes('definition-peek') && version.features.includes('header-source-switch') && version.features.includes('lsp') && version.features.includes('pdf-library') && version.features.includes('pdf-translation') && version.features.includes('reading-fragments') && version.features.includes('reading-split-view') && version.features.includes('reading-projects') && version.features.includes('reading-code-notes'), '版本接口返回异常');
+  assert(version.ok && version.name === '码境 CodeScope' && version.version === '1.2.0' && version.apiRevision >= 2 && version.features.includes('project-health') && version.features.includes('live-web-search') && version.features.includes('search-history') && version.features.includes('editor-groups') && version.features.includes('monaco-editor') && version.features.includes('multi-cursor') && version.features.includes('editor-folding') && version.features.includes('editor-command-palette') && version.features.includes('editor-word-wrap') && version.features.includes('editor-wheel-zoom') && version.features.includes('editor-position') && version.features.includes('lsp-completion') && version.features.includes('lsp-rename') && version.features.includes('lsp-code-actions') && version.features.includes('project-tests') && version.features.includes('project-debug') && version.features.includes('drawio') && version.features.includes('drawio-xml') && version.features.includes('ai-drawio') && version.features.includes('full-text-search') && version.features.includes('quick-open') && version.features.includes('navigation-history') && version.features.includes('definition-peek') && version.features.includes('header-source-switch') && version.features.includes('lsp') && version.features.includes('pdf-library') && version.features.includes('pdf-translation') && version.features.includes('pdf-full-text-search') && version.features.includes('pdf-thumbnail-navigation') && version.features.includes('pdf-focus-mode') && version.features.includes('reading-fragments') && version.features.includes('reading-split-view') && version.features.includes('reading-projects') && version.features.includes('reading-code-notes'), '版本接口返回异常');
 
   const page = await fetch(baseUrl + '/');
   const html = await page.text();
@@ -151,10 +182,27 @@ int main(void) { return 0; }
   const launchers = ['start.command', '../启动码境.command', '../启动码境.sh', '../启动码境.bat']
     .map((file) => fs.readFileSync(path.resolve(projectRoot, file), 'utf8')).join('\n');
   assert(page.ok && html.includes('码境 CodeScope · 工程代码工作台'), '主页品牌标题不正确');
+  assert(page.headers.get('etag') && page.headers.get('cache-control') === 'no-cache', '主页缺少协商缓存');
+  const compressedPage = await fetch(baseUrl + '/', { headers:{ 'accept-encoding':'gzip' } });
+  await compressedPage.arrayBuffer();
+  assert(compressedPage.headers.get('content-encoding') === 'gzip', '主页未启用 gzip 压缩');
+  const notModified = await fetch(baseUrl + '/', { headers:{ 'if-none-match':page.headers.get('etag') } });
+  assert(notModified.status === 304, '主页 ETag 协商缓存无效');
+  const headPage = await fetch(baseUrl + '/', { method:'HEAD' });
+  assert(headPage.ok && Number(headPage.headers.get('content-length')) > 0 && (await headPage.text()) === '', '主页 HEAD 请求语义异常');
   assert(html.includes('href="https://github.com/ruanjianshi/massCode"'), 'GitHub 远程仓库入口缺失');
   assert(html.includes('id="theme-switcher"') && html.includes('data-app-theme="light"') && html.includes('codescope-theme'), '界面主题切换功能缺失');
   assert(html.includes('id="editor-find"') && html.includes('replaceEditorFindAll') && html.includes("e.key==='F3'"), '编辑器快捷键查找替换功能缺失');
-  assert(html.includes("e.code === 'Space'") && html.includes('普通输入不主动弹补全'), '代码补全未限制为手动触发');
+ assert(html.includes('/monaco/vs/loader.js') && html.includes('id="monaco-main"') && html.includes('syncMonacoMain') && html.includes('multiCursorModifier'), 'Monaco / VS Code 同源编辑内核缺失');
+  assert(html.includes('id="btn-wrap"') && html.includes('toggleEditorWordWrap') && html.includes("key==='z'") && html.includes('id="editor-position"'), '自动换行或光标行列状态缺失');
+  assert(html.includes("localStorage.getItem('mc-editor-font-size')") && html.includes('applyEditorFontSize') && html.includes("event.addEventListener('wheel'") === false && html.includes("document.addEventListener('wheel'") && html.includes('EDITOR_FONT_MAX=28'), 'Ctrl/Command + 鼠标滚轮缩放编辑器功能缺失');
+  assert(!html.includes('allow-popups allow-same-origin'), 'HTML 预览沙箱不应同时允许脚本与同源访问');
+  assert(serverSource.includes("|| '127.0.0.1'") && serverSource.includes('trustedHttpOrigin') && serverSource.includes('fs.createReadStream') && serverSource.includes("'Content-Encoding': 'gzip'"), '默认本机监听、跨站写保护或流式静态资源优化缺失');
+  assert(html.includes("localStorage.removeItem('mc-editor-groups')") && !html.includes("localStorage.setItem('mc-editor-groups'"), '临时编辑分栏不应在刷新后恢复');
+  assert(html.includes("e.code === 'Space'") && html.includes('requestLspCompletion') && html.includes('requestSignatureHelp') && html.includes('EDITOR_SNIPPETS'), 'LSP 自动补全、参数提示或代码片段缺失');
+  assert(html.includes('renameFocusedSymbol') && html.includes('requestCodeActions') && html.includes("e.key==='F2'") && html.includes("key==='.'"), '重命名或快速修复快捷键缺失');
+  assert(html.includes('data-search-mode="command"') && html.includes('renderCommandResults') && html.includes("key==='p'") && html.includes("e.key==='F1'"), '命令面板缺失');
+  assert(html.includes('handleCommonEditorShortcut') && html.includes("command==='move-up'") && html.includes("command==='duplicate-down'"), '常用行编辑快捷键缺失');
   assert(html.includes('id="sym-ai-submit"') && html.includes('submitAiSearch') && html.includes('data-search-mode="symbol"'), 'AI 搜索或原项目符号检索入口缺失');
   assert(html.includes('id="ai-search-provider"') && html.includes('id="ai-search-key"') && html.includes('/api/ai/web-search'), '实时联网搜索配置缺失');
   assert(html.includes('data-search-mode="history"') && html.includes('AI_SEARCH_HISTORY_KEY') && html.includes('renderAiSearchHistory') && html.includes('清空记录'), 'AI 搜索记录功能缺失');
@@ -165,6 +213,7 @@ int main(void) { return 0; }
   assert(html.includes('networkError:true') && html.includes('后端返回了无法解析的响应') && serverSource.includes("require('saxes')"), '全局 API 错误处理或服务端 XML 解析器缺失');
   assert((launchers.match(/node_modules[\\/]saxes/g) || []).length === 4, '启动脚本未完整检测新增运行依赖');
   assert((launchers.match(/node_modules[\\/]pdfjs-dist/g) || []).length === 4, '启动脚本未完整检测 PDF 文本解析依赖');
+  assert((launchers.match(/node_modules[\\/]monaco-editor/g) || []).length === 4, '启动脚本未完整检测 Monaco 编辑器依赖');
   assert(html.includes('id="editor-drop-overlay"') && html.includes('split-editor-group') && html.includes('initEditorGroups') && html.includes('application/x-codescope-editor'), '2 至 4 栏拖拽编辑功能缺失');
   assert(html.includes('data-search-mode="text"') && html.includes('renderTextResults') && html.includes('id="text-regex"'), '全文搜索或正则检索功能缺失');
   assert(html.includes('data-search-mode="file"') && html.includes('renderFileResults') && html.includes("key==='p'"), '快速打开文件功能缺失');
@@ -187,6 +236,36 @@ int main(void) { return 0; }
   assert(!html.includes('id="reading-one"') && !html.includes('id="reading-two"') && html.includes('id="reading-new-column-drop"') && html.includes('updateReadingColumnLayout') && html.includes('closeReadingColumn'), '阅读工作区仍依赖固定单/双栏按钮或缺少拖拽自动分栏');
   assert(html.includes('id="reading-new-dialog"') && html.includes('submitReadingNewFragment') && html.includes('<option value="latex">LaTeX') && html.includes('<option value="python">Python'), '阅读项目缺少统一的 PDF、文档与代码片段新建窗口');
   assert(serverSource.includes("'/api/readings/node/move'") && html.includes('application/x-codescope-reading-node'), '阅读文件夹或项目缺少拖拽调整层级能力');
+  assert(html.includes('openPdfFind') && html.includes('buildPdfFindIndex') && html.includes('pdf-find-current') && html.includes('全文查找（⌘/Ctrl + F）'), 'PDF 阅读器缺少全文检索、结果定位或高亮能力');
+  assert(html.includes('bindPdfReaderKeys') && html.includes("e.key === 'PageDown'") && html.includes("e.key === 'PageUp'") && html.includes('pdf-reader-focus'), 'PDF 阅读器缺少翻页快捷键或专注阅读模式');
+  assert(html.includes('mc-pdf-view:') && html.includes('savePdfViewState') && html.includes('pdf-page-pill'), 'PDF 阅读器缺少视图记忆或页码快速跳转');
+  assert(html.includes('togglePdfThumbnails') && html.includes('renderPdfThumbnails') && html.includes('pdf-thumb-panel') && html.includes('ResizeObserver'), 'PDF 阅读器缺少页面缩略图导航或容器尺寸自适应');
+  assert(html.includes('cleanPdfOutlineTitle') && html.includes('classifyPdfOutlineLine') && html.includes("source: 'auto-v2'") && html.includes("data.source === 'auto-v2' ? '智能识别'"), 'PDF 智能目录缺少分栏重建、标题清洗或层级分类能力');
+  assert(html.includes('referencesReached') && html.includes('table\\s*(?:[.\\d]|[IVXLCDM]+\\b)'), 'PDF 智能目录缺少表格标题或参考文献正文过滤');
+  assert(html.includes('saveToolbarSelection') && html.includes("cite.textContent = '引用笔记'") && html.includes('range.getClientRects()'), 'PDF 选区缺少逐行几何识别、快捷摘录或引用笔记能力');
+  assert(html.includes('readingPdfRefMarkdown') && html.includes('appendReadingQuoteToNote') && html.includes('locateReadingMarkdownRef') && html.includes('reading-pdf-ref'), 'Markdown 阅读笔记缺少 Obsidian 风格 PDF 引用或原文回链定位');
+  assert(html.includes('removeReadingLinkedPdfFragment') && html.includes('restoreReadingLinkedPdfFragment') && html.includes('syncRemovedReadingPdfRefs') && html.includes('readingPdfRefsInMarkdown') && html.includes('引用、PDF 摘录与页内标记已同步删除'), 'Markdown 按钮或直接编辑删除引用时，未与 PDF 摘录及页内标记保持事务同步');
+  assert(html.includes('normalizePdfSelectionText') && html.includes('mergePdfSelectionRects') && !html.includes("replace(/scaleX\\([^)]*\\)/g, 'scaleX(1)')"), 'PDF 文本选择缺少精确文本拼接、逐行矩形合并或仍破坏 PDF.js 字形缩放');
+  assert(html.includes('READING_SLASH_COMMANDS') && html.includes('applyReadingSlashCommand') && html.includes('readingSlashKeydown') && html.includes("id:'bullet'") && html.includes("id:'number'") && html.includes("id:'h1'"), 'Markdown 阅读笔记缺少斜杠命令或标题、列表块转换');
+  assert(html.includes('callout-remove') && html.includes('引用已从 Markdown 笔记中移除') && html.includes("const ordered=tag==='ol'"), 'Markdown 引用缺少移除入口或有序列表持久化');
+  assert(html.includes('reading-md-source') && html.includes('reading-md-live') && html.includes("['edit','live','preview']") && html.includes('loadReadingMarkdownMode') && html.includes('Markdown 阅读视图'), 'Markdown 阅读笔记缺少源码编辑、同屏实时预览、阅读模式或模式记忆');
+  assert(html.includes('--md-measure:840px') && html.includes('--md-surface-hover') && html.includes('text-rendering:optimizeLegibility') && html.includes('@container (max-width:460px)') && html.includes('reading-md-property-tag') && html.includes('mdPropertyValue') && html.includes('reading-md-generated-title') && html.includes('orderedBlocks'), 'Markdown 阅读视图缺少主题化可读行宽、窄栏响应式属性标签或实时编辑回写兼容');
+  assert(html.includes("blockquote.md-callout.warning") && html.includes('tbody tr:nth-child(even)') && html.includes("content:'●  ●  ●'") && html.includes('li > ul,.reading-md-editor li > ol'), 'Markdown 主题缺少提示块语义色、表格层次、代码块标题栏或嵌套列表引导线');
+  assert(html.includes('readingLiveCaret') && html.includes('restoreReadingLiveCaret') && html.includes('readingLiveCanRender') && html.includes('readingLiveEnter') && html.includes("live.contentEditable='true'"), 'Markdown 实时预览缺少同位置渲染、光标恢复、块级换行或富文本编辑能力');
+  assert(html.includes('setupReadingLiveBlocks') && html.includes('reading-block-tools') && !html.includes('reading-block-tail-add') && html.includes('readingBlockFirstLineRect') && html.includes("block.tagName==='LI'?28:9") && html.includes('padding-left:max(68px') && html.includes('transformReadingLiveBlock') && html.includes('reading-block-drop-marker') && html.includes('scheduleHide') && html.includes('moveReadingLiveBlock') && html.includes('readingOrderedBlocks'), 'Markdown 实时预览缺少贴合首行的区块控制、窄栏操作槽、列表避让或拖拽排序能力');
+  assert(html.includes("handle.addEventListener('pointerdown'") && html.includes("handle.addEventListener('pointermove'") && html.includes('document.elementFromPoint') && html.includes('requestAnimationFrame(autoScroll)') && html.includes("e.altKey&&(e.key==='ArrowUp'||e.key==='ArrowDown')"), 'Markdown 区块拖拽缺少指针手势、边缘自动滚动、精确落点或键盘移动能力');
+  assert(html.includes("const item=node.closest&&node.closest('li')") && html.includes('readingMergeAdjacentLists') && html.includes("source.tagName==='LI'") && html.includes("target.tagName==='LI'"), 'Markdown 列表项未作为独立区块，或缺少跨列表与正文重排能力');
+  assert(html.includes('.reading-md-live > ul > li:hover') && html.includes('.reading-md-live > ol > li:hover'), 'Markdown 列表项拖拽缺少独立悬停命中反馈');
+  assert(html.includes("document.addEventListener('pointerdown'") && html.includes("document.addEventListener('scroll'") && html.includes("window.addEventListener('resize',hideReadingSlashMenu)") && html.includes("READING_SLASH_STATE.slot===slot") && html.includes("READING_SLASH_STATE.editor===live"), 'Markdown 区块转换菜单缺少点击外部、滚动、切换内容或失焦收起行为');
+  assert(html.includes('reading-md-properties') && html.includes('笔记属性') && html.includes("data-md-source") && html.includes('font-size:2.08rem') && html.includes('grid-template-columns:minmax(125px,160px)'), 'Markdown 渲染缺少 Obsidian 风格属性面板或响应式阅读排版层级');
+  assert(html.includes('readingSourceSlashContext') && html.includes("snippet:'> [!note] 笔记\\n> '") && html.includes("e.key==='Tab'") && html.includes("e.key.toLowerCase()==='s'"), 'Markdown 源码编辑器缺少斜杠命令、Tab 缩进或快捷保存');
+  assert(html.includes('md-code-block') && html.includes('li class="md-task"') && html.includes('~~([^~]+)~~') && html.includes('data-md-start'), 'Markdown 渲染缺少代码围栏、任务列表、删除线或引用块定位');
+  assert(html.includes('id="document-mode-tools"') && html.includes("['source','split','live','preview']") && html.includes('documentModeKey') && html.includes('wireProjectMarkdownLive') && html.includes('edit-preview-close'), '普通 Markdown 缺少源码、分栏、实时、阅读模式或可关闭预览');
+  assert(html.includes("classList.toggle('markdown-code'") && html.includes('#code-wrap.markdown-code #code .hljs-section') && !html.includes("f.language === 'markdown') return") && html.includes("$('code-edit').classList.add('live-hl')"), 'Markdown 源码编辑缺少兼容编辑器语法高亮、行号或主题样式');
+  assert(html.includes('#md-view.project-md-full') && html.includes("classList.toggle('project-md-full'") && html.includes('width:min(100%,1120px)'), 'Markdown 实时或阅读模式仍受旧的半宽 max-width 布局限制');
+  assert(html.includes('codeReferenceMarkdown') && html.includes('currentCodeReferenceSelection') && html.includes('chooseCodeReferenceTarget') && html.includes('id="code-ref-add"') && !html.includes('id="btn-code-reference"') && html.includes('md-code-ref') && html.includes('data-code-line') && html.includes('goToLocation({snippet,frag:'), '代码选区引用、Markdown 目标选择、行号定位或回跳能力缺失');
+  assert(html.includes('fragmentDisplayName') && html.includes('return label||filename||fallback') && html.includes("primaryName.textContent=primaryLabel") && !html.includes("function splitName(ref) { return (ref.frag.filename||ref.frag.label"), '编辑栏标题、面包屑或引用目标仍错误地优先显示底层文件名');
+  assert(html.includes("fragment.language==='html'?['source','split','preview']") && html.includes('HTML 预览') && html.includes("setDocumentMode('source')"), 'HTML 缺少源码、分栏、全宽预览或关闭入口');
   assert(html.includes('html[data-theme] .split-editor-input') && html.includes("classList.toggle('plain',!exact)"), '多栏编辑器高亮层遮挡修复或纯文本降级缺失');
   assert(html.includes('withActiveSplitContext') && html.includes('activateSplitReading') && html.includes('activateOpenSplitLocation'), '右侧阅读面板未跟随多栏编辑器焦点');
   assert(html.includes('if(multi)applySplitRatios()') && /applyMdView\(\);\s*if\(multi\)applySplitRatios/.test(html), '多栏退出后 Markdown/LaTeX 预览恢复逻辑缺失');
@@ -195,9 +274,13 @@ int main(void) { return 0; }
 
   const icon = await fetch(baseUrl + '/assets/codescope.svg');
   assert(icon.ok && (icon.headers.get('content-type') || '').includes('image/svg+xml'), '品牌图标无法加载');
+  const monacoLoader = await fetch(baseUrl + '/monaco/vs/loader.js');
+  assert(monacoLoader.ok && (monacoLoader.headers.get('content-type') || '').includes('javascript'), 'Monaco 编辑器资源无法加载');
+  const crossSite = await fetch(baseUrl + '/api/readings/folder', { method:'POST', headers:{'content-type':'application/json',origin:'https://evil.example','sec-fetch-site':'cross-site'}, body:'{"name":"Blocked"}' });
+  assert(crossSite.status === 403, '跨站写入请求未被阻止');
 
   const snippets = await requestJson(baseUrl, '/api/snippets');
-  assert(snippets.vault === vault && snippets.snippets.length === 1, '片段接口返回异常');
+  assert(snippets.vault === vault && snippets.snippets.length === 2, '片段接口返回异常');
 
   const readingFolder = await postJson(baseUrl, '/api/readings/folder', { name:'Research', parent:'' });
   assert(readingFolder.ok && readingFolder.path === 'Research', '阅读文库文件夹创建失败');
@@ -311,16 +394,29 @@ int main(void) { return 0; }
   assert(customTask.ok && customTask.stdout === 'custom-ok', '自定义任务执行失败');
   const escapedTask = await postJson(baseUrl, '/api/project/tasks/run', { command: 'pwd', cwd: '../escape' });
   assert(!escapedTask.ok, '构建任务未拒绝越界工作目录');
+  const tests = await requestJson(baseUrl, '/api/project/tests');
+  const npmTest = tests.tests.find((item) => item.command === 'npm run test');
+  assert(tests.ok && npmTest && npmTest.cwd === 'sample', '未检测到 npm 测试任务');
+  const testResult = await postJson(baseUrl, '/api/project/tests/run', { id:npmTest.id });
+  assert(testResult.ok && testResult.stdout.includes('test-ok'), '测试任务执行失败');
+  const debug = await requestJson(baseUrl, '/api/project/debug');
+  assert(debug.ok && debug.adapters.some((item) => item.id === 'node' && item.available) && debug.adapters.some((item) => item.id === 'lldb'), '统一调试适配器检测异常');
 
   const compileDb = await requestJson(baseUrl, '/api/project/compile-db');
   assert(compileDb.ok && compileDb.found && compileDb.entries === 1 && compileDb.defines.includes('DEMO_FEATURE=1'), '编译数据库解析失败');
   const health = await requestJson(baseUrl, '/api/project/health');
-  assert(health.ok && health.summary.files >= 4 && health.summary.todos === 1 && health.languages.C === 1 && health.languages['C/C++'] === 1, '工程健康报告统计异常');
+  assert(health.ok && health.summary.files >= 4 && Number.isInteger(health.summary.ignoredFiles) && health.summary.todos === 1 && health.languages.C === 1 && health.languages['C/C++'] === 1, '工程健康报告统计异常');
   const lspStatus = await requestJson(baseUrl, '/api/lsp/status');
   assert(lspStatus.ok && lspStatus.servers.some((item) => item.command === 'clangd' && item.languages.includes('c_cpp')), 'LSP 环境状态接口异常');
   if (lspStatus.servers.some((item) => item.command === 'clangd' && item.available)) {
     const lspHover = await postJson(baseUrl, '/api/lsp/query', { file:snippetFile, fragment:0, code:'int main(void) { return 0; }', action:'hover', line:1, column:5 });
     assert(lspHover.ok && lspHover.server === 'clangd' && lspHover.hover && /main/.test(lspHover.hover.markdown), 'clangd 悬停信息查询失败');
+    const lspCompletion = await postJson(baseUrl, '/api/lsp/query', { file:snippetFile, fragment:0, code:'int main(void) { ret }', action:'completion', line:1, column:21 });
+    assert(lspCompletion.ok && Array.isArray(lspCompletion.items), 'clangd 自动补全查询失败');
+    const lspActions = await postJson(baseUrl, '/api/lsp/query', { file:snippetFile, fragment:0, code:'int main(void) { return 0; }', action:'codeAction', line:1, column:5 });
+    assert(lspActions.ok && Array.isArray(lspActions.actions), 'clangd 快速修复查询失败');
+    const cppHeaderDiagnostics = await postJson(baseUrl, '/api/lsp/query', { file:cppHeaderFile, fragment:1, action:'diagnostics', line:1, column:1 });
+    assert(cppHeaderDiagnostics.ok && cppHeaderDiagnostics.diagnostics.length === 0, 'C++ .h 头文件被错误地按 C 语言诊断');
   }
 
   const invalidRemoteFiles = await postJson(baseUrl, '/api/remote/files/list', { host:'bad host', port:22, user:'robot', path:'.' });

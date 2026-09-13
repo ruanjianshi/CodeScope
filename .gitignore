@@ -1,3 +1,5 @@
 .DS_Store
 masscode-runner/output/
 masscode-runner/tmp/
+masscode-runner/mscdex-ssh2-*/
+markdown-vault/code/.masscode/*.bak-*
