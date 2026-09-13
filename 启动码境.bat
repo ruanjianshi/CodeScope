@@ -33,6 +33,7 @@ if not exist "node_modules\monaco-editor" goto install_deps
 if not exist "node_modules\fflate" goto install_deps
 if not exist "node_modules\xmind-embed-viewer\dist\umd\xmind-embed-viewer.js" goto install_deps
 if not exist "node_modules\mind-elixir\dist\MindElixir.iife.js" goto install_deps
+if not exist "node_modules\simple-mind-map\dist\simpleMindMap.umd.min.js" goto install_deps
 if not exist "node_modules\docx-preview\dist\docx-preview.min.js" goto install_deps
 if not exist "node_modules\xlsx\dist\xlsx.full.min.js" goto install_deps
 if not exist "node_modules\pptx-preview\dist\pptx-preview.umd.js" goto install_deps
