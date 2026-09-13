@@ -1026,8 +1026,13 @@
   #xmind-native-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transform-origin:center center; will-change:transform; }
   #xmind-native-image { display:block; width:100%; height:100%; object-fit:contain; pointer-events:none; -webkit-user-drag:none; }
   #xmind-official-view { position:absolute; inset:0; display:none; overflow:hidden; background:#2c2d30; }
-  #xmind-official-view iframe { display:block; width:100% !important; height:100% !important; border:0; background:#2c2d30; }
+  #xmind-official-host { position:absolute; inset:0; }
+  #xmind-official-host iframe { display:block; width:100% !important; height:100% !important; border:0; background:#2c2d30; }
   #xmind-official-loading { position:absolute; inset:0; display:grid; place-items:center; color:#aeb8c7; font-size:12px; background:#2c2d30; z-index:1; }
+  #xmind-official-loading .xmind-official-error { display:grid; gap:12px; width:min(520px,calc(100% - 48px)); padding:20px; border:1px solid #6c4650; border-radius:12px; background:#21191d; box-shadow:0 18px 60px rgba(0,0,0,.36); }
+  #xmind-official-loading .xmind-official-error strong { color:#ff9ca7; font-size:14px; }
+  #xmind-official-loading .xmind-official-error span { color:#c7b4b9; line-height:1.65; overflow-wrap:anywhere; }
+  #xmind-official-loading .xmind-official-actions { display:flex; justify-content:flex-end; gap:8px; }
   #xmind-official-consent { position:absolute; inset:0; z-index:20; display:grid; place-items:center; padding:24px; background:rgba(5,9,14,.72); backdrop-filter:blur(5px); }
   #xmind-official-consent.hidden { display:none; }
   .xmind-consent-card { width:min(480px,calc(100% - 32px)); padding:20px; border:1px solid #465266; border-radius:12px; background:#171d26; box-shadow:0 20px 70px rgba(0,0,0,.45); color:#dbe4ef; }
@@ -2682,7 +2687,7 @@
         </div>
         <div class="xmind-workspace">
           <aside id="xmind-outline" aria-label="XMind 大纲"></aside>
-          <section id="xmind-preview" tabindex="0" aria-label="XMind 导图预览，可单击选择、双击或空格编辑"><div id="xmind-native-view" aria-label="XMind 原貌画布"><div id="xmind-native-stage"><img id="xmind-native-image" alt="XMind 原貌画布"></div></div><div id="xmind-official-view" aria-label="XMind 官方查看器"><div id="xmind-official-loading">正在连接 XMind 官方查看器…</div></div><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
+          <section id="xmind-preview" tabindex="0" aria-label="XMind 导图预览，可单击选择、双击或空格编辑"><div id="xmind-native-view" aria-label="XMind 原貌画布"><div id="xmind-native-stage"><img id="xmind-native-image" alt="XMind 原貌画布"></div></div><div id="xmind-official-view" aria-label="XMind 官方查看器"><div id="xmind-official-host"></div><div id="xmind-official-loading">正在连接 XMind 官方查看器…</div></div><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
         </div>
         <aside id="xmind-shortcuts" class="hidden" aria-label="XMind 快捷键">
           <div class="xmind-shortcut-head"><span>XMind 快捷操作</span><span class="sp"></span><button id="xmind-shortcuts-close">✕</button></div>
@@ -4654,15 +4659,19 @@ function setXmindView(mode){
 }
 async function openXmindOfficialView(){
   if(!DRAW_FILE||DRAW_KIND!=='xmind')return;if(!XMIND_OFFICIAL_APPROVED){$('xmind-official-consent').classList.remove('hidden');return;}
-  setXmindView('official');const host=$('xmind-official-view'),loading=$('xmind-official-loading');loading.style.display='grid';loading.textContent='正在连接 XMind 官方查看器…';setDrawStatus('正在加载 XMind 官方视图…','');
+  setXmindView('official');const mount=$('xmind-official-host'),loading=$('xmind-official-loading');loading.style.display='grid';loading.textContent='正在连接 XMind 官方查看器…';setDrawStatus('正在加载 XMind 官方视图…','');
   try{
     if(!window.XMindEmbedViewer){if(!XMIND_OFFICIAL_LIB)XMIND_OFFICIAL_LIB=loadOptionalScript('/xmind-viewer/xmind-embed-viewer.js').catch(error=>{XMIND_OFFICIAL_LIB=null;throw error;});await XMIND_OFFICIAL_LIB;}if(!window.XMindEmbedViewer)throw new Error('官方查看器未正确加载');
     const response=await fetch('/api/drawings/file?name='+encodeURIComponent(DRAW_FILE),{cache:'no-store'});if(!response.ok)throw new Error('无法读取 XMind 原文件');const file=await response.arrayBuffer();
-    host.querySelectorAll('iframe').forEach(node=>node.remove());XMIND_OFFICIAL=new window.XMindEmbedViewer({el:host,file,region:'cn',isPitchModeDisabled:true,styles:{width:'100%',height:'100%',border:'0'}});
+    const exported=window.XMindEmbedViewer,ViewerCtor=typeof exported==='function'?exported:(exported&&(exported.XMindEmbedViewer||exported.default));if(typeof ViewerCtor!=='function')throw new Error('官方查看器版本不兼容');
+    mount.replaceChildren();XMIND_OFFICIAL=new ViewerCtor({el:mount,region:'cn',isPitchModeDisabled:true,styles:{width:'100%',height:'100%',border:'0'}});
     XMIND_OFFICIAL.addEventListener('map-ready',()=>{loading.style.display='none';setDrawStatus('XMind 官方视图已加载','ok');setTimeout(()=>{try{XMIND_OFFICIAL&&XMIND_OFFICIAL.setFitMap();}catch(_){}},80);});
     XMIND_OFFICIAL.addEventListener('sheet-switch',sheetId=>{const index=XMIND_WORKBOOK.findIndex(sheet=>sheet.id===sheetId);if(index>=0&&index!==XMIND_SHEET_INDEX){XMIND_SHEET_INDEX=index;XMIND_SELECTED=xmindRootTopic().id;renderXmindSheets();renderXmindOutline();}});
+    XMIND_OFFICIAL.load(file);
     setTimeout(()=>{if(XMIND_VIEW==='official'&&loading.style.display!=='none')loading.textContent='正在等待 XMind 官方渲染引擎…';},3500);
-  }catch(error){loading.textContent='官方视图加载失败：'+String(error.message||error);setDrawStatus('官方视图加载失败，已保留离线原貌','err');setTimeout(()=>setXmindView(XMIND_THUMBNAIL?'native':'edit'),1200);}
+  }catch(error){
+    const detail=String(error&&error.message||error||'未知错误');console.error('[CodeScope] XMind 官方视图加载失败',error);loading.replaceChildren();const card=document.createElement('div');card.className='xmind-official-error';const title=document.createElement('strong');title.textContent='XMind 官方视图加载失败';const message=document.createElement('span');message.textContent=detail;const actions=document.createElement('div');actions.className='xmind-official-actions';const back=document.createElement('button');back.textContent=XMIND_THUMBNAIL?'返回原貌':'返回编辑';back.onclick=()=>setXmindView(XMIND_THUMBNAIL?'native':'edit');const retry=document.createElement('button');retry.textContent='重试';retry.className='primary';retry.onclick=openXmindOfficialView;actions.append(back,retry);card.append(title,message,actions);loading.append(card);setDrawStatus('官方视图加载失败：'+detail,'err');
+  }
 }
 function xmindSheet(){return XMIND_WORKBOOK&&XMIND_WORKBOOK[XMIND_SHEET_INDEX];}
 function xmindRootTopic(){const sheet=xmindSheet();return sheet&&sheet.rootTopic;}
@@ -4780,7 +4789,7 @@ function openXmindEditor(workbook,thumbnail=''){
   $('xmind-root').style.display='flex';$('drawio-root').style.display='none';$('excal-root').style.display='none';$('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
   $('xmind-native-image').src=XMIND_THUMBNAIL;loadXmindTheme();renderXmindSheets();renderXmindOutline();setXmindView(XMIND_THUMBNAIL?'native':'edit');setDrawStatus(XMIND_THUMBNAIL?'XMind 原貌已加载 · 可切换编辑':'XMind 已加载 · 自动保存','ok');
 }
-function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();XMIND_THUMBNAIL='';XMIND_VIEW='edit';XMIND_SNAPSHOT_DIRTY=false;XMIND_NATIVE_DRAG=null;XMIND_OFFICIAL=null;XMIND_OFFICIAL_APPROVED=false;$('xmind-outline').innerHTML='';$('xmind-svg').innerHTML='';$('xmind-native-image').removeAttribute('src');$('xmind-official-view').querySelectorAll('iframe').forEach(node=>node.remove());$('xmind-official-loading').style.display='grid';$('xmind-official-consent').classList.add('hidden');$('xmind-theme-menu').classList.add('hidden');$('xmind-shortcuts').classList.add('hidden');$('xmind-root').style.display='none';}
+function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();XMIND_THUMBNAIL='';XMIND_VIEW='edit';XMIND_SNAPSHOT_DIRTY=false;XMIND_NATIVE_DRAG=null;XMIND_OFFICIAL=null;XMIND_OFFICIAL_APPROVED=false;$('xmind-outline').innerHTML='';$('xmind-svg').innerHTML='';$('xmind-native-image').removeAttribute('src');$('xmind-official-host').replaceChildren();$('xmind-official-loading').style.display='grid';$('xmind-official-loading').textContent='正在连接 XMind 官方查看器…';$('xmind-official-consent').classList.add('hidden');$('xmind-theme-menu').classList.add('hidden');$('xmind-shortcuts').classList.add('hidden');$('xmind-root').style.display='none';}
 
 function scheduleDrawSave() {
   DRAW_DIRTY = true; setDrawStatus('未保存…', 'dirty');
