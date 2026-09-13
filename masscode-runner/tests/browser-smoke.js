@@ -124,7 +124,7 @@ print(r.run())
   fs.writeFileSync(path.join(readingProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Markdown block drag regression',tags:['markdown','drag']},null,2));
   fs.writeFileSync(readingNotePath,'# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n## Section B\n\n- alpha\n- beta\n- gamma\n','utf8');
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
-  server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data')},stdio:'ignore'});
+  server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data'),CODESCOPE_ONLYOFFICE_URL:'http://127.0.0.1:1'},stdio:'ignore'});
   await waitForServer(baseUrl);
   const officeFixtures=[['word','Browser Word'],['sheet','Browser Sheet'],['slides','Browser Slides']];
   for(const [kind,name] of officeFixtures){

@@ -2596,6 +2596,98 @@ function workspaceBacklinks(kind, targetPath, targetFragment) {
 
 function officeDir() { return path.join(vaultPath(), 'office'); }
 const OFFICE_EXTS = new Set(['.docx', '.xlsx', '.xls', '.csv', '.pptx']);
+const ONLYOFFICE_PUBLIC_URL = String(process.env.CODESCOPE_ONLYOFFICE_URL || 'http://127.0.0.1:8088').replace(/\/$/, '');
+const ONLYOFFICE_CONTAINER_HOST = String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER_HOST || 'host.docker.internal').trim();
+const ONLYOFFICE_ACCESS_SECRET = crypto.randomBytes(32);
+function onlyOfficeToken(rel, purpose) {
+  return crypto.createHmac('sha256', ONLYOFFICE_ACCESS_SECRET).update(String(purpose || '') + '\0' + String(rel || '')).digest('hex');
+}
+function onlyOfficeTokenValid(rel, purpose, token) {
+  const expected = Buffer.from(onlyOfficeToken(rel, purpose)), actual = Buffer.from(String(token || ''));
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+function onlyOfficeContainerBase() {
+  const explicit = String(process.env.CODESCOPE_ONLYOFFICE_CALLBACK_BASE || '').replace(/\/$/, '');
+  if (explicit) return explicit;
+  return 'http://' + ONLYOFFICE_CONTAINER_HOST + ':' + PORT;
+}
+async function onlyOfficeHealth() {
+  try {
+    const response = await fetch(ONLYOFFICE_PUBLIC_URL + '/healthcheck', { signal:AbortSignal.timeout(1800), cache:'no-store' });
+    const text = (await response.text()).trim().toLowerCase();
+    return { ok:response.ok && (text === 'true' || text === 'true.' || text.includes('true')), url:ONLYOFFICE_PUBLIC_URL };
+  } catch (error) {
+    return { ok:false, url:ONLYOFFICE_PUBLIC_URL, error:String(error.message || error) };
+  }
+}
+function onlyOfficeDocumentType(kind) {
+  return kind === 'word' ? 'word' : kind === 'sheet' ? 'cell' : kind === 'slides' ? 'slide' : '';
+}
+function onlyOfficeConfig(rel, file) {
+  const stat = fs.statSync(file), ext = path.extname(rel).slice(1).toLowerCase(), kind = officeKind(rel);
+  const internal = onlyOfficeContainerBase(), documentToken = onlyOfficeToken(rel, 'document'), callbackToken = onlyOfficeToken(rel, 'callback');
+  const key = crypto.createHash('sha256').update('codescope\0' + rel + '\0' + stat.size + '\0' + stat.mtimeMs).digest('hex').slice(0, 48);
+  return {
+    type:'desktop', width:'100%', height:'100%', documentType:onlyOfficeDocumentType(kind),
+    document:{
+      fileType:ext, key, title:path.basename(rel),
+      url:internal + '/api/office/onlyoffice-file?path=' + encodeURIComponent(rel) + '&token=' + documentToken,
+      info:{ owner:'CodeScope', folder:path.posix.dirname(rel) === '.' ? 'Office 根目录' : path.posix.dirname(rel), uploaded:new Date(stat.mtimeMs).toISOString() },
+      permissions:{ edit:true, download:true, print:true, copy:true, comment:true, review:true, fillForms:true, modifyFilter:true, protect:true },
+    },
+    editorConfig:{
+      callbackUrl:internal + '/api/office/onlyoffice-callback?path=' + encodeURIComponent(rel) + '&token=' + callbackToken,
+      lang:'zh-CN', region:'zh-CN', mode:'edit',
+      user:{ id:'codescope-local', name:'CodeScope 本地用户' },
+      coEditing:{ mode:'fast', change:true },
+      customization:{ autosave:true, forcesave:true, compactHeader:false, compactToolbar:false, hideRightMenu:false, toolbarHideFileName:true, about:false, feedback:false },
+    },
+  };
+}
+function backupOfficeFile(file, rel) {
+  const ext = path.extname(rel), relDir = path.dirname(rel), stem = path.basename(rel, ext);
+  const backupDir = path.join(officeDir(), '.codescope-backups', relDir === '.' ? '' : relDir);
+  fs.mkdirSync(backupDir, { recursive:true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  fs.copyFileSync(file, path.join(backupDir, stem + '.' + stamp + ext));
+  const backups = fs.readdirSync(backupDir).filter((name) => name.startsWith(stem + '.') && name.endsWith(ext)).sort().reverse();
+  for (const old of backups.slice(5)) { try { fs.unlinkSync(path.join(backupDir, old)); } catch (_) {} }
+}
+async function saveOnlyOfficeResult(rel, sourceUrl) {
+  const file = path.join(officeDir(), rel), ext = path.extname(rel).toLowerCase();
+  if (!fs.existsSync(file)) throw requestError('要保存的 Office 文档不存在', 404);
+  let source;
+  try { source = new URL(String(sourceUrl || '')); } catch (_) { throw requestError('ONLYOFFICE 返回了无效的保存地址', 400); }
+  const allowed = new URL(ONLYOFFICE_PUBLIC_URL);
+  if (!['http:', 'https:'].includes(source.protocol)) throw requestError('ONLYOFFICE 保存地址协议不受支持', 400);
+  const localNames = new Set(['127.0.0.1', 'localhost', '::1', 'codescope-onlyoffice', allowed.hostname]);
+  if (!localNames.has(source.hostname)) throw requestError('已拒绝非本机 ONLYOFFICE 保存地址', 403);
+  if (source.origin !== allowed.origin) {
+    source = new URL(source.pathname + source.search, ONLYOFFICE_PUBLIC_URL + '/');
+  }
+  let response;
+  for (let redirects = 0; redirects < 4; redirects += 1) {
+    response = await fetch(source, { signal:AbortSignal.timeout(60000), redirect:'manual' });
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    const location = response.headers.get('location');
+    if (!location) throw requestError('ONLYOFFICE 保存重定向缺少地址', 502);
+    let next; try { next = new URL(location, source); } catch (_) { throw requestError('ONLYOFFICE 保存重定向地址无效', 502); }
+    if (!['http:', 'https:'].includes(next.protocol) || !localNames.has(next.hostname)) throw requestError('已拒绝非本机 ONLYOFFICE 保存重定向', 403);
+    if (next.origin !== allowed.origin) next = new URL(next.pathname + next.search, ONLYOFFICE_PUBLIC_URL + '/');
+    source = next;
+  }
+  if (!response) throw requestError('ONLYOFFICE 文件下载失败', 502);
+  if (!response.ok) throw requestError('ONLYOFFICE 文件下载失败（HTTP ' + response.status + '）', 502);
+  const announced = Number(response.headers.get('content-length') || 0);
+  if (announced > 200 * 1024 * 1024) throw requestError('ONLYOFFICE 返回的文件超过 200 MB', 413);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length > 200 * 1024 * 1024) throw requestError('ONLYOFFICE 返回的文件超过 200 MB', 413);
+  const temp = path.join(path.dirname(file), '.' + crypto.randomUUID() + ext + '.onlyoffice-saving');
+  try {
+    fs.writeFileSync(temp, buffer); validateOfficeFile(temp, ext); backupOfficeFile(file, rel); fs.renameSync(temp, file);
+  } catch (error) { try { fs.unlinkSync(temp); } catch (_) {} throw error; }
+  return fs.statSync(file);
+}
 function officePath(value, allowFolder = false) {
   if (typeof value !== 'string') return null;
   const rel = value.replace(/\\/g, '/').split('/').map((part) => part.trim()).filter(Boolean).join('/');
@@ -2902,7 +2994,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'onlyoffice-docs', 'onlyoffice-save-callback', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -2912,6 +3004,35 @@ const server = http.createServer(async (req, res) => {
       if (!rel) return send(res, 400, { ok:false, error:'Office 文件路径不合法' });
       if (u.searchParams.get('download') === '1') res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(path.basename(rel)));
       return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-cache', notFound:'Office 文件不存在' });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/status') {
+      const health = await onlyOfficeHealth();
+      return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', editable:['docx','xlsx','xls','csv','pptx'] });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/config') {
+      const rel = officePath(u.searchParams.get('path'));
+      if (!rel) return send(res, 400, { ok:false, error:'Office 文件路径不合法' });
+      const file = path.join(officeDir(), rel), kind = officeKind(rel);
+      if (!fs.existsSync(file) || !onlyOfficeDocumentType(kind)) return send(res, 404, { ok:false, error:'Office 文件不存在或类型不受支持' });
+      const health = await onlyOfficeHealth();
+      if (!health.ok) return send(res, 503, { ok:false, error:'ONLYOFFICE Docs 尚未启动', documentServerUrl:ONLYOFFICE_PUBLIC_URL, fallback:true });
+      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:ONLYOFFICE_PUBLIC_URL, config:onlyOfficeConfig(rel, file) });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/office/onlyoffice-file') {
+      const rel = officePath(u.searchParams.get('path'));
+      if (!rel || !onlyOfficeTokenValid(rel, 'document', u.searchParams.get('token'))) return send(res, 403, { ok:false, error:'Office 文件访问令牌无效' });
+      return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-store', notFound:'Office 文件不存在' });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/onlyoffice-callback') {
+      const rel = officePath(u.searchParams.get('path'));
+      if (!rel || !onlyOfficeTokenValid(rel, 'callback', u.searchParams.get('token'))) return send(res, 403, { error:1 });
+      const body = await readBody(req, 4 * 1024 * 1024), status = Number(body && body.status);
+      if ((status === 2 || status === 6) && body.url) {
+        try { await saveOnlyOfficeResult(rel, body.url); }
+        catch (error) { console.error('ONLYOFFICE 保存失败:', rel, error); return send(res, 500, { error:1 }); }
+      }
+      if (status === 3 || status === 7) console.error('ONLYOFFICE 编辑服务报告保存错误:', rel, body && body.error);
+      return send(res, 200, { error:0 });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/word-html') {
       const rel = officePath(u.searchParams.get('path'));
