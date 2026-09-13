@@ -2713,6 +2713,11 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/xmind-viewer/'.length);
       return streamStatic(req, res, viewerRoot, rel, { cacheControl:'public, max-age=86400', notFound:'XMind 官方查看器资源不存在；请先运行 npm install' });
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/mind-elixir/')) {
+      const editorRoot = path.join(__dirname, 'node_modules', 'mind-elixir', 'dist');
+      const rel = u.pathname.slice('/mind-elixir/'.length);
+      return streamStatic(req, res, editorRoot, rel, { cacheControl:'public, max-age=86400', notFound:'Mind Elixir 编辑器资源不存在；请先运行 npm install' });
+    }
     if (req.method === 'GET' && u.pathname === '/api/system/status') {
       return send(res, 200, await systemStatus());
     }
@@ -2726,7 +2731,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });

@@ -17,6 +17,7 @@
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
     "fflate": "^0.8.3",
+    "mind-elixir": "5.15.1",
     "monaco-editor": "^0.52.2",
     "pdfjs-dist": "^4.10.38",
     "saxes": "^6.0.0",

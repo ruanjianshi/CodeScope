@@ -503,7 +503,7 @@
   .item .nm { font-weight: 600; }
   .item .desc { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item .langs { margin-top: 3px; font-size: 11px; color: var(--accent); }
-  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height:0; }
   #toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; position: sticky; top: 0; z-index: 20; background: var(--panel); }
   #toolbar .title { flex:1 1 180px; min-width:110px; max-width:340px; overflow:hidden; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
   #tabs { display: flex; gap: 6px; padding: 8px 14px 0; }
@@ -988,7 +988,8 @@
   #main { position: relative; }
   body.drawing-mode header { display: none; }   /* 绘图时隐藏应用顶栏：Excalidraw 的 fixed 菜单对齐到编辑器头部行 */
   body.drawing-mode #outline-panel { display: none !important; }   /* 绘图时隐藏右侧大纲面板，让编辑器占满主区 */
-  #draw-editor { position: absolute; inset: 0; z-index: 60; display: none; flex-direction: column; background: var(--bg); }
+  body.drawing-mode #main { overflow:hidden; }
+  #draw-editor { position: absolute; inset: 0; z-index: 60; display: none; flex-direction: column; min-height:0; overflow:hidden; background: var(--bg); }
   #draw-ed-head { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #10151c; border-bottom: 1px solid var(--border); z-index: 50; }
   #draw-ed-head button { background: #1c2330; border: 1px solid var(--border); color: #c9d4e3; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
   #draw-ed-head button:hover { background: #28324a; color: #fff; }
@@ -1002,19 +1003,26 @@
   #excal-root .excalidraw { position: absolute; inset: 0; }
   #drawio-root { flex:1; min-height:0; position:relative; display:none; background:#1e1e1e; }
   #drawio-root iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
-  #xmind-root { position:relative; flex:1; min-height:0; display:none; flex-direction:column; background:#0b1017; }
+  #xmind-root { position:relative; flex:1; height:100%; min-height:0; overflow:hidden; display:none; flex-direction:column; background:#0b1017; }
   .xmind-toolbar { display:flex; align-items:center; gap:6px; min-height:42px; padding:6px 12px; border-bottom:1px solid var(--border); background:#111821; }
   .xmind-toolbar button { flex:none; padding:4px 9px; font-size:11px; white-space:nowrap; }
   .xmind-toolbar button:disabled { opacity:.42; cursor:default; }
   #xmind-sheet-select { max-width:150px; padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:#0b1119; color:var(--dim); font:11px var(--font); }
   #xmind-sheet-title { min-width:130px; max-width:220px; padding:5px 8px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); font:600 12px var(--font); }
   #xmind-sheet-title:hover, #xmind-sheet-title:focus { border-color:var(--border); background:#0b1119; outline:none; }
-  .xmind-workspace { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); flex:1; min-height:0; }
+  .xmind-workspace { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); flex:1; min-height:0; height:0; overflow:hidden; }
   #xmind-root.native-mode .xmind-workspace { grid-template-columns:minmax(0,1fr); }
   #xmind-root.native-mode #xmind-outline { display:none; }
   #xmind-outline { min-width:0; overflow:auto; padding:10px 8px 32px; border-right:1px solid var(--border); background:#0e151e; }
   #xmind-preview { position:relative; min-width:0; min-height:0; overflow:hidden; outline:none; background:radial-gradient(circle at 50% 45%,rgba(45,72,108,.18),transparent 46%),#0b1017; }
   #xmind-preview:focus-visible { box-shadow:inset 0 0 0 2px var(--xm-accent); }
+  #xmind-engine { position:absolute; inset:0; width:100%; height:100%; min-height:0; box-sizing:border-box; display:none; overflow:hidden; background:var(--xm-bg); }
+  #xmind-engine .mind-elixir { width:100%; height:100%; font-family:var(--font); }
+  #xmind-engine me-tpc { max-width:360px; line-height:1.45; letter-spacing:.01em; }
+  #xmind-engine me-tpc.selected { filter:drop-shadow(0 4px 12px rgba(0,0,0,.28)); }
+  #xmind-engine .toolbar, #xmind-engine .context-menu { color:var(--xm-text); background:var(--xm-control); border-color:var(--xm-border); box-shadow:0 12px 34px rgba(0,0,0,.32); }
+  #xmind-engine .toolbar { border-radius:9px; overflow:hidden; }
+  #xmind-engine .map-container { cursor:default; }
   #xmind-svg { display:block; width:100%; height:100%; }
   .xmind-view-switch { display:flex; padding:2px; border:1px solid var(--border); border-radius:7px; background:#0b1119; }
   .xmind-view-switch button { border:0; border-radius:5px; background:transparent; color:var(--dim); }
@@ -2687,7 +2695,7 @@
         </div>
         <div class="xmind-workspace">
           <aside id="xmind-outline" aria-label="XMind 大纲"></aside>
-          <section id="xmind-preview" tabindex="0" aria-label="XMind 导图预览，可单击选择、双击或空格编辑"><div id="xmind-native-view" aria-label="XMind 原貌画布"><div id="xmind-native-stage"><img id="xmind-native-image" alt="XMind 原貌画布"></div></div><div id="xmind-official-view" aria-label="XMind 官方查看器"><div id="xmind-official-host"></div><div id="xmind-official-loading">正在连接 XMind 官方查看器…</div></div><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
+          <section id="xmind-preview" tabindex="0" aria-label="XMind 导图预览，可单击选择、双击或空格编辑"><div id="xmind-native-view" aria-label="XMind 原貌画布"><div id="xmind-native-stage"><img id="xmind-native-image" alt="XMind 原貌画布"></div></div><div id="xmind-official-view" aria-label="XMind 官方查看器"><div id="xmind-official-host"></div><div id="xmind-official-loading">正在连接 XMind 官方查看器…</div></div><div id="xmind-engine" aria-label="Mind Elixir 思维导图编辑器"></div><svg id="xmind-svg" aria-hidden="true"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
         </div>
         <aside id="xmind-shortcuts" class="hidden" aria-label="XMind 快捷键">
           <div class="xmind-shortcut-head"><span>XMind 快捷操作</span><span class="sp"></span><button id="xmind-shortcuts-close">✕</button></div>
@@ -4636,24 +4644,24 @@ async function generateDrawioWithAi(){
   finally{if(generationTimer)clearInterval(generationTimer);DRAW_AI_BUSY=false;$('draw-ai-generate').disabled=false;}
 }
 
-/* ---- XMind：标准 .xmind 工作簿 + 可拖拽大纲 + Markmap 预览 ---- */
-let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set(),XMIND_THUMBNAIL='',XMIND_VIEW='edit',XMIND_SNAPSHOT_DIRTY=false,XMIND_NATIVE_SCALE=1,XMIND_NATIVE_X=0,XMIND_NATIVE_Y=0,XMIND_NATIVE_DRAG=null,XMIND_OFFICIAL=null,XMIND_OFFICIAL_LIB=null,XMIND_OFFICIAL_APPROVED=false;
+/* ---- XMind：标准 .xmind 工作簿 + 可拖拽大纲 + Mind Elixir 编辑器 ---- */
+let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set(),XMIND_THUMBNAIL='',XMIND_VIEW='edit',XMIND_SNAPSHOT_DIRTY=false,XMIND_NATIVE_SCALE=1,XMIND_NATIVE_X=0,XMIND_NATIVE_Y=0,XMIND_NATIVE_DRAG=null,XMIND_OFFICIAL=null,XMIND_OFFICIAL_LIB=null,XMIND_OFFICIAL_APPROVED=false,XMIND_EDITOR_LIB=null,XMIND_ENGINE_SYNCING=false;
 const XMIND_THEMES={midnight:'深海下划线',classic:'经典卡片',forest:'森林圆角',sunset:'日落便签',violet:'紫罗兰胶囊',paper:'纸张手绘',spectrum:'彩虹分支'};
 function xmindClone(value){return JSON.parse(JSON.stringify(value));}
 function xmindId(){return 'cs'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
 function xmindThemeStorageKey(){return 'mc-xmind-theme:'+(DRAW_FILE||'default');}
 function setXmindTheme(theme){
-  const id=XMIND_THEMES[theme]?theme:'midnight',root=$('xmind-root');root.dataset.xmindTheme=id;$('xmind-theme-btn').textContent='主题 · '+XMIND_THEMES[id];$('xmind-theme-menu').querySelectorAll('button').forEach(button=>button.classList.toggle('on',button.dataset.theme===id));try{localStorage.setItem(xmindThemeStorageKey(),id);}catch(_){}setTimeout(()=>{if(XMIND_MAP)XMIND_MAP.fit();},80);
+  const id=XMIND_THEMES[theme]?theme:'midnight',root=$('xmind-root');root.dataset.xmindTheme=id;$('xmind-theme-btn').textContent='主题 · '+XMIND_THEMES[id];$('xmind-theme-menu').querySelectorAll('button').forEach(button=>button.classList.toggle('on',button.dataset.theme===id));try{localStorage.setItem(xmindThemeStorageKey(),id);}catch(_){}if(XMIND_MAP&&typeof XMIND_MAP.changeTheme==='function'){const scale=XMIND_MAP.scaleVal||1;XMIND_MAP.changeTheme(xmindEditorTheme(id));setTimeout(()=>xmindPositionEditor(XMIND_SELECTED,Math.max(.35,Math.min(1.25,scale))),80);}
 }
 function loadXmindTheme(){let theme='midnight';try{theme=localStorage.getItem(xmindThemeStorageKey())||localStorage.getItem('mc-xmind-theme:default')||'midnight';}catch(_){}setXmindTheme(theme);}
 function renderXmindNativeTransform(){const stage=$('xmind-native-stage');if(stage)stage.style.transform='translate('+XMIND_NATIVE_X+'px,'+XMIND_NATIVE_Y+'px) scale('+XMIND_NATIVE_SCALE+')';}
 function resetXmindNativeView(){XMIND_NATIVE_SCALE=1;XMIND_NATIVE_X=0;XMIND_NATIVE_Y=0;renderXmindNativeTransform();}
 function xmindMarkSnapshotDirty(){if(!XMIND_THUMBNAIL||XMIND_SNAPSHOT_DIRTY)return;XMIND_SNAPSHOT_DIRTY=true;const note=$('xmind-native-note');if(note){note.textContent='原貌为导入时快照';note.classList.add('warn');}}
 function setXmindView(mode){
-  const canNative=!!XMIND_THUMBNAIL&&XMIND_SHEET_INDEX===0;XMIND_VIEW=mode==='official'?'official':(mode==='native'&&canNative?'native':'edit');const nativeView=$('xmind-native-view'),officialView=$('xmind-official-view'),svg=$('xmind-svg'),empty=$('xmind-empty');
+  const canNative=!!XMIND_THUMBNAIL&&XMIND_SHEET_INDEX===0;XMIND_VIEW=mode==='official'?'official':(mode==='native'&&canNative?'native':'edit');const nativeView=$('xmind-native-view'),officialView=$('xmind-official-view'),engine=$('xmind-engine'),svg=$('xmind-svg'),empty=$('xmind-empty');
   $('xmind-root').classList.toggle('native-mode',XMIND_VIEW==='native'||XMIND_VIEW==='official');
   $('xmind-view-native').disabled=!canNative;$('xmind-view-native').classList.toggle('on',XMIND_VIEW==='native');$('xmind-view-edit').classList.toggle('on',XMIND_VIEW==='edit');
-  $('xmind-view-official').classList.toggle('on',XMIND_VIEW==='official');nativeView.style.display=XMIND_VIEW==='native'?'block':'none';officialView.style.display=XMIND_VIEW==='official'?'block':'none';svg.style.display=XMIND_VIEW==='edit'?'block':'none';if(empty&&XMIND_VIEW!=='edit')empty.style.display='none';
+  $('xmind-view-official').classList.toggle('on',XMIND_VIEW==='official');nativeView.style.display=XMIND_VIEW==='native'?'block':'none';officialView.style.display=XMIND_VIEW==='official'?'block':'none';engine.style.display=XMIND_VIEW==='edit'?'block':'none';svg.style.display='none';if(empty&&XMIND_VIEW!=='edit')empty.style.display='none';
   const note=$('xmind-native-note');if(note){note.textContent=XMIND_VIEW==='official'?'官方渲染 · 全部画布':(!XMIND_THUMBNAIL?'文件无原貌快照':(XMIND_SHEET_INDEX!==0?'原貌仅对应首张画布':(XMIND_SNAPSHOT_DIRTY?'原貌为导入时快照':'XMind 原始画布')));note.classList.toggle('warn',XMIND_VIEW!=='official'&&(XMIND_SNAPSHOT_DIRTY||XMIND_SHEET_INDEX!==0));}
   if(XMIND_VIEW==='native')resetXmindNativeView();else requestAnimationFrame(renderXmindPreview);
 }
@@ -4709,6 +4717,35 @@ function xmindUndo(direction){
   XMIND_HISTORY_INDEX=next;XMIND_WORKBOOK=JSON.parse(XMIND_HISTORY[next]);XMIND_SHEET_INDEX=Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1);if(!xmindFind(XMIND_SELECTED))XMIND_SELECTED=xmindRootTopic().id;xmindMarkSnapshotDirty();
   DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();renderXmindSheets();renderXmindOutline();scheduleXmindPreview();xmindUpdateUndo();
 }
+function xmindEditorModule(){const mod=typeof window.MindElixir!=='undefined'?window.MindElixir:null;return mod&&(mod.default||mod);}
+function ensureXmindEditorLib(){
+  if(xmindEditorModule())return Promise.resolve();if(!XMIND_EDITOR_LIB){const style=document.querySelector('link[data-codescope-mind-elixir]')||document.createElement('link');if(!style.parentNode){style.rel='stylesheet';style.href='/mind-elixir/MindElixir.css';style.dataset.codescopeMindElixir='1';document.head.appendChild(style);}XMIND_EDITOR_LIB=loadOptionalScript('/mind-elixir/MindElixir.iife.js').then(()=>{if(!xmindEditorModule())throw new Error('Mind Elixir 编辑器未正确加载');}).catch(error=>{XMIND_EDITOR_LIB=null;throw error;});}return XMIND_EDITOR_LIB;
+}
+function xmindEditorTheme(id){
+  const themes={
+    midnight:{type:'dark',palette:['#7dd3fc','#a78bfa','#34d399','#fbbf24','#fb7185'],root:'#315f9b',rootBorder:'#78a9ff',main:'#182536',bg:'#0b1017',color:'#d9e3ef'},
+    classic:{type:'light',palette:['#316fc5','#6f42c1','#0f8a68','#d97706','#c2415d'],root:'#316fc5',rootBorder:'#22599f',main:'#ffffff',bg:'#f4f7fb',color:'#243248'},
+    forest:{type:'dark',palette:['#52d6a4','#81c784','#7dd3fc','#d5e86c','#f4b860'],root:'#176b50',rootBorder:'#52d6a4',main:'#10271e',bg:'#09140f',color:'#dcf7eb'},
+    sunset:{type:'dark',palette:['#ff9e64','#ff7b72','#e0af68','#bb9af7','#7dcfff'],root:'#9a4f2c',rootBorder:'#ff9e64',main:'#2b1b15',bg:'#17100d',color:'#fff0e5'},
+    violet:{type:'dark',palette:['#bb9af7','#7aa2f7','#9ece6a','#e0af68','#f7768e'],root:'#5d4892',rootBorder:'#bb9af7',main:'#211a31',bg:'#120f1c',color:'#f0e9ff'},
+    paper:{type:'light',palette:['#9b6d32','#607d3b','#517792','#985b68','#8064a2'],root:'#f0dfbf',rootBorder:'#9b6d32',main:'#fffaf0',bg:'#f5f0e5',color:'#382e24'},
+    spectrum:{type:'dark',palette:['#ff7b72','#7ee787','#7dd3fc','#d2a8ff','#ffa657'],root:'#405d91',rootBorder:'#7dd3fc',main:'#171f2e',bg:'#0c1018',color:'#eef4ff'}
+  },t=themes[id]||themes.midnight;
+  return{name:'CodeScope '+id,type:t.type,palette:t.palette,cssVar:{'--node-gap-x':'34px','--node-gap-y':'12px','--main-gap-x':'72px','--main-gap-y':'30px','--root-radius':'12px','--main-radius':'9px','--root-color':t.type==='light'?'#29231c':'#ffffff','--root-bgcolor':t.root,'--root-border-color':t.rootBorder,'--main-color':t.color,'--main-bgcolor':t.main,'--main-bgcolor-transparent':t.main,'--topic-padding':'6px 10px','--color':t.color,'--bgcolor':t.bg,'--selected':t.rootBorder,'--accent-color':t.rootBorder,'--panel-color':t.color,'--panel-bgcolor':t.main,'--panel-border-color':t.rootBorder,'--map-padding':'48px 64px'}};
+}
+function xmindEditorDirection(ME){const structure=String(xmindRootTopic()?.structureClass||'');return /org-chart|org\.xmind\.ui\.org/i.test(structure)?ME.DOWN:/logic\.right/i.test(structure)?ME.RIGHT:ME.SIDE;}
+function xmindPositionEditor(id,scale){
+  if(!XMIND_MAP)return;try{requestAnimationFrame(()=>{if(!XMIND_MAP)return;const map=XMIND_MAP.map,pane=$('xmind-engine'),root=map&&map.querySelector('me-root'),rootTopic=root&&root.querySelector(':scope > me-tpc');if(!map||!pane||!root||!rootTopic)return;const nextScale=Number.isFinite(scale)?scale:(XMIND_MAP.scaleVal||1),rootX=root.offsetLeft+rootTopic.offsetLeft+rootTopic.offsetWidth*.5,rootY=root.offsetTop+rootTopic.offsetTop+rootTopic.offsetHeight*.5,rightFacing=XMIND_MAP.direction===1,dx=pane.clientWidth*(rightFacing ? .34 : .5)-rootX,dy=pane.clientHeight*.5-rootY;XMIND_MAP.scaleVal=nextScale;map.style.transformOrigin=rootX+'px '+rootY+'px';map.style.transform='translate3d('+dx+'px, '+dy+'px, 0) scale('+nextScale+')';XMIND_MAP.bus.fire('scale',nextScale);});}catch(error){console.warn('[CodeScope] 无法定位导图主题',error);}
+}
+function xmindToEditorData(ME){
+  const direction=xmindEditorDirection(ME),walk=(topic,depth,index)=>{const node={id:String(topic.id||xmindId()),topic:String(topic.title||'未命名主题'),expanded:!XMIND_COLLAPSED.has(topic.id)};const children=xmindChildren(topic).map((child,i)=>walk(child,depth+1,i));if(children.length)node.children=children;if(depth===1&&direction===ME.SIDE)node.direction=index%2?ME.LEFT:ME.RIGHT;if(Array.isArray(topic.labels)&&topic.labels.length)node.tags=topic.labels.map(String);const note=topic.notes&&topic.notes.plain&&topic.notes.plain.content;if(note)node.note=String(note);return node;};
+  const root=walk(xmindRootTopic(),0,0);root.root=true;return{nodeData:root,direction,theme:xmindEditorTheme($('xmind-root').dataset.xmindTheme||'midnight')};
+}
+function xmindSyncFromEditor(record=false){
+  if(!XMIND_MAP||XMIND_ENGINE_SYNCING||DRAW_KIND!=='xmind')return;let data;try{data=XMIND_MAP.getData();}catch(_){return;}if(!data||!data.nodeData)return;const old=new Map();(function collect(topic){if(!topic)return;old.set(String(topic.id),topic);xmindChildren(topic).forEach(collect);})(xmindRootTopic());
+  const merge=(node)=>{const prior=old.get(String(node.id)),topic=prior?xmindClone(prior):{id:String(node.id||xmindId()),class:'topic'};topic.id=String(node.id||topic.id||xmindId());topic.class=topic.class||'topic';topic.title=String(node.topic||'未命名主题');if(!topic.children||typeof topic.children!=='object')topic.children={};topic.children.attached=(node.children||[]).map(merge);if(node.expanded===false)XMIND_COLLAPSED.add(topic.id);else XMIND_COLLAPSED.delete(topic.id);if(node.note){topic.notes=topic.notes||{};topic.notes.plain={content:String(node.note)}}return topic;};
+  xmindSheet().rootTopic=merge(data.nodeData);const current=XMIND_MAP.currentNode&&XMIND_MAP.currentNode.nodeObj;XMIND_SELECTED=String(current&&current.id||XMIND_SELECTED||xmindRootTopic().id);xmindNormalize();record?xmindRecord():xmindQueueRecord();xmindMarkSnapshotDirty();DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();renderXmindSheets();renderXmindOutline();
+}
 function xmindMarkdown(){
   const lines=[];const clean=(value)=>String(value||'未命名主题').split(/\r?\n/).map(line=>line.replace(/([\\`*_{}\[\]<>])/g,'\\$1').trim()).filter(Boolean).join('<br>')||'未命名主题';
   const walk=(topic,depth)=>{if(depth<=6)lines.push('#'.repeat(Math.max(1,depth))+' '+clean(topic.title));else lines.push('  '.repeat(depth-7)+'- '+clean(topic.title));for(const child of xmindChildren(topic))walk(child,depth+1);};
@@ -4732,11 +4769,8 @@ function xmindStartPreviewEdit(id=XMIND_SELECTED){
   text.onkeydown=(event)=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();finish(false);return;}if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();finish(true,'sibling');return;}if(event.key==='Tab'){event.preventDefault();finish(true,event.shiftKey?'unindent':'child');}};text.onblur=()=>finish(true);
 }
 function renderXmindPreview(){
-  if(DRAW_KIND!=='xmind'||XMIND_VIEW!=='edit')return;const svg=$('xmind-svg'),empty=$('xmind-empty');if(!svg)return;
-  if(!(window.MarkmapLib&&window.MarkmapView&&window.MarkmapView.Markmap)){
-    empty.style.display='grid';empty.textContent='正在加载导图引擎…';ensureMindmapLib().then(()=>{if(DRAW_KIND==='xmind')renderXmindPreview();}).catch(error=>{empty.textContent='导图引擎加载失败：'+error.message;});return;
-  }
-  empty.style.display='none';try{const{root}=new window.MarkmapLib.Transformer().transform(xmindMarkdown()||'# 空导图');if(!XMIND_MAP)XMIND_MAP=window.MarkmapView.Markmap.create(svg,{duration:160,maxWidth:300});XMIND_MAP.setData(root);XMIND_MAP.fit();requestAnimationFrame(decorateXmindPreview);setTimeout(decorateXmindPreview,190);}catch(error){empty.style.display='grid';empty.textContent='导图渲染失败：'+error.message;}
+  if(DRAW_KIND!=='xmind'||XMIND_VIEW!=='edit')return;const engine=$('xmind-engine'),empty=$('xmind-empty');if(!engine)return;const ME=xmindEditorModule();if(!ME){empty.style.display='grid';empty.textContent='正在加载 Mind Elixir 编辑器…';ensureXmindEditorLib().then(()=>renderXmindPreview()).catch(error=>{empty.textContent='导图编辑器加载失败：'+error.message;});return;}
+  empty.style.display='none';try{const data=xmindToEditorData(ME);if(XMIND_MAP){XMIND_ENGINE_SYNCING=true;XMIND_MAP.changeTheme(data.theme,false);XMIND_MAP.refresh(data);XMIND_ENGINE_SYNCING=false;return;}engine.replaceChildren();XMIND_MAP=new ME({el:engine,direction:data.direction,editable:true,contextMenu:{focus:true,link:true,locale:{addChild:'添加子主题',addParent:'添加父主题',addSibling:'添加同级主题',removeNode:'删除主题',focus:'专注模式',cancelFocus:'退出专注',moveUp:'上移',moveDown:'下移',link:'关联线',linkBidirectional:'双向关联',clickTips:'请选择目标主题',summary:'概要'}},toolBar:true,keypress:true,allowUndo:false,overflowHidden:true,compact:false,newTopicName:'新主题',theme:data.theme,scaleSensitivity:.12,scaleMin:.2,scaleMax:4,handleWheel:true});XMIND_MAP.init(data);if(!engine.dataset.historyWired){engine.dataset.historyWired='1';engine.addEventListener('keydown',event=>{if(DRAW_KIND!=='xmind'||XMIND_VIEW!=='edit'||event.target.closest('[contenteditable]'))return;const mod=event.metaKey||event.ctrlKey,key=event.key.toLowerCase();if(mod&&(key==='z'||key==='y')){event.preventDefault();event.stopImmediatePropagation();xmindUndo(key==='y'||event.shiftKey?1:-1);}},true);}XMIND_MAP.bus.addListener('operation',()=>setTimeout(()=>xmindSyncFromEditor(true),0));XMIND_MAP.bus.addListener('selectNode',node=>{const id=node&&node.nodeObj&&node.nodeObj.id;if(id){XMIND_SELECTED=String(id);renderXmindOutlineSelection(false);}});XMIND_MAP.bus.addListener('expandNode',()=>setTimeout(()=>xmindSyncFromEditor(false),0));setDrawStatus('Mind Elixir 编辑器已加载 · 自动保存','ok');setTimeout(()=>{if(!XMIND_MAP)return;if(xmindPreorderTopics().length>28)xmindPositionEditor(xmindRootTopic().id,.82);else XMIND_MAP.scaleFit();},80);}catch(error){XMIND_ENGINE_SYNCING=false;empty.style.display='grid';empty.textContent='导图编辑器初始化失败：'+error.message;console.error('[CodeScope] Mind Elixir 初始化失败',error);}
 }
 function xmindResizeTitle(input){input.style.height='26px';input.style.height=Math.min(112,Math.max(26,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>112?'auto':'hidden';}
 function renderXmindOutline(){
@@ -4757,14 +4791,22 @@ function renderXmindOutline(){
   };walk(root,null,0);xmindUpdateUndo();
   if(XMIND_FOCUS){const target=box.querySelector('.xmind-row[data-id="'+CSS.escape(XMIND_FOCUS)+'"] .xmind-title');XMIND_FOCUS=null;if(target)requestAnimationFrame(()=>{target.focus();target.select();});}
 }
-function renderXmindOutlineSelection(){document.querySelectorAll('.xmind-row').forEach(row=>row.classList.toggle('selected',row.dataset.id===XMIND_SELECTED));document.querySelectorAll('#xmind-svg .markmap-node').forEach(node=>node.classList.toggle('xmind-node-selected',node.dataset.topicId===XMIND_SELECTED));xmindUpdateUndo();}
+function renderXmindOutlineSelection(syncEditor=true){
+  document.querySelectorAll('.xmind-row').forEach(row=>row.classList.toggle('selected',row.dataset.id===XMIND_SELECTED));document.querySelectorAll('#xmind-svg .markmap-node').forEach(node=>node.classList.toggle('xmind-node-selected',node.dataset.topicId===XMIND_SELECTED));
+  if(syncEditor&&XMIND_VIEW==='edit'&&XMIND_MAP&&XMIND_SELECTED){try{const target=XMIND_MAP.findEle(String(XMIND_SELECTED)),current=XMIND_MAP.currentNode;if(target&&target!==current)XMIND_MAP.selectNode(target);}catch(_){}}
+  xmindUpdateUndo();
+}
 function xmindNewTopic(title='新主题'){return{id:xmindId(),class:'topic',title,children:{attached:[]}};}
 function xmindAddSheet(){const number=XMIND_WORKBOOK.length+1;XMIND_WORKBOOK.push({id:xmindId(),class:'sheet',title:'画布 '+number,rootTopic:{...xmindNewTopic('中心主题'),structureClass:'org.xmind.ui.logic.right'}});XMIND_SHEET_INDEX=XMIND_WORKBOOK.length-1;XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
 function xmindDeleteSheet(){if(!XMIND_WORKBOOK||XMIND_WORKBOOK.length<=1)return;XMIND_WORKBOOK.splice(XMIND_SHEET_INDEX,1);XMIND_SHEET_INDEX=Math.max(0,Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1));XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
-function xmindAddChild(){const hit=xmindFind(XMIND_SELECTED)||xmindFind(xmindRootTopic()?.id);if(!hit)return;const topic=xmindNewTopic();xmindChildren(hit.topic,true).push(topic);XMIND_COLLAPSED.delete(hit.topic.id);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
-function xmindAddSibling(before=false){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return xmindAddChild();const list=xmindChildren(hit.parent,true),topic=xmindNewTopic(),index=list.indexOf(hit.topic);list.splice(index+(before?0:1),0,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
-function xmindAddParent(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic),topic=xmindNewTopic('新父主题');topic.children.attached.push(hit.topic);list.splice(index,1,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
-function xmindDelete(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic);if(index>=0)list.splice(index,1);XMIND_SELECTED=hit.parent.id;xmindChanged();}
+function xmindEditorAction(action){
+  if(XMIND_VIEW!=='edit'||!XMIND_MAP)return false;let current=XMIND_MAP.currentNode;try{if(!current&&XMIND_SELECTED)current=XMIND_MAP.findEle(String(XMIND_SELECTED));}catch(_){}if(!current)return false;
+  try{let task;if(action==='child')task=XMIND_MAP.addChild(current);else if(action==='sibling')task=XMIND_MAP.insertSibling('after',current);else if(action==='parent')task=XMIND_MAP.insertParent(current);else if(action==='delete'){if(current.nodeObj&&current.nodeObj.root)return true;task=XMIND_MAP.removeNodes(XMIND_MAP.currentNodes&&XMIND_MAP.currentNodes.length?XMIND_MAP.currentNodes:[current]);}else if(action==='edit')task=XMIND_MAP.beginEdit(current);else return false;Promise.resolve(task).catch(error=>{console.error('[CodeScope] Mind Elixir 操作失败',error);setDrawStatus('导图操作失败：'+error.message,'err');});return true;}catch(error){console.error('[CodeScope] Mind Elixir 操作失败',error);return false;}
+}
+function xmindAddChild(){if(xmindEditorAction('child'))return;const hit=xmindFind(XMIND_SELECTED)||xmindFind(xmindRootTopic()?.id);if(!hit)return;const topic=xmindNewTopic();xmindChildren(hit.topic,true).push(topic);XMIND_COLLAPSED.delete(hit.topic.id);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindAddSibling(before=false){if(!before&&xmindEditorAction('sibling'))return;const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return xmindAddChild();const list=xmindChildren(hit.parent,true),topic=xmindNewTopic(),index=list.indexOf(hit.topic);list.splice(index+(before?0:1),0,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindAddParent(){if(xmindEditorAction('parent'))return;const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic),topic=xmindNewTopic('新父主题');topic.children.attached.push(hit.topic);list.splice(index,1,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindDelete(){if(xmindEditorAction('delete'))return;const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic);if(index>=0)list.splice(index,1);XMIND_SELECTED=hit.parent.id;xmindChanged();}
 function xmindDeleteSingle(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic);if(index<0)return;list.splice(index,1,...xmindChildren(hit.topic));XMIND_SELECTED=hit.parent.id;xmindChanged();}
 function xmindReorder(delta){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic),next=index+delta;if(index<0||next<0||next>=list.length)return;[list[index],list[next]]=[list[next],list[index]];xmindChanged();}
 function xmindUnindent(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const parentHit=xmindFind(hit.parent.id);if(!parentHit||!parentHit.parent)return;const from=xmindChildren(hit.parent,true),index=from.indexOf(hit.topic);if(index<0)return;from.splice(index,1);const to=xmindChildren(parentHit.parent,true),parentIndex=to.indexOf(hit.parent);to.splice(parentIndex+1,0,hit.topic);xmindChanged();}
@@ -4776,7 +4818,7 @@ function xmindToggleFold(all=false){
 function xmindSelectVisible(delta){const rows=[...document.querySelectorAll('#xmind-outline .xmind-row')],index=rows.findIndex(row=>row.dataset.id===XMIND_SELECTED),next=rows[Math.max(0,Math.min(rows.length-1,(index<0?0:index)+delta))];if(!next)return;XMIND_SELECTED=next.dataset.id;renderXmindOutlineSelection();next.scrollIntoView({block:'nearest'});}
 function xmindSelectParent(){const hit=xmindFind(XMIND_SELECTED);if(!hit)return;if(xmindChildren(hit.topic).length&&!XMIND_COLLAPSED.has(hit.topic.id)){XMIND_COLLAPSED.add(hit.topic.id);renderXmindOutline();return;}if(hit.parent){XMIND_SELECTED=hit.parent.id;renderXmindOutlineSelection();}}
 function xmindSelectChild(){const hit=xmindFind(XMIND_SELECTED);if(!hit)return;if(XMIND_COLLAPSED.has(hit.topic.id)){XMIND_COLLAPSED.delete(hit.topic.id);renderXmindOutline();return;}const child=xmindChildren(hit.topic)[0];if(child){XMIND_SELECTED=child.id;renderXmindOutlineSelection();}}
-function xmindFocusTitle(){const row=document.querySelector('.xmind-row[data-id="'+CSS.escape(XMIND_SELECTED||'')+'"]'),input=row&&row.querySelector('.xmind-title');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
+function xmindFocusTitle(){if(xmindEditorAction('edit'))return;const row=document.querySelector('.xmind-row[data-id="'+CSS.escape(XMIND_SELECTED||'')+'"]'),input=row&&row.querySelector('.xmind-title');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
 function xmindMove(sourceId,targetId,mode){
   const source=xmindFind(sourceId),target=xmindFind(targetId);if(!source||!source.parent||!target||sourceId===targetId||xmindContains(source.topic,targetId))return;
   const old=xmindChildren(source.parent,true),oldIndex=old.indexOf(source.topic);if(oldIndex<0)return;old.splice(oldIndex,1);
@@ -4785,11 +4827,11 @@ function xmindMove(sourceId,targetId,mode){
   XMIND_SELECTED=sourceId;xmindChanged();
 }
 function openXmindEditor(workbook,thumbnail=''){
-  XMIND_WORKBOOK=xmindClone(workbook);XMIND_SHEET_INDEX=0;xmindNormalize();XMIND_SELECTED=xmindRootTopic().id;XMIND_HISTORY=[JSON.stringify(XMIND_WORKBOOK)];XMIND_HISTORY_INDEX=0;XMIND_MAP=null;XMIND_COLLAPSED=new Set();XMIND_THUMBNAIL=String(thumbnail||'');XMIND_SNAPSHOT_DIRTY=false;
+  if(XMIND_MAP&&typeof XMIND_MAP.destroy==='function'){try{XMIND_MAP.destroy();}catch(_){}}XMIND_WORKBOOK=xmindClone(workbook);XMIND_SHEET_INDEX=0;xmindNormalize();XMIND_SELECTED=xmindRootTopic().id;XMIND_HISTORY=[JSON.stringify(XMIND_WORKBOOK)];XMIND_HISTORY_INDEX=0;XMIND_MAP=null;XMIND_COLLAPSED=new Set();XMIND_THUMBNAIL=String(thumbnail||'');XMIND_SNAPSHOT_DIRTY=false;
   $('xmind-root').style.display='flex';$('drawio-root').style.display='none';$('excal-root').style.display='none';$('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
   $('xmind-native-image').src=XMIND_THUMBNAIL;loadXmindTheme();renderXmindSheets();renderXmindOutline();setXmindView(XMIND_THUMBNAIL?'native':'edit');setDrawStatus(XMIND_THUMBNAIL?'XMind 原貌已加载 · 可切换编辑':'XMind 已加载 · 自动保存','ok');
 }
-function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();XMIND_THUMBNAIL='';XMIND_VIEW='edit';XMIND_SNAPSHOT_DIRTY=false;XMIND_NATIVE_DRAG=null;XMIND_OFFICIAL=null;XMIND_OFFICIAL_APPROVED=false;$('xmind-outline').innerHTML='';$('xmind-svg').innerHTML='';$('xmind-native-image').removeAttribute('src');$('xmind-official-host').replaceChildren();$('xmind-official-loading').style.display='grid';$('xmind-official-loading').textContent='正在连接 XMind 官方查看器…';$('xmind-official-consent').classList.add('hidden');$('xmind-theme-menu').classList.add('hidden');$('xmind-shortcuts').classList.add('hidden');$('xmind-root').style.display='none';}
+function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);if(XMIND_MAP&&typeof XMIND_MAP.destroy==='function'){try{XMIND_MAP.destroy();}catch(_){}}XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();XMIND_THUMBNAIL='';XMIND_VIEW='edit';XMIND_SNAPSHOT_DIRTY=false;XMIND_NATIVE_DRAG=null;XMIND_OFFICIAL=null;XMIND_OFFICIAL_APPROVED=false;$('xmind-outline').innerHTML='';$('xmind-engine').replaceChildren();$('xmind-svg').innerHTML='';$('xmind-native-image').removeAttribute('src');$('xmind-official-host').replaceChildren();$('xmind-official-loading').style.display='grid';$('xmind-official-loading').textContent='正在连接 XMind 官方查看器…';$('xmind-official-consent').classList.add('hidden');$('xmind-theme-menu').classList.add('hidden');$('xmind-shortcuts').classList.add('hidden');$('xmind-root').style.display='none';}
 
 function scheduleDrawSave() {
   DRAW_DIRTY = true; setDrawStatus('未保存…', 'dirty');
@@ -5321,16 +5363,16 @@ function wireDrawingPanel() {
   $('draw-xml-validate').onclick=()=>{const checked=validateDrawioXmlLocal($('draw-xml-source').value);setDrawToolStatus(checked.ok?'✅ XML 有效 · '+checked.pages+' 页 · '+checked.cells+' 个单元':'❌ '+checked.error,checked.ok?'ok':'err');};
   $('draw-xml-format').onclick=()=>{try{$('draw-xml-source').value=prettyDrawioXml($('draw-xml-source').value);setDrawToolStatus('✅ 已格式化','ok');}catch(error){setDrawToolStatus('❌ '+error.message,'err');}};
   $('draw-xml-apply').onclick=()=>applyDrawioXml($('draw-xml-source').value,'XML 已校验并载入');
-  $('xmind-add-child').onclick=xmindAddChild;$('xmind-add-sibling').onclick=xmindAddSibling;$('xmind-delete').onclick=xmindDelete;$('xmind-add-sheet').onclick=xmindAddSheet;$('xmind-delete-sheet').onclick=xmindDeleteSheet;$('xmind-undo').onclick=()=>xmindUndo(-1);$('xmind-redo').onclick=()=>xmindUndo(1);$('xmind-fit').onclick=()=>{if(XMIND_VIEW==='native')resetXmindNativeView();else if(XMIND_VIEW==='official'&&XMIND_OFFICIAL)XMIND_OFFICIAL.setFitMap();else if(XMIND_MAP)XMIND_MAP.fit();};
+  $('xmind-add-child').onclick=xmindAddChild;$('xmind-add-sibling').onclick=xmindAddSibling;$('xmind-delete').onclick=xmindDelete;$('xmind-add-sheet').onclick=xmindAddSheet;$('xmind-delete-sheet').onclick=xmindDeleteSheet;$('xmind-undo').onclick=()=>xmindUndo(-1);$('xmind-redo').onclick=()=>xmindUndo(1);$('xmind-fit').onclick=()=>{if(XMIND_VIEW==='native')resetXmindNativeView();else if(XMIND_VIEW==='official'&&XMIND_OFFICIAL)XMIND_OFFICIAL.setFitMap();else if(XMIND_MAP)XMIND_MAP.scaleFit();};
   $('xmind-view-native').onclick=()=>setXmindView('native');$('xmind-view-official').onclick=openXmindOfficialView;$('xmind-view-edit').onclick=()=>setXmindView('edit');
   $('xmind-consent-cancel').onclick=()=>$('xmind-official-consent').classList.add('hidden');$('xmind-consent-ok').onclick=()=>{XMIND_OFFICIAL_APPROVED=true;$('xmind-official-consent').classList.add('hidden');openXmindOfficialView();};$('xmind-official-consent').onmousedown=event=>{if(event.target===$('xmind-official-consent'))$('xmind-official-consent').classList.add('hidden');};
-  $('xmind-sheet-select').onchange=()=>{XMIND_SHEET_INDEX=Math.max(0,Number($('xmind-sheet-select').value)||0);XMIND_SELECTED=xmindRootTopic().id;renderXmindSheets();renderXmindOutline();if(XMIND_VIEW==='official'&&XMIND_OFFICIAL){XMIND_OFFICIAL.switchSheet(xmindSheet().id);setXmindView('official');}else setXmindView(XMIND_SHEET_INDEX===0&&XMIND_THUMBNAIL?'native':'edit');};
+  $('xmind-sheet-select').onchange=()=>{if(XMIND_MAP&&typeof XMIND_MAP.destroy==='function'){try{XMIND_MAP.destroy();}catch(_){}}XMIND_MAP=null;$('xmind-engine').replaceChildren();XMIND_SHEET_INDEX=Math.max(0,Number($('xmind-sheet-select').value)||0);XMIND_SELECTED=xmindRootTopic().id;renderXmindSheets();renderXmindOutline();if(XMIND_VIEW==='official'&&XMIND_OFFICIAL){XMIND_OFFICIAL.switchSheet(xmindSheet().id);setXmindView('official');}else setXmindView(XMIND_SHEET_INDEX===0&&XMIND_THUMBNAIL?'native':'edit');};
   $('xmind-sheet-title').oninput=()=>{const sheet=xmindSheet();if(!sheet)return;sheet.title=$('xmind-sheet-title').value;xmindMarkSnapshotDirty();DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();xmindQueueRecord();};$('xmind-sheet-title').onblur=()=>{xmindRecord();renderXmindSheets();};
   const nativeView=$('xmind-native-view');nativeView.addEventListener('wheel',(event)=>{if(DRAW_KIND!=='xmind'||XMIND_VIEW!=='native')return;event.preventDefault();if(event.ctrlKey||event.metaKey){XMIND_NATIVE_SCALE=Math.max(.55,Math.min(5,XMIND_NATIVE_SCALE*Math.exp(-event.deltaY*.002)));}else{XMIND_NATIVE_X-=event.deltaX;XMIND_NATIVE_Y-=event.deltaY;}renderXmindNativeTransform();},{passive:false});nativeView.addEventListener('pointerdown',(event)=>{if(event.button!==0)return;XMIND_NATIVE_DRAG={x:event.clientX,y:event.clientY,ox:XMIND_NATIVE_X,oy:XMIND_NATIVE_Y};nativeView.setPointerCapture(event.pointerId);nativeView.classList.add('dragging');});nativeView.addEventListener('pointermove',(event)=>{if(!XMIND_NATIVE_DRAG)return;XMIND_NATIVE_X=XMIND_NATIVE_DRAG.ox+event.clientX-XMIND_NATIVE_DRAG.x;XMIND_NATIVE_Y=XMIND_NATIVE_DRAG.oy+event.clientY-XMIND_NATIVE_DRAG.y;renderXmindNativeTransform();});nativeView.addEventListener('pointerup',(event)=>{XMIND_NATIVE_DRAG=null;nativeView.classList.remove('dragging');try{nativeView.releasePointerCapture(event.pointerId);}catch(_){}});nativeView.addEventListener('pointercancel',()=>{XMIND_NATIVE_DRAG=null;nativeView.classList.remove('dragging');});nativeView.ondblclick=resetXmindNativeView;
   const themeMenu=$('xmind-theme-menu');$('xmind-theme-btn').onclick=(event)=>{event.stopPropagation();themeMenu.classList.toggle('hidden');$('xmind-shortcuts').classList.add('hidden');};themeMenu.querySelectorAll('button').forEach(button=>button.onclick=(event)=>{event.stopPropagation();setXmindTheme(button.dataset.theme);themeMenu.classList.add('hidden');});
   $('xmind-shortcuts-btn').onclick=(event)=>{event.stopPropagation();$('xmind-shortcuts').classList.toggle('hidden');themeMenu.classList.add('hidden');};$('xmind-shortcuts-close').onclick=()=>$('xmind-shortcuts').classList.add('hidden');document.addEventListener('click',(event)=>{if(!event.target.closest('.xmind-theme-wrap'))themeMenu.classList.add('hidden');if(!event.target.closest('#xmind-shortcuts')&&!event.target.closest('#xmind-shortcuts-btn'))$('xmind-shortcuts').classList.add('hidden');});
   $('xmind-root').addEventListener('keydown',(event)=>{
-    if(DRAW_KIND!=='xmind')return;const mod=event.metaKey||event.ctrlKey,key=event.key.toLowerCase(),editing=event.target.classList.contains('xmind-title');
+    if(DRAW_KIND!=='xmind'||event.target.closest('#xmind-engine'))return;const mod=event.metaKey||event.ctrlKey,key=event.key.toLowerCase(),editing=event.target.classList.contains('xmind-title');
     if(mod&&key==='z'){event.preventDefault();xmindUndo(event.shiftKey?1:-1);return;}if(mod&&key==='y'){event.preventDefault();xmindUndo(1);return;}
     if(mod&&event.key==='Enter'){event.preventDefault();xmindAddParent();return;}if(event.altKey&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();xmindReorder(event.key==='ArrowUp'?-1:1);return;}
     if(mod&&key==='/'){event.preventDefault();xmindToggleFold(event.altKey||event.shiftKey);return;}if(mod&&key==='r'){event.preventDefault();XMIND_SELECTED=xmindRootTopic().id;XMIND_COLLAPSED.delete(XMIND_SELECTED);renderXmindOutline();xmindFocusTitle();return;}
