@@ -307,6 +307,60 @@ function platformInfo() {
   };
 }
 
+function runtimeCheck(key, label, target, options = {}) {
+  const required = options.required !== false;
+  let available = false, issue = '', version = options.version || '', resolved = target || '';
+  try {
+    if (options.kind === 'dependency') {
+      resolved = require.resolve(target);
+      available = true;
+    } else if (options.kind === 'node') {
+      const major = Number(process.versions.node.split('.')[0]);
+      available = Number.isInteger(major) && major >= 18;
+      version = process.version;
+      resolved = process.execPath;
+      if (!available) issue = '需要 Node.js 18 或更高版本';
+    } else {
+      fs.mkdirSync(target, { recursive:true });
+      fs.accessSync(target, fs.constants.R_OK | fs.constants.W_OK);
+      available = fs.statSync(target).isDirectory();
+      if (!available) issue = '路径不是目录';
+    }
+  } catch (error) {
+    issue = String(error && error.message || error).slice(0, 180);
+  }
+  return {
+    key, label, for:options.for || '', group:'运行基础', available, installed:available,
+    required, version:version || (available ? '可用' : ''), path:resolved, issue,
+    hint:options.hint || '', installable:false,
+  };
+}
+
+function runtimeReadiness() {
+  let vault = '';
+  try { vault = vaultPath(); } catch (error) {
+    return {
+      vault:{ key:'vault', label:'Vault 数据目录', for:'代码、文档、论文和绘图数据', group:'运行基础', available:false, installed:false, required:true, version:'', path:'', issue:String(error.message || error), hint:'设置 CODESCOPE_VAULT 指向可读写的 markdown-vault 目录', installable:false },
+    };
+  }
+  const dataRoot = path.dirname(timelineRoot());
+  const dependencies = Object.keys(require('./package.json').dependencies || {});
+  const unresolved = dependencies.filter((name) => !fs.existsSync(path.join(__dirname, 'node_modules', ...name.split('/'), 'package.json')));
+  const dependency = {
+    key:'dependencies', label:'前端与服务依赖', for:'编辑器、PDF、XMind、Office、SSH 与实时通信', group:'运行基础',
+    available:unresolved.length === 0, installed:unresolved.length === 0, required:true,
+    version:unresolved.length ? '' : dependencies.length + ' 个依赖完整', path:path.join(__dirname, 'node_modules'),
+    issue:unresolved.length ? '缺少：' + unresolved.join('、') : '', hint:'在 masscode-runner 目录运行 npm ci', installable:false,
+  };
+  return {
+    node:runtimeCheck('runtimeNode', 'Node.js 运行时', process.execPath, { kind:'node', for:'CodeScope 本地服务', hint:'安装 Node.js 18 或更高版本' }),
+    vault:runtimeCheck('vault', 'Vault 数据目录', vault, { for:'代码、文档、论文和绘图数据', hint:'确认目录存在且当前用户有读写权限' }),
+    appData:runtimeCheck('appData', '应用数据目录', dataRoot, { for:'时间线、恢复点和本地状态', hint:'确认系统应用数据目录可读写' }),
+    temp:runtimeCheck('temp', '系统临时目录', os.tmpdir(), { for:'LaTeX 编译、导入和安全转换', hint:'确认系统临时目录可读写' }),
+    dependencies:dependency,
+  };
+}
+
 function shellQuote(value) { return "'" + String(value).replace(/'/g, "'\\''") + "'"; }
 
 function deploymentInfo(env, requiredKeys) {
@@ -2998,8 +3052,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
-      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'onlyoffice-docs', 'onlyoffice-save-callback', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
+      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 3, releaseChannel:'stable',
+        features: ['unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'onlyoffice-docs', 'onlyoffice-save-callback', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3301,7 +3355,16 @@ const server = http.createServer(async (req, res) => {
       const force = u.searchParams.get('refresh') === '1';
       const detected = await getEnv(force);
       const env = detected.tools;
-      const all = Object.values(env);
+      const runtime = runtimeReadiness();
+      const onlyOffice = force ? await onlyOfficeHealth() : null;
+      runtime.onlyoffice = {
+        key:'onlyoffice', label:'ONLYOFFICE Docs', for:'DOCX、XLSX 与 PPTX 完整编辑', group:'Office 集成',
+        available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:false,
+        version:onlyOffice && onlyOffice.ok ? '在线' : '', path:ONLYOFFICE_PUBLIC_URL,
+        issue:onlyOffice ? (onlyOffice.ok ? '' : '服务未启动，Office 将使用本地兼容模式') : '点击“重新检测”验证服务',
+        hint:'可选：启动 ONLYOFFICE Document Server，并通过 CODESCOPE_ONLYOFFICE_URL 指定地址', installable:false,
+      };
+      const all = [...Object.values(runtime), ...Object.values(env)];
       const required = all.filter((e) => e.required);
       const missing = all.filter((e) => !e.available).length;
       const requiredMissing = required.filter((e) => !e.available).length;
@@ -3309,7 +3372,7 @@ const server = http.createServer(async (req, res) => {
       for (const e of all) e.hint = installHint(e.key); // 按当前平台给安装提示
       const system = platformInfo();
       send(res, 200, {
-        env,
+        env, runtime, version:APP_VERSION, node:process.version,
         summary: {
           total, missing, ready: total - missing, ok: requiredMissing === 0,
           required: required.length, requiredMissing, requiredReady: required.length - requiredMissing,

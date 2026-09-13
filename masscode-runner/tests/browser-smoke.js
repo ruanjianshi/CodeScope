@@ -144,6 +144,23 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.0.0');
+  const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
+  if(versionContract.version!=='2.0.0'||versionContract.apiRevision<3||versionContract.releaseChannel!=='stable')throw new Error('v2.0 版本契约异常：'+JSON.stringify(versionContract));
+  const sidebarMetrics=await page.evaluate(()=>{
+    const ids=['tree-head','draw-head','office-head','reading-head'];
+    return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
+  });
+  const sidebarHeights=Object.values(sidebarMetrics).map(item=>item.height);
+  if(Math.max(...sidebarHeights)-Math.min(...sidebarHeights)>1)throw new Error('一级侧栏标题高度未统一：'+JSON.stringify(sidebarMetrics));
+  if(new Set(Object.values(sidebarMetrics).map(item=>item.padding)).size!==1)throw new Error('一级侧栏标题内边距未统一：'+JSON.stringify(sidebarMetrics));
+  await page.locator('#btn-env').click();
+  await page.locator('#env-panel.open').waitFor({state:'visible'});
+  await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
+  if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
+  if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.0.0'))throw new Error('环境元信息未显示 v2.0.0');
+  await page.locator('#btn-env-close').click();
   /* ---- 命令面板与工程测试/调试入口 ---- */
   await page.keyboard.press(process.platform==='darwin'?'Meta+Shift+P':'Control+Shift+P');
   await page.locator('#sym-modal.open').waitFor({state:'visible'});
@@ -484,14 +501,16 @@ print(r.run())
   await officePage.waitForFunction(()=>document.getElementById('office-status').textContent.includes('已保存'),null,{timeout:10000});
   await officePage.locator('#office-back').click();
   await officeRows.filter({hasText:'Browser Sheet'}).click();
-  await sheetTable.waitFor({state:'visible',timeout:30000});
-  if(!(await sheetTable.innerText()).includes('Browser Sheet Edited'))throw new Error('Excel 单元格编辑结果未持久化');
+  const reopenedSheetTable=officePage.locator('#office-sheet-table');
+  await reopenedSheetTable.waitFor({state:'visible',timeout:30000});
+  if(!(await reopenedSheetTable.innerText()).includes('Browser Sheet Edited'))throw new Error('Excel 单元格编辑结果未持久化');
   await officePage.locator('#office-back').click();
 
   await officeRows.filter({hasText:'Browser Slides'}).click();
   const pptFrame=officePage.locator('.office-pptx-frame');await pptFrame.waitFor({state:'visible',timeout:15000});
   if(await pptFrame.getAttribute('sandbox')!=='allow-scripts')throw new Error('PowerPoint 预览未在隔离沙箱中运行');
   await officePage.frameLocator('.office-pptx-frame').locator('.pptx-preview-wrapper').waitFor({state:'visible',timeout:20000});
+  await officePage.frameLocator('.office-pptx-frame').locator('body').filter({hasText:'Browser Slides'}).waitFor({state:'visible',timeout:10000});
   const pptText=await officePage.frameLocator('.office-pptx-frame').locator('body').innerText();
   if(!pptText.includes('Browser Slides'))throw new Error('PowerPoint 预览未渲染幻灯片文本');
   if(officeErrors.length)throw new Error('Office 浏览器运行错误：'+officeErrors.join('；'));
@@ -505,6 +524,7 @@ print(r.run())
   try{await xmindPage.locator('#xmind-engine.smm-mind-map-container .smm-node').first().waitFor({state:'visible',timeout:20000});}catch(error){const state=await xmindPage.evaluate(()=>({kind:DRAW_KIND,file:DRAW_FILE,view:XMIND_VIEW,root:getComputedStyle(document.getElementById('xmind-root')).display,engine:getComputedStyle(document.getElementById('xmind-engine')).display,empty:document.getElementById('xmind-empty').textContent,status:document.getElementById('draw-ed-status').textContent,html:document.getElementById('xmind-engine').innerHTML.slice(0,240)}));throw new Error('XMind 编辑引擎未启动：'+JSON.stringify(state)+' / '+xmindErrors.join('；')+' / '+error.message);}
   const toolbarState=await xmindPage.evaluate(()=>({height:document.querySelector('.codescope-xmind-toolbar').getBoundingClientRect().height,polluted:[...document.querySelectorAll('#xmind-outline .xmind-title')].some(el=>/<\/?p>/i.test(el.value))}));if(toolbarState.height>48||toolbarState.polluted)throw new Error('XMind 工具栏高度或节点纯文本清理异常：'+JSON.stringify(toolbarState));await xmindPage.locator('#xmind-more').evaluate(el=>el.open=true);await xmindPage.locator('#xmind-preview').click({position:{x:16,y:16}});if(await xmindPage.locator('#xmind-more').evaluate(el=>el.open))throw new Error('XMind 更多菜单点击画布后未关闭');
   await xmindPage.locator('#xmind-floating-layer .xmind-floating-node').first().waitFor({state:'visible',timeout:10000});
+  await xmindPage.waitForFunction(()=>{const node=document.querySelector('.xmind-floating-node');return !!node&&Math.abs((XMIND_MAP?.view?.scale||1)-Number(node.style.getPropertyValue('--free-scale')||1))<.001;},null,{timeout:3000});
   const floatingScale=await xmindPage.evaluate(()=>({map:XMIND_MAP.view.scale,node:Number(document.querySelector('.xmind-floating-node').style.getPropertyValue('--free-scale'))}));
   if(Math.abs(floatingScale.map-floatingScale.node)>.001)throw new Error('XMind 自由分支与主画布缩放不一致：'+JSON.stringify(floatingScale));
   const floatingLayout=await xmindPage.evaluate(()=>{const get=id=>{const el=document.querySelector('.xmind-floating-node[data-topic-id="'+id+'"]'),r=el&&el.getBoundingClientRect();return r&&{left:r.left,right:r.right,top:r.top,bottom:r.bottom,cx:r.left+r.width/2,cy:r.top+r.height/2};},bounds=ids=>{const rects=ids.map(get).filter(Boolean);return{top:Math.min(...rects.map(r=>r.top)),bottom:Math.max(...rects.map(r=>r.bottom))};},root=get('browser-free-root'),a=get('browser-free-a'),a1=get('browser-free-a1'),b=get('browser-free-b'),groups=[bounds(['browser-free-root','browser-free-a','browser-free-a1','browser-free-b']),bounds(['browser-free-root-2','browser-free-c','browser-free-d']),bounds(['browser-free-root-3','browser-free-e'])].sort((x,y)=>x.top-y.top);return{root,a,a1,b,groups,nodes:document.querySelectorAll('.xmind-floating-node').length,links:document.querySelectorAll('#xmind-floating-links path').length};});

@@ -24,20 +24,8 @@ if %NODE_MAJOR% LSS 18 (
 )
 
 cd /d "%~dp0masscode-runner"
-if not exist "node_modules\@novnc\novnc\core\rfb.js" goto install_deps
-if not exist "node_modules\ws" goto install_deps
-if not exist "node_modules\ssh2" goto install_deps
-if not exist "node_modules\saxes" goto install_deps
-if not exist "node_modules\pdfjs-dist" goto install_deps
-if not exist "node_modules\monaco-editor" goto install_deps
-if not exist "node_modules\fflate" goto install_deps
-if not exist "node_modules\xmind-embed-viewer\dist\umd\xmind-embed-viewer.js" goto install_deps
-if not exist "node_modules\mind-elixir\dist\MindElixir.iife.js" goto install_deps
-if not exist "node_modules\simple-mind-map\dist\simpleMindMap.umd.min.js" goto install_deps
-if not exist "node_modules\docx-preview\dist\docx-preview.min.js" goto install_deps
-if not exist "node_modules\xlsx\dist\xlsx.full.min.js" goto install_deps
-if not exist "node_modules\pptx-preview\dist\pptx-preview.umd.js" goto install_deps
-if not exist "node_modules\docx" goto install_deps
+node -e "const fs=require('fs'),path=require('path'),p=require('./package.json');process.exit(Object.keys(p.dependencies||{}).every(n=^>fs.existsSync(path.join('node_modules',...n.split('/'),'package.json')))?0:1)"
+if errorlevel 1 goto install_deps
 goto deps_ready
 
 :install_deps
@@ -59,11 +47,22 @@ if errorlevel 1 (
 
 if not defined CODESCOPE_PORT set "CODESCOPE_PORT=%MASSCODE_RUNNER_PORT%"
 if not defined CODESCOPE_PORT set "CODESCOPE_PORT=4877"
+if not defined CODESCOPE_HOST set "CODESCOPE_HOST=%MASSCODE_RUNNER_HOST%"
+if not defined CODESCOPE_HOST set "CODESCOPE_HOST=127.0.0.1"
 set "PORT=%CODESCOPE_PORT%"
+node preflight.js --quiet
+if errorlevel 1 (
+  echo [错误] 环境预检失败，请按上方提示修复后重试。
+  pause
+  exit /b 1
+)
+set "OPEN_HOST=%CODESCOPE_HOST%"
+if "%OPEN_HOST%"=="0.0.0.0" set "OPEN_HOST=127.0.0.1"
+if "%OPEN_HOST%"=="::" set "OPEN_HOST=[::1]"
 echo 启动码境 CodeScope（前台运行，Ctrl+C 停止）
-echo 页面：http://127.0.0.1:%PORT%
-echo 局域网：http://<本机IP>:%PORT% （同一局域网下其他设备可访问；本机 IP 用 ipconfig 查看）
-start "" "http://127.0.0.1:%PORT%"
+echo 页面：http://%OPEN_HOST%:%PORT%
+if "%CODESCOPE_HOST%"=="0.0.0.0" echo 局域网：http://^<本机IP^>:%PORT%（仅限可信网络；本机 IP 用 ipconfig 查看）
+start "" "http://%OPEN_HOST%:%PORT%"
 
 node server.js
 

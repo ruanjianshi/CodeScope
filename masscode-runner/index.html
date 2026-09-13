@@ -1576,6 +1576,9 @@
   .tool-row .info .sub { color: var(--dim); font-size: 11px; line-height:1.45; white-space:normal; word-break:normal; overflow-wrap:anywhere; }
   .tool-row .ver { grid-column:2; min-width:0; max-width:100%; color: var(--accent); font: 10px/1.4 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:.9; }
   .hint { color: var(--err); font-size: 12px; font-family: var(--mono); word-break: break-all; }
+  .env-group-title { display:flex; align-items:center; gap:7px; margin:13px 1px 7px; color:var(--text); font-size:11px; font-weight:740; letter-spacing:.02em; }
+  .env-group-title::after { content:''; flex:1; height:1px; background:color-mix(in srgb,var(--border) 72%,transparent); }
+  .env-capability-note { margin:-2px 1px 8px; color:var(--dim); font-size:10.5px; line-height:1.45; }
   /* ---- SSH / VNC 远程开发 ---- */
   #btn-remote { position:relative; padding-right:22px; }
   #btn-remote::after { content:''; position:absolute; top:8px; right:8px; width:7px; height:7px; border-radius:50%; background:#657184; }
@@ -2414,21 +2417,21 @@
     min-height:34px; margin:8px; border-radius:var(--ui-radius); border-color:var(--ui-divider);
     background:color-mix(in srgb,var(--control) 92%,transparent);
   }
-  #tree-head,#git-head,#tag-head,#draw-head,#reading-head {
+  #tree-head,#git-head,#tag-head,#draw-head,#office-head,#reading-head {
     min-height:36px; padding:6px 9px; gap:7px; border-top:1px solid var(--ui-divider);
     border-bottom:1px solid color-mix(in srgb,var(--border) 48%,transparent);
     background:color-mix(in srgb,var(--panel) 88%,var(--bg)); font-size:12px; letter-spacing:.015em;
   }
   #tree-head { border-top:0; }
-  #tree-head .tt,#git-head>span:nth-child(2),#tag-head>span:nth-child(2),#draw-head>span:nth-child(2),#reading-head>span:nth-child(2) { font-weight:700; color:var(--text); }
-  #tree-head button,#git-head button,#tag-head button,#draw-head button,#reading-head button {
+  #tree-head .tt,#git-head>span:nth-child(2),#tag-head>span:nth-child(2),#draw-head>span:nth-child(2),#office-head>span:nth-child(2),#reading-head>span:nth-child(2) { font-weight:700; color:var(--text); }
+  #tree-head button,#git-head button,#tag-head button,#draw-head button,#office-head button,#reading-head button {
     min-height:26px; padding:3px 7px; border-color:transparent; background:transparent; color:var(--dim);
   }
-  #tree-head button:hover,#git-head button:hover,#tag-head button:hover,#draw-head button:hover,#reading-head button:hover { background:var(--ui-accent-soft); color:var(--text); }
-  #list,#git-box,#tag-box,#draw-box,#reading-box { padding:5px 6px 7px; }
-  .fnode,.git-row,.tag-row,.draw-row,.reading-row { min-height:29px; border-radius:7px; font-size:12.5px; }
-  .fnode:hover,.git-row:hover,.tag-row:hover,.draw-row:hover,.reading-row:hover { background:color-mix(in srgb,var(--surface-hover) 78%,transparent); }
-  .item.selected,.fnode.active,.git-row.active,.tag-row.active,.draw-row.active,.reading-row.active { background:var(--ui-accent-soft); box-shadow:inset 3px 0 0 var(--accent); }
+  #tree-head button:hover,#git-head button:hover,#tag-head button:hover,#draw-head button:hover,#office-head button:hover,#reading-head button:hover { background:var(--ui-accent-soft); color:var(--text); }
+  #list,#git-box,#tag-box,#draw-box,#office-list,#reading-box { padding:5px 6px 7px; }
+  .fnode,.git-row,.tag-row,.draw-row,.office-row,.reading-row { min-height:29px; border-radius:7px; font-size:12.5px; }
+  .fnode:hover,.git-row:hover,.tag-row:hover,.draw-row:hover,.office-row:hover,.reading-row:hover { background:color-mix(in srgb,var(--surface-hover) 78%,transparent); }
+  .item.selected,.fnode.active,.git-row.active,.tag-row.active,.draw-row.active,.office-row.on,.reading-row.active { background:var(--ui-accent-soft); box-shadow:inset 3px 0 0 var(--accent); }
   .tag-chip,.badge,.pill { border-radius:999px; border-color:var(--ui-divider); background:color-mix(in srgb,var(--panel2) 90%,transparent); box-shadow:none; }
   #toolbar {
     min-height:46px; padding:7px 10px; gap:7px; border-bottom:1px solid var(--ui-divider);
@@ -2507,7 +2510,7 @@
 
   /* 左侧资源管理器：统一模块标题、创建入口与行内操作。 */
   #side { container-type:inline-size; }
-  #tree-head,#git-head,#tag-head,#draw-head,#reading-head {
+  #tree-head,#git-head,#tag-head,#draw-head,#office-head,#reading-head {
     min-height:40px; padding:6px 8px; gap:6px;
     background:linear-gradient(180deg,color-mix(in srgb,var(--panel2) 54%,var(--panel)),color-mix(in srgb,var(--panel) 94%,var(--bg)));
   }
@@ -2518,28 +2521,34 @@
   }
   .side-section-icon svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
   .side-head-actions { display:flex; align-items:center; justify-content:flex-end; gap:3px; min-width:0; margin-left:auto; }
-  #tree-head .side-head-actions button,#draw-head .side-head-actions button,#reading-head .side-head-actions button {
+  #tree-head .side-head-actions button,#draw-head .side-head-actions button,#office-head .side-head-actions button,#reading-head .side-head-actions button {
     display:inline-flex; align-items:center; justify-content:center; height:26px; min-height:26px; padding:0 7px;
     border:1px solid color-mix(in srgb,var(--border) 76%,transparent); border-radius:6px;
     background:color-mix(in srgb,var(--panel2) 72%,transparent); color:var(--dim); font-size:10.5px; font-weight:670;
     line-height:1; white-space:nowrap;
   }
-  #tree-head .side-head-actions button:hover,#draw-head .side-head-actions button:hover,#reading-head .side-head-actions button:hover {
+  #tree-head .side-head-actions button:hover,#draw-head .side-head-actions button:hover,#office-head .side-head-actions button:hover,#reading-head .side-head-actions button:hover {
     color:var(--text); border-color:color-mix(in srgb,var(--accent) 43%,var(--border));
     background:color-mix(in srgb,var(--accent) 12%,var(--panel2)); transform:none;
   }
-  #tree-head .side-head-actions .side-create,#draw-head .side-head-actions .side-create,#reading-head .side-head-actions .side-create {
+  #tree-head .side-head-actions .side-create,#draw-head .side-head-actions .side-create,#office-head .side-head-actions button,#reading-head .side-head-actions .side-create {
     color:color-mix(in srgb,var(--accent) 88%,var(--text));
   }
   #tree-head .side-head-actions .side-icon { width:26px; padding:0; color:var(--dim); font-size:13px; }
   .side-head-divider { width:1px; height:17px; margin:0 1px; background:color-mix(in srgb,var(--border) 72%,transparent); }
   #git-head>button { width:26px; min-width:26px; padding:0; border-radius:6px; }
-  #list,#draw-list,#reading-list { padding:6px 7px 8px; }
-  .tree-children,.draw-children,.reading-library-children {
+  #list,#draw-list,#office-list,#reading-list { padding:6px 7px 8px; }
+  #office-list { background:color-mix(in srgb,var(--theme-side) 97%,var(--bg)); }
+  .tree-children,.draw-children,.office-children,.reading-library-children {
     border-left-color:color-mix(in srgb,var(--border) 58%,transparent) !important;
   }
-  .fnode,.draw-frow,.reading-folder { border:1px solid transparent; }
-  .fnode:hover,.draw-frow:hover,.reading-folder:hover { border-color:color-mix(in srgb,var(--border) 58%,transparent); }
+  .fnode,.draw-frow,.office-row,.reading-folder { border:1px solid transparent; }
+  .fnode:hover,.draw-frow:hover,.office-row:hover,.reading-folder:hover { border-color:color-mix(in srgb,var(--border) 58%,transparent); }
+  .office-row { min-height:33px; margin:1px 0; padding:4px 5px; gap:5px; font-size:11.5px; }
+  .office-row.on { border-color:color-mix(in srgb,var(--accent) 48%,var(--border)); background:color-mix(in srgb,var(--accent) 11%,var(--panel2)); box-shadow:inset 3px 0 var(--accent); }
+  .office-type { width:22px; height:22px; border-radius:6px; box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 18%,transparent); }
+  .office-type.folder { color:color-mix(in srgb,var(--dim) 82%,var(--accent)); background:color-mix(in srgb,var(--panel2) 80%,var(--accent) 9%); }
+  .office-row .meta { font:650 9.5px/1 var(--mono); font-variant-numeric:tabular-nums; }
   .reading-library-folder { min-height:33px; margin:1px 0; padding:4px 5px; gap:5px; border-radius:7px; }
   .reading-project { min-height:54px; margin:2px 0; padding:7px 6px; gap:6px; border-radius:8px; }
   .reading-project.on {
@@ -2572,22 +2581,25 @@
   .fnode.open>.side-glyph,.draw-frow.open>.side-glyph,.reading-library-folder:hover>.side-glyph,.reading-project.on>.side-glyph { color:var(--accent); }
   .fnode .ico.side-glyph,.draw-frow .draw-ic.side-glyph { width:18px; filter:none; }
   .fnode .count,.frag-count,.draw-frow .draw-fcount,.reading-library-folder>.meta,.reading-project>.meta,
-  #reading-head .count,#draw-head .count,#tag-head .count {
+  #reading-head .count,#office-head .count,#draw-head .count,#tag-head .count {
     min-width:22px; height:20px; padding:0 6px; display:inline-flex; align-items:center; justify-content:center;
     border:1px solid color-mix(in srgb,var(--border) 76%,transparent); border-radius:999px;
     background:color-mix(in srgb,var(--panel2) 76%,transparent); color:var(--dim);
     font:650 9.5px/1 var(--mono); font-variant-numeric:tabular-nums; letter-spacing:0;
     box-sizing:border-box; white-space:nowrap;
   }
-  #reading-head .count,#draw-head .count,#tag-head .count { color:color-mix(in srgb,var(--text) 70%,var(--dim)); background:color-mix(in srgb,var(--panel2) 90%,transparent); }
+  #reading-head .count,#office-head .count,#draw-head .count,#tag-head .count { color:color-mix(in srgb,var(--text) 70%,var(--dim)); background:color-mix(in srgb,var(--panel2) 90%,transparent); }
   @container (max-width:360px) {
-    #tree-head .side-head-actions button,#draw-head .side-head-actions button,#reading-head .side-head-actions button { width:27px; padding:0; font-size:0; }
+    #tree-head .side-head-actions button,#draw-head .side-head-actions button,#office-head .side-head-actions button,#reading-head .side-head-actions button { width:27px; padding:0; font-size:0; }
     #tree-head #btn-new-file,#tree-head #btn-new-latex,#tree-head #btn-new-folder { font-size:0; }
     #btn-new-file::before { content:'F+'; font-size:9px; }
     #btn-new-latex::before { content:'T+'; font-size:9px; }
     #btn-new-folder::before,#reading-new-library-folder::before,#draw-new-folder::before { content:'▣+'; font-size:10px; }
     #draw-new-manual::before { content:'◇+'; font-size:10px; }
     #reading-new-folder::before { content:'R+'; font-size:9px; }
+    #office-new::before { content:'D+'; font-size:9px; }
+    #office-new-folder::before { content:'▣+'; font-size:10px; }
+    #office-import::before { content:'⇧'; font-size:12px; }
     #reading-import::before { content:'⇧'; font-size:12px; }
     .side-head-divider { display:none; }
   }
@@ -2630,7 +2642,7 @@
 </head>
 <body>
 <header>
-  <h1 title="码境 · 工程代码工作台"><span class="brand-mark"><img src="/assets/codescope.svg" alt=""></span><span class="brand-name">码境</span><span class="brand-edition">CodeScope</span><span class="brand-version">v1.2.0</span><a class="brand-github" href="https://github.com/ruanjianshi/massCode" target="_blank" rel="noopener noreferrer" title="打开 CodeScope GitHub 远程仓库" aria-label="CodeScope GitHub 远程仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a></h1>
+  <h1 title="码境 · 工程代码工作台"><span class="brand-mark"><img src="/assets/codescope.svg" alt=""></span><span class="brand-name">码境</span><span class="brand-edition">CodeScope</span><span class="brand-version" id="brand-version">v2.0.0</span><a class="brand-github" href="https://github.com/ruanjianshi/massCode" target="_blank" rel="noopener noreferrer" title="打开 CodeScope GitHub 远程仓库" aria-label="CodeScope GitHub 远程仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a></h1>
   <div class="sub" id="vault-path">…</div>
   <div id="sysmon" aria-label="电脑实时状态">
     <button class="sm-item sm-detail-trigger offline" id="sm-cpu" title="点击查看完整电脑状态" aria-expanded="false" aria-controls="sysmon-detail"><span class="sm-label">CPU <i class="sm-open-mark" aria-hidden="true">ⓘ</i></span><b class="sm-value" id="sm-cpu-v">--%</b><span class="sm-bar"><i id="sm-cpu-b"></i></span></button>
@@ -3169,6 +3181,13 @@
       <div id="env-deploy-state"></div>
       <code id="env-deploy-command"></code>
     </div>
+    <div class="env-group-title">运行基础</div>
+    <div class="env-capability-note">检查 Vault、应用数据目录、临时目录、Node.js 与前端依赖是否可读写并适合运行。</div>
+    <div id="env-runtime-list"></div>
+    <div class="env-group-title">浏览器能力</div>
+    <div class="env-capability-note" id="env-client-meta">检查当前浏览器的编辑器、文件缓存和交互能力。</div>
+    <div id="env-client-list"></div>
+    <div class="env-group-title">项目工具链</div>
     <div id="env-list"></div>
   </div>
 </div>
@@ -12917,8 +12936,46 @@ async function syncLoop() {
 }
 setInterval(syncLoop, 3000);
 
+async function loadAppVersion(){
+  try{const data=await api('/api/version'),badge=document.querySelector('.brand-version');if(data&&data.version&&badge){badge.textContent='v'+data.version;badge.title='稳定版 · API '+String(data.apiRevision||'');}}
+  catch(_){}
+}
+loadAppVersion();
+
 // 环境检测面板
 let ENV_DATA = null, ENV_LOADING = false, DEPLOY_RUNNING = false;
+function clientEnvironment(){
+  const check=(key,label,available,detail,required=true)=>({key,label,available:!!available,installed:!!available,required,group:'浏览器能力',for:detail,version:available?'支持':'',path:'',issue:available?'':'当前浏览器不支持',hint:'建议使用最新版 Chrome、Edge 或 Safari',installable:false});
+  let storage=true;try{const k='__codescope_probe__';localStorage.setItem(k,'1');localStorage.removeItem(k);}catch(_){storage=false;}
+  return {
+    wasm:check('browserWasm','WebAssembly','WebAssembly'in window,'PDF、编辑器与高性能解析'),
+    worker:check('browserWorker','Web Worker','Worker'in window,'后台解析与大型文档处理'),
+    indexeddb:check('browserIndexedDB','IndexedDB','indexedDB'in window,'缓存、离线状态与大文件索引'),
+    storage:check('browserStorage','本地设置存储',storage,'主题、布局和工作区状态'),
+    resize:check('browserResizeObserver','ResizeObserver','ResizeObserver'in window,'多栏编辑与画布自适应'),
+    pointer:check('browserPointer','Pointer Events','PointerEvent'in window,'拖拽、缩放和触控笔交互'),
+    clipboard:check('browserClipboard','安全剪贴板',!!(navigator.clipboard&&window.isSecureContext),'复制代码、图片和引用',false),
+    fileSystem:check('browserFileSystem','文件系统访问 API','showOpenFilePicker'in window,'可选的原生文件选择体验',false),
+  };
+}
+function clientBrowserLabel(){
+  const ua=navigator.userAgent||'';let m;
+  if((m=ua.match(/Edg\/([\d.]+)/)))return 'Edge '+m[1];
+  if((m=ua.match(/Chrome\/([\d.]+)/)))return 'Chrome '+m[1];
+  if((m=ua.match(/Version\/([\d.]+).*Safari/)))return 'Safari '+m[1];
+  if((m=ua.match(/Firefox\/([\d.]+)/)))return 'Firefox '+m[1];
+  return navigator.userAgentData&&navigator.userAgentData.brands?navigator.userAgentData.brands.map(x=>x.brand+' '+x.version).join(' / '):'当前浏览器';
+}
+function renderEnvironmentRows(hostId,entries){
+  const host=$(hostId);if(!host)return;host.replaceChildren();
+  const sorted=Object.values(entries||{}).sort((a,b)=>a.required!==b.required?(a.required?-1:1):a.available!==b.available?(a.available?1:-1):String(a.label).localeCompare(String(b.label)));
+  for(const t of sorted){
+    const row=document.createElement('div');row.className='tool-row'+(t.required?'':' optional');
+    const hint=t.available?'':`<div class="hint">⚠ ${escapeHtml(t.label)}：${escapeHtml(t.issue||'缺失')}<br>${escapeHtml(t.hint||installHints[t.key]||'')}</div>`;
+    row.innerHTML=`<div class="dot ${t.available?'ok':'bad'}"></div><div class="info"><div class="nm">${escapeHtml(t.label)}<span class="scope">${t.required?'必需':'可选'}</span></div><div class="sub">${escapeHtml(t.group||'')} · ${escapeHtml(t.for||'')}</div>${hint}</div><div class="ver" title="${escapeHtml(t.path||'')}">${t.available?escapeHtml(t.version||'可用'):escapeHtml(t.installed?'需处理':'缺失')}</div>`;
+    host.appendChild(row);
+  }
+}
 async function loadEnv(refreshNow, quiet) {
   if (ENV_LOADING) return ENV_DATA;
   ENV_LOADING = true;
@@ -12932,6 +12989,11 @@ async function loadEnv(refreshNow, quiet) {
   d.env.aiDrawing={key:'aiDrawing',label:'AI 绘图模型',for:'自然语言生成 / 修改 Draw.io XML',group:'绘图工具',available:aiDrawingReady,installed:aiDrawingReady,required:false,version:aiDrawingReady?drawCfg.model:'',path:aiDrawingReady?aiNormalizeUrl(drawCfg.url):'',issue:aiDrawingReady?'':'尚未配置 OpenAI 兼容 API URL 与模型',hint:'在右侧 AI 面板打开“设置”，填写 API URL、Key 和模型后测试连接',installable:false};
   d.summary.total+=1;
   if(aiDrawingReady)d.summary.ready+=1;else{d.summary.missing+=1;d.summary.optionalMissing+=1;}
+  const client=clientEnvironment(),clientValues=Object.values(client),clientRequired=clientValues.filter(item=>item.required);
+  d.summary.total+=clientValues.length;d.summary.required+=clientRequired.length;
+  d.summary.ready+=clientValues.filter(item=>item.available).length;d.summary.requiredReady+=clientRequired.filter(item=>item.available).length;
+  d.summary.missing+=clientValues.filter(item=>!item.available).length;d.summary.requiredMissing+=clientRequired.filter(item=>!item.available).length;
+  d.summary.optionalMissing+=clientValues.filter(item=>!item.available&&!item.required).length;
   ENV_DATA = d;
   envButton.classList.remove('env-checking');
   envButton.classList.add(d.summary.requiredMissing ? 'env-warn' : 'env-ok');
@@ -12942,31 +13004,24 @@ async function loadEnv(refreshNow, quiet) {
   $('env-optional').textContent = d.summary.optionalMissing;
   const pm = d.system && d.system.packageManager ? ' · 包管理器 ' + d.system.packageManager : '';
   const langs = d.project && d.project.languages && d.project.languages.length ? d.project.languages.join(' / ') : '仅文档';
-  $('env-meta').innerHTML = `Vault: <code style="font-size:11px">${escapeHtml(d.vault)}</code><br>平台: ${escapeHtml(d.platform + pm)}<br>项目语言: ${escapeHtml(langs)}`;
+  $('env-meta').innerHTML = `CodeScope: <strong>v${escapeHtml(d.version||'')}</strong> · Node ${escapeHtml(d.node||'')}<br>Vault: <code style="font-size:11px">${escapeHtml(d.vault)}</code><br>平台: ${escapeHtml(d.platform + pm)}<br>项目语言: ${escapeHtml(langs)}`;
+  $('env-client-meta').textContent='当前 '+clientBrowserLabel()+' · 必需能力 '+clientRequired.filter(item=>item.available).length+'/'+clientRequired.length+' 项就绪。';
   const deploy = d.deployment || {};
   const deployBtn = $('btn-env-deploy');
   const missingNames = (deploy.missing || []).map((key) => (d.env[key] && d.env[key].label) || key);
+  const runtimeMissing=Object.values(d.runtime||{}).filter(item=>item.required&&!item.available).map(item=>item.label);
+  const browserMissing=clientRequired.filter(item=>!item.available).map(item=>item.label);
   deployBtn.disabled = DEPLOY_RUNNING || !deploy.supported || !deploy.command;
-  deployBtn.textContent = DEPLOY_RUNNING ? '配置进行中…' : (missingNames.length ? '一键配置 ' + missingNames.length + ' 项缺失工具' : '当前项目环境已就绪');
-  $('env-deploy-desc').textContent = missingNames.length
+  deployBtn.textContent = DEPLOY_RUNNING ? '配置进行中…' : (missingNames.length ? '一键配置 ' + missingNames.length + ' 项缺失工具' : (runtimeMissing.length||browserMissing.length?'请先处理运行基础问题':'当前项目环境已就绪'));
+  $('env-deploy-desc').textContent = runtimeMissing.length||browserMissing.length
+    ? '需手动处理：'+runtimeMissing.concat(browserMissing).join('、')+'。详情和建议见下方对应条目。'
+    : missingNames.length
     ? '只部署当前 vault 实际用到的缺失项：' + missingNames.join('、') + '。安装过程在终端中显示，需要时可输入 sudo 密码。'
     : '当前项目所需工具均已就绪；下方仍会列出未安装的可选语言环境。';
   $('env-deploy-command').textContent = deploy.command || (deploy.supported ? '无需执行部署命令' : '当前平台暂不支持自动部署');
-  const list = $('env-list'); list.innerHTML = '';
-  const tools = Object.values(d.env).sort((a, b) => {
-    if (a.required !== b.required) return a.required ? -1 : 1;
-    if (a.available !== b.available) return a.available ? 1 : -1;
-    return String(a.group || '').localeCompare(String(b.group || ''));
-  });
-  for (const t of tools) {
-    const row = document.createElement('div');
-    row.className = 'tool-row' + (t.required ? '' : ' optional');
-    const hint = t.available ? '' : `<div class="hint">⚠ ${escapeHtml(t.label)}：${escapeHtml(t.issue || '缺失')} · ${escapeHtml(t.for)}<br>安装: ${escapeHtml(t.hint || installHints[t.key] || '')}</div>`;
-    row.innerHTML = `<div class="dot ${t.available ? 'ok' : 'bad'}"></div>
-      <div class="info"><div class="nm">${escapeHtml(t.label)}<span class="scope">${t.required ? '当前项目' : '可选'}</span></div><div class="sub">${escapeHtml(t.group || '')} · ${escapeHtml(t.for)}</div>${hint}</div>
-      <div class="ver" title="${escapeHtml(t.path || '')}">${t.available ? escapeHtml(t.version || 'ok') : escapeHtml(t.installed ? '需升级' : '缺失')}</div>`;
-    list.appendChild(row);
-  }
+  renderEnvironmentRows('env-runtime-list',d.runtime);
+  renderEnvironmentRows('env-client-list',client);
+  renderEnvironmentRows('env-list',d.env);
   return d;
   } catch (err) {
     envButton.classList.remove('env-checking', 'env-ok');
