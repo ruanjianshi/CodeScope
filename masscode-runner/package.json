@@ -21,7 +21,8 @@
     "pdfjs-dist": "^4.10.38",
     "saxes": "^6.0.0",
     "ssh2": "^1.17.0",
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "xmind-embed-viewer": "1.2.0"
   },
   "devDependencies": {
     "playwright-core": "^1.63.0"

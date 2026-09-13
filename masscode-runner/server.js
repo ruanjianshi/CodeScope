@@ -2243,7 +2243,7 @@ async function projectHealth() {
 
 /* --------------------------------- HTTP 服务 ---------------------------------- */
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.xmind': 'application/vnd.xmind.workbook', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
 
 let INDEX_CACHE = null;
 function indexAsset() {
@@ -2708,6 +2708,11 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/monaco/'.length);
       return streamStatic(req, res, monacoRoot, rel, { cacheControl:'public, max-age=86400', notFound:'Monaco asset not found；请先运行 npm install' });
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/xmind-viewer/')) {
+      const viewerRoot = path.join(__dirname, 'node_modules', 'xmind-embed-viewer', 'dist', 'umd');
+      const rel = u.pathname.slice('/xmind-viewer/'.length);
+      return streamStatic(req, res, viewerRoot, rel, { cacheControl:'public, max-age=86400', notFound:'XMind 官方查看器资源不存在；请先运行 npm install' });
+    }
     if (req.method === 'GET' && u.pathname === '/api/system/status') {
       return send(res, 200, await systemStatus());
     }
@@ -2721,7 +2726,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
@@ -3538,9 +3543,12 @@ const server = http.createServer(async (req, res) => {
         if (depth > 128) throw new Error('主题层级超过 128 层');
         nodes += 1; if (nodes > 20000) throw new Error('主题数量超过 20000');
         if (topic.title != null && (typeof topic.title !== 'string' || topic.title.length > 20000)) throw new Error('主题标题无效');
-        const attached = topic.children && topic.children.attached;
-        if (attached != null && !Array.isArray(attached)) throw new Error('子主题结构无效');
-        for (const child of attached || []) walk(child, depth + 1);
+        const children = topic.children && typeof topic.children === 'object' ? topic.children : {};
+        for (const group of ['attached', 'detached', 'summary']) {
+          const list = children[group];
+          if (list != null && !Array.isArray(list)) throw new Error(group + ' 主题结构无效');
+          for (const child of list || []) walk(child, depth + 1);
+        }
       };
       try {
         for (const sheet of workbook) {
@@ -3556,7 +3564,11 @@ const server = http.createServer(async (req, res) => {
       const workbook = JSON.parse(strFromU8(entries['content.json']));
       const checked = inspectXmindWorkbook(workbook);
       if (!checked.ok) throw new Error(checked.error);
-      return { workbook, ...checked };
+      const thumbnailBytes = entries['Thumbnails/thumbnail.png'];
+      const thumbnail = thumbnailBytes && thumbnailBytes.length <= 15 * 1024 * 1024
+        ? 'data:image/png;base64,' + Buffer.from(thumbnailBytes).toString('base64')
+        : '';
+      return { workbook, thumbnail, hasThumbnail:!!thumbnailBytes, ...checked };
     }
     function writeXmindFile(file, workbook) {
       const checked = inspectXmindWorkbook(workbook);
@@ -3673,6 +3685,11 @@ const server = http.createServer(async (req, res) => {
         const scene = JSON.parse(raw);
         return send(res, 200, { ok: true, name, kind: 'excalidraw', ...scene });
       } catch (error) { return send(res, 200, { ok: false, error: '读取失败（文件不存在或绘图格式无效）：' + String(error && error.message || error).slice(0, 220) }); }
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/drawings/file') {
+      const name = drawingName(u.searchParams.get('name'));
+      if (!name || drawingKind(name) !== 'xmind') return send(res, 400, { ok:false, error:'仅支持读取 XMind 原文件' });
+      return streamStatic(req, res, drawingsDir(), name, { cacheControl:'no-cache', notFound:'XMind 文件不存在' });
     }
     if (req.method === 'POST' && u.pathname === '/api/drawings/save') {
       const b = await readBody(req);
