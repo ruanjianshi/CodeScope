@@ -14,12 +14,15 @@ const os = require('os');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { StringDecoder } = require('string_decoder');
+const { Transform } = require('stream');
 const { spawn, execFile, execFileSync } = require('child_process');
 const { pipeline } = require('stream/promises');
 const { WebSocketServer } = require('ws');
 const { Client: SshClient } = require('ssh2');
 const { SaxesParser } = require('saxes');
 const { unzipSync, zipSync, strFromU8, strToU8 } = require('fflate');
+const { Document, Packer, Paragraph, HeadingLevel } = require('docx');
+const XLSX = require('xlsx');
 const { createLspService } = require('./lib/lsp-service');
 const APP_VERSION = require('./package.json').version;
 
@@ -2207,7 +2210,7 @@ function compileDatabaseInfo(projectFiles) {
 const LANGUAGE_BY_EXT = { '.js':'JavaScript','.mjs':'JavaScript','.cjs':'JavaScript','.ts':'TypeScript','.tsx':'TypeScript','.jsx':'JavaScript','.py':'Python','.c':'C','.h':'C/C++','.cc':'C++','.cpp':'C++','.cxx':'C++','.hpp':'C++','.java':'Java','.go':'Go','.rs':'Rust','.rb':'Ruby','.php':'PHP','.swift':'Swift','.kt':'Kotlin','.sh':'Shell','.md':'Markdown','.tex':'LaTeX','.html':'HTML','.css':'CSS','.json':'JSON','.yaml':'YAML','.yml':'YAML' };
 async function projectHealth() {
   const scannedFiles = walkProject();
-  const generatedPath = /(?:^|\/)(?:vendor|assets\/pdfjs|mscdex-ssh2-[^/]+)(?:\/|$)|^markdown-vault\/(?:readings|libraries|drawings|\.timeline)(?:\/|$)/;
+  const generatedPath = /(?:^|\/)(?:vendor|assets\/pdfjs|mscdex-ssh2-[^/]+)(?:\/|$)|^markdown-vault\/(?:readings|libraries|drawings|office|\.timeline)(?:\/|$)/;
   const files = scannedFiles.filter((file) => !generatedPath.test(file.relative));
   const languages = {}, issues = [], includeGraph = new Map();
   let lines = 0, bytes = 0, todos = 0;
@@ -2243,7 +2246,7 @@ async function projectHealth() {
 
 /* --------------------------------- HTTP 服务 ---------------------------------- */
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.xmind': 'application/vnd.xmind.workbook', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.xmind': 'application/vnd.xmind.workbook', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xls': 'application/vnd.ms-excel', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.ppt': 'application/vnd.ms-powerpoint', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
 
 let INDEX_CACHE = null;
 function indexAsset() {
@@ -2587,6 +2590,108 @@ function workspaceBacklinks(kind, targetPath, targetFragment) {
   return hits;
 }
 
+/* ------------------------------- Office 文档库 ------------------------------- */
+
+function officeDir() { return path.join(vaultPath(), 'office'); }
+const OFFICE_EXTS = new Set(['.docx', '.xlsx', '.xls', '.csv', '.pptx']);
+function officePath(value, allowFolder = false) {
+  if (typeof value !== 'string') return null;
+  const rel = value.replace(/\\/g, '/').split('/').map((part) => part.trim()).filter(Boolean).join('/');
+  if (!rel || /(^|\/)\.{1,2}(\/|$)|^\/|\/\//.test(rel) || /^[A-Za-z]:/.test(rel)) return null;
+  if (!/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&/]+$/.test(rel)) return null;
+  if (!allowFolder && !OFFICE_EXTS.has(path.extname(rel).toLowerCase())) return null;
+  return rel;
+}
+function officeKind(value) {
+  const ext = path.extname(String(value || '')).toLowerCase();
+  if (ext === '.docx') return 'word';
+  if (['.xlsx', '.xls', '.csv'].includes(ext)) return 'sheet';
+  if (ext === '.pptx') return 'slides';
+  return 'unknown';
+}
+function officeTree() {
+  const root = { type:'folder', name:'', path:'', children:[], count:0 };
+  const walk = (node, absolute) => {
+    let entries = [];
+    try { entries = fs.readdirSync(absolute, { withFileTypes:true }); } catch (_) {}
+    entries = entries.filter((entry) => !entry.name.startsWith('.')).sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.name.localeCompare(b.name, 'zh-CN', { numeric:true });
+    });
+    let count = 0;
+    for (const entry of entries) {
+      const rel = node.path ? node.path + '/' + entry.name : entry.name;
+      const full = path.join(absolute, entry.name);
+      if (entry.isDirectory()) {
+        const child = { type:'folder', name:entry.name, path:rel, children:[], count:0 };
+        node.children.push(child); child.count = walk(child, full); count += child.count;
+      } else if (OFFICE_EXTS.has(path.extname(entry.name).toLowerCase())) {
+        let stat; try { stat = fs.statSync(full); } catch (_) { continue; }
+        node.children.push({ type:'document', name:entry.name, path:rel, kind:officeKind(entry.name), ext:path.extname(entry.name).toLowerCase(), size:stat.size, updated:stat.mtimeMs });
+        count += 1;
+      }
+    }
+    node.count = count; return count;
+  };
+  fs.mkdirSync(officeDir(), { recursive:true }); walk(root, officeDir()); return root;
+}
+function uniqueOfficeTarget(folder, base) {
+  const ext = path.extname(base), stem = path.basename(base, ext), dir = path.join(officeDir(), folder || '.');
+  fs.mkdirSync(dir, { recursive:true });
+  let name = base, index = 2;
+  while (fs.existsSync(path.join(dir, name))) { name = stem + '-' + index + ext; index += 1; }
+  return { name, file:path.join(dir, name), path:folder ? folder + '/' + name : name };
+}
+function officeSafeFolder(value) {
+  if (value == null || value === '') return '';
+  const rel = officePath(String(value), true);
+  return rel && !OFFICE_EXTS.has(path.extname(rel).toLowerCase()) ? rel : null;
+}
+function officeStreamToFile(req, target, maxBytes = 200 * 1024 * 1024) {
+  let bytes = 0;
+  const limiter = new Transform({ transform(chunk, encoding, callback) {
+    bytes += chunk.length;
+    if (bytes > maxBytes) return callback(requestError('Office 文件超过 200 MB', 413));
+    callback(null, chunk);
+  }});
+  return pipeline(req, limiter, fs.createWriteStream(target, { flags:'wx' })).then(() => bytes);
+}
+function validateOfficeFile(file, ext) {
+  const fd = fs.openSync(file, 'r'), head = Buffer.alloc(8); fs.readSync(fd, head, 0, 8, 0); fs.closeSync(fd);
+  if (['.docx', '.xlsx', '.pptx'].includes(ext) && head.slice(0, 2).toString('ascii') !== 'PK') throw new Error('文件内容不是有效的 Office Open XML 文档');
+  if (ext === '.xls' && !head.equals(Buffer.from([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]))) throw new Error('文件内容不是有效的 Excel 工作簿');
+}
+async function createOfficeDocument(kind, file, title) {
+  if (kind === 'word') {
+    const doc = new Document({ sections:[{ children:[new Paragraph({ text:title || '新建文档', heading:HeadingLevel.TITLE }), new Paragraph('开始编写内容…')] }] });
+    fs.writeFileSync(file, await Packer.toBuffer(doc)); return;
+  }
+  if (kind === 'sheet') {
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([['项目', '内容'], ['标题', title || '新建表格']]);
+    sheet['!cols'] = [{ wch:18 }, { wch:36 }]; XLSX.utils.book_append_sheet(workbook, sheet, '工作表1'); XLSX.writeFile(workbook, file); return;
+  }
+  if (kind === 'slides') {
+    const escape = (value) => String(value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const deckTitle = escape(title || '新建演示文稿'), entries = {};
+    entries['[Content_Types].xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>');
+    entries['_rels/.rels'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>');
+    entries['docProps/core.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>'+deckTitle+'</dc:title><dc:creator>CodeScope</dc:creator><cp:lastModifiedBy>CodeScope</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">'+new Date().toISOString()+'</dcterms:created></cp:coreProperties>');
+    entries['docProps/app.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>CodeScope</Application><PresentationFormat>宽屏</PresentationFormat><Slides>1</Slides><Notes>0</Notes></Properties>');
+    entries['ppt/presentation.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst><p:sldSz cx="12192000" cy="6858000" type="screen16x9"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle/></p:presentation>');
+    entries['ppt/_rels/presentation.xml.rels'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>');
+    entries['ppt/slides/slide1.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="F7F9FC"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr><p:sp><p:nvSpPr><p:cNvPr id="2" name="标题"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="2286000"/><a:ext cx="10363200" cy="1143000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="zh-CN" sz="3000" b="1"><a:solidFill><a:srgbClr val="243247"/></a:solidFill></a:rPr><a:t>'+deckTitle+'</a:t></a:r><a:endParaRPr lang="zh-CN"/></a:p></p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>');
+    entries['ppt/slides/_rels/slide1.xml.rels'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>');
+    entries['ppt/slideLayouts/slideLayout1.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank" preserve="1"><p:cSld name="空白"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>');
+    entries['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/></Relationships>');
+    entries['ppt/slideMasters/slideMaster1.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap accent1="4472C4" accent2="ED7D31" accent3="A5A5A5" accent4="FFC000" accent5="5B9BD5" accent6="70AD47" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/><p:sldLayoutIdLst><p:sldLayoutId id="1" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>');
+    entries['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/></Relationships>');
+    entries['ppt/theme/theme1.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="CodeScope"><a:themeElements><a:clrScheme name="CodeScope"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="243247"/></a:dk2><a:lt2><a:srgbClr val="F7F9FC"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="CodeScope"><a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface="等线"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/><a:ea typeface="等线"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="CodeScope"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="lt1"/></a:solidFill><a:solidFill><a:schemeClr val="lt2"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>');
+    fs.writeFileSync(file, Buffer.from(zipSync(entries, { level:6 }))); return;
+  }
+  throw new Error('不支持的 Office 文档类型');
+}
+
 function send(res, code, obj) {
   if (res.writableEnded || res.destroyed) return false;
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
@@ -2718,6 +2823,22 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/mind-elixir/'.length);
       return streamStatic(req, res, editorRoot, rel, { cacheControl:'public, max-age=86400', notFound:'Mind Elixir 编辑器资源不存在；请先运行 npm install' });
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/office-docx/')) {
+      const root = path.join(__dirname, 'node_modules', 'docx-preview', 'dist');
+      return streamStatic(req, res, root, u.pathname.slice('/office-docx/'.length), { cacheControl:'public, max-age=86400', notFound:'Word 预览组件不存在；请先运行 npm install' });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/office-jszip/')) {
+      const root = path.join(__dirname, 'node_modules', 'jszip', 'dist');
+      return streamStatic(req, res, root, u.pathname.slice('/office-jszip/'.length), { cacheControl:'public, max-age=86400', notFound:'Office ZIP 组件不存在；请先运行 npm install' });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/office-xlsx/')) {
+      const root = path.join(__dirname, 'node_modules', 'xlsx');
+      return streamStatic(req, res, root, u.pathname.slice('/office-xlsx/'.length), { cacheControl:'public, max-age=86400', notFound:'表格组件不存在；请先运行 npm install' });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/office-pptx/')) {
+      const root = path.join(__dirname, 'node_modules', 'pptx-preview', 'dist');
+      return streamStatic(req, res, root, u.pathname.slice('/office-pptx/'.length), { cacheControl:'public, max-age=86400', notFound:'演示文稿预览组件不存在；请先运行 npm install' });
+    }
     if (req.method === 'GET' && u.pathname === '/api/system/status') {
       return send(res, 200, await systemStatus());
     }
@@ -2731,7 +2852,89 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'docx-preview', 'spreadsheet-editing', 'pptx-preview'] });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/office/tree') {
+      const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/office/file') {
+      const rel = officePath(u.searchParams.get('path'));
+      if (!rel) return send(res, 400, { ok:false, error:'Office 文件路径不合法' });
+      if (u.searchParams.get('download') === '1') res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(path.basename(rel)));
+      return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-cache', notFound:'Office 文件不存在' });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/folder') {
+      const b = await readBody(req), parent = officeSafeFolder(b && b.parent), name = officeSafeFolder(b && b.name);
+      if (parent === null || !name || name.includes('/')) return send(res, 400, { ok:false, error:'文件夹名称或位置不合法' });
+      const rel = parent ? parent + '/' + name : name, target = path.join(officeDir(), rel);
+      if (fs.existsSync(target)) return send(res, 409, { ok:false, error:'同名文件夹已存在' });
+      fs.mkdirSync(target, { recursive:true }); return send(res, 200, { ok:true, path:rel });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/new') {
+      const b = await readBody(req), folder = officeSafeFolder(b && b.folder), kind = String(b && b.kind || '');
+      if (folder === null || !['word', 'sheet', 'slides'].includes(kind)) return send(res, 400, { ok:false, error:'新建文档参数不合法' });
+      const raw = String(b && b.name || '').trim().replace(/\.(?:docx|xlsx|pptx)$/i, '');
+      if (!raw || !/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&]+$/.test(raw) || ['.', '..'].includes(raw)) return send(res, 400, { ok:false, error:'文档名称不合法' });
+      const ext = kind === 'word' ? '.docx' : (kind === 'sheet' ? '.xlsx' : '.pptx'), target = uniqueOfficeTarget(folder, raw + ext);
+      try { await createOfficeDocument(kind, target.file, raw); return send(res, 200, { ok:true, path:target.path, name:target.name, kind, size:fs.statSync(target.file).size }); }
+      catch (error) { try { fs.unlinkSync(target.file); } catch (_) {} return send(res, 500, { ok:false, error:'创建 Office 文档失败：' + String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/upload-stream') {
+      let info;
+      try { info = JSON.parse(Buffer.from(String(req.headers['x-codescope-office'] || ''), 'base64').toString('utf8')); }
+      catch (_) { return send(res, 400, { ok:false, error:'上传信息格式错误' }); }
+      const folder = officeSafeFolder(info && info.folder), base = path.basename(String(info && info.name || '')).trim(), ext = path.extname(base).toLowerCase();
+      if (folder === null || !officePath(base) || !OFFICE_EXTS.has(ext)) return send(res, 400, { ok:false, error:'仅支持 DOCX、XLSX、XLS、CSV 和 PPTX 文件' });
+      const target = uniqueOfficeTarget(folder, base), temp = path.join(path.dirname(target.file), '.' + crypto.randomUUID() + '.upload');
+      try {
+        const bytes = await officeStreamToFile(req, temp); validateOfficeFile(temp, ext); fs.renameSync(temp, target.file);
+        return send(res, 200, { ok:true, path:target.path, name:target.name, kind:officeKind(target.name), size:bytes });
+      } catch (error) { try { fs.unlinkSync(temp); } catch (_) {} return send(res, error.statusCode || 400, { ok:false, error:'导入失败：' + String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/save-stream') {
+      let info;
+      try { info = JSON.parse(Buffer.from(String(req.headers['x-codescope-office'] || ''), 'base64').toString('utf8')); }
+      catch (_) { return send(res, 400, { ok:false, error:'保存信息格式错误' }); }
+      const rel = officePath(info && info.path), ext = path.extname(String(rel || '')).toLowerCase();
+      if (!rel || !['.xlsx', '.xls', '.csv'].includes(ext)) return send(res, 400, { ok:false, error:'当前只允许在 CodeScope 内保存表格文件' });
+      const target = path.join(officeDir(), rel), temp = path.join(path.dirname(target), '.' + crypto.randomUUID() + '.saving');
+      if (!fs.existsSync(target)) return send(res, 404, { ok:false, error:'要保存的表格不存在' });
+      try {
+        const bytes = await officeStreamToFile(req, temp); validateOfficeFile(temp, ext); fs.renameSync(temp, target);
+        return send(res, 200, { ok:true, path:rel, size:bytes, updated:fs.statSync(target).mtimeMs });
+      } catch (error) { try { fs.unlinkSync(temp); } catch (_) {} return send(res, error.statusCode || 400, { ok:false, error:'保存失败：' + String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/rename') {
+      const b = await readBody(req), rel = officePath(b && b.path, true), rawName = String(b && b.name || '').trim();
+      if (!rel || !rawName || /[\\/]/.test(rawName) || !/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&]+$/.test(rawName) || ['.', '..'].includes(rawName)) return send(res, 400, { ok:false, error:'名称不合法' });
+      const source = path.join(officeDir(), rel); let stat; try { stat = fs.statSync(source); } catch (_) { return send(res, 404, { ok:false, error:'文件或文件夹不存在' }); }
+      const parent = path.posix.dirname(rel) === '.' ? '' : path.posix.dirname(rel);
+      let name = rawName;
+      if (stat.isFile()) { const ext = path.extname(rel).toLowerCase(); name = rawName.replace(/\.(?:docx|xlsx|xls|csv|pptx)$/i, '') + ext; }
+      const targetRel = parent ? parent + '/' + name : name, target = path.join(officeDir(), targetRel);
+      if (targetRel === rel) return send(res, 200, { ok:true, path:rel, unchanged:true });
+      if (fs.existsSync(target)) return send(res, 409, { ok:false, error:'同名文件或文件夹已存在' });
+      try { fs.renameSync(source, target); return send(res, 200, { ok:true, path:targetRel }); }
+      catch (error) { return send(res, 500, { ok:false, error:'重命名失败：' + String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/move') {
+      const b = await readBody(req), rel = officePath(b && b.path, true), toFolder = officeSafeFolder(b && b.toFolder);
+      if (!rel || toFolder === null || toFolder === rel || toFolder.startsWith(rel + '/')) return send(res, 400, { ok:false, error:'移动路径不合法' });
+      const source = path.join(officeDir(), rel), name = path.basename(rel); let stat; try { stat = fs.statSync(source); } catch (_) { return send(res, 404, { ok:false, error:'文件或文件夹不存在' }); }
+      const dir = path.join(officeDir(), toFolder || '.'); fs.mkdirSync(dir, { recursive:true });
+      let targetName = name, index = 2, ext = stat.isFile() ? path.extname(name) : '', stem = ext ? path.basename(name, ext) : name;
+      while (fs.existsSync(path.join(dir, targetName))) { targetName = stem + '-' + index + ext; index += 1; }
+      const targetRel = toFolder ? toFolder + '/' + targetName : targetName;
+      if (targetRel === rel) return send(res, 200, { ok:true, path:rel, unchanged:true });
+      try { fs.renameSync(source, path.join(dir, targetName)); return send(res, 200, { ok:true, path:targetRel }); }
+      catch (error) { return send(res, 500, { ok:false, error:'移动失败：' + String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/delete') {
+      const b = await readBody(req), rel = officePath(b && b.path, true);
+      if (!rel) return send(res, 400, { ok:false, error:'删除路径不合法' });
+      const target = path.join(officeDir(), rel);
+      try { const stat = fs.statSync(target); stat.isDirectory() ? fs.rmSync(target, { recursive:true }) : fs.unlinkSync(target); return send(res, 200, { ok:true, path:rel }); }
+      catch (error) { return send(res, 404, { ok:false, error:'删除失败：文件不存在或已被占用' }); }
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });

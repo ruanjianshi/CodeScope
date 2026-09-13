@@ -16,7 +16,7 @@ if [ "$(node -p 'Number(process.versions.node.split(".")[0])')" -lt 18 ]; then
   read -r -p "按回车退出"
   exit 1
 fi
-if [ ! -f node_modules/@novnc/novnc/core/rfb.js ] || [ ! -d node_modules/ws ] || [ ! -d node_modules/ssh2 ] || [ ! -d node_modules/saxes ] || [ ! -d node_modules/pdfjs-dist ] || [ ! -d node_modules/monaco-editor ] || [ ! -d node_modules/fflate ] || [ ! -f node_modules/xmind-embed-viewer/dist/umd/xmind-embed-viewer.js ] || [ ! -f node_modules/mind-elixir/dist/MindElixir.iife.js ]; then
+if [ ! -f node_modules/@novnc/novnc/core/rfb.js ] || [ ! -d node_modules/ws ] || [ ! -d node_modules/ssh2 ] || [ ! -d node_modules/saxes ] || [ ! -d node_modules/pdfjs-dist ] || [ ! -d node_modules/monaco-editor ] || [ ! -d node_modules/fflate ] || [ ! -f node_modules/xmind-embed-viewer/dist/umd/xmind-embed-viewer.js ] || [ ! -f node_modules/mind-elixir/dist/MindElixir.iife.js ] || [ ! -f node_modules/docx-preview/dist/docx-preview.min.js ] || [ ! -f node_modules/xlsx/dist/xlsx.full.min.js ] || [ ! -f node_modules/pptx-preview/dist/pptx-preview.umd.js ] || [ ! -d node_modules/docx ]; then
   command -v npm >/dev/null 2>&1 || { echo "未找到 npm，无法安装码境依赖。"; read -r -p "按回车退出"; exit 1; }
   echo "首次启动或依赖已更新：正在安装码境运行依赖…"
   npm ci --omit=dev || { echo "依赖安装失败，请检查网络后重试。"; read -r -p "按回车退出"; exit 1; }

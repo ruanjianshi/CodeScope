@@ -126,6 +126,11 @@ print(r.run())
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
   server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data')},stdio:'ignore'});
   await waitForServer(baseUrl);
+  const officeFixtures=[['word','Browser Word'],['sheet','Browser Sheet'],['slides','Browser Slides']];
+  for(const [kind,name] of officeFixtures){
+    const response=await fetch(baseUrl+'/api/office/new',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name,folder:''})});
+    const result=await response.json();if(!response.ok||!result.ok)throw new Error('Office 测试文档创建失败：'+JSON.stringify(result));
+  }
   browser=await chromium.launch({headless:true,executablePath,args:['--disable-gpu']});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
@@ -433,6 +438,43 @@ print(r.run())
   if(restoredSplit.groups!==0||restoredSplit.saved!==null)throw new Error('刷新后仍恢复了临时编辑分栏：'+JSON.stringify(restoredSplit));
  if(ideErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideErrors.join('；'));
   await idePage.close();
+
+  /* ---- Office 工作区：左侧同级入口、三类文档渲染与表格持久化 ---- */
+  const officePage=await browser.newPage({viewport:{width:1440,height:900}}),officeErrors=[];
+  officePage.on('pageerror',error=>officeErrors.push(String(error.message||error)));
+  await officePage.goto(baseUrl,{waitUntil:'domcontentloaded'});
+  await officePage.waitForFunction(()=>OFFICE_TREE&&OFFICE_TREE.count===3);
+  const panelOrder=await officePage.evaluate(()=>[...document.getElementById('side').children].map(node=>node.id).filter(Boolean));
+  const drawPos=panelOrder.indexOf('pane-draw'),officePos=panelOrder.indexOf('pane-office'),readingPos=panelOrder.indexOf('pane-reading');
+  if(drawPos<0||officePos!==drawPos+2||readingPos!==officePos+2)throw new Error('Office 未作为绘图与阅读之间的左侧同级模块：'+JSON.stringify(panelOrder));
+  const officeRows=officePage.locator('#office-list .office-row');await officeRows.first().waitFor({state:'visible'});
+  if(await officeRows.count()!==3)throw new Error('Office 文档树数量错误');
+
+  await officeRows.filter({hasText:'Browser Word'}).click();
+  await officePage.locator('body.office-mode .office-docx-host section.docx').waitFor({state:'visible',timeout:15000});
+  if(!(await officePage.locator('.office-docx-host').innerText()).includes('Browser Word'))throw new Error('Word 预览未渲染文档内容');
+  if(!(await officePage.locator('#office-status').innerText()).includes('只读预览'))throw new Error('Word 预览没有清晰标识编辑能力');
+  await officePage.locator('#office-back').click();
+
+  await officeRows.filter({hasText:'Browser Sheet'}).click();
+  const sheetTable=officePage.locator('#office-sheet-table');await sheetTable.waitFor({state:'visible',timeout:15000});
+  const valueCell=sheetTable.locator('td').filter({hasText:'Browser Sheet'}).first();
+  await valueCell.evaluate(cell=>{cell.textContent='Browser Sheet Edited';cell.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:' Edited'}));});
+  await officePage.waitForFunction(()=>document.getElementById('office-status').textContent.includes('已保存'),null,{timeout:10000});
+  await officePage.locator('#office-back').click();
+  await officeRows.filter({hasText:'Browser Sheet'}).click();
+  await sheetTable.waitFor({state:'visible',timeout:15000});
+  if(!(await sheetTable.innerText()).includes('Browser Sheet Edited'))throw new Error('Excel 单元格编辑结果未持久化');
+  await officePage.locator('#office-back').click();
+
+  await officeRows.filter({hasText:'Browser Slides'}).click();
+  const pptFrame=officePage.locator('.office-pptx-frame');await pptFrame.waitFor({state:'visible',timeout:15000});
+  if(await pptFrame.getAttribute('sandbox')!=='allow-scripts')throw new Error('PowerPoint 预览未在隔离沙箱中运行');
+  await officePage.frameLocator('.office-pptx-frame').locator('.pptx-preview-wrapper').waitFor({state:'visible',timeout:20000});
+  const pptText=await officePage.frameLocator('.office-pptx-frame').locator('body').innerText();
+  if(!pptText.includes('Browser Slides'))throw new Error('PowerPoint 预览未渲染幻灯片文本');
+  if(officeErrors.length)throw new Error('Office 浏览器运行错误：'+officeErrors.join('；'));
+  await officePage.close();
 
   /* ---- Markdown 块编辑器：真实指针拖拽、列表项独立移动与落盘 ---- */
   const readingPage=await browser.newPage({viewport:{width:1440,height:900}}),readingErrors=[];

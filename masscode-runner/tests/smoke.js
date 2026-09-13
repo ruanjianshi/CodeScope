@@ -76,6 +76,12 @@ async function postJson(baseUrl, pathname, body, expectedStatus = 200) {
   return response.json();
 }
 
+async function postStream(baseUrl, pathname, body, info, expectedStatus = 200) {
+  const response = await fetch(baseUrl + pathname, { method:'POST', headers:{ 'content-type':'application/octet-stream', 'x-codescope-office':Buffer.from(JSON.stringify(info)).toString('base64') }, body });
+  assert(response.status === expectedStatus, `${pathname} 状态码应为 ${expectedStatus}，实际为 ${response.status}`);
+  return response.json();
+}
+
 function samplePdf(text) {
   const escaped = String(text).replace(/([\\()])/g, '\\$1');
   const stream = `BT /F1 18 Tf 72 720 Td (${escaped}) Tj ET`;
@@ -177,7 +183,7 @@ void bubbleSort(Array& values);
   assert(unicodeFragment.label === '中文片段', '片段中文名称解析或重新读取后丢失');
 
   const version = await requestJson(baseUrl, '/api/version');
-  assert(version.ok && version.name === '码境 CodeScope' && version.version === '1.2.0' && version.apiRevision >= 2 && version.features.includes('project-health') && version.features.includes('workspace-backlinks') && version.features.includes('markdown-note-links') && version.features.includes('xmind-markdown-export') && version.features.includes('xmind-native') && version.features.includes('xmind-official-viewer') && version.features.includes('xmind-mind-elixir') && version.features.includes('opml-export') && version.features.includes('workspace-snapshots') && version.features.includes('live-web-search') && version.features.includes('search-history') && version.features.includes('editor-groups') && version.features.includes('monaco-editor') && version.features.includes('multi-cursor') && version.features.includes('editor-folding') && version.features.includes('editor-command-palette') && version.features.includes('editor-word-wrap') && version.features.includes('editor-wheel-zoom') && version.features.includes('editor-position') && version.features.includes('lsp-completion') && version.features.includes('lsp-rename') && version.features.includes('lsp-code-actions') && version.features.includes('project-tests') && version.features.includes('project-debug') && version.features.includes('drawio') && version.features.includes('drawio-xml') && version.features.includes('ai-drawio') && version.features.includes('full-text-search') && version.features.includes('quick-open') && version.features.includes('workspace-quick-open') && version.features.includes('workspace-recent') && version.features.includes('reading-full-text-search') && version.features.includes('pdf-text-cache') && version.features.includes('navigation-history') && version.features.includes('definition-peek') && version.features.includes('header-source-switch') && version.features.includes('lsp') && version.features.includes('pdf-library') && version.features.includes('pdf-translation') && version.features.includes('pdf-full-text-search') && version.features.includes('pdf-thumbnail-navigation') && version.features.includes('pdf-focus-mode') && version.features.includes('reading-fragments') && version.features.includes('reading-split-view') && version.features.includes('reading-projects') && version.features.includes('reading-code-notes'), '版本接口返回异常');
+  assert(version.ok && version.name === '码境 CodeScope' && version.version === '1.2.0' && version.apiRevision >= 2 && version.features.includes('project-health') && version.features.includes('workspace-backlinks') && version.features.includes('markdown-note-links') && version.features.includes('xmind-markdown-export') && version.features.includes('xmind-native') && version.features.includes('xmind-official-viewer') && version.features.includes('xmind-mind-elixir') && version.features.includes('opml-export') && version.features.includes('workspace-snapshots') && version.features.includes('live-web-search') && version.features.includes('search-history') && version.features.includes('editor-groups') && version.features.includes('monaco-editor') && version.features.includes('multi-cursor') && version.features.includes('editor-folding') && version.features.includes('editor-command-palette') && version.features.includes('editor-word-wrap') && version.features.includes('editor-wheel-zoom') && version.features.includes('editor-position') && version.features.includes('lsp-completion') && version.features.includes('lsp-rename') && version.features.includes('lsp-code-actions') && version.features.includes('project-tests') && version.features.includes('project-debug') && version.features.includes('drawio') && version.features.includes('drawio-xml') && version.features.includes('ai-drawio') && version.features.includes('full-text-search') && version.features.includes('quick-open') && version.features.includes('workspace-quick-open') && version.features.includes('workspace-recent') && version.features.includes('reading-full-text-search') && version.features.includes('pdf-text-cache') && version.features.includes('navigation-history') && version.features.includes('definition-peek') && version.features.includes('header-source-switch') && version.features.includes('lsp') && version.features.includes('pdf-library') && version.features.includes('pdf-translation') && version.features.includes('pdf-full-text-search') && version.features.includes('pdf-thumbnail-navigation') && version.features.includes('pdf-focus-mode') && version.features.includes('reading-fragments') && version.features.includes('reading-split-view') && version.features.includes('reading-projects') && version.features.includes('reading-code-notes') && version.features.includes('office-library') && version.features.includes('docx-preview') && version.features.includes('spreadsheet-editing') && version.features.includes('pptx-preview'), '版本接口返回异常');
 
   const page = await fetch(baseUrl + '/');
   const html = await page.text();
@@ -216,6 +222,7 @@ void bubbleSort(Array& values);
   assert(html.includes("event.key==='Tab'") && html.includes("event.key==='Enter'") && html.includes("event.key==='ArrowUp'") && html.includes("key==='/'"), 'XMind 键盘新建、导航、重排或折叠快捷键缺失');
   assert(html.includes('xmindStartPreviewEdit') && html.includes('decorateXmindPreview') && html.includes('contentEditable=\'true\'') && html.includes('可单击选择、双击或空格编辑'), 'XMind 画布节点缺少直接选择或原位编辑能力');
   assert(html.includes('id="xmind-pan-mode"') && html.includes('id="xmind-zoom-value"') && html.includes('id="xmind-layout-select"') && html.includes('xmindSetToolMode') && html.includes('XMIND_CANVAS_PAN') && html.includes('xmindSetAllExpanded') && html.includes('xmindToggleEditorFocus'), 'XMind 缺少画布平移、缩放、布局、折叠或专注浏览能力');
+  assert(html.includes('id="pane-office"') && html.includes('id="office-workspace"') && html.includes('renderOfficeWord') && html.includes('renderOfficeSheetBook') && html.includes('renderOfficeSlides') && html.includes('/office-docx/docx-preview.min.js') && html.includes('/office-xlsx/dist/xlsx.full.min.js') && html.includes('/office-pptx/pptx-preview.umd.js'), 'Office 一级模块或本地 Word、Excel、PowerPoint 渲染能力缺失');
   assert(html.includes('id="xmind-add-floating"') && html.includes('id="xmind-to-floating"') && html.includes('children.detached') && html.includes('xmindRenderFloatingTopics') && html.includes('xmindAttachFloating') && html.includes('xmindAddFloatingAt(event.clientX,event.clientY)') && html.includes('function xmindEngineTopicId') && html.includes("replace(/^me/,'')"), 'XMind 缺少标准自由主题、任意位置拖放、节点标识映射或层级互转能力');
   assert(html.includes('id="xmind-view-native"') && html.includes('id="xmind-native-image"') && html.includes('setXmindView') && html.includes('XMind 原始画布'), 'XMind 缺少原貌快照与可编辑视图切换');
   assert(html.includes('id="xmind-view-official"') && html.includes('id="xmind-official-consent"') && html.includes('id="xmind-official-host"') && html.includes('openXmindOfficialView') && html.includes('/xmind-viewer/xmind-embed-viewer.js') && html.includes('www.xmind.cn'), 'XMind 缺少带隐私确认和隔离挂载容器的官方全画布查看器');
@@ -232,9 +239,10 @@ void bubbleSort(Array& values);
   assert((launchers.match(/node_modules[\\/]fflate/g) || []).length === 4, '启动脚本未完整检测 XMind 压缩包依赖');
   assert((launchers.match(/node_modules[\\/]xmind-embed-viewer/g) || []).length === 4, '启动脚本未完整检测 XMind 官方查看器依赖');
   assert((launchers.match(/node_modules[\\/]mind-elixir/g) || []).length === 4, '启动脚本未完整检测 Mind Elixir 编辑器依赖');
+  assert((launchers.match(/node_modules[\\/]docx-preview/g) || []).length === 4 && (launchers.match(/node_modules[\\/]pptx-preview/g) || []).length === 4 && (launchers.match(/node_modules[\\/]xlsx/g) || []).length === 4, '启动脚本未完整检测 Office 本地组件依赖');
   assert(html.includes('id="editor-drop-overlay"') && html.includes('split-editor-group') && html.includes('initEditorGroups') && html.includes('application/x-codescope-editor'), '2 至 4 栏拖拽编辑功能缺失');
   assert(html.includes('data-search-mode="text"') && html.includes('renderTextResults') && html.includes('id="text-regex"'), '全文搜索或正则检索功能缺失');
-  assert(html.includes('workspaceQuickEntries') && html.includes('WORKSPACE_RECENT_KEY') && html.includes('搜索代码、阅读项目、PDF、笔记或绘图'), '快速打开未覆盖代码、阅读、PDF 与绘图，或缺少最近访问排序');
+  assert(html.includes('workspaceQuickEntries') && html.includes('WORKSPACE_RECENT_KEY') && html.includes('Office 文档') && html.includes('workspaceRecent'), '快速打开未覆盖代码、阅读、Office 与绘图，或缺少最近访问排序');
   assert(html.includes('id="btn-backlinks"') && html.includes('showBacklinks') && html.includes('workspaceLinkMarkdown') && html.includes('md-note-ref') && serverSource.includes('workspaceBacklinks'), '统一内部链接或反向链接功能缺失');
   assert(html.includes('id="mm-export-md"') && html.includes('id="mm-export-opml"') && html.includes('mmExportMarkdown') && html.includes('mmExportOpml'), '思维导图缺少 XMind Markdown 或 OPML 互通');
   assert(html.includes('WORKSPACE_SNAPSHOT_KEY') && html.includes('saveWorkspaceSnapshot') && html.includes('restoreWorkspaceSnapshot'), '显式工作台快照保存或恢复功能缺失');
@@ -246,7 +254,7 @@ void bubbleSort(Array& values);
   assert(html.includes('DEFINITION_HOVER_INTERACTING') && html.includes('scheduleDefinitionHoverHide') && html.includes('overscroll-behavior:contain') && html.includes('from+120'), '悬停定义卡片缺少鼠标移入、滚动或长定义查看能力');
   assert(html.includes('/api/lsp/query') && html.includes('enrichDefinitionHover') && serverSource.includes("require('./lib/lsp-service')"), '通用 LSP 服务或悬停信息接入缺失');
   assert(html.includes('id="btn-pair-switch"') && html.includes('pairedCodeFile') && html.includes("key==='o'"), '头文件与源文件快速切换功能缺失');
-  assert(html.includes('#pane-git, #pane-tags, #pane-draw, #pane-reading { flex:0 1 auto; min-height:37px; }') && html.includes('#pane-tree { min-height:96px; }') && html.includes('#pane-draw, #pane-reading { min-height:108px; }'), '左侧多面板在低高度窗口中缺少自适应收缩');
+  assert(html.includes('#pane-git, #pane-tags, #pane-draw, #pane-office, #pane-reading { flex:0 1 auto; min-height:37px; }') && html.includes('#pane-tree { min-height:96px; }') && html.includes('#pane-draw, #pane-office, #pane-reading { min-height:108px; }'), '左侧多面板在低高度窗口中缺少自适应收缩');
   assert(html.includes('id="pane-reading"') && html.includes('id="reading-workspace"') && html.includes('application/x-codescope-reading') && html.includes('拖到阅读区右侧新建一栏'), 'PDF 阅读项目或拖拽片段组合入口缺失');
   assert(html.includes('translateReadingSelection') && html.includes('translateReadingPage') && html.includes('translateReadingAll') && html.includes('renderReadingFragments'), 'PDF AI 翻译或片段管理功能缺失');
   assert(html.includes('openReadingProject') && html.includes('addReadingProjectFragment') && html.includes('/api/readings/text-fragment') && html.includes('已匹配中文 PDF'), '阅读项目、多类型片段或中文版 PDF 自动配对功能缺失');
@@ -301,8 +309,38 @@ void bubbleSort(Array& values);
   assert(monacoLoader.ok && (monacoLoader.headers.get('content-type') || '').includes('javascript'), 'Monaco 编辑器资源无法加载');
   const mindElixir = await fetch(baseUrl + '/mind-elixir/MindElixir.iife.js');
   assert(mindElixir.ok && (mindElixir.headers.get('content-type') || '').includes('javascript') && (await mindElixir.text()).includes('MindElixir'), 'Mind Elixir 编辑器资源无法加载');
+  for (const [asset, marker] of [['/office-jszip/jszip.min.js','JSZip'],['/office-docx/docx-preview.min.js','renderAsync'],['/office-xlsx/dist/xlsx.full.min.js','XLSX'],['/office-pptx/pptx-preview.umd.js','pptxPreview']]) {
+    const response = await fetch(baseUrl + asset), source = await response.text();
+    assert(response.ok && (response.headers.get('content-type') || '').includes('javascript') && source.includes(marker), 'Office 本地组件无法加载：' + asset);
+  }
   const crossSite = await fetch(baseUrl + '/api/readings/folder', { method:'POST', headers:{'content-type':'application/json',origin:'https://evil.example','sec-fetch-site':'cross-site'}, body:'{"name":"Blocked"}' });
   assert(crossSite.status === 403, '跨站写入请求未被阻止');
+
+  const officeFolder = await postJson(baseUrl, '/api/office/folder', { parent:'', name:'项目资料' });
+  assert(officeFolder.ok && officeFolder.path === '项目资料', 'Office 文件夹创建失败');
+  const officeWord = await postJson(baseUrl, '/api/office/new', { folder:'项目资料', name:'设计说明', kind:'word' });
+  const officeSheet = await postJson(baseUrl, '/api/office/new', { folder:'', name:'测试数据', kind:'sheet' });
+  const officeSlides = await postJson(baseUrl, '/api/office/new', { folder:'', name:'项目汇报', kind:'slides' });
+  assert(officeWord.ok && officeWord.path.endsWith('.docx') && officeSheet.ok && officeSheet.path.endsWith('.xlsx') && officeSlides.ok && officeSlides.path.endsWith('.pptx'), 'Office 标准文档创建失败');
+  const officeTree = await requestJson(baseUrl, '/api/office/tree');
+  assert(officeTree.ok && officeTree.total === 3 && officeTree.root.children.some((item) => item.name === '项目资料' && item.count === 1), 'Office 文档树或数量统计错误');
+  const wordResponse = await fetch(baseUrl + '/api/office/file?path=' + encodeURIComponent(officeWord.path));
+  const wordBytes = Buffer.from(await wordResponse.arrayBuffer());
+  assert(wordResponse.ok && wordResponse.headers.get('content-type').includes('wordprocessingml') && wordBytes.subarray(0,2).toString() === 'PK', 'DOCX 原文件读取或 MIME 类型错误');
+  const sheetResponse = await fetch(baseUrl + '/api/office/file?path=' + encodeURIComponent(officeSheet.path));
+  const sheetBytes = Buffer.from(await sheetResponse.arrayBuffer());
+  const savedSheet = await postStream(baseUrl, '/api/office/save-stream', sheetBytes, { path:officeSheet.path });
+  assert(savedSheet.ok && savedSheet.size === sheetBytes.length, 'Excel 流式保存失败');
+  const renamedWord = await postJson(baseUrl, '/api/office/rename', { path:officeWord.path, name:'架构说明' });
+  assert(renamedWord.ok && renamedWord.path === '项目资料/架构说明.docx', 'Office 文档重命名失败或扩展名丢失');
+  const movedSlides = await postJson(baseUrl, '/api/office/move', { path:officeSlides.path, toFolder:'项目资料' });
+  assert(movedSlides.ok && movedSlides.path === '项目资料/项目汇报.pptx', 'Office 文档拖拽移动后端失败');
+  const importedWord = await postStream(baseUrl, '/api/office/upload-stream', wordBytes, { folder:'', name:'导入文档.docx' });
+  assert(importedWord.ok && importedWord.path === '导入文档.docx', 'Office 流式导入失败');
+  const invalidOffice = await requestJson(baseUrl, '/api/office/file?path=' + encodeURIComponent('../escape.docx'), 400);
+  assert(!invalidOffice.ok, 'Office 文件接口未拒绝越界路径');
+  assert((await postJson(baseUrl, '/api/office/delete', { path:'项目资料' })).ok, 'Office 文件夹递归删除失败');
+  assert((await postJson(baseUrl, '/api/office/delete', { path:officeSheet.path })).ok && (await postJson(baseUrl, '/api/office/delete', { path:importedWord.path })).ok, 'Office 测试文档清理失败');
 
   const snippets = await requestJson(baseUrl, '/api/snippets');
   assert(snippets.vault === vault && snippets.snippets.length === 2, '片段接口返回异常');

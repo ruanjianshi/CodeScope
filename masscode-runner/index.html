@@ -64,8 +64,8 @@
   #pane-git { flex: 0 0 auto; display: flex; flex-direction: column; overflow: hidden; }
   #pane-tags { flex: 0 0 auto; display: flex; flex-direction: column; overflow: hidden; }
   /* 面板拖拽重排：按住面板标题栏上下拖动即可换位（顺序持久化到 localStorage） */
-  #tree-head, #git-head, #tag-head, #draw-head, #reading-head { cursor: grab; }
-  #tree-head:active, #git-head:active, #tag-head:active, #draw-head:active, #reading-head:active { cursor: grabbing; }
+  #tree-head, #git-head, #tag-head, #draw-head, #office-head, #reading-head { cursor: grab; }
+  #tree-head:active, #git-head:active, #tag-head:active, #draw-head:active, #office-head:active, #reading-head:active { cursor: grabbing; }
   .pane-dragging { opacity: .45 !important; }
   #panel-drop-line { position: fixed; left: 10px; width: calc(100% - 140px); height: 2px; background: var(--accent); z-index: 210; pointer-events: none; display: none; box-shadow: 0 0 6px rgba(79,140,255,.6); }
   .hsplit { flex: none; height: 7px; cursor: row-resize; position: relative; background: transparent; }
@@ -631,6 +631,60 @@
   .draw-row:hover .draw-ren { visibility: visible; }
   .draw-row .draw-ren:hover { color: #9fc0ff; background: rgba(79,140,255,.14); }
   .draw-empty { padding: 10px 8px; color: var(--dim); font-size: 12px; font-style: italic; }
+  /* ---- Office 文档库（与阅读 / 绘图同级） ---- */
+  #pane-office { display:flex; flex:0 1 auto; min-height:108px; max-height:70%; flex-direction:column; overflow:hidden; border-top:1px solid var(--border); background:var(--panel); }
+  #pane-office.collapsed { min-height:40px; height:auto !important; }
+  #pane-office.collapsed #office-list { display:none; }
+  #office-head { display:flex; align-items:center; gap:5px; min-height:38px; padding:7px 10px; color:var(--dim); font-size:12px; font-weight:650; user-select:none; }
+  #office-head:hover { color:var(--text); } #office-head .arrow { width:10px; text-align:center; transition:transform .15s; }
+  #pane-office.collapsed #office-head .arrow { transform:rotate(-90deg); }
+  #office-head button { padding:1px 5px; border-color:transparent; background:transparent; color:var(--accent); font-size:12px; }
+  #office-list { flex:1; min-height:0; overflow:auto; padding:4px 7px 10px; background:var(--theme-deep,var(--bg)); }
+  .office-row { display:flex; align-items:center; gap:6px; min-height:30px; padding:4px 7px; border:1px solid transparent; border-radius:6px; color:var(--text); font-size:11px; cursor:pointer; user-select:none; }
+  .office-row:hover { background:var(--panel2); } .office-row.on { border-color:rgba(79,140,255,.55); background:var(--accent-soft); box-shadow:inset 2px 0 var(--accent); }
+  .office-row.drop-target,#office-list.root-drop { background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); }
+  .office-row.dragging { opacity:.42; }
+  .office-children { margin-left:13px; padding-left:6px; border-left:1px solid var(--border); }
+  .office-row .arrow { width:9px; flex:none; color:var(--dim); font-size:9px; text-align:center; }
+  .office-type { width:20px; height:20px; display:grid; place-items:center; flex:none; border-radius:5px; color:#fff; font:800 10px/1 var(--mono); box-shadow:inset 0 0 0 1px rgba(255,255,255,.16); }
+  .office-type.word { background:#2b67c8; } .office-type.sheet { background:#168455; } .office-type.slides { background:#c74b28; } .office-type.folder { background:#56657a; }
+  .office-row .name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .office-row .meta { flex:none; color:var(--dim); font-size:9px; }
+  .office-row .office-action { visibility:hidden; width:21px; height:21px; padding:0; border:0; background:transparent; color:var(--dim); }
+  .office-row:hover .office-action { visibility:visible; } .office-row .office-action:hover { color:var(--accent); background:rgba(79,140,255,.12); }
+  .office-empty { padding:14px 10px; color:var(--dim); font-size:11px; line-height:1.7; }
+  #office-workspace { display:none; flex:1; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
+  body.office-mode #office-workspace { display:flex; }
+  body.office-mode #toolbar,body.office-mode #tabs,body.office-mode #document-mode-tools,body.office-mode #code-context-bar,body.office-mode #draw-editor,body.office-mode #reading-workspace,body.office-mode #edit-split,body.office-mode #resource-viewer,body.office-mode #preview,body.office-mode #input-area,body.office-mode #split-h,body.office-mode #output,body.office-mode #split-v2,body.office-mode #outline-panel { display:none !important; }
+  .office-toolbar { min-height:48px; display:flex; align-items:center; gap:7px; padding:7px 10px; border-bottom:1px solid var(--border); background:var(--panel); }
+  .office-toolbar .office-file-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .office-toolbar .office-path { max-width:36%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); font-size:10px; }
+  .office-toolbar .sp { flex:1; } .office-toolbar button.primary { border-color:#3578d0; background:#245da9; color:#fff; }
+  #office-status { color:var(--dim); font-size:10px; white-space:nowrap; }
+  #office-stage { flex:1; min-height:0; position:relative; overflow:auto; background:radial-gradient(circle at 50% 10%,rgba(73,103,145,.13),transparent 42%),var(--theme-deep,#0c1118); }
+  .office-welcome { min-height:100%; display:grid; place-items:center; padding:36px; }
+  .office-welcome-card { width:min(620px,90%); padding:30px; border:1px solid var(--border); border-radius:16px; background:var(--panel); box-shadow:0 18px 60px rgba(0,0,0,.3); text-align:center; }
+  .office-welcome-card .marks { display:flex; justify-content:center; gap:12px; margin-bottom:16px; }.office-welcome-card .office-type { width:42px; height:42px; font-size:17px; border-radius:10px; }
+  .office-welcome-card h2 { margin:0 0 8px; font-size:20px; }.office-welcome-card p { margin:0; color:var(--dim); }
+  .office-docx-host { min-height:100%; padding:28px 36px 80px; overflow:auto; }
+  .office-docx-host .docx-wrapper { background:transparent !important; padding:0 !important; }
+  .office-docx-host section.docx { margin:0 auto 22px !important; box-shadow:0 10px 38px rgba(0,0,0,.38); }
+  .office-sheet { min-width:100%; min-height:100%; display:flex; flex-direction:column; background:#10161e; }
+  .office-sheet-tabs { min-height:38px; display:flex; gap:3px; align-items:flex-end; padding:5px 10px 0; border-bottom:1px solid var(--border); background:var(--panel); overflow-x:auto; }
+  .office-sheet-tab { min-width:92px; padding:5px 12px; border-radius:6px 6px 0 0; border-bottom:0; color:var(--dim); }.office-sheet-tab.on { background:#123a2c; border-color:#267a59; color:#bdebd7; }
+  .office-sheet-grid { flex:1; min-height:0; overflow:auto; padding:0; }
+  .office-sheet-grid table { border-collapse:separate; border-spacing:0; min-width:100%; background:#fff; color:#1d2733; font:12px/1.45 -apple-system,"PingFang SC",sans-serif; }
+  .office-sheet-grid td,.office-sheet-grid th { min-width:96px; height:29px; padding:5px 8px; border:0; border-right:1px solid #d9dee5; border-bottom:1px solid #d9dee5; white-space:pre-wrap; outline:none; }
+  .office-sheet-grid td:focus { box-shadow:inset 0 0 0 2px #168455; background:#f3fff9; }
+  .office-pptx-host { min-height:100%; padding:28px; display:flex; justify-content:center; overflow:auto; }
+  .office-pptx-frame { width:100%; min-height:100%; border:0; background:#0c1118; }
+  .office-pptx-host .pptx-preview-wrapper { flex:none; border-radius:8px; overflow:hidden; box-shadow:0 18px 56px rgba(0,0,0,.45); }
+  .office-error { min-height:100%; display:grid; place-items:center; padding:30px; color:#ffaaa6; text-align:center; white-space:pre-wrap; }
+  #office-ndialog { position:fixed; inset:0; z-index:190; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.62); }
+  #office-ndialog.open { display:flex; } #office-ndialog .nd-panel { width:430px; max-width:92vw; padding:18px; border:1px solid var(--border); border-radius:12px; background:var(--panel); box-shadow:0 18px 60px rgba(0,0,0,.55); }
+  #office-ndialog h3 { margin:0 0 5px; font-size:15px; } #office-ndialog p { margin:0 0 12px; color:var(--dim); font-size:11px; }
+  #office-ndialog label { display:block; margin:10px 0 4px; color:var(--dim); font-size:11px; } #office-ndialog input,#office-ndialog select { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:var(--text); }
+  #office-ndialog .nd-btns { display:flex; gap:8px; margin-top:16px; } #office-ndialog .nd-btns button { flex:1; }
   /* ---- 阅读文库（PDF / 论文 / 开发文档） ---- */
   #pane-reading { display:flex; flex:0 1 auto; min-height:108px; max-height:70%; flex-direction:column; overflow:hidden; border-top:1px solid var(--border); background:var(--panel); }
   #pane-reading.collapsed { min-height:40px; height:auto !important; }
@@ -1611,6 +1665,7 @@
   .search-hit.quick-code .ico { color:var(--accent); }
   .search-hit.quick-reading .ico { color:var(--ok); }
   .search-hit.quick-drawing .ico { color:var(--syntax-number,#d99a43); }
+  .search-hit.quick-office .ico { color:#71a7ff; }
   .quick-section { display:flex; align-items:center; gap:8px; padding:9px 14px 4px; color:var(--dim); font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
   .quick-section::after { content:''; height:1px; flex:1; background:var(--border); opacity:.7; }
   .quick-kind { display:inline-flex; align-items:center; margin-left:6px; padding:1px 5px; border:1px solid var(--border); border-radius:999px; color:var(--dim); font:8px var(--mono); vertical-align:1px; }
@@ -1941,10 +1996,10 @@
 
   main { background:var(--bg); }
   #side { min-height:0; overflow:hidden; background:#0f151d; border-right-color:#273241; }
-  #pane-tree, #pane-git, #pane-tags, #pane-draw, #pane-reading { background:#0f151d; }
+  #pane-tree, #pane-git, #pane-tags, #pane-draw, #pane-office, #pane-reading { background:#0f151d; }
   #pane-tree { min-height:96px; }
-  #pane-git, #pane-tags, #pane-draw, #pane-reading { flex:0 1 auto; min-height:37px; }
-  #pane-draw, #pane-reading { min-height:108px; }
+  #pane-git, #pane-tags, #pane-draw, #pane-office, #pane-reading { flex:0 1 auto; min-height:37px; }
+  #pane-draw, #pane-office, #pane-reading { min-height:108px; }
   #pane-draw.collapsed { min-height:40px; }
   #git-body, #tagbar, #draw-list, #reading-list { min-height:0; }
   #search { min-height:36px; margin:10px 10px 7px; padding:8px 11px; border-color:#2b3747; border-radius:8px; background:#0a1017; color:#dfe7f2; font-size:12px; }
@@ -2150,7 +2205,7 @@
   html[data-theme] button { border-color:var(--border); background:var(--control); color:var(--text); }
   html[data-theme] button:hover:not(:disabled) { border-color:var(--accent); background:var(--control-hover); }
   html[data-theme] button.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
-  html[data-theme] #side, html[data-theme] #pane-tree, html[data-theme] #pane-git, html[data-theme] #pane-tags, html[data-theme] #pane-draw, html[data-theme] #pane-reading,
+  html[data-theme] #side, html[data-theme] #pane-tree, html[data-theme] #pane-git, html[data-theme] #pane-tags, html[data-theme] #pane-draw, html[data-theme] #pane-office, html[data-theme] #pane-reading,
   html[data-theme] #outline-panel, html[data-theme] #outline-list, html[data-theme] #outline-list.stack-on { background:var(--theme-side); border-color:var(--border); }
   html[data-theme] #tree-head, html[data-theme] #git-head, html[data-theme] #tag-head, html[data-theme] #draw-head,
   html[data-theme] #toolbar, html[data-theme] #resource-head, html[data-theme] #outline-head, html[data-theme] .pane-title, html[data-theme] .ai-title-row,
@@ -2632,6 +2687,15 @@
         </div>
       </div>
     </div>
+    <div class="hsplit" id="h-office" title="拖拽调整 Office 面板高度"></div>
+    <div id="pane-office">
+      <div id="office-head" title="显示/隐藏 Office 文档库（按住标题可上下拖动调整位置）">
+        <span class="arrow">▾</span><span class="side-section-title"><span class="side-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3.5h9l5 5v12H5z"/><path d="M14 3.5v5h5M8 12h8M8 15h8M8 18h5"/></svg></span>Office</span><span id="office-count" class="count"></span>
+        <span class="side-head-actions"><button id="office-new" title="新建 Word、Excel 或 PowerPoint 文档">＋文档</button><button id="office-new-folder" title="新建 Office 文件夹">＋文件夹</button><button id="office-import" title="导入 Office 文档">导入</button></span>
+      </div>
+      <div id="office-list"></div>
+      <input id="office-file-input" type="file" accept=".docx,.xlsx,.xls,.csv,.pptx" multiple hidden>
+    </div>
     <div class="hsplit" id="h-reading" title="拖拽调整阅读面板高度"></div>
     <div id="pane-reading">
       <div id="reading-head" title="显示/隐藏阅读文库（按住标题可上下拖动调整位置）">
@@ -2741,6 +2805,13 @@
         </div>
       </div>
     </div>
+    <section id="office-workspace" aria-label="Office 文档工作区">
+      <div class="office-toolbar">
+        <button id="office-back">← 返回代码</button><span id="office-file-badge" class="office-type word">W</span><span id="office-title" class="office-file-title">Office</span><span id="office-path" class="office-path"></span><span class="sp"></span>
+        <button id="office-refresh" title="重新读取磁盘上的文件">刷新</button><button id="office-save" class="primary" title="保存当前表格" hidden>保存表格</button><button id="office-download" title="下载原始 Office 文件">原文件</button><button id="office-rename-current">重命名</button><span id="office-status"></span>
+      </div>
+      <div id="office-stage"><div class="office-welcome"><div class="office-welcome-card"><div class="marks"><span class="office-type word">W</span><span class="office-type sheet">X</span><span class="office-type slides">P</span></div><h2>Office 工作区</h2><p>在左侧选择文档；Word 和 PowerPoint 保真预览，Excel 可直接编辑并保存。</p></div></div></div>
+    </section>
     <section id="reading-workspace" aria-label="PDF 阅读工作区">
       <div class="reading-toolbar">
         <button id="reading-back">← 返回代码</button><span class="title" id="reading-title">阅读</span><span id="reading-project-context"></span><span class="sp"></span>
@@ -3992,6 +4063,49 @@ function wireNewDialog() {
 }
 window.addEventListener('DOMContentLoaded', wireNewDialog);
 
+/* ------------------------- Office 文档库（Word / Excel / PowerPoint） ------------------------- */
+let OFFICE_TREE=null,OFFICE_CURRENT='',OFFICE_ITEM=null,OFFICE_WORKBOOK=null,OFFICE_SHEET='',OFFICE_PPTX=null,OFFICE_SHEET_DIRTY=false,OFFICE_SAVE_T=0,OFFICE_DIALOG_MODE='document',OFFICE_TARGET_FOLDER='';
+let OFFICE_WORD_LOADER=null,OFFICE_SHEET_LOADER=null;
+let OFFICE_OPEN=(()=>{try{return localStorage.getItem('mc-office-open')!=='0';}catch(_){return true;}})();
+let OFFICE_DIR_OPEN=(()=>{try{return new Set(JSON.parse(localStorage.getItem('mc-office-dirs')||'[]'));}catch(_){return new Set();}})();
+function officePersistDirs(){try{localStorage.setItem('mc-office-dirs',JSON.stringify([...OFFICE_DIR_OPEN]));}catch(_){}}
+function officeStatus(text,error){const el=$('office-status');if(!el)return;el.textContent=text||'';el.style.color=error?'var(--err)':'var(--dim)';}
+function officeBase(path){return String(path||'').split('/').pop();}
+function officeParent(path){const parts=String(path||'').split('/');parts.pop();return parts.join('/');}
+function officeTypeMark(kind){return kind==='word'?'W':kind==='sheet'?'X':'P';}
+function officeFind(path,node=OFFICE_TREE){if(!node)return null;if(node.path===path)return node;for(const child of node.children||[]){const hit=officeFind(path,child);if(hit)return hit;}return null;}
+function officeFolders(node=OFFICE_TREE,out=[]){if(!node)return out;if(node.type==='folder'&&node.path)out.push(node);for(const child of node.children||[])officeFolders(child,out);return out;}
+function officeJsonHeader(value){const bytes=new TextEncoder().encode(JSON.stringify(value));let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary);}
+function loadOfficeClassic(url,ready){if(ready())return Promise.resolve();return new Promise((resolve,reject)=>{const amd=window.define;try{window.define=undefined;}catch(_){}const script=document.createElement('script');script.src=url;script.onload=()=>{try{window.define=amd;}catch(_){}ready()?resolve():reject(new Error('组件加载后未注册：'+url));};script.onerror=()=>{try{window.define=amd;}catch(_){}reject(new Error('无法加载本地组件：'+url));};document.head.appendChild(script);});}
+function ensureOfficeWord(){if(!OFFICE_WORD_LOADER)OFFICE_WORD_LOADER=loadOfficeClassic('/office-jszip/jszip.min.js',()=>!!window.JSZip).then(()=>loadOfficeClassic('/office-docx/docx-preview.min.js',()=>!!(window.docx&&window.docx.renderAsync)));return OFFICE_WORD_LOADER;}
+function ensureOfficeSheet(){if(!OFFICE_SHEET_LOADER)OFFICE_SHEET_LOADER=loadOfficeClassic('/office-xlsx/dist/xlsx.full.min.js',()=>!!window.XLSX);return OFFICE_SHEET_LOADER;}
+function officeWelcome(){OFFICE_WORKBOOK=null;OFFICE_SHEET='';OFFICE_ITEM=null;$('office-save').hidden=true;$('office-file-badge').className='office-type word';$('office-file-badge').textContent='W';$('office-title').textContent='Office';$('office-path').textContent='';$('office-stage').innerHTML='<div class="office-welcome"><div class="office-welcome-card"><div class="marks"><span class="office-type word">W</span><span class="office-type sheet">X</span><span class="office-type slides">P</span></div><h2>Office 工作区</h2><p>在左侧选择文档；Word 和 PowerPoint 保真预览，Excel 可直接编辑并保存。</p></div></div>';}
+async function loadOffice(silent=false){const result=await api('/api/office/tree');if(!result.ok){if(!silent)officeStatus(result.error,true);return;}OFFICE_TREE=result.root;$('office-count').textContent=result.total?String(result.total):'';renderOfficeList();}
+function renderOfficeList(){const box=$('office-list');if(!box||!OFFICE_TREE)return;box.replaceChildren();const build=(node,host)=>{for(const item of node.children||[]){const row=document.createElement('div');row.className='office-row'+(OFFICE_CURRENT===item.path?' on':'');row.draggable=true;row.dataset.path=item.path;row.dataset.type=item.type;row.title=item.path+(item.type==='folder'?' · 拖放文档或文件夹到这里':' · 点击打开；可拖入文件夹整理');
+      row.addEventListener('dragstart',(event)=>{if(event.target.closest('button')){event.preventDefault();return;}event.dataTransfer.setData('application/x-codescope-office',JSON.stringify({path:item.path,type:item.type}));event.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));
+      const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent=item.type==='folder'?(OFFICE_DIR_OPEN.has(item.path)?'▾':'▸'):'';const mark=document.createElement('span');mark.className='office-type '+(item.type==='folder'?'folder':item.kind);mark.textContent=item.type==='folder'?'▰':officeTypeMark(item.kind);const name=document.createElement('span');name.className='name';name.textContent=item.name;const meta=document.createElement('span');meta.className='meta';meta.textContent=item.type==='folder'?String(item.count||0):(item.size<1024?'1 KB':formatCapacity(item.size));const ren=document.createElement('button');ren.className='office-action';ren.textContent='✎';ren.title='重命名';ren.onclick=(event)=>{event.stopPropagation();renameOfficeNode(item);};const del=document.createElement('button');del.className='office-action';del.textContent='×';del.title='删除';del.onclick=(event)=>{event.stopPropagation();deleteOfficeNode(item);};row.append(arrow,mark,name,meta,ren,del);host.appendChild(row);
+      if(item.type==='folder'){row.onclick=()=>{OFFICE_TARGET_FOLDER=item.path;OFFICE_DIR_OPEN.has(item.path)?OFFICE_DIR_OPEN.delete(item.path):OFFICE_DIR_OPEN.add(item.path);officePersistDirs();renderOfficeList();};row.addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();event.stopPropagation();row.classList.add('drop-target');}});row.addEventListener('dragleave',()=>row.classList.remove('drop-target'));row.addEventListener('drop',async(event)=>{event.preventDefault();event.stopPropagation();row.classList.remove('drop-target');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}if(!value||value.path===item.path)return;const result=await api('/api/office/move',{path:value.path,toFolder:item.path});if(!result.ok)return officeStatus(result.error,true);OFFICE_DIR_OPEN.add(item.path);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});if(OFFICE_DIR_OPEN.has(item.path)){const children=document.createElement('div');children.className='office-children';host.appendChild(children);build(item,children);}}
+      else row.onclick=()=>openOffice(item.path);
+    }};build(OFFICE_TREE,box);if(!OFFICE_TREE.children.length)box.innerHTML='<div class="office-empty">尚无 Office 文档。点击“＋文档”新建，或“导入”加入已有的 DOCX、XLSX、XLS、CSV、PPTX。</div>';}
+async function openOffice(path){const item=officeFind(path);if(!item||item.type!=='document')return;if(DRAW_FILE)await closeDrawEditor(true);if(document.body.classList.contains('reading-mode'))closeReading();clearTimeout(OFFICE_SAVE_T);OFFICE_CURRENT=path;OFFICE_ITEM=item;OFFICE_WORKBOOK=null;OFFICE_SHEET='';OFFICE_SHEET_DIRTY=false;document.body.classList.add('office-mode');$('office-title').textContent=item.name;$('office-path').textContent=officeParent(path)||'Office 根目录';$('office-file-badge').className='office-type '+item.kind;$('office-file-badge').textContent=officeTypeMark(item.kind);$('office-save').hidden=item.kind!=='sheet';renderOfficeList();officeStatus('正在读取…');$('office-stage').innerHTML='<div class="office-welcome"><div class="office-welcome-card"><h2>正在打开 '+item.name.replace(/[<>&]/g,'')+'</h2><p>解析本地 Office 文档，请稍候…</p></div></div>';
+  try{const response=await fetch('/api/office/file?path='+encodeURIComponent(path),{cache:'no-store'});if(!response.ok)throw new Error('文件读取失败（HTTP '+response.status+'）');const buffer=await response.arrayBuffer();if(item.kind==='word')await renderOfficeWord(buffer);else if(item.kind==='sheet')await renderOfficeSheetBook(buffer,item.ext);else if(item.kind==='slides')await renderOfficeSlides(buffer);else throw new Error('不支持的 Office 类型');rememberWorkspaceRecent('office',path);officeStatus(item.kind==='sheet'?'可直接编辑单元格 · 修改后自动保存':'只读预览 · 可用“原文件”在桌面 Office 中继续编辑');}catch(error){$('office-stage').innerHTML='<div class="office-error">无法打开 '+item.name+'\n'+String(error.message||error)+'</div>';officeStatus(String(error.message||error),true);}}
+async function renderOfficeWord(buffer){await ensureOfficeWord();const host=document.createElement('div');host.className='office-docx-host';$('office-stage').replaceChildren(host);await window.docx.renderAsync(buffer,host,null,{className:'docx',inWrapper:true,breakPages:true,ignoreLastRenderedPageBreak:false,renderHeaders:true,renderFooters:true,renderFootnotes:true,useBase64URL:true});}
+function officeSyncSheet(){if(!OFFICE_WORKBOOK||!OFFICE_SHEET)return;const table=$('office-sheet-table');if(!table)return;const edited=XLSX.utils.table_to_sheet(table,{raw:false});const original=OFFICE_WORKBOOK.Sheets[OFFICE_SHEET]||{};for(const key of Object.keys(edited)){if(key[0]==='!')continue;original[key]={...(original[key]||{}),...edited[key]};}original['!ref']=edited['!ref']||original['!ref'];OFFICE_WORKBOOK.Sheets[OFFICE_SHEET]=original;}
+async function renderOfficeSheetBook(buffer){await ensureOfficeSheet();OFFICE_WORKBOOK=XLSX.read(buffer,{type:'array',cellStyles:true,cellDates:true});if(!OFFICE_WORKBOOK.SheetNames.length){XLSX.utils.book_append_sheet(OFFICE_WORKBOOK,XLSX.utils.aoa_to_sheet([[]]),'工作表1');}OFFICE_SHEET=OFFICE_WORKBOOK.SheetNames[0];renderOfficeSheet();}
+function renderOfficeSheet(){officeSyncSheet();const wrap=document.createElement('div');wrap.className='office-sheet';const tabs=document.createElement('div');tabs.className='office-sheet-tabs';for(const sheet of OFFICE_WORKBOOK.SheetNames){const button=document.createElement('button');button.className='office-sheet-tab'+(sheet===OFFICE_SHEET?' on':'');button.textContent=sheet;button.onclick=()=>{officeSyncSheet();OFFICE_SHEET=sheet;renderOfficeSheet();};tabs.appendChild(button);}const grid=document.createElement('div');grid.className='office-sheet-grid';grid.innerHTML=XLSX.utils.sheet_to_html(OFFICE_WORKBOOK.Sheets[OFFICE_SHEET],{editable:true,id:'office-sheet-table'});grid.addEventListener('input',()=>{OFFICE_SHEET_DIRTY=true;officeStatus('未保存…');clearTimeout(OFFICE_SAVE_T);OFFICE_SAVE_T=setTimeout(()=>saveOfficeSheet(),1200);});wrap.append(tabs,grid);$('office-stage').replaceChildren(wrap);}
+async function saveOfficeSheet(){if(!OFFICE_WORKBOOK||!OFFICE_ITEM||OFFICE_ITEM.kind!=='sheet')return;clearTimeout(OFFICE_SAVE_T);officeSyncSheet();let body,type='application/octet-stream';if(OFFICE_ITEM.ext==='.csv'){body=new Blob([XLSX.utils.sheet_to_csv(OFFICE_WORKBOOK.Sheets[OFFICE_SHEET])],{type:'text/csv;charset=utf-8'});type='text/csv';}else{const bookType=OFFICE_ITEM.ext==='.xls'?'biff8':'xlsx';body=new Blob([XLSX.write(OFFICE_WORKBOOK,{type:'array',bookType,cellStyles:true})],{type:'application/octet-stream'});}officeStatus('正在保存…');try{const response=await fetch('/api/office/save-stream',{method:'POST',headers:{'Content-Type':type,'X-CodeScope-Office':officeJsonHeader({path:OFFICE_CURRENT})},body});const result=await response.json();if(!result.ok)throw new Error(result.error);OFFICE_SHEET_DIRTY=false;officeStatus('已保存 '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));await loadOffice(true);}catch(error){officeStatus(String(error.message||error),true);}}
+async function renderOfficeSlides(buffer){const frame=document.createElement('iframe');frame.className='office-pptx-frame';frame.setAttribute('sandbox','allow-scripts');frame.title='PowerPoint 沙箱预览';const width=Math.max(640,Math.min(1120,$('office-stage').clientWidth-72)),height=Math.round(width*9/16);frame.srcdoc='<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;min-height:100%;background:#0c1118;color:#dce5f3;font-family:-apple-system,sans-serif}#host{min-height:100vh;padding:28px;box-sizing:border-box}.pptx-preview-wrapper{border-radius:8px;overflow:hidden;box-shadow:0 18px 56px rgba(0,0,0,.55)}</style><script src="/office-pptx/pptx-preview.umd.js"><\/script></head><body><div id="host"></div><script>addEventListener("message",async e=>{if(!e.data||e.data.type!=="codescope-pptx")return;try{const viewer=pptxPreview.init(document.getElementById("host"),{width:e.data.width,height:e.data.height,mode:"slide"});await viewer.preview(e.data.buffer);parent.postMessage({type:"codescope-pptx-rendered"},"*")}catch(error){parent.postMessage({type:"codescope-pptx-error",error:String(error&&error.message||error)},"*")}});parent.postMessage({type:"codescope-pptx-ready"},"*")<\/script></body></html>';$('office-stage').replaceChildren(frame);await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{window.removeEventListener('message',receive);reject(new Error('PowerPoint 预览组件加载超时'));},20000);const receive=(event)=>{if(event.source!==frame.contentWindow||!event.data)return;if(event.data.type==='codescope-pptx-ready'){frame.contentWindow.postMessage({type:'codescope-pptx',buffer,width,height},'*',[buffer]);}else if(event.data.type==='codescope-pptx-rendered'){clearTimeout(timer);window.removeEventListener('message',receive);resolve();}else if(event.data.type==='codescope-pptx-error'){clearTimeout(timer);window.removeEventListener('message',receive);reject(new Error(event.data.error||'PowerPoint 渲染失败'));}};window.addEventListener('message',receive);});}
+async function closeOffice(){clearTimeout(OFFICE_SAVE_T);if(OFFICE_SHEET_DIRTY)await saveOfficeSheet();if(OFFICE_PPTX&&typeof OFFICE_PPTX.destroy==='function'){try{OFFICE_PPTX.destroy();}catch(_){}}OFFICE_PPTX=null;OFFICE_CURRENT='';document.body.classList.remove('office-mode');officeWelcome();renderOfficeList();}
+async function renameOfficeNode(item){const name=prompt(item.type==='folder'?'文件夹名称':'文档名称',item.type==='folder'?item.name:item.name.replace(/\.[^.]+$/,''));if(!name)return;const result=await api('/api/office/rename',{path:item.path,name});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===item.path){OFFICE_CURRENT=result.path;await loadOffice(true);await openOffice(result.path);}else await loadOffice();}
+async function deleteOfficeNode(item){if(!confirm('删除「'+item.name+'」'+(item.type==='folder'?'及其中全部文档':'')+'？'))return;const result=await api('/api/office/delete',{path:item.path});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===item.path||OFFICE_CURRENT.startsWith(item.path+'/'))await closeOffice();await loadOffice();}
+function officeFillFolderOptions(select){select.replaceChildren();const root=document.createElement('option');root.value='';root.textContent='Office 根目录';select.appendChild(root);for(const folder of officeFolders()){const option=document.createElement('option');option.value=folder.path;option.textContent=folder.path;select.appendChild(option);}select.value=officeFind(OFFICE_TARGET_FOLDER)?OFFICE_TARGET_FOLDER:'';}
+function openOfficeDialog(mode){OFFICE_DIALOG_MODE=mode;$('office-nd-title').textContent=mode==='folder'?'新建 Office 文件夹':'新建 Office 文档';$('office-nd-hint').textContent=mode==='folder'?'建立目录后，可用拖拽自由整理 Office 文档。':'创建标准 DOCX、XLSX 或 PPTX 文件，可继续用桌面 Office 编辑。';$('office-nd-kind').hidden=mode==='folder';$('office-nd-kind-label').hidden=mode==='folder';$('office-nd-name').value=mode==='folder'?'新建文件夹':'未命名文档';officeFillFolderOptions($('office-nd-folder'));$('office-ndialog').classList.add('open');setTimeout(()=>{$('office-nd-name').focus();$('office-nd-name').select();},0);}
+function closeOfficeDialog(){$('office-ndialog').classList.remove('open');}
+async function submitOfficeDialog(){const name=$('office-nd-name').value.trim(),folder=$('office-nd-folder').value;if(!name)return $('office-nd-name').focus();let result;if(OFFICE_DIALOG_MODE==='folder')result=await api('/api/office/folder',{parent:folder,name});else result=await api('/api/office/new',{folder,name,kind:$('office-nd-kind').value});if(!result.ok)return officeStatus(result.error,true);closeOfficeDialog();if(folder)OFFICE_DIR_OPEN.add(folder);if(OFFICE_DIALOG_MODE==='folder')OFFICE_DIR_OPEN.add(result.path);await loadOffice();if(OFFICE_DIALOG_MODE!=='folder')await openOffice(result.path);}
+async function importOfficeFiles(files){if(!files||!files.length)return;const folder=officeFind(OFFICE_TARGET_FOLDER)&&officeFind(OFFICE_TARGET_FOLDER).type==='folder'?OFFICE_TARGET_FOLDER:'';for(let index=0;index<files.length;index++){const file=files[index];if(!/\.(?:docx|xlsx|xls|csv|pptx)$/i.test(file.name)){officeStatus('已跳过不支持的文件：'+file.name,true);continue;}officeStatus('正在导入 '+(index+1)+'/'+files.length+' · '+file.name);try{const response=await fetch('/api/office/upload-stream',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-CodeScope-Office':officeJsonHeader({name:file.name,folder})},body:file});const result=await response.json();if(!result.ok)throw new Error(result.error);if(index===files.length-1)OFFICE_CURRENT=result.path;}catch(error){officeStatus(String(error.message||error),true);return;}}if(folder)OFFICE_DIR_OPEN.add(folder);await loadOffice();const item=officeFind(OFFICE_CURRENT);if(item)await openOffice(item.path);}
+function wireOfficePanel(){const pane=$('pane-office');pane.classList.toggle('collapsed',!OFFICE_OPEN);$('office-head').onclick=()=>{OFFICE_OPEN=!OFFICE_OPEN;pane.classList.toggle('collapsed',!OFFICE_OPEN);try{localStorage.setItem('mc-office-open',OFFICE_OPEN?'1':'0');}catch(_){}};$('office-new').onclick=(event)=>{event.stopPropagation();openOfficeDialog('document');};$('office-new-folder').onclick=(event)=>{event.stopPropagation();openOfficeDialog('folder');};$('office-import').onclick=(event)=>{event.stopPropagation();$('office-file-input').click();};$('office-file-input').onchange=(event)=>{importOfficeFiles([...event.target.files]);event.target.value='';};$('office-nd-cancel').onclick=closeOfficeDialog;$('office-nd-submit').onclick=submitOfficeDialog;$('office-nd-name').onkeydown=(event)=>{if(event.key==='Enter')submitOfficeDialog();};$('office-ndialog').onmousedown=(event)=>{if(event.target===$('office-ndialog'))closeOfficeDialog();};$('office-back').onclick=()=>closeOffice();$('office-refresh').onclick=()=>OFFICE_CURRENT?openOffice(OFFICE_CURRENT):loadOffice();$('office-save').onclick=saveOfficeSheet;$('office-download').onclick=()=>{if(!OFFICE_CURRENT)return;const link=document.createElement('a');link.href='/api/office/file?download=1&path='+encodeURIComponent(OFFICE_CURRENT);link.download=officeBase(OFFICE_CURRENT);link.click();};$('office-rename-current').onclick=()=>{if(OFFICE_ITEM)renameOfficeNode(OFFICE_ITEM);};$('office-list').addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();$('office-list').classList.add('root-drop');}});$('office-list').addEventListener('dragleave',(event)=>{if(!$('office-list').contains(event.relatedTarget))$('office-list').classList.remove('root-drop');});$('office-list').addEventListener('drop',async(event)=>{if(event.target.closest('.office-row'))return;event.preventDefault();$('office-list').classList.remove('root-drop');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}const result=await api('/api/office/move',{path:value.path,toFolder:''});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});loadOffice(true);}
+window.addEventListener('DOMContentLoaded',wireOfficePanel);
+
 /* ------------------------- 阅读文库（PDF / AI 翻译 / 摘录） ------------------------- */
 let READING_TREE = null;
 let READING_CURRENT = '';
@@ -4333,6 +4447,7 @@ async function renderReadingSlot(slot) {
   if(view!=='source'){const zh=document.createElement('div');zh.className='translation';zh.textContent=translation||'本页尚未生成 AI 译文。';paper.appendChild(zh);}els.body.appendChild(paper);
 }
 async function openReadingProject(project) {
+  if(document.body.classList.contains('office-mode'))await closeOffice();
   if(!project)return;
   rememberWorkspaceRecent('reading','project:'+project.path);
   if(DRAW_FILE||DRAW_ROOT)await closeDrawEditor(true);
@@ -4352,6 +4467,7 @@ async function openReadingProject(project) {
   readingStatus(project.count+' 个片段 · 拖动上方片段到右侧可并排阅读'+(translated?' · 已匹配中文 PDF':bilingual?' · 已匹配双语 PDF':' · 可使用 AI 生成译文'));
 }
 async function openReading(path,slot) {
+  if(document.body.classList.contains('office-mode'))await closeOffice();
   rememberWorkspaceRecent('reading',path);
   if(DRAW_FILE||DRAW_ROOT)await closeDrawEditor(true);
   const fragment=readingFragment(path);READING_PROJECT_CURRENT=readingProjectFor(path);READING_CURRENT=path;READING_ACTIVE_SLOT=slot==null?0:slot;READING_SLOTS[READING_ACTIVE_SLOT]=path;
@@ -4918,6 +5034,7 @@ function scheduleDrawSave() {
 }
 
 async function openDrawing(name) {
+  if(document.body.classList.contains('office-mode'))await closeOffice();
   rememberWorkspaceRecent('drawing',name);
   const r = await api('/api/drawings/get?name=' + encodeURIComponent(name));
   if (!r.ok) { setStatus('err', '打开绘图失败：' + (r.error || '')); return; }
@@ -5327,7 +5444,7 @@ async function renderDrawList() {
 }
 
 /* ---- 左侧面板拖拽重排（项目 / Git / 标签 / 绘图 可自由换位，顺序持久化） ---- */
-const PANEL_DEFAULT = ['pane-tree', 'pane-git', 'pane-tags', 'pane-draw', 'pane-reading'];
+const PANEL_DEFAULT = ['pane-tree', 'pane-git', 'pane-tags', 'pane-draw', 'pane-office', 'pane-reading'];
 let PANEL_ORDER = (() => {
   try {
     const o = JSON.parse(localStorage.getItem('mc-panel-order') || '');
@@ -5410,7 +5527,7 @@ function wirePanelReorder() {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   };
-  for (const [pid, hid] of [['pane-tree', 'tree-head'], ['pane-git', 'git-head'], ['pane-tags', 'tag-head'], ['pane-draw', 'draw-head'], ['pane-reading', 'reading-head']]) {
+  for (const [pid, hid] of [['pane-tree', 'tree-head'], ['pane-git', 'git-head'], ['pane-tags', 'tag-head'], ['pane-draw', 'draw-head'], ['pane-office', 'office-head'], ['pane-reading', 'reading-head']]) {
     const head = $(hid); if (!head) continue;
     head.addEventListener('mousedown', (e) => onDown(e, pid));
   }
@@ -8998,6 +9115,7 @@ function workspaceQuickEntries(){
     for(const item of project.children||[])rows.push({kind:'reading',key:item.path,icon:readingKindIcon(item),name:readingBase(item.name),preview:project.name+' · '+readingRoleLabel(item),where:'阅读 · '+item.path,search:[item.name,item.path,project.name,project.description,(project.tags||[]).join(' '),readingRoleLabel(item)].join(' '),open:()=>openReading(item.path,READING_ACTIVE_SLOT)});
   }
   for(const item of DRAWINGS){const kind=drawKind(item.path),label=kind==='drawio'?'Draw.io':(kind==='xmind'?'XMind':'Excalidraw'),icon=kind==='drawio'?'▦':(kind==='xmind'?'◉':'◇');rows.push({kind:'drawing',key:item.path,icon,name:drawBase(item.path),preview:item.path,where:'绘图 · '+label,search:item.path+' '+drawBase(item.path)+' '+kind,open:()=>openDrawing(item.path)});}
+  const addOffice=(node)=>{for(const item of (node&&node.children)||[]){if(item.type==='folder')addOffice(item);else rows.push({kind:'office',key:item.path,icon:officeTypeMark(item.kind),name:item.name,preview:item.path,where:'Office · '+(item.kind==='word'?'Word':item.kind==='sheet'?'Excel':'PowerPoint'),search:item.path+' '+item.name+' '+item.kind,open:()=>openOffice(item.path)});}};addOffice(OFFICE_TREE);
   return rows;
 }
 function quickSection(box,label){const el=document.createElement('div');el.className='quick-section';el.textContent=label;box.appendChild(el);}
@@ -9006,12 +9124,13 @@ function renderFileResults(query) {
   let items=workspaceQuickEntries().map(item=>{const score=q?Math.max(fuzzyScore(q,item.name),fuzzyScore(q,item.preview),fuzzyScore(q,item.search)):0;return{item,score,recent:rank.get(item.kind+'\n'+item.key)||0};}).filter(entry=>!q||entry.score>=0);
   items.sort((a,b)=>q?(b.score-a.score||b.recent-a.recent||a.item.name.localeCompare(b.item.name,'zh')):(b.recent-a.recent||a.item.kind.localeCompare(b.item.kind)||a.item.name.localeCompare(b.item.name,'zh')));items=items.slice(0,180);
   let lastSection='';
-  for(const rowData of items){const {item}=rowData,section=!q&&rowData.recent?'最近打开':item.kind==='code'?'代码':item.kind==='reading'?'阅读与论文':'绘图';if(section!==lastSection){quickSection(box,section);lastSection=section;}const row=searchResultRow(item.icon,item.name,item.preview,item.where,()=>{rememberWorkspaceRecent(item.kind,item.key);closeSymModal();Promise.resolve(item.open()).catch((error)=>setStatus('err','打开失败：'+String(error&&error.message||error)));});row.classList.add('quick-'+item.kind);row.querySelector('.name').insertAdjacentHTML('beforeend','<span class="quick-kind">'+(item.kind==='code'?'CODE':item.kind==='reading'?'READ':'DRAW')+'</span>');box.appendChild(row);}
-  const selectable=[...box.querySelectorAll('.symr')];SYM_ACTIVE=0;if(selectable.length)selectable[0].classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的代码、阅读资料或绘图</span>';
-  const counts=items.reduce((out,row)=>(out[row.item.kind]=(out[row.item.kind]||0)+1,out),{});$('sym-modal-status').textContent=(counts.code||0)+' 代码 · '+(counts.reading||0)+' 阅读 · '+(counts.drawing||0)+' 绘图 · Ctrl/⌘+P';
+  for(const rowData of items){const {item}=rowData,section=!q&&rowData.recent?'最近打开':item.kind==='code'?'代码':item.kind==='reading'?'阅读与论文':item.kind==='office'?'Office 文档':'绘图';if(section!==lastSection){quickSection(box,section);lastSection=section;}const row=searchResultRow(item.icon,item.name,item.preview,item.where,()=>{rememberWorkspaceRecent(item.kind,item.key);closeSymModal();Promise.resolve(item.open()).catch((error)=>setStatus('err','打开失败：'+String(error&&error.message||error)));});row.classList.add('quick-'+item.kind);row.querySelector('.name').insertAdjacentHTML('beforeend','<span class="quick-kind">'+(item.kind==='code'?'CODE':item.kind==='reading'?'READ':item.kind==='office'?'OFFICE':'DRAW')+'</span>');box.appendChild(row);}
+  const selectable=[...box.querySelectorAll('.symr')];SYM_ACTIVE=0;if(selectable.length)selectable[0].classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的代码、阅读资料、Office 文档或绘图</span>';
+  const counts=items.reduce((out,row)=>(out[row.item.kind]=(out[row.item.kind]||0)+1,out),{});$('sym-modal-status').textContent=(counts.code||0)+' 代码 · '+(counts.reading||0)+' 阅读 · '+(counts.office||0)+' Office · '+(counts.drawing||0)+' 绘图 · Ctrl/⌘+P';
 }
 const WORKSPACE_SNAPSHOT_KEY='mc-workspace-snapshot-v1';
 function currentWorkspaceTarget(){
+  if(document.body.classList.contains('office-mode')&&OFFICE_CURRENT)return{kind:'office',path:OFFICE_CURRENT,label:officeBase(OFFICE_CURRENT)};
   if(document.body.classList.contains('reading-mode')&&READING_CURRENT){const fragment=readingFragment(READING_CURRENT);if(fragment&&fragment.kind==='pdf')return{kind:'pdf',path:READING_CURRENT,page:currentReadingPage(),label:readingBase(READING_CURRENT)};return{kind:'note',path:'reading:'+READING_CURRENT,openPath:READING_CURRENT,label:readingBase(READING_CURRENT)};}
   if(DRAW_FILE)return{kind:'drawing',path:DRAW_FILE,label:drawBase(DRAW_FILE)};
   const context=readingContext();if(!context)return null;
@@ -9037,12 +9156,12 @@ async function showBacklinks(){
   if(!result.hits.length){list.innerHTML='<div class="backlink-empty">还没有内容引用这里。<br>使用“复制链接”，粘贴到 Markdown 后即可建立双向关联。</div>';return;}
   for(const hit of result.hits){const row=document.createElement('button');row.type='button';row.className='backlink-row';const icon=document.createElement('span');icon.className='icon';icon.textContent=hit.sourceKind==='code-note'?'M↓':'▤';const main=document.createElement('span');main.className='main';const name=document.createElement('span');name.className='name';name.textContent=hit.name||'Markdown';const preview=document.createElement('span');preview.className='preview';preview.textContent=hit.preview||hit.label||'';main.append(name,preview);const where=document.createElement('span');where.className='where';where.textContent=(hit.project||'')+' · L'+(hit.line||1);row.append(icon,main,where);row.onclick=()=>openBacklinkSource(hit);list.appendChild(row);}
 }
-function workspaceSnapshotStatus(kind,message){if(document.body.classList.contains('reading-mode'))readingStatus(message,kind==='err');else setStatus(kind,message);}
+function workspaceSnapshotStatus(kind,message){if(document.body.classList.contains('reading-mode'))readingStatus(message,kind==='err');else if(document.body.classList.contains('office-mode'))officeStatus(message,kind==='err');else setStatus(kind,message);}
 function saveWorkspaceSnapshot(){const target=currentWorkspaceTarget();if(!target){setStatus('err','没有可保存的工作台内容');return;}const snapshot={version:1,target,sideWidth:localStorage.getItem('mc-side-w')||'',outlineWidth:localStorage.getItem('mc-outline-w')||'',outputHeight:localStorage.getItem('mc-out-h')||'',readingFragmentsWidth:localStorage.getItem('mc-reading-fragments-width')||'',theme:APP_THEME,updatedAt:Date.now()};try{localStorage.setItem(WORKSPACE_SNAPSHOT_KEY,JSON.stringify(snapshot));workspaceSnapshotStatus('ok','工作台快照已保存 · '+target.label);}catch(error){workspaceSnapshotStatus('err','工作台快照保存失败：'+error.message);}}
-async function restoreWorkspaceSnapshot(){let snapshot=null;try{snapshot=JSON.parse(localStorage.getItem(WORKSPACE_SNAPSHOT_KEY)||'null');}catch(_){}if(!snapshot||!snapshot.target){setStatus('err','还没有保存工作台快照');return;}const target=snapshot.target;if(snapshot.theme)applyAppTheme(snapshot.theme);if(snapshot.sideWidth)$('side').style.width=snapshot.sideWidth+'px';if(snapshot.outlineWidth)$('outline-panel').style.width=snapshot.outlineWidth+'px';if(snapshot.outputHeight)$('output').style.height=snapshot.outputHeight+'px';if(snapshot.readingFragmentsWidth)$('reading-stage').style.setProperty('--reading-fragments-width',snapshot.readingFragmentsWidth+'px');if(target.kind==='drawing')await openDrawing(target.path);else if(target.kind==='pdf'){await openReading(target.path,0);await setReadingPage(0,target.page||1);}else if(target.kind==='note'&&target.openPath)await openReading(target.openPath,0);else{const snippet=SNIPPETS.find((item)=>item.file===(target.file||target.path));if(snippet)goToLocation({snippet,frag:Number(target.fragment)||0,line:Number(target.line)||1});else{setStatus('err','快照中的内容已移动或不存在');return;}}workspaceSnapshotStatus('ok','已恢复工作台快照 · '+(target.label||target.path));}
+async function restoreWorkspaceSnapshot(){let snapshot=null;try{snapshot=JSON.parse(localStorage.getItem(WORKSPACE_SNAPSHOT_KEY)||'null');}catch(_){}if(!snapshot||!snapshot.target){setStatus('err','还没有保存工作台快照');return;}const target=snapshot.target;if(snapshot.theme)applyAppTheme(snapshot.theme);if(snapshot.sideWidth)$('side').style.width=snapshot.sideWidth+'px';if(snapshot.outlineWidth)$('outline-panel').style.width=snapshot.outlineWidth+'px';if(snapshot.outputHeight)$('output').style.height=snapshot.outputHeight+'px';if(snapshot.readingFragmentsWidth)$('reading-stage').style.setProperty('--reading-fragments-width',snapshot.readingFragmentsWidth+'px');if(target.kind==='drawing')await openDrawing(target.path);else if(target.kind==='office')await openOffice(target.path);else if(target.kind==='pdf'){await openReading(target.path,0);await setReadingPage(0,target.page||1);}else if(target.kind==='note'&&target.openPath)await openReading(target.openPath,0);else{const snippet=SNIPPETS.find((item)=>item.file===(target.file||target.path));if(snippet)goToLocation({snippet,frag:Number(target.fragment)||0,line:Number(target.line)||1});else{setStatus('err','快照中的内容已移动或不存在');return;}}workspaceSnapshotStatus('ok','已恢复工作台快照 · '+(target.label||target.path));}
 function goToLinePrompt(){const context=readingContext();if(!context)return;const value=prompt('跳转到行：',String(context.line||1));if(value===null)return;const line=Math.max(1,Number.parseInt(value,10)||1);if(activeSplitContext())activateOpenSplitLocation(SPLIT_EDITORS.findIndex(item=>splitKey(item.file,item.fragment)===ACTIVE_SPLIT_KEY),line);else jumpToLine(line);}
 function commandPaletteItems(){return[
-  {name:'工作台：快速打开代码、阅读资料或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'工作台：保存当前快照',key:'',run:saveWorkspaceSnapshot},{name:'工作台：恢复最近快照',key:'',run:restoreWorkspaceSnapshot},{name:'引用：复制当前内容链接',key:'',run:copyCurrentWorkspaceLink},{name:'引用：查看当前内容的反向链接',key:'',run:showBacklinks},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
+  {name:'工作台：快速打开代码、阅读资料、Office 或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'Office：新建文档',key:'',run:()=>openOfficeDialog('document')},{name:'Office：导入文档',key:'',run:()=>$('office-file-input').click()},{name:'工作台：保存当前快照',key:'',run:saveWorkspaceSnapshot},{name:'工作台：恢复最近快照',key:'',run:restoreWorkspaceSnapshot},{name:'引用：复制当前内容链接',key:'',run:copyCurrentWorkspaceLink},{name:'引用：查看当前内容的反向链接',key:'',run:showBacklinks},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
 ];}
 function renderCommandResults(query){const box=$('sym-modal-res');box.replaceChildren();const q=String(query||'').trim(),items=commandPaletteItems().map(item=>({item,score:q?fuzzyScore(q,item.name+' '+item.key):0})).filter(row=>!q||row.score>=0).sort((a,b)=>b.score-a.score);for(const {item} of items){const row=searchResultRow('›',item.name,'',item.key,()=>{closeSymModal();item.run();});row.classList.add('command-result');box.appendChild(row);}SYM_ACTIVE=0;if(items.length)box.firstElementChild.classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的命令</span>';$('sym-modal-status').textContent=items.length+' 个命令 · Ctrl/⌘+Shift+P';}
 function textSearchMatcher(query) {
@@ -12110,6 +12229,11 @@ function makeHResizer(handle, getter, setter) {
   makeHResizer($('h-draw'),
     () => $('pane-draw').getBoundingClientRect().height,
     (v) => { $('pane-draw').style.height = clampV(v, 60, maxPaneH) + 'px'; try { localStorage.setItem('mc-draw-h', String(Math.round(v))); } catch (_) {} });
+  const officeH = parseInt(localStorage.getItem('mc-office-h'));
+  if (officeH && OFFICE_OPEN) $('pane-office').style.height = clampV(officeH, 60, maxPaneH) + 'px';
+  makeHResizer($('h-office'),
+    () => $('pane-office').getBoundingClientRect().height,
+    (v) => { $('pane-office').style.height = clampV(v, 60, maxPaneH) + 'px'; try { localStorage.setItem('mc-office-h', String(Math.round(v))); } catch (_) {} });
   const readingH = parseInt(localStorage.getItem('mc-reading-h'));
   if (readingH && READING_OPEN) $('pane-reading').style.height = clampV(readingH, 60, maxPaneH) + 'px';
   makeHResizer($('h-reading'),
@@ -14362,6 +14486,16 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       <button id="cd-cancel">取消</button>
       <button id="cd-ok">确定</button>
     </div>
+  </div>
+</div>
+<div id="office-ndialog" role="dialog" aria-modal="true" aria-labelledby="office-nd-title">
+  <div class="nd-panel">
+    <h3 id="office-nd-title">新建 Office 文档</h3>
+    <p id="office-nd-hint">文件保存在 vault/office，可继续用 Microsoft Office、Keynote、Numbers 或 ONLYOFFICE 打开。</p>
+    <label id="office-nd-kind-label" for="office-nd-kind">文档类型</label><select id="office-nd-kind"><option value="word">Word 文档（.docx）</option><option value="sheet">Excel 工作簿（.xlsx）</option><option value="slides">PowerPoint 演示文稿（.pptx）</option></select>
+    <label for="office-nd-name">名称</label><input id="office-nd-name" type="text" placeholder="未命名文档" autocomplete="off" spellcheck="false">
+    <label for="office-nd-folder">位置</label><select id="office-nd-folder"></select>
+    <div class="nd-btns"><button id="office-nd-cancel">取消</button><button id="office-nd-submit">创建</button></div>
   </div>
 </div>
 <div id="reading-new-dialog" role="dialog" aria-modal="true" aria-labelledby="reading-new-title">

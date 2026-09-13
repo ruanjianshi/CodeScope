@@ -16,13 +16,17 @@
   "license": "MIT",
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
+    "docx": "^9.7.1",
+    "docx-preview": "^0.4.0",
     "fflate": "^0.8.3",
     "mind-elixir": "5.15.1",
     "monaco-editor": "^0.52.2",
     "pdfjs-dist": "^4.10.38",
+    "pptx-preview": "^1.0.7",
     "saxes": "^6.0.0",
     "ssh2": "^1.17.0",
     "ws": "^8.21.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "xmind-embed-viewer": "1.2.0"
   },
   "devDependencies": {
