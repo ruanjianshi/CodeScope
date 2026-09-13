@@ -2,6 +2,8 @@
 
 面向代码阅读、编写、工程文档、论文研究与可视化的一体化本地工作台。CodeScope 把代码编辑器、Markdown 知识库、PDF 阅读笔记、Office 文档与多种绘图工具放进同一个可组合界面，数据仍保存在用户自己的 `markdown-vault` 中。
 
+CodeScope 采用“单内核、双入口”架构：Web 端与桌面端共用界面、服务 API 和 Vault 数据格式。Web 端适合浏览器、局域网与服务器部署；桌面端提供独立窗口、原生菜单、Vault 选择、单实例运行和自动更新能力。
+
 ## v2.0 能做什么
 
 | 工作区 | 主要能力 |
@@ -15,6 +17,8 @@
 
 ## 快速开始
 
+### Web 模式
+
 要求 Node.js 18 或更高版本。启动脚本会检查版本、Vault 权限、端口与运行依赖，缺少 npm 依赖时自动安装。
 
 - macOS：双击 `启动码境.command`
@@ -24,10 +28,24 @@
 
 默认地址为 `http://127.0.0.1:4877`，仅监听本机。需要可信局域网访问时显式设置 `CODESCOPE_HOST=0.0.0.0`。可用 `CODESCOPE_PORT`、`CODESCOPE_VAULT` 与 `CODESCOPE_DATA_HOME` 覆盖端口、资料库和应用数据目录。
 
+### 桌面模式
+
+```bash
+cd masscode-runner
+npm ci
+npm run desktop:dev       # 开发模式
+npm run make:desktop      # 生成当前系统安装包
+```
+
+桌面端会在独立进程启动同一套本地服务，默认复用已有 Vault；首次使用时会在系统“文档/CodeScope/markdown-vault”创建资料库。通过“文件 → 切换 Vault”可选择其他资料库。正式安装包由 GitHub Actions 分别为 macOS、Windows 和 Linux 构建，更新不会覆盖 Vault。
+
+正式桌面安装包已内置 Electron、Node.js 和 CodeScope 的 npm 运行依赖，目标电脑无需另装 Node.js 或执行 `npm install`，安装后即可从应用图标启动。编译器、LaTeX、语言服务器、ONLYOFFICE Docs 等属于按功能启用的可选工具链：阅读、Markdown、PDF、Office 兼容模式和本地绘图不依赖它们，只有运行对应语言或启用完整 Office/LaTeX 能力时才需安装。
+
 ## 数据与兼容性
 
 - 代码、文档、论文、Office 文件和图稿均保存在 `markdown-vault`，不绑定云服务。
 - 兼容 macOS、Windows、Linux 与 WSL；环境面板会显示系统、包管理器、Node、目录权限、依赖、浏览器能力及项目实际需要的工具链。
+- Web 与桌面模式共用 Vault；应用程序、运行缓存和用户资料相互分离，升级或重新安装不会删除代码与文档。
 - ONLYOFFICE、Draw.io 在线编辑和 AI 绘图属于可选服务；不可用时不会阻塞代码、Markdown、PDF 或本地绘图能力。
 - SSH/VNC 凭据不写入 Vault；本地时间线存放在系统 CodeScope 应用数据目录。
 

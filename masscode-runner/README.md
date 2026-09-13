@@ -5,6 +5,18 @@
 
 当前正式版本：**v2.0.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
+## Web 与桌面双模式
+
+CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、全部 `/api` 接口与 Vault 数据格式：
+
+| 模式 | 启动方式 | 适用场景 |
+| --- | --- | --- |
+| Web | `npm start` 或三端启动脚本 | 浏览器、本机服务、可信局域网和服务器部署 |
+| Desktop | `npm run desktop:dev` | 独立窗口、原生菜单、Vault 切换和桌面调试 |
+| Desktop 安装包 | `npm run make:desktop` | macOS、Windows、Linux 一键安装与启动 |
+
+桌面主进程位于 `desktop/main.js`，通过隔离的 preload 桥接原生能力；CodeScope 服务运行在 Electron Utility Process 中。渲染器不开放 Node.js 权限，Web 端也不依赖 Electron API。
+
 ## v2.0 概览
 
 - 统一项目、Office、阅读、绘图与 Git 的侧栏标题、计数、操作按钮、树行、悬停和选中反馈；五套工作台主题共用同一套语义化颜色与间距。
@@ -28,6 +40,8 @@ iCloud Drive/massCode/
 ├── masscode-runner/           ← 码境程序目录（保留旧目录名以兼容已有路径）
 │   ├── server.js              ← HTTP 服务（127.0.0.1:4877）
 │   ├── preflight.js           ← 跨平台启动预检（Node / 端口 / 权限 / 依赖）
+│   ├── desktop/               ← Electron 主进程与安全 preload 桥接
+│   ├── forge.config.js        ← macOS / Windows / Linux 安装包配置
 │   ├── index.html             ← 界面
 │   ├── assets/                ← 高亮库等静态资源（离线可用）
 │   └── README.md
@@ -37,6 +51,26 @@ iCloud Drive/massCode/
 ```
 
 ## 快速开始
+
+### 桌面端
+
+```bash
+cd masscode-runner
+npm ci
+npm run desktop:dev
+```
+
+生成当前操作系统的安装包：
+
+```bash
+npm run make:desktop
+```
+
+构建结果位于 `masscode-runner/out/make/`。GitHub 标签发布时，`.github/workflows/desktop-release.yml` 会在 macOS、Windows 和 Linux 分别构建并把安装包上传到对应 Release。macOS 自动更新正式启用前需要配置开发者签名与公证。
+
+正式安装包内置 Electron、Node.js 与 CodeScope 的 npm 运行依赖，用户电脑无需安装 Node.js、npm 或手动执行依赖安装。编译器、LaTeX、语言服务器与 ONLYOFFICE Docs 是按需启用的外部工具链，仅影响对应的运行或高级编辑能力。
+
+### Web 端
 
 **macOS**：在 Finder 打开 `iCloud Drive / massCode`，**双击「启动码境.command」**
 - 终端窗口保持前台运行服务，浏览器自动打开 http://127.0.0.1:4877
@@ -254,6 +288,6 @@ massCode 一个片段里可以有多个 fragment。**把 fragment 标签写成�
 
 ## 局限
 
-- 当前以本地 Web 应用运行；浏览器页面关闭不会自动结束后端服务，需要在启动终端按 `Ctrl+C` 停止。
+- Web 模式关闭浏览器页面不会自动结束后端服务，需要在启动终端按 `Ctrl+C` 停止；桌面模式退出应用时会一并停止其本地服务。
 - 不拦截系统调用：`rm -rf` 之类会真实执行（这就是"运行"的意义，使用时请留意）。
 - 本机没有的运行时（如 rustc/php/dotnet/perl）会提示不支持；装好后刷新环境面板即可。

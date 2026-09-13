@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' http: https:; style-src 'self' 'unsafe-inline' http: https:; img-src 'self' data: blob: http: https:; font-src 'self' data: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' data: blob: http: https:; worker-src 'self' blob:; object-src 'self' data: blob:; base-uri 'self'; form-action 'self'">
 <title>码境 CodeScope · 工程代码工作台</title>
 <meta name="application-name" content="码境 CodeScope">
 <meta name="theme-color" content="#16181d">
@@ -12937,7 +12938,7 @@ async function syncLoop() {
 setInterval(syncLoop, 3000);
 
 async function loadAppVersion(){
-  try{const data=await api('/api/version'),badge=document.querySelector('.brand-version');if(data&&data.version&&badge){badge.textContent='v'+data.version;badge.title='稳定版 · API '+String(data.apiRevision||'');}}
+  try{const data=await api('/api/version'),badge=document.querySelector('.brand-version');if(data&&data.version&&badge){const mode=data.mode==='desktop'?'Desktop':'Web';badge.textContent='v'+data.version+' · '+mode;badge.title=(data.mode==='desktop'?'桌面端':'Web 端')+' · 稳定版 · API '+String(data.apiRevision||'');document.documentElement.dataset.appMode=data.mode||'web';}}
   catch(_){}
 }
 loadAppVersion();
@@ -13004,7 +13005,7 @@ async function loadEnv(refreshNow, quiet) {
   $('env-optional').textContent = d.summary.optionalMissing;
   const pm = d.system && d.system.packageManager ? ' · 包管理器 ' + d.system.packageManager : '';
   const langs = d.project && d.project.languages && d.project.languages.length ? d.project.languages.join(' / ') : '仅文档';
-  $('env-meta').innerHTML = `CodeScope: <strong>v${escapeHtml(d.version||'')}</strong> · Node ${escapeHtml(d.node||'')}<br>Vault: <code style="font-size:11px">${escapeHtml(d.vault)}</code><br>平台: ${escapeHtml(d.platform + pm)}<br>项目语言: ${escapeHtml(langs)}`;
+  $('env-meta').innerHTML = `CodeScope: <strong>v${escapeHtml(d.version||'')}</strong> · ${d.mode==='desktop'?'桌面端':'Web 端'} · Node ${escapeHtml(d.node||'')}<br>Vault: <code style="font-size:11px">${escapeHtml(d.vault)}</code><br>平台: ${escapeHtml(d.platform + pm)}<br>项目语言: ${escapeHtml(langs)}`;
   $('env-client-meta').textContent='当前 '+clientBrowserLabel()+' · 必需能力 '+clientRequired.filter(item=>item.available).length+'/'+clientRequired.length+' 项就绪。';
   const deploy = d.deployment || {};
   const deployBtn = $('btn-env-deploy');

@@ -2,4 +2,5 @@
 masscode-runner/output/
 masscode-runner/tmp/
 masscode-runner/mscdex-ssh2-*/
+masscode-runner/out/
 markdown-vault/code/.masscode/*.bak-*
