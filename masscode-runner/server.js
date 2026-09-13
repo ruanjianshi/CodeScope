@@ -2476,7 +2476,15 @@ function readingTree() {
   return root;
 }
 let PDFJS_PROMISE = null;
+const PDF_TEXT_CACHE = new Map();
+const PDF_TEXT_CACHE_LIMIT = 10;
 async function extractPdfPages(file) {
+  const stat = fs.statSync(file), cacheKey = stat.mtimeMs + ':' + stat.size;
+  const cached = PDF_TEXT_CACHE.get(file);
+  if (cached && cached.key === cacheKey) {
+    PDF_TEXT_CACHE.delete(file); PDF_TEXT_CACHE.set(file, cached);
+    return cached.pages;
+  }
   if (!PDFJS_PROMISE) PDFJS_PROMISE = import('pdfjs-dist/legacy/build/pdf.mjs');
   const pdfjs = await PDFJS_PROMISE;
   const bytes = new Uint8Array(fs.readFileSync(file));
@@ -2496,7 +2504,43 @@ async function extractPdfPages(file) {
     pages.push(text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
   }
   await doc.destroy();
+  PDF_TEXT_CACHE.delete(file); PDF_TEXT_CACHE.set(file, { key:cacheKey, pages });
+  while (PDF_TEXT_CACHE.size > PDF_TEXT_CACHE_LIMIT) PDF_TEXT_CACHE.delete(PDF_TEXT_CACHE.keys().next().value);
   return pages;
+}
+
+function searchReadingLibrary(query, sensitive) {
+  const needle = sensitive ? String(query || '') : String(query || '').toLocaleLowerCase();
+  if (!needle || needle.length > 240) return [];
+  const root = readingsDir(), hits = [];
+  const addLines = (rel, content, extra) => {
+    const lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
+    for (let index = 0; index < lines.length && hits.length < 200; index += 1) {
+      const line = lines[index], haystack = sensitive ? line : line.toLocaleLowerCase(), start = haystack.indexOf(needle);
+      if (start >= 0) hits.push({ path:rel, line:index + 1, text:line.trim().slice(0, 600), start, length:String(query).length, ...(extra || {}) });
+    }
+  };
+  const walk = (dir, prefix) => {
+    let entries = []; try { entries = fs.readdirSync(dir, { withFileTypes:true }); } catch (_) { return; }
+    for (const entry of entries) {
+      if (hits.length >= 200 || entry.name === '.codescope' || entry.name.startsWith('.')) continue;
+      const rel = prefix ? prefix + '/' + entry.name : entry.name, full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full, rel); continue; }
+      const ext = path.extname(entry.name).toLowerCase();
+      if (READING_TEXT_EXTS.has(ext)) {
+        try { const stat = fs.statSync(full); if (stat.size <= 2 * 1024 * 1024) addLines(rel, fs.readFileSync(full, 'utf8'), { kind:'text' }); } catch (_) {}
+      } else if (ext === '.pdf') {
+        const meta = loadReadingMeta(rel);
+        for (const fragment of meta.fragments || []) {
+          const value = [fragment.source, fragment.translation, fragment.note].filter(Boolean).join(' · '), haystack = sensitive ? value : value.toLocaleLowerCase(), start = haystack.indexOf(needle);
+          if (start >= 0) hits.push({ path:rel, page:Number(fragment.page) || 1, line:0, text:value.slice(0, 600), start, length:String(query).length, kind:'pdf' });
+          if (hits.length >= 200) break;
+        }
+      }
+    }
+  };
+  walk(root, '');
+  return hits;
 }
 
 function send(res, code, obj) {
@@ -2633,12 +2677,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
       const root = readingTree();
       return send(res, 200, { ok:true, dir:readingsDir(), root, total:root.count });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/readings/search') {
+      const query = String(u.searchParams.get('q') || '').trim();
+      if (!query) return send(res, 200, { ok:true, hits:[] });
+      if (query.length > 240) return send(res, 400, { ok:false, error:'搜索内容不能超过 240 个字符' });
+      return send(res, 200, { ok:true, hits:searchReadingLibrary(query, u.searchParams.get('case') === '1') });
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/folder') {
       const b = await readBody(req);

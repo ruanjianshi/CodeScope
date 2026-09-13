@@ -136,6 +136,13 @@ print(r.run())
   if(await page.locator('[data-search-mode="command"].on').count()!==1)throw new Error('命令面板快捷键未切换到命令模式');
   if(await page.locator('#sym-modal-res .command-result').count()<10)throw new Error('命令面板未显示完整命令列表');
   await page.locator('#sym-modal-close').click();
+  await page.keyboard.press(process.platform==='darwin'?'Meta+P':'Control+P');
+  await page.locator('#sym-modal.open').waitFor({state:'visible'});
+  if(await page.locator('[data-search-mode="file"].on').count()!==1)throw new Error('快速打开快捷键未切换到全工作台模式');
+  await page.locator('#sym-q').fill('Block Drag');
+  await page.locator('#sym-modal-res .quick-reading').first().waitFor({state:'visible'});
+  if(!(await page.locator('#sym-modal-status').innerText()).includes('阅读'))throw new Error('快速打开未统计阅读资料');
+  await page.locator('#sym-modal-close').click();
   await page.locator('#btn-project').click();
  await page.locator('[data-project-tab="tests"]').click();
  await page.locator('#project-tests:not(.hidden)').waitFor({state:'visible'});

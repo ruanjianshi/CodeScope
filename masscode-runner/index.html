@@ -1456,6 +1456,12 @@
   .search-hit .preview { margin-top:3px; overflow:hidden; color:var(--dim); text-overflow:ellipsis; white-space:nowrap; font:10px var(--mono); }
   .search-hit .preview mark { border-radius:2px; background:color-mix(in srgb,var(--syntax-number,#d99a43) 35%,transparent); color:var(--text); }
   .search-hit .where { color:var(--dim); white-space:nowrap; font:9px var(--mono); }
+  .search-hit.quick-code .ico { color:var(--accent); }
+  .search-hit.quick-reading .ico { color:var(--ok); }
+  .search-hit.quick-drawing .ico { color:var(--syntax-number,#d99a43); }
+  .quick-section { display:flex; align-items:center; gap:8px; padding:9px 14px 4px; color:var(--dim); font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .quick-section::after { content:''; height:1px; flex:1; background:var(--border); opacity:.7; }
+  .quick-kind { display:inline-flex; align-items:center; margin-left:6px; padding:1px 5px; border:1px solid var(--border); border-radius:999px; color:var(--dim); font:8px var(--mono); vertical-align:1px; }
   .ai-search-home { padding:18px 20px 22px; color:var(--dim); font-size:12px; line-height:1.7; }
   .ai-search-home strong { display:block; margin-bottom:4px; color:var(--text); font-size:13px; }
   .ai-search-examples { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
@@ -2765,7 +2771,7 @@
       <button class="on" data-search-mode="ai" role="tab" aria-selected="true">✨ AI 搜索</button>
       <button data-search-mode="symbol" role="tab" aria-selected="false">🔎 项目符号</button>
       <button data-search-mode="text" role="tab" aria-selected="false">⌕ 全文</button>
-      <button data-search-mode="file" role="tab" aria-selected="false">📄 文件</button>
+      <button data-search-mode="file" role="tab" aria-selected="false">⌘ 快速打开</button>
       <button data-search-mode="command" role="tab" aria-selected="false">›_ 命令</button>
       <button data-search-mode="history" role="tab" aria-selected="false">🕘 搜索记录</button>
     </div>
@@ -4117,6 +4123,7 @@ async function renderReadingSlot(slot) {
 }
 async function openReadingProject(project) {
   if(!project)return;
+  rememberWorkspaceRecent('reading','project:'+project.path);
   if(DRAW_FILE||DRAW_ROOT)await closeDrawEditor(true);
   READING_PROJECT_CURRENT=project.path;READING_DIR_OPEN.add(project.path);saveReadingDirs();
   document.body.classList.add('reading-mode');$('reading-title').textContent=project.name;$('reading-project-context').textContent=[project.description,(project.tags||[]).map((tag)=>'#'+tag).join(' ')].filter(Boolean).join(' · ');renderReadingList();renderReadingProjectTabs();
@@ -4134,6 +4141,7 @@ async function openReadingProject(project) {
   readingStatus(project.count+' 个片段 · 拖动上方片段到右侧可并排阅读'+(translated?' · 已匹配中文 PDF':bilingual?' · 已匹配双语 PDF':' · 可使用 AI 生成译文'));
 }
 async function openReading(path,slot) {
+  rememberWorkspaceRecent('reading',path);
   if(DRAW_FILE||DRAW_ROOT)await closeDrawEditor(true);
   const fragment=readingFragment(path);READING_PROJECT_CURRENT=readingProjectFor(path);READING_CURRENT=path;READING_ACTIVE_SLOT=slot==null?0:slot;READING_SLOTS[READING_ACTIVE_SLOT]=path;
   updateReadingColumnLayout();
@@ -4455,6 +4463,7 @@ function scheduleDrawSave() {
 }
 
 async function openDrawing(name) {
+  rememberWorkspaceRecent('drawing',name);
   const r = await api('/api/drawings/get?name=' + encodeURIComponent(name));
   if (!r.ok) { setStatus('err', '打开绘图失败：' + (r.error || '')); return; }
   await closeDrawEditor(true);            // 先落盘 / 销毁上一个绘图
@@ -4765,6 +4774,7 @@ async function moveDrawing(name, toDir) {
 async function renderDrawList() {
   const r = await api('/api/drawings/tree');
   const root = (r.ok && r.root) || { type: 'folder', name: '', path: '', children: [] };
+  DRAWINGS=[];const collectDrawings=(node)=>{for(const child of node.children||[]){if(child.type==='folder')collectDrawings(child);else DRAWINGS.push({path:child.path,name:child.name||child.path,size:child.size||0,updated:child.updated||0});}};collectDrawings(root);
   const box = $('draw-list');
   box.innerHTML = '';
   const cnt = $('draw-count'); if (cnt) cnt.textContent = String(r.total || 0);
@@ -8203,7 +8213,7 @@ function navigateHistory(direction) {
   updateNavigationButtons();
 }
 function codeFileEntries() {
-  const out=[];SNIPPETS.forEach(snippet=>(snippet.fragments||[]).forEach((fragment,frag)=>out.push({snippet,fragment,frag,name:fragment.filename||fragment.label||snippet.name})));
+  const out=[];SNIPPETS.forEach(snippet=>(snippet.fragments||[]).forEach((fragment,frag)=>out.push({snippet,fragment,frag,name:fragmentDisplayName(fragment,snippet.name),filename:fragment.filename||''})));
   return out;
 }
 function pairedCodeFile() {
@@ -8420,6 +8430,9 @@ function fuzzyScore(q, name) {
 let symTimer = null;
 let SEARCH_MODE = 'ai', AI_SEARCH_BUSY = false, AI_SEARCH_SEQ = 0;
 const AI_SEARCH_HISTORY_KEY='codescope-ai-search-history-v1', AI_SEARCH_HISTORY_LIMIT=20;
+const WORKSPACE_RECENT_KEY='codescope-workspace-recent-v1', WORKSPACE_RECENT_LIMIT=24;
+function workspaceRecent(){try{const rows=JSON.parse(localStorage.getItem(WORKSPACE_RECENT_KEY)||'[]');return Array.isArray(rows)?rows.filter((row)=>row&&row.kind&&row.key).slice(0,WORKSPACE_RECENT_LIMIT):[];}catch(_){return[];}}
+function rememberWorkspaceRecent(kind,key){if(!kind||!key)return;const rows=workspaceRecent().filter((row)=>!(row.kind===kind&&row.key===key));rows.unshift({kind,key,at:Date.now()});try{localStorage.setItem(WORKSPACE_RECENT_KEY,JSON.stringify(rows.slice(0,WORKSPACE_RECENT_LIMIT)));}catch(_){}}
 function aiSearchHistory() {
   try {
     const value=JSON.parse(localStorage.getItem(AI_SEARCH_HISTORY_KEY)||'[]');
@@ -8475,26 +8488,41 @@ function searchResultRow(icon,name,preview,where,activate,match) {
   if(preview!==undefined){const text=document.createElement('span');text.className='preview';const raw=String(preview||'');if(match&&match.length){text.append(document.createTextNode(raw.slice(0,match.start)));const mark=document.createElement('mark');mark.textContent=raw.slice(match.start,match.start+match.length);text.append(mark,document.createTextNode(raw.slice(match.start+match.length)));}else text.textContent=raw;main.appendChild(text);}
   const place=document.createElement('span');place.className='where';place.textContent=where||'';row.append(ico,main,place);row.onclick=activate;row.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();activate();}};return row;
 }
+function workspaceQuickEntries(){
+  const rows=[];
+  for(const item of codeFileEntries())rows.push({kind:'code',key:item.snippet.file+':'+item.frag,icon:'</>',name:item.name,preview:item.snippet.name,where:'代码 · '+[(item.snippet.folder||''),(item.fragment.language||'')].filter(Boolean).join(' · '),search:[item.name,item.filename,item.snippet.name,item.snippet.description,item.snippet.folder,(item.snippet.tags||[]).join(' ')].join(' '),open:()=>goToLocation({snippet:item.snippet,frag:item.frag,line:1})});
+  for(const project of READING_PROJECT_INDEX.values()){
+    rows.push({kind:'reading',key:'project:'+project.path,icon:'▤',name:project.name,preview:project.description||'阅读项目',where:'阅读项目 · '+(project.count||0)+' 个片段',search:[project.name,project.path,project.description,(project.tags||[]).join(' ')].join(' '),open:()=>openReadingProject(project)});
+    for(const item of project.children||[])rows.push({kind:'reading',key:item.path,icon:readingKindIcon(item),name:readingBase(item.name),preview:project.name+' · '+readingRoleLabel(item),where:'阅读 · '+item.path,search:[item.name,item.path,project.name,project.description,(project.tags||[]).join(' '),readingRoleLabel(item)].join(' '),open:()=>openReading(item.path,READING_ACTIVE_SLOT)});
+  }
+  for(const item of DRAWINGS)rows.push({kind:'drawing',key:item.path,icon:drawKind(item.path)==='drawio'?'▦':'◇',name:drawBase(item.path),preview:item.path,where:'绘图 · '+(drawKind(item.path)==='drawio'?'Draw.io':'Excalidraw'),search:item.path+' '+drawBase(item.path)+' '+drawKind(item.path),open:()=>openDrawing(item.path)});
+  return rows;
+}
+function quickSection(box,label){const el=document.createElement('div');el.className='quick-section';el.textContent=label;box.appendChild(el);}
 function renderFileResults(query) {
-  const box=$('sym-modal-res');box.innerHTML='';const q=String(query||'').trim();
-  let items=codeFileEntries().map(item=>{const label=item.name+' '+item.snippet.name+' '+(item.snippet.folder||'');return{item,score:q?Math.max(fuzzyScore(q,item.name),fuzzyScore(q,item.snippet.name),fuzzyScore(q,label)):0};}).filter(entry=>!q||entry.score>=0);
-  items.sort((a,b)=>b.score-a.score||Number(b.item.snippet===CURRENT)-Number(a.item.snippet===CURRENT)||a.item.name.localeCompare(b.item.name));items=items.slice(0,160);
-  items.forEach(({item})=>box.appendChild(searchResultRow('▤',item.name,item.snippet.name,(item.snippet.folder?item.snippet.folder+'/':'')+(item.fragment.language||''),()=>{closeSymModal();goToLocation({snippet:item.snippet,frag:item.frag,line:1});})));
-  SYM_ACTIVE=0;if(items.length)box.firstElementChild.classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的文件</span>';
-  $('sym-modal-status').textContent=items.length+' 个文件 · Ctrl/⌘+P';
+  const box=$('sym-modal-res');box.replaceChildren();const q=String(query||'').trim(),recent=workspaceRecent(),rank=new Map(recent.map((row,index)=>[row.kind+'\n'+row.key,recent.length-index]));
+  let items=workspaceQuickEntries().map(item=>{const score=q?Math.max(fuzzyScore(q,item.name),fuzzyScore(q,item.preview),fuzzyScore(q,item.search)):0;return{item,score,recent:rank.get(item.kind+'\n'+item.key)||0};}).filter(entry=>!q||entry.score>=0);
+  items.sort((a,b)=>q?(b.score-a.score||b.recent-a.recent||a.item.name.localeCompare(b.item.name,'zh')):(b.recent-a.recent||a.item.kind.localeCompare(b.item.kind)||a.item.name.localeCompare(b.item.name,'zh')));items=items.slice(0,180);
+  let lastSection='';
+  for(const rowData of items){const {item}=rowData,section=!q&&rowData.recent?'最近打开':item.kind==='code'?'代码':item.kind==='reading'?'阅读与论文':'绘图';if(section!==lastSection){quickSection(box,section);lastSection=section;}const row=searchResultRow(item.icon,item.name,item.preview,item.where,()=>{rememberWorkspaceRecent(item.kind,item.key);closeSymModal();Promise.resolve(item.open()).catch((error)=>setStatus('err','打开失败：'+String(error&&error.message||error)));});row.classList.add('quick-'+item.kind);row.querySelector('.name').insertAdjacentHTML('beforeend','<span class="quick-kind">'+(item.kind==='code'?'CODE':item.kind==='reading'?'READ':'DRAW')+'</span>');box.appendChild(row);}
+  const selectable=[...box.querySelectorAll('.symr')];SYM_ACTIVE=0;if(selectable.length)selectable[0].classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的代码、阅读资料或绘图</span>';
+  const counts=items.reduce((out,row)=>(out[row.item.kind]=(out[row.item.kind]||0)+1,out),{});$('sym-modal-status').textContent=(counts.code||0)+' 代码 · '+(counts.reading||0)+' 阅读 · '+(counts.drawing||0)+' 绘图 · Ctrl/⌘+P';
 }
 function goToLinePrompt(){const context=readingContext();if(!context)return;const value=prompt('跳转到行：',String(context.line||1));if(value===null)return;const line=Math.max(1,Number.parseInt(value,10)||1);if(activeSplitContext())activateOpenSplitLocation(SPLIT_EDITORS.findIndex(item=>splitKey(item.file,item.fragment)===ACTIVE_SPLIT_KEY),line);else jumpToLine(line);}
 function commandPaletteItems(){return[
-  {name:'文件：快速打开',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'搜索：全文搜索',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
+  {name:'工作台：快速打开代码、阅读资料或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
 ];}
 function renderCommandResults(query){const box=$('sym-modal-res');box.replaceChildren();const q=String(query||'').trim(),items=commandPaletteItems().map(item=>({item,score:q?fuzzyScore(q,item.name+' '+item.key):0})).filter(row=>!q||row.score>=0).sort((a,b)=>b.score-a.score);for(const {item} of items){const row=searchResultRow('›',item.name,'',item.key,()=>{closeSymModal();item.run();});row.classList.add('command-result');box.appendChild(row);}SYM_ACTIVE=0;if(items.length)box.firstElementChild.classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的命令</span>';$('sym-modal-status').textContent=items.length+' 个命令 · Ctrl/⌘+Shift+P';}
 function textSearchMatcher(query) {
   if(!$('text-regex').classList.contains('on'))return null;
   try{return new RegExp(query,$('text-case').classList.contains('on')?'':'i');}catch(error){return{error:String(error.message||error)};}
 }
-function renderTextResults(query) {
+let TEXT_SEARCH_SEQ=0;
+async function openReadingSearchHit(hit){await openReading(hit.path,READING_ACTIVE_SLOT);if(hit.page)await setReadingPage(READING_ACTIVE_SLOT,hit.page);}
+async function renderTextResults(query) {
+  const seq=++TEXT_SEARCH_SEQ;
   const box=$('sym-modal-res');box.innerHTML='';const rawQuery=String(query||'');
-  if(!rawQuery){box.innerHTML='<div class="sym-help">搜索全部片段内容。支持区分大小写和正则表达式。<br>↑ / ↓ 选择，Enter 打开，Esc 关闭。</div>';$('sym-modal-status').textContent='Ctrl/⌘+Shift+F';return;}
+  if(!rawQuery){box.innerHTML='<div class="sym-help">搜索代码片段、阅读 Markdown/代码笔记，以及 PDF 摘录。支持区分大小写和正则表达式；正则模式仅搜索已加载的代码。<br>↑ / ↓ 选择，Enter 打开，Esc 关闭。</div>';$('sym-modal-status').textContent='Ctrl/⌘+Shift+F';return;}
   const matcher=textSearchMatcher(rawQuery);if(matcher&&matcher.error){box.innerHTML='<span class="ol-empty">正则表达式错误：'+escapeHtml(matcher.error)+'</span>';$('sym-modal-status').textContent='表达式无效';return;}
   const sensitive=$('text-case').classList.contains('on'),needle=sensitive?rawQuery:rawQuery.toLowerCase(),hits=[];
   outer:for(const item of codeFileEntries()){
@@ -8504,9 +8532,17 @@ function renderTextResults(query) {
       if(start>=0){hits.push({item,line:index+1,text:line.trim()||line,start:Math.max(0,start-(line.length-line.trimStart().length)),length:matcher?Math.max(1,found[0].length):rawQuery.length});if(hits.length>=300)break outer;}
     }
   }
-  hits.forEach(hit=>box.appendChild(searchResultRow('⌕',hit.item.name,hit.text,hit.item.snippet.name+':'+hit.line,()=>{closeSymModal();goToLocation({snippet:hit.item.snippet,frag:hit.item.frag,line:hit.line});},{start:hit.start,length:hit.length})));
-  SYM_ACTIVE=0;if(hits.length)box.firstElementChild.classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的内容</span>';
-  $('sym-modal-status').textContent=hits.length+(hits.length===300?'+':'')+' 条结果';
+  hits.forEach(hit=>{const row=searchResultRow('⌕',hit.item.name,hit.text,hit.item.snippet.name+':'+hit.line,()=>{closeSymModal();goToLocation({snippet:hit.item.snippet,frag:hit.item.frag,line:hit.line});},{start:hit.start,length:hit.length});row.classList.add('quick-code');box.appendChild(row);});
+  let readingHits=[];
+  if(!matcher){
+    $('sym-modal-status').textContent='正在搜索阅读资料…';
+    const result=await api('/api/readings/search?q='+encodeURIComponent(rawQuery)+'&case='+(sensitive?'1':'0'));
+    if(seq!==TEXT_SEARCH_SEQ||SEARCH_MODE!=='text')return;
+    if(result.ok)readingHits=result.hits||[];
+    for(const hit of readingHits){const preview=String(hit.text||''),start=(sensitive?preview:preview.toLocaleLowerCase()).indexOf(needle);const row=searchResultRow(hit.kind==='pdf'?'▤':'M↓',readingBase(hit.path),preview,'阅读 · '+(hit.page?'P.'+hit.page:hit.path+(hit.line?':'+hit.line:'')),()=>{closeSymModal();openReadingSearchHit(hit).catch((error)=>readingStatus(String(error&&error.message||error),true));},{start:Math.max(0,start),length:rawQuery.length});row.classList.add('quick-reading');box.appendChild(row);}
+  }
+  const rows=box.querySelectorAll('.symr');SYM_ACTIVE=0;if(rows.length)rows[0].classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的内容</span>';
+  $('sym-modal-status').textContent=hits.length+' 代码 · '+readingHits.length+' 阅读'+(matcher?' · 正则仅代码':'');
 }
 function aiSearchMatches(query) {
   const q=String(query||'').trim().toLowerCase();
@@ -8540,7 +8576,7 @@ function setSearchMode(mode) {
   SEARCH_MODE=['symbol','history','text','file','command'].includes(mode)?mode:'ai';
   const box=$('sym-modal-box'),isAi=SEARCH_MODE==='ai',isSymbol=SEARCH_MODE==='symbol';
   ['ai','symbol','history','text','file','command'].forEach(name=>box.classList.toggle(name+'-mode',SEARCH_MODE===name));
-  $('sym-q').placeholder=isAi?'询问 API、函数用途、参数、示例或代码问题…':isSymbol?'函数 / 类型 / 宏 / 变量名…（跨库，支持模糊匹配）':SEARCH_MODE==='text'?'搜索项目中的文本或正则表达式…':SEARCH_MODE==='file'?'输入文件名快速打开…':SEARCH_MODE==='command'?'输入命令名称…':'筛选搜索记录…';
+  $('sym-q').placeholder=isAi?'询问 API、函数用途、参数、示例或代码问题…':isSymbol?'函数 / 类型 / 宏 / 变量名…（跨库，支持模糊匹配）':SEARCH_MODE==='text'?'搜索项目中的文本或正则表达式…':SEARCH_MODE==='file'?'搜索代码、阅读项目、PDF、笔记或绘图…':SEARCH_MODE==='command'?'输入命令名称…':'筛选搜索记录…';
   $('sym-modal-mode').querySelectorAll('button').forEach((button)=>{const on=button.dataset.searchMode===SEARCH_MODE;button.classList.toggle('on',on);button.setAttribute('aria-selected',String(on));});
   $('sym-q').value='';
   if(isAi)renderAiSearchHome();else if(isSymbol)renderSymResults('');else if(SEARCH_MODE==='text')renderTextResults('');else if(SEARCH_MODE==='file')renderFileResults('');else if(SEARCH_MODE==='command')renderCommandResults('');else renderAiSearchHistory('');
@@ -8957,6 +8993,7 @@ function select(s) {
   RESOURCE_CURRENT = null; $('resource-viewer').style.display = 'none';
   rememberNavigation({snippet:s,frag:0,line:1});
   CURRENT = s; CINDEX = 0; SYM_SEL = null; REL_ROOT = null; REL_EXPANDED.clear();
+  rememberWorkspaceRecent('code',s.file+':0');
   renderList(); renderMain();
   return true;
 }
@@ -8999,7 +9036,7 @@ function renderCode() {
     t.onclick = () => {
       const openGroup=SPLIT_EDITORS.findIndex((entry)=>entry.file===s.file&&entry.fragment===i);
       if(openGroup>=0){promoteSplitEditor(openGroup);return;}
-      if (!confirmLeaveEdit()) return; rememberMarkdownCaret();hideCodeReferenceBar();rememberNavigation({snippet:s,frag:i,line:1});CINDEX = i; SYM_SEL = null; REL_ROOT = null; REL_EXPANDED.clear(); renderMain();
+      if (!confirmLeaveEdit()) return; rememberMarkdownCaret();hideCodeReferenceBar();rememberNavigation({snippet:s,frag:i,line:1});CINDEX = i;rememberWorkspaceRecent('code',s.file+':'+i); SYM_SEL = null; REL_ROOT = null; REL_EXPANDED.clear(); renderMain();
     };
     t.draggable = true;
     t.classList.add('draggable-tab');
