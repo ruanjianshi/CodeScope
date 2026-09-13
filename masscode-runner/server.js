@@ -19,6 +19,7 @@ const { pipeline } = require('stream/promises');
 const { WebSocketServer } = require('ws');
 const { Client: SshClient } = require('ssh2');
 const { SaxesParser } = require('saxes');
+const { unzipSync, zipSync, strFromU8, strToU8 } = require('fflate');
 const { createLspService } = require('./lib/lsp-service');
 const APP_VERSION = require('./package.json').version;
 
@@ -2720,7 +2721,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
@@ -3509,7 +3510,7 @@ const server = http.createServer(async (req, res) => {
       try { fs.rmSync(dir, { recursive: true, force: true }); disk = true; } catch (_) {}
       return send(res, 200, { ok: true, folder: rel, deletedSnippets: removed.length, removedFolders: delKeys.length, disk });
     }
-    /* ------------------------------ 绘图（Excalidraw / Draw.io） ------------------------------ */
+    /* ------------------------------ 绘图（Excalidraw / Draw.io / XMind） ------------------------------ */
     function drawingsDir() { return path.join(vaultPath(), 'drawings'); }
     function drawingName(n) {
       if (typeof n !== 'string') return null;
@@ -3518,10 +3519,59 @@ const server = http.createServer(async (req, res) => {
       if (base.indexOf('\\') >= 0) return null;
       if (/(^|\/)\.{1,2}(\/|$)|^\/|\/\/|^[A-Za-z]:/.test(base)) return null;   // 防穿越：拒绝 ..、前导 /、//、盘符
       if (!/^[A-Za-z0-9._\-\u00a0-\uffff /]+$/.test(base)) return null;          // 每段仅合法字符（保留中文/空格，分隔符允许 /）
-      if (!/\.(?:excalidraw|drawio)$/i.test(base)) return null;
+      if (!/\.(?:excalidraw|drawio|xmind)$/i.test(base)) return null;
       return base;
     }
-    function drawingKind(name) { return /\.drawio$/i.test(String(name || '')) ? 'drawio' : 'excalidraw'; }
+    function drawingKind(name) {
+      const value = String(name || '');
+      return /\.drawio$/i.test(value) ? 'drawio' : (/\.xmind$/i.test(value) ? 'xmind' : 'excalidraw');
+    }
+    function xmindId() { return crypto.randomUUID().replace(/-/g, '').slice(0, 26); }
+    function newXmindWorkbook(title) {
+      return [{ id:xmindId(), class:'sheet', title:'画布 1', rootTopic:{ id:xmindId(), class:'topic', title:String(title || '中心主题'), structureClass:'org.xmind.ui.logic.right', children:{ attached:[] } } }];
+    }
+    function inspectXmindWorkbook(workbook) {
+      if (!Array.isArray(workbook) || !workbook.length || workbook.length > 100) return { ok:false, error:'XMind 必须包含 1–100 个画布' };
+      let nodes = 0;
+      const walk = (topic, depth) => {
+        if (!topic || typeof topic !== 'object' || Array.isArray(topic)) throw new Error('主题结构无效');
+        if (depth > 128) throw new Error('主题层级超过 128 层');
+        nodes += 1; if (nodes > 20000) throw new Error('主题数量超过 20000');
+        if (topic.title != null && (typeof topic.title !== 'string' || topic.title.length > 20000)) throw new Error('主题标题无效');
+        const attached = topic.children && topic.children.attached;
+        if (attached != null && !Array.isArray(attached)) throw new Error('子主题结构无效');
+        for (const child of attached || []) walk(child, depth + 1);
+      };
+      try {
+        for (const sheet of workbook) {
+          if (!sheet || typeof sheet !== 'object' || !sheet.rootTopic) throw new Error('画布缺少根主题');
+          walk(sheet.rootTopic, 1);
+        }
+      } catch (error) { return { ok:false, error:'XMind 结构错误：' + String(error.message || error) }; }
+      return { ok:true, sheets:workbook.length, nodes };
+    }
+    function readXmindFile(file) {
+      const entries = unzipSync(new Uint8Array(fs.readFileSync(file)));
+      if (!entries['content.json']) throw new Error('缺少 content.json，可能是旧版或加密 XMind 文件');
+      const workbook = JSON.parse(strFromU8(entries['content.json']));
+      const checked = inspectXmindWorkbook(workbook);
+      if (!checked.ok) throw new Error(checked.error);
+      return { workbook, ...checked };
+    }
+    function writeXmindFile(file, workbook) {
+      const checked = inspectXmindWorkbook(workbook);
+      if (!checked.ok) throw new Error(checked.error);
+      let entries = {};
+      try { if (fs.existsSync(file)) entries = unzipSync(new Uint8Array(fs.readFileSync(file))); } catch (_) { entries = {}; }
+      entries['content.json'] = strToU8(JSON.stringify(workbook));
+      if (!entries['metadata.json']) entries['metadata.json'] = strToU8(JSON.stringify({ creator:{ name:'CodeScope', version:APP_VERSION }, dataStructureVersion:'3' }));
+      if (!entries['manifest.json']) entries['manifest.json'] = strToU8(JSON.stringify({ 'file-entries':{ 'content.json':{}, 'metadata.json':{} } }));
+      const zipped = Buffer.from(zipSync(entries, { level:6 }));
+      const tmp = file + '.tmp-' + process.pid + '-' + Date.now();
+      fs.writeFileSync(tmp, zipped);
+      fs.renameSync(tmp, file);
+      return { bytes:zipped.length, ...checked };
+    }
     function inspectDrawioXml(value) {
       const xml = String(value || '').trim();
       if (!xml || xml.length > 40e6) return { ok:false, error:'Draw.io XML 为空或超过 40 MB' };
@@ -3616,11 +3666,13 @@ const server = http.createServer(async (req, res) => {
       const name = drawingName(u.searchParams.get('name'));
       if (!name) return send(res, 200, { ok: false, error: '文件名不合法' });
       try {
-        const raw = fs.readFileSync(path.join(drawingsDir(), name), 'utf8');
+        const target = path.join(drawingsDir(), name);
+        if (drawingKind(name) === 'xmind') return send(res, 200, { ok:true, name, kind:'xmind', ...readXmindFile(target) });
+        const raw = fs.readFileSync(target, 'utf8');
         if (drawingKind(name) === 'drawio') return send(res, 200, { ok: true, name, kind: 'drawio', xml: raw });
         const scene = JSON.parse(raw);
         return send(res, 200, { ok: true, name, kind: 'excalidraw', ...scene });
-      } catch (_) { return send(res, 200, { ok: false, error: '读取失败（文件不存在或绘图格式无效）' }); }
+      } catch (error) { return send(res, 200, { ok: false, error: '读取失败（文件不存在或绘图格式无效）：' + String(error && error.message || error).slice(0, 220) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/drawings/save') {
       const b = await readBody(req);
@@ -3630,8 +3682,12 @@ const server = http.createServer(async (req, res) => {
       const dir = drawingsDir();
       const target = path.join(dir, name);          // name 可含 '/' 子路径，防穿越已校验
       try { fs.mkdirSync(path.dirname(target), { recursive: true }); } catch (_) {}
-      let body;
-      if (drawingKind(name) === 'drawio') {
+      let body, result;
+      if (drawingKind(name) === 'xmind') {
+        try { result = writeXmindFile(target, data && data.workbook); }
+        catch (error) { return send(res, 200, { ok:false, error:'XMind 写入失败：' + String(error.message || error) }); }
+        return send(res, 200, { ok:true, name, ...result });
+      } else if (drawingKind(name) === 'drawio') {
         body = data && typeof data.xml === 'string' ? data.xml : '';
         const inspection = inspectDrawioXml(body);
         if (!inspection.ok) return send(res, 200, inspection);
@@ -3650,9 +3706,9 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const sub = drawingDir2(b && b.dir);          // 目标目录（'' = 根）
       if (sub === null) return send(res, 200, { ok: false, error: '目录不合法' });
-      const kind = b && b.kind === 'drawio' ? 'drawio' : 'excalidraw';
-      const ext = kind === 'drawio' ? '.drawio' : '.excalidraw';
-      const baseRaw = String((b && b.name) || '').replace(/\.(?:excalidraw|drawio)$/i, '').trim();
+      const kind = b && ['drawio', 'xmind'].includes(b.kind) ? b.kind : 'excalidraw';
+      const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : '.excalidraw');
+      const baseRaw = String((b && b.name) || '').replace(/\.(?:excalidraw|drawio|xmind)$/i, '').trim();
       const base = baseRaw || 'Untitled';
       if (!/^[A-Za-z0-9._\-\u00a0-\uffff ]+$/.test(base) || base === '.' || base === '..') return send(res, 200, { ok: false, error: '名称不合法' });
       const dirAbs = path.join(drawingsDir(), sub || '.');
@@ -3666,8 +3722,12 @@ const server = http.createServer(async (req, res) => {
       const full = sub ? sub + '/' + name : name;
       const scene = kind === 'drawio'
         ? '<mxfile host="CodeScope"><diagram id="page-1" name="Page-1"><mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>'
-        : { type: 'excalidraw', version: 2, source: 'file://', elements: [], appState: {}, files: {} };
+        : (kind === 'xmind' ? newXmindWorkbook(base) : { type: 'excalidraw', version: 2, source: 'file://', elements: [], appState: {}, files: {} });
       try {
+        if (kind === 'xmind') {
+          const info = writeXmindFile(path.join(dirAbs, name), scene);
+          return send(res, 200, { ok:true, name:full, dir:sub, kind, workbook:scene, ...info });
+        }
         fs.writeFileSync(path.join(dirAbs, name), kind === 'drawio' ? scene : JSON.stringify(scene));
         return send(res, 200, kind === 'drawio' ? { ok: true, name: full, dir: sub, kind, xml: scene } : { ok: true, name: full, dir: sub, kind, ...scene });
       } catch (e) { return send(res, 200, { ok: false, error: '创建失败: ' + String((e && e.message) || e) }); }
@@ -3697,8 +3757,9 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const name = drawingName(b && b.name);
       if (!name) return send(res, 200, { ok: false, error: '文件名不合法' });
-      const ext = drawingKind(name) === 'drawio' ? '.drawio' : '.excalidraw';
-      const baseRaw = String((b && b.newName) || '').replace(/\.(?:excalidraw|drawio)$/i, '').trim();
+      const kind = drawingKind(name);
+      const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : '.excalidraw');
+      const baseRaw = String((b && b.newName) || '').replace(/\.(?:excalidraw|drawio|xmind)$/i, '').trim();
       if (!baseRaw) return send(res, 200, { ok: false, error: '名称不合法' });
       if (!/^[A-Za-z0-9._\-\u00a0-\uffff ]+$/.test(baseRaw) || baseRaw === '.' || baseRaw === '..' || /[\\/]/.test(baseRaw)) return send(res, 200, { ok: false, error: '名称不合法（仅当前文件夹内命名）' });
       const parts = name.split('/');
@@ -3739,8 +3800,9 @@ const server = http.createServer(async (req, res) => {
       // 目标文件夹已有同名文件 → 自动 -2、-3 避冲突（移动不改文件名）
       let target = fromFile, i = 2;
       while (fs.existsSync(path.join(dirAbs, target)) && (toDir ? toDir + '/' + target : target) !== name) {
-        const ext = drawingKind(fromFile) === 'drawio' ? '.drawio' : '.excalidraw';
-        target = fromFile.replace(/\.(?:excalidraw|drawio)$/i, '') + '-' + i + ext; i += 1;
+        const kind = drawingKind(fromFile);
+        const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : '.excalidraw');
+        target = fromFile.replace(/\.(?:excalidraw|drawio|xmind)$/i, '') + '-' + i + ext; i += 1;
         if (i > 100000) return send(res, 200, { ok: false, error: '无法分配文件名' });
       }
       try {

@@ -16,6 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
+    "fflate": "^0.8.3",
     "monaco-editor": "^0.52.2",
     "pdfjs-dist": "^4.10.38",
     "saxes": "^6.0.0",

@@ -7,6 +7,7 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
+const { unzipSync, zipSync, strFromU8, strToU8 } = require('fflate');
 
 const projectRoot = path.resolve(__dirname, '..');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-test-'));
@@ -18,6 +19,8 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
   passed++;
 }
+
+function xmindCloneForTest(value) { return JSON.parse(JSON.stringify(value)); }
 
 async function freePort() {
   return new Promise((resolve, reject) => {
@@ -174,7 +177,7 @@ void bubbleSort(Array& values);
   assert(unicodeFragment.label === '中文片段', '片段中文名称解析或重新读取后丢失');
 
   const version = await requestJson(baseUrl, '/api/version');
-  assert(version.ok && version.name === '码境 CodeScope' && version.version === '1.2.0' && version.apiRevision >= 2 && version.features.includes('project-health') && version.features.includes('workspace-backlinks') && version.features.includes('markdown-note-links') && version.features.includes('xmind-markdown-export') && version.features.includes('opml-export') && version.features.includes('workspace-snapshots') && version.features.includes('live-web-search') && version.features.includes('search-history') && version.features.includes('editor-groups') && version.features.includes('monaco-editor') && version.features.includes('multi-cursor') && version.features.includes('editor-folding') && version.features.includes('editor-command-palette') && version.features.includes('editor-word-wrap') && version.features.includes('editor-wheel-zoom') && version.features.includes('editor-position') && version.features.includes('lsp-completion') && version.features.includes('lsp-rename') && version.features.includes('lsp-code-actions') && version.features.includes('project-tests') && version.features.includes('project-debug') && version.features.includes('drawio') && version.features.includes('drawio-xml') && version.features.includes('ai-drawio') && version.features.includes('full-text-search') && version.features.includes('quick-open') && version.features.includes('workspace-quick-open') && version.features.includes('workspace-recent') && version.features.includes('reading-full-text-search') && version.features.includes('pdf-text-cache') && version.features.includes('navigation-history') && version.features.includes('definition-peek') && version.features.includes('header-source-switch') && version.features.includes('lsp') && version.features.includes('pdf-library') && version.features.includes('pdf-translation') && version.features.includes('pdf-full-text-search') && version.features.includes('pdf-thumbnail-navigation') && version.features.includes('pdf-focus-mode') && version.features.includes('reading-fragments') && version.features.includes('reading-split-view') && version.features.includes('reading-projects') && version.features.includes('reading-code-notes'), '版本接口返回异常');
+  assert(version.ok && version.name === '码境 CodeScope' && version.version === '1.2.0' && version.apiRevision >= 2 && version.features.includes('project-health') && version.features.includes('workspace-backlinks') && version.features.includes('markdown-note-links') && version.features.includes('xmind-markdown-export') && version.features.includes('xmind-native') && version.features.includes('opml-export') && version.features.includes('workspace-snapshots') && version.features.includes('live-web-search') && version.features.includes('search-history') && version.features.includes('editor-groups') && version.features.includes('monaco-editor') && version.features.includes('multi-cursor') && version.features.includes('editor-folding') && version.features.includes('editor-command-palette') && version.features.includes('editor-word-wrap') && version.features.includes('editor-wheel-zoom') && version.features.includes('editor-position') && version.features.includes('lsp-completion') && version.features.includes('lsp-rename') && version.features.includes('lsp-code-actions') && version.features.includes('project-tests') && version.features.includes('project-debug') && version.features.includes('drawio') && version.features.includes('drawio-xml') && version.features.includes('ai-drawio') && version.features.includes('full-text-search') && version.features.includes('quick-open') && version.features.includes('workspace-quick-open') && version.features.includes('workspace-recent') && version.features.includes('reading-full-text-search') && version.features.includes('pdf-text-cache') && version.features.includes('navigation-history') && version.features.includes('definition-peek') && version.features.includes('header-source-switch') && version.features.includes('lsp') && version.features.includes('pdf-library') && version.features.includes('pdf-translation') && version.features.includes('pdf-full-text-search') && version.features.includes('pdf-thumbnail-navigation') && version.features.includes('pdf-focus-mode') && version.features.includes('reading-fragments') && version.features.includes('reading-split-view') && version.features.includes('reading-projects') && version.features.includes('reading-code-notes'), '版本接口返回异常');
 
   const page = await fetch(baseUrl + '/');
   const html = await page.text();
@@ -207,13 +210,15 @@ void bubbleSort(Array& values);
   assert(html.includes('id="ai-search-provider"') && html.includes('id="ai-search-key"') && html.includes('/api/ai/web-search'), '实时联网搜索配置缺失');
   assert(html.includes('data-search-mode="history"') && html.includes('AI_SEARCH_HISTORY_KEY') && html.includes('renderAiSearchHistory') && html.includes('清空记录'), 'AI 搜索记录功能缺失');
   assert(html.includes('id="draw-nd-type"') && html.includes('id="drawio-root"') && html.includes('DRAWIO_ORIGIN') && html.includes('onDrawioMessage'), 'Draw.io 新建入口或嵌入编辑器缺失');
-  assert(html.includes("typeBadge.className = 'draw-type draw-type--' + kind") && html.includes("? 'Draw.io' : 'Excalidraw'"), '绘图列表缺少明确且隔离样式的类型标识');
+  assert(html.includes('value="xmind"') && html.includes('id="xmind-root"') && html.includes('renderXmindOutline') && html.includes('xmindMove'), 'XMind 新建入口、大纲编辑或拖拽功能缺失');
+  assert(html.includes("typeBadge.className = 'draw-type draw-type--' + kind") && html.includes("kind === 'xmind' ? 'XMind' : 'Excalidraw'"), '绘图列表缺少明确且隔离样式的类型标识');
   assert(html.includes('id="draw-ai-btn"') && html.includes('id="draw-xml-source"') && html.includes('generateDrawioWithAi') && html.includes('validateDrawioXmlLocal'), 'Draw.io AI 绘图或 XML 编辑器缺失');
   assert(html.includes('timeoutMs:300000') && html.includes('复杂图可能需要 1–5 分钟') && serverSource.includes('Math.min(600000') && serverSource.includes("e.name === 'TimeoutError'"), 'Draw.io AI 绘图长耗时请求或超时提示缺失');
   assert(html.includes('networkError:true') && html.includes('后端返回了无法解析的响应') && serverSource.includes("require('saxes')"), '全局 API 错误处理或服务端 XML 解析器缺失');
   assert((launchers.match(/node_modules[\\/]saxes/g) || []).length === 4, '启动脚本未完整检测新增运行依赖');
   assert((launchers.match(/node_modules[\\/]pdfjs-dist/g) || []).length === 4, '启动脚本未完整检测 PDF 文本解析依赖');
   assert((launchers.match(/node_modules[\\/]monaco-editor/g) || []).length === 4, '启动脚本未完整检测 Monaco 编辑器依赖');
+  assert((launchers.match(/node_modules[\\/]fflate/g) || []).length === 4, '启动脚本未完整检测 XMind 压缩包依赖');
   assert(html.includes('id="editor-drop-overlay"') && html.includes('split-editor-group') && html.includes('initEditorGroups') && html.includes('application/x-codescope-editor'), '2 至 4 栏拖拽编辑功能缺失');
   assert(html.includes('data-search-mode="text"') && html.includes('renderTextResults') && html.includes('id="text-regex"'), '全文搜索或正则检索功能缺失');
   assert(html.includes('workspaceQuickEntries') && html.includes('WORKSPACE_RECENT_KEY') && html.includes('搜索代码、阅读项目、PDF、笔记或绘图'), '快速打开未覆盖代码、阅读、PDF 与绘图，或缺少最近访问排序');
@@ -351,6 +356,23 @@ void bubbleSort(Array& values);
   assert(reopenedDrawio.ok && reopenedDrawio.xml === changedDrawioXml, 'Draw.io XML 保存后读取不一致');
   const drawingTree = await requestJson(baseUrl, '/api/drawings/tree');
   assert(drawingTree.ok && drawingTree.total === 1 && drawingTree.root.children.some((item) => item.path === newDrawio.name), '绘图树未包含 Draw.io 文件');
+  const newXmind = await postJson(baseUrl, '/api/drawings/new', { name:'设计导图', dir:'', kind:'xmind' });
+  assert(newXmind.ok && newXmind.kind === 'xmind' && newXmind.name.endsWith('.xmind') && newXmind.workbook[0].rootTopic.title === '设计导图', 'XMind 文件创建失败');
+  const xmindFile = path.join(vault, 'drawings', newXmind.name);
+  assert(fs.readFileSync(xmindFile).subarray(0, 2).toString('hex') === '504b', 'XMind 未写入标准 ZIP 容器');
+  const xmindEntries = unzipSync(new Uint8Array(fs.readFileSync(xmindFile)));
+  xmindEntries['resources/smoke.txt'] = strToU8('preserve me');
+  fs.writeFileSync(xmindFile, Buffer.from(zipSync(xmindEntries)));
+  const xmindWorkbook = xmindCloneForTest(newXmind.workbook);
+  xmindWorkbook[0].rootTopic.children.attached.push({ id:'smoke-child', class:'topic', title:'子主题', children:{ attached:[] } });
+  const savedXmind = await postJson(baseUrl, '/api/drawings/save', { name:newXmind.name, data:{ workbook:xmindWorkbook } });
+  assert(savedXmind.ok && savedXmind.nodes === 2, 'XMind 编辑结果保存失败');
+  const reopenedXmind = await requestJson(baseUrl, '/api/drawings/get?name=' + encodeURIComponent(newXmind.name));
+  assert(reopenedXmind.ok && reopenedXmind.kind === 'xmind' && reopenedXmind.workbook[0].rootTopic.children.attached[0].title === '子主题', 'XMind 保存后读取不一致');
+  const preservedXmind = unzipSync(new Uint8Array(fs.readFileSync(xmindFile)));
+  assert(strFromU8(preservedXmind['resources/smoke.txt']) === 'preserve me', 'XMind 保存时丢失原有附件资源');
+  const badXmind = await postJson(baseUrl, '/api/drawings/save', { name:newXmind.name, data:{ workbook:[] } });
+  assert(!badXmind.ok && /XMind/.test(badXmind.error), 'XMind 保存接口未拒绝无效工作簿');
   const badDrawio = await postJson(baseUrl, '/api/drawings/save', { name: newDrawio.name, data: { xml: '<invalid/>' } });
   assert(!badDrawio.ok, 'Draw.io 保存接口未拒绝无效 XML');
   const malformedDrawio = await postJson(baseUrl, '/api/drawings/validate', { xml:'<mxfile><diagram><mxGraphModel></diagram></mxfile>' });
@@ -359,6 +381,8 @@ void bubbleSort(Array& values);
   assert(!nestedRootDrawio.ok && /根节点/.test(nestedRootDrawio.error), 'Draw.io XML 校验未拒绝错误根节点');
   const deletedDrawio = await postJson(baseUrl, '/api/drawings/delete', { name: newDrawio.name });
   assert(deletedDrawio.ok, 'Draw.io 文件删除失败');
+  const deletedXmind = await postJson(baseUrl, '/api/drawings/delete', { name:newXmind.name });
+  assert(deletedXmind.ok, 'XMind 文件删除失败');
 
   const changedCode = 'int main(void) { return 1; }';
   const saved = await postJson(baseUrl, '/api/save', { file: snippetFile, fragment: 0, code: changedCode });

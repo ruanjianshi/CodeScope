@@ -18,7 +18,7 @@ if [ "$NODE_MAJOR" -lt 18 ]; then
 fi
 
 cd "$RUNNER_DIR"
-if [ ! -f node_modules/@novnc/novnc/core/rfb.js ] || [ ! -d node_modules/ws ] || [ ! -d node_modules/ssh2 ] || [ ! -d node_modules/saxes ] || [ ! -d node_modules/pdfjs-dist ] || [ ! -d node_modules/monaco-editor ]; then
+if [ ! -f node_modules/@novnc/novnc/core/rfb.js ] || [ ! -d node_modules/ws ] || [ ! -d node_modules/ssh2 ] || [ ! -d node_modules/saxes ] || [ ! -d node_modules/pdfjs-dist ] || [ ! -d node_modules/monaco-editor ] || [ ! -d node_modules/fflate ]; then
   if ! command -v npm >/dev/null 2>&1; then
     echo "未找到 npm，无法安装码境运行依赖。"
     exit 1

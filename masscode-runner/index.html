@@ -1002,6 +1002,38 @@
   #excal-root .excalidraw { position: absolute; inset: 0; }
   #drawio-root { flex:1; min-height:0; position:relative; display:none; background:#1e1e1e; }
   #drawio-root iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
+  #xmind-root { flex:1; min-height:0; display:none; flex-direction:column; background:#0b1017; }
+  .xmind-toolbar { display:flex; align-items:center; gap:6px; min-height:42px; padding:6px 12px; border-bottom:1px solid var(--border); background:#111821; }
+  .xmind-toolbar button { padding:4px 9px; font-size:11px; }
+  .xmind-toolbar button:disabled { opacity:.42; cursor:default; }
+  #xmind-sheet-select { max-width:150px; padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:#0b1119; color:var(--dim); font:11px var(--font); }
+  #xmind-sheet-title { min-width:130px; max-width:220px; padding:5px 8px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); font:600 12px var(--font); }
+  #xmind-sheet-title:hover, #xmind-sheet-title:focus { border-color:var(--border); background:#0b1119; outline:none; }
+  .xmind-workspace { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); flex:1; min-height:0; }
+  #xmind-outline { min-width:0; overflow:auto; padding:10px 8px 32px; border-right:1px solid var(--border); background:#0e151e; }
+  #xmind-preview { position:relative; min-width:0; min-height:0; overflow:hidden; background:radial-gradient(circle at 50% 45%,rgba(45,72,108,.18),transparent 46%),#0b1017; }
+  #xmind-svg { display:block; width:100%; height:100%; }
+  #xmind-svg .markmap-node { cursor:pointer; }
+  #xmind-svg .markmap-link, #xmind-svg .markmap-node line { stroke:#405672; }
+  #xmind-svg .markmap-node circle { fill:rgba(120,169,255,.2); stroke:#78a9ff; }
+  #xmind-svg .markmap-foreign { color:#e4ebf4; }
+  #xmind-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); font-size:12px; pointer-events:none; }
+  .xmind-row { position:relative; display:flex; align-items:center; gap:4px; min-height:31px; margin:1px 0; padding:2px 5px; border:1px solid transparent; border-radius:6px; }
+  .xmind-row:hover { border-color:#29384a; background:#151f2a; }
+  .xmind-row.selected { border-color:rgba(120,169,255,.5); background:rgba(120,169,255,.14); }
+  .xmind-row.dragging { opacity:.45; }
+  .xmind-row.drop-child { box-shadow:inset 0 0 0 1px #78a9ff; }
+  .xmind-row.drop-before::before, .xmind-row.drop-after::after { content:''; position:absolute; left:5px; right:5px; height:2px; background:#78a9ff; border-radius:2px; }
+  .xmind-row.drop-before::before { top:-2px; } .xmind-row.drop-after::after { bottom:-2px; }
+  .xmind-toggle, .xmind-grip { flex:none; width:20px; height:24px; padding:0; border:0; background:transparent; color:#71839a; }
+  .xmind-toggle:hover, .xmind-grip:hover { color:#c9d5e5; background:#1d2936; }
+  .xmind-toggle.empty { visibility:hidden; }
+  .xmind-grip { cursor:grab; font-size:13px; }
+  .xmind-title { flex:1; min-width:0; padding:4px 6px; border:1px solid transparent; border-radius:5px; outline:none; background:transparent; color:#dce5f1; font:12px/1.35 var(--font); }
+  .xmind-title:hover, .xmind-title:focus { border-color:#34465c; background:#0b1119; }
+  .xmind-depth { flex:none; color:#56667a; font:9px var(--mono); }
+  .xmind-help { margin-left:auto; color:#758399; font-size:10px; }
+  @media(max-width:900px){.xmind-workspace{grid-template-columns:minmax(220px,42%) minmax(0,1fr)}.xmind-help{display:none}}
   #draw-ai-btn, #draw-xml-btn { display:none; }
   #draw-tool-dialog { position:absolute; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(3,7,12,.72); backdrop-filter:blur(5px); }
   #draw-tool-dialog.open { display:flex; }
@@ -1894,6 +1926,7 @@
   .draw-type { flex:none; padding:1px 6px; border:1px solid; border-radius:999px; font:8px/1.55 var(--mono); letter-spacing:.02em; white-space:nowrap; }
   .draw-type--excalidraw { color:#8fb5ff; border-color:rgba(120,169,255,.35); background:rgba(79,140,255,.10); }
   .draw-type--drawio { color:#65d397; border-color:rgba(78,201,135,.34); background:rgba(54,179,113,.10); }
+  .draw-type--xmind { color:#c6e66c; border-color:rgba(170,205,76,.38); background:rgba(143,184,42,.11); }
   .tree-children > .fnode::before, .tree-children > .item::after, .tree-children > .resource-row::before,
   .draw-children > .draw-frow::before, .draw-children > .draw-row::before {
     content:''; position:absolute; left:-9px; top:15px; width:8px; border-top:1px solid #273546; pointer-events:none;
@@ -2484,7 +2517,7 @@
           <label id="draw-nd-name-label" for="draw-nd-name">名称</label>
           <input type="text" id="draw-nd-name" placeholder="Untitled" autocomplete="off">
           <label id="draw-nd-type-label" for="draw-nd-type">绘图类型</label>
-          <select id="draw-nd-type"><option value="excalidraw">Excalidraw（手绘风格）</option><option value="drawio">Draw.io（流程图 / 架构图）</option></select>
+          <select id="draw-nd-type"><option value="excalidraw">Excalidraw（手绘风格）</option><option value="drawio">Draw.io（流程图 / 架构图）</option><option value="xmind">XMind（思维导图）</option></select>
           <label id="draw-nd-dir-label" for="draw-nd-dir">位置</label>
           <select id="draw-nd-dir"></select>
           <div class="nd-btns">
@@ -2550,6 +2583,26 @@
       </div>
       <div id="excal-root"></div>
       <div id="drawio-root" aria-label="Draw.io 编辑器"></div>
+      <div id="xmind-root" aria-label="XMind 编辑器">
+        <div class="xmind-toolbar">
+          <select id="xmind-sheet-select" aria-label="选择 XMind 画布"></select>
+          <input id="xmind-sheet-title" aria-label="XMind 画布名称" value="画布 1">
+          <button id="xmind-add-sheet" title="新增画布">＋ 画布</button>
+          <button id="xmind-delete-sheet" title="删除当前画布">删画布</button>
+          <button id="xmind-add-child" title="为选中主题新增子主题（Tab）">＋ 子主题</button>
+          <button id="xmind-add-sibling" title="在选中主题后新增同级主题（Enter）">＋ 同级</button>
+          <button id="xmind-delete" title="删除选中主题（Delete）">删除</button>
+          <span class="sp"></span>
+          <button id="xmind-undo" title="撤销（Ctrl/⌘+Z）">撤销</button>
+          <button id="xmind-redo" title="重做（Ctrl/⌘+Shift+Z）">重做</button>
+          <button id="xmind-fit" title="将导图适应可视区域">适应</button>
+          <span class="xmind-help">拖到主题中部成为子级，拖到上/下边缘调整顺序</span>
+        </div>
+        <div class="xmind-workspace">
+          <aside id="xmind-outline" aria-label="XMind 大纲"></aside>
+          <section id="xmind-preview" aria-label="XMind 导图预览"><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
+        </div>
+      </div>
       <div id="draw-tool-dialog" role="dialog" aria-modal="true" aria-labelledby="draw-tool-title">
         <div class="draw-tool-panel">
           <div class="draw-tool-head"><strong id="draw-tool-title">Draw.io 智能绘图</strong><button id="draw-tool-ai-tab" class="on">✨ AI 生成</button><button id="draw-tool-xml-tab">&lt;/&gt; XML</button><button id="draw-tool-close">✕</button></div>
@@ -4288,8 +4341,8 @@ window.addEventListener('DOMContentLoaded',wireReadingPanel);
 /* ------------------------- 绘图（Excalidraw / Draw.io，文件存于 vault/drawings/） ------------------------- */
 let DRAWINGS = [];            // [{name,size,updated}]
 let DRAW_FILE = null;         // 当前打开的绘图文件名
-let DRAW_KIND = null;         // excalidraw | drawio
-let DRAW_PENDING = null;      // 待保存的最新 Excalidraw 场景或 {xml}
+let DRAW_KIND = null;         // excalidraw | drawio | xmind
+let DRAW_PENDING = null;      // 待保存的最新 Excalidraw 场景、{xml} 或 {workbook}
 let DRAW_SAVE_T = 0;          // 防抖定时器
 let DRAW_ROOT = null;         // React 根（Excalidraw）
 let DRAW_DIRTY = false;
@@ -4301,8 +4354,8 @@ let DRAW_OPEN = (() => { try { return localStorage.getItem('mc-draw-open') !== '
 let DRAW_DIR_OPEN = (() => { try { return new Set(JSON.parse(localStorage.getItem('mc-draw-open-dirs') || '[]')); } catch (_) { return new Set(); } })();
 let DRAW_ND_KIND = 'drawing';
 function saveDrawDirs() { try { localStorage.setItem('mc-draw-open-dirs', JSON.stringify([...DRAW_DIR_OPEN])); } catch (_) {} }
-function drawKind(n) { return /\.drawio$/i.test(String(n || '')) ? 'drawio' : 'excalidraw'; }
-function drawBase(n) { return String(n).split('/').pop().replace(/\.(?:excalidraw|drawio)$/i, ''); }   // 显示名：路径 → 文件名（不含扩展）
+function drawKind(n) { const value=String(n||'');return /\.drawio$/i.test(value)?'drawio':(/\.xmind$/i.test(value)?'xmind':'excalidraw'); }
+function drawBase(n) { return String(n).split('/').pop().replace(/\.(?:excalidraw|drawio|xmind)$/i, ''); }   // 显示名：路径 → 文件名（不含扩展）
 /* ---- 库（Library）：与本绘图共享同一套编辑器，库文件存于 vault/libraries/*.excalidrawLibrary ---- */
 let LIB_SAVE_T = 0;            // 库改动防抖定时器
 let LIB_POLL_T = 0;            // 文件夹轮询定时器
@@ -4311,7 +4364,7 @@ let LIB_LAST_IDS = '';         // 上次已加载 item id 快照（用于判断�
 window.__LIB_COUNT = 0;        // 测试/调试：当前库 item 数
 const LIB_APP_FILE = 'local.excalidrawLibrary';   // 应用内改动的自写文件名（轮询忽略它，避免写读循环）
 
-function drawName(n) { return String(n).replace(/\.(?:excalidraw|drawio)$/i, ''); }
+function drawName(n) { return String(n).replace(/\.(?:excalidraw|drawio|xmind)$/i, ''); }
 
 function loadExcalLoader() {
   if (window.ExcalLoader) return Promise.resolve(window.ExcalLoader);
@@ -4343,7 +4396,7 @@ async function saveDrawing() {
   clearTimeout(DRAW_SAVE_T); DRAW_SAVE_T = 0;
   if (!DRAW_FILE || !DRAW_PENDING) return;
   const data = DRAW_PENDING; DRAW_PENDING = null;
-  const body = DRAW_KIND === 'drawio' ? { xml: data.xml || '' } : sanitizeScene(data);
+  const body = DRAW_KIND === 'drawio' ? { xml: data.xml || '' } : (DRAW_KIND === 'xmind' ? { workbook:data.workbook } : sanitizeScene(data));
   const r = await api('/api/drawings/save', { name: DRAW_FILE, data: body });
   if (r.ok) {
     DRAW_DIRTY = !!DRAW_PENDING;
@@ -4491,6 +4544,98 @@ async function generateDrawioWithAi(){
   finally{if(generationTimer)clearInterval(generationTimer);DRAW_AI_BUSY=false;$('draw-ai-generate').disabled=false;}
 }
 
+/* ---- XMind：标准 .xmind 工作簿 + 可拖拽大纲 + Markmap 预览 ---- */
+let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set();
+function xmindClone(value){return JSON.parse(JSON.stringify(value));}
+function xmindId(){return 'cs'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
+function xmindSheet(){return XMIND_WORKBOOK&&XMIND_WORKBOOK[XMIND_SHEET_INDEX];}
+function xmindRootTopic(){const sheet=xmindSheet();return sheet&&sheet.rootTopic;}
+function xmindChildren(topic,create=false){
+  if(!topic)return[];
+  if(create){if(!topic.children||typeof topic.children!=='object')topic.children={};if(!Array.isArray(topic.children.attached))topic.children.attached=[];}
+  return topic.children&&Array.isArray(topic.children.attached)?topic.children.attached:[];
+}
+function xmindFind(id){
+  let found=null;
+  const walk=(topic,parent,depth)=>{if(!topic||found)return;if(topic.id===id){found={topic,parent,depth};return;}for(const child of xmindChildren(topic))walk(child,topic,depth+1);};
+  walk(xmindRootTopic(),null,0);return found;
+}
+function xmindContains(topic,id){if(!topic)return false;if(topic.id===id)return true;return xmindChildren(topic).some(child=>xmindContains(child,id));}
+function xmindNormalize(){
+  if(!XMIND_WORKBOOK)return;const seen=new Set();const walk=(topic)=>{if(!topic.id||seen.has(topic.id))topic.id=xmindId();seen.add(topic.id);topic.class=topic.class||'topic';topic.title=String(topic.title||'未命名主题');xmindChildren(topic,true).forEach(walk);};XMIND_WORKBOOK.forEach((sheet,index)=>{if(!sheet.id||seen.has(sheet.id))sheet.id=xmindId();seen.add(sheet.id);sheet.class=sheet.class||'sheet';sheet.title=String(sheet.title||('画布 '+(index+1)));if(sheet.rootTopic)walk(sheet.rootTopic);});
+}
+function xmindRecord(){
+  if(!XMIND_WORKBOOK)return;const snapshot=JSON.stringify(XMIND_WORKBOOK);
+  if(XMIND_HISTORY[XMIND_HISTORY_INDEX]===snapshot){xmindUpdateUndo();return;}
+  XMIND_HISTORY=XMIND_HISTORY.slice(0,XMIND_HISTORY_INDEX+1);XMIND_HISTORY.push(snapshot);if(XMIND_HISTORY.length>100)XMIND_HISTORY.shift();XMIND_HISTORY_INDEX=XMIND_HISTORY.length-1;xmindUpdateUndo();
+}
+function xmindQueueRecord(){clearTimeout(XMIND_HISTORY_T);XMIND_HISTORY_T=setTimeout(xmindRecord,450);}
+function xmindUpdateUndo(){const undo=$('xmind-undo'),redo=$('xmind-redo');if(undo)undo.disabled=XMIND_HISTORY_INDEX<=0;if(redo)redo.disabled=XMIND_HISTORY_INDEX<0||XMIND_HISTORY_INDEX>=XMIND_HISTORY.length-1;const del=$('xmind-delete'),sib=$('xmind-add-sibling');const hit=xmindFind(XMIND_SELECTED);if(del)del.disabled=!hit||!hit.parent;if(sib)sib.disabled=!hit||!hit.parent;}
+function renderXmindSheets(){
+  const select=$('xmind-sheet-select');if(!select||!XMIND_WORKBOOK)return;select.innerHTML='';XMIND_WORKBOOK.forEach((sheet,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=sheet.title||('画布 '+(index+1));select.appendChild(option);});XMIND_SHEET_INDEX=Math.max(0,Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1));select.value=String(XMIND_SHEET_INDEX);$('xmind-sheet-title').value=xmindSheet().title||('画布 '+(XMIND_SHEET_INDEX+1));$('xmind-delete-sheet').disabled=XMIND_WORKBOOK.length<=1;
+}
+function xmindChanged(record=true){
+  xmindNormalize();if(record)xmindRecord();else xmindQueueRecord();
+  DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();renderXmindSheets();renderXmindOutline();scheduleXmindPreview();
+}
+function xmindUndo(direction){
+  clearTimeout(XMIND_HISTORY_T);xmindRecord();const next=XMIND_HISTORY_INDEX+direction;if(next<0||next>=XMIND_HISTORY.length)return;
+  XMIND_HISTORY_INDEX=next;XMIND_WORKBOOK=JSON.parse(XMIND_HISTORY[next]);XMIND_SHEET_INDEX=Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1);if(!xmindFind(XMIND_SELECTED))XMIND_SELECTED=xmindRootTopic().id;
+  DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();renderXmindSheets();renderXmindOutline();scheduleXmindPreview();xmindUpdateUndo();
+}
+function xmindMarkdown(){
+  const lines=[];const clean=(value)=>String(value||'未命名主题').replace(/[\r\n]+/g,' ').replace(/([\\`*_{}\[\]<>])/g,'\\$1').trim()||'未命名主题';
+  const walk=(topic,depth)=>{if(depth<=6)lines.push('#'.repeat(Math.max(1,depth))+' '+clean(topic.title));else lines.push('  '.repeat(depth-7)+'- '+clean(topic.title));for(const child of xmindChildren(topic))walk(child,depth+1);};
+  const root=xmindRootTopic();if(root)walk(root,1);return lines.join('\n');
+}
+function scheduleXmindPreview(){clearTimeout(XMIND_RENDER_T);XMIND_RENDER_T=setTimeout(renderXmindPreview,120);}
+function renderXmindPreview(){
+  if(DRAW_KIND!=='xmind')return;const svg=$('xmind-svg'),empty=$('xmind-empty');if(!svg)return;
+  if(!(window.MarkmapLib&&window.MarkmapView&&window.MarkmapView.Markmap)){
+    empty.style.display='grid';empty.textContent='正在加载导图引擎…';ensureMindmapLib().then(()=>{if(DRAW_KIND==='xmind')renderXmindPreview();}).catch(error=>{empty.textContent='导图引擎加载失败：'+error.message;});return;
+  }
+  empty.style.display='none';try{const{root}=new window.MarkmapLib.Transformer().transform(xmindMarkdown()||'# 空导图');if(!XMIND_MAP)XMIND_MAP=window.MarkmapView.Markmap.create(svg,{duration:160,maxWidth:300});XMIND_MAP.setData(root);XMIND_MAP.fit();}catch(error){empty.style.display='grid';empty.textContent='导图渲染失败：'+error.message;}
+}
+function renderXmindOutline(){
+  const box=$('xmind-outline');if(!box||DRAW_KIND!=='xmind')return;box.innerHTML='';const root=xmindRootTopic();if(!root)return;
+  const walk=(topic,parent,depth)=>{
+    const row=document.createElement('div');row.className='xmind-row'+(topic.id===XMIND_SELECTED?' selected':'');row.dataset.id=topic.id;row.style.paddingLeft=(5+Math.min(depth,12)*14)+'px';row.draggable=!!parent;
+    const toggle=document.createElement('button');toggle.className='xmind-toggle'+(xmindChildren(topic).length?'':' empty');toggle.textContent=XMIND_COLLAPSED.has(topic.id)?'▸':'▾';toggle.title=XMIND_COLLAPSED.has(topic.id)?'展开子主题':'收起子主题';toggle.onclick=(event)=>{event.stopPropagation();if(XMIND_COLLAPSED.has(topic.id))XMIND_COLLAPSED.delete(topic.id);else XMIND_COLLAPSED.add(topic.id);renderXmindOutline();};
+    const grip=document.createElement('button');grip.className='xmind-grip';grip.textContent='⠇';grip.title=parent?'拖拽调整层级或顺序':'根主题';grip.disabled=!parent;
+    const input=document.createElement('input');input.className='xmind-title';input.value=topic.title||'';input.setAttribute('aria-label','主题名称');input.onfocus=()=>{XMIND_SELECTED=topic.id;renderXmindOutlineSelection();};input.oninput=()=>{topic.title=input.value;DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();scheduleXmindPreview();xmindQueueRecord();};input.onblur=xmindRecord;
+    input.onkeydown=(event)=>{if(event.key==='Enter'){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();xmindAddChild();}else if((event.key==='Backspace'||event.key==='Delete')&&!input.value&&parent){event.preventDefault();xmindDelete();}};
+    const level=document.createElement('span');level.className='xmind-depth';level.textContent=depth===0?'中心':'L'+depth;
+    row.append(toggle,grip,input,level);row.onclick=(event)=>{if(event.target!==input){XMIND_SELECTED=topic.id;renderXmindOutlineSelection();}};
+    row.addEventListener('dragstart',(event)=>{if(!parent){event.preventDefault();return;}XMIND_DRAG=topic.id;row.classList.add('dragging');event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-codescope-xmind',topic.id);});
+    row.addEventListener('dragend',()=>{XMIND_DRAG=null;document.querySelectorAll('.xmind-row').forEach(node=>node.classList.remove('dragging','drop-before','drop-after','drop-child'));});
+    row.addEventListener('dragover',(event)=>{const source=XMIND_DRAG||event.dataTransfer.getData('application/x-codescope-xmind');if(!source||source===topic.id||xmindContains(xmindFind(source)?.topic,topic.id))return;event.preventDefault();const rect=row.getBoundingClientRect(),ratio=(event.clientY-rect.top)/Math.max(1,rect.height),mode=ratio<.27?'before':(ratio>.73?'after':'child');row.classList.remove('drop-before','drop-after','drop-child');row.classList.add('drop-'+mode);row.dataset.dropMode=mode;});
+    row.addEventListener('dragleave',()=>row.classList.remove('drop-before','drop-after','drop-child'));
+    row.addEventListener('drop',(event)=>{event.preventDefault();event.stopPropagation();const source=XMIND_DRAG||event.dataTransfer.getData('application/x-codescope-xmind'),mode=row.dataset.dropMode||'child';xmindMove(source,topic.id,mode);});
+    box.appendChild(row);if(!XMIND_COLLAPSED.has(topic.id))for(const child of xmindChildren(topic))walk(child,topic,depth+1);
+  };walk(root,null,0);xmindUpdateUndo();
+  if(XMIND_FOCUS){const target=box.querySelector('.xmind-row[data-id="'+CSS.escape(XMIND_FOCUS)+'"] .xmind-title');XMIND_FOCUS=null;if(target)requestAnimationFrame(()=>{target.focus();target.select();});}
+}
+function renderXmindOutlineSelection(){document.querySelectorAll('.xmind-row').forEach(row=>row.classList.toggle('selected',row.dataset.id===XMIND_SELECTED));xmindUpdateUndo();}
+function xmindNewTopic(title='新主题'){return{id:xmindId(),class:'topic',title,children:{attached:[]}};}
+function xmindAddSheet(){const number=XMIND_WORKBOOK.length+1;XMIND_WORKBOOK.push({id:xmindId(),class:'sheet',title:'画布 '+number,rootTopic:{...xmindNewTopic('中心主题'),structureClass:'org.xmind.ui.logic.right'}});XMIND_SHEET_INDEX=XMIND_WORKBOOK.length-1;XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
+function xmindDeleteSheet(){if(!XMIND_WORKBOOK||XMIND_WORKBOOK.length<=1)return;XMIND_WORKBOOK.splice(XMIND_SHEET_INDEX,1);XMIND_SHEET_INDEX=Math.max(0,Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1));XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
+function xmindAddChild(){const hit=xmindFind(XMIND_SELECTED)||xmindFind(xmindRootTopic()?.id);if(!hit)return;const topic=xmindNewTopic();xmindChildren(hit.topic,true).push(topic);XMIND_COLLAPSED.delete(hit.topic.id);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindAddSibling(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return xmindAddChild();const list=xmindChildren(hit.parent,true),topic=xmindNewTopic(),index=list.indexOf(hit.topic);list.splice(index+1,0,topic);XMIND_SELECTED=topic.id;XMIND_FOCUS=topic.id;xmindChanged();}
+function xmindDelete(){const hit=xmindFind(XMIND_SELECTED);if(!hit||!hit.parent)return;const list=xmindChildren(hit.parent,true),index=list.indexOf(hit.topic);if(index>=0)list.splice(index,1);XMIND_SELECTED=hit.parent.id;xmindChanged();}
+function xmindMove(sourceId,targetId,mode){
+  const source=xmindFind(sourceId),target=xmindFind(targetId);if(!source||!source.parent||!target||sourceId===targetId||xmindContains(source.topic,targetId))return;
+  const old=xmindChildren(source.parent,true),oldIndex=old.indexOf(source.topic);if(oldIndex<0)return;old.splice(oldIndex,1);
+  if(mode==='child'){xmindChildren(target.topic,true).push(source.topic);XMIND_COLLAPSED.delete(target.topic.id);}
+  else{const refreshed=xmindFind(targetId);if(!refreshed||!refreshed.parent){old.splice(oldIndex,0,source.topic);return;}const list=xmindChildren(refreshed.parent,true),index=list.indexOf(refreshed.topic);list.splice(index+(mode==='after'?1:0),0,source.topic);}
+  XMIND_SELECTED=sourceId;xmindChanged();
+}
+function openXmindEditor(workbook){
+  XMIND_WORKBOOK=xmindClone(workbook);XMIND_SHEET_INDEX=0;xmindNormalize();XMIND_SELECTED=xmindRootTopic().id;XMIND_HISTORY=[JSON.stringify(XMIND_WORKBOOK)];XMIND_HISTORY_INDEX=0;XMIND_MAP=null;XMIND_COLLAPSED=new Set();
+  $('xmind-root').style.display='flex';$('drawio-root').style.display='none';$('excal-root').style.display='none';$('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
+  renderXmindSheets();renderXmindOutline();renderXmindPreview();setDrawStatus('XMind 已加载 · 自动保存','ok');
+}
+function closeXmindEditor(){clearTimeout(XMIND_HISTORY_T);clearTimeout(XMIND_RENDER_T);XMIND_WORKBOOK=null;XMIND_SHEET_INDEX=0;XMIND_SELECTED=null;XMIND_HISTORY=[];XMIND_HISTORY_INDEX=-1;XMIND_MAP=null;XMIND_DRAG=null;XMIND_COLLAPSED=new Set();$('xmind-outline').innerHTML='';$('xmind-svg').innerHTML='';$('xmind-root').style.display='none';}
+
 function scheduleDrawSave() {
   DRAW_DIRTY = true; setDrawStatus('未保存…', 'dirty');
   clearTimeout(DRAW_SAVE_T);
@@ -4508,6 +4653,13 @@ async function openDrawing(name) {
   $('draw-editor').style.display = 'flex';
   $('draw-ed-name').textContent = drawBase(name);
   setDrawStatus('加载中…', '');
+  if (DRAW_KIND === 'xmind') {
+    $('draw-lib-note').textContent='XMind · 本地编辑';
+    $('draw-lib-note').title='标准 .xmind 文件，可在 XMind 桌面端继续编辑';
+    openXmindEditor(r.workbook);
+    renderDrawList();
+    return;
+  }
   if (DRAW_KIND === 'drawio') {
     $('draw-lib-note').textContent='Draw.io · 在线编辑';
     $('draw-lib-note').title='使用 diagrams.net 官方嵌入编辑器，文件自动保存到 vault/drawings';
@@ -4560,6 +4712,7 @@ async function closeDrawEditor(flush) {
   LIB_ITEMS = []; window.__LIB_COUNT = 0; LIB_LAST_IDS = '';
   if (DRAW_ROOT) { try { DRAW_ROOT.unmount(); } catch (_) {} DRAW_ROOT = null; }
   if (DRAWIO_FRAME) { try { DRAWIO_FRAME.remove(); } catch (_) {} DRAWIO_FRAME = null; }
+  closeXmindEditor();
   DRAWIO_XML = '';
   DRAW_API = null;
   window.__EX = null;          // 清除旧实例引用（防止重开时误判/读旧场景）
@@ -4570,6 +4723,7 @@ async function closeDrawEditor(flush) {
   $('excal-root').style.display = 'block';
   $('drawio-root').innerHTML = '';
   $('drawio-root').style.display = 'none';
+  $('xmind-root').style.display = 'none';
   $('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
   $('draw-tool-dialog').classList.remove('open');
   renderDrawList();
@@ -4677,7 +4831,7 @@ function openDrawNewDialog(kind) {
   $('draw-nd-title').textContent = DRAW_ND_KIND === 'folder' ? '新建绘图文件夹' : '新建绘图';
   $('draw-nd-hint').textContent = DRAW_ND_KIND === 'folder'
     ? '名称可含 / 嵌套创建（如 工作/架构图），可放在任意层级下'
-    : 'Excalidraw 适合草图；Draw.io 适合流程图、架构图和 UML（编辑时需要联网）';
+    : 'Excalidraw 适合草图；Draw.io 适合流程图与 UML；XMind 适合可拖拽的层级思维导图';
   $('draw-nd-name').value = '';
   $('draw-nd-name').placeholder = DRAW_ND_KIND === 'folder' ? '我的文件夹' : 'Untitled';
   $('draw-nd-name-label').textContent = DRAW_ND_KIND === 'folder' ? '文件夹名称' : '绘图名称';
@@ -4688,7 +4842,7 @@ function openDrawNewDialog(kind) {
   typeLabel.style.display = choosingType ? '' : 'none';
   typeSelect.style.display = choosingType ? '' : 'none';
   if (choosingType) {
-    try { typeSelect.value = localStorage.getItem('mc-draw-new-kind') === 'drawio' ? 'drawio' : 'excalidraw'; }
+    try { const saved=localStorage.getItem('mc-draw-new-kind');typeSelect.value=['excalidraw','drawio','xmind'].includes(saved)?saved:'excalidraw'; }
     catch (_) { typeSelect.value = 'excalidraw'; }
   }
   // 位置下拉：递归收集绘图文件夹
@@ -4760,7 +4914,8 @@ async function submitDrawNewDialog() {
     setStatus('ok', '已创建文件夹：' + r.path);
   } else {
     if (DRAW_FILE || DRAW_ROOT) await closeDrawEditor(true);
-    const kind = $('draw-nd-type').value === 'drawio' ? 'drawio' : 'excalidraw';
+    const selectedKind=$('draw-nd-type').value;
+    const kind = ['drawio','xmind'].includes(selectedKind) ? selectedKind : 'excalidraw';
     try { localStorage.setItem('mc-draw-new-kind', kind); } catch (_) {}
     const r = await api('/api/drawings/new', { dir, name, kind });
     if (!r.ok) { setStatus('err', '新建绘图失败：' + (r.error || '')); await renderDrawList(); return; }
@@ -4853,7 +5008,8 @@ async function renderDrawList() {
         const row = document.createElement('div');
         row.className = 'draw-row' + (DRAW_FILE === c.path ? ' on' : '');
         const kind = drawKind(c.path);
-        row.title = c.path + '　点击打开（' + (kind === 'drawio' ? 'Draw.io 在线编辑器' : 'Excalidraw 编辑器') + '，改动自动保存）；拖到文件夹行可移动';
+        const kindLabel=kind==='drawio'?'Draw.io 在线编辑器':(kind==='xmind'?'XMind 本地思维导图编辑器':'Excalidraw 编辑器');
+        row.title = c.path + '　点击打开（' + kindLabel + '，改动自动保存）；拖到文件夹行可移动';
         row.draggable = true;
         row.addEventListener('dragstart', (e) => {
           if (e.target.closest('button')) { e.preventDefault(); return; }
@@ -4866,16 +5022,16 @@ async function renderDrawList() {
         nm.textContent = drawBase(c.path);
         const fileIcon = document.createElement('span');
         fileIcon.className = 'draw-file-ic';
-        fileIcon.textContent = kind === 'drawio' ? '▦' : '◇';
-        fileIcon.title = kind === 'drawio' ? 'Draw.io' : 'Excalidraw';
+        fileIcon.textContent = kind === 'drawio' ? '▦' : (kind === 'xmind' ? '◉' : '◇');
+        fileIcon.title = kind === 'drawio' ? 'Draw.io' : (kind === 'xmind' ? 'XMind' : 'Excalidraw');
         const typeBadge = document.createElement('span');
         // 不直接使用 `.excalidraw` 类名，避免与编辑器自带的全局样式冲突。
         typeBadge.className = 'draw-type draw-type--' + kind;
         typeBadge.dataset.kind = kind;
-        typeBadge.textContent = kind === 'drawio' ? 'Draw.io' : 'Excalidraw';
+        typeBadge.textContent = kind === 'drawio' ? 'Draw.io' : (kind === 'xmind' ? 'XMind' : 'Excalidraw');
         typeBadge.title = kind === 'drawio'
           ? '类型：Draw.io（流程图、架构图、UML）'
-          : '类型：Excalidraw（手绘草图、白板）';
+          : (kind === 'xmind' ? '类型：XMind（层级思维导图）' : '类型：Excalidraw（手绘草图、白板）');
         const ren = document.createElement('button');
         ren.className = 'draw-ren';
         ren.textContent = '✎';
@@ -5010,6 +5166,10 @@ function wireDrawingPanel() {
   $('draw-xml-validate').onclick=()=>{const checked=validateDrawioXmlLocal($('draw-xml-source').value);setDrawToolStatus(checked.ok?'✅ XML 有效 · '+checked.pages+' 页 · '+checked.cells+' 个单元':'❌ '+checked.error,checked.ok?'ok':'err');};
   $('draw-xml-format').onclick=()=>{try{$('draw-xml-source').value=prettyDrawioXml($('draw-xml-source').value);setDrawToolStatus('✅ 已格式化','ok');}catch(error){setDrawToolStatus('❌ '+error.message,'err');}};
   $('draw-xml-apply').onclick=()=>applyDrawioXml($('draw-xml-source').value,'XML 已校验并载入');
+  $('xmind-add-child').onclick=xmindAddChild;$('xmind-add-sibling').onclick=xmindAddSibling;$('xmind-delete').onclick=xmindDelete;$('xmind-add-sheet').onclick=xmindAddSheet;$('xmind-delete-sheet').onclick=xmindDeleteSheet;$('xmind-undo').onclick=()=>xmindUndo(-1);$('xmind-redo').onclick=()=>xmindUndo(1);$('xmind-fit').onclick=()=>{if(XMIND_MAP)XMIND_MAP.fit();};
+  $('xmind-sheet-select').onchange=()=>{XMIND_SHEET_INDEX=Math.max(0,Number($('xmind-sheet-select').value)||0);XMIND_SELECTED=xmindRootTopic().id;renderXmindSheets();renderXmindOutline();renderXmindPreview();};
+  $('xmind-sheet-title').oninput=()=>{const sheet=xmindSheet();if(!sheet)return;sheet.title=$('xmind-sheet-title').value;DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();xmindQueueRecord();};$('xmind-sheet-title').onblur=()=>{xmindRecord();renderXmindSheets();};
+  $('xmind-root').addEventListener('keydown',(event)=>{if(DRAW_KIND!=='xmind')return;const mod=event.metaKey||event.ctrlKey;if(mod&&event.key.toLowerCase()==='z'){event.preventDefault();xmindUndo(event.shiftKey?1:-1);}else if(mod&&event.key.toLowerCase()==='y'){event.preventDefault();xmindUndo(1);}else if(event.key==='Delete'&&!event.target.classList.contains('xmind-title'))xmindDelete();});
   $('draw-tool-dialog').addEventListener('mousedown',(event)=>{if(event.target===$('draw-tool-dialog'))hideDrawTool();});
   document.addEventListener('keydown',(event)=>{if(event.key==='Escape'&&$('draw-tool-dialog').classList.contains('open'))hideDrawTool();});
   $('pane-draw').classList.toggle('collapsed', !DRAW_OPEN);
@@ -5019,7 +5179,7 @@ function wireDrawingPanel() {
   window.addEventListener('beforeunload', () => {
     if (DRAW_FILE && DRAW_PENDING) {
       clearTimeout(DRAW_SAVE_T);
-      const data = DRAW_KIND === 'drawio' ? { xml: DRAW_PENDING.xml || '' } : sanitizeScene(DRAW_PENDING);
+      const data = DRAW_KIND === 'drawio' ? { xml: DRAW_PENDING.xml || '' } : (DRAW_KIND === 'xmind' ? { workbook:DRAW_PENDING.workbook } : sanitizeScene(DRAW_PENDING));
       try { fetch('/api/drawings/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: DRAW_FILE, data }), keepalive: true }); } catch (_) {}
     }
     flushLibSave(LIB_ITEMS);
@@ -8547,7 +8707,7 @@ function workspaceQuickEntries(){
     rows.push({kind:'reading',key:'project:'+project.path,icon:'▤',name:project.name,preview:project.description||'阅读项目',where:'阅读项目 · '+(project.count||0)+' 个片段',search:[project.name,project.path,project.description,(project.tags||[]).join(' ')].join(' '),open:()=>openReadingProject(project)});
     for(const item of project.children||[])rows.push({kind:'reading',key:item.path,icon:readingKindIcon(item),name:readingBase(item.name),preview:project.name+' · '+readingRoleLabel(item),where:'阅读 · '+item.path,search:[item.name,item.path,project.name,project.description,(project.tags||[]).join(' '),readingRoleLabel(item)].join(' '),open:()=>openReading(item.path,READING_ACTIVE_SLOT)});
   }
-  for(const item of DRAWINGS)rows.push({kind:'drawing',key:item.path,icon:drawKind(item.path)==='drawio'?'▦':'◇',name:drawBase(item.path),preview:item.path,where:'绘图 · '+(drawKind(item.path)==='drawio'?'Draw.io':'Excalidraw'),search:item.path+' '+drawBase(item.path)+' '+drawKind(item.path),open:()=>openDrawing(item.path)});
+  for(const item of DRAWINGS){const kind=drawKind(item.path),label=kind==='drawio'?'Draw.io':(kind==='xmind'?'XMind':'Excalidraw'),icon=kind==='drawio'?'▦':(kind==='xmind'?'◉':'◇');rows.push({kind:'drawing',key:item.path,icon,name:drawBase(item.path),preview:item.path,where:'绘图 · '+label,search:item.path+' '+drawBase(item.path)+' '+kind,open:()=>openDrawing(item.path)});}
   return rows;
 }
 function quickSection(box,label){const el=document.createElement('div');el.className='quick-section';el.textContent=label;box.appendChild(el);}

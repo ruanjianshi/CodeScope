@@ -30,6 +30,7 @@ if not exist "node_modules\ssh2" goto install_deps
 if not exist "node_modules\saxes" goto install_deps
 if not exist "node_modules\pdfjs-dist" goto install_deps
 if not exist "node_modules\monaco-editor" goto install_deps
+if not exist "node_modules\fflate" goto install_deps
 goto deps_ready
 
 :install_deps
