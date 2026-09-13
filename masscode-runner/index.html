@@ -1011,7 +1011,8 @@
   #xmind-sheet-title:hover, #xmind-sheet-title:focus { border-color:var(--border); background:#0b1119; outline:none; }
   .xmind-workspace { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); flex:1; min-height:0; }
   #xmind-outline { min-width:0; overflow:auto; padding:10px 8px 32px; border-right:1px solid var(--border); background:#0e151e; }
-  #xmind-preview { position:relative; min-width:0; min-height:0; overflow:hidden; background:radial-gradient(circle at 50% 45%,rgba(45,72,108,.18),transparent 46%),#0b1017; }
+  #xmind-preview { position:relative; min-width:0; min-height:0; overflow:hidden; outline:none; background:radial-gradient(circle at 50% 45%,rgba(45,72,108,.18),transparent 46%),#0b1017; }
+  #xmind-preview:focus-visible { box-shadow:inset 0 0 0 2px var(--xm-accent); }
   #xmind-svg { display:block; width:100%; height:100%; }
   #xmind-svg .markmap-node { cursor:pointer; }
   #xmind-root { --xm-bg:#0b1017; --xm-glow:rgba(45,72,108,.2); --xm-outline:#0e151e; --xm-row:#151f2a; --xm-link:#405672; --xm-dot:#78a9ff; --xm-node:rgba(120,169,255,.2); --xm-text:#e4ebf4; --xm-muted:#71839a; --xm-control:#0b1119; --xm-border:#34465c; --xm-selected:rgba(120,169,255,.14); --xm-accent:#78a9ff; }
@@ -1021,6 +1022,13 @@
   #xmind-svg .markmap-link, #xmind-svg .markmap-node line { stroke:var(--xm-link); }
   #xmind-svg .markmap-node circle { fill:var(--xm-node); stroke:var(--xm-dot); }
   #xmind-svg .markmap-foreign { color:var(--xm-text); }
+  #xmind-svg .markmap-link, #xmind-svg .markmap-node line { stroke-linecap:round; transition:stroke .18s,stroke-width .18s,opacity .18s; }
+  #xmind-svg .markmap-foreign { overflow:visible; }
+  #xmind-svg .markmap-foreign > div > div { border-radius:3px; transition:color .18s,background .18s,box-shadow .18s,filter .18s; }
+  #xmind-svg .markmap-node.xmind-node-selected .markmap-foreign > div > div { background:var(--xm-selected); box-shadow:0 0 0 2px var(--xm-accent),0 5px 18px rgba(0,0,0,.18); }
+  #xmind-svg .markmap-node.xmind-node-selected line { stroke:var(--xm-accent); stroke-width:3px; }
+  #xmind-svg .markmap-node.xmind-node-editing .markmap-foreign > div > div { min-width:24px; cursor:text; white-space:pre-wrap; background:var(--xm-control); box-shadow:0 0 0 2px var(--xm-accent),0 8px 24px rgba(0,0,0,.25); }
+  #xmind-svg .markmap-node[data-depth="1"] .markmap-foreign > div > div { font-weight:700; }
   #xmind-root[data-xmind-theme="classic"] { --xm-bg:#f4f7fb; --xm-glow:rgba(65,105,225,.1); --xm-outline:#e9eef6; --xm-row:#dce6f4; --xm-link:#7c94b4; --xm-dot:#316fc5; --xm-node:#e2ecfb; --xm-text:#243248; --xm-muted:#62738b; --xm-control:rgba(255,255,255,.72); --xm-border:#9db0ca; --xm-selected:rgba(49,111,197,.13); --xm-accent:#316fc5; }
   #xmind-root[data-xmind-theme="forest"] { --xm-bg:#09140f; --xm-glow:rgba(42,195,160,.14); --xm-outline:#0d1b15; --xm-row:#14291f; --xm-link:#326c58; --xm-dot:#52d6a4; --xm-node:rgba(82,214,164,.17); --xm-text:#dcf7eb; --xm-muted:#75a591; --xm-control:#091710; --xm-border:#315a49; --xm-selected:rgba(82,214,164,.13); --xm-accent:#52d6a4; }
   #xmind-root[data-xmind-theme="sunset"] { --xm-bg:#17100d; --xm-glow:rgba(255,158,100,.15); --xm-outline:#201510; --xm-row:#302019; --xm-link:#8a593b; --xm-dot:#ff9e64; --xm-node:rgba(255,158,100,.18); --xm-text:#fff0e5; --xm-muted:#bd9076; --xm-control:#190f0b; --xm-border:#714a36; --xm-selected:rgba(255,158,100,.13); --xm-accent:#ff9e64; }
@@ -1031,6 +1039,20 @@
   #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="2"] circle { stroke:#7ee787;fill:rgba(126,231,135,.17) }
   #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="3"] circle { stroke:#ffa657;fill:rgba(255,166,87,.18) }
   #xmind-root[data-xmind-theme="spectrum"] #xmind-svg [data-depth="4"] circle { stroke:#d2a8ff;fill:rgba(210,168,255,.18) }
+  #xmind-root[data-xmind-theme="classic"] #xmind-svg .markmap-foreign > div > div { padding:2px 5px; border-radius:6px; background:rgba(255,255,255,.72); box-shadow:0 0 0 1px rgba(75,102,140,.32),0 3px 10px rgba(45,66,96,.08); }
+  #xmind-root[data-xmind-theme="classic"] #xmind-svg .markmap-node line { opacity:.38; }
+  #xmind-root[data-xmind-theme="forest"] #xmind-svg .markmap-foreign > div > div { padding:2px 7px; border-radius:999px; background:rgba(32,102,76,.35); box-shadow:0 0 0 1px rgba(82,214,164,.42); }
+  #xmind-root[data-xmind-theme="forest"] #xmind-svg .markmap-link { stroke-width:2.2px; }
+  #xmind-root[data-xmind-theme="sunset"] #xmind-svg .markmap-foreign > div > div { padding:3px 6px; border-radius:2px 8px 2px 8px; background:rgba(112,58,31,.42); box-shadow:3px 3px 0 rgba(255,158,100,.18); }
+  #xmind-root[data-xmind-theme="sunset"] #xmind-svg .markmap-link { stroke-width:2.4px; }
+  #xmind-root[data-xmind-theme="violet"] #xmind-svg .markmap-foreign > div > div { padding:3px 8px; border-radius:999px; background:linear-gradient(135deg,rgba(187,154,247,.22),rgba(111,85,255,.13)); box-shadow:0 0 0 1px rgba(187,154,247,.5); }
+  #xmind-root[data-xmind-theme="violet"] #xmind-svg .markmap-link { stroke-dasharray:5 3; }
+  #xmind-root[data-xmind-theme="paper"] #xmind-svg .markmap-foreign > div > div { padding:2px 5px; border-radius:8px 3px 7px 2px; background:rgba(255,252,244,.68); box-shadow:0 0 0 1px rgba(119,92,55,.42); }
+  #xmind-root[data-xmind-theme="paper"] #xmind-svg .markmap-link { stroke-dasharray:1 2; stroke-width:2.2px; }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-foreign > div > div { padding:3px 7px; border-radius:7px; background:rgba(23,31,46,.86); box-shadow:0 0 0 1px currentColor; }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-link[data-depth="2"], #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-node[data-depth="2"] line { stroke:#ff7b72; }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-link[data-depth="3"], #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-node[data-depth="3"] line { stroke:#7ee787; }
+  #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-link[data-depth="4"], #xmind-root[data-xmind-theme="spectrum"] #xmind-svg .markmap-node[data-depth="4"] line { stroke:#d2a8ff; }
   #xmind-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); font-size:12px; pointer-events:none; }
   .xmind-row { position:relative; display:flex; align-items:center; gap:4px; min-height:31px; margin:1px 0; padding:2px 5px; border:1px solid transparent; border-radius:6px; }
   .xmind-row:hover { border-color:var(--xm-border); background:var(--xm-row); }
@@ -2623,24 +2645,24 @@
           <button id="xmind-redo" title="重做（Ctrl/⌘+Shift+Z）">重做</button>
           <button id="xmind-fit" title="将导图适应可视区域">适应</button>
           <div class="xmind-theme-wrap"><button id="xmind-theme-btn" title="选择导图外观">主题 · 深海</button><div id="xmind-theme-menu" class="hidden">
-            <button data-theme="midnight"><i class="xmind-swatch" style="background:linear-gradient(135deg,#0b1017,#78a9ff)"></i>深海</button>
-            <button data-theme="classic"><i class="xmind-swatch" style="background:linear-gradient(135deg,#f4f7fb,#316fc5)"></i>经典亮色</button>
-            <button data-theme="forest"><i class="xmind-swatch" style="background:linear-gradient(135deg,#09140f,#52d6a4)"></i>森林</button>
-            <button data-theme="sunset"><i class="xmind-swatch" style="background:linear-gradient(135deg,#17100d,#ff9e64)"></i>日落</button>
-            <button data-theme="violet"><i class="xmind-swatch" style="background:linear-gradient(135deg,#120f1c,#bb9af7)"></i>紫罗兰</button>
-            <button data-theme="paper"><i class="xmind-swatch" style="background:linear-gradient(135deg,#f5f0e5,#9b6d32)"></i>纸张</button>
-            <button data-theme="spectrum"><i class="xmind-swatch" style="background:linear-gradient(90deg,#ff7b72,#7ee787,#7dd3fc,#d2a8ff)"></i>彩虹分支</button>
+            <button data-theme="midnight"><i class="xmind-swatch" style="background:linear-gradient(135deg,#0b1017,#78a9ff)"></i>深海 · 下划线</button>
+            <button data-theme="classic"><i class="xmind-swatch" style="background:linear-gradient(135deg,#f4f7fb,#316fc5)"></i>经典 · 卡片</button>
+            <button data-theme="forest"><i class="xmind-swatch" style="background:linear-gradient(135deg,#09140f,#52d6a4)"></i>森林 · 圆角</button>
+            <button data-theme="sunset"><i class="xmind-swatch" style="background:linear-gradient(135deg,#17100d,#ff9e64)"></i>日落 · 便签</button>
+            <button data-theme="violet"><i class="xmind-swatch" style="background:linear-gradient(135deg,#120f1c,#bb9af7)"></i>紫罗兰 · 胶囊</button>
+            <button data-theme="paper"><i class="xmind-swatch" style="background:linear-gradient(135deg,#f5f0e5,#9b6d32)"></i>纸张 · 手绘</button>
+            <button data-theme="spectrum"><i class="xmind-swatch" style="background:linear-gradient(90deg,#ff7b72,#7ee787,#7dd3fc,#d2a8ff)"></i>彩虹 · 分支卡片</button>
           </div></div>
           <button id="xmind-shortcuts-btn" title="查看 XMind 同款快捷键">⌨ 快捷键</button>
           <span class="xmind-help">Enter 同级 · Tab 子级 · 拖拽调整层级</span>
         </div>
         <div class="xmind-workspace">
           <aside id="xmind-outline" aria-label="XMind 大纲"></aside>
-          <section id="xmind-preview" aria-label="XMind 导图预览"><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
+          <section id="xmind-preview" tabindex="0" aria-label="XMind 导图预览，可单击选择、双击或空格编辑"><svg id="xmind-svg"></svg><div id="xmind-empty">正在加载思维导图…</div></section>
         </div>
         <aside id="xmind-shortcuts" class="hidden" aria-label="XMind 快捷键">
           <div class="xmind-shortcut-head"><span>XMind 快捷操作</span><span class="sp"></span><button id="xmind-shortcuts-close">✕</button></div>
-          <div class="xmind-shortcut-grid"><kbd>Enter</kbd><span>新建同级主题</span><kbd>Tab</kbd><span>新建子主题</span><kbd>Ctrl/⌘ + Enter</kbd><span>新建父主题</span><kbd>Shift + Tab</kbd><span>提升一级</span><kbd>Space / F2</kbd><span>编辑选中主题</span><kbd>Alt/⌥ + ↑↓</kbd><span>上下重排主题</span><kbd>Delete</kbd><span>删除主题及子级</span><kbd>Ctrl/⌘ + Delete</kbd><span>仅删除当前主题</span><kbd>Ctrl/⌘ + /</kbd><span>折叠/展开子主题</span><kbd>Ctrl/⌘ + R</kbd><span>回到中心主题</span><kbd>↑ ↓ ← →</kbd><span>在大纲中导航</span><kbd>Ctrl/⌘ + Z</kbd><span>撤销；加 Shift 重做</span></div>
+          <div class="xmind-shortcut-grid"><kbd>单击 / 双击</kbd><span>选择主题 / 原位编辑</span><kbd>Enter</kbd><span>新建同级主题</span><kbd>Tab</kbd><span>新建子主题</span><kbd>Ctrl/⌘ + Enter</kbd><span>新建父主题</span><kbd>Shift + Tab</kbd><span>提升一级</span><kbd>Space / F2</kbd><span>原位编辑选中主题</span><kbd>Alt/⌥ + ↑↓</kbd><span>上下重排主题</span><kbd>Delete</kbd><span>删除主题及子级</span><kbd>Ctrl/⌘ + Delete</kbd><span>仅删除当前主题</span><kbd>Ctrl/⌘ + /</kbd><span>折叠/展开子主题</span><kbd>Ctrl/⌘ + R</kbd><span>回到中心主题</span><kbd>↑ ↓ ← →</kbd><span>在大纲中导航</span><kbd>Ctrl/⌘ + Z</kbd><span>撤销；加 Shift 重做</span></div>
         </aside>
       </div>
       <div id="draw-tool-dialog" role="dialog" aria-modal="true" aria-labelledby="draw-tool-title">
@@ -4586,7 +4608,7 @@ async function generateDrawioWithAi(){
 
 /* ---- XMind：标准 .xmind 工作簿 + 可拖拽大纲 + Markmap 预览 ---- */
 let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set();
-const XMIND_THEMES={midnight:'深海',classic:'经典亮色',forest:'森林',sunset:'日落',violet:'紫罗兰',paper:'纸张',spectrum:'彩虹分支'};
+const XMIND_THEMES={midnight:'深海下划线',classic:'经典卡片',forest:'森林圆角',sunset:'日落便签',violet:'紫罗兰胶囊',paper:'纸张手绘',spectrum:'彩虹分支'};
 function xmindClone(value){return JSON.parse(JSON.stringify(value));}
 function xmindId(){return 'cs'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
 function xmindThemeStorageKey(){return 'mc-xmind-theme:'+(DRAW_FILE||'default');}
@@ -4635,12 +4657,28 @@ function xmindMarkdown(){
   const root=xmindRootTopic();if(root)walk(root,1);return lines.join('\n');
 }
 function scheduleXmindPreview(){clearTimeout(XMIND_RENDER_T);XMIND_RENDER_T=setTimeout(renderXmindPreview,120);}
+function xmindPreorderTopics(){const topics=[];(function walk(topic){if(!topic)return;topics.push(topic);xmindChildren(topic).forEach(walk);})(xmindRootTopic());return topics;}
+function xmindPreviewOrdinal(node){const path=String(node.dataset.path||'').split('.');return Math.max(0,(Number(path[path.length-1])||1)-1);}
+function decorateXmindPreview(){
+  const svg=$('xmind-svg'),preview=$('xmind-preview');if(!svg||!preview||DRAW_KIND!=='xmind')return;const topics=xmindPreorderTopics(),nodes=[...svg.querySelectorAll('.markmap-node')];
+  nodes.forEach((node,index)=>{const topic=topics[xmindPreviewOrdinal(node)]||topics[index];if(!topic)return;node.dataset.topicId=topic.id;node.setAttribute('role','button');node.setAttribute('aria-label','主题：'+(topic.title||'未命名主题'));node.classList.toggle('xmind-node-selected',topic.id===XMIND_SELECTED);
+    if(node.dataset.xmindWired)return;node.dataset.xmindWired='1';
+    node.addEventListener('click',(event)=>{const editable=event.target.closest('[contenteditable="true"]');if(editable)return;event.preventDefault();event.stopPropagation();XMIND_SELECTED=node.dataset.topicId;renderXmindOutlineSelection();preview.focus({preventScroll:true});},true);
+    node.addEventListener('dblclick',(event)=>{event.preventDefault();event.stopPropagation();XMIND_SELECTED=node.dataset.topicId;renderXmindOutlineSelection();xmindStartPreviewEdit(node.dataset.topicId);},true);
+  });
+}
+function xmindStartPreviewEdit(id=XMIND_SELECTED){
+  const hit=xmindFind(id);if(!hit)return xmindFocusTitle();XMIND_SELECTED=hit.topic.id;renderXmindOutlineSelection();const node=$('xmind-svg').querySelector('.markmap-node[data-topic-id="'+CSS.escape(hit.topic.id)+'"]'),text=node&&node.querySelector('.markmap-foreign > div > div');if(!text)return xmindFocusTitle();
+  const original=hit.topic.title||'';let finished=false;node.classList.add('xmind-node-editing');text.contentEditable='true';text.spellcheck=false;text.focus({preventScroll:true});const selection=window.getSelection(),range=document.createRange();range.selectNodeContents(text);selection.removeAllRanges();selection.addRange(range);
+  const finish=(save,action='')=>{if(finished)return;finished=true;text.onkeydown=null;text.onblur=null;text.contentEditable='false';node.classList.remove('xmind-node-editing');if(save){const next=text.innerText.replace(/\r/g,'').replace(/\n+$/,'')||'未命名主题';if(next!==original){hit.topic.title=next;xmindNormalize();xmindRecord();DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();renderXmindOutline();}}if(action==='sibling')xmindAddSibling();else if(action==='child')xmindAddChild();else if(action==='unindent')xmindUnindent();else renderXmindPreview();};
+  text.onkeydown=(event)=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();finish(false);return;}if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();finish(true,'sibling');return;}if(event.key==='Tab'){event.preventDefault();finish(true,event.shiftKey?'unindent':'child');}};text.onblur=()=>finish(true);
+}
 function renderXmindPreview(){
   if(DRAW_KIND!=='xmind')return;const svg=$('xmind-svg'),empty=$('xmind-empty');if(!svg)return;
   if(!(window.MarkmapLib&&window.MarkmapView&&window.MarkmapView.Markmap)){
     empty.style.display='grid';empty.textContent='正在加载导图引擎…';ensureMindmapLib().then(()=>{if(DRAW_KIND==='xmind')renderXmindPreview();}).catch(error=>{empty.textContent='导图引擎加载失败：'+error.message;});return;
   }
-  empty.style.display='none';try{const{root}=new window.MarkmapLib.Transformer().transform(xmindMarkdown()||'# 空导图');if(!XMIND_MAP)XMIND_MAP=window.MarkmapView.Markmap.create(svg,{duration:160,maxWidth:300});XMIND_MAP.setData(root);XMIND_MAP.fit();}catch(error){empty.style.display='grid';empty.textContent='导图渲染失败：'+error.message;}
+  empty.style.display='none';try{const{root}=new window.MarkmapLib.Transformer().transform(xmindMarkdown()||'# 空导图');if(!XMIND_MAP)XMIND_MAP=window.MarkmapView.Markmap.create(svg,{duration:160,maxWidth:300});XMIND_MAP.setData(root);XMIND_MAP.fit();requestAnimationFrame(decorateXmindPreview);setTimeout(decorateXmindPreview,190);}catch(error){empty.style.display='grid';empty.textContent='导图渲染失败：'+error.message;}
 }
 function xmindResizeTitle(input){input.style.height='26px';input.style.height=Math.min(112,Math.max(26,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>112?'auto':'hidden';}
 function renderXmindOutline(){
@@ -4661,7 +4699,7 @@ function renderXmindOutline(){
   };walk(root,null,0);xmindUpdateUndo();
   if(XMIND_FOCUS){const target=box.querySelector('.xmind-row[data-id="'+CSS.escape(XMIND_FOCUS)+'"] .xmind-title');XMIND_FOCUS=null;if(target)requestAnimationFrame(()=>{target.focus();target.select();});}
 }
-function renderXmindOutlineSelection(){document.querySelectorAll('.xmind-row').forEach(row=>row.classList.toggle('selected',row.dataset.id===XMIND_SELECTED));xmindUpdateUndo();}
+function renderXmindOutlineSelection(){document.querySelectorAll('.xmind-row').forEach(row=>row.classList.toggle('selected',row.dataset.id===XMIND_SELECTED));document.querySelectorAll('#xmind-svg .markmap-node').forEach(node=>node.classList.toggle('xmind-node-selected',node.dataset.topicId===XMIND_SELECTED));xmindUpdateUndo();}
 function xmindNewTopic(title='新主题'){return{id:xmindId(),class:'topic',title,children:{attached:[]}};}
 function xmindAddSheet(){const number=XMIND_WORKBOOK.length+1;XMIND_WORKBOOK.push({id:xmindId(),class:'sheet',title:'画布 '+number,rootTopic:{...xmindNewTopic('中心主题'),structureClass:'org.xmind.ui.logic.right'}});XMIND_SHEET_INDEX=XMIND_WORKBOOK.length-1;XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
 function xmindDeleteSheet(){if(!XMIND_WORKBOOK||XMIND_WORKBOOK.length<=1)return;XMIND_WORKBOOK.splice(XMIND_SHEET_INDEX,1);XMIND_SHEET_INDEX=Math.max(0,Math.min(XMIND_SHEET_INDEX,XMIND_WORKBOOK.length-1));XMIND_SELECTED=xmindRootTopic().id;xmindChanged();}
@@ -5237,7 +5275,7 @@ function wireDrawingPanel() {
     if(mod&&key==='/'){event.preventDefault();xmindToggleFold(event.altKey||event.shiftKey);return;}if(mod&&key==='r'){event.preventDefault();XMIND_SELECTED=xmindRootTopic().id;XMIND_COLLAPSED.delete(XMIND_SELECTED);renderXmindOutline();xmindFocusTitle();return;}
     if(mod&&(event.key==='Delete'||event.key==='Backspace')){event.preventDefault();xmindDeleteSingle();return;}
     if(editing){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();if(event.shiftKey)xmindUnindent();else xmindAddChild();}else if(event.key==='Escape'){event.preventDefault();event.target.blur();}else if(event.key==='Enter'&&event.shiftKey)setTimeout(()=>xmindResizeTitle(event.target),0);return;}
-    if(event.key==='Enter'){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();event.shiftKey?xmindUnindent():xmindAddChild();}else if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();xmindDelete();}else if(event.key===' '||event.key==='F2'){event.preventDefault();xmindFocusTitle();}else if(event.key==='ArrowUp'){event.preventDefault();xmindSelectVisible(-1);}else if(event.key==='ArrowDown'){event.preventDefault();xmindSelectVisible(1);}else if(event.key==='ArrowLeft'){event.preventDefault();xmindSelectParent();}else if(event.key==='ArrowRight'){event.preventDefault();xmindSelectChild();}else if(event.key==='Escape'){$('xmind-shortcuts').classList.add('hidden');themeMenu.classList.add('hidden');}
+    if(event.key==='Enter'){event.preventDefault();xmindAddSibling();}else if(event.key==='Tab'){event.preventDefault();event.shiftKey?xmindUnindent():xmindAddChild();}else if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();xmindDelete();}else if(event.key===' '||event.key==='F2'){event.preventDefault();event.target.closest('#xmind-preview')?xmindStartPreviewEdit():xmindFocusTitle();}else if(event.key==='ArrowUp'){event.preventDefault();xmindSelectVisible(-1);}else if(event.key==='ArrowDown'){event.preventDefault();xmindSelectVisible(1);}else if(event.key==='ArrowLeft'){event.preventDefault();xmindSelectParent();}else if(event.key==='ArrowRight'){event.preventDefault();xmindSelectChild();}else if(event.key==='Escape'){$('xmind-shortcuts').classList.add('hidden');themeMenu.classList.add('hidden');}
   });
   $('draw-tool-dialog').addEventListener('mousedown',(event)=>{if(event.target===$('draw-tool-dialog'))hideDrawTool();});
   document.addEventListener('keydown',(event)=>{if(event.key==='Escape'&&$('draw-tool-dialog').classList.contains('open'))hideDrawTool();});

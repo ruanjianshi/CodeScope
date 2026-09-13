@@ -214,6 +214,8 @@ void bubbleSort(Array& values);
   assert(html.includes('id="xmind-theme-menu"') && html.includes('data-theme="spectrum"') && html.includes('setXmindTheme') && html.includes('xmindThemeStorageKey'), 'XMind 缺少多主题或主题持久化能力');
   assert(html.includes('id="xmind-shortcuts"') && html.includes('xmindAddParent') && html.includes('xmindDeleteSingle') && html.includes('xmindReorder') && html.includes('xmindToggleFold'), 'XMind 缺少快捷键面板或高级主题操作');
   assert(html.includes("event.key==='Tab'") && html.includes("event.key==='Enter'") && html.includes("event.key==='ArrowUp'") && html.includes("key==='/'"), 'XMind 键盘新建、导航、重排或折叠快捷键缺失');
+  assert(html.includes('xmindStartPreviewEdit') && html.includes('decorateXmindPreview') && html.includes('contentEditable=\'true\'') && html.includes('可单击选择、双击或空格编辑'), 'XMind 画布节点缺少直接选择或原位编辑能力');
+  assert(html.includes('森林 · 圆角') && html.includes('日落 · 便签') && html.includes('紫罗兰 · 胶囊') && html.includes('彩虹 · 分支卡片'), 'XMind 主题缺少节点形状与连线风格预设');
   assert(html.includes("typeBadge.className = 'draw-type draw-type--' + kind") && html.includes("kind === 'xmind' ? 'XMind' : 'Excalidraw'"), '绘图列表缺少明确且隔离样式的类型标识');
   assert(html.includes('id="draw-ai-btn"') && html.includes('id="draw-xml-source"') && html.includes('generateDrawioWithAi') && html.includes('validateDrawioXmlLocal'), 'Draw.io AI 绘图或 XML 编辑器缺失');
   assert(html.includes('timeoutMs:300000') && html.includes('复杂图可能需要 1–5 分钟') && serverSource.includes('Math.min(600000') && serverSource.includes("e.name === 'TimeoutError'"), 'Draw.io AI 绘图长耗时请求或超时提示缺失');
