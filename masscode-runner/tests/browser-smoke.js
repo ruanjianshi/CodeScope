@@ -457,9 +457,21 @@ print(r.run())
   if(await officeRows.count()!==3)throw new Error('Office 文档树数量错误');
 
   await officeRows.filter({hasText:'Browser Word'}).click();
-  await officePage.locator('body.office-mode .office-docx-host section.docx').waitFor({state:'visible',timeout:15000});
-  if(!(await officePage.locator('.office-docx-host').innerText()).includes('Browser Word'))throw new Error('Word 预览未渲染文档内容');
-  if(!(await officePage.locator('#office-status').innerText()).includes('只读预览'))throw new Error('Word 预览没有清晰标识编辑能力');
+  const wordEditor=officePage.locator('#office-word-editor[contenteditable="true"]');
+  await wordEditor.waitFor({state:'visible',timeout:15000});
+  if(!(await wordEditor.innerText()).includes('Browser Word'))throw new Error('Word 编辑器未载入文档内容');
+  if(await officePage.locator('.office-word-ribbon [data-word-cmd]').count()<10)throw new Error('Word 格式工具栏功能不足');
+  await wordEditor.evaluate((editor)=>{editor.insertAdjacentHTML('beforeend','<p>Browser Word Edited</p>');editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'Browser Word Edited'}));});
+  await officePage.waitForFunction(()=>document.getElementById('office-status').textContent.includes('已保存'),null,{timeout:15000});
+  await officePage.locator('[data-word-mode="preview"]').click();
+  await officePage.locator('.office-docx-host section.docx').waitFor({state:'visible',timeout:20000});
+  if(!(await officePage.locator('.office-docx-host').innerText()).includes('Browser Word Edited'))throw new Error('Word 保存后原貌预览未同步');
+  await officePage.locator('[data-word-mode="edit"]').click();
+  await wordEditor.waitFor({state:'visible',timeout:10000});
+  await officePage.locator('#office-back').click();
+  await officeRows.filter({hasText:'Browser Word'}).click();
+  await wordEditor.waitFor({state:'visible',timeout:15000});
+  if(!(await wordEditor.innerText()).includes('Browser Word Edited'))throw new Error('Word 编辑内容重新打开后丢失');
   await officePage.locator('#office-back').click();
 
   await officeRows.filter({hasText:'Browser Sheet'}).click();

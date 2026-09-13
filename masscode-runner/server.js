@@ -23,6 +23,8 @@ const { SaxesParser } = require('saxes');
 const { unzipSync, zipSync, strFromU8, strToU8 } = require('fflate');
 const { Document, Packer, Paragraph, HeadingLevel } = require('docx');
 const XLSX = require('xlsx');
+const mammoth = require('mammoth');
+const htmlToDocx = require('@turbodocx/html-to-docx');
 const { createLspService } = require('./lib/lsp-service');
 const APP_VERSION = require('./package.json').version;
 
@@ -2692,6 +2694,54 @@ async function createOfficeDocument(kind, file, title) {
   throw new Error('不支持的 Office 文档类型');
 }
 
+function sanitizeOfficeWordHtml(value) {
+  return String(value || '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(script|style|iframe|object|embed|form|input|button|meta|link)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<(script|style|iframe|object|embed|form|input|button|meta|link)\b[^>]*\/?\s*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s+(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, '');
+}
+
+async function officeWordToHtml(file) {
+  const result = await mammoth.convertToHtml({ buffer:fs.readFileSync(file) }, {
+    styleMap:[
+      "p[style-name='Title'] => h1.office-document-title:fresh",
+      "p[style-name='Subtitle'] => p.office-document-subtitle:fresh",
+      "p[style-name='Quote'] => blockquote:fresh",
+    ],
+    includeDefaultStyleMap:true,
+  });
+  return { html:sanitizeOfficeWordHtml(result.value), messages:(result.messages || []).slice(0, 30).map((item) => ({ type:item.type, message:item.message })) };
+}
+
+async function saveOfficeWordHtml(file, value) {
+  const html = sanitizeOfficeWordHtml(value);
+  if (!html.trim()) throw requestError('Word 文档内容不能为空', 400);
+  if (Buffer.byteLength(html, 'utf8') > 20 * 1024 * 1024) throw requestError('Word 编辑内容超过 20 MB', 413);
+  const page = '<!doctype html><html><head><meta charset="utf-8"><style>' +
+    'body{font-family:Arial,"Microsoft YaHei",sans-serif;font-size:11pt;line-height:1.6;color:#111}h1{font-size:24pt}h2{font-size:18pt}h3{font-size:14pt}blockquote{border-left:3px solid #888;padding-left:12px;color:#555}table{border-collapse:collapse}td,th{border:1px solid #888;padding:5px 8px}' +
+    '</style></head><body>' + html + '</body></html>';
+  const output = await htmlToDocx(page, null, { table:{ row:{ cantSplit:true } }, footer:false, pageNumber:false });
+  const temp = path.join(path.dirname(file), '.' + crypto.randomUUID() + '.docx-saving');
+  try {
+    fs.writeFileSync(temp, Buffer.from(output));
+    validateOfficeFile(temp, '.docx');
+    const rel = path.relative(officeDir(), file), relDir = path.dirname(rel), stem = path.basename(rel, '.docx');
+    const backupDir = path.join(officeDir(), '.codescope-backups', relDir === '.' ? '' : relDir);
+    fs.mkdirSync(backupDir, { recursive:true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.copyFileSync(file, path.join(backupDir, stem + '.' + stamp + '.docx'));
+    const backups = fs.readdirSync(backupDir).filter((name) => name.startsWith(stem + '.') && name.endsWith('.docx')).sort().reverse();
+    for (const old of backups.slice(5)) { try { fs.unlinkSync(path.join(backupDir, old)); } catch (_) {} }
+    fs.renameSync(temp, file);
+  } catch (error) {
+    try { fs.unlinkSync(temp); } catch (_) {}
+    throw error;
+  }
+  return fs.statSync(file);
+}
+
 function send(res, code, obj) {
   if (res.writableEnded || res.destroyed) return false;
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
@@ -2852,7 +2902,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 2,
-        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'docx-preview', 'spreadsheet-editing', 'pptx-preview'] });
+        features: ['git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -2862,6 +2912,22 @@ const server = http.createServer(async (req, res) => {
       if (!rel) return send(res, 400, { ok:false, error:'Office 文件路径不合法' });
       if (u.searchParams.get('download') === '1') res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(path.basename(rel)));
       return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-cache', notFound:'Office 文件不存在' });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/office/word-html') {
+      const rel = officePath(u.searchParams.get('path'));
+      if (!rel || path.extname(rel).toLowerCase() !== '.docx') return send(res, 400, { ok:false, error:'Word 文件路径不合法' });
+      const file = path.join(officeDir(), rel);
+      if (!fs.existsSync(file)) return send(res, 404, { ok:false, error:'Word 文件不存在' });
+      try { const result = await officeWordToHtml(file); return send(res, 200, { ok:true, path:rel, ...result }); }
+      catch (error) { return send(res, 400, { ok:false, error:'Word 内容解析失败：' + String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/word-save') {
+      const b = await readBody(req, 24 * 1024 * 1024), rel = officePath(b && b.path);
+      if (!rel || path.extname(rel).toLowerCase() !== '.docx') return send(res, 400, { ok:false, error:'Word 文件路径不合法' });
+      const file = path.join(officeDir(), rel);
+      if (!fs.existsSync(file)) return send(res, 404, { ok:false, error:'要保存的 Word 文档不存在' });
+      try { const stat = await saveOfficeWordHtml(file, b && b.html); return send(res, 200, { ok:true, path:rel, size:stat.size, updated:stat.mtimeMs }); }
+      catch (error) { return send(res, error.statusCode || 400, { ok:false, error:'Word 保存失败：' + String(error.message || error) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/office/folder') {
       const b = await readBody(req), parent = officeSafeFolder(b && b.parent), name = officeSafeFolder(b && b.name);
