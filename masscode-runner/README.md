@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.0.0
+# 码境 CodeScope v2.1.0
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前正式版本：**v2.0.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前正式版本：**v2.1.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## Web 与桌面双模式
 
@@ -17,7 +17,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 
 桌面主进程位于 `desktop/main.js`，通过隔离的 preload 桥接原生能力；CodeScope 服务运行在 Electron Utility Process 中。渲染器不开放 Node.js 权限，Web 端也不依赖 Electron API。
 
-## v2.0 概览
+## v2.1 概览
 
 - 统一项目、Office、阅读、绘图与 Git 的侧栏标题、计数、操作按钮、树行、悬停和选中反馈；五套工作台主题共用同一套语义化颜色与间距。
 - 代码工作区使用 Monaco，提供多栏、LSP、定义/引用/调用关系、运行、调试、测试、Git Diff 与可恢复本地时间线。

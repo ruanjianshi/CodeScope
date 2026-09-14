@@ -1,5 +1,25 @@
 # 更新记录
 
+## v2.1.0 — 2026-09-14
+
+### Web 与桌面双模式
+
+- 新增 Electron 桌面入口，Web 端与桌面端共用服务 API、工作台界面和 Vault 数据格式。
+- 桌面端新增原生菜单、单实例运行、Vault 选择与持久化、独立 Utility Process 服务以及安全 preload 桥接。
+- 桌面安装包内置 Electron、Node.js 和 npm 运行依赖，安装后可直接启动；程序、缓存与 Vault 数据分离，升级不会覆盖用户资料。
+
+### 跨平台发布
+
+- 新增 Electron Forge 打包配置，支持 macOS DMG/ZIP、Windows Squirrel 安装包以及 Linux DEB/RPM/ZIP。
+- 新增 GitHub Actions 桌面发布流水线，推送版本标签后自动构建三端安装包并统一上传到 GitHub Release。
+- 接入 GitHub Release 更新源；Windows 和已签名、公证的 macOS 版本可检查并安装后续更新，Linux 通过 Release 或系统软件包更新。
+
+### 安全与质量
+
+- Electron 渲染进程启用上下文隔离、沙箱并关闭 Node.js 注入，外部链接交由系统浏览器处理。
+- Web/桌面接口新增运行模式和原生能力契约，并补充 CSP、桌面入口、构建配置及真实浏览器回归测试。
+- 排除 SSH 的可选原生 CPU 加速模块，避免桌面安装包要求用户额外配置编译工具链。
+
 ## v2.0.0 — 2026-09-14
 
 ### 工作台统一
