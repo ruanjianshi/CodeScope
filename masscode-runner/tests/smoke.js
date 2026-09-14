@@ -112,12 +112,13 @@ async function main() {
   assert(/utilityProcess\.fork/.test(desktopMain) && /BrowserWindow/.test(desktopMain) && /contextIsolation:\s*true/.test(desktopMain), '桌面主进程未使用隔离窗口和独立服务进程');
   assert(/contextBridge\.exposeInMainWorld/.test(desktopPreload) && /codescopeDesktop/.test(desktopPreload), '桌面安全桥接配置不完整');
   assert(/maker-squirrel/.test(forgeConfig) && /maker-dmg/.test(forgeConfig) && /maker-deb/.test(forgeConfig), '桌面跨平台构建配置不完整');
+  assert(/cloudManagedCheckout/.test(forgeConfig) && /Mobile Documents/.test(forgeConfig) && /outDir:\s*forgeOutDir/.test(forgeConfig), 'macOS 云盘工作区未隔离签名产物目录');
   assert(/discoverOfficeProvider/.test(desktopMain) && /startOfficeSidecar/.test(desktopMain) && /CODESCOPE_OFFICE_PROVIDER_MANIFEST/.test(desktopMain), '桌面端未接入可升级 Office Provider 管理器');
   assert(/sha256/.test(officeSidecar) && /apiRevision/.test(officeSidecar) && /healthUrl/.test(officeSidecar), 'Office Provider 缺少版本、摘要或健康检查约束');
   assert(/codescope-local/.test(officeEngine) && /updateContract/.test(officeEngine) && /onlyoffice-docs/.test(officeEngine), 'Office Provider API 未同时声明内置与高保真能力');
   assert(packageJson.scripts['verify:office'] && packageJson.scripts['prepackage:desktop'] && packageJson.scripts['premake:desktop'], 'Office 打包校验未接入桌面构建生命周期');
   const goplsBuildSource = fs.readFileSync(path.join(projectRoot, 'scripts', 'build-bundled-gopls.js'), 'utf8');
-  assert(/extraResource/.test(forgeConfig) && /\.bundled-tools/.test(forgeConfig) && packageJson.scripts['prepare:gopls'], 'gopls 未纳入跨平台桌面安装包或构建缓存未排除');
+  assert(/extraResource/.test(forgeConfig) && /\.bundled-tools/.test(forgeConfig) && /\(\?:\^\|\\\/\)out/.test(forgeConfig) && packageJson.scripts['prepare:gopls'], 'gopls 未纳入跨平台桌面安装包或旧构建产物未排除');
   assert(/crossCompiling/.test(goplsBuildSource) && /GOPATH/.test(goplsBuildSource) && /\$\{goos\}_\$\{goarch\}/.test(goplsBuildSource), 'gopls 构建脚本缺少跨架构产物处理');
   assert(/osxSign:\s*macSignConfig/.test(forgeConfig) && /identity:\s*macSigningIdentity\s*\|\|\s*['"]-['"]/.test(forgeConfig) && /continueOnError:\s*false/.test(forgeConfig) && /hardenedRuntime:\s*false/.test(forgeConfig), 'macOS 应用必须执行完整且可启动的代码签名');
   fs.mkdirSync(path.join(vault, 'code'), { recursive: true });

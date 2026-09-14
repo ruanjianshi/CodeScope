@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const iconFile = process.platform === 'darwin' ? 'icon.icns' : (process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 const iconPath = path.join(__dirname, 'desktop', 'icons', iconFile);
@@ -12,6 +13,14 @@ const officeProviderBundle = process.env.CODESCOPE_OFFICE_PROVIDER_BUNDLE || pat
 const extraResources = [];
 if (fs.existsSync(bundledGopls)) extraResources.push(bundledGopls);
 if (fs.existsSync(path.join(officeProviderBundle, 'manifest.json'))) extraResources.push(officeProviderBundle);
+// iCloud/File Provider attaches FinderInfo while an .app bundle is being moved
+// into a managed directory. That metadata invalidates macOS code-signature
+// verification and is then preserved by DMG. Build outside the managed tree;
+// release CI and ordinary local checkouts keep the conventional ./out path.
+const cloudManagedCheckout = process.platform === 'darwin' && /\/Library\/Mobile Documents\//.test(__dirname);
+const forgeOutDir = process.env.CODESCOPE_FORGE_OUT_DIR || (cloudManagedCheckout
+  ? path.join(os.tmpdir(), 'codescope-forge-out')
+  : 'out');
 
 // Electron's downloaded executable carries only a linker signature.  Without
 // signing the complete bundle macOS can register a stale/translocated copy and
@@ -32,6 +41,7 @@ const macSignConfig = process.platform === 'darwin' ? {
 } : undefined;
 
 module.exports = {
+  outDir: forgeOutDir,
   packagerConfig: {
     asar: true,
     name: 'CodeScope',
@@ -46,6 +56,7 @@ module.exports = {
     // avoids a compiler/toolchain requirement on end-user machines.
     ignore: [
       /node_modules\/cpu-features(?:\/|$)/,
+      /(?:^|\/)out(?:\/|$)/,
       /(?:^|\/)\.bundled-tools(?:\/|$)/,
       /(?:^|\/)\.office-provider(?:\/|$)/,
     ],
