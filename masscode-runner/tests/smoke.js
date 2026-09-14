@@ -110,7 +110,9 @@ async function main() {
   assert(/utilityProcess\.fork/.test(desktopMain) && /BrowserWindow/.test(desktopMain) && /contextIsolation:\s*true/.test(desktopMain), '桌面主进程未使用隔离窗口和独立服务进程');
   assert(/contextBridge\.exposeInMainWorld/.test(desktopPreload) && /codescopeDesktop/.test(desktopPreload), '桌面安全桥接配置不完整');
   assert(/maker-squirrel/.test(forgeConfig) && /maker-dmg/.test(forgeConfig) && /maker-deb/.test(forgeConfig), '桌面跨平台构建配置不完整');
+  const goplsBuildSource = fs.readFileSync(path.join(projectRoot, 'scripts', 'build-bundled-gopls.js'), 'utf8');
   assert(/extraResource/.test(forgeConfig) && /\.bundled-tools/.test(forgeConfig) && packageJson.scripts['prepare:gopls'], 'gopls 未纳入跨平台桌面安装包或构建缓存未排除');
+  assert(/crossCompiling/.test(goplsBuildSource) && /GOPATH/.test(goplsBuildSource) && /\$\{goos\}_\$\{goarch\}/.test(goplsBuildSource), 'gopls 构建脚本缺少跨架构产物处理');
   assert(/osxSign:\s*macSignConfig/.test(forgeConfig) && /identity:\s*macSigningIdentity\s*\|\|\s*['"]-['"]/.test(forgeConfig) && /continueOnError:\s*false/.test(forgeConfig) && /hardenedRuntime:\s*false/.test(forgeConfig), 'macOS 应用必须执行完整且可启动的代码签名');
   fs.mkdirSync(path.join(vault, 'code'), { recursive: true });
   fs.mkdirSync(path.join(vault, 'drawings'), { recursive: true });
