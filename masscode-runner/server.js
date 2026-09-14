@@ -15,7 +15,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { StringDecoder } = require('string_decoder');
 const { Transform } = require('stream');
-const { spawn, execFile, execFileSync } = require('child_process');
+const { spawn, exec, execFile, execFileSync } = require('child_process');
 const { pipeline } = require('stream/promises');
 const { WebSocketServer } = require('ws');
 const { Client: SshClient } = require('ssh2');
@@ -2246,9 +2246,8 @@ function runProjectCommand(command, cwd) {
   if (!value || value.length > 4000 || /[\0\r\n]/.test(value)) return Promise.resolve({ ok: false, error: '命令不合法' });
   let dir; try { dir = safeProjectDir(cwd); } catch (error) { return Promise.resolve({ ok:false, error:String(error.message || error) }); }
   const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'cmd.exe') : (process.env.SHELL || '/bin/sh');
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', value] : ['-lc', value];
   const started = Date.now();
-  return new Promise((resolve) => execFile(shell, args, { cwd: dir, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => resolve({
+  return new Promise((resolve) => exec(value, { cwd: dir, shell, encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => resolve({
     ok: !error, command: value, cwd: path.relative(projectRoot(), dir) || '.', durationMs: Date.now() - started,
     exitCode: error && Number.isInteger(error.code) ? error.code : 0, stdout: String(stdout || ''), stderr: String(stderr || ''), error: error ? String(error.killed ? '任务超时（120 秒）' : error.message || error).slice(0, 500) : '',
   })));

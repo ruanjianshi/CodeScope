@@ -33,11 +33,11 @@ module.exports = {
     { name: '@electron-forge/maker-zip', platforms: ['darwin', 'linux'] },
     {
       name: '@electron-forge/maker-deb',
-      config: { options: { maintainer: 'CodeScope Contributors', homepage: 'https://github.com/ruanjianshi/massCode' } },
+      config: { options: { bin: 'CodeScope', maintainer: 'CodeScope Contributors', homepage: 'https://github.com/ruanjianshi/massCode' } },
     },
     {
       name: '@electron-forge/maker-rpm',
-      config: { options: { homepage: 'https://github.com/ruanjianshi/massCode' } },
+      config: { options: { bin: 'CodeScope', homepage: 'https://github.com/ruanjianshi/massCode' } },
     },
   ],
   publishers: [
