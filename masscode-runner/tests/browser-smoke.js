@@ -175,9 +175,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.7 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.8 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.7'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.2.8'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -190,7 +190,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.7'))throw new Error('环境元信息未显示 v2.2.7');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.8'))throw new Error('环境元信息未显示 v2.2.8');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -599,6 +599,7 @@ print(r.run())
   if(await live.locator('.reading-md-block-loading').count())throw new Error('Milkdown Crepe 挂载后仍残留加载占位层');
   const liveBox=await live.boundingBox(),editorBox=await live.locator('.ProseMirror').boundingBox(),editorTopGap=liveBox&&editorBox?editorBox.y-liveBox.y:Infinity;if(editorTopGap>150)throw new Error('Milkdown Crepe 编辑正文被异常挤到工作区下方：'+editorTopGap+'px');
   const zoomTools=readingPage.locator('.reading-md-zoom');if(await zoomTools.locator('.value').innerText()!=='100%')throw new Error('Markdown 缩放工具未显示默认比例');await zoomTools.locator('button').last().click();await readingPage.waitForFunction(()=>getComputedStyle(document.querySelector('.reading-md-block .milkdown')).zoom==='1.1');await live.dispatchEvent('wheel',{ctrlKey:true,deltaY:-100});await readingPage.waitForFunction(()=>document.querySelector('.reading-md-zoom .value').textContent==='115%');await zoomTools.locator('.value').click();await readingPage.waitForFunction(()=>getComputedStyle(document.querySelector('.reading-md-block .milkdown')).zoom==='1');
+  const mdOutline=readingPage.locator('.reading-md-outline');await mdOutline.waitFor({state:'visible'});const outlineItems=mdOutline.locator('.reading-md-outline-item');if(await outlineItems.count()!==3||!await outlineItems.filter({hasText:'Section A'}).count())throw new Error('Markdown 大纲未按标题层级生成');await outlineItems.filter({hasText:'Section B'}).click();await readingPage.waitForTimeout(350);if(!await mdOutline.locator('.reading-md-outline-item.active').filter({hasText:'Section B'}).count())throw new Error('Markdown 大纲点击定位后未高亮当前章节');const outlineToggle=readingPage.locator('.reading-md-outline-toggle');await outlineToggle.click();if(await readingPage.locator('.reading-md-workbench').evaluate(el=>el.classList.contains('outline-open')))throw new Error('Markdown 大纲无法关闭');await outlineToggle.click();
   if(await readingPage.locator('.reading-block-tools').count())throw new Error('阅读模块仍显示旧的自制区块工具');
   const readingMdBefore=await readingPage.evaluate(()=>READING_TEXT_DOCS.get(READING_CURRENT).content);
   await live.locator('p').first().click();await readingPage.keyboard.press('End');await readingPage.keyboard.type(' undo-smoke');
