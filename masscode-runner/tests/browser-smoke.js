@@ -175,9 +175,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.10 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.11 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.10'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.2.11'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -190,7 +190,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.10'))throw new Error('环境元信息未显示 v2.2.10');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.11'))throw new Error('环境元信息未显示 v2.2.11');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -240,6 +240,7 @@ print(r.run())
   /* ---- 普通 Markdown / HTML：片段级视图模式、可关闭预览与代码回链 ---- */
   await page.locator('#tabs .tab').filter({hasText:'README.md'}).locator('span').first().click();
   try{await page.locator('#document-mode-tools.show.markdown').waitFor({state:'visible',timeout:5000});}catch(error){const state=await page.evaluate(()=>({current:CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX],index:CINDEX,editing:EDITING,splits:SPLIT_EDITORS.length,tools:document.getElementById('document-mode-tools').outerHTML,display:getComputedStyle(document.getElementById('document-mode-tools')).display,pageErrors:[] }));throw new Error('Markdown 模式工具条未显示：'+JSON.stringify(state)+'\n'+error.message);}
+  const modeButtonAlignment=await page.evaluate(()=>{const buttons=[...document.querySelectorAll('#document-mode-tools [data-doc-mode]')].filter(button=>getComputedStyle(button).display!=='none'),rects=buttons.map(button=>({mode:button.dataset.docMode,rect:button.getBoundingClientRect()})),center=rects.reduce((sum,item)=>sum+item.rect.top+item.rect.height/2,0)/rects.length;return rects.map(item=>({mode:item.mode,height:item.rect.height,offset:item.rect.top+item.rect.height/2-center}));});if(modeButtonAlignment.length!==4||modeButtonAlignment.some(item=>Math.abs(item.offset)>.5||Math.abs(item.height-modeButtonAlignment[0].height)>.5))throw new Error('Markdown 视图切换按钮未垂直对齐：'+JSON.stringify(modeButtonAlignment));
   const markdownSourceState=await page.evaluate(()=>({
     markdownClass:document.getElementById('code-wrap').classList.contains('markdown-code'),
     liveHighlight:document.getElementById('code-edit').classList.contains('live-hl'),
