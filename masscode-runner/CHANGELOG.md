@@ -1,5 +1,11 @@
 # 更新记录
 
+## v2.2.1 — 2026-09-14
+
+- 修复 Office 内置编辑器打开文档后正文可能被自动焦点、历史滚动位置或窄工作区挤出可视区的问题；页面宽度、页边距和工具栏现在随工作区响应，打开环境侧栏也不会造成白页。
+- 本地 Office 从“失败回退”升级为始终随包提供的内置 Provider，Word 与表格可离线编辑保存，演示文稿可离线预览；ONLYOFFICE 改为可选的高保真协作 Provider，不再制造“软件环境不完整”的误解。
+- 新增 Office Provider API v1、Provider 能力矩阵、版本接口、打包完整性检查以及 Electron 侧车发现、SHA-256 校验、健康检查、自动启动和退出回收链路，为后续替换或独立升级 Office 内核保留稳定接口。
+
 ## v2.2.0 — 2026-09-14
 
 - 桌面安装包内置 Prettier 3、Shell 格式化插件、Ruff WASM、Pyright、TypeScript 5 与 TypeScript Language Server，常用格式化和 Python/JS/TS LSP 不再依赖 npm、pip、系统 Python 或首次联网下载。

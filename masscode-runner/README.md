@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.2.0
+# 码境 CodeScope v2.2.1
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前正式版本：**v2.2.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v2.2.1**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
@@ -26,7 +26,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 - Markdown 提供源码、分栏、实时编辑和阅读四种模式；实时模式在原位编辑并渲染，支持区块转换、拖拽排序、原生撤销及代码/PDF 引用定位。
 - 阅读工作区把 PDF 原文、译本、Markdown、LaTeX 与代码片段组织在同一项目中，支持并排阅读、页码摘录、翻译和双向定位。
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
-- Office 工作区优先连接 ONLYOFFICE Docs 完整编辑 DOCX/XLSX/PPTX；服务离线时自动切换本地 Word/表格兼容编辑和演示文稿预览。
+- Office 工作区内置离线 Word/表格编辑和演示文稿预览；连接 ONLYOFFICE Provider 后自动切换 DOCX/XLSX/PPTX 高保真编辑与协作能力。
 - 环境检测扩展为运行基础、浏览器能力和项目工具链三层；三端启动脚本共用 `preflight.js` 检查 Node、端口、Vault 权限和依赖完整性。
 - 桌面安装包新增完整离线编辑辅助工具链：Prettier + Shell 插件、Ruff Python 格式化器、Pyright、TypeScript/TypeScript Language Server 和按平台编译的 gopls；Finder 启动时也会识别 Homebrew、用户 Python 与 Go 的常见工具目录。
 
@@ -72,6 +72,14 @@ npm run make:desktop
 构建结果位于 `masscode-runner/out/make/`。GitHub 标签发布时，`.github/workflows/desktop-release.yml` 会在 macOS、Windows 和 Linux 分别构建并把安装包上传到对应 Release。macOS 自动更新正式启用前需要配置开发者签名与公证。
 
 正式安装包内置 Electron、Node.js、Prettier、Ruff、Pyright、TypeScript Language Server、TypeScript 和 gopls，用户电脑无需安装 Node.js、npm、pip、Black 或 Go 工具即可使用这些编辑能力。编译器、语言解释器与 LaTeX 仍按项目语言调用系统工具。AI 绘图和 ONLYOFFICE Document Server 是需要用户凭据或独立服务器的外部连接，不计为安装环境缺失；未连接时不会影响本地功能。
+
+### Office 封装与扩展
+
+CodeScope 安装包包含内置 Office Provider：DOCX 和 XLSX/CSV 可在断网环境中打开、编辑并保存，PPTX 可离线预览，不要求电脑安装 Microsoft Office、LibreOffice、Docker 或 Node.js。ONLYOFFICE Docs 只作为复杂排版、PPTX 编辑与多人协作的高保真 Provider；未连接时环境面板会显示中性的可选连接状态，而不是软件缺失。
+
+桌面端支持把高保真 Provider 作为校验过的侧车随安装包分发。启动器读取 `resources/office-provider/manifest.json`，按系统与架构选择可执行文件、校验 SHA-256、等待健康检查，再自动把 Web UI 切换到高保真内核；退出 CodeScope 时同步回收侧车。Provider 状态和能力矩阵由 `GET /api/office/providers/v1` 返回，Web 部署也使用同一契约。清单格式、兼容策略和更新边界见 [Office Provider API v1](docs/office-provider-v1.md)。
+
+打包前会自动运行 `npm run verify:office`，阻止缺少内置 Office 依赖的安装包生成。如果正式发行要求必须附带高保真侧车，可设置 `CODESCOPE_REQUIRE_OFFICE_SIDECAR=1`，流水线会在侧车缺失、平台不匹配或摘要错误时直接失败。
 
 ### Web 端
 

@@ -6,6 +6,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const { discoverOfficeProvider, startOfficeSidecar } = require('./office-sidecar');
 
 const APP_ID = 'com.codescope.desktop';
 const DEFAULT_PORT = 4877;
@@ -13,6 +14,8 @@ const REPOSITORY_URL = 'https://github.com/ruanjianshi/massCode';
 
 let mainWindow = null;
 let serviceProcess = null;
+let officeSidecar = null;
+let officeSidecarState = { ready:false, provider:null };
 let servicePort = DEFAULT_PORT;
 let activeVault = '';
 let isQuitting = false;
@@ -118,6 +121,15 @@ async function startService() {
   activeVault = resolveVault();
   servicePort = await freePort(Number(process.env.CODESCOPE_PORT) || DEFAULT_PORT);
   const serverEntry = path.join(app.getAppPath(), 'server.js');
+  const provider = discoverOfficeProvider([
+    path.join(process.resourcesPath, 'office-provider'),
+    path.join(process.resourcesPath, '.office-provider'),
+    path.join(app.getAppPath(), '.office-provider'),
+  ]);
+  officeSidecarState = await startOfficeSidecar(provider, {
+    onOutput:(stream, chunk) => (stream === 'stderr' ? console.error : console.log)('[office-provider]', chunk.trimEnd()),
+  });
+  officeSidecar = officeSidecarState.process;
   const home = os.homedir();
   const inheritedPath = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
   const commonToolPaths = process.platform === 'darwin'
@@ -140,6 +152,10 @@ async function startService() {
       CODESCOPE_PORT: String(servicePort),
       CODESCOPE_VAULT: activeVault,
       CODESCOPE_DATA_HOME: app.getPath('userData'),
+      ...(provider ? {
+        CODESCOPE_OFFICE_PROVIDER_MANIFEST:provider.manifestPath,
+        CODESCOPE_ONLYOFFICE_URL:String(provider.entry.publicUrl || provider.manifest.publicUrl || 'http://127.0.0.1:8088'),
+      } : {}),
       PATH: toolPath,
     },
   });
@@ -265,7 +281,9 @@ function configureUpdater() {
 }
 
 function registerIpc() {
-  ipcMain.handle('desktop:get-info', () => ({ desktop: true, version: app.getVersion(), platform: process.platform, arch: process.arch, vault: activeVault, port: servicePort }));
+  ipcMain.handle('desktop:get-info', () => ({ desktop: true, version: app.getVersion(), platform: process.platform, arch: process.arch, vault: activeVault, port: servicePort,
+    officeProvider:officeSidecarState.provider ? { id:officeSidecarState.provider.manifest.id, version:officeSidecarState.provider.manifest.version, ready:officeSidecarState.ready } : { id:'codescope-local', version:app.getVersion(), ready:true },
+  }));
   ipcMain.handle('desktop:choose-vault', async () => { await chooseVaultAndRestart(); return { restarting: true }; });
   ipcMain.handle('desktop:show-vault', () => shell.openPath(activeVault));
   ipcMain.handle('desktop:check-updates', async () => { await checkForUpdates(true); return { ok: true }; });
@@ -301,6 +319,10 @@ app.on('before-quit', () => {
   if (serviceProcess) {
     serviceProcess.kill();
     serviceProcess = null;
+  }
+  if (officeSidecar) {
+    officeSidecar.kill();
+    officeSidecar = null;
   }
 });
 

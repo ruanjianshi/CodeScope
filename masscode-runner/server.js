@@ -27,10 +27,16 @@ const mammoth = require('mammoth');
 const htmlToDocx = require('@turbodocx/html-to-docx');
 const { createLspService } = require('./lib/lsp-service');
 const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
+const { createOfficeEngine } = require('./lib/office-engine');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
 const APP_MODE = process.env.CODESCOPE_APP_MODE === 'desktop' ? 'desktop' : 'web';
+const OFFICE_ENGINE = createOfficeEngine({
+  appVersion:APP_VERSION,
+  onlyOfficeUrl:process.env.CODESCOPE_ONLYOFFICE_URL,
+  managedManifest:process.env.CODESCOPE_OFFICE_PROVIDER_MANIFEST,
+});
 
 const PORT_VALUE = Number(process.env.CODESCOPE_PORT || process.env.MASSCODE_RUNNER_PORT || 4877);
 const PORT = Number.isInteger(PORT_VALUE) && PORT_VALUE > 0 && PORT_VALUE <= 65535 ? PORT_VALUE : 4877;
@@ -2694,7 +2700,7 @@ function workspaceBacklinks(kind, targetPath, targetFragment) {
 
 function officeDir() { return path.join(vaultPath(), 'office'); }
 const OFFICE_EXTS = new Set(['.docx', '.xlsx', '.xls', '.csv', '.pptx']);
-const ONLYOFFICE_PUBLIC_URL = String(process.env.CODESCOPE_ONLYOFFICE_URL || 'http://127.0.0.1:8088').replace(/\/$/, '');
+const ONLYOFFICE_PUBLIC_URL = OFFICE_ENGINE.onlyOfficeUrl;
 const ONLYOFFICE_CONTAINER_HOST = String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER_HOST || 'host.docker.internal').trim();
 const ONLYOFFICE_ACCESS_SECRET = crypto.randomBytes(32);
 function onlyOfficeToken(rel, purpose) {
@@ -2710,13 +2716,7 @@ function onlyOfficeContainerBase() {
   return 'http://' + ONLYOFFICE_CONTAINER_HOST + ':' + PORT;
 }
 async function onlyOfficeHealth() {
-  try {
-    const response = await fetch(ONLYOFFICE_PUBLIC_URL + '/healthcheck', { signal:AbortSignal.timeout(1800), cache:'no-store' });
-    const text = (await response.text()).trim().toLowerCase();
-    return { ok:response.ok && (text === 'true' || text === 'true.' || text.includes('true')), url:ONLYOFFICE_PUBLIC_URL };
-  } catch (error) {
-    return { ok:false, url:ONLYOFFICE_PUBLIC_URL, error:String(error.message || error) };
-  }
+  return OFFICE_ENGINE.probeOnlyOffice();
 }
 function onlyOfficeDocumentType(kind) {
   return kind === 'word' ? 'word' : kind === 'sheet' ? 'cell' : kind === 'slides' ? 'slide' : '';
@@ -3096,9 +3096,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
-      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 4, releaseChannel:'stable', mode:APP_MODE,
+      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 5, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
-        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'onlyoffice-docs', 'onlyoffice-save-callback', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
+        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-builtin-engine', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-save-callback', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3112,6 +3112,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/status') {
       const health = await onlyOfficeHealth();
       return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', editable:['docx','xlsx','xls','csv','pptx'] });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/office/providers/v1') {
+      return send(res, 200, await OFFICE_ENGINE.status({ probe:u.searchParams.get('refresh') !== '0' }));
     }
     if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/config') {
       const rel = officePath(u.searchParams.get('path'));
@@ -3402,12 +3405,18 @@ const server = http.createServer(async (req, res) => {
       const env = detected.tools;
       const runtime = runtimeReadiness();
       const onlyOffice = force ? await onlyOfficeHealth() : null;
+      runtime.officeBuiltin = {
+        key:'officeBuiltin', label:'CodeScope 内置 Office', for:'DOCX 与 XLSX 本地编辑、PPTX 本地预览', group:'应用内置',
+        available:true, installed:true, required:true, bundled:true, installable:false,
+        version:'Provider API v' + OFFICE_ENGINE.apiRevision, path:path.join(__dirname, 'node_modules'),
+        issue:'', hint:'已完整封装在 CodeScope 安装包内，无需安装 Office、Node.js 或容器环境',
+      };
       env.onlyoffice = {
-        key:'onlyoffice', label:'ONLYOFFICE Docs', for:'DOCX、XLSX 与 PPTX 完整编辑', group:'Office 集成',
+        key:'onlyoffice', label:'ONLYOFFICE 高保真协作 Provider', for:'复杂 DOCX、XLSX、PPTX 高保真编辑与多人协作', group:'外部连接',
         available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:false,
         version:onlyOffice && onlyOffice.ok ? '在线' : '', path:ONLYOFFICE_PUBLIC_URL,
-        issue:onlyOffice ? (onlyOffice.ok ? '' : '未连接独立服务；Office 本地兼容模式仍可使用') : '尚未检测独立服务；Office 本地兼容模式仍可使用',
-        hint:'需要多人协作或高保真编辑时，可连接 ONLYOFFICE Document Server；基础预览与本地编辑无需安装', installable:false, relevant:false, external:true,
+        issue:onlyOffice ? (onlyOffice.ok ? '' : '未连接可选协作服务；内置 Office 已就绪') : '未检测可选协作服务；内置 Office 已就绪',
+        hint:'只有多人协作和复杂排版需要此 Provider；普通本地编辑无需安装或连接任何服务', installable:false, relevant:false, external:true,
       };
       const all = [...Object.values(runtime), ...Object.values(env)];
       const required = all.filter((e) => e.required);

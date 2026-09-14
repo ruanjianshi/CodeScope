@@ -1,6 +1,6 @@
 {
   "name": "codescope",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "productName": "CodeScope",
   "description": "码境 CodeScope：面向代码阅读、编辑、运行、文档与远程开发的工程工作台",
@@ -13,7 +13,11 @@
     "package:desktop": "electron-forge package",
     "make:desktop": "electron-forge make",
     "publish:desktop": "electron-forge publish",
+    "prepackage:desktop": "npm run verify:office",
+    "premake:desktop": "npm run verify:office",
+    "prepublish:desktop": "npm run verify:office",
     "prepare:gopls": "node scripts/build-bundled-gopls.js",
+    "verify:office": "node scripts/verify-office-package.js",
     "test": "node tests/smoke.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js"
