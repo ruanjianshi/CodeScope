@@ -6,6 +6,7 @@
 - 本地 Office 从“失败回退”升级为始终随包提供的内置 Provider，Word 与表格可离线编辑保存，演示文稿可离线预览；ONLYOFFICE 改为可选的高保真协作 Provider，不再制造“软件环境不完整”的误解。
 - 新增 Office Provider API v1、Provider 能力矩阵、版本接口、打包完整性检查以及 Electron 侧车发现、SHA-256 校验、健康检查、自动启动和退出回收链路，为后续替换或独立升级 Office 内核保留稳定接口。
 - macOS 在 iCloud/File Provider 目录构建时自动把临时应用输出到系统临时目录，防止 FinderInfo 被写入应用包并破坏 DMG 内的代码签名；普通目录与发布流水线仍使用标准 `out` 目录。
+- macOS 正式发行预留 Developer ID 与 `notarytool` 钥匙串 Profile 接口；提供凭据时 Forge 自动签名并公证，开发构建继续使用不泄露凭据的 ad-hoc 签名。
 
 ## v2.2.0 — 2026-09-14
 

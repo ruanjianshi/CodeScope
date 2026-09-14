@@ -121,6 +121,7 @@ async function main() {
   assert(/extraResource/.test(forgeConfig) && /\.bundled-tools/.test(forgeConfig) && /\(\?:\^\|\\\/\)out/.test(forgeConfig) && packageJson.scripts['prepare:gopls'], 'gopls 未纳入跨平台桌面安装包或旧构建产物未排除');
   assert(/crossCompiling/.test(goplsBuildSource) && /GOPATH/.test(goplsBuildSource) && /\$\{goos\}_\$\{goarch\}/.test(goplsBuildSource), 'gopls 构建脚本缺少跨架构产物处理');
   assert(/osxSign:\s*macSignConfig/.test(forgeConfig) && /identity:\s*macSigningIdentity\s*\|\|\s*['"]-['"]/.test(forgeConfig) && /continueOnError:\s*false/.test(forgeConfig) && /hardenedRuntime:\s*false/.test(forgeConfig), 'macOS 应用必须执行完整且可启动的代码签名');
+  assert(/CODESCOPE_MAC_NOTARY_PROFILE/.test(forgeConfig) && /osxNotarize:\s*macNotarizeConfig/.test(forgeConfig) && /keychainProfile/.test(forgeConfig), 'macOS 正式发行缺少公证配置接口');
   fs.mkdirSync(path.join(vault, 'code'), { recursive: true });
   fs.mkdirSync(path.join(vault, 'drawings'), { recursive: true });
   const snippetFile = path.join(vault, 'code', 'timeline-demo.md');

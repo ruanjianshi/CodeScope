@@ -7,6 +7,7 @@ const os = require('os');
 const iconFile = process.platform === 'darwin' ? 'icon.icns' : (process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 const iconPath = path.join(__dirname, 'desktop', 'icons', iconFile);
 const macSigningIdentity = process.env.CODESCOPE_MAC_SIGN_IDENTITY || process.env.CSC_NAME || '';
+const macNotaryProfile = process.env.CODESCOPE_MAC_NOTARY_PROFILE || '';
 const goplsFilename = process.platform === 'win32' ? 'gopls.exe' : 'gopls';
 const bundledGopls = process.env.CODESCOPE_BUNDLED_GOPLS || path.join(__dirname, '.bundled-tools', goplsFilename);
 const officeProviderBundle = process.env.CODESCOPE_OFFICE_PROVIDER_BUNDLE || path.join(__dirname, '.office-provider');
@@ -39,6 +40,9 @@ const macSignConfig = process.platform === 'darwin' ? {
     optionsForFile: () => ({ hardenedRuntime: false, timestamp: 'none' }),
   }),
 } : undefined;
+const macNotarizeConfig = process.platform === 'darwin' && macSigningIdentity && macNotaryProfile
+  ? { keychainProfile:macNotaryProfile }
+  : undefined;
 
 module.exports = {
   outDir: forgeOutDir,
@@ -50,6 +54,7 @@ module.exports = {
     appBundleId: 'com.codescope.desktop',
     appCategoryType: 'public.app-category.developer-tools',
     osxSign: macSignConfig,
+    osxNotarize: macNotarizeConfig,
     extraResource: extraResources,
     // ssh2 can optionally use cpu-features as a native accelerator. CodeScope
     // does not require it, and excluding it keeps desktop builds portable and

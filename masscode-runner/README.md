@@ -81,7 +81,7 @@ CodeScope 安装包包含内置 Office Provider：DOCX 和 XLSX/CSV 可在断网
 
 打包前会自动运行 `npm run verify:office`，阻止缺少内置 Office 依赖的安装包生成。如果正式发行要求必须附带高保真侧车，可设置 `CODESCOPE_REQUIRE_OFFICE_SIDECAR=1`，流水线会在侧车缺失、平台不匹配或摘要错误时直接失败。
 
-macOS 如果从 iCloud Drive / File Provider 目录构建，Forge 会自动改用系统临时目录 `codescope-forge-out` 存放产物，避免云盘写入 FinderInfo 后破坏应用签名；终端最后会显示实际产物路径。可用 `CODESCOPE_FORGE_OUT_DIR` 指定其他非云盘输出目录。正式无提示安装还需要发行者配置 Apple Developer ID 与公证凭据；缺少证书时生成的是可供开发测试的 ad-hoc 签名包。
+macOS 如果从 iCloud Drive / File Provider 目录构建，Forge 会自动改用系统临时目录 `codescope-forge-out` 存放产物，避免云盘写入 FinderInfo 后破坏应用签名；终端最后会显示实际产物路径。可用 `CODESCOPE_FORGE_OUT_DIR` 指定其他非云盘输出目录。正式无提示安装还需要发行者配置 Apple Developer ID 与公证凭据；构建接口读取 `CODESCOPE_MAC_SIGN_IDENTITY` 和 `CODESCOPE_MAC_NOTARY_PROFILE`（`notarytool` 钥匙串 Profile），不会把证书或密码写入仓库。缺少凭据时生成的是可供开发测试的 ad-hoc 签名包。
 
 ### Web 端
 
