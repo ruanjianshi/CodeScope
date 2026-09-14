@@ -54,6 +54,13 @@ jobs:
         run: npm test
       - name: Build desktop packages
         run: npm run make:desktop -- --arch=${{ matrix.arch }}
+      - name: Verify macOS application signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          app_path="out/CodeScope-darwin-${{ matrix.arch }}/CodeScope.app"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")" = "com.codescope.desktop"
       - uses: actions/upload-artifact@v6
         with:
           name: codescope-${{ matrix.id }}

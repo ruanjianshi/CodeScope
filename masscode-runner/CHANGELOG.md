@@ -1,5 +1,11 @@
 # 更新记录
 
+## v2.1.3 — 2026-09-14
+
+- macOS 安装包现在会完整签名应用主体、Helper 与内嵌 Framework；没有 Developer ID 时使用可本地启动的 ad-hoc 签名，有正式证书时自动保留 hardened runtime。
+- macOS 签名失败不再被打包流程忽略，发布流水线增加 `codesign --verify --deep --strict` 和 Bundle ID 校验，阻止损坏的 DMG/ZIP 上传。
+- 修复下载后 Finder/LaunchServices 可能错误命中废纸篓或 App Translocation 副本，以及 ad-hoc hardened runtime 导致 Electron Framework Team ID 冲突的问题。
+
 ## v2.1.2 — 2026-09-14
 
 - 修复 Linux DEB/RPM 包装器无法定位大小写正确的 `CodeScope` 可执行文件。
