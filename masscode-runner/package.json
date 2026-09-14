@@ -1,6 +1,6 @@
 {
   "name": "codescope",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "private": true,
   "productName": "CodeScope",
   "description": "码境 CodeScope：面向代码阅读、编辑、运行、文档与远程开发的工程工作台",
@@ -15,14 +15,15 @@
     "package:desktop": "electron-forge package",
     "make:desktop": "electron-forge make",
     "publish:desktop": "electron-forge publish",
-    "prepackage:desktop": "npm run verify:office",
-    "premake:desktop": "npm run verify:office",
-    "prepublish:desktop": "npm run verify:office",
+    "prepackage:desktop": "npm run build:reading-editor && npm run verify:office",
+    "premake:desktop": "npm run build:reading-editor && npm run verify:office",
+    "prepublish:desktop": "npm run build:reading-editor && npm run verify:office",
     "prepare:gopls": "node scripts/build-bundled-gopls.js",
     "verify:office": "node scripts/verify-office-package.js",
     "test": "node tests/smoke.js",
     "test:browser": "node tests/browser-smoke.js",
-    "test:run": "node tests/run.js"
+    "test:run": "node tests/run.js",
+    "build:reading-editor": "node scripts/build-reading-editor.js"
   },
   "engines": {
     "node": ">=18"
@@ -30,6 +31,7 @@
   "license": "MIT",
   "dependencies": {
     "@astral-sh/ruff-wasm-nodejs": "^0.16.7",
+    "@milkdown/crepe": "^7.22.1",
     "@novnc/novnc": "^1.7.0",
     "@turbodocx/html-to-docx": "^1.23.1",
     "docx": "^9.7.1",
@@ -61,6 +63,7 @@
     "@electron-forge/maker-zip": "^7.11.2",
     "@electron-forge/publisher-github": "^7.11.2",
     "electron": "^44.3.0",
+    "esbuild": "^0.25.9",
     "playwright-core": "^1.63.0"
   }
 }

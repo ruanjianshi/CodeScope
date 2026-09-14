@@ -10,6 +10,7 @@
 <link rel="icon" href="/assets/codescope.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/hljs-theme.css">
 <link rel="stylesheet" href="/assets/xterm.css">
+<link rel="stylesheet" href="/assets/reading-block-editor.css">
 <script>
   (() => {
     const allowed = ['ocean', 'graphite', 'midnight', 'forest', 'light'];
@@ -20,6 +21,7 @@
 </script>
 <script src="/assets/highlight.min.js" defer></script>
 <script src="/assets/xterm.js" defer></script>
+<script src="/assets/reading-block-editor.js" defer></script>
 <style>
   :root {
     --bg: #16181d; --panel: #1e2128; --panel2: #252932; --border: #30353f;
@@ -914,16 +916,18 @@
   .reading-md-editor { display:none; height:100%; min-height:0; overflow:auto; scrollbar-gutter:stable; outline:0; box-sizing:border-box; padding:48px clamp(38px,8cqw,120px) 120px; background:transparent; color:var(--md-text); font:1rem/1.78 var(--ui); font-kerning:normal; font-variant-ligatures:common-ligatures; letter-spacing:.004em; text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; caret-color:var(--md-accent); }
   .reading-md-editor:empty::before { content:'这里会实时显示 Markdown 渲染结果'; color:var(--muted); font-size:11px; }
   .reading-md-editor > * { width:min(100%,var(--md-measure)); max-width:var(--md-measure); margin-left:auto; margin-right:auto; }
-  .reading-md-live { background:transparent; }
-  .reading-md-live:focus { box-shadow:inset 2px 0 color-mix(in srgb,var(--md-accent) 58%,transparent); }
-  .reading-md-live:empty::before { content:'直接输入 Markdown，标题、列表、加粗与引用会在当前位置实时呈现…'; }
-  .reading-md-live > * { position:relative; border-radius:6px; transition:background .12s,box-shadow .12s; }
-  .reading-md-live > *:hover { background:var(--md-surface-hover); box-shadow:0 0 0 6px var(--md-surface-hover); }
-  .reading-md-live > ul:hover,.reading-md-live > ol:hover { background:transparent; box-shadow:none; }
-  .reading-md-live > ul > li,.reading-md-live > ol > li { position:relative; border-radius:5px; transition:background .12s,box-shadow .12s,opacity .12s; }
-  .reading-md-live > ul > li:hover,.reading-md-live > ol > li:hover { background:var(--md-surface-hover); box-shadow:0 0 0 4px var(--md-surface-hover); }
+  .reading-md-block { display:none; height:100%; min-height:0; overflow:auto; scrollbar-gutter:stable; background:transparent; }
+  .reading-md-block-loading,.reading-md-block-error { width:min(100%,var(--md-measure)); margin:0 auto; padding:56px 0; color:var(--muted); font-size:11px; text-align:center; }
+  .reading-md-block-error { color:var(--err); }
+  .reading-md-block .codescope-crepe-host { min-height:100%; }
+  .reading-md-block .milkdown { min-height:100%; background:transparent; color:var(--md-text); --crepe-color-background:transparent; --crepe-color-on-background:var(--md-text); --crepe-color-surface:var(--theme-elevated,var(--panel)); --crepe-color-surface-low:var(--panel2); --crepe-color-on-surface:var(--text); --crepe-color-on-surface-variant:var(--dim); --crepe-color-outline:var(--border); --crepe-color-primary:var(--md-accent); --crepe-color-secondary:var(--accent-soft); --crepe-color-on-secondary:var(--text); --crepe-color-inverse:var(--text); --crepe-color-on-inverse:var(--bg); --crepe-color-inline-code:var(--syntax-number,#e5b475); --crepe-color-error:var(--err); --crepe-color-hover:var(--md-surface-hover); --crepe-color-selected:color-mix(in srgb,var(--accent) 24%,transparent); --crepe-color-inline-area:var(--md-surface); --crepe-font-default:var(--ui); --crepe-font-title:var(--ui); --crepe-font-code:var(--mono); --crepe-shadow-1:0 8px 22px rgba(0,0,0,.3); --crepe-shadow-2:0 14px 38px rgba(0,0,0,.42); }
+  .reading-md-block .milkdown .ProseMirror { width:min(calc(100% - clamp(40px,10cqw,120px)),var(--md-measure)); min-height:100%; margin:0 auto; padding:48px 0 120px; font:1rem/1.78 var(--ui); letter-spacing:.004em; caret-color:var(--md-accent); }
+  .reading-md-block .milkdown .ProseMirror > :first-child { margin-top:0; }
+  .reading-md-block .milkdown .ProseMirror a[href^="#codescope-ref-"] { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border)); border-radius:999px; background:var(--accent-soft); color:var(--accent); font:650 10px/1.45 var(--ui); text-decoration:none; cursor:pointer; }
+  .reading-md-block .milkdown .ProseMirror a[href^="#codescope-ref-"]::before { content:'↗'; }
+  .reading-md-block .milkdown .milkdown-block-handle,.reading-md-block .milkdown .milkdown-slash-menu,.reading-md-block .milkdown .milkdown-toolbar,.reading-md-block .milkdown .milkdown-link-preview,.reading-md-block .milkdown .milkdown-link-edit,.reading-md-block .milkdown .milkdown-latex-inline-edit { position:fixed; z-index:180; }
   .reading-text-shell.markdown[data-md-mode="edit"] .reading-md-source { display:block; }
-  .reading-text-shell.markdown[data-md-mode="live"] .reading-md-live { display:block; padding-left:max(68px,clamp(38px,8cqw,120px)); }
+  .reading-text-shell.markdown[data-md-mode="live"] .reading-md-block { display:block; }
   .reading-text-shell.markdown[data-md-mode="preview"] .reading-md-preview { display:block; }
   .reading-md-editor h1,.reading-md-editor h2,.reading-md-editor h3,.reading-md-editor h4,.reading-md-editor h5,.reading-md-editor h6 { scroll-margin-top:64px; letter-spacing:-.026em; line-height:1.28; text-wrap:balance; }
   .reading-md-editor h1 { margin-top:0; margin-bottom:30px; color:var(--md-accent-strong); font-size:2.08rem; font-weight:780; }
@@ -1007,7 +1011,7 @@
   .reading-slash-item .desc { display:block; margin-top:1px; color:var(--dim); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .reading-slash-item .key { color:var(--muted); font:9px var(--mono); }
   .reading-text-shell.markdown .reading-text-foot::before { content:'Markdown 源码 · 输入 / 插入内容块 · ⌘S 保存'; margin-right:auto; color:var(--muted); }
-  .reading-text-shell.markdown[data-md-mode="live"] .reading-text-foot::before { content:'Live Preview · 在同一位置输入并渲染 · / 插入内容块'; }
+  .reading-text-shell.markdown[data-md-mode="live"] .reading-text-foot::before { content:'区块编辑 · 拖动手柄排序 · / 插入区块 · 选中文本可格式化'; }
   .reading-text-shell.markdown[data-md-mode="preview"] .reading-text-foot::before { content:'阅读模式 · 点击 PDF 引用可定位原文'; }
   @keyframes readingRefFlash { 50% { box-shadow:0 0 0 4px var(--accent-soft); background:color-mix(in srgb,var(--accent) 24%,transparent); } }
   .reading-md-editor hr { height:1px; border:0; margin:2.5rem auto; background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--border) 95%,var(--md-accent)),transparent); }
@@ -4565,7 +4569,7 @@ function readingPdfVersions(fragment){const project=fragment&&READING_PROJECT_IN
 function syncReadingViewOptions(els,versions){const options=els.view.options;options[0].textContent=versions.original?'PDF 原版':'当前 PDF';options[1].textContent='可选文本';options[2].textContent=versions.translation?'中文 PDF':'AI 中文译文';options[3].textContent=versions.bilingual?'双语 PDF':'双语对照';}
 async function renderReadingSlot(slot) {
   if(READING_SLASH_STATE&&READING_SLASH_STATE.slot===slot)hideReadingSlashMenu();
-  const els=readingSlotElements(slot),path=READING_SLOTS[slot],fragment=readingFragment(path);els.body.replaceChildren();els.name.textContent=path?readingBase(path):'拖入项目片段';
+  const els=readingSlotElements(slot),path=READING_SLOTS[slot],fragment=readingFragment(path);if(els.body.__readingBlockDestroy)await els.body.__readingBlockDestroy();delete els.body.__readingBlockDestroy;els.body.replaceChildren();els.name.textContent=path?readingBase(path):'拖入项目片段';
   els.view.style.display='';els.page.style.display='';els.pages.style.display='';els.col.querySelector('.reading-prev').style.display='';els.col.querySelector('.reading-next').style.display='';
   if(!path){const empty=document.createElement('div');empty.className='reading-paper';empty.innerHTML='<div class="empty">从左侧阅读项目拖入 PDF、Markdown 或代码片段<br>可与另一片段并排阅读</div>';els.body.appendChild(empty);els.page.disabled=true;return;}
   if(fragment&&fragment.kind!=='pdf'){
@@ -4577,28 +4581,25 @@ async function renderReadingSlot(slot) {
     const scheduleSave=()=>{clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.set(path,setTimeout(saveNow,500));};
     if(fragment.kind==='markdown'){
       const toolbar=document.createElement('div');toolbar.className='reading-md-toolbar';const kind=document.createElement('span');kind.className='kind';kind.textContent='Markdown';const modes=document.createElement('div');modes.className='reading-md-modes';modes.setAttribute('role','tablist');
-      const modeDefs=[['edit','✎ 源码'],['live','⚡ 实时预览'],['preview','▤ 阅读']],modeButtons=new Map();
+      const modeDefs=[['edit','✎ 源码'],['live','▦ 区块编辑'],['preview','▤ 阅读']],modeButtons=new Map();
       for(const [mode,label] of modeDefs){const button=document.createElement('button');button.type='button';button.className='reading-md-mode';button.dataset.mode=mode;button.textContent=label;button.setAttribute('role','tab');button.onclick=()=>applyMode(mode,true);modeButtons.set(mode,button);modes.appendChild(button);}toolbar.append(kind,modes);
       const workbench=document.createElement('div');workbench.className='reading-md-workbench';const source=document.createElement('textarea');source.className='reading-md-source';source.spellcheck=false;source.value=record.content||'';source.placeholder='# 从这里开始写 Markdown…\n\n输入 / 可插入标题、列表、引用与提示块';source.setAttribute('aria-label','Markdown 源码编辑器');
-      const live=document.createElement('div');live.className='reading-md-editor reading-md-live';live.contentEditable='true';live.spellcheck=false;live.dataset.readingPath=path;live.setAttribute('aria-label','Markdown 实时预览编辑器');
+      const live=document.createElement('div');live.className='reading-md-block';live.dataset.readingPath=path;live.setAttribute('aria-label','Markdown 区块编辑器');
       const preview=document.createElement('div');preview.className='reading-md-editor reading-md-preview';preview.dataset.readingPath=path;preview.setAttribute('aria-label','Markdown 阅读视图');
       const historyKey='reading:'+path;markdownLiveHistory(historyKey,record.content||'');
-      let liveComposing=false,liveRenderTimer=0;const renderPreview=()=>{preview.innerHTML=renderMd(record.content||'');decorateMarkdownLinks(preview);};const renderLive=(keepCaret)=>renderReadingLive(live,record.content||'',keepCaret);
-      const applyHistory=(delta)=>{const entry=stepMarkdownLiveHistory(historyKey,delta);if(!entry)return false;clearTimeout(liveRenderTimer);record.content=entry.content;source.value=entry.content;renderLive(false);renderPreview();foot.textContent=(delta<0?'已撤销':'已重做')+' · '+record.content.length+' 字符';scheduleSave();requestAnimationFrame(()=>restoreReadingHistoryCaret(live,entry.caret));return true;};
-      const applyMode=(mode,persist)=>{hideReadingSlashMenu();if(!['edit','live','preview'].includes(mode))mode='live';shell.dataset.mdMode=mode;for(const [name,button] of modeButtons){const active=name===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}if(persist)saveReadingMarkdownMode(path,mode);if(mode==='edit')setTimeout(()=>source.focus(),0);if(mode==='live'){renderLive(false);setTimeout(()=>live.focus(),0);}if(mode==='preview')renderPreview();};
-      const contentChanged=(event)=>{record.content=source.value;recordMarkdownLiveHistory(historyKey,record.content,{source:true,start:source.selectionStart,end:source.selectionEnd},event&&event.isTrusted?'typing':'command');renderLive(false);renderPreview();foot.textContent='正在编辑… · '+record.content.length+' 字符';scheduleSave();updateReadingSlashMenu(source,slot);};
+      let blockEditor=null,blockMountId=0;const renderPreview=()=>{preview.innerHTML=renderMd(record.content||'');decorateMarkdownLinks(preview);};
+      const openBlockReference=(token)=>{const host=document.createElement('div');host.innerHTML=mdInline(token);const pdf=host.querySelector('.reading-pdf-ref');if(pdf){locateReadingMarkdownRef(pdf,slot);return;}const linked=host.querySelector('.md-code-ref,.md-note-ref');if(linked){decorateMarkdownLinks(host);linked.click();}};
+      const destroyBlockEditor=async()=>{blockMountId++;const current=blockEditor;blockEditor=null;if(current)try{await current.destroy();}catch(_){}};
+      const mountBlockEditor=async(focus)=>{await destroyBlockEditor();const id=++blockMountId;live.replaceChildren();const loading=document.createElement('div');loading.className='reading-md-block-loading';loading.textContent='正在加载区块编辑器…';live.appendChild(loading);try{if(!window.CodeScopeBlockEditor)throw new Error('区块编辑器资源未加载');const controller=await window.CodeScopeBlockEditor.create({root:live,markdown:record.content||'',onChange:(content)=>{record.content=content;source.value=content;recordMarkdownLiveHistory(historyKey,content,{source:false},'typing');renderPreview();foot.textContent='正在编辑… · '+content.length+' 字符';scheduleSave();},onFocus:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;},onReference:openBlockReference});if(id!==blockMountId){await controller.destroy();return;}blockEditor=controller;if(focus)setTimeout(()=>controller.focus(),0);}catch(error){if(id!==blockMountId)return;const failed=document.createElement('div');failed.className='reading-md-block-error';failed.textContent='区块编辑器加载失败：'+(error&&error.message||error);live.replaceChildren(failed);}};
+      const applyMode=(mode,persist)=>{hideReadingSlashMenu();if(!['edit','live','preview'].includes(mode))mode='live';shell.dataset.mdMode=mode;for(const [name,button] of modeButtons){const active=name===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}if(persist)saveReadingMarkdownMode(path,mode);if(mode==='edit'){destroyBlockEditor();source.value=record.content||'';setTimeout(()=>source.focus(),0);}if(mode==='live')mountBlockEditor(true);if(mode==='preview'){destroyBlockEditor();renderPreview();}};
+      const contentChanged=(event)=>{record.content=source.value;recordMarkdownLiveHistory(historyKey,record.content,{source:true,start:source.selectionStart,end:source.selectionEnd},event&&event.isTrusted?'typing':'command');renderPreview();foot.textContent='正在编辑… · '+record.content.length+' 字符';scheduleSave();updateReadingSlashMenu(source,slot);};
       source.addEventListener('input',contentChanged);
       source.addEventListener('click',()=>updateReadingSlashMenu(source,slot));
       source.addEventListener('blur',()=>setTimeout(()=>{if(READING_SLASH_STATE&&READING_SLASH_STATE.editor===source&&(!READING_SLASH_MENU||!READING_SLASH_MENU.contains(document.activeElement)))hideReadingSlashMenu();},0));
       source.addEventListener('keyup',(e)=>{if(!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key))updateReadingSlashMenu(source,slot);});
       source.addEventListener('keydown',(e)=>{if(readingSlashKeydown(e,source))return;if(e.key==='Tab'){e.preventDefault();source.setRangeText('  ',source.selectionStart,source.selectionEnd,'end');source.dispatchEvent(new Event('input',{bubbles:true}));return;}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow();}});
-      live.addEventListener('compositionstart',()=>{liveComposing=true;});live.addEventListener('compositionend',()=>{liveComposing=false;live.dispatchEvent(new Event('input',{bubbles:true}));});
-      live.addEventListener('input',(event)=>{record.content=mdFromHtml(live.innerHTML);source.value=record.content;recordMarkdownLiveHistory(historyKey,record.content,readingLiveCaret(live),event&&event.isTrusted?'typing':'command');renderPreview();foot.textContent='正在编辑… · '+record.content.length+' 字符';scheduleSave();updateReadingSlashMenu(live,slot);clearTimeout(liveRenderTimer);if(!liveComposing&&readingLiveCanRender(record.content))liveRenderTimer=setTimeout(()=>renderLive(true),90);});
-      live.addEventListener('beforeinput',(event)=>{if(event.inputType!=='historyUndo'&&event.inputType!=='historyRedo')return;event.preventDefault();applyHistory(event.inputType==='historyUndo'?-1:1);});
-      live.addEventListener('paste',(e)=>{e.preventDefault();const text=e.clipboardData.getData('text/plain');if(text)document.execCommand('insertText',false,text);});
-      live.addEventListener('keydown',(e)=>{const historyDelta=markdownHistoryShortcut(e);if(historyDelta){if(applyHistory(historyDelta))e.preventDefault();return;}if(readingSlashKeydown(e,live))return;if(e.key==='Enter'&&readingLiveEnter(live,e)){e.preventDefault();return;}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow();}});live.addEventListener('keyup',(e)=>{if(!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key))updateReadingSlashMenu(live,slot);});live.addEventListener('blur',()=>{clearTimeout(liveRenderTimer);setTimeout(()=>{if(READING_SLASH_STATE&&READING_SLASH_STATE.editor===live&&(!READING_SLASH_MENU||!READING_SLASH_MENU.contains(document.activeElement)))hideReadingSlashMenu();if(!workbench.contains(document.activeElement))renderLive(false);},0);});
       const previewClick=async(e)=>{const remove=e.target.closest&&e.target.closest('.callout-remove');if(remove){e.preventDefault();e.stopPropagation();const quote=remove.closest('blockquote'),ref=quote&&quote.querySelector('.reading-pdf-ref'),start=Number(quote&&quote.dataset.mdStart),end=Number(quote&&quote.dataset.mdEnd);if(quote&&Number.isFinite(start)&&Number.isFinite(end)){remove.disabled=true;const nextContent=removeReadingMarkdownBlock(record.content,start,end),linked=await removeReadingLinkedPdfFragment(ref);if(!linked.ok){remove.disabled=false;readingStatus('PDF 摘录删除失败：'+(linked.error||'未知错误'),true);return;}const saved=await api('/api/readings/text-fragment',{path,content:nextContent});if(!saved.ok){await restoreReadingLinkedPdfFragment(linked);remove.disabled=false;readingStatus('Markdown 引用删除失败，PDF 摘录已恢复：'+(saved.error||'未知错误'),true);return;}clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.delete(path);record.content=nextContent;record.savedContent=nextContent;source.value=record.content;renderLive(false);renderPreview();foot.textContent='已保存 · '+record.content.length+' 字符';loadReadings(true);readingStatus(linked.removed?'引用、PDF 摘录与页内标记已同步删除':'引用已从 Markdown 笔记中移除');}return;}const ref=e.target.closest&&e.target.closest('.reading-pdf-ref');if(!ref)return;e.preventDefault();e.stopPropagation();locateReadingMarkdownRef(ref,slot);};live.addEventListener('click',previewClick);preview.addEventListener('click',previewClick);
-      renderLive(false);renderPreview();workbench.append(source,live,preview);setupReadingLiveBlocks(live,workbench,slot);shell.append(toolbar,workbench,foot);applyMode(loadReadingMarkdownMode(path),false);
+      renderPreview();workbench.append(source,live,preview);shell.append(toolbar,workbench,foot);els.body.__readingBlockDestroy=destroyBlockEditor;shell.append(toolbar,workbench,foot);applyMode(loadReadingMarkdownMode(path),false);
     }else{
       editor.addEventListener('input',()=>{record.content=editor.value;foot.textContent='正在编辑…';scheduleSave();});editor.addEventListener('keydown',(e)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow();}});
       shell.append(editor,foot);

@@ -152,7 +152,8 @@ print(r.run())
   const readingProjectDir=path.join(vault,'readings','Block Drag Demo'),readingNotePath=path.join(readingProjectDir,'note.md');
   fs.mkdirSync(readingProjectDir,{recursive:true});
   fs.writeFileSync(path.join(readingProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Markdown block drag regression',tags:['markdown','drag']},null,2));
-  fs.writeFileSync(readingNotePath,'# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n## Section B\n\n- alpha\n- beta\n- gamma\n','utf8');
+  const readingReference='[[code-ref:demo.cpp#fragment=0&line=1&end=2|demo.cpp:1–2]]';
+  fs.writeFileSync(readingNotePath,'---\ntitle: Block Drag Demo\ntags: [markdown, drag]\n---\n# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n'+readingReference+'\n\n## Section B\n\n- alpha\n- beta\n- gamma\n','utf8');
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
   server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data'),CODESCOPE_ONLYOFFICE_URL:'http://127.0.0.1:1'},stdio:'ignore'});
   await waitForServer(baseUrl);
@@ -174,9 +175,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.4 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.5 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.4'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.2.5'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -189,7 +190,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.4'))throw new Error('环境元信息未显示 v2.2.4');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.5'))throw new Error('环境元信息未显示 v2.2.5');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -586,45 +587,36 @@ print(r.run())
   if(xmindErrors.length)throw new Error('XMind 浏览器运行错误：'+xmindErrors.join('；'));
   await xmindPage.close();
 
-  /* ---- Markdown 块编辑器：真实指针拖拽、列表项独立移动与落盘 ---- */
+  /* ---- Markdown 块编辑器：Milkdown Crepe 输入、撤销、斜杠菜单、拖拽与落盘 ---- */
   const readingPage=await browser.newPage({viewport:{width:1440,height:900}}),readingErrors=[];
   readingPage.on('pageerror',error=>readingErrors.push(String(error.message||error)));
   await readingPage.goto(baseUrl,{waitUntil:'domcontentloaded'});
   await readingPage.locator('.reading-project').filter({hasText:'Block Drag Demo'}).click();
   await readingPage.locator('.reading-project-tab').filter({hasText:'note'}).click();
-  const live=readingPage.locator('.reading-md-live');await live.waitFor({state:'visible',timeout:10000});
-  if(await readingPage.locator('.reading-block-tail-add').count())throw new Error('Markdown 实时预览仍显示文末“添加区块”按钮');
+  const live=readingPage.locator('.reading-md-block');await live.waitFor({state:'visible',timeout:10000});
+  await live.locator('.ProseMirror').waitFor({state:'visible',timeout:15000});
+  if(!await live.evaluate(el=>el.dataset.editorReady==='true'))throw new Error('Milkdown Crepe 区块编辑器未完成挂载');
+  if(await readingPage.locator('.reading-block-tools').count())throw new Error('阅读模块仍显示旧的自制区块工具');
   const readingMdBefore=await readingPage.evaluate(()=>READING_TEXT_DOCS.get(READING_CURRENT).content);
-  await live.locator('p').first().click();await live.press('End');await live.pressSequentially(' undo-smoke');
+  await live.locator('p').first().click();await readingPage.keyboard.press('End');await readingPage.keyboard.type(' undo-smoke');
   await readingPage.waitForFunction((before)=>READING_TEXT_DOCS.get(READING_CURRENT).content!==before,readingMdBefore);
   await readingPage.waitForTimeout(140);
   await readingPage.keyboard.press('Meta+z');
-  await readingPage.waitForFunction((before)=>READING_TEXT_DOCS.get(READING_CURRENT).content===before,readingMdBefore);
+  await readingPage.waitForFunction(()=>!READING_TEXT_DOCS.get(READING_CURRENT).content.includes('undo-smoke'));
   await readingPage.keyboard.press('Meta+Shift+z');
-  await readingPage.waitForFunction((before)=>READING_TEXT_DOCS.get(READING_CURRENT).content!==before,readingMdBefore);
+  await readingPage.waitForFunction(()=>READING_TEXT_DOCS.get(READING_CURRENT).content.includes('undo-smoke'));
   await readingPage.keyboard.press('Meta+z');
-  await readingPage.waitForFunction((before)=>READING_TEXT_DOCS.get(READING_CURRENT).content===before,readingMdBefore);
-  const dragHandle=readingPage.locator('.reading-block-tool.handle');
-  const firstParagraph=live.locator('p').first();await firstParagraph.hover();await dragHandle.waitFor({state:'visible'});
-  const blockToolAlignment=await readingPage.evaluate(()=>{const block=document.querySelector('.reading-md-live p'),tools=document.querySelector('.reading-block-tools.on');if(!block||!tools)return null;const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode()))if(String(node.textContent||'').trim())break;if(!node)return null;const text=String(node.textContent||''),start=Math.max(0,text.search(/\S/)),range=document.createRange();range.setStart(node,start);range.setEnd(node,Math.min(text.length,start+1));const line=range.getClientRects()[0],tool=tools.getBoundingClientRect();return{centerDelta:Math.abs((line.top+line.height/2)-(tool.top+tool.height/2)),gap:line.left-tool.right};});
-  if(!blockToolAlignment||blockToolAlignment.centerDelta>2.5||blockToolAlignment.gap<5)throw new Error('Markdown 区块控件未与首行对齐或侵入正文：'+JSON.stringify(blockToolAlignment));
-  const firstListItem=live.locator('li').first();await firstListItem.hover();await dragHandle.waitFor({state:'visible'});
-  const listToolAlignment=await readingPage.evaluate(()=>{const block=document.querySelector('.reading-md-live li'),tools=document.querySelector('.reading-block-tools.on');if(!block||!tools)return null;const item=block.getBoundingClientRect(),tool=tools.getBoundingClientRect();return{gap:item.left-tool.right,centerInside:tool.top<item.bottom&&tool.bottom>item.top};});
-  if(!listToolAlignment||listToolAlignment.gap<24||!listToolAlignment.centerInside)throw new Error('Markdown 列表区块控件侵入项目符号或纵向错位：'+JSON.stringify(listToolAlignment));
-  const dragBlock=async(source,target,after=true)=>{
-    await source.hover();await dragHandle.waitFor({state:'visible'});const from=await dragHandle.boundingBox(),to=await target.boundingBox();
-    if(!from||!to)throw new Error('Markdown 区块拖拽目标不可见');
-    await readingPage.mouse.move(from.x+from.width/2,from.y+from.height/2);await readingPage.mouse.down();
-    await readingPage.mouse.move(to.x+Math.min(90,to.width/2),to.y+(after?to.height*.8:to.height*.2),{steps:12});await readingPage.mouse.up();await readingPage.waitForTimeout(180);
-  };
+  await readingPage.waitForFunction(()=>!READING_TEXT_DOCS.get(READING_CURRENT).content.includes('undo-smoke'));
+  const paragraph=live.locator('p').first();await paragraph.click();await readingPage.keyboard.press('End');await readingPage.keyboard.press('Enter');await readingPage.keyboard.type('/');
+  const slash=readingPage.locator('.milkdown-slash-menu[data-show="true"]');await slash.waitFor({state:'visible'});if(!await slash.getByText('基础区块').count()||!await slash.getByText('表格').count())throw new Error('Milkdown 中文斜杠菜单缺少基础或高级区块');await readingPage.keyboard.press('Escape');await readingPage.keyboard.press('Backspace');await readingPage.keyboard.press('Backspace');
+  const dragHandle=readingPage.locator('.milkdown-block-handle');
   const sectionA=live.getByRole('heading',{name:'Section A'}),sectionB=live.getByRole('heading',{name:'Section B'});
-  await dragBlock(sectionA,sectionB,true);
-  let headings=await live.locator('h2').allTextContents();if(headings.join('|')!=='Section B|Section A')throw new Error('Markdown 标题区块拖拽排序失败：'+JSON.stringify(headings));
-  const alpha=live.locator('li').filter({hasText:'alpha'}),gamma=live.locator('li').filter({hasText:'gamma'});
-  await dragBlock(alpha,gamma,true);
-  const items=await live.locator('li').allTextContents();if(items.join('|')!=='beta|gamma|alpha')throw new Error('Markdown 列表项未作为独立区块拖拽：'+JSON.stringify(items));
+  await sectionA.hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');
+  if(await dragHandle.getAttribute('draggable')!=='true')throw new Error('Milkdown 区块手柄不可拖拽');
+  await dragHandle.dragTo(sectionB);await readingPage.waitForTimeout(250);
+  const headings=await live.locator('h2').allTextContents();if(headings.join('|')!=='Section B|Section A')throw new Error('Milkdown 标题区块拖拽排序失败：'+JSON.stringify(headings));
   await readingPage.waitForTimeout(850);const savedNote=fs.readFileSync(readingNotePath,'utf8');
-  if(savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!/- beta\n- gamma\n- alpha/.test(savedNote))throw new Error('Markdown 区块拖拽结果未持久化：'+savedNote);
+  if(!savedNote.startsWith('---\ntitle: Block Drag Demo')||savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!savedNote.includes(readingReference))throw new Error('Markdown frontmatter、引用或区块拖拽结果未持久化：'+savedNote);
   if(readingErrors.length)throw new Error('Markdown 区块浏览器运行错误：'+readingErrors.join('；'));
   await readingPage.close();
 
