@@ -2008,6 +2008,21 @@ function safeGitPath(input) {
   return { root, full, relative: path.relative(root, full).split(path.sep).join('/') };
 }
 
+function fallbackTextDiff(before, after, beforeLabel, afterLabel) {
+  const oldText = String(before || '');
+  const newText = String(after || '');
+  if (oldText === newText) return '';
+  const oldLines = oldText.split(/\r?\n/);
+  const newLines = newText.split(/\r?\n/);
+  return [
+    '--- ' + (beforeLabel || '旧版本'),
+    '+++ ' + (afterLabel || '当前版本'),
+    '@@ -1,' + oldLines.length + ' +1,' + newLines.length + ' @@',
+    ...oldLines.map((line) => '-' + line),
+    ...newLines.map((line) => '+' + line),
+  ].join('\n').slice(0, 2 * 1024 * 1024);
+}
+
 async function unifiedTextDiff(before, after, beforeLabel, afterLabel) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-diff-'));
   const left = path.join(dir, 'before.txt'), right = path.join(dir, 'after.txt');
@@ -2024,11 +2039,14 @@ async function unifiedTextDiff(before, after, beforeLabel, afterLabel) {
       cp.on('close', (code) => { clearTimeout(t); resolve({ out, code, err: null }); });
     });
     // git diff 用退出码 1 表示“存在差异”，并非执行失败。
-    if (raw.err && raw.code !== 1) throw raw.err;
-    return (raw.out || '')
+    const rendered = (raw.out || '')
       .split(left).join(beforeLabel || '旧版本')
       .split(right).join(afterLabel || '当前版本')
       .slice(0, 2 * 1024 * 1024);
+    if ((raw.err && raw.code !== 1) || (!rendered && String(before || '') !== String(after || ''))) {
+      return fallbackTextDiff(before, after, beforeLabel, afterLabel);
+    }
+    return rendered;
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
   }

@@ -195,7 +195,7 @@ void bubbleSort(Array& values);
 
   const environment = await requestJson(baseUrl, '/api/env');
   const runtimeEntries = Object.values(environment.runtime || {});
-  assert(environment.version === '2.1.0' && environment.mode === 'web' && environment.node && environment.system && environment.summary.ok, '环境接口模式、版本、系统信息或必需项状态异常');
+  assert(environment.version === '2.1.0' && environment.mode === 'web' && environment.node && environment.system && environment.summary && Number.isInteger(environment.summary.requiredMissing), '环境接口模式、版本、系统信息或汇总结构异常');
   assert(['node','vault','appData','temp','dependencies'].every((key) => environment.runtime && environment.runtime[key] && environment.runtime[key].available), '运行基础环境检测不完整');
   assert(runtimeEntries.every((item) => typeof item.required === 'boolean' && item.group), '运行环境条目结构不完整');
 
