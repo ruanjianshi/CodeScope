@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.2.8
+# 码境 CodeScope v2.2.9
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前版本：**v2.2.8**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v2.2.9**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
@@ -23,7 +23,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 
 - 统一项目、Office、阅读、绘图与 Git 的侧栏标题、计数、操作按钮、树行、悬停和选中反馈；五套工作台主题共用同一套语义化颜色与间距。
 - 代码工作区使用 Monaco，提供多栏、LSP、定义/引用/调用关系、运行、调试、测试、Git Diff 与可恢复本地时间线。
-- Markdown 提供源码、分栏、区块编辑和阅读模式；分栏预览严格绑定当前文件与片段，并按源码行锚点双向同步滚动。阅读模块的区块模式使用本地打包的 Milkdown Crepe（MIT），支持直接编辑、拖拽排序、斜杠命令、选区工具栏、表格、任务列表、代码高亮、公式、原生撤销及代码/PDF 引用定位；内置可折叠层级大纲、当前章节高亮与 60%–180% 文档缩放，原始 `.md` 与 frontmatter 保持兼容。
+- Markdown 提供源码、分栏、区块编辑和阅读模式；分栏预览严格绑定当前文件与片段，并按源码行锚点双向同步滚动。阅读模块的区块模式使用本地打包的 Milkdown Crepe（MIT），支持直接编辑、拖拽排序、斜杠命令、选区工具栏、表格、任务列表、代码高亮、公式、原生撤销及代码/PDF 引用定位；左侧内置可折叠层级大纲、当前章节高亮与 60%–180% 文档缩放，原始 `.md` 与 frontmatter 保持兼容。
 - 阅读工作区把 PDF 原文、译本、Markdown、LaTeX 与代码片段组织在同一项目中，支持并排阅读、页码摘录、翻译和双向定位。
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
 - Office 工作区只使用 ONLYOFFICE Docs，统一提供 DOCX/XLSX/PPTX 高保真编辑、审阅与多人协作；未连接时显示连接设置，不再使用内置兼容编辑器。
