@@ -10563,7 +10563,7 @@ function renderMarkdown(md, baseLine) {
     }
     const buf = [line];                         // 段落（单个回车 = 换行 <br>，与所见即所得一致）
     while (i + 1 < lines.length && lines[i + 1].trim() && !blockStart(lines[i + 1])) { i++; buf.push(lines[i]); }
-    html += '<p data-md-line="' + ml + '">' + inline(buf.join('\n')).replace(/(\n)+/g, '<br>') + '</p>'; i++;
+    html += '<p data-md-line="' + ml + '">' + buf.map((text,offset)=>'<span class="md-pline" data-md-line="'+(ml+offset)+'">'+inline(text)+'</span>').join('<br>') + '</p>'; i++;
   }
   return html;
 }
@@ -10818,7 +10818,9 @@ function markdownPreviewAnchors() {
   for(const element of p.querySelectorAll('.edit-preview-body [data-md-line]')){
     const line=Math.max(0,Math.min(lastLine,Number(element.dataset.mdLine)||0));
     const top=Math.max(0,Math.min(maxTop,element.getBoundingClientRect().top-p.getBoundingClientRect().top+p.scrollTop));
-    if(!byLine.has(line)||top<byLine.get(line))byLine.set(line,top);
+    // 父块与内部精确行可能共享源码行号（pre/md-cline、ul/li、blockquote/p）。
+    // DOM 顺序中内部行在后，保留最后一个可让锚点落到真实文字行而非容器外框。
+    byLine.set(line,top);
   }
   byLine.set(0,0);byLine.set(lastLine,maxTop);
   const rows=[...byLine].map(([line,top])=>({line,top})).sort((a,b)=>a.line-b.line);let top=0;
@@ -10837,6 +10839,14 @@ function markdownSourceTopLine() {
   }
   const ta=$('code-edit'),lineHeight=parseFloat(getComputedStyle(ta).lineHeight)||20;
   return Math.max(0,ta.scrollTop/lineHeight);
+}
+function markdownSourceCursorClientY(line) {
+  if(monacoMainActive()){
+    const position=MONACO_EDITOR.getPosition(),point=position&&MONACO_EDITOR.getScrolledVisiblePosition(position),rect=$('monaco-main').getBoundingClientRect();
+    if(point)return rect.top+point.top;
+  }
+  const ta=$('code-edit'),rect=ta.getBoundingClientRect(),style=getComputedStyle(ta),lineHeight=parseFloat(style.lineHeight)||20,paddingTop=parseFloat(style.paddingTop)||0;
+  return rect.top+paddingTop+Math.max(0,line)*lineHeight-ta.scrollTop;
 }
 function writeMarkdownScroll(owner,callback){MD_SCROLL_WRITE=owner;callback();requestAnimationFrame(()=>{if(MD_SCROLL_WRITE===owner)MD_SCROLL_WRITE='';});}
 function syncMarkdownPreviewFromSource() {
@@ -10860,10 +10870,10 @@ function syncMdPreview() {
   const ta = $('code-edit'), p = editPreviewScroller();
   if (!p || !ta || !markdownPreviewReady()) return;
   const focused = document.activeElement === ta||(monacoMainActive()&&MONACO_EDITOR.hasTextFocus());
-  const cursorLine = ta.value.slice(0, ta.selectionStart || 0).split('\n').length;  // 1-based
+  const cursorLine = Math.max(0,ta.value.slice(0, ta.selectionStart || 0).split('\n').length-1);
   let target = null;
   for (const el of p.querySelectorAll('[data-md-line]')) {
-    const n = parseInt(el.getAttribute('data-md-line'), 10) + 1;
+    const n = parseInt(el.getAttribute('data-md-line'), 10);
     if (n <= cursorLine) target = el; else break;
   }
   if (!target) return;
@@ -10873,13 +10883,15 @@ function syncMdPreview() {
     target.classList.add('md-sync-line');
     MD_SYNC_TARGET = target;
   }
-  // 滚动：仅编辑框聚焦时跟随；把目标行滚动到预览大致中间（顶部块自然钳制到 0）
-  // 左栏/右栏正在滚动（滚轮/滚动条）时以比例同步为准，350ms 内跳过居中，避免两种滚动打架
-  if (focused && Date.now() - MD_SCROLL_AT > 350) {
-    const rel = target.getBoundingClientRect().top - p.getBoundingClientRect().top;
-    const delta = rel - (p.clientHeight - target.getBoundingClientRect().height) / 2;
-    if (Math.abs(delta) >= 40) {
-      MD_CENTER_AT = Date.now();   // 居中触发的滚动不回写左栏，避免把光标滚出视野
+  // 光标移动时让右侧对应行与左侧光标保持同一屏幕高度。刚结束滚轮同步时延后执行，
+  // 避免滚动与光标定位互相抢占；延时结束后必须补做一次，不能永久停在旧位置。
+  if (focused) {
+    const remaining=350-(Date.now()-MD_SCROLL_AT);
+    if(remaining>0){clearTimeout(MD_SYNC_TIMER);const key=currentEditorDocumentKey();MD_SYNC_TIMER=setTimeout(()=>{if(key===currentEditorDocumentKey())syncMdPreview();},remaining+18);return;}
+    const previewRect=p.getBoundingClientRect(),head=p.querySelector('.edit-preview-head'),headBottom=head?head.getBoundingClientRect().bottom:previewRect.top;
+    const desiredY=Math.max(headBottom+6,Math.min(previewRect.bottom-24,markdownSourceCursorClientY(cursorLine))),delta=target.getBoundingClientRect().top-desiredY;
+    if (Math.abs(delta) >= 2) {
+      MD_CENTER_AT = Date.now();
       writeMarkdownScroll('preview',()=>{p.scrollTop+=delta;});
     }
   }

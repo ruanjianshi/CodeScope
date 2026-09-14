@@ -175,9 +175,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.11 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.12 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.11'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.2.12'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -190,7 +190,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.11'))throw new Error('环境元信息未显示 v2.2.11');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.12'))throw new Error('环境元信息未显示 v2.2.12');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -275,6 +275,9 @@ print(r.run())
   if((await page.locator('#md-view').getAttribute('contenteditable'))!=='false')throw new Error('Markdown 阅读模式仍处于编辑状态');
   if(!await page.locator('#md-view').evaluate(node=>node.classList.contains('project-md-full')))throw new Error('Markdown 阅读模式没有使用全宽阅读布局');
   await page.locator('[data-doc-mode="split"]').click();
+  const codeCursorLine=await page.evaluate(()=>{const input=document.getElementById('code-edit'),marker='cursor-sync-target',next=input.value+'\n\n```text\nfirst step\nsecond step\ncursor-sync-target\n```\n\n## Tail\n\nTrailing paragraph one.\n\nTrailing paragraph two.\n\nTrailing paragraph three.\n\nTrailing paragraph four.\n',offset=next.indexOf(marker),line=next.slice(0,offset).split('\n').length-1,lineHeight=parseFloat(getComputedStyle(input).lineHeight)||20;input.value=next;input.dispatchEvent(new Event('input',{bubbles:true}));input.setSelectionRange(offset,offset);input.scrollTop=Math.max(0,line*lineHeight-input.clientHeight*.5);input.focus();input.dispatchEvent(new Event('selectionchange'));return line;});
+  await page.waitForFunction(line=>document.querySelector('#edit-preview .md-cline[data-md-line="'+line+'"]'),codeCursorLine);await page.waitForTimeout(480);
+  const codeCursorAlignment=await page.evaluate(line=>{const sourceY=markdownSourceCursorClientY(line),targets=[...document.querySelectorAll('#edit-preview .md-cline[data-md-line="'+line+'"]')],target=targets[targets.length-1]?.getBoundingClientRect();return target?{sourceY,previewY:target.top,delta:Math.abs(sourceY-target.top)}:null;},codeCursorLine);if(!codeCursorAlignment||codeCursorAlignment.delta>4)throw new Error('Markdown 代码块光标与预览对应行未同高：'+JSON.stringify(codeCursorAlignment));
   await page.locator('#edit-preview .md-code-ref').click();
   if(!(await page.locator('#tabs .tab.active').innerText()).includes('led.h')){const jumpState=await page.evaluate(()=>({current:CURRENT&&CURRENT.file,index:CINDEX,active:document.querySelector('#tabs .tab.active')&&document.querySelector('#tabs .tab.active').textContent,status:document.getElementById('status').textContent,refs:[...document.querySelectorAll('.md-code-ref')].map(node=>({...node.dataset,text:node.textContent}))}));throw new Error('Markdown 代码引用无法回跳到原代码片段：'+JSON.stringify(jumpState));}
   await page.locator('#btn-backlinks').click();
@@ -311,6 +314,9 @@ print(r.run())
   await markdownPage.waitForTimeout(180);
   const rightToLeft=await markdownPage.evaluate(()=>({sourceLine:Math.round(markdownSourceTopLine()),previewLine:Math.round(interpolateMarkdownAnchors(markdownPreviewAnchors(),document.getElementById('edit-preview').scrollTop,'top','line'))}));
   if(Math.abs(rightToLeft.sourceLine-rightToLeft.previewLine)>3)throw new Error('Markdown 右侧滚动未按源码行同步源码：'+JSON.stringify(rightToLeft));
+  const monacoCursorLine=await markdownPage.evaluate(()=>{const model=MONACO_EDITOR.getModel(),marker='monaco-cursor-sync-target',tail=Array.from({length:12},(_,index)=>'Trailing paragraph '+(index+1)+'.').join('\n\n'),next=model.getValue()+'\n\n```text\nfirst step\nsecond step\n'+marker+'\n```\n\n## Cursor Sync Tail\n\n'+tail+'\n',offset=next.indexOf(marker);model.setValue(next);const position=model.getPositionAt(offset);MONACO_EDITOR.setPosition(position);MONACO_EDITOR.revealPositionInCenter(position);MONACO_EDITOR.focus();return position.lineNumber-1;});
+  await markdownPage.waitForFunction(line=>document.querySelector('#edit-preview .md-cline[data-md-line="'+line+'"]'),monacoCursorLine);await markdownPage.evaluate(()=>{const position=MONACO_EDITOR.getPosition(),height=MONACO_EDITOR.getLayoutInfo().height;MONACO_EDITOR.setScrollTop(Math.max(0,MONACO_EDITOR.getTopForLineNumber(position.lineNumber)-height*.42));MONACO_EDITOR.focus();scheduleSyncMdPreview();});await markdownPage.waitForTimeout(680);
+  const monacoCursorAlignment=await markdownPage.evaluate(line=>{const point=MONACO_EDITOR.getScrolledVisiblePosition(MONACO_EDITOR.getPosition()),source=document.getElementById('monaco-main').getBoundingClientRect(),targets=[...document.querySelectorAll('#edit-preview .md-cline[data-md-line="'+line+'"]')],target=targets[targets.length-1]?.getBoundingClientRect(),sourceY=point?source.top+point.top:NaN;return target&&Number.isFinite(sourceY)?{sourceY,previewY:target.top,delta:Math.abs(sourceY-target.top)}:null;},monacoCursorLine);if(!monacoCursorAlignment||monacoCursorAlignment.delta>4)throw new Error('Monaco Markdown 代码块光标与预览对应行未同高：'+JSON.stringify(monacoCursorAlignment));
   if(markdownErrors.length)throw new Error('Monaco Markdown 浏览器运行错误：'+markdownErrors.join('；'));
   await markdownPage.close();
   await page.locator('#tabs .tab').filter({hasText:'led.h'}).locator('span').first().click();
