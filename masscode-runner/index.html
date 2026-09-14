@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/assets/hljs-theme.css">
 <link rel="stylesheet" href="/assets/xterm.css">
 <link rel="stylesheet" href="/assets/reading-block-editor.css">
+<link rel="stylesheet" href="/assets/pdfjs/pdf_viewer.css">
 <script>
   (() => {
     const allowed = ['ocean', 'graphite', 'midnight', 'forest', 'light'];
@@ -800,7 +801,7 @@
   .reading-page-input { width:45px; text-align:center; }
   .reading-col-body { flex:1; min-height:0; position:relative; overflow:auto; }
   .reading-pdf { width:100%; height:100%; border:0; background:#525659; }
-  /* ---- 自研 PDF 阅读器（pdfjs 渲染 + 高亮标注） ---- */
+  /* ---- PDF.js 官方 Viewer 内核 + CodeScope 阅读标注层 ---- */
   .reading-pdf-host { height:100%; min-height:0; display:flex; flex-direction:column; background:#363d4a; position:relative; container-type:inline-size; }
   .reading-pdf-host .pdf-toolbar { display:flex; align-items:center; gap:6px; min-height:34px; padding:4px 8px; background:#2a313c; border-bottom:1px solid #3d4654; flex:none; overflow-x:auto; scrollbar-width:none; }
   .reading-pdf-host .pdf-toolbar::-webkit-scrollbar { display:none; }
@@ -842,16 +843,37 @@
     .reading-pdf-host .pdf-toolbar .pdf-zoom-range,
     .reading-pdf-host .pdf-toolbar .pdf-anno-count { display:none; }
   }
-  .pdf-scroll { flex:1; min-height:0; overflow:auto; padding:12px; background:#363d4a; }
+  .pdf-reader-stage { position:relative; flex:1; min-height:0; overflow:hidden; background:#303744; }
+  .pdf-scroll { min-height:0; overflow:auto; padding:12px; background:#363d4a; }
+  .pdf-scroll.pdfjs-viewer-container { position:absolute; inset:0; padding:16px 18px 28px; overflow:auto; background:radial-gradient(circle at 50% 0,rgba(93,112,140,.14),transparent 42%),#303744; }
+  .pdf-scroll.pdfjs-viewer-container .pdfViewer { --page-margin:0 auto 18px; --page-border:0; }
+  .pdf-scroll.pdfjs-viewer-container .pdfViewer .page { border:0; border-radius:2px; box-shadow:0 5px 22px rgba(0,0,0,.4); overflow:visible; }
+  .pdf-scroll.pdfjs-viewer-container .pdfViewer .spread { gap:18px; margin-bottom:18px; align-items:center; justify-content:center; }
+  .pdf-scroll.pdfjs-viewer-container .pdfViewer.scrollHorizontal { display:inline-flex; min-width:100%; align-items:flex-start; }
+  .pdf-scroll.pdfjs-viewer-container .pdfViewer.scrollWrapped { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:center; }
+  .pdf-layout-select { flex:none; height:24px; max-width:112px; padding:2px 22px 2px 7px; border:1px solid #3d4654; border-radius:5px; background:#333c49; color:#d8e3f2; font-size:10px; cursor:pointer; }
+  .pdf-toolbar .pdf-tool-primary { border-color:#58739b !important; background:#36577e !important; color:#fff !important; }
+  .reading-pdf-host.pdf-hand-mode .pdf-scroll { cursor:grab; }
+  .reading-pdf-host.pdf-hand-mode.pdf-hand-dragging .pdf-scroll { cursor:grabbing; }
+  .reading-pdf-host.pdf-hand-mode .textLayer { pointer-events:none; user-select:none; }
+  .pdf-official-badge { flex:none; padding:2px 6px; border-radius:999px; border:1px solid rgba(76,180,132,.38); background:rgba(45,148,99,.12); color:#93ddb9; font:8px var(--mono); }
+  .reading-onlyoffice-overlay { position:absolute; inset:0; z-index:80; display:flex; flex-direction:column; background:#171d25; }
+  .reading-onlyoffice-bar { display:flex; align-items:center; gap:8px; min-height:38px; padding:5px 8px; border-bottom:1px solid #3d4654; background:#252d38; color:#dce6f4; font-size:11px; }
+  .reading-onlyoffice-bar .title { font-weight:700; }
+  .reading-onlyoffice-bar .status { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#98abc2; }
+  .reading-onlyoffice-bar button { flex:none; padding:4px 10px; border:1px solid #506079; border-radius:6px; background:#334052; color:#e7effa; cursor:pointer; }
+  .reading-onlyoffice-bar button:hover { border-color:var(--accent); color:#fff; }
+  .reading-onlyoffice-editor { flex:1; min-height:0; }
   .pdf-page-wrap { position:relative; margin:0 auto 16px; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.38); transform-origin:0 0; }
   .pdf-page-wrap canvas { display:block; }
   .pdf-text-layer { position:absolute; inset:0; overflow:hidden; line-height:1; text-size-adjust:none; user-select:text; -webkit-user-select:text; cursor:text; }
   .pdf-text-layer span { position:absolute; color:transparent; white-space:pre; transform-origin:0% 0%; border-radius:2px; user-select:text; -webkit-user-select:text; }
-  .pdf-text-layer span.pdf-find-hit { background:rgba(255,213,79,.48); box-shadow:0 0 0 1px rgba(245,180,35,.28); }
-  .pdf-text-layer span.pdf-find-current { background:rgba(255,139,46,.68); box-shadow:0 0 0 2px rgba(255,174,73,.65); }
-  .pdf-text-layer ::selection { background:rgba(44,126,255,.38); color:transparent; text-shadow:none; }
-  .pdf-text-layer.selecting { cursor:text; }
+  .pdf-text-layer span.pdf-find-hit,.pdfjs-viewer-container .textLayer span.pdf-find-hit { background:rgba(255,213,79,.48); box-shadow:0 0 0 1px rgba(245,180,35,.28); }
+  .pdf-text-layer span.pdf-find-current,.pdfjs-viewer-container .textLayer span.pdf-find-current { background:rgba(255,139,46,.68); box-shadow:0 0 0 2px rgba(255,174,73,.65); }
+  .pdf-text-layer ::selection,.pdfjs-viewer-container .textLayer ::selection { background:rgba(44,126,255,.38); color:transparent; text-shadow:none; }
+  .pdf-text-layer.selecting,.pdfjs-viewer-container .textLayer.selecting { cursor:text; }
   .pdf-anno-overlay { position:absolute; inset:0; pointer-events:none; }
+  .pdf-scroll.pdfjs-viewer-container .page > .pdf-anno-overlay { z-index:5; }
   .pdf-anno-hl { position:absolute; border-radius:2px; pointer-events:none; }
   .pdf-anno-hl:hover { outline:1px solid rgba(0,0,0,.35); }
   .pdf-frag-mark { position:absolute; inset:0; pointer-events:none; }
@@ -13313,17 +13335,23 @@ loadEnv(false, true);
 setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
 </script>
 <script>
-/* ================= 阅读 PDF 标注与摘要（自研 pdfjs 渲染 + 高亮 + AI 摘要） ================= */
+/* ================= 阅读 PDF（PDF.js 官方 Viewer + CodeScope 标注/笔记/AI） ================= */
 (function () {
   'use strict';
-  let PDFJS_PROMISE = null;
+  let PDFJS_PROMISE = null, PDF_VIEWER_PROMISE = null;
   function loadPdfJs() {
     if (PDFJS_PROMISE) return PDFJS_PROMISE;
     PDFJS_PROMISE = import('/assets/pdfjs/pdf.min.mjs').then((mod) => {
       mod.GlobalWorkerOptions.workerSrc = '/assets/pdfjs/pdf.worker.min.mjs';
+      globalThis.pdfjsLib = mod;
       return mod;
     });
     return PDFJS_PROMISE;
+  }
+  function loadPdfViewerLib() {
+    if (PDF_VIEWER_PROMISE) return PDF_VIEWER_PROMISE;
+    PDF_VIEWER_PROMISE = loadPdfJs().then(() => import('/assets/pdfjs/pdf_viewer.mjs'));
+    return PDF_VIEWER_PROMISE;
   }
   const ANNO_COLORS = { yellow: '#ffe14d', green: '#7ee787', blue: '#79c0ff', pink: '#ff9ecf', orange: '#ffab70' };
   window.__pdfSelectedRectsIn = window.__pdfSelectedRectsIn || ((tl) => (tl ? selectedRectsIn(tl) : null));
@@ -13402,7 +13430,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     const t=pdfToolbarState;if(!t||!t.viewer||!t.text)return;
     const viewer=t.viewer,f=(viewer._previewF&&viewer._previewF!==1)?viewer._previewF:1;
     const rects=f===1?t.rects:t.rects.map((r)=>({x:r.x/f,y:r.y/f,width:r.width/f,height:r.height/f}));
-    const payload={path:viewer.path,page:t.page,text:t.text,rects,scale:viewer.scale};
+    const payload={path:viewer.path,page:t.page,text:t.text,rects,scale:pdfAnnotationScale(viewer,t.page)};
     hidePdfToolbar();
     try{await savePdfSelectionPayload(payload,!!cite);}catch(error){readingStatus(error.message||'保存选区失败',true);}
   }
@@ -13424,7 +13452,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     const anno = {
       id: 'a' + Math.random().toString(36).slice(2, 10),
       page: t.page, type: kind, color: color || '#ffe14d', text: t.text, rects,
-      note: '', scale: viewer.scale, createdAt: Date.now(),
+      note: '', scale: pdfAnnotationScale(viewer,t.page), createdAt: Date.now(),
     };
     if (kind === 'mark') {
       const note = prompt('为这条标记添加笔记（可留空）', '');
@@ -13441,6 +13469,10 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
   }
 
   /* ---------- 高亮 overlay ---------- */
+  function pdfAnnotationScale(viewer, pageNum) {
+    const rec = viewer && viewer.pages && viewer.pages.find((item) => item.pageNum === Number(pageNum));
+    return Number(rec && rec.viewport && rec.viewport.scale) || Number(viewer && viewer.scale) || 1;
+  }
   function renderPdfOverlay(viewer, pageNum) {
     const rec = viewer.pages.find((p) => p.pageNum === pageNum);
     if (!rec) return;
@@ -13451,7 +13483,8 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     const ov = rec.ov; ov.replaceChildren();
     for (const a of viewer.ann.annotations) {
       if (a.page !== pageNum) continue;
-      const sf = viewer.scale / (a.scale || viewer.scale);
+      const currentScale = pdfAnnotationScale(viewer, pageNum);
+      const sf = currentScale / (Number(a.scale) || currentScale);
       for (const r of (a.rects || [])) {
         const d = document.createElement('div');
         d.className = 'pdf-anno-hl';
@@ -13471,7 +13504,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     if (!rec || !rec.ov) return;
     rec.ov.querySelectorAll('.pdf-frag-mark').forEach((el) => el.remove());
     if (viewer._previewF && viewer._previewF !== 1) return;
-    const sfBase = viewer.scale;
+    const sfBase = pdfAnnotationScale(viewer, pageNum);
     for (const f of frags) {
       if (!f || Number(f.page) !== pageNum || !Array.isArray(f.rects) || !f.rects.length) continue;
       const sf = sfBase / (Number(f.scale) || 1);
@@ -13757,14 +13790,9 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     if (active) active.scrollIntoView({ block: 'nearest' });
   }
   async function renderPdfThumbnails(viewer, panel, list) {
-    for (let pageNum = 1; pageNum <= viewer.numPages; pageNum++) {
-      if (!viewer._alive || viewer._thumbPanel !== panel) return;
-      const item = document.createElement('button'); item.className = 'pdf-thumb-item'; item.dataset.page = pageNum;
-      item.title = '跳转到第 ' + pageNum + ' 页'; item.setAttribute('aria-label', '跳转到第 ' + pageNum + ' 页');
-      const loading = document.createElement('span'); loading.className = 'loading'; loading.textContent = 'P.' + pageNum;
-      const label = document.createElement('span'); label.className = 'label'; label.textContent = pageNum + ' / ' + viewer.numPages;
-      item.append(loading, label); item.onclick = () => viewer.goToPage(pageNum); list.appendChild(item);
-      if (pageNum === viewer.currentPage) item.classList.add('active');
+    const renderOne = async (item, pageNum) => {
+      if (!viewer._alive || viewer._thumbPanel !== panel || item.dataset.loaded) return;
+      item.dataset.loaded = '1'; const loading = item.querySelector('.loading');
       try {
         const page = await viewer.pdf.getPage(pageNum);
         const raw = page.getViewport({ scale: 1 });
@@ -13774,15 +13802,30 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
         canvas.width = Math.max(1, Math.floor(vp.width * density)); canvas.height = Math.max(1, Math.floor(vp.height * density));
         canvas.style.width = vp.width + 'px'; canvas.style.height = vp.height + 'px';
         await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, transform: density === 1 ? null : [density, 0, 0, density, 0, 0] }).promise;
-        if (viewer._thumbPanel === panel) loading.replaceWith(canvas);
-      } catch (_) { loading.textContent = '无法预览'; }
-      if (pageNum % 2 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+        if (viewer._thumbPanel === panel && loading && loading.isConnected) loading.replaceWith(canvas);
+      } catch (_) { if (loading) loading.textContent = '无法预览'; }
+    };
+    if (viewer._thumbObserver) viewer._thumbObserver.disconnect();
+    viewer._thumbObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting) { viewer._thumbObserver.unobserve(entry.target); renderOne(entry.target, Number(entry.target.dataset.page)); }
+    }, { root:list, rootMargin:'320px 0px', threshold:0.01 }) : null;
+    for (let pageNum = 1; pageNum <= viewer.numPages; pageNum++) {
+      if (!viewer._alive || viewer._thumbPanel !== panel) return;
+      const item = document.createElement('button'); item.className = 'pdf-thumb-item'; item.dataset.page = pageNum;
+      item.title = '跳转到第 ' + pageNum + ' 页'; item.setAttribute('aria-label', '跳转到第 ' + pageNum + ' 页');
+      const loading = document.createElement('span'); loading.className = 'loading'; loading.textContent = 'P.' + pageNum;
+      const label = document.createElement('span'); label.className = 'label'; label.textContent = pageNum + ' / ' + viewer.numPages;
+      item.append(loading, label); item.onclick = () => viewer.goToPage(pageNum); list.appendChild(item);
+      if (pageNum === viewer.currentPage) item.classList.add('active');
+      if (viewer._thumbObserver) viewer._thumbObserver.observe(item);
+      else if (pageNum <= 20) renderOne(item, pageNum);
     }
     syncPdfThumbnailActive(viewer);
   }
   function togglePdfThumbnails(viewer) {
     if (!viewer || !viewer._alive) return;
     if (viewer._thumbPanel) {
+      if (viewer._thumbObserver) { viewer._thumbObserver.disconnect(); viewer._thumbObserver = null; }
       viewer._thumbPanel.remove(); viewer._thumbPanel = null;
       viewer._thumbBtn && viewer._thumbBtn.classList.remove('on'); return;
     }
@@ -13811,7 +13854,8 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       if (ev.clientX < ovr.left || ev.clientX > ovr.right || ev.clientY < ovr.top || ev.clientY > ovr.bottom) continue;
       for (const a of viewer.ann.annotations) {
         if (a.page !== rec.pageNum) continue;
-        const sf = viewer.scale / (a.scale || viewer.scale);
+        const currentScale = pdfAnnotationScale(viewer, rec.pageNum);
+        const sf = currentScale / (Number(a.scale) || currentScale);
         for (const r of (a.rects || [])) {
           const l = ovr.left + r.x * sf, t = ovr.top + r.y * sf;
           const w = Math.max(2, r.width * sf), h = Math.max(2, r.height * sf);
@@ -13986,8 +14030,43 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     } catch (_) { /* 字体修正失败不影响画布渲染 */ }
   }
 
-  /* ---------- 渲染一页 ---------- */
-  async function renderPdfPage(viewer, pageNum) {
+  /* ---------- PDF.js 官方 Viewer 页面桥接：只登记已经进入渲染队列的可见页 ---------- */
+  function registerOfficialPdfPage(viewer, pageNum) {
+    if (!viewer || !viewer.pdfViewer) return null;
+    const pageView = viewer.pdfViewer.getPageView(pageNum - 1);
+    if (!pageView || !pageView.div) return null;
+    const textLayer = (pageView.textLayer && pageView.textLayer.div) || pageView.div.querySelector('.textLayer');
+    if (!textLayer) return null;
+    let rec = viewer.pages.find((item) => item.pageNum === pageNum);
+    let ov = pageView.div.querySelector(':scope > .pdf-anno-overlay');
+    if (!ov) { ov = document.createElement('div'); ov.className = 'pdf-anno-overlay'; pageView.div.appendChild(ov); }
+    if (!rec) {
+      rec = { pageNum, wrap:pageView.div, canvas:pageView.canvas || pageView.div.querySelector('canvas'), textLayer, ov, page:pageView.pdfPage, viewport:pageView.viewport, plainText:'' };
+      viewer.pages.push(rec); viewer.pages.sort((a,b) => a.pageNum - b.pageNum);
+    } else Object.assign(rec, { wrap:pageView.div, canvas:pageView.canvas || pageView.div.querySelector('canvas'), textLayer, ov, page:pageView.pdfPage, viewport:pageView.viewport });
+    if (!textLayer.dataset.codescopeBound) { textLayer.dataset.codescopeBound = '1'; attachPageInteractions(viewer, rec); }
+    if (!rec.plainText && pageView.pdfPage && !rec._textPromise) rec._textPromise = pageView.pdfPage.getTextContent().then((content) => {
+      rec.plainText = (content.items || []).map((item) => item.str || '').join(' '); applyRealFonts(pageView.pdfPage, textLayer, content); return rec.plainText;
+    }).catch(() => '').finally(() => { rec._textPromise = null; });
+    renderPdfOverlay(viewer, pageNum); applyPdfFindMarksToPage(viewer, rec);
+    return rec;
+  }
+  async function ensureOfficialPdfPage(viewer, pageNum) {
+    let rec = registerOfficialPdfPage(viewer, pageNum);
+    if (rec && rec.textLayer && rec.textLayer.isConnected) return rec;
+    viewer.pdfViewer.currentPageNumber = Math.max(1, Math.min(viewer.numPages, pageNum));
+    viewer.pdfViewer.update(); viewer.pdfViewer.forceRendering();
+    const started = Date.now();
+    while (viewer._alive && Date.now() - started < 7000) {
+      await new Promise((resolve) => setTimeout(resolve, 45));
+      rec = registerOfficialPdfPage(viewer, pageNum);
+      if (rec && rec.textLayer && rec.textLayer.isConnected) return rec;
+    }
+    return rec;
+  }
+
+  /* ---------- 旧渲染器仅作为不支持官方 Viewer 时的兼容降级 ---------- */
+  async function renderLegacyPdfPage(viewer, pageNum) {
     const pdf = viewer.pdf;
     const page = await pdf.getPage(pageNum);
     const vp = page.getViewport({ scale: viewer.scale });
@@ -14019,6 +14098,9 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     applyPdfFindMarksToPage(viewer, rec);
     return rec;
   }
+  async function renderPdfPage(viewer, pageNum) {
+    return viewer && viewer.pdfViewer ? ensureOfficialPdfPage(viewer, pageNum) : renderLegacyPdfPage(viewer, pageNum);
+  }
   /* 按页码顺序把渲染完成的页面插入滚动容器 —— 并发渲染完成顺序与页码无关，直接 appendChild 会把页面顺序打乱 */
   function insertPdfPageWrap(viewer, wrap, pageNum) {
     const kids = viewer.scroll.children;
@@ -14031,6 +14113,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
 
   /* ---------- 页码 / 缩放 ---------- */
   function currentVisiblePage(viewer) {
+    if (viewer.pdfViewer) return viewer.pdfViewer.currentPageNumber || viewer.currentPage;
     const top = viewer.scroll.scrollTop + 16;
     for (const p of [...viewer.pages].sort((a, b) => a.pageNum - b.pageNum)) {
       if (p.wrap.offsetTop <= top && p.wrap.offsetTop + p.wrap.offsetHeight >= top) return p.pageNum;
@@ -14057,6 +14140,32 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     if (fw) fw.classList.toggle('on', viewer.fitMode === 'width');
     if (fp) fp.classList.toggle('on', viewer.fitMode === 'page');
   }
+  function setPdfLayout(viewer, mode, persist) {
+    if (!viewer || !viewer.pdfViewer || !viewer._pdfViewerLib) return;
+    const lib = viewer._pdfViewerLib, current = viewer.pdfViewer.currentPageNumber || viewer.currentPage;
+    mode = ['continuous','single','spread','spread-cover'].includes(mode) ? mode : 'continuous';
+    if (mode === 'continuous') { viewer.pdfViewer.spreadMode = lib.SpreadMode.NONE; viewer.pdfViewer.scrollMode = lib.ScrollMode.VERTICAL; }
+    else if (mode === 'single') { viewer.pdfViewer.spreadMode = lib.SpreadMode.NONE; viewer.pdfViewer.scrollMode = lib.ScrollMode.PAGE; }
+    else if (mode === 'spread') { viewer.pdfViewer.scrollMode = lib.ScrollMode.PAGE; viewer.pdfViewer.spreadMode = lib.SpreadMode.ODD; }
+    else { viewer.pdfViewer.scrollMode = lib.ScrollMode.PAGE; viewer.pdfViewer.spreadMode = lib.SpreadMode.EVEN; }
+    viewer.layoutMode = mode; if (viewer._layoutSelect) viewer._layoutSelect.value = mode;
+    viewer.pdfViewer.currentPageNumber = current;
+    if (persist !== false) savePdfViewState(viewer);
+  }
+  function setPdfHandMode(viewer, enabled) {
+    viewer.handMode = !!enabled; viewer.host.classList.toggle('pdf-hand-mode', viewer.handMode);
+    if (viewer._handBtn) viewer._handBtn.classList.toggle('on', viewer.handMode);
+  }
+  function bindPdfHandPan(viewer) {
+    const scroll = viewer.scroll; let drag = null;
+    const finish = (event) => { if (!drag) return; try { scroll.releasePointerCapture(event.pointerId); } catch (_) {} drag = null; viewer.host.classList.remove('pdf-hand-dragging'); };
+    scroll.addEventListener('pointerdown', (event) => {
+      if (!viewer.handMode || event.button !== 0 || event.target.closest('button,input,select,textarea,a')) return;
+      drag = { x:event.clientX, y:event.clientY, left:scroll.scrollLeft, top:scroll.scrollTop }; scroll.setPointerCapture(event.pointerId); viewer.host.classList.add('pdf-hand-dragging'); event.preventDefault();
+    });
+    scroll.addEventListener('pointermove', (event) => { if (!drag) return; scroll.scrollLeft = drag.left - (event.clientX - drag.x); scroll.scrollTop = drag.top - (event.clientY - drag.y); event.preventDefault(); });
+    scroll.addEventListener('pointerup', finish); scroll.addEventListener('pointercancel', finish);
+  }
   function applyPdfTransform(viewer, s) {
     const f = s / viewer.baseScale;
     viewer._previewF = f;
@@ -14074,6 +14183,11 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     if (!viewer._alive) return;
     s = clampZoom(s);
     const o = opts || {};
+    if (viewer.pdfViewer) {
+      viewer.fitMode = o.fitMode !== undefined ? o.fitMode : null;
+      viewer.pdfViewer.currentScale = s; viewer.scale = viewer.pdfViewer.currentScale; viewer.baseScale = viewer.scale;
+      updateZoomUI(viewer); savePdfViewState(viewer); return;
+    }
     const rect = viewer.scroll.getBoundingClientRect();
     const vpTop = viewer.scroll.scrollTop;
     const oldScale = viewer.scale || viewer.baseScale;
@@ -14092,6 +14206,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
   }
   function commitPdfZoom(viewer) {
     if (!viewer._alive) return;
+    if (viewer.pdfViewer) { viewer.scale = viewer.pdfViewer.currentScale; viewer.baseScale = viewer.scale; updateZoomUI(viewer); savePdfViewState(viewer); return; }
     const z = viewer._pendingZoom; viewer._pendingZoom = null;
     applyPdfTransform(viewer, 1);                                  // 还原 transform
     viewer._previewF = 1;
@@ -14117,6 +14232,10 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
   }
   function fitPdfMode(viewer, mode) {
     if (!viewer._alive || !viewer._pageW) return;
+    if (viewer.pdfViewer) {
+      viewer.fitMode = mode; viewer.pdfViewer.currentScaleValue = mode === 'page' ? 'page-fit' : 'page-width';
+      viewer.scale = viewer.pdfViewer.currentScale; viewer.baseScale = viewer.scale; updateZoomUI(viewer); savePdfViewState(viewer); return;
+    }
     const w = Math.max(120, viewer.scroll.clientWidth - 26);
     const h = Math.max(120, viewer.scroll.clientHeight - 14);
     const s = mode === 'page' ? Math.min(w / viewer._pageW, h / viewer._pageH) : w / viewer._pageW;
@@ -14138,7 +14257,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
   }
   function savePdfViewState(viewer) {
     if (!viewer || !viewer.path) return;
-    try { localStorage.setItem(pdfViewStateKey(viewer.path), JSON.stringify({ scale: viewer.scale, fitMode: viewer.fitMode, updatedAt: Date.now() })); }
+    try { localStorage.setItem(pdfViewStateKey(viewer.path), JSON.stringify({ scale: viewer.scale, fitMode: viewer.fitMode, layoutMode:viewer.layoutMode || 'continuous', rotation:viewer.pdfViewer ? viewer.pdfViewer.pagesRotation : 0, handMode:!!viewer.handMode, updatedAt: Date.now() })); }
     catch (_) {}
   }
   function normalizePdfFindText(text) {
@@ -14292,9 +14411,85 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === '-') { e.preventDefault(); quickZoom(viewer, viewer.scale / 1.15); }
       else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === '0') { e.preventDefault(); fitPdfMode(viewer, 'width'); }
       else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === '1') { e.preventDefault(); fitPdfMode(viewer, 'page'); }
+      else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === '2' && viewer.pdfViewer) { e.preventDefault(); setPdfLayout(viewer, viewer.layoutMode === 'spread' ? 'continuous' : 'spread'); }
     };
     viewer._keyHandler = onKey;
     viewer.host.addEventListener('keydown', onKey);
+  }
+
+  async function openReadingPdfInOnlyOffice(viewer) {
+    if (!viewer || !viewer._alive || viewer._onlyOfficeOverlay) return;
+    readingStatus('正在连接 ONLYOFFICE PDF Editor…');
+    try {
+      const response = await fetch('/api/readings/onlyoffice/config?path=' + encodeURIComponent(viewer.path), { cache:'no-store' });
+      let result = {}; try { result = await response.json(); } catch (_) {}
+      if (!response.ok || !result.ok) throw new Error(result.error || 'ONLYOFFICE Docs 服务不可用');
+      await ensureOnlyOfficeApi(result.documentServerUrl);
+      const overlay = document.createElement('section'); overlay.className = 'reading-onlyoffice-overlay';
+      const bar = document.createElement('div'); bar.className = 'reading-onlyoffice-bar';
+      const title = document.createElement('span'); title.className = 'title'; title.textContent = 'ONLYOFFICE PDF Editor';
+      const status = document.createElement('span'); status.className = 'status'; status.textContent = '正在载入编辑器…';
+      const close = document.createElement('button'); close.textContent = '返回 PDF.js 阅读'; close.title = '关闭编辑器并返回阅读视图；更改会由 ONLYOFFICE 自动保存';
+      const editorHost = document.createElement('div'); editorHost.className = 'reading-onlyoffice-editor'; editorHost.id = 'reading-onlyoffice-' + Date.now();
+      bar.append(title, status, close); overlay.append(bar, editorHost); viewer.host.appendChild(overlay);
+      viewer._onlyOfficeOverlay = overlay;
+      const closeEditor = () => {
+        if (viewer._onlyOfficeEditor && typeof viewer._onlyOfficeEditor.destroyEditor === 'function') { try { viewer._onlyOfficeEditor.destroyEditor(); } catch (_) {} }
+        viewer._onlyOfficeEditor = null; viewer._onlyOfficeOverlay = null; overlay.remove();
+        readingStatus('已返回 PDF.js 阅读视图；ONLYOFFICE 更改会自动回写');
+        requestAnimationFrame(() => { if (viewer._alive && viewer.fitMode) fitPdfMode(viewer, viewer.fitMode); });
+      };
+      close.onclick = closeEditor; viewer._closeOnlyOffice = closeEditor;
+      const config = { ...result.config, events:{
+        onDocumentReady:() => { status.textContent = '完整 PDF 编辑 · 自动保存已开启'; readingStatus('ONLYOFFICE PDF Editor 已就绪'); },
+        onDocumentStateChange:(event) => { status.textContent = event && event.data ? '正在编辑 · 将自动保存' : '更改已同步'; },
+        onError:(event) => { status.textContent = '编辑器错误 ' + String(event && event.data || ''); readingStatus(status.textContent, true); },
+        onWarning:(event) => { status.textContent = '编辑器提示 ' + String(event && event.data || ''); },
+      } };
+      viewer._onlyOfficeEditor = new window.DocsAPI.DocEditor(editorHost.id, config);
+    } catch (error) {
+      if (viewer._onlyOfficeOverlay) { viewer._onlyOfficeOverlay.remove(); viewer._onlyOfficeOverlay = null; }
+      viewer._onlyOfficeEditor = null;
+      readingStatus('ONLYOFFICE PDF 编辑不可用：' + String(error.message || error), true);
+      alert('无法打开 ONLYOFFICE PDF Editor：\n' + String(error.message || error) + '\n\n请在 Office 模块的“连接设置”中检查 Document Server 地址、回调地址与 JWT 密钥。');
+    }
+  }
+
+  async function mountOfficialPdfViewer(viewer, pdf, root, remembered) {
+    const lib = await loadPdfViewerLib(), eventBus = new lib.EventBus(), linkService = new lib.PDFLinkService({ eventBus });
+    const findController = new lib.PDFFindController({ eventBus, linkService });
+    const pdfViewer = new lib.PDFViewer({
+      container:viewer.scroll, viewer:root, eventBus, linkService, findController,
+      imageResourcesPath:'/assets/pdfjs/images/', textLayerMode:1, annotationMode:2,
+      removePageBorders:true, maxCanvasPixels:16777216, enableHWA:true,
+    });
+    viewer.pdfViewer = pdfViewer; viewer._pdfViewerLib = lib; viewer._officialEventBus = eventBus;
+    linkService.setViewer(pdfViewer); linkService.setDocument(pdf, null); findController.setDocument(pdf);
+    eventBus._on('pagechanging', ({ pageNumber }) => {
+      if (!viewer._alive) return; viewer.currentPage = pageNumber; updatePageDisplay(viewer);
+      requestAnimationFrame(() => registerOfficialPdfPage(viewer, pageNumber));
+    });
+    eventBus._on('scalechanging', ({ scale, presetValue }) => {
+      if (!viewer._alive) return; viewer.scale = scale || pdfViewer.currentScale; viewer.baseScale = viewer.scale;
+      if (presetValue === 'page-width') viewer.fitMode = 'width'; else if (presetValue === 'page-fit') viewer.fitMode = 'page'; else if (presetValue) viewer.fitMode = null;
+      updateZoomUI(viewer); requestAnimationFrame(() => viewer.pages.forEach((rec) => registerOfficialPdfPage(viewer, rec.pageNum)));
+    });
+    eventBus._on('textlayerrendered', ({ pageNumber }) => { if (viewer._alive) registerOfficialPdfPage(viewer, pageNumber); });
+    eventBus._on('pagerendered', ({ pageNumber }) => { if (viewer._alive) requestAnimationFrame(() => registerOfficialPdfPage(viewer, pageNumber)); });
+    const ready = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('PDF.js Viewer 初始化超时')), 12000);
+      eventBus._on('pagesinit', () => { clearTimeout(timer); resolve(); }, { once:true });
+    });
+    pdfViewer.setDocument(pdf); await ready;
+    viewer.layoutMode = remembered && remembered.layoutMode || 'continuous'; setPdfLayout(viewer, viewer.layoutMode, false);
+    if (remembered && Number.isFinite(Number(remembered.rotation))) pdfViewer.pagesRotation = Number(remembered.rotation);
+    if (viewer.fitMode === 'page') pdfViewer.currentScaleValue = 'page-fit';
+    else if (viewer.fitMode === 'width') pdfViewer.currentScaleValue = 'page-width';
+    else pdfViewer.currentScale = clampZoom(Number(remembered && remembered.scale) || 1);
+    viewer.scale = pdfViewer.currentScale; viewer.baseScale = viewer.scale;
+    setPdfHandMode(viewer, !!(remembered && remembered.handMode)); updateZoomUI(viewer);
+    pdfViewer.currentPageNumber = viewer.currentPage; pdfViewer.update(); pdfViewer.forceRendering();
+    return pdfViewer;
   }
 
   /* ---------- 主入口：渲染 PDF 查看器 ---------- */
@@ -14312,6 +14507,11 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     const zi = document.createElement('button'); zi.textContent = '＋'; zi.title = '放大';
     const fitW = document.createElement('button'); fitW.className = 'fit-btn'; fitW.textContent = '宽度'; fitW.title = '适配宽度：页面宽度铺满容器（快捷键 0）';
     const fitP = document.createElement('button'); fitP.className = 'fit-btn'; fitP.textContent = '整页'; fitP.title = '适配页面：整页完整显示（快捷键 1）';
+    const actual = document.createElement('button'); actual.className = 'fit-btn'; actual.textContent = '100%'; actual.title = '实际大小';
+    const layout = document.createElement('select'); layout.className = 'pdf-layout-select'; layout.title = '页面排版（快捷键 2 切换双页）';
+    layout.innerHTML = '<option value="continuous">连续滚动</option><option value="single">单页</option><option value="spread">双页</option><option value="spread-cover">封面双页</option>';
+    const handBtn = document.createElement('button'); handBtn.textContent = '✋ 拖动'; handBtn.title = '手型工具：按住页面自由拖动';
+    const rotateBtn = document.createElement('button'); rotateBtn.textContent = '↻ 旋转'; rotateBtn.title = '顺时针旋转 90°';
     const pagePill = document.createElement('span'); pagePill.className = 'pdf-page-pill'; pagePill.textContent = '1 / —'; pagePill.title = '当前页 / 总页数；点击跳转';
     const sep = document.createElement('span'); sep.className = 'pdf-toolbar-sep';
     const thumbBtn = document.createElement('button'); thumbBtn.textContent = '▦ 页面'; thumbBtn.title = '页面缩略图导航'; thumbBtn.disabled = true;
@@ -14321,7 +14521,9 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     undoBtn.onclick = () => undoLastAnnotation(viewer);
     const tocBtn = document.createElement('button'); tocBtn.textContent = '☰ 目录'; tocBtn.title = '章节目录（优先 PDF 自带书签，无书签时自动识别章节标题）';
     const focusBtn = document.createElement('button'); focusBtn.textContent = '⛶ 专注'; focusBtn.title = '专注阅读（Esc 退出）';
-    toolbar.append(zo, zl, range, zi, fitW, fitP, pagePill, sep, thumbBtn, findBtn, tocBtn, undoBtn, ac, focusBtn);
+    const editBtn = document.createElement('button'); editBtn.className = 'pdf-tool-primary'; editBtn.textContent = 'ONLYOFFICE 编辑'; editBtn.title = '使用 ONLYOFFICE PDF Editor 高级编辑并自动保存';
+    const badge = document.createElement('span'); badge.className = 'pdf-official-badge'; badge.textContent = 'PDF.js Viewer';
+    toolbar.append(zo, zl, range, zi, fitW, fitP, actual, layout, editBtn, handBtn, rotateBtn, pagePill, sep, thumbBtn, findBtn, tocBtn, undoBtn, ac, focusBtn, badge);
     tocBtn.onclick = () => togglePdfOutline(viewer);
     const findBar = document.createElement('div'); findBar.className = 'pdf-find-bar'; findBar.hidden = true;
     const findInput = document.createElement('input'); findInput.type = 'search'; findInput.placeholder = '查找正文、术语、公式说明…'; findInput.setAttribute('aria-label', '在 PDF 中查找');
@@ -14330,8 +14532,10 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     const findNext = document.createElement('button'); findNext.textContent = '↓'; findNext.title = '下一个匹配（Enter）'; findNext.disabled = true;
     const findClose = document.createElement('button'); findClose.textContent = '×'; findClose.title = '关闭查找（Esc）';
     findBar.append(findInput, findStatus, findPrev, findNext, findClose);
-    const scroll = document.createElement('div'); scroll.className = 'pdf-scroll';
-    host.append(toolbar, findBar, scroll);
+    const stage = document.createElement('div'); stage.className = 'pdf-reader-stage';
+    const scroll = document.createElement('div'); scroll.className = 'pdf-scroll pdfjs-viewer-container';
+    const officialRoot = document.createElement('div'); officialRoot.className = 'pdfViewer'; scroll.appendChild(officialRoot); stage.appendChild(scroll);
+    host.append(toolbar, findBar, stage);
     body.appendChild(host);
     const slot = Number((body.closest('.reading-col') || {}).dataset && body.closest('.reading-col').dataset.slot);
     let onWinResize = null;
@@ -14340,9 +14544,9 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       scale: 1.25, baseScale: 1.25, pages: [], numPages: 0,
       currentPage: Math.max(1, Number(startPage) || 1),
       ann: { annotations: [], summary: null }, pdf: null,
-      fitMode: 'width', _pageW: 600, _pageH: 800, _previewF: 1, _pendingZoom: null, _zoomTimer: null,
+      fitMode: 'width', layoutMode:'continuous', handMode:false, _pageW: 600, _pageH: 800, _previewF: 1, _pendingZoom: null, _zoomTimer: null,
       _zoomPct: zl, _zoomRange: range, _fitWBtn: fitW, _fitPBtn: fitP, _pagePill: pagePill, _findBtn: findBtn, _focusBtn: focusBtn,
-      _undoBtn: undoBtn, _tocBtn: tocBtn, _thumbBtn: thumbBtn, _thumbPanel: null, _tocPanel: null, _tocCache: null, _undoStack: [], _findIndex: null, _findIndexPromise: null,
+      _undoBtn: undoBtn, _tocBtn: tocBtn, _thumbBtn: thumbBtn, _layoutSelect:layout, _handBtn:handBtn, _editBtn:editBtn, _thumbPanel: null, _tocPanel: null, _tocCache: null, _undoStack: [], _findIndex: null, _findIndexPromise: null,
       alive() { return this._alive; },
       goToPage(n) {
         if (!this._alive) return;
@@ -14350,6 +14554,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
         const target = Math.max(1, Math.min(maxPage, Number(n) || 1));
         const scrollToTarget = (attempt) => {
           if (!this._alive || this.currentPage !== target) return;
+          if (this.pdfViewer) { this.pdfViewer.currentPageNumber = target; this.pdfViewer.update(); this.pdfViewer.forceRendering(); return; }
           const rec = this.pages.find((p) => p.pageNum === target);
           if (rec) this.scroll.scrollTop = rec.wrap.offsetTop - 8;
           else if (attempt < 30) setTimeout(() => scrollToTarget(attempt + 1), 80);
@@ -14369,6 +14574,10 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
         this.scroll.onmouseup = null;
         clearTimeout(this._zoomTimer);
         clearTimeout(this._find && this._find.timer);
+        if (this._thumbObserver) { this._thumbObserver.disconnect(); this._thumbObserver = null; }
+        if (this._onlyOfficeEditor && typeof this._onlyOfficeEditor.destroyEditor === 'function') { try { this._onlyOfficeEditor.destroyEditor(); } catch (_) {} }
+        this._onlyOfficeEditor = null; this._onlyOfficeOverlay = null;
+        if (this.pdfViewer) { try { this.pdfViewer.setDocument(null); } catch (_) {} this.pdfViewer = null; }
         if (this._keyHandler) this.host.removeEventListener('keydown', this._keyHandler);
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this.host.classList.contains('pdf-reader-focus')) document.body.classList.remove('pdf-reader-focus');
@@ -14390,12 +14599,18 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePdfFind(viewer, true); }
     };
     focusBtn.onclick = () => togglePdfFocus(viewer);
+    actual.onclick = () => { viewer.fitMode = null; if (viewer.pdfViewer) { viewer.pdfViewer.currentScale = 1; viewer.scale = viewer.pdfViewer.currentScale; updateZoomUI(viewer); savePdfViewState(viewer); } else quickZoom(viewer, 1); };
+    layout.onchange = () => setPdfLayout(viewer, layout.value);
+    handBtn.onclick = () => { setPdfHandMode(viewer, !viewer.handMode); savePdfViewState(viewer); };
+    rotateBtn.onclick = () => { if (!viewer.pdfViewer) return; viewer.pdfViewer.pagesRotation = (viewer.pdfViewer.pagesRotation + 90) % 360; savePdfViewState(viewer); };
+    editBtn.onclick = () => openReadingPdfInOnlyOffice(viewer);
     pagePill.onclick = () => {
       const value = prompt('跳转到页码（1–' + (viewer.numPages || 1) + '）', String(viewer.currentPage));
       if (value !== null) viewer.goToPage(value);
     };
     host.addEventListener('pointerdown', (e) => { if (!e.target.closest('input,textarea,select,button')) host.focus({ preventScroll: true }); });
     bindPdfReaderKeys(viewer);
+    bindPdfHandPan(viewer);
     window.__readingPdfViewer = viewer;
     try {
       const pdfjs = await loadPdfJs();
@@ -14404,19 +14619,12 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       const page1 = await pdf.getPage(1);
       const vp1 = page1.getViewport({ scale: 1 });
       viewer._pageW = vp1.width; viewer._pageH = vp1.height;
-      const avail = Math.max(200, scroll.clientWidth - 26);
       const remembered = loadPdfViewState(physicalPath);
       const rememberedMode = remembered && (remembered.fitMode === 'width' || remembered.fitMode === 'page' || remembered.fitMode === null) ? remembered.fitMode : 'width';
-      if (rememberedMode === 'page') viewer.scale = clampZoom(Math.min(avail / vp1.width, Math.max(120, scroll.clientHeight - 14) / vp1.height));
-      else if (rememberedMode === null && isFinite(Number(remembered && remembered.scale))) viewer.scale = clampZoom(Number(remembered.scale));
-      else viewer.scale = clampZoom(avail / vp1.width);
-      viewer.baseScale = viewer.scale;
       viewer.fitMode = rememberedMode;
-      updateZoomUI(viewer);
       findBtn.disabled = false; thumbBtn.disabled = false;
       viewer.ann = await loadAnnotations(physicalPath);
-      await renderPdfPage(viewer, 1);
-      for (let i = 2; i <= pdf.numPages; i++) renderPdfPage(viewer, i).catch(() => {});
+      await mountOfficialPdfViewer(viewer, pdf, officialRoot, remembered);
       updatePdfAnnoCount(viewer);
       const els = viewer.slotEls;
       if (els) {
@@ -14770,7 +14978,6 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       const cfg = aiCfg(); if (!cfg.url || !cfg.model) throw new Error('请先在右侧 AI 助手设置 AI 配置');
       const ctx = await readingChatCtx();
       if (!ctx) throw new Error('无法提取论文文本（扫描版不支持）');
-      if (v.pages.length < v.numPages) { for (let i = v.pages.length + 1; i <= v.numPages; i++) { await renderPdfPage(v, i).catch(() => {}); } }
       const picks = [];
       // 剔除参考文献列表节（否则 AI 会把文献条目误当重点），只从正文提取
       let bodyText = (ctx.full || '');
@@ -14812,11 +15019,15 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       pushUndo(v);
       const statuses = [];
       let located = 0;
+      const originalPage = v.currentPage;
       for (const p of uniq) {
+        const candidatePage = locateQuotePage(ctx.pages, p.quote);
+        if (candidatePage) await renderPdfPage(v, candidatePage).catch(() => null);
         const loc = locateQuoteInViewer(v, p.quote);
         if (loc) { createAutoHighlights(v, loc, p); located++; statuses.push(true); }
         else statuses.push(false);
       }
+      if (originalPage) v.goToPage(originalPage);
       await saveAnnotations(v.path, v);
       v.pages.forEach(rec => renderPdfOverlay(v, rec.pageNum));
       updatePdfAnnoCount(v);
@@ -14863,11 +15074,30 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     while ((m = re.exec(text))) { toks.push(m[0].toLowerCase()); map.push({ s: m.index, e: m.index + m[0].length }); }
     return { toks, map };
   }
+  function locateQuotePage(pages, quote) {
+    const qn = normQuoteText(quote).toLowerCase();
+    if (!qn || !Array.isArray(pages)) return 0;
+    const qTokens = [...new Set(tokenize(qn).toks.filter((token) => token.length > 1))];
+    let bestPage = 0, bestScore = 0;
+    for (let index = 0; index < pages.length; index++) {
+      const text = normQuoteText(pages[index] || '').toLowerCase();
+      if (!text) continue;
+      if (text.includes(qn)) return index + 1;
+      if (!qTokens.length) continue;
+      const pageTokens = new Set(tokenize(text).toks);
+      let hits = 0;
+      for (const token of qTokens) if (pageTokens.has(token)) hits++;
+      const score = hits / qTokens.length;
+      if (score > bestScore) { bestScore = score; bestPage = index + 1; }
+    }
+    return bestScore >= 0.45 ? bestPage : 0;
+  }
   function locateQuoteInViewer(v, quote) {
     const qn = normQuoteText(quote);
     const qt = tokenize(qn);
     if (!qt.toks.length) return null;
     for (const rec of v.pages) {
+      if (!rec.textLayer || !rec.textLayer.isConnected) continue;
       const spans = [...rec.textLayer.querySelectorAll('span')];
       const joinedN = normQuoteText(spans.map(x => x.textContent || '').join(''));
       if (!joinedN) continue;
@@ -14925,7 +15155,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       id: 'a' + Math.random().toString(36).slice(2, 10) + 'x',
       page: loc.page, type: 'highlight', color: ANNO_COLORS[p.color] || '#ffe14d',
       text: (pageText.slice(loc.start, loc.end).replace(/\s+/g, ' ').trim() || p.quote).slice(0, 500),
-      rects, note: p.note, scale: v.scale, createdAt: Date.now(), auto: true,
+      rects, note: p.note, scale: pdfAnnotationScale(v,loc.page), createdAt: Date.now(), auto: true,
     });
   }
   function openAIChatPanel() {

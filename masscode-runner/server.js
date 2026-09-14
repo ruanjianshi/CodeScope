@@ -2842,6 +2842,30 @@ function onlyOfficeConfig(rel, file) {
   if (token) config.token = token;
   return config;
 }
+function onlyOfficeReadingConfig(rel, file) {
+  const stat = fs.statSync(file), internal = onlyOfficeContainerBase();
+  const documentToken = onlyOfficeToken(rel, 'reading-document'), callbackToken = onlyOfficeToken(rel, 'reading-callback');
+  const key = crypto.createHash('sha256').update('codescope-reading\0' + rel + '\0' + stat.size + '\0' + stat.mtimeMs).digest('hex').slice(0, 48);
+  const config = {
+    type:'desktop', width:'100%', height:'100%', documentType:'pdf',
+    document:{
+      fileType:'pdf', key, title:path.basename(rel),
+      url:internal + '/api/readings/onlyoffice-file?path=' + encodeURIComponent(rel) + '&token=' + documentToken,
+      info:{ owner:'CodeScope', folder:path.posix.dirname(rel) === '.' ? '阅读根目录' : path.posix.dirname(rel), uploaded:new Date(stat.mtimeMs).toISOString() },
+      permissions:{ edit:true, download:true, print:true, copy:true, comment:true, review:true, fillForms:true, protect:true },
+    },
+    editorConfig:{
+      callbackUrl:internal + '/api/readings/onlyoffice-callback?path=' + encodeURIComponent(rel) + '&token=' + callbackToken,
+      lang:'zh-CN', region:'zh-CN', mode:'edit',
+      user:{ id:'codescope-local', name:'CodeScope 本地用户' },
+      coEditing:{ mode:'fast', change:true },
+      customization:{ autosave:true, forcesave:true, compactHeader:false, compactToolbar:false, hideRightMenu:false, toolbarHideFileName:true, about:false, feedback:false },
+    },
+  };
+  const token = signOnlyOfficeConfig(config);
+  if (token) config.token = token;
+  return config;
+}
 function backupOfficeFile(file, rel) {
   const ext = path.extname(rel), relDir = path.dirname(rel), stem = path.basename(rel, ext);
   const backupDir = path.join(officeDir(), '.codescope-backups', relDir === '.' ? '' : relDir);
@@ -2851,9 +2875,19 @@ function backupOfficeFile(file, rel) {
   const backups = fs.readdirSync(backupDir).filter((name) => name.startsWith(stem + '.') && name.endsWith(ext)).sort().reverse();
   for (const old of backups.slice(5)) { try { fs.unlinkSync(path.join(backupDir, old)); } catch (_) {} }
 }
-async function saveOnlyOfficeResult(rel, sourceUrl) {
-  const file = path.join(officeDir(), rel), ext = path.extname(rel).toLowerCase();
-  if (!fs.existsSync(file)) throw requestError('要保存的 Office 文档不存在', 404);
+function backupReadingPdf(file, rel) {
+  const id = crypto.createHash('sha256').update(rel).digest('hex').slice(0, 24);
+  const backupDir = path.join(readingsDir(), '.codescope', 'pdf-backups', id);
+  fs.mkdirSync(backupDir, { recursive:true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  fs.copyFileSync(file, path.join(backupDir, stamp + '.pdf'));
+  const backups = fs.readdirSync(backupDir).filter((name) => name.endsWith('.pdf')).sort().reverse();
+  for (const old of backups.slice(5)) { try { fs.unlinkSync(path.join(backupDir, old)); } catch (_) {} }
+}
+async function saveOnlyOfficeResult(rel, sourceUrl, options) {
+  const opts = options || {}, root = opts.root || officeDir();
+  const file = path.join(root, rel), ext = path.extname(rel).toLowerCase();
+  if (!fs.existsSync(file)) throw requestError(opts.pdf ? '要保存的 PDF 不存在' : '要保存的 Office 文档不存在', 404);
   let source;
   try { source = new URL(String(sourceUrl || '')); } catch (_) { throw requestError('ONLYOFFICE 返回了无效的保存地址', 400); }
   if (!ONLYOFFICE_CONNECTION.publicUrl) throw requestError('ONLYOFFICE Docs 尚未配置', 503);
@@ -2883,7 +2917,12 @@ async function saveOnlyOfficeResult(rel, sourceUrl) {
   if (buffer.length > 200 * 1024 * 1024) throw requestError('ONLYOFFICE 返回的文件超过 200 MB', 413);
   const temp = path.join(path.dirname(file), '.' + crypto.randomUUID() + ext + '.onlyoffice-saving');
   try {
-    fs.writeFileSync(temp, buffer); validateOfficeFile(temp, ext); backupOfficeFile(file, rel); fs.renameSync(temp, file);
+    fs.writeFileSync(temp, buffer);
+    if (opts.pdf) {
+      if (buffer.length < 5 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') throw requestError('ONLYOFFICE 返回的文件不是有效 PDF', 400);
+      backupReadingPdf(file, rel);
+    } else { validateOfficeFile(temp, ext); backupOfficeFile(file, rel); }
+    fs.renameSync(temp, file);
   } catch (error) { try { fs.unlinkSync(temp); } catch (_) {} throw error; }
   return fs.statSync(file);
 }
@@ -3199,7 +3238,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 5, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
-        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
+        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3226,7 +3265,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/status') {
       const health = await onlyOfficeHealth();
-      return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', connection:publicOnlyOfficeConnection(), editable:['docx','xlsx','xls','csv','pptx'] });
+      return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', connection:publicOnlyOfficeConnection(), editable:['docx','xlsx','xls','csv','pptx','pdf'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/providers/v1') {
       return send(res, 200, await OFFICE_ENGINE.status({ probe:u.searchParams.get('refresh') !== '0' }));
@@ -3449,6 +3488,31 @@ const server = http.createServer(async (req, res) => {
         try { fs.unlinkSync(temp); } catch (_) {}
         return send(res, 400, { ok:false, error:'导入失败：' + String(error.message || error) });
       }
+    }
+    if (req.method === 'GET' && u.pathname === '/api/readings/onlyoffice/config') {
+      const rel = readingPath(u.searchParams.get('path'));
+      if (!rel) return send(res, 400, { ok:false, error:'PDF 路径不合法' });
+      const file = path.join(readingsDir(), rel);
+      if (!fs.existsSync(file)) return send(res, 404, { ok:false, error:'PDF 不存在' });
+      const health = await onlyOfficeHealth();
+      if (!health.ok) return send(res, 503, { ok:false, error:health.error || 'ONLYOFFICE Docs 尚未连接', documentServerUrl:ONLYOFFICE_CONNECTION.publicUrl, connection:publicOnlyOfficeConnection() });
+      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:onlyOfficeBrowserUrl(req), connection:publicOnlyOfficeConnection(), config:onlyOfficeReadingConfig(rel, file) });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/readings/onlyoffice-file') {
+      const rel = readingPath(u.searchParams.get('path'));
+      if (!rel || !onlyOfficeTokenValid(rel, 'reading-document', u.searchParams.get('token'))) return send(res, 403, { ok:false, error:'PDF 文件访问令牌无效' });
+      return streamStatic(req, res, readingsDir(), rel, { cacheControl:'private, no-store', notFound:'PDF 不存在' });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/readings/onlyoffice-callback') {
+      const rel = readingPath(u.searchParams.get('path'));
+      if (!rel || !onlyOfficeTokenValid(rel, 'reading-callback', u.searchParams.get('token'))) return send(res, 403, { error:1 });
+      const body = await readBody(req, 4 * 1024 * 1024), status = Number(body && body.status);
+      if ((status === 2 || status === 6) && body.url) {
+        try { await saveOnlyOfficeResult(rel, body.url, { root:readingsDir(), pdf:true }); }
+        catch (error) { console.error('ONLYOFFICE PDF 保存失败:', rel, error); return send(res, 500, { error:1 }); }
+      }
+      if (status === 3 || status === 7) console.error('ONLYOFFICE PDF 编辑服务报告保存错误:', rel, body && body.error);
+      return send(res, 200, { error:0 });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/file') {
       const rel = readingPath(u.searchParams.get('path'));

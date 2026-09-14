@@ -1,6 +1,6 @@
 {
   "name": "codescope",
-  "version": "2.2.12",
+  "version": "2.3.0",
   "private": true,
   "productName": "CodeScope",
   "description": "码境 CodeScope：面向代码阅读、编辑、运行、文档与远程开发的工程工作台",

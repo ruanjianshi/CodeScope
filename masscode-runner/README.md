@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.2.12
+# 码境 CodeScope v2.3.0
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前版本：**v2.2.12**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v2.3.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
@@ -19,14 +19,14 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 
 桌面主进程位于 `desktop/main.js`，通过隔离的 preload 桥接原生能力；CodeScope 服务运行在 Electron Utility Process 中。渲染器不开放 Node.js 权限，Web 端也不依赖 Electron API。
 
-## v2.2 概览
+## v2.3 概览
 
 - 统一项目、Office、阅读、绘图与 Git 的侧栏标题、计数、操作按钮、树行、悬停和选中反馈；五套工作台主题共用同一套语义化颜色与间距。
 - 代码工作区使用 Monaco，提供多栏、LSP、定义/引用/调用关系、运行、调试、测试、Git Diff 与可恢复本地时间线。
 - Markdown 提供源码、分栏、区块编辑和阅读模式；分栏预览严格绑定当前文件与片段，并按源码行锚点双向同步滚动。阅读模块的区块模式使用本地打包的 Milkdown Crepe（MIT），支持直接编辑、拖拽排序、斜杠菜单、选区工具栏、表格、任务列表、代码高亮、公式、原生撤销及代码/PDF 引用定位；左侧内置可折叠层级大纲、当前章节高亮与 60%–180% 无光标偏移的字号缩放。正文具备完整标题层级、列表基线、引用、链接、行内代码、代码块、表格与图片排版，原始 `.md` 与 frontmatter 保持兼容。
-- 阅读工作区把 PDF 原文、译本、Markdown、LaTeX 与代码片段组织在同一项目中，支持并排阅读、页码摘录、翻译和双向定位。
+- 阅读工作区把 PDF 原文、译本、Markdown、LaTeX 与代码片段组织在同一项目中。PDF 阅读内核采用本地打包的 Mozilla PDF.js 官方 Viewer，支持 20%–400% 自由缩放、适合宽度、适合整页、实际大小、连续滚动、单页、双页、封面双页、旋转、手型拖动、页码跳转、全文查找、目录、缩略图、专注阅读、摘录、高亮和笔记；页面与缩略图均按可视区域懒渲染，适合数百页大文档。
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
-- Office 工作区只使用 ONLYOFFICE Docs，统一提供 DOCX/XLSX/PPTX 高保真编辑、审阅与多人协作；未连接时显示连接设置，不再使用内置兼容编辑器。
+- Office 工作区只使用 ONLYOFFICE Docs，统一提供 DOCX/XLSX/PPTX 高保真编辑、审阅与多人协作；PDF 阅读工具栏也可直接进入 ONLYOFFICE PDF Editor，并通过独立令牌、自动保存回调和最近 5 份隐藏备份安全回写原 PDF。未连接时显示连接设置，不再使用内置兼容编辑器。
 - 环境检测扩展为运行基础、浏览器能力和项目工具链三层；三端启动脚本共用 `preflight.js` 检查 Node、端口、Vault 权限和依赖完整性。
 - 桌面安装包新增完整离线编辑辅助工具链：Prettier + Shell 插件、Ruff Python 格式化器、Pyright、TypeScript/TypeScript Language Server 和按平台编译的 gopls；Finder 启动时也会识别 Homebrew、用户 Python 与 Go 的常见工具目录。
 
@@ -75,7 +75,7 @@ npm run make:desktop
 
 ### ONLYOFFICE 集成
 
-CodeScope 不再提供或自动回退到内置 Office 兼容编辑器。DOCX、XLSX/XLS/CSV 与 PPTX 全部由 ONLYOFFICE Docs 打开；Document Server 未连接时，Office 页面只显示连接说明和配置表单，避免把低保真预览误当成完整 Office。
+CodeScope 不再提供或自动回退到内置 Office 兼容编辑器。DOCX、XLSX/XLS/CSV 与 PPTX 全部由 ONLYOFFICE Docs 打开；阅读模块中的 PDF 可从工具栏进入 ONLYOFFICE PDF Editor。Document Server 未连接时，Office 页面只显示连接说明和配置表单，PDF 则继续由本地 PDF.js Viewer 阅读，不会把低保真预览误当成完整编辑器。
 
 在 Office 工作区点击“连接设置”，填写：
 
@@ -84,6 +84,8 @@ CodeScope 不再提供或自动回退到内置 Office 兼容编辑器。DOCX、X
 - `JWT 密钥`：与 Document Server 的 `JWT_SECRET` 一致。密钥只写入 CodeScope 应用数据目录的 `office-connection.json`，权限设为仅当前用户可读写，接口不会回显明文。
 
 也可以在部署环境中设置 `CODESCOPE_ONLYOFFICE_URL`、`CODESCOPE_ONLYOFFICE_CALLBACK_BASE` 与 `CODESCOPE_ONLYOFFICE_JWT_SECRET`。环境变量优先于保存的界面配置。Provider 状态和能力矩阵由 `GET /api/office/providers/v1` 返回；连接设置使用 `GET/POST /api/office/connection`。接口与侧车扩展边界见 [Office Provider API v1](docs/office-provider-v1.md)。
+
+PDF 编辑沿用同一套连接设置，并使用独立的 `/api/readings/onlyoffice/config`、只读文档传输令牌和保存回调。保存前 CodeScope 会在 `readings/.codescope/pdf-backups/` 留下最多 5 份滚动备份；普通 PDF.js 阅读、搜索、摘录与标注完全不依赖 Document Server。
 
 官方 Community Edition 可使用 Docker 部署（[amd64 指南](https://helpcenter.onlyoffice.com/docs/installation/docs-community-install-docker.aspx)、[ARM64 指南](https://helpcenter.onlyoffice.com/docs/installation/docs-community-install-docker-arm64.aspx)）。生产环境建议使用 HTTPS、固定 JWT 密钥和持久化数据卷。Document Server 是独立服务器进程，不适合伪装为 Electron 内的 JavaScript 组件，因此不会被打进 CodeScope 的 ASAR。这样升级 CodeScope 或 ONLYOFFICE 时可以各自独立更新。
 

@@ -36,6 +36,25 @@ async function waitForServer(url) {
   throw new Error('浏览器测试服务启动超时');
 }
 
+function samplePdfPages(count) {
+  const pageCount=Math.max(1,Number(count)||1),fontRef=3+pageCount*2,objects=[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${Array.from({length:pageCount},(_,index)=>`${3+index*2} 0 R`).join(' ')}] /Count ${pageCount} >>`,
+  ];
+  for(let index=0;index<pageCount;index++){
+    const pageRef=3+index*2,contentRef=pageRef+1,text=`PDF Viewer page ${index+1}`,stream=`BT /F1 18 Tf 72 720 Td (${text}) Tj ET`;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontRef} 0 R >> >> /Contents ${contentRef} 0 R >>`);
+    objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+  }
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  let pdf='%PDF-1.4\n';const offsets=[0];
+  objects.forEach((object,index)=>{offsets.push(Buffer.byteLength(pdf));pdf+=`${index+1} 0 obj\n${object}\nendobj\n`;});
+  const xref=Buffer.byteLength(pdf);pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  for(let index=1;index<=objects.length;index++)pdf+=String(offsets[index]).padStart(10,'0')+' 00000 n \n';
+  pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf);
+}
+
 async function main() {
   const executablePath=browserExecutable();
   if(!executablePath){console.log('CodeScope browser smoke: skipped（未找到 Chrome/Chromium，可用 CODESCOPE_BROWSER 指定）');return;}
@@ -154,6 +173,10 @@ print(r.run())
   fs.writeFileSync(path.join(readingProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Markdown block drag regression',tags:['markdown','drag']},null,2));
   const readingReference='[[code-ref:demo.cpp#fragment=0&line=1&end=2|demo.cpp:1–2]]';
   fs.writeFileSync(readingNotePath,'---\ntitle: Block Drag Demo\ntags: [markdown, drag]\n---\n# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n'+readingReference+'\n\n## Section B\n\n- alpha\n- beta\n- gamma\n','utf8');
+  const pdfProjectDir=path.join(vault,'readings','PDF Viewer Demo');
+  fs.mkdirSync(pdfProjectDir,{recursive:true});
+  fs.writeFileSync(path.join(pdfProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Official PDF.js viewer regression',tags:['pdf','viewer']},null,2));
+  fs.writeFileSync(path.join(pdfProjectDir,'manual.pdf'),samplePdfPages(40));
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
   server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data'),CODESCOPE_ONLYOFFICE_URL:'http://127.0.0.1:1'},stdio:'ignore'});
   await waitForServer(baseUrl);
@@ -175,9 +198,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.12 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.3.0 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.12'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.3.0'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.3 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -190,7 +213,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.12'))throw new Error('环境元信息未显示 v2.2.12');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.3.0'))throw new Error('环境元信息未显示 v2.3.0');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -633,6 +656,19 @@ print(r.run())
   await readingPage.waitForTimeout(850);const savedNote=fs.readFileSync(readingNotePath,'utf8');
   if(!savedNote.startsWith('---\ntitle: Block Drag Demo')||savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!savedNote.includes(readingReference))throw new Error('Markdown frontmatter、引用或区块拖拽结果未持久化：'+savedNote);
   if(readingErrors.length)throw new Error('Markdown 区块浏览器运行错误：'+readingErrors.join('；'));
+
+  /* ---- PDF.js 官方 Viewer：虚拟渲染、自由缩放、单页/双页与懒加载缩略图 ---- */
+  await readingPage.evaluate(async()=>{closeReading();await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='PDF Viewer Demo');if(!project)throw new Error('找不到 PDF Viewer Demo');await openReadingProject(project);});
+  const pdfHost=readingPage.locator('.reading-pdf-host');await pdfHost.waitFor({state:'visible',timeout:15000});
+  await readingPage.waitForFunction(()=>window.__readingPdfViewer?.pdfViewer?.pagesCount===40&&document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length===40,null,{timeout:15000});
+  const initialPdf=await readingPage.evaluate(()=>({pages:document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length,canvases:document.querySelectorAll('.reading-pdf-host .pdfViewer .page canvas').length,badge:document.querySelector('.pdf-official-badge')?.textContent,edit:document.querySelector('.pdf-tool-primary')?.textContent}));
+  if(initialPdf.pages!==40||initialPdf.canvases>=initialPdf.pages||initialPdf.badge!=='PDF.js Viewer'||!initialPdf.edit.includes('ONLYOFFICE'))throw new Error('PDF.js 官方 Viewer 或虚拟渲染异常：'+JSON.stringify(initialPdf));
+  const zoomBefore=Number((await readingPage.locator('.pdf-zoom-pct').innerText()).replace('%',''));await readingPage.locator('.pdf-toolbar button[title="放大"]').click();await readingPage.waitForFunction(before=>Number(document.querySelector('.pdf-zoom-pct').textContent.replace('%',''))>before,zoomBefore);
+  await readingPage.locator('.pdf-layout-select').selectOption('single');await readingPage.waitForFunction(()=>document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length===1);
+  await readingPage.locator('.pdf-layout-select').selectOption('spread');await readingPage.waitForFunction(()=>document.querySelectorAll('.reading-pdf-host .pdfViewer .spread').length===1&&document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length<=2);
+  await readingPage.locator('.pdf-toolbar button[title="页面缩略图导航"]').click();await readingPage.locator('.pdf-thumb-panel').waitFor({state:'visible'});await readingPage.waitForTimeout(300);
+  const thumbs=await readingPage.evaluate(()=>({items:document.querySelectorAll('.pdf-thumb-item').length,canvases:document.querySelectorAll('.pdf-thumb-item canvas').length,pending:document.querySelectorAll('.pdf-thumb-item .loading').length}));
+  if(thumbs.items!==40||thumbs.canvases>=thumbs.items||thumbs.pending<1)throw new Error('PDF 缩略图未按可见区域懒加载：'+JSON.stringify(thumbs));
   await readingPage.close();
 
   if(errors.length)throw new Error('浏览器运行错误：'+errors.join('；'));
