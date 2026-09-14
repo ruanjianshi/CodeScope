@@ -282,7 +282,7 @@ function configureUpdater() {
 
 function registerIpc() {
   ipcMain.handle('desktop:get-info', () => ({ desktop: true, version: app.getVersion(), platform: process.platform, arch: process.arch, vault: activeVault, port: servicePort,
-    officeProvider:officeSidecarState.provider ? { id:officeSidecarState.provider.manifest.id, version:officeSidecarState.provider.manifest.version, ready:officeSidecarState.ready } : { id:'codescope-local', version:app.getVersion(), ready:true },
+    officeProvider:officeSidecarState.provider ? { id:officeSidecarState.provider.manifest.id, version:officeSidecarState.provider.manifest.version, ready:officeSidecarState.ready } : { id:'onlyoffice-docs', version:'', ready:false },
   }));
   ipcMain.handle('desktop:choose-vault', async () => { await chooseVaultAndRestart(); return { restarting: true }; });
   ipcMain.handle('desktop:show-vault', () => shell.openPath(activeVault));

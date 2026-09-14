@@ -7,10 +7,20 @@ const path = require('path');
 const { readProviderManifest } = require('../lib/office-engine');
 
 const root = path.resolve(__dirname, '..');
-const requiredPackages = ['mammoth', '@turbodocx/html-to-docx', 'docx-preview', 'xlsx', 'pptx-preview', 'jszip'];
+const requiredPackages = ['docx', 'xlsx'];
 const missing = requiredPackages.filter((name) => !fs.existsSync(path.join(root, 'node_modules', ...name.split('/'), 'package.json')));
 if (missing.length) {
-  console.error('Office 内置运行时不完整：' + missing.join('、'));
+  console.error('Office 文件创建/校验运行时不完整：' + missing.join('、'));
+  process.exit(1);
+}
+const serverSource = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const clientSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+if (!serverSource.includes('/api/office/connection') || !serverSource.includes('signOnlyOfficeConfig') || !serverSource.includes('CODESCOPE_ONLYOFFICE_JWT_SECRET')) {
+  console.error('ONLYOFFICE 连接、JWT 或持久化配置接口不完整');
+  process.exit(1);
+}
+if (!clientSource.includes('officeConnectionScreen') || !clientSource.includes('连接 ONLYOFFICE Docs') || /if\(!embedded\)await renderOfficeFallback/.test(clientSource)) {
+  console.error('Office 客户端没有强制使用 ONLYOFFICE，或仍会自动回退到内置编辑器');
   process.exit(1);
 }
 
@@ -40,7 +50,7 @@ if (manifest) {
       process.exit(1);
     }
   }
-  console.log('Office 打包检查通过：内置运行时 + ' + manifest.id + ' ' + manifest.version);
+  console.log('ONLYOFFICE 集成检查通过：连接/JWT/保存链路 + 受管侧车 ' + manifest.id + ' ' + manifest.version);
 } else {
-  console.log('Office 打包检查通过：内置离线运行时；未附加可选高保真侧车');
+  console.log('ONLYOFFICE 集成检查通过：连接/JWT/保存链路；Document Server 使用独立部署');
 }

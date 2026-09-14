@@ -144,9 +144,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.1 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.2 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.1'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.2.2'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -159,10 +159,10 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.1'))throw new Error('环境元信息未显示 v2.2.1');
-  if((await page.locator('#env-missing').innerText())!=='0')throw new Error('按需扩展被误计为 CodeScope 运行问题');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.2'))throw new Error('环境元信息未显示 v2.2.2');
+  if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
-  if(!(await page.locator('.env-package-note').innerText()).includes('完整基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls'))throw new Error('桌面安装包内置工具链说明缺失');
+  if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
   await page.locator('#btn-env-close').click();
   /* ---- 命令面板与工程测试/调试入口 ---- */
   await page.keyboard.press(process.platform==='darwin'?'Meta+Shift+P':'Control+Shift+P');
@@ -468,7 +468,7 @@ print(r.run())
  if(ideErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideErrors.join('；'));
   await idePage.close();
 
-  /* ---- Office 工作区：左侧同级入口、三类文档渲染与表格持久化 ---- */
+  /* ---- Office 工作区：左侧同级入口与 ONLYOFFICE 必选连接页 ---- */
   const officePage=await browser.newPage({viewport:{width:1440,height:900}}),officeErrors=[];
   officePage.on('pageerror',error=>officeErrors.push(String(error.message||error)));
   await officePage.goto(baseUrl,{waitUntil:'domcontentloaded'});
@@ -480,48 +480,12 @@ print(r.run())
   if(await officeRows.count()!==3)throw new Error('Office 文档树数量错误');
 
   await officeRows.filter({hasText:'Browser Word'}).click();
-  const wordEditor=officePage.locator('#office-word-editor[contenteditable="true"]');
-  await wordEditor.waitFor({state:'visible',timeout:15000});
-  if(!(await wordEditor.innerText()).includes('Browser Word'))throw new Error('Word 编辑器未载入文档内容');
-  const wordLayout=await officePage.evaluate(()=>{const area=document.querySelector('.office-word-scroll'),page=document.getElementById('office-word-editor'),a=area.getBoundingClientRect(),p=page.getBoundingClientRect(),style=getComputedStyle(page);return{scrollLeft:area.scrollLeft,scrollTop:area.scrollTop,area:{left:a.left,right:a.right,width:a.width},page:{left:p.left,right:p.right,width:p.width},color:style.color,text:page.innerText};});
-  if(wordLayout.scrollLeft!==0||wordLayout.scrollTop!==0||wordLayout.page.left<wordLayout.area.left-1||wordLayout.page.right>wordLayout.area.right+1||wordLayout.page.width<300||!wordLayout.text.includes('Browser Word')||wordLayout.color==='rgba(0, 0, 0, 0)')throw new Error('Word 本地编辑页发生白页、偏移或裁切：'+JSON.stringify(wordLayout));
-  await officePage.locator('#btn-env').click();await officePage.locator('#env-panel.open').waitFor({state:'visible'});
-  const wordWithDrawer=await officePage.evaluate(()=>{const area=document.querySelector('.office-word-scroll'),page=document.getElementById('office-word-editor'),a=area.getBoundingClientRect(),p=page.getBoundingClientRect();return{scrollLeft:area.scrollLeft,areaLeft:a.left,areaRight:a.right,pageLeft:p.left,pageRight:p.right,text:page.innerText};});
-  if(wordWithDrawer.scrollLeft!==0||wordWithDrawer.pageLeft<wordWithDrawer.areaLeft-1||wordWithDrawer.pageRight>wordWithDrawer.areaRight+1||!wordWithDrawer.text.includes('Browser Word'))throw new Error('打开环境面板后 Word 正文被挤出可视区：'+JSON.stringify(wordWithDrawer));
-  await officePage.locator('#btn-env-close').click();
-  if(await officePage.locator('.office-word-ribbon [data-word-cmd]').count()<10)throw new Error('Word 格式工具栏功能不足');
-  await wordEditor.evaluate((editor)=>{editor.insertAdjacentHTML('beforeend','<p>Browser Word Edited</p>');editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'Browser Word Edited'}));});
-  await officePage.waitForFunction(()=>document.getElementById('office-status').textContent.includes('已保存'),null,{timeout:15000});
-  await officePage.locator('[data-word-mode="preview"]').click();
-  await officePage.locator('.office-docx-host section.docx').waitFor({state:'visible',timeout:20000});
-  if(!(await officePage.locator('.office-docx-host').innerText()).includes('Browser Word Edited'))throw new Error('Word 保存后原貌预览未同步');
-  await officePage.locator('[data-word-mode="edit"]').click();
-  await wordEditor.waitFor({state:'visible',timeout:10000});
-  await officePage.locator('#office-back').click();
-  await officeRows.filter({hasText:'Browser Word'}).click();
-  await wordEditor.waitFor({state:'visible',timeout:15000});
-  if(!(await wordEditor.innerText()).includes('Browser Word Edited'))throw new Error('Word 编辑内容重新打开后丢失');
-  await officePage.locator('#office-back').click();
-
-  await officeRows.filter({hasText:'Browser Sheet'}).click();
-  const sheetTable=officePage.locator('#office-sheet-table');await sheetTable.waitFor({state:'visible',timeout:30000});
-  const valueCell=sheetTable.locator('td').filter({hasText:'Browser Sheet'}).first();
-  await valueCell.evaluate(cell=>{cell.textContent='Browser Sheet Edited';cell.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:' Edited'}));});
-  await officePage.waitForFunction(()=>document.getElementById('office-status').textContent.includes('已保存'),null,{timeout:10000});
-  await officePage.locator('#office-back').click();
-  await officeRows.filter({hasText:'Browser Sheet'}).click();
-  const reopenedSheetTable=officePage.locator('#office-sheet-table');
-  await reopenedSheetTable.waitFor({state:'visible',timeout:30000});
-  if(!(await reopenedSheetTable.innerText()).includes('Browser Sheet Edited'))throw new Error('Excel 单元格编辑结果未持久化');
-  await officePage.locator('#office-back').click();
-
-  await officeRows.filter({hasText:'Browser Slides'}).click();
-  const pptFrame=officePage.locator('.office-pptx-frame');await pptFrame.waitFor({state:'visible',timeout:15000});
-  if(await pptFrame.getAttribute('sandbox')!=='allow-scripts')throw new Error('PowerPoint 预览未在隔离沙箱中运行');
-  await officePage.frameLocator('.office-pptx-frame').locator('.pptx-preview-wrapper').waitFor({state:'visible',timeout:20000});
-  await officePage.frameLocator('.office-pptx-frame').locator('body').filter({hasText:'Browser Slides'}).waitFor({state:'visible',timeout:10000});
-  const pptText=await officePage.frameLocator('.office-pptx-frame').locator('body').innerText();
-  if(!pptText.includes('Browser Slides'))throw new Error('PowerPoint 预览未渲染幻灯片文本');
+  const connectCard=officePage.locator('.office-connect-card');await connectCard.waitFor({state:'visible',timeout:15000});
+  if(!(await connectCard.innerText()).includes('连接 ONLYOFFICE Docs'))throw new Error('ONLYOFFICE 未连接时没有显示明确的连接页');
+  if(await officePage.locator('#office-word-editor,.office-sheet,.office-pptx-frame').count())throw new Error('ONLYOFFICE 未连接时错误启用了内置 Office 编辑器');
+  if(!(await officePage.locator('#office-engine').innerText()).includes('ONLYOFFICE'))throw new Error('Office 引擎状态没有标识 ONLYOFFICE');
+  const connection=await officePage.evaluate(()=>fetch('/api/office/connection').then(response=>response.json()));
+  if(!connection.ok||connection.connection.publicUrl!=='http://127.0.0.1:1'||connection.connection.jwtSecret)throw new Error('ONLYOFFICE 连接配置接口异常：'+JSON.stringify(connection));
   if(officeErrors.length)throw new Error('Office 浏览器运行错误：'+officeErrors.join('；'));
   await officePage.close();
 

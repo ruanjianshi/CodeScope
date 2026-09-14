@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.2.1
+# 码境 CodeScope v2.2.2
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前版本：**v2.2.1**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v2.2.2**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
@@ -26,7 +26,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 - Markdown 提供源码、分栏、实时编辑和阅读四种模式；实时模式在原位编辑并渲染，支持区块转换、拖拽排序、原生撤销及代码/PDF 引用定位。
 - 阅读工作区把 PDF 原文、译本、Markdown、LaTeX 与代码片段组织在同一项目中，支持并排阅读、页码摘录、翻译和双向定位。
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
-- Office 工作区内置离线 Word/表格编辑和演示文稿预览；连接 ONLYOFFICE Provider 后自动切换 DOCX/XLSX/PPTX 高保真编辑与协作能力。
+- Office 工作区只使用 ONLYOFFICE Docs，统一提供 DOCX/XLSX/PPTX 高保真编辑、审阅与多人协作；未连接时显示连接设置，不再使用内置兼容编辑器。
 - 环境检测扩展为运行基础、浏览器能力和项目工具链三层；三端启动脚本共用 `preflight.js` 检查 Node、端口、Vault 权限和依赖完整性。
 - 桌面安装包新增完整离线编辑辅助工具链：Prettier + Shell 插件、Ruff Python 格式化器、Pyright、TypeScript/TypeScript Language Server 和按平台编译的 gopls；Finder 启动时也会识别 Homebrew、用户 Python 与 Go 的常见工具目录。
 
@@ -71,15 +71,33 @@ npm run make:desktop
 
 构建结果位于 `masscode-runner/out/make/`。GitHub 标签发布时，`.github/workflows/desktop-release.yml` 会在 macOS、Windows 和 Linux 分别构建并把安装包上传到对应 Release。macOS 自动更新正式启用前需要配置开发者签名与公证。
 
-正式安装包内置 Electron、Node.js、Prettier、Ruff、Pyright、TypeScript Language Server、TypeScript 和 gopls，用户电脑无需安装 Node.js、npm、pip、Black 或 Go 工具即可使用这些编辑能力。编译器、语言解释器与 LaTeX 仍按项目语言调用系统工具。AI 绘图和 ONLYOFFICE Document Server 是需要用户凭据或独立服务器的外部连接，不计为安装环境缺失；未连接时不会影响本地功能。
+正式安装包内置 Electron、Node.js、Prettier、Ruff、Pyright、TypeScript Language Server、TypeScript 和 gopls，用户电脑无需安装 Node.js、npm、pip、Black 或 Go 工具即可使用这些编辑能力。编译器、语言解释器与 LaTeX 仍按项目语言调用系统工具。AI 绘图是可选外部连接；Office 工作区则明确要求一台 ONLYOFFICE Document Server，未连接不影响代码、Markdown、PDF 与绘图模块，但 Office 会保持在连接页。
 
-### Office 封装与扩展
+### ONLYOFFICE 集成
 
-CodeScope 安装包包含内置 Office Provider：DOCX 和 XLSX/CSV 可在断网环境中打开、编辑并保存，PPTX 可离线预览，不要求电脑安装 Microsoft Office、LibreOffice、Docker 或 Node.js。ONLYOFFICE Docs 只作为复杂排版、PPTX 编辑与多人协作的高保真 Provider；未连接时环境面板会显示中性的可选连接状态，而不是软件缺失。
+CodeScope 不再提供或自动回退到内置 Office 兼容编辑器。DOCX、XLSX/XLS/CSV 与 PPTX 全部由 ONLYOFFICE Docs 打开；Document Server 未连接时，Office 页面只显示连接说明和配置表单，避免把低保真预览误当成完整 Office。
 
-桌面端支持把高保真 Provider 作为校验过的侧车随安装包分发。启动器读取 `resources/office-provider/manifest.json`，按系统与架构选择可执行文件、校验 SHA-256、等待健康检查，再自动把 Web UI 切换到高保真内核；退出 CodeScope 时同步回收侧车。Provider 状态和能力矩阵由 `GET /api/office/providers/v1` 返回，Web 部署也使用同一契约。清单格式、兼容策略和更新边界见 [Office Provider API v1](docs/office-provider-v1.md)。
+在 Office 工作区点击“连接设置”，填写：
 
-打包前会自动运行 `npm run verify:office`，阻止缺少内置 Office 依赖的安装包生成。如果正式发行要求必须附带高保真侧车，可设置 `CODESCOPE_REQUIRE_OFFICE_SIDECAR=1`，流水线会在侧车缺失、平台不匹配或摘要错误时直接失败。
+- `Document Server 地址`：当前浏览器能访问的 ONLYOFFICE 地址，例如本机 Docker 的 `http://127.0.0.1:8088` 或团队服务器的 HTTPS 地址。
+- `回调 / 文档访问地址`：Document Server 能回访 CodeScope 的地址。本机 Docker 通常使用 `http://host.docker.internal:4877`；远程服务必须使用服务器可达的局域网或公网地址。
+- `JWT 密钥`：与 Document Server 的 `JWT_SECRET` 一致。密钥只写入 CodeScope 应用数据目录的 `office-connection.json`，权限设为仅当前用户可读写，接口不会回显明文。
+
+也可以在部署环境中设置 `CODESCOPE_ONLYOFFICE_URL`、`CODESCOPE_ONLYOFFICE_CALLBACK_BASE` 与 `CODESCOPE_ONLYOFFICE_JWT_SECRET`。环境变量优先于保存的界面配置。Provider 状态和能力矩阵由 `GET /api/office/providers/v1` 返回；连接设置使用 `GET/POST /api/office/connection`。接口与侧车扩展边界见 [Office Provider API v1](docs/office-provider-v1.md)。
+
+官方 Community Edition 可使用 Docker 部署（[amd64 指南](https://helpcenter.onlyoffice.com/docs/installation/docs-community-install-docker.aspx)、[ARM64 指南](https://helpcenter.onlyoffice.com/docs/installation/docs-community-install-docker-arm64.aspx)）。生产环境建议使用 HTTPS、固定 JWT 密钥和持久化数据卷。Document Server 是独立服务器进程，不适合伪装为 Electron 内的 JavaScript 组件，因此不会被打进 CodeScope 的 ASAR。这样升级 CodeScope 或 ONLYOFFICE 时可以各自独立更新。
+
+本机 Docker 示例（把密钥替换为随机长字符串）：
+
+```bash
+docker run -d --name codescope-onlyoffice --restart=always \
+  -p 8088:80 \
+  -e JWT_SECRET='replace-with-a-long-random-secret' \
+  -e ALLOW_PRIVATE_IP_ADDRESS=true \
+  onlyoffice/documentserver:latest
+```
+
+`ALLOW_PRIVATE_IP_ADDRESS=true` 只应用于 Document Server 需要回访本机或可信局域网 CodeScope 的场景；公网部署应保留请求过滤并只允许明确的 CodeScope 地址。启动后在 CodeScope 中填写 `http://127.0.0.1:8088`、`http://host.docker.internal:4877` 和相同 JWT 密钥。
 
 macOS 如果从 iCloud Drive / File Provider 目录构建，Forge 会自动改用系统临时目录 `codescope-forge-out` 存放产物，避免云盘写入 FinderInfo 后破坏应用签名；终端最后会显示实际产物路径。可用 `CODESCOPE_FORGE_OUT_DIR` 指定其他非云盘输出目录。正式无提示安装还需要发行者配置 Apple Developer ID 与公证凭据；构建接口读取 `CODESCOPE_MAC_SIGN_IDENTITY` 和 `CODESCOPE_MAC_NOTARY_PROFILE`（`notarytool` 钥匙串 Profile），不会把证书或密码写入仓库。缺少凭据时生成的是可供开发测试的 ad-hoc 签名包。
 
@@ -141,7 +159,7 @@ node server.js
 | ⎇ Git Diff | 左侧 Git 面板按目录列出工作区改动；点击任意文件打开提交前差异检查，逐行区分新增、删除与上下文，并显示增删统计；支持未跟踪文本和二进制文件提示 |
 | 🕘 本地时间线 | 每个片段自动保存时记录覆盖前版本；两分钟内的连续输入归为一次编辑会话，只保留会话开始前的可恢复版本，避免一行修改产生多条记录，最多保留 60 个；可预览差异并一键恢复，恢复前内容也会自动创建保护检查点；历史存放于系统 CodeScope 应用数据目录，不写入 Git 仓库 |
 | ◫ 工程 | 自动发现 CMake、Make、Ninja、npm、Python 构建入口并支持自定义命令；读取 `compile_commands.json` 的编译单元、宏和头文件路径（宏同时参与 C/C++ 补全）；健康报告统计规模、语言、TODO、可能未实现项和头文件循环依赖，并排除论文 PDF、绘图、缓存和内置第三方库，避免把资料库误报成代码问题 |
-| 🔍 环境 | 明确分为“运行基础 / 应用内置 / 项目工具 / 外部连接”：桌面安装包内置 CodeScope、编辑器、PDF/XMind、本地 Office、Prettier、Ruff、Pyright、TypeScript LSP 与 gopls；编译器、解释器和 LaTeX 按 vault 语言提示；AI 与 ONLYOFFICE 服务只显示连接状态，不再误报为安装包缺失 |
+| 🔍 环境 | 明确分为“运行基础 / 应用内置 / 项目工具 / 外部连接”：桌面安装包内置 CodeScope、编辑器、PDF/XMind、Prettier、Ruff、Pyright、TypeScript LSP 与 gopls；编译器、解释器和 LaTeX 按 vault 语言提示；AI 为可选连接，ONLYOFFICE Docs 明确标为 Office 必需服务 |
 | ◐ 主题 | 提供深海蓝、石墨灰、午夜紫、森林绿和日光白五套完整工作台主题；代码高亮、终端、侧栏、关系图、弹窗与远程面板同步切换，并在本机自动记忆选择 |
 | 🖥 远程 | 集成 SSH、SFTP 文件浏览与 VNC：SSH 复用底部真实 PTY 终端；远程窗口左边缘和上边缘可分别拖动调整宽度、高度并自动记忆；远程文件页可浏览目录、编辑 2 MB 内的 UTF-8 文本，通过流式接口无限制上传/下载文件，还可保留层级上传文件夹、把当前远程目录打包为 `.tar.gz` 下载；VNC 通过 noVNC 显示远程桌面并支持缩放、分辨率适配、只读模式、连续文本/中文输入和实时网络延迟 |
 | 顶部电脑状态 | 页面可见时每 3 秒刷新 CPU、内存、硬盘使用率，以进度条和黄/红状态提示资源压力；切到后台后自动暂停轮询。点击任一指标可查看处理器、系统负载、可用内存、磁盘余量、系统与运行时间。macOS 使用可回收内存、Linux 使用 `MemAvailable`，避免把文件缓存误判为内存占满 |

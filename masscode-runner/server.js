@@ -32,11 +32,86 @@ const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
 const APP_MODE = process.env.CODESCOPE_APP_MODE === 'desktop' ? 'desktop' : 'web';
-const OFFICE_ENGINE = createOfficeEngine({
+
+function applicationDataRoot() {
+  if (process.env.CODESCOPE_DATA_HOME) return path.resolve(process.env.CODESCOPE_DATA_HOME);
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library/Application Support', 'CodeScope');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData/Roaming'), 'CodeScope');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'CodeScope');
+}
+const ONLYOFFICE_CONNECTION_FILE = path.join(applicationDataRoot(), 'office-connection.json');
+function cleanServiceUrl(value) {
+  const text = String(value || '').trim().replace(/\/+$/, '');
+  if (!text) return '';
+  let url;
+  try { url = new URL(text); } catch (_) { throw new Error('ONLYOFFICE 地址必须是完整的 http:// 或 https:// URL'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('ONLYOFFICE 地址必须使用 http/https，且不能包含账号密码');
+  return url.toString().replace(/\/$/, '');
+}
+function readOnlyOfficeConnection() {
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(ONLYOFFICE_CONNECTION_FILE, 'utf8')); } catch (_) {}
+  const rawPublic = process.env.CODESCOPE_ONLYOFFICE_URL || saved.publicUrl || '';
+  const rawCallback = process.env.CODESCOPE_ONLYOFFICE_CALLBACK_BASE || saved.callbackBase || '';
+  let publicUrl = '', callbackBase = '';
+  try { publicUrl = cleanServiceUrl(rawPublic); } catch (_) {}
+  try { callbackBase = cleanServiceUrl(rawCallback); } catch (_) {}
+  return {
+    publicUrl,
+    callbackBase,
+    jwtSecret:String(process.env.CODESCOPE_ONLYOFFICE_JWT_SECRET || saved.jwtSecret || ''),
+    source:process.env.CODESCOPE_ONLYOFFICE_URL ? 'environment' : (saved.publicUrl ? 'saved' : 'none'),
+  };
+}
+let ONLYOFFICE_CONNECTION = readOnlyOfficeConnection();
+let OFFICE_ENGINE = createOfficeEngine({
   appVersion:APP_VERSION,
-  onlyOfficeUrl:process.env.CODESCOPE_ONLYOFFICE_URL,
+  onlyOfficeUrl:ONLYOFFICE_CONNECTION.publicUrl,
   managedManifest:process.env.CODESCOPE_OFFICE_PROVIDER_MANIFEST,
 });
+function refreshOfficeEngine() {
+  OFFICE_ENGINE = createOfficeEngine({
+    appVersion:APP_VERSION,
+    onlyOfficeUrl:ONLYOFFICE_CONNECTION.publicUrl,
+    managedManifest:process.env.CODESCOPE_OFFICE_PROVIDER_MANIFEST,
+  });
+}
+function publicOnlyOfficeConnection() {
+  return {
+    publicUrl:ONLYOFFICE_CONNECTION.publicUrl,
+    callbackBase:ONLYOFFICE_CONNECTION.callbackBase,
+    configured:!!ONLYOFFICE_CONNECTION.publicUrl,
+    jwtConfigured:!!ONLYOFFICE_CONNECTION.jwtSecret,
+    source:ONLYOFFICE_CONNECTION.source,
+  };
+}
+function saveOnlyOfficeConnection(input) {
+  const publicUrl = cleanServiceUrl(input && input.publicUrl);
+  if (!publicUrl) throw new Error('请填写 ONLYOFFICE Document Server 地址');
+  const callbackBase = cleanServiceUrl(input && input.callbackBase);
+  const serviceHost = new URL(publicUrl).hostname;
+  if (!callbackBase && !['127.0.0.1', 'localhost', '::1'].includes(serviceHost)) {
+    throw new Error('远程 ONLYOFFICE 服务必须填写它能够访问的 CodeScope 回调地址');
+  }
+  const jwtSecret = String(input && input.jwtSecret || '').trim();
+  if (jwtSecret && jwtSecret.length < 16) throw new Error('JWT 密钥至少需要 16 个字符');
+  const currentSecret = ONLYOFFICE_CONNECTION.jwtSecret;
+  ONLYOFFICE_CONNECTION = {
+    publicUrl,
+    callbackBase,
+    jwtSecret:jwtSecret || (input && input.keepJwtSecret ? currentSecret : ''),
+    source:'saved',
+  };
+  fs.mkdirSync(path.dirname(ONLYOFFICE_CONNECTION_FILE), { recursive:true });
+  fs.writeFileSync(ONLYOFFICE_CONNECTION_FILE, JSON.stringify({
+    publicUrl:ONLYOFFICE_CONNECTION.publicUrl,
+    callbackBase:ONLYOFFICE_CONNECTION.callbackBase,
+    jwtSecret:ONLYOFFICE_CONNECTION.jwtSecret,
+  }, null, 2) + '\n', { encoding:'utf8', mode:0o600 });
+  try { fs.chmodSync(ONLYOFFICE_CONNECTION_FILE, 0o600); } catch (_) {}
+  refreshOfficeEngine();
+  return publicOnlyOfficeConnection();
+}
 
 const PORT_VALUE = Number(process.env.CODESCOPE_PORT || process.env.MASSCODE_RUNNER_PORT || 4877);
 const PORT = Number.isInteger(PORT_VALUE) && PORT_VALUE > 0 && PORT_VALUE <= 65535 ? PORT_VALUE : 4877;
@@ -2700,7 +2775,6 @@ function workspaceBacklinks(kind, targetPath, targetFragment) {
 
 function officeDir() { return path.join(vaultPath(), 'office'); }
 const OFFICE_EXTS = new Set(['.docx', '.xlsx', '.xls', '.csv', '.pptx']);
-const ONLYOFFICE_PUBLIC_URL = OFFICE_ENGINE.onlyOfficeUrl;
 const ONLYOFFICE_CONTAINER_HOST = String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER_HOST || 'host.docker.internal').trim();
 const ONLYOFFICE_ACCESS_SECRET = crypto.randomBytes(32);
 function onlyOfficeToken(rel, purpose) {
@@ -2711,7 +2785,7 @@ function onlyOfficeTokenValid(rel, purpose, token) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 function onlyOfficeContainerBase() {
-  const explicit = String(process.env.CODESCOPE_ONLYOFFICE_CALLBACK_BASE || '').replace(/\/$/, '');
+  const explicit = ONLYOFFICE_CONNECTION.callbackBase;
   if (explicit) return explicit;
   return 'http://' + ONLYOFFICE_CONTAINER_HOST + ':' + PORT;
 }
@@ -2721,11 +2795,22 @@ async function onlyOfficeHealth() {
 function onlyOfficeDocumentType(kind) {
   return kind === 'word' ? 'word' : kind === 'sheet' ? 'cell' : kind === 'slides' ? 'slide' : '';
 }
+function base64Url(value) {
+  return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+function signOnlyOfficeConfig(payload) {
+  const secret = ONLYOFFICE_CONNECTION.jwtSecret;
+  if (!secret) return '';
+  const header = base64Url(JSON.stringify({ alg:'HS256', typ:'JWT' }));
+  const body = base64Url(JSON.stringify(payload));
+  const signature = crypto.createHmac('sha256', secret).update(header + '.' + body).digest('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return header + '.' + body + '.' + signature;
+}
 function onlyOfficeConfig(rel, file) {
   const stat = fs.statSync(file), ext = path.extname(rel).slice(1).toLowerCase(), kind = officeKind(rel);
   const internal = onlyOfficeContainerBase(), documentToken = onlyOfficeToken(rel, 'document'), callbackToken = onlyOfficeToken(rel, 'callback');
   const key = crypto.createHash('sha256').update('codescope\0' + rel + '\0' + stat.size + '\0' + stat.mtimeMs).digest('hex').slice(0, 48);
-  return {
+  const config = {
     type:'desktop', width:'100%', height:'100%', documentType:onlyOfficeDocumentType(kind),
     document:{
       fileType:ext, key, title:path.basename(rel),
@@ -2741,6 +2826,9 @@ function onlyOfficeConfig(rel, file) {
       customization:{ autosave:true, forcesave:true, compactHeader:false, compactToolbar:false, hideRightMenu:false, toolbarHideFileName:true, about:false, feedback:false },
     },
   };
+  const token = signOnlyOfficeConfig(config);
+  if (token) config.token = token;
+  return config;
 }
 function backupOfficeFile(file, rel) {
   const ext = path.extname(rel), relDir = path.dirname(rel), stem = path.basename(rel, ext);
@@ -2756,12 +2844,13 @@ async function saveOnlyOfficeResult(rel, sourceUrl) {
   if (!fs.existsSync(file)) throw requestError('要保存的 Office 文档不存在', 404);
   let source;
   try { source = new URL(String(sourceUrl || '')); } catch (_) { throw requestError('ONLYOFFICE 返回了无效的保存地址', 400); }
-  const allowed = new URL(ONLYOFFICE_PUBLIC_URL);
+  if (!ONLYOFFICE_CONNECTION.publicUrl) throw requestError('ONLYOFFICE Docs 尚未配置', 503);
+  const allowed = new URL(ONLYOFFICE_CONNECTION.publicUrl);
   if (!['http:', 'https:'].includes(source.protocol)) throw requestError('ONLYOFFICE 保存地址协议不受支持', 400);
-  const localNames = new Set(['127.0.0.1', 'localhost', '::1', 'codescope-onlyoffice', allowed.hostname]);
+  const localNames = new Set(['127.0.0.1', 'localhost', '::1', 'codescope-onlyoffice', 'documentserver', allowed.hostname]);
   if (!localNames.has(source.hostname)) throw requestError('已拒绝非本机 ONLYOFFICE 保存地址', 403);
   if (source.origin !== allowed.origin) {
-    source = new URL(source.pathname + source.search, ONLYOFFICE_PUBLIC_URL + '/');
+    source = new URL(source.pathname + source.search, ONLYOFFICE_CONNECTION.publicUrl + '/');
   }
   let response;
   for (let redirects = 0; redirects < 4; redirects += 1) {
@@ -2771,7 +2860,7 @@ async function saveOnlyOfficeResult(rel, sourceUrl) {
     if (!location) throw requestError('ONLYOFFICE 保存重定向缺少地址', 502);
     let next; try { next = new URL(location, source); } catch (_) { throw requestError('ONLYOFFICE 保存重定向地址无效', 502); }
     if (!['http:', 'https:'].includes(next.protocol) || !localNames.has(next.hostname)) throw requestError('已拒绝非本机 ONLYOFFICE 保存重定向', 403);
-    if (next.origin !== allowed.origin) next = new URL(next.pathname + next.search, ONLYOFFICE_PUBLIC_URL + '/');
+    if (next.origin !== allowed.origin) next = new URL(next.pathname + next.search, ONLYOFFICE_CONNECTION.publicUrl + '/');
     source = next;
   }
   if (!response) throw requestError('ONLYOFFICE 文件下载失败', 502);
@@ -3098,7 +3187,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 5, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
-        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-builtin-engine', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-save-callback', 'docx-preview', 'word-editing', 'word-autosave', 'spreadsheet-editing', 'pptx-preview'] });
+        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3109,9 +3198,23 @@ const server = http.createServer(async (req, res) => {
       if (u.searchParams.get('download') === '1') res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(path.basename(rel)));
       return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-cache', notFound:'Office 文件不存在' });
     }
+    if (req.method === 'GET' && u.pathname === '/api/office/connection') {
+      const health = await onlyOfficeHealth();
+      return send(res, 200, { ok:true, connection:publicOnlyOfficeConnection(), health });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/connection') {
+      try {
+        const body = await readBody(req, 128 * 1024);
+        const connection = saveOnlyOfficeConnection(body);
+        const health = await onlyOfficeHealth();
+        return send(res, health.ok ? 200 : 202, { ok:true, connection, health });
+      } catch (error) {
+        return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) });
+      }
+    }
     if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/status') {
       const health = await onlyOfficeHealth();
-      return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', editable:['docx','xlsx','xls','csv','pptx'] });
+      return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', connection:publicOnlyOfficeConnection(), editable:['docx','xlsx','xls','csv','pptx'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/providers/v1') {
       return send(res, 200, await OFFICE_ENGINE.status({ probe:u.searchParams.get('refresh') !== '0' }));
@@ -3122,8 +3225,8 @@ const server = http.createServer(async (req, res) => {
       const file = path.join(officeDir(), rel), kind = officeKind(rel);
       if (!fs.existsSync(file) || !onlyOfficeDocumentType(kind)) return send(res, 404, { ok:false, error:'Office 文件不存在或类型不受支持' });
       const health = await onlyOfficeHealth();
-      if (!health.ok) return send(res, 503, { ok:false, error:'ONLYOFFICE Docs 尚未启动', documentServerUrl:ONLYOFFICE_PUBLIC_URL, fallback:true });
-      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:ONLYOFFICE_PUBLIC_URL, config:onlyOfficeConfig(rel, file) });
+      if (!health.ok) return send(res, 503, { ok:false, error:health.error || 'ONLYOFFICE Docs 尚未连接', documentServerUrl:ONLYOFFICE_CONNECTION.publicUrl, connection:publicOnlyOfficeConnection() });
+      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:ONLYOFFICE_CONNECTION.publicUrl, connection:publicOnlyOfficeConnection(), config:onlyOfficeConfig(rel, file) });
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/office/onlyoffice-file') {
       const rel = officePath(u.searchParams.get('path'));
@@ -3404,19 +3507,13 @@ const server = http.createServer(async (req, res) => {
       const detected = await getEnv(force);
       const env = detected.tools;
       const runtime = runtimeReadiness();
-      const onlyOffice = force ? await onlyOfficeHealth() : null;
-      runtime.officeBuiltin = {
-        key:'officeBuiltin', label:'CodeScope 内置 Office', for:'DOCX 与 XLSX 本地编辑、PPTX 本地预览', group:'应用内置',
-        available:true, installed:true, required:true, bundled:true, installable:false,
-        version:'Provider API v' + OFFICE_ENGINE.apiRevision, path:path.join(__dirname, 'node_modules'),
-        issue:'', hint:'已完整封装在 CodeScope 安装包内，无需安装 Office、Node.js 或容器环境',
-      };
+      const onlyOffice = await onlyOfficeHealth();
       env.onlyoffice = {
-        key:'onlyoffice', label:'ONLYOFFICE 高保真协作 Provider', for:'复杂 DOCX、XLSX、PPTX 高保真编辑与多人协作', group:'外部连接',
-        available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:false,
-        version:onlyOffice && onlyOffice.ok ? '在线' : '', path:ONLYOFFICE_PUBLIC_URL,
-        issue:onlyOffice ? (onlyOffice.ok ? '' : '未连接可选协作服务；内置 Office 已就绪') : '未检测可选协作服务；内置 Office 已就绪',
-        hint:'只有多人协作和复杂排版需要此 Provider；普通本地编辑无需安装或连接任何服务', installable:false, relevant:false, external:true,
+        key:'onlyoffice', label:'ONLYOFFICE Docs', for:'DOCX、XLSX 与 PPTX 完整编辑和多人协作', group:'Office 运行服务',
+        available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:true,
+        version:onlyOffice && onlyOffice.ok ? '已连接' : '', path:ONLYOFFICE_CONNECTION.publicUrl,
+        issue:onlyOffice ? (onlyOffice.ok ? '' : (onlyOffice.error || '服务未连接')) : (ONLYOFFICE_CONNECTION.publicUrl ? '等待重新检测服务' : '尚未配置 Document Server 地址'),
+        hint:'在 Office 工作区点击“连接设置”，填写 ONLYOFFICE Document Server 地址、回调地址和 JWT 密钥', installable:false, relevant:true, external:true, scope:'Office 必需',
       };
       const all = [...Object.values(runtime), ...Object.values(env)];
       const required = all.filter((e) => e.required);
@@ -3425,8 +3522,7 @@ const server = http.createServer(async (req, res) => {
       const optionalUnavailable = all.filter((e) => !e.available && !e.required && !e.external).length;
       const externalUnavailable = all.filter((e) => !e.available && e.external).length;
       const total = all.length;
-      // 保留条目自己提供的说明（尤其是 ONLYOFFICE 的本地兼容模式），只为没有说明的
-      // 外部工具补充平台提示，避免被通用“请安装”文案覆盖。
+      // 保留条目自己提供的说明，只为没有说明的外部工具补充平台提示。
       for (const e of all) e.hint = e.hint || installHint(e.key);
       const system = platformInfo();
       send(res, 200, {
