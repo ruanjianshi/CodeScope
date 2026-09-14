@@ -3394,8 +3394,33 @@ function monacoToken(editor){const model=editor.getModel(),position=editor.getPo
 function monacoSymbol(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel());return token&&context?symbolInContext(token,{snippet:context.snippet,index:context.index,frag:context.fragment}):null;}
 function monacoGoDefinition(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel()),sym=monacoSymbol(editor);if(!token||!context){showNavigationNotice('请把光标放在函数、类型、宏或变量上');return;}goToLspDefinition(token,{snippet:context.snippet,index:context.index,frag:context.fragment},sym);}
 function wireMonacoCommands(editor,isMain){const m=window.monaco;editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyS,()=>{if(isMain)flushSave();else flushSplitEditors();});editor.addCommand(m.KeyMod.CtrlCmd|m.KeyMod.Shift|m.KeyCode.KeyP,()=>openSymModal('command'));editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyP,()=>openSymModal('file'));editor.addCommand(m.KeyCode.F1,()=>openSymModal('command'));editor.addCommand(m.KeyMod.Alt|m.KeyCode.KeyZ,toggleEditorWordWrap);editor.addCommand(m.KeyCode.F8,()=>nextLspProblem(1));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F8,()=>nextLspProblem(-1));editor.addCommand(m.KeyCode.F12,()=>monacoGoDefinition(editor));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F12,()=>{const sym=monacoSymbol(editor);if(sym){SYM_SEL=sym;setSymMode('symbol');}});if(isMain)editor.onDidChangeCursorSelection(()=>{rememberMarkdownCaret();syncCodeReferenceBar();});}
-async function syncMonacoMain(){const host=$('monaco-main'),wrap=$('code-wrap'),f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];if(!EDITING||!f){wrap.classList.remove('monaco-active');host.style.display='none';return;}try{const m=await ensureMonaco();if(!m||!EDITING||!CURRENT||CURRENT.fragments[CINDEX]!==f)return;const ta=$('code-edit'),ref={snippet:CURRENT,index:CINDEX,frag:f},key=monacoModelKey(CURRENT.file,CINDEX),model=monacoModel(ref,ta.value);if(model.getValue()!==ta.value){MONACO_SYNCING=true;model.setValue(ta.value);MONACO_SYNCING=false;}if(!MONACO_EDITOR){MONACO_EDITOR=m.editor.create(host,Object.assign(monacoOptions(false),{model}));wireMonacoCommands(MONACO_EDITOR,true);MONACO_EDITOR.onDidChangeModelContent(()=>{if(MONACO_SYNCING)return;const ta=$('code-edit');MONACO_SYNCING=true;ta.value=MONACO_EDITOR.getValue();syncProxySelection(MONACO_EDITOR,ta);ta.dispatchEvent(new Event('input',{bubbles:true}));MONACO_SYNCING=false;});MONACO_EDITOR.onDidChangeCursorSelection(()=>{syncProxySelection(MONACO_EDITOR,$('code-edit'));scheduleSyncMdPreview();syncRelationToEditorCaret();updateCodeContextBar();});MONACO_EDITOR.onDidFocusEditorText(()=>clearActiveSplitReading());MONACO_EDITOR.onDidScrollChange(event=>{const ta=$('code-edit');ta.scrollTop=event.scrollTop;ta.scrollLeft=event.scrollLeft;const frag=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];if(frag&&frag.language==='markdown'){const p=$('edit-preview'),maxT=Math.max(1,MONACO_EDITOR.getScrollHeight()-MONACO_EDITOR.getLayoutInfo().height),maxP=p.scrollHeight-p.clientHeight;if(maxP>0)p.scrollTop=event.scrollTop/maxT*maxP;}});MONACO_EDITOR.onMouseDown(event=>{if((event.event.ctrlKey||event.event.metaKey)&&event.target.position){syncProxySelection(MONACO_EDITOR,$('code-edit'));const sym=focusedSymbol();if(sym)goToSymbol(resolveDefinition(sym)||sym);}});}else MONACO_EDITOR.setModel(model);MONACO_EDITOR.updateOptions(monacoOptions(false));const proxyPosition=model.getPositionAt(Math.max(0,Math.min(ta.selectionStart||0,model.getValueLength())));MONACO_EDITOR.setPosition(proxyPosition);MONACO_EDITOR.revealPositionInCenterIfOutsideViewport(proxyPosition);MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';requestAnimationFrame(()=>MONACO_EDITOR&&MONACO_EDITOR.layout());updateMonacoDiagnostics();}catch(error){wrap.classList.remove('monaco-active');host.style.display='none';console.warn('Monaco 编辑器加载失败，已回退兼容编辑器',error);}}
-function monacoMainActive(){return !!(MONACO_EDITOR&&$('code-wrap').classList.contains('monaco-active')&&EDITING);}
+async function syncMonacoMain(){
+  const host=$('monaco-main'),wrap=$('code-wrap'),f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];
+  if(!EDITING||!f){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';return;}
+  try{
+    const m=await ensureMonaco();
+    if(!m||!EDITING||!CURRENT||CURRENT.fragments[CINDEX]!==f)return;
+    const ta=$('code-edit'),ref={snippet:CURRENT,index:CINDEX,frag:f},key=monacoModelKey(CURRENT.file,CINDEX),model=monacoModel(ref,ta.value);
+    if(model.getValue()!==ta.value){MONACO_SYNCING=true;model.setValue(ta.value);MONACO_SYNCING=false;}
+    if(!MONACO_EDITOR){
+      MONACO_EDITOR=m.editor.create(host,Object.assign(monacoOptions(false),{model}));
+      wireMonacoCommands(MONACO_EDITOR,true);
+      MONACO_EDITOR.onDidChangeModelContent(()=>{if(MONACO_SYNCING)return;const ta=$('code-edit');MONACO_SYNCING=true;ta.value=MONACO_EDITOR.getValue();syncProxySelection(MONACO_EDITOR,ta);ta.dispatchEvent(new Event('input',{bubbles:true}));MONACO_SYNCING=false;});
+      MONACO_EDITOR.onDidChangeCursorSelection(()=>{syncProxySelection(MONACO_EDITOR,$('code-edit'));scheduleSyncMdPreview();syncRelationToEditorCaret();updateCodeContextBar();});
+      MONACO_EDITOR.onDidFocusEditorText(()=>clearActiveSplitReading());
+      MONACO_EDITOR.onDidScrollChange(event=>{const ta=$('code-edit');ta.scrollTop=event.scrollTop;ta.scrollLeft=event.scrollLeft;syncMarkdownPreviewFromSource();});
+      MONACO_EDITOR.onMouseDown(event=>{if((event.event.ctrlKey||event.event.metaKey)&&event.target.position){syncProxySelection(MONACO_EDITOR,$('code-edit'));const sym=focusedSymbol();if(sym)goToSymbol(resolveDefinition(sym)||sym);}});
+    }else MONACO_EDITOR.setModel(model);
+    MONACO_EDITOR.updateOptions(monacoOptions(false));
+    const proxyPosition=model.getPositionAt(Math.max(0,Math.min(ta.selectionStart||0,model.getValueLength())));
+    MONACO_EDITOR.setPosition(proxyPosition);MONACO_EDITOR.revealPositionInCenterIfOutsideViewport(proxyPosition);
+    MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';
+    requestAnimationFrame(()=>{if(MONACO_EDITOR){MONACO_EDITOR.layout();syncMarkdownPreviewFromSource();}});
+    updateMonacoDiagnostics();
+  }catch(error){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';console.warn('Monaco 编辑器加载失败，已回退兼容编辑器',error);}
+}
+function currentEditorDocumentKey(){return CURRENT?monacoModelKey(CURRENT.file,CINDEX):'';}
+function monacoMainActive(){return !!(MONACO_EDITOR&&$('code-wrap').classList.contains('monaco-active')&&EDITING&&MONACO_MAIN_KEY===currentEditorDocumentKey());}
 function focusMainEditor(){if(monacoMainActive())MONACO_EDITOR.focus();else $('code-edit').focus();}
 function setMainEditorValue(value){$('code-edit').value=String(value||'');if(monacoMainActive()&&MONACO_EDITOR.getValue()!==$('code-edit').value){MONACO_SYNCING=true;MONACO_EDITOR.setValue($('code-edit').value);MONACO_SYNCING=false;}}
 function updateMonacoDiagnostics(){if(!window.monaco||!MONACO_EDITOR||!MONACO_EDITOR.getModel())return;const severity=window.monaco.MarkerSeverity;window.monaco.editor.setModelMarkers(MONACO_EDITOR.getModel(),'codescope-lsp',(LSP_DIAGNOSTICS||[]).map(item=>({startLineNumber:Number(item.range&&item.range.start&&item.range.start.line||0)+1,startColumn:Number(item.range&&item.range.start&&item.range.start.character||0)+1,endLineNumber:Number(item.range&&item.range.end&&item.range.end.line||0)+1,endColumn:Number(item.range&&item.range.end&&item.range.end.character||0)+1,message:String(item.message||'诊断信息'),source:String(item.source||'LSP'),code:item.code==null?undefined:String(item.code),severity:Number(item.severity)===1?severity.Error:Number(item.severity)===2?severity.Warning:Number(item.severity)===4?severity.Hint:severity.Info})));}
@@ -10673,10 +10698,10 @@ async function compileLatexPreview(force) {
 function updateEditPreview() {
   const p = $('edit-preview');
   const f = CURRENT && CURRENT.fragments[CINDEX];
-  if (!EDITING || !f || (f.language !== 'markdown' && f.language !== 'latex' && f.language !== 'html')) { p.style.display = 'none'; return; }
-  if (MM_ACTIVE) { p.style.display = 'none'; return; }   /* 导图模式下不弹预览，避免三窗口 */
+  if (!EDITING || !f || (f.language !== 'markdown' && f.language !== 'latex' && f.language !== 'html')) { p.style.display = 'none';delete p.dataset.documentKey; return; }
+  if (MM_ACTIVE) { p.style.display = 'none';delete p.dataset.documentKey; return; }   /* 导图模式下不弹预览，避免三窗口 */
   const viewMode=documentMode(f);
-  if(viewMode==='source'||(f.language==='markdown'&&(viewMode==='live'||viewMode==='preview'))){p.style.display='none';return;}
+  if(viewMode==='source'||(f.language==='markdown'&&(viewMode==='live'||viewMode==='preview'))){p.style.display='none';delete p.dataset.documentKey;return;}
   if (f.language === 'latex') {
     ensureLatexPreview();
     p.style.display = 'flex';
@@ -10690,6 +10715,7 @@ function updateEditPreview() {
     return;
   }
   p.dataset.mode = 'markdown';
+  p.dataset.documentKey=currentEditorDocumentKey();
   p.classList.remove('latex-preview');p.classList.add('preview-shell','md-doc');p.classList.toggle('preview-full',documentMode(f)==='preview');p.style.overflow='auto';
   p.innerHTML = '<div class="edit-preview-head"><strong>Markdown 预览</strong><span>与源码同步滚动</span><span class="sp"></span><button type="button" class="edit-preview-close" title="关闭右侧预览">×</button></div><div class="edit-preview-body md-doc">'+renderMarkdown(editText())+'</div>';
   p.querySelector('.edit-preview-close').onclick=()=>setDocumentMode('source');
@@ -10697,17 +10723,61 @@ function updateEditPreview() {
   p.style.display = 'flex';
 }
 
-// markdown 左右同步：编辑器光标所在行 → 预览滚动到对应块（依赖 renderMarkdown 的 data-md-line）
-// 目标：光标内容显示在预览大致中间 + 对应块高亮
-let MD_SYNC_TIMER = 0, MD_SYNC_TARGET = null, MD_SCROLL_AT = 0, MD_CENTER_AT = 0;
+// Markdown 左右同步以源码行锚点为准。标题、表格、代码块的渲染高度差异很大，
+// 不能按两侧总高度做简单比例换算，否则长文档越往下偏差越明显。
+let MD_SYNC_TIMER = 0, MD_SYNC_TARGET = null, MD_SCROLL_AT = 0, MD_CENTER_AT = 0, MD_SCROLL_WRITE = '';
 function editPreviewScroller(){return $('edit-preview');}
+function markdownPreviewReady() {
+  const p=editPreviewScroller();
+  return !!(p&&p.dataset.mode==='markdown'&&p.dataset.documentKey===currentEditorDocumentKey()&&getComputedStyle(p).display!=='none');
+}
+function markdownPreviewAnchors() {
+  const p=editPreviewScroller(),source=editText(),lastLine=Math.max(0,source.split('\n').length-1),maxTop=Math.max(0,p.scrollHeight-p.clientHeight),byLine=new Map();
+  for(const element of p.querySelectorAll('.edit-preview-body [data-md-line]')){
+    const line=Math.max(0,Math.min(lastLine,Number(element.dataset.mdLine)||0));
+    const top=Math.max(0,Math.min(maxTop,element.getBoundingClientRect().top-p.getBoundingClientRect().top+p.scrollTop));
+    if(!byLine.has(line)||top<byLine.get(line))byLine.set(line,top);
+  }
+  byLine.set(0,0);byLine.set(lastLine,maxTop);
+  const rows=[...byLine].map(([line,top])=>({line,top})).sort((a,b)=>a.line-b.line);let top=0;
+  for(const row of rows){row.top=Math.max(top,row.top);top=row.top;}
+  return rows;
+}
+function interpolateMarkdownAnchors(rows,value,from,to){
+  if(!rows.length)return 0;if(value<=rows[0][from])return rows[0][to];
+  for(let i=1;i<rows.length;i++)if(value<=rows[i][from]){const a=rows[i-1],b=rows[i],span=b[from]-a[from];return span>0?a[to]+(value-a[from])/span*(b[to]-a[to]):b[to];}
+  return rows[rows.length-1][to];
+}
+function markdownSourceTopLine() {
+  if(monacoMainActive()){
+    const ranges=MONACO_EDITOR.getVisibleRanges();
+    if(ranges&&ranges.length)return Math.max(0,ranges[0].startLineNumber-1);
+  }
+  const ta=$('code-edit'),lineHeight=parseFloat(getComputedStyle(ta).lineHeight)||20;
+  return Math.max(0,ta.scrollTop/lineHeight);
+}
+function writeMarkdownScroll(owner,callback){MD_SCROLL_WRITE=owner;callback();requestAnimationFrame(()=>{if(MD_SCROLL_WRITE===owner)MD_SCROLL_WRITE='';});}
+function syncMarkdownPreviewFromSource() {
+  const f=CURRENT&&CURRENT.fragments[CINDEX];if(!EDITING||!f||f.language!=='markdown'||!markdownPreviewReady()||MD_SCROLL_WRITE==='source')return;
+  MD_SCROLL_AT=Date.now();const p=editPreviewScroller(),top=interpolateMarkdownAnchors(markdownPreviewAnchors(),markdownSourceTopLine(),'line','top');
+  writeMarkdownScroll('preview',()=>{p.scrollTop=top;});
+}
+function syncMarkdownSourceFromPreview() {
+  const f=CURRENT&&CURRENT.fragments[CINDEX];if(!EDITING||!f||f.language!=='markdown'||!markdownPreviewReady()||MD_SCROLL_WRITE==='preview')return;
+  if(Date.now()-MD_CENTER_AT<150)return;
+  MD_SCROLL_AT=Date.now();const p=editPreviewScroller(),line=interpolateMarkdownAnchors(markdownPreviewAnchors(),p.scrollTop,'top','line');
+  writeMarkdownScroll('source',()=>{
+    if(monacoMainActive())MONACO_EDITOR.setScrollTop(MONACO_EDITOR.getTopForLineNumber(Math.max(1,Math.round(line)+1)));
+    else {const ta=$('code-edit'),lineHeight=parseFloat(getComputedStyle(ta).lineHeight)||20;ta.scrollTop=line*lineHeight;}
+  });
+}
 function syncMdPreview() {
   const f = CURRENT && CURRENT.fragments[CINDEX];
   if (!EDITING || !f || f.language !== 'markdown') return;
   if (MM_ACTIVE) return;   /* 导图模式下预览隐藏，无需同步滚动 */
   const ta = $('code-edit'), p = editPreviewScroller();
-  if (!p || !ta || p.style.display === 'none') return;
-  const focused = document.activeElement === ta;
+  if (!p || !ta || !markdownPreviewReady()) return;
+  const focused = document.activeElement === ta||(monacoMainActive()&&MONACO_EDITOR.hasTextFocus());
   const cursorLine = ta.value.slice(0, ta.selectionStart || 0).split('\n').length;  // 1-based
   let target = null;
   for (const el of p.querySelectorAll('[data-md-line]')) {
@@ -10728,14 +10798,15 @@ function syncMdPreview() {
     const delta = rel - (p.clientHeight - target.getBoundingClientRect().height) / 2;
     if (Math.abs(delta) >= 40) {
       MD_CENTER_AT = Date.now();   // 居中触发的滚动不回写左栏，避免把光标滚出视野
-      p.scrollTop += delta;
+      writeMarkdownScroll('preview',()=>{p.scrollTop+=delta;});
     }
   }
 }
 
 function scheduleSyncMdPreview() {
+  const key=currentEditorDocumentKey();
   clearTimeout(MD_SYNC_TIMER);
-  MD_SYNC_TIMER = setTimeout(syncMdPreview, 70);
+  MD_SYNC_TIMER = setTimeout(()=>{if(key===currentEditorDocumentKey())syncMdPreview();}, 70);
 }
 
 /* ------------------------- 智能补全（简单符号前缀补全） ------------------------- */
@@ -12712,26 +12783,13 @@ function makeHResizer(handle, getter, setter) {
       $('code').scrollLeft = ta.scrollLeft;
       $('ln').scrollTop = ta.scrollTop;
       syncRelationToCodeFocus();
-      // markdown：左栏滚轮/滚动条 → 右栏预览按同一比例同步滚动
+      // Markdown：左栏滚轮/滚动条 → 右栏按源码行锚点同步。
       const f = CURRENT && CURRENT.fragments[CINDEX];
-      if (f && f.language === 'markdown') {
-        MD_SCROLL_AT = Date.now();   // 压制 350ms 内的光标居中逻辑，避免两种滚动打架
-        const p = editPreviewScroller();
-        const maxT = ta.scrollHeight - ta.clientHeight, maxP = p.scrollHeight - p.clientHeight;
-        if (maxT > 0 && maxP > 0) p.scrollTop = (ta.scrollTop / maxT) * maxP;
-      }
+      if (f && f.language === 'markdown') syncMarkdownPreviewFromSource();
     }
   });
-  // markdown：右栏滚轮/滚动条 → 左栏按同一比例同步滚动（居中触发的滚动不回写，避免光标被滚出视野）
-  $('edit-preview').addEventListener('scroll', () => {
-    const f = CURRENT && CURRENT.fragments[CINDEX];
-    if (!EDITING || !f || f.language !== 'markdown') return;
-    if (Date.now() - MD_CENTER_AT < 150) return;   // 居中逻辑引发的滚动跳过回写
-    MD_SCROLL_AT = Date.now();
-    const p = editPreviewScroller(), ta = $('code-edit');
-    const maxP = p.scrollHeight - p.clientHeight, maxT = ta.scrollHeight - ta.clientHeight;
-    if (maxP > 0 && maxT > 0) ta.scrollTop = (p.scrollTop / maxP) * maxT;
-  });
+  // Markdown：右栏滚轮/滚动条 → 左栏按同一组源码行锚点同步。
+  $('edit-preview').addEventListener('scroll', syncMarkdownSourceFromPreview);
   // 输入法合成期（拼音/五笔候选）：临时显示明文，避免候选字看不见；合成结束恢复高亮
   $('code-edit').addEventListener('compositionstart', () => { $('code-edit').classList.add('composing'); hideComp(); });
   $('code-edit').addEventListener('compositionend', () => { $('code-edit').classList.remove('composing'); syncHighlight(); });

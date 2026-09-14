@@ -40,6 +40,7 @@ async function main() {
   const executablePath=browserExecutable();
   if(!executablePath){console.log('CodeScope browser smoke: skipped（未找到 Chrome/Chromium，可用 CODESCOPE_BROWSER 指定）');return;}
  fs.mkdirSync(path.join(vault,'code'),{recursive:true});
+  const longMarkdown=['# Anchor Sync Guide','',...Array.from({length:36},(_,index)=>`## Section ${index+1}\n\n第 ${index+1} 节包含用于校验源码与预览双向同步的正文。\n\n| 项目 | 值 |\n| --- | --- |\n| 行号 | ${index+1} |`).join('\n\n')].join('\n');
   fs.writeFileSync(path.join(tempRoot,'package.json'),JSON.stringify({name:'codescope-browser-fixture',private:true,scripts:{test:'node -e "process.exit(0)"'}},null,2));
  fs.writeFileSync(path.join(vault,'code','reading.md'),`---
 contents:
@@ -91,6 +92,35 @@ led_t *led_create(int pin) {
 ## Fragment: demo.html
 \`\`\`html
 <!doctype html><html><body><h1>Preview Demo</h1></body></html>
+\`\`\`
+
+`);
+  fs.writeFileSync(path.join(vault,'code','markdown-sync.md'),`---
+contents:
+  - id: 1
+    label: README.md
+    filename: readme.md
+    language: markdown
+  - id: 2
+    label: Guide.md
+    filename: guide.md
+    language: markdown
+name: Markdown Sync Demo
+description: preview identity and scroll regression
+isDeleted: 0
+tags:
+---
+
+## Fragment: README.md
+\`\`\`markdown
+# First Markdown Document
+
+只允许显示在第一个片段中。
+\`\`\`
+
+## Fragment: Guide.md
+\`\`\`markdown
+${longMarkdown}
 \`\`\`
 `);
   fs.writeFileSync(path.join(vault,'code','indent.md'),`---
@@ -144,9 +174,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.3 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.2.4 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.2.3'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.2.4'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.2 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -159,7 +189,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.3'))throw new Error('环境元信息未显示 v2.2.3');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.2.4'))throw new Error('环境元信息未显示 v2.2.4');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -259,6 +289,28 @@ print(r.run())
   await page.locator('#html-preview-frame').waitFor({state:'visible'});
   if(await page.locator('#code-wrap').isVisible())throw new Error('HTML 全宽预览仍残留源码栏');
   await page.locator('#edit-preview .edit-preview-close').click();
+  /* ---- Monaco Markdown：快速切换不得串页，双向滚动按源码行锚点同步 ---- */
+  const markdownPage=await browser.newPage({viewport:{width:1440,height:760}}),markdownErrors=[];
+  markdownPage.on('pageerror',error=>markdownErrors.push(String(error.message||error)));
+  await markdownPage.goto(baseUrl,{waitUntil:'domcontentloaded'});
+  await markdownPage.locator('.item').filter({hasText:'Markdown Sync Demo'}).click();
+  await markdownPage.locator('#tabs .tab').filter({hasText:'README.md'}).locator('span').first().click();
+  await markdownPage.waitForFunction(()=>MONACO_EDITOR&&monacoMainActive()&&document.querySelector('#edit-preview .edit-preview-body'));
+  if(!(await markdownPage.locator('#edit-preview .edit-preview-body').innerText()).includes('First Markdown Document'))throw new Error('Monaco Markdown 初始预览未绑定当前片段');
+  await markdownPage.locator('#tabs .tab').filter({hasText:'Guide.md'}).locator('span').first().click();
+  await markdownPage.waitForFunction(()=>monacoMainActive()&&MONACO_MAIN_KEY===currentEditorDocumentKey()&&document.getElementById('edit-preview').dataset.documentKey===currentEditorDocumentKey());
+  const switchedMarkdown=await markdownPage.evaluate(()=>({source:document.getElementById('code-edit').value,preview:document.querySelector('#edit-preview .edit-preview-body')?.innerText||'',key:currentEditorDocumentKey(),previewKey:document.getElementById('edit-preview').dataset.documentKey,monacoKey:MONACO_MAIN_KEY}));
+  if(!switchedMarkdown.source.includes('Anchor Sync Guide')||!switchedMarkdown.preview.includes('Anchor Sync Guide')||switchedMarkdown.preview.includes('只允许显示在第一个片段中'))throw new Error('Markdown 快速切换后左右内容串页：'+JSON.stringify(switchedMarkdown));
+  await markdownPage.evaluate(()=>MONACO_EDITOR.setScrollTop(MONACO_EDITOR.getTopForLineNumber(120)));
+  await markdownPage.waitForTimeout(180);
+  const leftToRight=await markdownPage.evaluate(()=>({sourceLine:Math.round(markdownSourceTopLine()),previewLine:Math.round(interpolateMarkdownAnchors(markdownPreviewAnchors(),document.getElementById('edit-preview').scrollTop,'top','line'))}));
+  if(Math.abs(leftToRight.sourceLine-leftToRight.previewLine)>3)throw new Error('Markdown 左侧滚动未按源码行同步预览：'+JSON.stringify(leftToRight));
+  await markdownPage.evaluate(()=>{const p=document.getElementById('edit-preview'),rows=markdownPreviewAnchors();p.scrollTop=interpolateMarkdownAnchors(rows,36,'line','top');});
+  await markdownPage.waitForTimeout(180);
+  const rightToLeft=await markdownPage.evaluate(()=>({sourceLine:Math.round(markdownSourceTopLine()),previewLine:Math.round(interpolateMarkdownAnchors(markdownPreviewAnchors(),document.getElementById('edit-preview').scrollTop,'top','line'))}));
+  if(Math.abs(rightToLeft.sourceLine-rightToLeft.previewLine)>3)throw new Error('Markdown 右侧滚动未按源码行同步源码：'+JSON.stringify(rightToLeft));
+  if(markdownErrors.length)throw new Error('Monaco Markdown 浏览器运行错误：'+markdownErrors.join('；'));
+  await markdownPage.close();
   await page.locator('#tabs .tab').filter({hasText:'led.h'}).locator('span').first().click();
   await page.waitForTimeout(1400);
   const lspStatus=await page.locator('#lsp-diagnostics').innerText();
