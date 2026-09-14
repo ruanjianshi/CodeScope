@@ -52,6 +52,22 @@ async function requestJson(baseUrl, pathname, expectedStatus = 200) {
   return response.json();
 }
 
+function requestJsonWithHeaders(baseUrl, pathname, headers = {}) {
+  const target = new URL(pathname, baseUrl);
+  return new Promise((resolve, reject) => {
+    const req = http.request(target, { headers }, (res) => {
+      const parts = [];
+      res.on('data', (chunk) => parts.push(chunk));
+      res.on('end', () => {
+        try { resolve({ status:res.statusCode, data:JSON.parse(Buffer.concat(parts).toString('utf8')) }); }
+        catch (error) { reject(error); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 function postChunkedJson(baseUrl, pathname, chunks) {
   const target = new URL(pathname, baseUrl);
   return new Promise((resolve, reject) => {
@@ -109,6 +125,7 @@ async function main() {
   const officeEngine = fs.readFileSync(path.join(projectRoot, 'lib', 'office-engine.js'), 'utf8');
   const forgeConfig = fs.readFileSync(path.join(projectRoot, 'forge.config.js'), 'utf8');
   assert(packageJson.main === 'desktop/main.js' && packageJson.scripts.start === 'node server.js' && packageJson.scripts.desktop, 'Web / Desktop 双入口配置不完整');
+  assert(packageJson.scripts.prestart === 'node scripts/ensure-onlyoffice.js' && packageJson.scripts.preweb === 'node scripts/ensure-onlyoffice.js' && fs.existsSync(path.join(projectRoot, 'scripts', 'ensure-onlyoffice.js')), 'Web 启动流程未自动恢复本机 ONLYOFFICE');
   assert(/utilityProcess\.fork/.test(desktopMain) && /BrowserWindow/.test(desktopMain) && /contextIsolation:\s*true/.test(desktopMain), '桌面主进程未使用隔离窗口和独立服务进程');
   assert(/contextBridge\.exposeInMainWorld/.test(desktopPreload) && /codescopeDesktop/.test(desktopPreload), '桌面安全桥接配置不完整');
   assert(/maker-squirrel/.test(forgeConfig) && /maker-dmg/.test(forgeConfig) && /maker-deb/.test(forgeConfig), '桌面跨平台构建配置不完整');
@@ -384,6 +401,8 @@ void bubbleSort(Array& values);
   assert(connectedOffice.ok && connectedOffice.health.ok && connectedOffice.connection.jwtConfigured && !('jwtSecret' in connectedOffice.connection), 'ONLYOFFICE 连接保存、健康检查或密钥脱敏失败');
   const onlyOfficeEditorConfig = await requestJson(baseUrl, '/api/office/onlyoffice/config?path=' + encodeURIComponent(officeWord.path));
   assert(onlyOfficeEditorConfig.ok && onlyOfficeEditorConfig.config.token && onlyOfficeEditorConfig.config.token.split('.').length === 3 && onlyOfficeEditorConfig.config.document.url.includes('host.docker.internal'), 'ONLYOFFICE JWT 编辑配置或容器回访地址异常');
+  const lanOfficeConfig = await requestJsonWithHeaders(baseUrl, '/api/office/onlyoffice/config?path=' + encodeURIComponent(officeWord.path), { Host:'192.0.2.25:' + port });
+  assert(lanOfficeConfig.status === 200 && new URL(lanOfficeConfig.data.documentServerUrl).hostname === '192.0.2.25', '局域网浏览器仍会错误连接访问设备自身的 127.0.0.1');
   const connectedProviders = await requestJson(baseUrl, '/api/office/providers/v1');
   assert(connectedProviders.active === 'onlyoffice-docs' && connectedProviders.complete && connectedProviders.providers[0].available, 'ONLYOFFICE 连接后未成为活动编辑内核');
   const officeTree = await requestJson(baseUrl, '/api/office/tree');

@@ -1,6 +1,6 @@
 {
   "name": "codescope",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "private": true,
   "productName": "CodeScope",
   "description": "码境 CodeScope：面向代码阅读、编辑、运行、文档与远程开发的工程工作台",
@@ -8,6 +8,8 @@
   "scripts": {
     "start": "node server.js",
     "web": "node server.js",
+    "prestart": "node scripts/ensure-onlyoffice.js",
+    "preweb": "node scripts/ensure-onlyoffice.js",
     "desktop": "electron .",
     "desktop:dev": "electron .",
     "package:desktop": "electron-forge package",

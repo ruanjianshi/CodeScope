@@ -30,6 +30,7 @@ fi
 
 export CODESCOPE_VAULT="${CODESCOPE_VAULT:-${MASSCODE_VAULT:-$ROOT_DIR/markdown-vault}}"
 export CODESCOPE_HOST="$HOST"
+node scripts/ensure-onlyoffice.js
 node preflight.js --quiet || { echo "环境预检失败，请按上方提示修复后重试。"; exit 1; }
 OPEN_HOST="$HOST"
 [ "$OPEN_HOST" = "0.0.0.0" ] && OPEN_HOST="127.0.0.1"

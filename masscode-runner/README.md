@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.2.2
+# 码境 CodeScope v2.2.3
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前版本：**v2.2.2**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v2.2.3**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
@@ -105,6 +105,8 @@ macOS 如果从 iCloud Drive / File Provider 目录构建，Forge 会自动改�
 
 **macOS**：在 Finder 打开 `iCloud Drive / massCode`，**双击「启动码境.command」**
 - 终端窗口保持前台运行服务，浏览器自动打开 http://127.0.0.1:4877
+- 如果已配置本机 ONLYOFFICE，启动器会先检查并自动恢复 Colima/Docker 容器，避免重启后 Office 只显示连接页。
+- 局域网访问 CodeScope 时，Office 编辑器会自动使用当前 CodeScope 主机名访问 8088 端口，不会错误连到访问设备自己的 `127.0.0.1`。
 - 用完直接 **`Ctrl+C`**（或关掉终端窗口）即停止
 - 已运行时再次双击 → 只打开页面，不重复启动
 

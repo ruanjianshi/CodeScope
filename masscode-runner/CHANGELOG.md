@@ -1,5 +1,11 @@
 # 更新记录
 
+## v2.2.3 — 2026-09-14
+
+- 修复 Web 端原有 ONLYOFFICE 在 Colima/Docker 停止后变成“未连接”的问题；`npm start`、`npm run web` 和各系统一键启动脚本会在启动 CodeScope 前恢复已配置的本机 ONLYOFFICE 容器。
+- 保持 ONLYOFFICE 为 Office 编辑内核；Web 端的 DOCX/XLSX/PPTX 完整编辑、回调和自动保存链路不做降级。
+- 本机 Document Server 同时监听局域网 8088 端口；从其他设备访问 CodeScope 时，后端会为编辑器生成同主机的 ONLYOFFICE URL，修复远端浏览器错连自身 `127.0.0.1`。
+
 ## v2.2.2 — 2026-09-14
 
 - Office 工作区切换为 ONLYOFFICE Docs 唯一编辑内核，彻底停止自动启用内置 Word、表格或演示兼容编辑器；服务不可用时显示清晰的连接配置页。

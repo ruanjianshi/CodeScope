@@ -50,6 +50,7 @@ if not defined CODESCOPE_PORT set "CODESCOPE_PORT=4877"
 if not defined CODESCOPE_HOST set "CODESCOPE_HOST=%MASSCODE_RUNNER_HOST%"
 if not defined CODESCOPE_HOST set "CODESCOPE_HOST=127.0.0.1"
 set "PORT=%CODESCOPE_PORT%"
+node scripts\ensure-onlyoffice.js
 node preflight.js --quiet
 if errorlevel 1 (
   echo [错误] 环境预检失败，请按上方提示修复后重试。

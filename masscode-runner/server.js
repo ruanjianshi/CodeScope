@@ -2789,6 +2789,18 @@ function onlyOfficeContainerBase() {
   if (explicit) return explicit;
   return 'http://' + ONLYOFFICE_CONTAINER_HOST + ':' + PORT;
 }
+function onlyOfficeBrowserUrl(req) {
+  const configured = ONLYOFFICE_CONNECTION.publicUrl;
+  if (!configured) return '';
+  let service;
+  try { service = new URL(configured); } catch (_) { return configured; }
+  if (!['127.0.0.1', 'localhost', '::1'].includes(service.hostname)) return configured;
+  let requestHost = '';
+  try { requestHost = new URL('http://' + String(req && req.headers && req.headers.host || '')).hostname; } catch (_) {}
+  if (!requestHost || ['127.0.0.1', 'localhost', '::1'].includes(requestHost)) return configured;
+  service.hostname = requestHost;
+  return service.toString().replace(/\/$/, '');
+}
 async function onlyOfficeHealth() {
   return OFFICE_ENGINE.probeOnlyOffice();
 }
@@ -3226,7 +3238,7 @@ const server = http.createServer(async (req, res) => {
       if (!fs.existsSync(file) || !onlyOfficeDocumentType(kind)) return send(res, 404, { ok:false, error:'Office 文件不存在或类型不受支持' });
       const health = await onlyOfficeHealth();
       if (!health.ok) return send(res, 503, { ok:false, error:health.error || 'ONLYOFFICE Docs 尚未连接', documentServerUrl:ONLYOFFICE_CONNECTION.publicUrl, connection:publicOnlyOfficeConnection() });
-      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:ONLYOFFICE_CONNECTION.publicUrl, connection:publicOnlyOfficeConnection(), config:onlyOfficeConfig(rel, file) });
+      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:onlyOfficeBrowserUrl(req), connection:publicOnlyOfficeConnection(), config:onlyOfficeConfig(rel, file) });
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/office/onlyoffice-file') {
       const rel = officePath(u.searchParams.get('path'));

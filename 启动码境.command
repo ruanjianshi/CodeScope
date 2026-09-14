@@ -25,6 +25,7 @@ fi
 
 export CODESCOPE_VAULT="${CODESCOPE_VAULT:-${MASSCODE_VAULT:-$(cd .. && pwd)/markdown-vault}}"
 export CODESCOPE_HOST="$HOST"
+node scripts/ensure-onlyoffice.js
 node preflight.js --quiet || { echo "环境预检失败，请按上方提示修复后重试。"; read -r -p "按回车退出"; exit 1; }
 OPEN_HOST="$HOST"; [ "$OPEN_HOST" = "0.0.0.0" ] && OPEN_HOST="127.0.0.1"; [ "$OPEN_HOST" = "::" ] && OPEN_HOST="[::1]"
 URL="http://$OPEN_HOST:$PORT"

@@ -4,7 +4,7 @@ services:
     container_name: codescope-onlyoffice
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8088:80"
+      - "8088:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
