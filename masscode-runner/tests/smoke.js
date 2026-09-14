@@ -341,6 +341,7 @@ void bubbleSort(Array& values);
   assert(html.includes('togglePdfThumbnails') && html.includes('renderPdfThumbnails') && html.includes('pdf-thumb-panel') && html.includes('ResizeObserver'), 'PDF 阅读器缺少页面缩略图导航或容器尺寸自适应');
   assert(html.includes('loadPdfViewerLib') && html.includes('new lib.PDFViewer') && html.includes('IntersectionObserver') && html.includes('pdfjs-viewer-container'), 'PDF 阅读器未接入官方 Viewer 或可视区懒渲染');
   assert(html.includes('spread-cover') && html.includes('lib.ScrollMode.PAGE') && html.includes('lib.SpreadMode.ODD') && html.includes('ONLYOFFICE PDF Editor'), 'PDF 阅读器缺少单页、双页、封面双页或高级编辑入口');
+  assert(html.includes('保存并返回 PDF.js') && html.includes('/api/readings/onlyoffice/forcesave') && html.includes('mix-blend-mode:multiply') && serverSource.includes("c:'forcesave'") && serverSource.includes("body.url, { root:readingsDir(), pdf:true }"), 'PDF 批注对比度或 ONLYOFFICE 确定性回写同步缺失');
   assert(html.includes('cleanPdfOutlineTitle') && html.includes('classifyPdfOutlineLine') && html.includes("source: 'auto-v2'") && html.includes("data.source === 'auto-v2' ? '智能识别'"), 'PDF 智能目录缺少分栏重建、标题清洗或层级分类能力');
   assert(html.includes('referencesReached') && html.includes('table\\s*(?:[.\\d]|[IVXLCDM]+\\b)'), 'PDF 智能目录缺少表格标题或参考文献正文过滤');
   assert(html.includes('saveToolbarSelection') && html.includes("cite.textContent = '引用笔记'") && html.includes('range.getClientRects()'), 'PDF 选区缺少逐行几何识别、快捷摘录或引用笔记能力');
@@ -397,9 +398,12 @@ void bubbleSort(Array& values);
   const officeSlides = await postJson(baseUrl, '/api/office/new', { folder:'', name:'项目汇报', kind:'slides' });
   assert(officeWord.ok && officeWord.path.endsWith('.docx') && officeSheet.ok && officeSheet.path.endsWith('.xlsx') && officeSlides.ok && officeSlides.path.endsWith('.pptx'), 'Office 标准文档创建失败');
   const officePort = await freePort();
+  let onlyOfficePdfCallbackUrl = '';
   officeStub = http.createServer((req, res) => {
     if (req.url === '/healthcheck') { res.writeHead(200, { 'content-type':'text/plain' }); return res.end('true'); }
     if (req.url === '/web-apps/apps/api/documents/api.js') { res.writeHead(200, { 'content-type':'text/javascript' }); return res.end('window.DocsAPI = window.DocsAPI || {};'); }
+    if (req.url === '/saved.pdf') { const bytes=samplePdf('Hello research paper updated by ONLYOFFICE');res.writeHead(200,{'content-type':'application/pdf','content-length':bytes.length});return res.end(bytes); }
+    if (req.url.startsWith('/command') || req.url.startsWith('/coauthoring/CommandService.ashx')) { let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{let command={};try{command=JSON.parse(body);}catch(_){}res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({error:0,key:command.key||''}));if(onlyOfficePdfCallbackUrl)setTimeout(()=>fetch(onlyOfficePdfCallbackUrl.replace('host.docker.internal','127.0.0.1'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:6,url:'http://127.0.0.1:'+officePort+'/saved.pdf'})}).catch(()=>{}),20);});return; }
     res.writeHead(404); res.end();
   });
   await new Promise((resolve, reject) => { officeStub.once('error', reject); officeStub.listen(officePort, '127.0.0.1', resolve); });
@@ -463,9 +467,12 @@ void bubbleSort(Array& values);
   assert(readingUploadResponse.ok && readingUpload.ok && readingUpload.path === 'Research/Papers/paper.pdf', 'PDF 流式导入失败');
   const onlyOfficePdfConfig = await requestJson(baseUrl, '/api/readings/onlyoffice/config?path=' + encodeURIComponent(readingUpload.path));
   assert(onlyOfficePdfConfig.ok && onlyOfficePdfConfig.config.documentType === 'pdf' && onlyOfficePdfConfig.config.document.fileType === 'pdf' && onlyOfficePdfConfig.config.token && onlyOfficePdfConfig.config.editorConfig.callbackUrl.includes('/api/readings/onlyoffice-callback'), 'ONLYOFFICE PDF 编辑配置、JWT 或回写地址异常');
+  onlyOfficePdfCallbackUrl = onlyOfficePdfConfig.config.editorConfig.callbackUrl;
   const deniedOnlyOfficePdfFile = await requestJson(baseUrl, '/api/readings/onlyoffice-file?path=' + encodeURIComponent(readingUpload.path) + '&token=invalid', 403);
   const deniedOnlyOfficePdfCallback = await postJson(baseUrl, '/api/readings/onlyoffice-callback?path=' + encodeURIComponent(readingUpload.path) + '&token=invalid', { status:2 }, 403);
   assert(!deniedOnlyOfficePdfFile.ok && deniedOnlyOfficePdfCallback.error === 1, 'ONLYOFFICE PDF 文档或回调接口未拒绝无效令牌');
+  const forcedPdfSave = await postJson(baseUrl, '/api/readings/onlyoffice/forcesave', { path:readingUpload.path, key:onlyOfficePdfConfig.config.document.key });
+  assert(forcedPdfSave.ok && forcedPdfSave.synced && forcedPdfSave.changed === true, 'ONLYOFFICE PDF 返回阅读器前未等待保存回调和文件回写：' + JSON.stringify(forcedPdfSave));
   const chineseInfo = Buffer.from(JSON.stringify({ name:'paper_中文.pdf', folder:'Research/Papers' })).toString('base64');
   const chineseResponse = await fetch(baseUrl + '/api/readings/upload-stream', { method:'POST', headers:{'Content-Type':'application/pdf','X-CodeScope-Reading':chineseInfo}, body:samplePdf('Chinese paper') });
   const chineseUpload = await chineseResponse.json();

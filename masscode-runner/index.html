@@ -914,6 +914,13 @@
   .pdf-anno-pop button:hover { border-color:var(--accent); }
   .pdf-anno-pop button.danger:hover { border-color:#ff7b72; color:#ff9c94; }
   .pdf-anno-pop textarea { width:100%; box-sizing:border-box; min-height:54px; resize:vertical; padding:4px 6px; border:1px solid #3d4654; border-radius:5px; background:#171c24; color:#e2eaf5; font-size:11px; }
+  /* PDF.js 原生批注默认使用浅黄底；显式覆盖文字颜色，避免继承深色工作台的浅色文字。 */
+  .reading-pdf-host .annotationLayer .popup { background:#fff3a3 !important; color:#171717 !important; outline-color:#e5b900 !important; box-shadow:0 8px 24px rgba(0,0,0,.32) !important; }
+  .reading-pdf-host .annotationLayer .popup > .header,
+  .reading-pdf-host .annotationLayer .popup > .header h1 { color:#111827 !important; font-weight:750 !important; }
+  .reading-pdf-host .annotationLayer .popup > .header .popupDate { color:#4b5563 !important; }
+  .reading-pdf-host .annotationLayer .popupContent,
+  .reading-pdf-host .annotationLayer .popupContent * { color:#1f2937 !important; }
   .reading-pdf-fallback { width:100%; height:100%; border:0; background:#525659; }
   .reading-paper { min-height:100%; box-sizing:border-box; padding:24px clamp(18px,5%,54px); background:var(--theme-code,var(--panel2)); color:var(--text); font:14px/1.82 Georgia,"Noto Serif SC",serif; }
   .reading-paper h3 { margin:0 0 16px; color:var(--accent); font:600 13px var(--ui); }
@@ -13488,7 +13495,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       for (const r of (a.rects || [])) {
         const d = document.createElement('div');
         d.className = 'pdf-anno-hl';
-        d.style.cssText = 'left:' + (r.x * sf) + 'px;top:' + (r.y * sf) + 'px;width:' + Math.max(2, r.width * sf) + 'px;height:' + Math.max(2, r.height * sf) + 'px;background:' + rgba(a.color, a.type === 'mark' ? 0.5 : 0.3) + ';' + (a.type === 'mark' ? 'outline:1px solid ' + rgba(a.color, 0.8) + ';' : '');
+        d.style.cssText = 'left:' + (r.x * sf) + 'px;top:' + (r.y * sf) + 'px;width:' + Math.max(2, r.width * sf) + 'px;height:' + Math.max(2, r.height * sf) + 'px;background:' + rgba(a.color, a.type === 'mark' ? 0.62 : 0.42) + ';mix-blend-mode:multiply;' + (a.type === 'mark' ? 'outline:1px solid ' + rgba(a.color, 0.92) + ';' : '');
         d.dataset.id = a.id;
         d.title = (a.text || '').slice(0, 100);
         ov.appendChild(d);
@@ -14429,20 +14436,33 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       const bar = document.createElement('div'); bar.className = 'reading-onlyoffice-bar';
       const title = document.createElement('span'); title.className = 'title'; title.textContent = 'ONLYOFFICE PDF Editor';
       const status = document.createElement('span'); status.className = 'status'; status.textContent = '正在载入编辑器…';
-      const close = document.createElement('button'); close.textContent = '返回 PDF.js 阅读'; close.title = '关闭编辑器并返回阅读视图；更改会由 ONLYOFFICE 自动保存';
+      const close = document.createElement('button'); close.textContent = '保存并返回 PDF.js'; close.title = '强制保存 ONLYOFFICE 当前版本，确认回写后再返回 PDF.js';
       const editorHost = document.createElement('div'); editorHost.className = 'reading-onlyoffice-editor'; editorHost.id = 'reading-onlyoffice-' + Date.now();
       bar.append(title, status, close); overlay.append(bar, editorHost); viewer.host.appendChild(overlay);
       viewer._onlyOfficeOverlay = overlay;
-      const closeEditor = () => {
+      let closing = false;
+      const closeEditor = async () => {
+        if (closing) return;
+        closing = true; close.disabled = true; close.textContent = '正在同步…'; status.textContent = '正在强制保存并等待 PDF 回写…';
+        const synced = await api('/api/readings/onlyoffice/forcesave', { path:viewer.path, key:result.config.document.key });
+        if (!synced.ok || synced.pending) {
+          closing = false; close.disabled = false; close.textContent = '重试保存并返回';
+          status.textContent = synced.error || '保存回调尚未完成，请稍后重试';
+          readingStatus('ONLYOFFICE 与 PDF.js 同步失败：' + status.textContent, true);
+          return;
+        }
+        status.textContent = synced.changed ? '文件已回写，正在刷新 PDF.js…' : '没有待保存更改，正在返回…';
         if (viewer._onlyOfficeEditor && typeof viewer._onlyOfficeEditor.destroyEditor === 'function') { try { viewer._onlyOfficeEditor.destroyEditor(); } catch (_) {} }
         viewer._onlyOfficeEditor = null; viewer._onlyOfficeOverlay = null; overlay.remove();
-        readingStatus('已返回 PDF.js 阅读视图；ONLYOFFICE 更改会自动回写');
-        requestAnimationFrame(() => { if (viewer._alive && viewer.fitMode) fitPdfMode(viewer, viewer.fitMode); });
+        const slot = Number.isFinite(viewer.slot) ? viewer.slot : READING_ACTIVE_SLOT;
+        await renderReadingSlot(slot);
+        readingStatus(synced.changed ? 'ONLYOFFICE 更改已同步，PDF.js 已加载最新版本' : '已返回 PDF.js 阅读视图');
       };
       close.onclick = closeEditor; viewer._closeOnlyOffice = closeEditor;
       const config = { ...result.config, events:{
         onDocumentReady:() => { status.textContent = '完整 PDF 编辑 · 自动保存已开启'; readingStatus('ONLYOFFICE PDF Editor 已就绪'); },
-        onDocumentStateChange:(event) => { status.textContent = event && event.data ? '正在编辑 · 将自动保存' : '更改已同步'; },
+        onDocumentStateChange:(event) => { status.textContent = event && event.data ? '正在编辑 · 尚未回写 PDF.js' : '更改已收集 · 返回时将强制同步'; },
+        onRequestClose:() => closeEditor(),
         onError:(event) => { status.textContent = '编辑器错误 ' + String(event && event.data || ''); readingStatus(status.textContent, true); },
         onWarning:(event) => { status.textContent = '编辑器提示 ' + String(event && event.data || ''); },
       } };
@@ -14578,6 +14598,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
         if (this._onlyOfficeEditor && typeof this._onlyOfficeEditor.destroyEditor === 'function') { try { this._onlyOfficeEditor.destroyEditor(); } catch (_) {} }
         this._onlyOfficeEditor = null; this._onlyOfficeOverlay = null;
         if (this.pdfViewer) { try { this.pdfViewer.setDocument(null); } catch (_) {} this.pdfViewer = null; }
+        if (this.pdf && typeof this.pdf.destroy === 'function') { try { this.pdf.destroy(); } catch (_) {} this.pdf = null; }
         if (this._keyHandler) this.host.removeEventListener('keydown', this._keyHandler);
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this.host.classList.contains('pdf-reader-focus')) document.body.classList.remove('pdf-reader-focus');
@@ -14614,7 +14635,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     window.__readingPdfViewer = viewer;
     try {
       const pdfjs = await loadPdfJs();
-      const pdf = await pdfjs.getDocument('/api/readings/file?path=' + encodeURIComponent(physicalPath)).promise;
+      const pdf = await pdfjs.getDocument('/api/readings/file?path=' + encodeURIComponent(physicalPath) + '&revision=' + Date.now()).promise;
       viewer.pdf = pdf; viewer.numPages = pdf.numPages;
       const page1 = await pdf.getPage(1);
       const vp1 = page1.getViewport({ scale: 1 });

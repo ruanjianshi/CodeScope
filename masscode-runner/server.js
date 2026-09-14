@@ -2777,6 +2777,7 @@ function officeDir() { return path.join(vaultPath(), 'office'); }
 const OFFICE_EXTS = new Set(['.docx', '.xlsx', '.xls', '.csv', '.pptx']);
 const ONLYOFFICE_CONTAINER_HOST = String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER_HOST || 'host.docker.internal').trim();
 const ONLYOFFICE_ACCESS_SECRET = crypto.randomBytes(32);
+const ONLYOFFICE_READING_SESSIONS = new Map();
 function onlyOfficeToken(rel, purpose) {
   return crypto.createHmac('sha256', ONLYOFFICE_ACCESS_SECRET).update(String(purpose || '') + '\0' + String(rel || '')).digest('hex');
 }
@@ -2803,6 +2804,25 @@ function onlyOfficeBrowserUrl(req) {
 }
 async function onlyOfficeHealth() {
   return OFFICE_ENGINE.probeOnlyOffice();
+}
+async function onlyOfficeCommand(command) {
+  if (!ONLYOFFICE_CONNECTION.publicUrl) throw requestError('ONLYOFFICE Docs 尚未配置', 503);
+  const payload = { ...command };
+  const token = signOnlyOfficeConfig(command);
+  if (token) payload.token = token;
+  const base = ONLYOFFICE_CONNECTION.publicUrl.replace(/\/+$/, '');
+  const paths = ['/command?shardkey=' + encodeURIComponent(command.key || ''), '/coauthoring/CommandService.ashx?shardkey=' + encodeURIComponent(command.key || '')];
+  let lastError;
+  for (const suffix of paths) {
+    try {
+      const response = await fetch(base + suffix, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(payload), signal:AbortSignal.timeout(20000) });
+      if (response.status === 404 && suffix.startsWith('/command')) continue;
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const result = await response.json();
+      return result;
+    } catch (error) { lastError = error; }
+  }
+  throw requestError('ONLYOFFICE 命令服务不可用：' + String(lastError && lastError.message || lastError || '未知错误'), 502);
 }
 function onlyOfficeDocumentType(kind) {
   return kind === 'word' ? 'word' : kind === 'sheet' ? 'cell' : kind === 'slides' ? 'slide' : '';
@@ -2864,6 +2884,11 @@ function onlyOfficeReadingConfig(rel, file) {
   };
   const token = signOnlyOfficeConfig(config);
   if (token) config.token = token;
+  ONLYOFFICE_READING_SESSIONS.set(rel, { key, openedAt:Date.now(), savedAt:0 });
+  if (ONLYOFFICE_READING_SESSIONS.size > 100) {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    for (const [sessionPath, session] of ONLYOFFICE_READING_SESSIONS) if (session.openedAt < cutoff) ONLYOFFICE_READING_SESSIONS.delete(sessionPath);
+  }
   return config;
 }
 function backupOfficeFile(file, rel) {
@@ -3508,11 +3533,35 @@ const server = http.createServer(async (req, res) => {
       if (!rel || !onlyOfficeTokenValid(rel, 'reading-callback', u.searchParams.get('token'))) return send(res, 403, { error:1 });
       const body = await readBody(req, 4 * 1024 * 1024), status = Number(body && body.status);
       if ((status === 2 || status === 6) && body.url) {
-        try { await saveOnlyOfficeResult(rel, body.url, { root:readingsDir(), pdf:true }); }
+        try {
+          const saved = await saveOnlyOfficeResult(rel, body.url, { root:readingsDir(), pdf:true });
+          const session = ONLYOFFICE_READING_SESSIONS.get(rel);
+          if (session) { session.savedAt = Date.now(); session.size = saved.size; session.mtimeMs = saved.mtimeMs; }
+        }
         catch (error) { console.error('ONLYOFFICE PDF 保存失败:', rel, error); return send(res, 500, { error:1 }); }
       }
       if (status === 3 || status === 7) console.error('ONLYOFFICE PDF 编辑服务报告保存错误:', rel, body && body.error);
       return send(res, 200, { error:0 });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/readings/onlyoffice/forcesave') {
+      const body = await readBody(req, 1024 * 1024), rel = readingPath(body && body.path), key = String(body && body.key || '');
+      if (!rel) return send(res, 400, { ok:false, error:'PDF 路径不合法' });
+      const session = ONLYOFFICE_READING_SESSIONS.get(rel);
+      if (!session || !key || session.key !== key) return send(res, 409, { ok:false, error:'ONLYOFFICE PDF 编辑会话已失效，请重新打开编辑器' });
+      const file = path.join(readingsDir(), rel);
+      let before; try { before = fs.statSync(file); } catch (_) { return send(res, 404, { ok:false, error:'PDF 不存在' }); }
+      let command;
+      try { command = await onlyOfficeCommand({ c:'forcesave', key, userdata:'codescope-pdf-sync-' + Date.now() }); }
+      catch (error) { return send(res, error.statusCode || 502, { ok:false, error:String(error.message || error) }); }
+      if (![0, 4].includes(Number(command && command.error))) return send(res, 502, { ok:false, error:'ONLYOFFICE 强制保存失败（错误码 ' + String(command && command.error) + '）' });
+      if (Number(command.error) === 4) return send(res, 200, { ok:true, changed:false, synced:true, version:before.size + '-' + before.mtimeMs });
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        let current; try { current = fs.statSync(file); } catch (_) { continue; }
+        if (current.size !== before.size || current.mtimeMs !== before.mtimeMs) return send(res, 200, { ok:true, changed:true, synced:true, version:current.size + '-' + current.mtimeMs });
+      }
+      return send(res, 202, { ok:true, pending:true, synced:false, error:'ONLYOFFICE 已接收保存命令，但回写超过 15 秒；编辑器已保留，请稍后重试' });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/file') {
       const rel = readingPath(u.searchParams.get('path'));
