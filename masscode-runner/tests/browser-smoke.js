@@ -198,9 +198,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.3.2 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.3.3 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.3.2'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.3 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.3.3'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.3 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -213,7 +213,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.3.2'))throw new Error('环境元信息未显示 v2.3.2');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.3.3'))throw new Error('环境元信息未显示 v2.3.3');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -670,7 +670,10 @@ print(r.run())
   if(initialPdf.pages!==40||initialPdf.canvases>=initialPdf.pages||initialPdf.badge!=='PDF.js Viewer'||!initialPdf.edit.includes('ONLYOFFICE'))throw new Error('PDF.js 官方 Viewer 或虚拟渲染异常：'+JSON.stringify(initialPdf));
   const zoomBefore=Number((await readingPage.locator('.pdf-zoom-pct').innerText()).replace('%',''));await readingPage.locator('.pdf-toolbar button[title="放大"]').click();await readingPage.waitForFunction(before=>Number(document.querySelector('.pdf-zoom-pct').textContent.replace('%',''))>before,zoomBefore);
   await readingPage.locator('.pdf-layout-select').selectOption('single');await readingPage.waitForFunction(()=>document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length===1);
-  await readingPage.locator('.pdf-layout-select').selectOption('spread');await readingPage.waitForFunction(()=>document.querySelectorAll('.reading-pdf-host .pdfViewer .spread').length===1&&document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length<=2);
+  await readingPage.locator('.pdf-layout-select').selectOption('spread');await readingPage.waitForFunction(()=>document.querySelectorAll('.reading-pdf-host .pdfViewer .spread').length>1&&document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length===40);
+  const spreadInitial=await readingPage.evaluate(()=>({spreads:document.querySelectorAll('.reading-pdf-host .pdfViewer .spread').length,pages:document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length,canvases:document.querySelectorAll('.reading-pdf-host .pdfViewer .page canvas').length,scrollHeight:document.querySelector('.pdf-scroll').scrollHeight,clientHeight:document.querySelector('.pdf-scroll').clientHeight}));
+  if(spreadInitial.spreads<20||spreadInitial.pages!==40||spreadInitial.canvases>=spreadInitial.pages||spreadInitial.scrollHeight<=spreadInitial.clientHeight)throw new Error('PDF 双页未形成可滚动的连续懒加载布局：'+JSON.stringify(spreadInitial));
+  await readingPage.locator('.pdf-scroll').evaluate(element=>{element.scrollTop=element.scrollHeight;});await readingPage.waitForFunction(()=>window.__readingPdfViewer.currentPage>2&&Number(document.querySelector('.reading-col .reading-page-input').value)>2,null,{timeout:8000});
   await readingPage.locator('.pdf-toolbar button[title="页面缩略图导航"]').click();await readingPage.locator('.pdf-thumb-panel').waitFor({state:'visible'});await readingPage.waitForTimeout(300);
   const thumbs=await readingPage.evaluate(()=>({items:document.querySelectorAll('.pdf-thumb-item').length,canvases:document.querySelectorAll('.pdf-thumb-item canvas').length,pending:document.querySelectorAll('.pdf-thumb-item .loading').length}));
   if(thumbs.items!==40||thumbs.canvases>=thumbs.items||thumbs.pending<1)throw new Error('PDF 缩略图未按可见区域懒加载：'+JSON.stringify(thumbs));

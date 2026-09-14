@@ -14153,10 +14153,11 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     mode = ['continuous','single','spread','spread-cover'].includes(mode) ? mode : 'continuous';
     if (mode === 'continuous') { viewer.pdfViewer.spreadMode = lib.SpreadMode.NONE; viewer.pdfViewer.scrollMode = lib.ScrollMode.VERTICAL; }
     else if (mode === 'single') { viewer.pdfViewer.spreadMode = lib.SpreadMode.NONE; viewer.pdfViewer.scrollMode = lib.ScrollMode.PAGE; }
-    else if (mode === 'spread') { viewer.pdfViewer.scrollMode = lib.ScrollMode.PAGE; viewer.pdfViewer.spreadMode = lib.SpreadMode.ODD; }
-    else { viewer.pdfViewer.scrollMode = lib.ScrollMode.PAGE; viewer.pdfViewer.spreadMode = lib.SpreadMode.EVEN; }
+    else if (mode === 'spread') { viewer.pdfViewer.scrollMode = lib.ScrollMode.VERTICAL; viewer.pdfViewer.spreadMode = lib.SpreadMode.ODD; }
+    else { viewer.pdfViewer.scrollMode = lib.ScrollMode.VERTICAL; viewer.pdfViewer.spreadMode = lib.SpreadMode.EVEN; }
     viewer.layoutMode = mode; if (viewer._layoutSelect) viewer._layoutSelect.value = mode;
     viewer.pdfViewer.currentPageNumber = current;
+    viewer.pdfViewer.update(); viewer.pdfViewer.forceRendering();
     if (persist !== false) savePdfViewState(viewer);
   }
   function setPdfHandMode(viewer, enabled) {
