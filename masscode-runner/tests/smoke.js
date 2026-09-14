@@ -354,6 +354,7 @@ void bubbleSort(Array& values);
   assert(blockEditorSource.includes('listener.markdownUpdated') && blockEditorSource.includes('crepe.getMarkdown()') && html.includes('scheduleSave()'), 'Markdown 区块编辑器缺少 Markdown 原生回写或自动保存');
   assert(blockEditorSource.includes('splitFrontmatter') && blockEditorSource.includes('REFERENCE_RE') && blockEditorSource.includes('onReference') && html.includes('openBlockReference'), 'Markdown 区块编辑器未保护 frontmatter、PDF/代码引用或定位交互');
   assert(blockEditorSource.includes('[CrepeFeature.TopBar]: true') && blockEditorSource.includes('无序列表') && blockEditorSource.includes('代码块') && blockEditorSource.includes('表格'), 'Markdown 区块编辑器缺少格式工具栏、中文斜杠菜单或高级区块');
+  assert(html.includes('reading-md-zoom') && html.includes('loadReadingMarkdownZoom') && html.includes("e.deltaY<0?5:-5") && html.includes("e.key==='0'"), 'Markdown 区块编辑器缺少可记忆缩放、触控板缩放或键盘缩放');
   assert(!html.includes("setupReadingLiveBlocks(live,workbench,slot)"), '阅读模块仍在启用旧的自制区块拖拽层');
   assert(html.includes('reading-md-properties') && html.includes('笔记属性') && html.includes("data-md-source") && html.includes('font-size:2.08rem') && html.includes('grid-template-columns:minmax(125px,160px)'), 'Markdown 渲染缺少 Obsidian 风格属性面板或响应式阅读排版层级');
   assert(html.includes('readingSourceSlashContext') && html.includes("snippet:'> [!note] 笔记\\n> '") && html.includes("e.key==='Tab'") && html.includes("e.key.toLowerCase()==='s'"), 'Markdown 源码编辑器缺少斜杠命令、Tab 缩进或快捷保存');
