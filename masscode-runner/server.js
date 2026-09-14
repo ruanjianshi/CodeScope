@@ -230,10 +230,10 @@ const TOOLS = [
   { key: 'latex',      probe: () => [latexCmd(), '--version'],  label: 'LaTeX 引擎',            for: 'LaTeX 实时 PDF 编译', group: '文档工具' },
   { key: 'biber',      probe: ['biber', '--version'],           label: 'Biber',                for: 'LaTeX 参考文献', group: '文档工具' },
   { key: 'ctex',       probe: ['kpsewhich', 'ctexart.cls'],     label: 'CTeX 中文宏包',          for: 'LaTeX 中文文档', group: '文档工具' },
-  { key: 'clangd',     probe: ['clangd', '--version'],          label: 'clangd',               for: 'C/C++ 精确跳转、悬停与诊断（可选）', group: '语言服务器', installable: false },
-  { key: 'pyrightlsp', probe: ['pyright-langserver', '--version'], label: 'Pyright LSP',         for: 'Python 精确跳转、悬停与诊断（可选）', group: '语言服务器', installable: false },
-  { key: 'tslsp',      probe: ['typescript-language-server', '--version'], label: 'TypeScript LSP', for: 'JS/TS 精确跳转、悬停与诊断（可选）', group: '语言服务器', installable: false },
-  { key: 'gopls',      probe: ['gopls', 'version'],             label: 'gopls',                for: 'Go 精确跳转、悬停与诊断（可选）', group: '语言服务器', installable: false },
+  { key: 'clangd',     probe: ['clangd', '--version'],          label: 'clangd',               for: 'C/C++ 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
+  { key: 'pyrightlsp', probe: ['pyright-langserver', '--version'], label: 'Pyright LSP',         for: 'Python 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
+  { key: 'tslsp',      probe: ['typescript-language-server', '--version'], label: 'TypeScript LSP', for: 'JS/TS 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
+  { key: 'gopls',      probe: ['gopls', 'version'],             label: 'gopls',                for: 'Go 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
   { key: 'ssh',        probe: ['ssh', '-V'],                    label: 'OpenSSH 客户端',          for: 'SSH 远程开发', group: '远程开发' },
   { key: 'drawio',     probeUrl: 'https://embed.diagrams.net/?embed=1&proto=json', label: 'Draw.io 在线编辑器', for: 'Draw.io 编辑与 AI XML 绘图', group: '绘图工具', installable: false },
 ];
@@ -390,12 +390,12 @@ async function detectEnv({ skipNet } = {}) {
       if (skipNet) {
         // 本地模式下不访问网络：在线编辑器状态按需在刷新时探测
         return { key:t.key, label:t.label, for:t.for, group:t.group, available:true, installed:true,
-          required:project.keys.has(t.key), version:'在线编辑（按需检测）', minVersion:'',
+          required:false, relevant:project.keys.has(t.key), version:'在线编辑（按需检测）', minVersion:'',
           issue:'', path:t.probeUrl, elapsedMs:0, installable:false };
       }
       if (NET_PROBE_FAIL[t.key] && Date.now() - NET_PROBE_FAIL[t.key] < 120000) {
         return { key:t.key, label:t.label, for:t.for, group:t.group, available:false, installed:false,
-          required:project.keys.has(t.key), version:'', minVersion:'',
+          required:false, relevant:project.keys.has(t.key), version:'', minVersion:'',
           issue:'无法连接 embed.diagrams.net（' + (t.probeUrl||'').replace(/^https?:\/\//, '') + '，2 分钟内不再重试）',
           path:t.probeUrl, elapsedMs:0, installable:false };
       }
@@ -405,7 +405,7 @@ async function detectEnv({ skipNet } = {}) {
         const available = response.ok;
         return {
           key:t.key, label:t.label, for:t.for, group:t.group, available, installed:available,
-          required:project.keys.has(t.key), version:available ? '在线 · HTTP ' + response.status : 'HTTP ' + response.status,
+          required:false, relevant:project.keys.has(t.key), version:available ? '在线 · HTTP ' + response.status : 'HTTP ' + response.status,
           minVersion:'', issue:available ? '' : '在线服务返回 HTTP ' + response.status,
           path:t.probeUrl, elapsedMs:Date.now()-started, installable:false,
         };
@@ -413,7 +413,7 @@ async function detectEnv({ skipNet } = {}) {
         NET_PROBE_FAIL[t.key] = Date.now();
         return {
           key:t.key, label:t.label, for:t.for, group:t.group, available:false, installed:false,
-          required:project.keys.has(t.key), version:'', minVersion:'',
+          required:false, relevant:project.keys.has(t.key), version:'', minVersion:'',
           issue:'无法连接 embed.diagrams.net：' + String((error && error.message) || error).slice(0, 100),
           path:t.probeUrl, elapsedMs:Date.now()-started, installable:false,
         };
@@ -430,7 +430,10 @@ async function detectEnv({ skipNet } = {}) {
         key: t.key, label: t.label, for: t.for, group: t.group,
         available: !err && versionOk,
         installed: !err,
-        required: project.keys.has(t.key),
+        // 桌面安装包自身的运行条件由 runtimeReadiness 检查。解释器、编译器、
+        // 格式化器和 LSP 都是用户按项目启用的增强能力，不能被表述成应用缺失环境。
+        required: false,
+        relevant: project.keys.has(t.key),
         version: rawVersion,
         minVersion: t.minMajor ? String(t.minMajor) + '+' : '',
         issue: !err && !versionOk ? '版本过低，需要 ' + t.minMajor + '+' : (!err ? '' : '未安装或不在 PATH'),
@@ -499,7 +502,7 @@ function installHint(key) {
     drawio: '无需安装；请检查网络、代理或防火墙能否访问 embed.diagrams.net',
   };
   if (key === 'biber' || key === 'ctex') return H.latex;
-  return H[key] || '请安装对应工具';
+  return H[key] || '';
 }
 
 function missingReason(key, detected) {
@@ -3376,26 +3379,29 @@ const server = http.createServer(async (req, res) => {
       const env = detected.tools;
       const runtime = runtimeReadiness();
       const onlyOffice = force ? await onlyOfficeHealth() : null;
-      runtime.onlyoffice = {
+      env.onlyoffice = {
         key:'onlyoffice', label:'ONLYOFFICE Docs', for:'DOCX、XLSX 与 PPTX 完整编辑', group:'Office 集成',
         available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:false,
         version:onlyOffice && onlyOffice.ok ? '在线' : '', path:ONLYOFFICE_PUBLIC_URL,
-        issue:onlyOffice ? (onlyOffice.ok ? '' : '服务未启动，Office 将使用本地兼容模式') : '点击“重新检测”验证服务',
-        hint:'可选：启动 ONLYOFFICE Document Server，并通过 CODESCOPE_ONLYOFFICE_URL 指定地址', installable:false,
+        issue:onlyOffice ? (onlyOffice.ok ? '' : '未连接独立服务；Office 本地兼容模式仍可使用') : '尚未检测独立服务；Office 本地兼容模式仍可使用',
+        hint:'需要多人协作或高保真编辑时，可连接 ONLYOFFICE Document Server；基础预览与本地编辑无需安装', installable:false, relevant:false,
       };
       const all = [...Object.values(runtime), ...Object.values(env)];
       const required = all.filter((e) => e.required);
-      const missing = all.filter((e) => !e.available).length;
+      const unavailable = all.filter((e) => !e.available).length;
       const requiredMissing = required.filter((e) => !e.available).length;
+      const optionalUnavailable = unavailable - requiredMissing;
       const total = all.length;
-      for (const e of all) e.hint = installHint(e.key); // 按当前平台给安装提示
+      // 保留条目自己提供的说明（尤其是 ONLYOFFICE 的本地兼容模式），只为没有说明的
+      // 外部工具补充平台提示，避免被通用“请安装”文案覆盖。
+      for (const e of all) e.hint = e.hint || installHint(e.key);
       const system = platformInfo();
       send(res, 200, {
         env, runtime, version:APP_VERSION, mode:APP_MODE, node:process.version,
         summary: {
-          total, missing, ready: total - missing, ok: requiredMissing === 0,
+          total, unavailable, missing: requiredMissing, ready: total - unavailable, ok: requiredMissing === 0,
           required: required.length, requiredMissing, requiredReady: required.length - requiredMissing,
-          optionalMissing: missing - requiredMissing,
+          optionalMissing: optionalUnavailable, optionalUnavailable,
         },
         project: { languages: detected.project.languages, tools: [...detected.project.keys] },
         deployment: deploymentInfo(env, detected.project.keys),
@@ -4673,15 +4679,13 @@ server.listen(PORT, HOST, () => {
   console.log('正在检测本机环境…');
   getEnv(false).then(({ tools: env, project }) => {
     const all = Object.values(env);
-    const missing = all.filter((e) => e.required && !e.available);
-    const needed = all.filter((e) => e.required);
-    console.log('环境检测完成：当前项目需要 ' + (needed.length - missing.length) + '/' + needed.length + ' 项就绪');
+    const relevant = all.filter((e) => e.relevant);
+    const inactive = relevant.filter((e) => !e.available);
+    console.log('核心运行环境已就绪；项目扩展 ' + (relevant.length - inactive.length) + '/' + relevant.length + ' 项可用');
     if (project.languages.length) console.log('检测到语言：' + project.languages.join(', '));
-    if (missing.length) {
-      console.log('缺失项：');
-      for (const m of missing) console.log('  - ' + m.label + '（' + m.for + '）→ ' + installHint(m.key));
-    } else {
-      console.log('全部就绪 ✅');
+    if (inactive.length) {
+      console.log('按需扩展未启用（不影响 CodeScope 基础功能）：');
+      for (const item of inactive) console.log('  - ' + item.label + '（' + item.for + '）' + (installHint(item.key) ? ' → ' + installHint(item.key) : ''));
     }
   });
   console.log('按 Ctrl+C 停止');
