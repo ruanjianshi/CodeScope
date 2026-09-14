@@ -1,5 +1,13 @@
 # 更新记录
 
+## v2.2.0 — 2026-09-14
+
+- 桌面安装包内置 Prettier 3、Shell 格式化插件、Ruff WASM、Pyright、TypeScript 5 与 TypeScript Language Server，常用格式化和 Python/JS/TS LSP 不再依赖 npm、pip、系统 Python 或首次联网下载。
+- 发布流水线使用 Go 官方工具链为 macOS Apple Silicon/Intel、Windows x64 和 Linux x64 构建 gopls，并作为独立可执行资源随安装包分发。
+- 语言服务器启动层支持 Electron 内置 Node 运行时和 ASAR 路径，TypeScript LSP 显式连接内置 tsserver；补充 Python、TypeScript 与 Go 的真实 LSP 集成验证。
+- 修复从 Finder/开始菜单启动桌面应用时 PATH 过窄的问题，补齐 Homebrew、用户 Python、Go、Cargo 与 npm 常见工具目录，同时保持 Web 模式兼容。
+- 环境面板区分“应用内置工具”和“外部服务连接”；AI 模型与 ONLYOFFICE Document Server 不再被统计为本机安装环境缺失，并继续清楚显示连接说明与离线降级能力。
+
 ## v2.1.4 — 2026-09-14
 
 - 环境检测改为“核心运行环境 / 按需扩展”两级语义；只有影响 CodeScope 启动的条件才显示运行问题，编译器、格式化器和语言服务器不再显示为软件缺失。

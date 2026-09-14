@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.1.4
+# 码境 CodeScope v2.2.0
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前正式版本：**v2.1.4**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前正式版本：**v2.2.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
@@ -19,7 +19,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 
 桌面主进程位于 `desktop/main.js`，通过隔离的 preload 桥接原生能力；CodeScope 服务运行在 Electron Utility Process 中。渲染器不开放 Node.js 权限，Web 端也不依赖 Electron API。
 
-## v2.1 概览
+## v2.2 概览
 
 - 统一项目、Office、阅读、绘图与 Git 的侧栏标题、计数、操作按钮、树行、悬停和选中反馈；五套工作台主题共用同一套语义化颜色与间距。
 - 代码工作区使用 Monaco，提供多栏、LSP、定义/引用/调用关系、运行、调试、测试、Git Diff 与可恢复本地时间线。
@@ -28,6 +28,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
 - Office 工作区优先连接 ONLYOFFICE Docs 完整编辑 DOCX/XLSX/PPTX；服务离线时自动切换本地 Word/表格兼容编辑和演示文稿预览。
 - 环境检测扩展为运行基础、浏览器能力和项目工具链三层；三端启动脚本共用 `preflight.js` 检查 Node、端口、Vault 权限和依赖完整性。
+- 桌面安装包新增完整离线编辑辅助工具链：Prettier + Shell 插件、Ruff Python 格式化器、Pyright、TypeScript/TypeScript Language Server 和按平台编译的 gopls；Finder 启动时也会识别 Homebrew、用户 Python 与 Go 的常见工具目录。
 
 远程仓库：[github.com/ruanjianshi/massCode](https://github.com/ruanjianshi/massCode)
 
@@ -70,7 +71,7 @@ npm run make:desktop
 
 构建结果位于 `masscode-runner/out/make/`。GitHub 标签发布时，`.github/workflows/desktop-release.yml` 会在 macOS、Windows 和 Linux 分别构建并把安装包上传到对应 Release。macOS 自动更新正式启用前需要配置开发者签名与公证。
 
-正式安装包内置 Electron、Node.js 与 CodeScope 的 npm 运行依赖，用户电脑无需安装 Node.js、npm 或手动执行依赖安装。编译器、LaTeX、语言服务器与 ONLYOFFICE Docs 是按需启用的外部工具链，仅影响对应的运行或高级编辑能力。
+正式安装包内置 Electron、Node.js、Prettier、Ruff、Pyright、TypeScript Language Server、TypeScript 和 gopls，用户电脑无需安装 Node.js、npm、pip、Black 或 Go 工具即可使用这些编辑能力。编译器、语言解释器与 LaTeX 仍按项目语言调用系统工具。AI 绘图和 ONLYOFFICE Document Server 是需要用户凭据或独立服务器的外部连接，不计为安装环境缺失；未连接时不会影响本地功能。
 
 ### Web 端
 
@@ -121,7 +122,7 @@ node server.js
   - **上下文窗口**：点击代码中任意标识符 → 自动解析到最佳定义，右侧显示精确函数体、定义来源与**整个 vault 的代码引用**，点击可跨片段/文件跳转；注释、字符串和 Markdown 示例不会混入引用；
   - **调用关系**：基于真实函数定义统计整个 vault 的调用者(callers) / 被调(callees)，不会再把头文件声明后的代码误当成函数体；
   - **全局检索**：在顶部“✨ AI 搜索”弹窗切换到“🔎 项目符号”，或按 Ctrl/⌘+Shift+F 直接打开；可按函数/类型/宏/变量过滤，支持前缀、连续子串与字符序列模糊匹配，↑/↓ 选择、Enter 打开 |
-| LSP 代码理解 | 自动检测并连接 clangd、Pyright、TypeScript Language Server 或 gopls，为 C/C++、Python、JavaScript/TypeScript 和 Go 提供更准确的悬停类型、跨文件定义和实时诊断；顶部代码面包屑持续显示当前文件、类型、函数与签名，右侧状态按钮可查看并跳转错误/警告。未安装语言服务器时继续使用内置符号索引，不影响基本阅读能力 |
+| LSP 代码理解 | 内置 Pyright、TypeScript Language Server/TypeScript 和 gopls，为 Python、JavaScript/TypeScript 和 Go 提供悬停类型、跨文件定义与实时诊断；C/C++ 项目自动连接系统 clangd，不可用时继续使用内置符号索引。顶部代码面包屑持续显示当前文件、类型、函数与签名，右侧状态按钮可查看并跳转错误/警告 |
 | 🌳 关系 | Source Insight 式关系图：默认用三栏箭头图直观呈现“调用者 → 当前函数 → 被调用”或“包含当前文件 → 当前文件 → 当前文件包含”，蓝线表示流入、绿线表示流出，函数指针目标标为“动态候选”；可切换传统树形、向下/向上/双向。文件关系可解析跨片段本地头文件与系统头文件；图形节点点击即可跳转并成为新的关系中心，树形节点支持逐层展开 |
 | 窗口与标签 | 大纲、符号、关系、AI 都可作为独立窗口：从横向标签栏向下拖出后，像左侧面板一样纵向排列并可上下拉伸；把窗口标题拖回标签栏后，重新变成点一个显示一个的标签 |
 | ▶ / ✓ / ✨ / ⌨（位置） | 运行/检查/格式化/输入按钮**固定在大纲面板顶部**，与大纲排在一起；点「🧭 大纲」收起大纲列表后，仍保留一列操作按钮，随时可用 |
@@ -130,7 +131,7 @@ node server.js
 | ⎇ Git Diff | 左侧 Git 面板按目录列出工作区改动；点击任意文件打开提交前差异检查，逐行区分新增、删除与上下文，并显示增删统计；支持未跟踪文本和二进制文件提示 |
 | 🕘 本地时间线 | 每个片段自动保存时记录覆盖前版本；两分钟内的连续输入归为一次编辑会话，只保留会话开始前的可恢复版本，避免一行修改产生多条记录，最多保留 60 个；可预览差异并一键恢复，恢复前内容也会自动创建保护检查点；历史存放于系统 CodeScope 应用数据目录，不写入 Git 仓库 |
 | ◫ 工程 | 自动发现 CMake、Make、Ninja、npm、Python 构建入口并支持自定义命令；读取 `compile_commands.json` 的编译单元、宏和头文件路径（宏同时参与 C/C++ 补全）；健康报告统计规模、语言、TODO、可能未实现项和头文件循环依赖，并排除论文 PDF、绘图、缓存和内置第三方库，避免把资料库误报成代码问题 |
-| 🔍 环境 | 明确分为“核心运行环境 / 按需扩展”：桌面安装包内置 CodeScope、编辑器、PDF/XMind 与本地 Office 所需依赖，开箱即用；编译器、解释器、格式化器、LSP、AI 服务和 ONLYOFFICE Document Server 仅在需要对应高级能力时启用，不再误报为软件缺失环境。面板仍可按 vault 语言给出项目相关提示和可选的一键配置 |
+| 🔍 环境 | 明确分为“运行基础 / 应用内置 / 项目工具 / 外部连接”：桌面安装包内置 CodeScope、编辑器、PDF/XMind、本地 Office、Prettier、Ruff、Pyright、TypeScript LSP 与 gopls；编译器、解释器和 LaTeX 按 vault 语言提示；AI 与 ONLYOFFICE 服务只显示连接状态，不再误报为安装包缺失 |
 | ◐ 主题 | 提供深海蓝、石墨灰、午夜紫、森林绿和日光白五套完整工作台主题；代码高亮、终端、侧栏、关系图、弹窗与远程面板同步切换，并在本机自动记忆选择 |
 | 🖥 远程 | 集成 SSH、SFTP 文件浏览与 VNC：SSH 复用底部真实 PTY 终端；远程窗口左边缘和上边缘可分别拖动调整宽度、高度并自动记忆；远程文件页可浏览目录、编辑 2 MB 内的 UTF-8 文本，通过流式接口无限制上传/下载文件，还可保留层级上传文件夹、把当前远程目录打包为 `.tar.gz` 下载；VNC 通过 noVNC 显示远程桌面并支持缩放、分辨率适配、只读模式、连续文本/中文输入和实时网络延迟 |
 | 顶部电脑状态 | 页面可见时每 3 秒刷新 CPU、内存、硬盘使用率，以进度条和黄/红状态提示资源压力；切到后台后自动暂停轮询。点击任一指标可查看处理器、系统负载、可用内存、磁盘余量、系统与运行时间。macOS 使用可回收内存、Linux 使用 `MemAvailable`，避免把文件缓存误判为内存占满 |
@@ -195,7 +196,7 @@ massCode 一个片段里可以有多个 fragment。**把 fragment 标签写成�
 |------|:--:|:--:|:--:|
 | JavaScript | node | node --check | Prettier |
 | TypeScript | node（原生剥离类型） | node --check | Prettier |
-| Python | python3 | py_compile | black |
+| Python | python3 | py_compile | 内置 Ruff（Black 兼容） |
 | Bash | bash | bash -n | Prettier |
 | C | gcc 编译+运行 | gcc -fsyntax-only | clang-format |
 | C/C++ | g++ 编译+运行 | g++ -fsyntax-only | clang-format |
@@ -208,8 +209,8 @@ massCode 一个片段里可以有多个 fragment。**把 fragment 标签写成�
 | LaTeX | 实时编译 PDF（XeLaTeX，回退 pdfLaTeX） | 编译即检查 | — |
 | 其他 | 提示不支持 | — | 提示不支持 |
 
-> 格式化工具：C/C++ → clang-format，Go → gofmt，Python → black，其余 → Prettier。
-> Prettier 首次调用需联网（`npx -y prettier@3` 按需下载）；clang-format / gofmt / black 完全离线。
+> 格式化工具：C/C++ → clang-format，Go → gofmt，Python → 内置 Ruff，其余 → 内置 Prettier。
+> Ruff、Prettier 和 Shell 格式化插件随应用离线分发，不会在第一次使用时联网下载。clang-format / gofmt 仅在对应原生工具链项目中使用。
 
 ## 配置
 

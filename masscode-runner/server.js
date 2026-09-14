@@ -26,6 +26,9 @@ const XLSX = require('xlsx');
 const mammoth = require('mammoth');
 const htmlToDocx = require('@turbodocx/html-to-docx');
 const { createLspService } = require('./lib/lsp-service');
+const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
+const Ruff = require('@astral-sh/ruff-wasm-nodejs');
+applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
 const APP_MODE = process.env.CODESCOPE_APP_MODE === 'desktop' ? 'desktop' : 'web';
 
@@ -225,15 +228,15 @@ const TOOLS = [
   { key: 'go',         probe: ['go', 'version'],                label: 'Go',                   for: 'Go 运行/检查', group: '运行环境' },
   { key: 'clangformat', probe: ['clang-format', '--version'],   label: 'clang-format',         for: 'C/C++ 格式化', group: '格式化工具' },
   { key: 'gofmt',      probe: ['gofmt', '-h'],                  label: 'gofmt',                for: 'Go 格式化', group: '格式化工具' },
-  { key: 'black',      probe: () => [pythonCmd(), '-m', 'black', '--version'], label: 'black', for: 'Python 格式化', group: '格式化工具' },
-  { key: 'npx',        probe: ['npx', '--version'],             label: 'npx（Prettier）',       for: '前端/文档格式化', group: '格式化工具' },
+  { key: 'black',      builtin: { version: 'Ruff ' + packageVersion('@astral-sh/ruff-wasm-nodejs'), path: '应用内置 · WASM' }, label: 'Python 格式化（Ruff）', for: 'Python 格式化（Black 兼容）', group: '格式化工具', installable: false },
+  { key: 'npx',        builtin: { version: 'Prettier ' + packageVersion('prettier'), path: require.resolve('prettier/bin/prettier.cjs') }, label: 'Prettier', for: '前端/文档/Shell 格式化', group: '格式化工具', installable: false },
   { key: 'latex',      probe: () => [latexCmd(), '--version'],  label: 'LaTeX 引擎',            for: 'LaTeX 实时 PDF 编译', group: '文档工具' },
   { key: 'biber',      probe: ['biber', '--version'],           label: 'Biber',                for: 'LaTeX 参考文献', group: '文档工具' },
   { key: 'ctex',       probe: ['kpsewhich', 'ctexart.cls'],     label: 'CTeX 中文宏包',          for: 'LaTeX 中文文档', group: '文档工具' },
   { key: 'clangd',     probe: ['clangd', '--version'],          label: 'clangd',               for: 'C/C++ 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
-  { key: 'pyrightlsp', probe: ['pyright-langserver', '--version'], label: 'Pyright LSP',         for: 'Python 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
-  { key: 'tslsp',      probe: ['typescript-language-server', '--version'], label: 'TypeScript LSP', for: 'JS/TS 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
-  { key: 'gopls',      probe: ['gopls', 'version'],             label: 'gopls',                for: 'Go 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
+  { key: 'pyrightlsp', builtin: { version: 'Pyright ' + packageVersion('pyright'), path: require.resolve('pyright/langserver.index.js') }, label: 'Pyright LSP', for: 'Python 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
+  { key: 'tslsp',      builtin: { version: 'TypeScript LSP ' + packageVersion('typescript-language-server'), path: require.resolve('typescript-language-server/lib/cli.mjs') }, label: 'TypeScript LSP', for: 'JS/TS 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
+  { key: 'gopls',      probe: () => { const runtime = bundledGopls(['version']); return runtime ? [runtime.command, ...runtime.args] : ['gopls', 'version']; }, label: 'gopls', for: 'Go 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
   { key: 'ssh',        probe: ['ssh', '-V'],                    label: 'OpenSSH 客户端',          for: 'SSH 远程开发', group: '远程开发' },
   { key: 'drawio',     probeUrl: 'https://embed.diagrams.net/?embed=1&proto=json', label: 'Draw.io 在线编辑器', for: 'Draw.io 编辑与 AI XML 绘图', group: '绘图工具', installable: false },
 ];
@@ -386,6 +389,14 @@ async function detectEnv({ skipNet } = {}) {
   const project = projectToolKeys();
   const results = await Promise.all(TOOLS.map(async (t) => {
     const started = Date.now();
+    if (t.builtin) {
+      return {
+        key:t.key, label:t.label, for:t.for, group:t.group, available:true, installed:true,
+        required:false, relevant:project.keys.has(t.key), version:t.builtin.version, minVersion:'',
+        issue:'', path:t.builtin.path, elapsedMs:Date.now()-started, installable:false, bundled:true,
+        hint:'已随 CodeScope 安装，无需另行配置',
+      };
+    }
     if (t.probeUrl) {
       if (skipNet) {
         // 本地模式下不访问网络：在线编辑器状态按需在刷新时探测
@@ -439,6 +450,8 @@ async function detectEnv({ skipNet } = {}) {
         issue: !err && !versionOk ? '版本过低，需要 ' + t.minMajor + '+' : (!err ? '' : '未安装或不在 PATH'),
         path: !err ? executablePath(cmd[0]) : '',
         elapsedMs: Date.now() - started,
+        bundled: !err && path.isAbsolute(cmd[0]) && (cmd[0].includes(path.sep + '.bundled-tools' + path.sep) || (process.resourcesPath && cmd[0].startsWith(process.resourcesPath + path.sep))),
+        hint: !err && path.isAbsolute(cmd[0]) && (cmd[0].includes(path.sep + '.bundled-tools' + path.sep) || (process.resourcesPath && cmd[0].startsWith(process.resourcesPath + path.sep))) ? '已随 CodeScope 安装，无需另行配置' : '',
       });
     });
     });
@@ -1401,17 +1414,17 @@ function formatWithGofmt(code) {
 }
 
 function formatWithBlack(code) {
-  // black 就地改写文件；--line-length 100 减少意外换行
-  const { dir, file } = writeTemp('format.py', code);
-  return new Promise((resolve) => {
-    execFile(pythonCmd(), ['-m', 'black', '--quiet', '--line-length', '100', file], { timeout: 30000 }, (err, stdout, stderr) => {
-      let formatted;
-      if (!err) { try { formatted = fs.readFileSync(file, 'utf8'); } catch (_) { formatted = null; } }
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
-      if (err || formatted == null) resolve({ ok: false, reason: 'black 失败: ' + (stderr || err.message).slice(0, 500) });
-      else resolve({ ok: true, formatted });
-    });
-  });
+  // Ruff 的格式化器与 Black 兼容，并以 WASM 随 CodeScope 离线分发。
+  try {
+    const workspace = new Ruff.Workspace({
+      'line-length': 100,
+      'indent-width': 4,
+      format: { 'indent-style': 'space', 'quote-style': 'double' },
+    }, Ruff.PositionEncoding.UTF16);
+    return Promise.resolve({ ok: true, formatted: workspace.format(String(code || '')) });
+  } catch (error) {
+    return Promise.resolve({ ok: false, reason: 'Python 格式化失败: ' + String(error && error.message || error).slice(0, 500) });
+  }
 }
 
 function prettierArgs(parser, tmpFile) {
@@ -1428,12 +1441,22 @@ function prettierArgs(parser, tmpFile) {
 }
 
 function formatWithPrettier(parser, code) {
-  const ext = { babel: '.js', typescript: '.ts', json: '.json', json5: '.json5', html: '.html', css: '.css', scss: '.scss', less: '.less', yaml: '.yaml', markdown: '.md', bash: '.sh' }[parser] || '.txt';
+  const ext = { babel: '.js', typescript: '.ts', json: '.json', json5: '.json5', html: '.html', css: '.css', scss: '.scss', less: '.less', yaml: '.yaml', markdown: '.md', bash: '.sh', sh: '.sh' }[parser] || '.txt';
   const { dir, file } = writeTemp('format' + ext, code);
   return new Promise((resolve) => {
-    execFile('npx', ['-y', 'prettier@3', ...prettierArgs(parser, file)], { timeout: 60000 }, (err, stdout, stderr) => {
+    const runtime = nodeTool('prettier/bin/prettier.cjs', [
+      ...(parser === 'bash' || parser === 'sh' ? ['--plugin=prettier-plugin-sh'] : []),
+      ...prettierArgs(parser === 'bash' ? 'sh' : parser, file),
+    ]);
+    if (!runtime) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+      resolve({ ok: false, reason: '应用内置 Prettier 不完整，请重新安装 CodeScope' });
+      return;
+    }
+    execFile(runtime.command, runtime.args, { timeout: 60000, env:runtime.env, cwd:__dirname }, (err, stdout, stderr) => {
       if (err) {
-        resolve({ ok: false, reason: 'Prettier 执行失败（需要网络首次下载）: ' + (stderr || err.message).slice(0, 500) });
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+        resolve({ ok: false, reason: '应用内置 Prettier 执行失败: ' + (stderr || err.message).slice(0, 500) });
         return;
       }
       try { resolve({ ok: true, formatted: fs.readFileSync(file, 'utf8') }); }
@@ -3384,13 +3407,14 @@ const server = http.createServer(async (req, res) => {
         available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:false,
         version:onlyOffice && onlyOffice.ok ? '在线' : '', path:ONLYOFFICE_PUBLIC_URL,
         issue:onlyOffice ? (onlyOffice.ok ? '' : '未连接独立服务；Office 本地兼容模式仍可使用') : '尚未检测独立服务；Office 本地兼容模式仍可使用',
-        hint:'需要多人协作或高保真编辑时，可连接 ONLYOFFICE Document Server；基础预览与本地编辑无需安装', installable:false, relevant:false,
+        hint:'需要多人协作或高保真编辑时，可连接 ONLYOFFICE Document Server；基础预览与本地编辑无需安装', installable:false, relevant:false, external:true,
       };
       const all = [...Object.values(runtime), ...Object.values(env)];
       const required = all.filter((e) => e.required);
       const unavailable = all.filter((e) => !e.available).length;
       const requiredMissing = required.filter((e) => !e.available).length;
-      const optionalUnavailable = unavailable - requiredMissing;
+      const optionalUnavailable = all.filter((e) => !e.available && !e.required && !e.external).length;
+      const externalUnavailable = all.filter((e) => !e.available && e.external).length;
       const total = all.length;
       // 保留条目自己提供的说明（尤其是 ONLYOFFICE 的本地兼容模式），只为没有说明的
       // 外部工具补充平台提示，避免被通用“请安装”文案覆盖。
@@ -3401,7 +3425,7 @@ const server = http.createServer(async (req, res) => {
         summary: {
           total, unavailable, missing: requiredMissing, ready: total - unavailable, ok: requiredMissing === 0,
           required: required.length, requiredMissing, requiredReady: required.length - requiredMissing,
-          optionalMissing: optionalUnavailable, optionalUnavailable,
+          optionalMissing: optionalUnavailable, optionalUnavailable, externalUnavailable,
         },
         project: { languages: detected.project.languages, tools: [...detected.project.keys] },
         deployment: deploymentInfo(env, detected.project.keys),

@@ -4,24 +4,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execFileSync } = require('child_process');
+const { spawn } = require('child_process');
 const { pathToFileURL, fileURLToPath } = require('url');
+const { languageServer } = require('./tool-runtime');
 
-const SERVERS = {
-  c: { command: 'clangd', args: ['--background-index=false', '--clang-tidy=false', '--header-insertion=never', '--log=error'] },
-  c_cpp: { command: 'clangd', args: ['--background-index=false', '--clang-tidy=false', '--header-insertion=never', '--log=error'] },
-  python: { command: 'pyright-langserver', args: ['--stdio'] },
-  javascript: { command: 'typescript-language-server', args: ['--stdio'] },
-  typescript: { command: 'typescript-language-server', args: ['--stdio'] },
-  go: { command: 'gopls', args: ['serve'] },
-};
-
-function executablePath(command) {
-  try {
-    const finder = process.platform === 'win32' ? 'where' : 'which';
-    return execFileSync(finder, [command], { encoding: 'utf8', timeout: 2500 }).split(/\r?\n/)[0].trim();
-  } catch (_) { return ''; }
-}
+const SERVER_LANGUAGES = ['c', 'c_cpp', 'python', 'javascript', 'typescript', 'go'];
 
 function shortHash(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16);
@@ -80,14 +67,18 @@ class LspSession {
   start() {
     if (this.ready) return this.ready;
     this.ready = new Promise((resolve, reject) => {
-      const executable = executablePath(this.config.command);
-      if (!executable) return reject(new Error('未安装 ' + this.config.command));
-      const child = spawn(executable, this.config.args, { cwd: this.root, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      if (!this.config || !this.config.command) return reject(new Error('语言服务器不可用'));
+      const child = spawn(this.config.command, this.config.args, {
+        cwd: this.root,
+        env: this.config.env || process.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
       this.child = child;
       child.stdout.on('data', (chunk) => this.onData(chunk));
       child.stderr.on('data', () => {});
       child.once('error', reject);
-      child.once('exit', () => this.failAll(new Error(this.config.command + ' 已退出')));
+      child.once('exit', () => this.failAll(new Error(this.config.id + ' 已退出')));
       this.request('initialize', {
         processId: process.pid,
         rootUri: pathToFileURL(this.root).href,
@@ -106,6 +97,7 @@ class LspSession {
           workspace: { workspaceFolders: true, applyEdit: true, workspaceEdit: { documentChanges: true } },
         },
         clientInfo: { name: 'CodeScope', version: '1.2.0' },
+        initializationOptions: this.config.initializationOptions || {},
       }, 12000).then(() => {
         this.notify('initialized', {});
         resolve(this);
@@ -187,9 +179,11 @@ function createLspService(options = {}) {
 
   function status() {
     const byCommand = {};
-    for (const [language, config] of Object.entries(SERVERS)) {
-      if (!byCommand[config.command]) byCommand[config.command] = { command: config.command, path: executablePath(config.command), languages: [] };
-      byCommand[config.command].languages.push(language);
+    for (const language of SERVER_LANGUAGES) {
+      const config = languageServer(language);
+      const id = config ? config.id : ({ c:'clangd', c_cpp:'clangd', python:'pyright-langserver', javascript:'typescript-language-server', typescript:'typescript-language-server', go:'gopls' })[language];
+      if (!byCommand[id]) byCommand[id] = { command:id, path:config ? config.path : '', languages:[], bundled:!!(config && config.bundled), version:config ? config.version : '' };
+      byCommand[id].languages.push(language);
     }
     return { ok: true, servers: Object.values(byCommand).map((item) => ({ ...item, available: !!item.path })) };
   }
@@ -252,13 +246,16 @@ function createLspService(options = {}) {
   }
 
   async function query(input) {
-    const language = String(input.language || '').toLowerCase(), config = SERVERS[language];
-    if (!config) return { ok: false, available: false, error: '当前语言尚未配置 LSP' };
-    const commandPath = executablePath(config.command);
-    if (!commandPath) return { ok: false, available: false, server: config.command, error: '未安装 ' + config.command };
+    const language = String(input.language || '').toLowerCase();
+    if (!SERVER_LANGUAGES.includes(language)) return { ok: false, available: false, error: '当前语言尚未配置 LSP' };
+    const config = languageServer(language);
+    if (!config) {
+      const server = ({ c:'clangd', c_cpp:'clangd', python:'pyright-langserver', javascript:'typescript-language-server', typescript:'typescript-language-server', go:'gopls' })[language];
+      return { ok:false, available:false, server, error:'语言服务器不可用：' + server };
+    }
     const workspace = materialize(input.snippet, Number(input.fragment) || 0, input.code);
     if (!workspace.selected) return { ok: false, available: true, error: '片段文件不存在' };
-    const sessionKey = config.command + '|' + workspace.root;
+    const sessionKey = config.id + '|' + workspace.root;
     let session = sessions.get(sessionKey);
     if (!session) { session = new LspSession(config, workspace.root); sessions.set(sessionKey, session); }
     try {
@@ -269,13 +266,13 @@ function createLspService(options = {}) {
       const action = String(input.action || 'hover');
       if (action === 'hover') {
         const result = await session.request('textDocument/hover', params);
-        return { ok: true, available: true, server: config.command, hover: result ? { markdown: hoverText(result.contents), range: result.range || null } : null };
+        return { ok: true, available: true, server: config.id, hover: result ? { markdown: hoverText(result.contents), range: result.range || null } : null };
       }
       if (action === 'definition' || action === 'references') {
         const method = action === 'definition' ? 'textDocument/definition' : 'textDocument/references';
         const result = await session.request(method, action === 'references' ? { ...params, context: { includeDeclaration: true } } : params);
         const rows = (Array.isArray(result) ? result : result ? [result] : []).map((item) => mapLocation(item, workspace)).filter(Boolean);
-        return { ok: true, available: true, server: config.command, locations: rows };
+        return { ok: true, available: true, server: config.id, locations: rows };
       }
       if (action === 'completion') {
         const result = await session.request('textDocument/completion', { ...params, context: { triggerKind: Number(input.triggerKind) || 1, ...(input.triggerCharacter ? { triggerCharacter:String(input.triggerCharacter) } : {}) } });
@@ -290,11 +287,11 @@ function createLspService(options = {}) {
           sortText: String(item.sortText || item.label || ''),
           filterText: String(item.filterText || item.label || ''),
         })).filter((item) => item.label);
-        return { ok:true, available:true, server:config.command, incomplete:!!(result && result.isIncomplete), items };
+        return { ok:true, available:true, server:config.id, incomplete:!!(result && result.isIncomplete), items };
       }
       if (action === 'signature') {
         const result = await session.request('textDocument/signatureHelp', { ...params, context: { triggerKind:1, isRetrigger:false } });
-        return { ok:true, available:true, server:config.command, signature: result ? {
+        return { ok:true, available:true, server:config.id, signature: result ? {
           activeSignature:Number(result.activeSignature)||0,
           activeParameter:Number(result.activeParameter)||0,
           signatures:(result.signatures||[]).map((item)=>({ label:String(item.label||''), documentation:markupText(item.documentation), parameters:(item.parameters||[]).map((parameter)=>({label:parameter.label,documentation:markupText(parameter.documentation)})) })),
@@ -302,14 +299,14 @@ function createLspService(options = {}) {
       }
       if (action === 'highlights') {
         const result = await session.request('textDocument/documentHighlight', params);
-        return { ok:true, available:true, server:config.command, highlights:(Array.isArray(result)?result:[]).map((item)=>({range:item.range,kind:Number(item.kind)||1})) };
+        return { ok:true, available:true, server:config.id, highlights:(Array.isArray(result)?result:[]).map((item)=>({range:item.range,kind:Number(item.kind)||1})) };
       }
       if (action === 'rename') {
         const newName = String(input.newName || '').trim();
         if (!newName) return { ok:false, available:true, error:'新名称不能为空' };
         try { await session.request('textDocument/prepareRename', params, 5000); } catch (_) {}
         const result = await session.request('textDocument/rename', { ...params, newName }, 12000);
-        return { ok:true, available:true, server:config.command, edits:mapWorkspaceEdit(result, workspace) };
+        return { ok:true, available:true, server:config.id, edits:mapWorkspaceEdit(result, workspace) };
       }
       if (action === 'codeAction') {
         const line = position.line, character = position.character;
@@ -326,16 +323,16 @@ function createLspService(options = {}) {
           edits:mapWorkspaceEdit(item.edit, workspace),
           command:item.command ? { title:String(item.command.title||''), command:String(item.command.command||'') } : null,
         }));
-        return { ok:true, available:true, server:config.command, actions };
+        return { ok:true, available:true, server:config.id, actions };
       }
       if (action === 'diagnostics') {
         await new Promise((resolve) => setTimeout(resolve, 220));
-        return { ok: true, available: true, server: config.command, diagnostics: session.diagnostics.get(workspace.selected.uri) || [] };
+        return { ok: true, available: true, server: config.id, diagnostics: session.diagnostics.get(workspace.selected.uri) || [] };
       }
       return { ok: false, available: true, error: '不支持的 LSP 操作' };
     } catch (error) {
       sessions.delete(sessionKey); session.close();
-      return { ok: false, available: true, server: config.command, error: String(error.message || error).slice(0, 500) };
+      return { ok: false, available: true, server: config.id, error: String(error.message || error).slice(0, 500) };
     }
   }
 

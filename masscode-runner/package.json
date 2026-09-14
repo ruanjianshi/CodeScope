@@ -1,6 +1,6 @@
 {
   "name": "codescope",
-  "version": "2.1.4",
+  "version": "2.2.0",
   "private": true,
   "productName": "CodeScope",
   "description": "码境 CodeScope：面向代码阅读、编辑、运行、文档与远程开发的工程工作台",
@@ -13,6 +13,7 @@
     "package:desktop": "electron-forge package",
     "make:desktop": "electron-forge make",
     "publish:desktop": "electron-forge publish",
+    "prepare:gopls": "node scripts/build-bundled-gopls.js",
     "test": "node tests/smoke.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js"
@@ -22,6 +23,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@astral-sh/ruff-wasm-nodejs": "^0.16.7",
     "@novnc/novnc": "^1.7.0",
     "@turbodocx/html-to-docx": "^1.23.1",
     "docx": "^9.7.1",
@@ -32,9 +34,14 @@
     "monaco-editor": "^0.52.2",
     "pdfjs-dist": "^4.10.38",
     "pptx-preview": "^1.0.7",
+    "prettier": "^3.9.6",
+    "prettier-plugin-sh": "^0.19.0",
+    "pyright": "^1.1.414",
     "saxes": "^6.0.0",
     "simple-mind-map": "0.14.0-fix.3",
     "ssh2": "^1.17.0",
+    "typescript": "^5.9.3",
+    "typescript-language-server": "^6.0.0",
     "ws": "^8.21.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "xmind-embed-viewer": "1.2.0"

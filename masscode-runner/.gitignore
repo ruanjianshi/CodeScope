@@ -1,4 +1,5 @@
 node_modules/
+.bundled-tools/
 npm-debug.log*
 __pycache__/
 *.py[cod]

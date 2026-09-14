@@ -4,6 +4,7 @@ const { app, autoUpdater, BrowserWindow, dialog, ipcMain, Menu, shell, utilityPr
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
+const os = require('os');
 const path = require('path');
 
 const APP_ID = 'com.codescope.desktop';
@@ -117,6 +118,18 @@ async function startService() {
   activeVault = resolveVault();
   servicePort = await freePort(Number(process.env.CODESCOPE_PORT) || DEFAULT_PORT);
   const serverEntry = path.join(app.getAppPath(), 'server.js');
+  const home = os.homedir();
+  const inheritedPath = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const commonToolPaths = process.platform === 'darwin'
+    ? ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin']
+    : process.platform === 'win32'
+      ? [path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'npm')]
+      : ['/usr/local/bin', '/snap/bin', '/home/linuxbrew/.linuxbrew/bin'];
+  const toolPath = [...new Set([
+    path.join(home, '.local', 'bin'), path.join(home, 'bin'), path.join(home, 'go', 'bin'),
+    path.join(home, '.cargo', 'bin'), path.join(home, '.npm-global', 'bin'),
+    ...commonToolPaths, ...inheritedPath,
+  ])].join(path.delimiter);
   serviceProcess = utilityProcess.fork(serverEntry, [], {
     serviceName: 'CodeScope Local Service',
     stdio: 'pipe',
@@ -127,6 +140,7 @@ async function startService() {
       CODESCOPE_PORT: String(servicePort),
       CODESCOPE_VAULT: activeVault,
       CODESCOPE_DATA_HOME: app.getPath('userData'),
+      PATH: toolPath,
     },
   });
   if (serviceProcess.stdout) serviceProcess.stdout.on('data', (chunk) => console.log('[service]', String(chunk).trimEnd()));

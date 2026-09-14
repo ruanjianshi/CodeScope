@@ -3185,9 +3185,9 @@
     <div class="env-summary">
       <div class="env-card good"><b id="env-ready">–</b><span>运行就绪</span></div>
       <div class="env-card bad"><b id="env-missing">–</b><span>运行问题</span></div>
-      <div class="env-card optional"><b id="env-optional">–</b><span>扩展未启用</span></div>
+      <div class="env-card optional"><b id="env-optional">–</b><span>外部服务未连接</span></div>
     </div>
-    <div class="env-package-note"><strong>桌面安装包已包含 CodeScope 的核心运行环境。</strong><br>代码与 Markdown 编辑、PDF/XMind 阅读、本地 Office 预览和基础编辑无需另装环境。编译器、格式化器、语言服务器、AI 服务和 ONLYOFFICE 服务属于按需扩展。</div>
+    <div class="env-package-note"><strong>桌面安装包已包含完整基础环境与常用编辑工具链。</strong><br>代码与 Markdown 编辑、PDF/XMind 阅读、本地 Office、Prettier、Python 格式化、Pyright、TypeScript LSP 与 gopls 均可离线使用。AI 模型和 ONLYOFFICE Document Server 是需要单独连接的外部服务，不属于本机缺失环境。</div>
     <div id="env-meta" style="color:var(--dim);font-size:12px;margin-bottom:10px"></div>
     <div class="env-deploy">
       <div class="title">🧩 项目工具（按需）</div>
@@ -3205,7 +3205,7 @@
     <details class="env-extensions">
       <summary><span>开发与集成扩展</span><span id="env-extension-summary">按需查看</span></summary>
       <div class="env-extensions-body">
-        <div class="env-capability-note">这些能力不会影响 CodeScope 启动；仅在需要对应语言、在线服务或高级 Office 编辑时启用。</div>
+        <div class="env-capability-note">内置工具会标记“应用内置”；项目编译器按语言使用。AI 模型与 ONLYOFFICE 服务作为外部连接单独显示，不会被误报为安装包缺失。</div>
         <div id="env-list"></div>
       </div>
     </details>
@@ -12991,12 +12991,12 @@ function renderEnvironmentRows(hostId,entries){
   const sorted=Object.values(entries||{}).sort((a,b)=>a.required!==b.required?(a.required?-1:1):a.available!==b.available?(a.available?1:-1):String(a.label).localeCompare(String(b.label)));
   for(const t of sorted){
     const row=document.createElement('div');
-    const optional=!t.required,state=t.available?'ok':(optional?'idle':'bad'),scope=t.required?'运行必需':(t.relevant?'项目相关':'按需扩展');
+    const optional=!t.required,state=t.available?'ok':(optional?'idle':'bad'),scope=t.required?'运行必需':(t.bundled?'应用内置':t.external?'外部连接':(t.relevant?'项目相关':'按需扩展'));
     const action=t.hint||installHints[t.key]||'';
     const hint=t.available?'':optional
-      ?`<div class="hint optional-hint"><strong>按需启用</strong> · ${escapeHtml(t.issue||'当前未启用')}${action?'<br>'+escapeHtml(action):''}</div>`
+      ?`<div class="hint optional-hint"><strong>${t.external?'需要连接':'按需启用'}</strong> · ${escapeHtml(t.issue||'当前未启用')}${action?'<br>'+escapeHtml(action):''}</div>`
       :`<div class="hint">⚠ ${escapeHtml(t.label)}：${escapeHtml(t.issue||'运行条件异常')}${action?'<br>'+escapeHtml(action):''}</div>`;
-    const status=t.available?(t.version||'可用'):(optional?(t.installed?'需配置':'未启用'):(t.installed?'需处理':'缺失'));
+    const status=t.available?(t.version||'可用'):(optional?(t.external?'未连接':(t.installed?'需配置':'未启用')):(t.installed?'需处理':'缺失'));
     row.className='tool-row'+(optional?' optional':'')+(t.available?' available':'');
     row.innerHTML=`<div class="dot ${state}"></div><div class="info"><div class="nm">${escapeHtml(t.label)}<span class="scope">${scope}</span></div><div class="sub">${escapeHtml(t.group||'')} · ${escapeHtml(t.for||'')}</div>${hint}</div><div class="ver" title="${escapeHtml(t.path||'')}">${escapeHtml(status)}</div>`;
     host.appendChild(row);
@@ -13012,9 +13012,9 @@ async function loadEnv(refreshNow, quiet) {
   const d = await api('/api/env' + (refreshNow ? '?refresh=1' : ''));
   if (!d || !d.summary || !d.env) throw new Error((d && d.error) || '环境检测返回异常');
   const drawCfg=aiCfg(), aiDrawingReady=!!(aiNormalizeUrl(drawCfg.url)&&drawCfg.model);
-  d.env.aiDrawing={key:'aiDrawing',label:'AI 绘图模型',for:'自然语言生成 / 修改 Draw.io XML',group:'绘图工具',available:aiDrawingReady,installed:aiDrawingReady,required:false,version:aiDrawingReady?drawCfg.model:'',path:aiDrawingReady?aiNormalizeUrl(drawCfg.url):'',issue:aiDrawingReady?'':'尚未配置 OpenAI 兼容 API URL 与模型',hint:'在右侧 AI 面板打开“设置”，填写 API URL、Key 和模型后测试连接',installable:false};
+  d.env.aiDrawing={key:'aiDrawing',label:'AI 绘图模型',for:'自然语言生成 / 修改 Draw.io XML',group:'外部 AI 连接',available:aiDrawingReady,installed:aiDrawingReady,required:false,external:true,version:aiDrawingReady?drawCfg.model:'',path:aiDrawingReady?aiNormalizeUrl(drawCfg.url):'',issue:aiDrawingReady?'':'尚未连接用户选择的 OpenAI 兼容模型',hint:'在右侧 AI 面板打开“设置”，填写你使用的 API URL、Key 和模型后测试连接；密钥不能预置在公开安装包中',installable:false};
   d.summary.total+=1;
-  if(aiDrawingReady)d.summary.ready+=1;else{d.summary.unavailable=(d.summary.unavailable||0)+1;d.summary.optionalMissing+=1;d.summary.optionalUnavailable=(d.summary.optionalUnavailable||0)+1;}
+  if(aiDrawingReady)d.summary.ready+=1;else{d.summary.unavailable=(d.summary.unavailable||0)+1;d.summary.externalUnavailable=(d.summary.externalUnavailable||0)+1;}
   const client=clientEnvironment(),clientValues=Object.values(client),clientRequired=clientValues.filter(item=>item.required);
   d.summary.total+=clientValues.length;d.summary.required+=clientRequired.length;
   d.summary.ready+=clientValues.filter(item=>item.available).length;d.summary.requiredReady+=clientRequired.filter(item=>item.available).length;
@@ -13029,8 +13029,8 @@ async function loadEnv(refreshNow, quiet) {
   $('env-ready').textContent = d.summary.requiredReady;
   $('env-missing').textContent = d.summary.requiredMissing;
   const issueCard=$('env-missing').closest('.env-card');issueCard.classList.toggle('bad',d.summary.requiredMissing>0);issueCard.classList.toggle('good',d.summary.requiredMissing===0);
-  $('env-optional').textContent = d.summary.optionalMissing;
-  $('env-extension-summary').textContent=d.summary.optionalMissing?d.summary.optionalMissing+' 项未启用，不影响使用':'全部已启用';
+  $('env-optional').textContent = d.summary.externalUnavailable||0;
+  $('env-extension-summary').textContent=d.summary.optionalMissing?d.summary.optionalMissing+' 项项目工具未启用':((d.summary.externalUnavailable||0)?d.summary.externalUnavailable+' 项外部服务未连接':'全部已就绪');
   const pm = d.system && d.system.packageManager ? ' · 包管理器 ' + d.system.packageManager : '';
   const langs = d.project && d.project.languages && d.project.languages.length ? d.project.languages.join(' / ') : '仅文档';
   $('env-meta').innerHTML = `CodeScope: <strong>v${escapeHtml(d.version||'')}</strong> · ${d.mode==='desktop'?'桌面端':'Web 端'} · Node ${escapeHtml(d.node||'')}<br>Vault: <code style="font-size:11px">${escapeHtml(d.vault)}</code><br>平台: ${escapeHtml(d.platform + pm)}<br>项目语言: ${escapeHtml(langs)}`;

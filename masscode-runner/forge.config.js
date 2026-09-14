@@ -1,10 +1,13 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
 
 const iconFile = process.platform === 'darwin' ? 'icon.icns' : (process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 const iconPath = path.join(__dirname, 'desktop', 'icons', iconFile);
 const macSigningIdentity = process.env.CODESCOPE_MAC_SIGN_IDENTITY || process.env.CSC_NAME || '';
+const goplsFilename = process.platform === 'win32' ? 'gopls.exe' : 'gopls';
+const bundledGopls = process.env.CODESCOPE_BUNDLED_GOPLS || path.join(__dirname, '.bundled-tools', goplsFilename);
 
 // Electron's downloaded executable carries only a linker signature.  Without
 // signing the complete bundle macOS can register a stale/translocated copy and
@@ -33,10 +36,14 @@ module.exports = {
     appBundleId: 'com.codescope.desktop',
     appCategoryType: 'public.app-category.developer-tools',
     osxSign: macSignConfig,
+    extraResource: fs.existsSync(bundledGopls) ? [bundledGopls] : [],
     // ssh2 can optionally use cpu-features as a native accelerator. CodeScope
     // does not require it, and excluding it keeps desktop builds portable and
     // avoids a compiler/toolchain requirement on end-user machines.
-    ignore: [/node_modules\/cpu-features(?:\/|$)/],
+    ignore: [
+      /node_modules\/cpu-features(?:\/|$)/,
+      /(?:^|\/)\.bundled-tools(?:\/|$)/,
+    ],
   },
   rebuildConfig: {},
   makers: [
