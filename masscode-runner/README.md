@@ -1,9 +1,11 @@
-# 码境 CodeScope v2.1.0
+# 码境 CodeScope v2.1.1
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前正式版本：**v2.1.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前正式版本：**v2.1.1**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
 ## Web 与桌面双模式
 

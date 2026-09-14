@@ -4,6 +4,10 @@
 
 CodeScope 采用“单内核、双入口”架构：Web 端与桌面端共用界面、服务 API 和 Vault 数据格式。Web 端适合浏览器、局域网与服务器部署；桌面端提供独立窗口、原生菜单、Vault 选择、单实例运行和自动更新能力。
 
+## 下载桌面版
+
+前往 [GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest) 下载当前系统的安装包：macOS 提供 Apple Silicon 与 Intel 的 DMG/ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB/RPM/ZIP。安装包已经内置应用运行环境；编译器、LaTeX、语言服务器和 ONLYOFFICE Docs 仅在启用对应高级功能时按需安装。
+
 ## v2.1 能做什么
 
 | 工作区 | 主要能力 |
