@@ -198,9 +198,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.3.1 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.3.2 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.3.1'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.3 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.3.2'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.3 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -213,7 +213,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.3.1'))throw new Error('环境元信息未显示 v2.3.1');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.3.2'))throw new Error('环境元信息未显示 v2.3.2');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -562,8 +562,10 @@ print(r.run())
   const officeRows=officePage.locator('#office-list .office-row');await officeRows.first().waitFor({state:'visible'});
   if(await officeRows.count()!==3)throw new Error('Office 文档树数量错误');
 
+  await officePage.evaluate(()=>document.getElementById('document-mode-tools').classList.add('show','markdown'));
   await officeRows.filter({hasText:'Browser Word'}).click();
   const connectCard=officePage.locator('.office-connect-card');await connectCard.waitFor({state:'visible',timeout:15000});
+  if(await officePage.locator('#document-mode-tools').isVisible())throw new Error('Office 工作区错误显示了代码文档模式切换器');
   if(!(await connectCard.innerText()).includes('连接 ONLYOFFICE Docs'))throw new Error('ONLYOFFICE 未连接时没有显示明确的连接页');
   if(await officePage.locator('#office-word-editor,.office-sheet,.office-pptx-frame').count())throw new Error('ONLYOFFICE 未连接时错误启用了内置 Office 编辑器');
   if(!(await officePage.locator('#office-engine').innerText()).includes('ONLYOFFICE'))throw new Error('Office 引擎状态没有标识 ONLYOFFICE');
@@ -576,7 +578,9 @@ print(r.run())
   const xmindPage=await browser.newPage({viewport:{width:1440,height:900}}),xmindErrors=[];
   xmindPage.on('pageerror',error=>xmindErrors.push(String(error.message||error)));
   await xmindPage.goto(baseUrl,{waitUntil:'domcontentloaded'});
+  await xmindPage.evaluate(()=>document.getElementById('document-mode-tools').classList.add('show','markdown'));
   await xmindPage.evaluate(async name=>{await openDrawing(name);setXmindView('edit');},xmindCreated.name);
+  if(await xmindPage.locator('#document-mode-tools').isVisible())throw new Error('绘图工作区错误显示了代码文档模式切换器');
   try{await xmindPage.locator('#xmind-engine.smm-mind-map-container .smm-node').first().waitFor({state:'visible',timeout:20000});}catch(error){const state=await xmindPage.evaluate(()=>({kind:DRAW_KIND,file:DRAW_FILE,view:XMIND_VIEW,root:getComputedStyle(document.getElementById('xmind-root')).display,engine:getComputedStyle(document.getElementById('xmind-engine')).display,empty:document.getElementById('xmind-empty').textContent,status:document.getElementById('draw-ed-status').textContent,html:document.getElementById('xmind-engine').innerHTML.slice(0,240)}));throw new Error('XMind 编辑引擎未启动：'+JSON.stringify(state)+' / '+xmindErrors.join('；')+' / '+error.message);}
   const toolbarState=await xmindPage.evaluate(()=>({height:document.querySelector('.codescope-xmind-toolbar').getBoundingClientRect().height,polluted:[...document.querySelectorAll('#xmind-outline .xmind-title')].some(el=>/<\/?p>/i.test(el.value))}));if(toolbarState.height>48||toolbarState.polluted)throw new Error('XMind 工具栏高度或节点纯文本清理异常：'+JSON.stringify(toolbarState));await xmindPage.locator('#xmind-more').evaluate(el=>el.open=true);await xmindPage.locator('#xmind-preview').click({position:{x:16,y:16}});if(await xmindPage.locator('#xmind-more').evaluate(el=>el.open))throw new Error('XMind 更多菜单点击画布后未关闭');
   await xmindPage.locator('#xmind-floating-layer .xmind-floating-node').first().waitFor({state:'visible',timeout:10000});
@@ -658,8 +662,9 @@ print(r.run())
   if(readingErrors.length)throw new Error('Markdown 区块浏览器运行错误：'+readingErrors.join('；'));
 
   /* ---- PDF.js 官方 Viewer：虚拟渲染、自由缩放、单页/双页与懒加载缩略图 ---- */
-  await readingPage.evaluate(async()=>{closeReading();await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='PDF Viewer Demo');if(!project)throw new Error('找不到 PDF Viewer Demo');await openReadingProject(project);});
+  await readingPage.evaluate(async()=>{closeReading();document.getElementById('document-mode-tools').classList.add('show','markdown');await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='PDF Viewer Demo');if(!project)throw new Error('找不到 PDF Viewer Demo');await openReadingProject(project);});
   const pdfHost=readingPage.locator('.reading-pdf-host');await pdfHost.waitFor({state:'visible',timeout:15000});
+  if(await readingPage.locator('#document-mode-tools').isVisible())throw new Error('PDF 阅读工作区错误显示了代码文档模式切换器');
   await readingPage.waitForFunction(()=>window.__readingPdfViewer?.pdfViewer?.pagesCount===40&&document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length===40,null,{timeout:15000});
   const initialPdf=await readingPage.evaluate(()=>({pages:document.querySelectorAll('.reading-pdf-host .pdfViewer .page').length,canvases:document.querySelectorAll('.reading-pdf-host .pdfViewer .page canvas').length,badge:document.querySelector('.pdf-official-badge')?.textContent,edit:document.querySelector('.pdf-tool-primary')?.textContent}));
   if(initialPdf.pages!==40||initialPdf.canvases>=initialPdf.pages||initialPdf.badge!=='PDF.js Viewer'||!initialPdf.edit.includes('ONLYOFFICE'))throw new Error('PDF.js 官方 Viewer 或虚拟渲染异常：'+JSON.stringify(initialPdf));
