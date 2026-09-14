@@ -8,6 +8,7 @@
 
 const http = require('http');
 const net = require('net');
+const dns = require('dns').promises;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -2495,10 +2496,13 @@ function trustedHttpOrigin(req) {
   catch (_) { return false; }
 }
 
-/* ------------------------------- PDF 阅读文库 ------------------------------- */
+/* ------------------------------- 统一资料阅读库 ------------------------------- */
 
 function readingsDir() { return path.join(vaultPath(), 'readings'); }
 const READING_TEXT_EXTS = new Set(['.md','.markdown','.txt','.c','.h','.cpp','.hpp','.cc','.py','.js','.ts','.json','.yaml','.yml','.tex']);
+const READING_DOCUMENT_EXTS = new Set(['.docx','.xlsx','.xls','.csv','.pptx']);
+const READING_WEB_EXTS = new Set(['.url']);
+const READING_ASSET_EXTS = new Set(['.pdf', ...READING_TEXT_EXTS, ...READING_DOCUMENT_EXTS, ...READING_WEB_EXTS]);
 const READING_PROJECT_META = '.codescope-project.json';
 const READING_FOLDER_META = '.codescope-folder.json';
 function readingPath(value, allowFolder) {
@@ -2513,11 +2517,15 @@ function readingAssetPath(value) {
   const rel = readingPath(value, true);
   if (!rel) return null;
   const ext = path.extname(rel).toLowerCase();
-  return ext === '.pdf' || READING_TEXT_EXTS.has(ext) ? rel : null;
+  return READING_ASSET_EXTS.has(ext) ? rel : null;
 }
 function readingFragmentInfo(rel, stat, project) {
   const ext = path.extname(rel).toLowerCase(), base = path.basename(rel);
-  const kind = ext === '.pdf' ? 'pdf' : (['.md','.markdown'].includes(ext) ? 'markdown' : 'code');
+  const kind = ext === '.pdf' ? 'pdf'
+    : (['.md','.markdown'].includes(ext) ? 'markdown'
+      : (ext === '.docx' ? 'docx'
+        : (['.xlsx','.xls','.csv'].includes(ext) ? 'sheet'
+          : (ext === '.pptx' ? 'slides' : (ext === '.url' ? 'web' : 'code')))));
   let role = kind;
   if (kind === 'pdf') {
     if (/双语|bilingual|parallel/i.test(base)) role = 'bilingual';
@@ -2525,6 +2533,85 @@ function readingFragmentInfo(rel, stat, project) {
     else role = 'original';
   }
   return { type:'fragment', kind, role, name:base, path:rel, project:project||'', size:stat.size, updated:stat.mtimeMs };
+}
+function readingWebShortcut(rel) {
+  const file = path.join(readingsDir(), rel);
+  const content = fs.readFileSync(file, 'utf8').slice(0, 16384);
+  const match = /(?:^|\n)URL\s*=\s*(https?:\/\/[^\r\n]+)/i.exec(content);
+  if (!match) throw new Error('网页地址文件无效');
+  return match[1].trim();
+}
+function privateNetworkAddress(address) {
+  const value = String(address || '').toLowerCase().split('%')[0];
+  if (net.isIP(value) === 4) {
+    const parts = value.split('.').map(Number);
+    return parts[0] === 10 || parts[0] === 127 || parts[0] === 0
+      || (parts[0] === 169 && parts[1] === 254)
+      || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+      || (parts[0] === 192 && parts[1] === 168)
+      || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127)
+      || parts[0] >= 224;
+  }
+  if (net.isIP(value) === 6) {
+    if (value === '::1' || value === '::' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb')) return true;
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(value);
+    return mapped ? privateNetworkAddress(mapped[1]) : false;
+  }
+  return true;
+}
+function parsedReadingWebUrl(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); } catch (_) { throw requestError('网页地址必须是完整的 http:// 或 https:// URL', 400); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw requestError('网页地址仅支持不含账号密码的 http/https URL', 400);
+  return url;
+}
+async function validatedReadingWebUrl(value) {
+  const url = parsedReadingWebUrl(value);
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) throw requestError('出于安全原因，网页阅读不能访问本机地址', 403);
+  let addresses;
+  try { addresses = await dns.lookup(hostname, { all:true }); } catch (_) { throw requestError('无法解析网页地址', 400); }
+  if (!addresses.length || addresses.some((item) => privateNetworkAddress(item.address))) throw requestError('出于安全原因，网页阅读不能访问局域网或保留地址', 403);
+  return url;
+}
+function readableWebSection(html) {
+  const source = String(html || '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(script|style|noscript|svg|canvas|form|nav|footer|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<(script|style|noscript|svg|canvas|form|nav|footer|aside)\b[^>]*\/?>/gi, '');
+  const title = ((/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(source) || [])[1] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+  const article = (/<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(source) || [])[1];
+  const main = (/<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(source) || [])[1];
+  const body = (/<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(source) || [])[1];
+  return { title, html:String(article || main || body || source).slice(0, 6 * 1024 * 1024) };
+}
+async function fetchReadableWebPage(input) {
+  let url = await validatedReadingWebUrl(input);
+  for (let redirect = 0; redirect <= 5; redirect += 1) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try { response = await fetch(url, { redirect:'manual', signal:controller.signal, headers:{ 'User-Agent':'CodeScope/2.4 Reading Mode', Accept:'text/html,application/xhtml+xml,text/plain;q=0.8' } }); }
+    catch (error) { clearTimeout(timer); throw requestError(error && error.name === 'AbortError' ? '网页加载超时' : '网页加载失败：' + String(error.message || error), 502); }
+    if (response.status >= 300 && response.status < 400 && response.headers.get('location')) {
+      clearTimeout(timer);
+      if (redirect === 5) throw requestError('网页重定向次数过多', 502);
+      url = await validatedReadingWebUrl(new URL(response.headers.get('location'), url).toString());
+      continue;
+    }
+    if (!response.ok) { clearTimeout(timer); throw requestError('网页返回 HTTP ' + response.status, 502); }
+    const type = String(response.headers.get('content-type') || '').toLowerCase();
+    if (type && !type.includes('text/html') && !type.includes('application/xhtml') && !type.includes('text/plain')) { clearTimeout(timer); throw requestError('该地址不是可阅读网页', 415); }
+    const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+    const chunks = []; let bytes = 0;
+    try {
+      if (reader) {
+        for (;;) { const part = await reader.read(); if (part.done) break; bytes += part.value.byteLength; if (bytes > 8 * 1024 * 1024) throw requestError('网页内容超过 8 MB', 413); chunks.push(Buffer.from(part.value)); }
+      } else { const data = Buffer.from(await response.arrayBuffer()); bytes = data.length; if (bytes > 8 * 1024 * 1024) throw requestError('网页内容超过 8 MB', 413); chunks.push(data); }
+    } finally { clearTimeout(timer); }
+    const readable = readableWebSection(Buffer.concat(chunks).toString('utf8'));
+    return { ...readable, url:url.toString() };
+  }
+  throw requestError('网页加载失败', 502);
 }
 function readingProjectMetaFile(rel){return path.join(readingsDir(),rel,READING_PROJECT_META);}
 function loadReadingProjectMeta(rel){try{const value=JSON.parse(fs.readFileSync(readingProjectMetaFile(rel),'utf8'));return{description:String(value.description||'').slice(0,1000),tags:Array.isArray(value.tags)?value.tags.map(String).filter(Boolean).slice(0,30):[]};}catch(_){return{description:'',tags:[]};}}
@@ -2714,6 +2801,8 @@ function searchReadingLibrary(query, sensitive) {
       const ext = path.extname(entry.name).toLowerCase();
       if (READING_TEXT_EXTS.has(ext)) {
         try { const stat = fs.statSync(full); if (stat.size <= 2 * 1024 * 1024) addLines(rel, fs.readFileSync(full, 'utf8'), { kind:'text' }); } catch (_) {}
+      } else if (ext === '.url') {
+        try { addLines(rel, path.basename(rel, ext) + '\n' + readingWebShortcut(rel), { kind:'web' }); } catch (_) {}
       } else if (ext === '.pdf') {
         const meta = loadReadingMeta(rel);
         for (const fragment of meta.fragments || []) {
@@ -3261,9 +3350,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && u.pathname === '/api/version') {
-      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 5, releaseChannel:'stable', mode:APP_MODE,
+      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 6, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
-        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
+        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3467,6 +3556,26 @@ const server = http.createServer(async (req, res) => {
       const ext=path.extname(name).toLowerCase();const content=['.md','.markdown'].includes(ext)?'# '+name.replace(/\.[^.]+$/,'')+'\n\n':'// '+name+'\n';
       fs.writeFileSync(target,content,'utf8');return send(res,200,{ok:true,path:project+'/'+name,kind:['.md','.markdown'].includes(ext)?'markdown':'code',content});
     }
+    if (req.method === 'POST' && u.pathname === '/api/readings/web/new') {
+      const b = await readBody(req, 128 * 1024), project = readingPath(String(b.project || ''), true);
+      if (!project) return send(res, 400, { ok:false, error:'阅读项目路径不合法' });
+      let url;
+      try { url = parsedReadingWebUrl(b.url); } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
+      const rawTitle = String(b.title || url.hostname || '网页资料').trim().replace(/\.url$/i, '');
+      if (!rawTitle || !/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&]+$/.test(rawTitle) || ['.', '..'].includes(rawTitle)) return send(res, 400, { ok:false, error:'网页资料名称不合法' });
+      const dir = path.join(readingsDir(), project);
+      try { if (!fs.statSync(dir).isDirectory()) throw new Error(); } catch (_) { return send(res, 404, { ok:false, error:'阅读项目不存在' }); }
+      let name = rawTitle + '.url', index = 2;
+      while (fs.existsSync(path.join(dir, name))) { name = rawTitle + '-' + index + '.url'; index += 1; }
+      fs.writeFileSync(path.join(dir, name), '[InternetShortcut]\nURL=' + url.toString() + '\n', 'utf8');
+      return send(res, 200, { ok:true, path:project + '/' + name, name, kind:'web', url:url.toString() });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/readings/web') {
+      const rel = readingAssetPath(u.searchParams.get('path'));
+      if (!rel || path.extname(rel).toLowerCase() !== '.url') return send(res, 400, { ok:false, error:'网页资料路径不合法' });
+      try { const result = await fetchReadableWebPage(readingWebShortcut(rel)); return send(res, 200, { ok:true, path:rel, ...result }); }
+      catch (error) { return send(res, error.statusCode || 502, { ok:false, error:String(error.message || error) }); }
+    }
     if (req.method === 'POST' && u.pathname === '/api/readings/project/rename') {
       const b=await readBody(req),from=readingPath(String(b.project||''),true),name=readingPath(String(b.name||''),true);const parent=from&&(path.posix.dirname(from)==='.'?'':path.posix.dirname(from)),to=parent?parent+'/'+name:name;
       if(!from||!name||name.includes('/'))return send(res,400,{ok:false,error:'阅读项目名称不合法'});
@@ -3496,19 +3605,19 @@ const server = http.createServer(async (req, res) => {
       try { info = JSON.parse(Buffer.from(String(req.headers['x-codescope-reading'] || ''), 'base64').toString('utf8')); }
       catch (_) { return send(res, 400, { ok:false, error:'上传信息格式错误' }); }
       const folder = info.folder ? readingPath(String(info.folder), true) : '';
-      let base = path.basename(String(info.name || '')).trim();
-      if ((info.folder && !folder) || !/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&]+\.pdf$/i.test(base)) return send(res, 400, { ok:false, error:'仅支持合法的 PDF 文件名和文库目录' });
+      let base = path.basename(String(info.name || '')).trim(); const ext = path.extname(base).toLowerCase();
+      if ((info.folder && !folder) || !readingAssetPath((folder ? folder + '/' : '') + base) || (!READING_DOCUMENT_EXTS.has(ext) && ext !== '.pdf')) return send(res, 400, { ok:false, error:'仅支持 PDF、DOCX、XLSX、XLS、CSV 和 PPTX 文件' });
       const dir = path.join(readingsDir(), folder || '.'); fs.mkdirSync(dir, { recursive:true });
-      const stem = base.replace(/\.pdf$/i, ''); let target = path.join(dir, base), index = 2;
-      while (fs.existsSync(target)) { base = stem + '-' + index + '.pdf'; target = path.join(dir, base); index += 1; }
+      const stem = path.basename(base, ext); let target = path.join(dir, base), index = 2;
+      while (fs.existsSync(target)) { base = stem + '-' + index + ext; target = path.join(dir, base); index += 1; }
       const temp = path.join(dir, '.' + crypto.randomUUID() + '.upload');
       try {
-        await pipeline(req, fs.createWriteStream(temp, { flags:'wx' }));
-        const head = Buffer.alloc(5); const fd = fs.openSync(temp, 'r'); fs.readSync(fd, head, 0, 5, 0); fs.closeSync(fd);
-        if (head.toString('ascii') !== '%PDF-') throw new Error('文件不是有效的 PDF');
+        await officeStreamToFile(req, temp);
+        if (ext === '.pdf') { const head = Buffer.alloc(5); const fd = fs.openSync(temp, 'r'); fs.readSync(fd, head, 0, 5, 0); fs.closeSync(fd); if (head.toString('ascii') !== '%PDF-') throw new Error('文件不是有效的 PDF'); }
+        else validateOfficeFile(temp, ext);
         fs.renameSync(temp, target);
         const rel = (folder ? folder + '/' : '') + base;
-        return send(res, 200, { ok:true, path:rel, size:fs.statSync(target).size });
+        return send(res, 200, { ok:true, path:rel, size:fs.statSync(target).size, kind:readingFragmentInfo(rel, fs.statSync(target), folder || '').kind });
       } catch (error) {
         try { fs.unlinkSync(temp); } catch (_) {}
         return send(res, 400, { ok:false, error:'导入失败：' + String(error.message || error) });
@@ -3564,12 +3673,13 @@ const server = http.createServer(async (req, res) => {
       return send(res, 202, { ok:true, pending:true, synced:false, error:'ONLYOFFICE 已接收保存命令，但回写超过 15 秒；编辑器已保留，请稍后重试' });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/file') {
-      const rel = readingPath(u.searchParams.get('path'));
-      if (!rel) return send(res, 400, { ok:false, error:'PDF 路径不合法' });
+      const rel = readingAssetPath(u.searchParams.get('path'));
+      if (!rel || path.extname(rel).toLowerCase() === '.url') return send(res, 400, { ok:false, error:'资料文件路径不合法' });
       const file = path.join(readingsDir(), rel);
-      let stat; try { stat = fs.statSync(file); } catch (_) { return send(res, 404, { ok:false, error:'PDF 不存在' }); }
+      let stat; try { stat = fs.statSync(file); } catch (_) { return send(res, 404, { ok:false, error:'资料文件不存在' }); }
       const range = req.headers.range;
-      res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Accept-Ranges', 'bytes'); res.setHeader('Cache-Control', 'private, no-cache');
+      res.setHeader('Content-Type', MIME[path.extname(rel).toLowerCase()] || 'application/octet-stream'); res.setHeader('Accept-Ranges', 'bytes'); res.setHeader('Cache-Control', 'private, no-cache');
+      if (u.searchParams.get('download') === '1') res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(path.basename(rel)));
       if (range) {
         const match = /^bytes=(\d*)-(\d*)$/.exec(range);
         if (!match) { res.writeHead(416, { 'Content-Range':'bytes */' + stat.size }); return res.end(); }

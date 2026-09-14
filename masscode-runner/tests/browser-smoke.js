@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
 const { chromium } = require('playwright-core');
+const { Document, Packer, Paragraph, HeadingLevel } = require('docx');
 
 const projectRoot = path.resolve(__dirname, '..');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-browser-'));
@@ -177,6 +178,12 @@ print(r.run())
   fs.mkdirSync(pdfProjectDir,{recursive:true});
   fs.writeFileSync(path.join(pdfProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Official PDF.js viewer regression',tags:['pdf','viewer']},null,2));
   fs.writeFileSync(path.join(pdfProjectDir,'manual.pdf'),samplePdfPages(40));
+  const universalProjectDir=path.join(vault,'readings','Universal Reading Demo');
+  fs.mkdirSync(universalProjectDir,{recursive:true});
+  fs.writeFileSync(path.join(universalProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'DOCX and web reader regression',tags:['docx','web']},null,2));
+  const readingDocx=new Document({sections:[{children:[new Paragraph({text:'统一资料阅读测试',heading:HeadingLevel.TITLE}),new Paragraph('DOCX 正文可以直接在阅读项目中渲染。')]}]});
+  fs.writeFileSync(path.join(universalProjectDir,'guide.docx'),await Packer.toBuffer(readingDocx));
+  fs.writeFileSync(path.join(universalProjectDir,'官方文档.url'),'[InternetShortcut]\nURL=https://example.com/guide\n','utf8');
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
   server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data'),CODESCOPE_ONLYOFFICE_URL:'http://127.0.0.1:1'},stdio:'ignore'});
   await waitForServer(baseUrl);
@@ -198,9 +205,9 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.3.3 · Web');
+  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.4.0 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.3.3'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.3 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!=='2.4.0'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.4 Web 版本契约异常：'+JSON.stringify(versionContract));
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -213,7 +220,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.3.3'))throw new Error('环境元信息未显示 v2.3.3');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.4.0'))throw new Error('环境元信息未显示 v2.4.0');
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -660,6 +667,16 @@ print(r.run())
   await readingPage.waitForTimeout(850);const savedNote=fs.readFileSync(readingNotePath,'utf8');
   if(!savedNote.startsWith('---\ntitle: Block Drag Demo')||savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!savedNote.includes(readingReference))throw new Error('Markdown frontmatter、引用或区块拖拽结果未持久化：'+savedNote);
   if(readingErrors.length)throw new Error('Markdown 区块浏览器运行错误：'+readingErrors.join('；'));
+
+  /* ---- 统一资料阅读：DOCX 原貌渲染、网页正文提取与缩放 ---- */
+  await readingPage.route('**/api/readings/web?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:'https://example.com/guide',title:'网页阅读测试',html:'<article><h2>网页正文</h2><p>网页地址也可以保存为阅读资料。</p><script>window.__unsafe=true</script></article>'})}));
+  await readingPage.evaluate(async()=>{closeReading();await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='Universal Reading Demo');if(!project)throw new Error('找不到统一资料阅读项目');await openReadingProject(project);const doc=project.children.find(item=>item.kind==='docx');await openReading(doc.path,0);});
+  await readingPage.locator('.reading-docx-host').waitFor({state:'visible',timeout:15000});
+  if(!await readingPage.locator('.reading-docx-host').getByText('DOCX 正文可以直接在阅读项目中渲染。').count())throw new Error('DOCX 未在阅读项目中完成原貌渲染');
+  const assetZoom=readingPage.locator('.reading-asset-toolbar .zoom-value');if(await assetZoom.innerText()!=='100%')throw new Error('Office 阅读缩放未显示默认比例');await readingPage.locator('.reading-asset-toolbar button').last().click();if(await assetZoom.innerText()!=='110%')throw new Error('Office 阅读缩放按钮未生效');
+  await readingPage.evaluate(async()=>{const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='Universal Reading Demo'),web=project.children.find(item=>item.kind==='web');await openReading(web.path,0);});
+  await readingPage.locator('.reading-web-article').waitFor({state:'visible',timeout:10000});
+  if(!await readingPage.locator('.reading-web-article').getByText('网页地址也可以保存为阅读资料。').count()||await readingPage.locator('.reading-web-article script').count())throw new Error('网页阅读正文未渲染或危险脚本未清理');
 
   /* ---- PDF.js 官方 Viewer：虚拟渲染、自由缩放、单页/双页与懒加载缩略图 ---- */
   await readingPage.evaluate(async()=>{closeReading();document.getElementById('document-mode-tools').classList.add('show','markdown');await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='PDF Viewer Demo');if(!project)throw new Error('找不到 PDF Viewer Demo');await openReadingProject(project);});

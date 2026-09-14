@@ -927,6 +927,42 @@
   .reading-paper .source,.reading-paper .translation { white-space:pre-wrap; overflow-wrap:anywhere; }
   .reading-paper.bilingual .source { margin-bottom:18px; padding-bottom:18px; border-bottom:1px dashed var(--border); color:var(--dim); }
   .reading-paper .empty { color:var(--dim); font-family:var(--ui); text-align:center; }
+  .reading-asset-shell { --reading-asset-zoom:1; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--theme-code,var(--bg)); }
+  .reading-asset-toolbar { min-height:38px; display:flex; align-items:center; gap:6px; padding:5px 9px; flex:none; border-bottom:1px solid var(--border); background:var(--panel); color:var(--dim); font-size:10px; }
+  .reading-asset-toolbar .kind { display:inline-flex; align-items:center; min-height:22px; padding:0 7px; border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); border-radius:999px; background:var(--accent-soft); color:var(--accent); font-weight:720; }
+  .reading-asset-toolbar .title { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-weight:650; }
+  .reading-asset-toolbar button,.reading-asset-toolbar a { min-height:25px; display:inline-flex; align-items:center; justify-content:center; padding:2px 8px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:var(--dim); font:600 10px var(--ui); text-decoration:none; cursor:pointer; }
+  .reading-asset-toolbar button:hover,.reading-asset-toolbar a:hover { border-color:var(--accent); color:var(--text); }
+  .reading-asset-toolbar .zoom-value { min-width:43px; font-family:var(--mono); }
+  .reading-asset-stage { flex:1; min-height:0; overflow:auto; padding:22px; background:radial-gradient(circle at 50% 0,color-mix(in srgb,var(--accent) 8%,transparent),transparent 42%),color-mix(in srgb,var(--theme-deep,var(--bg)) 92%,#000); }
+  .reading-asset-loading,.reading-asset-error { min-height:180px; display:grid; place-items:center; padding:26px; color:var(--dim); text-align:center; line-height:1.7; }
+  .reading-asset-error { color:var(--err); }
+  .reading-docx-host { width:max-content; min-width:100%; zoom:var(--reading-asset-zoom); }
+  .reading-docx-host .docx-wrapper { padding:22px !important; background:transparent !important; }
+  .reading-docx-host .docx-wrapper > section.docx { margin:0 auto 22px !important; box-shadow:0 12px 42px rgba(0,0,0,.4) !important; }
+  .reading-sheet-wrap { width:max-content; min-width:100%; zoom:var(--reading-asset-zoom); }
+  .reading-sheet-tabs { position:sticky; top:-22px; z-index:3; display:flex; gap:4px; margin:-10px -10px 14px; padding:8px 10px; border-bottom:1px solid var(--border); background:color-mix(in srgb,var(--panel) 94%,transparent); backdrop-filter:blur(8px); }
+  .reading-sheet-tabs button { padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:var(--dim); cursor:pointer; }
+  .reading-sheet-tabs button.on { border-color:var(--accent); background:var(--accent-soft); color:var(--text); }
+  .reading-sheet-table { overflow:auto; border:1px solid var(--border); border-radius:9px; background:var(--panel); box-shadow:0 12px 36px rgba(0,0,0,.22); }
+  .reading-sheet-table table { border-collapse:collapse; min-width:100%; color:var(--text); font:11px/1.45 var(--ui); }
+  .reading-sheet-table td,.reading-sheet-table th { min-width:72px; padding:6px 9px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); white-space:pre-wrap; vertical-align:top; }
+  .reading-sheet-table tr:first-child td,.reading-sheet-table th { position:sticky; top:0; background:color-mix(in srgb,var(--accent) 8%,var(--panel2)); font-weight:700; }
+  .reading-slides-frame { display:block; width:100%; min-height:100%; border:0; border-radius:9px; background:#0c1118; zoom:var(--reading-asset-zoom); }
+  .reading-web-stage { padding:0; background:color-mix(in srgb,var(--theme-code,var(--bg)) 96%,#000); }
+  .reading-web-article { width:min(860px,calc(100% - 56px)); box-sizing:border-box; margin:28px auto 90px; padding:clamp(28px,5vw,64px); border:1px solid color-mix(in srgb,var(--border) 78%,transparent); border-radius:15px; background:color-mix(in srgb,var(--panel) 78%,var(--theme-code,var(--bg))); color:color-mix(in srgb,var(--text) 91%,var(--dim)); box-shadow:0 20px 60px rgba(0,0,0,.18); font-family:Georgia,"Noto Serif SC",serif; font-size:calc(16px * var(--reading-asset-zoom)); line-height:1.78; overflow-wrap:anywhere; }
+  .reading-web-article h1 { margin:.2em 0 1em; font:750 2em/1.2 var(--ui); letter-spacing:-.02em; }
+  .reading-web-article h2 { margin:2em 0 .75em; padding-bottom:.32em; border-bottom:1px solid var(--border); font:720 1.45em/1.3 var(--ui); }
+  .reading-web-article h3 { margin:1.65em 0 .6em; font:700 1.16em/1.4 var(--ui); }
+  .reading-web-article p,.reading-web-article ul,.reading-web-article ol,.reading-web-article blockquote,.reading-web-article pre { margin:1em 0; }
+  .reading-web-article img { display:block; max-width:100%; height:auto; margin:1.4em auto; border-radius:9px; }
+  .reading-web-article pre { overflow:auto; padding:14px; border:1px solid var(--border); border-radius:9px; background:var(--theme-deep,var(--bg)); font:12px/1.65 var(--mono); }
+  .reading-web-article code { font-family:var(--mono); }
+  .reading-web-article blockquote { padding:.4em 1em; border-left:3px solid var(--accent); color:var(--dim); }
+  .reading-web-article a { color:var(--accent); text-underline-offset:3px; }
+  .reading-web-article table { display:block; max-width:100%; overflow:auto; border-collapse:collapse; }
+  .reading-web-article th,.reading-web-article td { padding:7px 10px; border:1px solid var(--border); }
+  @container (max-width:680px) { .reading-asset-stage { padding:10px; } .reading-web-article { width:calc(100% - 20px); margin:10px auto 50px; padding:24px 20px; } }
   .reading-text-shell { height:100%; min-height:0; display:grid; grid-template-rows:minmax(0,1fr) auto; background:var(--theme-code,var(--bg)); }
   .reading-text-shell.markdown { --md-accent:color-mix(in srgb,var(--ok) 76%,var(--accent)); --md-accent-strong:color-mix(in srgb,var(--md-accent) 84%,var(--text)); --md-link:color-mix(in srgb,var(--accent) 82%,var(--text)); --md-page:var(--theme-code,var(--bg)); --md-surface:color-mix(in srgb,var(--panel2) 58%,var(--md-page)); --md-surface-hover:color-mix(in srgb,var(--md-accent) 5%,var(--md-page)); --md-text:color-mix(in srgb,var(--text) 88%,var(--dim)); --md-muted:color-mix(in srgb,var(--dim) 86%,var(--text)); --md-measure:840px; grid-template-rows:auto minmax(0,1fr) auto; container-type:inline-size; background:var(--md-page); }
   .reading-text-editor { width:100%; height:100%; min-height:0; resize:none; box-sizing:border-box; padding:22px 24px; border:0; outline:0; background:transparent; color:var(--text); font:13px/1.7 var(--mono); tab-size:2; }
@@ -2906,11 +2942,11 @@
         <span class="side-head-actions">
           <button class="side-create" id="reading-new-folder" title="新建阅读项目" aria-label="新建阅读项目">＋项目</button>
           <button class="side-create" id="reading-new-library-folder" title="新建阅读文件夹" aria-label="新建阅读文件夹">＋文件夹</button>
-          <button id="reading-import" title="向阅读项目导入 PDF（支持大文件）" aria-label="导入 PDF">导入</button>
+          <button id="reading-import" title="向阅读项目导入 PDF 或 Office 文档（支持大文件）" aria-label="导入阅读资料">导入</button>
         </span>
       </div>
       <div id="reading-list"></div>
-      <input id="reading-file-input" type="file" accept="application/pdf,.pdf" multiple hidden>
+      <input id="reading-file-input" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.pptx" multiple hidden>
     </div>
   </div>
   <div id="split-v" title="拖拽调整左侧宽度"></div>
@@ -4400,8 +4436,35 @@ let READING_TEXT_SAVE_TIMERS = new Map();
 function readingStatus(text, error) { const el=$('reading-status');el.textContent=text||'';el.style.color=error?'var(--err)':'var(--dim)'; }
 function readingBase(path) { return String(path||'').split('/').pop().replace(/\.[^.]+$/,''); }
 function readingFragment(path) { return READING_FRAGMENT_INDEX.get(path)||null; }
-function readingRoleLabel(item){return item.role==='original'?'原版':item.role==='translation'?'中文版':item.role==='bilingual'?'双语版':item.kind==='markdown'?'Markdown':'代码';}
-function readingKindIcon(item){return item.kind==='pdf'?'▤':item.kind==='markdown'?'M↓':'</>';}
+function readingRoleLabel(item){return item.role==='original'?'原版':item.role==='translation'?'中文版':item.role==='bilingual'?'双语版':item.kind==='markdown'?'Markdown':item.kind==='docx'?'Word':item.kind==='sheet'?'表格':item.kind==='slides'?'演示文稿':item.kind==='web'?'网页':'代码';}
+function readingKindIcon(item){return item.kind==='pdf'?'▤':item.kind==='markdown'?'M↓':item.kind==='docx'?'W':item.kind==='sheet'?'X':item.kind==='slides'?'P':item.kind==='web'?'↗':'</>';}
+function hideReadingPagination(els){els.view.style.display='none';els.page.style.display='none';els.pages.style.display='none';els.col.querySelector('.reading-prev').style.display='none';els.col.querySelector('.reading-next').style.display='none';}
+function readingAssetShell(els,fragment){
+  const shell=document.createElement('div');shell.className='reading-asset-shell '+fragment.kind;const toolbar=document.createElement('div');toolbar.className='reading-asset-toolbar';const kind=document.createElement('span');kind.className='kind';kind.textContent=readingRoleLabel(fragment);const title=document.createElement('span');title.className='title';title.textContent=readingBase(fragment.name);const minus=document.createElement('button'),value=document.createElement('button'),plus=document.createElement('button');minus.type=value.type=plus.type='button';minus.textContent='−';plus.textContent='＋';value.className='zoom-value';let zoom=100;try{zoom=Math.max(60,Math.min(180,Number(localStorage.getItem('mc-reading-asset-zoom:'+fragment.path))||100));}catch(_){}const setZoom=(next,persist=true)=>{zoom=Math.max(60,Math.min(180,Math.round(Number(next)||100)));shell.style.setProperty('--reading-asset-zoom',String(zoom/100));value.textContent=zoom+'%';if(persist)try{localStorage.setItem('mc-reading-asset-zoom:'+fragment.path,String(zoom));}catch(_){}};minus.title='缩小';plus.title='放大';value.title='恢复 100%';minus.onclick=()=>setZoom(zoom-10);plus.onclick=()=>setZoom(zoom+10);value.onclick=()=>setZoom(100);const download=document.createElement('a');download.href='/api/readings/file?download=1&path='+encodeURIComponent(fragment.path);download.textContent='下载原文件';download.title='下载原始资料文件';const stage=document.createElement('div');stage.className='reading-asset-stage';toolbar.append(kind,title,minus,value,plus);if(fragment.kind!=='web')toolbar.append(download);shell.append(toolbar,stage);stage.addEventListener('wheel',(event)=>{if(!(event.ctrlKey||event.metaKey))return;event.preventDefault();setZoom(zoom+(event.deltaY<0?10:-10));},{passive:false});setZoom(zoom,false);els.body.appendChild(shell);return{shell,toolbar,stage,title,setZoom};
+}
+function sanitizeReadingWebHtml(html,baseUrl){
+  const parsed=new DOMParser().parseFromString('<body>'+String(html||'')+'</body>','text/html');parsed.querySelectorAll('script,style,noscript,iframe,object,embed,form,input,button,textarea,select,meta,link,base,svg,canvas').forEach((node)=>node.remove());
+  parsed.querySelectorAll('*').forEach((node)=>{for(const attr of [...node.attributes]){const name=attr.name.toLowerCase();if(name.startsWith('on')||['style','srcdoc','formaction','action','integrity'].includes(name))node.removeAttribute(attr.name);}for(const name of ['href','src','poster']){const raw=node.getAttribute(name);if(!raw)continue;try{const resolved=new URL(raw,baseUrl);if(!['http:','https:'].includes(resolved.protocol))throw new Error();node.setAttribute(name,resolved.toString());}catch(_){node.removeAttribute(name);}}node.removeAttribute('srcset');if(node.tagName==='A'&&node.hasAttribute('href')){node.target='_blank';node.rel='noopener noreferrer';}if(node.tagName==='IMG'){node.loading='lazy';node.decoding='async';}});
+  return parsed.body.innerHTML;
+}
+async function renderReadingAsset(slot,els,fragment){
+  hideReadingPagination(els);const ui=readingAssetShell(els,fragment),loading=document.createElement('div');loading.className='reading-asset-loading';loading.textContent=fragment.kind==='web'?'正在提取网页正文…':'正在解析 '+readingRoleLabel(fragment)+'…';ui.stage.appendChild(loading);
+  try{
+    if(fragment.kind==='web'){
+      ui.stage.classList.add('reading-web-stage');const result=await api('/api/readings/web?path='+encodeURIComponent(fragment.path));if(!result.ok)throw new Error(result.error||'网页加载失败');const open=document.createElement('a');open.href=result.url;open.target='_blank';open.rel='noopener noreferrer';open.textContent='打开原网页';ui.toolbar.append(open);ui.title.textContent=result.title||readingBase(fragment.name);const article=document.createElement('article');article.className='reading-web-article';article.innerHTML=sanitizeReadingWebHtml(result.html,result.url);if(result.title&&!article.querySelector('h1')){const heading=document.createElement('h1');heading.textContent=result.title;article.prepend(heading);}ui.stage.replaceChildren(article);return;
+    }
+    const response=await fetch('/api/readings/file?path='+encodeURIComponent(fragment.path),{cache:'no-store'});if(!response.ok)throw new Error('资料文件读取失败（HTTP '+response.status+'）');const buffer=await response.arrayBuffer();
+    if(fragment.kind==='docx'){
+      await ensureOfficeWord();const host=document.createElement('div');host.className='reading-docx-host';ui.stage.replaceChildren(host);await window.docx.renderAsync(buffer,host,null,{className:'docx',inWrapper:true,breakPages:true,ignoreLastRenderedPageBreak:false,renderHeaders:true,renderFooters:true,renderFootnotes:true,useBase64URL:true});return;
+    }
+    if(fragment.kind==='sheet'){
+      await ensureOfficeSheet();const workbook=XLSX.read(buffer,{type:'array',cellStyles:true,cellDates:true}),wrap=document.createElement('div'),tabs=document.createElement('div'),table=document.createElement('div');wrap.className='reading-sheet-wrap';tabs.className='reading-sheet-tabs';table.className='reading-sheet-table';const renderSheet=(name)=>{tabs.querySelectorAll('button').forEach((button)=>button.classList.toggle('on',button.dataset.sheet===name));table.innerHTML=XLSX.utils.sheet_to_html(workbook.Sheets[name],{id:'',editable:false});};for(const name of workbook.SheetNames){const button=document.createElement('button');button.type='button';button.dataset.sheet=name;button.textContent=name;button.onclick=()=>renderSheet(name);tabs.appendChild(button);}wrap.append(tabs,table);ui.stage.replaceChildren(wrap);if(workbook.SheetNames.length)renderSheet(workbook.SheetNames[0]);return;
+    }
+    if(fragment.kind==='slides'){
+      const frame=document.createElement('iframe');frame.className='reading-slides-frame';frame.setAttribute('sandbox','allow-scripts');frame.title='PowerPoint 阅读预览';const width=Math.max(640,Math.min(1120,ui.stage.clientWidth-36)),height=Math.round(width*9/16);frame.style.minHeight=Math.max(560,ui.stage.clientHeight-44)+'px';frame.srcdoc='<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;min-height:100%;background:#0c1118;color:#dce5f3;font-family:-apple-system,sans-serif}#host{min-height:100vh;padding:24px;box-sizing:border-box}.pptx-preview-wrapper{border-radius:8px;overflow:hidden;box-shadow:0 18px 56px rgba(0,0,0,.55)}</style><script src="/office-pptx/pptx-preview.umd.js"><\/script></head><body><div id="host"></div><script>addEventListener("message",async e=>{if(!e.data||e.data.type!=="codescope-reading-pptx")return;try{const viewer=pptxPreview.init(document.getElementById("host"),{width:e.data.width,height:e.data.height,mode:"slide"});await viewer.preview(e.data.buffer);parent.postMessage({type:"codescope-reading-pptx-rendered"},"*")}catch(error){parent.postMessage({type:"codescope-reading-pptx-error",error:String(error&&error.message||error)},"*")}});parent.postMessage({type:"codescope-reading-pptx-ready"},"*")<\/script></body></html>';ui.stage.replaceChildren(frame);await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{window.removeEventListener('message',receive);reject(new Error('演示文稿预览组件加载超时'));},20000);const receive=(event)=>{if(event.source!==frame.contentWindow||!event.data)return;if(event.data.type==='codescope-reading-pptx-ready')frame.contentWindow.postMessage({type:'codescope-reading-pptx',buffer,width,height},'*',[buffer]);else if(event.data.type==='codescope-reading-pptx-rendered'){clearTimeout(timer);window.removeEventListener('message',receive);resolve();}else if(event.data.type==='codescope-reading-pptx-error'){clearTimeout(timer);window.removeEventListener('message',receive);reject(new Error(event.data.error||'演示文稿渲染失败'));}};window.addEventListener('message',receive);});return;
+    }
+  }catch(error){const failed=document.createElement('div');failed.className='reading-asset-error';failed.textContent=String(error.message||error);ui.stage.replaceChildren(failed);readingStatus('资料加载失败：'+failed.textContent,true);}
+}
 function readingPdfRefPath(path){return encodeURIComponent(String(path||'')).replace(/'/g,'%27');}
 function readingPdfRefDecode(value){try{return decodeURIComponent(String(value||''));}catch(_){return String(value||'');}}
 function readingPdfRefMarkdown(doc,item){
@@ -4676,9 +4739,10 @@ async function renderReadingSlot(slot) {
   if(READING_SLASH_STATE&&READING_SLASH_STATE.slot===slot)hideReadingSlashMenu();
   const els=readingSlotElements(slot),path=READING_SLOTS[slot],fragment=readingFragment(path);if(els.body.__readingBlockDestroy)await els.body.__readingBlockDestroy();delete els.body.__readingBlockDestroy;els.body.replaceChildren();els.name.textContent=path?readingBase(path):'拖入项目片段';
   els.view.style.display='';els.page.style.display='';els.pages.style.display='';els.col.querySelector('.reading-prev').style.display='';els.col.querySelector('.reading-next').style.display='';
-  if(!path){const empty=document.createElement('div');empty.className='reading-paper';empty.innerHTML='<div class="empty">从左侧阅读项目拖入 PDF、Markdown 或代码片段<br>可与另一片段并排阅读</div>';els.body.appendChild(empty);els.page.disabled=true;return;}
-  if(fragment&&fragment.kind!=='pdf'){
-    els.view.style.display='none';els.page.style.display='none';els.pages.style.display='none';els.col.querySelector('.reading-prev').style.display='none';els.col.querySelector('.reading-next').style.display='none';
+  if(!path){const empty=document.createElement('div');empty.className='reading-paper';empty.innerHTML='<div class="empty">从左侧阅读项目拖入 PDF、Office 文档、网页、Markdown 或代码片段<br>可与另一份资料并排阅读</div>';els.body.appendChild(empty);els.page.disabled=true;return;}
+  if(fragment&&['docx','sheet','slides','web'].includes(fragment.kind)){await renderReadingAsset(slot,els,fragment);if(slot===READING_ACTIVE_SLOT)syncReadingTools();return;}
+  if(fragment&&['markdown','code'].includes(fragment.kind)){
+    hideReadingPagination(els);
     let record=READING_TEXT_DOCS.get(path);if(!record){const result=await api('/api/readings/text-fragment?path='+encodeURIComponent(path));record={content:result.ok?result.content:'',savedContent:result.ok?result.content:'',error:result.ok?'':result.error};READING_TEXT_DOCS.set(path,record);}else if(record.savedContent===undefined)record.savedContent=record.content||'';
     const shell=document.createElement('div');shell.className='reading-text-shell '+fragment.kind;const editor=document.createElement('textarea');editor.className='reading-text-editor '+fragment.kind;editor.spellcheck=false;editor.value=record.content||'';editor.placeholder=fragment.kind==='markdown'?'在这里记录论文笔记、结论与引用…（输入 / 插入内容块）':'在这里添加与论文相关的代码…';
     const foot=document.createElement('div');foot.className='reading-text-foot';foot.textContent=record.error||((record.content||'').length+' 字符 · 自动保存');
@@ -4738,7 +4802,7 @@ async function openReadingProject(project) {
   if(DRAW_FILE||DRAW_ROOT)await closeDrawEditor(true);
   READING_PROJECT_CURRENT=project.path;READING_DIR_OPEN.add(project.path);saveReadingDirs();
   document.body.classList.add('reading-mode');$('reading-title').textContent=project.name;$('reading-project-context').textContent=[project.description,(project.tags||[]).map((tag)=>'#'+tag).join(' ')].filter(Boolean).join(' · ');renderReadingList();renderReadingProjectTabs();
-  if(!project.children||!project.children.length){READING_SLOTS=['',''];READING_CURRENT='';updateReadingColumnLayout();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);renderReadingFragments();readingStatus('空阅读项目 · 点击“＋ 片段”添加 PDF、Markdown 或代码');return;}
+  if(!project.children||!project.children.length){READING_SLOTS=['',''];READING_CURRENT='';updateReadingColumnLayout();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);renderReadingFragments();readingStatus('空阅读项目 · 点击“＋ 片段”添加 PDF、Office 文档、网页、Markdown 或代码');return;}
   const original=project.children.find((item)=>item.kind==='pdf'&&item.role==='original');
   const translated=project.children.find((item)=>item.kind==='pdf'&&item.role==='translation');
   const bilingual=project.children.find((item)=>item.kind==='pdf'&&item.role==='bilingual');
@@ -4758,7 +4822,7 @@ async function openReading(path,slot) {
   const fragment=readingFragment(path);READING_PROJECT_CURRENT=readingProjectFor(path);READING_CURRENT=path;READING_ACTIVE_SLOT=slot==null?0:slot;READING_SLOTS[READING_ACTIVE_SLOT]=path;
   updateReadingColumnLayout();
   const project=READING_PROJECT_INDEX.get(READING_PROJECT_CURRENT);document.body.classList.add('reading-mode');$('reading-title').textContent=project?project.name:(READING_PROJECT_CURRENT||readingBase(path));$('reading-project-context').textContent=project?[project.description,(project.tags||[]).map((tag)=>'#'+tag).join(' ')].filter(Boolean).join(' · '):'';renderReadingList();renderReadingProjectTabs();readingStatus(fragment&&fragment.kind!=='pdf'?'正在打开项目片段…':'正在解析 PDF…');
-  if(fragment&&fragment.kind!=='pdf'){await renderReadingSlot(READING_ACTIVE_SLOT);renderReadingFragments();readingStatus(readingRoleLabel(fragment)+' · 编辑内容会自动保存');return;}
+  if(fragment&&fragment.kind!=='pdf'){await renderReadingSlot(READING_ACTIVE_SLOT);renderReadingFragments();readingStatus(['markdown','code'].includes(fragment.kind)?readingRoleLabel(fragment)+' · 编辑内容会自动保存':readingRoleLabel(fragment)+' · 阅读模式');return;}
   const doc=await ensureReadingDoc(path);const primary=readingSlotElements(READING_ACTIVE_SLOT);primary.page.value=doc.meta.page||1;const roleView=fragment&&fragment.kind==='pdf'?(fragment.role==='translation'?'translation':fragment.role==='bilingual'?'bilingual':'original'):'original';primary.view.value=doc.meta.view&&doc.meta.view!=='original'?doc.meta.view:roleView;
   await renderReadingSlot(READING_ACTIVE_SLOT);renderReadingFragments();readingStatus(doc.error?doc.error:(doc.pageCount+' 页 · 可选择文字保存摘录'),!!doc.error);
 }
@@ -4838,19 +4902,20 @@ function startFragNoteEdit(card, doc, item) {
 }
 async function importReadingFiles(files) {
   if(!files||!files.length)return;let folder=READING_IMPORT_PROJECT||READING_PROJECT_CURRENT;READING_IMPORT_PROJECT='';const projects=[...READING_PROJECT_INDEX.keys()];if(!folder){if(!projects.length)return readingStatus('请先创建一个阅读项目',true);const choice=prompt('导入到哪个阅读项目？\n可选：'+projects.join('、'),projects[0]);if(choice===null)return;folder=choice.trim();}if(!projects.includes(folder))return readingStatus('阅读项目不存在：'+folder,true);
-  for(let i=0;i<files.length;i++){const file=files[i];if(!/\.pdf$/i.test(file.name)){readingStatus('已跳过非 PDF：'+file.name,true);continue;}readingStatus('正在导入 '+(i+1)+'/'+files.length+' · '+file.name);const info=btoa(unescape(encodeURIComponent(JSON.stringify({name:file.name,folder}))));let response;try{response=await fetch('/api/readings/upload-stream',{method:'POST',headers:{'Content-Type':'application/pdf','X-CodeScope-Reading':info},body:file});const result=await response.json();if(!result.ok)throw new Error(result.error);if(i===files.length-1)READING_CURRENT=result.path;}catch(error){readingStatus(error.message,true);return;}}
-  READING_PROJECT_CURRENT=folder;saveReadingDirs();await loadReadings();readingStatus('PDF 已加入阅读项目');const project=READING_PROJECT_INDEX.get(folder);if(project)openReadingProject(project);
+  const supported=/\.(?:pdf|docx|xlsx|xls|csv|pptx)$/i;let imported=0,lastPath='';for(let i=0;i<files.length;i++){const file=files[i];if(!supported.test(file.name)){readingStatus('已跳过不支持的文件：'+file.name,true);continue;}readingStatus('正在导入 '+(i+1)+'/'+files.length+' · '+file.name);const info=btoa(unescape(encodeURIComponent(JSON.stringify({name:file.name,folder}))));let response;try{response=await fetch('/api/readings/upload-stream',{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream','X-CodeScope-Reading':info},body:file});const result=await response.json();if(!result.ok)throw new Error(result.error);imported++;lastPath=result.path;}catch(error){readingStatus(error.message,true);return;}}
+  if(!imported)return;READING_PROJECT_CURRENT=folder;READING_CURRENT=lastPath;saveReadingDirs();await loadReadings();readingStatus(imported+' 份资料已加入阅读项目');const project=READING_PROJECT_INDEX.get(folder);if(project){await openReadingProject(project);if(lastPath)await openReading(lastPath,READING_ACTIVE_SLOT);}
 }
-const READING_NEW_DEFAULTS={pdf:'',markdown:'阅读笔记.md',c:'示例代码.c',h:'接口定义.h',cpp:'示例代码.cpp',python:'示例代码.py',javascript:'示例代码.js',typescript:'示例代码.ts',latex:'公式笔记.tex',text:'阅读记录.txt'};
-function addReadingProjectFragment(project){const dialog=$('reading-new-dialog'),select=$('reading-new-project');select.replaceChildren();for(const item of READING_PROJECT_INDEX.values()){const option=document.createElement('option');option.value=item.path;option.textContent=item.path;select.appendChild(option);}select.value=project&&project.path||READING_PROJECT_CURRENT||select.value;$('reading-new-kind').value='markdown';$('reading-new-name').disabled=false;$('reading-new-name').value=READING_NEW_DEFAULTS.markdown;dialog.classList.add('open');$('reading-new-name').focus();$('reading-new-name').select();}
+const READING_NEW_DEFAULTS={file:'',web:'网页资料',markdown:'阅读笔记.md',c:'示例代码.c',h:'接口定义.h',cpp:'示例代码.cpp',python:'示例代码.py',javascript:'示例代码.js',typescript:'示例代码.ts',latex:'公式笔记.tex',text:'阅读记录.txt'};
+function syncReadingNewFields(){const kind=$('reading-new-kind').value,file=kind==='file',web=kind==='web';$('reading-new-name').value=READING_NEW_DEFAULTS[kind]||'';$('reading-new-name').disabled=file;$('reading-new-name-label').textContent=web?'资料名称':'文件名';$('reading-new-url-label').classList.toggle('hidden',!web);$('reading-new-url').classList.toggle('hidden',!web);$('reading-new-url').disabled=!web;}
+function addReadingProjectFragment(project){const dialog=$('reading-new-dialog'),select=$('reading-new-project');select.replaceChildren();for(const item of READING_PROJECT_INDEX.values()){const option=document.createElement('option');option.value=item.path;option.textContent=item.path;select.appendChild(option);}select.value=project&&project.path||READING_PROJECT_CURRENT||select.value;$('reading-new-kind').value='markdown';syncReadingNewFields();$('reading-new-url').value='';dialog.classList.add('open');$('reading-new-name').focus();$('reading-new-name').select();}
 function closeReadingNewDialog(){$('reading-new-dialog').classList.remove('open');}
-async function submitReadingNewFragment(){const project=$('reading-new-project').value,kind=$('reading-new-kind').value,name=$('reading-new-name').value.trim();if(!project)return readingStatus('请先创建阅读项目',true);if(kind==='pdf'){closeReadingNewDialog();READING_IMPORT_PROJECT=project;$('reading-file-input').click();return;}if(!name)return $('reading-new-name').focus();const result=await api('/api/readings/text/new',{project,name});if(!result.ok)return alert(result.error);closeReadingNewDialog();READING_PROJECT_CURRENT=project;await loadReadings();openReading(result.path,READING_ACTIVE_SLOT);}
+async function submitReadingNewFragment(){const project=$('reading-new-project').value,kind=$('reading-new-kind').value,name=$('reading-new-name').value.trim();if(!project)return readingStatus('请先创建阅读项目',true);if(kind==='file'){closeReadingNewDialog();READING_IMPORT_PROJECT=project;$('reading-file-input').click();return;}if(!name)return $('reading-new-name').focus();let result;if(kind==='web'){const url=$('reading-new-url').value.trim();if(!url)return $('reading-new-url').focus();result=await api('/api/readings/web/new',{project,title:name,url});}else result=await api('/api/readings/text/new',{project,name});if(!result.ok)return alert(result.error);closeReadingNewDialog();READING_PROJECT_CURRENT=project;await loadReadings();openReading(result.path,READING_ACTIVE_SLOT);}
 function wireReadingPanel() {
   try{const saved=Number(localStorage.getItem('mc-reading-fragments-width'));if(saved>=240)$('reading-stage').style.setProperty('--reading-fragments-width',saved+'px');}catch(_){}
   $('pane-reading').classList.toggle('collapsed',!READING_OPEN);$('reading-head').onclick=()=>{READING_OPEN=!READING_OPEN;$('pane-reading').classList.toggle('collapsed',!READING_OPEN);try{localStorage.setItem('mc-reading-open',READING_OPEN?'1':'0');}catch(_){}};
   $('reading-import').onclick=(e)=>{e.stopPropagation();READING_IMPORT_PROJECT='';$('reading-file-input').click();};$('reading-file-input').onchange=(e)=>{importReadingFiles([...e.target.files]);e.target.value='';};
   $('reading-new-folder').onclick=(e)=>{e.stopPropagation();createReadingProject('');};$('reading-new-library-folder').onclick=(e)=>{e.stopPropagation();createReadingFolder('');};
-  $('reading-new-kind').onchange=()=>{$('reading-new-name').value=READING_NEW_DEFAULTS[$('reading-new-kind').value]||'';$('reading-new-name').disabled=$('reading-new-kind').value==='pdf';};$('reading-new-cancel').onclick=closeReadingNewDialog;$('reading-new-submit').onclick=submitReadingNewFragment;$('reading-new-name').onkeydown=(e)=>{if(e.key==='Enter')submitReadingNewFragment();};$('reading-new-dialog').addEventListener('mousedown',(e)=>{if(e.target===$('reading-new-dialog'))closeReadingNewDialog();});
+  $('reading-new-kind').onchange=syncReadingNewFields;$('reading-new-cancel').onclick=closeReadingNewDialog;$('reading-new-submit').onclick=submitReadingNewFragment;$('reading-new-name').onkeydown=(e)=>{if(e.key==='Enter')submitReadingNewFragment();};$('reading-new-url').onkeydown=(e)=>{if(e.key==='Enter')submitReadingNewFragment();};$('reading-new-dialog').addEventListener('mousedown',(e)=>{if(e.target===$('reading-new-dialog'))closeReadingNewDialog();});
   $('reading-back').onclick=closeReading;
   $('reading-backlinks').onclick=showBacklinks;$('reading-copy-link').onclick=copyCurrentWorkspaceLink;
   $('reading-add-fragment').onclick=addReadingFragment;$('reading-translate-selection').onclick=translateReadingSelection;$('reading-translate-page').onclick=translateReadingPage;$('reading-translate-all').onclick=translateReadingAll;
@@ -15248,10 +15313,11 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
 <div id="reading-new-dialog" role="dialog" aria-modal="true" aria-labelledby="reading-new-title">
   <div class="nd-panel">
     <h3 id="reading-new-title">新建项目片段</h3>
-    <div class="nd-hint">与代码工程一致：选择类型和名称。PDF 使用导入，其余片段创建后可直接编辑并自动保存。</div>
+    <div class="nd-hint">阅读项目可统一收纳 PDF、Office 文档、网页、Markdown 和代码；不同资料可以并排打开。</div>
     <label for="reading-new-project">所属阅读项目</label><select id="reading-new-project"></select>
-    <label for="reading-new-kind">片段类型</label><select id="reading-new-kind"><option value="pdf">PDF 文档（导入文件）</option><option value="markdown">Markdown 文档</option><option value="c">C 源文件</option><option value="h">C/C++ 头文件</option><option value="cpp">C++ 源文件</option><option value="python">Python</option><option value="javascript">JavaScript</option><option value="typescript">TypeScript</option><option value="latex">LaTeX</option><option value="text">纯文本</option></select>
-    <label for="reading-new-name">文件名</label><input id="reading-new-name" type="text" placeholder="阅读笔记.md" autocomplete="off" spellcheck="false">
+    <label for="reading-new-kind">资料类型</label><select id="reading-new-kind"><option value="file">导入文件（PDF / DOCX / XLSX / PPTX）</option><option value="web">网页地址（阅读模式）</option><option value="markdown">Markdown 文档</option><option value="c">C 源文件</option><option value="h">C/C++ 头文件</option><option value="cpp">C++ 源文件</option><option value="python">Python</option><option value="javascript">JavaScript</option><option value="typescript">TypeScript</option><option value="latex">LaTeX</option><option value="text">纯文本</option></select>
+    <label id="reading-new-name-label" for="reading-new-name">文件名</label><input id="reading-new-name" type="text" placeholder="阅读笔记.md" autocomplete="off" spellcheck="false">
+    <label id="reading-new-url-label" class="hidden" for="reading-new-url">网页地址</label><input id="reading-new-url" class="hidden" type="url" placeholder="https://example.com/article" autocomplete="url" spellcheck="false" disabled>
     <div class="nd-btns"><button id="reading-new-cancel">取消</button><button id="reading-new-submit" class="primary">创建</button></div>
   </div>
 </div>
