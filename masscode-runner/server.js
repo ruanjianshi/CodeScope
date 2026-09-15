@@ -2499,6 +2499,91 @@ function trustedHttpOrigin(req) {
 /* ------------------------------- 统一资料阅读库 ------------------------------- */
 
 function readingsDir() { return path.join(vaultPath(), 'readings'); }
+
+/* ------------------------------- 学习工作台 ------------------------------- */
+
+function studyDir() { return path.join(vaultPath(), '.codescope', 'study'); }
+function studyConfigFile() { return path.join(studyDir(), 'workspace.json'); }
+function studySafeName(value, fallback) {
+  const name = String(value || '').trim().replace(/[^A-Za-z0-9._-]/g, '').slice(0, 96);
+  return name || fallback || '';
+}
+function defaultStudyConfig() {
+  return {
+    version:3,
+    title:'学习工作台',
+    preset:'study',
+    bookmarks:[
+      { id:'bilibili', label:'B站', url:'https://www.bilibili.com', color:'#fb7299', category:'featured' },
+      { id:'github', label:'GitHub', url:'https://github.com', color:'#8b949e', category:'featured' },
+      { id:'arxiv', label:'arXiv', url:'https://arxiv.org', color:'#b31b1b', category:'featured' },
+      { id:'mdn', label:'MDN', url:'https://developer.mozilla.org', color:'#62a0ea', category:'featured' },
+    ],
+    categories:[],
+    hiddenSites:[],
+    layout:null,
+    updatedAt:0,
+  };
+}
+function cleanStudyConfig(value) {
+  const fallback = defaultStudyConfig(), parsed = value && typeof value === 'object' ? value : {};
+  const bookmarks = Array.isArray(parsed.bookmarks) ? parsed.bookmarks.slice(0, 512).map((item, index) => {
+    const id = studySafeName(item && item.id, 'site-' + index);
+    return {
+      id,
+      label:String(item && item.label || '网址').trim().slice(0, 24) || '网址',
+      url:String(item && item.url || '').trim().slice(0, 2048),
+      color:/^#[0-9a-f]{6}$/i.test(String(item && item.color || '')) ? item.color : '#4f8cff',
+      category:studySafeName(item && item.category, '') || (['bilibili','github','arxiv','mdn'].includes(id) ? 'featured' : 'custom'),
+    };
+  }).filter((item) => /^https?:\/\//i.test(item.url)) : fallback.bookmarks;
+  const categoryIds = new Set();
+  const categories = Array.isArray(parsed.categories) ? parsed.categories.slice(0, 64).map((item, index) => ({
+    id:studySafeName(item && item.id, 'category-' + index),
+    label:String(item && item.label || '自定义分类').trim().slice(0, 24) || '自定义分类',
+    icon:String(item && item.icon || '◆').trim().slice(0, 8) || '◆',
+    color:/^#[0-9a-f]{6}$/i.test(String(item && item.color || '')) ? item.color : '#70d6a3',
+  })).filter((item) => !categoryIds.has(item.id) && categoryIds.add(item.id)) : [];
+  const hiddenSites = Array.isArray(parsed.hiddenSites) ? [...new Set(parsed.hiddenSites.map((item) => String(item || '').trim().slice(0, 2048)).filter((item) => /^https?:\/\//i.test(item)))].slice(0, 512) : [];
+  let layout = parsed.layout && typeof parsed.layout === 'object' ? parsed.layout : null;
+  if (layout && Buffer.byteLength(JSON.stringify(layout)) > 1024 * 1024) layout = null;
+  return {
+    version:3,
+    title:String(parsed.title || fallback.title).trim().slice(0, 80) || fallback.title,
+    preset:String(parsed.preset || fallback.preset).slice(0, 24),
+    bookmarks,
+    categories,
+    hiddenSites,
+    layout,
+    updatedAt:Number(parsed.updatedAt) || Date.now(),
+  };
+}
+function readStudyConfig() {
+  try { return cleanStudyConfig(JSON.parse(fs.readFileSync(studyConfigFile(), 'utf8'))); }
+  catch (_) { return defaultStudyConfig(); }
+}
+function saveStudyConfig(input) {
+  const next = cleanStudyConfig({ ...readStudyConfig(), ...(input && typeof input === 'object' ? input : {}), updatedAt:Date.now() });
+  fs.mkdirSync(studyDir(), { recursive:true });
+  fs.writeFileSync(studyConfigFile(), JSON.stringify(next, null, 2) + '\n', 'utf8');
+  return next;
+}
+function studyNoteFile(id) {
+  const safe = studySafeName(id);
+  return safe ? path.join(studyDir(), 'notes', safe + '.md') : '';
+}
+function studyAssetFile(name) {
+  const safe = studySafeName(name);
+  return safe && /\.(?:png|jpe?g|webp)$/i.test(safe) ? path.join(studyDir(), 'assets', safe) : '';
+}
+function isStudyImage(body, type) {
+  if (!Buffer.isBuffer(body)) return false;
+  if (type === 'image/png') return body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]));
+  if (type === 'image/jpeg') return body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff;
+  if (type === 'image/webp') return body.length >= 12 && body.subarray(0, 4).toString('ascii') === 'RIFF' && body.subarray(8, 12).toString('ascii') === 'WEBP';
+  return false;
+}
+
 const READING_TEXT_EXTS = new Set(['.md','.markdown','.txt','.c','.h','.cpp','.hpp','.cc','.py','.js','.ts','.json','.yaml','.yml','.tex']);
 const READING_DOCUMENT_EXTS = new Set(['.docx','.xlsx','.xls','.csv','.pptx']);
 const READING_WEB_EXTS = new Set(['.url']);
@@ -2574,8 +2659,56 @@ async function validatedReadingWebUrl(value) {
   if (!addresses.length || addresses.some((item) => privateNetworkAddress(item.address))) throw requestError('出于安全原因，网页阅读不能访问局域网或保留地址', 403);
   return url;
 }
+function readableWebNavigation(html) {
+  const source = String(html || '');
+  const chapter = /<ol\b[^>]*class=["'][^"']*\bchapter\b[^"']*["'][^>]*>[\s\S]*?<\/ol\s*>/i.exec(source);
+  if (chapter && (chapter[0].match(/<a\b/gi) || []).length >= 2) return chapter[0].slice(0, 2 * 1024 * 1024);
+  const candidates = [], pattern = /<(nav|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+  let match;
+  while ((match = pattern.exec(source))) {
+    const links = (match[0].match(/<a\b/gi) || []).length;
+    if (links >= 2) candidates.push({ html:match[0], score:links * 1000 + Math.min(match[0].length, 100000) });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0] ? candidates[0].html.slice(0, 2 * 1024 * 1024) : '';
+}
+function readableWebNavigationLinkCount(html) { return (String(html || '').match(/<a\b/gi) || []).length; }
+const READING_WEB_NAV_CACHE = new Map();
+async function readableWebCompanionNavigation(html, pageUrl) {
+  const source = String(html || '');
+  const match = /<iframe\b[^>]*\bsrc=["']([^"']*(?:toc|sidebar)[^"']*\.html(?:[?#][^"']*)?)["'][^>]*>/i.exec(source);
+  if (!match) return '';
+  let target;
+  try { target = await validatedReadingWebUrl(new URL(match[1].replace(/&amp;/g, '&'), pageUrl).toString()); }
+  catch (_) { return ''; }
+  if (target.origin !== pageUrl.origin) return '';
+  const cacheKey = target.toString(), cached = READING_WEB_NAV_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.html;
+  for (let redirect = 0; redirect <= 2; redirect += 1) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(target, { redirect:'manual', signal:controller.signal, headers:{ 'User-Agent':'CodeScope/2.4 Reading Navigation', Accept:'text/html,application/xhtml+xml' } });
+      if (response.status >= 300 && response.status < 400 && response.headers.get('location')) {
+        if (redirect === 2) return '';
+        const next = await validatedReadingWebUrl(new URL(response.headers.get('location'), target).toString());
+        if (next.origin !== pageUrl.origin) return '';
+        target = next;
+        continue;
+      }
+      if (!response.ok) return '';
+      const data = Buffer.from(await response.arrayBuffer());
+      if (data.length > 2 * 1024 * 1024) return '';
+      const navigation = readableWebNavigation(data.toString('utf8'));
+      if (navigation) READING_WEB_NAV_CACHE.set(cacheKey, { at:Date.now(), html:navigation });
+      return navigation;
+    } catch (_) { return ''; }
+    finally { clearTimeout(timer); }
+  }
+  return '';
+}
 function readableWebSection(html) {
-  const source = String(html || '')
+  const raw = String(html || ''), navigationHtml = readableWebNavigation(raw);
+  const source = raw
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<(script|style|noscript|svg|canvas|form|nav|footer|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
     .replace(/<(script|style|noscript|svg|canvas|form|nav|footer|aside)\b[^>]*\/?>/gi, '');
@@ -2583,7 +2716,7 @@ function readableWebSection(html) {
   const article = (/<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(source) || [])[1];
   const main = (/<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(source) || [])[1];
   const body = (/<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(source) || [])[1];
-  return { title, html:String(article || main || body || source).slice(0, 6 * 1024 * 1024) };
+  return { title, html:String(article || main || body || source).slice(0, 6 * 1024 * 1024), navigationHtml };
 }
 async function fetchReadableWebPage(input) {
   let url = await validatedReadingWebUrl(input);
@@ -2608,8 +2741,14 @@ async function fetchReadableWebPage(input) {
         for (;;) { const part = await reader.read(); if (part.done) break; bytes += part.value.byteLength; if (bytes > 8 * 1024 * 1024) throw requestError('网页内容超过 8 MB', 413); chunks.push(Buffer.from(part.value)); }
       } else { const data = Buffer.from(await response.arrayBuffer()); bytes = data.length; if (bytes > 8 * 1024 * 1024) throw requestError('网页内容超过 8 MB', 413); chunks.push(data); }
     } finally { clearTimeout(timer); }
-    const readable = readableWebSection(Buffer.concat(chunks).toString('utf8'));
-    return { ...readable, url:url.toString() };
+    const raw = Buffer.concat(chunks).toString('utf8'), readable = readableWebSection(raw), companionNavigation = await readableWebCompanionNavigation(raw, url);
+    let navigationUrl = url.toString();
+    if (readableWebNavigationLinkCount(companionNavigation) > readableWebNavigationLinkCount(readable.navigationHtml)) {
+      readable.navigationHtml = companionNavigation;
+      const navigationSource = /<iframe\b[^>]*\bsrc=["']([^"']*(?:toc|sidebar)[^"']*\.html(?:[?#][^"']*)?)["'][^>]*>/i.exec(raw);
+      if (navigationSource) try { navigationUrl = new URL(navigationSource[1].replace(/&amp;/g, '&'), url).toString(); } catch (_) {}
+    }
+    return { ...readable, url:url.toString(), navigationUrl };
   }
   throw requestError('网页加载失败', 502);
 }
@@ -2620,6 +2759,7 @@ function readingMetaFile(rel) {
   const id = crypto.createHash('sha256').update(rel).digest('hex');
   return path.join(readingsDir(), '.codescope', id + '.json');
 }
+function readingHasMeta(rel) { return /\.(?:pdf|url)$/i.test(String(rel || '')); }
 function defaultReadingMeta(rel) {
   return { version:1, path:rel, page:1, view:'original', translations:{}, fragments:[], updatedAt:0 };
 }
@@ -2642,6 +2782,11 @@ function saveReadingMeta(rel, value) {
     note:String(item.note || '').slice(0, 10000), createdAt:Number(item.createdAt) || Date.now(),
     rects:Array.isArray(item && item.rects) ? item.rects.slice(0, 200).map((r) => ({ x:Number(r && r.x) || 0, y:Number(r && r.y) || 0, width:Number(r && r.width) || 0, height:Number(r && r.height) || 0 })) : [],
     scale:Number(item && item.scale) || 1,
+    url:String(item && item.url || '').slice(0, 4096),
+    webTitle:String(item && item.webTitle || '').slice(0, 500),
+    anchor:String(item && item.anchor || '').slice(0, 1000),
+    webStart:Math.max(0, Number(item && item.webStart) || 0),
+    webEnd:Math.max(0, Number(item && item.webEnd) || 0),
   })) : [];
   clean.updatedAt = Date.now();
   const target = readingMetaFile(rel);
@@ -3227,6 +3372,22 @@ function readBody(req, maxBytes = 45e6) {
   });
 }
 
+function readRawBody(req, maxBytes = 12e6) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let bytes = 0;
+    req.on('data', (chunk) => {
+      bytes += chunk.length;
+      if (bytes <= maxBytes) chunks.push(chunk);
+    });
+    req.once('end', () => bytes > maxBytes
+      ? reject(requestError('请求内容超过 ' + Math.round(maxBytes / 1e6) + ' MB', 413))
+      : resolve(Buffer.concat(chunks)));
+    req.once('aborted', () => reject(requestError('请求在传输完成前已中止', 400)));
+    req.once('error', reject);
+  });
+}
+
 function searchPlainText(value, maxLength) {
   return String(value || '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim().slice(0, maxLength || 1200);
 }
@@ -3307,6 +3468,10 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/monaco/'.length);
       return streamStatic(req, res, monacoRoot, rel, { cacheControl:'public, max-age=86400', notFound:'Monaco asset not found；请先运行 npm install' });
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/golden-layout/')) {
+      const root = path.join(__dirname, 'node_modules', 'golden-layout', 'dist');
+      return streamStatic(req, res, root, u.pathname.slice('/golden-layout/'.length), { cacheControl:'public, max-age=86400', notFound:'学习工作台布局组件不存在；请先运行 npm install' });
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/xmind-viewer/')) {
       const viewerRoot = path.join(__dirname, 'node_modules', 'xmind-embed-viewer', 'dist', 'umd');
       const rel = u.pathname.slice('/xmind-viewer/'.length);
@@ -3341,6 +3506,74 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/system/status') {
       return send(res, 200, await systemStatus());
     }
+    if (u.pathname === '/api/study/config') {
+      if (req.method === 'GET') return send(res, 200, { ok:true, config:readStudyConfig() });
+      if (req.method === 'POST') {
+        try { return send(res, 200, { ok:true, config:saveStudyConfig(await readBody(req, 2 * 1024 * 1024)) }); }
+        catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
+      }
+    }
+    if (u.pathname === '/api/study/note') {
+      const id = studySafeName(u.searchParams.get('id'));
+      const file = studyNoteFile(id);
+      if (!file) return send(res, 400, { ok:false, error:'笔记标识不合法' });
+      if (req.method === 'GET') {
+        try { return send(res, 200, { ok:true, id, content:fs.readFileSync(file, 'utf8') }); }
+        catch (_) { return send(res, 200, { ok:true, id, content:'# 学习笔记\n\n' }); }
+      }
+      if (req.method === 'POST') {
+        try {
+          const body = await readBody(req, 9 * 1024 * 1024), content = String(body && body.content != null ? body.content : '');
+          if (Buffer.byteLength(content) > 8 * 1024 * 1024) return send(res, 413, { ok:false, error:'笔记超过 8 MB' });
+          fs.mkdirSync(path.dirname(file), { recursive:true });
+          fs.writeFileSync(file, content, 'utf8');
+          return send(res, 200, { ok:true, id, size:Buffer.byteLength(content) });
+        } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
+      }
+    }
+    if (u.pathname === '/api/study/asset') {
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        const name = studySafeName(u.searchParams.get('name')), file = studyAssetFile(name);
+        if (!file) return send(res, 400, { ok:false, error:'学习图片路径不合法' });
+        return streamStatic(req, res, path.dirname(file), path.basename(file), { cacheControl:'private, no-cache', notFound:'学习图片不存在' });
+      }
+      if (req.method === 'POST') {
+        try {
+          const type = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
+          if (!['image/png','image/jpeg','image/webp'].includes(type)) return send(res, 415, { ok:false, error:'仅支持 PNG、JPEG 或 WebP 学习图片' });
+          const body = await readRawBody(req, 12 * 1024 * 1024), ext = type === 'image/png' ? '.png' : (type === 'image/webp' ? '.webp' : '.jpg');
+          if (!body.length) return send(res, 400, { ok:false, error:'学习图片内容为空' });
+          if (!isStudyImage(body, type)) return send(res, 415, { ok:false, error:'学习图片内容与图片格式不匹配' });
+          const name = 'frame-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex') + ext, file = studyAssetFile(name);
+          fs.mkdirSync(path.dirname(file), { recursive:true });
+          fs.writeFileSync(file, body);
+          const url = '/api/study/asset?name=' + encodeURIComponent(name), title = String(u.searchParams.get('title') || '视频帧').replace(/[\[\]]/g, '').slice(0, 80);
+          return send(res, 200, { ok:true, name, url, markdown:'![' + title + '](' + url + ')' });
+        } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
+      }
+    }
+    if (req.method === 'GET' && u.pathname === '/api/study/resolve-url') {
+      const raw = String(u.searchParams.get('url') || '').trim();
+      let parsed;
+      try { parsed = new URL(raw); }
+      catch (_) { return send(res, 400, { ok:false, error:'网址格式不正确' }); }
+      const allowed = new Set(['b23.tv','www.bilibili.com','bilibili.com','m.bilibili.com','player.bilibili.com']);
+      if (!allowed.has(parsed.hostname.toLowerCase())) return send(res, 200, { ok:true, url:parsed.toString() });
+      try {
+        if (parsed.hostname.toLowerCase() === 'b23.tv') {
+          const response = await fetch(parsed, { method:'HEAD', redirect:'follow', signal:AbortSignal.timeout(8000) });
+          const resolved = new URL(response.url);
+          if (allowed.has(resolved.hostname.toLowerCase())) parsed = resolved;
+        }
+      } catch (_) {}
+      return send(res, 200, { ok:true, url:parsed.toString() });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/study/readable') {
+      try {
+        const target = parsedReadingWebUrl(String(u.searchParams.get('url') || ''));
+        return send(res, 200, { ok:true, ...(await fetchReadableWebPage(target)) });
+      } catch (error) { return send(res, error.statusCode || 502, { ok:false, error:String(error.message || error) }); }
+    }
     if (req.method === 'GET' && u.pathname === '/api/snippets') {
       send(res, 200, { vault: vaultPath(), rev: computeRev(), tags: readTagRegistry().list, folders: walkFolders(), resources: walkLatexResources(), snippets: walkSnippets() });
       return;
@@ -3352,7 +3585,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/version') {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 6, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
-        features: ['dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
+        study:{ available:true, webOnly:true, layoutEngine:'Golden Layout', paneTypes:['browser','code','notes','pdf'], presets:['study','dual','notes','quad'] },
+        features: ['study-workspace', 'study-bookmarks', 'study-site-catalog', 'study-site-categories', 'study-layout-presets', 'study-layout-truth', 'study-readable-browser', 'study-video-timepoints', 'study-video-frame-capture', 'dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'docx-page-break-normalization', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'reading-web-site-navigation', 'reading-web-session', 'reading-web-whole-page-zoom', 'reading-web-annotations', 'reading-web-location', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3536,17 +3770,17 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/folder/rename') {
       const b=await readBody(req),from=readingPath(String(b.folder||''),true),name=readingPath(String(b.name||''),true);if(!from||!name||name.includes('/'))return send(res,400,{ok:false,error:'阅读文件夹名称不合法'});const parent=path.posix.dirname(from)==='.'?'':path.posix.dirname(from),to=parent?parent+'/'+name:name,source=path.join(readingsDir(),from),target=path.join(readingsDir(),to);if(fs.existsSync(target))return send(res,409,{ok:false,error:'同名文件夹已存在'});
-      const pdfs=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(/\.pdf$/i.test(e.name))pdfs.push(rel);}};try{scan(source,from);fs.renameSync(source,target);for(const oldRel of pdfs)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'阅读文件夹重命名失败：'+String(error.message||error)});}
+      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(source,from);fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'阅读文件夹重命名失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/folder/delete') {
-      const b=await readBody(req),folder=readingPath(String(b.folder||''),true);if(!folder)return send(res,400,{ok:false,error:'阅读文件夹路径不合法'});const dir=path.join(readingsDir(),folder),pdfs=[];const scan=(current,prefix)=>{for(const e of fs.readdirSync(current,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(current,e.name),rel);else if(/\.pdf$/i.test(e.name))pdfs.push(rel);}};try{scan(dir,folder);fs.rmSync(dir,{recursive:true,force:false});for(const rel of pdfs)try{fs.unlinkSync(readingMetaFile(rel));}catch(_){}return send(res,200,{ok:true});}catch(error){return send(res,500,{ok:false,error:'删除阅读文件夹失败：'+String(error.message||error)});}
+      const b=await readBody(req),folder=readingPath(String(b.folder||''),true);if(!folder)return send(res,400,{ok:false,error:'阅读文件夹路径不合法'});const dir=path.join(readingsDir(),folder),metaAssets=[];const scan=(current,prefix)=>{for(const e of fs.readdirSync(current,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(current,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(dir,folder);fs.rmSync(dir,{recursive:true,force:false});for(const rel of metaAssets)try{fs.unlinkSync(readingMetaFile(rel));}catch(_){}return send(res,200,{ok:true});}catch(error){return send(res,500,{ok:false,error:'删除阅读文件夹失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/node/move') {
       const b=await readBody(req),type=String(b.type||''),from=readingPath(String(b.path||''),true),toFolder=b.toFolder?readingPath(String(b.toFolder),true):'';
       if(!['folder','project'].includes(type)||!from||(b.toFolder&&!toFolder))return send(res,400,{ok:false,error:'阅读节点或目标文件夹路径不合法'});if(type==='folder'&&toFolder&&(toFolder===from||toFolder.startsWith(from+'/')))return send(res,400,{ok:false,error:'不能把文件夹移动到自身或子文件夹中'});
       const source=path.join(readingsDir(),from);if(!fs.existsSync(source)||!fs.statSync(source).isDirectory())return send(res,404,{ok:false,error:'待移动的阅读项目或文件夹不存在'});if(toFolder){const parent=path.join(readingsDir(),toFolder);if(!fs.existsSync(parent)||!fs.statSync(parent).isDirectory())return send(res,404,{ok:false,error:'目标阅读文件夹不存在'});}
       const base=path.posix.basename(from),to=toFolder?toFolder+'/'+base:base;if(to===from)return send(res,200,{ok:true,path:from,unchanged:true});const target=path.join(readingsDir(),to);if(fs.existsSync(target))return send(res,409,{ok:false,error:'目标位置已有同名项目或文件夹'});
-      const pdfs=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(/\.pdf$/i.test(e.name))pdfs.push(rel);}};try{scan(source,from);fs.mkdirSync(path.dirname(target),{recursive:true});fs.renameSync(source,target);for(const oldRel of pdfs)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'移动失败：'+String(error.message||error)});}
+      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(source,from);fs.mkdirSync(path.dirname(target),{recursive:true});fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'移动失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/text/new') {
       const b=await readBody(req), project=readingPath(String(b.project||''),true), name=path.basename(String(b.name||'')).trim();
@@ -3576,17 +3810,21 @@ const server = http.createServer(async (req, res) => {
       try { const result = await fetchReadableWebPage(readingWebShortcut(rel)); return send(res, 200, { ok:true, path:rel, ...result }); }
       catch (error) { return send(res, error.statusCode || 502, { ok:false, error:String(error.message || error) }); }
     }
+    if (req.method === 'GET' && u.pathname === '/api/readings/web/page') {
+      try { return send(res, 200, { ok:true, ...(await fetchReadableWebPage(u.searchParams.get('url'))) }); }
+      catch (error) { return send(res, error.statusCode || 502, { ok:false, error:String(error.message || error) }); }
+    }
     if (req.method === 'POST' && u.pathname === '/api/readings/project/rename') {
       const b=await readBody(req),from=readingPath(String(b.project||''),true),name=readingPath(String(b.name||''),true);const parent=from&&(path.posix.dirname(from)==='.'?'':path.posix.dirname(from)),to=parent?parent+'/'+name:name;
       if(!from||!name||name.includes('/'))return send(res,400,{ok:false,error:'阅读项目名称不合法'});
       const source=path.join(readingsDir(),from),target=path.join(readingsDir(),to);if(fs.existsSync(target))return send(res,409,{ok:false,error:'同名阅读项目已存在'});
-      const pdfs=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){if(e.name==='.codescope')continue;const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(/\.pdf$/i.test(e.name))pdfs.push(rel);}};
-      try{scan(source,from);fs.renameSync(source,target);for(const oldRel of pdfs)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,project:to});}catch(error){return send(res,500,{ok:false,error:'阅读项目重命名失败：'+String(error.message||error)});}
+      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){if(e.name==='.codescope')continue;const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};
+      try{scan(source,from);fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,project:to});}catch(error){return send(res,500,{ok:false,error:'阅读项目重命名失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/project/delete') {
       const b=await readBody(req),project=readingPath(String(b.project||''),true);if(!project)return send(res,400,{ok:false,error:'阅读项目名称不合法'});
-      const dir=path.join(readingsDir(),project),pdfs=[];const scan=(folder,prefix)=>{for(const e of fs.readdirSync(folder,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(folder,e.name),rel);else if(/\.pdf$/i.test(e.name))pdfs.push(rel);}};
-      try{scan(dir,project);fs.rmSync(dir,{recursive:true,force:false});for(const rel of pdfs)try{fs.unlinkSync(readingMetaFile(rel));}catch(_){}return send(res,200,{ok:true});}catch(error){return send(res,500,{ok:false,error:'删除阅读项目失败：'+String(error.message||error)});}
+      const dir=path.join(readingsDir(),project),metaAssets=[];const scan=(folder,prefix)=>{for(const e of fs.readdirSync(folder,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(folder,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};
+      try{scan(dir,project);fs.rmSync(dir,{recursive:true,force:false});for(const rel of metaAssets)try{fs.unlinkSync(readingMetaFile(rel));}catch(_){}return send(res,200,{ok:true});}catch(error){return send(res,500,{ok:false,error:'删除阅读项目失败：'+String(error.message||error)});}
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/text-fragment') {
       const rel=readingAssetPath(u.searchParams.get('path'));
@@ -3711,13 +3949,13 @@ const server = http.createServer(async (req, res) => {
       catch (error) { return send(res, 500, { ok:false, error:'标注保存失败：' + String(error.message || error).slice(0, 300) }); }
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/meta') {
-      const rel = readingPath(u.searchParams.get('path'));
-      if (!rel) return send(res, 400, { ok:false, error:'PDF 路径不合法' });
+      const rel = readingAssetPath(u.searchParams.get('path'));
+      if (!rel) return send(res, 400, { ok:false, error:'阅读资料路径不合法' });
       return send(res, 200, { ok:true, meta:loadReadingMeta(rel) });
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/meta') {
-      const b = await readBody(req, 25e6); const rel = readingPath(b.path);
-      if (!rel) return send(res, 400, { ok:false, error:'PDF 路径不合法' });
+      const b = await readBody(req, 25e6); const rel = readingAssetPath(b.path);
+      if (!rel) return send(res, 400, { ok:false, error:'阅读资料路径不合法' });
       try { return send(res, 200, { ok:true, meta:saveReadingMeta(rel, b.meta) }); }
       catch (error) { return send(res, 500, { ok:false, error:'阅读记录保存失败：' + String(error.message || error) }); }
     }
@@ -3728,13 +3966,13 @@ const server = http.createServer(async (req, res) => {
       const dir = path.dirname(rel) === '.' ? '' : path.dirname(rel).split(path.sep).join('/');
       const next = dir ? dir + '/' + nextBase : nextBase;
       if (next !== rel && fs.existsSync(path.join(readingsDir(), next))) return send(res, 409, { ok:false, error:'目标文件已存在' });
-      try { fs.renameSync(path.join(readingsDir(), rel), path.join(readingsDir(), next)); if(/\.pdf$/i.test(rel))moveReadingMeta(rel, next); return send(res, 200, { ok:true, path:next }); }
+      try { fs.renameSync(path.join(readingsDir(), rel), path.join(readingsDir(), next)); if(readingHasMeta(rel))moveReadingMeta(rel, next); return send(res, 200, { ok:true, path:next }); }
       catch (error) { return send(res, 500, { ok:false, error:'重命名失败：' + String(error.message || error) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/delete') {
       const b = await readBody(req); const rel = readingAssetPath(b.path);
       if (!rel) return send(res, 400, { ok:false, error:'片段路径不合法' });
-      try { fs.unlinkSync(path.join(readingsDir(), rel)); if(/\.pdf$/i.test(rel))try { fs.unlinkSync(readingMetaFile(rel)); } catch (_) {} return send(res, 200, { ok:true }); }
+      try { fs.unlinkSync(path.join(readingsDir(), rel)); if(readingHasMeta(rel))try { fs.unlinkSync(readingMetaFile(rel)); } catch (_) {} return send(res, 200, { ok:true }); }
       catch (error) { return send(res, 500, { ok:false, error:'删除失败：' + String(error.message || error) }); }
     }
     if (req.method === 'GET' && u.pathname === '/api/env') {

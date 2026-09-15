@@ -79,6 +79,10 @@ contents:
   - id: 4
     label: demo.html
     language: html
+  - id: 5
+    label: main.tex
+    filename: file5.tex
+    language: latex
 name: Reading Demo
 description: browser regression
 isDeleted: 0
@@ -112,6 +116,14 @@ led_t *led_create(int pin) {
 ## Fragment: demo.html
 \`\`\`html
 <!doctype html><html><body><h1>Preview Demo</h1></body></html>
+\`\`\`
+
+## Fragment: main.tex
+\`\`\`latex
+\\documentclass{article}
+\\begin{document}
+CodeScope LaTeX preview
+\\end{document}
 \`\`\`
 
 `);
@@ -205,9 +217,96 @@ print(r.run())
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
+  await page.route('**/api/study/readable?*',route=>{const requestUrl=new URL(route.request().url()),target=requestUrl.searchParams.get('url')||'';const chapter=target.includes('chapter-2');route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:chapter?'https://docs.example.test/chapter-2.html':'https://docs.example.test/start.html',title:chapter?'第二章':'学习网页',html:chapter?'<main><h1>第二章内容</h1><p>阅读视图内导航成功。</p></main>':'<main><h1>学习网页正文</h1><p>公网网址已通过站内阅读视图载入。</p></main>',navigationHtml:'<ol><li><a href="start.html">首页</a></li><li><a href="chapter-2.html">第二章</a></li></ol>',navigationUrl:'https://docs.example.test/toc.html'})});});
   await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.4.0 · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
   if(versionContract.version!=='2.4.0'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.4 Web 版本契约异常：'+JSON.stringify(versionContract));
+  await page.getByRole('heading',{name:'从一个目标开始'}).waitFor({state:'visible'});
+  const shellGeometry=await page.evaluate(()=>{const center=document.querySelector('#header-center')?.getBoundingClientRect();const monitor=document.querySelector('#sysmon')?.getBoundingClientRect();return{viewport:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,nav:document.querySelector('#app-nav')?.getBoundingClientRect().toJSON(),actions:[...document.querySelectorAll('#app-nav .header-action')].map(node=>node.getBoundingClientRect().width),center:center?center.left+center.width/2:null,centerRight:center?.right??null,monitorLeft:monitor?.left??null,contentVisibility:getComputedStyle(document.querySelector('#list')).contentVisibility};});
+  if(shellGeometry.scrollWidth>shellGeometry.viewport+1||!shellGeometry.nav||shellGeometry.actions.some(width=>width<30)||Math.abs(shellGeometry.center-shellGeometry.viewport/2)>1||shellGeometry.monitorLeft<shellGeometry.centerRight)throw new Error('响应式顶栏溢出、操作热区过小、学习入口未居中或状态区未归位：'+JSON.stringify(shellGeometry));
+  await page.locator('#site-menu-trigger').click();
+  await page.locator('#site-menu-panel').waitFor({state:'visible'});
+  const siteMenuState=await page.evaluate(()=>{const panel=document.querySelector('#site-menu-panel');const body=document.querySelector('.site-menu-body');const footer=panel.querySelector(':scope>footer');const categories=document.querySelector('#site-menu-categories');return{categories:document.querySelectorAll('#site-menu-categories .site-category').length,count:Number(document.querySelector('#site-menu-count').textContent),panel:panel.getBoundingClientRect().toJSON(),bodyBottom:body.getBoundingClientRect().bottom,footerTop:footer.getBoundingClientRect().top,footerBackground:getComputedStyle(footer).backgroundColor,categoryClient:categories.clientHeight,categoryScroll:categories.scrollHeight};});
+  if(siteMenuState.categories<15||siteMenuState.count<120||siteMenuState.panel.left<0||siteMenuState.panel.right>shellGeometry.viewport+1||siteMenuState.bodyBottom>siteMenuState.footerTop+1||siteMenuState.footerBackground.includes('rgba')||siteMenuState.categoryScroll<siteMenuState.categoryClient)throw new Error('网址分类菜单数量、定位、滚动层或底栏遮挡异常：'+JSON.stringify(siteMenuState));
+  await page.locator('#site-menu-search').fill('FreeRTOS');
+  await page.waitForTimeout(60);
+  const siteSearch=await page.locator('#quick-sites .quick-site strong').allTextContents();
+  if(siteSearch.length!==1||siteSearch[0]!=='FreeRTOS')throw new Error('网址分类搜索异常：'+JSON.stringify(siteSearch));
+  await page.locator('#site-menu-search').fill('');
+  await page.locator('#site-menu-add-category').click();
+  await page.locator('#study-category-label').fill('机器人学习');
+  await page.locator('#study-category-icon').fill('🤖');
+  await page.locator('#study-category-save').click();
+  await page.locator('#site-menu-categories .site-category').filter({hasText:'机器人学习'}).waitFor({state:'visible'});
+  await page.locator('#site-menu-add-site').click();
+  await page.locator('#study-bookmark-label').fill('机器人课程');
+  await page.locator('#study-bookmark-url').fill('https://robot.example.test/course');
+  const customCategory=await page.locator('#study-bookmark-category option').filter({hasText:'机器人学习'}).getAttribute('value');
+  await page.locator('#study-bookmark-category').selectOption(customCategory);
+  await page.locator('#study-bookmark-save').click();
+  await page.locator('#quick-sites .quick-site').filter({hasText:'机器人课程'}).waitFor({state:'visible'});
+  await page.locator('#quick-sites .quick-site').filter({hasText:'机器人课程'}).locator('.quick-site-manage').click();
+  await page.locator('#study-bookmark-category').selectOption('docs');
+  await page.locator('#study-bookmark-save').click();
+  await page.locator('#site-menu-categories .site-category[data-category="docs"]').click();
+  await page.locator('#quick-sites .quick-site').filter({hasText:'机器人课程'}).waitFor({state:'visible'});
+  await page.locator('#quick-sites .quick-site').filter({hasText:'机器人课程'}).dragTo(page.locator(`#site-menu-categories .site-category[data-category="${customCategory}"]`));
+  await page.locator('#quick-sites .quick-site').filter({hasText:'机器人课程'}).waitFor({state:'visible'});
+  await page.waitForTimeout(850);
+  const managedSites=await page.evaluate(()=>fetch('/api/study/config').then((response)=>response.json()));
+  if(!managedSites.config.categories.some(category=>category.label==='机器人学习')||!managedSites.config.bookmarks.some(site=>site.label==='机器人课程'&&site.category===customCategory))throw new Error('自定义网址分类、新增网址或拖拽移动未持久化：'+JSON.stringify(managedSites.config));
+  await page.locator('#site-menu-close').click();
+  await page.setViewportSize({width:760,height:720});await page.waitForTimeout(100);
+  const compactGeometry=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,side:document.querySelector('#side').getBoundingClientRect().width,outline:document.querySelector('#outline-panel').getBoundingClientRect().width,welcomeClient:document.querySelector('#workspace-welcome').clientWidth,welcomeScroll:document.querySelector('#workspace-welcome').scrollWidth,outlineLabels:[...document.querySelectorAll('#outline-actions button')].filter(node=>getComputedStyle(node).display!=='none').map(node=>node.textContent.trim())}));
+  if(compactGeometry.scrollWidth>compactGeometry.viewport+1||compactGeometry.side>221||compactGeometry.outline>53||compactGeometry.welcomeScroll>compactGeometry.welcomeClient+1||compactGeometry.outlineLabels.some(label=>!label))throw new Error('760px 紧凑布局溢出、快捷页裁切或按钮标签丢失：'+JSON.stringify(compactGeometry));
+  await page.setViewportSize({width:1440,height:900});
+  await page.locator('#welcome-search').click();
+  if(!await page.locator('#search').evaluate(node=>document.activeElement===node))throw new Error('空白工作区搜索快捷入口未聚焦搜索框');
+  await page.locator('#welcome-study').click();
+  await page.locator('#study-workspace').waitFor({state:'visible'});
+  await page.waitForTimeout(300);
+  if(!await page.locator('#btn-study').evaluate(node=>node.classList.contains('on')&&node.getAttribute('aria-pressed')==='true'))throw new Error('学习工作台打开后顶栏按钮未进入活动状态');
+  await page.locator('#btn-study').click();await page.locator('#study-workspace').waitFor({state:'hidden'});
+  if(await page.locator('#btn-study').evaluate(node=>node.classList.contains('on')||node.getAttribute('aria-pressed')!=='false'))throw new Error('学习工作台关闭后顶栏按钮仍保持高亮');
+  await page.locator('#btn-study').click();await page.locator('#study-workspace').waitFor({state:'visible'});
+  const studyKinds=await page.locator('#study-layout .study-pane').evaluateAll((nodes)=>nodes.map((node)=>node.dataset.kind));
+  if(!['browser','code','notes'].every((kind)=>studyKinds.includes(kind)))throw new Error('学习工作台默认三栏未完整创建：'+JSON.stringify(studyKinds));
+  if(await page.locator('#study-capture').count())throw new Error('学习工作台仍保留错误的全屏截图按钮');
+  const studyBrowser=page.locator('.study-browser').first();
+  await page.evaluate(()=>{window.__studyOpened=[];window.open=(url,name,features)=>{window.__studyOpened.push({url,name,features});return{focus(){}};};});
+  await page.locator('#study-bookmarks .study-bookmark').filter({hasText:'B站'}).click();
+  await studyBrowser.getByText('B站视频学习').waitFor({state:'visible'});
+  const biliPopup=await page.evaluate(()=>window.__studyOpened.at(-1));
+  if(!biliPopup||!/bilibili\.com/i.test(biliPopup.url)||biliPopup.name!=='codescope-bilibili-browser')throw new Error('顶部 B站入口未打开可登录的一方站点窗口：'+JSON.stringify(biliPopup));
+  await studyBrowser.locator('.study-url').first().fill('https://docs.example.test/start.html');await studyBrowser.getByRole('button',{name:'打开',exact:true}).click();
+  await studyBrowser.getByText('公网网址已通过站内阅读视图载入。').waitFor({state:'visible'});
+  await studyBrowser.locator('.study-readable-nav').getByText('第二章',{exact:true}).click();
+  await studyBrowser.getByText('阅读视图内导航成功。').waitFor({state:'visible'});
+  await page.locator('#study-preset').selectOption('quad');
+  await page.waitForTimeout(250);
+  const quadState=await page.evaluate(()=>{const panes=[...document.querySelectorAll('#study-layout .study-pane')].map(node=>({kind:node.dataset.kind,rect:node.getBoundingClientRect().toJSON()}));return{value:document.querySelector('#study-preset').value,panes};});
+  const quadXs=new Set(quadState.panes.map(item=>Math.round(item.rect.left/20))),quadYs=new Set(quadState.panes.map(item=>Math.round(item.rect.top/20)));
+  if(quadState.value!=='quad'||quadState.panes.length!==4||quadXs.size!==2||quadYs.size!==2||!['browser','code','notes','pdf'].every(kind=>quadState.panes.some(item=>item.kind===kind)))throw new Error('学习工作台四宫格名称、内容或真实几何结构不一致：'+JSON.stringify(quadState));
+  const quadBrowser=page.locator('.study-browser').first();await quadBrowser.locator('.study-url').first().fill('https://www.bilibili.com/video/BV1xx411c7mD');await quadBrowser.getByRole('button',{name:'打开',exact:true}).click();await quadBrowser.locator('iframe[title="B站视频播放器"]').waitFor({state:'attached'});
+  await quadBrowser.locator('.study-video-time').fill('01:23');await quadBrowser.locator('.study-video-moment').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.study-note-editor')].some(node=>node.value.includes('1:23')&&node.value.includes('t=83')));
+  if(!await quadBrowser.locator('.study-video-frame').isVisible())throw new Error('B站播放器未提供定向视频帧记录功能');
+  await quadBrowser.locator('.study-bili-browser').click();
+  const videoPopup=await page.evaluate(()=>window.__studyOpened.at(-1));
+  if(!videoPopup||!/bilibili\.com\/video\/BV1xx411c7mD/i.test(videoPopup.url)||videoPopup.name!=='codescope-bilibili-browser')throw new Error('播放器的 B站浏览按钮未复用第一方视频窗口：'+JSON.stringify(videoPopup));
+  const studyNote=page.locator('.study-note-editor').first();
+  await studyNote.fill('# Browser Study Note\n\n- video\n- code\n\n[[video:https://www.bilibili.com/video/BV1xx411c7mD|Browser Video]]');
+  await page.waitForTimeout(900);
+  await page.locator('.study-notes .study-note-head button', { hasText:'阅读' }).first().click();
+  await page.locator('.study-note-video iframe').waitFor({ state:'attached' });
+  const studyVideoSrc=await page.locator('.study-note-video iframe').getAttribute('src');
+  if(!/player\.bilibili\.com\/.+bvid=BV1xx411c7mD/i.test(studyVideoSrc||''))throw new Error('学习工作台视频节点未使用 B站播放器：'+studyVideoSrc);
+  const persistedStudyNote=await page.evaluate(()=>fetch('/api/study/note?id=main').then((response)=>response.json()));
+  if(!persistedStudyNote.ok||!persistedStudyNote.content.includes('Browser Study Note'))throw new Error('学习工作台 Markdown 笔记未持久化');
+  const persistedStudyLayout=await page.evaluate(()=>fetch('/api/study/config').then((response)=>response.json()));
+  if(!persistedStudyLayout.ok||!persistedStudyLayout.config.layout)throw new Error('学习工作台布局未持久化');
+  await page.locator('#study-back').click();
+  await page.locator('#study-workspace').waitFor({state:'hidden'});
   const sidebarMetrics=await page.evaluate(()=>{
     const ids=['tree-head','draw-head','office-head','reading-head'];
     return Object.fromEntries(ids.map(id=>{const node=document.getElementById(id),style=getComputedStyle(node);return[id,{height:node.getBoundingClientRect().height,padding:style.padding,background:style.backgroundImage||style.backgroundColor}];}));
@@ -324,6 +423,13 @@ print(r.run())
   await page.locator('#html-preview-frame').waitFor({state:'visible'});
   if(await page.locator('#code-wrap').isVisible())throw new Error('HTML 全宽预览仍残留源码栏');
   await page.locator('#edit-preview .edit-preview-close').click();
+  await page.locator('#tabs .tab').filter({hasText:'main.tex'}).locator('span').first().click();
+  await page.locator('#edit-preview.latex-preview').waitFor({state:'visible'});
+  if(await page.locator('#document-mode-tools').isVisible())throw new Error('LaTeX 工作区错误显示 Markdown/HTML 的源码、分栏或阅读切换器');
+  await page.locator('#latex-preview-close').click();
+  if(await page.locator('#document-mode-tools').isVisible())throw new Error('关闭 LaTeX 预览后文档模式切换器再次出现');
+  await page.locator('#btn-run').click();
+  await page.locator('#edit-preview.latex-preview').waitFor({state:'visible'});
   /* ---- Monaco Markdown：快速切换不得串页，双向滚动按源码行锚点同步 ---- */
   const markdownPage=await browser.newPage({viewport:{width:1440,height:760}}),markdownErrors=[];
   markdownPage.on('pageerror',error=>markdownErrors.push(String(error.message||error)));
@@ -669,7 +775,8 @@ print(r.run())
   if(readingErrors.length)throw new Error('Markdown 区块浏览器运行错误：'+readingErrors.join('；'));
 
   /* ---- 统一资料阅读：DOCX 原貌渲染、网页正文提取与缩放 ---- */
-  await readingPage.route('**/api/readings/web?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:'https://example.com/guide',title:'网页阅读测试',html:'<article><h2>网页正文</h2><p>网页地址也可以保存为阅读资料。</p><script>window.__unsafe=true</script></article>'})}));
+  await readingPage.route('**/api/readings/web/page?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:'https://example.com/book/chapter-1.html',title:'第一章',html:'<main><h1>第一章正文</h1><p>目录内跳转保持在阅读模块。</p></main>',navigationHtml:'<nav><a href="index.html">上一页</a><a href="chapter-2.html">下一页</a></nav>',navigationUrl:'https://example.com/book/chapter-1.html'})}));
+  await readingPage.route('**/api/readings/web?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:'https://example.com/book/index.html',title:'网页阅读测试',html:'<article><h2 id="web-intro">网页正文</h2><p id="web-quote">网页地址也可以保存为阅读资料。</p><table><tbody><tr><td>整张页面缩放测试</td></tr></tbody></table><script>window.__unsafe=true</script></article>',navigationHtml:'<ol class="chapter"><li><a href="index.html">首页</a></li><li><a href="chapter-1.html">第一章</a></li></ol>',navigationUrl:'https://example.com/book/toc.html'})}));
   await readingPage.evaluate(async()=>{closeReading();await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='Universal Reading Demo');if(!project)throw new Error('找不到统一资料阅读项目');await openReadingProject(project);const doc=project.children.find(item=>item.kind==='docx');await openReading(doc.path,0);});
   await readingPage.locator('.reading-docx-host').waitFor({state:'visible',timeout:15000});
   if(!await readingPage.locator('.reading-docx-host').getByText('DOCX 正文可以直接在阅读项目中渲染。').count())throw new Error('DOCX 未在阅读项目中完成原貌渲染');
@@ -677,6 +784,18 @@ print(r.run())
   await readingPage.evaluate(async()=>{const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='Universal Reading Demo'),web=project.children.find(item=>item.kind==='web');await openReading(web.path,0);});
   await readingPage.locator('.reading-web-article').waitFor({state:'visible',timeout:10000});
   if(!await readingPage.locator('.reading-web-article').getByText('网页地址也可以保存为阅读资料。').count()||await readingPage.locator('.reading-web-article script').count())throw new Error('网页阅读正文未渲染或危险脚本未清理');
+  const webNav=readingPage.locator('.reading-web-nav');if(!await webNav.getByText('第一章',{exact:true}).count())throw new Error('网页阅读未显示网站章节目录');
+  const webScaleBefore=await readingPage.locator('.reading-web-article').evaluate(element=>({width:element.getBoundingClientRect().width,height:element.getBoundingClientRect().height,fontSize:getComputedStyle(element).fontSize}));
+  await readingPage.locator('.reading-web-zoom-range').fill('150');
+  const webScaleAfter=await readingPage.locator('.reading-web-article').evaluate(element=>({width:element.getBoundingClientRect().width,height:element.getBoundingClientRect().height,fontSize:getComputedStyle(element).fontSize}));
+  if(webScaleAfter.width<webScaleBefore.width*1.4||webScaleAfter.height<webScaleBefore.height*1.4||webScaleAfter.fontSize!==webScaleBefore.fontSize)throw new Error('网页缩放仍只改变字体，未缩放整张页面：'+JSON.stringify({webScaleBefore,webScaleAfter}));
+  await readingPage.locator('#web-quote').evaluate(element=>{const range=document.createRange();range.selectNodeContents(element);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);element.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));});
+  await readingPage.locator('.reading-web-action').filter({hasText:'摘录'}).click();await readingPage.waitForFunction(()=>Number(document.querySelector('#reading-frag-count').textContent)===1);
+  const webFragment=await readingPage.evaluate(()=>{const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='Universal Reading Demo'),web=project.children.find(item=>item.kind==='web'),doc=READING_DOCS.get(web.path),item=doc?.meta?.fragments?.[0];return item&&{url:item.url,webStart:item.webStart,webEnd:item.webEnd,source:item.source};});
+  if(!webFragment||webFragment.url!=='https://example.com/book/index.html'||webFragment.webEnd<=webFragment.webStart||!webFragment.source.includes('网页地址'))throw new Error('网页摘录没有保存章节与正文定位：'+JSON.stringify(webFragment));
+  await webNav.getByText('第一章',{exact:true}).click();await readingPage.getByText('目录内跳转保持在阅读模块。').waitFor({state:'visible'});
+  if(!await webNav.locator('a.active').getByText('第一章',{exact:true}).count()||!await webNav.getByText('首页',{exact:true}).count()||await readingPage.locator('.reading-web-chapter-pos').innerText()!=='2 / 2')throw new Error('切换章节后整站目录被当前页导航覆盖或高亮未同步');
+  await readingPage.locator('.reading-frag').filter({hasText:'网页地址也可以保存为阅读资料。'}).getByRole('button',{name:'定位'}).click();await readingPage.locator('#web-quote').waitFor({state:'visible'});await readingPage.waitForFunction(()=>getSelection()?.toString().includes('网页地址也可以保存为阅读资料。'));
 
   /* ---- PDF.js 官方 Viewer：虚拟渲染、自由缩放、单页/双页与懒加载缩略图 ---- */
   await readingPage.evaluate(async()=>{closeReading();document.getElementById('document-mode-tools').classList.add('show','markdown');await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='PDF Viewer Demo');if(!project)throw new Error('找不到 PDF Viewer Demo');await openReadingProject(project);});

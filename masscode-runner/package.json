@@ -15,15 +15,17 @@
     "package:desktop": "electron-forge package",
     "make:desktop": "electron-forge make",
     "publish:desktop": "electron-forge publish",
-    "prepackage:desktop": "npm run build:reading-editor && npm run verify:office",
-    "premake:desktop": "npm run build:reading-editor && npm run verify:office",
-    "prepublish:desktop": "npm run build:reading-editor && npm run verify:office",
+    "prepackage:desktop": "npm run build:assets && npm run verify:office",
+    "premake:desktop": "npm run build:assets && npm run verify:office",
+    "prepublish:desktop": "npm run build:assets && npm run verify:office",
     "prepare:gopls": "node scripts/build-bundled-gopls.js",
     "verify:office": "node scripts/verify-office-package.js",
     "test": "node tests/smoke.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js",
-    "build:reading-editor": "node scripts/build-reading-editor.js"
+    "build:reading-editor": "node scripts/build-reading-editor.js",
+    "build:study-workspace": "node scripts/build-study-workspace.js",
+    "build:assets": "npm run build:reading-editor && npm run build:study-workspace"
   },
   "engines": {
     "node": ">=18"
@@ -37,6 +39,7 @@
     "docx": "^9.7.1",
     "docx-preview": "^0.4.0",
     "fflate": "^0.8.3",
+    "golden-layout": "^2.6.0",
     "mammoth": "^1.12.3",
     "mind-elixir": "5.15.1",
     "monaco-editor": "^0.52.2",
