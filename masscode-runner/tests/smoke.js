@@ -207,13 +207,16 @@ void bubbleSort(Array& values);
   const output = [];
   child = spawn(process.execPath, ['server.js'], {
     cwd: projectRoot,
-    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data') },
+    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_DSH_AUTOSTART:'0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (chunk) => output.push(String(chunk)));
   child.stderr.on('data', (chunk) => output.push(String(chunk)));
 
   await waitForServer(baseUrl, output);
+
+  const dshIntegration = await requestJson(baseUrl, '/api/integrations/dsh');
+  assert(dshIntegration.ok && dshIntegration.service && dshIntegration.service.installed && dshIntegration.service.bundled, 'DeepSeek Harness 未作为 CodeScope 内置托管服务暴露');
 
   const unicodeSnippets = await requestJson(baseUrl, '/api/snippets');
   const unicodeFragment = unicodeSnippets.snippets.find((item) => item.name === 'Timeline Demo').fragments[0];
@@ -285,12 +288,17 @@ void bubbleSort(Array& values);
   assert(html.includes('id="theme-switcher"') && html.includes('data-app-theme="light"') && html.includes('codescope-theme'), '界面主题切换功能缺失');
   assert(html.includes('id="app-nav"') && html.includes('id="workspace-welcome"') && html.includes('id="welcome-search"') && html.includes("welcome.hidden = !!s"), '响应式全局导航或空白工作区快捷入口缺失');
   assert(html.includes('content-visibility:auto') && html.includes('@media (prefers-contrast:more)') && html.includes("$('welcome-study').onclick"), '长列表延迟绘制、增强对比度或快捷入口交互缺失');
+  assert(['welcome-dsh','welcome-office','welcome-project','welcome-remote'].every(id=>html.includes(`id="${id}"`)) && html.includes("$('welcome-dsh').onclick") && html.includes("$('welcome-office').onclick") && html.includes("$('welcome-project').onclick") && html.includes("$('welcome-remote').onclick"), '空白工作区未覆盖 DSH、Office、工程与远程开发入口');
+  assert(['tab-cases','tab-results','algo-cases','algo-results'].every(id=>html.includes(`id="${id}"`)) && html.includes('async function runAlgoTests') && html.includes("const ALGO_CASES_KEY = 'mc-algorithm-cases-v1'"), '算法测试用例、结果面板或按片段持久化能力缺失');
+  assert(['office-service-state','office-service-start','office-service-stop'].every(id=>html.includes(`id="${id}"`)) && html.includes("'/api/office/service'") && serverSource.includes('controlOnlyOfficeService') && serverSource.includes("['start','stop'].includes(action)"), 'ONLYOFFICE 固定容器的启动/关闭控制缺失');
   assert(html.includes('id="env-runtime-list"') && html.includes('id="env-client-list"') && html.includes('clientEnvironment') && html.includes('renderEnvironmentRows'), '环境面板缺少运行基础或浏览器能力检测');
+  assert(packageJson.dependencies['@deepseek-ai/dsh'] && html.includes('id="btn-dsh"') && html.includes('id="dsh-workspace"') && html.includes('id="dsh-frame"') && html.includes("classList.add('dsh-mode')") && html.includes('id="btn-env-dsh-restart"') && serverSource.includes("'/api/integrations/dsh'"), 'DSH 依赖、内嵌工作区、环境控制或服务 API 缺失');
   assert(html.includes('#tree-head,#git-head,#tag-head,#draw-head,#office-head,#reading-head') && html.includes('#tree-head .side-head-actions button,#draw-head .side-head-actions button,#office-head .side-head-actions button,#reading-head .side-head-actions button'), 'Office 与其他一级模块未使用统一侧栏 UI');
   assert(serverSource.includes('function runtimeReadiness') && serverSource.includes("releaseChannel:'stable'") && launchers.includes('node preflight.js --quiet'), '跨平台运行预检或 v2 稳定版契约缺失');
   assert(preflightSource.includes("process.argv.includes('--json')") && preflightSource.includes('missingDependencies') && preflightSource.includes('fs.constants.R_OK | fs.constants.W_OK'), '启动预检缺少 JSON、依赖或目录权限诊断');
   assert(html.includes('id="editor-find"') && html.includes('replaceEditorFindAll') && html.includes("e.key==='F3'"), '编辑器快捷键查找替换功能缺失');
- assert(html.includes('/monaco/vs/loader.js') && html.includes('id="monaco-main"') && html.includes('syncMonacoMain') && html.includes('multiCursorModifier'), 'Monaco / VS Code 同源编辑内核缺失');
+  assert(html.includes('/monaco/vs/loader.js') && html.includes('id="monaco-main"') && html.includes('syncMonacoMain') && html.includes('multiCursorModifier'), 'Monaco / VS Code 同源编辑内核缺失');
+  assert(html.includes('<script src="/assets/xterm.js"></script>') && !html.includes('<script src="/assets/xterm.js" defer'), 'xterm 必须在 Monaco AMD loader 之前同步注册全局 Terminal');
   assert(html.includes('id="btn-wrap"') && html.includes('toggleEditorWordWrap') && html.includes("key==='z'") && html.includes('id="editor-position"'), '自动换行或光标行列状态缺失');
   assert(html.includes("localStorage.getItem('mc-editor-font-size')") && html.includes('applyEditorFontSize') && html.includes("event.addEventListener('wheel'") === false && html.includes("document.addEventListener('wheel'") && html.includes('EDITOR_FONT_MAX=28'), 'Ctrl/Command + 鼠标滚轮缩放编辑器功能缺失');
   assert(!html.includes('allow-popups allow-same-origin'), 'HTML 预览沙箱不应同时允许脚本与同源访问');

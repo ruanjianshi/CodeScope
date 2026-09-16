@@ -1,0 +1,186 @@
+{
+  "version": 3,
+  "title": "学习工作台",
+  "preset": "study",
+  "bookmarks": [
+    {
+      "id": "bilibili",
+      "label": "B站",
+      "url": "https://www.bilibili.com",
+      "color": "#fb7299",
+      "category": "featured"
+    },
+    {
+      "id": "github",
+      "label": "GitHub",
+      "url": "https://github.com",
+      "color": "#8b949e",
+      "category": "featured"
+    },
+    {
+      "id": "mdn",
+      "label": "MDN",
+      "url": "https://developer.mozilla.org",
+      "color": "#62a0ea",
+      "category": "featured"
+    },
+    {
+      "id": "arxiv",
+      "label": "arXiv",
+      "url": "https://arxiv.org/",
+      "color": "#b31b1b",
+      "category": "featured"
+    }
+  ],
+  "categories": [],
+  "hiddenSites": [],
+  "layout": {
+    "root": {
+      "type": "row",
+      "content": [
+        {
+          "type": "stack",
+          "content": [
+            {
+              "type": "component",
+              "content": [],
+              "size": 1,
+              "sizeUnit": "fr",
+              "minSizeUnit": "px",
+              "id": "",
+              "maximised": false,
+              "isClosable": true,
+              "reorderEnabled": true,
+              "title": "网页 / B站",
+              "componentType": "browser",
+              "componentState": {
+                "url": "https://www.bilibili.com/",
+                "history": [
+                  "https://www.bilibili.com/"
+                ],
+                "index": 0,
+                "mode": "start",
+                "videoTime": 0
+              }
+            }
+          ],
+          "size": 50,
+          "sizeUnit": "%",
+          "minSizeUnit": "px",
+          "id": "",
+          "isClosable": true,
+          "maximised": false,
+          "activeItemIndex": 0
+        },
+        {
+          "type": "column",
+          "content": [
+            {
+              "type": "stack",
+              "content": [
+                {
+                  "type": "component",
+                  "content": [],
+                  "size": 1,
+                  "sizeUnit": "fr",
+                  "minSizeUnit": "px",
+                  "id": "",
+                  "maximised": false,
+                  "isClosable": true,
+                  "reorderEnabled": true,
+                  "title": "代码",
+                  "componentType": "code",
+                  "componentState": {
+                    "file": "/Users/xiaoq/Library/Mobile Documents/com~apple~CloudDocs/massCode/markdown-vault/code/Test/latex/main.md",
+                    "fragment": 0
+                  }
+                }
+              ],
+              "size": 50,
+              "sizeUnit": "%",
+              "minSizeUnit": "px",
+              "id": "",
+              "isClosable": true,
+              "maximised": false,
+              "activeItemIndex": 0
+            },
+            {
+              "type": "stack",
+              "content": [
+                {
+                  "type": "component",
+                  "content": [],
+                  "size": 1,
+                  "sizeUnit": "fr",
+                  "minSizeUnit": "px",
+                  "id": "",
+                  "maximised": false,
+                  "isClosable": true,
+                  "reorderEnabled": true,
+                  "title": "学习笔记",
+                  "componentType": "notes",
+                  "componentState": {
+                    "noteId": "main",
+                    "mode": "edit"
+                  }
+                }
+              ],
+              "size": 50,
+              "sizeUnit": "%",
+              "minSizeUnit": "px",
+              "id": "",
+              "isClosable": true,
+              "maximised": false,
+              "activeItemIndex": 0
+            }
+          ],
+          "size": 50,
+          "sizeUnit": "%",
+          "minSizeUnit": "px",
+          "id": "",
+          "isClosable": true
+        }
+      ],
+      "size": 1,
+      "sizeUnit": "fr",
+      "minSizeUnit": "px",
+      "id": "",
+      "isClosable": true
+    },
+    "openPopouts": [],
+    "settings": {
+      "constrainDragToContainer": true,
+      "reorderEnabled": true,
+      "popoutWholeStack": false,
+      "blockedPopoutsThrowError": false,
+      "closePopoutsOnUnload": true,
+      "responsiveMode": "always",
+      "tabOverlapAllowance": 0,
+      "reorderOnTabMenuClick": true,
+      "tabControlOffset": 10,
+      "popInOnClose": false
+    },
+    "dimensions": {
+      "borderWidth": 7,
+      "borderGrabWidth": 11,
+      "defaultMinItemHeight": 0,
+      "defaultMinItemHeightUnit": "px",
+      "defaultMinItemWidth": 10,
+      "defaultMinItemWidthUnit": "px",
+      "headerHeight": 32,
+      "dragProxyWidth": 320,
+      "dragProxyHeight": 200
+    },
+    "header": {
+      "show": "top",
+      "popout": false,
+      "dock": "dock",
+      "close": "关闭窗格",
+      "maximise": "专注窗格",
+      "minimise": "恢复窗格",
+      "tabDropdown": "更多标签"
+    },
+    "resolved": true
+  },
+  "updatedAt": 1789524319585
+}

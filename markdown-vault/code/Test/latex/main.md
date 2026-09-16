@@ -1,10 +1,13 @@
 ---
 contents:
+  - id: 46
+    label: singleresume
+    language: latex
   - id: 45
     label: main.tex
     language: latex
-  - id: 46
-    label: singleresume
+  - id: 159
+    label: singleresume.bak
     language: latex
 createdAt: 1788511095111
 description: "LaTeX 工程：latex"
@@ -17,6 +20,208 @@ updatedAt: 1788511095111
 tags:
   - 28
 ---
+
+## Fragment: singleresume
+```latex
+\documentclass[10pt]{article}
+
+\usepackage[a4paper,left=1.15cm,right=1.15cm,top=0.65cm,bottom=0.55cm]{geometry}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{fontawesome5}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{titlesec}
+
+\setmainfont[
+    Path=fonts/,
+    Extension=.otf,
+    BoldFont=*-Bold
+]{NotoSerifSC}
+\setCJKmainfont[
+    Path=fonts/,
+    Extension=.otf,
+    BoldFont=*-Bold
+]{NotoSerifSC}
+
+\definecolor{primary}{HTML}{173E35}
+\definecolor{accent}{HTML}{B68B38}
+\definecolor{ink}{HTML}{18212A}
+\definecolor{muted}{HTML}{64717D}
+\definecolor{soft}{HTML}{EDF3F0}
+\definecolor{line}{HTML}{D5DFDB}
+
+\hypersetup{
+    colorlinks=true,
+    urlcolor=accent,
+    linkcolor=primary
+}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\linespread{0.925}
+\emergencystretch=3em
+\tolerance=1800
+\setlist[itemize]{
+    leftmargin=1.35em,
+    itemsep=0.05em,
+    topsep=0.08em,
+    parsep=0pt,
+    partopsep=0pt,
+    label=\textcolor{accent}{\scriptsize\faCircle}
+}
+
+\newcommand{\mainsection}[2]{%
+    \vspace{0.30em}
+    \noindent\hbox to \linewidth{{\large\bfseries\color{primary}%
+    \makebox[1.45em][c]{#1}\hspace{0.35em}#2}\hspace{0.55em}%
+    {\color{accent}\leaders\hrule height 0.9pt\hfill\kern0pt}}\par
+    \vspace{0.12em}
+}
+\newcommand{\entryhead}[3]{%
+    \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{7.2cm}>{\centering\arraybackslash}X>{\raggedleft\arraybackslash}p{3.2cm}@{}}
+    {\normalsize\bfseries\color{ink}#1} &
+    {\footnotesize\bfseries\color{primary}#2} &
+    {\footnotesize\bfseries\color{muted}#3}
+    \end{tabularx}\vspace{0.03em}
+}
+\newcommand{\tech}[1]{%
+    {\footnotesize\color{muted}\textbf{技术栈}\enspace #1}\par\vspace{0.03em}
+}
+\newcommand{\skillrow}[2]{%
+    \textbf{\color{primary}#1} & #2\\[0.10em]
+}
+\newcommand{\awarditem}[1]{%
+    \makebox[1.05em][l]{\color{accent}\scriptsize\faTrophy}%
+    {\footnotesize #1}\par\vspace{0.02em}
+}
+
+\begin{document}
+
+% 顶部身份信息
+\noindent
+\begin{minipage}[c]{0.80\linewidth}
+    {\fontsize{25}{28}\selectfont\bfseries\color{ink}肖琦}\par
+    \vspace{0.16em}
+    {\footnotesize\color{muted}
+    \faPhone\enspace 15347348975 \quad
+    \faEnvelope\enspace\href{mailto:2408128687@qq.com}{2408128687@qq.com} \quad
+    \faWeixin\enspace xiao15096010804\par
+    \faMapMarker*\enspace 湖南省衡阳 \quad
+    \faFlag\enspace 中共党员 \quad
+    \faBriefcase\enspace 深圳 / 长沙}
+\end{minipage}%
+\begin{minipage}[c]{0.19\linewidth}
+    \raggedleft
+    \begin{tikzpicture}
+        \clip (0,0) circle (1.00cm);
+        \node at (0,-0.01) {\includegraphics[width=2.10cm]{figures/amater.jpg}};
+        \draw[accent,line width=1.1pt] (0,0) circle (1.00cm);
+    \end{tikzpicture}
+\end{minipage}
+
+\vspace{0.08em}
+{\color{primary}\rule{\linewidth}{1.5pt}}
+
+\mainsection{\faUser}{个人情况}
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}p{3.7cm}p{5.8cm}X@{}}
+\textbf{出生年月}：2002.11 &
+\textbf{求职意向}：嵌入式 Linux 开发 &
+\textbf{技术方向}：Linux底层、机器人控制、工业通信
+\end{tabularx}}
+\vspace{0.15em}
+\noindent\makebox[2.65cm][l]{\bfseries\color{primary}武汉科技大学}%
+机械专业硕士（专硕）· 机械工程学院\hfill{\color{muted}2024.09 -- 2027.06}\par
+\hspace*{2.65cm}{\footnotesize 初试总分363（位列前十），综合排名5/172，课程均分83.5}\par
+\vspace{0.10em}
+\noindent\makebox[2.65cm][l]{\bfseries\color{primary}湖南工学院}%
+机械设计制造及其自动化\hfill{\color{muted}2020.09 -- 2024.06}\par
+\hspace*{2.65cm}{\footnotesize 班级排名1/43，专业排名3/164}\par
+\vspace{0.14em}
+\colorbox{soft}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{\footnotesize\color{ink}
+\textbf{岗位优势}\enspace 聚焦嵌入式 Linux 与机器人底层开发，熟悉C / C++、系统编程、多线程、设备通信、交叉编译及工程构建；具备“驱动接口--协议解析--中间件封装--系统联调--故障定位”完整实践。}}
+
+\mainsection{\faBriefcase}{实习经历}
+\entryhead{武汉格蓝若智能技术股份有限公司}
+  {嵌入式 Linux 实习生 · 人形/四足机器人底层控制}
+  {2025.11 -- 2026.06}
+\tech{RK3588、Linux、C++、CMake、ROS2、PCIe-to-CAN、CANopen、GDB、STM32F4、EtherCAT、SIG5632、远程控制、Bootloader}
+\begin{itemize}
+    \item \textbf{Linux关节驱动：}在RK3588上使用C++ / CMake实现六路CAN多线程并发控制，完成设备初始化、发送队列、接收解析与状态监测，并封装ROS2话题 / 服务接口；解析私有协议与CANopen对象字典，支持位置、速度、力矩、MIT及回零控制，实现在线配置、状态回读、故障诊断和满载回环测试。
+    \item \textbf{六维力传感器：}基于STM32F4、SIG5632 / SIG5634、SPI ADC与外部中断实现6路同步采样、PGA配置、数字滤波和力矩阵解算，形成32位测量数据，并通过AX58100 EtherCAT PDO周期上报。
+    \item \textbf{仓储机器人底盘与末端：}适配升降立柱RS485协议，开发电推杆夹取与气泵吸盘控制；完成底盘报文解析、ROS发布订阅接口、动作时序和限位保护联调。
+    \item \textbf{机器人电源管理：}设计双电池冗余、过欠压与制动能量泄放方案；通过3路RS485、2路CAN及USART监测电量与温度，实现硬件急停、RF遥控、软件指令三级仲裁及异常恢复状态机。
+\end{itemize}
+
+\mainsection{\faProjectDiagram}{项目经历}
+\entryhead{四连杆两轮腿机器人（轮 + 足）}
+  {独立开发 · 嵌入式 Linux / 驱动 / 通信 / 部署}
+  {2026.01 -- 2026.09}
+\tech{Jetson Nano、Linux、ROS1、EtherCAT、CAN FD、C++、R86 / R52、MuJoCo、SolidWorks}
+\begin{itemize}
+    \item \textbf{Linux控制与通信：}在Jetson Nano上搭建ROS1控制框架，编写R86 / R52电机MIT驱动、IMU接口及通信节点；实现EtherCAT转4路CAN FD链路并完成周期、零点与异常联调。
+    \item \textbf{结构与硬件：}完成SolidWorks整机建模、URDF导出与STL碰撞简化；设计Jetson Nano拓展板、DCU和安全BMS四层架构，打通供电、通信、急停与保护链路。
+    \item \textbf{部署联调：}集成7寸屏幕、雷达和RGB-D相机；配合PPO策略完成MuJoCo sim2sim验证、实机迁移、电机ID / 零点校准及PD参数调优。
+\end{itemize}
+
+\vspace{0em}
+\entryhead{ROS差分驱动小车底层控制与自主导航}
+  {嵌入式开发 · STM32底层 / 串口协议 / Linux ROS驱动}
+  {2025.09 -- 2025.12}
+\tech{STM32F303、HAL、PID、编码器、USART / CRC-8、Ubuntu、C++、多线程、CMake、GDB、ROS、Cartographer、AMCL}
+\begin{itemize}
+    \item \textbf{自制底层控制板：}独立完成STM32F303底层控制板原理图与PCB设计，集成主控最小系统、电机驱动、编码器、USART、电源转换及保护电路；完成元件选型、焊接、上电检查、分模块测试和整车联调，排查供电、信号与通信问题并跑通控制链路。
+    \item \textbf{STM32底层控制：}使用PWM、外部中断和定时器完成25GA370电机驱动与编码器测速，实现增量式PID速度环、差速逆运动学及里程计解算，优化起步抖动和速度过冲。
+    \item \textbf{串口协议与Linux驱动：}设计“帧头 + 帧长 + ID + 功能码 + 数据 + CRC-8”协议，完成粘包 / 拆包处理与收发校验；在Ubuntu下编写多线程串口节点，封装cmd\_vel、odom、imu话题，并使用GDB定位丢帧和数据竞争。
+\end{itemize}
+
+\vspace{0em}
+\entryhead{STM32 / OpenMV 智能物流小车}
+  {主控代码撰写 · 运动控制 / 视觉识别}
+  {2025.08 -- 2025.09}
+\tech{STM32F407、FreeRTOS、麦克纳姆轮、520编码电机、42步进电机、OpenMV4 H7 Plus、UART、超声波}
+\begin{itemize}
+    \item \textbf{底层与运动控制：}基于STM32F407 + FreeRTOS驱动4路520编码电机、42步进滑轨、舵机和超声波，实现麦克纳姆轮运动学；使用任务、队列与状态机协调底盘、升降、云台和夹爪，组织自动取放流程。
+    \item \textbf{视觉与通信：}在OpenMV4上实现红 / 蓝 / 绿 / 灰 / 黄颜色及多种几何形状识别，设计UART双向协议与STM32交换目标信息，完成物料定位和自动分拣。
+\end{itemize}
+
+\mainsection{\faTools}{专业技能}
+\begin{tabularx}{\linewidth}{@{}p{2.75cm}X@{}}
+\skillrow{C / C++ 开发}{掌握C / C++、STL与面向对象设计；能够进行模块划分、接口封装、资源管理和异常定位}
+\skillrow{Linux 系统编程}{文件I/O、进程 / 线程、同步互斥、Socket；TCP / UDP、MQTT及串口、CAN设备的多线程通信开发}
+\skillrow{Linux 工程能力}{交叉编译、CMake、Makefile、Git、GDB；熟悉日志分析、抓包、压力测试与软硬件联合调试}
+\skillrow{MCU 与实时系统}{STM32固件库 / HAL、FreeRTOS / RT-Thread；中断、DMA、Bootloader、状态机和实时任务设计}
+\skillrow{通信与现场总线}{UART、SPI、I\textsuperscript{2}C、RS485、CAN / CAN FD、CANopen、EtherCAT、LIN、UDS}
+\skillrow{电机驱动控制}{PMSM / BLDC的FOC、SVPWM及电流 / 速度 / 位置环；了解有感与无感控制}
+\skillrow{机器人软件集成}{ROS1 / ROS2话题与服务、传感器和电机接口；URDF、TF、里程计与系统联调}
+\end{tabularx}
+
+\mainsection{\faTrophy}{荣誉、证书与组织经历}
+{\small
+\renewcommand{\arraystretch}{0.84}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+{\bfseries\color{primary}研究生阶段}\quad\textcolor{accent}{\faTrophy}\enspace 学业奖学金一等奖（2024、2025） &
+{\bfseries\color{primary}本科阶段}\quad\textcolor{accent}{\faTrophy}\enspace 湖南省物联网设计大赛省一等奖\\
+\textcolor{accent}{\faTrophy}\enspace 睿抗机器人开发者大赛国家二等奖 &
+\textcolor{accent}{\faTrophy}\enspace 湖南省机械创新设计大赛省二等奖\\
+\textcolor{accent}{\faTrophy}\enspace 三维数字化创新设计大赛省一等奖 &
+\textcolor{accent}{\faTrophy}\enspace 工程实践与创新能力大赛省三等奖\\
+\textcolor{accent}{\faTrophy}\enspace 睿抗ROS机器人挑战赛省二等奖 &
+\textcolor{accent}{\faTrophy}\enspace 国家级大创项目负责人\\
+\textcolor{accent}{\faTrophy}\enspace 高校机器人创意大赛省二、三等奖 &
+\textcolor{accent}{\faTrophy}\enspace 机械创新实验室负责人；智能制造协会会长\\
+\textcolor{accent}{\faTrophy}\enspace 兼职辅导员（2024.09-2025.7） &
+\textcolor{accent}{\faTrophy}\enspace CET-4、计算机二级、C1驾照
+\end{tabularx}}
+
+\end{document}
+```
 
 ## Fragment: main.tex
 ```latex
@@ -478,7 +683,7 @@ tags:
 \end{document}
 ```
 
-## Fragment: singleresume
+## Fragment: singleresume.bak
 ```latex
 \documentclass[10pt]{article}
 

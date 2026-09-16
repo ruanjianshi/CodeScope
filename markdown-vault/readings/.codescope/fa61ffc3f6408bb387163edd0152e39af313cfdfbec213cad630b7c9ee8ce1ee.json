@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "path": "我的文档/电机FOC/网页资料.url",
+  "page": 1,
+  "view": "original",
+  "translations": {},
+  "fragments": [
+    {
+      "id": "e45428ee-9e47-416d-b858-6126db7704c3",
+      "page": 1,
+      "source": "本章配套代码相对第 11 章给 led_gpio 加了一个 on_level 字段（第四个参数 true 表示高电平点亮，低电平点亮就传 false），子类构造签名跟着多了一个参数。这个改动 § 12.8.7 会展开，先记住第四个参数是干什么的。",
+      "translation": "",
+      "note": "",
+      "createdAt": 1789444381334,
+      "rects": [],
+      "scale": 1,
+      "url": "https://zhaochengbo.github.io/zhaoming-embedded/04-%E5%B7%A5%E7%A8%8B%E5%A8%81%E5%8A%9B/12-%E5%90%91%E4%B8%8A%E8%BD%AC%E5%9E%8B.html",
+      "webTitle": "ch12 一个指针指所有 LED · 向上转型 - C 语言面向对象编程·嵌入式实战",
+      "anchor": "121-上一章的代码里藏着一个秘密",
+      "webStart": 105,
+      "webEnd": 228
+    }
+  ],
+  "updatedAt": 1789444381339
+}

@@ -39,6 +39,7 @@ fi
 
 echo "启动码境 CodeScope（前台运行，Ctrl+C 停止）"
 echo "页面：$URL"
+echo "DeepSeek Harness：由 CodeScope 自动启动和管理"
 LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)"
 if { [ "$HOST" = "0.0.0.0" ] || [ "$HOST" = "::" ]; } && [ -n "$LAN_IP" ]; then echo "局域网：http://$LAN_IP:$PORT（仅限可信网络）"; fi
 ( sleep 1.2; open "$URL" ) &

@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@astral-sh/ruff-wasm-nodejs": "^0.16.7",
+    "@deepseek-ai/dsh": "0.1.5-rc.1",
     "@milkdown/crepe": "^7.22.1",
     "@novnc/novnc": "^1.7.0",
     "@turbodocx/html-to-docx": "^1.23.1",

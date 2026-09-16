@@ -47,7 +47,9 @@ const macNotarizeConfig = process.platform === 'darwin' && macSigningIdentity &&
 module.exports = {
   outDir: forgeOutDir,
   packagerConfig: {
-    asar: true,
+    // DSH 的本地终端适配包含 node-pty 原生模块与 spawn-helper；smartUnpack
+    // 会把这些可执行文件放到 app.asar.unpacked，安装后无需系统全局 dsh。
+    asar: { smartUnpack:true },
     name: 'CodeScope',
     executableName: 'CodeScope',
     icon: iconPath,

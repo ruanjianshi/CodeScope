@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "永磁同步电机，FOC控制",
+  "tags": [
+    "FOC",
+    "BLDC",
+    "PMSM"
+  ],
+  "updatedAt": 1789391120256
+}

@@ -62,6 +62,7 @@ if "%OPEN_HOST%"=="0.0.0.0" set "OPEN_HOST=127.0.0.1"
 if "%OPEN_HOST%"=="::" set "OPEN_HOST=[::1]"
 echo 启动码境 CodeScope（前台运行，Ctrl+C 停止）
 echo 页面：http://%OPEN_HOST%:%PORT%
+echo DeepSeek Harness：由 CodeScope 自动启动和管理
 if "%CODESCOPE_HOST%"=="0.0.0.0" echo 局域网：http://^<本机IP^>:%PORT%（仅限可信网络；本机 IP 用 ipconfig 查看）
 start "" "http://%OPEN_HOST%:%PORT%"
 

@@ -9,7 +9,7 @@
 
 ## Web 与桌面双模式
 
-CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、全部 `/api` 接口与 Vault 数据格式：
+CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、全部 `/api` 接口、DSH 托管层与 Vault 数据格式：
 
 | 模式 | 启动方式 | 适用场景 |
 | --- | --- | --- |
@@ -30,6 +30,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
 - Office 工作区只使用 ONLYOFFICE Docs，统一提供 DOCX/XLSX/PPTX 高保真编辑、审阅与多人协作；PDF 阅读工具栏也可直接进入 ONLYOFFICE PDF Editor，并通过独立令牌、自动保存回调和最近 5 份隐藏备份安全回写原 PDF。未连接时显示连接设置，不再使用内置兼容编辑器。
 - 环境检测扩展为运行基础、浏览器能力和项目工具链三层；三端启动脚本共用 `preflight.js` 检查 Node、端口、Vault 权限和依赖完整性。
+- DeepSeek Harness（DSH）已作为 CodeScope 正式依赖和托管服务集成：只需启动 CodeScope，DSH 会在本机回环地址自动启动；顶部可直接进入 Harness，环境面板提供状态、日志位置和重启入口，CodeScope 退出时仅回收自己创建的 DSH 进程。
 - 桌面安装包新增完整离线编辑辅助工具链：Prettier + Shell 插件、Ruff Python 格式化器、Pyright、TypeScript/TypeScript Language Server 和按平台编译的 gopls；Finder 启动时也会识别 Homebrew、用户 Python 与 Go 的常见工具目录。
 
 远程仓库：[github.com/ruanjianshi/massCode](https://github.com/ruanjianshi/massCode)
@@ -73,7 +74,19 @@ npm run make:desktop
 
 构建结果位于 `masscode-runner/out/make/`。GitHub 标签发布时，`.github/workflows/desktop-release.yml` 会在 macOS、Windows 和 Linux 分别构建并把安装包上传到对应 Release。macOS 自动更新正式启用前需要配置开发者签名与公证。
 
-正式安装包内置 Electron、Node.js、Prettier、Ruff、Pyright、TypeScript Language Server、TypeScript 和 gopls，用户电脑无需安装 Node.js、npm、pip、Black 或 Go 工具即可使用这些编辑能力。编译器、语言解释器与 LaTeX 仍按项目语言调用系统工具。AI 绘图是可选外部连接；Office 工作区则明确要求一台 ONLYOFFICE Document Server，未连接不影响代码、Markdown、PDF 与绘图模块，但 Office 会保持在连接页。
+正式安装包内置 Electron、Node.js、DeepSeek Harness、Prettier、Ruff、Pyright、TypeScript Language Server、TypeScript 和 gopls，用户电脑无需另行全局安装 `dsh`、Node.js、npm、pip、Black 或 Go 工具即可使用这些能力。编译器、语言解释器与 LaTeX 仍按项目语言调用系统工具。AI 绘图是可选外部连接；Office 工作区则明确要求一台 ONLYOFFICE Document Server，未连接不影响代码、Markdown、PDF 与绘图模块，但 Office 会保持在连接页。
+
+### DeepSeek Harness 集成
+
+`npm start`、三端一键启动脚本和桌面端都会由 CodeScope 启动 DSH，默认监听 `127.0.0.1:3080`。顶部「Harness」按钮会使用 DSH 启动时生成的安全令牌地址，在 CodeScope 主区域内打开完整 Harness 工作区；可以随时返回代码区、刷新，或按需在外部标签打开。若 3080 已有 DSH 在运行，CodeScope 会连接现有服务且不会在退出时将它结束。
+
+可选部署变量：
+
+- `CODESCOPE_DSH_AUTOSTART=0`：禁用自动启动（测试或由进程管理器单独托管时使用）。
+- `CODESCOPE_DSH_PORT=3080`：修改 DSH 本机端口。
+- `CODESCOPE_DSH_PUBLIC_URL=https://...`：为局域网或远程浏览器提供已经安全发布的 DSH 地址。DSH 默认仍只绑定回环地址，不会因 CodeScope 开启局域网访问而直接暴露智能体 API。
+
+运行日志写入 CodeScope 应用数据目录的 `dsh/dsh.log`。DSH 自身的 profile、登录状态和插件配置继续存放在用户目录的 `.dsh/profiles/web`，升级 CodeScope 不会覆盖这些数据。
 
 ### ONLYOFFICE 集成
 
@@ -112,6 +125,7 @@ macOS 如果从 iCloud Drive / File Provider 目录构建，Forge 会自动改�
 - 如果已配置本机 ONLYOFFICE，启动器会先检查并自动恢复 Colima/Docker 容器，避免重启后 Office 只显示连接页。
 - 局域网访问 CodeScope 时，Office 编辑器会自动使用当前 CodeScope 主机名访问 8088 端口，不会错误连到访问设备自己的 `127.0.0.1`。
 - 顶部“学习工作台”可在同一浏览器标签内组合网页/视频、代码、Markdown 笔记与 PDF，无需桌面端能力。
+- DeepSeek Harness 随 CodeScope 自动启动；顶部「Harness」会在 CodeScope 内部打开，不再需要另开终端执行 `dsh web` 或跳出当前工作台。
 - 用完直接 **`Ctrl+C`**（或关掉终端窗口）即停止
 - 已运行时再次双击 → 只打开页面，不重复启动
 

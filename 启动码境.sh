@@ -53,6 +53,7 @@ fi
 echo "启动码境 CodeScope（Linux，Ctrl+C 停止）"
 echo "Vault：$CODESCOPE_VAULT"
 echo "页面：$URL"
+echo "DeepSeek Harness：由 CodeScope 自动启动和管理"
 LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 if { [ "$HOST" = "0.0.0.0" ] || [ "$HOST" = "::" ]; } && [ -n "$LAN_IP" ]; then
   echo "局域网：http://$LAN_IP:$PORT（仅限可信网络）"

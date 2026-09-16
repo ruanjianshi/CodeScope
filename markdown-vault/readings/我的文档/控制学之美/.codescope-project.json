@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "description": "控制学之美，详细介绍了控制算法的数学原理",
+  "tags": [
+    "ADP",
+    "HDP",
+    "DP",
+    "PID",
+    "MPC",
+    "LQR"
+  ],
+  "updatedAt": 1789469292801
+}

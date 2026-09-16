@@ -99,7 +99,7 @@ async function startServer() {
   const output = [];
   child = spawn(process.execPath, ['server.js'], {
     cwd: projectRoot,
-    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_TMP_TTL_MS: '3000' },
+    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_TMP_TTL_MS: '3000', CODESCOPE_DSH_AUTOSTART:'0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (c) => output.push(String(c)));

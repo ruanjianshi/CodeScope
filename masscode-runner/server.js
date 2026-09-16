@@ -29,6 +29,7 @@ const htmlToDocx = require('@turbodocx/html-to-docx');
 const { createLspService } = require('./lib/lsp-service');
 const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
 const { createOfficeEngine } = require('./lib/office-engine');
+const { createDshService } = require('./lib/dsh-service');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
@@ -116,9 +117,13 @@ function saveOnlyOfficeConnection(input) {
 
 const PORT_VALUE = Number(process.env.CODESCOPE_PORT || process.env.MASSCODE_RUNNER_PORT || 4877);
 const PORT = Number.isInteger(PORT_VALUE) && PORT_VALUE > 0 && PORT_VALUE <= 65535 ? PORT_VALUE : 4877;
+const ONLYOFFICE_CONTAINER_NAME = /^[A-Za-z0-9_.-]+$/.test(String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER || ''))
+  ? String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER)
+  : 'codescope-onlyoffice';
 // 默认仅监听本机，避免终端、文件编辑与代码执行接口意外暴露到局域网。
 // 确实需要跨设备访问时，可显式设置 CODESCOPE_HOST=0.0.0.0，并配合受信网络使用。
 const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
+const DSH = createDshService({ projectRoot:__dirname, dataRoot:applicationDataRoot() });
 
 /* ---------------------------------- 路径发现 ---------------------------------- */
 
@@ -191,6 +196,42 @@ let DISK_CACHE = { at: 0, value: null };
 let MEMORY_CACHE = { at: 0, value: null };
 function execFileText(command, args, timeout) {
   return new Promise((resolve, reject) => execFile(command, args, { encoding: 'utf8', timeout: timeout || 5000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => err ? reject(new Error(String(stderr || err.message))) : resolve(String(stdout || ''))));
+}
+async function onlyOfficeServiceStatus() {
+  const base = { managed:true, container:ONLYOFFICE_CONTAINER_NAME, dockerAvailable:false, installed:false, running:false, status:'unavailable', health:'none', memory:'', cpu:'' };
+  try {
+    await execFileText('docker', ['info', '--format', '{{json .ServerVersion}}'], 5000);
+    base.dockerAvailable = true;
+  } catch (error) {
+    return { ...base, error:'Docker 未运行或不可用：' + String(error.message || error).trim().slice(0, 240) };
+  }
+  try {
+    const state = JSON.parse((await execFileText('docker', ['inspect', '--format', '{{json .State}}', ONLYOFFICE_CONTAINER_NAME], 5000)).trim());
+    base.installed = true;
+    base.running = !!state.Running;
+    base.status = String(state.Status || (state.Running ? 'running' : 'stopped'));
+    base.health = state.Health && state.Health.Status ? String(state.Health.Status) : (state.Running ? 'running' : 'none');
+    base.startedAt = state.StartedAt || '';
+    if (state.Running) {
+      try {
+        const stats = (await execFileText('docker', ['stats', '--no-stream', '--format', '{{json .}}', ONLYOFFICE_CONTAINER_NAME], 8000)).trim();
+        if (stats) { const parsed = JSON.parse(stats); base.memory = String(parsed.MemUsage || ''); base.cpu = String(parsed.CPUPerc || ''); }
+      } catch (_) { /* 状态仍可用，统计信息是可选项 */ }
+    }
+    return base;
+  } catch (error) {
+    const message = String(error.message || error).trim();
+    return { ...base, error:/No such (?:object|container)/i.test(message) ? '未找到本机 ONLYOFFICE 容器' : message.slice(0, 240) };
+  }
+}
+async function controlOnlyOfficeService(action) {
+  if (!['start','stop'].includes(action)) throw Object.assign(new Error('不支持的 ONLYOFFICE 服务操作'), { statusCode:400 });
+  const before = await onlyOfficeServiceStatus();
+  if (!before.dockerAvailable) throw Object.assign(new Error(before.error || 'Docker 未运行'), { statusCode:503 });
+  if (!before.installed) throw Object.assign(new Error('未找到固定容器 '+ONLYOFFICE_CONTAINER_NAME+'；请先完成 ONLYOFFICE 安装'), { statusCode:404 });
+  if (action === 'start' && !before.running) await execFileText('docker', ['start', ONLYOFFICE_CONTAINER_NAME], 60000);
+  if (action === 'stop' && before.running) await execFileText('docker', ['stop', '--time', '10', ONLYOFFICE_CONTAINER_NAME], 30000);
+  return onlyOfficeServiceStatus();
 }
 async function memoryStatus() {
   if (MEMORY_CACHE.value && Date.now() - MEMORY_CACHE.at < 1800) return MEMORY_CACHE.value;
@@ -3586,7 +3627,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 6, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
         study:{ available:true, webOnly:true, layoutEngine:'Golden Layout', paneTypes:['browser','code','notes','pdf'], presets:['study','dual','notes','quad'] },
-        features: ['study-workspace', 'study-bookmarks', 'study-site-catalog', 'study-site-categories', 'study-layout-presets', 'study-layout-truth', 'study-readable-browser', 'study-video-timepoints', 'study-video-frame-capture', 'dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'docx-page-break-normalization', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'reading-web-site-navigation', 'reading-web-session', 'reading-web-whole-page-zoom', 'reading-web-annotations', 'reading-web-location', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
+        features: ['study-workspace', 'study-bookmarks', 'study-site-catalog', 'study-site-categories', 'study-layout-presets', 'study-layout-truth', 'study-readable-browser', 'study-video-timepoints', 'study-video-frame-capture', 'dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'docx-page-break-normalization', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'reading-web-site-navigation', 'reading-web-session', 'reading-web-whole-page-zoom', 'reading-web-annotations', 'reading-web-location', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-service-control', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
       const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
@@ -3600,6 +3641,18 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/office/connection') {
       const health = await onlyOfficeHealth();
       return send(res, 200, { ok:true, connection:publicOnlyOfficeConnection(), health });
+    }
+    if (req.method === 'GET' && u.pathname === '/api/office/service') {
+      return send(res, 200, { ok:true, service:await onlyOfficeServiceStatus() });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/office/service') {
+      try {
+        const body = await readBody(req, 16 * 1024), action = String(body && body.action || '');
+        const service = await controlOnlyOfficeService(action);
+        return send(res, 200, { ok:true, action, service });
+      } catch (error) {
+        return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error) });
+      }
     }
     if (req.method === 'POST' && u.pathname === '/api/office/connection') {
       try {
@@ -3975,6 +4028,17 @@ const server = http.createServer(async (req, res) => {
       try { fs.unlinkSync(path.join(readingsDir(), rel)); if(readingHasMeta(rel))try { fs.unlinkSync(readingMetaFile(rel)); } catch (_) {} return send(res, 200, { ok:true }); }
       catch (error) { return send(res, 500, { ok:false, error:'删除失败：' + String(error.message || error) }); }
     }
+    if (u.pathname === '/api/integrations/dsh') {
+      if (req.method === 'GET') return send(res, 200, { ok:true, service:DSH.status() });
+      if (req.method === 'POST') {
+        const body = await readBody(req, 64 * 1024);
+        const action = String(body && body.action || 'start');
+        if (!['start', 'stop', 'restart'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 DSH 操作' });
+        const service = await DSH[action]();
+        return send(res, service.available || action === 'stop' ? 200 : 503, { ok:service.available || action === 'stop', service });
+      }
+      return send(res, 405, { ok:false, error:'Method Not Allowed' });
+    }
     if (req.method === 'GET' && u.pathname === '/api/env') {
       const force = u.searchParams.get('refresh') === '1';
       const detected = await getEnv(force);
@@ -3988,6 +4052,7 @@ const server = http.createServer(async (req, res) => {
         issue:onlyOffice ? (onlyOffice.ok ? '' : (onlyOffice.error || '服务未连接')) : (ONLYOFFICE_CONNECTION.publicUrl ? '等待重新检测服务' : '尚未配置 Document Server 地址'),
         hint:'在 Office 工作区点击“连接设置”，填写 ONLYOFFICE Document Server 地址、回调地址和 JWT 密钥', installable:false, relevant:true, external:true, scope:'Office 必需',
       };
+      env.dsh = DSH.status();
       const all = [...Object.values(runtime), ...Object.values(env)];
       const required = all.filter((e) => e.required);
       const unavailable = all.filter((e) => !e.available).length;
@@ -5279,6 +5344,10 @@ server.listen(PORT, HOST, () => {
   // 清扫上次服务留下的运行临时目录（正常退出会由 TTL 回收，强杀则依赖这里）
   try { const swept = sweepTempDirs(); if (swept) console.log('已清理运行临时目录: ' + swept + ' 个'); } catch (_) {}
   console.log('正在检测本机环境…');
+  DSH.start().then((service) => {
+    const suffix = service.available ? (service.managed ? '（由 CodeScope 托管）' : '（连接现有服务）') : '：' + service.message;
+    console.log('DeepSeek Harness ' + (service.available ? '已就绪' : '未就绪') + suffix);
+  }).catch((error) => console.log('DeepSeek Harness 启动失败：' + String(error.message || error)));
   getEnv(false).then(({ tools: env, project }) => {
     const all = Object.values(env);
     const relevant = all.filter((e) => e.relevant);
@@ -5292,3 +5361,15 @@ server.listen(PORT, HOST, () => {
   });
   console.log('按 Ctrl+C 停止');
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { LSP.close(); } catch (_) {}
+  try { await DSH.stop(); } catch (_) {}
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 2500).unref();
+}
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));

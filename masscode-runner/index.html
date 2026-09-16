@@ -23,7 +23,8 @@
   })();
 </script>
 <script src="/assets/highlight.min.js" defer></script>
-<script src="/assets/xterm.js" defer></script>
+<!-- xterm 必须在正文中的 Monaco AMD loader 注册 window.define 之前执行，否则 UMD 会被误判为 AMD 模块。 -->
+<script src="/assets/xterm.js"></script>
 <script src="/assets/reading-block-editor.js" defer></script>
 <script src="/assets/study-workspace.js" defer></script>
 <style>
@@ -671,6 +672,12 @@
   .office-engine:before { content:''; width:6px; height:6px; border-radius:50%; background:#7b8797; }
   .office-engine.online { border-color:rgba(50,191,122,.38); color:#77d9a6; background:rgba(29,138,84,.12); }.office-engine.online:before { background:#35c77d; box-shadow:0 0 0 3px rgba(53,199,125,.12); }
   .office-engine.fallback { border-color:rgba(236,174,66,.36); color:#e7ba66; background:rgba(176,118,27,.11); }.office-engine.fallback:before { background:#e5a938; }
+  .office-service { display:inline-flex; align-items:center; gap:5px; max-width:170px; overflow:hidden; padding:3px 7px; border:1px solid var(--border); border-radius:999px; background:color-mix(in srgb,var(--panel2) 82%,transparent); color:var(--dim); font:9px/1.4 var(--mono); text-overflow:ellipsis; white-space:nowrap; }
+  .office-service.running { border-color:color-mix(in srgb,var(--ok) 36%,var(--border)); color:var(--ok); }
+  .office-service.stopped { border-color:color-mix(in srgb,#e6aa43 38%,var(--border)); color:#e6b65d; }
+  #office-service-start { border-color:color-mix(in srgb,var(--ok) 42%,var(--border)); color:var(--ok); }
+  #office-service-stop { border-color:color-mix(in srgb,var(--err) 38%,var(--border)); color:#ef8d88; }
+  #office-service-start:disabled,#office-service-stop:disabled { border-color:var(--border); color:var(--dim); opacity:.52; }
   #office-status { color:var(--dim); font-size:10px; white-space:nowrap; }
   #office-stage { flex:1; min-height:0; position:relative; overflow:auto; background:radial-gradient(circle at 50% 10%,rgba(73,103,145,.13),transparent 42%),var(--theme-deep,#0c1118); }
   .office-onlyoffice { position:absolute; inset:0; overflow:hidden; background:#f3f3f3; }
@@ -1682,6 +1689,44 @@
   #out-body.hidden { display: none; }
   #out-body .stderr { color: #ff9b95; }
   #out-body .empty { color: var(--dim); font-style: italic; }
+  .algo-panel { flex:1; min-height:0; overflow:auto; padding:12px 14px 18px; color:var(--text); }
+  .algo-panel.hidden { display:none; }
+  .algo-toolbar { display:flex; align-items:center; gap:8px; min-height:32px; margin-bottom:10px; }
+  .algo-toolbar .sp { flex:1; }
+  .algo-toolbar button { min-height:28px; padding:4px 10px; font-size:10.5px; }
+  .algo-toolbar .algo-run { border-color:color-mix(in srgb,var(--ok) 48%,var(--border)); background:color-mix(in srgb,var(--ok) 13%,var(--panel2)); color:var(--ok); font-weight:750; }
+  .algo-toolbar .algo-run:hover:not(:disabled) { border-color:var(--ok); background:color-mix(in srgb,var(--ok) 20%,var(--panel2)); }
+  .algo-case-tabs { display:flex; align-items:center; gap:6px; overflow-x:auto; padding:1px 0 9px; scrollbar-width:thin; }
+  .algo-case-tab { display:inline-flex; align-items:center; gap:6px; min-height:30px; padding:5px 11px; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--dim); white-space:nowrap; }
+  .algo-case-tab:hover { color:var(--text); background:var(--panel2); }
+  .algo-case-tab.on { border-color:color-mix(in srgb,var(--accent) 45%,var(--border)); background:color-mix(in srgb,var(--accent) 13%,var(--panel2)); color:var(--text); }
+  .algo-case-tab::before { content:'◇'; color:var(--dim); font-size:11px; }
+  .algo-case-tab.pass::before { content:'✓'; color:var(--ok); font-weight:900; }
+  .algo-case-tab.fail::before { content:'×'; color:var(--err); font-weight:900; }
+  .algo-case-tab.ran::before { content:'•'; color:#d7a63d; font-weight:900; }
+  .algo-editor-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .algo-field { display:flex; min-width:0; flex-direction:column; gap:6px; }
+  .algo-field label { display:flex; align-items:center; gap:8px; color:var(--dim); font-size:10.5px; font-weight:700; }
+  .algo-field label small { color:color-mix(in srgb,var(--dim) 72%,transparent); font-weight:500; }
+  .algo-field textarea { width:100%; min-height:112px; resize:vertical; padding:10px 11px; border:1px solid color-mix(in srgb,var(--border) 90%,transparent); border-radius:8px; outline:0; background:color-mix(in srgb,var(--bg) 78%,#000); color:var(--text); font:11.5px/1.55 var(--mono); tab-size:2; }
+  .algo-field textarea:hover { border-color:color-mix(in srgb,var(--dim) 55%,var(--border)); }
+  .algo-field textarea:focus { border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 13%,transparent); }
+  .algo-tip { margin-top:9px; color:color-mix(in srgb,var(--dim) 80%,transparent); font-size:9.5px; }
+  .algo-result-summary { display:flex; align-items:center; gap:10px; min-height:42px; margin-bottom:8px; }
+  .algo-result-summary .sp { flex:1; }
+  .algo-result-summary strong { color:var(--text); font-size:18px; }
+  .algo-result-summary strong.pass { color:var(--ok); }
+  .algo-result-summary strong.fail { color:var(--err); }
+  .algo-result-summary span { color:var(--dim); font-size:10.5px; }
+  .algo-result-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+  .algo-result-card { min-width:0; padding:9px 10px; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb,var(--panel2) 72%,transparent); }
+  .algo-result-card.wide { grid-column:1/-1; }
+  .algo-result-card label { display:block; margin-bottom:6px; color:var(--dim); font-size:9.5px; font-weight:700; }
+  .algo-result-card pre { min-height:38px; max-height:170px; margin:0; overflow:auto; color:var(--text); font:11px/1.55 var(--mono); white-space:pre-wrap; word-break:break-word; }
+  .algo-result-card.actual.fail { border-color:color-mix(in srgb,var(--err) 48%,var(--border)); background:color-mix(in srgb,var(--err) 6%,var(--panel2)); }
+  .algo-result-card.actual.pass { border-color:color-mix(in srgb,var(--ok) 38%,var(--border)); }
+  .algo-result-empty { display:grid; place-items:center; min-height:110px; color:var(--dim); font-size:11px; text-align:center; }
+  @media (max-width:900px) { .algo-editor-grid,.algo-result-grid { grid-template-columns:1fr; } .algo-result-card.wide { grid-column:auto; } }
   /* 终端 */
   #term-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   #term-wrap.hidden { display: none; }
@@ -1714,6 +1759,24 @@
   #btn-env.env-ok::after { background:var(--ok); box-shadow:0 0 6px rgba(86,211,100,.75); }
   #btn-env.env-warn::after { background:var(--err); box-shadow:0 0 6px rgba(255,107,99,.68); }
   #btn-env.env-checking::after { background:#d9a441; animation:env-pulse .8s ease-in-out infinite alternate; }
+  #btn-dsh { position:relative; }
+  #btn-dsh::before { content:'DSH'; font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace; color:#82b6ff; letter-spacing:.03em; }
+  #btn-dsh.dsh-ready { border-color:rgba(86,211,100,.45); background:rgba(86,211,100,.08); }
+  #btn-dsh.dsh-bad { border-color:rgba(255,107,99,.45); }
+  #btn-dsh.on { color:#dcecff; border-color:rgba(89,156,255,.62); background:rgba(55,116,205,.22); box-shadow:inset 0 -2px 0 #599cff; }
+  #dsh-workspace { display:none; position:absolute; inset:0; z-index:76; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
+  body.dsh-mode #dsh-workspace { display:flex; }
+  body.dsh-mode #side,body.dsh-mode #split-v,body.dsh-mode #split-v2,body.dsh-mode #outline-panel { display:none !important; }
+  body.dsh-mode #toolbar,body.dsh-mode #tabs,body.dsh-mode #document-mode-tools,body.dsh-mode #code-context-bar,body.dsh-mode #draw-editor,body.dsh-mode #office-workspace,body.dsh-mode #reading-workspace,body.dsh-mode #study-workspace,body.dsh-mode #edit-split,body.dsh-mode #resource-viewer,body.dsh-mode #preview,body.dsh-mode #input-area,body.dsh-mode #split-h,body.dsh-mode #output { display:none !important; }
+  body.dsh-mode #main { flex:1; min-width:0; }
+  #dsh-head { height:44px; flex:none; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--border); background:var(--panel); }
+  #dsh-head strong { color:var(--text); font-size:13px; }
+  #dsh-head .sp { flex:1; }
+  #dsh-head-status { color:var(--dim); font-size:11px; }
+  #dsh-frame-wrap { position:relative; flex:1; min-height:0; background:#0c1119; }
+  #dsh-frame { width:100%; height:100%; border:0; background:#0c1119; }
+  #dsh-loading { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; background:radial-gradient(circle at 50% 42%,rgba(55,116,205,.13),transparent 38%),#0c1119; }
+  #dsh-loading.hidden { display:none; }
   @keyframes env-pulse { to { opacity:.35; transform:scale(.72); } }
   #env-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border); z-index: 50; box-shadow: -8px 0 30px rgba(0,0,0,.4); flex-direction: column; }
   #env-panel.open { display: flex; }
@@ -1755,6 +1818,11 @@
   .hint.optional-hint strong { color:#d9b45b; font-weight:650; }
   .env-package-note { margin:0 0 12px; padding:10px 11px; border:1px solid rgba(86,211,100,.28); border-radius:9px; background:rgba(86,211,100,.065); color:var(--dim); font-size:11px; line-height:1.55; }
   .env-package-note strong { color:var(--ok); }
+  .env-dsh-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; margin:0 0 12px; padding:12px; border:1px solid rgba(89,156,255,.3); border-radius:10px; background:linear-gradient(135deg,rgba(55,116,205,.12),rgba(86,211,100,.045)); }
+  .env-dsh-card strong { display:block; color:var(--text); font-size:13px; margin-bottom:4px; }
+  .env-dsh-card p { margin:0; color:var(--dim); font-size:11px; line-height:1.5; }
+  .env-dsh-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  .env-dsh-actions button.primary { color:#dcecff; border-color:rgba(89,156,255,.55); background:rgba(55,116,205,.2); }
   .env-extensions { margin-top:13px; }
   .env-extensions > summary { display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--border); border-radius:8px; background:var(--panel2); color:var(--text); font-size:11px; font-weight:700; cursor:pointer; list-style:none; }
   .env-extensions > summary::-webkit-details-marker { display:none; }
@@ -2795,7 +2863,7 @@
 
   /* 空编辑区使用可操作的起始页，替代大面积无反馈的空框。 */
   #workspace-welcome {
-    position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; align-items:center; justify-content:safe center;
     padding:clamp(24px,6vw,72px); overflow:auto; text-align:center;
     background:
       radial-gradient(circle at 50% 18%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 38%),
@@ -2806,11 +2874,15 @@
   .welcome-mark img { width:28px; height:28px; border-radius:8px; box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 24%,transparent); }
   #workspace-welcome h2 { margin:0; color:var(--text); font-size:clamp(24px,2.6vw,36px); font-weight:760; letter-spacing:-.035em; }
   #workspace-welcome>p { max-width:620px; margin:12px auto 26px; color:var(--dim); font-size:13px; line-height:1.7; }
-  .welcome-actions { display:grid; grid-template-columns:repeat(2,minmax(210px,1fr)); gap:10px; width:min(620px,100%); }
-  .welcome-actions button { display:flex; align-items:center; gap:12px; min-height:68px; padding:12px 14px; text-align:left; border-color:color-mix(in srgb,var(--border) 82%,transparent); background:color-mix(in srgb,var(--panel2) 78%,transparent); box-shadow:0 8px 24px color-mix(in srgb,#000 12%,transparent); }
+  .welcome-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; width:min(1040px,100%); }
+  .welcome-actions button { display:flex; align-items:center; gap:12px; min-height:72px; padding:12px 14px; text-align:left; border-color:color-mix(in srgb,var(--border) 82%,transparent); background:color-mix(in srgb,var(--panel2) 78%,transparent); box-shadow:0 8px 24px color-mix(in srgb,#000 12%,transparent); }
   .welcome-actions button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 54%,var(--border)); background:color-mix(in srgb,var(--accent) 10%,var(--panel2)); transform:translateY(-2px); }
   .welcome-actions button.primary { border-color:color-mix(in srgb,var(--accent) 46%,var(--border)); background:color-mix(in srgb,var(--accent) 12%,var(--panel2)); }
   .welcome-actions button>b { display:grid; place-items:center; width:36px; height:36px; flex:none; border-radius:10px; background:color-mix(in srgb,var(--accent) 12%,var(--panel)); color:var(--accent); font:700 17px/1 var(--mono); }
+  .welcome-actions button[data-tone="ai"]>b { color:#a88cff; background:color-mix(in srgb,#8f72ff 14%,var(--panel)); }
+  .welcome-actions button[data-tone="office"]>b { color:#54c98b; background:color-mix(in srgb,#36b874 14%,var(--panel)); }
+  .welcome-actions button[data-tone="project"]>b { color:#f0b85a; background:color-mix(in srgb,#dc9b32 14%,var(--panel)); }
+  .welcome-actions button[data-tone="remote"]>b { color:#55bde8; background:color-mix(in srgb,#3ca4d2 14%,var(--panel)); }
   .welcome-actions button>span { display:flex; flex-direction:column; gap:3px; min-width:0; }
   .welcome-actions strong { color:var(--text); font-size:12.5px; }
   .welcome-actions small { color:var(--dim); font-size:10.5px; font-weight:500; }
@@ -2883,7 +2955,7 @@
     #theme-btn { min-width:34px; width:34px; padding:5px; justify-content:center; }
     #theme-btn .theme-label { display:none; }
     #multi-badge { display:none !important; }
-    .welcome-actions { grid-template-columns:minmax(220px,1fr); width:min(360px,100%); }
+    .welcome-actions { grid-template-columns:repeat(2,minmax(210px,1fr)); width:min(620px,100%); }
     .welcome-shortcuts { display:none; }
   }
   @media (max-width:980px) {
@@ -2892,7 +2964,7 @@
     #snippet-desc { display:none; }
     header .sub { display:none; }
     .brand-edition,.brand-version { display:none; }
-    .welcome-actions { grid-template-columns:minmax(220px,1fr); width:min(360px,100%); }
+    .welcome-actions { grid-template-columns:repeat(2,minmax(210px,1fr)); width:min(620px,100%); }
     .welcome-shortcuts { display:none; }
   }
 
@@ -2910,6 +2982,7 @@
     #outline-panel #outline-actions button { flex:none; min-width:38px; padding-inline:4px; font-size:12px; }
     #workspace-welcome { padding:20px; }
     #workspace-welcome>p { margin-bottom:18px; }
+    .welcome-actions { grid-template-columns:minmax(220px,1fr); width:min(360px,100%); }
     .welcome-actions button { min-height:60px; }
   }
 
@@ -2928,6 +3001,7 @@
   </div>
   <div id="header-center" aria-label="学习与网址">
     <button class="header-action header-study" id="btn-study" title="打开学习工作台：网页、视频、代码和笔记自由分屏"><span>学习工作台</span></button>
+    <button class="header-action" id="btn-dsh" title="打开由 CodeScope 托管的 DeepSeek Harness"><span>Harness</span></button>
     <div id="site-menu">
       <button id="site-menu-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="site-menu-panel" title="按分类选择常用网址"><span class="site-menu-trigger-icon" aria-hidden="true">⌘</span><span>常用网址</span><small id="site-menu-count">0</small><span class="site-menu-chevron" aria-hidden="true">⌄</span></button>
       <section id="site-menu-panel" class="hidden" role="dialog" aria-label="常用网址分类选择">
@@ -3096,6 +3170,15 @@
   </div>
   <div id="split-v" title="拖拽调整左侧宽度"></div>
   <div id="main">
+    <section id="dsh-workspace" aria-label="DeepSeek Harness 工作区">
+      <div id="dsh-head">
+        <button id="dsh-back" title="返回代码工作区">← 返回</button>
+        <strong>DeepSeek Harness</strong><span id="dsh-head-status">等待连接</span><span class="sp"></span>
+        <button id="dsh-reload" title="重新载入 Harness">↻ 刷新</button>
+        <button id="dsh-external" title="在独立浏览器标签中打开">↗ 外部打开</button>
+      </div>
+      <div id="dsh-frame-wrap"><div id="dsh-loading">正在连接 CodeScope 托管的 DeepSeek Harness…</div><iframe id="dsh-frame" title="DeepSeek Harness" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer"></iframe></div>
+    </section>
     <section id="study-workspace" aria-label="学习工作台">
       <div id="study-head">
         <button id="study-back" title="返回代码工作区">← 返回</button>
@@ -3216,7 +3299,7 @@
     <section id="office-workspace" aria-label="Office 文档工作区">
       <div class="office-toolbar">
         <button id="office-back">← 返回代码</button><span id="office-file-badge" class="office-type word">W</span><span id="office-title" class="office-file-title">Office</span><span id="office-path" class="office-path"></span><span class="sp"></span>
-        <span id="office-engine" class="office-engine fallback">ONLYOFFICE · 未连接</span><button id="office-reconnect" title="配置或重新检测 ONLYOFFICE Document Server">连接设置</button><button id="office-refresh" title="重新读取磁盘上的文件">刷新</button><button id="office-save" class="primary" title="保存当前文档" hidden>保存</button><button id="office-download" title="下载原始 Office 文件">原文件</button><button id="office-rename-current">重命名</button><span id="office-status"></span>
+        <span id="office-engine" class="office-engine fallback">ONLYOFFICE · 未连接</span><span id="office-service-state" class="office-service">容器 · 检测中</span><button id="office-service-start" title="启动本机 codescope-onlyoffice 容器">▶ 启动</button><button id="office-service-stop" title="停止本机 codescope-onlyoffice 容器并释放运行内存">■ 关闭</button><button id="office-reconnect" title="配置或重新检测 ONLYOFFICE Document Server">连接设置</button><button id="office-refresh" title="重新读取磁盘上的文件">刷新</button><button id="office-save" class="primary" title="保存当前文档" hidden>保存</button><button id="office-download" title="下载原始 Office 文件">原文件</button><button id="office-rename-current">重命名</button><span id="office-status"></span>
       </div>
       <div id="office-stage"><div class="office-welcome"><div class="office-welcome-card"><div class="marks"><span class="office-type word">W</span><span class="office-type sheet">X</span><span class="office-type slides">P</span></div><h2>ONLYOFFICE 工作区</h2><p>DOCX、XLSX 与 PPTX 统一由 ONLYOFFICE Docs 打开、编辑和协作。</p></div></div></div>
     </section>
@@ -3241,7 +3324,7 @@
       </div>
     </section>
     <div id="edit-split">
-      <div id="code-wrap" class="editor-column"><div id="workspace-welcome" aria-label="CodeScope 快速开始"><div class="welcome-mark"><img src="/assets/codescope.svg" alt=""><span>码境工作台</span></div><h2>从一个目标开始</h2><p>代码、资料、文档与绘图都在同一个工作区，选择左侧内容，或使用下面的快捷入口。</p><div class="welcome-actions"><button id="welcome-search" class="primary"><b>⌘</b><span><strong>查找内容</strong><small>搜索项目与片段</small></span></button><button id="welcome-study"><b>◫</b><span><strong>学习工作台</strong><small>网页、视频与笔记分屏</small></span></button><button id="welcome-reading"><b>▤</b><span><strong>阅读资料</strong><small>PDF、Word 与网页</small></span></button><button id="welcome-draw"><b>◇</b><span><strong>新建绘图</strong><small>导图、白板与架构图</small></span></button></div><div class="welcome-shortcuts"><span><kbd>⌘ P</kbd> 快速打开</span><span><kbd>⌘ ⇧ F</kbd> 全文搜索</span><span><kbd>⌘ ⇧ P</kbd> 命令面板</span></div></div><div id="primary-group-bar"><span>主编辑栏</span><span class="name" id="primary-group-name"></span><span class="sp"></span><span>大纲跟随此栏</span></div><div id="ln"></div><div id="fold-gutter"></div><canvas id="indent-guides"></canvas><pre id="code"></pre><textarea id="code-edit" spellcheck="false" style="display:none"></textarea><div id="monaco-main" aria-label="VS Code 编辑器；按住 Ctrl 或 Command 并滚动缩放"></div><div id="comp-pop"></div><div id="signature-help" role="status" aria-live="polite"></div><div id="code-actions-pop" role="menu" aria-label="代码操作"></div><div id="editor-find" class="hidden" role="dialog" aria-label="代码查找和替换"><div class="editor-find-row"><button id="editor-find-toggle" type="button" title="展开或收起替换">▸</button><input id="editor-find-query" aria-label="查找内容" placeholder="查找（Enter 下一个）" spellcheck="false"><span id="editor-find-count">0/0</span><button id="editor-find-prev" type="button" title="上一个（Shift+Enter）">↑</button><button id="editor-find-next" type="button" title="下一个（Enter）">↓</button><button id="editor-find-close" type="button" title="关闭（Esc）">×</button></div><div id="editor-find-replace-row" class="editor-find-row editor-find-replace hidden"><button id="editor-find-case" type="button" title="区分大小写">Aa</button><input id="editor-find-replacement" aria-label="替换内容" placeholder="替换为" spellcheck="false"><button id="editor-find-one" type="button">替换</button><button id="editor-find-all" type="button">全部替换</button><span id="editor-find-status"></span></div></div></div>
+      <div id="code-wrap" class="editor-column"><div id="workspace-welcome" aria-label="CodeScope 快速开始"><div class="welcome-mark"><img src="/assets/codescope.svg" alt=""><span>码境工作台</span></div><h2>从一个目标开始</h2><p>代码、AI、资料、Office 文档与绘图都在同一个工作区。选择左侧内容，或从下面进入完整工具。</p><div class="welcome-actions"><button id="welcome-search" class="primary"><b>⌘</b><span><strong>查找内容</strong><small>搜索项目与片段</small></span></button><button id="welcome-study"><b>◫</b><span><strong>学习工作台</strong><small>网页、视频与笔记分屏</small></span></button><button id="welcome-dsh" data-tone="ai"><b>AI</b><span><strong>DeepSeek Harness</strong><small>在当前工作区使用 AI 编程</small></span></button><button id="welcome-reading"><b>▤</b><span><strong>阅读资料</strong><small>PDF、Word 与网页</small></span></button><button id="welcome-office" data-tone="office"><b>W</b><span><strong>Office 文档</strong><small>Word、Excel 与 PPT</small></span></button><button id="welcome-draw"><b>◇</b><span><strong>绘图设计</strong><small>导图、白板与架构图</small></span></button><button id="welcome-project" data-tone="project"><b>⚙</b><span><strong>工程工具</strong><small>构建、诊断与任务管理</small></span></button><button id="welcome-remote" data-tone="remote"><b>⌁</b><span><strong>远程开发</strong><small>SSH 终端与远程桌面</small></span></button></div><div class="welcome-shortcuts"><span><kbd>⌘ P</kbd> 快速打开</span><span><kbd>⌘ ⇧ F</kbd> 全文搜索</span><span><kbd>⌘ ⇧ P</kbd> 命令面板</span></div></div><div id="primary-group-bar"><span>主编辑栏</span><span class="name" id="primary-group-name"></span><span class="sp"></span><span>大纲跟随此栏</span></div><div id="ln"></div><div id="fold-gutter"></div><canvas id="indent-guides"></canvas><pre id="code"></pre><textarea id="code-edit" spellcheck="false" style="display:none"></textarea><div id="monaco-main" aria-label="VS Code 编辑器；按住 Ctrl 或 Command 并滚动缩放"></div><div id="comp-pop"></div><div id="signature-help" role="status" aria-live="polite"></div><div id="code-actions-pop" role="menu" aria-label="代码操作"></div><div id="editor-find" class="hidden" role="dialog" aria-label="代码查找和替换"><div class="editor-find-row"><button id="editor-find-toggle" type="button" title="展开或收起替换">▸</button><input id="editor-find-query" aria-label="查找内容" placeholder="查找（Enter 下一个）" spellcheck="false"><span id="editor-find-count">0/0</span><button id="editor-find-prev" type="button" title="上一个（Shift+Enter）">↑</button><button id="editor-find-next" type="button" title="下一个（Enter）">↓</button><button id="editor-find-close" type="button" title="关闭（Esc）">×</button></div><div id="editor-find-replace-row" class="editor-find-row editor-find-replace hidden"><button id="editor-find-case" type="button" title="区分大小写">Aa</button><input id="editor-find-replacement" aria-label="替换内容" placeholder="替换为" spellcheck="false"><button id="editor-find-one" type="button">替换</button><button id="editor-find-all" type="button">全部替换</button><span id="editor-find-status"></span></div></div></div>
       <div id="edit-split-v" title="拖动调整编辑 / 预览宽度"></div>
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
@@ -3300,6 +3383,8 @@
     <div id="output">
       <div id="out-head">
         <div id="out-tabs">
+          <button id="tab-cases" class="otab" title="编辑当前代码片段的算法测试用例">▣ 测试用例</button>
+          <button id="tab-results" class="otab" title="查看最近一次测试结果">⌁ 测试结果</button>
           <button id="tab-out" class="otab on" title="程序运行输出">⚙ 输出</button>
           <button id="tab-term" class="otab" title="交互式终端（shell）">>_ 终端</button>
         </div>
@@ -3307,6 +3392,8 @@
         <span class="pill idle" id="status">空闲</span>
         <span id="elapsed" style="font-variant-numeric:tabular-nums"></span>
       </div>
+      <div id="algo-cases" class="algo-panel hidden"></div>
+      <div id="algo-results" class="algo-panel hidden"></div>
       <div id="out-body"><span class="empty">选择片段并点击「运行」查看输出</span></div>
       <div id="term-wrap" class="hidden">
         <div id="term-box"></div>
@@ -3496,7 +3583,11 @@
       <div class="env-card bad"><b id="env-missing">–</b><span>运行问题</span></div>
       <div class="env-card optional"><b id="env-optional">–</b><span>外部服务未连接</span></div>
     </div>
-    <div class="env-package-note"><strong>桌面安装包已包含 CodeScope 基础环境与常用代码工具链。</strong><br>代码与 Markdown 编辑、PDF/XMind 阅读、Prettier、Python 格式化、Pyright、TypeScript LSP 与 gopls 可离线使用。Office 工作区只使用 ONLYOFFICE Docs，必须连接独立 Document Server。</div>
+    <div class="env-package-note"><strong>CodeScope 已集成基础环境、DeepSeek Harness 与常用代码工具链。</strong><br>启动 CodeScope 时会自动启动 DSH；代码与 Markdown 编辑、PDF/XMind 阅读、Prettier、Python 格式化、Pyright、TypeScript LSP 与 gopls 可离线使用。Office 工作区只使用 ONLYOFFICE Docs，必须连接独立 Document Server。</div>
+    <div class="env-dsh-card">
+      <div><strong id="env-dsh-title">DeepSeek Harness · 检测中</strong><p id="env-dsh-detail">DSH 将随 CodeScope 自动启动，并在退出时安全回收。</p></div>
+      <div class="env-dsh-actions"><button id="btn-env-dsh-open" class="primary">打开 DSH</button><button id="btn-env-dsh-restart">重启</button></div>
+    </div>
     <div id="env-meta" style="color:var(--dim);font-size:12px;margin-bottom:10px"></div>
     <div class="env-deploy">
       <div class="title">🧩 项目工具（按需）</div>
@@ -4511,7 +4602,7 @@ window.addEventListener('DOMContentLoaded', wireNewDialog);
 
 /* ------------------------- Office 文档库（Word / Excel / PowerPoint） ------------------------- */
 let OFFICE_TREE=null,OFFICE_CURRENT='',OFFICE_ITEM=null,OFFICE_WORKBOOK=null,OFFICE_SHEET='',OFFICE_PPTX=null,OFFICE_SHEET_DIRTY=false,OFFICE_WORD_HTML='',OFFICE_WORD_DIRTY=false,OFFICE_WORD_MODE='edit',OFFICE_WORD_ZOOM=1,OFFICE_SAVE_T=0,OFFICE_DIALOG_MODE='document',OFFICE_TARGET_FOLDER='';
-let OFFICE_WORD_LOADER=null,OFFICE_SHEET_LOADER=null,OFFICE_ONLYOFFICE_LOADER=null,OFFICE_DOC_EDITOR=null,OFFICE_ENGINE='detecting',OFFICE_HIGH_FIDELITY_READY=false;
+let OFFICE_WORD_LOADER=null,OFFICE_SHEET_LOADER=null,OFFICE_ONLYOFFICE_LOADER=null,OFFICE_DOC_EDITOR=null,OFFICE_ENGINE='detecting',OFFICE_HIGH_FIDELITY_READY=false,OFFICE_SERVICE_BUSY=false;
 let OFFICE_OPEN=(()=>{try{return localStorage.getItem('mc-office-open')!=='0';}catch(_){return true;}})();
 let OFFICE_DIR_OPEN=(()=>{try{return new Set(JSON.parse(localStorage.getItem('mc-office-dirs')||'[]'));}catch(_){return new Set();}})();
 function officePersistDirs(){try{localStorage.setItem('mc-office-dirs',JSON.stringify([...OFFICE_DIR_OPEN]));}catch(_){}}
@@ -4577,7 +4668,10 @@ function closeOfficeDialog(){$('office-ndialog').classList.remove('open');}
 async function submitOfficeDialog(){const name=$('office-nd-name').value.trim(),folder=$('office-nd-folder').value;if(!name)return $('office-nd-name').focus();let result;if(OFFICE_DIALOG_MODE==='folder')result=await api('/api/office/folder',{parent:folder,name});else result=await api('/api/office/new',{folder,name,kind:$('office-nd-kind').value});if(!result.ok)return officeStatus(result.error,true);closeOfficeDialog();if(folder)OFFICE_DIR_OPEN.add(folder);if(OFFICE_DIALOG_MODE==='folder')OFFICE_DIR_OPEN.add(result.path);await loadOffice();if(OFFICE_DIALOG_MODE!=='folder')await openOffice(result.path);}
 async function importOfficeFiles(files){if(!files||!files.length)return;const folder=officeFind(OFFICE_TARGET_FOLDER)&&officeFind(OFFICE_TARGET_FOLDER).type==='folder'?OFFICE_TARGET_FOLDER:'';for(let index=0;index<files.length;index++){const file=files[index];if(!/\.(?:docx|xlsx|xls|csv|pptx)$/i.test(file.name)){officeStatus('已跳过不支持的文件：'+file.name,true);continue;}officeStatus('正在导入 '+(index+1)+'/'+files.length+' · '+file.name);try{const response=await fetch('/api/office/upload-stream',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-CodeScope-Office':officeJsonHeader({name:file.name,folder})},body:file});const result=await response.json();if(!result.ok)throw new Error(result.error);if(index===files.length-1)OFFICE_CURRENT=result.path;}catch(error){officeStatus(String(error.message||error),true);return;}}if(folder)OFFICE_DIR_OPEN.add(folder);await loadOffice();const item=officeFind(OFFICE_CURRENT);if(item)await openOffice(item.path);}
 async function probeOnlyOffice(){try{const response=await fetch('/api/office/providers/v1?refresh=1',{cache:'no-store'});const result=await response.json(),provider=result.providers&&result.providers.find((item)=>item.id==='onlyoffice-docs');OFFICE_HIGH_FIDELITY_READY=!!(provider&&provider.available);officeSetEngine(OFFICE_HIGH_FIDELITY_READY?'onlyoffice':'disconnected',OFFICE_HIGH_FIDELITY_READY?'ONLYOFFICE Docs · 已连接':'ONLYOFFICE · 需要连接');if(provider&&provider.note)$('office-engine').title=provider.note;return OFFICE_HIGH_FIDELITY_READY;}catch(_){OFFICE_HIGH_FIDELITY_READY=false;officeSetEngine('disconnected','ONLYOFFICE · 连接失败');return false;}}
-function wireOfficePanel(){const pane=$('pane-office');pane.classList.toggle('collapsed',!OFFICE_OPEN);$('office-head').onclick=()=>{OFFICE_OPEN=!OFFICE_OPEN;pane.classList.toggle('collapsed',!OFFICE_OPEN);try{localStorage.setItem('mc-office-open',OFFICE_OPEN?'1':'0');}catch(_){}};$('office-new').onclick=(event)=>{event.stopPropagation();openOfficeDialog('document');};$('office-new-folder').onclick=(event)=>{event.stopPropagation();openOfficeDialog('folder');};$('office-import').onclick=(event)=>{event.stopPropagation();$('office-file-input').click();};$('office-file-input').onchange=(event)=>{importOfficeFiles([...event.target.files]);event.target.value='';};$('office-nd-cancel').onclick=closeOfficeDialog;$('office-nd-submit').onclick=submitOfficeDialog;$('office-nd-name').onkeydown=(event)=>{if(event.key==='Enter')submitOfficeDialog();};$('office-ndialog').onmousedown=(event)=>{if(event.target===$('office-ndialog'))closeOfficeDialog();};$('office-back').onclick=()=>closeOffice();$('office-reconnect').onclick=()=>{document.body.classList.add('office-mode');officeConnectionScreen();};$('office-refresh').onclick=()=>OFFICE_CURRENT?openOffice(OFFICE_CURRENT):loadOffice();$('office-save').onclick=saveOfficeCurrent;$('office-download').onclick=()=>{if(!OFFICE_CURRENT)return;const link=document.createElement('a');link.href='/api/office/file?download=1&path='+encodeURIComponent(OFFICE_CURRENT);link.download=officeBase(OFFICE_CURRENT);link.click();};$('office-rename-current').onclick=()=>{if(OFFICE_ITEM)renameOfficeNode(OFFICE_ITEM);};$('office-list').addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();$('office-list').classList.add('root-drop');}});$('office-list').addEventListener('dragleave',(event)=>{if(!$('office-list').contains(event.relatedTarget))$('office-list').classList.remove('root-drop');});$('office-list').addEventListener('drop',async(event)=>{if(event.target.closest('.office-row'))return;event.preventDefault();$('office-list').classList.remove('root-drop');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}const result=await api('/api/office/move',{path:value.path,toFolder:''});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});loadOffice(true);probeOnlyOffice();}
+function applyOfficeServiceStatus(service){const state=$('office-service-state'),start=$('office-service-start'),stop=$('office-service-stop');if(!state||!start||!stop)return;const running=!!(service&&service.running),healthy=service&&service.health==='healthy',memory=running&&service.memory?String(service.memory).split('/')[0].trim():'';state.className='office-service '+(running?'running':'stopped');state.textContent=!service||!service.dockerAvailable?'Docker · 不可用':!service.installed?'容器 · 未安装':running?'容器 · '+(healthy?'健康':'启动中')+(memory?' · '+memory:''):'容器 · 已关闭';state.title=service&&service.error?service.error:(running?'ONLYOFFICE 正在运行'+(service.cpu?'，CPU '+service.cpu:''):'ONLYOFFICE 已停止，不占用运行内存');start.disabled=OFFICE_SERVICE_BUSY||!service||!service.dockerAvailable||!service.installed||running;stop.disabled=OFFICE_SERVICE_BUSY||!running;}
+async function loadOfficeServiceStatus(silent=false){try{const response=await fetch('/api/office/service',{cache:'no-store'}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'无法读取 ONLYOFFICE 服务状态');applyOfficeServiceStatus(result.service);return result.service;}catch(error){applyOfficeServiceStatus({dockerAvailable:false,error:String(error.message||error)});if(!silent)officeStatus(String(error.message||error),true);return null;}}
+async function controlOfficeService(action){if(OFFICE_SERVICE_BUSY)return;if(action==='stop'&&OFFICE_CURRENT&&!confirm('关闭 ONLYOFFICE 会中断当前文档编辑。请确认文档已经自动保存，是否继续？'))return;OFFICE_SERVICE_BUSY=true;applyOfficeServiceStatus({dockerAvailable:true,installed:true,running:action==='stop'});$('office-service-start').disabled=true;$('office-service-stop').disabled=true;officeStatus(action==='start'?'正在启动 ONLYOFFICE…':'正在关闭 ONLYOFFICE…');try{if(action==='stop')destroyOnlyOffice();const response=await fetch('/api/office/service',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'服务操作失败');applyOfficeServiceStatus(result.service);if(action==='start'){let service=result.service;for(let attempt=0;attempt<30&&service&&service.running&&service.health!=='healthy';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));service=await loadOfficeServiceStatus(true);}const ready=await probeOnlyOffice();officeStatus(ready?'ONLYOFFICE 已启动，可以打开文档':'容器已启动，Document Server 仍在初始化');if(ready&&OFFICE_CURRENT)await openOffice(OFFICE_CURRENT);}else{OFFICE_HIGH_FIDELITY_READY=false;officeSetEngine('disconnected','ONLYOFFICE · 已关闭');officeStatus('ONLYOFFICE 已关闭，运行内存已释放');if(OFFICE_CURRENT)await officeConnectionScreen('ONLYOFFICE 本机服务已关闭');}}catch(error){officeStatus(String(error.message||error),true);}finally{OFFICE_SERVICE_BUSY=false;await loadOfficeServiceStatus(true);}}
+function wireOfficePanel(){const pane=$('pane-office');pane.classList.toggle('collapsed',!OFFICE_OPEN);$('office-head').onclick=()=>{OFFICE_OPEN=!OFFICE_OPEN;pane.classList.toggle('collapsed',!OFFICE_OPEN);try{localStorage.setItem('mc-office-open',OFFICE_OPEN?'1':'0');}catch(_){}};$('office-new').onclick=(event)=>{event.stopPropagation();openOfficeDialog('document');};$('office-new-folder').onclick=(event)=>{event.stopPropagation();openOfficeDialog('folder');};$('office-import').onclick=(event)=>{event.stopPropagation();$('office-file-input').click();};$('office-file-input').onchange=(event)=>{importOfficeFiles([...event.target.files]);event.target.value='';};$('office-nd-cancel').onclick=closeOfficeDialog;$('office-nd-submit').onclick=submitOfficeDialog;$('office-nd-name').onkeydown=(event)=>{if(event.key==='Enter')submitOfficeDialog();};$('office-ndialog').onmousedown=(event)=>{if(event.target===$('office-ndialog'))closeOfficeDialog();};$('office-back').onclick=()=>closeOffice();$('office-service-start').onclick=()=>controlOfficeService('start');$('office-service-stop').onclick=()=>controlOfficeService('stop');$('office-reconnect').onclick=()=>{document.body.classList.add('office-mode');officeConnectionScreen();};$('office-refresh').onclick=()=>OFFICE_CURRENT?openOffice(OFFICE_CURRENT):loadOffice();$('office-save').onclick=saveOfficeCurrent;$('office-download').onclick=()=>{if(!OFFICE_CURRENT)return;const link=document.createElement('a');link.href='/api/office/file?download=1&path='+encodeURIComponent(OFFICE_CURRENT);link.download=officeBase(OFFICE_CURRENT);link.click();};$('office-rename-current').onclick=()=>{if(OFFICE_ITEM)renameOfficeNode(OFFICE_ITEM);};$('office-list').addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();$('office-list').classList.add('root-drop');}});$('office-list').addEventListener('dragleave',(event)=>{if(!$('office-list').contains(event.relatedTarget))$('office-list').classList.remove('root-drop');});$('office-list').addEventListener('drop',async(event)=>{if(event.target.closest('.office-row'))return;event.preventDefault();$('office-list').classList.remove('root-drop');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}const result=await api('/api/office/move',{path:value.path,toFolder:''});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});loadOffice(true);probeOnlyOffice();loadOfficeServiceStatus(true);}
 window.addEventListener('DOMContentLoaded',wireOfficePanel);
 
 /* ------------------------- 阅读文库（PDF / AI 翻译 / 摘录） ------------------------- */
@@ -11856,6 +11950,7 @@ function renderMain() {
   $('output').style.display = 'flex';
   $('split-h').style.display = '';
   setStatus('idle', '空闲'); $('elapsed').textContent = ''; $('out-body').innerHTML = '<span class="empty">选择片段并点击「运行」查看输出</span>';
+  algoLoadForCurrent(); renderAlgoCases(); renderAlgoResults(); switchOutTab(OUT_TAB);
   applyMdView();
   renderSplitEditors();
   updateCodeContextBar();
@@ -12185,8 +12280,74 @@ function doPreview() {
   setStatus('ok', '预览中');
 }
 
+/* ----------------------------- 算法测试用例（LeetCode 风格） ----------------------------- */
+const ALGO_CASES_KEY = 'mc-algorithm-cases-v1';
+let ALGO_CASES = [], ALGO_CASE_KEY = '', ALGO_ACTIVE = 0, ALGO_RESULTS = [], ALGO_RESULT_ACTIVE = 0, ALGO_RUNNING = false;
+function algoId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function algoStorage(){try{return JSON.parse(localStorage.getItem(ALGO_CASES_KEY)||'{}')||{};}catch(_){return {};}}
+function algoCurrentKey(){return CURRENT ? CURRENT.file+'#'+CINDEX : '';}
+function algoDefaultCase(index=0){return{id:algoId(),name:'Case '+(index+1),input:'',expected:''};}
+function algoLoadForCurrent(){
+  const key=algoCurrentKey();
+  if(key===ALGO_CASE_KEY&&ALGO_CASES.length)return;
+  ALGO_CASE_KEY=key;ALGO_ACTIVE=0;ALGO_RESULT_ACTIVE=0;ALGO_RESULTS=[];
+  const stored=key&&algoStorage()[key];
+  ALGO_CASES=Array.isArray(stored)&&stored.length?stored.map((item,index)=>({id:String(item.id||algoId()),name:String(item.name||('Case '+(index+1))),input:String(item.input||''),expected:String(item.expected||'')})):[algoDefaultCase()];
+}
+function algoSave(){
+  if(!ALGO_CASE_KEY)return;
+  try{const all=algoStorage();all[ALGO_CASE_KEY]=ALGO_CASES.slice(0,40);const keys=Object.keys(all);if(keys.length>200)keys.slice(0,keys.length-200).forEach(key=>delete all[key]);localStorage.setItem(ALGO_CASES_KEY,JSON.stringify(all));}catch(_){}
+}
+function algoResultFor(id){return ALGO_RESULTS.find(result=>result.id===id);}
+function algoResultClass(id){const result=algoResultFor(id);return result?(result.pass?'pass':result.asserted?'fail':'ran'):'';}
+function algoMakeTabs(host,active,onSelect){
+  const tabs=document.createElement('div');tabs.className='algo-case-tabs';
+  ALGO_CASES.forEach((item,index)=>{const button=document.createElement('button');button.className='algo-case-tab '+(index===active?'on ':'')+algoResultClass(item.id);button.textContent=item.name;button.onclick=()=>onSelect(index);tabs.appendChild(button);});
+  host.appendChild(tabs);
+}
+function renderAlgoCases(){
+  const host=$('algo-cases');if(!host)return;algoLoadForCurrent();host.innerHTML='';
+  const toolbar=document.createElement('div');toolbar.className='algo-toolbar';
+  const add=document.createElement('button');add.textContent='＋ 用例';add.onclick=()=>{ALGO_CASES.push(algoDefaultCase(ALGO_CASES.length));ALGO_ACTIVE=ALGO_CASES.length-1;algoSave();renderAlgoCases();};
+  const duplicate=document.createElement('button');duplicate.textContent='复制';duplicate.onclick=()=>{const source=ALGO_CASES[ALGO_ACTIVE]||algoDefaultCase();ALGO_CASES.splice(ALGO_ACTIVE+1,0,{...source,id:algoId(),name:'Case '+(ALGO_CASES.length+1)});ALGO_ACTIVE++;algoSave();renderAlgoCases();};
+  const remove=document.createElement('button');remove.textContent='删除';remove.disabled=ALGO_CASES.length===1;remove.onclick=()=>{const removed=ALGO_CASES.splice(ALGO_ACTIVE,1)[0];ALGO_RESULTS=ALGO_RESULTS.filter(result=>result.id!==removed.id);ALGO_ACTIVE=Math.max(0,Math.min(ALGO_ACTIVE,ALGO_CASES.length-1));algoSave();renderAlgoCases();renderAlgoResults();};
+  const spacer=document.createElement('span');spacer.className='sp';
+  const runOne=document.createElement('button');runOne.textContent='▶ 运行当前';runOne.disabled=ALGO_RUNNING;runOne.onclick=()=>runAlgoTests([ALGO_ACTIVE]);
+  const runAll=document.createElement('button');runAll.className='algo-run';runAll.textContent=ALGO_RUNNING?'运行中…':'▶ 运行全部';runAll.disabled=ALGO_RUNNING;runAll.onclick=()=>runAlgoTests(ALGO_CASES.map((_,index)=>index));
+  toolbar.append(add,duplicate,remove,spacer,runOne,runAll);host.appendChild(toolbar);
+  algoMakeTabs(host,ALGO_ACTIVE,index=>{ALGO_ACTIVE=index;renderAlgoCases();});
+  const item=ALGO_CASES[ALGO_ACTIVE]||algoDefaultCase();
+  const grid=document.createElement('div');grid.className='algo-editor-grid';
+  const makeField=(title,hint,value,placeholder,onInput)=>{const wrap=document.createElement('div');wrap.className='algo-field';const label=document.createElement('label');label.textContent=title;const small=document.createElement('small');small.textContent=hint;label.appendChild(small);const area=document.createElement('textarea');area.value=value;area.placeholder=placeholder;area.spellcheck=false;area.oninput=()=>onInput(area.value);area.onkeydown=event=>{if((event.metaKey||event.ctrlKey)&&event.key==='Enter'){event.preventDefault();runAlgoTests([ALGO_ACTIVE]);}};wrap.append(label,area);return wrap;};
+  grid.append(makeField('标准输入','stdin',item.input,'例如：\n5 2\n1 2 3 4 5',value=>{item.input=value;ALGO_RESULTS=ALGO_RESULTS.filter(result=>result.id!==item.id);algoSave();}),makeField('期望输出','自动忽略行尾空白',item.expected,'例如：\n1 2 3 5',value=>{item.expected=value;ALGO_RESULTS=ALGO_RESULTS.filter(result=>result.id!==item.id);algoSave();}));
+  host.appendChild(grid);const tip=document.createElement('div');tip.className='algo-tip';tip.textContent='提示：使用标准输入 / 标准输出编写算法程序；⌘/Ctrl + Enter 运行当前用例。用例会按当前文件和片段自动保存。';host.appendChild(tip);
+}
+function algoNormalized(value){return String(value||'').replace(/\r\n?/g,'\n').split('\n').map(line=>line.trimEnd()).join('\n').trim();}
+function renderAlgoResults(){
+  const host=$('algo-results');if(!host)return;algoLoadForCurrent();host.innerHTML='';
+  if(!ALGO_RESULTS.length){host.innerHTML='<div class="algo-result-empty">尚未运行测试用例<br>在“测试用例”中填写输入与期望输出后，点击运行全部</div>';return;}
+  const asserted=ALGO_RESULTS.filter(result=>result.asserted),passed=asserted.filter(result=>result.pass).length,failed=ALGO_RESULTS.filter(result=>result.error||result.asserted&&!result.pass).length,totalMs=ALGO_RESULTS.reduce((sum,result)=>sum+(result.durationMs||0),0);
+  const summary=document.createElement('div');summary.className='algo-result-summary';const headline=document.createElement('strong');headline.className=failed?'fail':asserted.length&&passed===asserted.length?'pass':'';headline.textContent=failed?'未通过':asserted.length?'通过':'运行完成';const detail=document.createElement('span');detail.textContent=(asserted.length?passed+' / '+asserted.length+' 个断言通过 · ':'')+'执行用时 '+Math.round(totalMs)+' ms';const spacer=document.createElement('span');spacer.className='sp';const back=document.createElement('button');back.textContent='编辑用例';back.onclick=()=>switchOutTab('cases');const rerun=document.createElement('button');rerun.className='algo-run';rerun.textContent='↻ 再次运行';rerun.disabled=ALGO_RUNNING;rerun.onclick=()=>runAlgoTests(ALGO_CASES.map((_,index)=>index));summary.append(headline,detail,spacer,back,rerun);host.appendChild(summary);
+  ALGO_RESULT_ACTIVE=Math.max(0,Math.min(ALGO_RESULT_ACTIVE,ALGO_CASES.length-1));algoMakeTabs(host,ALGO_RESULT_ACTIVE,index=>{ALGO_RESULT_ACTIVE=index;renderAlgoResults();});
+  const item=ALGO_CASES[ALGO_RESULT_ACTIVE],result=item&&algoResultFor(item.id);if(!result){const empty=document.createElement('div');empty.className='algo-result-empty';empty.textContent='这个用例尚未运行';host.appendChild(empty);return;}
+  const grid=document.createElement('div');grid.className='algo-result-grid';
+  const card=(label,value,className='')=>{const wrap=document.createElement('div');wrap.className='algo-result-card '+className;const title=document.createElement('label');title.textContent=label;const pre=document.createElement('pre');pre.textContent=value||'(空)';wrap.append(title,pre);return wrap;};
+  grid.append(card('输入',item.input),card('实际输出',result.stdout,'actual '+(result.pass?'pass':result.asserted?'fail':'')),card('期望输出',item.expected||'未设置（本次仅运行）'));
+  if(result.stderr||result.error)grid.append(card(result.error?'错误':'标准错误',result.error||result.stderr,'wide actual fail'));
+  host.appendChild(grid);
+}
+async function runAlgoTests(indices){
+  if(!CURRENT||ALGO_RUNNING)return;algoLoadForCurrent();
+  const fragment=CURRENT.fragments[CINDEX];if(!fragment||fragment.language==='latex'){setStatus('err','当前内容不可测试');return;}
+  ALGO_RUNNING=true;switchOutTab('results');setStatus('idle','测试中…');$('elapsed').textContent='';renderAlgoCases();renderAlgoResults();
+  const keep=ALGO_RESULTS.filter(result=>!indices.includes(ALGO_CASES.findIndex(item=>item.id===result.id)));
+  const next=[...keep];
+  for(const index of indices){const item=ALGO_CASES[index];if(!item)continue;const started=performance.now();let result;try{const body={file:CURRENT.file,fragment:CINDEX,input:item.input};if(EDITING)body.code=editText();const response=await api('/api/run',body);const asserted=item.expected.trim().length>0,stdout=String(response.stdout||''),pass=!!response.ok&&(!asserted||algoNormalized(stdout)===algoNormalized(item.expected));result={id:item.id,asserted,pass,stdout,stderr:String(response.stderr||''),error:response.unsupported?response.reason:response.reason&&!response.ok?response.reason:response.error||'',durationMs:Number(response.durationMs)||performance.now()-started,code:response.code};}catch(error){result={id:item.id,asserted:item.expected.trim().length>0,pass:false,stdout:'',stderr:'',error:String(error.message||error),durationMs:performance.now()-started};}next.push(result);ALGO_RESULTS=next.slice();ALGO_RESULT_ACTIVE=index;renderAlgoCases();renderAlgoResults();}
+  ALGO_RUNNING=false;const asserted=ALGO_RESULTS.filter(result=>result.asserted),failed=ALGO_RESULTS.some(result=>result.error||result.asserted&&!result.pass),totalMs=ALGO_RESULTS.reduce((sum,result)=>sum+(result.durationMs||0),0);$('elapsed').textContent=Math.round(totalMs)+' ms';setStatus(failed?'err':'ok',failed?'测试失败':asserted.length?'全部通过':'运行完成');renderAlgoCases();renderAlgoResults();
+}
+
 /* ----------------------------- 底部终端（xterm + PTY） ----------------------------- */
-let term = null, TERM_TAB_OPEN = false, termConnecting = false, TERM_SIZE_TIMER = null;
+let term = null, TERM_TAB_OPEN = false, OUT_TAB = 'out', termConnecting = false, TERM_SIZE_TIMER = null;
 let TERM_SCAN_BUFFER = '';
 let SSH_LAYOUT_ACTIVE = false;
 function setTerminalMode(mode, label) {
@@ -12211,12 +12372,21 @@ function setTerminalMode(mode, label) {
   requestAnimationFrame(() => { termFit(); requestAnimationFrame(termFit); });
 }
 function switchOutTab(which) {
+  OUT_TAB = ['cases','results','out','term'].includes(which) ? which : 'out';
   TERM_TAB_OPEN = which === 'term';
+  $('tab-cases').classList.toggle('on', which === 'cases');
+  $('tab-results').classList.toggle('on', which === 'results');
   $('tab-out').classList.toggle('on', which === 'out');
   $('tab-term').classList.toggle('on', which === 'term');
-  $('out-body').classList.toggle('hidden', which === 'term');
+  $('algo-cases').classList.toggle('hidden', which !== 'cases');
+  $('algo-results').classList.toggle('hidden', which !== 'results');
+  $('out-body').classList.toggle('hidden', which !== 'out');
   $('input-area').classList.add('hidden');
   $('term-wrap').classList.toggle('hidden', which !== 'term');
+  if (which === 'cases' || which === 'results') {
+    if ($('output').getBoundingClientRect().height < 300) $('output').style.height = Math.min(430, Math.round(window.innerHeight * .42)) + 'px';
+    if (which === 'cases') renderAlgoCases(); else renderAlgoResults();
+  }
   if (which === 'term') {
     if (!term) initTerm();
     else { termFit(); term.focus(); }
@@ -12280,6 +12450,8 @@ async function termConnect() {
   loadRemoteStatus();
   if (TERM_TAB_OPEN) setTimeout(termConnect, 800);   // 会话结束 / 服务重启后自动重连
 }
+$('tab-cases').onclick = () => switchOutTab('cases');
+$('tab-results').onclick = () => switchOutTab('results');
 $('tab-out').onclick = () => switchOutTab('out');
 $('tab-term').onclick = () => switchOutTab('term');
 $('term-clear').onclick = () => { if (term) term.clear(); };
@@ -13409,12 +13581,16 @@ $('refresh').onclick = () => { refresh(false); renderDrawList(); };
 $('search').oninput = renderList;
 $('welcome-search').onclick = () => { $('search').focus(); $('search').select(); };
 $('welcome-study').onclick = () => $('btn-study').click();
+$('welcome-dsh').onclick = () => $('btn-dsh').click();
 $('welcome-reading').onclick = () => {
   const head = $('reading-head');
   if (!READING_OPEN) head.click();
   head.scrollIntoView({ behavior:'smooth', block:'center' });
 };
+$('welcome-office').onclick = () => { document.body.classList.add('office-mode'); officeWelcome(); };
 $('welcome-draw').onclick = () => $('draw-new-manual').click();
+$('welcome-project').onclick = () => $('btn-project').click();
+$('welcome-remote').onclick = () => $('btn-remote').click();
 $('btn-collapse-all').onclick = collapseAll;
 $('btn-expand-all').onclick = expandAll;
 // Git 面板
@@ -13494,6 +13670,63 @@ function renderEnvironmentRows(hostId,entries){
     host.appendChild(row);
   }
 }
+function dshLaunchUrl(service){
+  const local=['127.0.0.1','localhost','::1'].includes(location.hostname);
+  return local ? service.url : (service.publicUrl||service.url);
+}
+let DSH_SERVICE=null;
+function renderDshService(service){
+  if(!service)return;
+  DSH_SERVICE=service;
+  const ready=!!service.available,managed=!!service.managed;
+  $('env-dsh-title').textContent='DeepSeek Harness · '+(ready?(managed?'CodeScope 托管运行':'已连接现有服务'):(service.state==='starting'?'正在启动':'未就绪'));
+  $('env-dsh-detail').textContent=ready
+    ?`v${service.version||'未知'} · 端口 ${service.port} · ${managed?'关闭 CodeScope 时自动回收':'现有进程保持独立运行'}`
+    :(service.message||'DSH 服务尚未启动');
+  $('btn-env-dsh-open').disabled=!ready;
+  $('btn-env-dsh-restart').disabled=service.state==='starting';
+  const top=$('btn-dsh');top.classList.toggle('dsh-ready',ready);top.classList.toggle('dsh-bad',!ready);top.title=ready?'打开 DeepSeek Harness':(service.message||'DSH 未就绪，点击尝试启动');
+}
+async function dshAction(action){
+  const response=await api('/api/integrations/dsh',{action});
+  renderDshService(response.service);
+  return response.service;
+}
+async function openDsh(){
+  try{
+    let response=await api('/api/integrations/dsh');
+    let service=response.service;
+    if(!service.available)service=await dshAction('start');
+    if(!service.available)throw new Error(service.message||'DSH 未能启动');
+    renderDshService(service);
+    const url=dshLaunchUrl(service);
+    if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
+    if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
+    if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
+    if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
+    document.body.classList.remove('study-mode','office-mode','reading-mode','drawing-mode');
+    document.body.classList.add('dsh-mode');
+    $('btn-dsh').classList.add('on');$('btn-dsh').setAttribute('aria-pressed','true');
+    $('dsh-head-status').textContent=service.managed?'CodeScope 托管运行':'已连接现有服务';
+    const frame=$('dsh-frame');
+    if(frame.src!==url){$('dsh-loading').classList.remove('hidden');frame.src=url;}
+    setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+  }catch(error){alert('DeepSeek Harness 打开失败：'+(error.message||error));}
+}
+function closeDshWorkspace(){
+  document.body.classList.remove('dsh-mode');
+  $('btn-dsh').classList.remove('on');$('btn-dsh').setAttribute('aria-pressed','false');
+  setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+}
+async function openDshExternal(){
+  try{
+    let service=DSH_SERVICE;
+    if(!service||!service.available)service=(await api('/api/integrations/dsh')).service;
+    if(!service.available)service=await dshAction('start');
+    if(!service.available)throw new Error(service.message||'DSH 未能启动');
+    window.open(dshLaunchUrl(service),'codescope-dsh-external','noopener');
+  }catch(error){alert('DeepSeek Harness 打开失败：'+(error.message||error));}
+}
 async function loadEnv(refreshNow, quiet) {
   if (ENV_LOADING) return ENV_DATA;
   ENV_LOADING = true;
@@ -13543,6 +13776,7 @@ async function loadEnv(refreshNow, quiet) {
   renderEnvironmentRows('env-runtime-list',d.runtime);
   renderEnvironmentRows('env-client-list',client);
   renderEnvironmentRows('env-list',d.env);
+  renderDshService(d.env.dsh);
   return d;
   } catch (err) {
     envButton.classList.remove('env-checking', 'env-ok');
@@ -13631,6 +13865,15 @@ $('btn-env').onclick = () => { $('env-panel').classList.add('open'); loadEnv(fal
 $('btn-env-close').onclick = () => $('env-panel').classList.remove('open');
 $('btn-env-refresh').onclick = () => loadEnv(true, false);
 $('btn-env-deploy').onclick = deployCurrentEnv;
+$('btn-dsh').setAttribute('aria-pressed','false');
+$('btn-dsh').onclick=()=>document.body.classList.contains('dsh-mode')?closeDshWorkspace():openDsh();
+$('btn-env-dsh-open').onclick=openDsh;
+$('btn-env-dsh-restart').onclick=async()=>{try{renderDshService({...((ENV_DATA&&ENV_DATA.env&&ENV_DATA.env.dsh)||{}),state:'starting',message:'正在重启 DSH…'});await dshAction('restart');}catch(error){alert('DSH 重启失败：'+(error.message||error));}};
+$('dsh-back').onclick=closeDshWorkspace;
+$('dsh-reload').onclick=()=>{const frame=$('dsh-frame');$('dsh-loading').classList.remove('hidden');frame.src=frame.src;};
+$('dsh-external').onclick=openDshExternal;
+$('dsh-frame').addEventListener('load',()=>{$('dsh-loading').classList.add('hidden');$('dsh-head-status').textContent=DSH_SERVICE&&DSH_SERVICE.managed?'已连接 · CodeScope 托管':'已连接';});
+new MutationObserver(()=>{if(document.body.classList.contains('dsh-mode')&&['study-mode','office-mode','reading-mode','drawing-mode'].some(mode=>document.body.classList.contains(mode)))closeDshWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
 
 initAppThemes();
 initEditorGroups();
