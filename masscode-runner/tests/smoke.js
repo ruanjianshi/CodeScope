@@ -234,6 +234,8 @@ void bubbleSort(Array& values);
   const knowledgeImageResponse=await fetch(baseUrl+'/api/knowledge/image',{method:'POST',headers:{'Content-Type':'image/png','X-CodeScope-Knowledge':knowledgeImageInfo},body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')});
   const knowledgeImage=await knowledgeImageResponse.json();
   assert(knowledgeImageResponse.ok && knowledgeImage.ok && knowledgeImage.markdown.includes('/images/') && fs.existsSync(path.join(vault,'readings','知识库','public','images','设备驱动','示意图.png')), '知识库图片导入、分类存储或 Markdown 语法生成失败');
+  const knowledgeEditorImage=await fetch(baseUrl+knowledgeImage.url);
+  assert(knowledgeEditorImage.ok && knowledgeEditorImage.headers.get('content-type')==='image/png' && (await knowledgeEditorImage.arrayBuffer()).byteLength>0, '知识库原始图片未通过 CodeScope /images 路由提供，区块编辑器会显示破图');
   const knowledgeBuild = await postJson(baseUrl, '/api/knowledge/build', {});
   assert(knowledgeBuild.phase === 'ready' && knowledgeBuild.built && !knowledgeBuild.pending && knowledgeBuild.pageCount >= 3 && knowledgeBuild.assetCount === 1, 'VitePress 知识库构建、待处理状态或图片统计失败：' + (knowledgeBuild.error || 'unknown'));
   const knowledgeSite = await fetch(baseUrl + '/knowledge/');

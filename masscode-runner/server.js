@@ -3500,6 +3500,11 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/assets/'.length);
       return streamStatic(req, res, assetsRoot, rel, { cacheControl:'no-cache' });
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/images/')) {
+      const imagesRoot = path.join(KNOWLEDGE.sourceDir(), 'public', 'images');
+      const rel = decodeURIComponent(u.pathname.slice('/images/'.length));
+      return streamStatic(req, res, imagesRoot, rel, { cacheControl:'no-cache', notFound:'知识库图片不存在' });
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && (u.pathname === '/manual' || u.pathname.startsWith('/manual/'))) {
       const manualRoot = path.join(__dirname, 'docs', 'manual');
       const rel = u.pathname === '/manual' || u.pathname === '/manual/' ? 'index.html' : u.pathname.slice('/manual/'.length);
