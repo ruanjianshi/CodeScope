@@ -15,6 +15,8 @@ import {
   wrapInBlockTypeCommand,
 } from '@milkdown/kit/preset/commonmark'
 import { TextSelection } from '@milkdown/kit/prose/state'
+import { Fragment } from '@milkdown/kit/prose/model'
+import { imageBlockSchema } from '@milkdown/kit/component/image-block'
 import { insert } from '@milkdown/kit/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
@@ -171,16 +173,6 @@ const runBlockTransform = (crepe, type, targetPos) => {
       nodeType: codeBlockSchema.type(ctx), attrs: type === 'math' ? { language: 'LaTeX' } : {},
     })
     if (type === 'divider') return commands.call(addBlockTypeCommand.key, { nodeType: hrSchema.type(ctx) })
-  })
-}
-
-const focusBlockAtPosition = (crepe, targetPos) => {
-  if (typeof targetPos !== 'number') return
-  crepe.editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx)
-    const pos = Math.max(0, Math.min(view.state.doc.content.size, targetPos + 1))
-    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos))))
-    view.focus()
   })
 }
 
@@ -345,15 +337,40 @@ async function create(options = {}) {
   const insertImages = async (files, targetPos) => {
     root.dataset.imageUploading = 'true'
     try {
-      const markdown = []
+      const images = []
       for (const file of files) {
         const uploaded = await options.onImage?.(file)
         const value = typeof uploaded === 'string' ? uploaded : uploaded?.markdown
-        if (value) markdown.push(value)
+        const url = typeof uploaded === 'object' && uploaded?.url
+          ? uploaded.url
+          : String(value || '').match(/!\[[^\]]*\]\(([^\s)]+)(?:\s+['"][^'"]*['"])?\)/)?.[1]
+        if (value && url) images.push({ markdown:value, url })
       }
-      if (!markdown.length) throw new Error('图片上传后没有返回 Markdown 地址')
-      focusBlockAtPosition(crepe, targetPos)
-      crepe.editor.action(insert(toEditorMarkdown(markdown.join('\n\n'))))
+      if (!images.length) throw new Error('图片上传后没有返回可用地址')
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        const doc = view.state.doc
+        let anchor = typeof targetPos === 'number' ? targetPos : null
+        if (anchor === null) {
+          const { $from, from } = view.state.selection
+          anchor = $from.depth > 0 ? $from.before(1) : from
+        }
+        const anchorNode = doc.nodeAt(anchor)
+        let insertPos = anchorNode?.isBlock ? anchor + anchorNode.nodeSize : doc.content.size
+        let transaction = view.state.tr
+        if (anchorNode?.type === paragraphSchema.type(ctx) && anchorNode.content.size === 0) {
+          transaction = transaction.delete(anchor, anchor + anchorNode.nodeSize)
+          insertPos = anchor
+        }
+        const imageType = imageBlockSchema.type(ctx)
+        const nodes = images.map((image) => imageType.create({ src:image.url, caption:'', ratio:1 }))
+        transaction = transaction.insert(insertPos, Fragment.fromArray(nodes))
+        const nextPos = Math.min(transaction.doc.content.size, insertPos + nodes.reduce((size, node) => size + node.nodeSize, 0))
+        transaction = transaction.setSelection(TextSelection.near(transaction.doc.resolve(nextPos)))
+        view.dispatch(transaction)
+        view.focus()
+      })
+      const markdown = images.map((image) => image.markdown)
       root.dispatchEvent(new CustomEvent('codescope-image-inserted', {
         bubbles: true,
         detail: { count:markdown.length, markdown:markdown.join('\n\n') },

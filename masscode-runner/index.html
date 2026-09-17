@@ -4860,7 +4860,7 @@ async function uploadKnowledgeEditorImage(file,readingPath){
   const header=utf8Base64(JSON.stringify({path:relative})),response=await fetch('/api/knowledge/image',{method:'POST',headers:{'Content-Type':file.type||'image/png','X-CodeScope-Knowledge':header},body:file}),result=await response.json();
   if(!response.ok||!result.ok)throw new Error(result.error||'知识库图片保存失败');
   readingStatus('图片已保存到知识库：'+result.path);
-  return result.markdown;
+  return result;
 }
 function setKnowledgeLaunchMenu(open){
   const wrap=$('knowledge-launch'),menu=$('knowledge-launch-menu'),more=$('knowledge-launch-more');

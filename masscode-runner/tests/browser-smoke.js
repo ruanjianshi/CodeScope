@@ -186,6 +186,10 @@ print(r.run())
   fs.writeFileSync(path.join(readingProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Markdown block drag regression',tags:['markdown','drag']},null,2));
   const readingReference='[[code-ref:demo.cpp#fragment=0&line=1&end=2|demo.cpp:1–2]]';
   fs.writeFileSync(readingNotePath,'---\ntitle: Block Drag Demo\ntags: [markdown, drag]\n---\n# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n'+readingReference+'\n\n## Section B\n\n- alpha\n- beta\n- gamma\n','utf8');
+  const knowledgeImageProjectDir=path.join(vault,'readings','知识库','浏览器测试','图片项目'),knowledgeImageNotePath=path.join(knowledgeImageProjectDir,'图片插入.md');
+  fs.mkdirSync(knowledgeImageProjectDir,{recursive:true});
+  fs.writeFileSync(path.join(knowledgeImageProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Knowledge image insertion regression',tags:['image']},null,2));
+  fs.writeFileSync(knowledgeImageNotePath,'# 图片插入测试\n\n在此区块后插入图片。\n','utf8');
   const pdfProjectDir=path.join(vault,'readings','PDF Viewer Demo');
   fs.mkdirSync(pdfProjectDir,{recursive:true});
   fs.writeFileSync(path.join(pdfProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Official PDF.js viewer regression',tags:['pdf','viewer']},null,2));
@@ -849,6 +853,9 @@ print(r.run())
   await readingPage.waitForTimeout(850);const savedNote=fs.readFileSync(readingNotePath,'utf8');
   if(!savedNote.startsWith('---\ntitle: Block Drag Demo')||savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!savedNote.includes(readingReference))throw new Error('Markdown frontmatter、引用或区块拖拽结果未持久化：'+savedNote);
   const paragraphA=live.locator('p').filter({hasText:'Paragraph A.'});await paragraphA.hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');await transformHandle.click();await transformMenu.getByText('删除区块',{exact:true}).click();await paragraphA.waitFor({state:'detached'});await readingPage.waitForFunction(()=>!READING_TEXT_DOCS.get(READING_CURRENT).content.includes('Paragraph A.'));
+  await readingPage.evaluate(async()=>{await loadReadings(true);await openReading('知识库/浏览器测试/图片项目/图片插入.md',0);});await live.locator('.ProseMirror').waitFor({state:'visible',timeout:15000});await readingPage.waitForFunction(()=>document.querySelector('.reading-md-block')?.dataset.editorReady==='true');
+  const imageAnchor=live.locator('p').filter({hasText:'在此区块后插入图片。'});await imageAnchor.hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');const chooserPromise=readingPage.waitForEvent('filechooser');await transformHandle.click();await transformMenu.getByText('插入图片',{exact:true}).click();const chooser=await chooserPromise;await chooser.setFiles({name:'像素.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')});
+  const insertedImage=live.locator('.milkdown-image-block img').first();await insertedImage.waitFor({state:'visible',timeout:15000});await readingPage.waitForFunction(()=>{const image=document.querySelector('.reading-md-block .milkdown-image-block img');return image&&image.naturalWidth>0&&image.getAttribute('src')?.startsWith('/images/');});await readingPage.waitForTimeout(850);const savedImageNote=fs.readFileSync(knowledgeImageNotePath,'utf8');if(!/!\[1\.00\]\(\/images\/.+\.png\)/.test(savedImageNote)||savedImageNote.includes(']()'))throw new Error('图片区块保存后丢失地址：'+savedImageNote);
   if(readingErrors.length)throw new Error('Markdown 区块浏览器运行错误：'+readingErrors.join('；'));
 
   /* ---- 统一资料阅读：DOCX 原貌渲染、网页正文提取与缩放 ---- */

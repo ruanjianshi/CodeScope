@@ -432,6 +432,7 @@ void bubbleSort(Array& values);
   assert(blockEditorSource.includes('looksLikeMarkdown') && blockEditorSource.includes("root.addEventListener('paste', onPaste, true)") && blockEditorSource.includes('crepe.editor.action(insert('), 'Markdown 区块编辑器缺少粘贴结构识别或原生 Markdown 解析插入');
   assert(blockEditorSource.includes('options.onImage') && blockEditorSource.includes("root.addEventListener('drop', onDrop, true)") && blockEditorSource.includes('codescope-image-inserted') && html.includes('uploadKnowledgeEditorImage'), '知识库 Markdown 区块编辑器缺少粘贴/拖入图片自动落盘能力');
   assert(blockEditorSource.includes('data-block-action="image"') && blockEditorSource.includes('data-block-action="delete"') && blockEditorSource.includes('deleteBlockAt') && blockEditorSource.includes('onInsertImages'), '六点手柄菜单缺少插入图片或删除区块操作');
+  assert(blockEditorSource.includes("imageBlockSchema.type(ctx)") && blockEditorSource.includes("src:image.url") && html.includes('return result;'), '知识库图片仍通过 Markdown 字符串间接插入，可能在图片区块序列化时丢失地址');
   assert(html.includes('reading-md-zoom') && html.includes('loadReadingMarkdownZoom') && html.includes("e.deltaY<0?5:-5") && html.includes("e.key==='0'"), 'Markdown 区块编辑器缺少可记忆缩放、触控板缩放或键盘缩放');
   assert(html.includes('reading-md-outline') && html.includes('readingMarkdownHeadings') && html.includes('focusOutlineEntry') && html.includes('syncOutlineFromView') && html.includes('loadReadingMarkdownOutline'), 'Markdown 区块编辑器缺少可记忆大纲、标题层级、点击定位或滚动高亮');
   assert(!html.includes("setupReadingLiveBlocks(live,workbench,slot)"), '阅读模块仍在启用旧的自制区块拖拽层');
