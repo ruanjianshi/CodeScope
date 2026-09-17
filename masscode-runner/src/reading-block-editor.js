@@ -174,7 +174,32 @@ const runBlockTransform = (crepe, type, targetPos) => {
   })
 }
 
-const attachBlockTransformMenu = (crepe, root) => {
+const focusBlockAtPosition = (crepe, targetPos) => {
+  if (typeof targetPos !== 'number') return
+  crepe.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    const pos = Math.max(0, Math.min(view.state.doc.content.size, targetPos + 1))
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos))))
+    view.focus()
+  })
+}
+
+const deleteBlockAt = (crepe, targetPos) => {
+  if (typeof targetPos !== 'number') return
+  crepe.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    const node = view.state.doc.nodeAt(targetPos)
+    if (!node?.isBlock) return
+    let transaction = view.state.tr.delete(targetPos, Math.min(view.state.doc.content.size, targetPos + node.nodeSize))
+    if (!transaction.doc.childCount) transaction = transaction.insert(0, paragraphSchema.type(ctx).create())
+    const nextPos = Math.max(0, Math.min(transaction.doc.content.size, targetPos))
+    transaction = transaction.setSelection(TextSelection.near(transaction.doc.resolve(nextPos)))
+    view.dispatch(transaction)
+    view.focus()
+  })
+}
+
+const attachBlockTransformMenu = (crepe, root, options = {}) => {
   let activeBlock = null
   let targetPos = null
   const menu = document.createElement('div')
@@ -185,7 +210,19 @@ const attachBlockTransformMenu = (crepe, root) => {
   menu.innerHTML = `<div class="title">转换为</div>${BLOCK_TRANSFORM_GROUPS.map((group) => `
     <section><h6>${group.label}</h6><div class="items">${group.items.map(([type, label, icon]) => `
       <button type="button" role="menuitem" data-block-type="${type}"><span class="icon">${icon}</span><span>${label}</span></button>
-    `).join('')}</div></section>`).join('')}`
+    `).join('')}</div></section>`).join('')}
+    <section><h6>媒体</h6><div class="items">
+      <button type="button" role="menuitem" data-block-action="image" ${typeof options.onInsertImages === 'function' ? '' : 'disabled'} title="${typeof options.onInsertImages === 'function' ? '从电脑选择并插入图片' : '此文档暂不支持图片上传'}"><span class="icon">▧</span><span>插入图片</span></button>
+    </div></section>
+    <section class="block-actions"><h6>区块操作</h6><div class="items">
+      <button type="button" role="menuitem" class="danger" data-block-action="delete"><span class="icon">⌫</span><span>删除区块</span></button>
+    </div></section>`
+  const imageInput = document.createElement('input')
+  imageInput.type = 'file'
+  imageInput.accept = 'image/png,image/jpeg,image/gif,image/webp'
+  imageInput.multiple = true
+  imageInput.hidden = true
+  menu.appendChild(imageInput)
   document.body.appendChild(menu)
 
   const hide = () => { menu.hidden = true; delete menu.dataset.show }
@@ -194,10 +231,11 @@ const attachBlockTransformMenu = (crepe, root) => {
     const rect = handle.getBoundingClientRect()
     const width = 292
     const left = Math.min(window.innerWidth - width - 12, Math.max(12, rect.right + 8))
-    const top = Math.min(window.innerHeight - 520, Math.max(12, rect.top - 8))
-    Object.assign(menu.style, { left: `${left}px`, top: `${Math.max(12, top)}px` })
     menu.hidden = false
     menu.dataset.show = 'true'
+    const menuHeight = Math.min(menu.offsetHeight, window.innerHeight - 24)
+    const top = Math.min(window.innerHeight - menuHeight - 12, Math.max(12, rect.top - 8))
+    Object.assign(menu.style, { left: `${left}px`, top: `${Math.max(12, top)}px` })
   }
   const onPointerUp = (event) => {
     const item = event.target instanceof Element ? event.target.closest('.milkdown-block-handle .operation-item:nth-child(2)') : null
@@ -208,10 +246,18 @@ const attachBlockTransformMenu = (crepe, root) => {
   }
   const onMenuPointerDown = (event) => event.preventDefault()
   const onMenuClick = (event) => {
-    const button = event.target instanceof Element ? event.target.closest('[data-block-type]') : null
+    const button = event.target instanceof Element ? event.target.closest('[data-block-type],[data-block-action]') : null
     if (!button) return
-    runBlockTransform(crepe, button.dataset.blockType, targetPos)
+    if (button.dataset.blockType) runBlockTransform(crepe, button.dataset.blockType, targetPos)
+    if (button.dataset.blockAction === 'image' && !button.disabled) imageInput.click()
+    if (button.dataset.blockAction === 'delete') deleteBlockAt(crepe, targetPos)
     hide()
+  }
+  const onImageChange = () => {
+    const files = [...(imageInput.files || [])]
+    imageInput.value = ''
+    if (!files.length || typeof options.onInsertImages !== 'function') return
+    void options.onInsertImages(files, targetPos)
   }
   const rememberActiveBlock = (event) => {
     const editor = root.querySelector('.ProseMirror')
@@ -229,6 +275,7 @@ const attachBlockTransformMenu = (crepe, root) => {
   root.addEventListener('mouseover', rememberActiveBlock, true)
   menu.addEventListener('pointerdown', onMenuPointerDown)
   menu.addEventListener('click', onMenuClick)
+  imageInput.addEventListener('change', onImageChange)
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
   window.addEventListener('keydown', onKeyDown, true)
   return () => {
@@ -237,6 +284,7 @@ const attachBlockTransformMenu = (crepe, root) => {
     root.removeEventListener('mouseover', rememberActiveBlock, true)
     menu.removeEventListener('pointerdown', onMenuPointerDown)
     menu.removeEventListener('click', onMenuClick)
+    imageInput.removeEventListener('change', onImageChange)
     document.removeEventListener('pointerdown', onDocumentPointerDown, true)
     window.removeEventListener('keydown', onKeyDown, true)
     menu.remove()
@@ -287,7 +335,7 @@ async function create(options = {}) {
     }
     return files.filter((file) => String(file.type || '').startsWith('image/'))
   }
-  const insertImages = async (files) => {
+  const insertImages = async (files, targetPos) => {
     root.dataset.imageUploading = 'true'
     try {
       const markdown = []
@@ -297,6 +345,7 @@ async function create(options = {}) {
         if (value) markdown.push(value)
       }
       if (!markdown.length) throw new Error('图片上传后没有返回 Markdown 地址')
+      focusBlockAtPosition(crepe, targetPos)
       crepe.editor.action(insert(toEditorMarkdown(markdown.join('\n\n'))))
       root.dispatchEvent(new CustomEvent('codescope-image-inserted', {
         bubbles: true,
@@ -347,7 +396,9 @@ async function create(options = {}) {
   root.addEventListener('paste', onPaste, true)
   root.addEventListener('drop', onDrop, true)
   await crepe.create()
-  const detachBlockTransformMenu = attachBlockTransformMenu(crepe, root)
+  const detachBlockTransformMenu = attachBlockTransformMenu(crepe, root, {
+    onInsertImages: typeof options.onImage === 'function' ? insertImages : null,
+  })
   ready = true
   root.dataset.editorReady = 'true'
   return {
