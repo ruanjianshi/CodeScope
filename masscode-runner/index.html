@@ -2381,6 +2381,7 @@
   .brand-github:hover { color:#dbe7f7; border-color:#35465b; background:#17222f; }
   .brand-github:focus-visible { outline:2px solid #8bb7ff; outline-offset:1px; }
   .brand-github svg { width:14px; height:14px; fill:currentColor; }
+  .brand-manual svg { fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   header .sub { min-width:40px; max-width:none; color:#718096; font:10px/1.2 var(--mono); }
   button { min-height:30px; border:1px solid #303d4e; border-radius:7px; padding:5px 10px; background:var(--control); color:#cfd8e6; box-shadow:none; font-weight:500; transition:background .12s,border-color .12s,color .12s,transform .08s; }
   button:hover:not(:disabled) { background:var(--control-hover); border-color:#536985; color:#fff; }
@@ -2926,6 +2927,30 @@
   #header-left>h1 { flex:none; }
   #header-left>.sub { min-width:0; flex:1; }
   #header-right { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
+  #header-center { gap:6px; }
+  #header-center>.header-action,#btn-knowledge-launch,#knowledge-launch-more,#site-menu-trigger {
+    height:34px; min-height:34px; box-sizing:border-box; border-color:#344356;
+    background:#17202b; color:#cbd6e5; font-size:12px; font-weight:680; box-shadow:inset 0 1px rgba(255,255,255,.025);
+  }
+  #header-center>.header-action,#site-menu-trigger { border-radius:7px; padding:6px 11px; }
+  #header-center>.header-action:hover,#btn-knowledge-launch:hover,#knowledge-launch-more:hover,#site-menu-trigger:hover,
+  #knowledge-launch.open #btn-knowledge-launch,#knowledge-launch.open #knowledge-launch-more,#site-menu-trigger.on {
+    border-color:#526983; background:#202c39; color:#f1f6fd;
+  }
+  #header-center>.header-action::before,#btn-knowledge-launch::before,.site-menu-trigger-icon {
+    display:grid; place-items:center; width:20px; height:20px; box-sizing:border-box; flex:none;
+    border:1px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:5px;
+    background:color-mix(in srgb,var(--accent) 10%,transparent); color:#8bb7f5;
+  }
+  #header-center #btn-study::before { color:#8bb7f5; font-size:14px; }
+  #header-center #btn-dsh::before { content:'DSH'; color:#82b6ff; font-size:7px; }
+  #header-center #btn-dsh.dsh-ready { border-color:#3e7654; background:#17271e; }
+  #header-center #btn-dsh.dsh-ready::before { border-color:rgba(86,211,100,.28); background:rgba(86,211,100,.09); }
+  #header-center #btn-dsh.on,#header-center #btn-study.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
+  #header-center #btn-knowledge-launch.on { border-color:#4c9675; background:#1b382d; box-shadow:inset 0 -2px #63d6a0; }
+  #header-center #btn-knowledge-launch { padding:6px 10px; border-radius:7px 0 0 7px; }
+  #header-center #knowledge-launch-more { width:28px; padding:0; border-radius:0 7px 7px 0; }
+  #header-center #site-menu-trigger small { min-width:24px; }
   #app-nav { display:flex; align-items:center; justify-content:flex-end; gap:5px; min-width:0; flex:none; }
   #app-nav .header-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:34px; white-space:nowrap; }
   #app-nav .header-action::before { display:grid; place-items:center; width:15px; height:15px; flex:none; color:color-mix(in srgb,var(--accent) 84%,var(--text)); font:700 13px/1 var(--mono); }
@@ -2933,8 +2958,6 @@
   #app-nav .header-project::before { content:'⌘'; }
   #app-nav .header-remote::before { content:'⌁'; font-size:16px; }
   #app-nav .header-env::before { content:'◌'; }
-  #app-nav .header-knowledge::before { content:'K'; border:1px solid currentColor; border-radius:4px; width:14px; height:14px; font-size:9px; }
-  #app-nav .header-manual::before { content:'?'; border:1px solid currentColor; border-radius:50%; width:14px; height:14px; font-size:9px; }
   #app-nav .header-refresh::before { content:'↻'; font-size:15px; }
   #app-nav #btn-env,#app-nav #btn-remote { padding-right:22px; }
   #app-nav #theme-btn { min-height:32px; }
@@ -3076,7 +3099,7 @@
 <body>
 <header>
   <div id="header-left">
-  <h1 title="码境 · 工程代码工作台"><span class="brand-mark"><img src="/assets/codescope.svg" alt=""></span><span class="brand-name">码境</span><span class="brand-edition">CodeScope</span><span class="brand-version" id="brand-version">v2.0.0</span><a class="brand-github" href="https://github.com/ruanjianshi/massCode" target="_blank" rel="noopener noreferrer" title="打开 CodeScope GitHub 远程仓库" aria-label="CodeScope GitHub 远程仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a></h1>
+  <h1 title="码境 · 工程代码工作台"><span class="brand-mark"><img src="/assets/codescope.svg" alt=""></span><span class="brand-name">码境</span><span class="brand-edition">CodeScope</span><span class="brand-version" id="brand-version">v2.0.0</span><a class="brand-github" href="https://github.com/ruanjianshi/massCode" target="_blank" rel="noopener noreferrer" title="打开 CodeScope GitHub 远程仓库" aria-label="CodeScope GitHub 远程仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a><a class="brand-github brand-manual" id="btn-manual" href="/manual/" target="codescope-manual" rel="noopener" title="打开 CodeScope 使用手册" aria-label="CodeScope 使用手册"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5A3.5 3.5 0 0 1 8 3h3v16H8a3.5 3.5 0 0 0-3.5 2V5.5Z"/><path d="M19.5 5.5A3.5 3.5 0 0 0 16 3h-3v16h3a3.5 3.5 0 0 1 3.5 2V5.5Z"/></svg></a></h1>
   <div class="sub" id="vault-path">…</div>
   </div>
   <div id="header-center" aria-label="学习与网址">
@@ -3143,8 +3166,6 @@
     <button class="header-action header-project" id="btn-project" title="构建任务、编译数据库与工程健康报告"><span>工程</span></button>
     <button class="header-action header-remote" id="btn-remote" title="SSH 终端与 VNC 桌面"><span>远程</span></button>
     <button class="header-action header-env" id="btn-env" title="检查运行环境与项目工具"><span>环境</span></button>
-    <button class="header-action header-knowledge" id="btn-knowledge" title="管理、生成并阅读 Markdown 知识库"><span>知识库</span></button>
-    <button class="header-action header-manual" id="btn-manual" title="打开 CodeScope 完整使用手册"><span>手册</span></button>
     <button class="header-action header-refresh" id="refresh" title="刷新 Vault、Git、绘图和阅读资料"><span>刷新</span></button>
     </nav>
   </div>
@@ -13798,7 +13819,6 @@ function makeHResizer(handle, getter, setter) {
   window.addEventListener('resize', () => { try { layoutEditEditor(); } catch (_) {} if(MONACO_EDITOR)MONACO_EDITOR.layout();for(const editor of MONACO_SPLIT_EDITORS)editor.layout(); });
 })();
 $('refresh').onclick = () => { refresh(false); renderDrawList(); };
-$('btn-knowledge').onclick = openKnowledgeCenter;
 $('btn-knowledge-launch').setAttribute('aria-pressed','false');
 $('btn-knowledge-launch').onclick=()=>document.body.classList.contains('knowledge-mode')?closeKnowledgeWorkspace():openKnowledgeWorkspace(false);
 $('knowledge-launch-more').onclick=(event)=>{event.stopPropagation();setKnowledgeLaunchMenu();};
@@ -13813,7 +13833,6 @@ $('knowledge-workspace-reload').onclick=()=>openKnowledgeWorkspace(true);
 $('knowledge-workspace-external').onclick=openKnowledgeExternal;
 $('knowledge-workspace-frame').addEventListener('load',()=>{$('knowledge-workspace-loading').classList.add('hidden');});
 document.addEventListener('pointerdown',(event)=>{if(!$('knowledge-launch').contains(event.target))setKnowledgeLaunchMenu(false);});
-$('btn-manual').onclick = () => window.open('/manual/', 'codescope-manual', 'noopener');
 $('reading-knowledge').onclick = (event) => { event.stopPropagation(); openKnowledgeCenter(); };
 $('knowledge-close').onclick = () => closeKnowledgeCenter();
 $('knowledge-center').addEventListener('mousedown',(event)=>{if(event.target===$('knowledge-center'))closeKnowledgeCenter();});

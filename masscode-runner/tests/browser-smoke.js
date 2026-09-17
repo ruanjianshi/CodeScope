@@ -222,7 +222,8 @@ print(r.run())
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
   if(versionContract.version!=='2.4.0'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.4 Web 版本契约异常：'+JSON.stringify(versionContract));
   await page.getByRole('heading',{name:'从一个目标开始'}).waitFor({state:'visible'});
-  await page.locator('#btn-knowledge').click();
+  await page.locator('#knowledge-launch-more').click();
+  await page.locator('#knowledge-launch-manage').click();
   await page.locator('#knowledge-center.open').waitFor({state:'visible'});
   const knowledgePanel=await page.evaluate(()=>({engine:document.querySelector('#knowledge-engine').textContent,status:document.querySelector('#knowledge-status').textContent,pageCount:Number(document.querySelector('#knowledge-page-count').textContent),scrollWidth:document.querySelector('.knowledge-panel').scrollWidth,clientWidth:document.querySelector('.knowledge-panel').clientWidth}));
   if(!knowledgePanel.engine.includes('VitePress')||knowledgePanel.pageCount<2||knowledgePanel.scrollWidth>knowledgePanel.clientWidth+1)throw new Error('知识库中心状态、示例文档或布局异常：'+JSON.stringify(knowledgePanel));
