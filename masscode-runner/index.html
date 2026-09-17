@@ -2927,30 +2927,35 @@
   #header-left>h1 { flex:none; }
   #header-left>.sub { min-width:0; flex:1; }
   #header-right { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
-  #header-center { gap:6px; }
-  #header-center>.header-action,#btn-knowledge-launch,#knowledge-launch-more,#site-menu-trigger {
-    height:34px; min-height:34px; box-sizing:border-box; border-color:#344356;
-    background:#17202b; color:#cbd6e5; font-size:12px; font-weight:680; box-shadow:inset 0 1px rgba(255,255,255,.025);
+  #header-center {
+    gap:3px; padding:3px; border:1px solid #293544; border-radius:10px;
+    background:#0d131b; box-shadow:inset 0 1px rgba(255,255,255,.018),0 4px 16px rgba(0,0,0,.1);
   }
-  #header-center>.header-action,#site-menu-trigger { border-radius:7px; padding:6px 11px; }
+  #header-center>.header-action,#btn-knowledge-launch,#knowledge-launch-more,#site-menu-trigger {
+    height:30px; min-height:30px; box-sizing:border-box; flex:0 0 auto; border-color:transparent;
+    background:transparent; color:#aebccd; font-size:11.5px; font-weight:650; line-height:1; white-space:nowrap; box-shadow:none;
+  }
+  #header-center>.header-action,#site-menu-trigger { border-radius:7px; padding:5px 9px; }
   #header-center>.header-action:hover,#btn-knowledge-launch:hover,#knowledge-launch-more:hover,#site-menu-trigger:hover,
   #knowledge-launch.open #btn-knowledge-launch,#knowledge-launch.open #knowledge-launch-more,#site-menu-trigger.on {
-    border-color:#526983; background:#202c39; color:#f1f6fd;
+    border-color:transparent; background:#1a2430; color:#edf3fb;
   }
   #header-center>.header-action::before,#btn-knowledge-launch::before,.site-menu-trigger-icon {
-    display:grid; place-items:center; width:20px; height:20px; box-sizing:border-box; flex:none;
-    border:1px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:5px;
-    background:color-mix(in srgb,var(--accent) 10%,transparent); color:#8bb7f5;
+    display:grid; place-items:center; width:18px; height:18px; box-sizing:border-box; flex:none;
+    border:0; border-radius:5px; background:#1c2734; color:#86abe0;
   }
-  #header-center #btn-study::before { color:#8bb7f5; font-size:14px; }
-  #header-center #btn-dsh::before { content:'DSH'; color:#82b6ff; font-size:7px; }
-  #header-center #btn-dsh.dsh-ready { border-color:#3e7654; background:#17271e; }
-  #header-center #btn-dsh.dsh-ready::before { border-color:rgba(86,211,100,.28); background:rgba(86,211,100,.09); }
-  #header-center #btn-dsh.on,#header-center #btn-study.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
-  #header-center #btn-knowledge-launch.on { border-color:#4c9675; background:#1b382d; box-shadow:inset 0 -2px #63d6a0; }
-  #header-center #btn-knowledge-launch { padding:6px 10px; border-radius:7px 0 0 7px; }
-  #header-center #knowledge-launch-more { width:28px; padding:0; border-radius:0 7px 7px 0; }
-  #header-center #site-menu-trigger small { min-width:24px; }
+  #header-center #btn-study::before { color:#86abe0; font-size:13px; }
+  #header-center #btn-dsh { min-width:86px; }
+  #header-center #btn-dsh::before { content:'DSH'; color:#7fb0f3; font-size:7px; }
+  #header-center #btn-dsh.dsh-ready { border-color:transparent; background:transparent; }
+  #header-center #btn-dsh.dsh-ready:hover { background:#1a2430; }
+  #header-center #btn-dsh.dsh-ready::after { content:''; width:6px; height:6px; margin-left:1px; border-radius:50%; background:var(--ok); box-shadow:0 0 7px color-mix(in srgb,var(--ok) 70%,transparent); }
+  #header-center #btn-dsh.on,#header-center #btn-study.on { border-color:transparent; background:#1b2c41; color:#dcecff; box-shadow:inset 0 -2px #629cf0; }
+  #header-center #btn-knowledge-launch.on { border-color:transparent; background:#193328; color:#e5faf0; box-shadow:inset 0 -2px #58bd8c; }
+  #header-center #knowledge-launch { flex:0 0 auto; border-radius:7px; overflow:hidden; }
+  #header-center #btn-knowledge-launch { padding:5px 9px; border-radius:7px 0 0 7px; }
+  #header-center #knowledge-launch-more { width:25px; padding:0; border-left:1px solid #273341; border-radius:0 7px 7px 0; }
+  #header-center #site-menu-trigger small { min-width:22px; padding:2px 5px; background:#202c3b; color:#91add1; }
   #app-nav { display:flex; align-items:center; justify-content:flex-end; gap:5px; min-width:0; flex:none; }
   #app-nav .header-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:34px; white-space:nowrap; }
   #app-nav .header-action::before { display:grid; place-items:center; width:15px; height:15px; flex:none; color:color-mix(in srgb,var(--accent) 84%,var(--text)); font:700 13px/1 var(--mono); }
