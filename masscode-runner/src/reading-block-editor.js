@@ -306,6 +306,13 @@ async function create(options = {}) {
     featureConfigs: {
       [CrepeFeature.Placeholder]: { text: '输入 / 插入区块；拖动左侧手柄调整顺序…', mode: 'block' },
       [CrepeFeature.BlockEdit]: blockEditConfig,
+      [CrepeFeature.ImageBlock]: {
+        blockCaptionPlaceholderText: '添加图片说明（可选）',
+        blockUploadButton: '选择图片',
+        blockUploadPlaceholderText: '或粘贴图片链接',
+        inlineUploadButton: '选择图片',
+        inlineUploadPlaceholderText: '或粘贴图片链接',
+      },
     },
   })
   crepe.on((listener) => {
