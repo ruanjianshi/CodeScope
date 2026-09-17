@@ -749,6 +749,13 @@
   .reading-folder,.reading-file { display:flex; align-items:center; gap:6px; min-height:30px; padding:4px 7px; border-radius:6px; color:var(--dim); font-size:11px; }
   .reading-folder { cursor:pointer; user-select:none; } .reading-folder:hover,.reading-file:hover { background:var(--panel2); color:var(--text); }
   .reading-project { margin-top:3px; border:1px solid transparent; font-weight:650; color:var(--text); }
+  .reading-knowledge-page { min-height:34px; margin:1px 0; padding:4px 7px; border:1px solid transparent; border-radius:7px; color:var(--text); cursor:pointer; }
+  .reading-knowledge-page:hover { border-color:var(--border); background:var(--panel2); }
+  .reading-knowledge-page.on { border-color:var(--accent); background:var(--accent-soft); }
+  .reading-knowledge-page .name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:600; }
+  .reading-knowledge-page .meta { flex:none; color:var(--dim); font-size:8px; }
+  .reading-knowledge-page .reading-row-actions button { visibility:hidden; padding:1px 4px; border:0; background:transparent; color:var(--dim); }
+  .reading-knowledge-page:hover .reading-row-actions button { visibility:visible; }
   .reading-project.on { border-color:var(--accent); background:var(--accent-soft); }
   .reading-project-copy { min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; padding:2px 0; }
   .reading-project-copy .name { flex:none; font-size:11px; }
@@ -1076,6 +1083,15 @@
   .reading-md-block .milkdown .milkdown-block-handle { gap:3px; padding:3px; border:1px solid color-mix(in srgb,var(--border) 84%,transparent); border-radius:9px; background:color-mix(in srgb,var(--panel) 94%,transparent); box-shadow:0 10px 28px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.035); backdrop-filter:blur(12px); }
   .reading-md-block .milkdown .milkdown-block-handle .operation-item { width:27px; height:27px; padding:2px; }
   .reading-md-block .milkdown .milkdown-block-handle .operation-item svg { width:21px; height:21px; fill:color-mix(in srgb,var(--text) 72%,var(--dim)); }
+  .codescope-block-transform-menu { position:fixed; z-index:260; width:292px; max-height:min(520px,calc(100vh - 24px)); overflow:auto; padding:8px; color:var(--text); border:1px solid color-mix(in srgb,var(--border) 88%,transparent); border-radius:12px; background:color-mix(in srgb,var(--panel) 97%,#111722); box-shadow:0 18px 54px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.04); backdrop-filter:blur(18px); }
+  .codescope-block-transform-menu[hidden] { display:none; }
+  .codescope-block-transform-menu .title { padding:7px 9px 9px; color:var(--text); font-size:13px; font-weight:750; }
+  .codescope-block-transform-menu section+section { margin-top:6px; padding-top:6px; border-top:1px solid color-mix(in srgb,var(--border) 62%,transparent); }
+  .codescope-block-transform-menu h6 { margin:0; padding:5px 9px; color:var(--dim); font-size:11px; font-weight:700; letter-spacing:.05em; }
+  .codescope-block-transform-menu .items { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+  .codescope-block-transform-menu button { display:flex; align-items:center; gap:8px; min-width:0; padding:7px 8px; color:var(--muted); border:0; border-radius:7px; background:transparent; text-align:left; cursor:pointer; }
+  .codescope-block-transform-menu button:hover,.codescope-block-transform-menu button:focus-visible { color:var(--text); background:color-mix(in srgb,var(--accent) 15%,var(--soft)); outline:0; }
+  .codescope-block-transform-menu .icon { display:grid; place-items:center; flex:0 0 27px; height:27px; color:color-mix(in srgb,var(--accent) 86%,white); border:1px solid color-mix(in srgb,var(--border) 70%,transparent); border-radius:6px; background:color-mix(in srgb,var(--soft) 86%,transparent); font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
   .reading-md-outline { display:none; grid-column:1; grid-row:1; min-width:0; overflow:auto; border-right:1px solid color-mix(in srgb,var(--border) 76%,transparent); background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 78%,var(--md-page)),color-mix(in srgb,var(--md-page) 95%,var(--panel2))); scrollbar-width:thin; }
   .reading-md-workbench.outline-open .reading-md-outline { display:block; }
   .reading-md-outline-head { position:sticky; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; min-height:45px; padding:0 14px; border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent); background:color-mix(in srgb,var(--panel) 88%,transparent); backdrop-filter:blur(14px); }
@@ -1246,6 +1262,41 @@
   #reading-new-dialog .nd-hint,#reading-new-dialog label { display:block; margin:8px 0 4px; color:var(--dim); font-size:11px; }
   #reading-new-dialog input,#reading-new-dialog select { width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:var(--text); }
   #reading-new-dialog .nd-btns { display:flex; justify-content:flex-end; gap:8px; margin-top:15px; }
+  #knowledge-center { display:none; position:fixed; z-index:195; inset:0; align-items:center; justify-content:center; padding:22px; background:rgba(0,0,0,.68); }
+  #knowledge-center.open { display:flex; }
+  .knowledge-panel { width:min(820px,96vw); max-height:min(780px,94vh); display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border); border-radius:15px; background:var(--theme-elevated,var(--panel)); box-shadow:0 24px 80px rgba(0,0,0,.58); }
+  .knowledge-head { display:flex; align-items:center; gap:11px; padding:16px 18px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,rgba(79,140,255,.13),transparent 60%); }
+  .knowledge-mark { width:36px; height:36px; display:grid; place-items:center; border:1px solid rgba(79,140,255,.42); border-radius:10px; background:rgba(79,140,255,.12); color:#87b3ff; font:800 14px var(--mono); }
+  .knowledge-head-copy { min-width:0; flex:1; }
+  .knowledge-head-copy strong { display:block; font-size:15px; }
+  .knowledge-head-copy span { display:block; color:var(--dim); font-size:10px; }
+  #knowledge-close { width:30px; height:30px; padding:0; font-size:16px; }
+  .knowledge-body { overflow:auto; padding:16px 18px 19px; }
+  .knowledge-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .knowledge-metric { min-width:0; padding:10px 11px; border:1px solid var(--border); border-radius:9px; background:var(--panel2); }
+  .knowledge-metric span { display:block; color:var(--dim); font-size:9px; }
+  .knowledge-metric b { display:block; overflow:hidden; margin-top:2px; color:var(--text); font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+  .knowledge-status-line { display:flex; align-items:center; gap:7px; margin:11px 0; padding:8px 10px; border:1px solid var(--border); border-radius:8px; color:var(--dim); font-size:10px; }
+  .knowledge-status-line::before { content:''; width:7px; height:7px; flex:none; border-radius:50%; background:var(--dim); }
+  .knowledge-status-line.ready::before { background:#54cf91; box-shadow:0 0 9px rgba(84,207,145,.7); }
+  .knowledge-status-line.building::before { background:#efbd68; animation:pulse 1s infinite; }
+  .knowledge-status-line.error::before { background:#ff6b75; }
+  .knowledge-actions { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px; }
+  .knowledge-actions button.primary,.knowledge-form-row button.primary { border-color:#4f8cff; background:rgba(79,140,255,.18); color:#dce9ff; }
+  .knowledge-grid { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(280px,.88fr); gap:12px; }
+  .knowledge-card { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
+  .knowledge-card h3 { margin:0; padding:10px 12px; border-bottom:1px solid var(--border); font-size:11px; }
+  #knowledge-pages { max-height:330px; overflow:auto; padding:6px; }
+  .knowledge-page { width:100%; display:flex; align-items:center; gap:8px; padding:7px 8px; border:0; border-radius:6px; background:transparent; color:var(--text); text-align:left; }
+  .knowledge-page:hover { background:var(--panel2); }
+  .knowledge-page .kp-icon { color:#77a8ff; }.knowledge-page .kp-copy { min-width:0; flex:1; }
+  .knowledge-page b,.knowledge-page small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .knowledge-page b { font-size:10.5px; }.knowledge-page small { color:var(--dim); font-size:8.5px; }
+  .knowledge-form { padding:11px 12px; }.knowledge-form label { display:block; margin:8px 0 4px; color:var(--dim); font-size:9.5px; }
+  .knowledge-form input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--panel2); color:var(--text); }
+  .knowledge-form-row { display:flex; gap:6px; margin-top:7px; }.knowledge-form-row button { flex:1; }
+  .knowledge-hint { margin-top:9px; min-height:30px; padding:8px; border-radius:6px; background:var(--panel2); color:var(--dim); font:9px/1.55 var(--mono); overflow-wrap:anywhere; }
+  @media(max-width:720px){.knowledge-metrics{grid-template-columns:repeat(2,1fr)}.knowledge-grid{grid-template-columns:1fr}.knowledge-panel{max-height:96vh}.knowledge-actions button{flex:1 1 42%}}
   /* 绘图编辑器：覆盖整个主编辑区（左侧栏保持可见，可随时切换/新建绘图） */
   #main { position: relative; }
   body.drawing-mode header { display: none; }   /* 绘图时隐藏应用顶栏：Excalidraw 的 fixed 菜单对齐到编辑器头部行 */
@@ -1764,6 +1815,33 @@
   #btn-dsh.dsh-ready { border-color:rgba(86,211,100,.45); background:rgba(86,211,100,.08); }
   #btn-dsh.dsh-bad { border-color:rgba(255,107,99,.45); }
   #btn-dsh.on { color:#dcecff; border-color:rgba(89,156,255,.62); background:rgba(55,116,205,.22); box-shadow:inset 0 -2px 0 #599cff; }
+  #knowledge-launch { position:relative; display:flex; align-items:stretch; }
+  #btn-knowledge-launch,#knowledge-launch-more { min-height:34px; border-color:#344356; background:linear-gradient(180deg,#242c37,#1b222c); color:#c7d2e1; font-weight:700; }
+  #btn-knowledge-launch { display:inline-flex; align-items:center; gap:7px; padding:6px 10px; border-radius:6px 0 0 6px; white-space:nowrap; }
+  #btn-knowledge-launch::before { content:'K'; display:grid; place-items:center; width:18px; height:18px; border-radius:5px; background:rgba(99,214,160,.12); color:#70d6a3; font:800 10px/1 var(--mono); }
+  #knowledge-launch-more { width:25px; padding:0; margin-left:-1px; border-radius:0 6px 6px 0; color:#8290a3; }
+  #btn-knowledge-launch:hover,#knowledge-launch-more:hover,#knowledge-launch.open #btn-knowledge-launch,#knowledge-launch.open #knowledge-launch-more { border-color:#4c806c; background:linear-gradient(180deg,#273a35,#1c2c27); color:#effaf5; }
+  #btn-knowledge-launch.on { border-color:#4c9675; background:linear-gradient(180deg,#24503f,#19372c); color:#e8fff5; box-shadow:inset 0 -2px 0 #63d6a0; }
+  #knowledge-launch-menu { position:absolute; z-index:540; top:calc(100% + 8px); left:50%; width:270px; padding:7px; transform:translateX(-50%); border:1px solid #3a485c; border-radius:11px; background:#111821; box-shadow:0 18px 55px rgba(0,0,0,.58); }
+  #knowledge-launch-menu[hidden] { display:none; }
+  #knowledge-launch-menu button { display:grid; grid-template-columns:30px minmax(0,1fr); width:100%; padding:8px 9px; border-color:transparent; background:transparent; color:#dce6f3; text-align:left; }
+  #knowledge-launch-menu button:hover { border-color:#30445b; background:#1b2836; }
+  #knowledge-launch-menu i { grid-row:1/3; display:grid; place-items:center; width:26px; height:26px; border-radius:7px; background:rgba(99,214,160,.1); color:#76d8ab; font-style:normal; }
+  #knowledge-launch-menu b { font-size:11px; }
+  #knowledge-launch-menu small { color:#8290a3; font-size:9px; line-height:1.45; }
+  #knowledge-workspace { display:none; position:absolute; inset:0; z-index:77; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
+  body.knowledge-mode #knowledge-workspace { display:flex; }
+  body.knowledge-mode #side,body.knowledge-mode #split-v,body.knowledge-mode #split-v2,body.knowledge-mode #outline-panel { display:none !important; }
+  body.knowledge-mode #toolbar,body.knowledge-mode #tabs,body.knowledge-mode #document-mode-tools,body.knowledge-mode #code-context-bar,body.knowledge-mode #draw-editor,body.knowledge-mode #office-workspace,body.knowledge-mode #reading-workspace,body.knowledge-mode #study-workspace,body.knowledge-mode #dsh-workspace,body.knowledge-mode #edit-split,body.knowledge-mode #resource-viewer,body.knowledge-mode #preview,body.knowledge-mode #input-area,body.knowledge-mode #split-h,body.knowledge-mode #output { display:none !important; }
+  body.knowledge-mode #main { flex:1; min-width:0; }
+  #knowledge-workspace-head { height:44px; flex:none; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--border); background:var(--panel); }
+  #knowledge-workspace-head strong { font-size:13px; }
+  #knowledge-workspace-head .sub { color:var(--dim); font-size:10px; }
+  #knowledge-workspace-head .sp { flex:1; }
+  #knowledge-workspace-frame-wrap { position:relative; flex:1; min-height:0; background:#fff; }
+  #knowledge-workspace-frame { width:100%; height:100%; border:0; background:#fff; }
+  #knowledge-workspace-loading { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; color:var(--dim); background:radial-gradient(circle at 50% 38%,rgba(99,214,160,.12),transparent 34%),var(--bg); }
+  #knowledge-workspace-loading.hidden { display:none; }
   #dsh-workspace { display:none; position:absolute; inset:0; z-index:76; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
   body.dsh-mode #dsh-workspace { display:flex; }
   body.dsh-mode #side,body.dsh-mode #split-v,body.dsh-mode #split-v2,body.dsh-mode #outline-panel { display:none !important; }
@@ -2625,7 +2703,6 @@
   .tab.active::after { content:''; position:absolute; left:9px; right:9px; bottom:0; height:2px; border-radius:2px 2px 0 0; background:var(--accent); }
   .item.active { outline:0; box-shadow:inset 3px 0 var(--accent), inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,var(--border)); }
   #outline-actions button { min-width:30px; }
-  #btn-wrap.on { color:var(--accent); border-color:color-mix(in srgb,var(--accent) 58%,var(--border)); background:var(--accent-soft); }
   * { scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--dim) 48%,transparent) transparent; }
   *::-webkit-scrollbar { width:9px; height:9px; }
   *::-webkit-scrollbar-thumb { border:2px solid transparent; border-radius:10px; background:color-mix(in srgb,var(--dim) 48%,transparent); background-clip:padding-box; }
@@ -2724,7 +2801,6 @@
     background:color-mix(in srgb,var(--panel) 91%,var(--bg));
   }
   #outline-actions button { min-height:29px; padding:4px 7px; font-size:11.5px; white-space:nowrap; }
-  #outline-actions #btn-indent { flex:1.35; }
   #btn-run { border-color:color-mix(in srgb,var(--ok) 38%,var(--border)); background:color-mix(in srgb,var(--ok) 11%,var(--panel)); color:var(--ok); }
   #sym-tabs {
     min-height:36px; padding:4px 6px; gap:3px; border-bottom:1px solid var(--ui-divider);
@@ -2857,6 +2933,8 @@
   #app-nav .header-project::before { content:'⌘'; }
   #app-nav .header-remote::before { content:'⌁'; font-size:16px; }
   #app-nav .header-env::before { content:'◌'; }
+  #app-nav .header-knowledge::before { content:'K'; border:1px solid currentColor; border-radius:4px; width:14px; height:14px; font-size:9px; }
+  #app-nav .header-manual::before { content:'?'; border:1px solid currentColor; border-radius:50%; width:14px; height:14px; font-size:9px; }
   #app-nav .header-refresh::before { content:'↻'; font-size:15px; }
   #app-nav #btn-env,#app-nav #btn-remote { padding-right:22px; }
   #app-nav #theme-btn { min-height:32px; }
@@ -2922,6 +3000,7 @@
     header { gap:6px; }
     header h1 { gap:6px; }
     header .sub { max-width:130px; }
+    .sync-dot { min-width:17px; height:30px; padding:0 5px 0 9px; overflow:hidden; font-size:0; white-space:nowrap; }
     #app-nav { gap:4px; }
     #app-nav .header-action { width:34px; padding:0; font-size:0; }
     #app-nav .header-action::before { font-size:14px; }
@@ -2947,9 +3026,10 @@
   }
   @media (max-width:1180px) {
     header .sub { display:none; }
+    #btn-knowledge-launch { padding-inline:7px; }
+    #btn-knowledge-launch span { display:none; }
     #sysmon #sm-mem,#sysmon #sm-disk { display:none; }
     .sm-item { min-width:60px; }
-    .sync-dot { font-size:0; padding:0 5px 0 9px; }
     #side { width:280px; max-width:280px; }
     #outline-panel { width:300px; max-width:300px; }
     #theme-btn { min-width:34px; width:34px; padding:5px; justify-content:center; }
@@ -3002,6 +3082,16 @@
   <div id="header-center" aria-label="学习与网址">
     <button class="header-action header-study" id="btn-study" title="打开学习工作台：网页、视频、代码和笔记自由分屏"><span>学习工作台</span></button>
     <button class="header-action" id="btn-dsh" title="打开由 CodeScope 托管的 DeepSeek Harness"><span>Harness</span></button>
+    <div id="knowledge-launch">
+      <button id="btn-knowledge-launch" type="button" title="在 CodeScope 内嵌阅读生成后的知识库"><span>知识库</span></button>
+      <button id="knowledge-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="knowledge-launch-menu" title="选择知识库打开方式">⌄</button>
+      <div id="knowledge-launch-menu" role="menu" hidden>
+        <button type="button" id="knowledge-launch-embed" role="menuitem"><i>▣</i><b>内嵌阅读</b><small>在 CodeScope 内打开完整知识站</small></button>
+        <button type="button" id="knowledge-launch-split" role="menuitem"><i>▥</i><b>分栏学习</b><small>与代码、笔记、资料自由分屏</small></button>
+        <button type="button" id="knowledge-launch-external" role="menuitem"><i>↗</i><b>外部打开</b><small>在独立浏览器标签中阅读</small></button>
+        <button type="button" id="knowledge-launch-manage" role="menuitem"><i>⚙</i><b>管理知识库</b><small>新建分类、项目和 Markdown 片段</small></button>
+      </div>
+    </div>
     <div id="site-menu">
       <button id="site-menu-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="site-menu-panel" title="按分类选择常用网址"><span class="site-menu-trigger-icon" aria-hidden="true">⌘</span><span>常用网址</span><small id="site-menu-count">0</small><span class="site-menu-chevron" aria-hidden="true">⌄</span></button>
       <section id="site-menu-panel" class="hidden" role="dialog" aria-label="常用网址分类选择">
@@ -3053,6 +3143,8 @@
     <button class="header-action header-project" id="btn-project" title="构建任务、编译数据库与工程健康报告"><span>工程</span></button>
     <button class="header-action header-remote" id="btn-remote" title="SSH 终端与 VNC 桌面"><span>远程</span></button>
     <button class="header-action header-env" id="btn-env" title="检查运行环境与项目工具"><span>环境</span></button>
+    <button class="header-action header-knowledge" id="btn-knowledge" title="管理、生成并阅读 Markdown 知识库"><span>知识库</span></button>
+    <button class="header-action header-manual" id="btn-manual" title="打开 CodeScope 完整使用手册"><span>手册</span></button>
     <button class="header-action header-refresh" id="refresh" title="刷新 Vault、Git、绘图和阅读资料"><span>刷新</span></button>
     </nav>
   </div>
@@ -3161,15 +3253,42 @@
         <span class="side-head-actions">
           <button class="side-create" id="reading-new-folder" title="新建阅读项目" aria-label="新建阅读项目">＋项目</button>
           <button class="side-create" id="reading-new-library-folder" title="新建阅读文件夹" aria-label="新建阅读文件夹">＋文件夹</button>
+          <button class="side-create" id="reading-knowledge" title="打开知识库中心" aria-label="打开知识库中心">知识库</button>
           <button id="reading-import" title="向阅读项目导入 PDF 或 Office 文档（支持大文件）" aria-label="导入阅读资料">导入</button>
         </span>
       </div>
       <div id="reading-list"></div>
       <input id="reading-file-input" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.pptx" multiple hidden>
     </div>
+    <div id="knowledge-center" role="dialog" aria-modal="true" aria-labelledby="knowledge-title">
+      <div class="knowledge-panel">
+        <div class="knowledge-head"><div class="knowledge-mark">K</div><div class="knowledge-head-copy"><strong id="knowledge-title">我的知识库</strong><span>VitePress · Markdown 原稿本地保存 · 自动生成阅读站点</span></div><button id="knowledge-close" aria-label="关闭知识库中心">×</button></div>
+        <div class="knowledge-body">
+          <div class="knowledge-metrics"><div class="knowledge-metric"><span>文档</span><b id="knowledge-page-count">—</b></div><div class="knowledge-metric"><span>图片与资源</span><b id="knowledge-asset-count">—</b></div><div class="knowledge-metric"><span>生成器</span><b id="knowledge-engine">VitePress</b></div><div class="knowledge-metric"><span>最近生成</span><b id="knowledge-built-at">—</b></div></div>
+          <div id="knowledge-status" class="knowledge-status-line">正在读取知识库状态…</div>
+          <div class="knowledge-actions"><button class="primary" id="knowledge-open">↗ 阅读知识库</button><button id="knowledge-build">↻ 立即生成</button><button id="knowledge-refresh">刷新状态</button><button id="knowledge-upload">＋ 导入图片</button></div>
+          <div class="knowledge-grid">
+            <section class="knowledge-card"><h3>文档与分类</h3><div id="knowledge-pages"></div></section>
+            <section class="knowledge-card"><h3>新建内容</h3><div class="knowledge-form"><label for="knowledge-folder-path">1. 分类文件夹</label><input id="knowledge-folder-path" placeholder="嵌入式 Linux"><div class="knowledge-form-row"><button id="knowledge-create-folder">新建分类</button></div><label for="knowledge-project-path">2. 知识项目</label><input id="knowledge-project-path" placeholder="嵌入式 Linux/Linux 驱动开发"><label for="knowledge-project-description">项目说明</label><input id="knowledge-project-description" placeholder="设备驱动学习、调试与复盘"><div class="knowledge-form-row"><button id="knowledge-create-project">新建项目</button></div><label for="knowledge-page-path">3. Markdown 片段路径</label><input id="knowledge-page-path" placeholder="嵌入式 Linux/Linux 驱动开发/设备树.md"><label for="knowledge-page-title">片段标题</label><input id="knowledge-page-title" placeholder="设备树与平台驱动"><div class="knowledge-form-row"><button class="primary" id="knowledge-create-page">新建 Markdown</button></div><label for="knowledge-image-folder">图片保存分类</label><input id="knowledge-image-folder" value="通用" placeholder="项目图片"><div id="knowledge-result" class="knowledge-hint">结构固定为：知识库 → 分类 → 项目 → 多个 Markdown 片段。保存后会自动生成阅读站点。</div></div></section>
+          </div>
+        </div>
+      </div>
+      <input id="knowledge-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+    </div>
   </div>
   <div id="split-v" title="拖拽调整左侧宽度"></div>
   <div id="main">
+    <section id="knowledge-workspace" aria-label="知识库阅读工作区">
+      <div id="knowledge-workspace-head">
+        <button id="knowledge-workspace-back" title="返回代码工作区">← 返回</button>
+        <strong>知识库</strong><span class="sub">VitePress 阅读站</span><span class="sp"></span>
+        <button id="knowledge-workspace-split" title="在学习工作台中与代码、笔记自由分屏">▥ 分栏学习</button>
+        <button id="knowledge-workspace-manage" title="管理知识库目录和内容">⚙ 管理</button>
+        <button id="knowledge-workspace-reload" title="重新生成并载入知识库">↻ 重新生成</button>
+        <button id="knowledge-workspace-external" title="在独立浏览器标签中打开">↗ 外部打开</button>
+      </div>
+      <div id="knowledge-workspace-frame-wrap"><div id="knowledge-workspace-loading">正在生成并载入知识库…</div><iframe id="knowledge-workspace-frame" title="CodeScope 知识库" allow="clipboard-read; clipboard-write; fullscreen"></iframe></div>
+    </section>
     <section id="dsh-workspace" aria-label="DeepSeek Harness 工作区">
       <div id="dsh-head">
         <button id="dsh-back" title="返回代码工作区">← 返回</button>
@@ -3414,8 +3533,6 @@
       <button id="btn-run" class="btn-run" title="运行代码" aria-label="运行代码">▶</button>
       <button id="btn-check" title="语法检查" aria-label="语法检查">✓</button>
       <button id="btn-format" title="格式化代码" aria-label="格式化代码">✨</button>
-      <button id="btn-indent" title="缩进宽度：Tab 键插入的空格数（点击切换 2 / 4）" aria-label="切换缩进宽度">⇥ 2</button>
-      <button id="btn-wrap" title="切换自动换行（Alt+Z）" aria-label="切换自动换行">↔</button>
       <button id="btn-preview" title="预览 HTML" style="display:none">👁</button>
       <button id="btn-md" title="Markdown 渲染 / 源码切换" style="display:none">📄 源码</button>
     </div>
@@ -4689,6 +4806,68 @@ let READING_FRAGMENT_INDEX = new Map();
 let READING_PROJECT_INDEX = new Map();
 let READING_TEXT_DOCS = new Map();
 let READING_TEXT_SAVE_TIMERS = new Map();
+let KNOWLEDGE_STATE = null;
+let KNOWLEDGE_RETURN_FOCUS = null;
+function knowledgeBytes(value){const bytes=Number(value)||0;if(bytes<1024)return bytes+' B';if(bytes<1024*1024)return (bytes/1024).toFixed(bytes<10240?1:0)+' KB';return (bytes/1024/1024).toFixed(1)+' MB';}
+function knowledgeTime(value){if(!value)return '尚未生成';try{return new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(_){return '—';}}
+function renderKnowledgeCenter(state){
+  KNOWLEDGE_STATE=state;if(!state||!state.ok)return;
+  $('knowledge-page-count').textContent=String(state.pageCount||0);$('knowledge-asset-count').textContent=(state.assetCount||0)+' · '+knowledgeBytes(state.assetBytes);$('knowledge-engine').textContent=(state.engine||'VitePress')+' '+(state.engineVersion||'');$('knowledge-built-at').textContent=knowledgeTime(state.finishedAt);
+  const status=$('knowledge-status');status.className='knowledge-status-line '+(state.phase||'idle');status.textContent=state.error?(state.message+'：'+state.error):(state.message||'等待生成');$('knowledge-open').disabled=!state.built;$('knowledge-build').disabled=state.phase==='building';
+  const pages=$('knowledge-pages');pages.replaceChildren();if(!(state.pages||[]).length){const empty=document.createElement('div');empty.className='draw-empty';empty.textContent='还没有知识库文档';pages.appendChild(empty);}else for(const page of state.pages){const button=document.createElement('button');button.className='knowledge-page';button.style.paddingLeft=(8+Math.max(0,page.path.split('/').length-1)*14)+'px';const icon=document.createElement('span');icon.className='kp-icon';icon.textContent='▤';const copy=document.createElement('span');copy.className='kp-copy';const title=document.createElement('b');title.textContent=page.title;const detail=document.createElement('small');detail.textContent=page.path+' · '+knowledgeBytes(page.size);copy.append(title,detail);button.append(icon,copy);button.onclick=async()=>{closeKnowledgeCenter(false);await loadReadings(true);const fragment=READING_FRAGMENT_INDEX.get(page.readingPath);if(fragment)openReading(page.readingPath,0);};pages.appendChild(button);}
+}
+async function loadKnowledgeStatus(){const state=await api('/api/knowledge/status');if(!state.ok){$('knowledge-status').className='knowledge-status-line error';$('knowledge-status').textContent=state.error||'读取知识库失败';return state;}renderKnowledgeCenter(state);return state;}
+async function openKnowledgeCenter(){const modal=$('knowledge-center');KNOWLEDGE_RETURN_FOCUS=document.activeElement instanceof HTMLElement?document.activeElement:null;if(modal.parentElement!==document.body)document.body.appendChild(modal);modal.classList.add('open');document.body.classList.add('knowledge-dialog-open');$('knowledge-result').textContent='Markdown 原稿保存在 Vault；站点生成结果可随时重建。';requestAnimationFrame(()=>$('knowledge-close').focus());await loadKnowledgeStatus();}
+function closeKnowledgeCenter(restoreFocus=true){const modal=$('knowledge-center');modal.classList.remove('open');document.body.classList.remove('knowledge-dialog-open');if(restoreFocus&&KNOWLEDGE_RETURN_FOCUS&&KNOWLEDGE_RETURN_FOCUS.isConnected)KNOWLEDGE_RETURN_FOCUS.focus();KNOWLEDGE_RETURN_FOCUS=null;}
+async function buildKnowledge(){const button=$('knowledge-build');button.disabled=true;$('knowledge-status').className='knowledge-status-line building';$('knowledge-status').textContent='正在生成静态页面、目录和搜索索引…';const state=await api('/api/knowledge/build',{});button.disabled=false;if(!state.ok){$('knowledge-status').className='knowledge-status-line error';$('knowledge-status').textContent=state.error||'知识库生成失败';return;}renderKnowledgeCenter(state);await loadReadings(true);}
+async function createKnowledgePage(){let pagePath=$('knowledge-page-path').value.trim();const title=$('knowledge-page-title').value.trim();if(!pagePath)return $('knowledge-result').textContent='请填写“分类/项目/文档名称.md”。';if(!/\.md$/i.test(pagePath))pagePath+='.md';const result=await api('/api/knowledge/page',{path:pagePath,title});if(!result.ok)return $('knowledge-result').textContent=result.error||'新建失败';$('knowledge-page-path').value='';$('knowledge-page-title').value='';$('knowledge-result').textContent='已新建 '+result.path+'，正在后台更新阅读站点…';await loadReadings(true);await loadKnowledgeStatus();const fragment=READING_FRAGMENT_INDEX.get(result.readingPath);if(fragment){closeKnowledgeCenter(false);openReading(result.readingPath,0);}}
+async function createKnowledgeFolder(){const folder=$('knowledge-folder-path').value.trim();if(!folder)return $('knowledge-result').textContent='请填写分类路径。';const result=await api('/api/knowledge/folder',{path:folder});if(!result.ok)return $('knowledge-result').textContent=result.error||'新建失败';$('knowledge-folder-path').value='';$('knowledge-result').textContent='分类已建立：'+result.path+'。下一步请在分类中新建项目。';await loadReadings(true);await loadKnowledgeStatus();}
+async function createKnowledgeProject(){const projectPath=$('knowledge-project-path').value.trim(),description=$('knowledge-project-description').value.trim();if(!projectPath)return $('knowledge-result').textContent='请填写“分类/项目名称”。';const result=await api('/api/knowledge/project',{path:projectPath,description});if(!result.ok)return $('knowledge-result').textContent=result.error||'新建失败';$('knowledge-project-path').value='';$('knowledge-project-description').value='';$('knowledge-result').textContent='项目已建立：'+result.path+'。可在其中继续新建多个 Markdown 片段。';await loadReadings(true);await loadKnowledgeStatus();const project=READING_PROJECT_INDEX.get('知识库/'+result.path);if(project){closeKnowledgeCenter(false);openReadingProject(project);}}
+async function uploadKnowledgeImages(files){if(!files||!files.length)return;const folder=$('knowledge-image-folder').value.trim().replace(/^\/+|\/+$/g,'')||'通用';let last='';for(const file of files){const header=btoa(unescape(encodeURIComponent(JSON.stringify({path:folder+'/'+file.name}))));const response=await fetch('/api/knowledge/image',{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream','X-CodeScope-Knowledge':header},body:file});const result=await response.json();if(!response.ok||!result.ok){$('knowledge-result').textContent=result.error||('导入 '+file.name+' 失败');return;}last=result.markdown;}await loadKnowledgeStatus();$('knowledge-result').textContent=(files.length===1?'图片语法已复制：':'最后一张图片语法已复制：')+last;try{await navigator.clipboard.writeText(last);}catch(_){}}
+function setKnowledgeLaunchMenu(open){
+  const wrap=$('knowledge-launch'),menu=$('knowledge-launch-menu'),more=$('knowledge-launch-more');
+  const next=typeof open==='boolean'?open:menu.hidden;
+  menu.hidden=!next;wrap.classList.toggle('open',next);more.setAttribute('aria-expanded',String(next));
+}
+function syncKnowledgeWorkspaceButton(){
+  const active=document.body.classList.contains('knowledge-mode');
+  $('btn-knowledge-launch').classList.toggle('on',active);$('btn-knowledge-launch').setAttribute('aria-pressed',String(active));
+}
+async function ensureKnowledgeSite(force=false){
+  let state=force?null:await api('/api/knowledge/status');
+  if(force||!state||!state.ok||!state.built||state.phase==='building'||state.pending)state=await api('/api/knowledge/build',{});
+  if(!state||!state.ok||!state.built)throw new Error(state&&state.error||'知识库生成失败');
+  renderKnowledgeCenter(state);return state;
+}
+async function leaveWorkspaceModesForKnowledge(){
+  if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
+  if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();
+  if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
+  if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
+  if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
+  document.body.classList.remove('study-mode','dsh-mode','office-mode','reading-mode','drawing-mode');
+}
+async function openKnowledgeWorkspace(forceBuild=false){
+  setKnowledgeLaunchMenu(false);closeKnowledgeCenter(false);
+  const loading=$('knowledge-workspace-loading');loading.textContent=forceBuild?'正在重新生成知识库…':'正在载入知识库…';loading.classList.remove('hidden');
+  try{
+    await ensureKnowledgeSite(forceBuild);await leaveWorkspaceModesForKnowledge();
+    document.body.classList.add('knowledge-mode');syncKnowledgeWorkspaceButton();
+    const frame=$('knowledge-workspace-frame'),url='/knowledge/?embedded=1&view='+Date.now();
+    frame.src=url;
+    setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+  }catch(error){loading.textContent='知识库打开失败：'+(error.message||error);alert('知识库打开失败：'+(error.message||error));}
+}
+function closeKnowledgeWorkspace(){
+  document.body.classList.remove('knowledge-mode');syncKnowledgeWorkspaceButton();setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+}
+async function openKnowledgeSplit(){
+  setKnowledgeLaunchMenu(false);closeKnowledgeWorkspace();
+  if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();
+  try{await ensureKnowledgeSite(false);if(!window.CodeScopeStudy)throw new Error('学习工作台尚未加载');await window.CodeScopeStudy.open(new URL('/knowledge/',window.location.href).href);}
+  catch(error){alert('知识库分栏打开失败：'+(error.message||error));}
+}
+function openKnowledgeExternal(){setKnowledgeLaunchMenu(false);window.open('/knowledge/','codescope-knowledge','noopener');}
 function readingStatus(text, error) { const el=$('reading-status');el.textContent=text||'';el.style.color=error?'var(--err)':'var(--dim)'; }
 function readingBase(path) { return String(path||'').split('/').pop().replace(/\.[^.]+$/,''); }
 function readingFragment(path) { return READING_FRAGMENT_INDEX.get(path)||null; }
@@ -4930,6 +5109,22 @@ function readingMarkdownOutlineKey(path){return 'mc-reading-md-outline:'+String(
 function loadReadingMarkdownOutline(path){try{return localStorage.getItem(readingMarkdownOutlineKey(path))!=='0';}catch(_){return true;}}
 function saveReadingMarkdownOutline(path,value){try{localStorage.setItem(readingMarkdownOutlineKey(path),value?'1':'0');}catch(_){} }
 function readingMarkdownHeadings(content){const result=[],lines=String(content||'').split('\n');let fenced=false;for(let line=0;line<lines.length;line++){if(/^\s*```/.test(lines[line])){fenced=!fenced;continue;}if(fenced)continue;const match=lines[line].match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);if(!match)continue;const text=match[2].replace(/!?(\[([^\]]*)\])\([^)]*\)/g,'$2').replace(/[*_~`]/g,'').trim();if(text)result.push({level:match[1].length,text,line});}return result;}
+function setReadingMarkdownOutlineActive(outlineList,index,keepVisible=true){
+  const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
+  buttons.forEach((button,itemIndex)=>button.classList.toggle('active',itemIndex===index));
+  const active=buttons[index];
+  if(keepVisible&&active&&outlineList.parentElement){const scroller=outlineList.parentElement,top=active.offsetTop,bottom=top+active.offsetHeight,viewTop=scroller.scrollTop+45,viewBottom=scroller.scrollTop+scroller.clientHeight-12;if(top<viewTop)scroller.scrollTo({top:Math.max(0,top-57),behavior:'smooth'});else if(bottom>viewBottom)scroller.scrollTo({top:Math.max(0,bottom-scroller.clientHeight+18),behavior:'smooth'});}
+}
+function readingMarkdownViewHeadings(container,isPreview){return isPreview?[...container.querySelectorAll('[data-outline-index]')]:[...container.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];}
+function readingMarkdownViewportOffset(container,isPreview){if(isPreview)return 24;const bar=container.querySelector('.milkdown-top-bar');return Math.max(24,(bar&&bar.getBoundingClientRect().height||0)+18);}
+function syncReadingMarkdownOutlineView(container,outlineList,isPreview){
+  const nodes=readingMarkdownViewHeadings(container,isPreview);if(!nodes.length)return setReadingMarkdownOutlineActive(outlineList,-1,false);
+  if(Number.isInteger(container.__outlineTargetIndex))return setReadingMarkdownOutlineActive(outlineList,container.__outlineTargetIndex);
+  const bounds=container.getBoundingClientRect(),anchor=bounds.top+readingMarkdownViewportOffset(container,isPreview);let active=0;
+  for(let index=0;index<nodes.length;index++){if(nodes[index].getBoundingClientRect().top<=anchor)active=isPreview?Number(nodes[index].dataset.outlineIndex):index;else break;}
+  setReadingMarkdownOutlineActive(outlineList,active);
+}
+function scrollReadingMarkdownHeading(container,node,isPreview){if(!node)return;const bounds=container.getBoundingClientRect(),target=container.scrollTop+node.getBoundingClientRect().top-bounds.top-readingMarkdownViewportOffset(container,isPreview);container.scrollTo({top:Math.max(0,target),behavior:'smooth'});}
 function removeReadingMarkdownBlock(content,start,end){const lines=String(content||'').split('\n');lines.splice(Math.max(0,start),Math.max(0,end-start));return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim();}
 function readingLiveCaret(editor){const selection=window.getSelection();if(!selection||!selection.rangeCount||!selection.isCollapsed)return null;const range=selection.getRangeAt(0);if(!editor.contains(range.startContainer))return null;let block=range.startContainer;while(block.parentNode&&block.parentNode!==editor)block=block.parentNode;let index=[...editor.childNodes].indexOf(block);if(index<0)index=Math.max(0,editor.childNodes.length-1);const before=document.createRange();try{before.selectNodeContents(block);before.setEnd(range.startContainer,range.startOffset);return{index,offset:before.toString().length};}catch(_){return{index,offset:0};}}
 function restoreReadingLiveCaret(editor,bookmark){if(!bookmark||!editor.childNodes.length)return;const block=editor.childNodes[Math.min(bookmark.index,editor.childNodes.length-1)],walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);let left=bookmark.offset,node=walker.nextNode();while(node&&left>node.textContent.length){left-=node.textContent.length;node=walker.nextNode();}const range=document.createRange(),selection=window.getSelection();if(node)range.setStart(node,Math.min(left,node.textContent.length));else{range.selectNodeContents(block);range.collapse(false);}range.collapse(true);selection.removeAllRanges();selection.addRange(range);}
@@ -4984,17 +5179,30 @@ async function moveReadingNode(payload,toFolder){if(!payload||!payload.path)retu
 async function loadReadings(silent) {
   const result=await api('/api/readings/tree');
   if(!result.ok){if(!silent)setStatus('err',result.error||'读取文库失败');return;}
-  READING_TREE=result.root;READING_FRAGMENT_INDEX=new Map();READING_PROJECT_INDEX=new Map();let projects=0;const index=(nodes)=>{for(const node of nodes||[]){if(node.type==='project'){projects++;READING_PROJECT_INDEX.set(node.path,node);for(const item of node.children||[])READING_FRAGMENT_INDEX.set(item.path,item);}else index(node.children);}};index(result.root.children);
+  READING_TREE=result.root;READING_FRAGMENT_INDEX=new Map();READING_PROJECT_INDEX=new Map();let projects=0;const index=(nodes)=>{for(const node of nodes||[]){if(node.type==='project'){projects++;READING_PROJECT_INDEX.set(node.path,node);for(const item of node.children||[])READING_FRAGMENT_INDEX.set(item.path,item);}else if(node.type==='fragment'){READING_FRAGMENT_INDEX.set(node.path,node);}else{if(node.knowledgeRoot){projects++;READING_DIR_OPEN.add(node.path);}index(node.children);}}};index(result.root.children);
   $('reading-count').textContent=projects?String(projects):'';$('reading-count').title=projects?projects+' 个阅读项目':'';renderReadingList();renderReadingProjectTabs();
 }
 function renderReadingList() {
   const host=$('reading-list');host.replaceChildren();
   host.ondragover=(e)=>{if(e.dataTransfer.types.includes('application/x-codescope-reading-node')){e.preventDefault();host.classList.add('root-drop');}};host.ondragleave=(e)=>{if(e.target===host)host.classList.remove('root-drop');};host.ondrop=(e)=>{e.preventDefault();host.classList.remove('root-drop');moveReadingNode(readingNodePayload(e),'');};
   if(!READING_TREE||!READING_TREE.children.length){const empty=document.createElement('div');empty.className='draw-empty';empty.textContent='还没有阅读项目：点击 ＋ 创建项目';host.appendChild(empty);return;}
-  const drawNodes=(nodes,parent)=>{for(const node of nodes||[]){if(node.type==='folder'){const open=READING_DIR_OPEN.has(node.path),row=document.createElement('div');row.className='reading-folder reading-library-folder';row.draggable=true;const arrow=document.createElement('span');arrow.textContent=open?'▾':'▸';const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup(open?'folderOpen':'folder');const name=document.createElement('span');name.className='name';name.textContent=node.name;const count=document.createElement('span');count.className='meta';count.textContent=String(node.count||0);count.title=(node.count||0)+' 个项目';count.setAttribute('aria-label',count.title);
-      const addProject=document.createElement('button');addProject.textContent='＋';addProject.title='在此文件夹新建阅读项目';addProject.setAttribute('aria-label',addProject.title);addProject.onclick=(e)=>{e.stopPropagation();createReadingProject(node.path);};const addFolder=document.createElement('button');addFolder.textContent='▣+';addFolder.title='新建子文件夹';addFolder.setAttribute('aria-label',addFolder.title);addFolder.onclick=(e)=>{e.stopPropagation();createReadingFolder(node.path);};const ren=document.createElement('button');ren.textContent='✎';ren.title='重命名文件夹';ren.setAttribute('aria-label',ren.title);ren.onclick=(e)=>{e.stopPropagation();renameReadingFolder(node);};const del=document.createElement('button');del.textContent='×';del.title='删除文件夹';del.className='danger';del.setAttribute('aria-label',del.title);del.onclick=(e)=>{e.stopPropagation();deleteReadingFolder(node);};const actions=document.createElement('span');actions.className='reading-row-actions';actions.append(addProject,addFolder,ren,del);row.append(arrow,icon,name,count,actions);row.onclick=()=>{open?READING_DIR_OPEN.delete(node.path):READING_DIR_OPEN.add(node.path);saveReadingDirs();renderReadingList();};row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'folder',path:node.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));row.addEventListener('dragover',(e)=>{if(e.dataTransfer.types.includes('application/x-codescope-reading-node')){e.preventDefault();e.stopPropagation();row.classList.add('drop-target');}});row.addEventListener('dragleave',()=>row.classList.remove('drop-target'));row.addEventListener('drop',(e)=>{e.preventDefault();e.stopPropagation();row.classList.remove('drop-target');moveReadingNode(readingNodePayload(e),node.path);});parent.appendChild(row);if(open){const children=document.createElement('div');children.className='reading-library-children';parent.appendChild(children);drawNodes(node.children,children);}continue;}
-      const project=node,row=document.createElement('div');row.className='reading-folder reading-project'+(project.path===READING_PROJECT_CURRENT?' on':'');row.draggable=true;const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup('book');const copy=document.createElement('div');copy.className='reading-project-copy';const name=document.createElement('span');name.className='name';name.textContent=project.name;copy.appendChild(name);const desc=document.createElement('span');desc.className='reading-project-desc'+(project.description?'':' empty');desc.textContent=project.description||'暂无说明 · 点击 ⓘ 完善';copy.appendChild(desc);const tags=document.createElement('span');tags.className='reading-project-tags';if(project.tags&&project.tags.length){for(const value of project.tags.slice(0,3)){const tag=document.createElement('span');tag.className='reading-project-tag';tag.textContent=value;tags.appendChild(tag);}}else{const tag=document.createElement('span');tag.className='reading-project-tag empty';tag.textContent='＋ 标签';tag.onclick=(e)=>{e.stopPropagation();editReadingProjectMeta(project);};tags.appendChild(tag);}copy.appendChild(tags);const count=document.createElement('span');count.className='meta';count.textContent=String(project.count||0);count.title=(project.count||0)+' 个片段';count.setAttribute('aria-label',count.title);const add=document.createElement('button');add.textContent='＋';add.title='添加项目片段';add.setAttribute('aria-label',add.title);add.onclick=(e)=>{e.stopPropagation();addReadingProjectFragment(project);};const info=document.createElement('button');info.textContent='ⓘ';info.title='编辑项目说明和标签';info.setAttribute('aria-label',info.title);info.onclick=(e)=>{e.stopPropagation();editReadingProjectMeta(project);};const renp=document.createElement('button');renp.textContent='✎';renp.title='重命名阅读项目';renp.setAttribute('aria-label',renp.title);renp.onclick=(e)=>{e.stopPropagation();renameReadingProject(project);};const delp=document.createElement('button');delp.textContent='×';delp.title='删除整个阅读项目';delp.className='danger';delp.setAttribute('aria-label',delp.title);delp.onclick=(e)=>{e.stopPropagation();deleteReadingProject(project);};const actions=document.createElement('span');actions.className='reading-row-actions';actions.append(add,info,renp,delp);row.append(icon,copy,count,actions);row.onclick=()=>openReadingProject(project);row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'project',path:project.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));parent.appendChild(row);}};drawNodes(READING_TREE.children,host);
+  const action=(text,title,handler,danger=false)=>{const button=document.createElement('button');button.textContent=text;button.title=title;button.setAttribute('aria-label',title);if(danger)button.className='danger';button.onclick=(event)=>{event.stopPropagation();handler();};return button;};
+  const drawNodes=(nodes,parent)=>{for(const node of nodes||[]){
+    if(node.type==='folder'){
+      const open=READING_DIR_OPEN.has(node.path),knowledge=!!node.knowledge,row=document.createElement('div');row.className='reading-folder reading-library-folder'+(knowledge?' knowledge-folder':'');row.draggable=!knowledge;const arrow=document.createElement('span');arrow.textContent=open?'▾':'▸';const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup(open?'folderOpen':'folder');const name=document.createElement('span');name.className='name';name.textContent=node.name;const count=document.createElement('span');count.className='meta';count.textContent=String(node.count||0);count.title=(node.count||0)+(knowledge?' 篇文档':' 个项目');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';
+      if(knowledge){if(node.knowledgeRoot)actions.append(action('▣+','新建知识分类',()=>createKnowledgeCategoryInFolder(node.path)));else actions.append(action('P+','在此分类新建知识项目',()=>createKnowledgeProjectInFolder(node.path)),action('▣+','新建子分类',()=>createKnowledgeCategoryInFolder(node.path)),action('✎','重命名知识分类',()=>renameReadingFolder(node)),action('×','删除知识分类',()=>deleteReadingFolder(node),true));}
+      else actions.append(action('＋','在此文件夹新建阅读项目',()=>createReadingProject(node.path)),action('▣+','新建子文件夹',()=>createReadingFolder(node.path)),action('✎','重命名文件夹',()=>renameReadingFolder(node)),action('×','删除文件夹',()=>deleteReadingFolder(node),true));
+      row.append(arrow,icon,name,count,actions);row.onclick=()=>{open?READING_DIR_OPEN.delete(node.path):READING_DIR_OPEN.add(node.path);saveReadingDirs();renderReadingList();};
+      if(!knowledge){row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'folder',path:node.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));row.addEventListener('dragover',(e)=>{if(e.dataTransfer.types.includes('application/x-codescope-reading-node')){e.preventDefault();e.stopPropagation();row.classList.add('drop-target');}});row.addEventListener('dragleave',()=>row.classList.remove('drop-target'));row.addEventListener('drop',(e)=>{e.preventDefault();e.stopPropagation();row.classList.remove('drop-target');moveReadingNode(readingNodePayload(e),node.path);});}
+      parent.appendChild(row);if(open){const children=document.createElement('div');children.className='reading-library-children';parent.appendChild(children);drawNodes(node.children,children);}continue;
+    }
+    if(node.type==='fragment'&&node.knowledge){const row=document.createElement('div');row.className='reading-folder reading-knowledge-page'+(node.path===READING_CURRENT?' on':'');const icon=document.createElement('span');icon.className='side-glyph';icon.textContent='M↓';const name=document.createElement('span');name.className='name';name.textContent=node.path==='知识库/index.md'?'知识库首页':readingBase(node.name);const meta=document.createElement('span');meta.className='meta';meta.textContent=readingSize(node.size);const actions=document.createElement('span');actions.className='reading-row-actions';if(node.path!=='知识库/index.md')actions.append(action('✎','重命名文档',()=>renameReadingFragment(node)),action('×','删除文档',()=>deleteReadingFragment(node),true));row.append(icon,name,meta,actions);row.onclick=()=>openReading(node.path,0);parent.appendChild(row);continue;}
+    const project=node,row=document.createElement('div');row.className='reading-folder reading-project'+(project.path===READING_PROJECT_CURRENT?' on':'');row.draggable=!project.knowledge;const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup('book');const copy=document.createElement('div');copy.className='reading-project-copy';const name=document.createElement('span');name.className='name';name.textContent=project.name;copy.appendChild(name);const desc=document.createElement('span');desc.className='reading-project-desc'+(project.description?'':' empty');desc.textContent=project.description||'暂无说明 · 点击 ⓘ 完善';copy.appendChild(desc);const tags=document.createElement('span');tags.className='reading-project-tags';if(project.tags&&project.tags.length){for(const value of project.tags.slice(0,3)){const tag=document.createElement('span');tag.className='reading-project-tag';tag.textContent=value;tags.appendChild(tag);}}else{const tag=document.createElement('span');tag.className='reading-project-tag empty';tag.textContent='＋ 标签';tag.onclick=(e)=>{e.stopPropagation();editReadingProjectMeta(project);};tags.appendChild(tag);}copy.appendChild(tags);const count=document.createElement('span');count.className='meta';count.textContent=String(project.count||0);count.title=(project.count||0)+(project.knowledge?' 篇 Markdown':' 个片段');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';actions.append(action(project.knowledge?'M+':'＋',project.knowledge?'新建 Markdown 片段':'添加项目片段',project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project)),action('ⓘ','编辑项目说明和标签',()=>editReadingProjectMeta(project)),action('✎','重命名阅读项目',()=>renameReadingProject(project)),action('×','删除整个阅读项目',()=>deleteReadingProject(project),true));row.append(icon,copy,count,actions);row.onclick=()=>openReadingProject(project);if(!project.knowledge){row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'project',path:project.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));}parent.appendChild(row);
+  }};drawNodes(READING_TREE.children,host);
 }
+async function createKnowledgePageInProject(projectPath){const name=prompt('Markdown 片段名称','新文档.md');if(!name)return;const base=String(projectPath||'').replace(/^知识库\/?/,'');let rel=base+'/'+name.trim();if(!/\.md$/i.test(rel))rel+='.md';const result=await api('/api/knowledge/page',{path:rel,title:name.replace(/\.md$/i,'')});if(!result.ok)return alert(result.error);await loadReadings();READING_PROJECT_CURRENT=projectPath;openReading(result.readingPath,READING_ACTIVE_SLOT);}
+async function createKnowledgeProjectInFolder(folderPath){const name=prompt('知识项目名称');if(!name)return;const description=prompt('项目说明（可留空）','')??'';const base=String(folderPath||'').replace(/^知识库\/?/,'');const result=await api('/api/knowledge/project',{path:base+'/'+name.trim(),description});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(folderPath);saveReadingDirs();await loadReadings();const project=READING_PROJECT_INDEX.get('知识库/'+result.path);if(project)openReadingProject(project);}
+async function createKnowledgeCategoryInFolder(folderPath){const name=prompt('知识分类名称');if(!name)return;const base=String(folderPath||'').replace(/^知识库\/?/,'');const rel=(base?base+'/':'')+name.trim();const result=await api('/api/knowledge/folder',{path:rel});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(folderPath);READING_DIR_OPEN.add('知识库/'+result.path);saveReadingDirs();await loadReadings();}
 async function createReadingProject(parent){const name=prompt('阅读项目名称');if(!name)return;const description=prompt('项目说明（可留空）','')??'';const tags=prompt('标签（使用逗号分隔）','')??'';const result=await api('/api/readings/project/new',{parent:parent||'',name,description,tags});if(!result.ok)return alert(result.error);if(parent)READING_DIR_OPEN.add(parent);READING_PROJECT_CURRENT=result.path;saveReadingDirs();await loadReadings();const project=READING_PROJECT_INDEX.get(result.path);if(project)openReadingProject(project);}
 async function createReadingFolder(parent){const name=prompt('阅读文件夹名称');if(!name)return;const result=await api('/api/readings/folder',{parent:parent||'',name});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(result.path);if(parent)READING_DIR_OPEN.add(parent);saveReadingDirs();await loadReadings();}
 async function editReadingProjectMeta(project){const description=prompt('项目说明',project.description||'');if(description===null)return;const tags=prompt('标签（使用逗号分隔）',(project.tags||[]).join('，'));if(tags===null)return;const result=await api('/api/readings/project/meta',{project:project.path,description,tags});if(!result.ok)return alert(result.error);await loadReadings();}
@@ -5013,7 +5221,7 @@ function renderReadingProjectTabs(){
     const ren=document.createElement('button');ren.className='tab-action';ren.textContent='✎';ren.title='重命名片段';ren.onclick=(e)=>{e.stopPropagation();renameReadingFragment(item);};const del=document.createElement('button');del.className='tab-action';del.textContent='×';del.title='删除片段';del.onclick=(e)=>{e.stopPropagation();deleteReadingFragment(item);};
     tab.append(kind,name,role,ren,del);tab.onclick=()=>openReading(item.path,READING_ACTIVE_SLOT);tab.addEventListener('dragstart',(e)=>{tab.classList.add('dragging');$('reading-columns').classList.add('fragment-dragging');e.dataTransfer.setData('application/x-codescope-reading',item.path);e.dataTransfer.effectAllowed='copy';});tab.addEventListener('dragend',()=>{tab.classList.remove('dragging');$('reading-columns').classList.remove('fragment-dragging');});host.appendChild(tab);
   }
-  const add=document.createElement('button');add.id='reading-project-add';add.textContent='＋ 片段';add.title='新建或导入 PDF、Markdown、代码片段';add.onclick=()=>addReadingProjectFragment(project);host.appendChild(add);
+  const add=document.createElement('button');add.id='reading-project-add';add.textContent=project.knowledge?'＋ Markdown':'＋ 片段';add.title=project.knowledge?'在当前知识项目中新建 Markdown 片段':'新建或导入 PDF、Markdown、代码片段';add.onclick=project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project);host.appendChild(add);
 }
 async function ensureReadingDoc(path) {
   let doc=READING_DOCS.get(path);if(doc)return doc;
@@ -5070,7 +5278,9 @@ async function renderReadingSlot(slot) {
       source.addEventListener('click',()=>updateReadingSlashMenu(source,slot));
       source.addEventListener('blur',()=>setTimeout(()=>{if(READING_SLASH_STATE&&READING_SLASH_STATE.editor===source&&(!READING_SLASH_MENU||!READING_SLASH_MENU.contains(document.activeElement)))hideReadingSlashMenu();},0));
       source.addEventListener('keyup',(e)=>{if(!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key))updateReadingSlashMenu(source,slot);});
-      source.addEventListener('select',syncOutlineFromSource);source.addEventListener('click',syncOutlineFromSource);source.addEventListener('keyup',syncOutlineFromSource);live.addEventListener('scroll',()=>requestAnimationFrame(()=>syncOutlineFromView(live)));preview.addEventListener('scroll',()=>requestAnimationFrame(()=>syncOutlineFromView(preview)));
+      source.addEventListener('select',syncOutlineFromSource);source.addEventListener('click',syncOutlineFromSource);source.addEventListener('keyup',syncOutlineFromSource);
+      live.addEventListener('scroll',()=>requestAnimationFrame(()=>syncReadingMarkdownOutlineView(live,outlineList,false)));preview.addEventListener('scroll',()=>requestAnimationFrame(()=>syncReadingMarkdownOutlineView(preview,outlineList,true)));
+      outlineList.addEventListener('click',(event)=>{const button=event.target.closest('.reading-md-outline-item');if(!button||shell.dataset.mdMode==='edit')return;event.preventDefault();event.stopImmediatePropagation();const index=[...outlineList.querySelectorAll('.reading-md-outline-item')].indexOf(button),isPreview=shell.dataset.mdMode==='preview',container=isPreview?preview:live,node=readingMarkdownViewHeadings(container,isPreview).find((heading,nodeIndex)=>(isPreview?Number(heading.dataset.outlineIndex):nodeIndex)===index);clearTimeout(container.__outlineTargetTimer);container.__outlineTargetIndex=index;container.__outlineTargetTimer=setTimeout(()=>{delete container.__outlineTargetIndex;syncReadingMarkdownOutlineView(container,outlineList,isPreview);},750);setReadingMarkdownOutlineActive(outlineList,index,false);scrollReadingMarkdownHeading(container,node,isPreview);},true);
       source.addEventListener('keydown',(e)=>{if(readingSlashKeydown(e,source))return;if(e.key==='Tab'){e.preventDefault();source.setRangeText('  ',source.selectionStart,source.selectionEnd,'end');source.dispatchEvent(new Event('input',{bubbles:true}));return;}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow();}});
       workbench.addEventListener('wheel',(e)=>{if(!(e.metaKey||e.ctrlKey))return;e.preventDefault();setMarkdownZoom(markdownZoom+(e.deltaY<0?5:-5));},{passive:false});
       workbench.addEventListener('keydown',(e)=>{if(!(e.metaKey||e.ctrlKey))return;if(e.key==='0'){e.preventDefault();setMarkdownZoom(100);return;}if(e.key==='+'||e.key==='='){e.preventDefault();setMarkdownZoom(markdownZoom+10);return;}if(e.key==='-'||e.key==='_'){e.preventDefault();setMarkdownZoom(markdownZoom-10);} },true);
@@ -13578,6 +13788,39 @@ function makeHResizer(handle, getter, setter) {
   window.addEventListener('resize', () => { try { layoutEditEditor(); } catch (_) {} if(MONACO_EDITOR)MONACO_EDITOR.layout();for(const editor of MONACO_SPLIT_EDITORS)editor.layout(); });
 })();
 $('refresh').onclick = () => { refresh(false); renderDrawList(); };
+$('btn-knowledge').onclick = openKnowledgeCenter;
+$('btn-knowledge-launch').setAttribute('aria-pressed','false');
+$('btn-knowledge-launch').onclick=()=>document.body.classList.contains('knowledge-mode')?closeKnowledgeWorkspace():openKnowledgeWorkspace(false);
+$('knowledge-launch-more').onclick=(event)=>{event.stopPropagation();setKnowledgeLaunchMenu();};
+$('knowledge-launch-embed').onclick=()=>openKnowledgeWorkspace(false);
+$('knowledge-launch-split').onclick=openKnowledgeSplit;
+$('knowledge-launch-external').onclick=openKnowledgeExternal;
+$('knowledge-launch-manage').onclick=()=>{setKnowledgeLaunchMenu(false);openKnowledgeCenter();};
+$('knowledge-workspace-back').onclick=closeKnowledgeWorkspace;
+$('knowledge-workspace-split').onclick=openKnowledgeSplit;
+$('knowledge-workspace-manage').onclick=()=>openKnowledgeCenter();
+$('knowledge-workspace-reload').onclick=()=>openKnowledgeWorkspace(true);
+$('knowledge-workspace-external').onclick=openKnowledgeExternal;
+$('knowledge-workspace-frame').addEventListener('load',()=>{$('knowledge-workspace-loading').classList.add('hidden');});
+document.addEventListener('pointerdown',(event)=>{if(!$('knowledge-launch').contains(event.target))setKnowledgeLaunchMenu(false);});
+$('btn-manual').onclick = () => window.open('/manual/', 'codescope-manual', 'noopener');
+$('reading-knowledge').onclick = (event) => { event.stopPropagation(); openKnowledgeCenter(); };
+$('knowledge-close').onclick = () => closeKnowledgeCenter();
+$('knowledge-center').addEventListener('mousedown',(event)=>{if(event.target===$('knowledge-center'))closeKnowledgeCenter();});
+document.addEventListener('keydown',(event)=>{if(event.key==='Escape'&&$('knowledge-center').classList.contains('open')){event.preventDefault();closeKnowledgeCenter();}});
+$('knowledge-open').onclick = () => openKnowledgeWorkspace(false);
+$('knowledge-build').onclick = buildKnowledge;
+$('knowledge-refresh').onclick = loadKnowledgeStatus;
+$('knowledge-create-page').onclick = createKnowledgePage;
+$('knowledge-create-folder').onclick = createKnowledgeFolder;
+$('knowledge-create-project').onclick = createKnowledgeProject;
+$('knowledge-upload').onclick = () => $('knowledge-image-input').click();
+$('knowledge-image-input').onchange = (event) => { uploadKnowledgeImages([...event.target.files]);event.target.value=''; };
+$('knowledge-page-path').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgePage();});
+$('knowledge-page-title').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgePage();});
+$('knowledge-folder-path').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeFolder();});
+$('knowledge-project-path').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeProject();});
+$('knowledge-project-description').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeProject();});
 $('search').oninput = renderList;
 $('welcome-search').onclick = () => { $('search').focus(); $('search').select(); };
 $('welcome-study').onclick = () => $('btn-study').click();
@@ -13874,6 +14117,7 @@ $('dsh-reload').onclick=()=>{const frame=$('dsh-frame');$('dsh-loading').classLi
 $('dsh-external').onclick=openDshExternal;
 $('dsh-frame').addEventListener('load',()=>{$('dsh-loading').classList.add('hidden');$('dsh-head-status').textContent=DSH_SERVICE&&DSH_SERVICE.managed?'已连接 · CodeScope 托管':'已连接';});
 new MutationObserver(()=>{if(document.body.classList.contains('dsh-mode')&&['study-mode','office-mode','reading-mode','drawing-mode'].some(mode=>document.body.classList.contains(mode)))closeDshWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
+new MutationObserver(()=>{if(document.body.classList.contains('knowledge-mode')&&['study-mode','dsh-mode','office-mode','reading-mode','drawing-mode'].some(mode=>document.body.classList.contains(mode)))closeKnowledgeWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
 
 initAppThemes();
 initEditorGroups();

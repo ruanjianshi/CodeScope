@@ -5,6 +5,11 @@
 
 当前版本：**v2.4.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
+完整使用手册已内置到 CodeScope：启动后点击顶栏 **「手册」**，或访问
+[`http://127.0.0.1:4877/manual/`](http://127.0.0.1:4877/manual/)。手册提供章节导航、全文搜索、页内目录、深链接、演示流程、故障排查、深浅主题与打印导出，无需外网。
+
+顶栏 **「知识库」** 是面向长期 Markdown 积累的独立阅读站。原稿和图片保存在 Vault 的 `readings/知识库/`，CodeScope 使用 VitePress 自动生成分类侧栏、页内大纲、中文模糊全文搜索、上一篇/下一篇、深浅主题和稳定定位链接。内容按“知识库 → 分类文件夹 → 项目 → 多个 Markdown 片段”组织；保存 Markdown 后会防抖触发重建，也可在知识库中心导入图片或手动重建。阅读地址为 [`http://127.0.0.1:4877/knowledge/`](http://127.0.0.1:4877/knowledge/)，生成缓存位于应用数据目录，不会把大量构建产物写入 Vault。
+
 桌面版下载：[GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest)。macOS 提供 Apple Silicon / Intel 的 DMG 与 ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB、RPM 与 ZIP。
 
 ## Web 与桌面双模式

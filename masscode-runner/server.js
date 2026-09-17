@@ -30,6 +30,7 @@ const { createLspService } = require('./lib/lsp-service');
 const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
 const { createOfficeEngine } = require('./lib/office-engine');
 const { createDshService } = require('./lib/dsh-service');
+const { createKnowledgeBase } = require('./lib/knowledge-base');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
@@ -173,6 +174,8 @@ function vaultPath() {
   }
   return defaultVaultPath();
 }
+
+const KNOWLEDGE = createKnowledgeBase({ projectRoot:__dirname, dataRoot:applicationDataRoot(), getVaultPath:vaultPath });
 
 /* -------------------------------- 实时系统状态 -------------------------------- */
 
@@ -2903,7 +2906,7 @@ function readingTree() {
   const root = { type:'folder', name:'', path:'', children:[], count:0 };
   const walkProject = (node, dir, prefix, projectPath) => {
     let rows = [];
-    try { rows = fs.readdirSync(dir, { withFileTypes:true }).filter((entry) => ![READING_PROJECT_META,READING_FOLDER_META,'.codescope'].includes(entry.name)); } catch (_) {}
+    try { rows = fs.readdirSync(dir, { withFileTypes:true }).filter((entry) => ![READING_PROJECT_META,READING_FOLDER_META,'.codescope','.vitepress','node_modules','public'].includes(entry.name)); } catch (_) {}
     rows.sort((a, b) => a.name.localeCompare(b.name));
     let count = 0;
     for (const entry of rows) {
@@ -2924,8 +2927,11 @@ function readingTree() {
     return count;
   };
   const directoryHasDirectAssets=(dir)=>{try{return fs.readdirSync(dir,{withFileTypes:true}).some((entry)=>entry.isFile()&&![READING_PROJECT_META,READING_FOLDER_META].includes(entry.name)&&readingAssetPath(entry.name));}catch(_){return false;}};
+  const buildKnowledgeProject=(dir,rel)=>{const meta=loadReadingProjectMeta(rel),project={type:'project',knowledge:true,name:path.basename(rel),path:rel,description:meta.description,tags:meta.tags,children:[],count:0};let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.isFile()&&!entry.name.startsWith('.')&&['.md','.markdown'].includes(path.extname(entry.name).toLowerCase()));}catch(_){}entries.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true}));for(const entry of entries){const childRel=rel+'/'+entry.name,full=path.join(dir,entry.name);let stat={size:0,mtimeMs:0};try{stat=fs.statSync(full);}catch(_){}const fragment=readingFragmentInfo(childRel,stat,rel);fragment.knowledge=true;project.children.push(fragment);project.count+=1;}return project;};
+  const buildKnowledgeFolder=(dir,rel,isRoot=false)=>{let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.isDirectory()&&!entry.name.startsWith('.')&&!['.codescope','.vitepress','node_modules','public'].includes(entry.name));}catch(_){}entries.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true}));const folder={type:'folder',knowledge:true,knowledgeRoot:isRoot,name:path.basename(rel),path:rel,children:[],count:0};for(const entry of entries){const childRel=rel+'/'+entry.name,full=path.join(dir,entry.name);if(fs.existsSync(path.join(full,READING_PROJECT_META))){const project=buildKnowledgeProject(full,childRel);folder.children.push(project);folder.count+=1;}else{const child=buildKnowledgeFolder(full,childRel,false);folder.children.push(child);folder.count+=child.count;}}return folder;};
   const walkFolders=(dir,prefix,depth)=>{let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.name!=='.codescope'&&![READING_PROJECT_META,READING_FOLDER_META].includes(entry.name));}catch(_){}entries.sort((a,b)=>a.name.localeCompare(b.name));const children=[];
     for(const entry of entries){if(!entry.isDirectory())continue;const rel=prefix?prefix+'/'+entry.name:entry.name,full=path.join(dir,entry.name);const explicitFolder=fs.existsSync(path.join(full,READING_FOLDER_META)),explicitProject=fs.existsSync(path.join(full,READING_PROJECT_META));
+      if(rel===KNOWLEDGE.folderName){const folder=buildKnowledgeFolder(full,rel,true);children.push(folder);root.count+=folder.count;continue;}
       if(explicitFolder){const folder={type:'folder',name:entry.name,path:rel,children:walkFolders(full,rel,depth+1)};folder.count=folder.children.reduce((sum,item)=>sum+(item.type==='project'?1:item.count||0),0);children.push(folder);continue;}
       if(explicitProject||directoryHasDirectAssets(full)||depth===0){const meta=loadReadingProjectMeta(rel),project={type:'project',name:entry.name,path:rel,description:meta.description,tags:meta.tags,children:[],count:0};project.count=walkProject(project,full,rel,rel);children.push(project);root.count+=project.count;continue;}
       const folder={type:'folder',name:entry.name,path:rel,children:walkFolders(full,rel,depth+1)};folder.count=folder.children.reduce((sum,item)=>sum+(item.type==='project'?1:item.count||0),0);children.push(folder);
@@ -3494,6 +3500,16 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/assets/'.length);
       return streamStatic(req, res, assetsRoot, rel, { cacheControl:'no-cache' });
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && (u.pathname === '/manual' || u.pathname.startsWith('/manual/'))) {
+      const manualRoot = path.join(__dirname, 'docs', 'manual');
+      const rel = u.pathname === '/manual' || u.pathname === '/manual/' ? 'index.html' : u.pathname.slice('/manual/'.length);
+      return streamStatic(req, res, manualRoot, rel, { cacheControl:'no-cache', notFound:'CodeScope 使用手册页面不存在' });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && (u.pathname === '/knowledge' || u.pathname.startsWith('/knowledge/'))) {
+      const root = KNOWLEDGE.distDir();
+      const rel = u.pathname === '/knowledge' || u.pathname === '/knowledge/' ? 'index.html' : decodeURIComponent(u.pathname.slice('/knowledge/'.length));
+      return streamStatic(req, res, root, rel, { cacheControl:rel.startsWith('assets/')?'public, max-age=31536000, immutable':'no-cache', notFound:'知识库尚未生成，请返回 CodeScope 点击“立即生成”' });
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/vendor/')) {
       const assetsRoot = path.join(__dirname, 'vendor');
       const rel = u.pathname.slice('/vendor/'.length);
@@ -3627,6 +3643,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 6, releaseChannel:'stable', mode:APP_MODE,
         capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
         study:{ available:true, webOnly:true, layoutEngine:'Golden Layout', paneTypes:['browser','code','notes','pdf'], presets:['study','dual','notes','quad'] },
+        knowledge:{ available:true, engine:'VitePress', url:'/knowledge/', source:'readings/知识库', autoBuild:true, localSearch:true },
         features: ['study-workspace', 'study-bookmarks', 'study-site-catalog', 'study-site-categories', 'study-layout-presets', 'study-layout-truth', 'study-readable-browser', 'study-video-timepoints', 'study-video-frame-capture', 'dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'docx-page-break-normalization', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'reading-web-site-navigation', 'reading-web-session', 'reading-web-whole-page-zoom', 'reading-web-annotations', 'reading-web-location', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-service-control', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
@@ -3790,6 +3807,31 @@ const server = http.createServer(async (req, res) => {
       const root = readingTree();
       return send(res, 200, { ok:true, dir:readingsDir(), root, total:root.count });
     }
+    if (req.method === 'GET' && u.pathname === '/api/knowledge/status') {
+      return send(res, 200, KNOWLEDGE.status());
+    }
+    if (req.method === 'POST' && u.pathname === '/api/knowledge/build') {
+      return send(res, 200, await KNOWLEDGE.build('manual'));
+    }
+    if (req.method === 'POST' && u.pathname === '/api/knowledge/page') {
+      try { return send(res, 200, KNOWLEDGE.createPage(await readBody(req, 256 * 1024))); }
+      catch (error) { return send(res, 400, { ok:false, error:String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/knowledge/folder') {
+      try { return send(res, 200, KNOWLEDGE.createFolder(await readBody(req, 256 * 1024))); }
+      catch (error) { return send(res, 400, { ok:false, error:String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/knowledge/project') {
+      try { return send(res, 200, KNOWLEDGE.createProject(await readBody(req, 256 * 1024))); }
+      catch (error) { return send(res, 400, { ok:false, error:String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/knowledge/image') {
+      try {
+        const info = JSON.parse(Buffer.from(String(req.headers['x-codescope-knowledge'] || ''), 'base64').toString('utf8'));
+        const body = await readRawBody(req, 50 * 1024 * 1024);
+        return send(res, 200, KNOWLEDGE.saveImage(String(info.path || info.name || ''), body, String(req.headers['content-type'] || 'application/octet-stream')));
+      } catch (error) { return send(res, 400, { ok:false, error:String(error.message || error) }); }
+    }
     if (req.method === 'GET' && u.pathname === '/api/readings/search') {
       const query = String(u.searchParams.get('q') || '').trim();
       if (!query) return send(res, 200, { ok:true, hits:[] });
@@ -3889,7 +3931,7 @@ const server = http.createServer(async (req, res) => {
       const b=await readBody(req,12e6),rel=readingAssetPath(b.path);
       if(!rel||!READING_TEXT_EXTS.has(path.extname(rel).toLowerCase()))return send(res,400,{ok:false,error:'文本片段路径不合法'});
       const content=String(b.content==null?'':b.content);if(Buffer.byteLength(content)>8*1024*1024)return send(res,413,{ok:false,error:'文本片段超过 8 MB'});
-      try{fs.writeFileSync(path.join(readingsDir(),rel),content,'utf8');return send(res,200,{ok:true,size:Buffer.byteLength(content)});}catch(error){return send(res,500,{ok:false,error:'保存失败：'+String(error.message||error)});}
+      try{fs.writeFileSync(path.join(readingsDir(),rel),content,'utf8');if(rel===KNOWLEDGE.folderName||rel.startsWith(KNOWLEDGE.folderName+'/'))KNOWLEDGE.schedule('markdown-save');return send(res,200,{ok:true,size:Buffer.byteLength(content)});}catch(error){return send(res,500,{ok:false,error:'保存失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/upload-stream') {
       let info;
@@ -5341,6 +5383,7 @@ server.listen(PORT, HOST, () => {
     console.log('⚠ 当前为局域网模式：终端、代码运行和文件修改接口可被同网段设备访问。');
   }
   try { console.log('Vault: ' + vaultPath()); } catch (e) { console.log('Vault: ' + e.message); }
+  try { KNOWLEDGE.start(); console.log('知识库: VitePress 自动生成已启用'); } catch (e) { console.log('知识库初始化失败: ' + e.message); }
   // 清扫上次服务留下的运行临时目录（正常退出会由 TTL 回收，强杀则依赖这里）
   try { const swept = sweepTempDirs(); if (swept) console.log('已清理运行临时目录: ' + swept + ' 个'); } catch (_) {}
   console.log('正在检测本机环境…');
@@ -5367,6 +5410,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   try { LSP.close(); } catch (_) {}
+  try { KNOWLEDGE.stop(); } catch (_) {}
   try { await DSH.stop(); } catch (_) {}
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 2500).unref();

@@ -25,7 +25,8 @@
     "test:run": "node tests/run.js",
     "build:reading-editor": "node scripts/build-reading-editor.js",
     "build:study-workspace": "node scripts/build-study-workspace.js",
-    "build:assets": "npm run build:reading-editor && npm run build:study-workspace"
+    "build:assets": "npm run build:reading-editor && npm run build:study-workspace",
+    "build:knowledge": "node scripts/build-knowledge.js"
   },
   "engines": {
     "node": ">=18"
@@ -54,6 +55,7 @@
     "ssh2": "^1.17.0",
     "typescript": "^5.9.3",
     "typescript-language-server": "^6.0.0",
+    "vitepress": "^1.6.4",
     "ws": "^8.21.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "xmind-embed-viewer": "1.2.0"
