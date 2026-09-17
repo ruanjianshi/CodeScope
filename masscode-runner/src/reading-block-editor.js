@@ -279,9 +279,49 @@ async function create(options = {}) {
     const encoded = anchor.getAttribute('href')?.slice('#codescope-ref-'.length) || ''
     try { options.onReference?.(base64UrlToUtf8(encoded), anchor) } catch (_) {}
   }
+  const imageFiles = (transfer) => {
+    const files = [...(transfer?.files || [])]
+    for (const item of [...(transfer?.items || [])]) {
+      const file = item.kind === 'file' ? item.getAsFile?.() : null
+      if (file && !files.includes(file)) files.push(file)
+    }
+    return files.filter((file) => String(file.type || '').startsWith('image/'))
+  }
+  const insertImages = async (files) => {
+    root.dataset.imageUploading = 'true'
+    try {
+      const markdown = []
+      for (const file of files) {
+        const uploaded = await options.onImage?.(file)
+        const value = typeof uploaded === 'string' ? uploaded : uploaded?.markdown
+        if (value) markdown.push(value)
+      }
+      if (!markdown.length) throw new Error('图片上传后没有返回 Markdown 地址')
+      crepe.editor.action(insert(toEditorMarkdown(markdown.join('\n\n'))))
+      root.dispatchEvent(new CustomEvent('codescope-image-inserted', {
+        bubbles: true,
+        detail: { count:markdown.length, markdown:markdown.join('\n\n') },
+      }))
+    } catch (error) {
+      options.onError?.(error)
+      root.dispatchEvent(new CustomEvent('codescope-image-error', {
+        bubbles: true,
+        detail: { error:String(error?.message || error) },
+      }))
+    } finally {
+      delete root.dataset.imageUploading
+    }
+  }
   const onPaste = (event) => {
     if (!ready || destroyed || !(event.target instanceof Element) || !event.target.closest('.ProseMirror')) return
     const clipboard = event.clipboardData
+    const images = imageFiles(clipboard)
+    if (images.length && typeof options.onImage === 'function') {
+      event.preventDefault()
+      event.stopPropagation()
+      void insertImages(images)
+      return
+    }
     const text = clipboard?.getData('text/plain') || ''
     if (!looksLikeMarkdown(text)) return
     event.preventDefault()
@@ -295,8 +335,17 @@ async function create(options = {}) {
       detail: { markdown: pasted.body },
     }))
   }
+  const onDrop = (event) => {
+    if (!ready || destroyed || !(event.target instanceof Element) || !event.target.closest('.ProseMirror') || typeof options.onImage !== 'function') return
+    const images = imageFiles(event.dataTransfer)
+    if (!images.length) return
+    event.preventDefault()
+    event.stopPropagation()
+    void insertImages(images)
+  }
   root.addEventListener('click', onClick)
   root.addEventListener('paste', onPaste, true)
+  root.addEventListener('drop', onDrop, true)
   await crepe.create()
   const detachBlockTransformMenu = attachBlockTransformMenu(crepe, root)
   ready = true
@@ -309,6 +358,7 @@ async function create(options = {}) {
       destroyed = true
       root.removeEventListener('click', onClick)
       root.removeEventListener('paste', onPaste, true)
+      root.removeEventListener('drop', onDrop, true)
       detachBlockTransformMenu()
       delete root.dataset.editorReady
       await crepe.destroy()

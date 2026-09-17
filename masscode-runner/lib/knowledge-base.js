@@ -666,18 +666,34 @@ function createKnowledgeBase(options) {
     const startedAt = Date.now();
     state = { ...state, phase:'building', message:'正在生成知识库…', startedAt, error:'', pending:false, reason };
     const bin = path.join(projectRoot, 'node_modules', 'vitepress', 'bin', 'vitepress.js');
-    fs.mkdirSync(path.dirname(distDir()), { recursive:true });
+    const targetDir=distDir(),parentDir=path.dirname(targetDir),stagingDir=path.join(parentDir,'.site-build-'+process.pid+'-'+startedAt),backupDir=path.join(parentDir,'.site-previous-'+process.pid);
+    fs.mkdirSync(parentDir, { recursive:true });
+    try { fs.rmSync(stagingDir, { recursive:true, force:true }); } catch (_) {}
     buildPromise = new Promise((resolve) => {
-      const child = spawn(process.execPath, [bin, 'build', sourceDir(), '--outDir', distDir()], { cwd:projectRoot, env:{ ...process.env, NO_COLOR:'1' }, stdio:['ignore','pipe','pipe'] });
+      const child = spawn(process.execPath, [bin, 'build', sourceDir(), '--outDir', stagingDir], { cwd:projectRoot, env:{ ...process.env, NO_COLOR:'1' }, stdio:['ignore','pipe','pipe'] });
       let output = '';
       const add = (chunk) => { output = (output + chunk.toString()).slice(-12000); };
       child.stdout.on('data', add); child.stderr.on('data', add);
       child.once('error', (error) => {
+        try { fs.rmSync(stagingDir, { recursive:true, force:true }); } catch (_) {}
         const finishedAt=Date.now(); state={ ...state, phase:'error', message:'知识库生成失败', error:String(error.message||error), finishedAt, durationMs:finishedAt-startedAt }; buildPromise=null; resolve(status());
       });
       child.once('exit', (code) => {
-        const finishedAt = Date.now(), ok = code === 0 && fs.existsSync(path.join(distDir(), 'index.html'));
-        state = { ...state, phase:ok?'ready':'error', message:ok?'知识库已更新':'知识库生成失败', error:ok?'':output.trim().slice(-4000), finishedAt, durationMs:finishedAt-startedAt };
+        const finishedAt = Date.now();let ok = code === 0 && fs.existsSync(path.join(stagingDir, 'index.html')),swapError='';
+        if(ok){
+          let movedCurrent=false;
+          try{
+            fs.rmSync(backupDir,{recursive:true,force:true});
+            if(fs.existsSync(targetDir)){fs.renameSync(targetDir,backupDir);movedCurrent=true;}
+            fs.renameSync(stagingDir,targetDir);
+          }catch(error){
+            ok=false;swapError='发布新站点失败：'+String(error.message||error);
+            try{if(movedCurrent&&!fs.existsSync(targetDir)&&fs.existsSync(backupDir))fs.renameSync(backupDir,targetDir);}catch(restoreError){swapError+='；恢复上一版本失败：'+String(restoreError.message||restoreError);}
+            try{fs.rmSync(stagingDir,{recursive:true,force:true});}catch(_){}
+          }
+          if(ok)try{fs.rmSync(backupDir,{recursive:true,force:true});}catch(_){}
+        }else try{fs.rmSync(stagingDir,{recursive:true,force:true});}catch(_){}
+        state = { ...state, phase:ok?'ready':'error', message:ok?'知识库已更新':'知识库生成失败（已保留上一版本）', error:ok?'':(swapError||output.trim().slice(-4000)), finishedAt, durationMs:finishedAt-startedAt };
         buildPromise = null; const again = state.pending; state.pending = false; resolve(status()); if (again) schedule('pending');
       });
     });

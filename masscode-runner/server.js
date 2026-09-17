@@ -3931,6 +3931,7 @@ const server = http.createServer(async (req, res) => {
       const b=await readBody(req,12e6),rel=readingAssetPath(b.path);
       if(!rel||!READING_TEXT_EXTS.has(path.extname(rel).toLowerCase()))return send(res,400,{ok:false,error:'文本片段路径不合法'});
       const content=String(b.content==null?'':b.content);if(Buffer.byteLength(content)>8*1024*1024)return send(res,413,{ok:false,error:'文本片段超过 8 MB'});
+      if((rel===KNOWLEDGE.folderName||rel.startsWith(KNOWLEDGE.folderName+'/'))&&/!?\[[^\]]*\]\(\s*blob:/i.test(content))return send(res,400,{ok:false,error:'知识库图片不能使用浏览器临时 blob 地址，请在区块编辑器中重新粘贴或拖入图片'});
       try{fs.writeFileSync(path.join(readingsDir(),rel),content,'utf8');if(rel===KNOWLEDGE.folderName||rel.startsWith(KNOWLEDGE.folderName+'/'))KNOWLEDGE.schedule('markdown-save');return send(res,200,{ok:true,size:Buffer.byteLength(content)});}catch(error){return send(res,500,{ok:false,error:'保存失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/upload-stream') {
