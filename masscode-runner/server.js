@@ -30,6 +30,7 @@ const { createLspService } = require('./lib/lsp-service');
 const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
 const { createOfficeEngine } = require('./lib/office-engine');
 const { createDshService } = require('./lib/dsh-service');
+const { createOpencodeService } = require('./lib/opencode-service');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
@@ -125,6 +126,7 @@ const ONLYOFFICE_CONTAINER_NAME = /^[A-Za-z0-9_.-]+$/.test(String(process.env.CO
 // 确实需要跨设备访问时，可显式设置 CODESCOPE_HOST=0.0.0.0，并配合受信网络使用。
 const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
 const DSH = createDshService({ projectRoot:__dirname, dataRoot:applicationDataRoot() });
+const OPENCODE = createOpencodeService({});
 
 /* ---------------------------------- 路径发现 ---------------------------------- */
 
@@ -4084,6 +4086,21 @@ const server = http.createServer(async (req, res) => {
         if (!['start', 'stop', 'restart'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 DSH 操作' });
         const service = await DSH[action]();
         return send(res, service.available || action === 'stop' ? 200 : 503, { ok:service.available || action === 'stop', service });
+      }
+      return send(res, 405, { ok:false, error:'Method Not Allowed' });
+    }
+    if (u.pathname === '/api/integrations/opencode') {
+      if (req.method === 'GET') return send(res, 200, { ok:true, service:OPENCODE.status() });
+      if (req.method === 'POST') {
+        const body = await readBody(req, 64 * 1024);
+        const action = String(body && body.action || 'open');
+        if (action === 'stop') {
+          const service = await OPENCODE.stop();
+          return send(res, 200, { ok:true, service });
+        }
+        if (action !== 'open') return send(res, 400, { ok:false, error:'不支持的 opencode 操作' });
+        const service = await OPENCODE.start();
+        return send(res, service.available ? 200 : 503, { ok:service.available, service });
       }
       return send(res, 405, { ok:false, error:'Method Not Allowed' });
     }

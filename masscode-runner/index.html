@@ -2953,6 +2953,11 @@
   #header-center #btn-dsh.dsh-ready { border-color:#3e7654; background:#17271e; }
   #header-center #btn-dsh.dsh-ready::before { border-color:rgba(86,211,100,.28); background:rgba(86,211,100,.09); }
   #header-center #btn-dsh.on,#header-center #btn-study.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
+  #header-center #btn-dsh-restart { min-width:88px; }
+  #header-center #btn-dsh-restart::before { content:'▶'; color:#7fae7f; font-size:11px; line-height:1; }
+  #header-center #btn-dsh-restart:hover { border-color:#3f7a4f; background:#15241a; }
+  #header-center #btn-dsh-restart.on { border-color:#3f7a4f; background:#15241a; color:#9fd0a9; }
+  #header-center #btn-dsh-restart.busy { opacity:.55; pointer-events:none; border-color:#3f7a4f; background:#15241a; }
   #header-center #btn-knowledge-launch.on { border-color:#4c9675; background:#1b382d; box-shadow:inset 0 -2px #63d6a0; }
   #header-center #knowledge-launch,#header-center #site-menu { flex:0 0 auto; }
   #header-center #btn-knowledge-launch { padding:6px 10px; border-radius:7px 0 0 7px; }
@@ -3112,6 +3117,7 @@
   <div id="header-center" aria-label="学习与网址">
     <button class="header-action header-study" id="btn-study" title="打开学习工作台：网页、视频、代码和笔记自由分屏"><span>学习工作台</span></button>
     <button class="header-action" id="btn-dsh" title="打开由 CodeScope 托管的 DeepSeek Harness"><span>Harness</span></button>
+    <button class="header-action" id="btn-dsh-restart" title="在 CodeScope 内打开 opencode 的 Web 界面"><span>opencode</span></button>
     <div id="knowledge-launch">
       <button id="btn-knowledge-launch" type="button" title="在 CodeScope 内嵌阅读生成后的知识库"><span>知识库</span></button>
       <button id="knowledge-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="knowledge-launch-menu" title="选择知识库打开方式">⌄</button>
@@ -13954,6 +13960,7 @@ function dshLaunchUrl(service){
   return local ? service.url : (service.publicUrl||service.url);
 }
 let DSH_SERVICE=null;
+let opencodeActive=false;
 function renderDshService(service){
   if(!service)return;
   DSH_SERVICE=service;
@@ -13993,8 +14000,10 @@ async function openDsh(){
   }catch(error){alert('DeepSeek Harness 打开失败：'+(error.message||error));}
 }
 function closeDshWorkspace(){
+  opencodeActive=false;
   document.body.classList.remove('dsh-mode');
   $('btn-dsh').classList.remove('on');$('btn-dsh').setAttribute('aria-pressed','false');
+  $('btn-dsh-restart').classList.remove('on');
   setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
 }
 async function openDshExternal(){
@@ -14005,6 +14014,30 @@ async function openDshExternal(){
     if(!service.available)throw new Error(service.message||'DSH 未能启动');
     window.open(dshLaunchUrl(service),'codescope-dsh-external','noopener');
   }catch(error){alert('DeepSeek Harness 打开失败：'+(error.message||error));}
+}
+async function openOpencode(){
+  opencodeActive=true;
+  $('btn-dsh-restart').classList.add('on');
+  const btn=$('btn-dsh-restart');if(btn.classList.contains('busy'))return;
+  btn.classList.add('busy');btn.disabled=true;
+  try{
+    const response=await api('/api/integrations/opencode',{action:'open'});
+    const service=response.service;
+    if(!service||!service.available)throw new Error(service.message||'opencode 未能启动');
+    if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
+    if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
+    if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
+    if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
+    document.body.classList.remove('study-mode','office-mode','reading-mode','drawing-mode');
+    document.body.classList.add('dsh-mode');
+    $('btn-dsh').classList.add('on');$('btn-dsh').setAttribute('aria-pressed','true');
+    $('dsh-head-status').textContent=service.managed?'已连接 · CodeScope 托管':'已连接 opencode';
+    const frame=$('dsh-frame');
+    const url=dshLaunchUrl(service);
+    if(frame.src!==url){$('dsh-loading').classList.remove('hidden');frame.src=url;}
+    setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+  }catch(error){alert('opencode 打开失败：'+(error.message||error));}
+  finally{btn.classList.remove('busy');btn.disabled=false;}
 }
 async function loadEnv(refreshNow, quiet) {
   if (ENV_LOADING) return ENV_DATA;
@@ -14148,6 +14181,7 @@ $('btn-dsh').setAttribute('aria-pressed','false');
 $('btn-dsh').onclick=()=>document.body.classList.contains('dsh-mode')?closeDshWorkspace():openDsh();
 $('btn-env-dsh-open').onclick=openDsh;
 $('btn-env-dsh-restart').onclick=async()=>{try{renderDshService({...((ENV_DATA&&ENV_DATA.env&&ENV_DATA.env.dsh)||{}),state:'starting',message:'正在重启 DSH…'});await dshAction('restart');}catch(error){alert('DSH 重启失败：'+(error.message||error));}};
+$('btn-dsh-restart').onclick=()=>{if(opencodeActive){opencodeActive=false;closeDshWorkspace();}else openOpencode();};
 $('dsh-back').onclick=closeDshWorkspace;
 $('dsh-reload').onclick=()=>{const frame=$('dsh-frame');$('dsh-loading').classList.remove('hidden');frame.src=frame.src;};
 $('dsh-external').onclick=openDshExternal;
