@@ -2630,7 +2630,7 @@ function isStudyImage(body, type) {
   return false;
 }
 
-const READING_TEXT_EXTS = new Set(['.md','.markdown','.txt','.c','.h','.cpp','.hpp','.cc','.py','.js','.ts','.json','.yaml','.yml','.tex']);
+const READING_TEXT_EXTS = new Set(['.md','.markdown','.txt','.c','.h','.cpp','.hpp','.cc','.py','.js','.ts','.json','.yaml','.yml','.tex','.html','.htm']);
 const READING_DOCUMENT_EXTS = new Set(['.docx','.xlsx','.xls','.csv','.pptx']);
 const READING_WEB_EXTS = new Set(['.url']);
 const READING_ASSET_EXTS = new Set(['.pdf', ...READING_TEXT_EXTS, ...READING_DOCUMENT_EXTS, ...READING_WEB_EXTS]);
@@ -2656,7 +2656,7 @@ function readingFragmentInfo(rel, stat, project) {
     : (['.md','.markdown'].includes(ext) ? 'markdown'
       : (ext === '.docx' ? 'docx'
         : (['.xlsx','.xls','.csv'].includes(ext) ? 'sheet'
-          : (ext === '.pptx' ? 'slides' : (ext === '.url' ? 'web' : 'code')))));
+          : (ext === '.pptx' ? 'slides' : (['.html','.htm'].includes(ext) ? 'html' : (ext === '.url' ? 'web' : 'code'))))));
   let role = kind;
   if (kind === 'pdf') {
     if (/双语|bilingual|parallel/i.test(base)) role = 'bilingual';
@@ -3947,7 +3947,7 @@ const server = http.createServer(async (req, res) => {
       catch (_) { return send(res, 400, { ok:false, error:'上传信息格式错误' }); }
       const folder = info.folder ? readingPath(String(info.folder), true) : '';
       let base = path.basename(String(info.name || '')).trim(); const ext = path.extname(base).toLowerCase();
-      if ((info.folder && !folder) || !readingAssetPath((folder ? folder + '/' : '') + base) || (!READING_DOCUMENT_EXTS.has(ext) && ext !== '.pdf')) return send(res, 400, { ok:false, error:'仅支持 PDF、DOCX、XLSX、XLS、CSV 和 PPTX 文件' });
+      if ((info.folder && !folder) || !readingAssetPath((folder ? folder + '/' : '') + base) || (!READING_DOCUMENT_EXTS.has(ext) && ext !== '.pdf' && !['.html','.htm'].includes(ext))) return send(res, 400, { ok:false, error:'仅支持 PDF、DOCX、XLSX、XLS、CSV、PPTX 和 HTML 文件' });
       const dir = path.join(readingsDir(), folder || '.'); fs.mkdirSync(dir, { recursive:true });
       const stem = path.basename(base, ext); let target = path.join(dir, base), index = 2;
       while (fs.existsSync(target)) { base = stem + '-' + index + ext; target = path.join(dir, base); index += 1; }
@@ -3955,6 +3955,7 @@ const server = http.createServer(async (req, res) => {
       try {
         await officeStreamToFile(req, temp);
         if (ext === '.pdf') { const head = Buffer.alloc(5); const fd = fs.openSync(temp, 'r'); fs.readSync(fd, head, 0, 5, 0); fs.closeSync(fd); if (head.toString('ascii') !== '%PDF-') throw new Error('文件不是有效的 PDF'); }
+        else if (['.html','.htm'].includes(ext)) { const head = fs.readFileSync(temp, 'utf8').slice(0, 512).trimStart(); if (!head.startsWith('<')) throw new Error('文件不是有效的 HTML'); }
         else validateOfficeFile(temp, ext);
         fs.renameSync(temp, target);
         const rel = (folder ? folder + '/' : '') + base;
@@ -4448,13 +4449,15 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const folder = String(b.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
       const toFolder = String(b.toFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      const renameName = String(b.name || '').replace(/[\\/]/g, '').trim();
       const invalid = (value, allowEmpty) => !value ? !allowEmpty : value.split('/').some((seg) => !seg || seg === '.' || seg === '..');
-      if (invalid(folder, false) || invalid(toFolder, true)) return send(res, 400, { ok: false, error: '文件夹路径不合法' });
+      if (invalid(folder, false) || invalid(toFolder, true) || (renameName && (renameName === '.' || renameName === '..'))) return send(res, 400, { ok: false, error: '文件夹路径不合法' });
       if (toFolder === folder || toFolder.startsWith(folder + '/')) return send(res, 400, { ok: false, error: '不能把文件夹移动到自身内部' });
       const codeRoot = path.resolve(path.join(vaultPath(), 'code'));
       const source = path.resolve(codeRoot, folder);
       const destParent = toFolder ? path.resolve(codeRoot, toFolder) : codeRoot;
-      const targetRel = (toFolder ? toFolder + '/' : '') + path.posix.basename(folder);
+      const baseName = renameName || path.posix.basename(folder);
+      const targetRel = (toFolder ? toFolder + '/' : '') + baseName;
       const target = path.resolve(codeRoot, targetRel);
       if (!source.startsWith(codeRoot + path.sep) || (destParent !== codeRoot && !destParent.startsWith(codeRoot + path.sep)) || !target.startsWith(codeRoot + path.sep)) return send(res, 400, { ok: false, error: '路径越界' });
       if (!fs.existsSync(source) || !fs.statSync(source).isDirectory()) return send(res, 404, { ok: false, error: '文件夹不存在' });

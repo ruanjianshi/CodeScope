@@ -208,7 +208,8 @@ function createLspService(options = {}) {
       ? ['-xc++', '-std=c++17', '-I.']
       : hasC ? ['-xc', '-std=c11', '-I.'] : ['-I.'];
     fs.writeFileSync(path.join(root, 'compile_flags.txt'), flags.join('\n') + '\n', 'utf8');
-    return { key, root, files, selected: files.find((file) => file.index === selectedIndex) };
+    const signature = shortHash(files.map((file) => file.code).join('\u0000'));
+    return { key, root, files, signature, selected: files.find((file) => file.index === selectedIndex) };
   }
 
   function mapLocation(location, workspace) {
@@ -257,7 +258,12 @@ function createLspService(options = {}) {
     if (!workspace.selected) return { ok: false, available: true, error: '片段文件不存在' };
     const sessionKey = config.id + '|' + workspace.root;
     let session = sessions.get(sessionKey);
-    if (!session) { session = new LspSession(config, workspace.root); sessions.set(sessionKey, session); }
+    // 会话内容变化后 clangd 可能停留在旧翻译单元（头文件改动等），导致陈旧/误报诊断。
+    // 请求诊断时若物化内容签名不一致，丢弃旧会话，用当前内容重建一个全新 clangd 会话。
+    if (session && String(input.action || 'hover') === 'diagnostics' && session.signature !== workspace.signature) {
+      session.close(); sessions.delete(sessionKey); session = null;
+    }
+    if (!session) { session = new LspSession(config, workspace.root); session.signature = workspace.signature; sessions.set(sessionKey, session); }
     try {
       await session.start();
       for (const file of workspace.files) session.sync(file.uri, languageId(file.language, file.filename), file.code);

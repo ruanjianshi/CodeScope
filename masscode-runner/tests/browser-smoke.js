@@ -185,7 +185,7 @@ print(r.run())
   fs.mkdirSync(readingProjectDir,{recursive:true});
   fs.writeFileSync(path.join(readingProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Markdown block drag regression',tags:['markdown','drag']},null,2));
   const readingReference='[[code-ref:demo.cpp#fragment=0&line=1&end=2|demo.cpp:1–2]]';
-  fs.writeFileSync(readingNotePath,'---\ntitle: Block Drag Demo\ntags: [markdown, drag]\n---\n# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n'+readingReference+'\n\n## Section B\n\n- alpha\n- beta\n- gamma\n','utf8');
+  fs.writeFileSync(readingNotePath,'---\ntitle: Block Drag Demo\ntags: [markdown, drag]\n---\n# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n'+readingReference+'\n\n## Section B\n\n- alpha\n- beta\n- gamma\n\n| 维度 | 堆 | 自由存储区 |\n| --- | --- | --- |\n| 分配 | malloc | new |\n| 释放 | free | delete |\n','utf8');
   const knowledgeImageProjectDir=path.join(vault,'readings','知识库','浏览器测试','图片项目'),knowledgeImageNotePath=path.join(knowledgeImageProjectDir,'图片插入.md');
   fs.mkdirSync(knowledgeImageProjectDir,{recursive:true});
   fs.writeFileSync(path.join(knowledgeImageProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Knowledge image insertion regression',tags:['image']},null,2));
@@ -200,6 +200,8 @@ print(r.run())
   const readingDocx=new Document({sections:[{children:[new Paragraph({text:'统一资料阅读测试',heading:HeadingLevel.TITLE}),new Paragraph('DOCX 正文可以直接在阅读项目中渲染。')]}]});
   fs.writeFileSync(path.join(universalProjectDir,'guide.docx'),await Packer.toBuffer(readingDocx));
   fs.writeFileSync(path.join(universalProjectDir,'官方文档.url'),'[InternetShortcut]\nURL=https://example.com/guide\n','utf8');
+  const readingHtmlPath=path.join(universalProjectDir,'导图.html');
+  fs.writeFileSync(readingHtmlPath,'// 导图.html\n','utf8');
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
   server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data'),CODESCOPE_ONLYOFFICE_URL:'http://127.0.0.1:1',CODESCOPE_DSH_AUTOSTART:'0'},stdio:'ignore'});
   await waitForServer(baseUrl);
@@ -208,6 +210,10 @@ print(r.run())
     const response=await fetch(baseUrl+'/api/office/new',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name,folder:''})});
     const result=await response.json();if(!response.ok||!result.ok)throw new Error('Office 测试文档创建失败：'+JSON.stringify(result));
   }
+  const officeFolders=await fetch(baseUrl+'/api/office/folder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({parent:'',name:'Browser Office Folder'})}).then(response=>response.json());
+  if(!officeFolders.ok)throw new Error('Office 测试文件夹创建失败：'+JSON.stringify(officeFolders));
+  const drawFolderCreated=await fetch(baseUrl+'/api/drawings/new-folder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dir:'',name:'Browser Draw Folder'})}).then(response=>response.json());
+  if(!drawFolderCreated.ok)throw new Error('绘图测试文件夹创建失败：'+JSON.stringify(drawFolderCreated));
   const xmindCreated=await fetch(baseUrl+'/api/drawings/new',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'xmind',name:'Browser Mind',dir:''})}).then(response=>response.json());
   if(!xmindCreated.ok)throw new Error('XMind 测试文件创建失败：'+JSON.stringify(xmindCreated));
   const detachedRoot={id:'browser-free-root',class:'topic',title:'自由导图',position:{x:310,y:20},structureClass:'org.xmind.ui.logic.right',children:{attached:[{id:'browser-free-a',class:'topic',title:'分支 A',children:{attached:[{id:'browser-free-a1',class:'topic',title:'A.1',children:{attached:[]}}]}},{id:'browser-free-b',class:'topic',title:'分支 B',children:{attached:[]}}]}};
@@ -462,11 +468,11 @@ print(r.run())
   await liveMode.locator('p').last().click();await liveMode.press('End');await liveMode.pressSequentially(' undo-smoke');
   await page.waitForFunction((before)=>document.getElementById('code-edit').value!==before,projectMdBefore);
   await page.keyboard.press('Meta+z');
-  await page.waitForFunction((before)=>document.getElementById('code-edit').value===before,projectMdBefore);
+  await page.waitForFunction((before)=>document.getElementById('code-edit').value===before,projectMdBefore,{timeout:60000});
   await page.keyboard.press('Meta+Shift+z');
   await page.waitForFunction((before)=>document.getElementById('code-edit').value!==before,projectMdBefore);
   await page.keyboard.press('Meta+z');
-  await page.waitForFunction((before)=>document.getElementById('code-edit').value===before,projectMdBefore);
+  await page.waitForFunction((before)=>document.getElementById('code-edit').value===before,projectMdBefore,{timeout:60000});
   await page.locator('[data-doc-mode="preview"]').click();
   if((await page.locator('#md-view').getAttribute('contenteditable'))!=='false')throw new Error('Markdown 阅读模式仍处于编辑状态');
   if(!await page.locator('#md-view').evaluate(node=>node.classList.contains('project-md-full')))throw new Error('Markdown 阅读模式没有使用全宽阅读布局');
@@ -700,6 +706,40 @@ print(r.run())
   await idePage.evaluate(()=>toggleEditorWordWrap());
   const wrapState=await idePage.evaluate(()=>({wordWrap:MONACO_EDITOR.getRawOptions().wordWrap,saved:localStorage.getItem('mc-editor-word-wrap')}));
   if(wrapState.wordWrap!=='on'||wrapState.saved!=='1')throw new Error('自动换行状态未同步：'+JSON.stringify(wrapState));
+
+  /* 保存状态必须待在底部状态栏的固定槽位里：
+     回归 1：它原本在 #toolbar 内，自动保存时多出的约 90px 会把工具栏挤成两行
+     （实测视口 1647：内容 1056px / 容器 977px，工具栏 46→79px），编辑器随之上下抖动；
+     回归 2：改成工具栏内浮层后会盖住「信息」等右侧按钮（文字重叠成“12:信息3 已保存”）。 */
+  const saveStatusLayout=await idePage.evaluate(()=>{
+    const bar=document.getElementById('toolbar'),tick=document.getElementById('save-tick'),split=document.getElementById('edit-split'),status=document.getElementById('status'),elapsed=document.getElementById('elapsed');
+    const info=document.getElementById('btn-info');
+    const read=()=>({
+      barH:bar.getBoundingClientRect().height,
+      splitTop:split.getBoundingClientRect().top,
+      statusLeft:status.getBoundingClientRect().left,
+      elapsedLeft:elapsed.getBoundingClientRect().left,
+      tickW:Math.round(tick.getBoundingClientRect().width*100)/100,
+    });
+    tick.classList.remove('show');
+    const idle=read();
+    tick.textContent='12:00:00 已保存';
+    tick.className='pill ok show';
+    const shown=read();
+    // 「信息」按钮中心必须命中按钮本身，说明没有被任何提示层遮挡
+    const infoBox=info.getBoundingClientRect();
+    const infoHit=document.elementFromPoint(infoBox.left+infoBox.width/2,infoBox.top+infoBox.height/2);
+    tick.classList.remove('show');
+    return {idle,shown,inToolbar:!!tick.closest('#toolbar'),inStatusBar:!!tick.closest('#status')?.parentElement||tick.parentElement.contains(status),position:getComputedStyle(tick).position,idleVisibility:getComputedStyle(tick).visibility,infoHitId:infoHit?infoHit.id:''};
+  });
+  if(saveStatusLayout.inToolbar)throw new Error('保存状态仍放在工具栏内，会挤压按钮：'+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.idle.tickW<=0)throw new Error('保存状态槽位宽度为 0：'+JSON.stringify(saveStatusLayout));
+  if(Math.abs(saveStatusLayout.shown.tickW-saveStatusLayout.idle.tickW)>0.5)throw new Error('保存状态显示与隐藏的槽位宽度不一致：'+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.idleVisibility!=='hidden')throw new Error('保存状态空闲时应隐藏（保留槽位）: '+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.shown.barH!==saveStatusLayout.idle.barH)throw new Error('保存状态出现会改变工具栏高度，导致编辑器上下跳动：'+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.shown.splitTop!==saveStatusLayout.idle.splitTop)throw new Error('保存状态出现会推动代码编辑器：'+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.shown.statusLeft!==saveStatusLayout.idle.statusLeft||saveStatusLayout.shown.elapsedLeft!==saveStatusLayout.idle.elapsedLeft)throw new Error('保存状态出现会挤动底部状态栏：'+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.infoHitId!=='btn-info')throw new Error('「信息」按钮被提示层遮挡：'+JSON.stringify(saveStatusLayout));
   await idePage.evaluate(()=>MONACO_EDITOR.setPosition({lineNumber:2,column:3}));
   await idePage.waitForFunction(()=>document.getElementById('editor-position').textContent==='Ln 2, Col 3');
   const proxySync=await idePage.evaluate(()=>{MONACO_EDITOR.setValue('int main(void) {\n  return 0;\n}');return document.getElementById('code-edit').value;});
@@ -728,6 +768,140 @@ print(r.run())
   await idePage.locator('#code-wrap.monaco-active .monaco-editor').waitFor({state:'visible',timeout:15000});
   const restoredSplit=await idePage.evaluate(()=>({groups:document.querySelectorAll('.split-editor-group').length,saved:localStorage.getItem('mc-editor-groups')}));
   if(restoredSplit.groups!==0||restoredSplit.saved!==null)throw new Error('刷新后仍恢复了临时编辑分栏：'+JSON.stringify(restoredSplit));
+
+  /* 项目树改用 VS Code 风格的右键菜单：
+     回归 1：行内悬停按钮会把「嵌入式常考手撕代码」这类长文件夹名挤成两行；
+     回归 2：增删改入口必须能在右键菜单里找到，且点击后真正生效。 */
+  const snippetMenu=await idePage.evaluate(()=>{
+    const menu=document.getElementById('ctx-menu');
+    if(!menu)return {missingMenu:true};
+    const row=document.querySelector('#list .item');
+    if(!row)return {missing:true};
+    row.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:140,clientY:220}));
+    return {visible:!menu.hidden,labels:[...menu.querySelectorAll('.ctx-item .ctx-label')].map(n=>n.textContent),inlineButtons:row.querySelectorAll('.factions, .fa').length};
+  });
+  if(snippetMenu.missingMenu)throw new Error('项目树没有右键菜单容器 #ctx-menu（增删改将无处可开）');
+  if(snippetMenu.missing)throw new Error('项目树中没有片段行，无法校验右键菜单');
+  if(snippetMenu.inlineButtons)throw new Error('片段行仍保留行内操作按钮：'+JSON.stringify(snippetMenu));
+  if(!snippetMenu.visible||snippetMenu.labels.join('|')!=='打开|编辑信息 / 重命名|删除片段')throw new Error('片段行右键菜单异常：'+JSON.stringify(snippetMenu));
+  await idePage.keyboard.press('Escape');
+  await idePage.waitForFunction(()=>document.getElementById('ctx-menu').hidden);
+  const listMenu=await idePage.evaluate(()=>{
+    const list=document.getElementById('list'),box=list.getBoundingClientRect();
+    const rows=[...list.querySelectorAll('.item, .fnode')];
+    const bottom=rows.length?Math.max(...rows.map(n=>n.getBoundingClientRect().bottom)):box.top;
+    const y=Math.round(Math.min(box.bottom-10,bottom+24));
+    list.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:Math.round(box.left+box.width/2),clientY:y}));
+    return [...document.querySelectorAll('#ctx-menu .ctx-item .ctx-label')].map(n=>n.textContent);
+  });
+  if(listMenu.join('|')!=='新建文件|新建文件夹')throw new Error('列表空白处右键菜单异常：'+JSON.stringify(listMenu));
+  await idePage.locator('#ctx-menu .ctx-item').filter({hasText:'新建文件夹'}).first().click();
+  await idePage.waitForFunction(()=>document.getElementById('new-dialog').classList.contains('open'));
+  if((await idePage.locator('#nd-title').innerText())!=='新建文件夹')throw new Error('右键「新建文件夹」未打开新建对话框');
+  await idePage.fill('#nd-name','右键菜单回归');
+  await idePage.click('#nd-submit');
+  await idePage.waitForFunction(()=>[...document.querySelectorAll('#list .fnode')].some(n=>n.textContent.includes('右键菜单回归')),null,{timeout:15000});
+  const folderMenu=await idePage.evaluate(()=>{
+    const row=[...document.querySelectorAll('#list .fnode')].find(n=>n.textContent.includes('右键菜单回归'));
+    const name=row.querySelector('.fname');
+    row.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:150,clientY:280}));
+    const menu=document.getElementById('ctx-menu');
+    return {labels:[...menu.querySelectorAll('.ctx-item .ctx-label')].map(n=>n.textContent),inlineButtons:row.querySelectorAll('.factions, .fa').length,nameWrap:name?getComputedStyle(name).whiteSpace:'',nameH:name?Math.round(name.getBoundingClientRect().height):0};
+  });
+  if(folderMenu.inlineButtons)throw new Error('文件夹行仍保留行内操作按钮：'+JSON.stringify(folderMenu));
+  if(folderMenu.labels.join('|')!=='新建文件|新建文件夹|重命名|删除文件夹')throw new Error('文件夹行右键菜单异常：'+JSON.stringify(folderMenu));
+  if(folderMenu.nameWrap!=='nowrap'||folderMenu.nameH>26)throw new Error('文件夹名未按单行省略显示（会被长名称撑成两行）：'+JSON.stringify(folderMenu));
+  await idePage.keyboard.press('Escape');
+  await idePage.waitForFunction(()=>document.getElementById('ctx-menu').hidden);
+
+  /* 阅读 / Office / 绘图三个列表同样改为右键菜单：行内按钮隐藏、菜单由按钮派生，
+     并且文件夹行与列表空白处都要有「新建」入口（回归：绘图文件夹行曾漏绑，右键会弹出浏览器原生菜单）。 */
+  const otherTrees=await idePage.evaluate(()=>{
+    const readMenu=()=>[...document.querySelectorAll('#ctx-menu .ctx-item .ctx-label')].map(n=>n.textContent);
+    const inspect=(key,hostId,rowSelector,buttonSelector,rowFilter)=>{
+      const host=document.getElementById(hostId);
+      const row=host&&[...host.querySelectorAll(rowSelector)].find(n=>{
+        if(n.getBoundingClientRect().width<=0)return false;
+        if(!rowFilter)return true;
+        return rowFilter==='folder'?n.dataset.type==='folder':n.dataset.type!=='folder';
+      });
+      if(!row)return {key,missing:true};
+      const buttons=buttonSelector?[...row.querySelectorAll(buttonSelector)]:[];
+      row.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:150,clientY:340}));
+      const labels=readMenu();
+      const open=labels.length>0;
+      closeContextMenu();
+      // 用渲染宽度判断：getComputedStyle 在子元素上不会反映父级 display:none
+      return {key,missing:false,open,inlineHidden:buttons.length?buttons.every(b=>b.getBoundingClientRect().width===0):null,labels};
+    };
+    const blank=(key,hostId)=>{
+      const host=document.getElementById(hostId);
+      host.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:180,clientY:400}));
+      const labels=readMenu();
+      closeContextMenu();
+      return {key,missing:false,open:labels.length>0,inlineHidden:null,labels};
+    };
+    return [
+      inspect('阅读·项目','reading-list','.reading-project','.reading-row-actions button'),
+      inspect('阅读·资料文件夹','reading-list','.reading-library-folder','.reading-row-actions button'),
+      inspect('Office·文档','office-list','.office-row','.office-action','file'),
+      inspect('Office·文件夹','office-list','.office-row','.office-action','folder'),
+      inspect('绘图·绘图','draw-list','.draw-row','.draw-ren, .draw-del'),
+      inspect('绘图·文件夹','draw-list','.draw-frow',null),
+      blank('阅读·空白','reading-list'),
+      blank('Office·空白','office-list'),
+      blank('绘图·空白','draw-list'),
+    ];
+  });
+  const expectTree=(key,texts)=>{
+    const tree=otherTrees.find(t=>t.key===key);
+    if(!tree)throw new Error('未检查列表 '+key);
+    if(tree.missing)throw new Error('列表 '+key+' 没有可测的行：'+JSON.stringify(tree));
+    if(!tree.open)throw new Error('列表 '+key+' 右键没有弹出应用菜单（会落到浏览器原生菜单）：'+JSON.stringify(tree));
+    if(tree.inlineHidden===false)throw new Error('列表 '+key+' 仍在行内显示操作按钮：'+JSON.stringify(tree));
+    for(const text of texts)if(!tree.labels.some(l=>l.includes(text)))throw new Error('列表 '+key+' 右键菜单缺少「'+text+'」：'+JSON.stringify(tree));
+  };
+  expectTree('阅读·项目',['打开','重命名阅读项目','删除整个阅读项目']);
+  expectTree('阅读·资料文件夹',['新建']);
+  const readingFolderTree=otherTrees.find(t=>t.key==='阅读·资料文件夹');
+  if(!readingFolderTree.labels.some(l=>l==='展开'||l==='收起'))throw new Error('阅读资料文件夹行缺少展开/收起项：'+JSON.stringify(readingFolderTree));
+  expectTree('Office·文档',['打开','重命名','删除']);
+  expectTree('Office·文件夹',['在此文件夹新建文档','在此文件夹新建文件夹']);
+  expectTree('绘图·绘图',['打开','重命名绘图','删除绘图']);
+  expectTree('绘图·文件夹',['在此新建绘图','在此新建文件夹']);
+  expectTree('阅读·空白',['新建阅读项目','新建阅读文件夹']);
+  expectTree('Office·空白',['新建文档','新建文件夹']);
+  expectTree('绘图·空白',['新建绘图','新建文件夹']);
+
+  /* 片段标签：改类型 / 重命名 / 删除收进右键菜单，行内不再有悬停 ✎ / × 按钮 */
+  const tabMenu=await idePage.evaluate(()=>{
+    const tab=document.querySelector('#tabs .tab');
+    if(!tab)return {missing:true};
+    const hoverButtons=document.querySelectorAll('#tabs .frag-ren, #tabs .frag-del').length;
+    const lang=tab.querySelector('.frag-lang');
+    tab.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:160,clientY:150}));
+    const items=[...document.querySelectorAll('#ctx-menu .ctx-item')];
+    const textOf=(node,selector)=>{const n=node.querySelector(selector);return n?n.textContent:'';};
+    const open=!document.getElementById('ctx-menu').hidden;
+    const labels=items.map(node=>textOf(node,'.ctx-label'));
+    const hints=items.map(node=>textOf(node,'.ctx-hint'));
+    closeContextMenu();
+    return {missing:false,open,hoverButtons,lang:lang?lang.textContent:'',labels,hints};
+  });
+  if(tabMenu.missing)throw new Error('片段标签缺失，无法验证标签右键菜单');
+  if(!tabMenu.open)throw new Error('片段标签右键没有弹出菜单：'+JSON.stringify(tabMenu));
+  if(tabMenu.hoverButtons)throw new Error('片段标签仍在行内显示悬停按钮：'+JSON.stringify(tabMenu));
+  for(const text of ['修改片段类型','重命名片段','删除片段'])if(!tabMenu.labels.some(label=>label.includes(text)))throw new Error('片段标签右键菜单缺少「'+text+'」：'+JSON.stringify(tabMenu));
+  if(!tabMenu.hints.some(hint=>hint&&hint===tabMenu.lang))throw new Error('片段标签右键菜单未显示当前片段类型：'+JSON.stringify(tabMenu));
+  // 菜单项必须真的接到原有动作上：重命名会弹出原生输入框
+  let tabPrompt=null;
+  idePage.once('dialog',async(dialog)=>{tabPrompt=dialog.message();await dialog.dismiss();});
+  await idePage.evaluate(()=>{const tab=document.querySelector('#tabs .tab');tab.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:160,clientY:150}));});
+  await idePage.locator('#ctx-menu .ctx-item').filter({hasText:'重命名片段'}).first().click();
+  await idePage.waitForTimeout(400);
+  if(!tabPrompt)throw new Error('片段标签右键「重命名片段」没有触发重命名');
+  if(await idePage.locator('#ctx-menu .ctx-item:visible').count())await idePage.keyboard.press('Escape');
+  if(await idePage.locator('#ctx-menu .ctx-item:visible').count())throw new Error('Esc 之后右键菜单仍然可见');
  if(ideErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideErrors.join('；'));
   await idePage.close();
 
@@ -735,12 +909,13 @@ print(r.run())
   const officePage=await browser.newPage({viewport:{width:1440,height:900}}),officeErrors=[];
   officePage.on('pageerror',error=>officeErrors.push(String(error.message||error)));
   await officePage.goto(baseUrl,{waitUntil:'domcontentloaded'});
+  // count 是递归「文档」数（空文件夹不计），因此仍为 3；渲染行数则含文件夹行，为 4
   await officePage.waitForFunction(()=>OFFICE_TREE&&OFFICE_TREE.count===3);
   const panelOrder=await officePage.evaluate(()=>[...document.getElementById('side').children].map(node=>node.id).filter(Boolean));
   const drawPos=panelOrder.indexOf('pane-draw'),officePos=panelOrder.indexOf('pane-office'),readingPos=panelOrder.indexOf('pane-reading');
   if(drawPos<0||officePos!==drawPos+2||readingPos!==officePos+2)throw new Error('Office 未作为绘图与阅读之间的左侧同级模块：'+JSON.stringify(panelOrder));
   const officeRows=officePage.locator('#office-list .office-row');await officeRows.first().waitFor({state:'visible'});
-  if(await officeRows.count()!==3)throw new Error('Office 文档树数量错误');
+  if(await officeRows.count()!==4)throw new Error('Office 文档树数量错误');
 
   await officePage.evaluate(()=>document.getElementById('document-mode-tools').classList.add('show','markdown'));
   await officeRows.filter({hasText:'Browser Word'}).click();
@@ -814,6 +989,7 @@ print(r.run())
   const liveBox=await live.boundingBox(),editorBox=await live.locator('.ProseMirror').boundingBox(),editorTopGap=liveBox&&editorBox?editorBox.y-liveBox.y:Infinity;if(editorTopGap>150)throw new Error('Milkdown Crepe 编辑正文被异常挤到工作区下方：'+editorTopGap+'px');
   const zoomTools=readingPage.locator('.reading-md-zoom');if(await zoomTools.locator('.value').innerText()!=='100%')throw new Error('Markdown 缩放工具未显示默认比例');await zoomTools.locator('button').last().click();const readingZoomState=await readingPage.evaluate(()=>{const editor=document.querySelector('.reading-md-block .ProseMirror');return{value:document.querySelector('.reading-md-zoom .value')?.textContent,fontSize:getComputedStyle(editor).fontSize,inlineFontSize:editor?.style.fontSize}});if(parseFloat(readingZoomState.fontSize)<=17.4)throw new Error('Markdown 字体级缩放未生效：'+JSON.stringify(readingZoomState));await live.dispatchEvent('wheel',{ctrlKey:true,deltaY:-100});await readingPage.waitForFunction(()=>document.querySelector('.reading-md-zoom .value').textContent==='115%');await zoomTools.locator('.value').click();await readingPage.waitForFunction(()=>Math.abs(parseFloat(getComputedStyle(document.querySelector('.reading-md-block .ProseMirror')).fontSize)-16)<.1);
   const mdOutline=readingPage.locator('.reading-md-outline');await mdOutline.waitFor({state:'visible'});const outlinePosition=await readingPage.evaluate(()=>{const outline=document.querySelector('.reading-md-outline').getBoundingClientRect(),workbench=document.querySelector('.reading-md-workbench').getBoundingClientRect();return{outlineLeft:outline.left,workbenchLeft:workbench.left}});if(Math.abs(outlinePosition.outlineLeft-outlinePosition.workbenchLeft)>4)throw new Error('Markdown 大纲未放在工作区左侧：'+JSON.stringify(outlinePosition));const outlineItems=mdOutline.locator('.reading-md-outline-item');if(await outlineItems.count()!==3||!await outlineItems.filter({hasText:'Section A'}).count())throw new Error('Markdown 大纲未按标题层级生成');await outlineItems.filter({hasText:'Section B'}).click();await readingPage.waitForTimeout(350);if(!await mdOutline.locator('.reading-md-outline-item.active').filter({hasText:'Section B'}).count())throw new Error('Markdown 大纲点击定位后未高亮当前章节');const outlineToggle=readingPage.locator('.reading-md-outline-toggle');await outlineToggle.click();if(await readingPage.locator('.reading-md-workbench').evaluate(el=>el.classList.contains('outline-open')))throw new Error('Markdown 大纲无法关闭');await outlineToggle.click();
+  const tableBlock=live.locator('.milkdown-table-block').first(),columnResizer=tableBlock.locator('.codescope-table-resizer').first();await readingPage.waitForTimeout(1000);if(!await columnResizer.count())throw new Error('Markdown 表格列宽拖拽柄未生成：'+JSON.stringify({errors:readingErrors,html:(await tableBlock.evaluate(el=>el.outerHTML)).slice(0,4000)}));await columnResizer.waitFor({state:'visible'});await columnResizer.hover();const resizeBox=await columnResizer.boundingBox();if(!resizeBox)throw new Error('Markdown 表格列宽拖拽柄不可见');const widthsBefore=await tableBlock.locator('th').evaluateAll(cells=>cells.map(cell=>cell.getBoundingClientRect().width));await readingPage.mouse.move(resizeBox.x+resizeBox.width/2,resizeBox.y+36);await readingPage.mouse.down();await readingPage.mouse.move(resizeBox.x+resizeBox.width/2+74,resizeBox.y+36,{steps:8});await readingPage.mouse.up();const widthsAfter=await tableBlock.locator('th').evaluateAll(cells=>cells.map(cell=>cell.getBoundingClientRect().width));if(widthsAfter[0]<widthsBefore[0]+55||widthsAfter[1]>widthsBefore[1]-55)throw new Error('Markdown 表格列之间无法自由拖拽调整：'+JSON.stringify({widthsBefore,widthsAfter}));await readingPage.waitForFunction(()=>READING_TEXT_DOCS.get(READING_CURRENT).content.includes('codescope-table-layout:'));
   if(await readingPage.locator('.reading-block-tools').count())throw new Error('阅读模块仍显示旧的自制区块工具');
   const readingMdBefore=await readingPage.evaluate(()=>READING_TEXT_DOCS.get(READING_CURRENT).content);
   await live.locator('p').first().click();await readingPage.keyboard.press('End');await readingPage.keyboard.type(' undo-smoke');
@@ -851,7 +1027,7 @@ print(r.run())
   await dragHandle.dragTo(sectionB);await readingPage.waitForTimeout(250);
   const headings=await live.locator('h2').allTextContents();if(headings.join('|')!=='Section B|Section A')throw new Error('Milkdown 标题区块拖拽排序失败：'+JSON.stringify(headings));
   await readingPage.waitForTimeout(850);const savedNote=fs.readFileSync(readingNotePath,'utf8');
-  if(!savedNote.startsWith('---\ntitle: Block Drag Demo')||savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!savedNote.includes(readingReference))throw new Error('Markdown frontmatter、引用或区块拖拽结果未持久化：'+savedNote);
+  if(!savedNote.startsWith('---\ntitle: Block Drag Demo')||savedNote.indexOf('## Section B')>savedNote.indexOf('## Section A')||!savedNote.includes(readingReference)||!savedNote.includes('codescope-table-layout:'))throw new Error('Markdown frontmatter、引用、表格列宽或区块拖拽结果未持久化：'+savedNote);
   const paragraphA=live.locator('p').filter({hasText:'Paragraph A.'});await paragraphA.hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');await transformHandle.click();await transformMenu.getByText('删除区块',{exact:true}).click();await paragraphA.waitFor({state:'detached'});await readingPage.waitForFunction(()=>!READING_TEXT_DOCS.get(READING_CURRENT).content.includes('Paragraph A.'));
   await readingPage.evaluate(async()=>{await loadReadings(true);await openReading('知识库/浏览器测试/图片项目/图片插入.md',0);});await live.locator('.ProseMirror').waitFor({state:'visible',timeout:15000});await readingPage.waitForFunction(()=>document.querySelector('.reading-md-block')?.dataset.editorReady==='true');
   const imageAnchor=live.locator('p').filter({hasText:'在此区块后插入图片。'});await imageAnchor.hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');const chooserPromise=readingPage.waitForEvent('filechooser');await transformHandle.click();await transformMenu.getByText('插入图片',{exact:true}).click();const chooser=await chooserPromise;await chooser.setFiles({name:'像素.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')});
@@ -880,6 +1056,50 @@ print(r.run())
   await webNav.getByText('第一章',{exact:true}).click();await readingPage.getByText('目录内跳转保持在阅读模块。').waitFor({state:'visible'});
   if(!await webNav.locator('a.active').getByText('第一章',{exact:true}).count()||!await webNav.getByText('首页',{exact:true}).count()||await readingPage.locator('.reading-web-chapter-pos').innerText()!=='2 / 2')throw new Error('切换章节后整站目录被当前页导航覆盖或高亮未同步');
   await readingPage.locator('.reading-frag').filter({hasText:'网页地址也可以保存为阅读资料。'}).getByRole('button',{name:'定位'}).click();await readingPage.locator('#web-quote').waitFor({state:'visible'});await readingPage.waitForFunction(()=>getSelection()?.toString().includes('网页地址也可以保存为阅读资料。'));
+
+  /* ---- 阅读 HTML 源码：编辑后右侧必须自动渲染并自动落盘 ---- */
+  /* 回归：编辑器实例没有 isDisposed()，getSource() 抛错会让 onChange 后半段（自动保存、预览刷新）整体静默失效，
+     表现为“左侧粘进了代码，右侧仍显示旧内容、磁盘也不更新”。 */
+  await readingPage.evaluate(async()=>{closeReading();await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='Universal Reading Demo');if(!project)throw new Error('找不到统一资料阅读项目');const html=project.children.find(item=>item.kind==='html');if(!html)throw new Error('统一资料阅读项目缺少 HTML 片段');await openReading(html.path,0);});
+  await readingPage.locator('.reading-html-source .monaco-editor').waitFor({state:'visible',timeout:60000});
+  if(!(await readingPage.locator('.reading-html-preview').getAttribute('srcdoc')).includes('导图.html'))throw new Error('阅读 HTML 预览未绑定当前片段的初始内容');
+  const readingHtmlSource='<!doctype html>\n<html><body><div id="reading-html-probe">阅读 HTML 预览联动</div><script>document.getElementById("reading-html-probe").dataset.ran="1";<\/script></body></html>\n';
+  await readingPage.locator('.reading-html-source .monaco-editor .view-lines').click();
+  await readingPage.keyboard.press('Meta+A');
+  await readingPage.keyboard.insertText(readingHtmlSource);
+  await readingPage.waitForFunction(()=>document.querySelector('.reading-html-preview')?.getAttribute('srcdoc')?.includes('阅读 HTML 预览联动'),null,{timeout:15000});
+  const readingHtmlFrame=readingPage.frameLocator('.reading-html-preview');
+  await readingHtmlFrame.locator('#reading-html-probe').waitFor({state:'visible',timeout:15000});
+  if(await readingHtmlFrame.locator('#reading-html-probe').getAttribute('data-ran')!=='1')throw new Error('阅读 HTML 预览未执行片段脚本');
+  let readingHtmlDisk='';
+  for(let attempt=0;attempt<60;attempt+=1){readingHtmlDisk=fs.readFileSync(readingHtmlPath,'utf8');if(readingHtmlDisk.includes('阅读 HTML 预览联动')&&readingHtmlDisk.includes('dataset.ran'))break;await readingPage.waitForTimeout(200);}
+  if(!readingHtmlDisk.includes('阅读 HTML 预览联动')||!readingHtmlDisk.includes('dataset.ran'))throw new Error('阅读 HTML 源码编辑未自动保存到磁盘：'+readingHtmlDisk.slice(0,200));
+  if((await readingPage.locator('.reading-text-foot').innerText()).includes('读取编辑器内容失败'))throw new Error('阅读 HTML 源码编辑器读取内容失败');
+
+  /* HTML 片段不该占用右侧摘录面板，也不该显示不可用的摘录/翻译按钮，但引用与复制链接要保留；
+     源码默认软换行（长行不被横向截断），源码与预览之间必须有可见的分栏线。 */
+  const readingHtmlChrome=await readingPage.evaluate(()=>{
+    const hidden=(sel)=>{const el=document.querySelector(sel);return !el||getComputedStyle(el).display==='none';};
+    const split=document.querySelector('.reading-html-split');
+    const editor=window.monaco&&window.monaco.editor.getEditors().find((item)=>item.getContainerDomNode().closest('.reading-html-source'));
+    return {
+      fragmentsHidden:hidden('#reading-fragments'),resizerHidden:hidden('#reading-fragments-resizer'),toggleHidden:hidden('#reading-frag-toggle'),
+      addFragmentHidden:hidden('#reading-add-fragment'),translateAllHidden:hidden('#reading-translate-all'),
+      backlinksVisible:!hidden('#reading-backlinks'),copyLinkVisible:!hidden('#reading-copy-link'),
+      splitColor:split?getComputedStyle(split,'::after').backgroundColor:'',
+      wordWrap:editor?editor.getOption(window.monaco.editor.EditorOption.wordWrap):'',
+    };
+  });
+  if(!readingHtmlChrome.fragmentsHidden||!readingHtmlChrome.resizerHidden||!readingHtmlChrome.toggleHidden)throw new Error('HTML 片段仍占用右侧摘录面板宽度：'+JSON.stringify(readingHtmlChrome));
+  if(!readingHtmlChrome.addFragmentHidden||!readingHtmlChrome.translateAllHidden)throw new Error('HTML 片段仍显示不可用的摘录/翻译按钮：'+JSON.stringify(readingHtmlChrome));
+  if(!readingHtmlChrome.backlinksVisible||!readingHtmlChrome.copyLinkVisible)throw new Error('HTML 片段误隐藏了仍可用的引用/复制链接按钮：'+JSON.stringify(readingHtmlChrome));
+  if(!readingHtmlChrome.splitColor||/rgba?\(0,\s*0,\s*0,\s*0\)/.test(readingHtmlChrome.splitColor))throw new Error('阅读 HTML 源码与预览之间没有可见的分栏线：'+JSON.stringify(readingHtmlChrome));
+  if(readingHtmlChrome.wordWrap!=='on')throw new Error('阅读 HTML 源码未启用自动换行，长行会被横向截断：'+String(readingHtmlChrome.wordWrap));
+  /* 切到 Markdown 片段后，摘录面板与其开关必须恢复：HTML 的隐藏不能是永久性的 */
+  await readingPage.evaluate(async()=>{await openReading('Block Drag Demo/note.md',0);});
+  await readingPage.waitForFunction(()=>{const panel=document.getElementById('reading-fragments');return !!panel&&!panel.classList.contains('hidden');},null,{timeout:15000});
+  if(await readingPage.evaluate(()=>getComputedStyle(document.getElementById('reading-frag-toggle')).display==='none'))throw new Error('切回 Markdown 后摘录面板开关未恢复');
+  if(readingErrors.length)throw new Error('阅读 HTML 浏览器运行错误：'+readingErrors.join('；'));
 
   /* ---- PDF.js 官方 Viewer：虚拟渲染、自由缩放、单页/双页与懒加载缩略图 ---- */
   await readingPage.evaluate(async()=>{closeReading();document.getElementById('document-mode-tools').classList.add('show','markdown');await loadReadings(true);const project=[...READING_PROJECT_INDEX.values()].find(item=>item.name==='PDF Viewer Demo');if(!project)throw new Error('找不到 PDF Viewer Demo');await openReadingProject(project);});

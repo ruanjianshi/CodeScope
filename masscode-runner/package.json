@@ -4,6 +4,13 @@
   "private": true,
   "productName": "CodeScope",
   "description": "码境 CodeScope：面向代码阅读、编辑、运行、文档与远程开发的工程工作台",
+  "allowScripts": [
+    "@deepseek-ai/dsh-subprocess-local",
+    "koffi",
+    "node-pty",
+    "@google/genai",
+    "protobufjs"
+  ],
   "main": "desktop/main.js",
   "scripts": {
     "start": "node server.js",
@@ -34,7 +41,7 @@
   "license": "MIT",
   "dependencies": {
     "@astral-sh/ruff-wasm-nodejs": "^0.16.7",
-    "@deepseek-ai/dsh": "0.1.5-rc.1",
+    "@deepseek-ai/dsh": "^0.1.7-rc.1",
     "@milkdown/crepe": "^7.22.1",
     "@novnc/novnc": "^1.7.0",
     "@turbodocx/html-to-docx": "^1.23.1",

@@ -23,6 +23,7 @@ import '@milkdown/crepe/theme/frame-dark.css'
 
 const REFERENCE_RE = /\[\[(pdf-ref|code-ref|note-ref):([^\]]+)\]\]/g
 const REFERENCE_LINK_RE = /\[([^\]]*)\]\(#codescope-ref-([A-Za-z0-9_-]+)\)/g
+const TABLE_LAYOUT_RE = /(?:\r?\n)*<!--\s*codescope-table-layout:([A-Za-z0-9_-]+)\s*-->\s*$/
 
 const utf8ToBase64Url = (value) => {
   const bytes = new TextEncoder().encode(value)
@@ -56,6 +57,171 @@ const splitFrontmatter = (markdown) => {
   const value = String(markdown || '')
   const match = value.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)
   return match ? { prefix: match[0], body: value.slice(match[0].length) } : { prefix: '', body: value }
+}
+
+const splitTableLayout = (markdown) => {
+  const value = String(markdown || '')
+  const match = value.match(TABLE_LAYOUT_RE)
+  if (!match) return { body:value, widths:[] }
+  try {
+    const decoded = JSON.parse(base64UrlToUtf8(match[1]))
+    const widths = Array.isArray(decoded) ? decoded.map((row) => Array.isArray(row)
+      ? row.map(Number).filter((width) => Number.isFinite(width) && width > 0)
+      : []) : []
+    return { body:value.slice(0, match.index).replace(/\s+$/, ''), widths }
+  } catch (_) {
+    return { body:value.slice(0, match.index).replace(/\s+$/, ''), widths:[] }
+  }
+}
+
+const withTableLayout = (markdown, widths) => {
+  const body = String(markdown || '').replace(TABLE_LAYOUT_RE, '').replace(/\s+$/, '')
+  const hasWidths = widths.some((row) => Array.isArray(row) && row.length > 1)
+  if (!hasWidths) return body
+  return `${body}\n\n<!-- codescope-table-layout:${utf8ToBase64Url(JSON.stringify(widths))} -->\n`
+}
+
+const attachTableColumnResizers = (root, getWidths, onWidthsChange) => {
+  let frame = 0
+  let destroyed = false
+  let active = null
+
+  const normalize = (values) => {
+    const total = values.reduce((sum, value) => sum + value, 0) || 1
+    return values.map((value) => Math.round((value / total) * 10000) / 10000)
+  }
+
+  const renderColumns = (block, table, widths) => {
+    let colgroup = table.querySelector(':scope > colgroup[data-codescope-columns]')
+    if (!colgroup) {
+      colgroup = document.createElement('colgroup')
+      colgroup.dataset.codescopeColumns = 'true'
+      table.insertBefore(colgroup, table.firstChild)
+    }
+    while (colgroup.children.length < widths.length) colgroup.appendChild(document.createElement('col'))
+    while (colgroup.children.length > widths.length) colgroup.lastElementChild?.remove()
+    ;[...colgroup.children].forEach((column, index) => { column.style.width = `${widths[index] * 100}%` })
+    table.classList.add('codescope-table-fixed')
+    block.dataset.codescopeWidths = widths.join(',')
+  }
+
+  const positionHandles = (block, table, handles) => {
+    const row = table.rows[0]
+    if (!row) return
+    const blockRect = block.getBoundingClientRect()
+    const tableRect = table.getBoundingClientRect()
+    handles.forEach((handle, index) => {
+      const cell = row.cells[index]
+      if (!cell) return
+      const cellRect = cell.getBoundingClientRect()
+      handle.style.left = `${cellRect.right - blockRect.left + block.scrollLeft}px`
+      handle.style.top = `${tableRect.top - blockRect.top + block.scrollTop + 10}px`
+      handle.style.height = `${Math.max(24, tableRect.height - 20)}px`
+    })
+  }
+
+  const install = (block, table, tableIndex) => {
+    const count = table.rows[0]?.cells.length || 0
+    if (count < 2) return
+    const stored = getWidths()[tableIndex]
+    const measured = [...table.rows[0].cells].map((cell) => Math.max(1, cell.getBoundingClientRect().width))
+    const widths = normalize(stored?.length === count ? stored : measured)
+    renderColumns(block, table, widths)
+
+    let layer = block.querySelector(':scope > .codescope-table-resizers')
+    if (!layer) {
+      layer = document.createElement('div')
+      layer.className = 'codescope-table-resizers'
+      layer.setAttribute('aria-hidden', 'true')
+      block.appendChild(layer)
+    }
+    while (layer.children.length < count - 1) {
+      const handle = document.createElement('div')
+      handle.className = 'codescope-table-resizer'
+      handle.title = '拖动调整列宽'
+      layer.appendChild(handle)
+    }
+    while (layer.children.length > count - 1) layer.lastElementChild?.remove()
+    const handles = [...layer.children]
+    handles.forEach((handle, index) => {
+      handle.dataset.column = String(index)
+      handle.onpointerdown = (event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        event.stopPropagation()
+        const current = normalize(String(block.dataset.codescopeWidths || '').split(',').map(Number))
+        const tableWidth = Math.max(1, table.getBoundingClientRect().width)
+        active = { block, table, tableIndex, index, startX:event.clientX, tableWidth, widths:current }
+        handle.setPointerCapture?.(event.pointerId)
+        block.classList.add('is-resizing-columns')
+      }
+    })
+    positionHandles(block, table, handles)
+  }
+
+  const refresh = () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      if (destroyed) return
+      const live = new Set()
+      root.querySelectorAll('.milkdown-table-block').forEach((block, tableIndex) => {
+        // Crepe keeps a second, empty table for its drag preview. Only the
+        // `.children` table owns the editable rows and column boundaries.
+        const table = block.querySelector('.table-wrapper > table.children')
+        if (!table) return
+        live.add(block)
+        install(block, table, tableIndex)
+      })
+      root.querySelectorAll('.codescope-table-resizers').forEach((layer) => {
+        if (!live.has(layer.parentElement)) layer.remove()
+      })
+    })
+  }
+
+  const onPointerMove = (event) => {
+    if (!active) return
+    event.preventDefault()
+    const { block, table, index, startX, tableWidth } = active
+    const next = [...active.widths]
+    const minimum = Math.min(.22, 72 / tableWidth)
+    const delta = (event.clientX - startX) / tableWidth
+    const pairTotal = next[index] + next[index + 1]
+    next[index] = Math.max(minimum, Math.min(pairTotal - minimum, active.widths[index] + delta))
+    next[index + 1] = pairTotal - next[index]
+    active.next = normalize(next)
+    renderColumns(block, table, active.next)
+    positionHandles(block, table, [...block.querySelectorAll('.codescope-table-resizer')])
+  }
+
+  const onPointerUp = () => {
+    if (!active) return
+    const { block, tableIndex } = active
+    block.classList.remove('is-resizing-columns')
+    if (active.next) {
+      const widths = getWidths().map((row) => [...row])
+      widths[tableIndex] = active.next
+      onWidthsChange(widths)
+    }
+    active = null
+  }
+
+  const resizeObserver = new ResizeObserver(refresh)
+  resizeObserver.observe(root)
+  root.addEventListener('scroll', refresh, true)
+  window.addEventListener('pointermove', onPointerMove, { passive:false })
+  window.addEventListener('pointerup', onPointerUp)
+  refresh()
+  return {
+    refresh,
+    destroy: () => {
+      destroyed = true
+      cancelAnimationFrame(frame)
+      resizeObserver.disconnect()
+      root.removeEventListener('scroll', refresh, true)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    },
+  }
 }
 
 const looksLikeMarkdown = (value) => {
@@ -291,9 +457,13 @@ async function create(options = {}) {
   let destroyed = false
   let lastMarkdown = String(options.markdown || '')
   let frontmatter = splitFrontmatter(lastMarkdown)
+  const tableLayout = splitTableLayout(frontmatter.body)
+  frontmatter.body = tableLayout.body
+  let tableWidths = tableLayout.widths
+  const composeMarkdown = (markdown) => frontmatter.prefix + withTableLayout(fromEditorMarkdown(markdown), tableWidths)
   const crepe = new Crepe({
     root,
-    defaultValue: toEditorMarkdown(frontmatter.body),
+    defaultValue: toEditorMarkdown(tableLayout.body),
     features: { [CrepeFeature.TopBar]: true },
     featureConfigs: {
       [CrepeFeature.Placeholder]: { text: '输入 / 插入区块；拖动左侧手柄调整顺序…', mode: 'block' },
@@ -310,7 +480,8 @@ async function create(options = {}) {
   crepe.on((listener) => {
     listener.markdownUpdated((_ctx, markdown) => {
       if (!ready || destroyed) return
-      const next = frontmatter.prefix + fromEditorMarkdown(markdown)
+      tableResizers?.refresh()
+      const next = composeMarkdown(markdown)
       if (next === lastMarkdown) return
       lastMarkdown = next
       options.onChange?.(next)
@@ -419,18 +590,28 @@ async function create(options = {}) {
   root.addEventListener('click', onClick)
   root.addEventListener('paste', onPaste, true)
   root.addEventListener('drop', onDrop, true)
+  let tableResizers = null
   await crepe.create()
+  tableResizers = attachTableColumnResizers(root, () => tableWidths, (nextWidths) => {
+    tableWidths = nextWidths
+    if (!ready || destroyed) return
+    const next = composeMarkdown(crepe.getMarkdown())
+    if (next === lastMarkdown) return
+    lastMarkdown = next
+    options.onChange?.(next)
+  })
   const detachBlockTransformMenu = attachBlockTransformMenu(crepe, root, {
     onInsertImages: typeof options.onImage === 'function' ? insertImages : null,
   })
   ready = true
   root.dataset.editorReady = 'true'
   return {
-    getMarkdown: () => frontmatter.prefix + fromEditorMarkdown(crepe.getMarkdown()),
+    getMarkdown: () => composeMarkdown(crepe.getMarkdown()),
     focus: () => root.querySelector('.ProseMirror')?.focus(),
     destroy: async () => {
       if (destroyed) return
       destroyed = true
+      tableResizers?.destroy()
       root.removeEventListener('click', onClick)
       root.removeEventListener('paste', onPaste, true)
       root.removeEventListener('drop', onDrop, true)
