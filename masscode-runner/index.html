@@ -3335,10 +3335,18 @@
     height: 2px; background: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }
+  /* ── 分栏里的 Markdown 区块编辑器：占满该栏，内部沿用阅读模块同一套外观 ── */
+  .split-editor-group.block-active .split-editor-ln,
+  .split-editor-group.block-active .split-editor-code { display: none; }
+  .split-editor-group.block-active .split-editor-input { opacity: 0; pointer-events: none; }
+  .split-md-block { position: absolute; z-index: 4; inset: 0; display: block; overflow: auto; background: var(--theme-code, var(--panel2)); container-type: inline-size; }
+  .split-md-block .milkdown-top-bar { padding-inline: clamp(10px, 3cqw, 30px); }
+  .split-md-block .milkdown .ProseMirror { width: min(calc(100% - clamp(18px, 5cqw, 48px)), 760px); margin: 16px auto 40px; padding: clamp(18px, 3.5cqw, 40px) clamp(16px, 4cqw, 52px) clamp(30px, 6cqw, 70px); }
+
   /* ── 代码工作区的 Markdown 区块编辑器：与阅读模块完全同一套外观 ── */
   #md-view.project-md-block {
-    display: block; flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0;
-    background: var(--md-page, var(--theme-code, var(--bg))); overflow: hidden;
+    display: block; flex: 1; align-self: stretch; width: 100%; min-width: 0; max-width: none; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0;
+    background: var(--md-page, var(--theme-code, var(--bg))); overflow: hidden; container-type: inline-size;
     --md-accent: color-mix(in srgb, var(--ok) 76%, var(--accent));
     --md-link: color-mix(in srgb, var(--accent) 82%, var(--text));
     --md-page: var(--theme-code, var(--bg));
@@ -4231,6 +4239,52 @@ function focusMainEditor(){if(monacoMainActive())MONACO_EDITOR.focus();else $('c
 function setMainEditorValue(value){$('code-edit').value=String(value||'');if(monacoMainActive()&&MONACO_EDITOR.getValue()!==$('code-edit').value){MONACO_SYNCING=true;MONACO_EDITOR.setValue($('code-edit').value);MONACO_SYNCING=false;}}
 function updateMonacoDiagnostics(){if(!window.monaco||!MONACO_EDITOR||!MONACO_EDITOR.getModel())return;const severity=window.monaco.MarkerSeverity;window.monaco.editor.setModelMarkers(MONACO_EDITOR.getModel(),'codescope-lsp',(LSP_DIAGNOSTICS||[]).map(item=>({startLineNumber:Number(item.range&&item.range.start&&item.range.start.line||0)+1,startColumn:Number(item.range&&item.range.start&&item.range.start.character||0)+1,endLineNumber:Number(item.range&&item.range.end&&item.range.end.line||0)+1,endColumn:Number(item.range&&item.range.end&&item.range.end.character||0)+1,message:String(item.message||'诊断信息'),source:String(item.source||'LSP'),code:item.code==null?undefined:String(item.code),severity:Number(item.severity)===1?severity.Error:Number(item.severity)===2?severity.Warning:Number(item.severity)===4?severity.Hint:severity.Info})));}
 function disposeSplitMonacoEditors(){for(const editor of MONACO_SPLIT_EDITORS){try{editor.dispose();}catch(_){}}MONACO_SPLIT_EDITORS.clear();for(const entry of SPLIT_EDITORS)entry.monacoEditor=null;}
+
+/* ── 分栏里的 Markdown 区块编辑器（与主编辑区同一个 window.CodeScopeBlockEditor）──
+   改动写回该栏的 textarea 并派发 input，复用分栏既有的 entry.code / scheduleSplitSave / 保存状态链路。 */
+const SPLIT_BLOCK_EDITORS = new Set();
+function disposeSplitBlockEditors() {
+  for (const controller of SPLIT_BLOCK_EDITORS) { try { controller.destroy(); } catch (_) {} }
+  SPLIT_BLOCK_EDITORS.clear();
+}
+async function mountSplitBlockEditor(group, input, entry, ref) {
+  if (!window.CodeScopeBlockEditor) return;
+  const area = group.querySelector('.split-editor-code-area');
+  if (!area) return;
+  const host = document.createElement('div');
+  host.className = 'reading-md-block split-md-block';
+  host.setAttribute('aria-label', 'Markdown 区块编辑器 · ' + splitName(ref));
+  area.appendChild(host);
+  const loading = document.createElement('div');
+  loading.className = 'reading-md-block-loading';
+  loading.textContent = '正在加载区块编辑器…';
+  area.appendChild(loading);
+  try {
+    const controller = await window.CodeScopeBlockEditor.create({
+      root: host,
+      markdown: String(input.value || entry.code || ''),
+      onChange: (content) => {
+        // 初始化时 Crepe 会规范化一次并回调：不是用户编辑（无焦点），不写回
+        if (!host.contains(document.activeElement)) return;
+        if (input.value === content) return;
+        input.value = content;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      },
+      onError: (error) => { try { setStatus('err', '区块编辑器：' + String((error && error.message) || error)); } catch (_) {} },
+    });
+    if (!group.isConnected) { try { await controller.destroy(); } catch (_) {} return; }
+    if (loading.parentNode) loading.remove();
+    SPLIT_BLOCK_EDITORS.add(controller);
+    group.classList.add('block-active');
+  } catch (error) {
+    if (loading.parentNode) loading.remove();
+    const failed = document.createElement('div');
+    failed.className = 'reading-md-block-error';
+    failed.textContent = '区块编辑器加载失败：' + String((error && error.message) || error);
+    host.replaceChildren(failed);
+  }
+}
+
 async function mountSplitMonaco(group,input,entry,ref){try{const m=await ensureMonaco();if(!m||!group.isConnected)return;const host=document.createElement('div');host.className='split-monaco-host';host.setAttribute('aria-label','VS Code 编辑 '+splitName(ref)+'；按住 Ctrl 或 Command 并滚动缩放');group.querySelector('.split-editor-code-area').appendChild(host);const model=monacoModel(ref,input.value);if(model.getValue()!==input.value)model.setValue(input.value);const editor=m.editor.create(host,Object.assign(monacoOptions(false),{model,minimap:{enabled:false},stickyScroll:{enabled:false}}));entry.monacoEditor=editor;MONACO_SPLIT_EDITORS.add(editor);wireMonacoCommands(editor,false);editor.onDidFocusEditorText(()=>{syncProxySelection(editor,input);activateSplitReading(entry,group,input,false);});editor.onDidChangeCursorSelection(()=>{syncProxySelection(editor,input);activateSplitReading(entry,group,input,false);});editor.onDidChangeModelContent(()=>{input.value=editor.getValue();syncProxySelection(editor,input);input.dispatchEvent(new Event('input',{bubbles:true}));});editor.onDidScrollChange(()=>{if(splitKey(entry.file,entry.fragment)===ACTIVE_SPLIT_KEY)scheduleActiveReadingRefresh();});group.classList.add('monaco-active');host.style.display='block';requestAnimationFrame(()=>editor.layout());}catch(error){console.warn('分栏 Monaco 加载失败，已回退兼容编辑器',error);}}
 function editText() { return monacoMainActive() ? MONACO_EDITOR.getValue() : $('code-edit').value; }
 function currentCode() { return CURRENT && CURRENT.fragments[CINDEX] ? CURRENT.fragments[CINDEX].code : ''; }
@@ -11370,12 +11424,21 @@ function wireEditorDivider(divider,left,right) {
     divider.addEventListener('pointermove',move);divider.addEventListener('pointerup',up);divider.addEventListener('pointercancel',up);
   });
 }
+function splitBlockHash(text){const s=String(text||'');let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return s.length+':'+h;}
 function renderSplitEditors() {
   restoreSplitEditors();const host=$('edit-split');
-  disposeSplitMonacoEditors();
-  host.querySelectorAll(':scope > .editor-group-divider, :scope > .split-editor-group').forEach((node)=>node.remove());
   const active=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];
   SPLIT_EDITORS=SPLIT_EDITORS.filter((entry)=>splitRef(entry.file,entry.fragment)&&!(CURRENT&&entry.file===CURRENT.file&&entry.fragment===CINDEX)).slice(0,3);
+  // 签名守卫：栏位组成与内容都没变就不重建（区块编辑器初始化很重，重建会闪、会丢焦点）。
+  // 必须放在任何 DOM 破坏之前，否则早退已经来不及。
+  // 用「片段存储里的内容」而不是可变的 entry.code 做签名：restoreSplitEditors 每次会重置 entry.code，
+  // 用它会导致签名永远不一致；存储内容稳定，且格式化/重命名等真实内容变更仍会触发刷新。
+  const splitSignature=SPLIT_EDITORS.map((entry)=>{const r=splitRef(entry.file,entry.fragment);return [entry.file,entry.fragment,splitBlockHash(r&&r.frag?r.frag.code:'')].join('#');}).join('|')+'|'+(CURRENT?CURRENT.file+'@'+CINDEX:'');
+  if(host.dataset.splitSignature===splitSignature&&host.querySelectorAll(':scope > .split-editor-group').length===SPLIT_EDITORS.length)return;
+  host.dataset.splitSignature=splitSignature;
+  // 到这里才动 DOM：销毁旧编辑器并删除旧窗格（守卫已确认需要重建）
+  disposeSplitMonacoEditors();disposeSplitBlockEditors();
+  host.querySelectorAll(':scope > .editor-group-divider, :scope > .split-editor-group').forEach((node)=>node.remove());
   if(ACTIVE_SPLIT_KEY&&!SPLIT_EDITORS.some((entry)=>splitKey(entry.file,entry.fragment)===ACTIVE_SPLIT_KEY))ACTIVE_SPLIT_KEY='';
   const multi=!!CURRENT&&SPLIT_EDITORS.length>0;
   if(multi)$('code-wrap').style.width='';
@@ -11419,7 +11482,8 @@ function renderSplitEditors() {
       if(event.key==='Tab'){event.preventDefault();const start=input.selectionStart,end=input.selectionEnd;input.setRangeText('  ',start,end,'end');input.dispatchEvent(new Event('input',{bubbles:true}));}
       else if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='s'){event.preventDefault();if(entry.timer){clearTimeout(entry.timer);entry.timer=null;}entry.code=input.value;entry.dirty=true;flushSplitEditors();saved.textContent='已保存';}
     });
-    mountSplitMonaco(group,input,entry,ref);
+    // Markdown 窗格与主编辑区、阅读模块保持一致：也用区块编辑器，不再降级成源码
+    if((ref.frag.language||'')==='markdown')mountSplitBlockEditor(group,input,entry,ref);else mountSplitMonaco(group,input,entry,ref);
     wireEditorDivider(divider,previous,group);previous=group;
   });
   /* 多栏与 Markdown/LaTeX 自身的源码+预览共用同一容器：

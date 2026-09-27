@@ -508,6 +508,14 @@ print(r.run())
   }));
   if(markdownBlock.toolsShown||markdownBlock.visibleModeButtons!==0)throw new Error('Markdown 仍显示源码/分栏/实时/阅读切换器：'+JSON.stringify(markdownBlock));
   if(markdownBlock.mode!=='block'||!markdownBlock.ready||!markdownBlock.crepe||!markdownBlock.sourceHidden||markdownBlock.hostWidth<markdownBlock.splitWidth-2)throw new Error('Markdown 区块编辑器未接管编辑区：'+JSON.stringify(markdownBlock));
+  // 编辑页必须铺满工作区并水平居中（历史回归：残留 max-width:980px 会让它靠左）
+  const blockLayout=await page.evaluate(()=>{
+    const view=document.getElementById('md-view'),split=document.getElementById('edit-split'),prose=document.querySelector('#md-view .ProseMirror');
+    const vr=view.getBoundingClientRect(),sr=split.getBoundingClientRect(),pr=prose.getBoundingClientRect();
+    return {viewWidth:Math.round(vr.width),hostWidth:Math.round(sr.width),maxWidth:getComputedStyle(view).maxWidth,leftGap:Math.round(pr.left-vr.left),rightGap:Math.round(vr.right-pr.right)};
+  });
+  if(blockLayout.viewWidth<blockLayout.hostWidth-2||blockLayout.maxWidth!=='none'||Math.abs(blockLayout.leftGap-blockLayout.rightGap)>4)throw new Error('Markdown 区块编辑器未铺满或未居中：'+JSON.stringify(blockLayout));
+
   const referenceSource=await page.locator('#code-edit').inputValue();
   if(!/\[\[code-ref:.*#fragment=0&line=\d+&end=\d+\|led\.h:\d+/.test(referenceSource))throw new Error('Markdown 未写入可持久化的代码位置引用');
   // 区块编辑器里真实输入：文本代理同步，且 ⌘Z 在编辑器内撤销（不落盘残留）
@@ -525,6 +533,37 @@ print(r.run())
   await page.locator('#backlink-close').click();
   const workspaceInterop=await page.evaluate(()=>({codeLink:workspaceLinkMarkdown(currentWorkspaceTarget()),outline:mmMarkdownOutline('# Root\n\n## Child\n\n- Leaf'),snapshotKey:WORKSPACE_SNAPSHOT_KEY}));
   if(!workspaceInterop.codeLink.startsWith('[[code-ref:')||workspaceInterop.outline.length!==3||workspaceInterop.snapshotKey!=='mc-workspace-snapshot-v1')throw new Error('内部链接、XMind 大纲或工作台快照基础能力异常：'+JSON.stringify(workspaceInterop));
+  // 分栏里的 Markdown 同样要用区块编辑器（不能退化成源码/Monaco）
+  const splitMarkdownTarget=await page.evaluate(()=>{
+    // 当前文件里唯一的 Markdown 片段可能正被主栏占用，所以跨文件挑一个 Markdown 片段拖进分栏
+    for(const snippet of SNIPPETS||[]){
+      for(let index=0;index<(snippet.fragments||[]).length;index++){
+        const fragment=snippet.fragments[index];
+        if(fragment.language!=='markdown')continue;
+        if(snippet.file===CURRENT.file&&index===CINDEX)continue;
+        const dt=new DataTransfer();
+        dt.setData('application/x-codescope-editor',JSON.stringify({file:snippet.file,fragment:index}));
+        document.getElementById('edit-split').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));
+        return {file:snippet.file,index};
+      }
+    }
+    return null;
+  });
+  if(!splitMarkdownTarget)throw new Error('测试夹具里找不到可拖入分栏的 Markdown 片段');
+  // 两个编辑器都是异步挂载的（Crepe 初始化较慢），等区块编辑器真正出现再断言
+  await page.waitForSelector('.split-editor-group.block-active .split-md-block', { timeout: 45000 }).catch(() => {});
+  await page.waitForTimeout(600);
+  const splitMarkdownPane=await page.evaluate(()=>({
+    groups:document.querySelectorAll('.split-editor-group').length,
+    blockHost:!!document.querySelector('.split-editor-group .split-md-block'),
+    blockActive:!!document.querySelector('.split-editor-group.block-active'),
+    monacoHost:!!document.querySelector('.split-editor-group .split-monaco-host'),
+  }));
+  if(splitMarkdownPane.groups<1)throw new Error('未能建立分栏以验证 Markdown 区块编辑器：'+JSON.stringify(splitMarkdownPane));
+  if(!splitMarkdownPane.blockHost||!splitMarkdownPane.blockActive||splitMarkdownPane.monacoHost)throw new Error('分栏里的 Markdown 未使用区块编辑器：'+JSON.stringify(splitMarkdownPane));
+  await page.evaluate(()=>{try{closeSplitEditor(0);}catch(_){}});
+  await page.waitForSelector('#md-view.project-md-block .reading-md-block',{timeout:45000}).catch(()=>{});
+  await page.waitForTimeout(400);
   await clickFragmentTab(page,'demo.html');
   await page.locator('#html-preview-frame').waitFor({state:'visible'});
   await page.locator('#edit-preview .edit-preview-close').click();
