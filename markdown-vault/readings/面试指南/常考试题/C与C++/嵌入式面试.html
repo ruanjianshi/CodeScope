@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>嵌入式 Linux 开发 · 面试笔试复习手册（2026 秋招定制）</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F2033'/%3E%3Cpath d='M7 20h5v-3h8v3h5M12 11v9M20 11v9' stroke='%2312A4B5' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='9' cy='8.5' r='1.6' fill='%23E29B2F'/%3E%3Ccircle cx='23' cy='8.5' r='1.6' fill='%23E29B2F'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#EEF1F5; --paper:#FFFFFF; --ink:#16283F; --ink2:#3D5269; --muted:#66788C;
+  --line:#D9E1EA; --accent:#0A7E8C; --accent2:#12A4B5; --amber:#E29B2F; --dark:#0F2033; --dark2:#17334F;
+  --code-bg:#10243B; --code-ink:#D7E4F0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"Noto Sans SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);line-height:1.75;font-size:15px}
+.mono,.tag,.num{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+
+/* ===== Hero ===== */
+.hero{background:var(--dark);color:#EAF2FA;position:relative;overflow:hidden;padding:64px 0 74px}
+.hero::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(900px 340px at 82% -10%,rgba(18,164,181,.28),transparent 60%),
+  radial-gradient(700px 300px at -6% 108%,rgba(226,155,47,.16),transparent 60%);}
+.hero .wave{position:absolute;left:0;right:0;bottom:0;height:74px;opacity:.9}
+.hero .wrap{position:relative;z-index:1}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;color:#7FD6E0;margin-bottom:18px}
+.kicker::before{content:"";width:26px;height:2px;background:var(--accent2)}
+.hero h1{font-size:clamp(26px,4.2vw,40px);font-weight:900;line-height:1.25;letter-spacing:.01em}
+.hero h1 em{font-style:normal;color:#4FD0DD}
+.hero .sub{margin-top:14px;color:#AFC3D6;font-size:15px;max-width:760px}
+.hero .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.chip{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);color:#D8E6F2;padding:6px 14px;border-radius:999px;font-size:12.5px}
+.chip b{color:#4FD0DD;font-weight:700}
+
+/* ===== Sticky nav ===== */
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none}
+.nav .wrap::-webkit-scrollbar{display:none}
+.nav a{flex:0 0 auto;padding:12px 13px;font-size:13px;color:var(--ink2);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+.nav a:hover{color:var(--accent)}
+.nav a.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+
+/* ===== Sections ===== */
+section{padding:54px 0 8px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.sec-no{font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.06em}
+.sec-head h2{font-size:24px;font-weight:900;letter-spacing:.01em}
+.sec-line{height:3px;width:64px;background:var(--amber);margin:10px 0 22px;border-radius:2px}
+.sec-desc{color:var(--ink2);margin-bottom:22px;max-width:900px}
+h3{font-size:17px;font-weight:800;margin:30px 0 12px;color:var(--ink)}
+h3 .h3-tag{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--accent);margin-right:8px;font-weight:700}
+p.lead{color:var(--ink2)}
+
+/* ===== Radar ===== */
+.chart-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 14px 8px;box-shadow:0 2px 10px rgba(15,32,51,.05)}
+#radarChart{width:100%;height:480px}
+.chart-note{font-size:12px;color:var(--muted);padding:4px 6px 10px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0 6px}
+.stat{background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px}
+.stat .v{font-size:22px;font-weight:900;color:var(--dark)}
+.stat .k{font-size:12.5px;color:var(--muted);margin-top:2px}
+
+/* ===== 要点卡 ===== */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:6px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 20px;position:relative}
+.card .n{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.08em}
+.card h4{font-size:15.5px;font-weight:800;margin:6px 0 8px}
+.card p{font-size:13.5px;color:var(--ink2)}
+.card .src{display:block;margin-top:10px;font-size:11.5px;color:var(--muted)}
+
+/* ===== QA accordion ===== */
+.qa-group{margin:8px 0 4px;border:1px solid var(--line);border-radius:12px;background:var(--paper);overflow:hidden}
+.qa-group>summary{list-style:none;cursor:pointer;padding:14px 18px;font-weight:700;font-size:15.5px;display:flex;gap:10px;align-items:center;user-select:none}
+.qa-group>summary::-webkit-details-marker{display:none}
+.qa-group>summary::after{content:"+";margin-left:auto;font-family:"JetBrains Mono",monospace;color:var(--accent);font-size:18px;font-weight:400;transition:transform .15s}
+.qa-group[open]>summary::after{content:"–"}
+.qa-group>summary:hover{background:#F7FAFC}
+.qa-group .qno{font-family:"JetBrains Mono",monospace;font-size:12px;color:#fff;background:var(--accent);border-radius:6px;padding:1px 8px;flex:0 0 auto;font-weight:700}
+.qa-body{padding:2px 20px 16px 50px;color:var(--ink2);font-size:14px}
+.qa-body ul{margin:6px 0;padding-left:0;list-style:none}
+.qa-body li{position:relative;padding-left:16px;margin:5px 0}
+.qa-body li::before{content:"▸";position:absolute;left:0;color:var(--accent2);font-size:12px;top:1px}
+.qa-body .k{color:var(--amber);font-weight:700}
+.qa-body code{font-family:"JetBrains Mono",monospace;font-size:12.5px;background:#EEF3F8;padding:1px 6px;border-radius:5px;color:#0A6E7A}
+
+/* ===== Table ===== */
+.tbl{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:10px 0 18px}
+.tbl th{background:#12304A;color:#E6F0FA;text-align:left;padding:10px 14px;font-size:13px;font-weight:700}
+.tbl td{padding:9px 14px;font-size:13.5px;border-top:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+.tbl tr:nth-child(even) td{background:#F7FAFC}
+.tbl td:first-child{font-weight:700;color:var(--ink)}
+
+/* ===== Timeline ===== */
+.tl{display:grid;grid-template-columns:86px 28px 1fr;gap:0;margin:16px 0 6px}
+.tl .t{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700;color:var(--accent);text-align:right;padding:10px 12px 10px 0}
+.tl .ax{position:relative;display:flex;justify-content:center}
+.tl .ax::before{content:"";position:absolute;top:0;bottom:0;width:2px;background:#C7D3E0}
+.tl .dot{width:12px;height:12px;border-radius:50%;background:var(--paper);border:3px solid var(--accent2);margin-top:16px;z-index:1;justify-self:center;align-self:start}
+.tl .c{padding:8px 0 16px 14px}
+.tl .c b{display:block;font-size:14.5px;margin-bottom:2px}
+.tl .c span{font-size:13px;color:var(--ink2)}
+
+/* ===== Source list ===== */
+.src-list{list-style:none;counter-reset:src}
+.src-list li{counter-increment:src;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13.5px;display:flex;gap:10px;align-items:baseline}
+.src-list li::before{content:"[" counter(src) "]";font-family:"JetBrains Mono",monospace;color:var(--accent);font-size:12px}
+.src-list a{color:var(--ink2);word-break:break-all;text-decoration:none;border-bottom:1px dotted var(--muted)}
+.src-list a:hover{color:var(--accent)}
+footer{background:var(--dark);color:#8FA5BC;margin-top:64px;padding:34px 0;font-size:12.5px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:space-between}
+
+@media (max-width:760px){
+  section{padding:40px 0 4px}
+  .sec-head h2{font-size:20px}
+  .qa-body{padding-left:18px}
+  .tl{grid-template-columns:64px 24px 1fr}
+  #radarChart{height:440px}
+  .card p{font-size:14px}
+  .card .src{font-size:12px}
+  .stat .k{font-size:13px}
+  .qa-body{font-size:14.5px}
+  .sec-desc{font-size:14px}
+}
+/* ===== Code blocks ===== */
+pre.codeblock{background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.7;margin:8px 0 16px;border:1px solid #1D3A57}
+pre.codeblock .cm{color:#7FA3C4}
+pre.codeblock .kw{color:#5FD0DE}
+pre.codeblock .fn{color:#F2C14E}
+pre.codeblock .num{color:#E58FB5}
+.proj-block{background:#F4F8FB;border:1px solid var(--line);border-left:4px solid var(--accent2);border-radius:10px;padding:14px 18px;margin:10px 0 18px;font-size:14px;color:var(--ink2)}
+.proj-block b{color:var(--ink)}
+.warn{background:#FDF3E3;border:1px solid #F0D9AE;border-left:4px solid var(--amber);border-radius:10px;padding:10px 14px;margin:8px 0 14px;font-size:13px;color:#7A5413}
+.warn b{color:#9A6A14}
+@media print{
+  .nav,.hero .wave{display:none}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 封面 ===== -->
+<header class="hero">
+  <svg class="wave" viewBox="0 0 1200 74" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 74 L0 46 Q150 14 300 44 T600 52 T900 40 T1200 48 L1200 74 Z" fill="#0F2033"/>
+    <path d="M0 74 L0 56 Q200 26 400 52 T800 56 T1200 50 L1200 74 Z" fill="#12304A" opacity=".8"/>
+  </svg>
+  <div class="wrap">
+    <span class="kicker">2026 FALL RECRUITMENT · EMBEDDED LINUX</span>
+    <h1>嵌入式 Linux 开发 <em>面试 / 笔试</em> 复习手册</h1>
+    <p class="sub">基于你的简历画像定制：机械硕士 · 嵌入式 Linux 方向 · 强项在 C/C++、Linux 系统编程、STM32/FreeRTOS、CAN/CANopen/EtherCAT 总线与 ROS。本手册汇总市面真实面经、高频八股与笔试题，按"先补短板、再固强项"编排。</p>
+    <div class="chips">
+      <span class="chip">画像：<b>嵌入式 Linux / 机器人底层</b></span>
+      <span class="chip">重点补强：<b>Linux 内核驱动</b></span>
+      <span class="chip">手撕重灾区：<b>链表 / 位运算 / 字符串</b></span>
+      <span class="chip">投递节奏：<b>2026 秋招进行中</b></span>
+    </div>
+  </div>
+</header>
+
+<!-- ===== 目录导航 ===== -->
+<nav class="nav"><div class="wrap">
+  <a href="#s1" class="on">01 备考雷达</a>
+  <a href="#s2">02 市场面经</a>
+  <a href="#s3">03 高频八股题库</a>
+  <a href="#s4">04 手撕完整实现</a>
+  <a href="#s5">05 笔试真题</a>
+  <a href="#s6">06 项目深挖预演</a>
+  <a href="#s7">07 行为面</a>
+  <a href="#s8">08 目标公司与投递</a>
+  <a href="#s9">09 两周冲刺计划</a>
+  <a href="#s10">10 资源与来源</a>
+</div></nav>
+
+<!-- ===== 01 备考雷达 ===== -->
+<section id="s1"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">01</span><h2>备考雷达：先看清强弱项</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">八个考点的「面试考察频率」（综合 2024–2026 多份面经的出现率估计）与「简历基础掌握度」（依据你简历所列技能与项目的初步评估，0–100）。两条线差距大的模块，就是你的复习优先级。</p>
+  <div class="chart-card">
+    <div id="radarChart"></div>
+    <p class="chart-note">数据口径：考察频率为多份面经（牛客、CSDN、电子工程专辑等）出现率的综合估计值；掌握度为依据简历技能的初评值。均为备考参考，非实测数据。</p>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><div class="v">90+</div><div class="k">强项模块：通信总线、RTOS/MCU、C/C++</div></div>
+    <div class="stat"><div class="v">45</div><div class="k">最大短板：Linux 内核/驱动八股</div></div>
+    <div class="stat"><div class="v">60</div><div class="k">手撕代码：简历与真实编码有差距，需专项练</div></div>
+    <div class="stat"><div class="v">3 周</div><div class="k">建议周期：2 周系统 + 1 周模拟冲刺</div></div>
+  </div>
+</div></section>
+
+<!-- ===== 02 市场面经 ===== -->
+<section id="s2"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">02</span><h2>2026 市场面经要点</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">从牛客秋招面经、大厂真题与备考社区提炼的 6 条规律，先建立"面试官视角"，再进入题库。</p>
+  <div class="cards">
+    <div class="card"><span class="n">CORE 01</span><h4>项目讲"设计"，不是讲"流程"</h4><p>低分回答：用了 FreeRTOS，建了几个任务，用队列通信。高分回答：为什么这么拆任务、为什么不用中断直接处理、队列长度怎么定、高负载下有没有测试。面试官用追问验证你是否真思考过。</p><span class="src">来源：牛客《嵌入式秋招复盘》</span></div>
+    <div class="card"><span class="n">CORE 02</span><h4>简历即考纲，写什么被问什么</h4><p>面试官手里就一张纸，问题基本从你写的东西里出。写"负责驱动开发与优化"，就会追问驱动做到哪一步；写"移植 FreeRTOS"，就追问移植流程、栈、启动文件。每个技术栈词汇都要能展开。</p><span class="src">来源：牛客面经评论区复盘</span></div>
+    <div class="card"><span class="n">CORE 03</span><h4>一面先砸八股，能接场景才算会</h4><p>高频开局：volatile 干什么、中断里能不能 printf、信号量和互斥锁差在哪。只背定义不算会，要能说清"项目里哪处用过、不用会怎样、踩过什么坑、怎么排查"。</p><span class="src">来源：牛客《嵌入式常考八股》</span></div>
+    <div class="card"><span class="n">CORE 04</span><h4>驱动岗必考清单（对标你的目标岗）</h4><p>中断上下文 vs 进程上下文、中断为何不能睡眠、tasklet / 工作队列谁可睡眠、自旋锁 / 互斥锁选型、设备树 compatible 匹配、ioremap、request_irq 失败排查、MMU / 虚拟内存、cache 一致性、DMA、gdb / ftrace 调试。寒武纪、影石等真题命中率极高。</p><span class="src">来源：电子工程专辑、牛客寒武纪/影石面经</span></div>
+    <div class="card"><span class="n">CORE 05</span><h4>手撕是拉开差距的环节</h4><p>华为、字节、大疆、宁德、小米、海康、TP-Link 几乎都安排手撕。嵌入式手撕不考复杂算法，重 C 基本功：位运算、内存操作、字符串、链表。题目经典、重复率高，是最容易提前准备拿满分的环节。</p><span class="src">来源：牛客《嵌入式手撕必考 20 题》</span></div>
+    <div class="card"><span class="n">CORE 06</span><h4>笔试：八股选择 + 编程题</h4><p>常见结构：选择题/填空（八股）+ 1–3 道编程题（ACM 格式，可含 bits/stdc++.h）。常考：hot100 简单题、排序、memcpy、位操作、ringbuffer（出现多次）。笔试及格看简历，别在笔试上无限内卷。</p><span class="src">来源：牛客校招笔试记录</span></div>
+  </div>
+</div></section>
+
+<!-- ===== 03 高频八股题库 ===== -->
+<section id="s3"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">03</span><h2>高频八股题库（按简历定制）</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">按你的目标岗（嵌入式 Linux 开发）排序：C/C++ → Linux 系统编程 → Linux 内核驱动（重点补强）→ RTOS/MCU → 通信总线（强项巩固）→ ROS。每道题先自答，再展开看要点；<b>能讲出场景、限制和踩坑</b>才算过关。</p>
+
+  <h3><span class="h3-tag">3.1</span>C / C++ 语言基础</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>volatile 的作用？哪些场景必须用？</summary><div class="qa-body"><ul>
+    <li>告诉编译器变量可能被硬件、中断、多任务意外修改，<b>禁止优化</b>，每次必须从内存读取，不能缓存在寄存器。</li>
+    <li>三大场景：<span class="k">寄存器映射变量</span>、<span class="k">中断修改的全局变量</span>、<span class="k">多线程共享变量</span>（嵌入式必答）。</li>
+    <li>反例：不加 volatile 时编译器优化读取旧值，出现"看似无解"的逻辑 bug。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q2</span>static 关键字的作用？</summary><div class="qa-body"><ul>
+    <li>局部变量：生命周期延长至程序结束、只初始化一次，但作用域仍是所在函数。</li>
+    <li>全局变量 / 函数：限制为<span class="k">文件内作用域</span>（外部不可见）。</li>
+    <li>C++ 补充：类静态成员为所有对象共享，静态成员函数无 this 指针。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q3</span>const 的三种指针写法区别？</summary><div class="qa-body"><ul>
+    <li><code>const int *p</code>：<span class="k">const 在 * 左边</span>，指向的数据不可改，指针本身可改（可 p++）。</li>
+    <li><code>int * const p</code>：const 在 * 右边，<span class="k">指针本身不可改</span>，指向的数据可改。</li>
+    <li><code>const int * const p</code>：指针和指向的数据都不可改。</li>
+    <li>记忆口诀：const 在谁旁边，谁就是常量。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q4</span>#define、const、typedef 的区别？</summary><div class="qa-body"><ul>
+    <li>define：<span class="k">预处理阶段</span>文本替换，无类型检查，占用代码段。</li>
+    <li>const：编译阶段生效，有类型检查，占用数据段（只读段）。</li>
+    <li>typedef：编译阶段为类型定义别名，有类型检查，只作用于类型；define 也可定义宏函数但无类型检查。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q5</span>宏为什么一定要加括号？宏有哪些坑？</summary><div class="qa-body"><ul>
+    <li>避免替换后运算符优先级导致逻辑错误：<code>#define M(a,b) (a)+(b)</code> 或整体 <code>((a)+(b))</code>。</li>
+    <li>坑：<span class="k">参数重复求值</span>（如 <code>MAX(i++, j)</code> 中 i++ 执行多次）、无类型检查、无法调试。</li>
+    <li>对比：const / inline 函数能规避这些坑，可尽量少用宏。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q6</span>内存对齐的规则？为什么需要对齐？</summary><div class="qa-body"><ul>
+    <li>成员偏移地址为自身大小整数倍；结构体总大小为最大成员大小的整数倍（并按此补尾）。</li>
+    <li>原因：CPU 访问对齐地址更快，部分硬件（ARM 某些模式）只能访问对齐地址，否则异常。</li>
+    <li>笔试常考 sizeof(struct) 计算：先按顺序放成员、注意对齐与尾部补齐。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q7</span>大小端是什么？如何判断系统大小端？</summary><div class="qa-body"><ul>
+    <li>小端：低字节存低地址（ARM / x86 默认）；大端：低字节存高地址（网络协议、部分外设）。</li>
+    <li>判断方法一（union）：<code>union { int a; char b; } u; u.a=1; u.b==1 即小端</code>。</li>
+    <li>判断方法二：<code>int n=1; *(char*)&amp;n == 1 即小端</code>。</li>
+    <li>加分：通信协议 / 寄存器读写要注意字节序转换（你做的 CAN、串口协议都会遇到）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q8</span>结构体与联合体区别？C 语言位段了解吗？</summary><div class="qa-body"><ul>
+    <li>结构体成员独立占内存（总大小 = 成员和 + 对齐）；联合体成员共享内存（大小 = 最大成员）。</li>
+    <li>位段：结构体中用冒号指定成员二进制位数，节省内存，适合寄存器配置 / 数据压缩；注意跨字节边界对齐问题。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q9</span>堆和栈的区别？</summary><div class="qa-body"><ul>
+    <li>栈：系统自动分配释放，向下生长（低地址），连续、空间小，存局部变量 / 参数 / 返回地址，分配快。</li>
+    <li>堆：手动 malloc/free，向上生长，空间大但不连续，分配慢，频繁使用易产生碎片。</li>
+    <li>补充：栈溢出（递归过深 / 大局部数组）、堆内存泄漏是两大经典问题。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q10</span>指针与数组的关系？数组作函数参数会怎样？</summary><div class="qa-body"><ul>
+    <li>数组名在表达式中退化为指向首元素的指针（<code>sizeof(arr)</code> 在定义处是数组大小，作参数后变成 4/8 字节指针大小）。</li>
+    <li>经典笔试题：<code>void Func(char str[100]){ sizeof(str)=? }</code> → 4（64 位下 8）。</li>
+    <li>区分：指针数组（存指针的数组）、数组指针（指向数组的指针）、函数指针（指向函数的指针）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q11</span>函数的入参存放在哪里？所有入参都在栈吗？</summary><div class="qa-body"><ul>
+    <li>默认在栈上；但 ARMv8 / x86-64 架构下<span class="k">前几个参数存寄存器</span>（如 r0–r7 / rdi-r9），多余的才压栈。</li>
+    <li>加分：这也解释了为什么中断 / 系统调用要保存寄存器上下文。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q12</span>内存泄漏、内存碎片？如何避免？</summary><div class="qa-body"><ul>
+    <li>泄漏：malloc 后未 free，长期运行设备内存耗尽死机。</li>
+    <li>碎片：频繁 malloc/free 产生零散小块，无法分配大块；嵌入式里更致命。</li>
+    <li>避免：尽量用静态内存 / 全局缓冲，RTOS 用内存池分配固定块，统一申请释放；<code>free</code> 靠块头元信息知道大小。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q13</span>C++ 必答三连：多态 / RAII / new 与 malloc</summary><div class="qa-body"><ul>
+    <li>多态与虚函数表：含虚函数的类有 vptr 指向 vtable，通过虚表实现动态绑定；基类析构函数应为 virtual。</li>
+    <li>RAII：构造时获取资源、析构时自动释放（如 unique_ptr），栈对象生命周期管理内存——被大厂反复追问。</li>
+    <li><code>new/delete</code> 在分配内存后调用构造 / 析构函数；<code>malloc/free</code> 只管理内存，不调用构造析构。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q14</span>回调函数是什么？有什么用？</summary><div class="qa-body"><ul>
+    <li>通过函数指针调用：调用者注册、被调用者在特定事件发生时执行。</li>
+    <li>典型用途：中断服务函数、事件驱动编程、异步通知、驱动层解耦（你的 CAN 接收回调、传感器中断都用到了）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q15</span>sizeof 和 strlen 的区别？</summary><div class="qa-body"><ul>
+    <li>sizeof：编译期运算符，计算类型 / 变量占用字节，字符串数组含结尾 '\0'。</li>
+    <li>strlen：运行期函数，统计到 '\0' 为止的字符数，不含 '\0'。</li>
+    <li>陷阱：<code>char *p="abc"; sizeof(p)</code> 是指针大小 4/8，不是 4。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">3.2</span>Linux 系统编程</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>进程与线程的区别？</summary><div class="qa-body"><ul>
+    <li>进程：独立地址空间、独立资源，切换开销大，通信靠 IPC；线程：共享进程地址空间与资源，创建 / 切换开销小，但共享数据需同步。</li>
+    <li>Linux 中线程本质是轻量进程（clone 实现），有独立 task_struct，但共享 mm / fs / fd。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q2</span>进程间通信方式有哪些？</summary><div class="qa-body"><ul>
+    <li>无名管道（父子进程）、命名管道（无亲缘关系）、信号、消息队列、共享内存、信号量、Socket（本机 / 跨网络）。</li>
+    <li>内核与用户态通信补充：系统调用、ioctl、netlink、mmap、procfs/sysfs。</li>
+    <li>高频追问：共享内存为什么最快？因为没有内核拷贝，但要自己处理同步。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q3</span>什么是上下文切换？</summary><div class="qa-body"><ul>
+    <li>CPU 在进程 / 任务间切换时保存并恢复现场：寄存器、PC、栈指针、页表、内核栈等。</li>
+    <li>开销包括：保存恢复寄存器、TLB / cache 失效、调度器开销；这也是线程优于进程的原因之一。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q4</span>静态库与动态库的区别？</summary><div class="qa-body"><ul>
+    <li>静态库：链接时合并进可执行文件，体积大，无运行依赖；动态库：运行时加载（.so），多进程共享一份代码，节省内存，升级方便。</li>
+    <li>经典真题：静态库内定义的静态变量，线程 A 修改后线程 B 再读，值变吗？——<span class="k">会变</span>：静态库代码已链接进进程，变量在进程内只有一份全局实例，所有线程共享同一地址。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q5</span>查看进程 / 线程 / 打开文件的命令？</summary><div class="qa-body"><ul>
+    <li>线程：<code>ps -eLf</code>、<code>top -H</code>；进程：<code>ps aux</code>。</li>
+    <li>进程打开的文件：<code>lsof</code>（以及 <code>/proc/pid/fd</code>）。</li>
+    <li>后台运行：<code>./app &amp;</code>；终端退出后继续：<code>nohup</code>；守护进程化：setsid / systemd。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q6</span>锁的类型与选型？</summary><div class="qa-body"><ul>
+    <li>自旋锁：忙等待，适合短临界区、中断上下文；互斥锁：可睡眠，适合长临界区、进程上下文；读写锁：读共享写独占；信号量：资源计数 / 同步；条件变量：配合互斥锁做等待通知。</li>
+    <li>常见追问：中断里不能用互斥锁（会睡眠）→ 用自旋锁或关中断。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q7</span>TCP 粘包 / 拆包怎么处理？</summary><div class="qa-body"><ul>
+    <li>TCP 是字节流，无消息边界，应用层必须自定义协议：帧头 + 帧长 + 数据（+ 校验）。</li>
+    <li>处理：接收端按帧长字段拆包，缓冲未满一帧的数据；你项目里的串口"帧头 + 帧长 + ID + 功能码 + 数据 + CRC-8" 就是同一套思路，可迁移作答。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q8</span>select / poll / epoll 的区别？</summary><div class="qa-body"><ul>
+    <li>select：fd 上限 1024，每次全量轮询、拷贝 fd 集合；poll：无上限，但仍全量扫描。</li>
+    <li>epoll：事件驱动，注册后只处理就绪 fd，O(1) 复杂度，支持 LT / ET 两种模式（ET 需一次性读完）。</li>
+    <li>加分：说出水平触发与边沿触发区别、ET 模式为什么适合大并发。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q9</span>32 位 Linux 虚拟内存空间怎么分布？</summary><div class="qa-body"><ul>
+    <li>用户空间 0x00000000–0xBFFFFFFF（3G）：代码段 → 数据段 → BSS → 堆（向上）→ 栈（向下）→ 环境变量。</li>
+    <li>内核空间 0xC0000000–0xFFFFFFFF（1G）；高端内存映射区位于内核空间顶部（约 0xF8000000 起），映射超过直接映射区（约 896MB）的物理内存。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q10</span>死锁的四个条件与避免方法？</summary><div class="qa-body"><ul>
+    <li>四条件：互斥、占有并等待、不可剥夺、循环等待。</li>
+    <li>避免：所有任务按相同顺序申请锁、避免嵌套锁、加超时、减少锁粒度；面试常让结合 RTOS / 多线程项目举例。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q11</span>GDB 调试常用命令（你简历写了 GDB）</summary><div class="qa-body"><ul>
+    <li>断点：<code>b 行号 / 函数名</code>；查看变量：<code>p 变量</code>；十六进制打印：<code>p/x (uint16_t)var</code>。</li>
+    <li>跟踪变量变化：<code>watch 变量</code>（写时触发）、<code>rwatch</code>（读时触发）；调用函数：<code>call func(args)</code>。</li>
+    <li>栈回溯：<code>bt</code>；core 分析：<code>gdb 程序 core</code> + <code>bt</code> 定位崩溃点。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q12</span>Linux 调度机制了解吗？</summary><div class="qa-body"><ul>
+    <li>普通进程：CFS 完全公平调度器，按虚拟运行时间公平分配 CPU；实时进程：SCHED_FIFO / SCHED_RR，优先级抢占。</li>
+    <li>nice 值调整调度优先级；高优先级进程优先执行。</li>
+  </ul></div></details>
+</div></section>
+
+<!-- ===== 3.3/3.4 续 ===== -->
+<div class="wrap">
+  <h3><span class="h3-tag">3.3</span>Linux 内核与驱动（重点补强 · 目标岗核心）</h3>
+  <p class="lead" style="margin-bottom:10px">对标大厂驱动岗真题：中断上下文、锁、设备树、内存、MMU、调试。以下每道都是驱动岗面经中重复出现的题。</p>
+  <details class="qa-group"><summary><span class="qno">Q1</span>内核空间与用户空间的通信方式？</summary><div class="qa-body"><ul>
+    <li>系统调用、ioctl、netlink、mmap 共享内存、管道 / 命名管道、消息队列、信号、Socket。</li>
+    <li>驱动中常用：<code>copy_to_user / copy_from_user</code>（读写接口）、mmap（零拷贝）、netlink。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q2</span>为什么中断处理函数不能睡眠？</summary><div class="qa-body"><ul>
+    <li>中断上下文没有进程结构体（task_struct），无法被调度器挂起和唤醒，睡眠会导致系统卡死。</li>
+    <li>中断要快速执行，睡眠会长时间占用中断资源；所以中断里禁止调用可能睡眠的函数（如 <code>kmalloc(..., GFP_KERNEL)</code>、mutex）。</li>
+    <li>对照记忆：进程上下文可以睡眠；工作队列运行在内核线程（进程上下文）中可以睡眠。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q3</span>什么是进程上下文 / 中断上下文？</summary><div class="qa-body"><ul>
+    <li>进程上下文：进程运行环境，包括用户上下文（寄存器、PC、栈指针、内存映射）和内核上下文（task_struct、内核栈、页表、fd、信号掩码）。</li>
+    <li>中断上下文：执行中断处理函数时的上下文，无进程关联，不可睡眠，栈受限（通常用独立中断栈）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q4</span>中断的下半部机制？tasklet 与工作队列区别？</summary><div class="qa-body"><ul>
+    <li>上半部（硬中断）：快速处理、清标志；下半部处理耗时任务：软中断、tasklet、工作队列、线程化中断。</li>
+    <li>tasklet：运行在软中断上下文（原子上下文），<span class="k">不能睡眠</span>，同一 tasklet 串行执行。</li>
+    <li>工作队列（workqueue）：运行在内核线程的<span class="k">进程上下文，可以睡眠</span>。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q5</span>自旋锁与互斥锁的选型？</summary><div class="qa-body"><ul>
+    <li>自旋锁：忙等待，不睡眠，适合短临界区，可在中断上下文用（配 <code>spin_lock_irqsave</code> 关中断）；持锁期间不能睡眠。</li>
+    <li>互斥锁：可睡眠（等待者挂起），适合长临界区，只能在进程上下文用。</li>
+    <li>口诀：中断 / 短临界 → 自旋锁；进程 / 长临界 → 互斥锁；读多写少 → 读写锁。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q6</span>设备树（Device Tree）的作用？驱动和设备如何匹配？</summary><div class="qa-body"><ul>
+    <li>设备树用节点 / 属性描述硬件资源（寄存器、中断、GPIO），实现硬件与驱动解耦，驱动通用化。</li>
+    <li>platform 驱动匹配：设备节点 <code>compatible</code> 字符串与驱动 <code>of_match_table</code> 完全一致（大小写、格式不能差一个字符）；也支持 name / id 匹配。</li>
+    <li>资源获取：<code>platform_get_resource</code>、<code>of_iomap / ioremap</code>、<code>irq_of_parse_and_map</code>。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q7</span>写一个字符设备驱动的流程？module_init 怎么生效？</summary><div class="qa-body"><ul>
+    <li>流程：注册设备号（alloc_chrdev_region）→ cdev_init / cdev_add → 实现 file_operations（open/read/write/ioctl）→ class_create + device_create 生成 /dev 节点。</li>
+    <li><code>module_init(fn)</code> / <code>module_exit(fn)</code> 把函数指针放入内核的 init / exit 段，insmod 时执行 init、rmmod 时执行 exit。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q8</span>内核内存分配方式？kmalloc / kzalloc / vmalloc 区别？</summary><div class="qa-body"><ul>
+    <li>伙伴系统：管理物理页框，分配大内存、解决外部碎片；slab / slub：基于伙伴系统缓存小对象（kmem_cache）。</li>
+    <li>kmalloc：物理连续、大小有限（按块对齐，如申请 128 可能按最小块规则给 128 或 256）；vmalloc：虚拟连续、物理可不连续，适合大块。</li>
+    <li>GFP_KERNEL（可睡眠）vs GFP_ATOMIC（中断上下文用）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q9</span>MMU 与虚拟地址到物理地址的转换？</summary><div class="qa-body"><ul>
+    <li>流程：拆分虚拟地址为页目录号、页表号、页内偏移 → 查多级页表得到物理页框号 → 页框号 + 偏移组成物理地址；转换失败触发缺页异常。</li>
+    <li>MMU 工作流：收到虚拟地址 → 查 TLB（未命中查页表）→ 地址转换 + 权限校验 → 输出物理地址。</li>
+    <li>缓存：TLB 是页表项的缓存，进程切换需刷新。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q10</span>Cache 一致性是什么？怎么保证？</summary><div class="qa-body"><ul>
+    <li>多核 / 多级缓存下，同一物理地址的 Cache 副本需保持一致；由硬件一致性协议（MESI/MOESI）自动维护。</li>
+    <li>软件侧：DMA 与外设共享内存时需要显式同步（dma_map / dma_unmap、cache clean/invalidate），或使用 dmb/dsb 内存屏障指令。</li>
+    <li>面试点：为什么 DMA 缓冲区要 cacheline 对齐、dma_alloc_coherent 分配一致性内存。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q11</span>DMA 的原理？为什么用 DMA？</summary><div class="qa-body"><ul>
+    <li>原理：CPU 配置 DMA 控制器（源地址、目的地址、传输长度、触发方式），DMA 自主搬运，完成后中断通知 CPU。</li>
+    <li>作用：外设与内存间高速传输无需 CPU 逐字节搬运，解放 CPU（你的 SPI ADC 采样、EtherCAT 报文收发都可用此作答）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q12</span>驱动能直接访问用户空间内存吗？怎么访问？</summary><div class="qa-body"><ul>
+    <li>不能直接访问（指针不可信、可能缺页睡眠），必须通过 <code>copy_to_user / copy_from_user</code> 或 <code>mmap</code>（零拷贝）间接访问。</li>
+    <li>补充：<code>get_user / put_user</code> 访问单个值；访问前要检查地址合法性。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q13</span>系统调用用户态到内核态发生了什么？</summary><div class="qa-body"><ul>
+    <li>触发软中断（x86 的 int 0x80 / syscall 指令）→ 保存用户态上下文 → 切换到内核栈与页表 → 执行系统调用服务函数 → 恢复用户态上下文并返回。</li>
+    <li>追问：用户态堆栈本身不变，CPU 把用户栈指针、PC 等保存到内核栈。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q14</span>驱动模块 panic 了怎么调试？</summary><div class="qa-body"><ul>
+    <li>dmesg 日志、printk 分级打印；死机后分析 core dump / crash 工具查内存镜像；kdb / kgdb、ftrace 函数跟踪；kmemleak 查泄漏。</li>
+    <li>ftrace 用法：echo function &gt; current_tracer → echo 1 &gt; tracing_on → 执行 → echo 0 &gt; tracing_on → cat trace。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q15</span>嵌入式 Linux 启动流程（三大块）？</summary><div class="qa-body"><ul>
+    <li>引导加载程序（U-Boot：初始化硬件、加载内核）→ 内核（进程 / 内存 / IO 管理、初始化驱动）→ 根文件系统（用户程序、配置、库）。</li>
+    <li>拓展：交叉编译、设备树 dtb 加载、根文件系统挂载（initramfs / 挂载 rootfs）常被问。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">3.4</span>MCU 与 RTOS（强项巩固）</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>中断处理完整流程？</summary><div class="qa-body"><ul>
+    <li>外设产生中断请求 → CPU 保存当前 PC、寄存器等上下文（压栈）、关总中断 → 根据中断向量表跳转 ISR → 读取数据 / 清状态等处理 → 恢复寄存器与 PC、开中断 → 返回被中断处继续执行。</li>
+    <li>中断嵌套：处理中断时允许响应更高优先级中断，执行完再返回；同优先级一般禁止嵌套。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q2</span>中断与轮询的区别？</summary><div class="qa-body"><ul>
+    <li>轮询：CPU 不断查外设状态，占用高、效率低、实时性差，适合低速外设。</li>
+    <li>中断：外设就绪主动通知 CPU，CPU 利用率高、实时性强，适合高速 / 紧急外设。</li>
+    <li>补充：中断里尽量短，用标志位 / 队列把数据交给任务处理。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q3</span>看门狗（WDT）原理？</summary><div class="qa-body"><ul>
+    <li>独立硬件定时器，启动后计数递减；程序正常时定期喂狗重置；程序卡死无法喂狗 → 计数归零 → 触发系统复位。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q4</span>GPIO 配置步骤（STM32）？</summary><div class="qa-body"><ul>
+    <li>开时钟 → 配置模式（输入 / 输出 / 复用 / 模拟）→ 输出类型（推挽 / 开漏）→ 上下拉 → 输出速度 → （可选）外部中断与触发方式。</li>
+    <li>追问：开漏输出为什么需要上拉电阻（无法主动输出高电平）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q5</span>ADC 采样精度受哪些因素影响？</summary><div class="qa-body"><ul>
+    <li>硬件：参考电压稳定性、电源噪声、输入阻抗、接地；ADC 自身：位数、采样率、转换时间；软件：采样时间、多次采样取平均、滤波；环境：温漂、电磁干扰。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q6</span>FreeRTOS 任务有哪几种状态？调度算法？</summary><div class="qa-body"><ul>
+    <li>就绪、运行、阻塞、挂起；任务调用 vTaskDelay / 等待队列 → 运行转阻塞；挂起由 vTaskSuspend 进入。</li>
+    <li>FreeRTOS 默认固定优先级抢占式调度 + 同优先级时间片轮转；高优先级任务就绪立即抢占。</li>
+    <li>任务栈大小确定：根据局部变量 + 调用深度估算，或用 <code>uxTaskGetStackHighWaterMark()</code> 检测水位。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q7</span>信号量、互斥锁、队列的区别？</summary><div class="qa-body"><ul>
+    <li>队列：传递数据，自带缓冲，最通用；信号量：做同步 / 事件通知（二值）或资源计数（计数），不传数据；互斥锁：保护共享资源，同一时间仅一个任务使用。</li>
+    <li>互斥锁自带优先级继承，能解决优先级反转；信号量不适合做互斥。</li>
+    <li>记忆：队列传数据、信号量传状态、互斥锁保资源。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q8</span>什么是优先级反转？怎么解决？</summary><div class="qa-body"><ul>
+    <li>高优先级任务 A 等待低优先级任务 C 持有的锁，被中间优先级任务 B 抢占，A 长时间得不到执行。</li>
+    <li>解决：优先级继承（低优先级任务持锁时临时提升到最高等待者优先级，互斥锁自带）、优先级天花板协议、减小临界区。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q9</span>中断里能用哪些 API？为什么？</summary><div class="qa-body"><ul>
+    <li>只能使用 FromISR 后缀的安全版本且不能阻塞：<code>xQueueSendFromISR</code>、<code>xSemaphoreGiveFromISR</code> 等，并传入 <code>xHigherPriorityTaskWoken</code>，最后 <code>portYIELD_FROM_ISR</code> 决定是否切换。</li>
+    <li>普通队列接口会因调度 / 阻塞在中断上下文失效甚至死机。</li>
+    <li>经典追问：中断里不能 printf（不可重入、可能阻塞、关中断下易死锁），应置标志或投递队列 / 信号量。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q10</span>SysTick 在 RTOS 中的作用？软件定时器？</summary><div class="qa-body"><ul>
+    <li>系统滴答定时器周期产生中断，在中断服务里更新 tick、检查任务就绪状态、触发调度（时间片 / 延时依赖它）。</li>
+    <li>软件定时器两种模式：单次 / 周期；基于 tick 计数，在定时器守护任务中回调。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q11</span>RTOS 动态内存管理有哪些方案？</summary><div class="qa-body"><ul>
+    <li>FreeRTOS heap_1 只申请不释放、heap_2 按大小合并但不合并相邻、heap_4 合并相邻空闲块（最常用）、heap_5 支持多段内存。</li>
+    <li>优势：比 C 库 malloc 更快、碎片更少（嵌入式可控）；必要时用内存池固定块分配。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q12</span>任务通知（Task Notification）是什么？优缺点？</summary><div class="qa-body"><ul>
+    <li>轻量级任务间通信：直接向任务写通知值，无需创建队列 / 信号量，速度最快、内存最省。</li>
+    <li>缺点：只能一对一（目标明确的任务），不适用一对多广播 / 带数据缓冲的场景。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q13</span>裸机、RTOS、Linux 三者核心区别？</summary><div class="qa-body"><ul>
+    <li>裸机：前后台（主循环 + 中断），实时性靠中断，任务管理靠人。</li>
+    <li>RTOS：可剥夺式调度 + 任务 / 同步机制，硬实时，内存占用小（几十 KB 级）。</li>
+    <li>Linux：多进程多线程 + 虚拟内存 + 驱动框架，功能强但实时性一般（需 PREEMPT_RT / 实时内核），资源占用大。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q14</span>如何优化代码执行效率 / 低功耗设计？</summary><div class="qa-body"><ul>
+    <li>效率：算法降复杂度、开启编译器优化、register 高频变量、循环内减少计算、DMA / 硬件代替软件、减少任务切换。</li>
+    <li>低功耗：选低功耗 MCU、空闲 IO 配置上下拉防漏电、外设不用断电、空闲进休眠 / 停机模式、关无用时钟、中断代替轮询。</li>
+  </ul></div></details>
+</div>
+
+<!-- ===== 3.5/3.6 + 04 ===== -->
+<div class="wrap">
+  <h3><span class="h3-tag">3.5</span>通信与现场总线（你的王牌区 · 答深就是加分）</h3>
+  <p class="lead" style="margin-bottom:10px">你的简历覆盖 UART/SPI/I2C/RS485/CAN/CAN FD/CANopen/EtherCAT/LIN/UDS，这一模块要能从"会用"讲到"原理与排查"。下方扩至 16 题 + 总线速查表，RS232、Modbus、CANopen 深度、LIN、UDS 都是高频拷问点。</p>
+  <details class="qa-group"><summary><span class="qno">Q1</span>UART、RS232、RS485 的区别？</summary><div class="qa-body"><ul>
+    <li>UART：异步串口，TX/RX 两根线，全双工，单片机直接电平（TTL）。</li>
+    <li>RS232：电平标准（±12V），点对点，距离约 15m。</li>
+    <li>RS485：差分信号，抗干扰强、支持多节点总线、远距离，半双工（2 线 A/B）。</li>
+    <li>追问：异步怎么同步？——波特率约定 + 起始位 / 停止位 / 校验位。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q2</span>I2C 的时序与关键特性？</summary><div class="qa-body"><ul>
+    <li>两根线 SDA/SCL，<span class="k">开漏输出 + 上拉电阻</span>，半双工；总线空闲为高电平。</li>
+    <li>时序：起始 S（SCL 高、SDA 拉低）→ 7/10 位地址 + R/W → ACK → 数据字节 → 停止 P（SCL 高、SDA 拉高）；每字节后必须有应答位。</li>
+    <li>上拉电阻不能太大（RC 时间常数影响速率）也不能太小（灌电流过大）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q3</span>SPI 与 I2C 的区别？</summary><div class="qa-body"><ul>
+    <li>SPI：4 根线（SCLK/MOSI/MISO/CS），全双工、高速、无地址靠片选（单主机多从机）；I2C：2 根线、半双工、低速、有地址支持多主机。</li>
+    <li>SPI 无应答机制，I2C 有 ACK/NACK；SPI 速率可达几十 MHz，I2C 一般几 MHz 内。</li>
+    <li>追问：SPI 四种模式（CPOL/CPHA 决定采样沿）；I2C 读写错误怎么排查（先查地址与 ACK、时序、上拉）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q4</span>CAN 总线为什么可靠？核心机制？</summary><div class="qa-body"><ul>
+    <li>差分信号（CANH/CANL），抗干扰；多主广播、消息导向（ID 决定优先级与内容，非节点地址）。</li>
+    <li>仲裁：多个节点同时发送时按 ID 位仲裁，显性位（0）优先，ID 越小优先级越高，无破坏性仲裁、不丢消息。</li>
+    <li>错误检测五重：位填充（每 5 个相同位插入 1 个反相位）、CRC-15、位监控（发送与回读比对）、ACK 应答、帧格式检查；出错自动重发。</li>
+    <li>标准帧 11 位 ID / 扩展帧 29 位 ID；CAN FD 数据段速率更高、负载更大。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q5</span>CANopen 是什么？对象字典（OD）是什么？</summary><div class="qa-body"><ul>
+    <li>基于 CAN 的应用层协议：对象字典（OD）按索引-子索引组织数据条目，SDO 用于配置 OD（点对点、慢）、PDO 用于实时过程数据（周期 / 事件触发、快）。</li>
+    <li>你的实习做了"解析私有协议与 CANopen 对象字典，支持位置 / 速度 / 力矩 / MIT 及回零控制"——重点准备：OD 条目如何组织、PDO 映射、心跳 / 同步报文。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q6</span>EtherCAT 了解多少？</summary><div class="qa-body"><ul>
+    <li>工业以太网实时协议：主站发送以太网帧，从站（ESC）在硬件中"边传边处理"（FMMU 映射、PDO 数据在帧过站时读写），时钟同步（DC）ns 级。</li>
+    <li>你用过 AX58100（ESC）+ PDO 周期上报——准备：周期、抖动、同步如何保证，主从站如何配置。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q7</span>串口粘包 / 拆包怎么处理？CRC 校验？</summary><div class="qa-body"><ul>
+    <li>自定义帧格式：帧头 + 帧长 + ID + 功能码 + 数据 + CRC；接收端按状态机收帧，校验通过再解析，处理粘包（多帧连续）与拆包（一帧分多次到达）。</li>
+    <li>CRC：循环冗余校验，硬件 / 查表实现；你用的 CRC-8 可展开讲讲多项式、初始值、异或输出。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q8</span>通信中"中断 + 队列 + 任务"的典型模型？</summary><div class="qa-body"><ul>
+    <li>中断清硬件标志、取数据入队（FromISR API）→ 任务从队列取出解析处理；不在中断里做大块拷贝 / 长处理。</li>
+    <li>这是 FreeRTOS 串口 / CAN 收发的标准套路，也是面试最爱让你现场设计的题。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q9</span>RS232 的电平与特点？和 TTL / RS485 怎么配合？</summary><div class="qa-body"><ul>
+    <li>电平：逻辑 1 为 −3~−15V、逻辑 0 为 +3~+15V（负逻辑电压型）；DB9 接口常用 2=RXD、3=TXD、5=GND，可硬件流控 RTS/CTS。</li>
+    <li>全双工点对点，距离约 15m；与 MCU TTL 需电平转换芯片（MAX232 / SP3232）。</li>
+    <li>对比：RS232 电压型 / 单端、RS485 差分型 / 多节点 / 半双工 / 远距离（1200m 级）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q10</span>Modbus 协议了解吗？三种模式？帧结构？</summary><div class="qa-body"><ul>
+    <li>应用层串行总线协议：<span class="k">RTU</span>（二进制、CRC16）、<span class="k">ASCII</span>（可读、LRC）、<span class="k">TCP</span>（以太网、端口 502）。</li>
+    <li>主从模型：一个主站轮询，从站地址 1–247（0 为广播）；RTU 帧：地址 + 功能码 + 数据 + CRC16（低字节先发），帧间隔 ≥3.5 字符时间。</li>
+    <li>你项目里的 RS485 升降立柱协议若基于 Modbus，答起来会很加分。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q11</span>Modbus 常用功能码？异常响应？</summary><div class="qa-body"><ul>
+    <li>01 读线圈、02 读离散输入、03 读保持寄存器、04 读输入寄存器、05 写单线圈、06 写单寄存器、0F 写多线圈、10 写多寄存器。</li>
+    <li>异常响应：功能码 + 0x80 + 异常码；常见：01 非法功能、02 非法地址、03 非法数据、04 从站设备故障。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q12</span>Modbus CRC16 怎么算？</summary><div class="qa-body"><ul>
+    <li>CRC-16/MODBUS：多项式 0x8005（查表回读 0xA001）、初值 0xFFFF、结果低字节先发；逐位或查表实现。</li>
+    <li>拷问点：初值、多项式、字节序（低先发）与从站约定一致才能通过校验；你写的 CRC-8 可讲同思路升级版。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q13</span>CANopen 的 NMT / SDO / PDO 分别是什么？</summary><div class="qa-body"><ul>
+    <li><span class="k">NMT</span>：网络管理，控制从站状态机 Initialization → Pre-Operational → Operational → Stopped，NMT 命令发往节点地址 0x000；心跳 / 节点守护监测在线。</li>
+    <li><span class="k">SDO</span>：读写对象字典（慢速、点对点、客户端 / 服务器），大对象分段传输；<span class="k">PDO</span>：过程数据实时传输（RPDO 收 / TPDO 发），需配置映射参数与传输类型（0 同步非周期、1–240 同步周期、255 异步事件）。</li>
+    <li>加分：说出 SDO 快速 / 分段传输、PDO 映射怎么配（映射对象 + 映射参数）、PDO 禁用后如何恢复。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q14</span>CANopen 心跳、SYNC、EMCY 报文？</summary><div class="qa-body"><ul>
+    <li>心跳（0x700 + NodeID）：从站周期上报在线状态；SYNC（0x080）：主站周期广播，触发同步 PDO；EMCY（0x080 + NodeID）：紧急事件上报（错误码 + 错误寄存器）。</li>
+    <li>拷问：心跳与节点守护的区别（心跳单向周期、节点守护主站轮询 + 从站响应）；网络启动 / 停止命令（0x01/0x02 + NodeID）。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q15</span>LIN 总线了解吗？（简历有）</summary><div class="qa-body"><ul>
+    <li>低成本单线串行总线（12V 单线 + 地），主从、基于 UART，最高约 20kbps；帧：同步场（0x55）+ PID（6 位 ID + 2 位校验）+ 数据 + 校验。</li>
+    <li>用于车窗、座椅、后视镜等低速车身控制；对比：比 CAN 便宜、可靠性与速率低。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q16</span>UDS 诊断协议（ISO 14229）？和 OBD 的区别？</summary><div class="qa-body"><ul>
+    <li>汽车诊断请求-响应协议：SID 如 0x10 诊断会话控制、0x22 读数据、0x2E 写数据、0x31 例程控制、0x14 清 DTC、0x19 读 DTC；负响应 0x7F + SID + NRC（0x13 长度错误、0x22 条件不满足、0x31 请求超出范围）。</li>
+    <li>OBD（ISO 15031 / 15765）面向排放法规（PID 01 等），UDS 是通用诊断服务、基于 CAN 的 TP 层（ISO 15765）传输。</li>
+  </ul></div></details>
+
+  <table class="tbl"><colgroup><col style="width:15%"><col style="width:29%"><col style="width:29%"><col style="width:27%"></colgroup>
+    <thead><tr><th>总线</th><th>物理 / 拓扑</th><th>特点</th><th>典型应用</th></tr></thead>
+    <tbody>
+      <tr><td>UART</td><td>TTL 电平、点对点、全双工</td><td>简单、无时钟、波特率约定</td><td>板级调试、传感器、BLE 模块</td></tr>
+      <tr><td>RS232</td><td>±12V 单端、点对点、全双工</td><td>电平转换、距离 ~15m</td><td>工业设备调试口、PC 串口</td></tr>
+      <tr><td>RS485</td><td>差分、多点总线、半双工</td><td>抗干扰、远距离、多节点</td><td>Modbus RTU、升降立柱、楼宇</td></tr>
+      <tr><td>Modbus</td><td>应用层：RTU / ASCII / TCP</td><td>主从轮询、功能码 + CRC16</td><td>PLC、仪表、驱动器</td></tr>
+      <tr><td>CAN</td><td>差分、多主、广播</td><td>仲裁、位填充、五重错误检测</td><td>汽车、机器人关节、伺服</td></tr>
+      <tr><td>CANopen</td><td>CAN 应用层（CiA 301/402）</td><td>OD + SDO/PDO/NMT/心跳</td><td>伺服、机器人、医疗设备</td></tr>
+      <tr><td>EtherCAT</td><td>以太网帧、环形 / 线形拓扑</td><td>边传边处理、DC 同步 ns 级</td><td>多轴运动控制</td></tr>
+      <tr><td>LIN</td><td>12V 单线、主从</td><td>低成本低速（≤20kbps）</td><td>车窗、座椅、车身子网</td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="h3-tag">3.6</span>机器人 / ROS（差异化加分项）</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>ROS1 与 ROS2 的核心区别？</summary><div class="qa-body"><ul>
+    <li>ROS1：中心化 master（roscore）负责发现，节点间 TCPROS/UDPROS 通信，单点故障风险；ROS2：去中心化 DDS 发现，支持实时 / 多机 / 安全（QoS 策略）。</li>
+    <li>你两个都用过——对比说出各自适用场景即可。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q2</span>话题、服务、动作的区别？</summary><div class="qa-body"><ul>
+    <li>话题：异步、一对多、持续流（传感器数据 / cmd_vel）；服务：同步请求-响应、一次性；动作：长任务、带反馈与可取消。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q3</span>URDF、TF、里程计是什么？</summary><div class="qa-body"><ul>
+    <li>URDF：机器人几何 / 关节 / 惯量描述；TF：坐标变换树，维护各坐标系位姿；里程计：由轮速积分（差速 / 全向运动学）估计位姿。</li>
+    <li>追问：里程计误差来源（打滑、轮距不准、编码器分辨率、轮径标定）、如何用 AMCL/Cartographer 修正。</li>
+  </ul></div></details>
+
+  <details class="qa-group"><summary><span class="qno">Q4</span>ROS 话题通信的实时性如何？底层机制？</summary><div class="qa-body"><ul>
+    <li>ROS1 底层是 TCP/UDP socket（本地也可用共享内存），经 master 发现后直连；实时性弱于 DDS。</li>
+    <li>控制类高频消息（如 1kHz 关节命令）通常不走 ROS 直接内核 / 驱动通道，ROS 只做监控与上层接口——结合你 RK3588 六路 CAN 的经验展开。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">3.7</span>高频英语 / 反问准备（大厂英文面）</h3>
+  <details class="qa-group"><summary><span class="qno">Q</span>英文自我介绍 + 三个高频问题</summary><div class="qa-body"><ul>
+    <li>自我介绍：教育背景 + 项目亮点 + 技术栈 + 为什么投这个岗（30–60 秒）。</li>
+    <li>高频题：何时毕业 / 何时到岗；"给我几个理由把 offer 给你"——专业能力（Linux 内核 + 嵌入式开发 + 项目经验）+ 问题解决能力 + 学习潜力。</li>
+    <li>反问准备：团队业务与分工、新人培养路径、项目技术栈、测试与发布流程——体现你的专业度。</li>
+  </ul></div></details>
+</div>
+
+<div class="wrap">
+  <h3><span class="h3-tag">3.8</span>操作系统原理核心（Linux 岗高频补充）</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>为什么需要虚拟内存？分页有什么好处？</summary><div class="qa-body"><ul>
+    <li>隔离（进程互不干扰）、按需加载（只映射用到的页）、地址统一（每个进程看到连续空间）、保护（权限位）。</li>
+    <li>分页 vs 分段：页大小固定（4KB）便于管理、无外部碎片；多级页表节省内存（未用页表项不分配）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>用户态与内核态的区别？为什么要分？</summary><div class="qa-body"><ul>
+    <li>特权级不同：内核态可执行特权指令、访问所有资源；用户态受限，访问硬件 / 关键资源必须系统调用进入内核。</li>
+    <li>目的：保护操作系统与硬件不被用户程序破坏，隔离错误。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>常见的进程调度算法？Linux CFS 怎么工作的？</summary><div class="qa-body"><ul>
+    <li>FCFS、SJF（短作业优先）、RR（时间片轮转）、优先级调度、多级反馈队列。</li>
+    <li>CFS：按虚拟运行时间（vruntime）平衡，选 vruntime 最小的任务运行，红黑树维护，追求公平。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>死锁、活锁、饥饿的区别？</summary><div class="qa-body"><ul>
+    <li>死锁：互相持有并等待，永远无法推进；活锁：都在"礼让"导致没人推进（如两个任务互相让锁，CPU 空转）；饥饿：低优先级任务长期得不到资源（可用老化机制提高优先级解决）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>什么是僵尸进程 / 孤儿进程？怎么处理？</summary><div class="qa-body"><ul>
+    <li>僵尸：子进程已退出但父进程未 wait 回收 PCB，占内核资源；处理：父进程 wait/waitpid 回收，或父进程退出由 init（pid 1）收养。</li>
+    <li>孤儿：父进程先退出，子进程被 init 收养。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>文件描述符是什么？0 / 1 / 2 分别是什么？</summary><div class="qa-body"><ul>
+    <li>内核管理打开文件的整数句柄，指向文件表项；0 标准输入、1 标准输出、2 标准错误。</li>
+    <li>重定向：<code>2&gt;&amp;1</code> 把 stderr 合并到 stdout；ulimit -n 看上限。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>软链接与硬链接的区别？</summary><div class="qa-body"><ul>
+    <li>硬链接：多个目录项指向同一 inode，不能跨文件系统、不能链接目录；软链接（符号链接）：存目标路径的独立文件，可跨文件系统，目标删除后失效。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q8</span>mmap 的原理与优势？</summary><div class="qa-body"><ul>
+    <li>把文件 / 匿名内存映射到进程地址空间，访问时按页缺页加载；优势：省一次内核到用户态的拷贝（零拷贝思想），大文件可只映射部分。</li>
+    <li>典型应用：共享内存 IPC、驱动 mmap 零拷贝、加载器。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q9</span>信号机制？哪些信号不能捕获？</summary><div class="qa-body"><ul>
+    <li>异步通知进程事件的机制：SIGINT（Ctrl+C）、SIGKILL（杀进程）、SIGSEGV（段错误）、SIGCHLD（子进程退出）。</li>
+    <li>SIGKILL 与 SIGSTOP 不可捕获 / 忽略。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q10</span>生产者-消费者模型怎么实现？注意什么？</summary><div class="qa-body"><ul>
+    <li>环形缓冲 + 互斥锁 + 条件变量（或信号量计数）；注意：缓冲满生产者阻塞、空消费者阻塞、唤醒时机、多生产多消费时避免死锁。</li>
+    <li>嵌入式版：中断（生产者）入队 + 任务（消费者）出队，用 FromISR API——你的串口 / CAN 收发的核心。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">3.9</span>计算机网络（嵌入式常考）</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>TCP 与 UDP 的区别？各自适用场景？</summary><div class="qa-body"><ul>
+    <li>TCP：面向连接、可靠（确认 / 重传 / 排序 / 流量控制 / 拥塞控制）、字节流；UDP：无连接、不可靠、数据报、低延迟。</li>
+    <li>适用：TCP 文件 / 控制命令；UDP 音视频实时流、传感器广播。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>TCP 三次握手 / 四次挥手过程？为什么？</summary><div class="qa-body"><ul>
+    <li>握手：SYN → SYN+ACK → ACK；目的：双方确认收发能力、交换初始序号。</li>
+    <li>挥手：FIN → ACK → FIN → ACK（两次因为半关闭，数据可单向继续）；主动方要等 TIME_WAIT（2MSL）保证对方 ACK 收到。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>TCP 怎么保证可靠传输？</summary><div class="qa-body"><ul>
+    <li>序号 + 确认应答、超时重传、滑动窗口（流量控制）、拥塞控制（慢启动 / 拥塞避免 / 快重传 / 快恢复）、校验和。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>MQTT 了解吗？（简历有）</summary><div class="qa-body"><ul>
+    <li>基于 TCP 的轻量发布 / 订阅协议，适合物联网：QoS 0/1/2、遗嘱消息、保留消息、1883 端口。</li>
+    <li>与 ROS 话题类比：都是发布订阅，但 MQTT 走 Broker 中转、跨网络。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>Socket 编程的基本流程？</summary><div class="qa-body"><ul>
+    <li>服务端：socket → bind → listen → accept → recv/send → close；客户端：socket → connect → send/recv → close。</li>
+    <li>追问：非阻塞 + epoll 怎么组织（结合 3.2-Q8）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>什么是 MTU？IP 分片？</summary><div class="qa-body"><ul>
+    <li>以太网 MTU 1500 字节；超过则 IP 层分片，接收端重组，分片丢失整包作废。</li>
+    <li>工程点：TCP 用 MSS 协商避免分片；UDP 大数据要自己考虑。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>ARP 的作用？</summary><div class="qa-body"><ul>
+    <li>同网段内由 IP 解析 MAC 地址：广播 ARP 请求、单播应答，结果缓存（ARP 表）。</li>
+    <li>追问：跨网段通信靠网关（路由器），源主机先解析网关 MAC。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">3.10</span>场景 / 设计题（区分"会用"和"用熟"）</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>设计一个串口接收驱动（中断 + 缓冲 + 任务）</summary><div class="qa-body"><ul>
+    <li>方案：串口中断收字节入环形缓冲（关中断或 FromISR 入队）→ 解析任务按状态机拆帧（帧头 + 帧长 + 校验）→ 上层按 ID 分发。</li>
+    <li>要点：缓冲长度估算（最大帧 × 突发）、溢出策略、中断里不做解析 / 拷贝。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>系统卡死 / 死机怎么定位？</summary><div class="qa-body"><ul>
+    <li>先看看门狗是否复位、串口最后日志；dmesg / printk 分级；内核 panic 看 oops 栈（地址转函数）；crash / gdb 分析 core；复现时加 ftrace / 计数日志二分定位。</li>
+    <li>MCU 侧：hardfault 处理函数打印 PC/LR、栈回溯；排查栈溢出、野指针、未初始化时钟。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>多个外设共享一条 SPI 总线怎么管理？</summary><div class="qa-body"><ul>
+    <li>片选 CS 分时选通 + 互斥锁保护总线；每个外设访问前获取锁、拉低自己的 CS、传完拉高释放；注意 CS 时序与模式（CPOL/CPHA）一致性。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>传感器滤波怎么选型？</summary><div class="qa-body"><ul>
+    <li>滑动平均：平滑噪声、有相位延迟，适合平稳信号；中值滤波：去毛刺 / 脉冲干扰；一阶低通（IIR）：计算量小、截止频率可调；卡尔曼：动态系统最优估计（IMU / 里程计融合）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>如何估算任务栈大小？</summary><div class="qa-body"><ul>
+    <li>方法：按函数最大局部变量 + 调用深度 + 中断嵌套估算，再留 1.5–2 倍余量；运行时用 <code>uxTaskGetStackHighWaterMark()</code> 观察水位，压测后收敛。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>实时性指标：硬实时 / 软实时、抖动是什么？</summary><div class="qa-body"><ul>
+    <li>硬实时：超时 = 灾难（汽车 ESP、伺服）；软实时：偶发延迟可接受（视频、通知）。</li>
+    <li>抖动（jitter）：周期任务的执行时刻偏差；来源：调度、中断、cache 未命中；优化：任务优先级、锁粒度、DMA、RT 内核。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>两个线程交替打印 1–100（条件变量实现）</summary><div class="qa-body"><ul>
+    <li>互斥锁 + 条件变量：各自等待自己的轮次标志，打印后翻转标志并通知对方；或用两个信号量（sem A 初始 1、sem B 初始 0）交替 take/give。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">3.11</span>Bootloader（MCU IAP + Linux U-Boot，拷问重灾区）</h3>
+  <details class="qa-group"><summary><span class="qno">Q1</span>什么是 Bootloader？为什么需要？</summary><div class="qa-body"><ul>
+    <li>上电最先执行的引导程序：初始化最小硬件、加载并跳转应用；用途：固件升级（IAP）、出厂烧录、安全引导（签名校验）。</li>
+    <li>拷问点：Boot 与 APP 的 Flash 分区、Boot 一般不擦除、升级失败也不影响 Boot。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>MCU Bootloader 启动与跳转 APP 的流程？</summary><div class="qa-body"><ul>
+    <li>上电判断进入条件（Boot 引脚 / Flash 标志位 / 外部升级命令）→ 需要升级则进入升级流程，否则直接跳 APP。</li>
+    <li>跳转步骤：关全局中断 → 校验 APP 起始地址合法（该地址处栈顶值应在 RAM 范围内）→ 设置 MSP（主栈指针）→ 设置中断向量表偏移（STM32：<code>SCB-&gt;VTOR = APP_BASE</code>）→ 用函数指针跳转 <code>((void(*)())APP_ResetHandler)()</code>。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>跳转 APP 有哪些坑？</summary><div class="qa-body"><ul>
+    <li>跳转前<span class="k">关全局中断</span>（避免跳转过程被打断）；<span class="k">VTOR 偏移</span>（中断向量表不重映射，中断会跑飞）；跳转后不复用 Boot 栈数据；外设状态复位（时钟 / 中断配置）。</li>
+    <li>分区规划：Boot 区与 APP 区不能重叠；APP 链接地址与 VTOR 必须一致（链接脚本 / 分散加载）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>固件升级协议怎么设计？</summary><div class="qa-body"><ul>
+    <li>帧：帧头 + 长度 + 命令（握手 / 擦除 / 写 Flash / 校验 / 跳转）+ 地址 + 数据 + CRC32；按 Flash 页擦除、块写入。</li>
+    <li>写完做整包 CRC / 累加和校验，通过才置"APP 有效"标志；应答 + 超时重传；断点续传与版本管理。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>双 Bank / A-B 双区升级与失败回滚？</summary><div class="qa-body"><ul>
+    <li>新固件写入 B 区 → 校验通过后置切换标志 → Boot 启动 B 区 → 运行确认（心跳 / 看门狗）→ 稳定后固化；失败自动回滚 A 区。</li>
+    <li>拷问点：为什么不能边擦边跑旧程序（Flash 擦写期间取指会卡死）、双区代价（Flash 容量翻倍）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>升级过程中断电 / 掉电怎么办？</summary><div class="qa-body"><ul>
+    <li>看门狗超时回滚 + 双区 + 升级状态机：先擦后写、写完再置有效标志，避免"半区有效"；CRC 校验失败拒绝跳转；Boot 区永不擦除、固件可重刷。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>Linux 的 U-Boot 了解多少？</summary><div class="qa-body"><ul>
+    <li>流程：SoC ROM code → <span class="k">SPL</span>（最小引导，初始化 DDR / 时钟）→ U-Boot 完整阶段 → 加载内核镜像（Image / zImage）与设备树 dtb → 设置 <code>bootargs</code>（根文件系统、console、mem 等）→ <code>booti / bootm</code> 跳转内核。</li>
+    <li>常用：环境变量（<code>bootcmd</code> / <code>bootargs</code>）、烧录方式（fastboot / mfg / UMS）、secure boot 签名校验。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q8</span>嵌入式 Linux 完整启动链路？为什么分 SPL / U-Boot 两段？</summary><div class="qa-body"><ul>
+    <li>ROM code → SPL / TPL → U-Boot → 内核自解压 → 设备树解析 → 内核初始化（进程 / 内存 / 驱动）→ 挂载根文件系统（initramfs / 真实 rootfs）→ /sbin/init → 应用启动。</li>
+    <li>为什么要分两段：<span class="k">DDR 未初始化前放不下大程序</span>，SPL 用片内 SRAM 最小初始化 DDR，再加载完整 U-Boot。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q9</span>Secure Boot 怎么防固件篡改？</summary><div class="qa-body"><ul>
+    <li>链式信任：ROM 固化公钥 → 校验 SPL 签名 → 校验 U-Boot 签名 → 校验内核 / 设备树；任一级校验失败即停止启动。</li>
+    <li>配合：固件加密存储、防回滚版本号（efuse / 安全存储）、JTAG 熔断。</li>
+  </ul></div></details>
+</div>
+
+<!-- ===== 04 手撕 20 题 ===== -->
+<section id="s4"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">04</span><h2>手撕代码完整实现</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">先掌握必考 20 题清单（华为 / 字节 / 大疆 / 宁德 / 小米 / 海康 / TP-Link 高频命中），再看下方 <b>13 段</b>可直接背诵的完整实现：环形缓冲、CRC-8、大小端、atoi、链表反转、memmove、offsetof/container_of、位操作、排序三件套、数组去重、找缺失数、链表删倒数第 N 个、数组旋转。每段都要能<strong>白板 / 共享屏幕下一遍写对</strong>，不要只看。</p>
+
+  <h3><span class="h3-tag">A</span>位运算类（嵌入式特色 · 出场率最高）</h3>
+  <table class="tbl"><colgroup><col style="width:6%"><col style="width:52%"><col style="width:42%"></colgroup>
+    <thead><tr><th>#</th><th>题目</th><th>关键思路</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>判断整数是否为 2 的整数次幂</td><td><code>n &gt; 0 &amp;&amp; (n &amp; (n-1)) == 0</code></td></tr>
+      <tr><td>2</td><td>统计二进制中 1 的个数</td><td><code>n &amp;= (n-1)</code> 循环，或查表 / 逐位</td></tr>
+      <tr><td>3</td><td>置位 / 清零 / 翻转 / 判断某一位</td><td><code>|= (1&lt;&lt;n)</code>、<code>&amp;= ~(1&lt;&lt;n)</code>、<code>^= (1&lt;&lt;n)</code>、<code>(x&gt;&gt;n)&amp;1</code></td></tr>
+      <tr><td>4</td><td>求两整数平均值且不溢出</td><td><code>(a &amp; b) + ((a ^ b) &gt;&gt; 1)</code></td></tr>
+      <tr><td>5</td><td>不用临时变量交换两数</td><td><code>a ^= b; b ^= a; a ^= b;</code>（或加减法，注意溢出）</td></tr>
+      <tr><td>6</td><td>求绝对值且不用分支</td><td><code>(n ^ (n&gt;&gt;31)) - (n&gt;&gt;31)</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="h3-tag">B</span>字符串 / 内存类（基本功照妖镜）</h3>
+  <table class="tbl"><colgroup><col style="width:6%"><col style="width:52%"><col style="width:42%"></colgroup>
+    <thead><tr><th>#</th><th>题目</th><th>关键思路</th></tr></thead>
+    <tbody>
+      <tr><td>7</td><td>手写 strlen</td><td><code>size_t</code> 返回、参数 <code>const char*</code>、空指针判断</td></tr>
+      <tr><td>8</td><td>手写 strcpy / memcpy（含 memmove）</td><td><b>重点：内存重叠</b>，memmove 需从尾部向前拷贝；memcpy 不保证重叠安全</td></tr>
+      <tr><td>9</td><td>手写 strcmp / strstr</td><td>逐字节比较；strstr 可用暴力或 KMP 思路</td></tr>
+      <tr><td>10</td><td>字符串转整数 atoi</td><td>处理正负号、跳过空格、非法输入、溢出返回 INT_MAX/MIN</td></tr>
+      <tr><td>11</td><td>手写 memset</td><td>逐字节赋值（可字节展开优化，讲一句即可）</td></tr>
+      <tr><td>12</td><td>判断字符串是否为回文</td><td>双指针从两端向中间</td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="h3-tag">C</span>C 关键字 / 宏 / 指针类</h3>
+  <table class="tbl"><colgroup><col style="width:6%"><col style="width:52%"><col style="width:42%"></colgroup>
+    <thead><tr><th>#</th><th>题目</th><th>关键思路</th></tr></thead>
+    <tbody>
+      <tr><td>13</td><td>宏实现 offsetof 与 container_of</td><td><code>((size_t)&amp;((type*)0)-&gt;member)</code>；container_of 用 member 指针减偏移回算结构体首地址</td></tr>
+      <tr><td>14</td><td>宏求 MAX/MIN 及宏的坑</td><td>整体加括号 <code>((a)&gt;(b)?(a):(b))</code>；说明副作用、重复求值</td></tr>
+      <tr><td>15</td><td>宏实现置位 / 清零带参宏</td><td><code>SET_BIT(x,n) ((x) |= (1UL&lt;&lt;(n)))</code> 等，参数加括号</td></tr>
+      <tr><td>16</td><td>函数指针实现回调机制</td><td><code>int (*cb)(int)</code> 声明、赋值、事件触发调用；讲清"注册-触发-解耦"</td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="h3-tag">D</span>数据结构类（链表是重灾区）</h3>
+  <table class="tbl"><colgroup><col style="width:6%"><col style="width:52%"><col style="width:42%"></colgroup>
+    <thead><tr><th>#</th><th>题目</th><th>关键思路</th></tr></thead>
+    <tbody>
+      <tr><td>17</td><td>单链表反转（手撕率第一名）</td><td>三指针 prev / cur / next 原地反转；或递归</td></tr>
+      <tr><td>18</td><td>判断链表是否有环</td><td>快慢指针（快 2 步慢 1 步），相遇即有环；可追问环入口</td></tr>
+      <tr><td>19</td><td>两个单链表的相交节点</td><td>双指针走完 A 走 B，相遇即交点（或先算长度差）</td></tr>
+      <tr><td>20</td><td>链表中间节点 / 删除倒数第 N 个节点</td><td>快慢指针；倒数第 N：先走 N 步再同步走 + 哑节点</td></tr>
+    </tbody>
+  </table>
+  <p class="lead" style="margin-top:4px">附加：笔试题还常出现冒泡 / 选择 / 插入排序、数组去重、找缺失数、数组旋转，完整代码见下方<b>实现 9–13</b>；链表的笔试题在牛客汇总中明确被标注为"嵌入式笔试最常见编程题"（反转见实现 5，判环 / 相交 / 中间节点见上方表格，删除倒数第 N 个见实现 12）。</p>
+
+  <h3><span class="h3-tag">实现 1</span>环形缓冲 ringbuffer（嵌入式笔试出现多次）</h3>
+  <pre class="codeblock">#define RB_SIZE 256
+typedef struct { uint8_t buf[RB_SIZE]; volatile uint16_t head, tail; } ringbuf_t;
+/* 空: head == tail; 满: (head+1)%RB_SIZE == tail; 最多存 RB_SIZE-1 字节 */
+int rb_write(ringbuf_t *rb, const uint8_t *data, uint16_t len) {
+    for (uint16_t i = 0; i &lt; len; i++) {
+        uint16_t next = (rb-&gt;head + 1) % RB_SIZE;
+        if (next == rb-&gt;tail) return -1;      /* 缓冲区满 */
+        rb-&gt;buf[rb-&gt;head] = data[i];
+        rb-&gt;head = next;
+    }
+    return 0;
+}
+int rb_read(ringbuf_t *rb, uint8_t *out, uint16_t len) {
+    uint16_t i = 0;
+    while (i &lt; len &amp;&amp; rb-&gt;tail != rb-&gt;head) {
+        out[i++] = rb-&gt;buf[rb-&gt;tail];
+        rb-&gt;tail = (rb-&gt;tail + 1) % RB_SIZE;
+    }
+    return i;                                  /* 返回实际读到的字节数 */
+}</pre>
+
+  <h3><span class="h3-tag">实现 2</span>CRC-8（多项式 0x07，逐位实现）</h3>
+  <pre class="codeblock">uint8_t crc8(uint8_t *data, uint16_t len) {
+    uint8_t crc = 0x00;
+    for (uint16_t i = 0; i &lt; len; i++) {
+        crc ^= data[i];
+        for (uint8_t b = 0; b &lt; 8; b++)
+            crc = (crc &amp; 0x80) ? (uint8_t)((crc &lt;&lt; 1) ^ 0x07) : (uint8_t)(crc &lt;&lt; 1);
+    }
+    return crc;                                 /* 与接收端约定的多项式、初值一致即可 */
+}</pre>
+
+  <h3><span class="h3-tag">实现 3</span>大小端判断与字节序转换</h3>
+  <pre class="codeblock">int is_little_endian(void) {                    /* 1 = 小端，0 = 大端 */
+    uint32_t x = 1;
+    return *(uint8_t *)&amp;x;
+}
+uint32_t swap32(uint32_t v) {
+    return ((v &amp; 0xFF) &lt;&lt; 24) | ((v &amp; 0xFF00) &lt;&lt; 8) |
+           ((v &gt;&gt; 8) &amp; 0xFF00) | ((v &gt;&gt; 24) &amp; 0xFF);
+}
+/* 协议收发统一转网络序：htonl / ntohl 的手写版，CAN/串口协议常用 */</pre>
+
+  <h3><span class="h3-tag">实现 4</span>字符串转整数 atoi（含边界处理）</h3>
+  <pre class="codeblock">int my_atoi(const char *s) {
+    int sign = 1, n = 0;
+    if (!s) return 0;
+    while (*s == ' ') s++;                       /* 跳过空白 */
+    if (*s == '+' || *s == '-') sign = (*s++ == '-') ? -1 : 1;
+    while (*s &gt;= '0' &amp;&amp; *s &lt;= '9') {
+        n = n * 10 + (*s++ - '0');               /* 完整版需检查 INT_MAX/MIN 溢出 */
+    }
+    return sign * n;
+}</pre>
+
+  <h3><span class="h3-tag">实现 5</span>单链表反转（手撕率第一名）</h3>
+  <pre class="codeblock">typedef struct Node { int val; struct Node *next; } Node;
+Node *reverse_list(Node *head) {
+    Node *prev = NULL, *cur = head;
+    while (cur) {
+        Node *next = cur-&gt;next;                  /* 先保存后继 */
+        cur-&gt;next = prev;                        /* 反转指针 */
+        prev = cur;                              /* 前进 */
+        cur = next;
+    }
+    return prev;                                 /* 新头 */
+}</pre>
+
+  <h3><span class="h3-tag">实现 6</span>memmove（处理内存重叠，笔试必问）</h3>
+  <pre class="codeblock">void *my_memmove(void *dst, const void *src, size_t n) {
+    uint8_t *d = (uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    if (d == s) return dst;
+    if (d &lt; s || d &gt;= s + n) {                   /* 无重叠：正向拷贝 */
+        while (n--) *d++ = *s++;
+    } else {                                     /* 重叠且 d 在 s 后：从尾向前拷贝 */
+        d += n; s += n;
+        while (n--) *--d = *--s;
+    }
+    return dst;
+}</pre>
+
+  <h3><span class="h3-tag">实现 7</span>offsetof 与 container_of（内核 / 驱动必会）</h3>
+  <pre class="codeblock">#define OFFSETOF(type, member)  ((size_t)&amp;((type *)0)-&gt;member)
+#define CONTAINER_OF(ptr, type, member) \
+    ((type *)((char *)(ptr) - OFFSETOF(type, member)))
+/* 用途：从结构体成员指针反推结构体首地址，链表 / 驱动 list_head 常用 */</pre>
+
+  <h3><span class="h3-tag">实现 8</span>位操作四件套 + 2 的幂 / 1 的个数</h3>
+  <pre class="codeblock">#define SET_BIT(x, n)  ((x) |=  (1UL &lt;&lt; (n)))
+#define CLR_BIT(x, n)  ((x) &amp;= ~(1UL &lt;&lt; (n)))
+#define TOG_BIT(x, n)  ((x) ^=  (1UL &lt;&lt; (n)))
+#define GET_BIT(x, n)  (((x) &gt;&gt; (n)) &amp; 1U)
+
+int is_pow2(unsigned v)    { return v &amp;&amp; !(v &amp; (v - 1)); }
+int count_one(unsigned v)  { int c = 0; while (v) { v &amp;= (v - 1); c++; } return c; }
+int avg_no_overflow(int a, int b) { return (a &amp; b) + ((a ^ b) &gt;&gt; 1); }</pre>
+
+  <h3><span class="h3-tag">实现 9</span>排序三件套：冒泡 / 选择 / 插入（笔试送分题）</h3>
+  <pre class="codeblock">/* 冒泡：相邻比较交换，每趟把最大沉底；已有序提前退出 O(n) */
+void bubble_sort(int *a, int n) {
+    for (int i = 0; i &lt; n - 1; i++) {
+        int swapped = 0;
+        for (int j = 0; j &lt; n - 1 - i; j++)
+            if (a[j] &gt; a[j + 1]) {
+                int t = a[j]; a[j] = a[j + 1]; a[j + 1] = t; swapped = 1;
+            }
+        if (!swapped) break;
+    }
+}
+
+/* 选择：每趟找最小放到前面，交换次数少 */
+void selection_sort(int *a, int n) {
+    for (int i = 0; i &lt; n - 1; i++) {
+        int m = i;
+        for (int j = i + 1; j &lt; n; j++)
+            if (a[j] &lt; a[m]) m = j;
+        if (m != i) { int t = a[i]; a[i] = a[m]; a[m] = t; }
+    }
+}
+
+/* 插入：像抓扑克牌，把当前元素插到前面有序区 */
+void insertion_sort(int *a, int n) {
+    for (int i = 1; i &lt; n; i++) {
+        int key = a[i], j = i - 1;
+        while (j &gt;= 0 &amp;&amp; a[j] &gt; key) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = key;
+    }
+}</pre>
+
+  <h3><span class="h3-tag">实现 10</span>有序数组原地去重（返回新长度）</h3>
+  <pre class="codeblock">int remove_dups(int *a, int n) {
+    if (n &lt;= 1) return n;
+    int k = 1;                                 /* 慢指针：已去重区长度 */
+    for (int i = 1; i &lt; n; i++)
+        if (a[i] != a[k - 1])                  /* 与已去重区末尾不同才保留 */
+            a[k++] = a[i];
+    return k;                                  /* 前 k 个为去重结果 */
+}</pre>
+
+  <h3><span class="h3-tag">实现 11</span>找缺失数（1~n 中缺一个，异或解法）</h3>
+  <pre class="codeblock">int find_missing(int *a, int n) {             /* a 含 1~n 中的 n-1 个数 */
+    int x = 0;
+    for (int i = 1; i &lt;= n; i++)  x ^= i;      /* 先异或全集 */
+    for (int i = 0; i &lt; n - 1; i++) x ^= a[i]; /* 再异或数组，成对抵消 */
+    return x;                                  /* 剩下的就是缺失值 */
+}</pre>
+
+  <h3><span class="h3-tag">实现 12</span>链表删除倒数第 N 个节点（哑节点 + 快慢指针）</h3>
+  <pre class="codeblock">Node *remove_nth_from_end(Node *head, int n) {
+    Node dummy = {0, head};                    /* 哑节点：统一处理删除头结点 */
+    Node *fast = &amp;dummy, *slow = &amp;dummy;
+    for (int i = 0; i &lt; n &amp;&amp; fast; i++) fast = fast-&gt;next;
+    while (fast &amp;&amp; fast-&gt;next) { fast = fast-&gt;next; slow = slow-&gt;next; }
+    Node *del = slow-&gt;next;                    /* slow 停在待删前驱 */
+    slow-&gt;next = del-&gt;next;
+    free(del);
+    return dummy.next;                         /* 新头（可能被删的是原头） */
+}</pre>
+
+  <h3><span class="h3-tag">实现 13</span>数组右旋 k 位（与 05 节左旋配套）</h3>
+  <pre class="codeblock">void rotate_right(int *a, int n, int k) {
+    k %= n;
+    reverse(a, 0, n - 1);                      /* 复用三次反转：整体反 */
+    reverse(a, 0, k - 1);                      /* 前 k 个反 */
+    reverse(a, k, n - 1);                      /* 后 n-k 个反 */
+}
+/* 例：1 2 3 4 5 右旋 2 → 4 5 1 2 3；左旋见第 05 节编程题 2 */</pre>
+</div></section>
+
+<!-- ===== 05 笔试指南 ===== -->
+<section id="s5"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">05</span><h2>笔试真题实战</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">笔试结构：选择题 / 填空（八股）+ 1–3 道编程题。下面 20 道是嵌入式笔试高频真题（选择题风格），先自答再展开；随后是 2 道带完整代码的编程题。</p>
+  <table class="tbl"><colgroup><col style="width:18%"><col style="width:40%"><col style="width:42%"></colgroup>
+    <thead><tr><th>模块</th><th>常见内容</th><th>备考策略</th></tr></thead>
+    <tbody>
+      <tr><td>选择题 / 填空</td><td>C 语言、操作系统、通信协议、RTOS 八股（覆盖本手册题库）</td><td>快速过、不恋战；把易错点（sizeof、大小端、volatile、宏）做错题本</td></tr>
+      <tr><td>编程题 1–3 道</td><td>ACM 格式（可含 <code>bits/stdc++.h</code>）：hot100 简单题、排序、链表、字符串、位操作、memcpy、ringbuffer</td><td>先易后难，先写能过的暴力再优化；务必处理边界（空输入、溢出、负数）</td></tr>
+      <tr><td>工程向手写</td><td>ringbuffer 实现、CRC 计算、大小端转换、协议解析（粘包拆包）</td><td>嵌入式笔试特色题，牛客 / 面经里多次出现，值得单独练</td></tr>
+      <tr><td>测评 / 性格测试</td><td>数不胜数，有的公司笔试后即筛</td><td>保持前后一致，别乱选；这类一般不是技术分</td></tr>
+    </tbody>
+  </table>
+  <h3><span class="h3-tag">建议</span>刷题路径（两周内可执行）</h3>
+  <ul class="qa-body" style="list-style:none;padding-left:0">
+    <li>牛客「嵌入式」专项题单 → 每日 15–20 道选择，覆盖八股</li>
+    <li>LeetCode hot100 挑简单题（链表、字符串、数组）→ 限时 15 分钟/道</li>
+    <li>手写题：本手册第 04 节 20 题 + ringbuffer + CRC，全部白板写一遍</li>
+    <li>笔试前：做 2–3 套目标公司真题 / 模拟，熟悉 ACM 输入输出格式</li>
+  </ul>
+  <h3><span class="h3-tag">A</span>选择 / 填空高频真题 20 道</h3>
+  <details class="qa-group"><summary><span class="qno">1</span>32 位下 struct{char a; int b; char c;} 的 sizeof？</summary><div class="qa-body"><ul><li>答案：<span class="k">12</span>。对齐规则：a 偏移 0，b 偏移 4（对齐 4），c 偏移 8，整体取最大成员对齐 4 → 12。</li><li>把成员按从大到小排列可省内存（8 字节）。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">2</span>union{char c[8]; int i;} 的 sizeof？</summary><div class="qa-body"><ul><li>答案：<span class="k">8</span>。联合体大小为最大成员（并按最大对齐补尾），成员共享内存。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">3</span>判断大小端：int n=1; *(char*)&amp;n 输出 1，说明？</summary><div class="qa-body"><ul><li>答案：<span class="k">小端</span>。低字节（0x01）存在低地址，因此强转 char 读到 1。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">4</span>volatile 不能用于？</summary><div class="qa-body"><ul><li>答案：防止编译器优化 / 缓存，用于寄存器映射、中断共享变量、多线程共享变量；<span class="k">不能解决原子性</span>（需锁 / 原子操作）。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">5</span>#define SQ(x) x*x，SQ(2+1) 的结果？</summary><div class="qa-body"><ul><li>答案：<span class="k">5</span>（2+1*2+1）。宏是文本替换，必须整体加括号 ((x)*(x))，否则优先级错误。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">6</span>x=0x0F 时 x &amp; ~(1&lt;&lt;3) 的结果？</summary><div class="qa-body"><ul><li>答案：<span class="k">0x07</span>。清零第 3 位：0x0F &amp; 0xF7 = 0x07。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">7</span>static 局部变量初始化几次？</summary><div class="qa-body"><ul><li>答案：<span class="k">程序运行期间只初始化一次</span>，存放于数据段 / BSS，生命周期到程序结束。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">8</span>线程共享什么、不共享什么？</summary><div class="qa-body"><ul><li>共享：地址空间、全局变量、堆、文件描述符、信号处理；<span class="k">不共享：栈、寄存器上下文、线程 ID</span>。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">9</span>FreeRTOS 中断中可调用？</summary><div class="qa-body"><ul><li>答案：<span class="k">xQueueSendFromISR / xSemaphoreGiveFromISR</span> 等 FromISR 后缀 API，并检查 xHigherPriorityTaskWoken 后 portYIELD_FROM_ISR。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">10</span>优先级反转的解决机制？</summary><div class="qa-body"><ul><li>答案：<span class="k">优先级继承</span>（互斥锁自带）或优先级天花板；低优先级任务持锁期间临时提升。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">11</span>CAN 总线仲裁：两个节点同时发 0x123 与 0x456，谁赢？</summary><div class="qa-body"><ul><li>答案：<span class="k">0x123 赢</span>。ID 越小优先级越高，显性位（0）优先，仲裁无破坏性。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">12</span>I2C 起始条件是什么？</summary><div class="qa-body"><ul><li>答案：<span class="k">SCL 为高时 SDA 产生下降沿</span>；停止条件为 SCL 高时 SDA 上升沿。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">13</span>中断处理函数中不能做什么？</summary><div class="qa-body"><ul><li>答案：不能睡眠 / 阻塞（无进程上下文、不可调度）、不能调用 malloc（GFP_KERNEL）、尽量不 printf；保持短小。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">14</span>自旋锁适合什么场景？</summary><div class="qa-body"><ul><li>答案：<span class="k">短临界区 / 中断上下文</span>；持锁时间短、忙等开销可接受；中断与进程共享时用 spin_lock_irqsave。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">15</span>memcpy 与 memmove 的核心区别？</summary><div class="qa-body"><ul><li>答案：memcpy <span class="k">不保证</span>源目的重叠时的正确性；memmove 通过方向判断保证重叠安全。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">16</span>TCP 三次握手第二次报文包含？</summary><div class="qa-body"><ul><li>答案：<span class="k">SYN + ACK</span>（服务端确认客户端的 SYN，同时请求建立连接）。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">17</span>判断链表是否有环用什么？</summary><div class="qa-body"><ul><li>答案：<span class="k">快慢指针</span>（快指针每次 2 步、慢指针 1 步），相遇则有环；复杂度 O(n)、空间 O(1)。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">18</span>堆与栈的生长方向？</summary><div class="qa-body"><ul><li>答案：<span class="k">栈向下生长（高地址→低地址）、堆向上生长</span>（低地址→高地址），中间是共享库 / 映射区。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">19</span>void Func(char str[100]) 内 sizeof(str)=？</summary><div class="qa-body"><ul><li>答案：<span class="k">4（32 位）/ 8（64 位）</span>。数组作函数参数退化为指针。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">20</span>大端机器上 0x12345678 低地址存放的字节是？</summary><div class="qa-body"><ul><li>答案：<span class="k">0x12</span>（高字节存低地址）。网络字节序即大端。</li></ul></div></details>
+
+  <h3><span class="h3-tag">B</span>编程题高频 2 道（完整实现）</h3>
+  <h3 style="font-size:15px">编程题 1：二分查找（有序数组）</h3>
+  <pre class="codeblock">int binary_search(int *a, int n, int target) {
+    int lo = 0, hi = n - 1;
+    while (lo &lt;= hi) {
+        int mid = lo + (hi - lo) / 2;            /* 防溢出写法 */
+        if (a[mid] == target) return mid;
+        if (a[mid] &lt; target) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return -1;                                   /* 未找到 */
+}</pre>
+  <h3 style="font-size:15px">编程题 2：数组左旋 k 位（三次反转）</h3>
+  <pre class="codeblock">void reverse(int *a, int l, int r) { while (l &lt; r) { int t = a[l]; a[l] = a[r]; a[r] = t; l++; r--; } }
+void rotate_left(int *a, int n, int k) {
+    k %= n;
+    reverse(a, 0, k - 1);                        /* 先反前 k 个 */
+    reverse(a, k, n - 1);                        /* 再反后 n-k 个 */
+    reverse(a, 0, n - 1);                        /* 整体反转 */
+}
+/* 例：1 2 3 4 5 左旋 2 → 3 4 5 1 2 */</pre>
+
+  <p class="lead" style="margin-top:6px">经验之谈：笔试大多"及格看简历"，编程题能过 1–2 道即达标，别为一道难题耗光时间；选择题里的八股分要拿稳。</p>
+</div></section>
+
+<!-- ===== 06 项目深挖预演 ===== -->
+<section id="s6"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">06</span><h2>项目深挖预演（简历即考纲）</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">面试官 80% 的问题从你简历的项目出发。下面按四个核心经历逐项预演：每个项目给出<b>开场白模板（背熟）</b>、<b>12 个左右高频追问与应答要点</b>、<b>追问预警</b>。答题主线：背景 → 目标 → 方案设计（为什么）→ 难点 → 量化结果。</p>
+
+  <h3><span class="h3-tag">P1</span>实习 · RK3588 六路 CAN 关节驱动（最可能被深挖）</h3>
+  <div class="proj-block"><b>开场白（30–60 秒）：</b>我在格蓝若实习期间负责 RK3588 平台上的 Linux 关节驱动。用 C++ / CMake 实现六路 CAN 的多线程并发控制，完成设备初始化、发送队列、接收解析与状态监测，并封装成 ROS2 话题 / 服务接口；同时解析私有协议与 CANopen 对象字典，支持位置、速度、力矩、MIT 与回零控制，最后做了满载回环测试与故障诊断。</div>
+  <div class="warn"><b>追问预警：</b>面试官大概率围绕这五点往下钻：①SocketCAN 还是内核驱动；②线程模型与同步细节；③队列满 / 超时策略；④CANopen 对象字典的工程实现；⑤ROS2 封装与控制链路的实时性。答不上来的点提前补。</div>
+  <details class="qa-group"><summary><span class="qno">Q1</span>为什么选 RK3588 平台？</summary><div class="qa-body"><ul>
+    <li>8 核（4×A76 + 4×A55）算力充足，可同时跑 ROS2、控制线程与感知；原生支持多路 CAN / 串口等工业外设，生态成熟（Debian / Ubuntu 镜像丰富）。</li>
+    <li>对比：Jetson GPU 强但工业外设弱、成本高；树莓派性能与工业接口不足。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>六路 CAN 是怎么操作的？自写驱动还是应用层？</summary><div class="qa-body"><ul>
+    <li>应用层用 <span class="k">SocketCAN</span>：<code>socket(AF_CAN, SOCK_RAW, CAN_RAW)</code> → bind 到 can0–can5 接口，内核原生支持、无需自写驱动。</li>
+    <li>加分：说明 canutils（cansend / candump）、canfd 帧结构、过滤规则 setsockopt；若要求更高实时 / 特殊过滤才考虑内核驱动。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>为什么用多线程并发控制？线程模型怎么分？</summary><div class="qa-body"><ul>
+    <li>每路（或按组）独立线程，负责一路 CAN 的收发与状态监测；主控线程统一下发控制指令。</li>
+    <li>理由：单线程串行收发，某路阻塞会拖累全部关节；多线程天然隔离故障、便于按路诊断；配合队列 + 互斥锁防数据竞争。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>线程间怎么同步？数据竞争怎么避免？</summary><div class="qa-body"><ul>
+    <li>发送：<span class="k">互斥锁 + 条件变量</span>的线程安全 FIFO；共享状态（使能、错误计数）用 atomic 或锁保护；接收解析与上层用队列解耦。</li>
+    <li>加分：说明为什么不用裸全局变量（竞态 + cache 一致性问题）、锁粒度怎么控制。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>发送队列怎么设计？满了 / 超时怎么办？</summary><div class="qa-body"><ul>
+    <li>定长 FIFO（预分配，避免运行期 malloc 抖动）；发送线程按序出队，周期对齐下发。</li>
+    <li>超时未确认：记录错误计数，按策略重发或丢弃并告警；高负载统计队列水位，避免无限积压导致控制延迟。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>CANopen 对象字典（OD）怎么实现的？</summary><div class="qa-body"><ul>
+    <li>OD 按 <span class="k">索引–子索引–条目</span>建表，每条含数据类型、读写属性、存储位置；SDO 用于上位机在线读写配置，PDO 用于实时数据映射。</li>
+    <li>心跳报文（0x700 + NodeID）做在线监测；加分：讲 PDO 映射、传输类型（同步 / 事件）、SDO 分段传输。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>私有协议与标准 CANopen 怎么共存？</summary><div class="qa-body"><ul>
+    <li>按 COB-ID 地址段分流：标准段（0x000–0x7FF 内约定区间）走 CANopen 栈，私有段用独立 ID 范围单独解析；两套解析器共用收发队列，互不干扰。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q8</span>位置 / 速度 / 力矩 / MIT 模式的区别？</summary><div class="qa-body"><ul>
+    <li>位置模式（CSP）：下目标位置 + 速度 / 加速度限制；速度模式（CSV）：下目标速度；力矩模式（CST）：下目标力矩。</li>
+    <li>MIT 模式：直接下传<span class="k">位置、速度、力矩、刚度、阻尼</span>（或 q / dq / tau），适合力矩控制机器人，实时性要求最高。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q9</span>回零怎么实现？</summary><div class="qa-body"><ul>
+    <li>方式：限位开关找零 → 编码器 Index 信号精确定位 → 堵转 / 电流检测兜底；实现软限位 + 回零状态机（回零中 → 完成 → 就绪），失败返回错误码。</li>
+    <li>加分：说明为什么需要回零（绝对位置参考）、掉电保持方案。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q10</span>满载回环测试怎么设计？</summary><div class="qa-body"><ul>
+    <li>满载加载 + 长时间连续运行；上位机回读实际位置 / 速度与指令逐周期比对；统计丢帧率、错误帧计数、总线负载率、温升。</li>
+    <li>异常自动记录日志并触发保护（急停 / 降级）。加分：负载率 = Σ(帧长+开销)/波特率，会算。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q11</span>故障诊断做了哪些？</summary><div class="qa-body"><ul>
+    <li>心跳超时检测、状态字 fault 位解析、CAN 错误计数（error passive / bus-off 监测与恢复）、日志分级、异常恢复状态机。</li>
+    <li>加分：bus-off 后如何恢复（重新初始化 CAN 控制器、降低负载）、故障分级与仲裁逻辑。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q12</span>ROS2 接口怎么封装的？实时性怎么保证？</summary><div class="qa-body"><ul>
+    <li>话题：关节状态回读；服务：配置 / 使能 / 回零 / 模式切换；控制命令可走话题或内部接口。</li>
+    <li>高频控制（1kHz）不依赖 ROS 调度，底层线程直连 CAN；ROS2 用于监控与上层规划，避免 DDS 抖动影响控制环。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">P2</span>实习 · 六维力传感器（STM32F4 + SIG5632 + EtherCAT）</h3>
+  <div class="proj-block"><b>开场白（30–60 秒）：</b>我基于 STM32F4 与 SIG5632 / SIG5634 实现 6 路同步采样：用外部中断触发 SPI 读取、配置 PGA 增益、做数字滤波与力矩阵解算，输出 32 位测量数据，通过 AX58100 EtherCAT PDO 周期上报，用于机器人末端力感知。</div>
+  <div class="warn"><b>追问预警：</b>"同步采样"最容易被追问——多路到底怎么同时？建议准备一张采样时序图在脑子里：触发源、通道顺序、时间戳对齐。</div>
+  <details class="qa-group"><summary><span class="qno">Q1</span>6 路同步采样怎么保证？</summary><div class="qa-body"><ul>
+    <li>外部中断统一触发采样窗口；单芯片多通道内部按序转换后，读取时按固定顺序打包，用同一时间戳对齐到一次"采样事件"。</li>
+    <li>加分：说明 SPI 读取期间如何保证数据一致性（CS 全程拉低连续时钟）、是否用 DMA。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>PGA 配置的作用？</summary><div class="qa-body"><ul>
+    <li>按量程选增益，把满量程信号放大到 ADC 最佳输入范围，提升信噪比；增益在转换前配置好，采样过程中不修改。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>数字滤波怎么选？</summary><div class="qa-body"><ul>
+    <li>滑动平均：窗口 N 折中噪声抑制与延迟；一阶低通：截止频率按控制带宽需求设置；实时系统避免大窗口，用迭代平均降低开销。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>力矩阵解算怎么做？</summary><div class="qa-body"><ul>
+    <li>标定得到 6×6 解耦矩阵（或通道耦合补偿），原始 ADC → 电压 → 力（F = K·V + 偏置）；补充温漂补偿、单位换算。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>EtherCAT PDO 周期上报怎么实现？</summary><div class="qa-body"><ul>
+    <li>AX58100 作从站（ESC）：配置 PDO 映射（把 32 位力数据映射进输出帧）、DC 同步时钟、设定周期（如 1ms）并测量抖动；从站状态机 Init → PreOP → SafeOP → OP。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>精度 / 噪声怎么评估？</summary><div class="qa-body"><ul>
+    <li>静态加载重复性、迟滞、零点漂移、噪声标准差；标定误差要给出量级（如满量程的 %FS）。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">P3</span>项目 · 四连杆两轮腿机器人（Jetson Nano + EtherCAT + CAN FD + PPO）</h3>
+  <div class="proj-block"><b>开场白（30–60 秒）：</b>我在 Jetson Nano 上搭建 ROS1 控制框架，编写 R86 / R52 电机 MIT 驱动与 IMU 接口，实现 EtherCAT 转 4 路 CAN FD 链路并完成周期、零点与异常联调；集成 7 寸屏、雷达与 RGB-D 相机，配合 PPO 策略完成 MuJoCo sim2sim 验证与实机迁移。整机结构、拓展板与 BMS 硬件也由我负责。</div>
+  <div class="warn"><b>追问预警：</b>这个项目技术栈密集，最怕被追到"具体数字"——控制周期、总线速率、抖动、推理延迟都要背熟；"PPO 怎么部署"也常被深挖。</div>
+  <details class="qa-group"><summary><span class="qno">Q1</span>EtherCAT 为什么要转 4 路 CAN FD？</summary><div class="qa-body"><ul>
+    <li>电机 / 驱动器原生接口为 CAN FD，用 EtherCAT 做主干实时总线统一调度，转接板把周期命令分发到各电机；对比直连：EtherCAT 同步性好、线束简单，CAN FD 负责电机侧。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>CAN FD 与经典 CAN 的区别？</summary><div class="qa-body"><ul>
+    <li>数据场 0–64 字节（CAN 8 字节）、数据段速率更高（可达 8Mbps+）、CRC 改进；<span class="k">仲裁段与 CAN 兼容</span>（仍 1Mbps 仲裁），适合大负载周期传输。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>控制周期与同步怎么保证？</summary><div class="qa-body"><ul>
+    <li>周期（如 1kHz）由实时线程 / 定时器保证；EtherCAT DC 同步对齐；CAN FD 帧按序下发、状态按周期回读对齐；统计抖动并说明量级。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>R86 / R52 MIT 协议细节？</summary><div class="qa-body"><ul>
+    <li>指令帧字段：位置 / 速度 / 力矩 / 刚度 / 阻尼（或 q / dq / tau）按定标打包；状态帧回读位置 / 速度 / 电流 / 温度 / 错误标志；注意字节序与浮点转换。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>零点怎么标定？</summary><div class="qa-body"><ul>
+    <li>上电找 Index / 限位，记录零点偏移；软件零点 + 软限位；每个电机独立 ID 与方向校准。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>MuJoCo sim2sim 到实机迁移做了什么？</summary><div class="qa-body"><ul>
+    <li>动力学差异（摩擦、惯量、延迟）校准；PD 参数重调；电机方向 / ID / 零点校准；实机加力矩限制、限位、急停等安全层；PPO 策略经接口下发目标，实机加降级策略。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>PPO 策略怎么部署到实机？</summary><div class="qa-body"><ul>
+    <li>训练在 MuJoCo 完成（sim2sim），导出策略权重后在边缘端推理（轻量推理或查表）；明确实机运行周期与推理延迟预算，超时走安全模式。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q8</span>雷达 + RGB-D 的用途？</summary><div class="qa-body"><ul>
+    <li>雷达做建图与定位（Cartographer / AMCL），RGB-D 做避障 / 目标识别；与底盘 / 腿部控制融合。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q9</span>项目里最难的问题是什么？</summary><div class="qa-body"><ul>
+    <li>准备一个"有细节"的 bug 故事：如 EtherCAT 周期抖动导致电机指令不稳定 → 排查时钟源 / 中断优先级 / 线程调度 → 改用实时优先级 + 绑核 + 锁粒度优化后收敛。</li>
+    <li>公式：现象 → 假设 → 排查手段 → 根因 → 修复 → 量化验证。</li>
+  </ul></div></details>
+
+  <h3><span class="h3-tag">P4</span>项目 · STM32 差分小车 + 智能物流小车</h3>
+  <div class="proj-block"><b>开场白（30–60 秒）：</b>我独立完成 STM32F303 底层控制板的原理图与 PCB 设计，实现增量式 PID 速度环、差速逆运动学与里程计；设计"帧头 + 帧长 + CRC-8"串口协议，并在 Ubuntu 下编写多线程串口 ROS 驱动（cmd_vel / odom / imu）；另一项目用 STM32F407 + FreeRTOS 完成麦克纳姆轮物流小车的运动控制与 OpenMV 视觉分拣。</div>
+  <div class="warn"><b>追问预警：</b>PID 与运动学是"必考题"——公式要能现场默写；串口协议与 GDB 排错要有真实案例支撑。</div>
+  <details class="qa-group"><summary><span class="qno">Q1</span>增量式 PID 公式？</summary><div class="qa-body"><ul>
+    <li>Δu = Kp·(e(k)−e(k−1)) + Ki·e(k) + Kd·(e(k)−2e(k−1)+e(k−2))；输出 u(k) = u(k−1) + Δu。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q2</span>为什么用增量式？</summary><div class="qa-body"><ul>
+    <li>输出为增量，无积分饱和风险、启动平稳、故障时可安全清零；位置式需要输出限幅与积分抗饱和处理。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q3</span>怎么调参？起步抖动 / 过冲怎么解决？</summary><div class="qa-body"><ul>
+    <li>顺序：先 P（出现等幅振荡记临界增益）→ 加 I 消静差（注意饱和）→ 加 D 抑超调（防噪声放大）。</li>
+    <li>起步抖动：输出限幅 / 缓启动斜坡；过冲：降低 P、微分先行、目标值斜坡。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q4</span>差速逆运动学 / 麦克纳姆轮运动学？</summary><div class="qa-body"><ul>
+    <li>差速：v = (vr+vl)/2，ω = (vr−vl)/L；麦克纳姆轮：四轮转速 = 速度分解矩阵 × [vx, vy, ω]（全向移动）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q5</span>里程计误差来源？怎么标定？</summary><div class="qa-body"><ul>
+    <li>误差：轮径误差（直线走固定距离标定）、轮距误差（原地旋转标定）、打滑、编码器分辨率、采样周期与量化。</li>
+    <li>修正：Cartographer / AMCL 融合激光与里程计。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q6</span>串口协议与粘包拆包？</summary><div class="qa-body"><ul>
+    <li>帧头 + 帧长 + ID + 功能码 + 数据 + CRC-8；接收状态机：找帧头 → 收帧长 → 收数据 → 校验通过再解析。</li>
+    <li>丢帧排查：波特率误差、中断优先级、缓冲溢出、多线程竞争（GDB watch 定位）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q7</span>GDB 定位数据竞争的案例？</summary><div class="qa-body"><ul>
+    <li>准备一个真实故事：共享变量未加锁 → 行为偶发异常 → gdb <code>watch</code> 观察变量在意外位置被改写 → 定位到多线程写 → 用锁 / 原子变量修复并复测。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q8</span>FreeRTOS 任务怎么划分？优先级怎么定？</summary><div class="qa-body"><ul>
+    <li>中断（编码器 / 串口）最高 → 控制任务 → 通信任务 → UI / 调试最低；队列传指令、状态机组织流程；说明为什么这样分（实时性 + 隔离）。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q9</span>自动取放流程状态机？</summary><div class="qa-body"><ul>
+    <li>初始化 → 寻物（视觉）→ 定位 → 夹取 → 放置 → 复位；每状态带超时与错误回退，异常可回溯。</li>
+  </ul></div></details>
+  <details class="qa-group"><summary><span class="qno">Q10</span>OpenMV 与 STM32 怎么通信？</summary><div class="qa-body"><ul>
+    <li>UART 双向协议：STM32 下发指令，OpenMV 返回目标坐标 / 颜色 / 形状；带校验与超时重发。</li>
+  </ul></div></details>
+
+  <div class="warn" style="margin-top:18px"><b>通用应对：</b>①所有项目的数字（周期、帧率、精度、负载率、队列深度）都背熟，回答时主动给量化结果；②"最难的 bug"准备好 STAR 故事；③被问到不会的：先复述问题确认 → 说思路与排查路径 → 诚实说明不会的部分，不硬编。</div>
+</div></section>
+
+<!-- ===== 07 自我介绍与行为面 ===== -->
+<section id="s7"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">07</span><h2>自我介绍与行为面</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">自我介绍是"简历的口语化浓缩"，行为面（HR / 主管面）用 STAR 结构回答：情境（S）→ 任务（T）→ 行动（A）→ 结果（R，带量化）。</p>
+
+  <h3><span class="h3-tag">中文</span>60 秒自我介绍模板（按你的简历填好）</h3>
+  <div class="proj-block">面试官好，我是武汉科技大学机械专业的硕士生，方向是嵌入式 Linux 与机器人底层开发。在校期间有三块积累：<b>一是底层系统</b>，熟悉 C/C++、Linux 系统编程、多线程与 Socket 通信，掌握交叉编译、CMake、GDB 等工程工具；<b>二是 MCU 与实时系统</b>，做过 STM32 + FreeRTOS 的完整项目，写过驱动级代码；<b>三是工业通信与机器人</b>，实习期间在 RK3588 上用 C++ 实现了六路 CAN 多线程关节驱动，解析 CANopen 对象字典，并封装 ROS2 接口；另外做过两轮腿机器人的 EtherCAT / CAN FD 控制链路与 sim2real 迁移。我的特点是能把"驱动接口—协议解析—中间件—系统联调—故障定位"整条链路走通，希望加入贵司继续做嵌入式 Linux / 机器人底层方向。</div>
+
+  <h3><span class="h3-tag">English</span>Self-Introduction Template</h3>
+  <div class="proj-block">Hello, I'm a master's student at Wuhan University of Science and Technology, majoring in Mechanical Engineering with a focus on embedded Linux and robot low-level development. I'm skilled in C/C++, Linux system programming, multi-threading and socket communication, and experienced with cross-compilation, CMake and GDB. I've built complete STM32 + FreeRTOS projects, and during my internship I developed a six-channel CAN joint driver on RK3588 with C++, parsing CANopen object dictionaries and wrapping ROS2 interfaces. I've also worked on an EtherCAT to CAN FD control chain for a two-wheel-legged robot, including sim-to-real transfer. I enjoy owning the full pipeline from drivers and protocols to system integration and debugging.</div>
+
+  <h3><span class="h3-tag">STAR</span>行为面高频 5 题</h3>
+  <details class="qa-group"><summary><span class="qno">1</span>讲一件你最有挑战的事</summary><div class="qa-body"><ul><li>推荐素材：两轮腿机器人 EtherCAT 周期抖动排查，或六路 CAN 满载回环测试；结构：难点 → 假设 → 排查手段 → 根因 → 修复 → 量化结果。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">2</span>讲一次失败 / 挫折的经历</summary><div class="qa-body"><ul><li>选"项目延期 / 方案推倒重来"这类真实教训，重点讲反思与改进，不甩锅、不避重。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">3</span>团队冲突怎么处理？</summary><div class="qa-body"><ul><li>例：分工边界不清导致接口返工 → 主动对齐接口文档与负责人 → 建立评审习惯。强调沟通与目标对齐。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">4</span>怎么管理多任务 / 时间？</summary><div class="qa-body"><ul><li>结合兼职辅导员 + 项目 + 比赛经历：优先级排序、任务拆解、deadline 倒排，举例说明。</li></ul></div></details>
+  <details class="qa-group"><summary><span class="qno">5</span>为什么选我们？职业规划？</summary><div class="qa-body"><ul><li>提前研究公司业务（如工控 / 机器人 / 芯片），结合你的通信 + 机器人背景说契合点；规划：3 年内成为能独立负责驱动 / 机器人底层模块的工程师。</li></ul></div></details>
+
+  <h3><span class="h3-tag">反问</span>高质量反问清单（选 2–3 个）</h3>
+  <div class="cards">
+    <div class="card"><span class="n">ASK 01</span><h4>团队与业务</h4><p>这个岗位所在的团队目前负责哪些产品线 / 模块？新人主要参与哪块？</p></div>
+    <div class="card"><span class="n">ASK 02</span><h4>技术栈</h4><p>团队当前用的主控平台与通信总线是什么？是否涉及 EtherCAT / CANopen / 实时内核？</p></div>
+    <div class="card"><span class="n">ASK 03</span><h4>成长路径</h4><p>贵司对嵌入式 / 驱动方向新人有怎样的培养机制和晋升通道？</p></div>
+    <div class="card"><span class="n">ASK 04</span><h4>工程流程</h4><p>团队的开发、测试与发布流程是怎样的？有没有完善的 CI / 测试基础设施？</p></div>
+  </div>
+  <div class="warn"><b>临场技巧：</b>不会的题先复述确认再给思路；手撕前先讲算法与边界；八股答完主动补一句"我项目里这样用过"；结束反问 2–3 个即可，别问薪酬福利。</div>
+</div></section>
+
+<!-- ===== 08 目标公司与投递策略 ===== -->
+<section id="s8"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">08</span><h2>目标公司与投递策略</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">结合你的画像（嵌入式 Linux + 机器人底层 + 工业通信 + 机械硕士），按匹配度分层投递，并针对性准备各公司的考察侧重。</p>
+  <table class="tbl"><colgroup><col style="width:16%"><col style="width:26%"><col style="width:58%"></colgroup>
+    <thead><tr><th>梯队</th><th>公司（示例）</th><th>考察侧重 / 匹配点</th></tr></thead>
+    <tbody>
+      <tr><td>第一梯队（强匹配）</td><td>汇川技术、埃斯顿、绿的谐波</td><td>工控 / 伺服 / 机器人，EtherCAT、CANopen、FOC 全是你的强项；深挖协议与实时性</td></tr>
+      <tr><td>第一梯队（强匹配）</td><td>宇树、云深处、大疆、优必选</td><td>机器人本体 + 关节驱动 + 电机控制；MIT 协议、sim2real、ROS 直接对口</td></tr>
+      <tr><td>第二梯队（高匹配）</td><td>华为（嵌入式 / 终端）、联发科、中兴</td><td>C/C++ 八股深、OS 原理、手撕；驱动与系统级考察</td></tr>
+      <tr><td>第二梯队（高匹配）</td><td>地平线、Momenta、大疆车载</td><td>Linux + 自动驾驶中间件；设备树、驱动、进程调度、C++</td></tr>
+      <tr><td>第二梯队（高匹配）</td><td>比亚迪、宁德时代、蔚来</td><td>车控 / BMS / CAN 总线；UDS 诊断、CAN/CAN FD、功能安全概念</td></tr>
+      <tr><td>第三梯队（中匹配）</td><td>海康、大华、TP-Link、影石</td><td>嵌入式应用 + 视觉产品；C、Linux、协议，笔试刷题为主</td></tr>
+      <tr><td>第三梯队（中匹配）</td><td>汇顶、兆易创新、乐鑫、全志</td><td>芯片原厂 MCU/SoC 岗；RTOS、外设驱动、datasheet 阅读能力</td></tr>
+    </tbody>
+  </table>
+  <h3><span class="h3-tag">时间线</span>2026 秋招投递节奏</h3>
+  <ul class="qa-body" style="list-style:none;padding-left:0">
+    <li>提前批（6–7 月）：华为、大疆、汇川等先开，投递 + 内推并行，流程快</li>
+    <li>正式批（8–10 月）：集中笔试面试，按梯队每天投 3–5 家，记录进度表（岗位 / 状态 / 笔试时间）</li>
+    <li>补录 / 春招（11 月–次年 3 月）：秋招失利仍有大量补录，保持刷题不中断</li>
+    <li>内推优先：牛客 / 脉脉找内推码，简历直达；笔试冲突可协调时间</li>
+  </ul>
+  <div class="warn"><b>简历优化提醒：</b>①每条经历补量化（CAN 周期、采样率、负载率、帧率、调试耗时下降）；②技术栈与项目一一对应，写什么就要能答什么；③"了解"与"熟悉"要诚实分级，避免被一句话问穿。</div>
+</div></section>
+
+<!-- ===== 09 两周冲刺计划 ===== -->
+<section id="s9"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">09</span><h2>两周冲刺复习计划</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">按"先补短板（内核驱动）、再固强项（通信总线）、每天保留手撕"编排，适合笔试 / 面试并行期。可自行压缩或拉长。</p>
+  <div class="tl">
+    <div class="t">D1–D2</div><div class="ax"><span class="dot"></span></div><div class="c"><b>C/C++ 八股 + 手撕热身</b><span>过 3.1 全部题目；手写位运算 6 题、strlen/strcpy/memcpy/memmove</span></div>
+    <div class="t">D3–D4</div><div class="ax"><span class="dot"></span></div><div class="c"><b>数据结构与手撕核心</b><span>链表反转 / 判环 / 相交 / 中间节点；排序三件套；牛客嵌入式选择 15 题/天</span></div>
+    <div class="t">D5–D6</div><div class="ax"><span class="dot"></span></div><div class="c"><b>Linux 系统编程</b><span>过 3.2 全部题目；刷笔试真题（进程 / 线程 / IPC / epoll）</span></div>
+    <div class="t">D7–D8</div><div class="ax"><span class="dot"></span></div><div class="c"><b>Linux 内核驱动（重点）</b><span>过 3.3 全部题目，逐题能讲原理；GDB 实操：断点 / watch / bt / core</span></div>
+    <div class="t">D9–D10</div><div class="ax"><span class="dot"></span></div><div class="c"><b>RTOS + MCU 巩固</b><span>过 3.4 全部题目；FreeRTOS 任务 / 队列 / 互斥锁场景题 5 道</span></div>
+    <div class="t">D11</div><div class="ax"><span class="dot"></span></div><div class="c"><b>通信总线查漏（王牌区）</b><span>过 3.5；重点准备 CANopen OD / EtherCAT PDO / 粘包拆包的高级追问</span></div>
+    <div class="t">D12</div><div class="ax"><span class="dot"></span></div><div class="c"><b>项目深挖逐字稿</b><span>按第 06 节 4 个项目写"设计型"讲稿；找同学 / 模拟面试对练</span></div>
+    <div class="t">D13</div><div class="ax"><span class="dot"></span></div><div class="c"><b>限时手撕 + 综合模拟</b><span>20 题白板限时各 10 分钟；完整走一遍自我介绍 → 八股 → 项目 → 反问</span></div>
+    <div class="t">D14</div><div class="ax"><span class="dot"></span></div><div class="c"><b>查漏 + 心态 + 反问准备</b><span>错题本过一遍；英文自我介绍背熟；准备 2–3 个高质量反问</span></div>
+  </div>
+</div></section>
+
+<!-- ===== 10 资源与来源 ===== -->
+<section id="s10"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">10</span><h2>学习资源与资料来源</h2></div>
+  <div class="sec-line"></div>
+  <p class="sec-desc">本手册题面与要点综合自以下公开面经与真题（检索于 2026-09-18）。刷题可直接到牛客 / LeetCode 对应专题。</p>
+  <ol class="src-list">
+    <li><a href="https://m.nowcoder.com/discuss/837251145784381440">牛客 · 嵌入式秋招复盘：从多家大厂面试谈如何拿下 Offer</a></li>
+    <li><a href="https://www.nowcoder.com/discuss/928680586456100864">牛客 · 嵌入式手撕必考 20 题汇总</a></li>
+    <li><a href="https://www.nowcoder.com/discuss/877600194316034048">牛客 · 2026 嵌入式 Linux 面试基础 100 题</a></li>
+    <li><a href="https://m.nowcoder.com/discuss/803363011191717888">牛客 · RTOS 面试官最关注的考点</a></li>
+    <li><a href="https://www.nowcoder.com/feed/main/detail/7317b4b0fae24826a6b33e64a756289c">牛客 · 嵌入式软件开发面经（地平线 / 联发科 / 泰凌微）</a></li>
+    <li><a href="https://m.nowcoder.com/discuss/870930714823319552">牛客 · 寒武纪 Linux 驱动开发一面面经</a></li>
+    <li><a href="https://blog.csdn.net/m0_49968063/article/details/161345443">CSDN · 嵌入式面试 200 问</a></li>
+    <li><a href="https://www.eet-china.com/mp/a463526.html">电子工程专辑 · 某大厂嵌入式 Linux 驱动岗位实习面试题</a></li>
+    <li><a href="https://www.eet-china.com/mp/a412238.html">电子工程专辑 · 常见 CAN 总线协议面试题</a></li>
+    <li><a href="https://www.eet-china.com/mp/a486557.html">电子工程专辑 · RTOS 面试 29 题（带答案）</a></li>
+    <li><a href="https://blog.csdn.net/leiming6/article/details/159825920">CSDN · 嵌入式面试关于通信协议的八股文</a></li>
+    <li><a href="https://m.nowcoder.com/feed/main/detail/a42afb8810104bf389c3471477342919">牛客 · 嵌入式 C/C++ 链表编程题汇总</a></li>
+    <li><a href="https://blog.csdn.net/qq_44333320/article/details/129193053">CSDN · 嵌入式软件笔试常见编程题</a></li>
+    <li><a href="https://m.elecfans.com/zt/36964/">电子发烧友 · 嵌入式开发面试题及答案</a></li>
+    <li><a href="https://m.elecfans.com/zt/37524/">电子发烧友 · 嵌入式开发工程师笔试题目</a></li>
+  </ol>
+  <h3><span class="h3-tag">推荐</span>系统性学习资源</h3>
+  <table class="tbl"><colgroup><col style="width:34%"><col style="width:66%"></colgroup>
+    <thead><tr><th>资源</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td>《C 语言深度解剖》</td><td>C 关键字 / 指针 / 内存八股速成，笔试选择题高分关键</td></tr>
+      <tr><td>《深入理解计算机系统》(CSAPP)</td><td>操作系统、内存、链接、并发原理的系统性底子</td></tr>
+      <tr><td>《Linux 内核设计与实现》</td><td>内核调度 / 同步 / 中断 / 驱动框架，驱动岗面试必备</td></tr>
+      <tr><td>《程序员的自我修养：链接、装载与库》</td><td>编译链接、ELF、动态库，静态 / 动态库题目的深度来源</td></tr>
+      <tr><td>《FreeRTOS 内核实现与应用开发实战》</td><td>任务调度、队列、互斥锁内核原理，RTOS 八股吃透</td></tr>
+      <tr><td>韦东山 / 正点原子嵌入式 Linux 驱动教程</td><td>字符设备、设备树、platform 驱动的实操路径</td></tr>
+      <tr><td>牛客嵌入式专项 + LeetCode hot100 + 剑指 Offer</td><td>笔试刷题主阵地：选择八股 + 手撕算法</td></tr>
+      <tr><td>CANopen CiA 标准 + ETG（EtherCAT 技术组）资料</td><td>工业总线从"会用"到"讲原理"的权威来源</td></tr>
+    </tbody>
+  </table>
+  <p class="lead" style="margin-top:14px;font-size:13px;color:var(--muted)">说明：考察频率与掌握度为综合面经的估计值与简历初评，供排优先级参考，非实测数据；实际以刷题自测为准。</p>
+</div></section>
+
+<footer><div class="wrap">
+  <span>嵌入式 Linux 开发 · 面试笔试复习手册</span>
+  <span>基于简历定制 · 2026 秋招 · 祝顺利上岸</span>
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script>
+(function(){
+  var el = document.getElementById('radarChart');
+  if(!el || typeof echarts === 'undefined') return;
+  var chart = echarts.init(el);
+  var option = {
+    title: { text: '备考雷达：考察频率 vs 简历基础', left: 'center', top: 10, textStyle: { fontSize: 16, fontWeight: 700 } },
+    tooltip: { trigger: 'item', triggerOn: 'mousemove|click', renderMode: 'richText', confine: true },
+    legend: { top: 38, left: 'center', itemWidth: 14, itemHeight: 8, textStyle: { fontSize: 12 } },
+    radar: {
+      center: ['50%', 274],
+      radius: '66%',
+      splitNumber: 4,
+      indicator: [
+        { name: 'C/C++ 语言', max: 100 },
+        { name: '手撕代码', max: 100 },
+        { name: 'Linux 系统编程', max: 100 },
+        { name: 'Linux 内核驱动', max: 100 },
+        { name: 'RTOS / MCU', max: 100 },
+        { name: '通信总线', max: 100 },
+        { name: 'ROS 机器人', max: 100 },
+        { name: '工程调试', max: 100 }
+      ],
+      axisName: { fontSize: 12 },
+      splitLine: { lineStyle: { width: 1 } },
+      axisLine: { lineStyle: { width: 1 } }
+    },
+    series: [
+      {
+        name: '面试考察频率（综合面经估计）',
+        type: 'radar',
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.15 },
+        data: [{ value: [95, 90, 85, 80, 85, 80, 30, 70] }]
+      },
+      {
+        name: '简历基础掌握度（初评）',
+        type: 'radar',
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.15 },
+        data: [{ value: [85, 60, 80, 45, 85, 90, 85, 85] }]
+      }
+    ]
+  };
+  chart.setOption(option);
+  window.addEventListener('resize', function(){ chart.resize(); });
+})();
+</script>
+</body>
+</html>

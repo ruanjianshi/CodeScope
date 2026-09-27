@@ -54,12 +54,12 @@
               "title": "网页 / B站",
               "componentType": "browser",
               "componentState": {
-                "url": "http://127.0.0.1:4877/knowledge/",
+                "url": "https://www.bilibili.com/",
                 "history": [
-                  "http://127.0.0.1:4877/knowledge/"
+                  "https://www.bilibili.com/"
                 ],
                 "index": 0,
-                "mode": "embedded",
+                "mode": "start",
                 "videoTime": 0
               }
             }
@@ -182,5 +182,5 @@
     },
     "resolved": true
   },
-  "updatedAt": 1789618194632
+  "updatedAt": 1790476432466
 }

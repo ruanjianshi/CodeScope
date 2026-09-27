@@ -1,0 +1,2641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>词根词缀 · 六级完整版</title>
+  <style>
+    :root {
+      --bg: #080c12;
+      --border: #1e2936;
+      --text: #e6edf3;
+      --muted: #7d8fa5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      background: radial-gradient(1200px 600px at 15% -10%, #0f1b2e 0%, transparent 55%),
+        radial-gradient(1000px 500px at 90% 110%, #1a0f2e 0%, transparent 50%), var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .topbar {
+      flex: none;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8, 12, 18, .85);
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: none;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #4ea1ff, #a78bfa);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 14.5px;
+      font-weight: 700;
+    }
+
+    .brand p {
+      margin: 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .search-wrap {
+      flex: 1;
+      max-width: 280px;
+      position: relative;
+      margin-left: auto;
+    }
+
+    .search-wrap .icon {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      opacity: .5;
+      pointer-events: none;
+    }
+
+    .search {
+      width: 100%;
+      padding: 7px 12px 7px 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0e141d;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: .2s;
+      font-family: inherit;
+    }
+
+    .search::placeholder {
+      color: #4a5768;
+    }
+
+    .search:focus {
+      border-color: #4ea1ff;
+      box-shadow: 0 0 0 3px rgba(78, 161, 255, .12);
+    }
+
+    .btn {
+      padding: 7px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0e141d;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12.5px;
+      font-family: inherit;
+      transition: .15s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn:hover {
+      border-color: #3d5170;
+      color: #fff;
+      background: #131b27;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    .btn.primary:hover {
+      filter: brightness(1.15);
+    }
+
+    .btn.gold {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fff;
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    .btn.gold:hover {
+      filter: brightness(1.15);
+    }
+
+    .canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+      user-select: none;
+    }
+
+    #svg.dragging {
+      cursor: grabbing;
+    }
+
+    .node {
+      cursor: pointer;
+    }
+
+    .node rect {
+      transition: filter .15s;
+    }
+
+    .node:hover rect {
+      filter: brightness(1.35);
+    }
+
+    .node.dim {
+      opacity: .15;
+      pointer-events: none;
+    }
+
+    .node.match rect {
+      stroke-width: 2.5 !important;
+      filter: drop-shadow(0 0 12px currentColor);
+    }
+
+    .link {
+      fill: none;
+      transition: opacity .2s;
+    }
+
+    .link.dim {
+      opacity: .04;
+    }
+
+    .detail {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      width: 440px;
+      max-height: calc(100% - 100px);
+      padding: 0;
+      border-radius: 14px;
+      background: rgba(14, 20, 30, .96);
+      border: 1px solid #26303f;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 24px 60px -20px #000;
+      display: none;
+      animation: fadeUp .22s ease;
+      overflow: hidden;
+    }
+
+    .detail.show {
+      display: flex;
+      flex-direction: column;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .detail .tip-bar {
+      padding: 9px 16px;
+      background: linear-gradient(90deg, rgba(78, 161, 255, .12), rgba(167, 139, 250, .08));
+      border-bottom: 1px solid rgba(78, 161, 255, .15);
+      font-size: 11.5px;
+      color: #9ecbff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+    }
+
+    .detail .tip-bar b {
+      color: #4ea1ff;
+      font-weight: 700;
+    }
+
+    .detail .body {
+      padding: 16px 20px;
+      overflow-y: auto;
+    }
+
+    .detail .close {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: rgba(14, 20, 30, .9);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+      z-index: 2;
+    }
+
+    .detail .close:hover {
+      color: #fff;
+      border-color: #ff5f6d;
+    }
+
+    .detail .dtag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-size: 10.5px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: .3px;
+    }
+
+    .src-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-size: 10.5px;
+      font-weight: 700;
+      margin-left: 8px;
+      letter-spacing: .3px;
+      vertical-align: middle;
+    }
+
+    .src-badge.latin {
+      background: rgba(251, 146, 60, .15);
+      color: #fdba74;
+      border: 1px solid rgba(251, 146, 60, .25);
+    }
+
+    .src-badge.greek {
+      background: rgba(34, 211, 238, .15);
+      color: #67e8f9;
+      border: 1px solid rgba(34, 211, 238, .25);
+    }
+
+    .detail h3 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      font-weight: 800;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .3px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .detail h3 .h3-left {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .detail h3 .h3-pron {
+      font-size: 14px;
+      color: #a78bfa;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .4px;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .detail .mean {
+      font-size: 14px;
+      color: #fbbf24;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .origin-box {
+      margin: 10px 0;
+      padding: 11px 14px;
+      border-radius: 10px;
+      background: rgba(78, 161, 255, .06);
+      border: 1px solid rgba(78, 161, 255, .15);
+    }
+
+    .origin-box .origin-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: #4ea1ff;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .origin-box .origin-label::before {
+      content: '📜';
+      font-size: 13px;
+    }
+
+    .origin-box .origin-text {
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #b8c9db;
+    }
+
+    .origin-box .origin-latin {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #93c5fd;
+      font-weight: 600;
+      background: rgba(78, 161, 255, .1);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .compare-box {
+      margin: 10px 0;
+      padding: 11px 14px;
+      border-radius: 10px;
+      background: rgba(251, 191, 36, .06);
+      border: 1px solid rgba(251, 191, 36, .18);
+    }
+
+    .compare-box .compare-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: #fbbf24;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .compare-box .compare-label::before {
+      content: '⚖️';
+      font-size: 13px;
+    }
+
+    .compare-box .compare-text {
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #d4c5a0;
+    }
+
+    .compare-box .compare-text b {
+      color: #fcd34d;
+    }
+
+    .ex-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .ex-item {
+      padding: 9px 12px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, .025);
+      border-left: 2px solid rgba(78, 161, 255, .4);
+    }
+
+    .ex-item .ex-w {
+      color: #93c5fd;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: .3px;
+      margin-bottom: 5px;
+    }
+
+    .ex-item .ex-b {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12.5px;
+      color: #5eead4;
+      margin-bottom: 5px;
+      line-height: 1.5;
+      letter-spacing: .2px;
+    }
+
+    .ex-item .ex-b .plus {
+      color: #4a5768;
+      margin: 0 3px;
+    }
+
+    .ex-item .ex-m {
+      font-size: 12.5px;
+      color: #b8c9db;
+      line-height: 1.6;
+    }
+
+    .ex-item .ex-m .arrow {
+      color: #fbbf24;
+      margin: 0 4px;
+      font-weight: 700;
+    }
+
+    .mastery-btns {
+      display: flex;
+      gap: 6px;
+      margin: 10px 0 4px;
+    }
+
+    .mbtn {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0e141d;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11.5px;
+      font-family: inherit;
+      transition: .15s;
+    }
+
+    .mbtn:hover {
+      border-color: #3d5170;
+      color: #fff;
+    }
+
+    .mbtn.active-1 {
+      background: rgba(251, 191, 36, .15);
+      border-color: #fbbf24;
+      color: #fcd34d;
+      font-weight: 600;
+    }
+
+    .mbtn.active-2 {
+      background: rgba(61, 220, 132, .15);
+      border-color: #3ddc84;
+      color: #3ddc84;
+      font-weight: 600;
+    }
+
+    .zoom-ctrl {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .zbtn {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: rgba(14, 20, 30, .9);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: .15s;
+      backdrop-filter: blur(10px);
+      font-family: inherit;
+    }
+
+    .zbtn:hover {
+      border-color: #4ea1ff;
+      color: #fff;
+      background: #131b27;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(5, 8, 13, .82);
+      backdrop-filter: blur(6px);
+    }
+
+    .modal.show {
+      display: flex;
+      animation: fade .18s ease;
+    }
+
+    @keyframes fade {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 540px;
+      max-height: 88vh;
+      overflow: auto;
+      background: linear-gradient(180deg, #161e2b, #111721);
+      border: 1px solid #2c3a4f;
+      border-radius: 18px;
+      padding: 20px 22px 26px;
+      box-shadow: 0 30px 80px -30px #000;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    #quizProgress {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: .5px;
+    }
+
+    .close-m {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .close-m:hover {
+      color: #fff;
+      border-color: #ff5f6d;
+    }
+
+    .q-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .q-root {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 28px;
+      font-weight: 800;
+      color: #4ea1ff;
+      text-align: center;
+      padding: 16px 0 6px;
+      letter-spacing: 1px;
+    }
+
+    .q-pron {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 14px;
+      color: #a78bfa;
+      text-align: center;
+      margin-bottom: 8px;
+      letter-spacing: .5px;
+    }
+
+    .q-hint {
+      font-size: 12px;
+      color: #7d8fa5;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .options {
+      display: grid;
+      gap: 9px;
+    }
+
+    .opt {
+      padding: 12px 16px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: #141b26;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+      transition: .15s;
+      font-family: inherit;
+    }
+
+    .opt:hover:not(:disabled) {
+      border-color: #4ea1ff;
+      background: #182233;
+    }
+
+    .opt:disabled {
+      cursor: default;
+      opacity: .75;
+    }
+
+    .opt.right {
+      background: rgba(61, 220, 132, .14);
+      border-color: #3ddc84;
+      color: #3ddc84;
+      opacity: 1;
+      font-weight: 600;
+    }
+
+    .opt.wrong {
+      background: rgba(255, 95, 109, .13);
+      border-color: #ff5f6d;
+      color: #ff5f6d;
+      opacity: 1;
+    }
+
+    .fb {
+      margin-top: 16px;
+      font-size: 13.5px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-height: 36px;
+    }
+
+    .next-btn {
+      margin-left: auto;
+      padding: 9px 18px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+
+    .next-btn:hover {
+      filter: brightness(1.12);
+    }
+
+    .result {
+      text-align: center;
+      padding: 20px 0 6px;
+    }
+
+    .result .big {
+      font-size: 46px;
+      font-weight: 800;
+      color: #4ea1ff;
+      font-family: ui-monospace, monospace;
+    }
+
+    .result .pct {
+      color: #fbbf24;
+      font-size: 16px;
+      margin: 6px 0 14px;
+    }
+
+    .result p {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0 0 22px;
+      line-height: 1.6;
+    }
+
+    .result .next-btn {
+      margin: 0 6px;
+    }
+
+    .ghost-btn {
+      padding: 9px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13.5px;
+      font-family: inherit;
+    }
+
+    .ghost-btn:hover {
+      color: #fff;
+      border-color: #4a5c78;
+    }
+
+    @media(max-width:800px) {
+      .brand p {
+        display: none;
+      }
+
+      .detail {
+        width: calc(100% - 36px);
+        left: 18px;
+        right: 18px;
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-icon">🧠</div>
+      <div>
+        <h1>词根词缀 · 六级完整版</h1>
+        <p>音标在标题右侧 · 例词展示拆解</p>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <span class="icon">🔍</span>
+      <input class="search" id="search" placeholder="搜索词根 / 含义 / 例词…">
+    </div>
+    <button class="btn gold" id="quizBtn">🎯 随机自测</button>
+    <button class="btn" id="expandBtn">展开全部</button>
+    <button class="btn" id="collapseBtn">折叠</button>
+    <button class="btn primary" id="fitBtn">适应屏幕</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <svg id="svg">
+      <g id="viewport">
+        <g id="links"></g>
+        <g id="nodes"></g>
+      </g>
+    </svg>
+    <div class="detail" id="detail"></div>
+    <div class="zoom-ctrl">
+      <button class="zbtn" id="zoomIn">+</button>
+      <button class="zbtn" id="zoomOut">−</button>
+      <button class="zbtn" id="zoomFit">⛶</button>
+    </div>
+  </div>
+
+  <div class="modal" id="quizModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="quizProgress">1 / 10</span>
+        <button class="close-m" id="closeQuiz">✕</button>
+      </div>
+      <div id="quizBody"></div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+   数据（例词格式：[单词, 含义演变, 拆解]）
+   ============================================================ */
+const DATA = {
+  root: [
+    { group:'看与感知', items:[
+      {k:'vis / vid', m:'看', pron:'/vɪs/ · /vɪd/', origin:'源自拉丁语 <span class="origin-latin">videre</span>（看），词干 <span class="origin-latin">vid-</span> 在分词时音变为 <span class="origin-latin">visum</span>（d 脱落），故有 <span class="origin-latin">vis-</span> 变体。两者同源，都表示“看”。', e:[
+        ['visit', '去看 → 拜访', 'vis(看) + it(走)'],
+        ['visible', '能被看见的 → 可见的', 'vis(看) + ible(能…的)'],
+        ['vision', '看见之物 → 视野、愿景', 'vis(看) + ion(名词后缀)'],
+        ['supervise', '在上面看 → 监督', 'super(在上面) + vis(看) + e'],
+        ['invisible', '看不见的 → 无形的', 'in(否定) + vis(看) + ible(能…的)']
+      ]},
+      {k:'spect / spic', m:'看', pron:'/spekt/ · /spɪk/', origin:'源自拉丁语 <span class="origin-latin">specere</span>（注视）。<span class="origin-latin">spect</span> 是分词词干，<span class="origin-latin">spic</span> 是变体。比 vis 更强调“注视、观察”的动作过程。', e:[
+        ['inspect', '向里看 → 检查', 'in(向里) + spect(看)'],
+        ['respect', '反复看 → 尊重', 're(反复) + spect(看)'],
+        ['perspective', '穿透看 → 视角', 'per(穿过) + spect(看) + ive(形容词后缀)'],
+        ['spectator', '看的人 → 观众', 'spect(看) + ator(做…的人)'],
+        ['suspect', '在下面看 → 怀疑', 'su(在下面) + spect(看)'],
+        ['prospect', '向前看 → 前景', 'pro(向前) + spect(看)'],
+        ['spectacle', '看的东西 → 景象', 'spect(看) + acle(名词后缀)']
+      ]},
+      {k:'sci', m:'知道', pron:'/saɪ/', origin:'源自拉丁语 <span class="origin-latin">scire</span>（知道）。本义是“通过询问而得知”。从“知道”引申出“科学”science，即系统化的“知道”。', e:[
+        ['science', '知道 → 科学', 'sci(知道) + ence(名词后缀)'],
+        ['conscious', '共同知道 → 有意识的', 'con(共同) + sci(知道) + ous(形容词后缀)'],
+        ['conscience', '共同知道 → 良心', 'con(共同) + sci(知道) + ence(名词后缀)']
+      ]},
+      {k:'sent / sens', m:'感觉', pron:'/sent/ · /sens/', origin:'源自拉丁语 <span class="origin-latin">sentire</span>（感觉）。sent 是动词词干，sens 是分词词干。由“感觉”引申出“同意”（consent = 共同感觉 → 意见一致）。', e:[
+        ['sense', '感觉 → 感觉', 'sens(感觉) + e'],
+        ['sensitive', '感觉的 → 敏感的', 'sens(感觉) + itive(形容词后缀)'],
+        ['consent', '共同感觉 → 同意', 'con(共同) + sent(感觉)'],
+        ['resent', '反复感觉 → 怨恨', 're(反复) + sent(感觉)'],
+        ['sensation', '感觉 → 感觉、轰动', 'sens(感觉) + ation(名词后缀)'],
+        ['consensus', '共同感觉 → 共识', 'con(共同) + sens(感觉) + us(名词后缀)']
+      ]},
+      {k:'cred', m:'相信', pron:'/kred/', origin:'源自拉丁语 <span class="origin-latin">credere</span>（相信、信任）。直接对应 credit，本义就是“相信”。', e:[
+        ['credit', '相信 → 信用', 'cred(相信) + it'],
+        ['credible', '可相信的 → 可信的', 'cred(相信) + ible(能…的)'],
+        ['incredible', '不可信的 → 难以置信的', 'in(否定) + cred(相信) + ible(能…的)'],
+        ['credential', '相信之物 → 凭证', 'cred(相信) + ential(名词后缀)'],
+        ['creed', '相信 → 信条', 'cred(相信) → creed']
+      ]},
+      {k:'fid', m:'信任', pron:'/fɪd/', origin:'源自拉丁语 <span class="origin-latin">fidere</span>（信任、依赖）。与 cred 的区别：fid 更强调“依赖、忠诚”的情感层面。', e:[
+        ['confide', '完全信任 → 倾诉', 'con(完全) + fid(信任) + e'],
+        ['fidelity', '信任 → 忠诚', 'fid(信任) + elity(名词后缀)'],
+        ['confident', '完全相信 → 自信的', 'con(完全) + fid(信任) + ent(形容词后缀)']
+      ]}
+    ]},
+    { group:'说与写', items:[
+      {k:'dict', m:'说', pron:'/dɪkt/', origin:'源自拉丁语 <span class="origin-latin">dicere</span>（说、宣告），分词 <span class="origin-latin">dictus</span>。更早的印欧词根 <span class="origin-latin">*deik-</span> 本义为“展示”。', e:[
+        ['dictate', '口述、命令', 'dict(说) + ate(动词后缀)'],
+        ['predict', '提前说 → 预言', 'pre(提前) + dict(说)'],
+        ['dictionary', '词语汇总 → 词典', 'dict(说) + ionary(名词后缀)'],
+        ['contradict', '反着说 → 反驳', 'contra(相反) + dict(说)'],
+        ['indicate', '指向着说 → 表明', 'in(朝向) + dic(说) + ate(动词后缀)'],
+        ['verdict', '真说 → 裁决', 'ver(真) + dict(说)']
+      ]},
+      {k:'log / logue', m:'说、学科', pron:'/lɒɡ/', origin:'源自希腊语 <span class="origin-latin">logos</span>（言说、理性、学科）。古希腊哲学中指“理性言说”的能力。后缀 -logy 表示某学科。', e:[
+        ['dialogue', '两人说 → 对话', 'dia(之间) + logue(说)'],
+        ['logic', '说的话 → 逻辑', 'log(说) + ic(形容词后缀)'],
+        ['biology', '生命学科 → 生物学', 'bio(生命) + logy(学科)'],
+        ['apology', '说开 → 道歉', 'apo(离开) + logy(说)'],
+        ['monologue', '独自说 → 独白', 'mono(单一) + logue(说)'],
+        ['eloquent', '向外说 → 雄辩的', 'e(向外) + loqu(说) + ent(形容词后缀)']
+      ]},
+      {k:'voc / vok', m:'叫、声音', pron:'/voʊk/', origin:'源自拉丁语 <span class="origin-latin">vocare</span>（叫、呼唤），与 <span class="origin-latin">vox</span>（声音）同源。vocal 即“嗓音的”，vocabulary 本义是“叫出来的词”。', e:[
+        ['vocal', '声音的 → 嗓音的', 'voc(声音) + al(形容词后缀)'],
+        ['invoke', '向内叫 → 调用、祈求', 'in(向内) + vok(叫) + e'],
+        ['provoke', '向前叫 → 激怒', 'pro(向前) + vok(叫) + e'],
+        ['vocabulary', '叫出来的词 → 词汇', 'voc(叫) + abulary(名词后缀)']
+      ]},
+      {k:'claim / clam', m:'喊', pron:'/kleɪm/', origin:'源自拉丁语 <span class="origin-latin">clamare</span>（喊叫）。claim 是变体形式。claim 单独成词意为“声称”，即“喊出自己的主张”。', e:[
+        ['exclaim', '向外喊 → 惊叫', 'ex(向外) + claim(喊)'],
+        ['claim', '喊 → 声称', 'claim(喊)'],
+        ['proclaim', '向前喊 → 宣布', 'pro(向前) + claim(喊)']
+      ]},
+      {k:'phon', m:'声音', pron:'/fɒn/', origin:'源自希腊语 <span class="origin-latin">phone</span>（声音、嗓音）。telephone = 远处的声音，symphony = 一起发出的声音。', e:[
+        ['telephone', '远处声音 → 电话', 'tele(远) + phon(声音) + e'],
+        ['microphone', '微小声音 → 麦克风', 'micro(微小) + phon(声音) + e'],
+        ['symphony', '一起声音 → 交响乐', 'sym(一起) + phon(声音) + y'],
+        ['phonetics', '声音学 → 语音学', 'phon(声音) + etics(学科)']
+      ]},
+      {k:'scrib / script', m:'写', pron:'/skrɪb/ · /skrɪpt/', origin:'源自拉丁语 <span class="origin-latin">scribere</span>（写），本义是“刻划、刮擦”。古人在蜡板或石头上刻字，所以“写”的本源动作是“刻”。', e:[
+        ['describe', '写下来 → 描述', 'de(向下) + scrib(写) + e'],
+        ['subscribe', '在下面写 → 订阅', 'sub(在下面) + scrib(写) + e'],
+        ['manuscript', '手写的 → 手稿', 'manu(手) + script(写)'],
+        ['prescribe', '提前写 → 开处方', 'pre(提前) + scrib(写) + e'],
+        ['script', '写的东西 → 剧本', 'script(写)'],
+        ['transcript', '跨越写 → 抄本', 'trans(跨越) + script(写)']
+      ]},
+      {k:'graph', m:'写、画', pron:'/ɡræf/', origin:'源自希腊语 <span class="origin-latin">graphein</span>（刻划、写、画）。graph 更强调“描绘、记录”的动作，所以 photograph = 用光来“写”出的图像。', e:[
+        ['photograph', '光写 → 照片', 'photo(光) + graph(写)'],
+        ['biography', '生命写 → 传记', 'bio(生命) + graph(写) + y'],
+        ['autograph', '自己写 → 签名', 'auto(自己) + graph(写)'],
+        ['graphic', '画的 → 图像的', 'graph(画) + ic(形容词后缀)'],
+        ['paragraph', '旁边写 → 段落', 'para(旁边) + graph(写)']
+      ]},
+      {k:'verb', m:'词、话', pron:'/vɜːrb/', origin:'源自拉丁语 <span class="origin-latin">verbum</span>（词）。verb = 动词，proverb = 前面的词（谚语），verbal = 词语的。', e:[
+        ['verb', '动词', 'verb(词)'],
+        ['proverb', '前面的词 → 谚语', 'pro(前面) + verb(词)'],
+        ['verbal', '词语的 → 口头的', 'verb(词) + al(形容词后缀)']
+      ]},
+      {k:'loqu', m:'说', pron:'/loʊkw/', origin:'源自拉丁语 <span class="origin-latin">loqui</span>（说）。eloquent = 向外说（雄辩的），colloquial = 共同说（口语的）。', e:[
+        ['eloquent', '向外说 → 雄辩的', 'e(向外) + loqu(说) + ent(形容词后缀)'],
+        ['colloquial', '共同说 → 口语的', 'col(共同) + loqu(说) + ial(形容词后缀)'],
+        ['soliloquy', '独自说 → 独白', 'soli(独自) + loqu(说) + y']
+      ]}
+    ]},
+    { group:'搬运与传递', items:[
+      {k:'port', m:'搬运', pron:'/pɔːrt/', origin:'源自拉丁语 <span class="origin-latin">portare</span>（携带、运输）。与 <span class="origin-latin">portus</span>（港口）同源——港口就是货物搬运、转运的地方。', e:[
+        ['import', '向内搬 → 进口', 'im(向内) + port(搬)'],
+        ['export', '向外搬 → 出口', 'ex(向外) + port(搬)'],
+        ['transport', '跨越搬运 → 运输', 'trans(跨越) + port(搬)'],
+        ['portable', '可搬的 → 便携的', 'port(搬) + able(能…的)'],
+        ['support', '从下面搬 → 支撑', 'sup(在下面) + port(搬)'],
+        ['porter', '搬的人 → 搬运工', 'port(搬) + er(做…的人)']
+      ]},
+      {k:'fer', m:'带、拿', pron:'/fɜːr/', origin:'源自拉丁语 <span class="origin-latin">ferre</span>（携带、拿取、承受）。与英语本族词 bear 同源，都来自印欧语 <span class="origin-latin">*bher-</span>。', e:[
+        ['transfer', '跨越带 → 转移', 'trans(跨越) + fer(带)'],
+        ['offer', '向前拿 → 提供', 'of(向前) + fer(拿)'],
+        ['prefer', '放在前面 → 更喜欢', 'pre(前面) + fer(拿)'],
+        ['refer', '带回 → 参考', 're(回) + fer(带)'],
+        ['conference', '一起带来 → 会议', 'con(一起) + fer(带) + ence(名词后缀)']
+      ]},
+      {k:'mit / miss', m:'送、发', pron:'/mɪt/ · /mɪs/', origin:'源自拉丁语 <span class="origin-latin">mittere</span>（送、放出、发射）。mit 是现在词干，miss 是分词词干。本义是“放开、让……走”。', e:[
+        ['emit', '向外送 → 发出', 'e(向外) + mit(送)'],
+        ['admit', '送进去 → 接纳、承认', 'ad(向里) + mit(送)'],
+        ['missile', '被发出的东西 → 导弹', 'miss(发) + ile(名词后缀)'],
+        ['submit', '向下送 → 提交', 'sub(向下) + mit(送)'],
+        ['dismiss', '送走 → 解散', 'dis(分开) + miss(送)'],
+        ['permit', '放行通过 → 允许', 'per(通过) + mit(送)'],
+        ['mission', '送出的任务 → 任务', 'miss(送) + ion(名词后缀)']
+      ]},
+      {k:'ject', m:'投掷', pron:'/dʒekt/', origin:'源自拉丁语 <span class="origin-latin">iacere</span>（扔、投），分词 <span class="origin-latin">iectus</span>，词根形式为 ject。', e:[
+        ['reject', '投回去 → 拒绝', 're(回) + ject(投)'],
+        ['inject', '向里投 → 注射', 'in(向里) + ject(投)'],
+        ['project', '向前投 → 投射、项目', 'pro(向前) + ject(投)'],
+        ['subject', '投在下面 → 主题', 'sub(下面) + ject(投)'],
+        ['eject', '向外投 → 喷出', 'e(向外) + ject(投)']
+      ]},
+      {k:'tract', m:'拉、拖', pron:'/trækt/', origin:'源自拉丁语 <span class="origin-latin">trahere</span>（拉、拖），分词 <span class="origin-latin">tractus</span>。与英语本族词 drag 同源。', e:[
+        ['attract', '拉向 → 吸引', 'at(朝向) + tract(拉)'],
+        ['distract', '拉开 → 分心', 'dis(分开) + tract(拉)'],
+        ['extract', '向外拉 → 提取', 'ex(向外) + tract(拉)'],
+        ['contract', '拉到一起 → 合同', 'con(一起) + tract(拉)'],
+        ['tractor', '拉的东西 → 拖拉机', 'tract(拉) + or(做…的东西)'],
+        ['traction', '拉 → 牵引力', 'tract(拉) + ion(名词后缀)'],
+        ['contraction', '拉到一起 → 收缩', 'con(一起) + tract(拉) + ion(名词后缀)']
+      ]},
+      {k:'duc / duct', m:'引导', pron:'/dʌkt/', origin:'源自拉丁语 <span class="origin-latin">ducere</span>（引导、带领），分词 <span class="origin-latin">ductus</span>。本义是“沿着既定路线带领”，强调方向性。', e:[
+        ['introduce', '引向内 → 介绍', 'intro(向内) + duc(引) + e'],
+        ['produce', '向前引 → 生产', 'pro(向前) + duc(引) + e'],
+        ['reduce', '向后引 → 减少', 're(向后) + duc(引) + e'],
+        ['conduct', '共同引导 → 指挥', 'con(共同) + duct(引导)'],
+        ['educate', '引出才能 → 教育', 'e(向外) + duc(引) + ate(动词后缀)'],
+        ['deduct', '向下引 → 扣除', 'de(向下) + duct(引)'],
+        ['abduct', '引走 → 绑架', 'ab(离开) + duct(引)']
+      ]}
+    ]},
+    { group:'动作与状态', items:[
+      {k:'sist', m:'站', pron:'/sɪst/', origin:'源自拉丁语 <span class="origin-latin">sistere</span>（站立、使站住），是 <span class="origin-latin">stare</span>（站）的加强形式。', e:[
+        ['assist', '站在旁边 → 协助', 'as(在旁边) + sist(站)'],
+        ['insist', '站在上面 → 坚持', 'in(在上面) + sist(站)'],
+        ['resist', '站回去 → 抵抗', 're(回去) + sist(站)'],
+        ['consist', '站在一起 → 组成', 'con(一起) + sist(站)'],
+        ['persist', '一直站 → 坚持', 'per(一直) + sist(站)'],
+        ['resistance', '站回去 → 抵抗', 're(回去) + sist(站) + ance(名词后缀)'],
+        ['consistency', '站在一起 → 一致性', 'con(一起) + sist(站) + ency(名词后缀)']
+      ]},
+      {k:'pos / pon', m:'放', pron:'/poʊz/ · /poʊn/', origin:'源自拉丁语 <span class="origin-latin">ponere</span>（放置），现在词干 pon-，分词词干 posit-（所以有 pos）。', e:[
+        ['compose', '共同放 → 组成', 'com(共同) + pos(放) + e'],
+        ['deposit', '向下放 → 存放', 'de(向下) + pos(放) + it'],
+        ['expose', '向外放 → 暴露', 'ex(向外) + pos(放) + e'],
+        ['impose', '放上去 → 强加', 'im(上面) + pos(放) + e'],
+        ['propose', '向前放 → 提议', 'pro(向前) + pos(放) + e']
+      ]},
+      {k:'ced / ceed / cess', m:'走、让', pron:'/sed/ · /siːd/ · /ses/', origin:'源自拉丁语 <span class="origin-latin">cedere</span>（走、让），分词词干 cess-。succeed = 下面走（跟在后面走 → 成功）。', e:[
+        ['proceed', '向前走 → 进行', 'pro(向前) + ceed(走)'],
+        ['exceed', '超过走 → 超过', 'ex(超出) + ceed(走)'],
+        ['success', '下面走 → 成功', 'suc(下面) + cess(走)'],
+        ['access', '向…走 → 进入', 'ac(朝向) + cess(走)'],
+        ['recede', '向后走 → 后退', 're(向后) + ced(走) + e'],
+        ['succeed', '下面走 → 成功', 'suc(下面) + ceed(走)']
+      ]},
+      {k:'tend / tens', m:'伸展', pron:'/tend/ · /tens/', origin:'源自拉丁语 <span class="origin-latin">tendere</span>（伸展、拉紧），分词词干 tens-。', e:[
+        ['extend', '向外伸 → 延伸', 'ex(向外) + tend(伸)'],
+        ['tension', '伸 → 紧张', 'tens(伸) + ion(名词后缀)'],
+        ['intense', '向内伸 → 强烈的', 'in(向内) + tens(伸) + e'],
+        ['attend', '向…伸 → 参加', 'at(朝向) + tend(伸)']
+      ]},
+      {k:'plic / ply', m:'折叠', pron:'/plɪk/ · /plaɪ/', origin:'源自拉丁语 <span class="origin-latin">plicare</span>（折叠）。complex = 一起折（多层折叠在一起 → 复杂的）。', e:[
+        ['apply', '向…折 → 应用', 'ap(朝向) + ply(折)'],
+        ['complex', '一起折 → 复杂的', 'com(一起) + plex(折)'],
+        ['multiply', '多折 → 乘、繁殖', 'multi(多) + ply(折)'],
+        ['complicate', '一起折 → 使复杂', 'com(一起) + plic(折) + ate(动词后缀)']
+      ]},
+      {k:'cid / cis', m:'切、杀', pron:'/sɪd/ · /sɪs/', origin:'源自拉丁语 <span class="origin-latin">caedere</span>（切、杀），分词词干 cis-。', e:[
+        ['decide', '切断疑虑 → 决定', 'de(向下) + cid(切) + e'],
+        ['scissors', '切的东西 → 剪刀', 'sciss(切) + ors(东西)'],
+        ['precise', '提前切好 → 精确的', 'pre(提前) + cis(切) + e'],
+        ['suicide', '自己杀 → 自杀', 'sui(自己) + cid(杀) + e']
+      ]},
+      {k:'act', m:'做、行动', pron:'/ækt/', origin:'源自拉丁语 <span class="origin-latin">agere</span>（做、驱动），分词词干 <span class="origin-latin">act-</span>。本义是“驱动、使动”，后引申为“行动、做”。', e:[
+        ['react', '反着做 → 反应', 're(反) + act(做)'],
+        ['interact', '在之间做 → 互动', 'inter(之间) + act(做)'],
+        ['transaction', '跨越做 → 交易', 'trans(跨越) + act(做) + ion(名词后缀)'],
+        ['activate', '使行动 → 激活', 'act(行动) + ivate(动词后缀)'],
+        ['agent', '做事的人 → 代理人', 'ag(做) + ent(做…的人)']
+      ]},
+      {k:'press', m:'压', pron:'/pres/', origin:'源自拉丁语 <span class="origin-latin">premere</span>（压），分词词干 <span class="origin-latin">press-</span>。', e:[
+        ['express', '向外压 → 表达', 'ex(向外) + press(压)'],
+        ['impress', '向内压 → 留下印象', 'im(向内) + press(压)'],
+        ['depress', '向下压 → 使沮丧', 'de(向下) + press(压)'],
+        ['compress', '共同压 → 压缩', 'com(共同) + press(压)'],
+        ['oppress', '反着压 → 压迫', 'op(反着) + press(压)'],
+        ['compression', '共同压 → 压缩', 'com(共同) + press(压) + ion(名词后缀)'],
+        ['expression', '向外压 → 表达', 'ex(向外) + press(压) + ion(名词后缀)'],
+        ['impressive', '向内压 → 给人深刻印象的', 'im(向内) + press(压) + ive(形容词后缀)']
+      ]},
+      {k:'tain / ten', m:'保持', pron:'/teɪn/ · /ten/', origin:'源自拉丁语 <span class="origin-latin">tenere</span>（保持、持有）。', e:[
+        ['contain', '共同保持 → 包含', 'con(共同) + tain(保持)'],
+        ['maintain', '用手保持 → 维持', 'main(手) + tain(保持)'],
+        ['obtain', '朝向保持 → 获得', 'ob(朝向) + tain(保持)'],
+        ['sustain', '在下面保持 → 维持', 'sus(在下面) + tain(保持)'],
+        ['retain', '向后保持 → 保留', 're(向后) + tain(保持)']
+      ]},
+      {k:'fact / fect', m:'做', pron:'/fækt/ · /fekt/', origin:'源自拉丁语 <span class="origin-latin">facere</span>（做），分词词干 <span class="origin-latin">fact-</span>，变体 <span class="origin-latin">fect-</span>。', e:[
+        ['factory', '做的地方 → 工厂', 'fact(做) + ory(地方)'],
+        ['effect', '向外做 → 效果', 'ef(向外) + fect(做)'],
+        ['perfect', '完全做完 → 完美的', 'per(完全) + fect(做)'],
+        ['defect', '向下做 → 缺陷', 'de(向下) + fect(做)'],
+        ['infect', '向内做 → 感染', 'in(向内) + fect(做)']
+      ]}
+    ]},
+    { group:'空间与移动', items:[
+      {k:'grad / gress', m:'走、步', pron:'/ɡræd/ · /ɡres/', origin:'源自拉丁语 <span class="origin-latin">gradi</span>（走、步），分词词干 gress-。', e:[
+        ['gradual', '一步步的 → 逐渐的', 'grad(步) + ual(形容词后缀)'],
+        ['progress', '向前走 → 进步', 'pro(向前) + gress(走)'],
+        ['degree', '向下走 → 程度', 'de(向下) + gree(走)'],
+        ['ingredient', '走进来 → 成分', 'in(进来) + gred(走) + ient(名词后缀)'],
+        ['graduate', '走完步 → 毕业', 'grad(步) + uate(动词后缀)'],
+        ['aggressive', '向前走 → 侵略性的', 'ag(朝向) + gress(走) + ive(形容词后缀)']
+      ]},
+      {k:'ven / vent', m:'来', pron:'/ven/ · /vent/', origin:'源自拉丁语 <span class="origin-latin">venire</span>（来），分词词干 vent-。', e:[
+        ['prevent', '提前来 → 阻止', 'pre(提前) + vent(来)'],
+        ['invent', '想出来 → 发明', 'in(向内) + vent(来)'],
+        ['avenue', '来路 → 大道', 'a(向) + ven(来) + ue'],
+        ['event', '出来的事 → 事件', 'e(向外) + vent(来)'],
+        ['intervene', '在中间来 → 干预', 'inter(之间) + ven(来) + e'],
+        ['convenient', '一起来 → 方便的', 'con(一起) + ven(来) + ient(形容词后缀)'],
+        ['adventure', '向未来来 → 冒险', 'ad(朝向) + vent(来) + ure(名词后缀)']
+      ]},
+      {k:'cur / curs / cour', m:'跑', pron:'/kɜːr/ · /kɜːrs/ · /kɔːr/', origin:'源自拉丁语 <span class="origin-latin">currere</span>（跑），分词词干 curs-。', e:[
+        ['current', '跑的 → 当前的、水流', 'cur(跑) + rent(形容词后缀)'],
+        ['occur', '跑向 → 发生', 'oc(朝向) + cur(跑)'],
+        ['excursion', '向外跑 → 远足', 'ex(向外) + curs(跑) + ion(名词后缀)'],
+        ['course', '跑的路 → 课程、路线', 'cour(跑) + se'],
+        ['currency', '跑的 → 流通的货币', 'cur(跑) + rency(名词后缀)'],
+        ['curriculum', '跑的路 → 课程', 'cur(跑) + riculum(名词后缀)']
+      ]},
+      {k:'mot / mov', m:'动', pron:'/moʊt/ · /muːv/', origin:'源自拉丁语 <span class="origin-latin">movere</span>（移动），分词词干 mot-。', e:[
+        ['motion', '动 → 运动', 'mot(动) + ion(名词后缀)'],
+        ['emotion', '向外动 → 情感', 'e(向外) + mot(动) + ion(名词后缀)'],
+        ['promote', '向前动 → 促进', 'pro(向前) + mot(动) + e'],
+        ['remove', '移开 → 移除', 're(回) + mov(动) + e'],
+        ['mobile', '动的 → 移动的', 'mob(动) + ile(形容词后缀)']
+      ]},
+      {k:'vert / vers', m:'转', pron:'/vɜːrt/ · /vɜːrs/', origin:'源自拉丁语 <span class="origin-latin">vertere</span>（转），分词词干 vers-。', e:[
+        ['convert', '共同转 → 转换', 'con(共同) + vert(转)'],
+        ['reverse', '反着转 → 倒转', 're(反) + vers(转) + e'],
+        ['universe', '转成一个 → 宇宙', 'uni(一个) + vers(转) + e'],
+        ['version', '转的 → 版本', 'vers(转) + ion(名词后缀)'],
+        ['advertise', '转向 → 广告', 'ad(朝向) + vert(转) + ise(动词后缀)'],
+        ['controversial', '反着转 → 有争议的', 'contro(反) + vers(转) + ial(形容词后缀)'],
+        ['versatile', '能转的 → 多才多艺的', 'vers(转) + atile(形容词后缀)']
+      ]},
+      {k:'flu', m:'流', pron:'/fluː/', origin:'源自拉丁语 <span class="origin-latin">fluere</span>（流动）。', e:[
+        ['fluent', '流动的 → 流利的', 'flu(流) + ent(形容词后缀)'],
+        ['influence', '流入 → 影响', 'in(向内) + flu(流) + ence(名词后缀)'],
+        ['fluid', '流动的 → 液体', 'flu(流) + id(名词后缀)'],
+        ['flush', '冲 → 冲洗', 'flu(流) + sh(动词后缀)'],
+        ['fluctuate', '流动 → 波动', 'flu(流) + ctuate(动词后缀)']
+      ]},
+      {k:'migr', m:'迁移', pron:'/ˈmaɪɡr/', origin:'源自拉丁语 <span class="origin-latin">migrare</span>（迁移）。', e:[
+        ['migrate', '迁移', 'migr(迁移) + ate(动词后缀)'],
+        ['immigrate', '向内迁移 → 移入', 'im(向内) + migr(迁移) + ate(动词后缀)'],
+        ['emigrate', '向外迁移 → 移出', 'e(向外) + migr(迁移) + ate(动词后缀)'],
+        ['migrant', '迁移的人 → 移民', 'migr(迁移) + ant(人)'],
+        ['immigration', '向内迁移 → 移民入境', 'im(向内) + migr(迁移) + ation(名词后缀)'],
+        ['emigration', '向外迁移 → 移民出境', 'e(向外) + migr(迁移) + ation(名词后缀)']
+      ]}
+    ]},
+    { group:'生命与自然', items:[
+      {k:'bio', m:'生命', pron:'/ˈbaɪoʊ/', origin:'源自希腊语 <span class="origin-latin">bios</span>（生命、生活）。', e:[
+        ['biology', '生命学科 → 生物学', 'bio(生命) + logy(学科)'],
+        ['biography', '生命写 → 传记', 'bio(生命) + graph(写) + y'],
+        ['antibiotic', '反抗生命 → 抗生素', 'anti(反抗) + bio(生命) + tic(名词后缀)']
+      ]},
+      {k:'viv / vit', m:'生命、活', pron:'/vɪv/ · /vɪt/', origin:'源自拉丁语 <span class="origin-latin">vivere</span>（活），<span class="origin-latin">vita</span>（生命）。', e:[
+        ['survive', '超过生命 → 幸存', 'sur(超过) + viv(活) + e'],
+        ['vital', '生命的 → 至关重要的', 'vit(生命) + al(形容词后缀)'],
+        ['revive', '重新活 → 复活', 're(重新) + viv(活) + e'],
+        ['vitamin', '生命物质 → 维生素', 'vit(生命) + amin(物质)'],
+        ['vivid', '活的 → 生动的', 'viv(活) + id(形容词后缀)'],
+        ['vitality', '生命的 → 活力', 'vit(生命) + ality(名词后缀)']
+      ]},
+      {k:'mort', m:'死', pron:'/mɔːrt/', origin:'源自拉丁语 <span class="origin-latin">mors</span>（死），词干 mort-。', e:[
+        ['mortal', '死的 → 凡人的、致命的', 'mort(死) + al(形容词后缀)'],
+        ['immortal', '不死的 → 不朽的', 'im(否定) + mort(死) + al(形容词后缀)'],
+        ['mortuary', '停尸房', 'mort(死) + uary(地方)'],
+        ['mortality', '死的 → 死亡率', 'mort(死) + ality(名词后缀)']
+      ]},
+      {k:'gen', m:'产生、种类', pron:'/dʒen/', origin:'源自拉丁语 <span class="origin-latin">genus</span>（种族、种类）和 <span class="origin-latin">gignere</span>（产生）。', e:[
+        ['generate', '产生 → 生成', 'gen(产生) + erate(动词后缀)'],
+        ['genetic', '基因的 → 遗传的', 'gen(产生) + etic(形容词后缀)'],
+        ['genius', '生来的 → 天才', 'gen(生) + ius(名词后缀)'],
+        ['hydrogen', '产生水的 → 氢', 'hydro(水) + gen(产生)']
+      ]},
+      {k:'spir', m:'呼吸', pron:'/spaɪr/', origin:'源自拉丁语 <span class="origin-latin">spirare</span>（呼吸）。', e:[
+        ['inspire', '吸进去 → 激励', 'in(向内) + spir(呼吸) + e'],
+        ['spirit', '呼吸 → 精神', 'spir(呼吸) + it(名词后缀)'],
+        ['respiration', '反复呼吸 → 呼吸作用', 're(反复) + spir(呼吸) + ation(名词后缀)'],
+        ['conspire', '共同呼吸 → 密谋', 'con(共同) + spir(呼吸) + e']
+      ]},
+      {k:'geo', m:'地球、土地', pron:'/ˈdʒiːoʊ/', origin:'源自希腊语 <span class="origin-latin">ge</span>（地球、土地）。', e:[
+        ['geography', '地球写 → 地理', 'geo(地球) + graph(写) + y'],
+        ['geology', '地球学科 → 地质学', 'geo(地球) + logy(学科)'],
+        ['geometry', '测量地球 → 几何', 'geo(地球) + metr(测量) + y']
+      ]},
+      {k:'astr', m:'星', pron:'/ˈæstr/', origin:'源自希腊语 <span class="origin-latin">astron</span>（星星）。', e:[
+        ['astronaut', '星际航行者 → 宇航员', 'astr(星) + o + naut(航行者)'],
+        ['astronomy', '星星学科 → 天文学', 'astr(星) + onomy(学科)'],
+        ['disaster', '星不好 → 灾难', 'dis(不好) + astr(星) + er']
+      ]},
+      {k:'mar', m:'海', pron:'/mɑːr/', origin:'源自拉丁语 <span class="origin-latin">mare</span>（海）。', e:[
+        ['marine', '海的 → 海洋的', 'mar(海) + ine(形容词后缀)'],
+        ['submarine', '在下面海 → 潜艇', 'sub(在下面) + mar(海) + ine(名词后缀)'],
+        ['maritime', '海的 → 海事的', 'mar(海) + itime(形容词后缀)']
+      ]},
+      {k:'terr', m:'土地', pron:'/ter/', origin:'源自拉丁语 <span class="origin-latin">terra</span>（土地、大地）。', e:[
+        ['territory', '土地 → 领土', 'terr(土地) + itory(地方)'],
+        ['terrain', '地形', 'terr(土地) + ain(名词后缀)'],
+        ['terrace', '台地 → 露台', 'terr(土地) + ace(名词后缀)']
+      ]},
+      {k:'urb', m:'城市', pron:'/ɜːrb/', origin:'源自拉丁语 <span class="origin-latin">urbs</span>（城市）。', e:[
+        ['urban', '城市的', 'urb(城市) + an(形容词后缀)'],
+        ['suburb', '下面城市 → 郊区', 'sub(下面) + urb(城市)']
+      ]},
+      {k:'agr', m:'田地', pron:'/æɡr/', origin:'源自拉丁语 <span class="origin-latin">ager</span>（田地、土地）。', e:[
+        ['agriculture', '田地文化 → 农业', 'agr(田地) + i + culture(文化)'],
+        ['agronomy', '田地学 → 农学', 'agr(田地) + onomy(学科)']
+      ]},
+      {k:'mater / matr', m:'母亲', pron:'/ˈmeɪtər/ · /mætr/', origin:'源自拉丁语 <span class="origin-latin">mater</span>（母亲）。', e:[
+        ['maternal', '母亲的', 'mater(母亲) + nal(形容词后缀)'],
+        ['matrimony', '母亲的状态 → 婚姻', 'matr(母亲) + imony(状态)'],
+        ['matriarch', '母亲统治 → 女家长', 'matr(母亲) + i + arch(统治)']
+      ]}
+    ]},
+    { group:'时间与数量', items:[
+      {k:'chron', m:'时间', pron:'/krɒn/', origin:'源自希腊语 <span class="origin-latin">chronos</span>（时间）。', e:[
+        ['chronic', '时间的 → 慢性的', 'chron(时间) + ic(形容词后缀)'],
+        ['synchronize', '共同时间 → 同步', 'syn(共同) + chron(时间) + ize(动词后缀)'],
+        ['chronology', '时间学科 → 年代学', 'chron(时间) + ology(学科)']
+      ]},
+      {k:'tempor', m:'时间', pron:'/ˈtempər/', origin:'源自拉丁语 <span class="origin-latin">tempus</span>（时间），词干 tempor-。', e:[
+        ['temporary', '时间的 → 暂时的', 'tempor(时间) + ary(形容词后缀)'],
+        ['contemporary', '共同时间 → 当代的', 'con(共同) + tempor(时间) + ary(形容词后缀)']
+      ]},
+      {k:'ann / enn', m:'年', pron:'/æn/ · /en/', origin:'源自拉丁语 <span class="origin-latin">annus</span>（年）。', e:[
+        ['annual', '年的 → 每年的', 'ann(年) + ual(形容词后缀)'],
+        ['anniversary', '年转 → 周年', 'ann(年) + i + vers(转) + ary(名词后缀)'],
+        ['perennial', '穿过年 → 长期的', 'per(穿过) + enn(年) + ial(形容词后缀)']
+      ]},
+      {k:'meter / metr', m:'测量', pron:'/ˈmiːtər/ · /metr/', origin:'源自希腊语 <span class="origin-latin">metron</span>（测量、尺度）。', e:[
+        ['thermometer', '热测量 → 温度计', 'thermo(热) + meter(测量)'],
+        ['diameter', '穿过测量 → 直径', 'dia(穿过) + meter(测量)'],
+        ['symmetry', '一起测量 → 对称', 'sym(一起) + metr(测量) + y'],
+        ['parameter', '旁边测量 → 参数', 'para(旁边) + meter(测量)']
+      ]},
+      {k:'equ', m:'平等', pron:'/ekw/', origin:'源自拉丁语 <span class="origin-latin">aequus</span>（平等的、平的）。', e:[
+        ['equal', '平等的', 'equ(平等) + al(形容词后缀)'],
+        ['equator', '平等 → 赤道', 'equ(平等) + ator(名词后缀)'],
+        ['adequate', '到平等 → 足够的', 'ad(到) + equ(平等) + ate(形容词后缀)']
+      ]},
+      {k:'magn', m:'大', pron:'/mæɡn/', origin:'源自拉丁语 <span class="origin-latin">magnus</span>（大的）。', e:[
+        ['magnify', '使大 → 放大', 'magn(大) + ify(使…)'],
+        ['magnificent', '大做的 → 壮丽的', 'magn(大) + ific(做) + ent(形容词后缀)'],
+        ['magnitude', '大小 → 重要性', 'magn(大) + itude(名词后缀)']
+      ]},
+      {k:'min', m:'小', pron:'/mɪn/', origin:'源自拉丁语 <span class="origin-latin">minus</span>（更少）和 <span class="origin-latin">minuere</span>（减少）。', e:[
+        ['minimum', '最小的', 'min(小) + imum(最高级)'],
+        ['minor', '小的 → 次要的', 'min(小) + or(比较级)'],
+        ['diminish', '使小 → 减少', 'di(向下) + min(小) + ish(动词后缀)']
+      ]},
+      {k:'mult', m:'多', pron:'/mʌlt/', origin:'源自拉丁语 <span class="origin-latin">multus</span>（多的）。', e:[
+        ['multiple', '多的 → 多样的', 'mult(多) + iple(形容词后缀)'],
+        ['multiply', '多折 → 乘', 'multi(多) + ply(折)'],
+        ['multitude', '多 → 众多', 'mult(多) + itude(名词后缀)']
+      ]},
+      {k:'uni', m:'一', pron:'/ˈjuːnɪ/', origin:'源自拉丁语 <span class="origin-latin">unus</span>（一）。', e:[
+        ['unite', '使一 → 联合', 'uni(一) + te(动词后缀)'],
+        ['uniform', '一形 → 制服', 'uni(一) + form(形状)'],
+        ['unique', '一的 → 独特的', 'uni(一) + que(形容词后缀)'],
+        ['universe', '转成一 → 宇宙', 'uni(一) + vers(转) + e'],
+        ['uniformity', '一形 → 一致性', 'uni(一) + form(形状) + ity(名词后缀)'],
+        ['unification', '使一 → 统一', 'uni(一) + fic(做) + ation(名词后缀)']
+      ]},
+      {k:'brev', m:'短', pron:'/brev/', origin:'源自拉丁语 <span class="origin-latin">brevis</span>（短的）。', e:[
+        ['brief', '短的 → 简短的', 'brev(短) → brief'],
+        ['abbreviate', '使短 → 缩写', 'ab(加强) + brev(短) + iate(动词后缀)'],
+        ['brevity', '简短', 'brev(短) + ity(名词后缀)']
+      ]},
+      {k:'long', m:'长', pron:'/lɒŋ/', origin:'源自拉丁语 <span class="origin-latin">longus</span>（长的）。', e:[
+        ['prolong', '向前延长 → 延长', 'pro(向前) + long(长)'],
+        ['length', '长度', 'leng(长) + th(名词后缀)'],
+        ['longitude', '长度 → 经度', 'long(长) + itude(名词后缀)']
+      ]}
+    ]},
+    { group:'手与身体', items:[
+      {k:'man / manu', m:'手', pron:'/mæn/ · /ˈmænju/', origin:'源自拉丁语 <span class="origin-latin">manus</span>（手）。', e:[
+        ['manual', '手的 → 手册', 'manu(手) + al(形容词后缀)'],
+        ['manufacture', '用手做 → 制造', 'manu(手) + fact(做) + ure(名词后缀)'],
+        ['manage', '用手管 → 管理', 'man(手) + age(动词后缀)'],
+        ['manuscript', '手写 → 手稿', 'manu(手) + script(写)'],
+        ['manipulate', '用手操作 → 操纵', 'mani(手) + pul(操作) + ate(动词后缀)']
+      ]},
+      {k:'ped / pod', m:'脚', pron:'/ped/ · /pɒd/', origin:'源自拉丁语 <span class="origin-latin">pes</span>（脚），词干 ped-；希腊语对应词根为 <span class="origin-latin">pous</span>（脚），词干 pod-。', e:[
+        ['pedal', '脚的 → 踏板', 'ped(脚) + al(形容词后缀)'],
+        ['pedestrian', '用脚走的人 → 行人', 'ped(脚) + estrian(人)'],
+        ['expedition', '向外走 → 远征', 'ex(向外) + ped(脚) + ition(名词后缀)'],
+        ['tripod', '三只脚 → 三脚架', 'tri(三) + pod(脚)']
+      ]},
+      {k:'cap / cept / ceive', m:'拿、取', pron:'/kæp/ · /sept/ · /siːv/', origin:'源自拉丁语 <span class="origin-latin">capere</span>（拿、取、抓住）。cap 是现在词干，cept 是分词词干，ceive 是另一种变体。', e:[
+        ['accept', '拿过来 → 接受', 'ac(朝向) + cept(拿)'],
+        ['capture', '抓住 → 捕获', 'capt(抓) + ure(名词后缀)'],
+        ['receive', '拿回 → 收到', 're(回) + ceive(拿)'],
+        ['concept', '共同抓 → 概念', 'con(共同) + cept(抓)'],
+        ['except', '拿出去 → 除…之外', 'ex(向外) + cept(拿)']
+      ]},
+      {k:'leg / lect', m:'读、选', pron:'/leɡ/ · /lekt/', origin:'源自拉丁语 <span class="origin-latin">legere</span>（收集、挑选、阅读）。本义是“收集、挑选”，因为“阅读”就是从文字中“挑选”出意义。', e:[
+        ['collect', '共同选 → 收集', 'col(共同) + lect(选)'],
+        ['elect', '选出来 → 选举', 'e(向外) + lect(选)'],
+        ['select', '分开选 → 挑选', 'se(分开) + lect(选)'],
+        ['lecture', '读的东西 → 讲座', 'lect(读) + ure(名词后缀)'],
+        ['intellect', '在中间读 → 智力', 'intel(在中间) + lect(读)'],
+        ['election', '选出来 → 选举', 'e(向外) + lect(选) + ion(名词后缀)'],
+        ['selective', '分开选 → 选择性的', 'se(分开) + lect(选) + ive(形容词后缀)']
+      ]},
+      {k:'leg', m:'法律', pron:'/leɡ/ · /liːɡ/', origin:'源自拉丁语 <span class="origin-latin">lex</span>（法律），词干 <span class="origin-latin">leg-</span>。', e:[
+        ['legal', '法律的', 'leg(法律) + al(形容词后缀)'],
+        ['illegal', '不合法的', 'il(否定) + leg(法律) + al(形容词后缀)'],
+        ['legislate', '立法律 → 立法', 'leg(法律) + islate(制定)'],
+        ['privilege', '私人的法律 → 特权', 'privi(私人) + leg(法律) + e'],
+        ['legacy', '留下的法律 → 遗产', 'leg(法律) + acy(名词后缀)'],
+        ['legitimate', '法律的 → 合法的', 'leg(法律) + itimate(形容词后缀)'],
+        ['legislation', '立法律 → 立法', 'leg(法律) + islation(名词后缀)']
+      ]},
+      {k:'liter', m:'字母、文字', pron:'/ˈlɪtər/', origin:'源自拉丁语 <span class="origin-latin">littera</span>（字母）。', e:[
+        ['literature', '文字的东西 → 文学', 'liter(文字) + ature(名词后缀)'],
+        ['literal', '文字的 → 字面的', 'liter(文字) + al(形容词后缀)'],
+        ['literacy', '文字能力 → 读写能力', 'liter(文字) + acy(名词后缀)'],
+        ['illiterate', '不认字的 → 文盲的', 'il(否定) + liter(文字) + ate(形容词后缀)']
+      ]},
+      {k:'memor', m:'记忆', pron:'/ˈmemər/', origin:'源自拉丁语 <span class="origin-latin">memor</span>（记忆的）。', e:[
+        ['memory', '记忆', 'memor(记忆) + y(名词后缀)'],
+        ['memorize', '使记忆 → 记住', 'memor(记忆) + ize(动词后缀)'],
+        ['commemorate', '共同记忆 → 纪念', 'com(共同) + memor(记忆) + ate(动词后缀)'],
+        ['memorial', '记忆的 → 纪念的', 'memor(记忆) + ial(形容词后缀)']
+      ]},
+      {k:'ment', m:'思考、心智', pron:'/ment/', origin:'源自拉丁语 <span class="origin-latin">mens</span>（心智），词干 <span class="origin-latin">ment-</span>。', e:[
+        ['mental', '心智的', 'ment(心智) + al(形容词后缀)'],
+        ['mention', '想到 → 提到', 'ment(思考) + ion(名词后缀)'],
+        ['comment', '共同思考 → 评论', 'com(共同) + ment(思考)'],
+        ['mentality', '心智状态 → 心态', 'ment(心智) + ality(名词后缀)']
+      ]}
+    ]},
+    { group:'断与破', items:[
+      {k:'rupt', m:'断', pron:'/rʌpt/', origin:'源自拉丁语 <span class="origin-latin">rumpere</span>（断裂），分词词干 rupt-。', e:[
+        ['interrupt', '在中间断 → 打断', 'inter(中间) + rupt(断)'],
+        ['bankrupt', '银行断 → 破产', 'bank(银行) + rupt(断)'],
+        ['erupt', '向外断 → 爆发', 'e(向外) + rupt(断)'],
+        ['corrupt', '完全断 → 腐败', 'cor(完全) + rupt(断)'],
+        ['disruption', '分开断 → 中断', 'dis(分开) + rupt(断) + ion(名词后缀)'],
+        ['abrupt', '离开断 → 突然的', 'ab(离开) + rupt(断)']
+      ]},
+      {k:'frag / fract', m:'破', pron:'/fræɡ/ · /frækt/', origin:'源自拉丁语 <span class="origin-latin">frangere</span>（打破），分词词干 fract-。', e:[
+        ['fragment', '破的东西 → 碎片', 'frag(破) + ment(名词后缀)'],
+        ['fracture', '破 → 骨折', 'fract(破) + ure(名词后缀)'],
+        ['fragile', '易破的 → 脆弱的', 'frag(破) + ile(易…的)']
+      ]},
+      {k:'struct', m:'建造', pron:'/strʌkt/', origin:'源自拉丁语 <span class="origin-latin">struere</span>（堆积、建造），分词词干 struct-。本义是“堆叠、垒起”。', e:[
+        ['structure', '建造之物 → 结构', 'struct(建造) + ure(名词后缀)'],
+        ['construct', '共同建造 → 建造', 'con(共同) + struct(建造)'],
+        ['instruct', '在里面建 → 指导', 'in(在里面) + struct(建造)'],
+        ['destruction', '向下建 → 破坏', 'de(向下) + struct(建造) + ion(名词后缀)'],
+        ['obstruct', '挡住建造 → 阻碍', 'ob(挡住) + struct(建造)'],
+        ['constructive', '建造的 → 建设性的', 'con(共同) + struct(建造) + ive(形容词后缀)'],
+        ['superstructure', '在上面建 → 上层建筑', 'super(在上面) + struct(建造) + ure(名词后缀)']
+      ]},
+      {k:'form', m:'形状', pron:'/fɔːrm/', origin:'源自拉丁语 <span class="origin-latin">forma</span>（形状、外形）。', e:[
+        ['inform', '使成形 → 告知', 'in(向内) + form(形状)'],
+        ['reform', '重新成形 → 改革', 're(重新) + form(形状)'],
+        ['uniform', '单一形状 → 制服', 'uni(单一) + form(形状)'],
+        ['transform', '跨越形状 → 转变', 'trans(跨越) + form(形状)'],
+        ['formula', '小形式 → 公式', 'form(形状) + ula(小)'],
+        ['perform', '完成形态 → 表演', 'per(完全) + form(形状)']
+      ]}
+    ]},
+    { group:'光与热', items:[
+      {k:'therm', m:'热', pron:'/θɜːrm/', origin:'源自希腊语 <span class="origin-latin">therme</span>（热）。', e:[
+        ['thermometer', '热测量 → 温度计', 'thermo(热) + meter(测量)'],
+        ['thermal', '热的', 'therm(热) + al(形容词后缀)'],
+        ['thermos', '保温瓶', 'therm(热) + os(名词后缀)']
+      ]},
+      {k:'lumin / luc', m:'光', pron:'/ˈluːmɪn/ · /luːk/', origin:'源自拉丁语 <span class="origin-latin">lumen</span>（光），词干 lumin-；<span class="origin-latin">lux</span>（光），词干 luc-。', e:[
+        ['illuminate', '照亮 → 照亮', 'il(加强) + lumin(光) + ate(动词后缀)'],
+        ['translucent', '穿过光 → 半透明的', 'trans(穿过) + luc(光) + ent(形容词后缀)'],
+        ['lucid', '光的 → 清晰的', 'luc(光) + id(形容词后缀)']
+      ]},
+      {k:'sol', m:'太阳 / 单独', pron:'/sɒl/ · /soʊl/', origin:'源自拉丁语 <span class="origin-latin">sol</span>（太阳），同时也表示“单独”（因为太阳在天空中独一无二）。', e:[
+        ['solar', '太阳的', 'sol(太阳) + ar(形容词后缀)'],
+        ['solitary', '单独的 → 孤独的', 'sol(单独) + itary(形容词后缀)'],
+        ['solitude', '单独 → 孤独', 'sol(单独) + itude(名词后缀)']
+      ]}
+    ]},
+    { group:'好与坏', items:[
+      {k:'bene', m:'好', pron:'/ˈbeneɪ/', origin:'源自拉丁语 <span class="origin-latin">bene</span>（好地）。', e:[
+        ['benefit', '做好事 → 利益', 'bene(好) + fit(做)'],
+        ['benevolent', '好意愿的 → 仁慈的', 'bene(好) + vol(意愿) + ent(形容词后缀)'],
+        ['beneficial', '好的 → 有益的', 'bene(好) + fic(做) + ial(形容词后缀)']
+      ]},
+      {k:'loc', m:'地方', pron:'/loʊk/', origin:'源自拉丁语 <span class="origin-latin">locus</span>（地方）。', e:[
+        ['local', '地方的', 'loc(地方) + al(形容词后缀)'],
+        ['locate', '定位', 'loc(地方) + ate(动词后缀)'],
+        ['location', '位置', 'loc(地方) + ation(名词后缀)'],
+        ['dislocate', '分开位置 → 脱臼', 'dis(分开) + loc(地方) + ate(动词后缀)']
+      ]}
+    ]},
+    { group:'其他高频', items:[
+      {k:'vac', m:'空', pron:'/væk/', origin:'源自拉丁语 <span class="origin-latin">vacare</span>（空的、空闲的）。', e:[
+        ['vacant', '空的 → 空着的', 'vac(空) + ant(形容词后缀)'],
+        ['vacation', '空的时间 → 假期', 'vac(空) + ation(名词后缀)'],
+        ['vacuum', '空 → 真空', 'vac(空) + uum(名词后缀)'],
+        ['evacuate', '向外空 → 疏散', 'e(向外) + vac(空) + uate(动词后缀)'],
+        ['vacancy', '空的 → 空缺', 'vac(空) + ancy(名词后缀)']
+      ]},
+      {k:'ver', m:'真', pron:'/vɜːr/', origin:'源自拉丁语 <span class="origin-latin">verus</span>（真的）。', e:[
+        ['verify', '使真 → 核实', 'ver(真) + ify(使…)'],
+        ['verdict', '真说 → 裁决', 'ver(真) + dict(说)'],
+        ['very', '真的 → 非常', 'ver(真) + y'],
+        ['verification', '使真 → 核实', 'ver(真) + ification(名词后缀)']
+      ]},
+      {k:'nom', m:'名字', pron:'/nɒm/', origin:'源自拉丁语 <span class="origin-latin">nomen</span>（名字），词干 nomin-。', e:[
+        ['nominate', '给名字 → 提名', 'nomin(名字) + ate(动词后缀)'],
+        ['synonym', '一起名字 → 同义词', 'syn(一起) + onym(名字)'],
+        ['antonym', '反名字 → 反义词', 'ant(反) + onym(名字)'],
+        ['nomination', '给名字 → 提名', 'nomin(名字) + ation(名词后缀)'],
+        ['anonymous', '没有名字 → 匿名的', 'an(没有) + onym(名字) + ous(形容词后缀)']
+      ]},
+      {k:'fin', m:'结束、界限', pron:'/fɪn/', origin:'源自拉丁语 <span class="origin-latin">finis</span>（结束、界限）。', e:[
+        ['final', '最后的', 'fin(结束) + al(形容词后缀)'],
+        ['finish', '结束', 'fin(结束) + ish(动词后缀)'],
+        ['define', '定下界限 → 定义', 'de(向下) + fin(界限) + e'],
+        ['infinite', '没有界限 → 无限的', 'in(否定) + fin(界限) + ite(形容词后缀)']
+      ]},
+      {k:'termin', m:'界限', pron:'/ˈtɜːrmɪn/', origin:'源自拉丁语 <span class="origin-latin">terminus</span>（界限、终点）。', e:[
+        ['terminal', '终点', 'termin(界限) + al(形容词后缀)'],
+        ['determine', '定下界限 → 决定', 'de(向下) + termin(界限) + e'],
+        ['exterminate', '向外界限 → 消灭', 'ex(向外) + termin(界限) + ate(动词后缀)']
+      ]},
+      {k:'liber', m:'自由', pron:'/ˈlɪbər/', origin:'源自拉丁语 <span class="origin-latin">liber</span>（自由的）。', e:[
+        ['liberty', '自由', 'liber(自由) + ty(名词后缀)'],
+        ['liberal', '自由的 → 开明的', 'liber(自由) + al(形容词后缀)'],
+        ['deliver', '向外自由 → 递送', 'de(向外) + liber(自由)']
+      ]},
+      {k:'pac', m:'和平', pron:'/pæk/', origin:'源自拉丁语 <span class="origin-latin">pax</span>（和平），词干 pac-。', e:[
+        ['pacific', '和平的 → 太平洋的', 'pac(和平) + ific(做)'],
+        ['pacify', '使和平 → 安抚', 'pac(和平) + ify(使…)'],
+        ['peace', '和平', 'pac(和平) → peace']
+      ]},
+      {k:'hosp / host', m:'客人', pron:'/hɒsp/ · /hoʊst/', origin:'源自拉丁语 <span class="origin-latin">hospes</span>（客人、主人），词干 hospit-。', e:[
+        ['hospital', '接待客人的地方 → 医院', 'hospit(客人) + al(地方)'],
+        ['host', '主人', 'host(主人)'],
+        ['hotel', '旅馆', 'hot(客人) + el(地方)'],
+        ['hostage', '人质', 'host(客人) + age(名词后缀)']
+      ]},
+      {k:'medi', m:'中间', pron:'/ˈmiːdi/', origin:'源自拉丁语 <span class="origin-latin">medius</span>（中间的）。', e:[
+        ['medium', '中间 → 媒介', 'medi(中间) + um(名词后缀)'],
+        ['mediate', '在中间 → 调解', 'medi(中间) + ate(动词后缀)'],
+        ['immediate', '没有中间 → 立即的', 'im(否定) + medi(中间) + ate(形容词后缀)']
+      ]},
+      {k:'centr', m:'中心', pron:'/sentr/', origin:'源自拉丁语 <span class="origin-latin">centrum</span>（中心），来自希腊语 <span class="origin-latin">kentron</span>（尖刺、圆规的中心点）。', e:[
+        ['central', '中心的', 'centr(中心) + al(形容词后缀)'],
+        ['concentrate', '共同中心 → 集中', 'con(共同) + centr(中心) + ate(动词后缀)'],
+        ['eccentric', '向外中心 → 古怪的', 'ec(向外) + centr(中心) + ic(形容词后缀)']
+      ]}
+    ]}
+  ],
+  prefix: [
+    { group:'方向与位置', items:[
+      {k:'re-', m:'再次 / 向后', pron:'/riː/ · /rɪ/', origin:'源自拉丁语前缀 <span class="origin-latin">re-</span>，本义为“向后、往回”。引申为“再次”（回到原点再做一次）。', e:[
+        ['return', '向回走 → 返回', 're(向回) + turn(走)'],
+        ['repeat', '再次请求 → 重复', 're(再次) + peat(请求)'],
+        ['rebuild', '再次建造 → 重建', 're(再次) + build(建造)'],
+        ['review', '再次看 → 复习', 're(再次) + view(看)'],
+        ['reconsider', '再次考虑 → 重新考虑', 're(再次) + consider(考虑)'],
+        ['reinforce', '再次加强 → 强化', 're(再次) + inforce(加强)']
+      ]},
+      {k:'in- / im-', m:'向内 / 否定', pron:'/ɪn/ · /ɪm/', origin:'源自拉丁语 <span class="origin-latin">in</span>（进入、在里面）。作为否定前缀时，来自古英语 <span class="origin-latin">un-</span> 的拉丁化形式。', e:[
+        ['inside', '在里面 → 内部', 'in(在里面) + side(边)'],
+        ['inactive', '不活跃的', 'in(否定) + active(活跃的)'],
+        ['import', '向内搬 → 进口', 'im(向内) + port(搬)'],
+        ['impossible', '不可能的', 'im(否定) + possible(可能的)']
+      ]},
+      {k:'ex- / e-', m:'向外 / 出', pron:'/eks/ · /iː/', origin:'源自拉丁语 <span class="origin-latin">ex</span>（出、向外）。e- 是 ex- 在辅音前的变体。', e:[
+        ['exit', '向外走 → 出口', 'ex(向外) + it(走)'],
+        ['exhale', '向外呼气', 'ex(向外) + hale(呼吸)'],
+        ['export', '向外搬 → 出口', 'ex(向外) + port(搬)'],
+        ['exclude', '向外关 → 排除', 'ex(向外) + clude(关)']
+      ]},
+      {k:'sub-', m:'在下面 / 次级', pron:'/sʌb/', origin:'源自拉丁语 <span class="origin-latin">sub</span>（在下面）。', e:[
+        ['subway', '下面的路 → 地铁', 'sub(下面) + way(路)'],
+        ['subgroup', '次级组 → 子组', 'sub(次级) + group(组)'],
+        ['submarine', '在海下面 → 潜艇', 'sub(下面) + marine(海)'],
+        ['suffer', '在下面承受 → 忍受', 'suf(下面) + fer(承受)'],
+        ['subordinate', '在下面 → 下属的', 'sub(下面) + ordin(顺序) + ate(形容词后缀)'],
+        ['subconscious', '在下面意识 → 潜意识', 'sub(下面) + conscious(意识)']
+      ]},
+      {k:'super- / sur-', m:'在上面 / 超过', pron:'/ˈsuːpər/ · /sɜːr/', origin:'源自拉丁语 <span class="origin-latin">super</span>（在上面、超过）。', e:[
+        ['supervise', '在上面看 → 监督', 'super(在上面) + vis(看) + e'],
+        ['supermarket', '超级市场', 'super(超级) + market(市场)'],
+        ['surface', '上面的面 → 表面', 'sur(在上面) + face(面)'],
+        ['survive', '超过生命 → 幸存', 'sur(超过) + viv(生命) + e']
+      ]},
+      {k:'trans-', m:'穿过 / 转移', pron:'/træns/ · /trænz/', origin:'源自拉丁语 <span class="origin-latin">trans</span>（穿过、越过）。', e:[
+        ['transport', '跨越搬运 → 运输', 'trans(跨越) + port(搬)'],
+        ['translate', '跨越搬 → 翻译', 'trans(跨越) + late(搬)'],
+        ['transform', '跨越形状 → 转变', 'trans(跨越) + form(形状)'],
+        ['transmit', '跨越送 → 传送', 'trans(跨越) + mit(送)'],
+        ['transaction', '跨越做 → 交易', 'trans(跨越) + act(做) + ion(名词后缀)']
+      ]},
+      {k:'inter-', m:'在…之间', pron:'/ˈɪntər/', origin:'源自拉丁语 <span class="origin-latin">inter</span>（在……之间）。', e:[
+        ['international', '国家之间 → 国际的', 'inter(之间) + nation(国家) + al(形容词后缀)'],
+        ['interrupt', '在中间断 → 打断', 'inter(中间) + rupt(断)'],
+        ['interact', '在之间行动 → 互动', 'inter(之间) + act(行动)'],
+        ['interval', '间隔', 'inter(之间) + val(名词后缀)'],
+        ['interpersonal', '人与人之间 → 人际的', 'inter(之间) + personal(个人的)']
+      ]},
+      {k:'pro-', m:'向前 / 支持', pron:'/proʊ/', origin:'源自拉丁语 <span class="origin-latin">pro</span>（向前、为了）。', e:[
+        ['progress', '向前走 → 进步', 'pro(向前) + gress(走)'],
+        ['promote', '向前动 → 促进', 'pro(向前) + mot(动) + e'],
+        ['produce', '向前引 → 生产', 'pro(向前) + duc(引) + e'],
+        ['propose', '向前放 → 提议', 'pro(向前) + pos(放) + e']
+      ]},
+      {k:'per-', m:'穿过 / 完全', pron:'/pɜːr/', origin:'源自拉丁语 <span class="origin-latin">per</span>（穿过、彻底）。', e:[
+        ['perspective', '穿透看 → 视角', 'per(穿过) + spect(看) + ive(形容词后缀)'],
+        ['perfect', '完全做完 → 完美的', 'per(完全) + fect(做)'],
+        ['permit', '放行通过 → 允许', 'per(通过) + mit(送)']
+      ]},
+      {k:'intro- / intra-', m:'向内 / 内部', pron:'/ˈɪntroʊ/ · /ˈɪntrə/', origin:'源自拉丁语 <span class="origin-latin">intro</span>（向内）。', e:[
+        ['introduce', '引向内 → 介绍', 'intro(向内) + duc(引) + e'],
+        ['introvert', '向内转 → 内向者', 'intro(向内) + vert(转)'],
+        ['intranet', '内部网', 'intra(内部) + net(网)']
+      ]},
+      {k:'extra-', m:'向外 / 超出', pron:'/ˈekstrə/', origin:'源自拉丁语 <span class="origin-latin">extra</span>（在……之外、超出）。', e:[
+        ['extraordinary', '超出寻常的', 'extra(超出) + ordinary(寻常的)'],
+        ['extract', '向外拉 → 提取', 'ex(向外) + tract(拉)'],
+        ['extrovert', '向外转 → 外向者', 'extro(向外) + vert(转)']
+      ]},
+      {k:'circum-', m:'环绕 / 周围', pron:'/ˈsɜːrkəm/', origin:'源自拉丁语 <span class="origin-latin">circum</span>（环绕、周围）。', e:[
+        ['circumstance', '周围站立 → 情况', 'circum(周围) + stance(站)'],
+        ['circumference', '环绕携带 → 圆周', 'circum(环绕) + fer(带) + ence(名词后缀)']
+      ]}
+    ]},
+    { group:'否定与反对', items:[
+      {k:'dis-', m:'分开 / 否定', pron:'/dɪs/', origin:'源自拉丁语 <span class="origin-latin">dis</span>（分开、离）。', e:[
+        ['disagree', '不同意', 'dis(否定) + agree(同意)'],
+        ['disappear', '不出现 → 消失', 'dis(否定) + appear(出现)'],
+        ['distance', '分开的距离 → 距离', 'dis(分开) + stance(站)'],
+        ['dismiss', '送走 → 解散', 'dis(分开) + miss(送)'],
+        ['discourage', '使气馁', 'dis(否定) + courage(勇气)'],
+        ['disapprove', '不赞成', 'dis(否定) + approve(赞成)']
+      ]},
+      {k:'un-', m:'否定', pron:'/ʌn/', origin:'源自古英语 <span class="origin-latin">un-</span>，是英语本族语的否定前缀，与拉丁语的 in- 同源。', e:[
+        ['unhappy', '不快乐', 'un(否定) + happy(快乐)'],
+        ['unable', '不能的', 'un(否定) + able(能)'],
+        ['unlock', '解锁', 'un(相反) + lock(锁)'],
+        ['unexpected', '出乎意料的', 'un(否定) + expected(预期的)'],
+        ['uneven', '不平坦的', 'un(否定) + even(平的)']
+      ]},
+      {k:'non-', m:'非 / 不', pron:'/nɒn/', origin:'源自拉丁语 <span class="origin-latin">non</span>（不）。', e:[
+        ['nonsense', '无意义的话', 'non(无) + sense(意义)'],
+        ['nonstop', '不停的', 'non(不) + stop(停)'],
+        ['nonprofit', '非营利的', 'non(非) + profit(利润)'],
+        ['nonverbal', '非语言的', 'non(非) + verbal(语言的)']
+      ]},
+      {k:'mis-', m:'错误 / 坏', pron:'/mɪs/', origin:'源自古英语 <span class="origin-latin">mis-</span>（错误地），与拉丁语 minus（更少）同源。', e:[
+        ['mistake', '拿错 → 错误', 'mis(错误) + take(拿)'],
+        ['misunderstand', '误解', 'mis(错误) + understand(理解)'],
+        ['mislead', '错误引导 → 误导', 'mis(错误) + lead(引导)'],
+        ['misinterpret', '曲解', 'mis(错误) + interpret(解释)']
+      ]},
+      {k:'anti-', m:'反对 / 抗', pron:'/ˈænti/', origin:'源自希腊语 <span class="origin-latin">anti</span>（反对、对抗）。', e:[
+        ['antibiotic', '抗生命的 → 抗生素', 'anti(抗) + bio(生命) + tic(名词后缀)'],
+        ['antibody', '抗体', 'anti(抗) + body(身体)'],
+        ['antisocial', '反社会的', 'anti(反) + social(社会的)']
+      ]},
+      {k:'contra- / counter-', m:'相反 / 对抗', pron:'/ˈkɒntrə/ · /ˈkaʊntər/', origin:'源自拉丁语 <span class="origin-latin">contra</span>（相反、反对）。', e:[
+        ['contradict', '反着说 → 反驳', 'contra(相反) + dict(说)'],
+        ['contrast', '对比', 'contra(相反) + st(站)'],
+        ['counteract', '反着行动 → 抵消', 'counter(反) + act(行动)'],
+        ['counterpart', '对应的人或物', 'counter(对应) + part(部分)']
+      ]},
+      {k:'ob- / oc- / of-', m:'朝向 / 反对', pron:'/ɒb/ · /ɒk/ · /ɒf/', origin:'源自拉丁语 <span class="origin-latin">ob</span>（朝向、反对）。', e:[
+        ['object', '投在对面 → 反对、物体', 'ob(对面) + ject(投)'],
+        ['occupy', '占据', 'oc(朝向) + cupy(拿)'],
+        ['offend', '冒犯', 'of(反对) + fend(打)']
+      ]}
+    ]},
+    { group:'时间与顺序', items:[
+      {k:'pre-', m:'提前 / 在前', pron:'/priː/', origin:'源自拉丁语 <span class="origin-latin">prae</span>（在前、预先）。', e:[
+        ['predict', '提前说 → 预言', 'pre(提前) + dict(说)'],
+        ['prepare', '提前准备', 'pre(提前) + pare(准备)'],
+        ['prewar', '战前的', 'pre(前) + war(战争)'],
+        ['preview', '提前看 → 预览', 'pre(提前) + view(看)'],
+        ['preliminary', '提前 → 初步的', 'pre(提前) + limin(门槛) + ary(形容词后缀)'],
+        ['preclude', '提前关 → 阻止', 'pre(提前) + clude(关)']
+      ]},
+      {k:'post-', m:'之后', pron:'/poʊst/', origin:'源自拉丁语 <span class="origin-latin">post</span>（在……之后）。', e:[
+        ['postwar', '战后的', 'post(之后) + war(战争)'],
+        ['postpone', '之后放 → 推迟', 'post(之后) + pon(放) + e'],
+        ['postgraduate', '研究生', 'post(之后) + graduate(毕业)']
+      ]},
+      {k:'fore-', m:'前面 / 预先', pron:'/fɔːr/', origin:'源自古英语 <span class="origin-latin">fore</span>（在前面）。', e:[
+        ['forecast', '提前扔 → 预报', 'fore(提前) + cast(扔)'],
+        ['foresee', '预先看见 → 预见', 'fore(预先) + see(看见)'],
+        ['forehead', '前面的头 → 额头', 'fore(前面) + head(头)']
+      ]}
+    ]},
+    { group:'数量与程度', items:[
+      {k:'mono-', m:'单一', pron:'/ˈmɒnoʊ/', origin:'源自希腊语 <span class="origin-latin">monos</span>（单一的）。', e:[
+        ['monopoly', '单一卖 → 垄断', 'mono(单一) + poly(卖)'],
+        ['monotone', '单一音调 → 单调', 'mono(单一) + tone(音调)'],
+        ['monologue', '独白', 'mono(单一) + logue(说)']
+      ]},
+      {k:'poly-', m:'多', pron:'/ˈpɒli/', origin:'源自希腊语 <span class="origin-latin">polys</span>（多的）。', e:[
+        ['polygon', '多角 → 多边形', 'poly(多) + gon(角)'],
+        ['polyglot', '多语言的人', 'poly(多) + glot(语言)']
+      ]},
+      {k:'multi-', m:'多', pron:'/ˈmʌlti/', origin:'源自拉丁语 <span class="origin-latin">multus</span>（多的）。', e:[
+        ['multiple', '多的 → 多样的', 'multi(多) + ple(折)'],
+        ['multiply', '多折 → 乘', 'multi(多) + ply(折)'],
+        ['multimedia', '多媒体', 'multi(多) + media(媒体)'],
+        ['multinational', '多国的', 'multi(多) + national(国家的)']
+      ]},
+      {k:'bi-', m:'二 / 双', pron:'/baɪ/', origin:'源自拉丁语 <span class="origin-latin">bi-</span>（二、双）。', e:[
+        ['bicycle', '两个轮子 → 自行车', 'bi(二) + cycle(轮子)'],
+        ['bilingual', '两种语言 → 双语的', 'bi(二) + lingu(语言) + al(形容词后缀)'],
+        ['bilateral', '两边的 → 双边的', 'bi(二) + later(边) + al(形容词后缀)'],
+        ['binary', '二的 → 二进制的', 'bi(二) + nary(形容词后缀)']
+      ]},
+      {k:'micro-', m:'微小', pron:'/ˈmaɪkroʊ/', origin:'源自希腊语 <span class="origin-latin">mikros</span>（小的）。', e:[
+        ['microscope', '看小东西 → 显微镜', 'micro(微小) + scope(看)'],
+        ['microphone', '小声音 → 麦克风', 'micro(微小) + phone(声音)']
+      ]},
+      {k:'macro-', m:'宏大', pron:'/ˈmækroʊ/', origin:'源自希腊语 <span class="origin-latin">makros</span>（长的、大的）。', e:[
+        ['macroeconomics', '宏观经济学', 'macro(宏大) + economics(经济学)'],
+        ['macroscopic', '宏观的', 'macro(宏大) + scop(看) + ic(形容词后缀)']
+      ]},
+      {k:'hyper-', m:'过度 / 超', pron:'/ˈhaɪpər/', origin:'源自希腊语 <span class="origin-latin">hyper</span>（超过、过度）。', e:[
+        ['hyperactive', '过度活跃的', 'hyper(过度) + active(活跃的)'],
+        ['hyperlink', '超链接', 'hyper(超) + link(链接)']
+      ]},
+      {k:'hypo-', m:'下面 / 不足', pron:'/ˈhaɪpoʊ/', origin:'源自希腊语 <span class="origin-latin">hypo</span>（在下面、不足）。', e:[
+        ['hypothesis', '下面放 → 假设', 'hypo(下面) + thesis(放)'],
+        ['hypocrisy', '伪善', 'hypo(下面) + crisy(判断)']
+      ]},
+      {k:'over-', m:'过度 / 在上', pron:'/ˈoʊvər/', origin:'源自古英语 <span class="origin-latin">ofer</span>（在上、超过）。', e:[
+        ['overwork', '过度工作', 'over(过度) + work(工作)'],
+        ['overcome', '翻过来 → 克服', 'over(翻过) + come(来)'],
+        ['overlook', '从上往下看 → 忽略', 'over(从上) + look(看)'],
+        ['overestimate', '高估', 'over(过度) + estimate(估计)'],
+        ['overwhelm', '压倒', 'over(过度) + whelm(压倒)']
+      ]},
+      {k:'under-', m:'下面 / 不足', pron:'/ˈʌndər/', origin:'源自古英语 <span class="origin-latin">under</span>（在下面）。', e:[
+        ['underground', '地下', 'under(下面) + ground(地面)'],
+        ['underestimate', '低估', 'under(不足) + estimate(估计)'],
+        ['undertake', '承担', 'under(下面) + take(拿)'],
+        ['undergraduate', '大学本科生', 'under(尚未) + graduate(毕业)']
+      ]},
+      {k:'out-', m:'向外 / 超过', pron:'/aʊt/', origin:'源自古英语 <span class="origin-latin">ut</span>（出、向外）。', e:[
+        ['outstanding', '站出来的 → 杰出的', 'out(出来) + standing(站)'],
+        ['output', '输出', 'out(向外) + put(放)'],
+        ['outbreak', '爆发', 'out(向外) + break(破)']
+      ]}
+    ]},
+    { group:'共同与分离', items:[
+      {k:'con- / com-', m:'共同 / 一起', pron:'/kɒn/ · /kɒm/', origin:'源自拉丁语 <span class="origin-latin">cum</span>（和、一起）。con- 是 cum 在辅音前的形式，com- 在唇音前。', e:[
+        ['consider', '一起坐 → 考虑', 'con(一起) + sider(坐)'],
+        ['connect', '连在一起 → 连接', 'con(一起) + nect(连)'],
+        ['combine', '合在一起 → 结合', 'com(一起) + bine(结合)'],
+        ['compose', '一起放 → 组成', 'com(一起) + pos(放) + e']
+      ]},
+      {k:'syn- / sym-', m:'共同 / 一起', pron:'/sɪn/ · /sɪm/', origin:'源自希腊语 <span class="origin-latin">syn</span>（一起、共同）。sym- 是 syn- 在唇音前的变体。', e:[
+        ['sympathy', '共同感觉 → 同情', 'sym(共同) + path(感觉) + y'],
+        ['synchronize', '共同时间 → 同步', 'syn(共同) + chron(时间) + ize(动词后缀)'],
+        ['synthesis', '一起放 → 合成', 'syn(一起) + thesis(放)']
+      ]},
+      {k:'se-', m:'分开', pron:'/siː/', origin:'源自拉丁语 <span class="origin-latin">se</span>（分开、离开）。', e:[
+        ['separate', '分开 → 分离', 'se(分开) + par(准备) + ate(动词后缀)'],
+        ['select', '分开选 → 挑选', 'se(分开) + lect(选)'],
+        ['secure', '分开照顾 → 安全的', 'se(分开) + cure(照顾)']
+      ]},
+      {k:'de-', m:'向下 / 去除', pron:'/diː/ · /dɪ/', origin:'源自拉丁语 <span class="origin-latin">de</span>（向下、从……离开）。', e:[
+        ['descend', '向下走 → 下降', 'de(向下) + scend(走)'],
+        ['decrease', '向下长 → 减少', 'de(向下) + crease(长)'],
+        ['deform', '去掉形状 → 使变形', 'de(去掉) + form(形状)'],
+        ['deposit', '向下放 → 存放', 'de(向下) + pos(放) + it']
+      ]},
+      {k:'ab- / abs-', m:'离开', pron:'/æb/ · /æbs/', origin:'源自拉丁语 <span class="origin-latin">ab</span>（离开、从……离开）。', e:[
+        ['absent', '离开在场 → 缺席的', 'ab(离开) + sent(在场)'],
+        ['abnormal', '离开正常 → 反常的', 'ab(离开) + normal(正常)'],
+        ['abstract', '抽离出来 → 抽象的', 'abs(离开) + tract(拉)']
+      ]},
+      {k:'ad- / ac- / af-', m:'朝向 / 加强', pron:'/æd/ · /æk/ · /æf/', origin:'源自拉丁语 <span class="origin-latin">ad</span>（朝向、向）。', e:[
+        ['admit', '送进去 → 承认', 'ad(朝向) + mit(送)'],
+        ['accept', '拿过来 → 接受', 'ac(朝向) + cept(拿)'],
+        ['affect', '去做 → 影响', 'af(朝向) + fect(做)'],
+        ['adequate', '到平等 → 足够的', 'ad(到) + equ(平等) + ate(形容词后缀)'],
+        ['adhere', '粘上去 → 坚持', 'ad(朝向) + here(粘)']
+      ]}
+    ]},
+    { group:'其他常见', items:[
+      {k:'auto-', m:'自己 / 自动', pron:'/ˈɔːtoʊ/', origin:'源自希腊语 <span class="origin-latin">autos</span>（自己）。', e:[
+        ['automatic', '自动的', 'auto(自己) + matic(动作)'],
+        ['autograph', '自己写 → 签名', 'auto(自己) + graph(写)'],
+        ['autonomy', '自治', 'auto(自己) + nomy(法则)']
+      ]},
+      {k:'dia-', m:'穿过 / 之间', pron:'/ˈdaɪə/', origin:'源自希腊语 <span class="origin-latin">dia</span>（穿过、之间）。', e:[
+        ['diameter', '穿过测量 → 直径', 'dia(穿过) + meter(测量)'],
+        ['dialogue', '之间说 → 对话', 'dia(之间) + logue(说)'],
+        ['diagnose', '穿过知道 → 诊断', 'dia(穿过) + gnos(知道) + e']
+      ]},
+      {k:'para-', m:'旁边 / 平行', pron:'/ˈpærə/', origin:'源自希腊语 <span class="origin-latin">para</span>（旁边）。', e:[
+        ['parallel', '旁边彼此 → 平行的', 'para(旁边) + allel(彼此)'],
+        ['paragraph', '旁边写 → 段落', 'para(旁边) + graph(写)']
+      ]},
+      {k:'meta-', m:'变化 / 超越', pron:'/ˈmetə/', origin:'源自希腊语 <span class="origin-latin">meta</span>（在……之后、超越）。', e:[
+        ['metaphor', '超越携带 → 隐喻', 'meta(超越) + phor(携带)'],
+        ['metabolism', '新陈代谢', 'meta(变化) + bol(扔) + ism(名词后缀)']
+      ]},
+      {k:'peri-', m:'周围', pron:'/ˈperɪ/', origin:'源自希腊语 <span class="origin-latin">peri</span>（周围）。', e:[
+        ['perimeter', '周围测量 → 周长', 'peri(周围) + meter(测量)'],
+        ['periscope', '周围看 → 潜望镜', 'peri(周围) + scope(看)']
+      ]},
+      {k:'epi-', m:'在上 / 附加', pron:'/ˈepɪ/', origin:'源自希腊语 <span class="origin-latin">epi</span>（在……之上、附加）。', e:[
+        ['epidemic', '在人群上 → 流行病', 'epi(在上) + dem(人群) + ic(形容词后缀)'],
+        ['epilogue', '在后面说 → 尾声', 'epi(后面) + logue(说)']
+      ]}
+    ]}
+  ],
+  suffix: [
+    { group:'名词后缀', items:[
+      {k:'-tion / -sion', m:'名词：动作或结果', pron:'/ʃən/ · /ʒən/', origin:'源自拉丁语 <span class="origin-latin">-tio</span>（名词后缀），表示动作或动作的结果。', e:[
+        ['action', '行动', 'act(做) + ion(名词后缀)'],
+        ['decision', '决定', 'decis(切) + ion(名词后缀)'],
+        ['invention', '发明', 'invent(发明) + ion(名词后缀)']
+      ]},
+      {k:'-ment', m:'名词：行为、结果', pron:'/mənt/', origin:'源自拉丁语 <span class="origin-latin">-mentum</span>（名词后缀），表示行为或结果。', e:[
+        ['agreement', '同意', 'agree(同意) + ment(名词后缀)'],
+        ['movement', '运动', 'move(动) + ment(名词后缀)'],
+        ['development', '发展', 'develop(发展) + ment(名词后缀)'],
+        ['achievement', '成就', 'achieve(达成) + ment(名词后缀)'],
+        ['government', '政府', 'govern(统治) + ment(名词后缀)']
+      ]},
+      {k:'-ness', m:'名词：性质、状态', pron:'/nəs/', origin:'源自古英语 <span class="origin-latin">-nes</span>（名词后缀），表示性质或状态。', e:[
+        ['happiness', '幸福', 'happy(幸福) + ness(名词后缀)'],
+        ['darkness', '黑暗', 'dark(黑暗) + ness(名词后缀)'],
+        ['kindness', '善良', 'kind(善良) + ness(名词后缀)']
+      ]},
+      {k:'-ity / -ty', m:'名词：性质、状态', pron:'/əti/ · /ti/', origin:'源自拉丁语 <span class="origin-latin">-itas</span>（名词后缀），表示性质或状态。', e:[
+        ['ability', '能力', 'abil(能) + ity(名词后缀)'],
+        ['reality', '现实', 'real(真) + ity(名词后缀)'],
+        ['security', '安全', 'secur(安全) + ity(名词后缀)'],
+        ['responsibility', '责任', 'responsible(负责的) + ility(名词后缀)'],
+        ['opportunity', '机会', 'opportune(合适的) + ity(名词后缀)']
+      ]},
+      {k:'-ance / -ence', m:'名词：状态、行为', pron:'/əns/', origin:'源自拉丁语 <span class="origin-latin">-antia</span> / <span class="origin-latin">-entia</span>（名词后缀），表示状态或行为。', e:[
+        ['importance', '重要性', 'import(重要) + ance(名词后缀)'],
+        ['difference', '差异', 'differ(不同) + ence(名词后缀)'],
+        ['confidence', '信心', 'confid(信任) + ence(名词后缀)']
+      ]},
+      {k:'-er / -or', m:'名词：人 / 物 / 器', pron:'/ər/ · /ɔːr/', origin:'源自拉丁语 <span class="origin-latin">-arius</span> / <span class="origin-latin">-or</span>（名词后缀），表示从事某动作的人或物。', e:[
+        ['teacher', '教师', 'teach(教) + er(做…的人)'],
+        ['actor', '演员', 'act(演) + or(做…的人)'],
+        ['tractor', '拖拉机', 'tract(拉) + or(做…的东西)']
+      ]},
+      {k:'-ist', m:'名词：人（从事…者）', pron:'/ɪst/', origin:'源自希腊语 <span class="origin-latin">-istes</span>（名词后缀），表示从事某职业或信仰某主义的人。', e:[
+        ['artist', '艺术家', 'art(艺术) + ist(从事…的人)'],
+        ['scientist', '科学家', 'scient(科学) + ist(从事…的人)']
+      ]},
+      {k:'-ism', m:'名词：主义、学说', pron:'/ɪzəm/', origin:'源自希腊语 <span class="origin-latin">-ismos</span>（名词后缀），表示主义、学说或行为。', e:[
+        ['capitalism', '资本主义', 'capital(资本) + ism(主义)'],
+        ['realism', '现实主义', 'real(现实) + ism(主义)']
+      ]},
+      {k:'-ship', m:'名词：状态、关系', pron:'/ʃɪp/', origin:'源自古英语 <span class="origin-latin">-scipe</span>（名词后缀），表示状态或关系。', e:[
+        ['friendship', '友谊', 'friend(朋友) + ship(关系)'],
+        ['leadership', '领导力', 'leader(领导) + ship(状态)']
+      ]},
+      {k:'-hood', m:'名词：身份、时期', pron:'/hʊd/', origin:'源自古英语 <span class="origin-latin">-had</span>（名词后缀），表示身份或时期。', e:[
+        ['childhood', '童年', 'child(孩子) + hood(时期)'],
+        ['neighborhood', '邻里', 'neighbor(邻居) + hood(状态)']
+      ]},
+      {k:'-age', m:'名词：行为、总称', pron:'/ɪdʒ/', origin:'源自拉丁语 <span class="origin-latin">-aticum</span>（名词后缀），表示行为或总称。', e:[
+        ['marriage', '婚姻', 'marri(结婚) + age(名词后缀)'],
+        ['package', '包裹', 'pack(打包) + age(名词后缀)']
+      ]},
+      {k:'-logy', m:'名词：…学', pron:'/lədʒi/', origin:'源自希腊语 <span class="origin-latin">-logia</span>（名词后缀），表示学科或研究。', e:[
+        ['biology', '生物学', 'bio(生命) + logy(学科)'],
+        ['psychology', '心理学', 'psycho(心理) + logy(学科)']
+      ]},
+      {k:'-graphy', m:'名词：…学 / 写法', pron:'/ɡrəfi/', origin:'源自希腊语 <span class="origin-latin">-graphia</span>（名词后缀），表示书写或记录的方法。', e:[
+        ['geography', '地理学', 'geo(地球) + graphy(学科)'],
+        ['photography', '摄影', 'photo(光) + graphy(记录)']
+      ]},
+      {k:'-meter', m:'名词：测量仪器', pron:'/mɪtər/', origin:'源自希腊语 <span class="origin-latin">metron</span>（测量）。', e:[
+        ['thermometer', '温度计', 'thermo(热) + meter(测量)'],
+        ['diameter', '直径', 'dia(穿过) + meter(测量)']
+      ]}
+    ]},
+    { group:'形容词后缀', items:[
+      {k:'-ive', m:'形容词：有…性质的', pron:'/ɪv/', origin:'源自拉丁语 <span class="origin-latin">-ivus</span>（形容词后缀），表示有……性质的。', e:[
+        ['active', '活跃的', 'act(做) + ive(形容词后缀)'],
+        ['creative', '有创造力的', 'create(创造) + ive(形容词后缀)']
+      ]},
+      {k:'-ous', m:'形容词：充满…的', pron:'/əs/', origin:'源自拉丁语 <span class="origin-latin">-osus</span>（形容词后缀），表示充满……的。', e:[
+        ['famous', '著名的', 'fame(名声) + ous(形容词后缀)'],
+        ['dangerous', '危险的', 'danger(危险) + ous(形容词后缀)']
+      ]},
+      {k:'-ful', m:'形容词：充满…的', pron:'/fʊl/', origin:'源自古英语 <span class="origin-latin">-ful</span>（形容词后缀），表示充满……的。', e:[
+        ['useful', '有用的', 'use(用) + ful(充满…的)'],
+        ['careful', '仔细的', 'care(在意) + ful(充满…的)'],
+        ['hopeful', '充满希望的', 'hope(希望) + ful(充满…的)'],
+        ['powerful', '强大的', 'power(力量) + ful(充满…的)']
+      ]},
+      {k:'-less', m:'形容词：没有…的', pron:'/ləs/', origin:'源自古英语 <span class="origin-latin">-leas</span>（形容词后缀），表示没有……的。', e:[
+        ['useless', '无用的', 'use(用) + less(没有…的)'],
+        ['careless', '粗心的', 'care(在意) + less(没有…的)'],
+        ['endless', '无尽的', 'end(尽头) + less(没有…的)'],
+        ['helpless', '无助的', 'help(帮助) + less(没有…的)']
+      ]},
+      {k:'-able / -ible', m:'形容词：能…的', pron:'/əbəl/', origin:'源自拉丁语 <span class="origin-latin">-abilis</span> / <span class="origin-latin">-ibilis</span>（形容词后缀），表示能……的。', e:[
+        ['visible', '可见的', 'vis(看) + ible(能…的)'],
+        ['portable', '便携的', 'port(搬) + able(能…的)'],
+        ['possible', '可能的', 'poss(能) + ible(能…的)'],
+        ['comfortable', '舒适的', 'comfort(舒适) + able(能…的)'],
+        ['flexible', '灵活的', 'flex(弯曲) + ible(能…的)']
+      ]},
+      {k:'-al', m:'形容词：…的', pron:'/əl/', origin:'源自拉丁语 <span class="origin-latin">-alis</span>（形容词后缀），表示……的。', e:[
+        ['natural', '自然的', 'nature(自然) + al(形容词后缀)'],
+        ['personal', '个人的', 'person(个人) + al(形容词后缀)']
+      ]},
+      {k:'-ic', m:'形容词：…的', pron:'/ɪk/', origin:'源自希腊语 <span class="origin-latin">-ikos</span>（形容词后缀），表示……的。', e:[
+        ['basic', '基本的', 'base(基础) + ic(形容词后缀)'],
+        ['scientific', '科学的', 'science(科学) + ific(形容词后缀)']
+      ]},
+      {k:'-ant / -ent', m:'形容词 / 名词：…的（人）', pron:'/ənt/', origin:'源自拉丁语 <span class="origin-latin">-ans</span> / <span class="origin-latin">-ens</span>（现在分词后缀）。既可作形容词，也可作名词指人。', e:[
+        ['important', '重要的', 'import(重要) + ant(形容词后缀)'],
+        ['different', '不同的', 'differ(不同) + ent(形容词后缀)'],
+        ['student', '学生', 'stud(学习) + ent(做…的人)']
+      ]},
+      {k:'-ary', m:'形容词 / 名词', pron:'/əri/ · /eri/', origin:'源自拉丁语 <span class="origin-latin">-arius</span>（形容词/名词后缀）。', e:[
+        ['necessary', '必要的', 'necess(必要) + ary(形容词后缀)'],
+        ['dictionary', '词典', 'dict(说) + ionary(名词后缀)']
+      ]}
+    ]},
+    { group:'动词后缀', items:[
+      {k:'-ify', m:'动词：使…', pron:'/ɪfaɪ/', origin:'源自拉丁语 <span class="origin-latin">-ificare</span>（动词后缀），表示使……。', e:[
+        ['simplify', '简化', 'simple(简单) + ify(使…)'],
+        ['clarify', '澄清', 'clar(清楚) + ify(使…)'],
+        ['magnify', '放大', 'magn(大) + ify(使…)']
+      ]},
+      {k:'-ize / -ise', m:'动词：使…化', pron:'/aɪz/', origin:'源自希腊语 <span class="origin-latin">-izein</span>（动词后缀），表示使……化。', e:[
+        ['realize', '实现', 'real(真) + ize(使…化)'],
+        ['modernize', '现代化', 'modern(现代) + ize(使…化)']
+      ]},
+      {k:'-ate', m:'动词：使…、做…', pron:'/eɪt/ · /ət/', origin:'源自拉丁语 <span class="origin-latin">-atus</span>（动词后缀），表示使……或做……。', e:[
+        ['activate', '激活', 'act(行动) + ivate(动词后缀)'],
+        ['generate', '产生', 'gen(产生) + erate(动词后缀)']
+      ]},
+      {k:'-en', m:'动词：使…', pron:'/ən/', origin:'源自古英语 <span class="origin-latin">-nian</span>（动词后缀），表示使……。', e:[
+        ['strengthen', '加强', 'strength(力量) + en(使…)'],
+        ['widen', '加宽', 'wide(宽) + en(使…)'],
+        ['shorten', '缩短', 'short(短) + en(使…)']
+      ]}
+    ]},
+    { group:'副词与其他', items:[
+      {k:'-ly', m:'副词：…地', pron:'/li/', origin:'源自古英语 <span class="origin-latin">-lice</span>（副词后缀），表示……地。', e:[
+        ['quickly', '快速地', 'quick(快) + ly(副词后缀)'],
+        ['carefully', '仔细地', 'careful(仔细) + ly(副词后缀)']
+      ]},
+      {k:'-ward', m:'副词：朝…方向', pron:'/wərd/', origin:'源自古英语 <span class="origin-latin">-weard</span>（副词后缀），表示朝……方向。', e:[
+        ['forward', '向前', 'for(前) + ward(朝…方向)'],
+        ['backward', '向后', 'back(后) + ward(朝…方向)']
+      ]},
+      {k:'-phobia', m:'名词：恐惧症', pron:'/ˈfoʊbiə/', origin:'源自希腊语 <span class="origin-latin">phobos</span>（恐惧）。', e:[
+        ['claustrophobia', '幽闭恐惧症', 'claustro(封闭) + phobia(恐惧症)'],
+        ['acrophobia', '恐高症', 'acro(高处) + phobia(恐惧症)']
+      ]}
+    ]}
+  ]
+};
+
+/* ============================================================
+   希腊语词根检测 & 同义词根对比
+   ============================================================ */
+const GREEK_MARKERS = ['bio','geo','tele','phon','graph','log','meter','metr','chron','therm','astr','auto','mono','poly','micro','macro','hyper','hypo','syn','sym','dia','para','meta','peri','epi','phob','psych'];
+
+function isGreekRoot(key){
+  const k = key.toLowerCase();
+  return GREEK_MARKERS.some(m => k.includes(m));
+}
+
+const COMPARE_PAIRS = [
+  { roots:['vis / vid','spect / spic'], title:'都表示“看”，区别在哪？', text:'<b>vis</b> 强调“看见的结果”（visible = 能被看见的）；<b>spect</b> 强调“注视的动作过程”（inspect = 向里看，检查）。' },
+  { roots:['cred','fid'], title:'都表示“相信”', text:'<b>cred</b> 偏“相信其真实性”（credible = 可信的）；<b>fid</b> 偏“依赖、忠诚的情感”（confide = 完全信任，倾诉）。' },
+  { roots:['port','fer'], title:'都与“搬运”相关', text:'<b>port</b> 偏“运输、搬运”（transport 运输）；<b>fer</b> 偏“携带、承受”（offer 提供，prefer 更喜欢）。' },
+  { roots:['mit / miss','ject'], title:'都与“发送/投掷”相关', text:'<b>mit</b> 偏“送出、放走”（emit 发出）；<b>ject</b> 偏“用力投掷”（reject 投回去，拒绝）。' },
+  { roots:['pos / pon','sist'], title:'与“放置/站立”相关', text:'<b>pos</b> 偏“放置”（compose 组成）；<b>sist</b> 偏“站立”（insist 站在上面，坚持）。' },
+  { roots:['sci','sent / sens'], title:'“知道”与“感觉”', text:'<b>sci</b> 是认知层面的“知道”（science 科学）；<b>sent</b> 是感官层面的“感觉”（sense 感觉）。从感知到认知，是这一组词根的递进逻辑。' },
+  { roots:['tain / ten','pos / pon'], title:'“保持”与“放置”', text:'<b>tain/ten</b> 强调“持续持有”（maintain 维持，obtain 获得）；<b>pos/pon</b> 强调“放置的动作”（compose 组成，deposit 存放）。' },
+  { roots:['fact / fect','act'], title:'都与“做”相关', text:'<b>fact/fect</b> 偏“制作、造成结果”（factory 工厂，effect 效果）；<b>act</b> 偏“行动、驱动”（react 反应，interact 互动）。' },
+  { roots:['leg / lect','leg'], title:'两个“leg”含义不同', text:'<b>leg/lect</b> 来自“收集、阅读”（collect 收集，elect 选举）；<b>leg</b> 来自“法律”（legal 法律的，legislate 立法）。拼写相同但来源不同，注意区分。' }
+];
+
+function findCompare(rootKey){
+  return COMPARE_PAIRS.find(p => p.roots.includes(rootKey));
+}
+
+/* ============================================================
+   构建树
+   ============================================================ */
+const CATEGORIES = [
+  { key:'root',   label:'词根', sub:'语义内核', color:'teal'   },
+  { key:'prefix', label:'前缀', sub:'改变含义', color:'purple' },
+  { key:'suffix', label:'后缀', sub:'改变词性', color:'amber'  }
+];
+
+function buildTree(){
+  const root = {
+    id:'root', type:'root', color:'root',
+    label:'英语单词', sub:'底层粒子',
+    collapsed:false, children:[]
+  };
+
+  CATEGORIES.forEach(cat => {
+    const catNode = {
+      id:'cat-'+cat.key, type:'cat', color:cat.color,
+      label:cat.label, sub:cat.sub,
+      collapsed:true, children:[]
+    };
+
+    DATA[cat.key].forEach((g, gi) => {
+      const groupNode = {
+        id:`grp-${cat.key}-${gi}`, type:'group', color:cat.color,
+        label:g.group, sub:`${g.items.length} 项`,
+        collapsed:true, children:[]
+      };
+
+      g.items.forEach((item, ii) => {
+        const src = cat.key === 'root' ? (isGreekRoot(item.k) ? 'greek' : 'latin') : 'latin';
+
+        const itemNode = {
+          id:`itm-${cat.key}-${gi}-${ii}`, type:'item', color:cat.color,
+          label:item.k, sub:item.m,
+          origin: item.origin || '',
+          pron: item.pron || '',
+          src: src,
+          collapsed:true, children:[]
+        };
+
+        item.e.forEach((ex, ei) => {
+          itemNode.children.push({
+            id:`ex-${cat.key}-${gi}-${ii}-${ei}`,
+            type:'ex', color:cat.color,
+            label:ex[0],
+            sub:ex[1],
+            breakdown: ex[2] || ''
+          });
+        });
+
+        groupNode.children.push(itemNode);
+      });
+
+      catNode.children.push(groupNode);
+    });
+
+    root.children.push(catNode);
+  });
+
+  return root;
+}
+
+const TREE = buildTree();
+
+/* ============================================================
+   尺寸、颜色、布局
+   ============================================================ */
+const SIZES = {
+  root:  { w: 210, h: 70 },
+  cat:   { w: 130, h: 58 },
+  group: { w: 160, h: 46 },
+  item:  { w: 190, h: 52 },
+  ex:    { w: 290, h: 36 }
+};
+const COL_X = (() => {
+  let x = 0;
+  return ['root','cat','group','item','ex'].map(t => {
+    const cur = x;
+    x += SIZES[t].w + 55;
+    return cur;
+  });
+})();
+const V_GAP = 8;
+
+const COLORS = {
+  root:  { bg:'#0e1a2b', bd:'#3b82f6', t1:'#e0f0ff', t2:'#7ea6d8', line:'#3b82f6' },
+  teal:  { bg:'#0a1a1a', bd:'#14b8a6', t1:'#99f6e4', t2:'#5eead4', line:'#14b8a6' },
+  purple:{ bg:'#170f2a', bd:'#8b5cf6', t1:'#ddd6fe', t2:'#a78bfa', line:'#8b5cf6' },
+  amber: { bg:'#1e1408', bd:'#f59e0b', t1:'#fde68a', t2:'#fbbf24', line:'#f59e0b' }
+};
+
+function calcSubtreeH(node){
+  node.w = SIZES[node.type].w;
+  node.h = SIZES[node.type].h;
+  const kids = (node.collapsed || !node.children) ? [] : node.children;
+  if (!kids.length){ node.subtreeH = node.h; return node.subtreeH; }
+  let total = 0;
+  kids.forEach((c, i) => { if (i>0) total += V_GAP; total += calcSubtreeH(c); });
+  node.subtreeH = Math.max(node.h, total);
+  return node.subtreeH;
+}
+
+function assignPos(node, x, y){
+  node.x = x;
+  node.y = y + (node.subtreeH - node.h) / 2;
+  const kids = (node.collapsed || !node.children) ? [] : node.children;
+  if (!kids.length) return;
+  const childX = COL_X[node.depth + 1];
+  let cy = y;
+  kids.forEach((c, i) => {
+    if (i>0) cy += V_GAP;
+    assignPos(c, childX, cy);
+    cy += c.subtreeH;
+  });
+}
+
+function layoutTree(){
+  calcSubtreeH(TREE);
+  (function ad(n, d){
+    n.depth = d;
+    if (!n.collapsed && n.children) n.children.forEach(c => ad(c, d+1));
+  })(TREE, 0);
+  assignPos(TREE, COL_X[0], 0);
+}
+
+/* ============================================================
+   状态
+   ============================================================ */
+let vx = 0, vy = 0, vk = 1;
+let visibleNodes = [], visibleLinks = [];
+let selectedId = null;
+let query = '';
+let mastery = new Map();
+try {
+  const raw = JSON.parse(localStorage.getItem('etym-mastery-v8') || '{}');
+  mastery = new Map(Object.entries(raw));
+} catch(e){}
+function saveMastery(){
+  try {
+    const obj = {};
+    mastery.forEach((v,k) => { if (v>0) obj[k]=v; });
+    localStorage.setItem('etym-mastery-v8', JSON.stringify(obj));
+  } catch(e){}
+}
+
+const svg      = document.getElementById('svg');
+const viewport = document.getElementById('viewport');
+const gLinks   = document.getElementById('links');
+const gNodes   = document.getElementById('nodes');
+const detailEl = document.getElementById('detail');
+const searchEl = document.getElementById('search');
+
+/* ============================================================
+   渲染
+   ============================================================ */
+function collectVisible(node){
+  visibleNodes.push(node);
+  if (!node.collapsed && node.children){
+    node.children.forEach(c => {
+      visibleLinks.push({ from:node, to:c });
+      collectVisible(c);
+    });
+  }
+}
+
+function render(){
+  layoutTree();
+  visibleNodes = []; visibleLinks = [];
+  collectVisible(TREE);
+
+  const matchSet = new Set();
+  if (query){
+    const q = query.toLowerCase();
+    const direct = new Set();
+    visibleNodes.forEach(n => {
+      const hay = (n.label + ' ' + (n.sub || '') + ' ' + (n.origin || '') + ' ' + (n.pron || '') + ' ' + (n.breakdown || '')).toLowerCase();
+      if (hay.includes(q)) direct.add(n.id);
+    });
+    const parentMap = new Map();
+    (function map(n){
+      if (n.children) n.children.forEach(c => { parentMap.set(c.id, n); map(c); });
+    })(TREE);
+    direct.forEach(id => {
+      matchSet.add(id);
+      let p = parentMap.get(id);
+      while (p){ matchSet.add(p.id); p = parentMap.get(p); }
+    });
+  }
+
+  let linkHTML = '';
+  visibleLinks.forEach(l => {
+    const p = l.from, c = l.to;
+    const x1 = p.x + p.w, y1 = p.y + p.h/2;
+    const x2 = c.x,       y2 = c.y + c.h/2;
+    const dx = Math.max((x2 - x1) * 0.5, 24);
+    const d = `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+    const col = COLORS[c.color] || COLORS.root;
+    const isDim = query && !matchSet.has(c.id);
+    const w = c.type === 'ex' ? 1.2 : (c.type === 'item' ? 1.8 : 2.4);
+    linkHTML += `<path class="link${isDim?' dim':''}" d="${d}" stroke="${col.line}" stroke-width="${w}" stroke-linecap="round" opacity="${isDim?0.04:0.35}"/>`;
+  });
+  gLinks.innerHTML = linkHTML;
+
+  let nodeHTML = '';
+  visibleNodes.forEach(n => {
+    const col = COLORS[n.color] || COLORS.root;
+    const isDim   = query && !matchSet.has(n.id);
+    const isMatch = query && matchSet.has(n.id);
+    const isSel   = selectedId === n.id;
+    const mState  = mastery.get(n.id) || 0;
+
+    let cls = 'node';
+    if (isDim) cls += ' dim';
+    if (isMatch && query) cls += ' match';
+
+    const r = n.type === 'root' ? 18
+            : n.type === 'cat'  ? 14
+            : n.type === 'group'? 12
+            : n.type === 'item' ? 11 : 9;
+
+    const strokeW = isSel ? 2.2 : 1.4;
+    const hasKids = n.children && n.children.length > 0;
+    const isCollapsed = n.collapsed && hasKids;
+    const dash = isCollapsed ? ' stroke-dasharray="4 3"' : '';
+
+    let strokeColor = isSel ? '#4ea1ff' : col.bd;
+    if (mState === 1) strokeColor = '#fbbf24';
+    if (mState === 2) strokeColor = '#3ddc84';
+
+    nodeHTML += `<g class="${cls}" data-id="${n.id}">`;
+    nodeHTML += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}"
+                   rx="${r}" ry="${r}" fill="${col.bg}"
+                   stroke="${strokeColor}" stroke-width="${strokeW}"${dash}/>`;
+
+    const cx = n.x + n.w/2, cy = n.y + n.h/2;
+
+    if (n.type === 'root'){
+      nodeHTML += `<text x="${cx}" y="${cy-5}" text-anchor="middle" fill="${col.t1}" font-size="18" font-weight="800" font-family="inherit">${n.label}</text>`;
+      nodeHTML += `<text x="${cx}" y="${cy+16}" text-anchor="middle" fill="${col.t2}" font-size="12" font-family="inherit">${n.sub}</text>`;
+    } else if (n.type === 'cat'){
+      nodeHTML += `<text x="${cx}" y="${cy-4}" text-anchor="middle" fill="${col.t1}" font-size="17" font-weight="800" font-family="inherit">${n.label}</text>`;
+      nodeHTML += `<text x="${cx}" y="${cy+15}" text-anchor="middle" fill="${col.t2}" font-size="11" font-family="inherit">${n.sub}</text>`;
+    } else if (n.type === 'group'){
+      nodeHTML += `<text x="${cx}" y="${cy+1}" text-anchor="middle" fill="${col.t1}" font-size="13.5" font-weight="700" font-family="inherit">${n.label}</text>`;
+      nodeHTML += `<text x="${cx}" y="${cy+17}" text-anchor="middle" fill="${col.t2}" font-size="10.5" font-family="inherit">${n.sub}</text>`;
+    } else if (n.type === 'item'){
+      nodeHTML += `<text x="${cx}" y="${cy-4}" text-anchor="middle" fill="${col.t1}" font-size="14" font-weight="700" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">${n.label}</text>`;
+      nodeHTML += `<text x="${cx}" y="${cy+15}" text-anchor="middle" fill="${col.t2}" font-size="11" font-family="inherit">${n.sub}</text>`;
+    } else {
+      nodeHTML += `<text x="${cx}" y="${cy+4.5}" text-anchor="middle" font-size="12.5" font-family="inherit">`;
+      nodeHTML += `<tspan fill="${col.t1}" font-weight="600" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">${n.label}</tspan>`;
+      nodeHTML += `<tspan fill="${col.t2}">  ·  ${n.sub}</tspan>`;
+      nodeHTML += `</text>`;
+    }
+
+    if (isCollapsed){
+      nodeHTML += `<circle cx="${n.x+n.w-8}" cy="${n.y+8}" r="8" fill="${col.bd}" opacity="0.18"/>`;
+      nodeHTML += `<text x="${n.x+n.w-8}" y="${n.y+12}" text-anchor="middle" fill="${col.bd}" font-size="11" font-weight="800" font-family="inherit">+</text>`;
+    }
+
+    if (mState > 0 && n.type !== 'ex'){
+      const dotColor = mState === 1 ? '#fbbf24' : '#3ddc84';
+      nodeHTML += `<circle cx="${n.x+n.w-8}" cy="${n.y+n.h-8}" r="4" fill="${dotColor}"/>`;
+    }
+
+    if (n.type === 'item' && n.src){
+      const badgeColor = n.src === 'greek' ? '#67e8f9' : '#fdba74';
+      nodeHTML += `<circle cx="${n.x+8}" cy="${n.y+8}" r="3" fill="${badgeColor}" opacity="0.85"/>`;
+    }
+
+    nodeHTML += `</g>`;
+  });
+  gNodes.innerHTML = nodeHTML;
+  applyViewport();
+}
+
+/* ============================================================
+   视图
+   ============================================================ */
+function applyViewport(){
+  viewport.setAttribute('transform', `translate(${vx},${vy}) scale(${vk})`);
+}
+
+function getBounds(){
+  if (!visibleNodes.length) return { minX:0, minY:0, maxX:100, maxY:100 };
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  visibleNodes.forEach(n => {
+    if (n.x<minX) minX=n.x;
+    if (n.y<minY) minY=n.y;
+    if (n.x+n.w>maxX) maxX=n.x+n.w;
+    if (n.y+n.h>maxY) maxY=n.y+n.h;
+  });
+  return { minX, minY, maxX, maxY };
+}
+
+function fitView(){
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const b = getBounds();
+  const pad = 80;
+  const cw = Math.max(rect.width - pad*2, 150);
+  const ch = Math.max(rect.height - pad*2, 150);
+  const w = Math.max(b.maxX - b.minX, 1);
+  const h = Math.max(b.maxY - b.minY, 1);
+  let k = Math.min(cw/w, ch/h);
+  k = Math.max(0.08, Math.min(k, 1.4));
+  const cxw = (b.minX+b.maxX)/2, cyw = (b.minY+b.maxY)/2;
+  vk = k;
+  vx = rect.width/2 - cxw*k;
+  vy = rect.height/2 - cyw*k;
+  applyViewport();
+}
+
+function zoomAt(px, py, factor){
+  const k2 = Math.max(0.08, Math.min(3.5, vk*factor));
+  const s = k2/vk;
+  vx = px - (px - vx)*s;
+  vy = py - (py - vy)*s;
+  vk = k2;
+  applyViewport();
+}
+
+function findNode(node, id){
+  if (node.id === id) return node;
+  if (node.children) for (const c of node.children){ const r = findNode(c,id); if (r) return r; }
+  return null;
+}
+
+function collapseDescendants(node){
+  if (!node.children) return;
+  node.children.forEach(c => { c.collapsed = true; collapseDescendants(c); });
+}
+
+/* ============================================================
+   交互
+   ============================================================ */
+gNodes.addEventListener('click', e => {
+  const g = e.target.closest('.node');
+  if (!g) return;
+  const id = g.dataset.id;
+  const node = findNode(TREE, id);
+  if (!node) return;
+
+  if (node.children && node.children.length){
+    node.collapsed = !node.collapsed;
+    if (node.collapsed) collapseDescendants(node);
+    selectedId = id;
+    render();
+    showDetail(node);
+    if (!node.collapsed) requestAnimationFrame(() => fitView());
+  } else {
+    selectedId = (selectedId === id) ? null : id;
+    render();
+    selectedId ? showDetail(node) : hideDetail();
+  }
+});
+
+gNodes.addEventListener('contextmenu', e => {
+  const g = e.target.closest('.node');
+  if (!g) return;
+  e.preventDefault();
+  const id = g.dataset.id;
+  const cur = mastery.get(id) || 0;
+  const next = (cur + 1) % 3;
+  if (next === 0) mastery.delete(id); else mastery.set(id, next);
+  saveMastery();
+  render();
+  const node = findNode(TREE, id);
+  if (node && selectedId === id) showDetail(node);
+});
+
+let dragging = false, dragStart = null;
+svg.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  if (e.target.closest('.node')) return;
+  dragging = true;
+  dragStart = { x:e.clientX, y:e.clientY, vx, vy };
+  svg.classList.add('dragging');
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  vx = dragStart.vx + (e.clientX - dragStart.x);
+  vy = dragStart.vy + (e.clientY - dragStart.y);
+  applyViewport();
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  svg.classList.remove('dragging');
+});
+
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  zoomAt(e.clientX-rect.left, e.clientY-rect.top, e.deltaY<0?1.12:1/1.12);
+}, { passive:false });
+
+let tDist = 0;
+svg.addEventListener('touchstart', e => {
+  if (e.touches.length === 1){
+    dragging = true;
+    dragStart = { x:e.touches[0].clientX, y:e.touches[0].clientY, vx, vy };
+  } else if (e.touches.length === 2){
+    dragging = false;
+    tDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+  }
+}, { passive:true });
+svg.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && dragging){
+    e.preventDefault();
+    vx = dragStart.vx + (e.touches[0].clientX - dragStart.x);
+    vy = dragStart.vy + (e.touches[0].clientY - dragStart.y);
+    applyViewport();
+  } else if (e.touches.length === 2){
+    e.preventDefault();
+    const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    if (tDist > 0){
+      const rect = svg.getBoundingClientRect();
+      const mx = (e.touches[0].clientX+e.touches[1].clientX)/2 - rect.left;
+      const my = (e.touches[0].clientY+e.touches[1].clientY)/2 - rect.top;
+      zoomAt(mx, my, d/tDist);
+    }
+    tDist = d;
+  }
+}, { passive:false });
+svg.addEventListener('touchend', () => { dragging = false; tDist = 0; });
+
+/* ============================================================
+   详情卡
+   ============================================================ */
+const CAT_LABEL = { root:'词根', prefix:'前缀', suffix:'后缀' };
+const CAT_COLOR = {
+  teal:   { bg:'rgba(20,184,166,.15)', color:'#5eead4' },
+  purple: { bg:'rgba(139,92,246,.15)', color:'#c4b5fd' },
+  amber:  { bg:'rgba(245,158,11,.15)', color:'#fcd34d' },
+  root:   { bg:'rgba(59,130,246,.15)', color:'#93c5fd' }
+};
+
+function formatBreakdown(b){
+  if (!b) return '';
+  return b.replace(/\+/g, '<span class="plus">+</span>');
+}
+
+function formatMeaning(m){
+  if (!m) return '';
+  return m.replace(/→/g, '<span class="arrow">→</span>');
+}
+
+function showDetail(node){
+  const cc = CAT_COLOR[node.color] || CAT_COLOR.root;
+
+  let tipHTML = '';
+  if (node.type === 'item'){
+    tipHTML = `<div class="tip-bar">💡 <b>心法</b>：先看拆解，再理解演变，最后才记含义</div>`;
+  }
+
+  let html = `${tipHTML}<div class="body"><button class="close" id="closeD">✕</button>`;
+
+  if (node.type === 'ex'){
+    html += `
+      <div class="dtag" style="background:${cc.bg};color:${cc.color}">例词</div>
+      <h3 style="color:${COLORS[node.color].t1}">
+        <span class="h3-left">${node.label}</span>
+      </h3>
+      ${node.breakdown ? `<div class="ex-b" style="margin:8px 0">${formatBreakdown(node.breakdown)}</div>` : ''}
+      <div class="mean">${formatMeaning(node.sub)}</div>
+    `;
+  } else if (node.type === 'item'){
+    const exList = (node.children || []).map(c => `
+      <div class="ex-item">
+        <div class="ex-w">${c.label}</div>
+        ${c.breakdown ? `<div class="ex-b">${formatBreakdown(c.breakdown)}</div>` : ''}
+        <div class="ex-m">${formatMeaning(c.sub)}</div>
+      </div>
+    `).join('');
+
+    let srcBadge = '';
+    if (node.src){
+      const isG = node.src === 'greek';
+      srcBadge = `<span class="src-badge ${isG?'greek':'latin'}">${isG?'希腊语源':'拉丁语源'}</span>`;
+    }
+
+    html += `
+      <div class="dtag" style="background:${cc.bg};color:${cc.color}">${CAT_LABEL[node.id.split('-')[1]] || '词根'}</div>
+      <h3 style="color:${COLORS[node.color].t1}">
+        <span class="h3-left">${node.label}${srcBadge}</span>
+        ${node.pron ? `<span class="h3-pron">${node.pron}</span>` : ''}
+      </h3>
+      <div class="mean">${node.sub}</div>
+    `;
+
+    const mState = mastery.get(node.id) || 0;
+    html += `
+      <div class="mastery-btns">
+        <button class="mbtn ${mState===1?'active-1':''}" data-m="1">学习中</button>
+        <button class="mbtn ${mState===2?'active-2':''}" data-m="2">已掌握</button>
+      </div>
+    `;
+
+    if (node.origin){
+      html += `
+        <div class="origin-box">
+          <div class="origin-label">词源与含义演变</div>
+          <div class="origin-text">${node.origin}</div>
+        </div>
+      `;
+    }
+
+    const cmp = findCompare(node.label);
+    if (cmp){
+      html += `
+        <div class="compare-box">
+          <div class="compare-label">${cmp.title}</div>
+          <div class="compare-text">${cmp.text}</div>
+        </div>
+      `;
+    }
+
+    html += `<div class="ex-list">${exList}</div>`;
+  } else {
+    html += `
+      <div class="dtag" style="background:${cc.bg};color:${cc.color}">${CAT_LABEL[node.id.replace('cat-','')] || '分类'}</div>
+      <h3 style="color:${COLORS[node.color].t1}">
+        <span class="h3-left">${node.label}</span>
+      </h3>
+      <div class="mean">${node.sub}</div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.6;">点击节点展开查看下级内容</div>
+    `;
+  }
+
+  html += `</div>`;
+  detailEl.innerHTML = html;
+  detailEl.classList.add('show');
+
+  const closeBtn = document.getElementById('closeD');
+  if (closeBtn) closeBtn.addEventListener('click', ev => { ev.stopPropagation(); hideDetail(); });
+
+  detailEl.querySelectorAll('.mbtn').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const m = +btn.dataset.m;
+      const cur = mastery.get(node.id) || 0;
+      if (cur === m){
+        mastery.delete(node.id);
+      } else {
+        mastery.set(node.id, m);
+      }
+      saveMastery();
+      render();
+      showDetail(node);
+    });
+  });
+}
+
+function hideDetail(){
+  detailEl.classList.remove('show');
+  selectedId = null;
+}
+
+/* ============================================================
+   搜索
+   ============================================================ */
+let searchTimer = null;
+searchEl.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    query = searchEl.value.trim();
+    if (query) expandAncestors(TREE, query.toLowerCase());
+    render();
+    if (query) requestAnimationFrame(() => fitView());
+  }, 180);
+});
+
+function expandAncestors(node, q){
+  const selfHay = (node.label + ' ' + (node.sub || '') + ' ' + (node.origin || '') + ' ' + (node.pron || '') + ' ' + (node.breakdown || '')).toLowerCase();
+  let hit = selfHay.includes(q);
+  if (node.children){
+    let childHit = false;
+    node.children.forEach(c => { if (expandAncestors(c, q)) childHit = true; });
+    if (childHit){ node.collapsed = false; hit = true; }
+  }
+  return hit;
+}
+
+/* ============================================================
+   随机自测
+   ============================================================ */
+const ALL_ITEMS = [];
+(function collectItems(node){
+  if (node.type === 'item' && node.children && node.children.length >= 3){
+    ALL_ITEMS.push(node);
+  }
+  if (node.children) node.children.forEach(collectItems);
+})(TREE);
+
+let quiz = { queue:[], idx:0, score:0, total:0, mode:'' };
+const quizModal = document.getElementById('quizModal');
+const quizBody  = document.getElementById('quizBody');
+const progEl    = document.getElementById('quizProgress');
+
+function shuffle(a){
+  for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function startQuiz(){
+  const pool = ALL_ITEMS.filter(n => (mastery.get(n.id) || 0) < 2);
+  const source = pool.length >= 5 ? pool : ALL_ITEMS;
+  const shuffled = shuffle([...source]);
+  quiz.total = Math.min(10, shuffled.length);
+  quiz.queue = shuffled.slice(0, quiz.total);
+  quiz.idx = 0;
+  quiz.score = 0;
+  quizModal.classList.add('show');
+  showQuestion();
+}
+
+function showQuestion(){
+  if (quiz.idx >= quiz.total) return showResult();
+
+  const item = quiz.queue[quiz.idx];
+  const mode = Math.random() < 0.5 ? 'root2mean' : 'ex2root';
+  quiz.mode = mode;
+
+  if (mode === 'root2mean'){
+    const others = shuffle(ALL_ITEMS.filter(x => x.sub !== item.sub && x.id !== item.id)).slice(0,3);
+    const opts = shuffle([item.sub, ...others.map(x => x.sub)]);
+    progEl.textContent = `第 ${quiz.idx+1} / ${quiz.total} 题 · 得分 ${quiz.score}`;
+    quizBody.innerHTML = `
+      <div class="q-label">这个${CAT_LABEL[item.id.split('-')[1]] || '词根'}的底层含义是？</div>
+      <div class="q-root">${item.label}</div>
+      ${item.pron ? `<div class="q-pron">${item.pron}</div>` : ''}
+      <div class="q-hint">先回忆，再选择</div>
+      <div class="options">
+        ${opts.map((o,i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+      </div>
+      <div class="fb" id="fb"></div>
+    `;
+    bindOptions(opts, item.sub, item);
+  } else {
+    const exNode = item.children[Math.floor(Math.random() * item.children.length)];
+    const others = shuffle(ALL_ITEMS.filter(x => x.label !== item.label && x.id !== item.id)).slice(0,3);
+    const opts = shuffle([item.label, ...others.map(x => x.label)]);
+    progEl.textContent = `第 ${quiz.idx+1} / ${quiz.total} 题 · 得分 ${quiz.score}`;
+    quizBody.innerHTML = `
+      <div class="q-label">这个例词对应的词根是？</div>
+      <div class="q-root">${exNode.label}</div>
+      ${exNode.breakdown ? `<div class="q-pron">${exNode.breakdown}</div>` : ''}
+      <div class="q-hint">${exNode.sub}</div>
+      <div class="options">
+        ${opts.map((o,i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+      </div>
+      <div class="fb" id="fb"></div>
+    `;
+    bindOptions(opts, item.label, item);
+  }
+}
+
+function bindOptions(opts, correct, item){
+  quizBody.querySelectorAll('.opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const chosen = opts[+btn.dataset.i];
+      const isCorrect = chosen === correct;
+      if (isCorrect) quiz.score++;
+
+      quizBody.querySelectorAll('.opt').forEach(b => {
+        const val = opts[+b.dataset.i];
+        b.disabled = true;
+        if (val === correct) b.classList.add('right');
+        else if (b === btn) b.classList.add('wrong');
+      });
+
+      progEl.textContent = `第 ${quiz.idx+1} / ${quiz.total} 题 · 得分 ${quiz.score}`;
+      const fb = document.getElementById('fb');
+      fb.innerHTML = (isCorrect
+        ? '<span style="color:#3ddc84">✅ 正确</span>'
+        : `<span style="color:#ff5f6d">❌ 正确答案：${correct}</span>`)
+        + `<button class="next-btn" id="nextQ">${quiz.idx+1>=quiz.total?'查看结果':'下一题 →'}</button>`;
+
+      document.getElementById('nextQ').addEventListener('click', () => {
+        quiz.idx++;
+        showQuestion();
+      });
+    });
+  });
+}
+
+function showResult(){
+  const pct = Math.round(quiz.score / quiz.total * 100);
+  progEl.textContent = '完成';
+  quizBody.innerHTML = `
+    <div class="result">
+      <div class="big">${quiz.score} / ${quiz.total}</div>
+      <div class="pct">正确率 ${pct}%</div>
+      <p>${pct>=80 ? '👏 底层逻辑已经内化，继续保持' : '别急着背中文，回头把卡片再点开看一遍 🧩'}</p>
+      <button class="next-btn" id="again">再来一轮</button>
+      <button class="ghost-btn" id="quit">关闭</button>
+    </div>
+  `;
+  document.getElementById('again').addEventListener('click', startQuiz);
+  document.getElementById('quit').addEventListener('click', () => quizModal.classList.remove('show'));
+}
+
+document.getElementById('quizBtn').addEventListener('click', startQuiz);
+document.getElementById('closeQuiz').addEventListener('click', () => quizModal.classList.remove('show'));
+quizModal.addEventListener('click', e => { if (e.target === quizModal) quizModal.classList.remove('show'); });
+
+/* ============================================================
+   按钮
+   ============================================================ */
+document.getElementById('fitBtn').addEventListener('click', fitView);
+document.getElementById('zoomFit').addEventListener('click', fitView);
+document.getElementById('zoomIn').addEventListener('click', () => {
+  const r = svg.getBoundingClientRect();
+  zoomAt(r.width/2, r.height/2, 1.2);
+});
+document.getElementById('zoomOut').addEventListener('click', () => {
+  const r = svg.getBoundingClientRect();
+  zoomAt(r.width/2, r.height/2, 1/1.2);
+});
+
+document.getElementById('expandBtn').addEventListener('click', () => {
+  (function walk(n){
+    if (n.children && n.children.length){ n.collapsed = false; n.children.forEach(walk); }
+  })(TREE);
+  render();
+  setTimeout(fitView, 60);
+});
+
+document.getElementById('collapseBtn').addEventListener('click', () => {
+  TREE.collapsed = false;
+  TREE.children.forEach(c => { c.collapsed = true; collapseDescendants(c); });
+  render();
+  setTimeout(fitView, 60);
+});
+
+/* ============================================================
+   窗口与键盘
+   ============================================================ */
+let rzTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(rzTimer);
+  rzTimer = setTimeout(fitView, 150);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target === searchEl) return;
+  const r = svg.getBoundingClientRect();
+  if (e.key === '+' || e.key === '=') zoomAt(r.width/2, r.height/2, 1.15);
+  if (e.key === '-' || e.key === '_') zoomAt(r.width/2, r.height/2, 1/1.15);
+  if (e.key === '0' || e.key === 'f' || e.key === 'F') fitView();
+  if (e.key === '/'){ e.preventDefault(); searchEl.focus(); }
+  if (e.key === 'Escape') quizModal.classList.remove('show');
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+render();
+requestAnimationFrame(() => requestAnimationFrame(fitView));
+  </script>
+</body>
+
+</html>
