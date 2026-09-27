@@ -817,16 +817,15 @@
   .reading-toolbar .sp { flex:1; } .reading-toolbar button.on { background:var(--accent-soft); }
   .reading-toolbar button[hidden] { display:none; }
   #reading-project-tabs { min-height:42px; display:flex; align-items:flex-end; gap:2px; padding:5px 8px 0; overflow-x:auto; overflow-y:hidden; border-bottom:1px solid var(--border); background:var(--theme-deep,var(--bg)); scrollbar-width:thin; }
-  .reading-project-tab { min-width:110px; max-width:250px; height:36px; display:flex; align-items:center; gap:6px; padding:0 9px; flex:none; border:1px solid transparent; border-bottom:0; border-radius:8px 8px 0 0; background:var(--panel2); color:var(--dim); cursor:pointer; user-select:none; }
-  .reading-project-tab:hover { color:var(--text); background:var(--panel); }
-  .reading-project-tab.on { border-color:var(--border); background:var(--panel); color:var(--text); box-shadow:inset 0 -2px var(--accent); }
+  /* 阅读片段标签：与代码工作区的 .tab 同一套外观；行内 ✎/× 已收进右键菜单，不再有悬停显形按钮 */
+  .reading-project-tab { position:relative; min-width:110px; max-width:250px; min-height:34px; height:34px; display:flex; align-items:center; gap:7px; padding:0 12px; flex:none; border:0; border-radius:6px 6px 0 0; background:transparent; color:var(--dim); cursor:pointer; user-select:none; transition:background .14s,color .14s; }
+  .reading-project-tab:hover { color:var(--text); background:color-mix(in srgb,var(--text) 5%,transparent); }
+  .reading-project-tab.on { color:var(--text); background:var(--panel2); }
+  .reading-project-tab.on::after { content:''; position:absolute; left:10px; right:10px; bottom:0; height:2px; border-radius:2px 2px 0 0; background:var(--accent); }
   .reading-project-tab.dragging { opacity:.45; }
   .reading-project-tab .tab-kind { flex:none; color:var(--accent); font:700 9px var(--mono); }
   .reading-project-tab .tab-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
-  .reading-project-tab .tab-role { flex:none; color:var(--dim); font-size:8px; }
-  .reading-project-tab .tab-action { display:none; padding:0 2px; border:0; background:transparent; color:var(--dim); font-size:9px; }
-  .reading-project-tab:hover .tab-action { display:block; }
-  .reading-project-tab .tab-action:hover { color:var(--accent); }
+  .reading-project-tab .tab-role { flex:none; padding:1px 6px; border:1px solid color-mix(in srgb,var(--border) 70%,transparent); border-radius:7px; background:color-mix(in srgb,var(--panel2) 70%,transparent); color:var(--dim); font-size:8px; }
   #reading-project-add { height:34px; margin:0 0 1px 3px; padding:0 12px; flex:none; border-style:dashed; color:var(--dim); background:transparent; }
   #reading-project-add:hover { color:var(--accent); border-color:var(--accent); }
   #reading-stage { --reading-left:50%; --reading-fragments-width:300px; flex:1; min-height:0; display:flex; overflow:hidden; padding:8px; gap:0; }
@@ -5755,10 +5754,18 @@ async function deleteReadingFragment(item){if(!confirm('删除片段「'+item.na
 function renderReadingProjectTabs(){
   const host=$('reading-project-tabs');if(!host)return;host.replaceChildren();const project=READING_PROJECT_INDEX.get(READING_PROJECT_CURRENT);
   if(!project){const hint=document.createElement('span');hint.className='draw-empty';hint.textContent='打开左侧阅读项目后，在这里管理和组合片段';host.appendChild(hint);return;}
-  for(const item of sortedReadingFragments(project)){const tab=document.createElement('div');tab.className='reading-project-tab'+(item.path===READING_CURRENT?' on':'');tab.draggable=true;tab.title='点击在当前栏打开；拖到阅读区右侧新建一栏';
+  for(const item of sortedReadingFragments(project)){const tab=document.createElement('div');tab.className='reading-project-tab'+(item.path===READING_CURRENT?' on':'');tab.draggable=true;tab.title='点击在当前栏打开\n右键：打开 / 在另一栏打开 / 重命名 / 删除\n拖到阅读区右侧新建一栏';
     const kind=document.createElement('span');kind.className='tab-kind';kind.textContent=readingKindIcon(item);const name=document.createElement('span');name.className='tab-name';name.textContent=readingBase(item.name);const role=document.createElement('span');role.className='tab-role';role.textContent=readingRoleLabel(item);
-    const ren=document.createElement('button');ren.className='tab-action';ren.textContent='✎';ren.title='重命名片段';ren.onclick=(e)=>{e.stopPropagation();renameReadingFragment(item);};const del=document.createElement('button');del.className='tab-action';del.textContent='×';del.title='删除片段';del.onclick=(e)=>{e.stopPropagation();deleteReadingFragment(item);};
-    tab.append(kind,name,role,ren,del);tab.onclick=()=>openReading(item.path,READING_ACTIVE_SLOT);tab.addEventListener('dragstart',(e)=>{tab.classList.add('dragging');$('reading-columns').classList.add('fragment-dragging');e.dataTransfer.setData('application/x-codescope-reading',item.path);e.dataTransfer.effectAllowed='copy';});tab.addEventListener('dragend',()=>{tab.classList.remove('dragging');$('reading-columns').classList.remove('fragment-dragging');});host.appendChild(tab);
+    // 行内 ✎/× 收进右键菜单（与代码工作区的片段标签同一套操作习惯）
+    tab.append(kind,name,role);
+    tab.addEventListener('contextmenu',(event)=>showContextMenu(event,[
+      {icon:'▸',label:'打开此片段',run:()=>openReading(item.path,READING_ACTIVE_SLOT)},
+      {icon:'⇉',label:'在另一栏打开',hint:'分屏对照阅读',run:()=>openReading(item.path,READING_ACTIVE_SLOT?0:1)},
+      {type:'separator'},
+      {icon:'✎',label:'重命名片段',run:()=>renameReadingFragment(item)},
+      {icon:'×',label:'删除片段',danger:true,run:()=>deleteReadingFragment(item)},
+    ]));
+    tab.onclick=()=>openReading(item.path,READING_ACTIVE_SLOT);tab.addEventListener('dragstart',(e)=>{tab.classList.add('dragging');$('reading-columns').classList.add('fragment-dragging');e.dataTransfer.setData('application/x-codescope-reading',item.path);e.dataTransfer.effectAllowed='copy';});tab.addEventListener('dragend',()=>{tab.classList.remove('dragging');$('reading-columns').classList.remove('fragment-dragging');});host.appendChild(tab);
   }
   const add=document.createElement('button');add.id='reading-project-add';add.textContent=project.knowledge?'＋ Markdown':'＋ 片段';add.title=project.knowledge?'在当前知识项目中新建 Markdown 片段':'新建或导入 PDF、Markdown、代码片段';add.onclick=project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project);host.appendChild(add);
 }

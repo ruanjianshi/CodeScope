@@ -1015,6 +1015,22 @@ print(r.run())
   await readingPage.goto(baseUrl,{waitUntil:'domcontentloaded'});
   await readingPage.locator('.reading-project').filter({hasText:'Block Drag Demo'}).click();
   await readingPage.locator('.reading-project-tab').filter({hasText:'note'}).click();
+  /* 阅读片段标签与代码工作区一致：不再有悬停才出现的行内 ✎/×，一律走右键菜单 */
+  const readingTabInline=await readingPage.evaluate(()=>({
+    inlineButtons:document.querySelectorAll('.reading-project-tab button, .reading-project-tab .tab-action').length,
+  }));
+  if(readingTabInline.inlineButtons!==0)throw new Error('阅读片段标签仍存在行内 ✎/× 按钮：'+JSON.stringify(readingTabInline));
+  await readingPage.locator('.reading-project-tab').first().hover();
+  await readingPage.waitForTimeout(350);
+  const readingTabHovered=await readingPage.evaluate(()=>[...document.querySelectorAll('.reading-project-tab button')].filter(button=>button.offsetParent!==null).length);
+  if(readingTabHovered!==0)throw new Error('阅读片段标签悬停仍显示行内按钮：'+readingTabHovered);
+  await readingPage.locator('.reading-project-tab').first().click({button:'right'});
+  await readingPage.waitForTimeout(300);
+  const readingTabMenu=await readingPage.evaluate(()=>[...document.querySelectorAll('#ctx-menu .ctx-item .ctx-label')].map(node=>node.textContent));
+  for(const text of ['打开此片段','在另一栏打开','重命名片段','删除片段'])if(!readingTabMenu.includes(text))throw new Error('阅读片段标签右键菜单缺少「'+text+'」：'+JSON.stringify(readingTabMenu));
+  await readingPage.keyboard.press('Escape');
+  const readingTabStyle=await readingPage.evaluate(()=>{const tab=document.querySelector('.reading-project-tab'),cs=getComputedStyle(tab),role=tab.querySelector('.tab-role');return{height:Math.round(tab.getBoundingClientRect().height),radius:parseFloat(cs.borderTopLeftRadius),border:cs.borderTopWidth,roleChip:role?getComputedStyle(role).borderTopWidth!=='0px':false};});
+  if(readingTabStyle.height!==34||readingTabStyle.radius!==6||readingTabStyle.border!=='0px'||!readingTabStyle.roleChip)throw new Error('阅读片段标签外观未与代码工作区统一：'+JSON.stringify(readingTabStyle));
   const live=readingPage.locator('.reading-md-block');await live.waitFor({state:'visible',timeout:10000});
   await live.locator('.ProseMirror').waitFor({state:'visible',timeout:15000});
   if(!await live.evaluate(el=>el.dataset.editorReady==='true'))throw new Error('Milkdown Crepe 区块编辑器未完成挂载');
