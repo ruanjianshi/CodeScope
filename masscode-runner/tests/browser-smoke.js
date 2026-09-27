@@ -292,6 +292,8 @@ print(r.run())
   await page.locator('#knowledge-launch-split').click();
   await page.locator('#study-workspace').waitFor({state:'visible'});
   await page.locator('#knowledge-workspace').waitFor({state:'hidden'});
+  // 学习工作台的栏位是异步渲染的：等知识库地址真的出现（最多 15s）再断言，避免读到空列表
+  await page.waitForFunction(base=>[...document.querySelectorAll('#study-workspace .study-url')].some(node=>node.value.startsWith(base+'/knowledge/')),baseUrl,{timeout:15000}).catch(()=>{});
   const knowledgeSplitUrls=await page.locator('#study-workspace .study-url').evaluateAll(nodes=>nodes.map(node=>node.value));
   if(!knowledgeSplitUrls.some(url=>url.startsWith(baseUrl+'/knowledge/')))throw new Error('知识库分栏未载入同源 VitePress 站点：'+JSON.stringify(knowledgeSplitUrls));
   await page.locator('#btn-study').click();

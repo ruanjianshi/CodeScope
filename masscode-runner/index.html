@@ -1644,6 +1644,8 @@
   .editor-group-divider::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:1px; background:color-mix(in srgb,var(--border) 72%,transparent); transition:background .12s,width .12s; }
   .editor-group-divider:hover::after, .editor-group-divider.active::after { width:2px; background:var(--accent); }
   .split-editor-group { flex:1; display:flex; flex-direction:column; min-width:120px; min-height:0; overflow:hidden; border:0; background:var(--theme-code,var(--panel2)); }
+  /* 分栏子列与主编辑栏 #code-wrap 保持同一套卡片外形（同样的内缩/圆角/描边），左右才对齐 */
+  html[data-theme] .split-editor-group { margin:7px 8px 0; border:1px solid color-mix(in srgb,var(--border) 72%,transparent); border-radius:var(--ui-radius); }
   .split-editor-head { flex:none; display:flex; align-items:center; gap:7px; min-height:32px; padding:0 7px 0 9px; border-bottom:1px solid var(--border); background:var(--panel); color:var(--dim); font-size:10px; }
   .split-editor-head .name { min-width:0; overflow:hidden; color:var(--text); text-overflow:ellipsis; white-space:nowrap; font:11px var(--mono); }
   /* 主编辑栏头与分栏头保持同一套结构：小标签 + 可点名称 + 语言 chip + 含蓄提示 */
@@ -3676,8 +3678,8 @@
           <button id="tab-term" class="otab" title="交互式终端（shell）">>_ 终端</button>
         </div>
         <span class="sp"></span>
-        <span class="pill idle" id="status">空闲</span>
         <span class="pill idle" id="save-tick">已保存</span>
+        <span class="pill idle" id="status">空闲</span>
         <span id="elapsed" style="font-variant-numeric:tabular-nums"></span>
       </div>
       <div id="algo-cases" class="algo-panel hidden"></div>
