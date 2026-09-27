@@ -2872,6 +2872,14 @@
     border-radius:999px; background:color-mix(in srgb,var(--ok) 9%,transparent);
     color:var(--ok); font-size:11px; font-weight:650;
   }
+  /* 保存模式开关：可点击；手动模式改为琥珀色，有未保存修改时轻微脉动 */
+  html[data-theme] #autosave-hint { cursor:pointer; box-shadow:none; transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .18s cubic-bezier(.32,.72,0,1); }
+  html[data-theme] #autosave-hint:hover { transform:translateY(-1px); box-shadow:0 6px 14px -10px rgba(0,0,0,.6); }
+  html[data-theme] #autosave-hint:active { transform:translateY(.5px) scale(.985); }
+  html[data-theme] #autosave-hint.manual { border-color:color-mix(in srgb,var(--syntax-number,#d99a43) 42%,transparent); background:color-mix(in srgb,var(--syntax-number,#d99a43) 12%,transparent); color:var(--syntax-number,#d99a43); }
+  html[data-theme] #autosave-hint.manual::before { background:var(--syntax-number,#d99a43); animation:none; }
+  html[data-theme] #autosave-hint.dirty { animation:saveModePulse 1.5s ease-in-out infinite; }
+  @keyframes saveModePulse { 0%,100% { opacity:1; } 50% { opacity:.6; } }
   #tabs {
     min-height:39px; padding:0 8px; gap:2px; border-bottom:1px solid var(--ui-divider);
     background:color-mix(in srgb,var(--panel) 90%,var(--bg));
@@ -3110,7 +3118,6 @@
   #app-nav .header-project::before { content:'⌘'; }
   #app-nav .header-remote::before { content:'⌁'; font-size:16px; }
   #app-nav .header-env::before { content:'◌'; }
-  #app-nav .header-refresh::before { content:'↻'; font-size:15px; }
   #app-nav #btn-env,#app-nav #btn-remote { padding-right:22px; }
   #app-nav #theme-btn { min-height:32px; }
 
@@ -3179,16 +3186,16 @@
     #toolbar { flex-wrap:nowrap; }
     #toolbar .sp { min-width:0; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-history, #toolbar #btn-info, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
+    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
     #btn-outline::before { content:'≡'; font-size:16px; }
     #btn-mindmap::before { content:'◇'; font-size:15px; }
     #btn-history::before { content:'↶'; font-size:15px; }
-    #btn-info::before { content:'i'; font-size:13px; font-weight:800; }
     #btn-pair-switch::before { content:'⇄'; font-size:13px; }
     #btn-edit { flex:none; white-space:nowrap; }
-    #autosave-hint { width:28px; flex:none; padding:4px 6px; overflow:hidden; white-space:nowrap; font-size:0; }
-    #autosave-hint::before { content:'✓'; font-size:11px; font-weight:800; }
+    html[data-theme] #autosave-hint { width:28px; flex:none; min-height:27px; padding:4px 6px; overflow:hidden; white-space:nowrap; font-size:0; }
+    html[data-theme] #autosave-hint::before { content:'✓'; font-size:11px; font-weight:800; }
+    html[data-theme] #autosave-hint.manual::before { content:'✎'; }
   }
   @media (max-width:1180px) {
     header .sub { display:none; }
@@ -3294,7 +3301,6 @@
         </div>
       </div>
     </div>
-    <span class="sync-dot" id="sync-ind" title="页面可见时每 3s 自动检测 vault 变更">实时同步</span>
     <nav id="app-nav" aria-label="全局工具">
     <div id="theme-switcher">
       <button class="header-action" id="theme-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="切换界面主题"><span class="theme-dot" aria-hidden="true"></span><span class="theme-label">主题</span></button>
@@ -3310,7 +3316,6 @@
     <button class="header-action header-project" id="btn-project" title="构建任务、编译数据库与工程健康报告"><span>工程</span></button>
     <button class="header-action header-remote" id="btn-remote" title="SSH 终端与 VNC 桌面"><span>远程</span></button>
     <button class="header-action header-env" id="btn-env" title="检查运行环境与项目工具"><span>环境</span></button>
-    <button class="header-action header-refresh" id="refresh" title="刷新 Vault、Git、绘图和阅读资料"><span>刷新</span></button>
     </nav>
   </div>
 </header>
@@ -3495,9 +3500,8 @@
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
       <button id="btn-edit" disabled>编辑</button>
-      <button id="btn-info" disabled title="编辑片段信息：名称/类型/标签/说明">信息</button>
       <span id="nav-notice" role="status" aria-live="polite"></span>
-      <span id="autosave-hint" title="代码修改后自动保存到 vault">自动保存</span>
+      <button type="button" id="autosave-hint" title="自动保存：代码修改后自动保存到 vault（点击切换为手动保存）">自动保存</button>
     </div>
     <div id="tabs"></div>
     <div id="document-mode-tools" aria-label="文档视图模式">
@@ -4301,7 +4305,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) load
 setInterval(() => { if(!document.hidden) loadSystemStatus(); }, 3000);
 loadSystemStatus();
 
-function setSync(on) { $('sync-ind').classList.toggle('off', !on); }
+function setSync(on) { const el = $('sync-ind'); if (el) el.classList.toggle('off', !on); }   /* 顶部「实时同步」已合并进保存模式开关 */
 
 async function refresh(silent) {
   const d = await api('/api/snippets');
@@ -4703,7 +4707,7 @@ async function openLatexResource(r) {
   $('resource-save').style.display = 'none'; $('resource-body').innerHTML = '<span class="empty">正在加载资源…</span>';
   $('resource-rename').onclick = () => renameLatexResource(r);
   $('resource-replace').onclick = () => chooseLatexResource(r.folder, r.kind);
-  $('btn-edit').disabled = $('btn-history').disabled = $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = $('btn-info').disabled = $('btn-backlinks').disabled = true;
+  $('btn-edit').disabled = $('btn-history').disabled = $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = $('btn-backlinks').disabled = true;
   const raw = latexRawUrl(r.path), ext = r.ext.toLowerCase();
   if (r.text) {
     const data = await api('/api/latex/resource?path=' + encodeURIComponent(r.path));
@@ -11030,6 +11034,7 @@ function flushSplitEditors() {
 }
 function scheduleSplitSave(entry, status) {
   entry.dirty=true;if(status){status.textContent='● 未保存';status.style.color='var(--syntax-number)';}
+  if(SAVE_MODE==='manual'){SAVE_MODE_DIRTY=true;applySaveMode();return;}   // 手动模式：等 ⌘S / 切换时再落盘
   clearTimeout(entry.timer);entry.timer=setTimeout(()=>{
     entry.timer=null;pushSave(entry.file,entry.fragment,String(entry.code||''));entry.dirty=false;
     if(status){status.textContent='已自动保存';status.style.color='';setTimeout(()=>{if(status.isConnected)status.textContent='';},1500);}
@@ -11396,7 +11401,7 @@ function renderCode() {
   }
   $('btn-edit').disabled = !f;$('btn-backlinks').disabled=!f;
   $('btn-history').disabled = !f;
-  $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = $('btn-info').disabled = !f;
+  $('btn-run').disabled = $('btn-check').disabled = $('btn-format').disabled = !f;
   $('btn-run').textContent = isLatex ? '▶ PDF' : '▶';
   $('btn-run').title = isLatex ? '立即编译并刷新 PDF' : '运行代码';
   $('btn-check').title = isLatex ? '检查 LaTeX 并刷新 PDF' : '语法检查';
@@ -13008,9 +13013,34 @@ async function reorderFragments(from, to) {
 let SAVE_TIMER = null, SAVE_QUEUE = [], SAVE_BUSY = false, SAVE_TICK_2 = null;
 let SAVE_WAITERS = [], SAVE_BATCH_OK = true;
 
+/* ── 保存模式：自动（默认）/ 手动 ──
+   手动模式下编辑不再自动落盘，改为标记未保存，按 ⌘S 或切换文件时才写盘；选择持久化。 */
+let SAVE_MODE = 'auto';
+try { if (localStorage.getItem('codescope-save-mode') === 'manual') SAVE_MODE = 'manual'; } catch (_) {}
+let SAVE_MODE_DIRTY = false;
+function applySaveMode() {
+  const el = $('autosave-hint');
+  if (!el) return;
+  const manual = SAVE_MODE === 'manual';
+  el.classList.toggle('manual', manual);
+  el.classList.toggle('dirty', manual && SAVE_MODE_DIRTY);
+  el.textContent = manual ? (SAVE_MODE_DIRTY ? '手动保存 · 未保存' : '手动保存') : '自动保存';
+  el.title = manual
+    ? '手动保存：编辑不再自动落盘，按 ⌘S 保存；切换文件时仍会自动保存' + (SAVE_MODE_DIRTY ? '（当前有未保存修改）' : '') + '。点击切回自动保存'
+    : '自动保存：代码修改后自动保存到 vault。点击切换为手动保存';
+}
+function toggleSaveMode() {
+  SAVE_MODE = SAVE_MODE === 'manual' ? 'auto' : 'manual';
+  try { localStorage.setItem('codescope-save-mode', SAVE_MODE); } catch (_) {}
+  if (SAVE_MODE === 'auto') { SAVE_MODE_DIRTY = false; flushSave(); }
+  applySaveMode();
+  setStatus('ok', SAVE_MODE === 'manual' ? '已切换为手动保存：⌘S 保存' : '已切换为自动保存');
+}
+
 function scheduleSave() {
   if (!CURRENT || !EDITING) return;
   if ($('code-edit').classList.contains('composing')) return; // 输入法合成中不落盘
+  if (SAVE_MODE === 'manual') { SAVE_MODE_DIRTY = true; applySaveMode(); return; }   // 手动模式：只标记未保存
   clearTimeout(SAVE_TIMER);
   SAVE_TIMER = setTimeout(flushSave, 700);
 }
@@ -13019,6 +13049,7 @@ function flushSave() {
   if (!CURRENT || !EDITING) return;
   if (SAVE_TIMER) { clearTimeout(SAVE_TIMER); SAVE_TIMER = null; }
   pushSave(CURRENT.file, CINDEX, editText());
+  if (SAVE_MODE_DIRTY) { SAVE_MODE_DIRTY = false; applySaveMode(); }
 }
 
 function pushSave(file, fragment, code) {
@@ -13850,8 +13881,9 @@ if ($('btn-wrap')) $('btn-wrap').onclick = toggleEditorWordWrap;
 applyEditorWordWrap();
 $('btn-edit').onclick = toggleEdit;
 $('btn-history').onclick = openTimeline;
-$('btn-info').onclick = openEditDialog;
 $('btn-backlinks').onclick = showBacklinks;
+$('autosave-hint').onclick = toggleSaveMode;
+applySaveMode();
 $('backlink-close').onclick=closeBacklinks;$('backlink-copy').onclick=copyCurrentWorkspaceLink;$('backlink-dialog').addEventListener('mousedown',(event)=>{if(event.target===$('backlink-dialog'))closeBacklinks();});document.addEventListener('keydown',(event)=>{if(event.key==='Escape'&&$('backlink-dialog').classList.contains('on'))closeBacklinks();});
 $('review-close').onclick = closeReview;
 $('review-restore').onclick = restoreTimeline;
@@ -14393,7 +14425,6 @@ function makeHResizer(handle, getter, setter) {
   // 窗口/布局变化时重排编辑布局（行号列宽度可能与 textarea 起始位置对齐）
   window.addEventListener('resize', () => { try { layoutEditEditor(); } catch (_) {} if(MONACO_EDITOR)MONACO_EDITOR.layout();for(const editor of MONACO_SPLIT_EDITORS)editor.layout(); });
 })();
-$('refresh').onclick = () => { refresh(false); renderDrawList(); };
 $('btn-knowledge-launch').setAttribute('aria-pressed','false');
 $('btn-knowledge-launch').onclick=()=>document.body.classList.contains('knowledge-mode')?closeKnowledgeWorkspace():openKnowledgeWorkspace(false);
 $('knowledge-launch-more').onclick=(event)=>{event.stopPropagation();setKnowledgeLaunchMenu();};

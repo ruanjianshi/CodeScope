@@ -526,6 +526,14 @@ print(r.run())
   if(Math.abs(rightToLeft.sourceLine-rightToLeft.previewLine)>3)throw new Error('Markdown 右侧滚动未按源码行同步源码：'+JSON.stringify(rightToLeft));
   const monacoCursorLine=await markdownPage.evaluate(()=>{const model=MONACO_EDITOR.getModel(),marker='monaco-cursor-sync-target',tail=Array.from({length:12},(_,index)=>'Trailing paragraph '+(index+1)+'.').join('\n\n'),next=model.getValue()+'\n\n```text\nfirst step\nsecond step\n'+marker+'\n```\n\n## Cursor Sync Tail\n\n'+tail+'\n',offset=next.indexOf(marker);model.setValue(next);const position=model.getPositionAt(offset);MONACO_EDITOR.setPosition(position);MONACO_EDITOR.revealPositionInCenter(position);MONACO_EDITOR.focus();return position.lineNumber-1;});
   await markdownPage.waitForFunction(line=>document.querySelector('#edit-preview .md-cline[data-md-line="'+line+'"]'),monacoCursorLine);await markdownPage.evaluate(()=>{const position=MONACO_EDITOR.getPosition(),height=MONACO_EDITOR.getLayoutInfo().height;MONACO_EDITOR.setScrollTop(Math.max(0,MONACO_EDITOR.getTopForLineNumber(position.lineNumber)-height*.42));MONACO_EDITOR.focus();scheduleSyncMdPreview();});await markdownPage.waitForTimeout(680);
+  // 等预览的对齐滚动稳定下来再量（应用是异步对齐；固定等待在慢机器上不够）
+  await markdownPage.evaluate(() => { window.__mdStable = { v: -1, n: 0 }; });
+  await markdownPage.waitForFunction(() => {
+    const p = document.getElementById('edit-preview');
+    const s = window.__mdStable, now = p.scrollTop;
+    if (s.v === now) s.n += 1; else { s.n = 0; s.v = now; }
+    return s.n >= 10;
+  }, null, { timeout: 5000 }).catch(() => {});
   const monacoCursorAlignment=await markdownPage.evaluate(line=>{const point=MONACO_EDITOR.getScrolledVisiblePosition(MONACO_EDITOR.getPosition()),source=document.getElementById('monaco-main').getBoundingClientRect(),targets=[...document.querySelectorAll('#edit-preview .md-cline[data-md-line="'+line+'"]')],target=targets[targets.length-1]?.getBoundingClientRect(),sourceY=point?source.top+point.top:NaN;return target&&Number.isFinite(sourceY)?{sourceY,previewY:target.top,delta:Math.abs(sourceY-target.top)}:null;},monacoCursorLine);if(!monacoCursorAlignment||monacoCursorAlignment.delta>4)throw new Error('Monaco Markdown 代码块光标与预览对应行未同高：'+JSON.stringify(monacoCursorAlignment));
   if(markdownErrors.length)throw new Error('Monaco Markdown 浏览器运行错误：'+markdownErrors.join('；'));
   await markdownPage.close();
@@ -714,7 +722,8 @@ print(r.run())
      回归 2：改成工具栏内浮层后会盖住「信息」等右侧按钮（文字重叠成“12:信息3 已保存”）。 */
   const saveStatusLayout=await idePage.evaluate(()=>{
     const bar=document.getElementById('toolbar'),tick=document.getElementById('save-tick'),split=document.getElementById('edit-split'),status=document.getElementById('status'),elapsed=document.getElementById('elapsed');
-    const info=document.getElementById('btn-info');
+    const toolbarButtons=[...document.querySelectorAll('#toolbar button')].filter((b)=>b.getBoundingClientRect().width>0);
+    const probe=toolbarButtons[toolbarButtons.length-1];
     const read=()=>({
       barH:bar.getBoundingClientRect().height,
       splitTop:split.getBoundingClientRect().top,
@@ -728,10 +737,10 @@ print(r.run())
     tick.className='pill ok show';
     const shown=read();
     // 「信息」按钮中心必须命中按钮本身，说明没有被任何提示层遮挡
-    const infoBox=info.getBoundingClientRect();
-    const infoHit=document.elementFromPoint(infoBox.left+infoBox.width/2,infoBox.top+infoBox.height/2);
+    const probeBox=probe.getBoundingClientRect();
+    const probeHit=document.elementFromPoint(probeBox.left+probeBox.width/2,probeBox.top+probeBox.height/2);
     tick.classList.remove('show');
-    return {idle,shown,inToolbar:!!tick.closest('#toolbar'),inStatusBar:!!tick.closest('#status')?.parentElement||tick.parentElement.contains(status),position:getComputedStyle(tick).position,idleVisibility:getComputedStyle(tick).visibility,infoHitId:infoHit?infoHit.id:''};
+    return {idle,shown,inToolbar:!!tick.closest('#toolbar'),inStatusBar:!!tick.closest('#status')?.parentElement||tick.parentElement.contains(status),position:getComputedStyle(tick).position,idleVisibility:getComputedStyle(tick).visibility,probeHitId:probeHit?probeHit.id:'',probeId:probe.id,probeText:(probe.textContent||'').trim()};
   });
   if(saveStatusLayout.inToolbar)throw new Error('保存状态仍放在工具栏内，会挤压按钮：'+JSON.stringify(saveStatusLayout));
   if(saveStatusLayout.idle.tickW<=0)throw new Error('保存状态槽位宽度为 0：'+JSON.stringify(saveStatusLayout));
@@ -740,7 +749,7 @@ print(r.run())
   if(saveStatusLayout.shown.barH!==saveStatusLayout.idle.barH)throw new Error('保存状态出现会改变工具栏高度，导致编辑器上下跳动：'+JSON.stringify(saveStatusLayout));
   if(saveStatusLayout.shown.splitTop!==saveStatusLayout.idle.splitTop)throw new Error('保存状态出现会推动代码编辑器：'+JSON.stringify(saveStatusLayout));
   if(saveStatusLayout.shown.statusLeft!==saveStatusLayout.idle.statusLeft||saveStatusLayout.shown.elapsedLeft!==saveStatusLayout.idle.elapsedLeft)throw new Error('保存状态出现会挤动底部状态栏：'+JSON.stringify(saveStatusLayout));
-  if(saveStatusLayout.infoHitId!=='btn-info')throw new Error('「信息」按钮被提示层遮挡：'+JSON.stringify(saveStatusLayout));
+  if(saveStatusLayout.probeHitId!==saveStatusLayout.probeId)throw new Error('工具栏按钮被提示层遮挡：'+JSON.stringify(saveStatusLayout));
   await idePage.evaluate(()=>MONACO_EDITOR.setPosition({lineNumber:2,column:3}));
   await idePage.waitForFunction(()=>document.getElementById('editor-position').textContent==='Ln 2, Col 3');
   const proxySync=await idePage.evaluate(()=>{MONACO_EDITOR.setValue('int main(void) {\n  return 0;\n}');return document.getElementById('code-edit').value;});
