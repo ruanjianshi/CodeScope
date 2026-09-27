@@ -212,7 +212,7 @@ void bubbleSort(Array& values);
   const output = [];
   child = spawn(process.execPath, ['server.js'], {
     cwd: projectRoot,
-    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_DSH_AUTOSTART:'0' },
+    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_DSH_AUTOSTART:'0',CODESCOPE_AUTO_OFFICE:'0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (chunk) => output.push(String(chunk)));

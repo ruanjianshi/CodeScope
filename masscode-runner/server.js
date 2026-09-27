@@ -3141,6 +3141,36 @@ function onlyOfficeBrowserUrl(req) {
 async function onlyOfficeHealth() {
   return OFFICE_ENGINE.probeOnlyOffice();
 }
+/* ONLYOFFICE 自动准备：npm 的 prestart/preweb 只在 `npm start` 时执行，
+   直接 `node server.js`、start.command 或桌面端启动都会跳过，因此服务端启动时自行补一次。
+   设置 CODESCOPE_AUTO_OFFICE=0（测试/CI）或在 CODESCOPE_ONLYOFFICE_URL 显式指定地址时不代管。 */
+let OFFICE_ENSURE_RUNNING = false;
+function runOfficeEnsure(reason) {
+  if (OFFICE_ENSURE_RUNNING) return;
+  try {
+    if (String(process.env.CODESCOPE_AUTO_OFFICE || '') === '0') return;
+    if (process.env.CODESCOPE_ONLYOFFICE_URL) return;
+    const script = path.join(__dirname, 'scripts', 'ensure-onlyoffice.js');
+    if (!fs.existsSync(script)) return;
+    OFFICE_ENSURE_RUNNING = true;
+    console.log('ONLYOFFICE 未就绪，正在后台自动准备（' + reason + '）…');
+    const child = spawn(process.execPath, [script], { cwd: __dirname, env: process.env, stdio: 'ignore' });
+    child.on('exit', (code) => {
+      try { ONLYOFFICE_CONNECTION = readOnlyOfficeConnection(); } catch (_) {}
+      console.log('ONLYOFFICE 自动准备结束（退出码 ' + code + '）：' + (ONLYOFFICE_CONNECTION.publicUrl || '仍未配置服务地址'));
+      OFFICE_ENSURE_RUNNING = false;
+    });
+    child.on('error', () => { OFFICE_ENSURE_RUNNING = false; });
+  } catch (_) { OFFICE_ENSURE_RUNNING = false; }
+}
+function ensureOnlyOfficeWhenNeeded() {
+  if (String(process.env.CODESCOPE_AUTO_OFFICE || '') === '0') return;
+  if (!ONLYOFFICE_CONNECTION.publicUrl) return runOfficeEnsure('尚未配置服务地址');
+  onlyOfficeHealth()
+    .then((health) => { if (!health || !health.ok) runOfficeEnsure('健康检查未通过：' + ((health && health.error) || '无响应')); })
+    .catch(() => runOfficeEnsure('健康检查异常'));
+}
+
 async function onlyOfficeCommand(command) {
   if (!ONLYOFFICE_CONNECTION.publicUrl) throw requestError('ONLYOFFICE Docs 尚未配置', 503);
   const payload = { ...command };
@@ -4160,6 +4190,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/api/env') {
       const force = u.searchParams.get('refresh') === '1';
+      // 自动准备完成或用户在“连接设置”里改了地址后，重新检测时同步读取，避免必须重启
+      if (force) { try { ONLYOFFICE_CONNECTION = readOnlyOfficeConnection(); } catch (_) {} }
       const detected = await getEnv(force);
       const env = detected.tools;
       const runtime = runtimeReadiness();
@@ -5502,6 +5534,8 @@ server.listen(PORT, HOST, () => {
     console.log('⚠ 当前为局域网模式：终端、代码运行和文件修改接口可被同网段设备访问。');
   }
   try { console.log('Vault: ' + vaultPath()); } catch (e) { console.log('Vault: ' + e.message); }
+  // 启动后台自动准备 ONLYOFFICE（不阻塞服务；测试用 CODESCOPE_AUTO_OFFICE=0 关闭）
+  setTimeout(() => { try { ensureOnlyOfficeWhenNeeded(); } catch (_) {} }, 1500);
   try { KNOWLEDGE.start(); console.log('知识库: VitePress 自动生成已启用'); } catch (e) { console.log('知识库初始化失败: ' + e.message); }
   // 清扫上次服务留下的运行临时目录（正常退出会由 TTL 回收，强杀则依赖这里）
   try { const swept = sweepTempDirs(); if (swept) console.log('已清理运行临时目录: ' + swept + ' 个'); } catch (_) {}

@@ -21,6 +21,38 @@ if [ "${#TOOLS[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# macOS 图形环境常缺少登录 shell 的 PATH，先补 TeX 目录，便于正确判断“已安装”
+if [ "$(uname -s)" = "Darwin" ]; then
+  for texdir in /Library/TeX/texbin /usr/local/texlive/*/bin/*; do
+    [ -d "$texdir" ] && case ":$PATH:" in *":$texdir:"*) ;; *) PATH="$texdir:$PATH" ;; esac
+  done
+  export PATH
+fi
+
+# 已经能解析到可执行文件的工具直接跳过，避免在已装 TeX Live / MacTeX 的机器上重复下载 4GB
+SKIPPED=()
+REMAIN=()
+for tool in "${TOOLS[@]}"; do
+  case "$tool" in
+    node) bin=node ;; npx) bin=npx ;; python3) bin=python3 ;; bash) bin=bash ;;
+    gcc) bin=gcc ;; gpp) bin=g++ ;; java) bin=javac ;; ruby) bin=ruby ;; swift) bin=swift ;;
+    go|gofmt) bin=go ;; clangformat) bin=clang-format ;; black) bin=black ;;
+    latex) bin=xelatex ;; biber) bin=biber ;; ctex) bin=kpsewhich ;; ssh) bin=ssh ;;
+    *) bin="$tool" ;;
+  esac
+  if command -v "$bin" >/dev/null 2>&1; then
+    printf '已安装，跳过：%s（%s：%s）\n' "$tool" "$bin" "$(command -v "$bin")"
+    SKIPPED+=("$tool")
+  else
+    REMAIN+=("$tool")
+  fi
+done
+if [ "${#SKIPPED[@]}" -gt 0 ] && [ "${#REMAIN[@]}" -eq 0 ]; then
+  echo "所需工具均已安装，无需部署。"
+  exit 0
+fi
+TOOLS=("${REMAIN[@]}")
+
 contains_tool() {
   local wanted="$1" item
   for item in "${TOOLS[@]}"; do [ "$item" = "$wanted" ] && return 0; done

@@ -17,6 +17,39 @@ function uniq(values) {
   });
 }
 
+/* macOS：读取 /etc/paths.d/*（系统与安装器注册的 PATH 片段，例如 TeX 的 /Library/TeX/texbin）。
+   图形界面或 launchd 启动的应用继承不到登录 shell 的 PATH，这里补齐，避免把已装工具误判为缺失。 */
+function systemPathDirs() {
+  if (process.platform !== 'darwin') return [];
+  const dirs = [];
+  let names = [];
+  try { names = fs.readdirSync('/etc/paths.d'); } catch (_) { return dirs; }
+  for (const name of names) {
+    try {
+      for (const line of fs.readFileSync(path.join('/etc/paths.d', name), 'utf8').split(/\r?\n/)) {
+        const value = line.trim();
+        if (value && !value.startsWith('#')) dirs.push(value);
+      }
+    } catch (_) {}
+  }
+  return dirs;
+}
+
+/* TeX Live / MacTeX 的可执行目录：latex、xelatex、biber、kpsewhich 都在这里 */
+function texLiveDirs() {
+  const dirs = ['/Library/TeX/texbin'];
+  if (process.platform !== 'darwin' && process.platform !== 'linux') return dirs;
+  let years = [];
+  try { years = fs.readdirSync('/usr/local/texlive'); } catch (_) { return dirs; }
+  for (const year of years) {
+    const binRoot = path.join('/usr/local/texlive', year, 'bin');
+    let flavours = [];
+    try { flavours = fs.readdirSync(binRoot); } catch (_) { continue; }
+    for (const flavour of flavours) dirs.push(path.join(binRoot, flavour));
+  }
+  return dirs;
+}
+
 function portableToolPaths(current = process.env.PATH || '') {
   const home = os.homedir();
   const dirs = current.split(path.delimiter).filter(Boolean);
@@ -37,6 +70,7 @@ function portableToolPaths(current = process.env.PATH || '') {
     path.join(home, '.cargo', 'bin'),
     path.join(home, '.npm-global', 'bin'),
   );
+  dirs.push(...texLiveDirs(), ...systemPathDirs());
   return uniq(dirs).join(path.delimiter);
 }
 

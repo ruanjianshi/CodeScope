@@ -62,11 +62,30 @@ function run(command, args, quiet = false) {
   return result.status === 0;
 }
 
+// 自带（Docker Compose）托管的本地实例地址：未配置过连接时也按它准备，
+// 这样全新机器上也能自动就绪，而不是直接放弃。
+const MANAGED_URL = 'http://127.0.0.1:8088';
+
+function saveManagedConnection(url) {
+  try {
+    const file = path.join(dataRoot(), 'office-connection.json');
+    let saved = {};
+    try { saved = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) {}
+    if (saved.publicUrl === url) return;
+    fs.mkdirSync(dataRoot(), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ publicUrl: url, callbackBase: saved.callbackBase || '', jwtSecret: saved.jwtSecret || '' }, null, 2));
+    console.log('已记录 ONLYOFFICE 服务地址：' + url);
+  } catch (_) {}
+}
+
 async function main() {
-  const serviceUrl = connectionUrl();
-  if (!serviceUrl || !isManagedLocalUrl(serviceUrl) || !fs.existsSync(composeFile)) return;
+  const configured = connectionUrl();
+  const serviceUrl = configured || MANAGED_URL;
+  // 用户显式配置了外部地址时，只有“本机托管实例”才由我们负责启停
+  if (!isManagedLocalUrl(serviceUrl) || !fs.existsSync(composeFile)) return;
   if (await healthy(serviceUrl)) {
     console.log('ONLYOFFICE Docs 已运行：' + serviceUrl);
+    if (!configured) saveManagedConnection(serviceUrl);
     return;
   }
 
@@ -92,6 +111,7 @@ async function main() {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     if (await healthy(serviceUrl)) {
       console.log('ONLYOFFICE Docs 已就绪：' + serviceUrl);
+      if (!configured) saveManagedConnection(serviceUrl);
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
