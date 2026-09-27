@@ -324,6 +324,15 @@
   #tagbar { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--border); max-height: 38vh; overflow-y: auto; }
   #tagbar.hidden { display: none; }
   #tagbar .tchip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 标签多时的整理：筛选框 / 「显示全部」开关 / 未被使用的标签灰显 */
+  #tag-filter-wrap { padding: 0 10px 6px; }
+  #tag-filter-wrap.hidden { display: none; }
+  #tag-filter { width: 100%; box-sizing: border-box; min-height: 24px; padding: 3px 8px; border: 1px solid color-mix(in srgb,var(--border) 80%,transparent); border-radius: var(--ui-radius-sm); background: var(--control,var(--panel2)); color: var(--text); font-size: 11px; outline: none; }
+  #tag-filter::placeholder { color: color-mix(in srgb,var(--dim) 78%,transparent); }
+  #tag-filter:focus { border-color: color-mix(in srgb,var(--accent) 55%,var(--border)); box-shadow: 0 0 0 2px color-mix(in srgb,var(--accent) 16%,transparent); }
+  #tagbar .tchip-more { justify-content: center; color: var(--accent); border-style: dashed; }
+  #tagbar .tchip-zero { opacity: .58; }
+  #tagbar .tag-empty-note { grid-column: 1 / -1; padding: 6px 2px; color: var(--dim); font-size: 11px; }
   #tag-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px 6px; cursor: pointer; color: var(--dim); font-size: 12px; font-weight: 600; user-select: none; border-top: 1px solid var(--border); }
   #tag-head:hover { color: var(--text); }
   #tag-head .arrow { width: 14px; text-align: center; flex: none; font-size: 10px; transition: transform .12s; }
@@ -3378,6 +3387,7 @@
         <span id="tag-active" class="tag-active"></span>
         <span id="tag-count" class="count"></span>
       </div>
+      <div id="tag-filter-wrap" class="hidden"><input id="tag-filter" type="search" placeholder="筛选标签…" autocomplete="off" spellcheck="false" aria-label="筛选标签"></div>
       <div id="tagbar"></div>
     </div>
     <div class="hsplit" id="h-draw" title="拖拽调整绘图面板高度"></div>
@@ -7520,26 +7530,119 @@ function restoreTimeline() {
   });
 }
 
-// 标签栏：全部 + 各标签（含数量），点击多选（AND）
+// 标签栏：全部 + 各标签（含数量，按使用次数排序），点击多选（AND）
+// 标签多时：显示筛选框，默认只列前 8 个（「显示全部」展开），右键可重命名/合并/删除
+let TAG_FILTER = '';
+let TAG_EXPANDED = false;
+const TAG_PREVIEW = 8;
+function tagUseCount(id) { return SNIPPETS.filter((s) => s.tagIds && s.tagIds.includes(id)).length; }
 function renderTagBar() {
   const bar = $('tagbar');
   bar.classList.toggle('hidden', tagsHidden);
   bar.innerHTML = '';
-  const countFor = (id) => SNIPPETS.filter(s => s.tagIds && s.tagIds.includes(id)).length;
-  const mk = (label, isAll, id) => {
+  const wrap = $('tag-filter-wrap'), input = $('tag-filter');
+  if (wrap) wrap.classList.toggle('hidden', tagsHidden || TAGS.length <= TAG_PREVIEW);
+  if (input) {
+    if (input.value !== TAG_FILTER) input.value = TAG_FILTER;
+    if (!input.__tagWired) {
+      input.__tagWired = true;
+      input.addEventListener('input', () => { TAG_FILTER = input.value; renderTagBar(); });
+      input.addEventListener('keydown', (event) => { if (event.key === 'Escape') { input.value = ''; TAG_FILTER = ''; renderTagBar(); } });
+    }
+  }
+  const mk = (label, isAll, id, extra) => {
     const c = document.createElement('span');
-    c.className = 'tchip' + (isAll ? ' tchip-all' : '') + (activeTags.has(id) || (isAll && activeTags.size === 0) ? ' on' : '');
+    c.className = 'tchip' + (isAll ? ' tchip-all' : '') + (activeTags.has(id) || (isAll && activeTags.size === 0) ? ' on' : '') + (extra || '');
     c.innerHTML = escapeHtml(label);
-    if (!isAll) c.innerHTML += ` <span class="tc">${countFor(id)}</span>`;
+    if (!isAll) c.innerHTML += ` <span class="tc">${tagUseCount(id)}</span>`;
     c.onclick = () => {
       if (isAll) activeTags.clear();
       else activeTags.has(id) ? activeTags.delete(id) : activeTags.add(id);
       renderTagBar(); renderTagHead(); renderList();
     };
     bar.appendChild(c);
+    return c;
   };
   mk(activeTags.size ? '✕ 清除筛选' : '全部', true, -1);
-  for (const t of TAGS) mk(t.name, false, t.id);
+  const query = TAG_FILTER.trim().toLowerCase();
+  const sorted = TAGS
+    .map((t) => ({ tag: t, count: tagUseCount(t.id) }))
+    .filter((row) => !query || String(row.tag.name).toLowerCase().includes(query))
+    .sort((a, b) => (b.count - a.count) || String(a.tag.name).localeCompare(String(b.tag.name), 'zh-Hans-CN'));
+  const visible = (query || TAG_EXPANDED) ? sorted : sorted.slice(0, TAG_PREVIEW);
+  for (const row of visible) {
+    const chip = mk(row.tag.name, false, row.tag.id, row.count ? '' : ' tchip-zero');
+    chip.title = `${row.tag.name} · ${row.count} 个片段（右键管理）`;
+    chip.oncontextmenu = (event) => { event.preventDefault(); event.stopPropagation(); tagContextMenu(event, row.tag); };
+  }
+  if (!query && sorted.length > TAG_PREVIEW) {
+    const more = document.createElement('span');
+    more.className = 'tchip tchip-more';
+    more.textContent = TAG_EXPANDED ? '收起' : `显示全部（${sorted.length}）`;
+    more.title = TAG_EXPANDED ? '只显示最常用的 8 个' : '展开全部标签';
+    more.onclick = () => { TAG_EXPANDED = !TAG_EXPANDED; renderTagBar(); };
+    bar.appendChild(more);
+  }
+  if (query && !sorted.length) {
+    const none = document.createElement('span');
+    none.className = 'tag-empty-note';
+    none.textContent = '没有匹配的标签';
+    bar.appendChild(none);
+  }
+}
+
+/* 标签右键管理：筛选 / 重命名 / 合并到其他标签 / 删除 */
+function tagContextMenu(event, tag) {
+  const count = tagUseCount(tag.id);
+  showContextMenu(event, [
+    {
+      icon: activeTags.has(tag.id) ? '✕' : '⚲',
+      label: activeTags.has(tag.id) ? '取消筛选' : '筛选此标签',
+      hint: count + ' 个片段',
+      run: () => {
+        activeTags.has(tag.id) ? activeTags.delete(tag.id) : activeTags.add(tag.id);
+        renderTagBar(); renderTagHead(); renderList();
+      },
+    },
+    { type: 'separator' },
+    { icon: '✎', label: '重命名标签…', run: () => renameTag(tag) },
+    { icon: '⇥', label: '合并到其他标签…', hint: count ? '片段改挂到另一个标签' : '该标签未被使用', disabled: !count, run: () => mergeTag(tag) },
+    { icon: '🗑', label: '删除标签', hint: count ? '将从 ' + count + ' 个片段移除' : '未被使用', danger: true, run: () => deleteTag(tag) },
+  ]);
+}
+async function tagUpdate(body) {
+  const r = await api('/api/tags/update', body);
+  if (!r || !r.ok) { setStatus('err', (r && r.error) || '标签操作失败'); return null; }
+  setStatus('ok', r.message || '标签已更新');
+  activeTags.delete(Number(body.id));
+  await refresh(true);
+  renderTagBar(); renderTagHead(); renderList();
+  return r;
+}
+async function renameTag(tag) {
+  const next = prompt('重命名标签「' + tag.name + '」为：', tag.name);
+  if (next === null) return;
+  const name = String(next).trim();
+  if (!name || name === tag.name) return;
+  await tagUpdate({ action: 'rename', id: tag.id, name });
+}
+async function deleteTag(tag) {
+  const count = tagUseCount(tag.id);
+  const ok = confirm(count
+    ? `删除标签「${tag.name}」？\n将从 ${count} 个片段中移除该标签（片段内容不变）。`
+    : `删除标签「${tag.name}」？\n该标签当前没有被任何片段使用。`);
+  if (!ok) return;
+  await tagUpdate({ action: 'delete', id: tag.id });
+}
+async function mergeTag(tag) {
+  const options = TAGS.filter((t) => t.id !== tag.id).map((t) => t.name).slice(0, 40);
+  const answer = prompt('把「' + tag.name + '」合并到哪个标签？\n（输入已有标签名，可用标签：' + (options.join('、') || '无') + '）', '');
+  if (answer === null) return;
+  const name = String(answer).trim();
+  if (!name) return;
+  const target = TAGS.find((t) => t.id !== tag.id && t.name === name);
+  if (!target) { setStatus('err', '没有找到标签「' + name + '」，请先确认名称'); return; }
+  await tagUpdate({ action: 'merge', id: tag.id, targetId: target.id });
 }
 
 // 标签栏折叠标题：箭头 + 计数 + 已选标签摘要

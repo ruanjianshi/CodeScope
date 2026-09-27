@@ -977,6 +977,59 @@ function syncTags(st, names) {
   return ids;
 }
 
+/* 重写所有片段 frontmatter 里的 tags 列表（只动 tags 那几行，其余内容原样保留）。
+   fromId 换成 toId；toId 为 null 表示删除该标签。返回被改动的片段数。 */
+function retagSnippets(fromId, toId) {
+  const codeRoot = path.join(vaultPath(), 'code');
+  let changed = 0;
+  const rewriteFile = (full) => {
+    let text;
+    try { text = fs.readFileSync(full, 'utf8'); } catch (_) { return; }
+    const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!m) return;
+    const lines = m[1].split('\n');
+    const out = [];
+    let touched = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/^\s*tags\s*:/.test(line)) { out.push(line); continue; }
+      const indent = (line.match(/^\s*/) || [''])[0];
+      const ids = [];
+      const inline = line.match(/\[([^\]]*)\]/);
+      if (inline) for (const piece of inline[1].split(',')) { const n = Number(String(piece).trim()); if (Number.isFinite(n)) ids.push(n); }
+      let j = i + 1;
+      while (j < lines.length && /^\s*-\s*\d+\s*$/.test(lines[j])) { ids.push(Number(lines[j].trim().replace(/^-\s*/, ''))); j++; }
+      const next = [];
+      for (const value of ids) {
+        const mapped = value === fromId ? toId : value;
+        if (mapped === null || mapped === undefined) { touched = true; continue; }
+        if (!next.includes(mapped)) next.push(mapped);
+      }
+      if (ids.includes(fromId)) touched = true;
+      out.push(indent + 'tags:');
+      for (const value of next) out.push(indent + '  - ' + value);
+      i = j - 1;
+    }
+    if (!touched) return;
+    const nextText = text.slice(0, m.index) + '---\n' + out.join('\n') + '\n---' + text.slice(m.index + m[0].length);
+    const tmp = full + '.tags-tmp';
+    try { fs.writeFileSync(tmp, nextText, 'utf8'); fs.renameSync(tmp, full); changed++; }
+    catch (_) { try { fs.unlinkSync(tmp); } catch (__) {} }
+  };
+  const walk = (dir) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (entry.name.toLowerCase().endsWith('.md')) rewriteFile(full);
+    }
+  };
+  walk(codeRoot);
+  return changed;
+}
+
 /* 版本指纹：所有片段文件的 路径+mtime+大小 的哈希，用于前端实时同步检测。
    也纳入 state.json（标签/计数）与 .meta.yaml（文件夹元数据），保证新增/改名标签也能触发同步 */
 function computeRev() {
@@ -4313,6 +4366,46 @@ const server = http.createServer(async (req, res) => {
       // 保存成功后记录“覆盖前”的内容，保证时间线第一项就能真正撤回本次编辑。
       if (written) recordTimeline(b.file, b.fragment, frag.code, '自动保存');
       return send(res, 200, { ok: written, written, message: written ? '已保存到 vault（massCode 会实时同步）' : '保存失败：未能定位片段代码块' });
+    }
+    /* 标签管理：重命名（只改注册表）/ 删除 / 合并（重写片段 frontmatter 的 tags） */
+    if (req.method === 'POST' && u.pathname === '/api/tags/update') {
+      const b = await readBody(req);
+      const st = readState();
+      if (!Array.isArray(st.tags)) st.tags = [];
+      const id = Number(b.id);
+      const tag = st.tags.find((t) => Number(t.id) === id);
+      if (!tag) return send(res, 200, { ok: false, error: '标签不存在（vault 可能已变动）' });
+      const action = String(b.action || '').trim();
+      if (action === 'rename') {
+        const name = String(b.name || '').trim();
+        if (!name) return send(res, 200, { ok: false, error: '标签名不能为空' });
+        if (name.length > 60) return send(res, 200, { ok: false, error: '标签名过长' });
+        if (st.tags.some((t) => Number(t.id) !== id && t.name === name)) return send(res, 200, { ok: false, error: '已存在同名标签「' + name + '」' });
+        const before = tag.name;
+        tag.name = name;
+        tag.updatedAt = Date.now();
+        writeState(st);
+        return send(res, 200, { ok: true, message: '标签「' + before + '」已重命名为「' + name + '」（片段保存的是标签 id，无需改动片段）' });
+      }
+      if (action === 'delete' || action === 'merge') {
+        let targetId = null;
+        if (action === 'merge') {
+          targetId = Number(b.targetId);
+          if (targetId === id) return send(res, 200, { ok: false, error: '不能合并到自己' });
+          if (!st.tags.some((t) => Number(t.id) === targetId)) return send(res, 200, { ok: false, error: '目标标签不存在' });
+        }
+        const changed = retagSnippets(id, targetId);
+        st.tags = st.tags.filter((t) => Number(t.id) !== id);
+        writeState(st);
+        return send(res, 200, {
+          ok: true,
+          changed,
+          message: action === 'delete'
+            ? '已删除标签「' + tag.name + '」，并从 ' + changed + ' 个片段移除'
+            : '已把「' + tag.name + '」合并，' + changed + ' 个片段改用目标标签',
+        });
+      }
+      return send(res, 200, { ok: false, error: '未知标签操作：' + action });
     }
     if (req.method === 'POST' && u.pathname === '/api/reorder') {
       const b = await readBody(req);

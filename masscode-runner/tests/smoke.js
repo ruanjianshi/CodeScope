@@ -666,6 +666,61 @@ void bubbleSort(Array& values);
   const compactItem = await requestJson(baseUrl, '/api/timeline/item?file=' + encodeURIComponent(snippetFile) + '&fragment=0&id=' + encodeURIComponent(compactTimeline.entries[0].id));
   assert(compactItem.diff.includes('return 0') && compactItem.diff.includes('return 2'), '合并后的时间线没有保留编辑会话起点');
 
+  /* 标签管理：重命名只改注册表（片段存的是 id）；删除/合并重写片段 frontmatter 的 tags 行 */
+  const tagDemoFile = path.join(vault, 'code', 'tags-demo.md');
+  fs.writeFileSync(tagDemoFile, `---
+contents:
+  - id: 1
+    label: tags
+    language: c
+createdAt: 1
+description: tags test
+folderId: null
+id: 9
+isDeleted: 0
+isFavorites: 0
+name: Tags Demo
+tags:
+  - 1
+updatedAt: 1
+---
+
+## Fragment: tags
+\`\`\`c
+int main(void) { return 0; }
+\`\`\`
+`);
+  const tagStateDir = path.join(vault, 'code', '.masscode');
+  fs.mkdirSync(tagStateDir, { recursive: true });
+  fs.writeFileSync(path.join(tagStateDir, 'state.json'), JSON.stringify({
+    version: 3, counters: { contentId: 1, folderId: 1, snippetId: 1, tagId: 3 },
+    folderIdByPath: {}, folderUi: {}, snippets: [],
+    tags: [{ createdAt: 1, id: 1, name: 'Alpha', updatedAt: 1 }, { createdAt: 1, id: 2, name: 'Beta', updatedAt: 1 }],
+  }, null, 2));
+  const renamed = await postJson(baseUrl, '/api/tags/update', { action: 'rename', id: 1, name: 'Alpha2' });
+  assert(renamed.ok, '标签重命名失败：' + JSON.stringify(renamed));
+  let tagSnap = await requestJson(baseUrl, '/api/snippets');
+  assert(tagSnap.tags.some((t) => t.id === 1 && t.name === 'Alpha2'), '标签重命名未写入注册表');
+  const demoBefore = tagSnap.snippets.find((s) => s.file === tagDemoFile);
+  assert(demoBefore && demoBefore.tagIds.includes(1), '重命名后片段的标签 id 不应变化（片段无需改动）');
+  assert(!(await postJson(baseUrl, '/api/tags/update', { action: 'rename', id: 1, name: 'Beta' })).ok, '重命名为已存在标签应被拒绝');
+  assert(!(await postJson(baseUrl, '/api/tags/update', { action: 'rename', id: 1, name: '   ' })).ok, '空标签名应被拒绝');
+  const merged = await postJson(baseUrl, '/api/tags/update', { action: 'merge', id: 1, targetId: 2 });
+  assert(merged.ok && merged.changed === 1, '标签合并失败：' + JSON.stringify(merged));
+  tagSnap = await requestJson(baseUrl, '/api/snippets');
+  const demoMerged = tagSnap.snippets.find((s) => s.file === tagDemoFile);
+  assert(demoMerged && demoMerged.tagIds.includes(2) && !demoMerged.tagIds.includes(1), '合并后片段未改挂到目标标签');
+  assert(!tagSnap.tags.some((t) => t.id === 1), '合并后源标签未从注册表移除');
+  const deletedTag = await postJson(baseUrl, '/api/tags/update', { action: 'delete', id: 2 });
+  assert(deletedTag.ok && deletedTag.changed === 1, '标签删除失败：' + JSON.stringify(deletedTag));
+  tagSnap = await requestJson(baseUrl, '/api/snippets');
+  const demoDeleted = tagSnap.snippets.find((s) => s.file === tagDemoFile);
+  assert(demoDeleted && demoDeleted.tagIds.length === 0, '删除标签后片段仍引用该标签');
+  assert(!tagSnap.tags.some((t) => t.id === 2), '删除后标签仍在注册表');
+  const demoRaw = fs.readFileSync(tagDemoFile, 'utf8');
+  assert(demoRaw.includes('int main(void) { return 0; }') && demoRaw.includes('name: Tags Demo') && /^tags:\n(?!  - )/m.test(demoRaw), '标签重写破坏了片段其他内容：' + demoRaw.slice(0, 120));
+  assert(!(await postJson(baseUrl, '/api/tags/update', { action: 'delete', id: 99999 })).ok, '不存在的标签应被拒绝');
+
   const git = await requestJson(baseUrl, '/api/git');
   const changedPath = path.relative(tempRoot, snippetFile).split(path.sep).join('/');
   assert(git.ok && git.changes.some((item) => item.path === changedPath), 'Git 状态未识别保存后的文件变化');

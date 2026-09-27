@@ -60,6 +60,14 @@ async function main() {
   const executablePath=browserExecutable();
   if(!executablePath){console.log('CodeScope browser smoke: skipped（未找到 Chrome/Chromium，可用 CODESCOPE_BROWSER 指定）');return;}
  fs.mkdirSync(path.join(vault,'code'),{recursive:true});
+  // 标签注册表夹具：9 个标签（>8 会触发筛选框与「显示全部」折叠），供标签面板回归断言使用
+  const tagRegDir = path.join(vault, 'code', '.masscode');
+  fs.mkdirSync(tagRegDir, { recursive: true });
+  fs.writeFileSync(path.join(tagRegDir, 'state.json'), JSON.stringify({
+    version: 3, counters: { contentId: 1, folderId: 1, snippetId: 1, tagId: 10 },
+    folderIdByPath: {}, folderUi: {}, snippets: [],
+    tags: ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota'].map((name, i) => ({ createdAt: 1, id: i + 1, name, updatedAt: 1 })),
+  }, null, 2));
   const longMarkdown=['# Anchor Sync Guide','',...Array.from({length:36},(_,index)=>`## Section ${index+1}\n\n第 ${index+1} 节包含用于校验源码与预览双向同步的正文。\n\n| 项目 | 值 |\n| --- | --- |\n| 行号 | ${index+1} |`).join('\n\n')].join('\n');
   fs.writeFileSync(path.join(tempRoot,'package.json'),JSON.stringify({name:'codescope-browser-fixture',private:true,scripts:{test:'node -e "process.exit(0)"'}},null,2));
  fs.writeFileSync(path.join(vault,'code','reading.md'),`---
@@ -240,6 +248,44 @@ print(r.run())
   await page.locator('#knowledge-close').click();
   const knowledgeBuild=await fetch(baseUrl+'/api/knowledge/build',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(response=>response.json());
   if(knowledgeBuild.phase!=='ready')throw new Error('浏览器回归中的知识库构建失败：'+JSON.stringify(knowledgeBuild));
+  /* 标签面板：标签多时显示筛选框、默认只列 8 个 + 「显示全部」，右键可管理 */
+  {
+    const tagCounts = await page.evaluate(() => {
+      const tagChips = [...document.querySelectorAll('#tagbar .tchip')];
+      return {
+        filterVisible: !document.getElementById('tag-filter-wrap').classList.contains('hidden'),
+        tags: tagChips.filter((node) => !node.classList.contains('tchip-all') && !node.classList.contains('tchip-more')).length,
+        total: tagChips.length,
+        more: (document.querySelector('#tagbar .tchip-more') || {}).textContent || '',
+      };
+    });
+    if (!tagCounts.filterVisible) throw new Error('标签超过 8 个时应显示筛选框：' + JSON.stringify(tagCounts));
+    if (tagCounts.tags !== 8 || tagCounts.total !== 10 || tagCounts.more !== '显示全部（9）') throw new Error('标签栏未折叠为 8 个 + 「显示全部」：' + JSON.stringify(tagCounts));
+    await page.locator('#tagbar .tchip-more').click();
+    const expandedTags = await page.evaluate(() => ({
+      tags: [...document.querySelectorAll('#tagbar .tchip')].filter((node) => !node.classList.contains('tchip-all') && !node.classList.contains('tchip-more')).length,
+      more: (document.querySelector('#tagbar .tchip-more') || {}).textContent || '',
+    }));
+    if (expandedTags.tags !== 9 || expandedTags.more !== '收起') throw new Error('「显示全部」未展开全部标签：' + JSON.stringify(expandedTags));
+    await page.locator('#tag-filter').fill('Theta');
+    const filteredTags = await page.evaluate(() => [...document.querySelectorAll('#tagbar .tchip')].map((node) => node.textContent.trim()));
+    if (filteredTags.length !== 2 || !filteredTags.some((text) => text.startsWith('Theta'))) throw new Error('标签筛选框未按名称过滤：' + JSON.stringify(filteredTags));
+    await page.locator('#tag-filter').fill('');
+    // 应用里任何滚动都会关闭右键菜单，而实时同步会周期性重渲染；被抢关闭时补点一次再断言
+    const openTagMenu = async () => {
+      await page.locator('#tagbar .tchip').nth(1).click({ button: 'right' });
+      try {
+        await page.waitForFunction(() => document.querySelectorAll('#ctx-menu .ctx-item').length > 0, null, { timeout: 2500 });
+      } catch (_) {
+        await page.locator('#tagbar .tchip').nth(1).click({ button: 'right' });
+        await page.waitForFunction(() => document.querySelectorAll('#ctx-menu .ctx-item').length > 0, null, { timeout: 2500 }).catch(() => {});
+      }
+    };
+    await openTagMenu();
+    const tagMenu = await page.evaluate(() => [...document.querySelectorAll('#ctx-menu .ctx-item .ctx-label')].map((node) => node.textContent));
+    if (!['重命名标签…', '合并到其他标签…', '删除标签'].every((text) => tagMenu.includes(text))) throw new Error('标签右键菜单缺少管理项：' + JSON.stringify(tagMenu));
+    await page.keyboard.press('Escape');
+  }
   const knowledgePage=await browser.newPage({viewport:{width:1280,height:800}});
   await knowledgePage.goto(baseUrl+'/knowledge/',{waitUntil:'domcontentloaded'});
   await knowledgePage.getByRole('heading',{name:'我的知识库'}).waitFor({state:'visible'});
