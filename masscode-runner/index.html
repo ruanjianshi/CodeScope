@@ -3336,6 +3336,33 @@
     height: 2px; background: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }
+  /* ── 代码工作区的 Markdown 区块编辑器：与阅读模块完全同一套外观 ── */
+  #md-view.project-md-block {
+    display: block; flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0;
+    background: var(--md-page, var(--theme-code, var(--bg))); overflow: hidden;
+    --md-accent: color-mix(in srgb, var(--ok) 76%, var(--accent));
+    --md-link: color-mix(in srgb, var(--accent) 82%, var(--text));
+    --md-page: var(--theme-code, var(--bg));
+    --md-surface: color-mix(in srgb, var(--panel2) 58%, var(--md-page));
+    --md-surface-hover: color-mix(in srgb, var(--md-accent) 5%, var(--md-page));
+    --md-text: color-mix(in srgb, var(--text) 88%, var(--dim));
+    --md-muted: color-mix(in srgb, var(--dim) 86%, var(--text));
+    --md-measure: 840px;
+  }
+  #md-view.project-md-block > .reading-md-block { display: block; height: 100%; }
+  #md-view.project-md-block .reading-md-block-error { padding: 28px 32px; color: var(--dim); font-size: 13px; }
+  #md-view.project-md-block .reading-md-block-loading {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
+    color: var(--dim); font-size: 13px; letter-spacing: .02em; pointer-events: none;
+  }
+  #md-view.project-md-block .reading-md-block-loading::before {
+    content: ''; width: 13px; height: 13px; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent); border-top-color: var(--accent);
+    animation: mdBlockSpin .7s linear infinite;
+  }
+  #md-view.project-md-block.is-loading { position: relative; }
+  @keyframes mdBlockSpin { to { transform: rotate(360deg); } }
+
   /* ── 面板标题栏细线统一（此前混用 --border / 55% / 硬编码）── */
   html[data-theme] #outline-head,
   html[data-theme] #outline-tools,
@@ -11782,7 +11809,9 @@ function documentModeKey(snippet, index) {
 }
 function documentMode(fragment) {
   if(!fragment)return 'source';
-  const allowed=fragment.language==='markdown'?['source','split','live','preview']:fragment.language==='html'?['source','split','preview']:fragment.language==='latex'?['source','split']:['source'];
+  // Markdown 在代码工作区统一使用“区块编辑”（与阅读模块同一个编辑器），不再有视图模式切换
+  if(fragment.language==='markdown')return 'block';
+  const allowed=fragment.language==='html'?['source','split','preview']:fragment.language==='latex'?['source','split']:['source'];
   let mode='';try{mode=localStorage.getItem(documentModeKey(CURRENT,CINDEX))||'';}catch(_){}
   if(!allowed.includes(mode))mode=(fragment.language==='markdown'||fragment.language==='html'||fragment.language==='latex')?'split':'source';
   return mode;
@@ -11859,11 +11888,100 @@ function chooseCodeReferenceTarget(){
   if(targets.length===1){insertSelectedCodeReference(targets[0].index);return;}
   const menu=$('code-ref-targets');menu.replaceChildren();targets.forEach(({fragment,index})=>{const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');const label=document.createElement('span');label.textContent='引用到 '+fragmentDisplayName(fragment,'Markdown '+(index+1));button.appendChild(label);button.onclick=()=>insertSelectedCodeReference(index);menu.appendChild(button);});menu.classList.remove('hidden');
 }
+/* ── 代码工作区的 Markdown 区块编辑器（与阅读模块共用 window.CodeScopeBlockEditor）──
+   同一片段只挂载一次：renderMain 因保存等原因重绘时不会重建编辑器，焦点与光标位置得以保留。 */
+let PROJECT_BLOCK_EDITOR = null, PROJECT_BLOCK_ID = 0, PROJECT_BLOCK_KEY = '', PROJECT_BLOCK_PENDING = '', PROJECT_OUTLINE_TIMER = 0;
+function projectBlockEditorKey() { return CURRENT ? markdownCaretKey(CURRENT.file, CINDEX) : ''; }
+async function destroyProjectBlockEditor() {
+  PROJECT_BLOCK_ID++;
+  PROJECT_BLOCK_KEY = '';
+  PROJECT_BLOCK_PENDING = '';
+  const current = PROJECT_BLOCK_EDITOR;
+  PROJECT_BLOCK_EDITOR = null;
+  if (current) { try { await current.destroy(); } catch (_) {} }
+}
+async function mountProjectBlockEditor() {
+  const fragment = CURRENT && CURRENT.fragments && CURRENT.fragments[CINDEX];
+  if (!fragment || fragment.language !== 'markdown') return;
+  const view = $('md-view');
+  if (!view) return;
+  const key = projectBlockEditorKey();
+  if (PROJECT_BLOCK_EDITOR && PROJECT_BLOCK_KEY === key) return;
+  // renderCode / renderMain / renderSplitEditors 都会走到这里：同一片段的挂载只做一次，
+  // 否则会连续重建多次区块编辑器（很重），并让布局长时间不稳定。
+  if (PROJECT_BLOCK_PENDING === key) return;
+  await destroyProjectBlockEditor();
+  const id = ++PROJECT_BLOCK_ID;
+  PROJECT_BLOCK_KEY = key;
+  PROJECT_BLOCK_PENDING = key;
+  const host = document.createElement('div');
+  host.className = 'reading-md-block';
+  host.setAttribute('aria-label', 'Markdown 区块编辑器');
+  view.replaceChildren(host);
+  // 提示放在 host 之外：Crepe 创建时会清空 host 内部，放在里面会立刻被抹掉，用户将长时间看不到反馈
+  const loading = document.createElement('div');
+  loading.className = 'reading-md-block-loading';
+  loading.textContent = '正在加载区块编辑器…';
+  view.appendChild(loading);
+  view.classList.add('is-loading');
+  try {
+    if (!window.CodeScopeBlockEditor) throw new Error('区块编辑器资源未加载');
+    const controller = await window.CodeScopeBlockEditor.create({
+      root: host,
+      markdown: String(fragment.code || ''),
+      onChange: (content) => {
+        // Crepe 在挂载时会把 Markdown 规范化一次并回调（并非用户编辑）：
+        // 此时不落盘，避免“只是打开片段”就把文件重写；只有编辑器内获得焦点后的改动才算编辑。
+        const host = document.querySelector('#md-view .reading-md-block');
+        if (!host || !host.contains(document.activeElement)) return;
+        // 复用既有链路：先同步文本代理与 Monaco（editText() 在 Monaco 挂载时读它），再防抖保存
+        const proxy = $('code-edit');
+        if (proxy && proxy.value !== content) proxy.value = content;
+        if (MONACO_EDITOR && MONACO_MAIN_KEY === currentEditorDocumentKey() && MONACO_EDITOR.getValue() !== content) {
+          MONACO_SYNCING = true;
+          try { MONACO_EDITOR.setValue(content); } finally { MONACO_SYNCING = false; }
+        }
+        EDITING = true;
+        clearTimeout(PROJECT_OUTLINE_TIMER);
+        PROJECT_OUTLINE_TIMER = setTimeout(() => { try { renderOutline(); } catch (_) {} }, 150);
+        scheduleSave();      // 自动保存 / 手动保存（含“未保存”标记）都走同一条链路
+      },
+      // 点击 [[code-ref:…]] / [[note-ref:…]] 时沿用既有跳转链路（与阅读模块相同的做法）
+      onReference: (token) => {
+        try {
+          const host = document.createElement('div');
+          host.innerHTML = mdInline(token);
+          const linked = host.querySelector('.md-code-ref,.md-note-ref');
+          if (!linked) return;
+          if (typeof decorateMarkdownLinks === 'function') decorateMarkdownLinks(host);
+          linked.click();
+        } catch (_) {}
+      },
+      onError: (error) => { try { setStatus('err', '区块编辑器：' + String((error && error.message) || error)); } catch (_) {} },
+    });
+    if (id !== PROJECT_BLOCK_ID) { try { await controller.destroy(); } catch (_) {} return; }
+    if (loading.parentNode) loading.remove();
+    view.classList.remove('is-loading');
+    PROJECT_BLOCK_EDITOR = controller;
+    PROJECT_BLOCK_PENDING = '';
+  } catch (error) {
+    PROJECT_BLOCK_PENDING = '';
+    if (loading.parentNode) loading.remove();
+    view.classList.remove('is-loading');
+    if (id !== PROJECT_BLOCK_ID) return;
+    const failed = document.createElement('div');
+    failed.className = 'reading-md-block-error';
+    failed.textContent = '区块编辑器加载失败：' + String((error && error.message) || error);
+    host.replaceChildren(failed);
+  }
+}
+
 function updateDocumentModeTools(fragment) {
   const tools=$('document-mode-tools'),kind=fragment&&fragment.language;
   // LaTeX 自带固定的源码 + PDF 预览工作区，不复用 Markdown/HTML 的视图切换器。
-  const show=!SPLIT_EDITORS.length&&['markdown','html'].includes(kind);
-  tools.classList.toggle('show',show);tools.classList.toggle('markdown',kind==='markdown');
+  // Markdown 已统一为区块编辑，不再需要视图切换；切换器只服务 HTML 的源码/分栏/预览
+  const show=!SPLIT_EDITORS.length&&kind==='html';
+  tools.classList.toggle('show',show);tools.classList.toggle('markdown',false);
   if(!show)return;
   const mode=documentMode(fragment);
   tools.querySelectorAll('[data-doc-mode]').forEach((button)=>{const supported=kind==='markdown'||button.dataset.docMode!=='live';button.style.display=supported?'':'none';button.classList.toggle('on',button.dataset.docMode===mode);});
@@ -12039,30 +12157,43 @@ function applyMdView() {
   $('btn-md').style.display = 'none';
   updateDocumentModeTools(f);
   if(documentKind){
-    const mode=documentMode(f),full=mode==='preview'||mode==='live',split=mode==='split';
-    $('md-view').classList.toggle('project-md-full',kind==='markdown'&&full);
+    const mode=documentMode(f),block=kind==='markdown'&&mode==='block',full=mode==='preview'||mode==='live'||block,split=mode==='split';
+    $('md-view').classList.toggle('project-md-full',kind==='markdown'&&(mode==='preview'||mode==='live'));
     $('md-view').classList.toggle('project-md-live',kind==='markdown'&&mode==='live');
-    $('md-view').contentEditable=kind==='markdown'&&mode==='live'?'true':'false';
+    $('md-view').classList.toggle('project-md-block',block);
+    $('md-view').contentEditable='false';
     $('code-wrap').style.display=full?'none':'';
     applyEditSplit(split);
-    if(kind==='markdown'&&full){
+    if(block){
+      // Markdown：整块交给区块编辑器（与阅读模块同一套外观）
+      $('md-view').style.display='block';
+      $('edit-preview').style.display='none';
+      mountProjectBlockEditor();
+    }else if(kind==='markdown'&&full){
+      destroyProjectBlockEditor();
       const source=EDITING?editText():String(f.code||'');
       markdownLiveHistory('project:'+markdownCaretKey(CURRENT.file,CINDEX),source);
       PROJECT_MD_LIVE_RENDERING=true;$('md-view').innerHTML=renderMarkdown(source);PROJECT_MD_LIVE_RENDERING=false;
       decorateMarkdownLinks($('md-view'));wireProjectMarkdownLive();
       $('md-view').style.display='block';$('edit-preview').style.display='none';
     }else if(kind==='html'&&mode==='preview'){
+      destroyProjectBlockEditor();
       $('md-view').style.display='none';$('md-view').innerHTML='';updateEditPreview();
     }else{
+      destroyProjectBlockEditor();
       $('md-view').style.display='none';$('md-view').innerHTML='';$('md-view').contentEditable='false';
       if(split)updateEditPreview();else $('edit-preview').style.display='none';
       if(split&&kind==='markdown')scheduleSyncMdPreview();
     }
   } else if (EDITING) {
+    destroyProjectBlockEditor();
+    $('md-view').classList.remove('project-md-block');
     $('md-view').style.display = 'none';$('md-view').innerHTML = '';$('md-view').contentEditable='false';
     $('code-wrap').style.display = '';
     $('edit-preview').style.display='none';applyEditSplit(false);
   } else {
+    destroyProjectBlockEditor();
+    $('md-view').classList.remove('project-md-block');
     $('md-view').style.display = 'none';
     $('md-view').innerHTML = '';
     $('md-view').contentEditable='false';

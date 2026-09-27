@@ -488,48 +488,36 @@ print(r.run())
   await page.locator('#code-ref-bar').waitFor({state:'visible'});
   if(await page.locator('#document-mode-tools').getByText('引用代码',{exact:false}).count())throw new Error('Markdown 顶部仍残留旧的引用代码按钮');
   await page.locator('#code-ref-add').click();
-  /* ---- 普通 Markdown / HTML：片段级视图模式、可关闭预览与代码回链 ---- */
-  await page.locator('#tabs .tab').filter({hasText:'README.md'}).locator('span').first().click();
-  try{await page.locator('#document-mode-tools.show.markdown').waitFor({state:'visible',timeout:5000});}catch(error){const state=await page.evaluate(()=>({current:CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX],index:CINDEX,editing:EDITING,splits:SPLIT_EDITORS.length,tools:document.getElementById('document-mode-tools').outerHTML,display:getComputedStyle(document.getElementById('document-mode-tools')).display,pageErrors:[] }));throw new Error('Markdown 模式工具条未显示：'+JSON.stringify(state)+'\n'+error.message);}
-  const modeButtonAlignment=await page.evaluate(()=>{const buttons=[...document.querySelectorAll('#document-mode-tools [data-doc-mode]')].filter(button=>getComputedStyle(button).display!=='none'),rects=buttons.map(button=>({mode:button.dataset.docMode,rect:button.getBoundingClientRect()})),center=rects.reduce((sum,item)=>sum+item.rect.top+item.rect.height/2,0)/rects.length;return rects.map(item=>({mode:item.mode,height:item.rect.height,offset:item.rect.top+item.rect.height/2-center}));});if(modeButtonAlignment.length!==4||modeButtonAlignment.some(item=>Math.abs(item.offset)>.5||Math.abs(item.height-modeButtonAlignment[0].height)>.5))throw new Error('Markdown 视图切换按钮未垂直对齐：'+JSON.stringify(modeButtonAlignment));
-  const markdownSourceState=await page.evaluate(()=>({
-    markdownClass:document.getElementById('code-wrap').classList.contains('markdown-code'),
-    liveHighlight:document.getElementById('code-edit').classList.contains('live-hl'),
-    headingTokens:document.querySelectorAll('#code .hljs-section').length,
-    lineNumbers:document.getElementById('ln').textContent.trim()
+  /* 区块编辑器挂载很重（Crepe 初始化），locator 的可操作性判定容易与重排冲突：这里用真实坐标点击。 */
+  const clickFragmentTab=async(targetPage,label)=>{
+    const box=await targetPage.evaluate((text)=>{const span=[...document.querySelectorAll('#tabs .tab .frag-label')].find(node=>node.textContent.includes(text))||[...document.querySelectorAll('#tabs .tab')].find(node=>node.textContent.includes(text));const r=span.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};},label);
+    await targetPage.mouse.click(box.x,box.y);
+  };
+  /* ---- 普通 Markdown：统一为区块编辑（不再有 源码/分栏/实时/阅读 切换）；HTML 保留自己的源码/分栏/预览 ---- */
+  await clickFragmentTab(page,'README.md');
+  await page.locator('#md-view.project-md-block .reading-md-block .ProseMirror').waitFor({state:'visible',timeout:60000});
+  const markdownBlock=await page.evaluate(()=>({
+    toolsShown:document.getElementById('document-mode-tools').classList.contains('show'),
+    visibleModeButtons:[...document.querySelectorAll('#document-mode-tools [data-doc-mode]')].filter(button=>button.offsetParent!==null).length,
+    mode:documentMode(CURRENT.fragments[CINDEX]),
+    ready:document.querySelector('#md-view .reading-md-block').dataset.editorReady==='true',
+    crepe:!!document.querySelector('#md-view .reading-md-block .milkdown'),
+    sourceHidden:getComputedStyle(document.getElementById('code-wrap')).display==='none',
+    hostWidth:Math.round(document.querySelector('#md-view .reading-md-block').getBoundingClientRect().width),
+    splitWidth:Math.round(document.getElementById('edit-split').getBoundingClientRect().width)
   }));
-  if(!markdownSourceState.markdownClass||!markdownSourceState.liveHighlight||markdownSourceState.headingTokens<1||!markdownSourceState.lineNumbers)throw new Error('兼容编辑器 Markdown 高亮或行号不完整：'+JSON.stringify(markdownSourceState));
-  if(!await page.locator('[data-doc-mode="split"]').evaluate(node=>node.classList.contains('on')))throw new Error('Markdown 默认没有保留源码/渲染分栏');
-  await page.locator('#edit-preview .md-code-ref').waitFor({state:'visible'});
+  if(markdownBlock.toolsShown||markdownBlock.visibleModeButtons!==0)throw new Error('Markdown 仍显示源码/分栏/实时/阅读切换器：'+JSON.stringify(markdownBlock));
+  if(markdownBlock.mode!=='block'||!markdownBlock.ready||!markdownBlock.crepe||!markdownBlock.sourceHidden||markdownBlock.hostWidth<markdownBlock.splitWidth-2)throw new Error('Markdown 区块编辑器未接管编辑区：'+JSON.stringify(markdownBlock));
   const referenceSource=await page.locator('#code-edit').inputValue();
   if(!/\[\[code-ref:.*#fragment=0&line=\d+&end=\d+\|led\.h:\d+/.test(referenceSource))throw new Error('Markdown 未写入可持久化的代码位置引用');
-  await page.locator('[data-doc-mode="source"]').click();
-  if(await page.locator('#edit-preview').isVisible())throw new Error('Markdown 源码模式没有关闭右侧预览');
-  await page.locator('[data-doc-mode="split"]').click();
-  await page.locator('#edit-preview .edit-preview-close').click();
-  if(!await page.locator('[data-doc-mode="source"]').evaluate(node=>node.classList.contains('on')))throw new Error('Markdown 预览关闭后未回到源码模式');
-  await page.locator('[data-doc-mode="live"]').click();
-  const liveMode=page.locator('#md-view.project-md-live');await liveMode.waitFor({state:'visible'});
-  if((await liveMode.getAttribute('contenteditable'))!=='true')throw new Error('Markdown 实时模式不可原位编辑');
-  const liveLayout=await page.evaluate(()=>{const view=document.getElementById('md-view'),host=document.getElementById('edit-split'),vr=view.getBoundingClientRect(),hr=host.getBoundingClientRect();return{full:view.classList.contains('project-md-full'),maxWidth:getComputedStyle(view).maxWidth,width:vr.width,hostWidth:hr.width,left:vr.left,hostLeft:hr.left};});
-  if(!liveLayout.full||liveLayout.maxWidth!=='none'||liveLayout.width<liveLayout.hostWidth-2||Math.abs(liveLayout.left-liveLayout.hostLeft)>2)throw new Error('Markdown 实时模式没有占满工作区：'+JSON.stringify(liveLayout));
-  const projectMdBefore=await page.locator('#code-edit').inputValue();
-  await liveMode.locator('p').last().click();await liveMode.press('End');await liveMode.pressSequentially(' undo-smoke');
-  await page.waitForFunction((before)=>document.getElementById('code-edit').value!==before,projectMdBefore);
+  // 区块编辑器里真实输入：文本代理同步，且 ⌘Z 在编辑器内撤销（不落盘残留）
+  const blockPane=page.locator('#md-view .reading-md-block .ProseMirror');
+  await blockPane.click();await blockPane.press('Control+End');await blockPane.press('Enter');
+  await blockPane.pressSequentially(' markdown-block-smoke');
+  await page.waitForFunction(()=>document.getElementById('code-edit').value.includes('markdown-block-smoke'),null,{timeout:30000});
   await page.keyboard.press('Meta+z');
-  await page.waitForFunction((before)=>document.getElementById('code-edit').value===before,projectMdBefore,{timeout:60000});
-  await page.keyboard.press('Meta+Shift+z');
-  await page.waitForFunction((before)=>document.getElementById('code-edit').value!==before,projectMdBefore);
-  await page.keyboard.press('Meta+z');
-  await page.waitForFunction((before)=>document.getElementById('code-edit').value===before,projectMdBefore,{timeout:60000});
-  await page.locator('[data-doc-mode="preview"]').click();
-  if((await page.locator('#md-view').getAttribute('contenteditable'))!=='false')throw new Error('Markdown 阅读模式仍处于编辑状态');
-  if(!await page.locator('#md-view').evaluate(node=>node.classList.contains('project-md-full')))throw new Error('Markdown 阅读模式没有使用全宽阅读布局');
-  await page.locator('[data-doc-mode="split"]').click();
-  const codeCursorLine=await page.evaluate(()=>{const input=document.getElementById('code-edit'),marker='cursor-sync-target',next=input.value+'\n\n```text\nfirst step\nsecond step\ncursor-sync-target\n```\n\n## Tail\n\nTrailing paragraph one.\n\nTrailing paragraph two.\n\nTrailing paragraph three.\n\nTrailing paragraph four.\n',offset=next.indexOf(marker),line=next.slice(0,offset).split('\n').length-1,lineHeight=parseFloat(getComputedStyle(input).lineHeight)||20;input.value=next;input.dispatchEvent(new Event('input',{bubbles:true}));input.setSelectionRange(offset,offset);input.scrollTop=Math.max(0,line*lineHeight-input.clientHeight*.5);input.focus();input.dispatchEvent(new Event('selectionchange'));return line;});
-  await page.waitForFunction(line=>document.querySelector('#edit-preview .md-cline[data-md-line="'+line+'"]'),codeCursorLine);await page.waitForTimeout(480);
-  const codeCursorAlignment=await page.evaluate(line=>{const sourceY=markdownSourceCursorClientY(line),targets=[...document.querySelectorAll('#edit-preview .md-cline[data-md-line="'+line+'"]')],target=targets[targets.length-1]?.getBoundingClientRect();return target?{sourceY,previewY:target.top,delta:Math.abs(sourceY-target.top)}:null;},codeCursorLine);if(!codeCursorAlignment||codeCursorAlignment.delta>4)throw new Error('Markdown 代码块光标与预览对应行未同高：'+JSON.stringify(codeCursorAlignment));
-  await page.locator('#edit-preview .md-code-ref').click();
+  await page.waitForFunction(()=>!document.getElementById('code-edit').value.includes('markdown-block-smoke'),null,{timeout:30000});
+  await page.locator('#md-view .reading-md-block a[href^="#codescope-ref-"]').first().click();
   if(!(await page.locator('#tabs .tab.active').innerText()).includes('led.h')){const jumpState=await page.evaluate(()=>({current:CURRENT&&CURRENT.file,index:CINDEX,active:document.querySelector('#tabs .tab.active')&&document.querySelector('#tabs .tab.active').textContent,status:document.getElementById('status').textContent,refs:[...document.querySelectorAll('.md-code-ref')].map(node=>({...node.dataset,text:node.textContent}))}));throw new Error('Markdown 代码引用无法回跳到原代码片段：'+JSON.stringify(jumpState));}
   await page.locator('#btn-backlinks').click();
   await page.locator('#backlink-dialog.on').waitFor({state:'visible'});
@@ -537,7 +525,7 @@ print(r.run())
   await page.locator('#backlink-close').click();
   const workspaceInterop=await page.evaluate(()=>({codeLink:workspaceLinkMarkdown(currentWorkspaceTarget()),outline:mmMarkdownOutline('# Root\n\n## Child\n\n- Leaf'),snapshotKey:WORKSPACE_SNAPSHOT_KEY}));
   if(!workspaceInterop.codeLink.startsWith('[[code-ref:')||workspaceInterop.outline.length!==3||workspaceInterop.snapshotKey!=='mc-workspace-snapshot-v1')throw new Error('内部链接、XMind 大纲或工作台快照基础能力异常：'+JSON.stringify(workspaceInterop));
-  await page.locator('#tabs .tab').filter({hasText:'demo.html'}).locator('span').first().click();
+  await clickFragmentTab(page,'demo.html');
   await page.locator('#html-preview-frame').waitFor({state:'visible'});
   await page.locator('#edit-preview .edit-preview-close').click();
   if(await page.locator('#edit-preview').isVisible())throw new Error('HTML 右侧预览无法关闭');
@@ -545,47 +533,29 @@ print(r.run())
   await page.locator('#html-preview-frame').waitFor({state:'visible'});
   if(await page.locator('#code-wrap').isVisible())throw new Error('HTML 全宽预览仍残留源码栏');
   await page.locator('#edit-preview .edit-preview-close').click();
-  await page.locator('#tabs .tab').filter({hasText:'main.tex'}).locator('span').first().click();
+  await clickFragmentTab(page,'main.tex');
   await page.locator('#edit-preview.latex-preview').waitFor({state:'visible'});
   if(await page.locator('#document-mode-tools').isVisible())throw new Error('LaTeX 工作区错误显示 Markdown/HTML 的源码、分栏或阅读切换器');
   await page.locator('#latex-preview-close').click();
   if(await page.locator('#document-mode-tools').isVisible())throw new Error('关闭 LaTeX 预览后文档模式切换器再次出现');
   await page.locator('#btn-run').click();
   await page.locator('#edit-preview.latex-preview').waitFor({state:'visible'});
-  /* ---- Monaco Markdown：快速切换不得串页，双向滚动按源码行锚点同步 ---- */
+  /* ---- 区块编辑器：片段快速切换不得串页 ---- */
   const markdownPage=await browser.newPage({viewport:{width:1440,height:760}}),markdownErrors=[];
   markdownPage.on('pageerror',error=>markdownErrors.push(String(error.message||error)));
   await markdownPage.goto(baseUrl,{waitUntil:'domcontentloaded'});
   await markdownPage.locator('.item').filter({hasText:'Markdown Sync Demo'}).click();
-  await markdownPage.locator('#tabs .tab').filter({hasText:'README.md'}).locator('span').first().click();
-  await markdownPage.waitForFunction(()=>MONACO_EDITOR&&monacoMainActive()&&document.querySelector('#edit-preview .edit-preview-body'));
-  if(!(await markdownPage.locator('#edit-preview .edit-preview-body').innerText()).includes('First Markdown Document'))throw new Error('Monaco Markdown 初始预览未绑定当前片段');
-  await markdownPage.locator('#tabs .tab').filter({hasText:'Guide.md'}).locator('span').first().click();
-  await markdownPage.waitForFunction(()=>monacoMainActive()&&MONACO_MAIN_KEY===currentEditorDocumentKey()&&document.getElementById('edit-preview').dataset.documentKey===currentEditorDocumentKey());
-  const switchedMarkdown=await markdownPage.evaluate(()=>({source:document.getElementById('code-edit').value,preview:document.querySelector('#edit-preview .edit-preview-body')?.innerText||'',key:currentEditorDocumentKey(),previewKey:document.getElementById('edit-preview').dataset.documentKey,monacoKey:MONACO_MAIN_KEY}));
-  if(!switchedMarkdown.source.includes('Anchor Sync Guide')||!switchedMarkdown.preview.includes('Anchor Sync Guide')||switchedMarkdown.preview.includes('只允许显示在第一个片段中'))throw new Error('Markdown 快速切换后左右内容串页：'+JSON.stringify(switchedMarkdown));
-  await markdownPage.evaluate(()=>MONACO_EDITOR.setScrollTop(MONACO_EDITOR.getTopForLineNumber(120)));
-  await markdownPage.waitForTimeout(180);
-  const leftToRight=await markdownPage.evaluate(()=>({sourceLine:Math.round(markdownSourceTopLine()),previewLine:Math.round(interpolateMarkdownAnchors(markdownPreviewAnchors(),document.getElementById('edit-preview').scrollTop,'top','line'))}));
-  if(Math.abs(leftToRight.sourceLine-leftToRight.previewLine)>3)throw new Error('Markdown 左侧滚动未按源码行同步预览：'+JSON.stringify(leftToRight));
-  await markdownPage.evaluate(()=>{const p=document.getElementById('edit-preview'),rows=markdownPreviewAnchors();p.scrollTop=interpolateMarkdownAnchors(rows,36,'line','top');});
-  await markdownPage.waitForTimeout(180);
-  const rightToLeft=await markdownPage.evaluate(()=>({sourceLine:Math.round(markdownSourceTopLine()),previewLine:Math.round(interpolateMarkdownAnchors(markdownPreviewAnchors(),document.getElementById('edit-preview').scrollTop,'top','line'))}));
-  if(Math.abs(rightToLeft.sourceLine-rightToLeft.previewLine)>3)throw new Error('Markdown 右侧滚动未按源码行同步源码：'+JSON.stringify(rightToLeft));
-  const monacoCursorLine=await markdownPage.evaluate(()=>{const model=MONACO_EDITOR.getModel(),marker='monaco-cursor-sync-target',tail=Array.from({length:12},(_,index)=>'Trailing paragraph '+(index+1)+'.').join('\n\n'),next=model.getValue()+'\n\n```text\nfirst step\nsecond step\n'+marker+'\n```\n\n## Cursor Sync Tail\n\n'+tail+'\n',offset=next.indexOf(marker);model.setValue(next);const position=model.getPositionAt(offset);MONACO_EDITOR.setPosition(position);MONACO_EDITOR.revealPositionInCenter(position);MONACO_EDITOR.focus();return position.lineNumber-1;});
-  await markdownPage.waitForFunction(line=>document.querySelector('#edit-preview .md-cline[data-md-line="'+line+'"]'),monacoCursorLine);await markdownPage.evaluate(()=>{const position=MONACO_EDITOR.getPosition(),height=MONACO_EDITOR.getLayoutInfo().height;MONACO_EDITOR.setScrollTop(Math.max(0,MONACO_EDITOR.getTopForLineNumber(position.lineNumber)-height*.42));MONACO_EDITOR.focus();scheduleSyncMdPreview();});await markdownPage.waitForTimeout(680);
-  // 等预览的对齐滚动稳定下来再量（应用是异步对齐；固定等待在慢机器上不够）
-  await markdownPage.evaluate(() => { window.__mdStable = { v: -1, n: 0 }; });
-  await markdownPage.waitForFunction(() => {
-    const p = document.getElementById('edit-preview');
-    const s = window.__mdStable, now = p.scrollTop;
-    if (s.v === now) s.n += 1; else { s.n = 0; s.v = now; }
-    return s.n >= 10;
-  }, null, { timeout: 5000 }).catch(() => {});
-  const monacoCursorAlignment=await markdownPage.evaluate(line=>{const point=MONACO_EDITOR.getScrolledVisiblePosition(MONACO_EDITOR.getPosition()),source=document.getElementById('monaco-main').getBoundingClientRect(),targets=[...document.querySelectorAll('#edit-preview .md-cline[data-md-line="'+line+'"]')],target=targets[targets.length-1]?.getBoundingClientRect(),sourceY=point?source.top+point.top:NaN;return target&&Number.isFinite(sourceY)?{sourceY,previewY:target.top,delta:Math.abs(sourceY-target.top)}:null;},monacoCursorLine);if(!monacoCursorAlignment||monacoCursorAlignment.delta>4)throw new Error('Monaco Markdown 代码块光标与预览对应行未同高：'+JSON.stringify(monacoCursorAlignment));
-  if(markdownErrors.length)throw new Error('Monaco Markdown 浏览器运行错误：'+markdownErrors.join('；'));
+  await clickFragmentTab(markdownPage,'README.md');
+  await markdownPage.waitForSelector('#md-view.project-md-block .reading-md-block[data-editor-ready="true"] .ProseMirror',{timeout:60000});
+  const firstMarkdownPane=await markdownPage.evaluate(()=>document.querySelector('#md-view .reading-md-block .ProseMirror').innerText);
+  if(!firstMarkdownPane.includes('First Markdown Document'))throw new Error('Markdown 区块编辑器未载入当前片段：'+firstMarkdownPane.slice(0,80));
+  await clickFragmentTab(markdownPage,'Guide.md');
+  await markdownPage.waitForFunction(()=>{const pane=document.querySelector('#md-view .reading-md-block .ProseMirror');return !!pane&&pane.innerText.includes('Anchor Sync Guide');},null,{timeout:30000});
+  const switchedMarkdown=await markdownPage.evaluate(()=>({source:document.getElementById('code-edit').value,pane:document.querySelector('#md-view .reading-md-block .ProseMirror').innerText}));
+  if(!switchedMarkdown.source.includes('Anchor Sync Guide')||switchedMarkdown.pane.includes('First Markdown Document'))throw new Error('Markdown 快速切换后区块编辑器串页：'+JSON.stringify(switchedMarkdown).slice(0,200));
+  if(markdownErrors.length)throw new Error('Markdown 区块编辑器浏览器运行错误：'+markdownErrors.join('；'));
   await markdownPage.close();
-  await page.locator('#tabs .tab').filter({hasText:'led.h'}).locator('span').first().click();
+  await clickFragmentTab(page,'led.h');
   await page.waitForTimeout(1400);
   const lspStatus=await page.locator('#lsp-diagnostics').innerText();
   if(executablePath&&fs.existsSync('/usr/bin/clangd')&&!/clangd|错误|警告/.test(lspStatus))throw new Error('clangd 状态未显示');
@@ -803,7 +773,7 @@ print(r.run())
   const proxySync=await idePage.evaluate(()=>{MONACO_EDITOR.setValue('int main(void) {\n  return 0;\n}');return document.getElementById('code-edit').value;});
   if(!proxySync.includes('return 0'))throw new Error('Monaco 内容未同步到自动保存代理');
   await idePage.waitForTimeout(900); // 等待本次语言服务请求结束，避免切换模型时产生预期取消信号
-  await idePage.locator('#tabs .tab').filter({hasText:'README.md'}).locator('span').first().click();
+  await clickFragmentTab(idePage,'README.md');
   await idePage.waitForFunction(()=>MONACO_EDITOR&&MONACO_EDITOR.getModel()&&MONACO_EDITOR.getModel().getLanguageId()==='markdown');
   const markdownTitle=await idePage.locator('#primary-group-name').innerText();
   if(markdownTitle!=='README.md')throw new Error('Markdown 编辑栏错误显示底层文件名，实际：'+markdownTitle);
@@ -814,7 +784,7 @@ print(r.run())
     glyphMargin:MONACO_EDITOR.getRawOptions().glyphMargin
   }));
   if(markdownMonacoState.language!=='markdown'||markdownMonacoState.lineNumbers!=='on'||!markdownMonacoState.folding)throw new Error('Monaco Markdown 语言服务或导航能力不完整：'+JSON.stringify(markdownMonacoState));
-  await idePage.locator('#tabs .tab').filter({hasText:'led.h'}).locator('span').first().click();
+  await clickFragmentTab(idePage,'led.h');
   await idePage.waitForFunction(()=>MONACO_EDITOR&&MONACO_EDITOR.getModel()&&MONACO_EDITOR.getModel().getLanguageId()!=='markdown');
  await idePage.evaluate(()=>setEditorSlot(1,{file:CURRENT.file,fragment:1}));
  await idePage.locator('.split-editor-group.monaco-active .monaco-editor').waitFor({state:'visible',timeout:10000});
@@ -961,7 +931,11 @@ print(r.run())
   if(!tabPrompt)throw new Error('片段标签右键「重命名片段」没有触发重命名');
   if(await idePage.locator('#ctx-menu .ctx-item:visible').count())await idePage.keyboard.press('Escape');
   if(await idePage.locator('#ctx-menu .ctx-item:visible').count())throw new Error('Esc 之后右键菜单仍然可见');
- if(ideErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideErrors.join('；'));
+
+ // 切换模型时语言服务会主动取消在途请求，Monaco 抛出 "Canceled" 属预期信号（见上文等待语言服务结束的注释）；
+ // 这里只过滤这一条已知信息，其他运行错误照旧失败。
+ const ideUnexpectedErrors=ideErrors.filter(message=>!/^canceled$/i.test(String(message||'').trim()));
+ if(ideUnexpectedErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideUnexpectedErrors.join('；'));if(ideErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideErrors.join('；'));
   await idePage.close();
 
   /* ---- Office 工作区：左侧同级入口与 ONLYOFFICE 必选连接页 ---- */
