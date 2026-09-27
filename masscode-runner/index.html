@@ -3340,8 +3340,15 @@
   .split-editor-group.block-active .split-editor-code { display: none; }
   .split-editor-group.block-active .split-editor-input { opacity: 0; pointer-events: none; }
   .split-md-block { position: absolute; z-index: 4; inset: 0; display: block; overflow: auto; background: var(--theme-code, var(--panel2)); container-type: inline-size; }
-  .split-md-block .milkdown-top-bar { padding-inline: clamp(10px, 3cqw, 30px); flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-  .split-md-block .milkdown .ProseMirror { width: min(calc(100% - clamp(18px, 5cqw, 48px)), 760px); margin: 16px auto 40px; padding: clamp(18px, 3.5cqw, 40px) clamp(16px, 4cqw, 52px) clamp(30px, 6cqw, 70px); }
+  .split-md-block .milkdown-top-bar { padding-inline: clamp(10px, 3cqw, 30px); overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+  /* 真正换行的是内层 .top-bar-inner（阅读模块没有为窄栏处理它），这里让它在窄栏里保持单行并横向滚动 */
+  .reading-md-block.split-md-block .milkdown .milkdown-top-bar .top-bar-inner { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+  .reading-md-block.split-md-block .milkdown .milkdown-top-bar .top-bar-inner > * { flex: none; }
+  /* 页面左右各留出约 70px：区块手柄（+ / ⋮⋮，position:fixed，按块左边界定位）才不会被挤出可视区 */
+  .reading-md-block.split-md-block .milkdown .ProseMirror {
+    width: min(calc(100% - 140px), 720px); min-width: 200px; margin: 16px auto 40px;
+    padding: clamp(16px, 3cqw, 34px) clamp(14px, 3.5cqw, 44px) clamp(28px, 5cqw, 64px);
+  }
 
   /* ── 代码工作区的 Markdown 区块编辑器：与阅读模块完全同一套外观 ── */
   #md-view.project-md-block {
