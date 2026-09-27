@@ -1862,11 +1862,11 @@
   #btn-env.env-checking::after { background:#d9a441; animation:env-pulse .8s ease-in-out infinite alternate; }
   #btn-dsh { position:relative; }
   #btn-dsh::before { content:'DSH'; font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace; color:#82b6ff; letter-spacing:.03em; }
-  #btn-dsh.dsh-ready { border-color:rgba(86,211,100,.45); background:rgba(86,211,100,.08); }
+  #btn-dsh.dsh-ready { border-color:rgba(86,211,100,.38); }
   #btn-dsh.dsh-bad { border-color:rgba(255,107,99,.45); }
   #btn-dsh.on { color:#dcecff; border-color:rgba(89,156,255,.62); background:rgba(55,116,205,.22); box-shadow:inset 0 -2px 0 #599cff; }
   #knowledge-launch { position:relative; display:flex; align-items:stretch; }
-  #btn-knowledge-launch,#knowledge-launch-more { min-height:34px; border-color:#344356; background:linear-gradient(180deg,#242c37,#1b222c); color:#c7d2e1; font-weight:700; }
+  #btn-knowledge-launch,#knowledge-launch-more { min-height:34px; color:#c7d2e1; font-weight:700; }
   #btn-knowledge-launch { display:inline-flex; align-items:center; gap:7px; padding:6px 10px; border-radius:6px 0 0 6px; white-space:nowrap; }
   #btn-knowledge-launch::before { content:'K'; display:grid; place-items:center; width:18px; height:18px; border-radius:5px; background:rgba(99,214,160,.12); color:#70d6a3; font:800 10px/1 var(--mono); }
   #knowledge-launch-more { width:25px; padding:0; margin-left:-1px; border-radius:0 6px 6px 0; color:#8290a3; }
@@ -2673,7 +2673,12 @@
     html[data-theme] button { transition:none; }
     html[data-theme] button:hover:not(:disabled),html[data-theme] button:active:not(:disabled) { transform:none; }
   }
-  html[data-theme] button.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+  html[data-theme] button.on {
+    border-color:color-mix(in srgb,var(--accent) 58%,var(--border));
+    background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.02) 58%,rgba(0,0,0,.06)),var(--accent-soft);
+    color:color-mix(in srgb,var(--accent) 64%,var(--text));
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(0,0,0,.16),0 1px 2px rgba(0,0,0,.26);
+  }
   html[data-theme] #side, html[data-theme] #pane-tree, html[data-theme] #pane-git, html[data-theme] #pane-tags, html[data-theme] #pane-draw, html[data-theme] #pane-office, html[data-theme] #pane-reading,
   html[data-theme] #outline-panel, html[data-theme] #outline-list, html[data-theme] #outline-list.stack-on { background:var(--theme-side); border-color:var(--border); }
   html[data-theme] #tree-head, html[data-theme] #git-head, html[data-theme] #tag-head, html[data-theme] #draw-head,
@@ -2850,7 +2855,6 @@
   }
   #toolbar .title { font-size:14.5px; font-weight:720; letter-spacing:.01em; }
   #toolbar button { min-height:30px; padding:5px 9px; font-size:12px; font-weight:620; }
-  #btn-symbols { color:var(--accent); border-color:color-mix(in srgb,var(--accent) 45%,var(--border)); background:var(--ui-accent-soft); }
   #autosave-hint {
     min-height:27px; padding:4px 8px; border:1px solid color-mix(in srgb,var(--ok) 28%,transparent);
     border-radius:999px; background:color-mix(in srgb,var(--ok) 9%,transparent);
@@ -3077,14 +3081,11 @@
   #header-center #btn-study::before { color:#8bb7f5; font-size:14px; }
   #header-center #btn-dsh { min-width:96px; }
   #header-center #btn-dsh::before { content:'DSH'; color:#82b6ff; font-size:7px; }
-  #header-center #btn-dsh.dsh-ready { border-color:#3e7654; background:#17271e; }
   #header-center #btn-dsh.dsh-ready::before { border-color:rgba(86,211,100,.28); background:rgba(86,211,100,.09); }
   #header-center #btn-dsh.on,#header-center #btn-study.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
   #header-center #btn-dsh-restart { min-width:88px; }
   #header-center #btn-dsh-restart::before { content:'▶'; color:#7fae7f; font-size:11px; line-height:1; }
-  #header-center #btn-dsh-restart:hover { border-color:#3f7a4f; background:#15241a; }
-  #header-center #btn-dsh-restart.on { border-color:#3f7a4f; background:#15241a; color:#9fd0a9; }
-  #header-center #btn-dsh-restart.busy { opacity:.55; pointer-events:none; border-color:#3f7a4f; background:#15241a; }
+  #header-center #btn-dsh-restart.busy { opacity:.55; pointer-events:none; }
   #header-center #btn-knowledge-launch.on { border-color:#4c9675; background:#1b382d; box-shadow:inset 0 -2px #63d6a0; }
   #header-center #knowledge-launch,#header-center #site-menu { flex:0 0 auto; }
   #header-center #btn-knowledge-launch { padding:6px 10px; border-radius:7px 0 0 7px; }

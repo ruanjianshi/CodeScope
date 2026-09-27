@@ -1,9 +1,8 @@
 /* CodeScope 学习工作台：Golden Layout 只负责窗格树，视觉与业务窗格由 CodeScope 管理。 */
 #header-center { display:flex; align-items:center; justify-content:center; gap:6px; min-width:0; }
-#btn-study { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:6px 12px; border-color:#344356; background:linear-gradient(180deg,#242c37,#1b222c); color:#c7d2e1; font-weight:700; white-space:nowrap; box-shadow:none; }
+#btn-study { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:6px 12px; color:#c7d2e1; font-weight:700; white-space:nowrap; }
 #btn-study::before { content:'◫'; color:#8294aa; font-size:16px; }
-#btn-study:hover { border-color:#4a607b; background:linear-gradient(180deg,#2b3644,#212b37); color:#eff5fd; }
-#btn-study.on { border-color:#4f79aa; background:linear-gradient(180deg,#25405f,#192b42); color:#e5f1ff; box-shadow:0 5px 16px rgba(15,39,69,.2); }
+#btn-study.on { color:#e5f1ff; }
 #btn-study.on::before { color:#8ec0ff; }
 #site-menu { position:relative; }
 #site-menu-trigger { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:6px 10px; border-color:#344356; background:linear-gradient(180deg,#242c37,#1b222c); color:#d5dfed; white-space:nowrap; }
