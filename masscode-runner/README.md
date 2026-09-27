@@ -1,9 +1,9 @@
-# 码境 CodeScope v2.4.0
+# 码境 CodeScope v2.5.0
 
 面向代码阅读、编辑、运行、工程文档和远程开发的一体化工作台。
 码境可以独立使用现有 Markdown Vault，同时兼容读取 [massCode](https://masscode.io/) 片段库，不修改原始数据格式。
 
-当前版本：**v2.4.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v2.5.0**。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 完整使用手册已内置到 CodeScope：启动后点击顶栏 **「手册」**，或访问
 [`http://127.0.0.1:4877/manual/`](http://127.0.0.1:4877/manual/)。手册提供章节导航、全文搜索、页内目录、深链接、演示流程、故障排查、深浅主题与打印导出，无需外网。
