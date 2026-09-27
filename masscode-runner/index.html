@@ -3255,6 +3255,96 @@
     button,.fnode,.office-row,.reading-project,.draw-row { border-color:var(--border); }
     button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline-width:3px; }
   }
+
+  /* ══════════════════════════════════════════════════════════════════
+     统一分割条语言（放在样式表末尾，覆盖此前所有代际的写法）
+     · 命中区统一 7px，凹槽底色与编辑器分隔条一致
+     · 静息：1px --ui-divider 细线；悬停/拖动：2px 强调色 + 柔和光环
+     · 全部使用主题令牌，浅色主题同样正确
+     ══════════════════════════════════════════════════════════════════ */
+  html[data-theme] { --cs-split-gutter: var(--bg); }   /* 凹槽用主区底色：窗格之间只剩一条细线，不出现“浅色带+两侧色阶” */
+  /* 分割条已经提供细线，容器不再重复画边框（否则窗格之间会出现两条平行线） */
+  html[data-theme] #side { border-right: 0; }
+  html[data-theme] #output { border-top: 0; }
+  /* ── 竖向分割：左右窗格之间（拖动改变宽度）── */
+  html[data-theme] #split-v,
+  html[data-theme] #split-v2,
+  html[data-theme] #edit-split-v,
+  html[data-theme] .editor-group-divider,
+  html[data-theme] #reading-fragments-resizer,
+  html[data-theme] #xmind-outline-resizer,
+  html[data-theme] #remote-resizer {
+    flex: none; width: 7px; position: relative; cursor: col-resize; touch-action: none;
+    background: var(--cs-split-gutter); border: 0; box-shadow: none;
+  }
+  html[data-theme] #split-v::after,
+  html[data-theme] #split-v2::after,
+  html[data-theme] #edit-split-v::after,
+  html[data-theme] .editor-group-divider::after,
+  html[data-theme] #reading-fragments-resizer::after,
+  html[data-theme] #xmind-outline-resizer::after,
+  html[data-theme] #remote-resizer::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; height: auto;
+    transform: translateX(-50%); border-radius: 2px; background: var(--ui-divider);
+    transition: width .14s ease, background .14s ease, box-shadow .14s ease;
+  }
+  html[data-theme] #split-v:hover::after,
+  html[data-theme] #split-v.active::after,
+  html[data-theme] #split-v2:hover::after,
+  html[data-theme] #split-v2.active::after,
+  html[data-theme] #edit-split-v:hover::after,
+  html[data-theme] #edit-split-v.active::after,
+  html[data-theme] .editor-group-divider:hover::after,
+  html[data-theme] .editor-group-divider.active::after,
+  html[data-theme] #reading-fragments-resizer:hover::after,
+  html[data-theme] #reading-fragments-resizer.dragging::after,
+  html[data-theme] #xmind-outline-resizer:hover::after,
+  html[data-theme] #xmind-outline-resizer.dragging::after,
+  html[data-theme] #remote-resizer:hover::after,
+  html[data-theme] #remote-resizer.active::after {
+    width: 2px; background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  /* ── 横向分割：上下窗格之间（拖动改变高度）── */
+  html[data-theme] .hsplit,
+  html[data-theme] #split-h,
+  html[data-theme] .pane-resizer,
+  html[data-theme] .pane-bottom-resizer,
+  html[data-theme] #remote-resizer-y {
+    flex: none; height: 7px; position: relative; cursor: row-resize; touch-action: none;
+    background: var(--cs-split-gutter); border: 0; box-shadow: none;
+  }
+  html[data-theme] .hsplit::after,
+  html[data-theme] #split-h::after,
+  html[data-theme] .pane-resizer::after,
+  html[data-theme] .pane-bottom-resizer::after,
+  html[data-theme] #remote-resizer-y::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%; width: auto; height: 1px;
+    transform: translateY(-50%); border-radius: 2px; background: var(--ui-divider);
+    transition: height .14s ease, background .14s ease, box-shadow .14s ease;
+  }
+  html[data-theme] .hsplit:hover::after,
+  html[data-theme] .hsplit.active::after,
+  html[data-theme] #split-h:hover::after,
+  html[data-theme] #split-h.active::after,
+  html[data-theme] .pane-resizer:hover::after,
+  html[data-theme] .pane-bottom-resizer:hover::after,
+  html[data-theme] body.resizing .pane-resizer::after,
+  html[data-theme] body.resizing .pane-bottom-resizer::after,
+  html[data-theme] #remote-resizer-y:hover::after,
+  html[data-theme] #remote-resizer-y.active::after {
+    height: 2px; background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  /* ── 面板标题栏细线统一（此前混用 --border / 55% / 硬编码）── */
+  html[data-theme] #outline-head,
+  html[data-theme] #outline-tools,
+  html[data-theme] .pane-title,
+  html[data-theme] #editor-context { border-bottom: 1px solid var(--ui-divider); }
+  html[data-theme] #toolbar,
+  html[data-theme] #out-head,
+  html[data-theme] #primary-group-bar,
+  html[data-theme] .split-editor-head { box-shadow: 0 1px 0 var(--ui-divider); }
 </style>
 </head>
 <body>
