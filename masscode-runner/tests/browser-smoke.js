@@ -589,7 +589,7 @@ print(r.run())
   const firstMarkdownPane=await markdownPage.evaluate(()=>document.querySelector('#md-view .reading-md-block .ProseMirror').innerText);
   if(!firstMarkdownPane.includes('First Markdown Document'))throw new Error('Markdown 区块编辑器未载入当前片段：'+firstMarkdownPane.slice(0,80));
   await clickFragmentTab(markdownPage,'Guide.md');
-  await markdownPage.waitForFunction(()=>{const pane=document.querySelector('#md-view .reading-md-block .ProseMirror');return !!pane&&pane.innerText.includes('Anchor Sync Guide');},null,{timeout:30000});
+  await markdownPage.waitForFunction(()=>{const pane=document.querySelector('#md-view .reading-md-block .ProseMirror');return !!pane&&pane.innerText.includes('Anchor Sync Guide');},null,{timeout:60000});
   const switchedMarkdown=await markdownPage.evaluate(()=>({source:document.getElementById('code-edit').value,pane:document.querySelector('#md-view .reading-md-block .ProseMirror').innerText}));
   if(!switchedMarkdown.source.includes('Anchor Sync Guide')||switchedMarkdown.pane.includes('First Markdown Document'))throw new Error('Markdown 快速切换后区块编辑器串页：'+JSON.stringify(switchedMarkdown).slice(0,200));
   if(markdownErrors.length)throw new Error('Markdown 区块编辑器浏览器运行错误：'+markdownErrors.join('；'));

@@ -3340,7 +3340,7 @@
   .split-editor-group.block-active .split-editor-code { display: none; }
   .split-editor-group.block-active .split-editor-input { opacity: 0; pointer-events: none; }
   .split-md-block { position: absolute; z-index: 4; inset: 0; display: block; overflow: auto; background: var(--theme-code, var(--panel2)); container-type: inline-size; }
-  .split-md-block .milkdown-top-bar { padding-inline: clamp(10px, 3cqw, 30px); }
+  .split-md-block .milkdown-top-bar { padding-inline: clamp(10px, 3cqw, 30px); flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
   .split-md-block .milkdown .ProseMirror { width: min(calc(100% - clamp(18px, 5cqw, 48px)), 760px); margin: 16px auto 40px; padding: clamp(18px, 3.5cqw, 40px) clamp(16px, 4cqw, 52px) clamp(30px, 6cqw, 70px); }
 
   /* ── 代码工作区的 Markdown 区块编辑器：与阅读模块完全同一套外观 ── */
@@ -11961,30 +11961,80 @@ function chooseCodeReferenceTarget(){
 }
 /* ── 代码工作区的 Markdown 区块编辑器（与阅读模块共用 window.CodeScopeBlockEditor）──
    同一片段只挂载一次：renderMain 因保存等原因重绘时不会重建编辑器，焦点与光标位置得以保留。 */
-let PROJECT_BLOCK_EDITOR = null, PROJECT_BLOCK_ID = 0, PROJECT_BLOCK_KEY = '', PROJECT_BLOCK_PENDING = '', PROJECT_OUTLINE_TIMER = 0;
+let PROJECT_BLOCK_EDITOR = null, PROJECT_BLOCK_HOST = null, PROJECT_BLOCK_PARKED = null, PROJECT_BLOCK_ID = 0, PROJECT_BLOCK_KEY = '', PROJECT_BLOCK_PENDING = '', PROJECT_BLOCK_PENDING_ID = 0, PROJECT_OUTLINE_TIMER = 0, PROJECT_BLOCK_DESTROY_TIMER = 0, PROJECT_BLOCK_MOUNT_TIMER = 0;
 function projectBlockEditorKey() { return CURRENT ? markdownCaretKey(CURRENT.file, CINDEX) : ''; }
-async function destroyProjectBlockEditor() {
+async function destroyProjectBlockEditorNow() {
   PROJECT_BLOCK_ID++;
   PROJECT_BLOCK_KEY = '';
-  PROJECT_BLOCK_PENDING = '';
   const current = PROJECT_BLOCK_EDITOR;
   PROJECT_BLOCK_EDITOR = null;
+  PROJECT_BLOCK_HOST = null;
+  // 停车位不在这里销毁：它由 parkProjectBlockEditor 在换成别的片段时回收。
+  // 否则「切到另一个片段」会变成“刚停车就销毁”，白白多花一次昂贵的销毁（实测让切换超时）。
   if (current) { try { await current.destroy(); } catch (_) {} }
 }
-async function mountProjectBlockEditor() {
+/* 把当前编辑器摘下来「停车」而不是销毁：切走再切回同一片段时可以直接复用（秒开）。
+   只保留最近一个，避免内存堆积；内容仍是同一片段，不会串页。 */
+function parkProjectBlockEditor() {
+  if (!PROJECT_BLOCK_EDITOR || !PROJECT_BLOCK_HOST) return;
+  if (PROJECT_BLOCK_PARKED) { const parked = PROJECT_BLOCK_PARKED; try { parked.controller.destroy(); } catch (_) {} }
+  const host = PROJECT_BLOCK_HOST;
+  if (host.parentNode) host.remove();
+  PROJECT_BLOCK_PARKED = { key: PROJECT_BLOCK_KEY, host, controller: PROJECT_BLOCK_EDITOR };
+  PROJECT_BLOCK_EDITOR = null;
+  PROJECT_BLOCK_HOST = null;
+  PROJECT_BLOCK_KEY = '';
+}
+/* 延迟销毁（性能）：一次切换会连续触发多轮重绘（renderCode / renderMain / renderSplitEditors），
+   原来立即销毁会让刚建立的编辑器在 1ms 内被拆掉，导致反复重建（实测 4 轮、冷开 14s）。
+   这里等 250ms，并在真正销毁前确认当前片段确实不再使用区块编辑器。
+   注意：不能在这里清 PROJECT_BLOCK_PENDING，否则重建去重会失效。 */
+function destroyProjectBlockEditor() {
+  // 注意：不能在这里取消 PROJECT_BLOCK_MOUNT_TIMER —— 一次切换里销毁与挂载会交错触发，
+  // 取消会把区块分支刚排好的挂载一起干掉（实测切回 Markdown 后永远挂不上）。
+  clearTimeout(PROJECT_BLOCK_DESTROY_TIMER);
+  PROJECT_BLOCK_DESTROY_TIMER = setTimeout(() => {
+    const fragment = CURRENT && CURRENT.fragments && CURRENT.fragments[CINDEX];
+    if (fragment && fragment.language === 'markdown' && documentMode(fragment) === 'block') return;
+    parkProjectBlockEditor();
+  }, 250);
+}
+/* 去抖入口（性能）：一次切换（打开片段 / 切回 Markdown）会连续触发多轮重绘，
+   每轮都会调用这里；若每轮都真的创建，会出现多份 Crepe 并发初始化（实测 4 份、冷开 13s）。
+   等 300ms 没有新的重绘再真正创建，通常只创建一次。 */
+function mountProjectBlockEditor() {
+  clearTimeout(PROJECT_BLOCK_MOUNT_TIMER);
+  PROJECT_BLOCK_MOUNT_TIMER = setTimeout(() => { mountProjectBlockEditorNow(); }, 300);
+}
+async function mountProjectBlockEditorNow() {
   const fragment = CURRENT && CURRENT.fragments && CURRENT.fragments[CINDEX];
   if (!fragment || fragment.language !== 'markdown') return;
+  if (documentMode(fragment) !== 'block') return;
   const view = $('md-view');
   if (!view) return;
   const key = projectBlockEditorKey();
-  if (PROJECT_BLOCK_EDITOR && PROJECT_BLOCK_KEY === key) return;
+  if (PROJECT_BLOCK_EDITOR && PROJECT_BLOCK_KEY === key && PROJECT_BLOCK_HOST && PROJECT_BLOCK_HOST.isConnected) return;
+  // 命中停车位：把之前摘下来的编辑器直接挂回去，省掉数秒的 Crepe 初始化
+  if (PROJECT_BLOCK_PARKED && PROJECT_BLOCK_PARKED.key === key) {
+    const parked = PROJECT_BLOCK_PARKED;
+    PROJECT_BLOCK_PARKED = null;
+    view.replaceChildren(parked.host);
+    PROJECT_BLOCK_EDITOR = parked.controller;
+    PROJECT_BLOCK_HOST = parked.host;
+    PROJECT_BLOCK_KEY = key;
+    view.classList.remove('is-loading');
+    return;
+  }
   // renderCode / renderMain / renderSplitEditors 都会走到这里：同一片段的挂载只做一次，
   // 否则会连续重建多次区块编辑器（很重），并让布局长时间不稳定。
   if (PROJECT_BLOCK_PENDING === key) return;
-  await destroyProjectBlockEditor();
+  await destroyProjectBlockEditorNow();
   const id = ++PROJECT_BLOCK_ID;
   PROJECT_BLOCK_KEY = key;
   PROJECT_BLOCK_PENDING = key;
+  PROJECT_BLOCK_PENDING_ID = id;
+  // 无论成功、失败还是被更新的挂载顶掉，都必须清掉自己占用的 pending，否则该片段会永远挂不上
+  const clearPending = () => { if (PROJECT_BLOCK_PENDING_ID === id) { PROJECT_BLOCK_PENDING = ''; PROJECT_BLOCK_PENDING_ID = 0; } };
   const host = document.createElement('div');
   host.className = 'reading-md-block';
   host.setAttribute('aria-label', 'Markdown 区块编辑器');
@@ -11995,6 +12045,7 @@ async function mountProjectBlockEditor() {
   loading.textContent = '正在加载区块编辑器…';
   view.appendChild(loading);
   view.classList.add('is-loading');
+  PROJECT_BLOCK_HOST = host;
   try {
     if (!window.CodeScopeBlockEditor) throw new Error('区块编辑器资源未加载');
     const controller = await window.CodeScopeBlockEditor.create({
@@ -12030,13 +12081,13 @@ async function mountProjectBlockEditor() {
       },
       onError: (error) => { try { setStatus('err', '区块编辑器：' + String((error && error.message) || error)); } catch (_) {} },
     });
-    if (id !== PROJECT_BLOCK_ID) { try { await controller.destroy(); } catch (_) {} return; }
+    if (id !== PROJECT_BLOCK_ID) { try { await controller.destroy(); } catch (_) {} clearPending(); return; }
     if (loading.parentNode) loading.remove();
     view.classList.remove('is-loading');
     PROJECT_BLOCK_EDITOR = controller;
-    PROJECT_BLOCK_PENDING = '';
+    clearPending();
   } catch (error) {
-    PROJECT_BLOCK_PENDING = '';
+    clearPending();
     if (loading.parentNode) loading.remove();
     view.classList.remove('is-loading');
     if (id !== PROJECT_BLOCK_ID) return;
