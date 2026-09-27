@@ -1639,12 +1639,24 @@
   #code-wrap.split-primary #primary-group-bar { display:flex; }
   #code-wrap.split-primary #ln, #code-wrap.split-primary #code, #code-wrap.split-primary #code-edit { padding-top:46px; }
   #code-wrap.split-primary #editor-find { top:40px; }
-  .editor-group-divider { flex:none; position:relative; width:7px; cursor:col-resize; background:var(--bg); }
-  .editor-group-divider::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:1px; background:var(--border); transition:background .12s,width .12s; }
+  /* 分隔条：克制的凹槽，悬停/拖动时亮起 2px 强调线 */
+  .editor-group-divider { flex:none; position:relative; width:7px; cursor:col-resize; background:color-mix(in srgb,var(--panel) 55%,var(--bg)); }
+  .editor-group-divider::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:1px; background:color-mix(in srgb,var(--border) 72%,transparent); transition:background .12s,width .12s; }
   .editor-group-divider:hover::after, .editor-group-divider.active::after { width:2px; background:var(--accent); }
   .split-editor-group { flex:1; display:flex; flex-direction:column; min-width:120px; min-height:0; overflow:hidden; border:0; background:var(--theme-code,var(--panel2)); }
   .split-editor-head { flex:none; display:flex; align-items:center; gap:7px; min-height:32px; padding:0 7px 0 9px; border-bottom:1px solid var(--border); background:var(--panel); color:var(--dim); font-size:10px; }
   .split-editor-head .name { min-width:0; overflow:hidden; color:var(--text); text-overflow:ellipsis; white-space:nowrap; font:11px var(--mono); }
+  /* 主编辑栏头与分栏头保持同一套结构：小标签 + 可点名称 + 语言 chip + 含蓄提示 */
+  #primary-group-bar .tag { flex:none; padding:1px 6px; border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border)); border-radius:7px; background:color-mix(in srgb,var(--accent) 12%,transparent); color:color-mix(in srgb,var(--accent) 78%,var(--text)); font-size:8px; line-height:1.5; white-space:nowrap; }
+  #primary-group-bar .name.split-name-pick { width:auto; height:auto; min-height:20px; padding:2px 17px 2px 6px; border:1px solid transparent; border-radius:6px; background:none; box-shadow:none; color:var(--text); text-align:left; position:relative; font:11px var(--mono); }
+  #primary-group-bar .name.split-name-pick::after { content:'▾'; position:absolute; right:5px; top:50%; transform:translateY(-50%); font-size:8px; color:var(--dim); }
+  #primary-group-bar .name.split-name-pick:hover { border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); background:color-mix(in srgb,var(--accent) 9%,transparent); color:var(--accent); }
+  #primary-group-bar .name.split-name-pick:active { transform:none; }
+  #primary-group-bar .lang { flex:none; display:inline-flex; align-items:center; height:17px; padding:0 7px; border:1px solid color-mix(in srgb,var(--border) 68%,transparent); border-radius:9px; background:color-mix(in srgb,var(--panel2) 80%,transparent); color:var(--dim); font-size:10px; line-height:1; }
+  #primary-group-bar .hint { flex:none; color:color-mix(in srgb,var(--dim) 70%,transparent); font-size:9.5px; }
+  /* 两侧栏头统一：顶部微高光；激活的那一栏高亮栏头 */
+  .split-editor-head, #primary-group-bar { box-shadow:inset 0 .5px 0 rgba(255,255,255,.04); }
+  .editor-column.active-reading #primary-group-bar { background:var(--accent-soft); }
   /* 栏头名称做成「弹出按钮」：外观仍是文件名，另有下拉指示，点它切换片段 */
   .split-editor-head .name.split-name-pick { width:auto; height:auto; min-height:20px; padding:2px 17px 2px 6px; border:1px solid transparent; border-radius:6px; background:none; box-shadow:none; color:var(--text); text-align:left; position:relative; }
   .split-editor-head .name.split-name-pick::after { content:'▾'; position:absolute; right:5px; top:50%; transform:translateY(-50%); font-size:8px; color:var(--dim); }
@@ -3595,7 +3607,7 @@
       </div>
     </section>
     <div id="edit-split">
-      <div id="code-wrap" class="editor-column"><div id="workspace-welcome" aria-label="CodeScope 快速开始"><div class="welcome-mark"><img src="/assets/codescope.svg" alt=""><span>码境工作台</span></div><h2>从一个目标开始</h2><p>代码、AI、资料、Office 文档与绘图都在同一个工作区。选择左侧内容，或从下面进入完整工具。</p><div class="welcome-actions"><button id="welcome-search" class="primary"><b>⌘</b><span><strong>查找内容</strong><small>搜索项目与片段</small></span></button><button id="welcome-study"><b>◫</b><span><strong>学习工作台</strong><small>网页、视频与笔记分屏</small></span></button><button id="welcome-dsh" data-tone="ai"><b>AI</b><span><strong>DeepSeek Harness</strong><small>在当前工作区使用 AI 编程</small></span></button><button id="welcome-reading"><b>▤</b><span><strong>阅读资料</strong><small>PDF、Word 与网页</small></span></button><button id="welcome-office" data-tone="office"><b>W</b><span><strong>Office 文档</strong><small>Word、Excel 与 PPT</small></span></button><button id="welcome-draw"><b>◇</b><span><strong>绘图设计</strong><small>导图、白板与架构图</small></span></button><button id="welcome-project" data-tone="project"><b>⚙</b><span><strong>工程工具</strong><small>构建、诊断与任务管理</small></span></button><button id="welcome-remote" data-tone="remote"><b>⌁</b><span><strong>远程开发</strong><small>SSH 终端与远程桌面</small></span></button></div><div class="welcome-shortcuts"><span><kbd>⌘ P</kbd> 快速打开</span><span><kbd>⌘ ⇧ F</kbd> 全文搜索</span><span><kbd>⌘ ⇧ P</kbd> 命令面板</span></div></div><div id="primary-group-bar"><span>主编辑栏</span><span class="name" id="primary-group-name"></span><span class="sp"></span><span>大纲跟随此栏</span></div><div id="ln"></div><div id="fold-gutter"></div><canvas id="indent-guides"></canvas><pre id="code"></pre><textarea id="code-edit" spellcheck="false" style="display:none"></textarea><div id="monaco-main" aria-label="VS Code 编辑器；按住 Ctrl 或 Command 并滚动缩放"></div><div id="comp-pop"></div><div id="signature-help" role="status" aria-live="polite"></div><div id="code-actions-pop" role="menu" aria-label="代码操作"></div><div id="editor-find" class="hidden" role="dialog" aria-label="代码查找和替换"><div class="editor-find-row"><button id="editor-find-toggle" type="button" title="展开或收起替换">▸</button><input id="editor-find-query" aria-label="查找内容" placeholder="查找（Enter 下一个）" spellcheck="false"><span id="editor-find-count">0/0</span><button id="editor-find-prev" type="button" title="上一个（Shift+Enter）">↑</button><button id="editor-find-next" type="button" title="下一个（Enter）">↓</button><button id="editor-find-close" type="button" title="关闭（Esc）">×</button></div><div id="editor-find-replace-row" class="editor-find-row editor-find-replace hidden"><button id="editor-find-case" type="button" title="区分大小写">Aa</button><input id="editor-find-replacement" aria-label="替换内容" placeholder="替换为" spellcheck="false"><button id="editor-find-one" type="button">替换</button><button id="editor-find-all" type="button">全部替换</button><span id="editor-find-status"></span></div></div></div>
+      <div id="code-wrap" class="editor-column"><div id="workspace-welcome" aria-label="CodeScope 快速开始"><div class="welcome-mark"><img src="/assets/codescope.svg" alt=""><span>码境工作台</span></div><h2>从一个目标开始</h2><p>代码、AI、资料、Office 文档与绘图都在同一个工作区。选择左侧内容，或从下面进入完整工具。</p><div class="welcome-actions"><button id="welcome-search" class="primary"><b>⌘</b><span><strong>查找内容</strong><small>搜索项目与片段</small></span></button><button id="welcome-study"><b>◫</b><span><strong>学习工作台</strong><small>网页、视频与笔记分屏</small></span></button><button id="welcome-dsh" data-tone="ai"><b>AI</b><span><strong>DeepSeek Harness</strong><small>在当前工作区使用 AI 编程</small></span></button><button id="welcome-reading"><b>▤</b><span><strong>阅读资料</strong><small>PDF、Word 与网页</small></span></button><button id="welcome-office" data-tone="office"><b>W</b><span><strong>Office 文档</strong><small>Word、Excel 与 PPT</small></span></button><button id="welcome-draw"><b>◇</b><span><strong>绘图设计</strong><small>导图、白板与架构图</small></span></button><button id="welcome-project" data-tone="project"><b>⚙</b><span><strong>工程工具</strong><small>构建、诊断与任务管理</small></span></button><button id="welcome-remote" data-tone="remote"><b>⌁</b><span><strong>远程开发</strong><small>SSH 终端与远程桌面</small></span></button></div><div class="welcome-shortcuts"><span><kbd>⌘ P</kbd> 快速打开</span><span><kbd>⌘ ⇧ F</kbd> 全文搜索</span><span><kbd>⌘ ⇧ P</kbd> 命令面板</span></div></div><div id="primary-group-bar"><span class="tag">主编辑栏</span><button type="button" class="name split-name-pick" id="primary-group-name" title="点击切换主编辑栏显示的片段"></button><span class="lang" id="primary-group-lang"></span><span class="sp"></span><span class="hint">点击任意栏，右侧面板随光标切换</span></div><div id="ln"></div><div id="fold-gutter"></div><canvas id="indent-guides"></canvas><pre id="code"></pre><textarea id="code-edit" spellcheck="false" style="display:none"></textarea><div id="monaco-main" aria-label="VS Code 编辑器；按住 Ctrl 或 Command 并滚动缩放"></div><div id="comp-pop"></div><div id="signature-help" role="status" aria-live="polite"></div><div id="code-actions-pop" role="menu" aria-label="代码操作"></div><div id="editor-find" class="hidden" role="dialog" aria-label="代码查找和替换"><div class="editor-find-row"><button id="editor-find-toggle" type="button" title="展开或收起替换">▸</button><input id="editor-find-query" aria-label="查找内容" placeholder="查找（Enter 下一个）" spellcheck="false"><span id="editor-find-count">0/0</span><button id="editor-find-prev" type="button" title="上一个（Shift+Enter）">↑</button><button id="editor-find-next" type="button" title="下一个（Enter）">↓</button><button id="editor-find-close" type="button" title="关闭（Esc）">×</button></div><div id="editor-find-replace-row" class="editor-find-row editor-find-replace hidden"><button id="editor-find-case" type="button" title="区分大小写">Aa</button><input id="editor-find-replacement" aria-label="替换内容" placeholder="替换为" spellcheck="false"><button id="editor-find-one" type="button">替换</button><button id="editor-find-all" type="button">全部替换</button><span id="editor-find-status"></span></div></div></div>
       <div id="edit-split-v" title="拖动调整编辑 / 预览宽度"></div>
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
@@ -11024,6 +11036,33 @@ function scheduleSplitSave(entry, status) {
     persistSplitEditors();
   },700);
 }
+/* 主编辑栏：点栏头名称切换片段（与分栏同一套操作习惯） */
+function showPrimaryFragmentMenu(event) {
+  if (!CURRENT || !CURRENT.fragments) return;
+  const items = [];
+  CURRENT.fragments.forEach((frag, i) => {
+    const current = i === CINDEX;
+    items.push({
+      icon: current ? '✓' : '',
+      label: String(frag.label || ('片段 ' + (i + 1))),
+      hint: current ? '当前' : (frag.language || ''),
+      disabled: current,
+      run: () => switchPrimaryFragment(i),
+    });
+  });
+  showContextMenu(event, items);
+}
+function switchPrimaryFragment(index) {
+  if (!CURRENT || !CURRENT.fragments[index] || index === CINDEX) return;
+  if (!confirmLeaveEdit()) return;
+  rememberMarkdownCaret(); hideCodeReferenceBar();
+  rememberNavigation({ snippet: CURRENT, frag: index, line: 1 });
+  CINDEX = index;
+  rememberWorkspaceRecent('code', CURRENT.file + ':' + index);
+  SYM_SEL = null; REL_ROOT = null; REL_EXPANDED.clear();
+  renderMain();
+}
+
 /* 分栏栏头的片段菜单：列出该文件的所有片段（当前片段打勾并禁用），并附上栏操作 */
 function showSplitFragmentMenu(event, index, entry, ref) {
   const items = [];
@@ -11107,7 +11146,9 @@ function renderSplitEditors() {
   const multi=!!CURRENT&&SPLIT_EDITORS.length>0;
   if(multi)$('code-wrap').style.width='';
   $('code-wrap').classList.toggle('split-primary',multi);
-  const primaryName=$('primary-group-name'),primaryLabel=active?fragmentDisplayName(active,CURRENT.name):'';primaryName.textContent=primaryLabel;primaryName.title=active&&active.filename&&active.filename!==primaryLabel?'底层文件：'+active.filename:'';
+  const primaryName=$('primary-group-name'),primaryLabel=active?fragmentDisplayName(active,CURRENT.name):'';primaryName.textContent=primaryLabel;
+  const primaryLang=$('primary-group-lang');if(primaryLang)primaryLang.textContent=active?(active.language||'text'):'';
+  primaryName.onclick=(event)=>{if(!CURRENT||!CURRENT.fragments.length)return;event.stopPropagation();showPrimaryFragmentMenu(event);};primaryName.title=active&&active.filename&&active.filename!==primaryLabel?'底层文件：'+active.filename:'';
   $('primary-group-bar').lastElementChild.textContent='点击任意栏，右侧面板随光标切换';
   $('btn-editor-layout').classList.toggle('show',multi);$('btn-editor-layout').textContent='▥ '+(SPLIT_EDITORS.length+1)+' 栏';
   let previous=$('code-wrap');
@@ -11121,8 +11162,8 @@ function renderSplitEditors() {
     name.onclick=(event)=>{event.stopPropagation();showSplitFragmentMenu(event,index,entry,ref);};
     const lang=document.createElement('span');lang.className='lang';lang.textContent=ref.frag.language||'text';
     const spacer=document.createElement('span');spacer.className='sp';const saved=document.createElement('span');saved.className='saved';
-    const promote=document.createElement('button');promote.textContent='↖';promote.title='设为主编辑栏，让大纲/符号/运行跟随此文件';promote.onclick=()=>promoteSplitEditor(index);
-    const close=document.createElement('button');close.textContent='×';close.title='关闭此编辑栏';close.onclick=()=>closeSplitEditor(index);head.append(name,lang,spacer,saved,promote,close);
+    // 不再在栏头放「设为主栏 / 关闭」两个图标按钮（太突兀）：动作在栏头右键菜单里
+    head.append(name,lang,spacer,saved);
     // 右键栏头同样给出片段列表（与侧栏/列表的右键习惯一致）
     head.addEventListener('contextmenu',(event)=>showSplitFragmentMenu(event,index,entry,ref));
     const body=document.createElement('div');body.className='split-editor-body';const lines=document.createElement('div');lines.className='split-editor-ln';

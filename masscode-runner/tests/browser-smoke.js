@@ -295,6 +295,7 @@ print(r.run())
   const knowledgeSplitUrls=await page.locator('#study-workspace .study-url').evaluateAll(nodes=>nodes.map(node=>node.value));
   if(!knowledgeSplitUrls.some(url=>url.startsWith(baseUrl+'/knowledge/')))throw new Error('知识库分栏未载入同源 VitePress 站点：'+JSON.stringify(knowledgeSplitUrls));
   await page.locator('#btn-study').click();
+  await page.waitForTimeout(300);   // 等按压缩放动画结束再量几何（断言不变，只是量稳定态）
   const shellGeometry=await page.evaluate(()=>{const centerNode=document.querySelector('#header-center'),center=centerNode?.getBoundingClientRect(),monitor=document.querySelector('#sysmon')?.getBoundingClientRect(),centerControls=['#btn-study','#btn-dsh','#btn-knowledge-launch','#site-menu-trigger'].map(selector=>{const node=document.querySelector(selector),rect=node?.getBoundingClientRect(),style=node&&getComputedStyle(node),label=node?.querySelector('span'),labelRect=label?.getBoundingClientRect();return{selector,height:rect?.height,width:rect?.width,whiteSpace:style?.whiteSpace,display:style?.display,lines:label?.getClientRects().length,labelCenterOffset:labelRect?Math.abs((labelRect.top+labelRect.bottom)/2-(rect.top+rect.bottom)/2):0};});return{viewport:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,nav:document.querySelector('#app-nav')?.getBoundingClientRect().toJSON(),actions:[...document.querySelectorAll('#app-nav .header-action')].map(node=>node.getBoundingClientRect().width),center:center?center.left+center.width/2:null,centerRight:center?.right??null,centerHeight:center?.height,centerControls,monitorLeft:monitor?.left??null,contentVisibility:getComputedStyle(document.querySelector('#list')).contentVisibility};});
   if(shellGeometry.scrollWidth>shellGeometry.viewport+1||!shellGeometry.nav||shellGeometry.actions.some(width=>width<30)||Math.abs(shellGeometry.center-shellGeometry.viewport/2)>1||shellGeometry.monitorLeft<shellGeometry.centerRight||Math.abs(shellGeometry.centerHeight-34)>.1||shellGeometry.centerControls.some(item=>Math.abs(item.height-34)>.1||item.whiteSpace!=='nowrap'||item.lines!==1||item.labelCenterOffset>1)||shellGeometry.centerControls.find(item=>item.selector==='#btn-dsh').width<96)throw new Error('响应式顶栏溢出、DSH 文本未垂直居中、按钮规格不统一、学习入口未居中或状态区未归位：'+JSON.stringify(shellGeometry));
   await page.locator('#site-menu-trigger').click();
@@ -897,6 +898,7 @@ print(r.run())
   let tabPrompt=null;
   idePage.once('dialog',async(dialog)=>{tabPrompt=dialog.message();await dialog.dismiss();});
   await idePage.evaluate(()=>{const tab=document.querySelector('#tabs .tab');tab.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:160,clientY:150}));});
+  await idePage.waitForFunction(()=>!document.getElementById('ctx-menu').hidden,null,{timeout:5000});
   await idePage.locator('#ctx-menu .ctx-item').filter({hasText:'重命名片段'}).first().click();
   await idePage.waitForTimeout(400);
   if(!tabPrompt)throw new Error('片段标签右键「重命名片段」没有触发重命名');
