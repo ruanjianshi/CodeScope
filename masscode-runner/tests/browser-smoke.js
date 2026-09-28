@@ -10,6 +10,8 @@ const { chromium } = require('playwright-core');
 const { Document, Packer, Paragraph, HeadingLevel } = require('docx');
 
 const projectRoot = path.resolve(__dirname, '..');
+// 版本号只有 package.json 一个来源：测试里硬编码 2.5.0 会让每次发版都误报失败。
+const packageVersion = require(path.join(projectRoot, 'package.json')).version;
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-browser-'));
 const vault = path.join(tempRoot, 'vault');
 let server, browser;
@@ -236,9 +238,10 @@ print(r.run())
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
   await page.route('**/api/study/readable?*',route=>{const requestUrl=new URL(route.request().url()),target=requestUrl.searchParams.get('url')||'';const chapter=target.includes('chapter-2');route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:chapter?'https://docs.example.test/chapter-2.html':'https://docs.example.test/start.html',title:chapter?'第二章':'学习网页',html:chapter?'<main><h1>第二章内容</h1><p>阅读视图内导航成功。</p></main>':'<main><h1>学习网页正文</h1><p>公网网址已通过站内阅读视图载入。</p></main>',navigationHtml:'<ol><li><a href="start.html">首页</a></li><li><a href="chapter-2.html">第二章</a></li></ol>',navigationUrl:'https://docs.example.test/toc.html'})});});
-  await page.waitForFunction(()=>document.querySelector('.brand-version')&&document.querySelector('.brand-version').textContent==='v2.5.0 · Web');
+  // 注意：传给 waitForFunction 的函数会被序列化到页面里执行，外部变量必须用参数传入。
+  await page.waitForFunction((expected)=>{const el=document.querySelector('.brand-version');return !!el&&el.textContent===expected;},'v'+packageVersion+' · Web');
   const versionContract=await page.evaluate(()=>fetch('/api/version').then(response=>response.json()));
-  if(versionContract.version!=='2.5.0'||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.4 Web 版本契约异常：'+JSON.stringify(versionContract));
+  if(versionContract.version!==packageVersion||versionContract.apiRevision<5||versionContract.releaseChannel!=='stable'||versionContract.mode!=='web'||!versionContract.capabilities?.web||versionContract.capabilities?.desktop)throw new Error('v2.4 Web 版本契约异常：'+JSON.stringify(versionContract));
   await page.getByRole('heading',{name:'从一个目标开始'}).waitFor({state:'visible'});
   await page.locator('#knowledge-launch-more').click();
   await page.locator('#knowledge-launch-manage').click();
@@ -441,7 +444,7 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v2.5.0'))throw new Error('环境元信息未显示 v2.5.0');
+  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v'+packageVersion))throw new Error('环境元信息未显示 v'+packageVersion);
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
@@ -825,7 +828,12 @@ print(r.run())
   if(markdownMonacoState.language!=='markdown'||markdownMonacoState.lineNumbers!=='on'||!markdownMonacoState.folding)throw new Error('Monaco Markdown 语言服务或导航能力不完整：'+JSON.stringify(markdownMonacoState));
   await clickFragmentTab(idePage,'led.h');
   await idePage.waitForFunction(()=>MONACO_EDITOR&&MONACO_EDITOR.getModel()&&MONACO_EDITOR.getModel().getLanguageId()!=='markdown');
- await idePage.evaluate(()=>setEditorSlot(1,{file:CURRENT.file,fragment:1}));
+ // 分栏里不能放主栏正在显示的那个分片（renderSplitEditors 会按设计把它过滤掉），
+ // 所以这里要按标签取 led.c 的下标，而不是照抄主栏的 fragment:1 —— 下面第 834 行期望的
+ // 正是「主栏 led.h / 分栏 led.c」。传错下标时这一步只能靠主栏尚未切换的竞态偶发通过。
+ const splitFragmentIndex=await idePage.evaluate(()=>{const i=(CURRENT.fragments||[]).findIndex((fragment)=>String(fragment.label||'').includes('led.c'));return i;});
+ if(splitFragmentIndex<0)throw new Error('夹具里找不到 led.c 分片，无法验证分栏');
+ await idePage.evaluate((index)=>setEditorSlot(1,{file:CURRENT.file,fragment:index}),splitFragmentIndex);
  await idePage.locator('.split-editor-group.monaco-active .monaco-editor').waitFor({state:'visible',timeout:10000});
   const splitTitles=await idePage.evaluate(()=>({primary:document.getElementById('primary-group-name').textContent,secondary:document.querySelector('.split-editor-head .name').textContent}));
   if(splitTitles.primary!=='led.h'||splitTitles.secondary!=='led.c')throw new Error('多栏编辑器未优先显示片段名：'+JSON.stringify(splitTitles));
