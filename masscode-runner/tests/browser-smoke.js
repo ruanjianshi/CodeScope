@@ -834,7 +834,9 @@ print(r.run())
  const splitFragmentIndex=await idePage.evaluate(()=>{const i=(CURRENT.fragments||[]).findIndex((fragment)=>String(fragment.label||'').includes('led.c'));return i;});
  if(splitFragmentIndex<0)throw new Error('夹具里找不到 led.c 分片，无法验证分栏');
  await idePage.evaluate((index)=>setEditorSlot(1,{file:CURRENT.file,fragment:index}),splitFragmentIndex);
- await idePage.locator('.split-editor-group.monaco-active .monaco-editor').waitFor({state:'visible',timeout:10000});
+ // 分栏里的 Monaco 是异步挂载的，实测（空闲机器）约 4.8 秒；挂载前显示的是普通代码视图，
+ // 所以慢不是缺陷。这里的 10 秒比套件其他等待（45~60 秒）低一个量级，负载下必然偶发超时。
+ await idePage.locator('.split-editor-group.monaco-active .monaco-editor').waitFor({state:'visible',timeout:45000});
   const splitTitles=await idePage.evaluate(()=>({primary:document.getElementById('primary-group-name').textContent,secondary:document.querySelector('.split-editor-head .name').textContent}));
   if(splitTitles.primary!=='led.h'||splitTitles.secondary!=='led.c')throw new Error('多栏编辑器未优先显示片段名：'+JSON.stringify(splitTitles));
   await idePage.evaluate(()=>{localStorage.setItem('mc-editor-groups',JSON.stringify([{file:CURRENT.file,fragment:1}]));localStorage.setItem('mc-editor-group-ratios','[50,50]');});

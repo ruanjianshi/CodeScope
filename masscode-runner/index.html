@@ -4897,9 +4897,31 @@ function renderTree(root, container) {
   for (const c of root.children) renderNode(c, container);
 }
 
+/* 列表重绘的输入签名。
+   renderList 会清空并重建整棵树，而它在一次操作里常被连续调用多次
+   （例如 renderList(); renderMain(); 或一次标签筛选里连调两遍）。
+   重建不仅浪费，还会丢掉滚动位置、正在进行的拖拽以及元素焦点。
+   签名覆盖 renderList 读取的全部输入：搜索词、标签筛选、折叠集合、当前选中，
+   以及 itemEl / renderTree / buildTree 真正用到的片段与文件夹字段。 */
+function listSignature(query) {
+  const parts = [query, [...activeTags].sort().join(','), [...collapsed].sort().join(','),
+    (CURRENT && CURRENT.file) || '', (RESOURCE_CURRENT && (RESOURCE_CURRENT.path || RESOURCE_CURRENT.name)) || '', '§'];
+  for (const s of SNIPPETS) parts.push([s.file, s.name, s.description || '', s.folder || '', s.isFavorites ? 1 : 0,
+    (s.tagIds || []).join(','), (s.tags || []).join(','), (s.fragments || []).map((f) => f.language || '').join(',')].join('§'));
+  for (const f of FOLDERS) parts.push([f.path, f.name || '', f.parent || '', f.orderIndex == null ? 0 : f.orderIndex, f.id == null ? '' : f.id].join('§'));
+  for (const r of RESOURCES) parts.push([r.folder || '', r.name || '', r.path || ''].join('§'));
+  return parts.join('~');
+}
 function renderList() {
   const q = $('search').value.trim().toLowerCase();
   const list = $('list');
+  // 签名一致、且 DOM 没被别处动过（子节点数对得上）就直接早退；对不上就重建，自愈。
+  if (list.dataset.listSignature === listSignature(q) && list.children.length === Number(list.dataset.listChildren || -1)) return;
+  renderListNow(q, list);
+  list.dataset.listSignature = listSignature(q);
+  list.dataset.listChildren = String(list.children.length);
+}
+function renderListNow(q, list) {
   list.innerHTML = '';
   const tagFilter = (s) => {
     for (const id of activeTags) if (!s.tagIds || !s.tagIds.includes(id)) return false;
@@ -14898,12 +14920,24 @@ $('knowledge-page-title').addEventListener('keydown',(event)=>{if(event.key==='E
 $('knowledge-folder-path').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeFolder();});
 $('knowledge-project-path').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeProject();});
 $('knowledge-project-description').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeProject();});
-$('search').oninput = renderList;
+/* 搜索是逐字符重绘列表的热路径：80ms 防抖足够让连续输入只重绘一次，
+   输入没变时还会被上面的签名拦掉。Esc/Enter 会先 flush，保证键盘操作看到的是最新列表。 */
+let SEARCH_RENDER_TIMER = null;
+function renderListSoon() {
+  if (SEARCH_RENDER_TIMER) clearTimeout(SEARCH_RENDER_TIMER);
+  SEARCH_RENDER_TIMER = setTimeout(() => { SEARCH_RENDER_TIMER = null; renderList(); }, 80);
+}
+function flushListRender() {
+  if (!SEARCH_RENDER_TIMER) return;
+  clearTimeout(SEARCH_RENDER_TIMER); SEARCH_RENDER_TIMER = null; renderList();
+}
+$('search').oninput = renderListSoon;
 bindListDropTarget();
 // 搜索框键盘操作：Esc 清空并退出；Enter 直接打开第一条结果（不必再用鼠标点）。
 $('search').onkeydown = (event) => {
-  if (event.key === 'Escape') { event.preventDefault(); $('search').value = ''; renderList(); $('search').blur(); return; }
+  if (event.key === 'Escape') { event.preventDefault(); $('search').value = ''; flushListRender(); renderList(); $('search').blur(); return; }
   if (event.key !== 'Enter') return;
+  flushListRender();
   const first = $('list').querySelector('.item');
   if (!first) return;
   event.preventDefault();
