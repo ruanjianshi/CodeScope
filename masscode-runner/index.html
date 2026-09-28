@@ -10,7 +10,6 @@
 <link rel="icon" href="/assets/codescope.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/hljs-theme.css">
 <link rel="stylesheet" href="/assets/xterm.css">
-<link rel="stylesheet" href="/assets/reading-block-editor.css">
 <link rel="stylesheet" href="/assets/pdfjs/pdf_viewer.css">
 <link rel="stylesheet" href="/golden-layout/css/goldenlayout-base.css">
 <link rel="stylesheet" href="/assets/study-workspace.css">
@@ -25,7 +24,6 @@
 <script src="/assets/highlight.min.js" defer></script>
 <!-- xterm 必须在正文中的 Monaco AMD loader 注册 window.define 之前执行，否则 UMD 会被误判为 AMD 模块。 -->
 <script src="/assets/xterm.js"></script>
-<script src="/assets/reading-block-editor.js" defer></script>
 <script src="/assets/study-workspace.js" defer></script>
 <style>
   :root {
@@ -4263,6 +4261,40 @@ function setMainEditorValue(value){$('code-edit').value=String(value||'');if(mon
 function updateMonacoDiagnostics(){if(!window.monaco||!MONACO_EDITOR||!MONACO_EDITOR.getModel())return;const severity=window.monaco.MarkerSeverity;window.monaco.editor.setModelMarkers(MONACO_EDITOR.getModel(),'codescope-lsp',(LSP_DIAGNOSTICS||[]).map(item=>({startLineNumber:Number(item.range&&item.range.start&&item.range.start.line||0)+1,startColumn:Number(item.range&&item.range.start&&item.range.start.character||0)+1,endLineNumber:Number(item.range&&item.range.end&&item.range.end.line||0)+1,endColumn:Number(item.range&&item.range.end&&item.range.end.character||0)+1,message:String(item.message||'诊断信息'),source:String(item.source||'LSP'),code:item.code==null?undefined:String(item.code),severity:Number(item.severity)===1?severity.Error:Number(item.severity)===2?severity.Warning:Number(item.severity)===4?severity.Hint:severity.Info})));}
 function disposeSplitMonacoEditors(){for(const editor of MONACO_SPLIT_EDITORS){try{editor.dispose();}catch(_){}}MONACO_SPLIT_EDITORS.clear();for(const entry of SPLIT_EDITORS)entry.monacoEditor=null;}
 
+/* 区块编辑器资源（2.7MB JS + 1.4MB CSS）只在真正打开 Markdown 区块编辑器时才需要，
+   首屏不再加载：原来那份 CSS 还是阻塞渲染的。首次打开时按需注入，并等样式就绪再返回，
+   避免出现一闪而过的无样式内容。 */
+let BLOCK_EDITOR_READY = null;
+function loadBlockEditor() {
+  if (window.CodeScopeBlockEditor) return Promise.resolve(window.CodeScopeBlockEditor);
+  if (!BLOCK_EDITOR_READY) {
+    const styleReady = new Promise((resolve) => {
+      const existing = document.querySelector('link[data-block-editor-style]');
+      if (existing && existing.sheet) return resolve();
+      const link = existing || document.createElement('link');
+      if (!existing) {
+        link.rel = 'stylesheet';
+        link.href = '/assets/reading-block-editor.css';
+        link.setAttribute('data-block-editor-style', '1');
+        document.head.appendChild(link);
+      }
+      // 样式加载失败不该阻断编辑器本身（内容仍可编辑，只是少了主题样式）。
+      link.addEventListener('load', () => resolve(), { once: true });
+      link.addEventListener('error', () => resolve(), { once: true });
+    });
+    const scriptReady = new Promise((resolve, reject) => {
+      const element = document.createElement('script');
+      element.src = '/assets/reading-block-editor.js';
+      element.async = true;
+      element.onload = () => window.CodeScopeBlockEditor ? resolve(window.CodeScopeBlockEditor) : reject(new Error('区块编辑器资源未注册'));
+      element.onerror = () => reject(new Error('区块编辑器资源加载失败'));
+      document.head.appendChild(element);
+    });
+    BLOCK_EDITOR_READY = Promise.all([styleReady, scriptReady]).then(() => window.CodeScopeBlockEditor);
+  }
+  return BLOCK_EDITOR_READY.catch((error) => { BLOCK_EDITOR_READY = null; throw error; });
+}
+
 /* ── 分栏里的 Markdown 区块编辑器（与主编辑区同一个 window.CodeScopeBlockEditor）──
    改动写回该栏的 textarea 并派发 input，复用分栏既有的 entry.code / scheduleSplitSave / 保存状态链路。 */
 const SPLIT_BLOCK_EDITORS = new Set();
@@ -4271,7 +4303,8 @@ function disposeSplitBlockEditors() {
   SPLIT_BLOCK_EDITORS.clear();
 }
 async function mountSplitBlockEditor(group, input, entry, ref) {
-  if (!window.CodeScopeBlockEditor) return;
+  try { await loadBlockEditor(); }
+  catch (error) { try { setStatus('err', '区块编辑器：' + String((error && error.message) || error)); } catch (_) {} return; }
   const area = group.querySelector('.split-editor-code-area');
   if (!area) return;
   const host = document.createElement('div');
@@ -5912,7 +5945,7 @@ async function renderReadingSlot(slot) {
       let markdownZoom=loadReadingMarkdownZoom(path),outlineOpen=loadReadingMarkdownOutline(path),outlineEntries=[],blockEditor=null,blockMountId=0;const setMarkdownZoom=(value,persist=true)=>{markdownZoom=Math.max(60,Math.min(180,Math.round(Number(value)||100)));const ratio=markdownZoom/100,fontSize=(16*ratio).toFixed(2)+'px';shell.style.setProperty('--reading-md-zoom',ratio.toFixed(2));shell.style.setProperty('--reading-md-font-size',fontSize);shell.style.setProperty('--reading-md-source-font-size',(12*ratio).toFixed(2)+'px');live.querySelector('.ProseMirror')?.style.setProperty('font-size',fontSize);zoomValueButton.textContent=markdownZoom+'%';zoomValueButton.setAttribute('aria-label','当前缩放 '+markdownZoom+'%，点击恢复 100%');if(persist)saveReadingMarkdownZoom(path,markdownZoom);};const setOutlineOpen=(value,persist=true)=>{outlineOpen=!!value;workbench.classList.toggle('outline-open',outlineOpen);outlineToggle.classList.toggle('active',outlineOpen);outlineToggle.setAttribute('aria-expanded',String(outlineOpen));if(persist)saveReadingMarkdownOutline(path,outlineOpen);};const setOutlineActive=(index)=>{outlineList.querySelectorAll('.reading-md-outline-item').forEach((button,itemIndex)=>button.classList.toggle('active',itemIndex===index));};const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));outlineEntries.forEach((entry,index)=>{const button=document.createElement('button');button.type='button';button.className='reading-md-outline-item';button.style.setProperty('--outline-depth',String(Math.max(0,entry.level-base)));button.title=entry.text;const label=document.createElement('span');label.className='label';label.textContent=entry.text;button.appendChild(label);button.onclick=()=>focusOutlineEntry(entry,index);outlineList.appendChild(button);});setOutlineActive(0);};setMarkdownZoom(markdownZoom,false);setOutlineOpen(outlineOpen,false);outlineToggle.onclick=()=>setOutlineOpen(!outlineOpen);zoomOut.onclick=()=>setMarkdownZoom(markdownZoom-10);zoomIn.onclick=()=>setMarkdownZoom(markdownZoom+10);zoomValueButton.onclick=()=>setMarkdownZoom(100);const renderPreview=()=>{preview.innerHTML='<div class="reading-md-preview-content">'+renderMd(record.content||'')+'</div>';decorateMarkdownLinks(preview);const nodes=[...preview.querySelectorAll('.reading-md-preview-content h1,.reading-md-preview-content h2,.reading-md-preview-content h3,.reading-md-preview-content h4,.reading-md-preview-content h5,.reading-md-preview-content h6')];let cursor=0;outlineEntries=readingMarkdownHeadings(record.content);outlineEntries.forEach((entry,index)=>{for(;cursor<nodes.length;cursor++){const node=nodes[cursor],level=Number(node.tagName.slice(1));if(level===entry.level&&node.textContent.trim()===entry.text){node.dataset.outlineIndex=String(index);cursor++;break;}}});renderOutline();};
       const openBlockReference=(token)=>{const host=document.createElement('div');host.innerHTML=mdInline(token);const pdf=host.querySelector('.reading-pdf-ref');if(pdf){locateReadingMarkdownRef(pdf,slot);return;}const linked=host.querySelector('.md-code-ref,.md-note-ref');if(linked){decorateMarkdownLinks(host);linked.click();}};
       const destroyBlockEditor=async()=>{blockMountId++;const current=blockEditor;blockEditor=null;if(current)try{await current.destroy();}catch(_){}};
-      const mountBlockEditor=async(focus)=>{await destroyBlockEditor();const id=++blockMountId;live.replaceChildren();const loading=document.createElement('div');loading.className='reading-md-block-loading';loading.textContent='正在加载区块编辑器…';live.appendChild(loading);try{if(!window.CodeScopeBlockEditor)throw new Error('区块编辑器资源未加载');const controller=await window.CodeScopeBlockEditor.create({root:live,markdown:record.content||'',onChange:(content)=>{record.content=content;source.value=content;recordMarkdownLiveHistory(historyKey,content,{source:false},'typing');renderPreview();foot.textContent='正在编辑… · '+content.length+' 字符';scheduleSave();},onFocus:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;},onReference:openBlockReference,onImage:path.startsWith('知识库/')?(file)=>uploadKnowledgeEditorImage(file,path):null,onError:(error)=>{const message=String(error&&error.message||error);foot.textContent='图片插入失败：'+message;readingStatus(foot.textContent,true);}});if(id!==blockMountId){await controller.destroy();return;}loading.remove();blockEditor=controller;setMarkdownZoom(markdownZoom,false);if(focus)setTimeout(()=>controller.focus(),0);}catch(error){if(id!==blockMountId)return;const failed=document.createElement('div');failed.className='reading-md-block-error';failed.textContent='区块编辑器加载失败：'+(error&&error.message||error);live.replaceChildren(failed);}};
+      const mountBlockEditor=async(focus)=>{await destroyBlockEditor();const id=++blockMountId;live.replaceChildren();const loading=document.createElement('div');loading.className='reading-md-block-loading';loading.textContent='正在加载区块编辑器…';live.appendChild(loading);try{await loadBlockEditor();const controller=await window.CodeScopeBlockEditor.create({root:live,markdown:record.content||'',onChange:(content)=>{record.content=content;source.value=content;recordMarkdownLiveHistory(historyKey,content,{source:false},'typing');renderPreview();foot.textContent='正在编辑… · '+content.length+' 字符';scheduleSave();},onFocus:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;},onReference:openBlockReference,onImage:path.startsWith('知识库/')?(file)=>uploadKnowledgeEditorImage(file,path):null,onError:(error)=>{const message=String(error&&error.message||error);foot.textContent='图片插入失败：'+message;readingStatus(foot.textContent,true);}});if(id!==blockMountId){await controller.destroy();return;}loading.remove();blockEditor=controller;setMarkdownZoom(markdownZoom,false);if(focus)setTimeout(()=>controller.focus(),0);}catch(error){if(id!==blockMountId)return;const failed=document.createElement('div');failed.className='reading-md-block-error';failed.textContent='区块编辑器加载失败：'+(error&&error.message||error);live.replaceChildren(failed);}};
       const applyMode=(mode,persist)=>{hideReadingSlashMenu();if(!['edit','live','preview'].includes(mode))mode='live';shell.dataset.mdMode=mode;for(const [name,button] of modeButtons){const active=name===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}if(persist)saveReadingMarkdownMode(path,mode);if(mode==='edit'){destroyBlockEditor();source.value=record.content||'';setTimeout(()=>source.focus(),0);}if(mode==='live')mountBlockEditor(true);if(mode==='preview'){destroyBlockEditor();renderPreview();}};
       const contentChanged=(event)=>{record.content=source.value;recordMarkdownLiveHistory(historyKey,record.content,{source:true,start:source.selectionStart,end:source.selectionEnd},event&&event.isTrusted?'typing':'command');renderPreview();foot.textContent='正在编辑… · '+record.content.length+' 字符';scheduleSave();updateReadingSlashMenu(source,slot);};
       source.addEventListener('input',contentChanged);
@@ -12071,7 +12104,7 @@ async function mountProjectBlockEditorNow() {
   view.classList.add('is-loading');
   PROJECT_BLOCK_HOST = host;
   try {
-    if (!window.CodeScopeBlockEditor) throw new Error('区块编辑器资源未加载');
+    await loadBlockEditor();
     const controller = await window.CodeScopeBlockEditor.create({
       root: host,
       markdown: String(fragment.code || ''),

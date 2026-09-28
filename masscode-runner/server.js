@@ -2621,27 +2621,73 @@ function sendIndex(req, res) {
   if (req.method === 'HEAD') return res.end();
   res.end(body);
 }
+/* 静态资源 gzip 缓存：/assets 下的 JS/CSS 未压缩合计约 4.8MB（reading-block-editor.js 2.7MB、
+   xterm.js 277KB、highlight 119KB…），原先这些一律原样发送。按 文件+大小+mtime 缓存压缩结果，
+   用 Z_BEST_SPEED（本地回环场景下省下的传输时间远大于多花的一点 CPU）。 */
+const STATIC_GZIP_CACHE = new Map();
+const STATIC_GZIP_CACHE_MAX = 40;
+const STATIC_GZIP_MIN_BYTES = 1024;
+const STATIC_GZIP_TYPES = /^(?:text\/|application\/(?:javascript|json|xml|manifest\+json)|image\/svg\+xml)/;
+function gzipStaticFile(file, stat, callback) {
+  const key = file + ':' + stat.size + ':' + Math.floor(stat.mtimeMs);
+  const hit = STATIC_GZIP_CACHE.get(key);
+  if (hit) {
+    STATIC_GZIP_CACHE.delete(key); STATIC_GZIP_CACHE.set(key, hit);
+    return callback(hit);
+  }
+  fs.readFile(file, (error, raw) => {
+    if (error) return callback(null);
+    zlib.gzip(raw, { level: zlib.constants.Z_BEST_SPEED }, (gzipError, gz) => {
+      // 压不动（已经很小的资源、已压缩过的二进制）就照常流式发送，避免白费 CPU 反而变大。
+      if (gzipError || !gz || gz.length >= raw.length) return callback(null);
+      STATIC_GZIP_CACHE.set(key, gz);
+      while (STATIC_GZIP_CACHE.size > STATIC_GZIP_CACHE_MAX) STATIC_GZIP_CACHE.delete(STATIC_GZIP_CACHE.keys().next().value);
+      callback(gz);
+    });
+  });
+}
 function streamStatic(req, res, root, relative, options = {}) {
   const file = path.resolve(root, relative);
   if (file !== root && !file.startsWith(root + path.sep)) return send(res, 403, { ok:false, error:'forbidden' });
   fs.stat(file, (error, stat) => {
     if (error || !stat.isFile()) return send(res, 404, { ok:false, error:options.notFound || 'not found' });
+    const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
     const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
+    const cacheControl = options.cacheControl || 'no-cache';
+    const canGzip = /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(req.headers['accept-encoding'] || ''))
+      && stat.size >= STATIC_GZIP_MIN_BYTES && STATIC_GZIP_TYPES.test(type);
     if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { ETag:etag, 'Cache-Control':options.cacheControl || 'no-cache' });
+      res.writeHead(304, { ETag:etag, 'Cache-Control':cacheControl, ...(canGzip ? { Vary:'Accept-Encoding' } : {}) });
       return res.end();
     }
-    res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'Content-Length': stat.size,
-      'Cache-Control': options.cacheControl || 'no-cache',
-      ETag: etag,
-      'X-Content-Type-Options': 'nosniff',
-    });
-    if (req.method === 'HEAD') return res.end();
-    const input = fs.createReadStream(file);
-    input.on('error', () => { if (!res.headersSent) send(res, 500, { ok:false, error:'读取静态资源失败' }); else res.destroy(); });
-    input.pipe(res);
+    const finish = (compressed) => {
+      if (compressed) {
+        res.writeHead(200, {
+          'Content-Type': type,
+          'Content-Length': compressed.length,
+          'Content-Encoding': 'gzip',
+          'Cache-Control': cacheControl,
+          ETag: etag,
+          Vary: 'Accept-Encoding',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        if (req.method === 'HEAD') return res.end();
+        return res.end(compressed);
+      }
+      res.writeHead(200, {
+        'Content-Type': type,
+        'Content-Length': stat.size,
+        'Cache-Control': cacheControl,
+        ETag: etag,
+        ...(canGzip ? { Vary: 'Accept-Encoding' } : {}),
+        'X-Content-Type-Options': 'nosniff',
+      });
+      if (req.method === 'HEAD') return res.end();
+      const input = fs.createReadStream(file);
+      input.on('error', () => { if (!res.headersSent) send(res, 500, { ok:false, error:'读取静态资源失败' }); else res.destroy(); });
+      input.pipe(res);
+    };
+    if (canGzip) gzipStaticFile(file, stat, finish); else finish(null);
   });
 }
 function pipeReadingFile(res, input) {
