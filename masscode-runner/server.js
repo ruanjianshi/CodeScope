@@ -107,7 +107,7 @@ function saveOnlyOfficeConnection(input) {
     source:'saved',
   };
   fs.mkdirSync(path.dirname(ONLYOFFICE_CONNECTION_FILE), { recursive:true });
-  fs.writeFileSync(ONLYOFFICE_CONNECTION_FILE, JSON.stringify({
+  writeFileAtomicSync(ONLYOFFICE_CONNECTION_FILE, JSON.stringify({
     publicUrl:ONLYOFFICE_CONNECTION.publicUrl,
     callbackBase:ONLYOFFICE_CONNECTION.callbackBase,
     jwtSecret:ONLYOFFICE_CONNECTION.jwtSecret,
@@ -943,18 +943,52 @@ function walkLatexResources() {
   return out.sort((a, b) => a.path.localeCompare(b.path, 'zh'));
 }
 
+/* 原子写：同目录临时文件 + rename。
+   裸 writeFileSync 在磁盘满/进程被强杀/iCloud 同步中断时会留下“半截文件”，而片段 .md 与
+   .masscode/state.json 一旦被截断，用户代码与整个片段索引都会损坏（本仓库此前只有
+   Office/XMind 少数几处用了 temp+rename 的写法）。 */
+function writeFileAtomicSync(file, data, options) {
+  const dir = path.dirname(file);
+  const tmp = path.join(dir, '.' + path.basename(file) + '.tmp-' + process.pid + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  let mode;
+  try { mode = fs.statSync(file).mode; } catch (_) {}
+  fs.writeFileSync(tmp, data, options);
+  if (mode !== undefined) { try { fs.chmodSync(tmp, mode); } catch (_) {} }
+  fs.renameSync(tmp, file);
+  return file;
+}
+
 /* massCode 元数据库 .masscode/state.json：新建/移动片段与文件夹时需要登记，保证 massCode 识别 */
+const STATE_EMPTY = () => ({ version: 3, counters: { contentId: 1, folderId: 1, snippetId: 1, tagId: 1 }, folderIdByPath: {}, folderUi: {}, snippets: [], tags: [] });
 function readState() {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(vaultPath(), 'code', '.masscode', 'state.json'), 'utf8'));
-  } catch (_) {
-    return { version: 3, counters: { contentId: 1, folderId: 1, snippetId: 1, tagId: 1 }, folderIdByPath: {}, folderUi: {}, snippets: [], tags: [] };
+  const file = path.join(vaultPath(), 'code', '.masscode', 'state.json');
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch (error) {
+    // 只有“确实不存在”才算空库；其它读取失败要留痕，不能装作没事。
+    if (error && error.code !== 'ENOENT') console.error('读取 massCode 状态库失败：' + String(error.message || error));
+    return STATE_EMPTY();
+  }
+  try { return JSON.parse(text); }
+  catch (error) {
+    // 状态库损坏时原来会静默当作空库，用户看到的是“整个片段库消失”，而且下次写入会直接
+    // 覆盖掉损坏文件、把唯一的恢复线索也销毁。这里改为：保留损坏文件 + 尽力抢救 id 计数器
+    // （计数器归零会导致新片段 id 与既有 .md 冲突），并明确报错。
+    const kept = file + '.corrupt-' + Date.now();
+    try { fs.renameSync(file, kept); } catch (_) {}
+    const empty = STATE_EMPTY();
+    for (const key of Object.keys(empty.counters)) {
+      const found = new RegExp('"' + key + '"\\s*:\\s*(\\d+)').exec(text);
+      if (found) empty.counters[key] = Number(found[1]);
+    }
+    console.error('massCode 状态库无法解析，已保留为 ' + kept + '、并按 id 计数器 ' + JSON.stringify(empty.counters) + ' 继续运行（原始错误：' + String(error.message || error) + '）');
+    return empty;
   }
 }
 function writeState(st) {
   const p = path.join(vaultPath(), 'code', '.masscode', 'state.json');
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(st, null, 2), 'utf8');
+  writeFileAtomicSync(p, JSON.stringify(st, null, 2), 'utf8');
 }
 
 /* 按标签名解析为 id，不存在的自动新建（massCode 标签注册表） */
@@ -1138,7 +1172,7 @@ function run(interp, args, opts = {}) {
 function writeTemp(name, content) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mscr-'));
   const f = path.join(dir, name);
-  fs.writeFileSync(f, content);
+  writeFileAtomicSync(f, content);
   scheduleTempCleanup(dir);
   return { dir, file: f };
 }
@@ -1245,8 +1279,8 @@ async function compileLatex(code, sourceFile) {
   const cmd = latexCmd();
   const copiedResources = await copyLatexResources(sourceFile, dir);
   const bibKey = await latexBibliographyKey(dir, sourceFile, code), cachedBbl = LATEX_BIB_CACHE.get(bibKey);
-  if (cachedBbl) fs.writeFileSync(path.join(dir, 'main.bbl'), cachedBbl);
-  fs.writeFileSync(source, code, 'utf8');
+  if (cachedBbl) writeFileAtomicSync(path.join(dir, 'main.bbl'), cachedBbl);
+  writeFileAtomicSync(source, code, 'utf8');
   const started = Date.now();
   try {
     const runFile = (program, args, timeout = 30000) => new Promise((resolve) => {
@@ -1336,7 +1370,7 @@ function writeFragments(files) {
     // 兜底：文件名只取 basename，任何情况下都不得写出临时目录之外
     const safeName = path.basename(String(f.filename));
     if (!safeName || safeName === '.' || safeName === '..') continue;
-    fs.writeFileSync(path.join(dir, safeName), f.code || '');
+    writeFileAtomicSync(path.join(dir, safeName), f.code || '');
   }
   scheduleTempCleanup(dir);
   return dir;
@@ -1677,7 +1711,7 @@ function writeBackFragment(file, fragment, newCode) {
   const absStart = bodyOffset + segStart + lineOffsets[firstIdx];
   const absEnd = bodyOffset + segStart + lineOffsets[lastIdx] + segLines[lastIdx].length;
   const replacement = openLine + '\n' + newCode + '\n' + segLines[lastIdx];
-  fs.writeFileSync(file, text.slice(0, absStart) + replacement + text.slice(absEnd), 'utf8');
+  writeFileAtomicSync(file, text.slice(0, absStart) + replacement + text.slice(absEnd), 'utf8');
   return true;
 }
 
@@ -1751,7 +1785,7 @@ function reorderFragments(file, order) {
 
   // 6) 组装写回
   const out = '---' + nl + newYaml + nl + '---' + nl + newBody;
-  fs.writeFileSync(file, out, 'utf8');
+  writeFileAtomicSync(file, out, 'utf8');
   return { ok: true };
 }
 
@@ -2234,8 +2268,8 @@ async function unifiedTextDiff(before, after, beforeLabel, afterLabel) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-diff-'));
   const left = path.join(dir, 'before.txt'), right = path.join(dir, 'after.txt');
   try {
-    fs.writeFileSync(left, String(before || ''), 'utf8');
-    fs.writeFileSync(right, String(after || ''), 'utf8');
+    writeFileAtomicSync(left, String(before || ''), 'utf8');
+    writeFileAtomicSync(right, String(after || ''), 'utf8');
     const raw = await new Promise((resolve) => {
       let out = '';
       const cp = spawn('git', ['diff', '--no-index', '--no-color', '--no-ext-diff', '--unified=3', '--', left, right], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -2370,7 +2404,7 @@ function recordTimeline(file, fragment, code, reason, force) {
     const bucket = now;
     const id = bucket + '-' + shortHash(target.relative + '#' + target.fragment);
     const firstLine = value.split(/\r?\n/).find((line) => line.trim()) || '空内容';
-    fs.writeFileSync(path.join(target.dir, id + '.json'), JSON.stringify({
+    writeFileAtomicSync(path.join(target.dir, id + '.json'), JSON.stringify({
       timestamp: now, file: target.relative, fragment: target.fragment, reason: reason || '自动保存',
       size: Buffer.byteLength(value, 'utf8'), preview: firstLine.trim().slice(0, 120), code: value,
     }), 'utf8');
@@ -2672,7 +2706,7 @@ function readStudyConfig() {
 function saveStudyConfig(input) {
   const next = cleanStudyConfig({ ...readStudyConfig(), ...(input && typeof input === 'object' ? input : {}), updatedAt:Date.now() });
   fs.mkdirSync(studyDir(), { recursive:true });
-  fs.writeFileSync(studyConfigFile(), JSON.stringify(next, null, 2) + '\n', 'utf8');
+  writeFileAtomicSync(studyConfigFile(), JSON.stringify(next, null, 2) + '\n', 'utf8');
   return next;
 }
 function studyNoteFile(id) {
@@ -2925,7 +2959,7 @@ async function fetchReadableWebPage(input) {
 }
 function readingProjectMetaFile(rel){return path.join(readingsDir(),rel,READING_PROJECT_META);}
 function loadReadingProjectMeta(rel){try{const value=JSON.parse(fs.readFileSync(readingProjectMetaFile(rel),'utf8'));return{description:String(value.description||'').slice(0,1000),tags:Array.isArray(value.tags)?value.tags.map(String).filter(Boolean).slice(0,30):[]};}catch(_){return{description:'',tags:[]};}}
-function saveReadingProjectMeta(rel,value){const clean={version:1,description:String(value&&value.description||'').trim().slice(0,1000),tags:[...new Set((Array.isArray(value&&value.tags)?value.tags:String(value&&value.tags||'').split(/[,，]/)).map((tag)=>String(tag).trim()).filter(Boolean))].slice(0,30),updatedAt:Date.now()};fs.mkdirSync(path.join(readingsDir(),rel),{recursive:true});fs.writeFileSync(readingProjectMetaFile(rel),JSON.stringify(clean,null,2),'utf8');return clean;}
+function saveReadingProjectMeta(rel,value){const clean={version:1,description:String(value&&value.description||'').trim().slice(0,1000),tags:[...new Set((Array.isArray(value&&value.tags)?value.tags:String(value&&value.tags||'').split(/[,，]/)).map((tag)=>String(tag).trim()).filter(Boolean))].slice(0,30),updatedAt:Date.now()};fs.mkdirSync(path.join(readingsDir(),rel),{recursive:true});writeFileAtomicSync(readingProjectMetaFile(rel),JSON.stringify(clean,null,2),'utf8');return clean;}
 function readingMetaFile(rel) {
   const id = crypto.createHash('sha256').update(rel).digest('hex');
   return path.join(readingsDir(), '.codescope', id + '.json');
@@ -2962,7 +2996,7 @@ function saveReadingMeta(rel, value) {
   clean.updatedAt = Date.now();
   const target = readingMetaFile(rel);
   fs.mkdirSync(path.dirname(target), { recursive:true });
-  fs.writeFileSync(target, JSON.stringify(clean, null, 2), 'utf8');
+  writeFileAtomicSync(target, JSON.stringify(clean, null, 2), 'utf8');
   return clean;
 }
 /* ---- 阅读标注（高亮/标记/摘要），存项目内 .codescope-annotations/<pdf名>.json ---- */
@@ -3015,7 +3049,7 @@ function saveReadingAnnotations(rel, value) {
   const data = { version: 1, updatedAt: Date.now(), annotations, summary };
   const target = readingAnnotationsFile(rel);
   fs.mkdirSync(path.dirname(target), { recursive:true });
-  fs.writeFileSync(target, JSON.stringify(data, null, 2), 'utf8');
+  writeFileAtomicSync(target, JSON.stringify(data, null, 2), 'utf8');
   return { annotations, summary };
 }
 function moveReadingMeta(from, to) {
@@ -3024,7 +3058,7 @@ function moveReadingMeta(from, to) {
   try {
     const meta = loadReadingMeta(from); meta.path = to;
     fs.mkdirSync(path.dirname(nextFile), { recursive:true });
-    fs.writeFileSync(nextFile, JSON.stringify(meta, null, 2), 'utf8');
+    writeFileAtomicSync(nextFile, JSON.stringify(meta, null, 2), 'utf8');
     fs.unlinkSync(oldFile);
   } catch (_) {}
 }
@@ -3459,7 +3493,7 @@ function validateOfficeFile(file, ext) {
 async function createOfficeDocument(kind, file, title) {
   if (kind === 'word') {
     const doc = new Document({ sections:[{ children:[new Paragraph({ text:title || '新建文档', heading:HeadingLevel.TITLE }), new Paragraph('开始编写内容…')] }] });
-    fs.writeFileSync(file, await Packer.toBuffer(doc)); return;
+    writeFileAtomicSync(file, await Packer.toBuffer(doc)); return;
   }
   if (kind === 'sheet') {
     const workbook = XLSX.utils.book_new();
@@ -3482,7 +3516,7 @@ async function createOfficeDocument(kind, file, title) {
     entries['ppt/slideMasters/slideMaster1.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap accent1="4472C4" accent2="ED7D31" accent3="A5A5A5" accent4="FFC000" accent5="5B9BD5" accent6="70AD47" bg1="lt1" bg2="lt2" folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/><p:sldLayoutIdLst><p:sldLayoutId id="1" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>');
     entries['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/></Relationships>');
     entries['ppt/theme/theme1.xml'] = strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="CodeScope"><a:themeElements><a:clrScheme name="CodeScope"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="243247"/></a:dk2><a:lt2><a:srgbClr val="F7F9FC"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="CodeScope"><a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface="等线"/><a:cs typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/><a:ea typeface="等线"/><a:cs typeface="Arial"/></a:minorFont></a:fontScheme><a:fmtScheme name="CodeScope"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="lt1"/></a:solidFill><a:solidFill><a:schemeClr val="lt2"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>');
-    fs.writeFileSync(file, Buffer.from(zipSync(entries, { level:6 }))); return;
+    writeFileAtomicSync(file, Buffer.from(zipSync(entries, { level:6 }))); return;
   }
   throw new Error('不支持的 Office 文档类型');
 }
@@ -3760,7 +3794,7 @@ const server = http.createServer(async (req, res) => {
           const body = await readBody(req, 9 * 1024 * 1024), content = String(body && body.content != null ? body.content : '');
           if (Buffer.byteLength(content) > 8 * 1024 * 1024) return send(res, 413, { ok:false, error:'笔记超过 8 MB' });
           fs.mkdirSync(path.dirname(file), { recursive:true });
-          fs.writeFileSync(file, content, 'utf8');
+          writeFileAtomicSync(file, content, 'utf8');
           return send(res, 200, { ok:true, id, size:Buffer.byteLength(content) });
         } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
       }
@@ -3780,7 +3814,7 @@ const server = http.createServer(async (req, res) => {
           if (!isStudyImage(body, type)) return send(res, 415, { ok:false, error:'学习图片内容与图片格式不匹配' });
           const name = 'frame-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex') + ext, file = studyAssetFile(name);
           fs.mkdirSync(path.dirname(file), { recursive:true });
-          fs.writeFileSync(file, body);
+          writeFileAtomicSync(file, body);
           const url = '/api/study/asset?name=' + encodeURIComponent(name), title = String(u.searchParams.get('title') || '视频帧').replace(/[\[\]]/g, '').slice(0, 80);
           return send(res, 200, { ok:true, name, url, markdown:'![' + title + '](' + url + ')' });
         } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
@@ -4028,7 +4062,7 @@ const server = http.createServer(async (req, res) => {
       if ((b.parent && !parent) || !name || name.includes('/')) return send(res, 400, { ok:false, error:'文件夹名称或位置不合法' });
       const rel = parent ? parent + '/' + name : name;
       fs.mkdirSync(path.join(readingsDir(), rel), { recursive:true });
-      fs.writeFileSync(path.join(readingsDir(),rel,READING_FOLDER_META),JSON.stringify({version:1,updatedAt:Date.now()},null,2),'utf8');
+      writeFileAtomicSync(path.join(readingsDir(),rel,READING_FOLDER_META),JSON.stringify({version:1,updatedAt:Date.now()},null,2),'utf8');
       return send(res, 200, { ok:true, path:rel });
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/project/new') {
@@ -4060,7 +4094,7 @@ const server = http.createServer(async (req, res) => {
       const dir=path.join(readingsDir(),project);fs.mkdirSync(dir,{recursive:true});let target=path.join(dir,name);
       if(fs.existsSync(target))return send(res,409,{ok:false,error:'同名片段已存在'});
       const ext=path.extname(name).toLowerCase();const content=['.md','.markdown'].includes(ext)?'# '+name.replace(/\.[^.]+$/,'')+'\n\n':'// '+name+'\n';
-      fs.writeFileSync(target,content,'utf8');return send(res,200,{ok:true,path:project+'/'+name,kind:['.md','.markdown'].includes(ext)?'markdown':'code',content});
+      writeFileAtomicSync(target,content,'utf8');return send(res,200,{ok:true,path:project+'/'+name,kind:['.md','.markdown'].includes(ext)?'markdown':'code',content});
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/web/new') {
       const b = await readBody(req, 128 * 1024), project = readingPath(String(b.project || ''), true);
@@ -4073,7 +4107,7 @@ const server = http.createServer(async (req, res) => {
       try { if (!fs.statSync(dir).isDirectory()) throw new Error(); } catch (_) { return send(res, 404, { ok:false, error:'阅读项目不存在' }); }
       let name = rawTitle + '.url', index = 2;
       while (fs.existsSync(path.join(dir, name))) { name = rawTitle + '-' + index + '.url'; index += 1; }
-      fs.writeFileSync(path.join(dir, name), '[InternetShortcut]\nURL=' + url.toString() + '\n', 'utf8');
+      writeFileAtomicSync(path.join(dir, name), '[InternetShortcut]\nURL=' + url.toString() + '\n', 'utf8');
       return send(res, 200, { ok:true, path:project + '/' + name, name, kind:'web', url:url.toString() });
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/web') {
@@ -4109,7 +4143,7 @@ const server = http.createServer(async (req, res) => {
       if(!rel||!READING_TEXT_EXTS.has(path.extname(rel).toLowerCase()))return send(res,400,{ok:false,error:'文本片段路径不合法'});
       const content=String(b.content==null?'':b.content);if(Buffer.byteLength(content)>8*1024*1024)return send(res,413,{ok:false,error:'文本片段超过 8 MB'});
       if((rel===KNOWLEDGE.folderName||rel.startsWith(KNOWLEDGE.folderName+'/'))&&/!?\[[^\]]*\]\(\s*blob:/i.test(content))return send(res,400,{ok:false,error:'知识库图片不能使用浏览器临时 blob 地址，请在区块编辑器中重新粘贴或拖入图片'});
-      try{fs.writeFileSync(path.join(readingsDir(),rel),content,'utf8');if(rel===KNOWLEDGE.folderName||rel.startsWith(KNOWLEDGE.folderName+'/'))KNOWLEDGE.schedule('markdown-save');return send(res,200,{ok:true,size:Buffer.byteLength(content)});}catch(error){return send(res,500,{ok:false,error:'保存失败：'+String(error.message||error)});}
+      try{writeFileAtomicSync(path.join(readingsDir(),rel),content,'utf8');if(rel===KNOWLEDGE.folderName||rel.startsWith(KNOWLEDGE.folderName+'/'))KNOWLEDGE.schedule('markdown-save');return send(res,200,{ok:true,size:Buffer.byteLength(content)});}catch(error){return send(res,500,{ok:false,error:'保存失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/upload-stream') {
       let info;
@@ -4345,7 +4379,7 @@ const server = http.createServer(async (req, res) => {
       const content = String(b.content == null ? '' : b.content);
       if (Buffer.byteLength(content, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok: false, error: '文本资源超过 2 MB' });
       fs.mkdirSync(path.dirname(resource.full), { recursive: true });
-      fs.writeFileSync(resource.full, content, 'utf8');
+      writeFileAtomicSync(resource.full, content, 'utf8');
       return send(res, 200, { ok: true, path: resource.rel, size: Buffer.byteLength(content, 'utf8') });
     }
     if (req.method === 'POST' && u.pathname === '/api/latex/resource/upload') {
@@ -4360,7 +4394,7 @@ const server = http.createServer(async (req, res) => {
       let data; try { data = Buffer.from(encoded, 'base64'); } catch (_) { return send(res, 400, { ok: false, error: '文件数据无效' }); }
       if (!data.length || data.length > 30 * 1024 * 1024) return send(res, 413, { ok: false, error: '资源文件必须在 30 MB 以内' });
       fs.mkdirSync(path.dirname(resource.full), { recursive: true });
-      fs.writeFileSync(resource.full, data);
+      writeFileAtomicSync(resource.full, data);
       return send(res, 200, { ok: true, path: resource.rel, size: data.length, replaced: !!b.replace });
     }
     if (req.method === 'POST' && u.pathname === '/api/latex/resource/rename') {
@@ -4560,7 +4594,7 @@ const server = http.createServer(async (req, res) => {
           st.folderIdByPath[subRel] = fid;
           st.folderUi[fid] = { isOpen: 1 };
         }
-        fs.writeFileSync(metaPath,
+        writeFileAtomicSync(metaPath,
           `id: ${fid}\ncreatedAt: ${now}\ndefaultLanguage: ${i === segs.length - 1 ? defaultLanguage : 'plain_text'}\nicon: null\nname: ${segs[i]}\norderIndex: 0\nupdatedAt: ${now}\n`, 'utf8');
       }
       writeState(st);
@@ -4612,7 +4646,7 @@ const server = http.createServer(async (req, res) => {
         '\n## Fragment: ' + contentLabel + '\n' +
         '```' + language + '\n' +
         initialCode + '\n```\n';
-      fs.writeFileSync(full, md, 'utf8');
+      writeFileAtomicSync(full, md, 'utf8');
       st.snippets.push({
         filePath, id: sid,
         meta: {
@@ -4654,7 +4688,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const text = fs.readFileSync(destFull, 'utf8');
         const updated = text.replace(/^folderId:\s*.*$/m, 'folderId: ' + (fid || 0));
-        if (updated !== text) fs.writeFileSync(destFull, updated, 'utf8');
+        if (updated !== text) writeFileAtomicSync(destFull, updated, 'utf8');
       } catch (_) {}
       return send(res, 200, { ok: true, file: destFull, folder: toFolder });
     }
@@ -4772,7 +4806,7 @@ const server = http.createServer(async (req, res) => {
       }
       // 写回 .md
       const newMd = stringifyFrontmatter(fm);
-      fs.writeFileSync(full, newMd, 'utf8');
+      writeFileAtomicSync(full, newMd, 'utf8');
       // 同步 state.json
       const sm = snip.meta;
       if (b.name !== undefined && fm.meta.name) sm.name = fm.meta.name;
@@ -4808,7 +4842,7 @@ const server = http.createServer(async (req, res) => {
       const bodyEnd = fm.body.replace(/\s+$/, '');
       fm.body = bodyEnd + '\n\n## Fragment: ' + label + '\n```' + language + '\n\n```\n';
       const newMd = stringifyFrontmatter(fm);
-      fs.writeFileSync(full, newMd, 'utf8');
+      writeFileAtomicSync(full, newMd, 'utf8');
       snip.meta.contents.push(newItem);
       snip.meta.mtimeMs = now; snip.meta.updatedAt = now; snip.meta.size = Buffer.byteLength(newMd);
       writeState(st);
@@ -4844,7 +4878,7 @@ const server = http.createServer(async (req, res) => {
         fm.body = fm.body.replace(/\n{3,}/g, '\n\n');
       }
       const newMd = stringifyFrontmatter(fm);
-      fs.writeFileSync(full, newMd, 'utf8');
+      writeFileAtomicSync(full, newMd, 'utf8');
       const now = Date.now();
       snip.meta.contents = snip.meta.contents.filter((c) => String(c.id) !== String(fragId));
       snip.meta.mtimeMs = now; snip.meta.updatedAt = now; snip.meta.size = Buffer.byteLength(newMd);
@@ -5148,7 +5182,7 @@ const server = http.createServer(async (req, res) => {
         if (!data || typeof data !== 'object' || !Array.isArray(data.elements)) return send(res, 200, { ok: false, error: '缺少 Excalidraw 场景数据' });
         body = JSON.stringify({ type: 'excalidraw', version: 2, source: 'file://', elements: data.elements, appState: data.appState || {}, files: data.files || {} });
       }
-      try { fs.writeFileSync(target, body); return send(res, 200, { ok: true, name, bytes: body.length }); }
+      try { writeFileAtomicSync(target, body); return send(res, 200, { ok: true, name, bytes: body.length }); }
       catch (e) { return send(res, 200, { ok: false, error: '写入失败: ' + String((e && e.message) || e) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/drawings/validate') {
@@ -5181,7 +5215,7 @@ const server = http.createServer(async (req, res) => {
           const info = writeXmindFile(path.join(dirAbs, name), scene);
           return send(res, 200, { ok:true, name:full, dir:sub, kind, workbook:scene, ...info });
         }
-        fs.writeFileSync(path.join(dirAbs, name), kind === 'drawio' ? scene : JSON.stringify(scene));
+        writeFileAtomicSync(path.join(dirAbs, name), kind === 'drawio' ? scene : JSON.stringify(scene));
         return send(res, 200, kind === 'drawio' ? { ok: true, name: full, dir: sub, kind, xml: scene } : { ok: true, name: full, dir: sub, kind, ...scene });
       } catch (e) { return send(res, 200, { ok: false, error: '创建失败: ' + String((e && e.message) || e) }); }
     }
@@ -5327,7 +5361,7 @@ const server = http.createServer(async (req, res) => {
       const dir = libsDir();
       try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
       const body = JSON.stringify({ type: 'excalidrawLibrary', version: 2, source: 'file://', libraryItems: data.libraryItems });
-      try { fs.writeFileSync(path.join(dir, name), body); return send(res, 200, { ok: true, name, bytes: body.length }); }
+      try { writeFileAtomicSync(path.join(dir, name), body); return send(res, 200, { ok: true, name, bytes: body.length }); }
       catch (e) { return send(res, 200, { ok: false, error: '写入失败: ' + String((e && e.message) || e) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/libraries/delete') {
