@@ -2587,6 +2587,14 @@ function streamStatic(req, res, root, relative, options = {}) {
     input.pipe(res);
   });
 }
+function pipeReadingFile(res, input) {
+  // 必须挂 error 监听：否则 iCloud 未落地/权限变化时未捕获的 'error' 事件会直接终止整个进程。
+  input.on('error', () => {
+    if (!res.headersSent) send(res, 500, { ok:false, error:'读取资料文件失败' });
+    else if (!res.destroyed) res.destroy();
+  });
+  return input.pipe(res);
+}
 function trustedHttpOrigin(req) {
   if (String(req.headers['sec-fetch-site'] || '').toLowerCase() === 'cross-site') return false;
   const origin = String(req.headers.origin || '').trim();
@@ -2758,21 +2766,83 @@ async function validatedReadingWebUrl(value) {
   if (!addresses.length || addresses.some((item) => privateNetworkAddress(item.address))) throw requestError('出于安全原因，网页阅读不能访问局域网或保留地址', 403);
   return url;
 }
+/* 有界 HTML 扫描。
+   原实现 /<(nav|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi 在“大量未闭合开标签”输入下退化为 O(n²)：
+   实测 30KB→20ms、100KB→241ms、300KB→2137ms、600KB→8569ms，而本模块允许 8MB 输入
+   （见 fetchReadableWebPage 的 8MB 上限），外推可冻结事件循环数分钟；且入口是无 CSRF 校验的 GET，
+   外部网页用 <img src="http://127.0.0.1:4877/api/readings/web/page?url=..."> 即可触发。
+   下面全部改为线性扫描（正则只匹配单个开标签，闭合位置用 indexOf 定位，并限制扫描量）。 */
+const READING_WEB_SCAN_LIMIT = 512 * 1024;
+const READING_WEB_MAX_CANDIDATES = 200;
 function readableWebNavigation(html) {
-  const source = String(html || '');
-  const chapter = /<ol\b[^>]*class=["'][^"']*\bchapter\b[^"']*["'][^>]*>[\s\S]*?<\/ol\s*>/i.exec(source);
-  if (chapter && (chapter[0].match(/<a\b/gi) || []).length >= 2) return chapter[0].slice(0, 2 * 1024 * 1024);
-  const candidates = [], pattern = /<(nav|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
-  let match;
-  while ((match = pattern.exec(source))) {
-    const links = (match[0].match(/<a\b/gi) || []).length;
-    if (links >= 2) candidates.push({ html:match[0], score:links * 1000 + Math.min(match[0].length, 100000) });
+  const full = String(html || '');
+  const source = full.length > READING_WEB_SCAN_LIMIT ? full.slice(0, READING_WEB_SCAN_LIMIT) : full;
+  const lower = source.toLowerCase();
+  const chapterOpen = /<ol\b[^>]*class=["'][^"']*\bchapter\b[^"']*["'][^>]*>/i.exec(source);
+  if (chapterOpen) {
+    const closeIndex = lower.indexOf('</ol', chapterOpen.index + chapterOpen[0].length);
+    const chunk = closeIndex === -1 ? '' : source.slice(chapterOpen.index, closeIndex + 5);
+    if ((chunk.match(/<a\b/gi) || []).length >= 2) return chunk.slice(0, 2 * 1024 * 1024);
+  }
+  const candidates = [], openRe = /<(nav|aside)\b[^>]*>/gi;
+  let open, scanned = 0;
+  while ((open = openRe.exec(source)) && scanned < READING_WEB_MAX_CANDIDATES) {
+    scanned += 1;
+    const tag = open[1].toLowerCase();
+    const closeIndex = lower.indexOf('</' + tag, openRe.lastIndex);
+    if (closeIndex === -1) continue;
+    const chunk = source.slice(open.index, closeIndex + tag.length + 3);
+    const links = (chunk.match(/<a\b/gi) || []).length;
+    if (links >= 2) candidates.push({ html:chunk, score:links * 1000 + Math.min(chunk.length, 100000) });
   }
   candidates.sort((a, b) => b.score - a.score);
   return candidates[0] ? candidates[0].html.slice(0, 2 * 1024 * 1024) : '';
 }
+function stripHtmlCommentsBounded(source, maxBlocks = 2000) {
+  let out = '', cursor = 0, guard = 0, index;
+  while ((index = source.indexOf('<!--', cursor)) !== -1 && guard < maxBlocks) {
+    guard += 1;
+    const end = source.indexOf('-->', index + 4);
+    out += source.slice(cursor, index);
+    if (end === -1) return out + source.slice(index);
+    cursor = end + 3;
+  }
+  return out + source.slice(cursor);
+}
+function stripTagBlocksBounded(source, tags, maxBlocks = 2000) {
+  const lower = source.toLowerCase(), openRe = new RegExp('<(?:' + tags + ')\\b[^>]*>', 'gi');
+  let out = '', cursor = 0, guard = 0, open;
+  while ((open = openRe.exec(source)) && guard < maxBlocks) {
+    if (open.index < cursor) continue;
+    guard += 1;
+    const tag = (open[0].match(/^<([a-z0-9]+)/i) || [])[1];
+    if (!tag) continue;
+    const closeIndex = lower.indexOf('</' + tag.toLowerCase(), openRe.lastIndex);
+    if (closeIndex === -1) continue;
+    out += source.slice(cursor, open.index);
+    cursor = closeIndex + tag.length + 3;
+    openRe.lastIndex = cursor;
+  }
+  return cursor === 0 ? source : out + source.slice(cursor);
+}
+function boundedTagInner(source, tag) {
+  const open = new RegExp('<' + tag + '\\b[^>]*>', 'i').exec(source);
+  if (!open) return '';
+  const closeIndex = source.toLowerCase().indexOf('</' + tag, open.index + open[0].length);
+  if (closeIndex === -1) return source.slice(open.index + open[0].length);
+  return source.slice(open.index + open[0].length, closeIndex);
+}
 function readableWebNavigationLinkCount(html) { return (String(html || '').match(/<a\b/gi) || []).length; }
-const READING_WEB_NAV_CACHE = new Map();
+const READING_WEB_NAV_CACHE = new Map(), READING_WEB_NAV_CACHE_LIMIT = 32;
+function rememberReadingWebNav(key, value) {
+  // 每条最多 2MB HTML：原来只写不淘汰，长期使用 RSS 会持续上涨。
+  READING_WEB_NAV_CACHE.set(key, value);
+  while (READING_WEB_NAV_CACHE.size > READING_WEB_NAV_CACHE_LIMIT) {
+    const oldest = READING_WEB_NAV_CACHE.keys().next().value;
+    if (oldest === undefined) break;
+    READING_WEB_NAV_CACHE.delete(oldest);
+  }
+}
 async function readableWebCompanionNavigation(html, pageUrl) {
   const source = String(html || '');
   const match = /<iframe\b[^>]*\bsrc=["']([^"']*(?:toc|sidebar)[^"']*\.html(?:[?#][^"']*)?)["'][^>]*>/i.exec(source);
@@ -2798,23 +2868,25 @@ async function readableWebCompanionNavigation(html, pageUrl) {
       const data = Buffer.from(await response.arrayBuffer());
       if (data.length > 2 * 1024 * 1024) return '';
       const navigation = readableWebNavigation(data.toString('utf8'));
-      if (navigation) READING_WEB_NAV_CACHE.set(cacheKey, { at:Date.now(), html:navigation });
+      if (navigation) rememberReadingWebNav(cacheKey, { at:Date.now(), html:navigation });
       return navigation;
     } catch (_) { return ''; }
     finally { clearTimeout(timer); }
   }
   return '';
 }
+const READING_WEB_SECTION_LIMIT = 4 * 1024 * 1024;
+const READING_WEB_STRIP_TAGS = 'script|style|noscript|svg|canvas|form|nav|footer|aside';
 function readableWebSection(html) {
-  const raw = String(html || ''), navigationHtml = readableWebNavigation(raw);
-  const source = raw
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<(script|style|noscript|svg|canvas|form|nav|footer|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+  const full = String(html || '');
+  const raw = full.length > READING_WEB_SECTION_LIMIT ? full.slice(0, READING_WEB_SECTION_LIMIT) : full;
+  const navigationHtml = readableWebNavigation(raw);
+  const source = stripTagBlocksBounded(stripTagBlocksBounded(stripHtmlCommentsBounded(raw), READING_WEB_STRIP_TAGS), READING_WEB_STRIP_TAGS)
     .replace(/<(script|style|noscript|svg|canvas|form|nav|footer|aside)\b[^>]*\/?>/gi, '');
-  const title = ((/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(source) || [])[1] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
-  const article = (/<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(source) || [])[1];
-  const main = (/<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(source) || [])[1];
-  const body = (/<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(source) || [])[1];
+  const title = boundedTagInner(source, 'title').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+  const article = boundedTagInner(source, 'article');
+  const main = boundedTagInner(source, 'main');
+  const body = boundedTagInner(source, 'body');
   return { title, html:String(article || main || body || source).slice(0, 6 * 1024 * 1024), navigationHtml };
 }
 async function fetchReadableWebPage(input) {
@@ -3566,13 +3638,28 @@ async function liveWebSearch(provider, key, query) {
   throw new Error('不支持的联网搜索服务');
 }
 
+/* 请求级熔断：从“总时长 90 秒”改为“无输出 N 秒”。
+   原实现无条件 90 秒销毁连接，导致终端/SSH 会话满 90 秒必被静默断开、长文 AI 翻译必然失败
+   （前端对 /api/ai/chat 传的是 timeoutMs:300000）。现在只要还在产出数据就不掐断，
+   仍然覆盖“云盘 git 卡死”这类真正无输出的挂起场景。 */
+const REQUEST_IDLE_TIMEOUT_MS = Math.max(10000, Number(process.env.CODESCOPE_REQUEST_TIMEOUT_MS) || 150000);
+const REQUEST_NO_TIMEOUT = new Set(['/api/term/stream', '/api/ai/chat']);
+function armRequestGuard(req, res, pathname) {
+  if (REQUEST_NO_TIMEOUT.has(pathname)) return;
+  let timer = null;
+  const arm = () => { clearTimeout(timer); timer = setTimeout(() => { try { res.destroy(); } catch (_) {} }, REQUEST_IDLE_TIMEOUT_MS); };
+  res.on('finish', () => clearTimeout(timer));
+  res.on('close', () => clearTimeout(timer));
+  const write = res.write.bind(res);
+  res.write = function guardedWrite(...args) { arm(); return write(...args); };
+  arm();
+}
+
 const server = http.createServer(async (req, res) => {
-  // 请求级熔断：任何请求最长 90 秒（覆盖云盘 git 卡死等极端场景），超时即断开该连接，
-  // 页面永远不会无限“转圈”，也不拖累其他请求。
-  const _reqGuard = setTimeout(() => { try { res.destroy(); } catch (_) {} }, 90000);
-  res.on('finish', () => clearTimeout(_reqGuard));
-  res.on('close', () => clearTimeout(_reqGuard));
-  const u = new URL(req.url, 'http://' + HOST + ':' + PORT);
+  let u;
+  try { u = new URL(req.url, 'http://' + HOST + ':' + PORT); }
+  catch (_) { return send(res, 400, { ok:false, error:'请求地址不合法' }); }
+  armRequestGuard(req, res, u.pathname);
   try {
     if (req.method !== 'GET' && u.pathname.startsWith('/api/') && !trustedHttpOrigin(req)) {
       return send(res, 403, { ok:false, error:'已拒绝跨站写入请求' });
@@ -4112,9 +4199,10 @@ const server = http.createServer(async (req, res) => {
         const end = match[2] ? Math.min(Number(match[2]), stat.size - 1) : stat.size - 1;
         if (start > end || start >= stat.size) { res.writeHead(416, { 'Content-Range':'bytes */' + stat.size }); return res.end(); }
         res.writeHead(206, { 'Content-Range':`bytes ${start}-${end}/${stat.size}`, 'Content-Length':end-start+1 });
-        return fs.createReadStream(file, { start, end }).pipe(res);
+        return pipeReadingFile(res, fs.createReadStream(file, { start, end }));
       }
-      res.writeHead(200, { 'Content-Length':stat.size }); return fs.createReadStream(file).pipe(res);
+      res.writeHead(200, { 'Content-Length':stat.size });
+      return pipeReadingFile(res, fs.createReadStream(file));
     }
     if (req.method === 'GET' && u.pathname === '/api/readings/text') {
       const rel = readingPath(u.searchParams.get('path'));
@@ -5557,6 +5645,22 @@ server.listen(PORT, HOST, () => {
   });
   console.log('按 Ctrl+C 停止');
 });
+
+/* 最后一道安全网。历史上「未捕获异常 / 未处理的 Promise 拒绝」会让整个工作台进程直接退出
+   （Node 15+ 对 unhandledRejection 默认终止进程），而进程退出前是没有任何提示的。
+   已知来源已在请求路径上修掉，这里只负责记录并尽量存活，同时对异常持续出现做熔断，避免刷屏空转。 */
+let unexpectedErrorCount = 0;
+const UNEXPECTED_ERROR_LIMIT = 30;
+function reportUnexpectedError(label, error) {
+  unexpectedErrorCount += 1;
+  console.error('[' + label + '] ' + String((error && error.stack) || error).slice(0, 2000));
+  if (unexpectedErrorCount === UNEXPECTED_ERROR_LIMIT) {
+    console.error('异常已连续出现 ' + UNEXPECTED_ERROR_LIMIT + ' 次，为避免继续空转将退出；请把以上日志反馈给开发者。');
+    try { shutdown(label); } catch (_) { process.exit(1); }
+  }
+}
+process.on('unhandledRejection', (reason) => reportUnexpectedError('未处理的 Promise 拒绝', reason));
+process.on('uncaughtException', (error) => reportUnexpectedError('未捕获异常', error));
 
 let shuttingDown = false;
 async function shutdown(signal) {
