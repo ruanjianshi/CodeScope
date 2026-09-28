@@ -974,7 +974,10 @@ print(r.run())
  // 切换模型时语言服务会主动取消在途请求，Monaco 抛出 "Canceled" 属预期信号（见上文等待语言服务结束的注释）；
  // 这里只过滤这一条已知信息，其他运行错误照旧失败。
  const ideUnexpectedErrors=ideErrors.filter(message=>!/^canceled$/i.test(String(message||'').trim()));
- if(ideUnexpectedErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideUnexpectedErrors.join('；'));if(ideErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideErrors.join('；'));
+ // 只对“过滤后仍然存在”的错误失败。原来这里后面还跟了一句 `if(ideErrors.length) throw`，
+ // 于是只要语言服务取消过一次在途请求，断言就必然失败（与被过滤掉的 Canceled 自相矛盾），
+ // 表现为约三成概率的偶发失败。
+ if(ideUnexpectedErrors.length)throw new Error('Monaco 浏览器运行错误：'+ideUnexpectedErrors.join('；'));
   await idePage.close();
 
   /* ---- Office 工作区：左侧同级入口与 ONLYOFFICE 必选连接页 ---- */
