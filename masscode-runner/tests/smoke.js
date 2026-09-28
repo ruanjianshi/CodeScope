@@ -859,6 +859,27 @@ int main(void) { return 0; }
   assert(!treeAfterFolderDelete.snippets.some((item)=>String(item.file).includes('删除测试/')), '删除文件夹后其中的片段仍出现在列表中');
   assert((await postJson(baseUrl, '/api/fs/delete-folder', { folder:'删除测试' })).ok === false, '删除不存在的文件夹应返回失败');
 
+  /* ---- 磁盘上有、状态库没登记的片段（iCloud 同步进来 / 手工放入）----
+     回归：这些接口此前只查 state.json，一律返回“片段不在状态库中（可能尚未同步）”，
+     于是列表里看得见的片段却无法移动、重命名、删除。 */
+  const orphanRel = '孤儿片段.md';
+  const orphanFull = path.join(vault, 'code', orphanRel);
+  fs.writeFileSync(orphanFull,
+    '---\ncontents:\n  - id: 1\n    label: main.c\n    language: c_cpp\ncreatedAt: 1\ndescription: 同步进来的片段\n' +
+    'folderId: 0\nid: 9001\nisDeleted: 0\nisFavorites: 0\nname: 孤儿片段\ntags:\nupdatedAt: 1\n---\n\n## Fragment: main.c\n' +
+    '```c_cpp\nint main(){return 0;}\n```\n', 'utf8');
+  assert((await requestJson(baseUrl, '/api/snippets')).snippets.some((item)=>String(item.file).endsWith(orphanRel)),
+    '磁盘直写的片段应出现在列表中（此时尚未登记进状态库）');
+  assert((await postJson(baseUrl, '/api/fs/mkdir', { path:'收养测试' })).ok, '收养测试目录创建失败');
+  const adoptedMove = await postJson(baseUrl, '/api/fs/move', { file:orphanFull, toFolder:'收养测试' });
+  assert(adoptedMove.ok, '未登记片段应能被移动（此前报“片段不在状态库中”）：' + JSON.stringify(adoptedMove));
+  const adoptedEntry = (await requestJson(baseUrl, '/api/snippets')).snippets.find((item)=>String(item.file).endsWith(orphanRel));
+  assert(adoptedEntry && adoptedEntry.folder === '收养测试', '移动后该片段应位于目标文件夹，实际 ' + (adoptedEntry && adoptedEntry.folder));
+  const adoptedDelete = await postJson(baseUrl, '/api/fs/delete', { file:adoptedEntry.file });
+  assert(adoptedDelete.ok && !fs.existsSync(path.join(vault, 'code', '收养测试', orphanRel)), '未登记片段应能被删除');
+  // 删掉最后一个片段时 /api/fs/delete 已经顺手回收了空目录，所以这里只断言“目录确实没了”。
+  assert(!fs.existsSync(path.join(vault, 'code', '收养测试')), '收养测试目录未随空片段一起清理');
+
   console.log(`CodeScope smoke tests: ${passed} passed`);
 }
 

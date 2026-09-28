@@ -983,6 +983,48 @@ function writeFileAtomicSync(file, data, options) {
 
 /* massCode 元数据库 .masscode/state.json：新建/移动片段与文件夹时需要登记，保证 massCode 识别 */
 const STATE_EMPTY = () => ({ version: 3, counters: { contentId: 1, folderId: 1, snippetId: 1, tagId: 1 }, folderIdByPath: {}, folderUi: {}, snippets: [], tags: [] });
+/* 把「磁盘上确实存在、但状态库里没有」的片段补登记后再继续。
+   state.json 只由 massCode 与本站的新建接口维护，所以另一台机器通过 iCloud 同步进来的
+   .md（本项目的 vault 就放在 iCloud 里）、手工复制进来的文件、或 massCode 尚未同步的改动，
+   都会「列表里看得到、一移动 / 重命名 / 删除就报片段不在状态库中」。
+   调用它的 5 个接口（move / update / addfragment / delfragment / delete）本来就要写 state，
+   因此补登记不会引入额外的写入路径。 */
+function adoptSnippetFromDisk(st, file) {
+  const codeRoot = path.join(vaultPath(), 'code');
+  const full = path.resolve(codeRoot, String(file || ''));
+  if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return null;
+  const hit = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === full);
+  if (hit) return hit;
+  let stat;
+  try { stat = fs.statSync(full); } catch (_) { return null; }
+  if (!stat.isFile()) return null;
+  let meta = {};
+  try { meta = parseFrontmatter(fs.readFileSync(full, 'utf8')).meta || {}; } catch (_) { return null; }
+  const rel = path.relative(codeRoot, full).split(path.sep).join('/');
+  const now = Date.now();
+  const entry = {
+    filePath: rel,
+    id: Number(meta.id) || ++st.counters.contentId,
+    meta: {
+      contents: Array.isArray(meta.contents) ? meta.contents : [],
+      createdAt: meta.createdAt || now,
+      description: meta.description || null,
+      folderId: meta.folderId || 0,
+      isDeleted: 0,
+      isFavorites: Number(meta.isFavorites) || 0,
+      mtimeMs: stat.mtimeMs,
+      name: String(meta.name || path.basename(full).replace(/\.md$/i, '')),
+      size: stat.size,
+      tags: Array.isArray(meta.tags) ? meta.tags : [],
+      updatedAt: meta.updatedAt || now,
+    },
+  };
+  st.snippets.push(entry);
+  writeState(st);
+  console.log('[codescope] 片段未登记，已从磁盘补登记：' + rel);
+  return entry;
+}
+
 function readState() {
   const file = path.join(vaultPath(), 'code', '.masscode', 'state.json');
   let text;
@@ -4757,8 +4799,8 @@ const server = http.createServer(async (req, res) => {
       if (!file || toFolder.split('/').some((seg) => seg === '.' || seg === '..')) return send(res, 200, { ok: false, error: '参数不合法' });
       const codeRoot = path.join(vaultPath(), 'code');
       const st = readState();
-      const snip = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === path.resolve(file));
-      if (!snip) return send(res, 200, { ok: false, error: '片段不在状态库中（可能尚未同步）' });
+      const snip = adoptSnippetFromDisk(st, file);
+      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       const destDir = toFolder ? path.join(codeRoot, toFolder) : codeRoot;
       if (destDir !== codeRoot && !destDir.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
       const fname = path.basename(snip.filePath);
@@ -4836,8 +4878,8 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
       const st = readState();
-      const snip = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === path.resolve(String(b.file || '')));
-      if (!snip) return send(res, 200, { ok: false, error: '片段不在状态库中（可能尚未同步）' });
+      const snip = adoptSnippetFromDisk(st, b.file);
+      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       let full = path.resolve(codeRoot, snip.filePath);
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
       let text = fs.readFileSync(full, 'utf8');
@@ -4931,8 +4973,8 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
       const st = readState();
-      const snip = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === path.resolve(String(b.file || '')));
-      if (!snip) return send(res, 200, { ok: false, error: '片段不在状态库中（可能尚未同步）' });
+      const snip = adoptSnippetFromDisk(st, b.file);
+      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       const full = path.resolve(codeRoot, snip.filePath);
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
       const language = String(b.language || 'plain_text').trim() || 'plain_text';
@@ -4958,8 +5000,8 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
       const st = readState();
-      const snip = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === path.resolve(String(b.file || '')));
-      if (!snip) return send(res, 200, { ok: false, error: '片段不在状态库中（可能尚未同步）' });
+      const snip = adoptSnippetFromDisk(st, b.file);
+      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       const full = path.resolve(codeRoot, snip.filePath);
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
       const fragId = Number(b.fragmentId);
@@ -5031,8 +5073,8 @@ const server = http.createServer(async (req, res) => {
       const codeRoot = path.join(vaultPath(), 'code');
       const st = readState();
       const full = path.resolve(codeRoot, String(b.file || ''));
-      const snip = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === full);
-      if (!snip) return send(res, 200, { ok: false, error: '片段不在状态库中（可能尚未同步）' });
+      const snip = adoptSnippetFromDisk(st, full);
+      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
       // 从状态库移除
       st.snippets = st.snippets.filter((s) => s !== snip);
