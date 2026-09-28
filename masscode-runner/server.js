@@ -3211,7 +3211,6 @@ function readingTree() {
   root.children=walkFolders(rootDir,'',0);
   return root;
 }
-let PDFJS_PROMISE = null;
 const PDF_TEXT_CACHE = new Map();
 const PDF_TEXT_CACHE_LIMIT = 10;
 const PDF_TEXT_CACHE_BYTES_LIMIT = 64 * 1024 * 1024;
@@ -3226,29 +3225,85 @@ function trimPdfTextCache() {
     PDF_TEXT_CACHE.delete(oldest);
   }
 }
-async function parsePdfPages(file) {
-  if (!PDFJS_PROMISE) PDFJS_PROMISE = import('pdfjs-dist/legacy/build/pdf.mjs');
-  const pdfjs = await PDFJS_PROMISE;
-  // 用异步读盘代替 readFileSync：一本大 PDF 同步读会阻塞事件循环（终端、自动保存一起卡住）。
-  const buffer = await fs.promises.readFile(file);
-  const bytes = new Uint8Array(buffer);
-  const task = pdfjs.getDocument({ data:bytes, disableWorker:true, useSystemFonts:true });
-  const doc = await task.promise;
-  const pages = [];
-  for (let number = 1; number <= doc.numPages; number += 1) {
-    const page = await doc.getPage(number);
-    const content = await page.getTextContent();
-    let text = '', lastY = null;
-    for (const item of content.items || []) {
-      const y = item.transform && item.transform[5];
-      if (lastY != null && y != null && Math.abs(y - lastY) > 4) text += '\n';
-      else if (text && !text.endsWith('\n')) text += ' ';
-      text += String(item.str || ''); lastY = y;
-    }
-    pages.push(text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
+/* pdf.js 的文本抽取是纯 CPU 的同步循环（服务端还禁用了它自带的 worker），
+   放在主线程上会让整本大 PDF 的解析时间把事件循环一起冻住：终端输出、自动保存、
+   其他 HTTP 请求都得等它。因此解析改到 worker 线程执行，主线程只负责收发。
+   线程复用（pdf.js 的加载不便宜），空闲一段时间后终止以释放其内存；
+   线程起不来或超时时退回进程内解析，功能不降级，只是退回到会短暂占用主线程的老行为。
+   解析逻辑只有一份，在 lib/pdf-text.js。 */
+const PDF_WORKER_IDLE_MS = Math.max(5000, Number(process.env.CODESCOPE_PDF_WORKER_IDLE_MS) || 60000);
+const PDF_WORKER_TIMEOUT_MS = Math.max(30000, Number(process.env.CODESCOPE_PDF_TIMEOUT_MS) || 180000);
+let PDF_WORKER = null;
+let PDF_WORKER_IDLE_TIMER = null;
+let PDF_WORKER_SEQ = 0;
+const PDF_WORKER_PENDING = new Map();
+
+function armPdfWorkerIdle() {
+  if (PDF_WORKER_IDLE_TIMER) clearTimeout(PDF_WORKER_IDLE_TIMER);
+  PDF_WORKER_IDLE_TIMER = setTimeout(() => {
+    if (PDF_WORKER_PENDING.size) return armPdfWorkerIdle();
+    stopPdfWorker('空闲');
+  }, PDF_WORKER_IDLE_MS);
+  if (PDF_WORKER_IDLE_TIMER.unref) PDF_WORKER_IDLE_TIMER.unref();
+}
+function stopPdfWorker(reason) {
+  if (PDF_WORKER_IDLE_TIMER) { clearTimeout(PDF_WORKER_IDLE_TIMER); PDF_WORKER_IDLE_TIMER = null; }
+  const worker = PDF_WORKER;
+  PDF_WORKER = null;
+  if (worker) { try { worker.terminate(); } catch (_) {} }
+  if (PDF_WORKER_PENDING.size) {
+    const waiting = [...PDF_WORKER_PENDING.values()];
+    PDF_WORKER_PENDING.clear();
+    for (const item of waiting) { clearTimeout(item.timer); item.reject(new Error(reason === '空闲' ? 'PDF 解析线程已空闲回收' : String(reason || 'PDF 解析线程已停止'))); }
   }
-  await doc.destroy();
-  return { pages, bytes: buffer.length };
+}
+function ensurePdfWorker() {
+  if (PDF_WORKER) return PDF_WORKER;
+  const { Worker } = require('worker_threads');
+  const worker = new Worker(path.join(__dirname, 'lib', 'pdf-text-worker.js'));
+  worker.on('message', (message) => {
+    const id = message && message.id, item = PDF_WORKER_PENDING.get(id);
+    if (!item) return;
+    PDF_WORKER_PENDING.delete(id);
+    clearTimeout(item.timer);
+    if (message.ok) item.resolve({ pages: message.pages, bytes: message.bytes });
+    else { const parseError = new Error(message.error || 'PDF 解析失败'); parseError.pdfReported = true; item.reject(parseError); }
+    armPdfWorkerIdle();
+  });
+  worker.on('error', (error) => stopPdfWorker('PDF 解析线程出错：' + String((error && error.message) || error)));
+  worker.on('exit', (code) => { if (PDF_WORKER === worker) stopPdfWorker('PDF 解析线程退出（code ' + code + '）'); });
+  if (worker.unref) worker.unref();
+  PDF_WORKER = worker;
+  return worker;
+}
+function parsePdfPagesInWorker(file) {
+  const worker = ensurePdfWorker();
+  const id = ++PDF_WORKER_SEQ;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      PDF_WORKER_PENDING.delete(id);
+      reject(new Error('PDF 解析超时（' + PDF_WORKER_TIMEOUT_MS + 'ms）'));
+      stopPdfWorker('PDF 解析超时');
+    }, PDF_WORKER_TIMEOUT_MS);
+    if (timer.unref) timer.unref();
+    PDF_WORKER_PENDING.set(id, { resolve, reject, timer });
+    worker.postMessage({ id, file });
+  });
+}
+async function parsePdfPagesInline(file) {
+  // pdf.js 的模块加载也交给 lib/pdf-text.js 缓存，这里不再重复 import。
+  const { parsePdfText } = require('./lib/pdf-text.js');
+  return parsePdfText(file);
+}
+async function parsePdfPages(file) {
+  try {
+    return await parsePdfPagesInWorker(file);
+  } catch (error) {
+    // 线程报告的解析失败（文件损坏、加密等）就是最终结论，不再重试一遍。
+    if (error && error.pdfReported) throw error;
+    console.warn('[codescope] PDF 解析线程不可用，退回进程内解析：' + String((error && error.message) || error));
+    return parsePdfPagesInline(file);
+  }
 }
 async function extractPdfPages(file) {
   const stat = await fs.promises.stat(file), cacheKey = stat.mtimeMs + ':' + stat.size;
@@ -5848,6 +5903,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   try { LSP.close(); } catch (_) {}
+  try { stopPdfWorker('进程退出'); } catch (_) {}
   try { KNOWLEDGE.stop(); } catch (_) {}
   try { stopTerm(); } catch (_) {}
   try { await OPENCODE.stop(); } catch (_) {}

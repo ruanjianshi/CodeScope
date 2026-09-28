@@ -880,6 +880,41 @@ int main(void) { return 0; }
   // 删掉最后一个片段时 /api/fs/delete 已经顺手回收了空目录，所以这里只断言“目录确实没了”。
   assert(!fs.existsSync(path.join(vault, 'code', '收养测试')), '收养测试目录未随空片段一起清理');
 
+  /* ---- PDF 文本抽取（/api/readings/text 此前零覆盖）----
+     真正的风险不是解析不出来，而是解析把事件循环一起冻住，所以这里至少守住
+     「能解析、页码正确、坏文件明确报错」这三件事（时序另有实测脚本覆盖）。 */
+  function buildMiniPdf() {
+    const objects = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+      null,
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ];
+    const content = 'BT /F1 14 Tf 20 120 Td (CodeScope PDF 文本抽取) Tj ET';
+    objects[3] = '<< /Length ' + Buffer.byteLength(content) + ' >>\nstream\n' + content + '\nendstream';
+    let body = '%PDF-1.4\n', offsets = [];
+    objects.forEach((text, index) => { offsets.push(Buffer.byteLength(body)); body += (index + 1) + ' 0 obj\n' + text + '\nendobj\n'; });
+    const xrefAt = Buffer.byteLength(body);
+    let xref = 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+    for (const offset of offsets) xref += String(offset).padStart(10, '0') + ' 00000 n \n';
+    return Buffer.from(body + xref + 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefAt + '\n%%EOF\n', 'utf8');
+  }
+  const readingsRoot = path.join(vault, 'readings');
+  fs.mkdirSync(readingsRoot, { recursive: true });
+  fs.writeFileSync(path.join(readingsRoot, 'smoke.pdf'), buildMiniPdf());
+  const pdfText = await requestJson(baseUrl, '/api/readings/text?path=' + encodeURIComponent('smoke.pdf'));
+  assert(pdfText.ok && pdfText.pageCount === 1, 'PDF 文本抽取应返回 1 页，实际 ' + JSON.stringify({ ok: pdfText.ok, pageCount: pdfText.pageCount, error: pdfText.error }));
+  assert(String(pdfText.pages[0]).includes('CodeScope PDF'), 'PDF 首页文本应包含写入的字符串，实际 ' + JSON.stringify(String(pdfText.pages[0]).slice(0, 80)));
+  // 第二次走缓存：结果必须稳定（线程重启与否都不影响文本）
+  const pdfTextAgain = await requestJson(baseUrl, '/api/readings/text?path=' + encodeURIComponent('smoke.pdf'));
+  assert(pdfTextAgain.pages[0] === pdfText.pages[0], '同一 PDF 两次抽取结果应完全一致');
+  fs.writeFileSync(path.join(readingsRoot, 'broken.pdf'), Buffer.from('%PDF-1.4\n这不是一个 PDF\n', 'utf8'));
+  const brokenPdf = await requestJson(baseUrl, '/api/readings/text?path=' + encodeURIComponent('broken.pdf'), 500);
+  assert(brokenPdf.ok === false && /PDF 文本解析失败/.test(String(brokenPdf.error)), '损坏的 PDF 应明确报错，实际 ' + JSON.stringify(brokenPdf).slice(0, 160));
+  const escapedPdf = await requestJson(baseUrl, '/api/readings/text?path=' + encodeURIComponent('../code/smoke.pdf'), 400);
+  assert(escapedPdf.ok === false, 'PDF 路径越界应被拒绝');
+
   console.log(`CodeScope smoke tests: ${passed} passed`);
 }
 
