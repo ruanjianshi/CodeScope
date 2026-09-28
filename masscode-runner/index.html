@@ -3177,6 +3177,12 @@
 
   @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition-duration:.01ms !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; } }
 
+  @media (max-width:1200px) {
+    /* 片段说明只在真正窄的窗口隐藏：原来断点设在 1600px，1280~1600 这一大片常见笔记本
+       宽度都看不到说明文字。 */
+    #snippet-desc { display:none; }
+  }
+
   @media (max-width:1600px) {
     header { gap:6px; }
     header h1 { gap:6px; }
@@ -3190,7 +3196,6 @@
     #app-nav #btn-env::after,#app-nav #btn-remote::after { top:5px; right:4px; width:6px; height:6px; }
     #app-nav #theme-btn .theme-dot { margin:0; }
     #sysmon #sm-disk { display:none; }
-    #snippet-desc { display:none; }
     #toolbar { flex-wrap:nowrap; }
     #toolbar .sp { min-width:0; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -4442,6 +4447,9 @@ function editorShortcutContext() {
   return !!CURRENT&&getComputedStyle($('code-wrap')).display!=='none';
 }
 // 切换/离开前把编辑中内容落盘（自动保存），无需确认弹窗
+/* 离开编辑前统一 flush 待保存内容。它永远返回 true：写盘是异步且带重试的，
+   这里拦不住也不该拦，所以调用方的 `if (!confirmLeaveEdit()) return` 只是防御性写法。
+   保留返回值是为了不改动 7 个调用点的控制流。 */
 function confirmLeaveEdit() {
   flushSave();
   flushSplitEditors();
@@ -4450,11 +4458,15 @@ function confirmLeaveEdit() {
 
 async function api(path, body) {
   let response;
-  // 统一 65 秒超时：服务无响应（例如旧服务进程已僵死）时明确报错返回，
-  // 而不是让界面永久停在“编译中…/运行中…”等状态。
+  // 默认 120 秒超时：服务无响应（例如旧服务进程已僵死）时明确报错返回，
+  // 而不是让界面永久停在“编译中…/运行中…”等状态。（注释此前写 65 秒，与代码不符。）
+  // 长任务例外：body 里的 timeoutMs 是给服务端的超时，前端必须比它更宽，
+  // 否则长文 AI 翻译会被前端先 abort（原来固定 120 秒 < 服务端 300 秒）。
+  const requested = Number(body && body.timeoutMs);
+  const clientTimeoutMs = requested > 0 ? Math.max(120000, requested + 15000) : 120000;
   const opts = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined;
   try {
-    response = await fetch(path, Object.assign({}, opts, { signal: AbortSignal.timeout(120000) }));
+    response = await fetch(path, Object.assign({}, opts, { signal: AbortSignal.timeout(clientTimeoutMs) }));
   } catch (error2) {
     const timedOut = /aborted|timeout/i.test(String((error2 && error2.name) || '') + ' ' + String((error2 && error2.message) || ''));
     return { ok:false, networkError:true, error: timedOut
@@ -4908,7 +4920,16 @@ function renderList() {
   }
   const root = buildTree(SNIPPETS, FOLDERS);
   renderTree(root, list);
-  // 拖到列表空白处（未命中文件夹）= 移到根目录
+  if (!list.children.length) list.innerHTML = '<div class="empty-state">暂无片段</div>';
+}
+
+/* 「拖到列表空白处＝移到根目录」的监听器只注册一次。
+   原来每次 renderList 都往常驻的 #list 上再挂 3 个监听器，长时间使用会累积到成千上万个，
+   同一次拖拽被重复处理很多遍（每次渲染还要重新分配闭包）。 */
+function bindListDropTarget() {
+  const list = $('list');
+  if (list.dataset.dropBound === '1') return;
+  list.dataset.dropBound = '1';
   list.addEventListener('dragover', (e) => {
     if (e.target.closest('.fnode')) return;
     e.preventDefault(); e.dataTransfer.dropEffect = 'move';
@@ -4925,7 +4946,6 @@ function renderList() {
     else if (drag.type === 'folder') moveProjectFolder(drag.value, '');
     else setStatus('err', 'LaTeX 资源必须保留在 data、figures 或 fonts 目录中');
   });
-  if (!list.children.length) list.innerHTML = '<div class="empty-state">暂无片段</div>';
 }
 
 function latexRawUrl(path) { return '/api/latex/resource/raw?path=' + encodeURIComponent(path) + '&t=' + Date.now(); }
@@ -5889,7 +5909,11 @@ async function ensureReadingDoc(path) {
   doc.loading=false;return doc;
 }
 async function saveReadingDoc(doc) {
-  if(!doc)return;await api('/api/readings/meta',{path:doc.path,meta:doc.meta});
+  if(!doc)return;
+  // 原来直接丢弃返回值：保存失败时界面看上去已经保存，重开文档改动就没了。
+  const result=await api('/api/readings/meta',{path:doc.path,meta:doc.meta});
+  if(result&&result.ok===false)setStatus('err','阅读元数据保存失败：'+String(result.error||'未知错误'));
+  return result;
 }
 function readingSlotElements(slot) { const col=document.querySelector('.reading-col[data-slot="'+slot+'"]');return {col,body:col.querySelector('.reading-col-body'),name:col.querySelector('.doc'),view:col.querySelector('.reading-view'),page:col.querySelector('.reading-page-input'),pages:col.querySelector('.reading-pages')}; }
 function updateReadingColumnLayout(){$('reading-columns').classList.toggle('single',!READING_SLOTS[1]);}
@@ -11344,6 +11368,10 @@ function fragmentDisplayName(fragment,fallback){const label=String(fragment&&fra
 function splitName(ref) { return fragmentDisplayName(ref.frag,ref.snippet.name||('片段 '+(ref.index+1))); }
 /* 分栏是当前阅读/编辑过程中的临时工作台：刷新页面时回到单栏，避免旧文件
    在新项目旁边被意外恢复。代码内容仍按原有自动保存流程持久化。 */
+/* 分栏编辑器有意不做会话持久化：每次启动都从单栏开始。旧版本曾把 mc-editor-groups /
+   mc-editor-group-ratios 写进 localStorage，下面顺手清掉遗留键。保留这个空实现，
+   是为了让 persistSplitEditors 的 8 个调用点不必区分“有时写、有时不写”，也让
+   “为什么重启后不恢复分栏”有据可查（此前看起来像是一个没写完的功能）。 */
 function persistSplitEditors() {}
 function restoreSplitEditors() {
   if(restoreSplitEditors.done) return;restoreSplitEditors.done=true;
@@ -14962,6 +14990,16 @@ $('knowledge-folder-path').addEventListener('keydown',(event)=>{if(event.key==='
 $('knowledge-project-path').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeProject();});
 $('knowledge-project-description').addEventListener('keydown',(event)=>{if(event.key==='Enter')createKnowledgeProject();});
 $('search').oninput = renderList;
+bindListDropTarget();
+// 搜索框键盘操作：Esc 清空并退出；Enter 直接打开第一条结果（不必再用鼠标点）。
+$('search').onkeydown = (event) => {
+  if (event.key === 'Escape') { event.preventDefault(); $('search').value = ''; renderList(); $('search').blur(); return; }
+  if (event.key !== 'Enter') return;
+  const first = $('list').querySelector('.item');
+  if (!first) return;
+  event.preventDefault();
+  first.click();
+};
 $('welcome-search').onclick = () => { $('search').focus(); $('search').select(); };
 $('welcome-study').onclick = () => $('btn-study').click();
 $('welcome-dsh').onclick = () => $('btn-dsh').click();
@@ -15331,7 +15369,10 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     await persistAnnotations(path, viewer);
   }
   async function persistAnnotations(path, viewer) {
-    await api('/api/readings/annotations', { path, annotations: viewer.ann.annotations, summary: viewer.ann.summary });
+    // 标注承载着全部高亮与摘要，保存失败必须让用户看见（原来静默丢弃返回值）。
+    const result = await api('/api/readings/annotations', { path, annotations: viewer.ann.annotations, summary: viewer.ann.summary });
+    if (result && result.ok === false) { try { setStatus('err', '标注保存失败：' + String(result.error || '未知错误')); } catch (_) {} }
+    return result;
   }
   function pushUndo(viewer) {
     (viewer._undoStack = viewer._undoStack || []).push(JSON.parse(JSON.stringify(viewer.ann.annotations)));
