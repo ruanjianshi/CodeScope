@@ -8,6 +8,8 @@ const KNOWLEDGE_FOLDER = '知识库';
 const KNOWLEDGE_PROJECT_META = '.codescope-project.json';
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown']);
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+/* 单次构建的硬上限：vitepress 卡死时必须能自救，否则状态永远停在“正在生成知识库…”。 */
+const KNOWLEDGE_BUILD_TIMEOUT_MS = Math.max(60000, Number(process.env.CODESCOPE_KNOWLEDGE_BUILD_TIMEOUT_MS) || 180000);
 
 function safeRelative(value, options = {}) {
   const rel = String(value || '').replace(/\\/g, '/').split('/').map((part) => part.trim()).filter(Boolean).join('/');
@@ -29,10 +31,22 @@ function textTitle(file, fallback) {
   return fallback;
 }
 
+/* 原子写：知识库文档是用户内容，半截文件会直接出现在站点里。 */
+function writeFileAtomicSync(file, data, options) {
+  const dir = path.dirname(file);
+  const tmp = path.join(dir, '.' + path.basename(file) + '.tmp-' + process.pid + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  let mode;
+  try { mode = fs.statSync(file).mode; } catch (_) {}
+  fs.writeFileSync(tmp, data, options);
+  if (mode !== undefined) { try { fs.chmodSync(tmp, mode); } catch (_) {} }
+  fs.renameSync(tmp, file);
+  return file;
+}
+
 function writeIfMissing(file, content) {
   if (fs.existsSync(file)) return false;
   fs.mkdirSync(path.dirname(file), { recursive:true });
-  fs.writeFileSync(file, content, 'utf8');
+  writeFileAtomicSync(file, content, 'utf8');
   return true;
 }
 
@@ -40,7 +54,7 @@ function writeManaged(file, content) {
   let current = ''; try { current = fs.readFileSync(file, 'utf8'); } catch (_) {}
   if (current === content) return false;
   fs.mkdirSync(path.dirname(file), { recursive:true });
-  fs.writeFileSync(file, content, 'utf8');
+  writeFileAtomicSync(file, content, 'utf8');
   return true;
 }
 
@@ -50,7 +64,7 @@ function migrateKnowledgeHome(file) {
   try { current = fs.readFileSync(file, 'utf8'); } catch (_) { return false; }
   const next = current.replace(/(\blink:\s*)\/快速开始\/知识库使用指南(?=\s|$)/g, '$1/快速开始/使用指南/知识库使用指南');
   if (next === current) return false;
-  fs.writeFileSync(file, next, 'utf8');
+  writeFileAtomicSync(file, next, 'utf8');
   return true;
 }
 
@@ -578,7 +592,7 @@ function createKnowledgeBase(options) {
   const sourceDir = () => path.join(getVaultPath(), 'readings', KNOWLEDGE_FOLDER);
   const distDir = () => path.join(dataRoot, 'knowledge', 'site');
   let state = { phase:'idle', message:'尚未生成', startedAt:0, finishedAt:0, durationMs:0, error:'', pending:false };
-  let buildPromise = null, timer = null, watcher = null, poller = null, observedSourceTime = 0;
+  let buildPromise = null, timer = null, watcher = null, poller = null, observedSourceTime = 0, buildChild = null;
 
   function ensure() {
     const root = sourceDir();
@@ -659,6 +673,13 @@ function createKnowledgeBase(options) {
     return { ok:true, engine:'VitePress', engineVersion:require('vitepress/package.json').version, sourceDir:sourceDir(), distDir:distDir(), url:'/knowledge/', pages, pageCount:pages.length, assetCount:assets.count, assetBytes:assets.bytes, built, ...displayState };
   }
 
+  /* status() 会做 statSync / require 版本号 / 目录遍历，任何一步抛错都不该让
+     构建结束回调里的未捕获异常把整个工作台带崩；所有回调统一走这个安全包装。 */
+  function statusSafe() {
+    try { return status(); }
+    catch (error) { return { ok:false, error:String((error && error.message) || error) }; }
+  }
+
   function build(reason = 'manual') {
     ensure();
     if (buildPromise) { state.pending = true; return buildPromise; }
@@ -671,14 +692,24 @@ function createKnowledgeBase(options) {
     try { fs.rmSync(stagingDir, { recursive:true, force:true }); } catch (_) {}
     buildPromise = new Promise((resolve) => {
       const child = spawn(process.execPath, [bin, 'build', sourceDir(), '--outDir', stagingDir], { cwd:projectRoot, env:{ ...process.env, NO_COLOR:'1' }, stdio:['ignore','pipe','pipe'] });
+      buildChild = child;
+      // 看门狗：vitepress 遇到坏 Markdown/循环引用会挂住不退出，原实现没有任何超时，
+      // 于是一直停留在“正在生成知识库…”且 buildPromise 永不结算（之后每次保存都只是排队）。
+      const watchdog = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch (_) {}
+      }, KNOWLEDGE_BUILD_TIMEOUT_MS);
+      watchdog.unref?.();
+      const clearWatchdog = () => { clearTimeout(watchdog); if (buildChild === child) buildChild = null; };
       let output = '';
       const add = (chunk) => { output = (output + chunk.toString()).slice(-12000); };
       child.stdout.on('data', add); child.stderr.on('data', add);
       child.once('error', (error) => {
+        clearWatchdog();
         try { fs.rmSync(stagingDir, { recursive:true, force:true }); } catch (_) {}
-        const finishedAt=Date.now(); state={ ...state, phase:'error', message:'知识库生成失败', error:String(error.message||error), finishedAt, durationMs:finishedAt-startedAt }; buildPromise=null; resolve(status());
+        const finishedAt=Date.now(); state={ ...state, phase:'error', message:'知识库生成失败', error:String(error.message||error), finishedAt, durationMs:finishedAt-startedAt }; buildPromise=null; resolve(statusSafe());
       });
       child.once('exit', (code) => {
+        clearWatchdog();
         const finishedAt = Date.now();let ok = code === 0 && fs.existsSync(path.join(stagingDir, 'index.html')),swapError='';
         if(ok){
           let movedCurrent=false;
@@ -694,7 +725,7 @@ function createKnowledgeBase(options) {
           if(ok)try{fs.rmSync(backupDir,{recursive:true,force:true});}catch(_){}
         }else try{fs.rmSync(stagingDir,{recursive:true,force:true});}catch(_){}
         state = { ...state, phase:ok?'ready':'error', message:ok?'知识库已更新':'知识库生成失败（已保留上一版本）', error:ok?'':(swapError||output.trim().slice(-4000)), finishedAt, durationMs:finishedAt-startedAt };
-        buildPromise = null; const again = state.pending; state.pending = false; resolve(status()); if (again) schedule('pending');
+        buildPromise = null; const again = state.pending; state.pending = false; resolve(statusSafe()); if (again) schedule('pending');
       });
     });
     return buildPromise;
@@ -724,7 +755,12 @@ function createKnowledgeBase(options) {
     }
   }
 
-  function stop() { clearTimeout(timer); timer=null;clearInterval(poller);poller=null;try { watcher?.close(); } catch (_) {} watcher=null; }
+  function stop() {
+    clearTimeout(timer); timer=null; clearInterval(poller); poller=null;
+    try { watcher?.close(); } catch (_) {} watcher=null;
+    // 退出时必须带走正在跑的构建子进程，否则它会变成孤儿继续占用 CPU 与 node_modules。
+    try { buildChild?.kill('SIGKILL'); } catch (_) {} buildChild=null;
+  }
 
   function createPage(input) {
     ensure(); let rel = safeRelative(input && input.path, { extension:MARKDOWN_EXTENSIONS });
@@ -734,7 +770,7 @@ function createKnowledgeBase(options) {
     if (!fs.existsSync(path.join(path.dirname(target), KNOWLEDGE_PROJECT_META))) throw new Error('请先创建知识项目，Markdown 片段只能建在项目中');
     const title = String(input && input.title || path.basename(rel, path.extname(rel))).trim().slice(0, 160) || '未命名文档';
     fs.mkdirSync(path.dirname(target), { recursive:true });
-    fs.writeFileSync(target, `---\ntitle: ${JSON.stringify(title)}\n---\n\n# ${title}\n\n开始记录……\n`, 'utf8');
+    writeFileAtomicSync(target, `---\ntitle: ${JSON.stringify(title)}\n---\n\n# ${title}\n\n开始记录……\n`, 'utf8');
     schedule('create-page'); return { ok:true, path:rel, readingPath:KNOWLEDGE_FOLDER + '/' + rel, title };
   }
 
@@ -766,7 +802,7 @@ function createKnowledgeBase(options) {
     const description = String(input && input.description || '').trim().slice(0, 1000);
     const rawTags = Array.isArray(input && input.tags) ? input.tags : String(input && input.tags || '').split(/[,，]/);
     const tags = rawTags.map(String).map((tag)=>tag.trim()).filter(Boolean).slice(0, 30);
-    fs.writeFileSync(path.join(target, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description, tags, updatedAt:Date.now() }, null, 2) + '\n', 'utf8');
+    writeFileAtomicSync(path.join(target, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description, tags, updatedAt:Date.now() }, null, 2) + '\n', 'utf8');
     writeIfMissing(path.join(target, '项目概览.md'), `---\ntitle: ${JSON.stringify(name + ' · 项目概览')}\n---\n\n# ${name}\n\n${description || '在这里记录项目概览、学习目标和文档索引。'}\n`);
     schedule('create-project');
     return { ok:true, path:rel, readingPath:KNOWLEDGE_FOLDER + '/' + rel + '/项目概览.md' };
@@ -786,7 +822,7 @@ function createKnowledgeBase(options) {
     if (!signatures[ext]) throw new Error('图片内容与文件扩展名不匹配');
     const target = path.resolve(sourceDir(), 'public', 'images', rel), root = path.resolve(sourceDir(), 'public', 'images');
     if (!target.startsWith(root + path.sep)) throw new Error('图片路径不合法');
-    fs.mkdirSync(path.dirname(target), { recursive:true }); fs.writeFileSync(target, body); schedule('upload-image');
+    fs.mkdirSync(path.dirname(target), { recursive:true }); writeFileAtomicSync(target, body); schedule('upload-image');
     const url = '/images/' + rel.split('/').map(encodeURIComponent).join('/');
     return { ok:true, path:'images/' + rel, url, markdown:`![图片说明](${url})`, type };
   }

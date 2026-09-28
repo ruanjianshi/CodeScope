@@ -832,12 +832,19 @@ function stringifyFrontmatter(fm) {
   return lines.join('\n') + '\n---\n' + (fm.body || '');
 }
 
+/* 片段解析缓存：walkSnippets() 被 13 个接口调用（运行/检查/格式化/保存/LSP/时间线…），
+   原实现每次都把整个 vault 的 .md 全部读盘 + 解析 frontmatter + 抽取片段，1000 片段规模下
+   单次操作要同步读十几 MB。这里按「文件 mtimeMs + size」缓存解析结果（写入必然改 mtime，
+   且应用本来就以同一指纹判定数据变化），返回时对片段对象做浅拷贝，避免调用方改到缓存。 */
+const SNIPPET_FILE_CACHE = new Map();
+const SNIPPET_FILE_CACHE_MAX = 2000;
 function walkSnippets() {
   const vault = vaultPath();
   const codeRoot = path.join(vault, 'code');
   const out = [];
   if (!fs.existsSync(codeRoot)) return out;
   const tagReg = readTagRegistry();
+  const alive = new Set();
   const walk = (dir, folder) => {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -846,27 +853,43 @@ function walkSnippets() {
       const full = path.join(dir, e.name);
       if (e.isDirectory()) walk(full, path.join(folder, e.name));
       else if (e.name.endsWith('.md')) {
+        alive.add(full);
         try {
-          const text = fs.readFileSync(full, 'utf8');
-          const { meta, body } = parseFrontmatter(text);
-          if (meta.isDeleted === '1') continue;
-          const tagIds = Array.isArray(meta.tags) ? meta.tags.map(Number).filter(Number.isFinite) : [];
+          const stat = fs.statSync(full), cacheKey = stat.mtimeMs + ':' + stat.size;
+          const hit = SNIPPET_FILE_CACHE.get(full);
+          let parsed = hit && hit.key === cacheKey ? hit.value : undefined;
+          if (parsed === undefined) {
+            const text = fs.readFileSync(full, 'utf8');
+            const { meta, body } = parseFrontmatter(text);
+            parsed = meta.isDeleted === '1' ? null : {
+              name: meta.name || path.basename(e.name, '.md'),
+              description: (meta.description && meta.description !== 'null') ? meta.description : '',
+              isFavorites: meta.isFavorites === '1',
+              updatedAt: Number(meta.updatedAt) || 0,
+              tagIds: Array.isArray(meta.tags) ? meta.tags.map(Number).filter(Number.isFinite) : [],
+              fragments: extractFragments(meta, body),
+            };
+            SNIPPET_FILE_CACHE.set(full, { key: cacheKey, value: parsed });
+          }
+          if (!parsed) continue;
           out.push({
             file: full,
-            name: meta.name || path.basename(e.name, '.md'),
-            description: (meta.description && meta.description !== 'null') ? meta.description : '',
-            isFavorites: meta.isFavorites === '1',
+            name: parsed.name,
+            description: parsed.description,
+            isFavorites: parsed.isFavorites,
             folder: folder.replace(/^\/+/, ''),
-            updatedAt: Number(meta.updatedAt) || 0,
-            tagIds,
-            tags: tagIds.map((id) => tagReg.map[String(id)]).filter(Boolean),
-            fragments: extractFragments(meta, body),
+            updatedAt: parsed.updatedAt,
+            tagIds: parsed.tagIds.slice(),
+            tags: parsed.tagIds.map((id) => tagReg.map[String(id)]).filter(Boolean),
+            fragments: parsed.fragments.map((f) => ({ ...f })),
           });
         } catch (_) { /* skip unreadable */ }
       }
     }
   };
   walk(codeRoot, '');
+  if (SNIPPET_FILE_CACHE.size > SNIPPET_FILE_CACHE_MAX) SNIPPET_FILE_CACHE.clear();
+  else for (const key of [...SNIPPET_FILE_CACHE.keys()]) if (!alive.has(key)) SNIPPET_FILE_CACHE.delete(key);
   out.sort((a, b) => a.folder.localeCompare(b.folder) || b.updatedAt - a.updatedAt);
   return out;
 }
@@ -3103,16 +3126,24 @@ function readingTree() {
 let PDFJS_PROMISE = null;
 const PDF_TEXT_CACHE = new Map();
 const PDF_TEXT_CACHE_LIMIT = 10;
-async function extractPdfPages(file) {
-  const stat = fs.statSync(file), cacheKey = stat.mtimeMs + ':' + stat.size;
-  const cached = PDF_TEXT_CACHE.get(file);
-  if (cached && cached.key === cacheKey) {
-    PDF_TEXT_CACHE.delete(file); PDF_TEXT_CACHE.set(file, cached);
-    return cached.pages;
+const PDF_TEXT_CACHE_BYTES_LIMIT = 64 * 1024 * 1024;
+let PDF_PARSE_CHAIN = Promise.resolve();
+function trimPdfTextCache() {
+  let total = 0;
+  for (const entry of PDF_TEXT_CACHE.values()) total += entry.bytes || 0;
+  while (PDF_TEXT_CACHE.size > PDF_TEXT_CACHE_LIMIT || total > PDF_TEXT_CACHE_BYTES_LIMIT) {
+    const oldest = PDF_TEXT_CACHE.keys().next().value;
+    if (oldest === undefined) break;
+    total -= (PDF_TEXT_CACHE.get(oldest).bytes || 0);
+    PDF_TEXT_CACHE.delete(oldest);
   }
+}
+async function parsePdfPages(file) {
   if (!PDFJS_PROMISE) PDFJS_PROMISE = import('pdfjs-dist/legacy/build/pdf.mjs');
   const pdfjs = await PDFJS_PROMISE;
-  const bytes = new Uint8Array(fs.readFileSync(file));
+  // 用异步读盘代替 readFileSync：一本大 PDF 同步读会阻塞事件循环（终端、自动保存一起卡住）。
+  const buffer = await fs.promises.readFile(file);
+  const bytes = new Uint8Array(buffer);
   const task = pdfjs.getDocument({ data:bytes, disableWorker:true, useSystemFonts:true });
   const doc = await task.promise;
   const pages = [];
@@ -3129,9 +3160,24 @@ async function extractPdfPages(file) {
     pages.push(text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
   }
   await doc.destroy();
-  PDF_TEXT_CACHE.delete(file); PDF_TEXT_CACHE.set(file, { key:cacheKey, pages });
-  while (PDF_TEXT_CACHE.size > PDF_TEXT_CACHE_LIMIT) PDF_TEXT_CACHE.delete(PDF_TEXT_CACHE.keys().next().value);
-  return pages;
+  return { pages, bytes: buffer.length };
+}
+async function extractPdfPages(file) {
+  const stat = await fs.promises.stat(file), cacheKey = stat.mtimeMs + ':' + stat.size;
+  const cached = PDF_TEXT_CACHE.get(file);
+  if (cached && cached.key === cacheKey) {
+    PDF_TEXT_CACHE.delete(file); PDF_TEXT_CACHE.set(file, cached);
+    return cached.pages;
+  }
+  // 串行解析：并发打开多本 PDF 时不要在内存里同时摊开多份解析结果。
+  const run = () => parsePdfPages(file);
+  const queued = PDF_PARSE_CHAIN.then(run, run);
+  PDF_PARSE_CHAIN = queued.then(() => {}, () => {});
+  const result = await queued;
+  PDF_TEXT_CACHE.delete(file);
+  PDF_TEXT_CACHE.set(file, { key:cacheKey, pages:result.pages, bytes:result.bytes });
+  trimPdfTextCache();
+  return result.pages;
 }
 
 function searchReadingLibrary(query, sensitive) {
@@ -4713,6 +4759,19 @@ const server = http.createServer(async (req, res) => {
       if (fs.existsSync(target)) return send(res, 409, { ok: false, error: '目标位置已存在同名文件夹' });
       try { fs.renameSync(source, target); }
       catch (e) { return send(res, 500, { ok: false, error: '移动文件夹失败: ' + e.message }); }
+      // 目录树的名字来自 .meta.yaml 的 name 字段（walkFolders 读它），改名后不同步就会出现
+      // “提示已重命名、刷新后仍是旧名”的假象（massCode 启动后同样是旧名）。
+      try {
+        const metaPath = path.join(target, '.meta.yaml');
+        if (fs.existsSync(metaPath)) {
+          const metaText = fs.readFileSync(metaPath, 'utf8');
+          const yamlName = /^[\w\u4e00-\u9fa5. /-]+$/.test(baseName) ? baseName : JSON.stringify(baseName);
+          const nextMeta = /^\s*name\s*:/m.test(metaText)
+            ? metaText.replace(/^\s*name\s*:.*$/m, 'name: ' + yamlName)
+            : metaText.replace(/\s*$/, '\n') + 'name: ' + yamlName + '\n';
+          if (nextMeta !== metaText) writeFileAtomicSync(metaPath, nextMeta, 'utf8');
+        }
+      } catch (_) {}
       const st = readState(), prefix = folder + '/';
       for (const snip of (st.snippets || [])) {
         if (snip.filePath && snip.filePath.startsWith(prefix)) snip.filePath = targetRel + '/' + snip.filePath.slice(prefix.length);
@@ -5702,6 +5761,8 @@ async function shutdown(signal) {
   shuttingDown = true;
   try { LSP.close(); } catch (_) {}
   try { KNOWLEDGE.stop(); } catch (_) {}
+  try { stopTerm(); } catch (_) {}
+  try { await OPENCODE.stop(); } catch (_) {}
   try { await DSH.stop(); } catch (_) {}
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 2500).unref();
