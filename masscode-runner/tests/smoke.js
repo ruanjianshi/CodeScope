@@ -807,6 +807,58 @@ int main(void) { return 0; }
   const chunkedJson = await postChunkedJson(baseUrl, '/api/ai/web-search', [unicodeBody.subarray(0, unicodeAt + 1), unicodeBody.subarray(unicodeAt + 1)]);
   assert(chunkedJson.status === 400 && /Key/.test(chunkedJson.data.error), '服务端无法正确解析跨网络分片的 UTF-8 JSON');
 
+  /* ---- 破坏性接口：删除片段 / 删除分片 / 删除文件夹（此前零覆盖）----
+     这三个接口会直接删用户文件，必须验证「删对了、没多删、越界被拒、最后一个分片不删」。 */
+  const trashFolder = await postJson(baseUrl, '/api/fs/mkdir', { path:'删除测试' });
+  assert(trashFolder.ok, '删除测试用文件夹创建失败：' + JSON.stringify(trashFolder));
+  const doomed = await postJson(baseUrl, '/api/fs/newfile', { folder:'删除测试', name:'doomed.md', language:'c_cpp' });
+  assert(doomed.ok, '删除测试用片段创建失败：' + JSON.stringify(doomed));
+  // 这些接口用 path.resolve(状态库路径) 与 path.resolve(入参) 比对，前端传的是绝对路径（列表返回的 file）。
+  const canonical = (await requestJson(baseUrl, '/api/snippets')).snippets.find((item)=>String(item.file).endsWith('doomed.md'));
+  assert(canonical && path.isAbsolute(canonical.file), '新建片段后应出现在列表里并带有绝对路径：' + JSON.stringify(canonical && canonical.file));
+  const doomedFull = canonical.file;
+  const secondFragment = await postJson(baseUrl, '/api/fs/addfragment', { file:doomedFull, label:'keep.c', language:'c_cpp' });
+  assert(secondFragment.ok, '删除测试用第二分片添加失败：' + JSON.stringify(secondFragment));
+  const beforeDelete = (await requestJson(baseUrl, '/api/snippets')).snippets.find((item)=>String(item.file).endsWith('doomed.md'));
+  assert(beforeDelete && beforeDelete.fragments.length === 2, '删除测试片段应含 2 个分片，实际 ' + (beforeDelete ? beforeDelete.fragments.length : '未找到该片段'));
+  const dropId = beforeDelete.fragments[0].id, keepLabel = beforeDelete.fragments[1].label;
+  assert(Number.isFinite(Number(dropId)) && keepLabel, '分片应带有可用于删除的数字 id 与标签：' + JSON.stringify(beforeDelete.fragments.map((f)=>({id:f.id,label:f.label}))));
+
+  const removedFragment = await postJson(baseUrl, '/api/fs/delfragment', { file:doomedFull, fragmentId:dropId });
+  assert(removedFragment.ok, '删除分片失败：' + JSON.stringify(removedFragment));
+  const afterFragmentDelete = (await requestJson(baseUrl, '/api/snippets')).snippets.find((item)=>String(item.file).endsWith('doomed.md'));
+  assert(afterFragmentDelete && afterFragmentDelete.fragments.length === 1 && afterFragmentDelete.fragments[0].label === keepLabel,
+    '删除分片应只删掉目标分片并保留其余分片，实际：' + JSON.stringify(afterFragmentDelete && afterFragmentDelete.fragments));
+  const rawAfterFragmentDelete = fs.readFileSync(doomedFull, 'utf8');
+  assert((rawAfterFragmentDelete.match(/^##\s*Fragment:/gm) || []).length === 1 && rawAfterFragmentDelete.includes(keepLabel),
+    '删除分片后正文段落数或保留内容不正确');
+  const missingFragment = await postJson(baseUrl, '/api/fs/delfragment', { file:doomedFull, fragmentId:'不存在的分片' });
+  assert(!missingFragment.ok, '删除不存在的分片应返回失败');
+  const lastFragment = await postJson(baseUrl, '/api/fs/delfragment', { file:doomedFull, fragmentId:afterFragmentDelete.fragments[0].id });
+  assert(!lastFragment.ok && /至少保留一个片段/.test(String(lastFragment.error)), '删除最后一个分片应被拒绝（应提示至少保留一个）');
+
+  const escapedSnippet = await postJson(baseUrl, '/api/fs/delete', { file:'../../escape.md' });
+  assert(!escapedSnippet.ok, '删除片段接口未拒绝越界路径');
+  const removedSnippet = await postJson(baseUrl, '/api/fs/delete', { file:doomedFull });
+  assert(removedSnippet.ok, '删除片段失败：' + JSON.stringify(removedSnippet));
+  assert(!fs.existsSync(doomedFull), '删除片段后文件仍然存在于磁盘');
+  assert(!(await requestJson(baseUrl, '/api/snippets')).snippets.some((item)=>String(item.file).endsWith('doomed.md')), '删除片段后它仍出现在片段列表中');
+  const missingSnippet = await postJson(baseUrl, '/api/fs/delete', { file:'删除测试/never-existed.md' });
+  assert(!missingSnippet.ok, '删除不存在的片段应返回失败');
+
+  const innerFile = await postJson(baseUrl, '/api/fs/newfile', { folder:'删除测试/子目录', name:'inside.md' });
+  assert(innerFile.ok, '文件夹删除测试用片段创建失败：' + JSON.stringify(innerFile));
+  const escapedFolder = await postJson(baseUrl, '/api/fs/delete-folder', { folder:'../escape' });
+  assert(!escapedFolder.ok, '删除文件夹接口未拒绝越界路径');
+  const removedFolder = await postJson(baseUrl, '/api/fs/delete-folder', { folder:'删除测试' });
+  assert(removedFolder.ok && removedFolder.disk === true && removedFolder.deletedSnippets >= 1,
+    '删除文件夹应连同其中片段一起删除：' + JSON.stringify(removedFolder));
+  assert(!fs.existsSync(path.join(vault, 'code', '删除测试')), '删除文件夹后目录仍然存在');
+  const treeAfterFolderDelete = await requestJson(baseUrl, '/api/snippets');
+  assert(!treeAfterFolderDelete.folders.some((item)=>item.path === '删除测试' || String(item.path).startsWith('删除测试/')), '删除文件夹后它仍出现在目录树中');
+  assert(!treeAfterFolderDelete.snippets.some((item)=>String(item.file).includes('删除测试/')), '删除文件夹后其中的片段仍出现在列表中');
+  assert((await postJson(baseUrl, '/api/fs/delete-folder', { folder:'删除测试' })).ok === false, '删除不存在的文件夹应返回失败');
+
   console.log(`CodeScope smoke tests: ${passed} passed`);
 }
 
