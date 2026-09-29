@@ -1776,16 +1776,16 @@
   #code-wrap.latex-code #code,
   #code-wrap.latex-code #code-edit { padding: 16px; font-size: 12.5px; line-height: 1.78; color: #d8dee9; }
   #code-wrap.latex-code #ln { padding-top: 16px; padding-bottom: 16px; font-size: 12.5px; line-height: 1.78; color: #465365; background: #0c1118; border-right-color: #202a36; }
-  #code-wrap.latex-code #code .tex-command { color: #82aaff; }
-  #code-wrap.latex-code #code .tex-env { color: #ffc777; }
-  #code-wrap.latex-code #code .tex-resource { color: #7dcfff; }
-  #code-wrap.latex-code #code .tex-heading { color: #c3e88d; }
-  #code-wrap.latex-code #code .tex-option { color: #b8c4d6; }
-  #code-wrap.latex-code #code .tex-math { color: #c099ff; }
-  #code-wrap.latex-code #code .tex-delim { color: #66758a; }
-  #code-wrap.latex-code #code .tex-special { color: #f5a97f; }
-  #code-wrap.latex-code #code .tex-number { color: #f6c177; }
-  #code-wrap.latex-code #code .tex-comment { color: #667085; }
+  #code-wrap.latex-code #code .tex-command, .split-editor-code .tex-command { color: #82aaff; }
+  #code-wrap.latex-code #code .tex-env, .split-editor-code .tex-env { color: #ffc777; }
+  #code-wrap.latex-code #code .tex-resource, .split-editor-code .tex-resource { color: #7dcfff; }
+  #code-wrap.latex-code #code .tex-heading, .split-editor-code .tex-heading { color: #c3e88d; }
+  #code-wrap.latex-code #code .tex-option, .split-editor-code .tex-option { color: #b8c4d6; }
+  #code-wrap.latex-code #code .tex-math, .split-editor-code .tex-math { color: #c099ff; }
+  #code-wrap.latex-code #code .tex-delim, .split-editor-code .tex-delim { color: #66758a; }
+  #code-wrap.latex-code #code .tex-special, .split-editor-code .tex-special { color: #f5a97f; }
+  #code-wrap.latex-code #code .tex-number, .split-editor-code .tex-number { color: #f6c177; }
+  #code-wrap.latex-code #code .tex-comment, .split-editor-code .tex-comment { color: #667085; }
   #code-wrap.latex-code #code-edit:focus { outline: 1px solid rgba(99,155,255,.85); box-shadow: inset 0 0 0 1px rgba(99,155,255,.12); }
   #code-wrap.latex-code #code-edit.live-hl::selection { background: rgba(82,139,255,.34); -webkit-text-fill-color: transparent; }
   /* Markdown 源码也使用与代码一致的双层高亮编辑器；颜色遵循当前主题语义色。 */
@@ -2718,11 +2718,11 @@
   html[data-theme] #code .c { color:var(--syntax-comment); }
   html[data-theme] #code .n { color:var(--syntax-number); }
   html[data-theme] #code .t, html[data-theme] #code .a { color:var(--syntax-title); }
-  html[data-theme] #code-wrap.latex-code #code .tex-command, html[data-theme] #code-wrap.latex-code #code .tex-resource { color:var(--syntax-title); }
-  html[data-theme] #code-wrap.latex-code #code .tex-heading, html[data-theme] #code-wrap.latex-code #code .tex-env { color:var(--syntax-string); }
-  html[data-theme] #code-wrap.latex-code #code .tex-number, html[data-theme] #code-wrap.latex-code #code .tex-special { color:var(--syntax-number); }
-  html[data-theme] #code-wrap.latex-code #code .tex-comment, html[data-theme] #code-wrap.latex-code #code .tex-delim { color:var(--syntax-comment); }
-  html[data-theme] #code-wrap.latex-code #code .tex-math { color:var(--syntax-keyword); }
+  html[data-theme] #code-wrap.latex-code #code .tex-command, .split-editor-code .tex-command, html[data-theme] #code-wrap.latex-code #code .tex-resource, .split-editor-code .tex-resource { color:var(--syntax-title); }
+  html[data-theme] #code-wrap.latex-code #code .tex-heading, .split-editor-code .tex-heading, html[data-theme] #code-wrap.latex-code #code .tex-env, .split-editor-code .tex-env { color:var(--syntax-string); }
+  html[data-theme] #code-wrap.latex-code #code .tex-number, .split-editor-code .tex-number, html[data-theme] #code-wrap.latex-code #code .tex-special, .split-editor-code .tex-special { color:var(--syntax-number); }
+  html[data-theme] #code-wrap.latex-code #code .tex-comment, .split-editor-code .tex-comment, html[data-theme] #code-wrap.latex-code #code .tex-delim, .split-editor-code .tex-delim { color:var(--syntax-comment); }
+  html[data-theme] #code-wrap.latex-code #code .tex-math, .split-editor-code .tex-math { color:var(--syntax-keyword); }
   html[data-theme] #output, html[data-theme] #term-box { background:var(--theme-deep); border-color:var(--border); }
   html[data-theme] #out-body { color:var(--text); }
   html[data-theme] #split-v, html[data-theme] #split-v2, html[data-theme] #split-h, html[data-theme] .hsplit { background:var(--theme-sub); }
@@ -4210,7 +4210,7 @@ document.addEventListener('keydown',event=>{
   event.preventDefault();applyEditorFontSize(EDITOR_FONT_DEFAULT);
 });
 applyEditorFontSize(EDITOR_FONT_SIZE,false);
-function monacoLanguage(language){return({c:'c',c_cpp:'cpp',javascript:'javascript',typescript:'typescript',python:'python',go:'go',rust:'rust',java:'java',csharp:'csharp',html:'html',css:'css',json:'json',markdown:'markdown',yaml:'yaml',xml:'xml',shell:'shell',latex:'plaintext',plain_text:'plaintext'})[String(language||'').toLowerCase()]||'plaintext';}
+function monacoLanguage(language){return({c:'c',c_cpp:'cpp',javascript:'javascript',typescript:'typescript',python:'python',go:'go',rust:'rust',java:'java',csharp:'csharp',html:'html',css:'css',json:'json',markdown:'markdown',yaml:'yaml',xml:'xml',shell:'shell',latex:'latex',plain_text:'plaintext'})[String(language||'').toLowerCase()]||'plaintext';}
 function monacoTheme(){return APP_THEME==='light'?'vs':'vs-dark';}
 function monacoModelKey(file,index){return String(file||'untitled')+'#'+String(Number(index)||0);}
 function monacoUriFor(file,index){return window.monaco.Uri.parse('inmemory://codescope/'+encodeURIComponent(String(file||'snippet'))+'/'+String(Number(index)||0));}
@@ -4223,6 +4223,40 @@ function monacoContext(model){const context=MONACO_MODEL_CONTEXT.get(model.uri.t
 async function monacoLsp(model,position,action,extra){const context=monacoContext(model);if(!context||!LSP_LANGUAGES.has(context.fragment.language))return{ok:false};return api('/api/lsp/query',Object.assign({file:context.snippet.file,fragment:context.index,code:model.getValue(),action,line:position.lineNumber,column:position.column},extra||{}));}
 function monacoCompletionKind(kind){const K=window.monaco.languages.CompletionItemKind;return({method:K.Method,function:K.Function,constructor:K.Constructor,field:K.Field,variable:K.Variable,class:K.Class,interface:K.Interface,module:K.Module,property:K.Property,unit:K.Unit,value:K.Value,enum:K.Enum,keyword:K.Keyword,snippet:K.Snippet,color:K.Color,file:K.File,reference:K.Reference,folder:K.Folder,enumMember:K.EnumMember,constant:K.Constant,struct:K.Struct,event:K.Event,operator:K.Operator,typeParameter:K.TypeParameter})[kind]||K.Text;}
 function monacoWorkspaceEdits(context,edits){const rows=[];for(const edit of edits||[]){const index=Number(edit.fragment),fragment=context.snippet.fragments[index];if(!fragment)continue;const ref={snippet:context.snippet,index,frag:fragment},model=monacoModel(ref,fragment.code||'');rows.push({resource:model.uri,textEdit:{range:monacoRange({start:edit.start,end:edit.end}),text:String(edit.newText||'')},versionId:undefined});}return rows;}
+/* Monaco 0.52 的 basic-languages 里没有 LaTeX（只有 restructuredtext 之类），
+   而主编辑器一旦接管就把它的语言 id 报成 plaintext，于是自研的 highlightLatex
+   只在回退编辑器（?legacy-editor）里才看得到。这里补一份 Monarch 语法，
+   token 名统一取 vs / vs-dark 内置主题认得的名字（keyword/string/type/comment/number/
+   delimiter/operator），因此不必自带主题。 */
+function registerLatexLanguage(){
+  if(!window.monaco||!window.monaco.languages||!window.monaco.languages.setMonarchTokensProvider)return;
+  if(registerLatexLanguage.done)return;
+  registerLatexLanguage.done=true;
+  const L=window.monaco.languages;
+  if(!L.getLanguages().some((item)=>item.id==='latex'))L.register({id:'latex',extensions:['.tex','.sty','.cls','.bib'],aliases:['LaTeX','latex','tex']});
+  L.setLanguageConfiguration('latex',{comments:{lineComment:'%'},brackets:[['{','}'],['[',']']]});
+  L.setMonarchTokensProvider('latex',{
+    defaultToken:'',
+    tokenizer:{
+      root:[
+        [/%[^\n]*/,'comment'],
+        [/\\(?:documentclass|usepackage|RequirePackage|graphicspath|includegraphics|input|include|bibliography|addbibresource|setmainfont|setsansfont|setmonofont|IfFileExists)/,'string'],
+        [/\\(?:part|chapter|section|subsection|subsubsection|paragraph|subparagraph|title|subtitle|author|date|maketitle)/,'type'],
+        [/\\(?:begin|end)(?![a-zA-Z@])/,'keyword.control'],
+        [/\\[a-zA-Z@]+\*?/,'keyword'],
+        [/\\[^a-zA-Z@\s]/,'keyword'],
+        [/\$\$/,'string','@mathBlock'],
+        [/\$/,'string','@math'],
+        [/[{}]/,'delimiter.curly'],
+        [/[\[\]]/,'delimiter.square'],
+        [/[&#~_^]/,'operator'],
+        [/\d+(?:\.\d+)?/,'number'],
+      ],
+      math:[[/\$/,'string','@pop'],[/[^$\\]+/,'string'],[/\\[a-zA-Z@]+\*?/,'keyword'],[/\\./,'keyword']],
+      mathBlock:[[/\$\$/,'string','@pop'],[/[^$\\]+/,'string'],[/\\[a-zA-Z@]+\*?/,'keyword'],[/\\./,'keyword']],
+    },
+  });
+}
 function registerMonacoProviders(){if(MONACO_PROVIDERS_READY)return;MONACO_PROVIDERS_READY=true;for(const language of ['c','cpp','python','javascript','typescript','go']){
   window.monaco.languages.registerCompletionItemProvider(language,{triggerCharacters:['.','>','::'],provideCompletionItems:async(model,position,context)=>{const result=await monacoLsp(model,position,'completion',{triggerKind:context.triggerKind,triggerCharacter:context.triggerCharacter||''});const source=monacoContext(model),word=model.getWordUntilPosition(position),range=new window.monaco.Range(position.lineNumber,word.startColumn,position.lineNumber,word.endColumn);let items=result.ok&&Array.isArray(result.items)?result.items:[];const snippets=source?(EDITOR_SNIPPETS[source.fragment.language]||[]):[];items=items.concat(snippets);return{suggestions:items.slice(0,120).map(item=>({label:item.label||item.name,kind:monacoCompletionKind(item.kind),detail:item.detail||'',documentation:item.documentation?{value:String(item.documentation)}:undefined,insertText:item.insertText||item.label||item.name,insertTextRules:(item.insertTextFormat===2||item.kind==='snippet')?window.monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet:undefined,range,sortText:item.kind==='snippet'?'0_'+(item.label||item.name):item.sortText||item.label||item.name}))};}});
   window.monaco.languages.registerSignatureHelpProvider(language,{signatureHelpTriggerCharacters:['(',','],provideSignatureHelp:async(model,position)=>{const result=await monacoLsp(model,position,'signature');if(!result.ok||!result.signature)return null;return{value:{signatures:result.signature.signatures||[],activeSignature:result.signature.activeSignature||0,activeParameter:result.signature.activeParameter||0},dispose(){}};}});
@@ -4230,7 +4264,7 @@ function registerMonacoProviders(){if(MONACO_PROVIDERS_READY)return;MONACO_PROVI
   window.monaco.languages.registerRenameProvider(language,{resolveRenameLocation(model,position){const word=model.getWordAtPosition(position);return word?{range:new window.monaco.Range(position.lineNumber,word.startColumn,position.lineNumber,word.endColumn),text:word.word}:{rejectReason:'当前位置没有可重命名的符号'};},provideRenameEdits:async(model,position,newName)=>{const context=monacoContext(model),result=await monacoLsp(model,position,'rename',{newName});if(!context||!result.ok)return{edits:[],rejectReason:result.error||'语言服务器未返回重命名结果'};return{edits:monacoWorkspaceEdits(context,result.edits)};}});
   window.monaco.languages.registerCodeActionProvider(language,{provideCodeActions:async(model,range)=>{const context=monacoContext(model),result=await monacoLsp(model,{lineNumber:range.startLineNumber,column:range.startColumn},'codeAction',{range:{start:{line:range.startLineNumber-1,character:range.startColumn-1},end:{line:range.endLineNumber-1,character:range.endColumn-1}}});if(!context||!result.ok)return{actions:[],dispose(){}};return{actions:(result.actions||[]).filter(item=>!item.disabled&&item.edits&&item.edits.length).map(item=>({title:item.title,kind:item.kind||'quickfix',isPreferred:item.preferred,edit:{edits:monacoWorkspaceEdits(context,item.edits)}})),dispose(){}};}});
 }}
-function ensureMonaco(){if(MONACO_DISABLED)return Promise.resolve(null);if(MONACO_PROMISE)return MONACO_PROMISE;if(window.monaco&&window.monaco.editor){registerMonacoProviders();return Promise.resolve(window.monaco);}MONACO_PROMISE=new Promise((resolve,reject)=>{if(!window.require||!window.require.config){reject(new Error('Monaco loader 未加载'));return;}window.MonacoEnvironment={getWorkerUrl(){const source=`self.MonacoEnvironment={baseUrl:'${location.origin}/monaco/'};importScripts('${location.origin}/monaco/vs/base/worker/workerMain.js');`;return URL.createObjectURL(new Blob([source],{type:'text/javascript'}));}};window.require.config({paths:{vs:'/monaco/vs'},ignoreDuplicateModules:['vs/editor/editor.main']});window.require(['vs/editor/editor.main'],()=>{registerMonacoProviders();window.monaco.editor.setTheme(monacoTheme());resolve(window.monaco);},reject);});MONACO_PROMISE.catch(()=>{MONACO_PROMISE=null;});return MONACO_PROMISE;}
+function ensureMonaco(){if(MONACO_DISABLED)return Promise.resolve(null);if(MONACO_PROMISE)return MONACO_PROMISE;if(window.monaco&&window.monaco.editor){registerMonacoProviders();registerLatexLanguage();return Promise.resolve(window.monaco);}MONACO_PROMISE=new Promise((resolve,reject)=>{if(!window.require||!window.require.config){reject(new Error('Monaco loader 未加载'));return;}window.MonacoEnvironment={getWorkerUrl(){const source=`self.MonacoEnvironment={baseUrl:'${location.origin}/monaco/'};importScripts('${location.origin}/monaco/vs/base/worker/workerMain.js');`;return URL.createObjectURL(new Blob([source],{type:'text/javascript'}));}};window.require.config({paths:{vs:'/monaco/vs'},ignoreDuplicateModules:['vs/editor/editor.main']});window.require(['vs/editor/editor.main'],()=>{registerMonacoProviders();registerLatexLanguage();window.monaco.editor.setTheme(monacoTheme());resolve(window.monaco);},reject);});MONACO_PROMISE.catch(()=>{MONACO_PROMISE=null;});return MONACO_PROMISE;}
 function syncProxySelection(editor,input){const model=editor&&editor.getModel(),selection=editor&&editor.getSelection();if(!model||!selection)return;const start=model.getOffsetAt({lineNumber:selection.startLineNumber,column:selection.startColumn}),end=model.getOffsetAt({lineNumber:selection.endLineNumber,column:selection.endColumn});try{input.setSelectionRange(start,end);}catch(_){}}
 function monacoToken(editor){const model=editor.getModel(),position=editor.getPosition(),word=model&&position&&model.getWordAtPosition(position);return word&&position?{word:word.word,line:position.lineNumber,column:word.startColumn}:null;}
 function monacoSymbol(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel());return token&&context?symbolInContext(token,{snippet:context.snippet,index:context.index,frag:context.fragment}):null;}
