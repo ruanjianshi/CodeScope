@@ -970,14 +970,18 @@ print(r.run())
   if(tabMenu.hoverButtons)throw new Error('片段标签仍在行内显示悬停按钮：'+JSON.stringify(tabMenu));
   for(const text of ['修改片段类型','重命名片段','删除片段'])if(!tabMenu.labels.some(label=>label.includes(text)))throw new Error('片段标签右键菜单缺少「'+text+'」：'+JSON.stringify(tabMenu));
   if(!tabMenu.hints.some(hint=>hint&&hint===tabMenu.lang))throw new Error('片段标签右键菜单未显示当前片段类型：'+JSON.stringify(tabMenu));
-  // 菜单项必须真的接到原有动作上：重命名会弹出原生输入框
-  let tabPrompt=null;
-  idePage.once('dialog',async(dialog)=>{tabPrompt=dialog.message();await dialog.dismiss();});
+  // 菜单项必须真的接到原有动作上：重命名会弹出应用内输入弹窗（原来是原生 prompt）
   await idePage.evaluate(()=>{const tab=document.querySelector('#tabs .tab');tab.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:160,clientY:150}));});
   await idePage.waitForFunction(()=>!document.getElementById('ctx-menu').hidden,null,{timeout:5000});
   await idePage.locator('#ctx-menu .ctx-item').filter({hasText:'重命名片段'}).first().click();
-  await idePage.waitForTimeout(400);
-  if(!tabPrompt)throw new Error('片段标签右键「重命名片段」没有触发重命名');
+  await idePage.locator('#confirm-dialog.open').waitFor({state:'visible',timeout:5000});
+  const tabPromptTitle=String((await idePage.locator('#cd-title').textContent())||'');
+  const tabPromptValue=await idePage.locator('#cd-input').inputValue();
+  if(!tabPromptTitle.includes('重命名'))throw new Error('片段标签右键「重命名片段」没有触发重命名弹窗：'+tabPromptTitle);
+  if(!tabPromptValue)throw new Error('重命名弹窗没有带出当前片段名');
+  await idePage.locator('#cd-cancel').click();
+  await idePage.waitForTimeout(300);
+  if(await idePage.locator('#confirm-dialog.open').count())throw new Error('取消后重命名弹窗没有关闭');
   if(await idePage.locator('#ctx-menu .ctx-item:visible').count())await idePage.keyboard.press('Escape');
   if(await idePage.locator('#ctx-menu .ctx-item:visible').count())throw new Error('Esc 之后右键菜单仍然可见');
 

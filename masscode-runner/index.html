@@ -376,6 +376,8 @@
   #confirm-dialog .nd-btns { display: flex; gap: 8px; margin-top: 14px; }
   #confirm-dialog .nd-btns button { flex: 1; padding: 6px 0; border-radius: 6px; cursor: pointer; font-size: 12px; }
   #confirm-dialog #cd-ok { background: var(--err); border-color: var(--err); color: #fff; }
+  /* 非破坏性操作（重命名/新建/跳转）的确定按钮用主色，别整片红 */
+  #confirm-dialog #cd-ok.safe { background: var(--accent); border-color: var(--accent); }
   #confirm-dialog #cd-ok:disabled { opacity: .4; cursor: not-allowed; }
   #new-dialog #nd-submit:hover { filter: brightness(1.1); }
   #list { flex: 1; overflow: auto; padding: 0 6px 12px; }
@@ -5016,7 +5018,7 @@ async function openLatexResource(r) {
 }
 
 async function renameLatexResource(r) {
-  const next = prompt('输入新的资源文件名（可省略扩展名）', r.name);
+  const next = await askText({ title:'重命名资源', message:'输入新的资源文件名（可省略扩展名）', value:r.name, okLabel:'重命名' });
   if (next == null || !next.trim() || next.trim() === r.name) return;
   setStatus('idle', '重命名资源…');
   const result = await api('/api/latex/resource/rename', { path: r.path, name: next.trim() });
@@ -5265,20 +5267,59 @@ async function submitNewDialog() {
 }
 
 // ---------- 通用确认弹窗（删除双重验证，全局共享：片段/文件夹/绘图 共用） ----------
-let CD_ON_OK = null, CD_INPUT_REQ = '';
+let CD_ON_OK = null, CD_INPUT_REQ = '', CD_ON_CLOSE = null, CD_LAST_FOCUS = null;
 function openConfirm(opt) {
   $('cd-title').textContent = opt.title || '确认';
   $('cd-msg').textContent = opt.message || '';
   CD_INPUT_REQ = opt.requireInput || '';
   const inp = $('cd-input');
-  inp.style.display = CD_INPUT_REQ ? '' : 'none';
-  inp.value = '';
+  // 输入框有两种用途：删除时"必须原样输入名称"的二次确认，以及替代 prompt 的普通输入。
+  const withInput = !!CD_INPUT_REQ || opt.inputValue != null;
+  inp.style.display = withInput ? '' : 'none';
+  inp.value = opt.inputValue != null ? String(opt.inputValue) : '';
+  inp.placeholder = opt.inputPlaceholder || (CD_INPUT_REQ ? '请输入名称确认' : '');
+  // 普通输入（如重命名）不是破坏性操作，不该用红色的确定按钮，也不再要求先删空才能提交。
+  $('cd-ok').textContent = opt.okLabel || '确定';
+  $('cd-ok').classList.toggle('safe', withInput && !CD_INPUT_REQ && !opt.danger);
   $('cd-ok').disabled = !!CD_INPUT_REQ;
   CD_ON_OK = opt.onOk || null;
+  CD_ON_CLOSE = opt.onClose || null;
+  // 记住打开前的焦点（原生 prompt 会自己还回去，自定义弹窗必须显式做），
+  // 否则"插入链接"这类依赖编辑器选区的命令在 await 之后会拿不到选区。
+  try { CD_LAST_FOCUS = document.activeElement && document.activeElement !== document.body ? document.activeElement : null; } catch (_) { CD_LAST_FOCUS = null; }
   $('confirm-dialog').classList.add('open');
-  if (CD_INPUT_REQ) inp.focus();
+  if (withInput) { inp.focus(); if (!CD_INPUT_REQ) { try { inp.select(); } catch (_) {} } }
 }
-function closeConfirm() { $('confirm-dialog').classList.remove('open'); CD_ON_OK = null; }
+/* 所有关闭路径都必须走这里：取消、确定、点背景、Esc。
+   以前只有"确定"会回调，promise 包装在取消时会永远悬着。 */
+function finishConfirm(ok) {
+  const onOk = CD_ON_OK, onClose = CD_ON_CLOSE;
+  CD_ON_OK = null; CD_ON_CLOSE = null;
+  $('confirm-dialog').classList.remove('open');
+  const back = CD_LAST_FOCUS; CD_LAST_FOCUS = null;
+  if (back && back.isConnected && typeof back.focus === 'function') { try { back.focus({ preventScroll: true }); } catch (_) { try { back.focus(); } catch (__) {} } }
+  if (ok && onOk) onOk($('cd-input').value);
+  if (onClose) onClose(!!ok);
+}
+function closeConfirm() { finishConfirm(false); }
+/* 原生 prompt/confirm 会阻塞事件循环、无法统一视觉、也没法自动化测试。
+   下面两个 promise 包装复用上面这套弹窗（同一份样式与键盘行为）。 */
+function askConfirm(opt) {
+  const options = opt || {};
+  return new Promise((resolve) => {
+    openConfirm({ title: options.title || '确认', message: options.message || '', requireInput: options.requireInput,
+      inputPlaceholder: options.inputPlaceholder, danger: options.danger !== false, okLabel: options.okLabel,
+      onOk: () => resolve(true), onClose: (ok) => { if (!ok) resolve(false); } });
+  });
+}
+function askText(opt) {
+  const options = opt || {};
+  return new Promise((resolve) => {
+    openConfirm({ title: options.title || '输入', message: options.message || '', inputValue: options.value == null ? '' : String(options.value),
+      inputPlaceholder: options.placeholder, okLabel: options.okLabel || '确定', danger: false,
+      onOk: (value) => resolve(String(value)), onClose: (ok) => { if (!ok) resolve(null); } });
+  });
+}
 
 function wireNewDialog() {
   if (window.__ND_WIRED__) return;
@@ -5286,11 +5327,13 @@ function wireNewDialog() {
   $('nd-close').onclick = () => $('new-dialog').classList.remove('open');
   $('nd-submit').onclick = submitNewDialog;
   $('new-dialog').addEventListener('click', (e) => { if (e.target === $('new-dialog')) $('new-dialog').classList.remove('open'); });
-  $('cd-cancel').onclick = () => { $('confirm-dialog').classList.remove('open'); CD_ON_OK = null; };
-  $('cd-ok').onclick = () => { const fn = CD_ON_OK; $('confirm-dialog').classList.remove('open'); CD_ON_OK = null; if (fn) fn(); };
+  $('cd-cancel').onclick = () => finishConfirm(false);
+  $('cd-ok').onclick = () => { if (!$('cd-ok').disabled) finishConfirm(true); };
   $('cd-input').addEventListener('input', () => { $('cd-ok').disabled = CD_INPUT_REQ !== '' && $('cd-input').value.trim() !== CD_INPUT_REQ; });
-  $('confirm-dialog').addEventListener('click', (e) => { if (e.target === $('confirm-dialog')) { $('confirm-dialog').classList.remove('open'); CD_ON_OK = null; } });
+  $('confirm-dialog').addEventListener('click', (e) => { if (e.target === $('confirm-dialog')) finishConfirm(false); });
   $('cd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('cd-ok').disabled) $('cd-ok').click(); });
+  // Esc 关闭：键盘用户也能随时退出（原来只有鼠标/回车两条路）。
+  $('confirm-dialog').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishConfirm(false); } });
 
   // 删除片段文件：双重验证（① 确认弹窗 → ② 输入文件名确认）
   $('nd-delete').onclick = () => {
@@ -5347,7 +5390,7 @@ function wireNewDialog() {
   }
   window.__deleteFolder = deleteFolderFlow;
   async function renameProjectFolder(folder, name) {
-    const next = String(prompt('文件夹新名称', name) || '').trim();
+    const next = String(await askText({ title:'重命名文件夹', message:'文件夹新名称', value:name, okLabel:'重命名' }) || '').trim();
     if (!next || next === name) return;
     if (next.includes('/') || next.includes('\\') || next === '.' || next === '..') { setStatus('err', '名称不能包含路径分隔符'); return; }
     if (!(await waitForPendingSave())) { setStatus('err', '当前代码保存失败，已取消重命名'); return; }
@@ -5440,7 +5483,7 @@ function officeWordToolbar(){return '<div class="office-word-ribbon" aria-label=
   '<div class="group"><button data-word-zoom="-">−</button><span class="zoom" id="office-word-zoom-label">100%</span><button data-word-zoom="+">＋</button></div></div>';}
 function officeWordMarkDirty(){const editor=$('office-word-editor');if(editor)OFFICE_WORD_HTML=editor.innerHTML;OFFICE_WORD_DIRTY=true;officeStatus('未保存…');clearTimeout(OFFICE_SAVE_T);OFFICE_SAVE_T=setTimeout(()=>saveOfficeWord(),1100);}
 function officeWordExec(command,value){const editor=$('office-word-editor');if(!editor)return;editor.focus();document.execCommand(command,false,value==null?null:value);officeWordMarkDirty();}
-function wireOfficeWordToolbar(shell){shell.querySelectorAll('[data-word-mode]').forEach((button)=>button.onclick=()=>officeWordSetMode(button.dataset.wordMode));shell.querySelectorAll('[data-word-cmd]').forEach((button)=>{button.onmousedown=(event)=>event.preventDefault();button.onclick=()=>officeWordExec(button.dataset.wordCmd);});const format=shell.querySelector('[data-word-format]');format.onchange=()=>officeWordExec('formatBlock','<'+format.value+'>');const font=shell.querySelector('[data-word-font]');font.onchange=()=>officeWordExec('fontName',font.value);const size=shell.querySelector('[data-word-size]');size.onchange=()=>officeWordExec('fontSize',size.value);shell.querySelector('[data-word-color]').oninput=(event)=>officeWordExec('foreColor',event.target.value);shell.querySelector('[data-word-highlight]').oninput=(event)=>officeWordExec('hiliteColor',event.target.value);shell.querySelector('[data-word-action="link"]').onclick=()=>{const value=prompt('链接地址（https://…）','https://');if(value&&/^https?:\/\//i.test(value))officeWordExec('createLink',value);};shell.querySelector('[data-word-action="table"]').onclick=()=>officeWordExec('insertHTML','<table><tbody>'+Array.from({length:3},()=>'<tr><td><br></td><td><br></td><td><br></td></tr>').join('')+'</tbody></table><p><br></p>');shell.querySelector('[data-word-action="find"]').onclick=()=>{const value=prompt('查找文字','');if(value)window.find(value,false,false,true);};shell.querySelectorAll('[data-word-zoom]').forEach((button)=>button.onclick=()=>{OFFICE_WORD_ZOOM=Math.max(.55,Math.min(1.8,OFFICE_WORD_ZOOM+(button.dataset.wordZoom==='+'?.1:-.1)));const page=shell.querySelector('.office-word-page');if(page)page.style.setProperty('--office-word-zoom',OFFICE_WORD_ZOOM);$('office-word-zoom-label').textContent=Math.round(OFFICE_WORD_ZOOM*100)+'%';});}
+function wireOfficeWordToolbar(shell){shell.querySelectorAll('[data-word-mode]').forEach((button)=>button.onclick=()=>officeWordSetMode(button.dataset.wordMode));shell.querySelectorAll('[data-word-cmd]').forEach((button)=>{button.onmousedown=(event)=>event.preventDefault();button.onclick=()=>officeWordExec(button.dataset.wordCmd);});const format=shell.querySelector('[data-word-format]');format.onchange=()=>officeWordExec('formatBlock','<'+format.value+'>');const font=shell.querySelector('[data-word-font]');font.onchange=()=>officeWordExec('fontName',font.value);const size=shell.querySelector('[data-word-size]');size.onchange=()=>officeWordExec('fontSize',size.value);shell.querySelector('[data-word-color]').oninput=(event)=>officeWordExec('foreColor',event.target.value);shell.querySelector('[data-word-highlight]').oninput=(event)=>officeWordExec('hiliteColor',event.target.value);shell.querySelector('[data-word-action="link"]').onclick=async()=>{const value=await askText({ title:'插入链接', message:'链接地址（https://…）', value:'https://', okLabel:'插入' });if(value&&/^https?:\/\//i.test(value))officeWordExec('createLink',value);};shell.querySelector('[data-word-action="table"]').onclick=()=>officeWordExec('insertHTML','<table><tbody>'+Array.from({length:3},()=>'<tr><td><br></td><td><br></td><td><br></td></tr>').join('')+'</tbody></table><p><br></p>');shell.querySelector('[data-word-action="find"]').onclick=async()=>{const value=await askText({ title:'查找', message:'查找文字', value:'', okLabel:'查找' });if(value)window.find(value,false,false,true);};shell.querySelectorAll('[data-word-zoom]').forEach((button)=>button.onclick=()=>{OFFICE_WORD_ZOOM=Math.max(.55,Math.min(1.8,OFFICE_WORD_ZOOM+(button.dataset.wordZoom==='+'?.1:-.1)));const page=shell.querySelector('.office-word-page');if(page)page.style.setProperty('--office-word-zoom',OFFICE_WORD_ZOOM);$('office-word-zoom-label').textContent=Math.round(OFFICE_WORD_ZOOM*100)+'%';});}
 function officeWordResetViewport(area,page){
   area.scrollLeft=0;area.scrollTop=0;
   requestAnimationFrame(()=>{area.scrollLeft=0;area.scrollTop=0;try{page.focus({preventScroll:true});}catch(_){page.focus();}
@@ -5457,8 +5500,8 @@ function renderOfficeSheet(){officeSyncSheet();const wrap=document.createElement
 async function saveOfficeSheet(){if(!OFFICE_WORKBOOK||!OFFICE_ITEM||OFFICE_ITEM.kind!=='sheet')return;clearTimeout(OFFICE_SAVE_T);officeSyncSheet();let body,type='application/octet-stream';if(OFFICE_ITEM.ext==='.csv'){body=new Blob([XLSX.utils.sheet_to_csv(OFFICE_WORKBOOK.Sheets[OFFICE_SHEET])],{type:'text/csv;charset=utf-8'});type='text/csv';}else{const bookType=OFFICE_ITEM.ext==='.xls'?'biff8':'xlsx';body=new Blob([XLSX.write(OFFICE_WORKBOOK,{type:'array',bookType,cellStyles:true})],{type:'application/octet-stream'});}officeStatus('正在保存…');try{const response=await fetch('/api/office/save-stream',{method:'POST',headers:{'Content-Type':type,'X-CodeScope-Office':officeJsonHeader({path:OFFICE_CURRENT})},body});const result=await response.json();if(!result.ok)throw new Error(result.error);OFFICE_SHEET_DIRTY=false;officeStatus('已保存 '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));await loadOffice(true);}catch(error){officeStatus(String(error.message||error),true);}}
 async function renderOfficeSlides(buffer){const frame=document.createElement('iframe');frame.className='office-pptx-frame';frame.setAttribute('sandbox','allow-scripts');frame.title='PowerPoint 沙箱预览';const width=Math.max(640,Math.min(1120,$('office-stage').clientWidth-72)),height=Math.round(width*9/16);frame.srcdoc='<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;min-height:100%;background:#0c1118;color:#dce5f3;font-family:-apple-system,sans-serif}#host{min-height:100vh;padding:28px;box-sizing:border-box}.pptx-preview-wrapper{border-radius:8px;overflow:hidden;box-shadow:0 18px 56px rgba(0,0,0,.55)}</style><script src="/office-pptx/pptx-preview.umd.js"><\/script></head><body><div id="host"></div><script>addEventListener("message",async e=>{if(!e.data||e.data.type!=="codescope-pptx")return;try{const viewer=pptxPreview.init(document.getElementById("host"),{width:e.data.width,height:e.data.height,mode:"slide"});await viewer.preview(e.data.buffer);parent.postMessage({type:"codescope-pptx-rendered"},"*")}catch(error){parent.postMessage({type:"codescope-pptx-error",error:String(error&&error.message||error)},"*")}});parent.postMessage({type:"codescope-pptx-ready"},"*")<\/script></body></html>';$('office-stage').replaceChildren(frame);await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{window.removeEventListener('message',receive);reject(new Error('PowerPoint 预览组件加载超时'));},20000);const receive=(event)=>{if(event.source!==frame.contentWindow||!event.data)return;if(event.data.type==='codescope-pptx-ready'){frame.contentWindow.postMessage({type:'codescope-pptx',buffer,width,height},'*',[buffer]);}else if(event.data.type==='codescope-pptx-rendered'){clearTimeout(timer);window.removeEventListener('message',receive);resolve();}else if(event.data.type==='codescope-pptx-error'){clearTimeout(timer);window.removeEventListener('message',receive);reject(new Error(event.data.error||'PowerPoint 渲染失败'));}};window.addEventListener('message',receive);});}
 async function closeOffice(){clearTimeout(OFFICE_SAVE_T);await saveOfficeCurrent();destroyOnlyOffice();if(OFFICE_PPTX&&typeof OFFICE_PPTX.destroy==='function'){try{OFFICE_PPTX.destroy();}catch(_){}}OFFICE_PPTX=null;OFFICE_CURRENT='';document.body.classList.remove('office-mode');officeWelcome();renderOfficeList();}
-async function renameOfficeNode(item){const name=prompt(item.type==='folder'?'文件夹名称':'文档名称',item.type==='folder'?item.name:item.name.replace(/\.[^.]+$/,''));if(!name)return;const result=await api('/api/office/rename',{path:item.path,name});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===item.path){OFFICE_CURRENT=result.path;await loadOffice(true);await openOffice(result.path);}else await loadOffice();}
-async function deleteOfficeNode(item){if(!confirm('删除「'+item.name+'」'+(item.type==='folder'?'及其中全部文档':'')+'？'))return;const result=await api('/api/office/delete',{path:item.path});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===item.path||OFFICE_CURRENT.startsWith(item.path+'/'))await closeOffice();await loadOffice();}
+async function renameOfficeNode(item){const name=await askText({ title:'重命名', message:item.type==='folder'?'文件夹名称':'文档名称', value:item.type==='folder'?item.name:item.name.replace(/\.[^.]+$/,''), okLabel:'重命名' });if(!name)return;const result=await api('/api/office/rename',{path:item.path,name});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===item.path){OFFICE_CURRENT=result.path;await loadOffice(true);await openOffice(result.path);}else await loadOffice();}
+async function deleteOfficeNode(item){if(!await askConfirm({ title:'删除', message:'删除「'+item.name+'」'+(item.type==='folder'?'及其中全部文档':'')+'？', okLabel:'删除' }))return;const result=await api('/api/office/delete',{path:item.path});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===item.path||OFFICE_CURRENT.startsWith(item.path+'/'))await closeOffice();await loadOffice();}
 function officeFillFolderOptions(select){select.replaceChildren();const root=document.createElement('option');root.value='';root.textContent='Office 根目录';select.appendChild(root);for(const folder of officeFolders()){const option=document.createElement('option');option.value=folder.path;option.textContent=folder.path;select.appendChild(option);}select.value=officeFind(OFFICE_TARGET_FOLDER)?OFFICE_TARGET_FOLDER:'';}
 function openOfficeDialog(mode){OFFICE_DIALOG_MODE=mode;$('office-nd-title').textContent=mode==='folder'?'新建 Office 文件夹':'新建 Office 文档';$('office-nd-hint').textContent=mode==='folder'?'建立目录后，可用拖拽自由整理 Office 文档。':'创建标准 DOCX、XLSX 或 PPTX 文件，可继续用桌面 Office 编辑。';$('office-nd-kind').hidden=mode==='folder';$('office-nd-kind-label').hidden=mode==='folder';$('office-nd-name').value=mode==='folder'?'新建文件夹':'未命名文档';officeFillFolderOptions($('office-nd-folder'));$('office-ndialog').classList.add('open');setTimeout(()=>{$('office-nd-name').focus();$('office-nd-name').select();},0);}
 function closeOfficeDialog(){$('office-ndialog').classList.remove('open');}
@@ -5467,7 +5510,7 @@ async function importOfficeFiles(files){if(!files||!files.length)return;const fo
 async function probeOnlyOffice(){try{const response=await fetch('/api/office/providers/v1?refresh=1',{cache:'no-store'});const result=await response.json(),provider=result.providers&&result.providers.find((item)=>item.id==='onlyoffice-docs');OFFICE_HIGH_FIDELITY_READY=!!(provider&&provider.available);officeSetEngine(OFFICE_HIGH_FIDELITY_READY?'onlyoffice':'disconnected',OFFICE_HIGH_FIDELITY_READY?'ONLYOFFICE Docs · 已连接':'ONLYOFFICE · 需要连接');if(provider&&provider.note)$('office-engine').title=provider.note;return OFFICE_HIGH_FIDELITY_READY;}catch(_){OFFICE_HIGH_FIDELITY_READY=false;officeSetEngine('disconnected','ONLYOFFICE · 连接失败');return false;}}
 function applyOfficeServiceStatus(service){const state=$('office-service-state'),start=$('office-service-start'),stop=$('office-service-stop');if(!state||!start||!stop)return;const running=!!(service&&service.running),healthy=service&&service.health==='healthy',memory=running&&service.memory?String(service.memory).split('/')[0].trim():'';state.className='office-service '+(running?'running':'stopped');state.textContent=!service||!service.dockerAvailable?'Docker · 不可用':!service.installed?'容器 · 未安装':running?'容器 · '+(healthy?'健康':'启动中')+(memory?' · '+memory:''):'容器 · 已关闭';state.title=service&&service.error?service.error:(running?'ONLYOFFICE 正在运行'+(service.cpu?'，CPU '+service.cpu:''):'ONLYOFFICE 已停止，不占用运行内存');start.disabled=OFFICE_SERVICE_BUSY||!service||!service.dockerAvailable||!service.installed||running;stop.disabled=OFFICE_SERVICE_BUSY||!running;}
 async function loadOfficeServiceStatus(silent=false){try{const response=await fetch('/api/office/service',{cache:'no-store'}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'无法读取 ONLYOFFICE 服务状态');applyOfficeServiceStatus(result.service);return result.service;}catch(error){applyOfficeServiceStatus({dockerAvailable:false,error:String(error.message||error)});if(!silent)officeStatus(String(error.message||error),true);return null;}}
-async function controlOfficeService(action){if(OFFICE_SERVICE_BUSY)return;if(action==='stop'&&OFFICE_CURRENT&&!confirm('关闭 ONLYOFFICE 会中断当前文档编辑。请确认文档已经自动保存，是否继续？'))return;OFFICE_SERVICE_BUSY=true;applyOfficeServiceStatus({dockerAvailable:true,installed:true,running:action==='stop'});$('office-service-start').disabled=true;$('office-service-stop').disabled=true;officeStatus(action==='start'?'正在启动 ONLYOFFICE…':'正在关闭 ONLYOFFICE…');try{if(action==='stop')destroyOnlyOffice();const response=await fetch('/api/office/service',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'服务操作失败');applyOfficeServiceStatus(result.service);if(action==='start'){let service=result.service;for(let attempt=0;attempt<30&&service&&service.running&&service.health!=='healthy';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));service=await loadOfficeServiceStatus(true);}const ready=await probeOnlyOffice();officeStatus(ready?'ONLYOFFICE 已启动，可以打开文档':'容器已启动，Document Server 仍在初始化');if(ready&&OFFICE_CURRENT)await openOffice(OFFICE_CURRENT);}else{OFFICE_HIGH_FIDELITY_READY=false;officeSetEngine('disconnected','ONLYOFFICE · 已关闭');officeStatus('ONLYOFFICE 已关闭，运行内存已释放');if(OFFICE_CURRENT)await officeConnectionScreen('ONLYOFFICE 本机服务已关闭');}}catch(error){officeStatus(String(error.message||error),true);}finally{OFFICE_SERVICE_BUSY=false;await loadOfficeServiceStatus(true);}}
+async function controlOfficeService(action){if(OFFICE_SERVICE_BUSY)return;if(action==='stop'&&OFFICE_CURRENT&&!await askConfirm({ title:'关闭 ONLYOFFICE', message:'关闭 ONLYOFFICE 会中断当前文档编辑。请确认文档已经自动保存，是否继续？', okLabel:'继续' }))return;OFFICE_SERVICE_BUSY=true;applyOfficeServiceStatus({dockerAvailable:true,installed:true,running:action==='stop'});$('office-service-start').disabled=true;$('office-service-stop').disabled=true;officeStatus(action==='start'?'正在启动 ONLYOFFICE…':'正在关闭 ONLYOFFICE…');try{if(action==='stop')destroyOnlyOffice();const response=await fetch('/api/office/service',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'服务操作失败');applyOfficeServiceStatus(result.service);if(action==='start'){let service=result.service;for(let attempt=0;attempt<30&&service&&service.running&&service.health!=='healthy';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));service=await loadOfficeServiceStatus(true);}const ready=await probeOnlyOffice();officeStatus(ready?'ONLYOFFICE 已启动，可以打开文档':'容器已启动，Document Server 仍在初始化');if(ready&&OFFICE_CURRENT)await openOffice(OFFICE_CURRENT);}else{OFFICE_HIGH_FIDELITY_READY=false;officeSetEngine('disconnected','ONLYOFFICE · 已关闭');officeStatus('ONLYOFFICE 已关闭，运行内存已释放');if(OFFICE_CURRENT)await officeConnectionScreen('ONLYOFFICE 本机服务已关闭');}}catch(error){officeStatus(String(error.message||error),true);}finally{OFFICE_SERVICE_BUSY=false;await loadOfficeServiceStatus(true);}}
 function wireOfficePanel(){const pane=$('pane-office');pane.classList.toggle('collapsed',!OFFICE_OPEN);$('office-head').onclick=()=>{OFFICE_OPEN=!OFFICE_OPEN;pane.classList.toggle('collapsed',!OFFICE_OPEN);try{localStorage.setItem('mc-office-open',OFFICE_OPEN?'1':'0');}catch(_){}};$('office-new').onclick=(event)=>{event.stopPropagation();openOfficeDialog('document');};$('office-new-folder').onclick=(event)=>{event.stopPropagation();openOfficeDialog('folder');};$('office-import').onclick=(event)=>{event.stopPropagation();$('office-file-input').click();};$('office-file-input').onchange=(event)=>{importOfficeFiles([...event.target.files]);event.target.value='';};$('office-nd-cancel').onclick=closeOfficeDialog;$('office-nd-submit').onclick=submitOfficeDialog;$('office-nd-name').onkeydown=(event)=>{if(event.key==='Enter')submitOfficeDialog();};$('office-ndialog').onmousedown=(event)=>{if(event.target===$('office-ndialog'))closeOfficeDialog();};$('office-back').onclick=()=>closeOffice();$('office-service-start').onclick=()=>controlOfficeService('start');$('office-service-stop').onclick=()=>controlOfficeService('stop');$('office-reconnect').onclick=()=>{document.body.classList.add('office-mode');officeConnectionScreen();};$('office-refresh').onclick=()=>OFFICE_CURRENT?openOffice(OFFICE_CURRENT):loadOffice();$('office-save').onclick=saveOfficeCurrent;$('office-download').onclick=()=>{if(!OFFICE_CURRENT)return;const link=document.createElement('a');link.href='/api/office/file?download=1&path='+encodeURIComponent(OFFICE_CURRENT);link.download=officeBase(OFFICE_CURRENT);link.click();};$('office-rename-current').onclick=()=>{if(OFFICE_ITEM)renameOfficeNode(OFFICE_ITEM);};$('office-list').addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();$('office-list').classList.add('root-drop');}});$('office-list').addEventListener('dragleave',(event)=>{if(!$('office-list').contains(event.relatedTarget))$('office-list').classList.remove('root-drop');});$('office-list').addEventListener('drop',async(event)=>{if(event.target.closest('.office-row'))return;event.preventDefault();$('office-list').classList.remove('root-drop');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}const result=await api('/api/office/move',{path:value.path,toFolder:''});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});loadOffice(true);probeOnlyOffice();loadOfficeServiceStatus(true);}
 window.addEventListener('DOMContentLoaded',wireOfficePanel);
 
@@ -5890,19 +5933,19 @@ function renderReadingList() {
     const project=node,row=document.createElement('div');row.className='reading-folder reading-project'+(project.path===READING_PROJECT_CURRENT?' on':'');row.draggable=!project.knowledge;const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup('book');const copy=document.createElement('div');copy.className='reading-project-copy';const name=document.createElement('span');name.className='name';name.textContent=project.name;copy.appendChild(name);const desc=document.createElement('span');desc.className='reading-project-desc'+(project.description?'':' empty');desc.textContent=project.description||'暂无说明 · 点击 ⓘ 完善';copy.appendChild(desc);const tags=document.createElement('span');tags.className='reading-project-tags';if(project.tags&&project.tags.length){for(const value of project.tags.slice(0,3)){const tag=document.createElement('span');tag.className='reading-project-tag';tag.textContent=value;tags.appendChild(tag);}}else{const tag=document.createElement('span');tag.className='reading-project-tag empty';tag.textContent='＋ 标签';tag.onclick=(e)=>{e.stopPropagation();editReadingProjectMeta(project);};tags.appendChild(tag);}copy.appendChild(tags);const count=document.createElement('span');count.className='meta';count.textContent=String(project.count||0);count.title=(project.count||0)+(project.knowledge?' 篇 Markdown':' 个片段');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';actions.append(action(project.knowledge?'M+':'＋',project.knowledge?'新建 Markdown 片段':'添加项目片段',project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project)),action('ⓘ','编辑项目说明和标签',()=>editReadingProjectMeta(project)),action('✎','重命名阅读项目',()=>renameReadingProject(project)),action('×','删除整个阅读项目',()=>deleteReadingProject(project),true));row.append(icon,copy,count,actions);row.onclick=()=>openReadingProject(project);if(!project.knowledge){row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'project',path:project.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));}parent.appendChild(row);
   }};drawNodes(READING_TREE.children,host);
 }
-async function createKnowledgePageInProject(projectPath){const name=prompt('Markdown 片段名称','新文档.md');if(!name)return;const base=String(projectPath||'').replace(/^知识库\/?/,'');let rel=base+'/'+name.trim();if(!/\.md$/i.test(rel))rel+='.md';const result=await api('/api/knowledge/page',{path:rel,title:name.replace(/\.md$/i,'')});if(!result.ok)return alert(result.error);await loadReadings();READING_PROJECT_CURRENT=projectPath;openReading(result.readingPath,READING_ACTIVE_SLOT);}
-async function createKnowledgeProjectInFolder(folderPath){const name=prompt('知识项目名称');if(!name)return;const description=prompt('项目说明（可留空）','')??'';const base=String(folderPath||'').replace(/^知识库\/?/,'');const result=await api('/api/knowledge/project',{path:base+'/'+name.trim(),description});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(folderPath);saveReadingDirs();await loadReadings();const project=READING_PROJECT_INDEX.get('知识库/'+result.path);if(project)openReadingProject(project);}
-async function createKnowledgeCategoryInFolder(folderPath){const name=prompt('知识分类名称');if(!name)return;const base=String(folderPath||'').replace(/^知识库\/?/,'');const rel=(base?base+'/':'')+name.trim();const result=await api('/api/knowledge/folder',{path:rel});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(folderPath);READING_DIR_OPEN.add('知识库/'+result.path);saveReadingDirs();await loadReadings();}
-async function createReadingProject(parent){const name=prompt('阅读项目名称');if(!name)return;const description=prompt('项目说明（可留空）','')??'';const tags=prompt('标签（使用逗号分隔）','')??'';const result=await api('/api/readings/project/new',{parent:parent||'',name,description,tags});if(!result.ok)return alert(result.error);if(parent)READING_DIR_OPEN.add(parent);READING_PROJECT_CURRENT=result.path;saveReadingDirs();await loadReadings();const project=READING_PROJECT_INDEX.get(result.path);if(project)openReadingProject(project);}
-async function createReadingFolder(parent){const name=prompt('阅读文件夹名称');if(!name)return;const result=await api('/api/readings/folder',{parent:parent||'',name});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(result.path);if(parent)READING_DIR_OPEN.add(parent);saveReadingDirs();await loadReadings();}
-async function editReadingProjectMeta(project){const description=prompt('项目说明',project.description||'');if(description===null)return;const tags=prompt('标签（使用逗号分隔）',(project.tags||[]).join('，'));if(tags===null)return;const result=await api('/api/readings/project/meta',{project:project.path,description,tags});if(!result.ok)return alert(result.error);await loadReadings();}
-async function renameReadingProject(project){const next=prompt('阅读项目名称',project.name);if(!next||next===project.name)return;const r=await api('/api/readings/project/rename',{project:project.path,name:next});if(!r.ok)return alert(r.error);const prefix=project.path+'/';READING_SLOTS=READING_SLOTS.map((value)=>value.startsWith(prefix)?r.project+'/'+value.slice(prefix.length):value);READING_PROJECT_CURRENT=r.project;await loadReadings();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);}
-async function deleteReadingProject(project){if(!confirm('删除阅读项目「'+project.name+'」及其中 '+project.count+' 个片段？'))return;const r=await api('/api/readings/project/delete',{project:project.path});if(!r.ok)return alert(r.error);if(READING_PROJECT_CURRENT===project.path)closeReading();await loadReadings();}
-async function renameReadingFolder(folder){const next=prompt('阅读文件夹名称',folder.name);if(!next||next===folder.name)return;const r=await api('/api/readings/folder/rename',{folder:folder.path,name:next});if(!r.ok)return alert(r.error);const prefix=folder.path+'/';READING_SLOTS=READING_SLOTS.map((value)=>value.startsWith(prefix)?r.path+'/'+value.slice(prefix.length):value);if(READING_PROJECT_CURRENT.startsWith(prefix))READING_PROJECT_CURRENT=r.path+'/'+READING_PROJECT_CURRENT.slice(prefix.length);READING_DIR_OPEN.delete(folder.path);READING_DIR_OPEN.add(r.path);saveReadingDirs();await loadReadings();}
-async function deleteReadingFolder(folder){if(!confirm('删除文件夹「'+folder.name+'」及其中 '+(folder.count||0)+' 个阅读项目？'))return;const r=await api('/api/readings/folder/delete',{folder:folder.path});if(!r.ok)return alert(r.error);if(READING_PROJECT_CURRENT===folder.path||READING_PROJECT_CURRENT.startsWith(folder.path+'/'))closeReading();await loadReadings();}
+async function createKnowledgePageInProject(projectPath){const name=await askText({ title:'新建 Markdown 片段', message:'Markdown 片段名称', value:'新文档.md', okLabel:'新建' });if(!name)return;const base=String(projectPath||'').replace(/^知识库\/?/,'');let rel=base+'/'+name.trim();if(!/\.md$/i.test(rel))rel+='.md';const result=await api('/api/knowledge/page',{path:rel,title:name.replace(/\.md$/i,'')});if(!result.ok)return alert(result.error);await loadReadings();READING_PROJECT_CURRENT=projectPath;openReading(result.readingPath,READING_ACTIVE_SLOT);}
+async function createKnowledgeProjectInFolder(folderPath){const name=await askText({ title:'新建知识项目', message:'知识项目名称', value:'', okLabel:'新建' });if(!name)return;const description=await askText({ title:'项目说明', message:'项目说明（可留空）', value:'', okLabel:'确定' })??'';const base=String(folderPath||'').replace(/^知识库\/?/,'');const result=await api('/api/knowledge/project',{path:base+'/'+name.trim(),description});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(folderPath);saveReadingDirs();await loadReadings();const project=READING_PROJECT_INDEX.get('知识库/'+result.path);if(project)openReadingProject(project);}
+async function createKnowledgeCategoryInFolder(folderPath){const name=await askText({ title:'新建知识分类', message:'知识分类名称', value:'', okLabel:'新建' });if(!name)return;const base=String(folderPath||'').replace(/^知识库\/?/,'');const rel=(base?base+'/':'')+name.trim();const result=await api('/api/knowledge/folder',{path:rel});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(folderPath);READING_DIR_OPEN.add('知识库/'+result.path);saveReadingDirs();await loadReadings();}
+async function createReadingProject(parent){const name=await askText({ title:'新建阅读项目', message:'阅读项目名称', value:'', okLabel:'新建' });if(!name)return;const description=await askText({ title:'项目说明', message:'项目说明（可留空）', value:'', okLabel:'确定' })??'';const tags=await askText({ title:'标签', message:'标签（使用逗号分隔）', value:'', okLabel:'确定' })??'';const result=await api('/api/readings/project/new',{parent:parent||'',name,description,tags});if(!result.ok)return alert(result.error);if(parent)READING_DIR_OPEN.add(parent);READING_PROJECT_CURRENT=result.path;saveReadingDirs();await loadReadings();const project=READING_PROJECT_INDEX.get(result.path);if(project)openReadingProject(project);}
+async function createReadingFolder(parent){const name=await askText({ title:'新建阅读文件夹', message:'阅读文件夹名称', value:'', okLabel:'新建' });if(!name)return;const result=await api('/api/readings/folder',{parent:parent||'',name});if(!result.ok)return alert(result.error);READING_DIR_OPEN.add(result.path);if(parent)READING_DIR_OPEN.add(parent);saveReadingDirs();await loadReadings();}
+async function editReadingProjectMeta(project){const description=await askText({ title:'项目说明', message:'项目说明', value:project.description||'', okLabel:'确定' });if(description===null)return;const tags=await askText({ title:'标签', message:'标签（使用逗号分隔）', value:(project.tags||[]).join('，'), okLabel:'确定' });if(tags===null)return;const result=await api('/api/readings/project/meta',{project:project.path,description,tags});if(!result.ok)return alert(result.error);await loadReadings();}
+async function renameReadingProject(project){const next=await askText({ title:'重命名阅读项目', message:'阅读项目名称', value:project.name, okLabel:'重命名' });if(!next||next===project.name)return;const r=await api('/api/readings/project/rename',{project:project.path,name:next});if(!r.ok)return alert(r.error);const prefix=project.path+'/';READING_SLOTS=READING_SLOTS.map((value)=>value.startsWith(prefix)?r.project+'/'+value.slice(prefix.length):value);READING_PROJECT_CURRENT=r.project;await loadReadings();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);}
+async function deleteReadingProject(project){if(!await askConfirm({ title:'删除阅读项目', message:'删除阅读项目「'+project.name+'」及其中 '+project.count+' 个片段？', okLabel:'删除' }))return;const r=await api('/api/readings/project/delete',{project:project.path});if(!r.ok)return alert(r.error);if(READING_PROJECT_CURRENT===project.path)closeReading();await loadReadings();}
+async function renameReadingFolder(folder){const next=await askText({ title:'重命名阅读文件夹', message:'阅读文件夹名称', value:folder.name, okLabel:'重命名' });if(!next||next===folder.name)return;const r=await api('/api/readings/folder/rename',{folder:folder.path,name:next});if(!r.ok)return alert(r.error);const prefix=folder.path+'/';READING_SLOTS=READING_SLOTS.map((value)=>value.startsWith(prefix)?r.path+'/'+value.slice(prefix.length):value);if(READING_PROJECT_CURRENT.startsWith(prefix))READING_PROJECT_CURRENT=r.path+'/'+READING_PROJECT_CURRENT.slice(prefix.length);READING_DIR_OPEN.delete(folder.path);READING_DIR_OPEN.add(r.path);saveReadingDirs();await loadReadings();}
+async function deleteReadingFolder(folder){if(!await askConfirm({ title:'删除阅读文件夹', message:'删除文件夹「'+folder.name+'」及其中 '+(folder.count||0)+' 个阅读项目？', okLabel:'删除' }))return;const r=await api('/api/readings/folder/delete',{folder:folder.path});if(!r.ok)return alert(r.error);if(READING_PROJECT_CURRENT===folder.path||READING_PROJECT_CURRENT.startsWith(folder.path+'/'))closeReading();await loadReadings();}
 function sortedReadingFragments(project){const order={original:0,translation:1,bilingual:2,markdown:3,code:4};return [...(project&&project.children||[])].sort((a,b)=>(order[a.role]??9)-(order[b.role]??9)||a.name.localeCompare(b.name));}
-async function renameReadingFragment(item){const next=prompt('片段文件名',item.name);if(!next)return;const r=await api('/api/readings/rename',{path:item.path,name:next});if(!r.ok)return alert(r.error);READING_DOCS.delete(item.path);READING_TEXT_DOCS.delete(item.path);READING_SLOTS=READING_SLOTS.map(v=>v===item.path?r.path:v);if(READING_CURRENT===item.path)READING_CURRENT=r.path;await loadReadings();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);}
-async function deleteReadingFragment(item){if(!confirm('删除片段「'+item.name+'」？'))return;const r=await api('/api/readings/delete',{path:item.path});if(!r.ok)return alert(r.error);READING_DOCS.delete(item.path);READING_TEXT_DOCS.delete(item.path);READING_SLOTS=READING_SLOTS.map(v=>v===item.path?'':v);if(!READING_SLOTS[0]&&READING_SLOTS[1])READING_SLOTS=[READING_SLOTS[1],''];READING_ACTIVE_SLOT=READING_SLOTS[READING_ACTIVE_SLOT]?READING_ACTIVE_SLOT:0;if(READING_CURRENT===item.path)READING_CURRENT=READING_SLOTS[READING_ACTIVE_SLOT]||'';updateReadingColumnLayout();await loadReadings();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);renderReadingFragments();}
+async function renameReadingFragment(item){const next=await askText({ title:'重命名片段', message:'片段文件名', value:item.name, okLabel:'重命名' });if(!next)return;const r=await api('/api/readings/rename',{path:item.path,name:next});if(!r.ok)return alert(r.error);READING_DOCS.delete(item.path);READING_TEXT_DOCS.delete(item.path);READING_SLOTS=READING_SLOTS.map(v=>v===item.path?r.path:v);if(READING_CURRENT===item.path)READING_CURRENT=r.path;await loadReadings();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);}
+async function deleteReadingFragment(item){if(!await askConfirm({ title:'删除片段', message:'删除片段「'+item.name+'」？', okLabel:'删除' }))return;const r=await api('/api/readings/delete',{path:item.path});if(!r.ok)return alert(r.error);READING_DOCS.delete(item.path);READING_TEXT_DOCS.delete(item.path);READING_SLOTS=READING_SLOTS.map(v=>v===item.path?'':v);if(!READING_SLOTS[0]&&READING_SLOTS[1])READING_SLOTS=[READING_SLOTS[1],''];READING_ACTIVE_SLOT=READING_SLOTS[READING_ACTIVE_SLOT]?READING_ACTIVE_SLOT:0;if(READING_CURRENT===item.path)READING_CURRENT=READING_SLOTS[READING_ACTIVE_SLOT]||'';updateReadingColumnLayout();await loadReadings();await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);renderReadingFragments();}
 function renderReadingProjectTabs(){
   const host=$('reading-project-tabs');if(!host)return;host.replaceChildren();const project=READING_PROJECT_INDEX.get(READING_PROJECT_CURRENT);
   if(!project){const hint=document.createElement('span');hint.className='draw-empty';hint.textContent='打开左侧阅读项目后，在这里管理和组合片段';host.appendChild(hint);return;}
@@ -6137,7 +6180,7 @@ async function translateReadingSelection() {
 }
 function cryptoRandomId(){return (self.crypto&&self.crypto.randomUUID)?self.crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2);}
 async function translateReadingAll() {
-  if(READING_TRANSLATING)return;const doc=activeReadingDoc();if(!doc||!doc.pages||!doc.pages.length)return;if(!confirm('将逐页调用 AI 翻译 '+doc.pages.length+' 页并保存，可随时保留已完成进度。继续吗？'))return;
+  if(READING_TRANSLATING)return;const doc=activeReadingDoc();if(!doc||!doc.pages||!doc.pages.length)return;if(!await askConfirm({ title:'逐页 AI 翻译', message:'将逐页调用 AI 翻译 '+doc.pages.length+' 页并保存，可随时保留已完成进度。继续吗？', okLabel:'继续' }))return;
   READING_TRANSLATING=true;try{for(let page=1;page<=doc.pages.length;page++){if(doc.meta.translations[page]||!doc.pages[page-1])continue;doc.meta.translations[page]=await translateReadingText(doc.pages[page-1],'全文翻译 '+page+'/'+doc.pages.length);await saveReadingDoc(doc);}await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);readingStatus('全文翻译完成 · 可切换中文版或双语版');loadReadings(true);}catch(error){readingStatus('已保存完成部分 · '+error.message,true);}finally{READING_TRANSLATING=false;}
 }
 async function addReadingFragment() {
@@ -6194,7 +6237,7 @@ function startFragNoteEdit(card, doc, item) {
   ta.focus();
 }
 async function importReadingFiles(files) {
-  if(!files||!files.length)return;let folder=READING_IMPORT_PROJECT||READING_PROJECT_CURRENT;READING_IMPORT_PROJECT='';const projects=[...READING_PROJECT_INDEX.keys()];if(!folder){if(!projects.length)return readingStatus('请先创建一个阅读项目',true);const choice=prompt('导入到哪个阅读项目？\n可选：'+projects.join('、'),projects[0]);if(choice===null)return;folder=choice.trim();}if(!projects.includes(folder))return readingStatus('阅读项目不存在：'+folder,true);
+  if(!files||!files.length)return;let folder=READING_IMPORT_PROJECT||READING_PROJECT_CURRENT;READING_IMPORT_PROJECT='';const projects=[...READING_PROJECT_INDEX.keys()];if(!folder){if(!projects.length)return readingStatus('请先创建一个阅读项目',true);const choice=await askText({ title:'选择阅读项目', message:'导入到哪个阅读项目？\n可选：'+projects.join('、'), value:projects[0], okLabel:'导入' });if(choice===null)return;folder=choice.trim();}if(!projects.includes(folder))return readingStatus('阅读项目不存在：'+folder,true);
   const supported=/\.(?:pdf|docx|xlsx|xls|csv|pptx|html|htm)$/i;let imported=0,lastPath='';for(let i=0;i<files.length;i++){const file=files[i];if(!supported.test(file.name)){readingStatus('已跳过不支持的文件：'+file.name,true);continue;}readingStatus('正在导入 '+(i+1)+'/'+files.length+' · '+file.name);const info=btoa(unescape(encodeURIComponent(JSON.stringify({name:file.name,folder}))));let response;try{response=await fetch('/api/readings/upload-stream',{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream','X-CodeScope-Reading':info},body:file});const result=await response.json();if(!result.ok)throw new Error(result.error);imported++;lastPath=result.path;}catch(error){readingStatus(error.message,true);return;}}
   if(!imported)return;READING_PROJECT_CURRENT=folder;READING_CURRENT=lastPath;saveReadingDirs();await loadReadings();readingStatus(imported+' 份资料已加入阅读项目');const project=READING_PROJECT_INDEX.get(folder);if(project){await openReadingProject(project);if(lastPath)await openReading(lastPath,READING_ACTIVE_SLOT);}
 }
@@ -7806,7 +7849,7 @@ async function tagUpdate(body) {
   return r;
 }
 async function renameTag(tag) {
-  const next = prompt('重命名标签「' + tag.name + '」为：', tag.name);
+  const next = await askText({ title:'重命名标签', message:'重命名标签「' + tag.name + '」为：', value:tag.name, okLabel:'重命名' });
   if (next === null) return;
   const name = String(next).trim();
   if (!name || name === tag.name) return;
@@ -7814,15 +7857,15 @@ async function renameTag(tag) {
 }
 async function deleteTag(tag) {
   const count = tagUseCount(tag.id);
-  const ok = confirm(count
+  const ok = await askConfirm({ title:'删除标签', message:count
     ? `删除标签「${tag.name}」？\n将从 ${count} 个片段中移除该标签（片段内容不变）。`
-    : `删除标签「${tag.name}」？\n该标签当前没有被任何片段使用。`);
+    : `删除标签「${tag.name}」？\n该标签当前没有被任何片段使用。`, okLabel:'删除' });
   if (!ok) return;
   await tagUpdate({ action: 'delete', id: tag.id });
 }
 async function mergeTag(tag) {
   const options = TAGS.filter((t) => t.id !== tag.id).map((t) => t.name).slice(0, 40);
-  const answer = prompt('把「' + tag.name + '」合并到哪个标签？\n（输入已有标签名，可用标签：' + (options.join('、') || '无') + '）', '');
+  const answer = await askText({ title:'合并标签', message:'把「' + tag.name + '」合并到哪个标签？\n（输入已有标签名，可用标签：' + (options.join('、') || '无') + '）', value:'', okLabel:'合并' });
   if (answer === null) return;
   const name = String(answer).trim();
   if (!name) return;
@@ -9010,9 +9053,9 @@ function showAiChatList() {
     const nm = document.createElement('span'); nm.className = 'nm'; nm.title = c.key; nm.textContent = c.name;
     const cnt = document.createElement('span'); cnt.className = 'cnt'; cnt.textContent = c.count + ' 条';
     const rn = document.createElement('button'); rn.textContent = '✎'; rn.title = '重命名对话';
-    rn.onclick = (e) => {
+    rn.onclick = async (e) => {
       e.stopPropagation();
-      const name = prompt('对话名称：', c.name);
+      const name = await askText({ title:'重命名对话', message:'对话名称：', value:c.name, okLabel:'重命名' });
       if (name != null && name.trim()) {
         const m = chatMeta(); m[c.key] = m[c.key] || {};
         m[c.key].name = name.trim().slice(0, 40); m[c.key].updatedAt = Date.now();
@@ -9020,9 +9063,9 @@ function showAiChatList() {
       }
     };
     const del = document.createElement('button'); del.textContent = '🗑'; del.title = '清空该对话';
-    del.onclick = (e) => {
+    del.onclick = async (e) => {
       e.stopPropagation();
-      if (!confirm('清空该对话记录？（不可恢复）')) return;
+      if (!await askConfirm({ title:'清空对话记录', message:'清空该对话记录？（不可恢复）', okLabel:'清空' })) return;
       try { localStorage.removeItem(c.key); } catch (_) {}
       if (AI_CTX_KEY === c.key) AI_CTX_KEY = null;
       showAiChatList(); loadAiChat(); updateAiChatCur();
@@ -10912,7 +10955,7 @@ function renderAiSearchHistory(filter) {
   const title=document.createElement('strong');title.textContent='最近搜索';head.appendChild(title);
   const count=document.createElement('span');count.textContent=items.length+(q?' / '+all.length:'')+' 条';head.appendChild(count);
   const spacer=document.createElement('span');spacer.className='sp';head.appendChild(spacer);
-  if(all.length){const clear=document.createElement('button');clear.textContent='清空记录';clear.onclick=()=>{if(confirm('清空全部 AI 搜索记录？')){saveAiSearchHistory([]);renderAiSearchHistory('');}};head.appendChild(clear);}
+  if(all.length){const clear=document.createElement('button');clear.textContent='清空记录';clear.onclick=async()=>{if(await askConfirm({ title:'清空搜索记录', message:'清空全部 AI 搜索记录？', okLabel:'清空' })){saveAiSearchHistory([]);renderAiSearchHistory('');}};head.appendChild(clear);}
   wrap.appendChild(head);
   if(!items.length){const empty=document.createElement('div');empty.className='ai-search-history-empty';empty.textContent=q?'没有匹配的搜索记录':'完成一次 AI 搜索后，记录会显示在这里。';wrap.appendChild(empty);}
   else {
@@ -10989,7 +11032,7 @@ async function showBacklinks(){
 function workspaceSnapshotStatus(kind,message){if(document.body.classList.contains('reading-mode'))readingStatus(message,kind==='err');else if(document.body.classList.contains('office-mode'))officeStatus(message,kind==='err');else setStatus(kind,message);}
 function saveWorkspaceSnapshot(){const target=currentWorkspaceTarget();if(!target){setStatus('err','没有可保存的工作台内容');return;}const snapshot={version:1,target,sideWidth:localStorage.getItem('mc-side-w')||'',outlineWidth:localStorage.getItem('mc-outline-w')||'',outputHeight:localStorage.getItem('mc-out-h')||'',readingFragmentsWidth:localStorage.getItem('mc-reading-fragments-width')||'',theme:APP_THEME,updatedAt:Date.now()};try{localStorage.setItem(WORKSPACE_SNAPSHOT_KEY,JSON.stringify(snapshot));workspaceSnapshotStatus('ok','工作台快照已保存 · '+target.label);}catch(error){workspaceSnapshotStatus('err','工作台快照保存失败：'+error.message);}}
 async function restoreWorkspaceSnapshot(){let snapshot=null;try{snapshot=JSON.parse(localStorage.getItem(WORKSPACE_SNAPSHOT_KEY)||'null');}catch(_){}if(!snapshot||!snapshot.target){setStatus('err','还没有保存工作台快照');return;}const target=snapshot.target;if(snapshot.theme)applyAppTheme(snapshot.theme);if(snapshot.sideWidth)$('side').style.width=snapshot.sideWidth+'px';if(snapshot.outlineWidth)$('outline-panel').style.width=snapshot.outlineWidth+'px';if(snapshot.outputHeight)$('output').style.height=snapshot.outputHeight+'px';if(snapshot.readingFragmentsWidth)$('reading-stage').style.setProperty('--reading-fragments-width',snapshot.readingFragmentsWidth+'px');if(target.kind==='drawing')await openDrawing(target.path);else if(target.kind==='office')await openOffice(target.path);else if(target.kind==='pdf'){await openReading(target.path,0);await setReadingPage(0,target.page||1);}else if(target.kind==='note'&&target.openPath)await openReading(target.openPath,0);else{const snippet=SNIPPETS.find((item)=>item.file===(target.file||target.path));if(snippet)goToLocation({snippet,frag:Number(target.fragment)||0,line:Number(target.line)||1});else{setStatus('err','快照中的内容已移动或不存在');return;}}workspaceSnapshotStatus('ok','已恢复工作台快照 · '+(target.label||target.path));}
-function goToLinePrompt(){const context=readingContext();if(!context)return;const value=prompt('跳转到行：',String(context.line||1));if(value===null)return;const line=Math.max(1,Number.parseInt(value,10)||1);if(activeSplitContext())activateOpenSplitLocation(SPLIT_EDITORS.findIndex(item=>splitKey(item.file,item.fragment)===ACTIVE_SPLIT_KEY),line);else jumpToLine(line);}
+async function goToLinePrompt(){const context=readingContext();if(!context)return;const value=await askText({ title:'跳转到行', message:'跳转到行：', value:String(context.line||1), okLabel:'跳转' });if(value===null)return;const line=Math.max(1,Number.parseInt(value,10)||1);if(activeSplitContext())activateOpenSplitLocation(SPLIT_EDITORS.findIndex(item=>splitKey(item.file,item.fragment)===ACTIVE_SPLIT_KEY),line);else jumpToLine(line);}
 function commandPaletteItems(){return[
   {name:'工作台：快速打开代码、阅读资料、Office 或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'Office：新建文档',key:'',run:()=>openOfficeDialog('document')},{name:'Office：导入文档',key:'',run:()=>$('office-file-input').click()},{name:'工作台：保存当前快照',key:'',run:saveWorkspaceSnapshot},{name:'工作台：恢复最近快照',key:'',run:restoreWorkspaceSnapshot},{name:'引用：复制当前内容链接',key:'',run:copyCurrentWorkspaceLink},{name:'引用：查看当前内容的反向链接',key:'',run:showBacklinks},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
 ];}
@@ -11736,7 +11779,7 @@ async function renameFragment(file, fragId, idx) {
   const sn = SNIPPETS && SNIPPETS.find((x) => x.file === file);
   if (!sn || !sn.fragments[idx]) return;
   const old = sn.fragments[idx].label || ('片段 ' + (idx + 1));
-  const name = window.prompt('重命名片段：', old);
+  const name = await askText({ title:'重命名片段', message:'重命名片段：', value:old, okLabel:'重命名' });
   if (name === null) return;
   const label = name.trim();
   if (!label) { setStatus('err', '片段名不能为空'); return; }
@@ -12823,11 +12866,11 @@ function maybeComplete() {
 
 async function renameFocusedSymbol(){
   const context=readingContext(),token=wordAtEditorCaret();if(!context||!token||!token.word){setStatus('err','请先把光标放在函数、类型或变量上');return;}
-  const next=prompt('将「'+token.word+'」重命名为：',token.word);if(!next||next===token.word)return;if(!/^[A-Za-z_$][\w$]*$/.test(next)){setStatus('err','新名称不是有效标识符');return;}
+  const next=await askText({ title:'重命名符号', message:'将「'+token.word+'」重命名为：', value:token.word, okLabel:'重命名' });if(!next||next===token.word)return;if(!/^[A-Za-z_$][\w$]*$/.test(next)){setStatus('err','新名称不是有效标识符');return;}
   flushSave();flushSplitEditors();setStatus('run','正在计算跨文件重命名…');const result=await lspRequest('rename',{newName:next});
   if(result.ok&&result.edits&&result.edits.length){applyLspEdits(context,result.edits,'重命名 '+token.word+' → '+next);return;}
   const rx=new RegExp('\\b'+token.word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','g'),edits=[];context.snippet.fragments.forEach((fragment,index)=>{let match;const code=String(fragment.code||'');while((match=rx.exec(code)))edits.push({fragment:index,start:{line:code.slice(0,match.index).split('\n').length-1,character:match.index-(code.lastIndexOf('\n',match.index-1)+1)},end:{line:code.slice(0,match.index).split('\n').length-1,character:match.index-(code.lastIndexOf('\n',match.index-1)+1)+token.word.length},newText:next});});
-  if(!edits.length||!confirm('语言服务器未返回修改。是否使用项目内文本索引替换 '+edits.length+' 处同名标识符？')){setStatus('err',(result&&result.error)||'没有找到可重命名位置');return;}applyLspEdits(context,edits,'索引重命名 '+token.word+' → '+next);
+  if(!edits.length||!await askConfirm({ title:'改用文本索引重命名', message:'语言服务器未返回修改。是否使用项目内文本索引替换 '+edits.length+' 处同名标识符？', okLabel:'替换' })){setStatus('err',(result&&result.error)||'没有找到可重命名位置');return;}applyLspEdits(context,edits,'索引重命名 '+token.word+' → '+next);
 }
 function hideCodeActions(){const box=$('code-actions-pop');box.style.display='none';box.replaceChildren();}
 async function requestCodeActions(){
@@ -14055,7 +14098,7 @@ async function uploadLocalFiles(fileList) {
     try {
       let d=await uploadRemoteStream(file,relativePath,false);
       if(d.exists) {
-        if(!window.confirm(`远端已存在 ${relativePath}，是否覆盖？`)) continue;
+        if(!await askConfirm({ title:'覆盖远端文件', message:`远端已存在 ${relativePath}，是否覆盖？`, okLabel:'覆盖' })) continue;
         d=await uploadRemoteStream(file,relativePath,true);
       }
       if(!d.ok) throw apiError(d,'上传失败'); completed++;
@@ -15401,7 +15444,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     sendReadingChat('📎 引用选中内容（P.' + t.page + '）：「' + t.text.slice(0, 200) + (t.text.length > 200 ? '…' : '') + '」\n\n请结合论文上下文，解释这段原文的含义、作用与要点。');
     if (viewer && viewer._alive) readingStatus('已向 AI 提问选中内容');
   }
-  function pdfToolbarAction(kind, color) {
+  async function pdfToolbarAction(kind, color) {
     const t = pdfToolbarState; if (!t) return;
     if (!t.rects || !t.rects.length) { hidePdfToolbar(); return; }
     const viewer = t.viewer;
@@ -15413,7 +15456,7 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       note: '', scale: pdfAnnotationScale(viewer,t.page), createdAt: Date.now(),
     };
     if (kind === 'mark') {
-      const note = prompt('为这条标记添加笔记（可留空）', '');
+      const note = await askText({ title:'标记笔记', message:'为这条标记添加笔记（可留空）', value:'', okLabel:'保存' });
       if (note === null) return;
       anno.note = note || '';
     }
@@ -16577,8 +16620,8 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     handBtn.onclick = () => { setPdfHandMode(viewer, !viewer.handMode); savePdfViewState(viewer); };
     rotateBtn.onclick = () => { if (!viewer.pdfViewer) return; viewer.pdfViewer.pagesRotation = (viewer.pdfViewer.pagesRotation + 90) % 360; savePdfViewState(viewer); };
     editBtn.onclick = () => openReadingPdfInOnlyOffice(viewer);
-    pagePill.onclick = () => {
-      const value = prompt('跳转到页码（1–' + (viewer.numPages || 1) + '）', String(viewer.currentPage));
+    pagePill.onclick = async () => {
+      const value = await askText({ title:'跳转到页码', message:'跳转到页码（1–' + (viewer.numPages || 1) + '）', value:String(viewer.currentPage), okLabel:'跳转' });
       if (value !== null) viewer.goToPage(value);
     };
     host.addEventListener('pointerdown', (e) => { if (!e.target.closest('input,textarea,select,button')) host.focus({ preventScroll: true }); });
@@ -16650,8 +16693,8 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
       }
       zo.onclick = () => quickZoom(viewer, viewer.scale / 1.15);
       zi.onclick = () => quickZoom(viewer, viewer.scale * 1.15);
-      zl.onclick = () => {
-        const v = prompt('输入缩放百分比（20–300）', String(Math.round(viewer.scale * 100)));
+      zl.onclick = async () => {
+        const v = await askText({ title:'缩放比例', message:'输入缩放百分比（20–300）', value:String(Math.round(viewer.scale * 100)), okLabel:'应用' });
         if (v === null) return;
         const val = Number(v); if (!isFinite(val)) return;
         const rect = viewer.scroll.getBoundingClientRect();
@@ -16723,8 +16766,8 @@ setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
     const bSum = document.createElement('button'); bSum.className = 'c-quick'; bSum.dataset.act = 'sum'; bSum.textContent = '📌 总结论文';
     const bPt = document.createElement('button'); bPt.className = 'c-quick'; bPt.dataset.act = 'points'; bPt.textContent = '🎯 提取重点并高亮';
     const bClear = document.createElement('button'); bClear.textContent = '🗑'; bClear.title = '清空该论文的 AI 对话记录'; bClear.className = 'c-clear';
-    bClear.onclick = () => {
-      if (!confirm('清空该论文的 AI 对话记录？（不可恢复）')) return;
+    bClear.onclick = async () => {
+      if (!await askConfirm({ title:'清空论文对话', message:'清空该论文的 AI 对话记录？（不可恢复）', okLabel:'清空' })) return;
       const vv = window.__readingPdfViewer;
       if (vv && vv.path) { try { localStorage.removeItem(readingChatKey(vv.path)); } catch (_) {} }
       chatClearMsgs();
