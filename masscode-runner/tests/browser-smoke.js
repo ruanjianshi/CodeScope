@@ -448,6 +448,18 @@ print(r.run())
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
+  /* ---- 云同步面板：校验渲染与降级，不假设本机装了哪些工具 ---- */
+  await page.locator('#env-sync-summary').waitFor({state:'visible',timeout:15000});
+  await page.waitForFunction(()=>{const node=document.getElementById('env-sync-summary');return node&&!/读取中/.test(node.textContent);},null,{timeout:20000});
+  const syncSummary=await page.locator('#env-sync-summary').innerText();
+  if(!/云同步/.test(syncSummary))throw new Error('云同步面板标题缺失：'+syncSummary);
+  const syncToolRows=await page.locator('#env-sync-tools .tool-row').count();
+  if(syncToolRows<3)throw new Error('云同步工具行不完整（Tailscale/Syncthing/restic 应为 3 行）：'+syncToolRows);
+  const syncPeerRows=await page.locator('#env-sync-peers .sync-row, #env-sync-peers .env-sync-empty').count();
+  if(syncPeerRows<1)throw new Error('云同步对端区域没有任何内容');
+  if(!/GitHub/.test(await page.locator('#env-sync-github').innerText()))throw new Error('云同步未显示 GitHub 状态');
+  if(!/vault/.test(await page.locator('#env-sync-note').innerText()))throw new Error('云同步未显示 vault 统计');
+  if((await page.locator('#btn-env-sync-refresh').count())!==1||(await page.locator('#btn-env-sync-scan').count())!==1||(await page.locator('#btn-env-sync-snapshot').count())!==1)throw new Error('云同步三个操作按钮不完整');
   await page.locator('#btn-env-close').click();
   /* ---- 命令面板与工程测试/调试入口 ---- */
   await page.keyboard.press(process.platform==='darwin'?'Meta+Shift+P':'Control+Shift+P');

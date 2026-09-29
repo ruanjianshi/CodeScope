@@ -1,0 +1,10 @@
+#!/bin/sh
+# CodeScope 提交流程的单文件体积守卫。
+# 只做一件事：把检查委托给同目录的 Node 脚本；找不到 Node 就放行，
+# 避免因为环境缺 Node 把正常提交全部卡死（守卫是便利设施，不是安全边界）。
+HOOK_DIR=$(dirname "$0")
+if command -v node >/dev/null 2>&1; then
+  exec node "$HOOK_DIR/pre-commit-size.js"
+fi
+echo "  [体积守卫] 未找到 node，已跳过单文件体积检查"
+exit 0

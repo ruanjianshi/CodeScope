@@ -292,6 +292,49 @@ void bubbleSort(Array& values);
   assert(requiredBundledTools.every((key) => /无需另行配置/.test(environment.env[key].hint)), '内置工具仍显示外部安装说明');
   assert(!environment.runtime.officeBuiltin, '已停用的内置 Office 仍出现在运行环境中');
   assert(environment.env.onlyoffice && environment.env.onlyoffice.external && environment.env.onlyoffice.required && /尚未配置|等待重新检测|服务未连接/.test(environment.env.onlyoffice.issue) && /连接设置/.test(environment.env.onlyoffice.hint), 'ONLYOFFICE 必选连接说明不完整');
+  // ---------- 云同步：Tailscale 组网 / Syncthing 数据面 / restic 历史层 ----------
+  // 这段刻意不依赖本机是否真的装了这三个工具：可用就校验数据，不可用就校验降级说明。
+  const originalSyncConfig = (await requestJson(baseUrl, '/api/sync/config')).config;
+  assert(originalSyncConfig && typeof originalSyncConfig.file === 'string' && originalSyncConfig.syncthing && originalSyncConfig.syncthing.folder, '云同步配置结构异常');
+  const syncStatus = await requestJson(baseUrl, '/api/sync/status');
+  assert(syncStatus.ok === true && typeof syncStatus.timestamp === 'number', '云同步状态接口未返回可用聚合结果');
+  assert(['tailscale','syncthing','restic'].every((key) => key in syncStatus.installed), '云同步未报告三个工具的安装情况');
+  assert(syncStatus.tailscale && typeof syncStatus.tailscale.available === 'boolean' && Array.isArray(syncStatus.tailscale.peers), 'Tailscale 状态结构异常');
+  assert(!syncStatus.tailscale.available || syncStatus.tailscale.peers.every((peer) => typeof peer.online === 'boolean' && typeof peer.direct === 'boolean' && peer.name === peer.name.toLowerCase() && peer.dnsName === peer.dnsName.replace(/\.$/,'')), 'Tailscale 对端结构或 MagicDNS 命名规范异常');
+  assert(syncStatus.syncthing && typeof syncStatus.syncthing.available === 'boolean' && Array.isArray(syncStatus.syncthing.devices) && Array.isArray(syncStatus.syncthing.folders), 'Syncthing 状态结构异常');
+  assert(syncStatus.syncthing.available ? !!syncStatus.syncthing.version : /Syncthing/.test(syncStatus.syncthing.issue || ''), 'Syncthing 不可用时未给出可读原因');
+  assert(syncStatus.restic && typeof syncStatus.restic.configured === 'boolean' && Array.isArray(syncStatus.restic.targets) && syncStatus.restic.targets.every((target) => typeof target.snapshots === 'number' && (target.available || !!target.issue)), 'restic 仓库状态结构异常');
+  assert(syncStatus.vault && typeof syncStatus.vault.root === 'string' && Number.isInteger(syncStatus.vault.files) && Number.isInteger(syncStatus.vault.bytes) && typeof syncStatus.vault.conflicts === 'number', 'vault 统计结构异常');
+  assert(syncStatus.github && typeof syncStatus.github.available === 'boolean' && Array.isArray(syncStatus.github.largeFiles), 'GitHub 状态结构异常');
+  assert(syncStatus.snapshot && typeof syncStatus.snapshot.running === 'boolean' && Array.isArray(syncStatus.snapshot.targets), '快照状态结构异常');
+  assert(syncStatus.settings && syncStatus.settings.syncthingFolder && syncStatus.settings.largeFileMiB >= 1 && syncStatus.settings.largeFileMiB <= 100, '云同步设置结构异常');
+  const syncCached = await requestJson(baseUrl, '/api/sync/status');
+  assert(syncCached.cached === true || syncCached.timestamp === syncStatus.timestamp, '云同步状态既未命中缓存也未返回一致结果');
+  const syncConfigRead = await requestJson(baseUrl, '/api/sync/config');
+  assert(syncConfigRead.ok === true && Array.isArray(syncConfigRead.configXmlCandidates) && syncConfigRead.configXmlCandidates.length >= 3, '未给出 Syncthing config.xml 候选路径');
+  const savedSyncConfig = await postJson(baseUrl, '/api/sync/config', { syncthing: { folder: 'vault-smoke' }, largeFileMiB: 88 });
+  assert(savedSyncConfig.ok === true && savedSyncConfig.config.syncthing.folder === 'vault-smoke' && savedSyncConfig.config.largeFileMiB === 88, '云同步配置写入未生效');
+  assert((await requestJson(baseUrl, '/api/sync/config')).config.syncthing.folder === 'vault-smoke', '云同步配置未持久化到磁盘');
+  const invalidSyncThreshold = await postJson(baseUrl, '/api/sync/config', { largeFileMiB: 200 }, 400);
+  assert(invalidSyncThreshold.ok === false && /largeFileMiB/.test(invalidSyncThreshold.error), '云同步配置未拒绝越界阈值');
+  const invalidSyncRepo = await postJson(baseUrl, '/api/sync/config', { resticTargets: [{ passwordFile: '/tmp/nowhere' }] }, 400);
+  assert(invalidSyncRepo.ok === false && /repository/.test(invalidSyncRepo.error), '云同步配置未拒绝缺少仓库地址的 restic 目标');
+  const syncPrecheck = await requestJson(baseUrl, '/api/sync/github/precheck');
+  assert(syncPrecheck.ok === true && syncPrecheck.githubLimitMiB === 100 && typeof syncPrecheck.advice === 'string' && Array.isArray(syncPrecheck.blocking) && Array.isArray(syncPrecheck.largeFiles), 'GitHub 体积预检结构异常');
+  assert(syncPrecheck.blocking.every((item) => item.bytes >= 100 * 1024 * 1024), '体积预检把未超硬限的文件误判为阻断项');
+  const badSyncAction = await postJson(baseUrl, '/api/sync/device', { action: 'explode', device: 'NOT-A-DEVICE' }, 400);
+  assert(badSyncAction.ok === false && /pause/.test(badSyncAction.error), '设备开关未校验 action 取值');
+  // 扫描的成败取决于本机 Syncthing 是否在跑，所以这里只校验"要么成功、要么是可读的降级原因"
+  const scanResponse = await fetch(baseUrl + '/api/sync/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  const scanWithoutDaemon = await scanResponse.json();
+  assert([200, 503].includes(scanResponse.status) && (scanWithoutDaemon.ok === true || /Syncthing/.test(scanWithoutDaemon.error || '')), '扫描接口在 Syncthing 未运行时未优雅降级');
+  const snapshotWithoutRepo = await postJson(baseUrl, '/api/sync/snapshot', {}, 400);
+  assert(snapshotWithoutRepo.ok === false && /restic/.test(snapshotWithoutRepo.error), '未配置 restic 仓库时快照接口未给出可读提示');
+  // 还原原始配置，避免污染本机 sync.json
+  await postJson(baseUrl, '/api/sync/config', {
+    syncthing: originalSyncConfig.syncthing, resticTargets: originalSyncConfig.resticTargets, largeFileMiB: originalSyncConfig.largeFileMiB,
+  });
+  assert((await requestJson(baseUrl, '/api/sync/config')).config.largeFileMiB === originalSyncConfig.largeFileMiB, '云同步配置未能还原');
   const officeProviders = await requestJson(baseUrl, '/api/office/providers/v1');
   assert(officeProviders.ok && officeProviders.apiRevision === 1 && officeProviders.active === null && officeProviders.providers.length === 1 && officeProviders.providers[0].id === 'onlyoffice-docs' && officeProviders.providers[0].required && !officeProviders.providers[0].available && officeProviders.updateContract.manifestVersion === 1, 'ONLYOFFICE Provider v1 契约异常');
   const officeConnection = await requestJson(baseUrl, '/api/office/connection');

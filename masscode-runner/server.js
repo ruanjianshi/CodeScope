@@ -238,6 +238,484 @@ async function controlOnlyOfficeService(action) {
   if (action === 'stop' && before.running) await execFileText('docker', ['stop', '--time', '10', ONLYOFFICE_CONTAINER_NAME], 30000);
   return onlyOfficeServiceStatus();
 }
+// ===================== 云同步：Tailscale 组网 · Syncthing 数据面 · restic 历史层 =====================
+// 设计原则：① 只读聚合优先，任何工具缺失/未配置/不可达都只降级不报错；
+//          ② 外部命令一律带超时且不 reject，绝不阻塞主界面；③ 写操作少而可回滚。
+const SYNC_CONFIG_FILE = path.join(applicationDataRoot(), 'sync.json');
+const SYNC_STATUS_CACHE = { at: 0, value: null };
+const SYNC_VAULT_CACHE = { at: 0, value: null };
+const SYNC_SCAN_LIMIT = 60000;
+const SYNC_SNAPSHOT = { running: false, startedAt: 0, finishedAt: 0, targets: [], results: [], message: '' };
+
+// 不抛错的命令执行：状态聚合里任何一条命令失败都只是「这一项不可用」。
+function syncRun(command, args, options) {
+  const opts = Object.assign({ encoding: 'utf8', timeout: 8000, maxBuffer: 16 * 1024 * 1024, env: process.env }, options || {});
+  return new Promise((resolve) => {
+    execFile(command, args, opts, (error, stdout, stderr) => {
+      const text = String(stderr || '').trim();
+      resolve({
+        ok: !error,
+        stdout: String(stdout || ''),
+        stderr: text,
+        error: error ? (text || String(error.message || error)).slice(0, 400) : '',
+      });
+    });
+  });
+}
+
+function syncBinary(name, extra) {
+  const found = executablePath(name);
+  if (found) return found;
+  return (extra || []).find((candidate) => { try { return fs.existsSync(candidate); } catch (_) { return false; } }) || '';
+}
+function syncthingBinary() {
+  return syncBinary('syncthing', process.platform === 'darwin'
+    ? ['/opt/homebrew/bin/syncthing', '/usr/local/bin/syncthing']
+    : ['/usr/bin/syncthing', '/usr/local/bin/syncthing', '/snap/bin/syncthing']);
+}
+function resticBinary() {
+  return syncBinary('restic', process.platform === 'darwin'
+    ? ['/opt/homebrew/bin/restic', '/usr/local/bin/restic']
+    : ['/usr/bin/restic', '/usr/local/bin/restic']);
+}
+// macOS 上 Tailscale 的命令行在应用包内，which 找不到。
+function tailscaleBinary() {
+  return syncBinary('tailscale', process.platform === 'darwin'
+    ? ['/Applications/Tailscale.app/Contents/MacOS/Tailscale', '/opt/homebrew/bin/tailscale', '/usr/local/bin/tailscale']
+    : ['/usr/bin/tailscale', '/usr/sbin/tailscale', '/usr/local/bin/tailscale']);
+}
+
+function syncConfig() {
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(SYNC_CONFIG_FILE, 'utf8')); } catch (_) {}
+  const st = saved && typeof saved.syncthing === 'object' && saved.syncthing ? saved.syncthing : {};
+  let url = 'http://127.0.0.1:8384';
+  try { url = cleanServiceUrl(st.url || url) || url; } catch (_) {}
+  const targets = (Array.isArray(saved.resticTargets) ? saved.resticTargets : []).map((item) => {
+    const target = item && typeof item === 'object' ? item : { repository: String(item || '') };
+    return {
+      name: String(target.name || target.repository || '').trim(),
+      repository: String(target.repository || '').trim(),
+      passwordFile: String(target.passwordFile || '').trim(),
+      passwordCommand: String(target.passwordCommand || '').trim(),
+      paths: Array.isArray(target.paths) ? target.paths.map((p2) => String(p2)).filter(Boolean) : [],
+      tag: String(target.tag || '').trim(),
+    };
+  }).filter((target) => target.repository);
+  return {
+    file: SYNC_CONFIG_FILE,
+    syncthing: {
+      url,
+      apiKey: typeof st.apiKey === 'string' ? st.apiKey.trim() : '',
+      folder: typeof st.folder === 'string' && st.folder.trim() ? st.folder.trim() : 'vault',
+    },
+    resticTargets: targets,
+    largeFileMiB: Number(saved.largeFileMiB) > 0 ? Number(saved.largeFileMiB) : 95,
+  };
+}
+
+function saveSyncConfig(patch) {
+  const body = patch && typeof patch === 'object' ? patch : {};
+  const current = syncConfig();
+  const next = { syncthing: Object.assign({}, current.syncthing), resticTargets: current.resticTargets, largeFileMiB: current.largeFileMiB };
+  if (body.syncthing && typeof body.syncthing === 'object') {
+    const st = body.syncthing;
+    if (st.url !== undefined) next.syncthing.url = String(st.url || '').trim() ? cleanServiceUrl(st.url) : 'http://127.0.0.1:8384';
+    if (st.apiKey !== undefined) next.syncthing.apiKey = String(st.apiKey || '').trim();
+    if (st.folder !== undefined) next.syncthing.folder = String(st.folder || '').trim() || 'vault';
+  }
+  if (body.resticTargets !== undefined) {
+    if (!Array.isArray(body.resticTargets)) throw requestError('resticTargets 必须是数组', 400);
+    next.resticTargets = body.resticTargets.map((item) => {
+      const target = item && typeof item === 'object' ? item : {};
+      const repository = String(target.repository || '').trim();
+      if (!repository) throw requestError('每个 restic 仓库都必须填写 repository', 400);
+      return {
+        name: String(target.name || repository).trim(), repository,
+        passwordFile: String(target.passwordFile || '').trim(),
+        passwordCommand: String(target.passwordCommand || '').trim(),
+        paths: Array.isArray(target.paths) ? target.paths.map((p2) => String(p2)).filter(Boolean) : [],
+        tag: String(target.tag || '').trim(),
+      };
+    });
+  }
+  if (body.largeFileMiB !== undefined) {
+    const value = Number(body.largeFileMiB);
+    if (!Number.isFinite(value) || value < 1 || value > 100) throw requestError('largeFileMiB 必须在 1 到 100 之间（GitHub 单文件硬上限为 100 MiB）', 400);
+    next.largeFileMiB = value;
+  }
+  fs.mkdirSync(path.dirname(SYNC_CONFIG_FILE), { recursive: true });
+  writeFileAtomicSync(SYNC_CONFIG_FILE, JSON.stringify(next, null, 2) + '\n');
+  return syncConfig();
+}
+
+// Syncthing 的 API Key 写在各自平台的 config.xml 里，找不到就让用户手填。
+function syncthingConfigPaths() {
+  const home = os.homedir();
+  const list = [];
+  if (process.platform === 'darwin') list.push(path.join(home, 'Library/Application Support/Syncthing/config.xml'));
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) list.push(path.join(process.env.LOCALAPPDATA, 'Syncthing/config.xml'));
+  list.push(path.join(home, '.local/state/syncthing/config.xml'));
+  list.push(path.join(home, '.config/syncthing/config.xml'));
+  list.push(path.join(home, '.local/share/syncthing/config.xml'));
+  return list;
+}
+function discoverSyncthingApiKey() {
+  for (const file of syncthingConfigPaths()) {
+    try {
+      const text = fs.readFileSync(file, 'utf8');
+      const match = /<apikey>([^<]+)<\/apikey>/i.exec(text);
+      if (match && match[1].trim()) return { key: match[1].trim(), file };
+    } catch (_) {}
+  }
+  return { key: '', file: '' };
+}
+
+function syncFetchHeaders(config) {
+  const key = config.syncthing.apiKey || discoverSyncthingApiKey().key;
+  return key ? { 'X-API-Key': key } : {};
+}
+async function syncthingRequest(config, apiPath, options) {
+  const url = String(config.syncthing.url || '').replace(/\/+$/, '') + apiPath;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), (options && options.timeout) || 5000);
+  try {
+    const response = await fetch(url, Object.assign({ headers: syncFetchHeaders(config), signal: controller.signal }, options || {}));
+    if (!response.ok) throw new Error('HTTP ' + response.status + (response.status === 403 ? '（API Key 无效）' : ''));
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
+  } finally { clearTimeout(timer); }
+}
+
+async function tailscaleStatus() {
+  const binary = tailscaleBinary();
+  const base = { key: 'tailscale', available: false, binary, backendState: '', self: {}, peers: [], onlinePeers: 0, directPeers: 0, issue: '' };
+  if (!binary) return Object.assign(base, { issue: '未找到 tailscale 命令行（macOS 可装 App Store 版，或用 brew install tailscale）' });
+  const run = await syncRun(binary, ['status', '--json'], { timeout: 6000 });
+  if (!run.ok) return Object.assign(base, { issue: 'tailscale status 失败：' + (run.error || '未知错误') });
+  let data;
+  try { data = JSON.parse(run.stdout || '{}'); }
+  catch (_) { return Object.assign(base, { issue: '无法解析 tailscale status 输出' }); }
+  const peers = Object.values(data.Peer || {}).map((peer) => {
+    const ips = Array.isArray(peer.TailscaleIPs) ? peer.TailscaleIPs : [];
+    const direct = !!peer.CurAddr;
+    const dnsName = String(peer.DNSName || '').replace(/\.$/, '');
+    return {
+      // MagicDNS 短名是稳定身份（换机沿用同名即零改动）；HostName 在不同平台大小写不一致，仅作展示。
+      name: dnsName.split('.')[0] || String(peer.HostName || '') || 'peer',
+      hostName: String(peer.HostName || ''),
+      dnsName,
+      ip: ips.find((ip) => ip.includes('.')) || ips[0] || '',
+      os: String(peer.OS || ''),
+      online: !!peer.Online,
+      active: !!peer.Active,
+      direct,
+      path: direct ? String(peer.CurAddr) : (peer.Relay ? 'DERP ' + peer.Relay : '中继'),
+      lastSeen: String(peer.LastSeen || ''),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  const selfIps = Array.isArray(data.Self && data.Self.TailscaleIPs) ? data.Self.TailscaleIPs : [];
+  return Object.assign(base, {
+    available: true,
+    backendState: String(data.BackendState || ''),
+    self: {
+      name: String((data.Self && data.Self.DNSName) || '').replace(/\.$/, '').split('.')[0] || String((data.Self && data.Self.HostName) || ''),
+      hostName: String((data.Self && data.Self.HostName) || ''),
+      dnsName: String((data.Self && data.Self.DNSName) || '').replace(/\.$/, ''),
+      ip: selfIps.find((ip) => ip.includes('.')) || selfIps[0] || '',
+      os: String((data.Self && data.Self.OS) || ''),
+    },
+    peers,
+    onlinePeers: peers.filter((peer) => peer.online).length,
+    directPeers: peers.filter((peer) => peer.direct).length,
+  });
+}
+
+async function syncthingStatus(config) {
+  const base = {
+    key: 'syncthing', available: false, binary: syncthingBinary(), url: config.syncthing.url,
+    folder: config.syncthing.folder, apiKeySource: '', version: '', devices: [], folders: [], folderState: null, issue: '',
+  };
+  let status = null;
+  try { status = await syncthingRequest(config, '/rest/system/status'); }
+  catch (error) {
+    return Object.assign(base, { issue: '无法连接 Syncthing（' + config.syncthing.url + '）：' + String(error.message || error).slice(0, 160) + '。请确认 Syncthing 正在运行。' });
+  }
+  // Syncthing 2.x 起 /rest/system/status 不再带 version，改从 /rest/system/version 取（旧版回落到 status）。
+  let version = String(status.version || '');
+  if (!version) {
+    try { version = String((await syncthingRequest(config, '/rest/system/version')).version || ''); } catch (_) {}
+  }
+  const stored = config.syncthing.apiKey ? { file: '（应用设置）' } : discoverSyncthingApiKey();
+  let devicesCfg = [], foldersCfg = [], conns = {};
+  try { devicesCfg = await syncthingRequest(config, '/rest/config/devices'); } catch (_) {}
+  try { foldersCfg = await syncthingRequest(config, '/rest/config/folders'); } catch (_) {}
+  try { conns = (await syncthingRequest(config, '/rest/system/connections')).connections || {}; } catch (_) {}
+  const devices = (Array.isArray(devicesCfg) ? devicesCfg : []).map((device) => {
+    const conn = conns[device.deviceID] || {};
+    return {
+      id: String(device.deviceID || ''),
+      name: String(device.name || String(device.deviceID || '').slice(0, 7)),
+      paused: !!device.paused,
+      connected: !!conn.connected,
+      address: String(conn.address || ''),
+      type: String(conn.type || ''),
+      direct: !!conn.address && !/relay/i.test(String(conn.address)),
+      inBytes: Number(conn.inBytesTotal || 0),
+      outBytes: Number(conn.outBytesTotal || 0),
+      lastSeen: String(conn.at || ''),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  const folders = (Array.isArray(foldersCfg) ? foldersCfg : []).map((folder) => ({
+    id: String(folder.id || ''), label: String(folder.label || folder.id || ''),
+    path: String(folder.path || ''), type: String(folder.type || ''), paused: !!folder.paused,
+    devices: Array.isArray(folder.devices) ? folder.devices.length : 0,
+  }));
+  const wanted = folders.find((folder) => folder.id === config.syncthing.folder) || folders[0] || null;
+  let folderState = null;
+  if (wanted) {
+    try {
+      const raw = await syncthingRequest(config, '/rest/db/status?folder=' + encodeURIComponent(wanted.id));
+      folderState = {
+        id: wanted.id, label: wanted.label, path: wanted.path, type: wanted.type, paused: wanted.paused,
+        state: String(raw.state || ''), stateChanged: String(raw.stateChanged || ''),
+        globalFiles: Number(raw.globalFiles || 0), globalBytes: Number(raw.globalBytes || 0),
+        localFiles: Number(raw.localFiles || 0), localBytes: Number(raw.localBytes || 0),
+        needFiles: Number(raw.needFiles || 0), needBytes: Number(raw.needBytes || 0),
+        inSyncFiles: Number(raw.inSyncFiles || 0), errors: Number(raw.errors || 0),
+      };
+    } catch (_) {}
+  }
+  return Object.assign(base, {
+    available: true, version, apiKeySource: stored.file || '', devices, folders, folderState,
+    connectedDevices: devices.filter((device) => device.connected).length,
+  });
+}
+
+// Syncthing 没运行/不可达时给出明确原因，而不是把失败伪装成"设备不存在"。
+async function syncthingEnsure(config) {
+  try { await syncthingRequest(config, '/rest/system/status', { timeout: 4000 }); }
+  catch (error) {
+    throw requestError('无法连接 Syncthing（' + config.syncthing.url + '）：' + String(error.message || error).slice(0, 160) + '。请确认 Syncthing 已启动，必要时在设置里填写 API Key。', 503);
+  }
+}
+
+async function syncthingAction(body) {
+  const config = syncConfig();
+  // 先校验参数、再探测环境：非法参数在任何环境下都应稳定返回 400，而不是随工具状态变成 503。
+  const action = String((body && body.action) || '').toLowerCase();
+  if (!['pause', 'resume', 'scan'].includes(action)) throw requestError('action 必须是 pause、resume 或 scan', 400);
+  const device = String((body && body.device) || '').trim();
+  const folder = String((body && body.folder) || '').trim() || config.syncthing.folder;
+  await syncthingEnsure(config);
+  if (action === 'scan') {
+    await syncthingRequest(config, '/rest/db/scan?folder=' + encodeURIComponent(folder), { method: 'POST', timeout: 20000 });
+    SYNC_STATUS_CACHE.at = 0;
+    return { ok: true, action, folder };
+  }
+  if (!device) throw requestError('暂停/恢复设备时必须提供 device（Syncthing Device ID）', 400);
+  const devices = await syncthingRequest(config, '/rest/config/devices').catch(() => []);
+  if (!Array.isArray(devices) || !devices.some((item) => String(item.deviceID) === device)) {
+    throw requestError('未在本机 Syncthing 配置中找到该设备：' + device, 404);
+  }
+  await syncthingRequest(config, '/rest/system/' + action + '?device=' + encodeURIComponent(device), { method: 'POST', timeout: 8000 });
+  SYNC_STATUS_CACHE.at = 0;
+  return { ok: true, action, device };
+}
+
+async function resticTargetStatus(target) {
+  const base = { name: target.name, repository: target.repository, available: false, snapshots: 0, last: null, issue: '' };
+  const binary = resticBinary();
+  if (!binary) return Object.assign(base, { issue: '未找到 restic 命令（macOS: brew install restic；Linux: apt install restic）' });
+  const env = Object.assign({}, process.env);
+  if (target.passwordFile) env.RESTIC_PASSWORD_FILE = target.passwordFile;
+  if (target.passwordCommand) env.RESTIC_PASSWORD_COMMAND = target.passwordCommand;
+  const run = await syncRun(binary, ['-r', target.repository, 'snapshots', '--json'], { timeout: 20000, env });
+  if (!run.ok) return Object.assign(base, { issue: run.error || 'restic snapshots 失败' });
+  let list;
+  try { list = JSON.parse(run.stdout || '[]'); }
+  catch (_) { return Object.assign(base, { issue: '无法解析 restic snapshots 输出' }); }
+  const snapshots = Array.isArray(list) ? list : [];
+  const last = snapshots.slice().sort((a, b) => String(a.time || '').localeCompare(String(b.time || ''))).pop() || null;
+  return Object.assign(base, {
+    available: true, snapshots: snapshots.length,
+    last: last ? {
+      time: String(last.time || ''), hostname: String(last.hostname || ''), paths: last.paths || [],
+      tags: last.tags || [], shortId: String(last.short_id || '').slice(0, 8),
+    } : null,
+  });
+}
+
+async function startSyncSnapshot(names) {
+  if (SYNC_SNAPSHOT.running) throw requestError('已有快照任务正在执行', 409);
+  const config = syncConfig();
+  const wanted = Array.isArray(names) ? names.map((name) => String(name)) : [];
+  const targets = config.resticTargets.filter((target) => !wanted.length || wanted.includes(target.name));
+  if (!targets.length) throw requestError(config.resticTargets.length ? '没有匹配的 restic 仓库' : '尚未配置 restic 仓库：请在云同步设置里填写仓库地址与密码文件', 400);
+  const binary = resticBinary();
+  if (!binary) throw requestError('未找到 restic 命令：请先安装 restic', 503);
+  let vault = '';
+  try { vault = vaultPath(); } catch (_) {}
+  SYNC_SNAPSHOT.running = true; SYNC_SNAPSHOT.startedAt = Date.now(); SYNC_SNAPSHOT.finishedAt = 0;
+  SYNC_SNAPSHOT.targets = targets.map((target) => target.name);
+  SYNC_SNAPSHOT.results = []; SYNC_SNAPSHOT.message = '正在创建快照…';
+  (async () => {
+    for (const target of targets) {
+      const env = Object.assign({}, process.env);
+      if (target.passwordFile) env.RESTIC_PASSWORD_FILE = target.passwordFile;
+      if (target.passwordCommand) env.RESTIC_PASSWORD_COMMAND = target.passwordCommand;
+      const paths = target.paths.length ? target.paths : (vault ? [vault] : []);
+      if (!paths.length) { SYNC_SNAPSHOT.results.push({ name: target.name, ok: false, error: '没有可备份的路径（vault 不可用且未配置 paths）' }); continue; }
+      const args = ['-r', target.repository, 'backup', '--exclude', '.stversions', '--tag', 'host=' + os.hostname()];
+      if (target.tag) args.push('--tag', target.tag);
+      args.push(...paths);
+      const run = await syncRun(binary, args, { timeout: 6 * 60 * 60 * 1000, env, maxBuffer: 32 * 1024 * 1024 });
+      SYNC_SNAPSHOT.results.push({
+        name: target.name, ok: run.ok, error: run.ok ? '' : run.error,
+        summary: run.ok ? (run.stdout.trim().split('\n').pop() || '') : '',
+      });
+    }
+    SYNC_SNAPSHOT.running = false; SYNC_SNAPSHOT.finishedAt = Date.now();
+    SYNC_SNAPSHOT.message = SYNC_SNAPSHOT.results.every((item) => item.ok) ? '快照完成' : '部分仓库快照失败';
+    SYNC_STATUS_CACHE.at = 0;
+  })().catch((error) => {
+    SYNC_SNAPSHOT.running = false; SYNC_SNAPSHOT.finishedAt = Date.now();
+    SYNC_SNAPSHOT.message = String(error.message || error);
+  });
+  return { ok: true, running: true, targets: SYNC_SNAPSHOT.targets, startedAt: SYNC_SNAPSHOT.startedAt };
+}
+
+const SYNC_SKIP_DIRS = new Set(['.git', 'node_modules', '.stversions', 'out', 'tmp', '.next', 'dist', '.cache']);
+function syncWalk(root, visit, limit) {
+  const stack = [root];
+  let seen = 0, truncated = false;
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { continue; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { if (!SYNC_SKIP_DIRS.has(entry.name)) stack.push(full); continue; }
+      if (!entry.isFile()) continue;
+      let stat;
+      try { stat = fs.statSync(full); } catch (_) { continue; }
+      seen++;
+      if (visit(full, entry.name, stat) === false || seen >= limit) { truncated = true; return truncated; }
+    }
+  }
+  return truncated;
+}
+function directoryBytes(root, limit) {
+  let total = 0;
+  syncWalk(root, (full, name, stat) => { total += stat.size; }, limit || 40000);
+  return total;
+}
+function largestRepoFiles(root, thresholdMiB, limit) {
+  const threshold = Math.max(1, Number(thresholdMiB) || 95) * 1024 * 1024;
+  const found = [];
+  syncWalk(root, (full, name, stat) => {
+    if (stat.size >= threshold / 4) found.push({ path: path.relative(root, full), bytes: stat.size });
+  }, SYNC_SCAN_LIMIT);
+  return found.filter((item) => item.bytes >= threshold).sort((a, b) => b.bytes - a.bytes).slice(0, limit || 8);
+}
+function vaultStats() {
+  if (SYNC_VAULT_CACHE.value && Date.now() - SYNC_VAULT_CACHE.at < 30000) return SYNC_VAULT_CACHE.value;
+  let root = '';
+  try { root = vaultPath(); } catch (error) { root = ''; }
+  const value = {
+    root, files: 0, bytes: 0, pdfFiles: 0, pdfBytes: 0, textFiles: 0, textBytes: 0,
+    pdfBackupFiles: 0, pdfBackupBytes: 0, conflicts: 0, truncated: false,
+  };
+  if (!root) {
+    SYNC_VAULT_CACHE.at = Date.now();
+    SYNC_VAULT_CACHE.value = Object.assign(value, { error: 'vault 路径不可用' });
+    return SYNC_VAULT_CACHE.value;
+  }
+  value.truncated = syncWalk(root, (full, name, stat) => {
+    value.files++; value.bytes += stat.size;
+    const relative = path.relative(root, full);
+    if (/\.pdf$/i.test(name)) {
+      value.pdfFiles++; value.pdfBytes += stat.size;
+      if (/\.codescope\/pdf-backups\//.test(relative)) { value.pdfBackupFiles++; value.pdfBackupBytes += stat.size; }
+    }
+    if (/\.(md|markdown|txt|json|ya?ml|tex|bib|csv)$/i.test(name)) { value.textFiles++; value.textBytes += stat.size; }
+    if (/\.sync-conflict-/i.test(name)) value.conflicts++;
+  }, SYNC_SCAN_LIMIT);
+  SYNC_VAULT_CACHE.at = Date.now();
+  SYNC_VAULT_CACHE.value = value;
+  return value;
+}
+
+async function syncGithubStatus(config) {
+  const root = path.join(__dirname, '..');
+  const base = {
+    available: false, root, branch: '', head: '', subject: '', remote: '', dirty: 0, ahead: 0, behind: 0,
+    gitDirBytes: 0, thresholdMiB: config.largeFileMiB, largeFiles: [], issue: '',
+  };
+  const inside = await syncRun('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root, timeout: 5000 });
+  if (!inside.ok || !/true/.test(inside.stdout)) return Object.assign(base, { issue: '当前目录不是 git 仓库（桌面安装包场景下正常）' });
+  const [branch, head, remote, status, gitdir] = await Promise.all([
+    syncRun('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root, timeout: 5000 }),
+    syncRun('git', ['log', '-1', '--pretty=%h%x09%s'], { cwd: root, timeout: 5000 }),
+    syncRun('git', ['remote', 'get-url', 'origin'], { cwd: root, timeout: 5000 }),
+    syncRun('git', ['status', '--porcelain'], { cwd: root, timeout: 10000 }),
+    syncRun('git', ['rev-parse', '--git-dir'], { cwd: root, timeout: 5000 }),
+  ]);
+  const logLine = head.stdout.trim().split('\t');
+  const gitDir = gitdir.ok ? path.resolve(root, gitdir.stdout.trim()) : '';
+  const ahead = await syncRun('git', ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], { cwd: root, timeout: 8000 });
+  return Object.assign(base, {
+    available: true,
+    branch: branch.stdout.trim(),
+    head: logLine[0] || '',
+    subject: logLine[1] || '',
+    remote: remote.stdout.trim(),
+    dirty: status.ok ? status.stdout.split('\n').filter((line) => line.trim()).length : 0,
+    ahead: ahead.ok ? (Number(ahead.stdout.trim().split(/\s+/)[0]) || 0) : 0,
+    behind: ahead.ok ? (Number(ahead.stdout.trim().split(/\s+/)[1]) || 0) : 0,
+    gitDirBytes: gitDir ? directoryBytes(gitDir) : 0,
+    largeFiles: largestRepoFiles(root, config.largeFileMiB, 8),
+  });
+}
+
+async function syncStatus(force) {
+  if (!force && SYNC_STATUS_CACHE.value && Date.now() - SYNC_STATUS_CACHE.at < 8000) {
+    return Object.assign({}, SYNC_STATUS_CACHE.value, { cached: true });
+  }
+  const config = syncConfig();
+  const vault = vaultStats();
+  const safe = (promise, fallback) => promise.catch((error) => Object.assign({}, fallback, { issue: String(error.message || error).slice(0, 200) }));
+  const [tailscale, syncthing, github] = await Promise.all([
+    safe(tailscaleStatus(), { key: 'tailscale', available: false, binary: tailscaleBinary(), peers: [] }),
+    safe(syncthingStatus(config), { key: 'syncthing', available: false, binary: syncthingBinary(), url: config.syncthing.url, devices: [], folders: [] }),
+    safe(syncGithubStatus(config), { available: false, largeFiles: [] }),
+  ]);
+  const resticTargets = [];
+  for (const target of config.resticTargets) resticTargets.push(await resticTargetStatus(target));
+  const value = {
+    ok: true,
+    timestamp: Date.now(),
+    configFile: config.file,
+    installed: {
+      tailscale: !!tailscaleBinary(), syncthing: !!syncthingBinary(), restic: !!resticBinary(),
+    },
+    tailscale, syncthing, github,
+    restic: { binary: resticBinary(), configured: config.resticTargets.length > 0, targets: resticTargets },
+    vault,
+    snapshot: Object.assign({}, SYNC_SNAPSHOT),
+    settings: {
+      syncthingUrl: config.syncthing.url,
+      syncthingFolder: config.syncthing.folder,
+      apiKeyConfigured: !!(config.syncthing.apiKey || discoverSyncthingApiKey().key),
+      resticTargets: config.resticTargets.length,
+      largeFileMiB: config.largeFileMiB,
+    },
+  };
+  SYNC_STATUS_CACHE.at = Date.now();
+  SYNC_STATUS_CACHE.value = value;
+  return value;
+}
+
 async function memoryStatus() {
   if (MEMORY_CACHE.value && Date.now() - MEMORY_CACHE.at < 1800) return MEMORY_CACHE.value;
   const total = os.totalmem(); let free = os.freemem();
@@ -5715,6 +6193,54 @@ const server = http.createServer(async (req, res) => {
       const code = typeof b.code === 'string' ? b.code : source.code;
       if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'LSP 文件内容超过 2 MB' });
       return send(res, 200, await LSP.query({ snippet, fragment, language:source.language, code, action, line:b.line, column:b.column, newName:b.newName, triggerKind:b.triggerKind, triggerCharacter:b.triggerCharacter, range:b.range, only:b.only }));
+    }
+    // ===== 云同步：Tailscale 组网 / Syncthing 数据面 / restic 历史层 =====
+    if (req.method === 'GET' && u.pathname === '/api/sync/status') {
+      return send(res, 200, await syncStatus(u.searchParams.get('refresh') === '1'));
+    }
+    if (u.pathname === '/api/sync/config') {
+      if (req.method === 'GET') {
+        const discovered = discoverSyncthingApiKey();
+        return send(res, 200, {
+          ok: true, config: syncConfig(),
+          discovered: { syncthingApiKey: discovered.key ? '已在本机 config.xml 中发现' : '', file: discovered.file },
+          configXmlCandidates: syncthingConfigPaths(),
+        });
+      }
+      if (req.method === 'POST') {
+        try { return send(res, 200, { ok: true, config: saveSyncConfig(await readBody(req)) }); }
+        catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
+      }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/sync/device') {
+      try { return send(res, 200, await syncthingAction(await readBody(req))); }
+      catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/sync/scan') {
+      try {
+        const body = await readBody(req);
+        return send(res, 200, await syncthingAction({ action: 'scan', folder: body.folder }));
+      } catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/sync/snapshot') {
+      try { return send(res, 200, await startSyncSnapshot((await readBody(req)).targets)); }
+      catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
+    }
+    // GitHub 体积预检：单文件 ≥100 MiB 一旦进历史，push 会被永久拒绝，必须在入库前拦住。
+    if (req.method === 'GET' && u.pathname === '/api/sync/github/precheck') {
+      const config = syncConfig();
+      const repo = await syncGithubStatus(config).catch(() => ({ largeFiles: [] }));
+      const vault = vaultStats();
+      const largeFiles = repo.largeFiles || [];
+      const blocking = largeFiles.filter((item) => item.bytes >= 100 * 1024 * 1024);
+      return send(res, 200, {
+        ok: true, thresholdMiB: config.largeFileMiB, githubLimitMiB: 100,
+        largeFiles, blocking,
+        pdfBackups: { files: vault.pdfBackupFiles, bytes: vault.pdfBackupBytes },
+        advice: blocking.length
+          ? '存在 ≥100 MiB 的文件：一旦提交，git push 会被永久拒绝，请先压缩或移出仓库'
+          : (largeFiles.length ? '存在接近上限的文件（≥' + config.largeFileMiB + ' MiB），提交前请确认' : '未发现超限文件'),
+      });
     }
     // ===== 远程开发：SSH 复用底部 PTY 终端；SFTP 浏览文件；VNC 由 WebSocket 代理 =====
     if (req.method === 'GET' && u.pathname === '/api/remote/status') {
