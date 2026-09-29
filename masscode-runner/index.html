@@ -1788,6 +1788,15 @@
   #code-wrap.latex-code #code .tex-comment, .split-editor-code .tex-comment { color: #667085; }
   #code-wrap.latex-code #code-edit:focus { outline: 1px solid rgba(99,155,255,.85); box-shadow: inset 0 0 0 1px rgba(99,155,255,.12); }
   #code-wrap.latex-code #code-edit.live-hl::selection { background: rgba(82,139,255,.34); -webkit-text-fill-color: transparent; }
+  /* 自动换行：高亮层与透明输入框必须一起折行，否则可见文字仍停留在 pre 单行、
+     长行会被分栏边界裁掉。折行后行号与视觉行不再一一对应，故换行时隐藏行号栏
+     （Monaco 路径自带折行行号，不受影响）。 */
+  #code-wrap.wrap-on #code, #code-wrap.wrap-on #code-edit { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #code-wrap.wrap-on #code-edit { overflow-x: hidden; }
+  #code-wrap.wrap-on #ln { visibility: hidden; }
+  .split-editor-group.wrap-on .split-editor-code, .split-editor-group.wrap-on .split-editor-input { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .split-editor-group.wrap-on .split-editor-input { overflow-x: hidden; }
+  .split-editor-group.wrap-on .split-editor-ln { visibility: hidden; }
   /* Markdown 源码也使用与代码一致的双层高亮编辑器；颜色遵循当前主题语义色。 */
   #code-wrap.markdown-code #code .hljs-section { color:var(--syntax-title,#82aaff); font-weight:700; }
   #code-wrap.markdown-code #code .hljs-bullet { color:var(--syntax-number,#f6c177); font-weight:700; }
@@ -4178,8 +4187,12 @@ const MONACO_DISABLED = new URLSearchParams(location.search).has('legacy-editor'
 let MONACO_PROMISE=null,MONACO_EDITOR=null,MONACO_MAIN_KEY='',MONACO_SYNCING=false,MONACO_PROVIDERS_READY=false;
 const MONACO_MODELS=new Map(),MONACO_MODEL_CONTEXT=new Map(),MONACO_SPLIT_EDITORS=new Set();
 let READING_HTML_EDITOR=null; /* 阅读区 HTML 源码编辑器：供全局自动换行（Alt+Z）同步 */
-let EDITOR_WORD_WRAP=false;
-try{EDITOR_WORD_WRAP=localStorage.getItem('mc-editor-word-wrap')==='1';}catch(_){}
+let EDITOR_WORD_WRAP=false,EDITOR_WORD_WRAP_SET=false;
+try{const stored=localStorage.getItem('mc-editor-word-wrap');if(stored==='0'||stored==='1'){EDITOR_WORD_WRAP=stored==='1';EDITOR_WORD_WRAP_SET=true;}}catch(_){}
+/* LaTeX / Markdown / 纯文本以长句为主，窄栏里不换行会被分栏边界裁掉，因此默认换行；
+   用户手动切换过（Alt+Z 或工具栏按钮）就一律以用户选择为准。 */
+const WORD_WRAP_PROSE=new Set(['latex','markdown','plain_text']);
+function editorWordWrapOn(){if(EDITOR_WORD_WRAP_SET)return EDITOR_WORD_WRAP;const f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];return !!(f&&WORD_WRAP_PROSE.has(f.language));}
 const EDITOR_FONT_DEFAULT=14,EDITOR_FONT_MIN=10,EDITOR_FONT_MAX=28;
 let EDITOR_FONT_SIZE=EDITOR_FONT_DEFAULT,EDITOR_ZOOM_DELTA=0;
 try{const saved=Number(localStorage.getItem('mc-editor-font-size'));if(Number.isFinite(saved))EDITOR_FONT_SIZE=Math.max(EDITOR_FONT_MIN,Math.min(EDITOR_FONT_MAX,Math.round(saved)));}catch(_){}
@@ -4216,8 +4229,8 @@ function monacoModelKey(file,index){return String(file||'untitled')+'#'+String(N
 function monacoUriFor(file,index){return window.monaco.Uri.parse('inmemory://codescope/'+encodeURIComponent(String(file||'snippet'))+'/'+String(Number(index)||0));}
 function monacoRange(range){return new window.monaco.Range(Number(range&&range.start&&range.start.line||0)+1,Number(range&&range.start&&range.start.character||0)+1,Number(range&&range.end&&range.end.line||0)+1,Number(range&&range.end&&range.end.character||0)+1);}
 function monacoOptions(readOnly=false){return{automaticLayout:true,readOnly,theme:monacoTheme(),fontFamily:'JetBrains Mono, SFMono-Regular, Consolas, monospace',fontSize:EDITOR_FONT_SIZE,lineHeight:editorLineHeight(EDITOR_FONT_SIZE),mouseWheelZoom:false,fontLigatures:true,tabSize:currentIndentWidth(),insertSpaces:true,detectIndentation:true,lineNumbers:'on',glyphMargin:true,folding:true,foldingStrategy:'auto',showFoldingControls:'mouseover',bracketPairColorization:{enabled:true},guides:{bracketPairs:true,indentation:true,highlightActiveIndentation:true},minimap:{enabled:true,autohide:true,showSlider:'mouseover',renderCharacters:false,maxColumn:90},stickyScroll:{enabled:true,maxLineCount:5},smoothScrolling:true,cursorSmoothCaretAnimation:'on',cursorBlinking:'smooth',multiCursorModifier:'alt',multiCursorPaste:'spread',formatOnPaste:true,formatOnType:true,wordWrap:EDITOR_WORD_WRAP?'on':'off',scrollBeyondLastLine:false,padding:{top:10,bottom:16},suggest:{preview:true,showStatusBar:true,shareSuggestSelections:true},quickSuggestions:{other:true,comments:false,strings:false},parameterHints:{enabled:true,cycle:true},hover:{enabled:true,delay:450,sticky:true},lightbulb:{enabled:'on'},inlayHints:{enabled:'on'},renderWhitespace:'selection',renderControlCharacters:true,linkedEditing:true,renameOnType:true,occurrencesHighlight:'multiFile',selectionHighlight:true,codeLens:true,accessibilitySupport:'auto'};}
-function applyEditorWordWrap(){const value=EDITOR_WORD_WRAP?'on':'off';if(MONACO_EDITOR)MONACO_EDITOR.updateOptions({wordWrap:value});for(const editor of MONACO_SPLIT_EDITORS)editor.updateOptions({wordWrap:value});if(READING_HTML_EDITOR)try{READING_HTML_EDITOR.updateOptions({wordWrap:value});}catch(_){}const input=$('code-edit');if(input)input.wrap=EDITOR_WORD_WRAP?'soft':'off';document.querySelectorAll('.split-editor-input').forEach(node=>node.wrap=EDITOR_WORD_WRAP?'soft':'off');const btn=$('btn-wrap');if(btn){btn.classList.toggle('on',EDITOR_WORD_WRAP);btn.textContent=EDITOR_WORD_WRAP?'↵':'↔';btn.title='自动换行：'+(EDITOR_WORD_WRAP?'已开启':'已关闭')+'（Alt+Z）';btn.setAttribute('aria-pressed',String(EDITOR_WORD_WRAP));}}
-function toggleEditorWordWrap(){EDITOR_WORD_WRAP=!EDITOR_WORD_WRAP;try{localStorage.setItem('mc-editor-word-wrap',EDITOR_WORD_WRAP?'1':'0');}catch(_){}applyEditorWordWrap();setStatus('ok','自动换行已'+(EDITOR_WORD_WRAP?'开启':'关闭'));}
+function applyEditorWordWrap(){const on=editorWordWrapOn();const value=on?'on':'off';if(MONACO_EDITOR)MONACO_EDITOR.updateOptions({wordWrap:value});for(const editor of MONACO_SPLIT_EDITORS)editor.updateOptions({wordWrap:value});if(READING_HTML_EDITOR)try{READING_HTML_EDITOR.updateOptions({wordWrap:value});}catch(_){}const wrap=$('code-wrap');if(wrap)wrap.classList.toggle('wrap-on',on);document.querySelectorAll('.split-editor-group').forEach(group=>group.classList.toggle('wrap-on',on));const input=$('code-edit');if(input)input.wrap=on?'soft':'off';document.querySelectorAll('.split-editor-input').forEach(node=>node.wrap=on?'soft':'off');const btn=$('btn-wrap');if(btn){btn.classList.toggle('on',on);btn.textContent=on?'↵':'↔';btn.title='自动换行：'+(on?'已开启':'已关闭')+'（Alt+Z）';btn.setAttribute('aria-pressed',String(on));}}
+function toggleEditorWordWrap(){EDITOR_WORD_WRAP=!editorWordWrapOn();EDITOR_WORD_WRAP_SET=true;try{localStorage.setItem('mc-editor-word-wrap',EDITOR_WORD_WRAP?'1':'0');}catch(_){}applyEditorWordWrap();setStatus('ok','自动换行已'+(EDITOR_WORD_WRAP?'开启':'关闭'));}
 function monacoModel(ref,code){const key=monacoModelKey(ref.snippet.file,ref.index);let model=MONACO_MODELS.get(key);if(!model||model.isDisposed()){const uri=monacoUriFor(ref.snippet.file,ref.index);model=window.monaco.editor.getModel(uri)||window.monaco.editor.createModel(String(code||''),monacoLanguage(ref.frag.language),uri);MONACO_MODELS.set(key,model);}else window.monaco.editor.setModelLanguage(model,monacoLanguage(ref.frag.language));MONACO_MODEL_CONTEXT.set(model.uri.toString(),{snippet:ref.snippet,index:ref.index,fragment:ref.frag});return model;}
 function monacoContext(model){const context=MONACO_MODEL_CONTEXT.get(model.uri.toString());if(!context)return null;const fresh=SNIPPETS.find(item=>item.file===context.snippet.file)||context.snippet,fragment=fresh.fragments&&fresh.fragments[context.index];return fragment?{snippet:fresh,index:context.index,fragment}:null;}
 async function monacoLsp(model,position,action,extra){const context=monacoContext(model);if(!context||!LSP_LANGUAGES.has(context.fragment.language))return{ok:false};return api('/api/lsp/query',Object.assign({file:context.snippet.file,fragment:context.index,code:model.getValue(),action,line:position.lineNumber,column:position.column},extra||{}));}
@@ -4287,7 +4300,7 @@ async function syncMonacoMain(){
       MONACO_EDITOR.onDidScrollChange(event=>{const ta=$('code-edit');ta.scrollTop=event.scrollTop;ta.scrollLeft=event.scrollLeft;syncMarkdownPreviewFromSource();});
       MONACO_EDITOR.onMouseDown(event=>{if((event.event.ctrlKey||event.event.metaKey)&&event.target.position){syncProxySelection(MONACO_EDITOR,$('code-edit'));const sym=focusedSymbol();if(sym)goToSymbol(resolveDefinition(sym)||sym);}});
     }else MONACO_EDITOR.setModel(model);
-    MONACO_EDITOR.updateOptions(monacoOptions(false));
+    MONACO_EDITOR.updateOptions(monacoOptions(false));applyEditorWordWrap();
     const proxyPosition=model.getPositionAt(Math.max(0,Math.min(ta.selectionStart||0,model.getValueLength())));
     MONACO_EDITOR.setPosition(proxyPosition);MONACO_EDITOR.revealPositionInCenterIfOutsideViewport(proxyPosition);
     MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';
@@ -11751,6 +11764,7 @@ function renderCode() {
   const isLatex = f && f.language === 'latex';
   $('code-wrap').classList.toggle('latex-code', !!isLatex);
   $('code-wrap').classList.toggle('markdown-code', !!isMd);
+  applyEditorWordWrap();   /* 按当前片段语言重算换行：LaTeX 等长句片段默认换行 */
   applyMmMode();   /* 同步导图按钮态；切换片段后按需保留/退出导图模式（非 md 自动关闭） */
   if (EDITING) {
     // 编辑模式：所有源码（含 Markdown）都使用透明 textarea + 语法高亮层；Monaco 可用时由其接管。
