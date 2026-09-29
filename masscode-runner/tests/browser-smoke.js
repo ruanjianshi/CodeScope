@@ -460,6 +460,17 @@ print(r.run())
   if(!/GitHub/.test(await page.locator('#env-sync-github').innerText()))throw new Error('云同步未显示 GitHub 状态');
   if(!/vault/.test(await page.locator('#env-sync-note').innerText()))throw new Error('云同步未显示 vault 统计');
   if((await page.locator('#btn-env-sync-refresh').count())!==1||(await page.locator('#btn-env-sync-scan').count())!==1||(await page.locator('#btn-env-sync-snapshot').count())!==1)throw new Error('云同步三个操作按钮不完整');
+  if((await page.locator('#btn-sync').count())!==1)throw new Error('顶栏缺少云同步快捷按钮');
+  if(!/云同步/.test(await page.locator('#btn-sync').getAttribute('title')||''))throw new Error('顶栏云同步按钮没有说明文字');
+  await page.locator('#env-panel .env-sync-card').first().waitFor({state:'visible',timeout:10000});
+  await page.locator('#btn-env-close').click();
+  /* ---- 顶栏「同步」按钮：点一次就能直接落到云同步卡片上 ---- */
+  await page.locator('#btn-sync').click();
+  await page.locator('#env-panel.open').waitFor({state:'visible'});
+  await page.waitForFunction(()=>{const node=document.getElementById('env-sync-summary');return node&&!/读取中/.test(node.textContent);},null,{timeout:20000});
+  await page.waitForTimeout(400);
+  const syncCardBox=await page.locator('#env-panel .env-sync-card').first().boundingBox();
+  if(!syncCardBox||syncCardBox.y<0||syncCardBox.y>await page.evaluate(()=>window.innerHeight*0.6))throw new Error('点击「同步」没有定位到云同步卡片：'+JSON.stringify(syncCardBox));
   await page.locator('#btn-env-close').click();
   /* ---- 命令面板与工程测试/调试入口 ---- */
   await page.keyboard.press(process.platform==='darwin'?'Meta+Shift+P':'Control+Shift+P');

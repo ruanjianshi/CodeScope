@@ -3156,6 +3156,7 @@
   #app-nav .header-project::before { content:'⌘'; }
   #app-nav .header-remote::before { content:'⌁'; font-size:16px; }
   #app-nav .header-env::before { content:'◌'; }
+  #app-nav .header-sync::before { content:'☁'; }
   #app-nav #btn-env,#app-nav #btn-remote { padding-right:22px; }
   #app-nav #theme-btn { min-height:32px; }
 
@@ -3507,6 +3508,7 @@
     <button class="header-action header-project" id="btn-project" title="构建任务、编译数据库与工程健康报告"><span>工程</span></button>
     <button class="header-action header-remote" id="btn-remote" title="SSH 终端与 VNC 桌面"><span>远程</span></button>
     <button class="header-action header-env" id="btn-env" title="检查运行环境与项目工具"><span>环境</span></button>
+    <button class="header-action header-sync" id="btn-sync" title="云同步：Tailscale 组网 · Syncthing 多端同步 · restic 历史快照"><span>同步</span></button>
     </nav>
   </div>
 </header>
@@ -15507,6 +15509,19 @@ const installHints = {
   biber: 'brew install --cask mactex-no-gui', ctex: 'brew install --cask mactex-no-gui',
 };
 $('btn-env').onclick = () => { $('env-panel').classList.add('open'); loadEnv(false, false); };
+// 「同步」按钮：直接打开环境面板里的云同步卡片，并强制刷新一次状态。
+// 先触发强制刷新、再 loadEnv，避免被 loadEnv 里的非强制加载抢先占住（同一次请求只跑一次）。
+$('btn-sync').onclick = () => {
+  $('env-panel').classList.add('open');
+  loadSyncPanel(true);
+  loadEnv(false, false);
+  const focusCard = () => {
+    const summary = $('env-sync-summary');
+    const card = summary && summary.closest('.env-sync-card');
+    if (card) card.scrollIntoView({ block: 'start' });
+  };
+  requestAnimationFrame(() => setTimeout(focusCard, 140));
+};
 $('btn-env-close').onclick = () => $('env-panel').classList.remove('open');
 $('btn-env-refresh').onclick = () => loadEnv(true, false);
 if($('btn-env-sync-refresh'))$('btn-env-sync-refresh').onclick=()=>loadSyncPanel(true);
