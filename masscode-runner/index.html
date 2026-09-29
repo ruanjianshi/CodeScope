@@ -13074,14 +13074,25 @@ function renderFoldGutter(displayLines, lineNos, blocks, foldedSet) {
   const gutter = $('fold-gutter');
   if (!gutter) return;
   const hidden = $('code').style.display === 'none';
-  if (hidden) { gutter.style.display = 'none'; gutter.innerHTML = ''; FOLD_LINES = -1; return; }
+  if (hidden) {
+    gutter.style.display = 'none'; gutter.innerHTML = ''; FOLD_LINES = -1;
+    // 清掉签名：装订线已被清空，签名若还留着，重新显示时会被误判为"没变化"而留下空栏。
+    delete gutter.dataset.key;
+    return;
+  }
   gutter.style.display = '';
   const lnWidth = $('ln').offsetWidth || 0;
   gutter.style.left = lnWidth + 'px';
   const m = editorMetrics();
   // 与 #code 文本首行对齐：装订线必须带上同样的上内边距，否则箭头会整体上移一个 padding
   gutter.style.paddingTop = m.paddingTop + 'px';
-  const key = [FOLD_KEY, FOLD_LINES, (lineNos ? lineNos.length : 0), blocks.length, [...(foldedSet || [])].sort().join(',')].join('|');
+  /* 签名必须用「本次」的输入。这里原来用的是 FOLD_LINES —— 而它正是下面一行才被赋值，
+     所以 key 每次都会因为"上一次的行数"变化而变，守卫永远不会命中，等于每次输入全量重建。
+     同时 key 只记 blocks.length，块位置整体平移（行数不变）时也会漏判，箭头会留在旧位置。
+     行高与编辑态也影响外观（按钮标题不同），一并纳入。 */
+  const key = [FOLD_KEY, displayLines.length, (lineNos ? lineNos.length + ':' + lineNos[lineNos.length - 1] : '-'),
+    blocks.map((b) => b.start + '-' + b.end).join(','), [...(foldedSet || [])].sort().join(','),
+    EDITING ? 'edit' : 'read', m.lineHeight].join('|');
   if (gutter.dataset.key === key) return;
   gutter.dataset.key = key;
   FOLD_LINES = displayLines.length;
@@ -14627,7 +14638,7 @@ function makeHResizer(handle, getter, setter) {
   });
   // 编辑模式下输入时实时刷新大纲 + 实时渲染预览 + 代码实时高亮 + 自动保存
   // 各步独立 try/catch：某一步异常不影响高亮/行号刷新（避免"写入时失去渲染"）
-  let editOutlineTimer = 0;
+  let editOutlineTimer = 0, editHighlightTimer = 0;
   $('code-edit').addEventListener('input', (event) => {
     if (!EDITING) return;
     if(monacoMainActive()&&!MONACO_SYNCING&&MONACO_EDITOR.getValue()!==$('code-edit').value){MONACO_SYNCING=true;MONACO_EDITOR.setValue($('code-edit').value);MONACO_SYNCING=false;}
@@ -14638,7 +14649,10 @@ function makeHResizer(handle, getter, setter) {
     clearTimeout(editOutlineTimer);
     editOutlineTimer = setTimeout(() => { try { renderOutline(); } catch (_) {} }, 120);
     try { updateEditPreview(); } catch (_) {}
-    if(!monacoMainActive())try { syncHighlight(); } catch (_) {}
+    /* 高亮 + 行号 + 折叠装订线 + 缩进参考线 + 诊断点：一次输入就全量重算太贵
+       （大文件上是整篇重新高亮），这里跟上面的纲要一样防抖；输入法合成结束会立即补一次。 */
+    clearTimeout(editHighlightTimer);
+    editHighlightTimer = setTimeout(() => { if(!monacoMainActive())try { syncHighlight(); } catch (_) {} }, 120);
     updateCodeContextBar();
     scheduleLspDiagnostics(900);
     if (MM_ACTIVE) scheduleMmSync();   /* 导图模式：左侧编辑 → 防抖同步思维导图 */
@@ -14689,7 +14703,7 @@ function makeHResizer(handle, getter, setter) {
   $('edit-preview').addEventListener('scroll', syncMarkdownSourceFromPreview);
   // 输入法合成期（拼音/五笔候选）：临时显示明文，避免候选字看不见；合成结束恢复高亮
   $('code-edit').addEventListener('compositionstart', () => { $('code-edit').classList.add('composing'); hideComp(); });
-  $('code-edit').addEventListener('compositionend', () => { $('code-edit').classList.remove('composing'); syncHighlight(); });
+  $('code-edit').addEventListener('compositionend', () => { $('code-edit').classList.remove('composing'); clearTimeout(editHighlightTimer); syncHighlight(); });
   // Cmd/Ctrl+/ 注释切换（VSCode 风格）
   /* ---------------- 编辑器缩进（对齐 VS Code 行为） ----------------
      Tab / Shift+Tab：单行或选中多行整体缩进、反缩进；Enter：自动续接缩进、
