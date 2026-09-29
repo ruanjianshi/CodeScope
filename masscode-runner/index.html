@@ -3485,7 +3485,7 @@
 <main>
   <div id="side">
     <div id="pane-tree">
-      <input id="search" placeholder="搜索片段名称 / 描述 / 语言…">
+      <input id="search" placeholder="搜索片段名称 / 描述 / 语言…" aria-label="搜索片段名称、描述或语言" aria-keyshortcuts="/" title="搜索片段（按 / 聚焦，Esc 清空）">
       <div id="tree-head">
         <span class="side-section-title"><span class="side-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M3.5 10h17"/></svg></span>项目</span>
         <span class="side-head-actions">
@@ -15000,6 +15000,18 @@ $('search').onkeydown = (event) => {
   event.preventDefault();
   first.click();
 };
+/* 键盘可达性：按 / 聚焦搜索框。正在输入、在编辑器里打字、或有弹窗打开时都不抢键，
+   否则 "/" 这种常用字符会在正文里打不进去。 */
+document.addEventListener('keydown', (event) => {
+  if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  const target = event.target;
+  if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName || ''))) return;
+  if (target && typeof target.closest === 'function' && target.closest('.monaco-editor,[contenteditable="true"]')) return;
+  if (document.querySelector('[role="dialog"].open,#confirm-dialog.open,#new-dialog.open,.modal.open')) return;
+  event.preventDefault();
+  const input = $('search');
+  input.focus(); input.select();
+});
 $('welcome-search').onclick = () => { $('search').focus(); $('search').select(); };
 $('welcome-study').onclick = () => $('btn-study').click();
 $('welcome-dsh').onclick = () => $('btn-dsh').click();
