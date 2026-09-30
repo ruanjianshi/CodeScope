@@ -324,10 +324,11 @@ void bubbleSort(Array& values);
   assert(syncPrecheck.blocking.every((item) => item.bytes >= 100 * 1024 * 1024), '体积预检把未超硬限的文件误判为阻断项');
   const badSyncAction = await postJson(baseUrl, '/api/sync/device', { action: 'explode', device: 'NOT-A-DEVICE' }, 400);
   assert(badSyncAction.ok === false && /pause/.test(badSyncAction.error), '设备开关未校验 action 取值');
-  // 扫描的成败取决于本机 Syncthing 是否在跑，所以这里只校验"要么成功、要么是可读的降级原因"
-  const scanResponse = await fetch(baseUrl + '/api/sync/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-  const scanWithoutDaemon = await scanResponse.json();
-  assert([200, 503].includes(scanResponse.status) && (scanWithoutDaemon.ok === true || /Syncthing/.test(scanWithoutDaemon.error || '')), '扫描接口在 Syncthing 未运行时未优雅降级');
+  // 扫描的成败取决于本机 Syncthing 是否在跑、目标文件夹是否存在：这里只校验"要么成功、要么是可读的降级原因"。
+  // 显式指定原始文件夹，避免受上面临时改名的 vault-smoke 影响而时红时绿。
+  const scanResponse = await fetch(baseUrl + '/api/sync/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder: originalSyncConfig.syncthing.folder }) });
+  const scanResult = await scanResponse.json();
+  assert([200, 400, 404, 503].includes(scanResponse.status) && (scanResult.ok === true || /Syncthing/.test(scanResult.error || '')), '扫描接口在 Syncthing 不可用或文件夹缺失时未优雅降级');
   const snapshotWithoutRepo = await postJson(baseUrl, '/api/sync/snapshot', {}, 400);
   assert(snapshotWithoutRepo.ok === false && /restic/.test(snapshotWithoutRepo.error), '未配置 restic 仓库时快照接口未给出可读提示');
   // 还原原始配置，避免污染本机 sync.json

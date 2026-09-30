@@ -381,7 +381,19 @@ async function syncthingRequest(config, apiPath, options) {
   const timer = setTimeout(() => controller.abort(), (options && options.timeout) || 5000);
   try {
     const response = await fetch(url, Object.assign({ headers: syncFetchHeaders(config), signal: controller.signal }, options || {}));
-    if (!response.ok) throw new Error('HTTP ' + response.status + (response.status === 403 ? '（API Key 无效）' : ''));
+    if (!response.ok) {
+      // 必须把 Syncthing 的原始原因带出来：否则面板上只剩「HTTP 500」这种无法排查的提示。
+      let detail = '';
+      try {
+        const raw = String((await response.text()) || '').trim();
+        if (raw) {
+          try { const parsed = JSON.parse(raw); detail = String(parsed.error || parsed.message || raw); }
+          catch (_) { detail = raw; }
+        }
+      } catch (_) { /* 响应体读不到时只报状态码 */ }
+      detail = detail.replace(/\s+/g, ' ').slice(0, 200);
+      throw new Error('Syncthing 返回 HTTP ' + response.status + (response.status === 403 ? '（API Key 无效）' : '') + (detail ? '：' + detail : ''));
+    }
     const text = await response.text();
     return text ? JSON.parse(text) : {};
   } finally { clearTimeout(timer); }
