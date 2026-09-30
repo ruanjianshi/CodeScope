@@ -3942,6 +3942,9 @@ function runOfficeEnsure(reason) {
     const child = spawn(process.execPath, [script], { cwd: __dirname, env: process.env, stdio: 'ignore' });
     child.on('exit', (code) => {
       try { ONLYOFFICE_CONNECTION = readOnlyOfficeConnection(); } catch (_) {}
+      // 代管流程刚写好配置时必须重建引擎：否则探测用的仍是启动时那个空地址，
+      // 面板会一直显示「尚未配置」，只能靠重启应用才恢复。
+      try { refreshOfficeEngine(); } catch (_) {}
       console.log('ONLYOFFICE 自动准备结束（退出码 ' + code + '）：' + (ONLYOFFICE_CONNECTION.publicUrl || '仍未配置服务地址'));
       OFFICE_ENSURE_RUNNING = false;
     });
