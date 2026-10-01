@@ -4,3 +4,11 @@ masscode-runner/tmp/
 masscode-runner/mscdex-ssh2-*/
 masscode-runner/out/
 markdown-vault/code/.masscode/*.bak-*
+
+# ── markdown-vault 里的运行时产物（属于工具生成，不是内容）──
+# Syncthing 的内部标记目录
+markdown-vault/**/.stfolder/
+# Office 编辑前的自动备份
+markdown-vault/**/.codescope-backups/
+# 知识库/文档保存时留下的临时文件（写完即应删除，异常退出时会残留）
+markdown-vault/**/.*.tmp-*
