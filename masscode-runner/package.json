@@ -32,7 +32,8 @@
     "test:run": "node tests/run.js",
     "build:reading-editor": "node scripts/build-reading-editor.js",
     "build:study-workspace": "node scripts/build-study-workspace.js",
-    "build:assets": "npm run build:reading-editor && npm run build:study-workspace",
+    "build:assets": "npm run build:reading-editor && npm run build:study-workspace && npm run build:system-panel",
+    "build:system-panel": "node scripts/build-system-panel.js",
     "build:knowledge": "node scripts/build-knowledge.js"
   },
   "engines": {

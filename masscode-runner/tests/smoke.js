@@ -351,6 +351,8 @@ void bubbleSort(Array& values);
   const html = await page.text();
   const serverSource = fs.readFileSync(path.join(projectRoot, 'server.js'), 'utf8');
   const blockEditorSource = fs.readFileSync(path.join(projectRoot, 'src', 'reading-block-editor.js'), 'utf8');
+  const codeServerSource = fs.readFileSync(path.join(projectRoot, 'lib', 'code-server-service.js'), 'utf8');
+  const codeServerProxySource = fs.readFileSync(path.join(projectRoot, 'lib', 'code-server-proxy.js'), 'utf8');
   const knowledgeSource = fs.readFileSync(path.join(projectRoot, 'lib', 'knowledge-base.js'), 'utf8');
   const preflightSource = fs.readFileSync(path.join(projectRoot, 'preflight.js'), 'utf8');
   const launchers = ['start.command', '../启动码境.command', '../启动码境.sh', '../启动码境.bat']
@@ -379,6 +381,31 @@ void bubbleSort(Array& values);
   assert(knowledgeSource.includes('const ReadingProgress') && knowledgeSource.includes('const AccurateOutline') && knowledgeSource.includes('kb-current') && knowledgeSource.includes('clamp(210px,38vh,430px)') && knowledgeSource.includes('const DocContext') && knowledgeSource.includes("'doc-before': () => h(DocContext)") && knowledgeSource.includes('.kb-breadcrumb') && knowledgeSource.includes('counter-increment:kb-h2') && knowledgeSource.includes('.vp-doc h3 + ul'), 'VitePress 知识库缺少阅读进度、精确大纲定位、文档上下文、章节编号或结构化列表排版');
   assert(html.includes('id="env-runtime-list"') && html.includes('id="env-client-list"') && html.includes('clientEnvironment') && html.includes('renderEnvironmentRows'), '环境面板缺少运行基础或浏览器能力检测');
   assert(packageJson.dependencies['@deepseek-ai/dsh'] && html.includes('id="btn-dsh"') && html.includes('id="dsh-workspace"') && html.includes('id="dsh-frame"') && html.includes("classList.add('dsh-mode')") && html.includes('id="btn-env-dsh-restart"') && serverSource.includes("'/api/integrations/dsh'"), 'DSH 依赖、内嵌工作区、环境控制或服务 API 缺失');
+  /* opencode 曾经复用 #dsh-workspace：点 opencode 会同时点亮顶栏的 Harness，标题栏还挂着 DSH 的「刷新 / 外部打开」。
+     它必须有自己的一套（工作区 + 标题栏 + iframe + 开关），并且只点亮自己那颗按钮。 */
+  assert(html.includes('id="opencode-workspace"') && html.includes('id="opencode-head"') && html.includes('id="opencode-frame"') && html.includes('body.opencode-mode #opencode-workspace') && html.includes("$('opencode-external').onclick=openOpencodeExternal;") && serverSource.includes("'/api/integrations/opencode'"), 'opencode 缺少独立工作区（容器 / 标题栏 / iframe / 外部打开），会退回复用 DSH 那套');
+  assert(html.includes("document.body.classList.add('opencode-mode')") && html.includes("$('btn-dsh').classList.remove('on')") && !html.includes('opencodeActive'), 'opencode 仍会连带点亮 Harness，或还在用 DSH 的 opencodeActive 开关');
+  assert(html.includes('#header-center #btn-dsh-restart.on {') && html.includes("$('btn-dsh-restart').onclick=()=>{if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();else openOpencode();};"), 'opencode 顶栏按钮缺少 .on 高亮样式或独立开关，点亮了也看不出来');
+  /* ── 编辑工作台（浏览器版 VS Code）──
+     code-server 只绑回环，对外只经 CodeScope 的代理端口；VS Code 待在代理端口的根路径下，
+     所以不依赖 code-server 的子路径支持（官方 FAQ 说有能力但没给 flag，实测也没验成）。 */
+  assert(html.includes('id="vscode-workspace"') && html.includes('id="vscode-head"') && html.includes('id="vscode-frame"') && html.includes('body.vscode-mode #vscode-workspace') && html.includes("$('vscode-external').onclick=openVSCodeExternal;"), '编辑工作台缺少独立工作区（容器 / 标题栏 / iframe / 外部打开）');
+  assert(html.includes('id="btn-vscode"') && html.includes("$('btn-vscode').onclick=()=>document.body.classList.contains('vscode-mode')?closeVSCodeWorkspace():openVSCode();") && html.includes('#header-center #btn-vscode.on {'), '顶栏缺少编辑工作台入口或它的独立开关/高亮样式');
+  /* 顶栏那批样式用的是 #header-center>.header-action 这种**直接子代**选择器；
+     编辑工作台按钮被包进 #workspace-launch 之后就不再匹配，会丢高度/白名单/字体等一整套样式。 */
+  assert(html.includes('#header-center>.header-action,#workspace-launch>.header-action') && html.includes('#knowledge-launch-more,#workspace-launch-more'), '顶栏按钮样式是直接子代选择器，编辑工作台按钮包进 #workspace-launch 后会丢样式');
+  /* 往选择器列表里插新项时，别把原选择器的后缀（:hover / ::before）嫁接走 ——
+     曾经写成 `#header-center>.header-action,#workspace-launch>.header-action::before`，
+     结果 #btn-dsh 的 ::before 徽标规则整个失效，按钮布局跟着错乱。 */
+  assert(html.includes('#header-center>.header-action:hover,#workspace-launch>.header-action:hover') && html.includes('#header-center>.header-action::before,#workspace-launch>.header-action::before'), '顶栏选择器列表里的 :hover / ::before 被嫁接走了（原选择器会失效）');
+  assert(html.includes('#header-center #btn-study[hidden] { display:none; }'), '学习工作台按钮的 [hidden] 被 .header-action 的 display 覆盖，属性 hidden 但照样显示');
+  assert(html.includes('id="workspace-launch-menu"') && html.includes('id="workspace-launch-study"') && html.includes('id="btn-study" hidden'), '学习工作台没有收进次级菜单（顶栏应当只留「编辑工作台」+ 一个 ⌄）');
+  /* iframe 必须按「当前访问用的主机名」拼地址：写死 127.0.0.1 的话，局域网另一台机器会指到它自己。 */
+  assert(html.includes("'http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/'") && html.includes('let VSCODE_PROXY_PORT='), 'VS Code 的 iframe 没有按当前主机名拼代理地址，局域网访问会指到本机');
+  assert(serverSource.includes("'/api/integrations/code-server'") && serverSource.includes('createCodeServerProxy') && serverSource.includes('VSCODE_PROXY.stop()'), '服务端缺少 VS Code 的托管接口、代理接线或退出清理');
+  assert(codeServerSource.includes("'--bind-addr'") && codeServerSource.includes("'--auth', 'none'") && codeServerSource.includes('--extensions-dir') && codeServerSource.includes('--user-data-dir'), 'VS Code 服务启动参数不全（绑定地址 / 免密 / 数据与扩展目录）');
+  assert(codeServerSource.includes("path.join(home, '.codescope'") && codeServerSource.includes("const home = os.homedir()") && codeServerSource.includes('resolveNodeRuntime'), 'VS Code 服务没有按约定目录找 code-server，或没处理「桌面版 process.execPath 是 Electron」的情况');
+  assert(codeServerProxySource.includes("server.on('upgrade'") && codeServerProxySource.includes("lower === 'host'") && codeServerProxySource.includes("lower === 'origin'"), 'VS Code 代理缺少 WebSocket 升级转发，或没有改写 Host/Origin（上游会判跨源）');
   assert(html.includes('#tree-head,#git-head,#tag-head,#draw-head,#office-head,#reading-head') && html.includes('#tree-head .side-head-actions button,#draw-head .side-head-actions button,#office-head .side-head-actions button,#reading-head .side-head-actions button'), 'Office 与其他一级模块未使用统一侧栏 UI');
   assert(serverSource.includes('function runtimeReadiness') && serverSource.includes("releaseChannel:'stable'") && launchers.includes('node preflight.js --quiet'), '跨平台运行预检或 v2 稳定版契约缺失');
   assert(preflightSource.includes("process.argv.includes('--json')") && preflightSource.includes('missingDependencies') && preflightSource.includes('fs.constants.R_OK | fs.constants.W_OK'), '启动预检缺少 JSON、依赖或目录权限诊断');
@@ -461,11 +488,24 @@ void bubbleSort(Array& values);
   assert(html.includes('referencesReached') && html.includes('table\\s*(?:[.\\d]|[IVXLCDM]+\\b)'), 'PDF 智能目录缺少表格标题或参考文献正文过滤');
   assert(html.includes('saveToolbarSelection') && html.includes("cite.textContent = '引用笔记'") && html.includes('range.getClientRects()'), 'PDF 选区缺少逐行几何识别、快捷摘录或引用笔记能力');
   assert(html.includes('readingPdfRefMarkdown') && html.includes('appendReadingQuoteToNote') && html.includes('locateReadingMarkdownRef') && html.includes('reading-pdf-ref'), 'Markdown 阅读笔记缺少 Obsidian 风格 PDF 引用或原文回链定位');
+  assert(html.includes('saveReadingMarkdownExcerpt') && html.includes('readingMarkdownSelectionAnchor') && html.includes('locateReadingMarkdownExcerpt') && html.includes('readingFindTextRange') && html.includes('readingMarkdownRefMarkdown'), 'Markdown 正文缺少划选摘录、摘录回原文定位或摘录引用到笔记的能力');
+  assert(html.includes("fragment.kind==='markdown'") && html.includes("gate('reading-add-fragment',pdf||web||markdown)") && html.includes("active.classList.contains('reading-md-source')"), 'Markdown 正文的摘录入口仍被 PDF / 网页分支挡住（按钮禁用、选区读不到或摘录写不进标注文件）');
+  assert(html.includes('reading-md-excerpt-marks') && html.includes('function refreshReadingExcerptMarks') && html.includes('function scheduleReadingExcerptMarks') && html.includes('function readingMarkTargets') && html.includes('syncReadingMarkObservers'), 'Markdown 正文缺少「已摘录文字」的持久标记浮层');
+  /* 各主题的 --accent 明度差很多（graphite 是浅灰蓝 #aebbd0），只给一层淡底色在近黑背景上几乎看不见。
+     断言守住三重提示：底色 + 左侧粗竖条 + 底部横线。 */
+  assert(html.includes('#reading-md-excerpt-marks > div') && html.includes('inset 3px 0 0 var(--md-accent,var(--accent))') && html.includes('inset 0 -2px 0 color-mix(in srgb,var(--md-accent,var(--accent)) 62%,transparent)'), '已摘录文字的正文标记太弱（缺少左侧竖条或底部横线），在深色主题下看不出来');
+  assert(html.includes('function readingMarkdownExcerptTrail') && html.includes('readingMarkdownExcerptTrail(doc,item)') && html.includes("no.className='frag-no'") && html.includes('const order=new Map('), 'Markdown 摘录卡片缺少标题层级链或稳定序号，同一章下多条摘录会分不清');
+  /* body 级浮层拿不到 --md-accent（只定义在阅读外壳上），不兜底的话 color-mix 里的变量无效、
+     整条声明被判无效，浮层全透明 —— 落点高亮与摘录标记都会「坐标对但看不见」。 */
+  assert(html.includes('var(--md-accent,var(--accent))'), 'body 级高亮浮层缺少 --md-accent 兜底，高亮会整条失效（全透明）');
   assert(html.includes('removeReadingLinkedPdfFragment') && html.includes('restoreReadingLinkedPdfFragment') && html.includes('syncRemovedReadingPdfRefs') && html.includes('readingPdfRefsInMarkdown') && html.includes('引用、PDF 摘录与页内标记已同步删除'), 'Markdown 按钮或直接编辑删除引用时，未与 PDF 摘录及页内标记保持事务同步');
   assert(html.includes('normalizePdfSelectionText') && html.includes('mergePdfSelectionRects') && !html.includes("replace(/scaleX\\([^)]*\\)/g, 'scaleX(1)')"), 'PDF 文本选择缺少精确文本拼接、逐行矩形合并或仍破坏 PDF.js 字形缩放');
   assert(html.includes('READING_SLASH_COMMANDS') && html.includes('applyReadingSlashCommand') && html.includes('readingSlashKeydown') && html.includes("id:'bullet'") && html.includes("id:'number'") && html.includes("id:'h1'"), 'Markdown 阅读笔记缺少斜杠命令或标题、列表块转换');
   assert(html.includes('callout-remove') && html.includes('引用已从 Markdown 笔记中移除') && html.includes("const ordered=tag==='ol'"), 'Markdown 引用缺少移除入口或有序列表持久化');
   assert(html.includes('reading-md-source') && html.includes('reading-md-block') && html.includes("['edit','live','preview']") && html.includes('loadReadingMarkdownMode') && html.includes('Markdown 阅读视图'), 'Markdown 阅读笔记缺少源码编辑、区块编辑、阅读模式或模式记忆');
+  /* Markdown 模式会把整行栏头隐藏（文档名并进工具栏），栏头里那个「关闭此栏」的 × 也跟着没了 ——
+     所以关闭入口必须在 Markdown 工具栏里再给一个，否则 Markdown 栏根本关不掉（双栏并排时尤其明显）。 */
+  assert(html.includes("closeColumn.className='reading-md-close-col'") && html.includes('closeColumn.onclick=(event)=>{event.stopPropagation();closeReadingColumn(slot);}') && html.includes('.reading-md-close-col { flex:none;') && html.includes('.reading-col.reading-col-md > .reading-col-head { display:none; }'), 'Markdown 模式隐藏栏头后缺少「关闭此栏」入口，Markdown 阅读栏将无法关闭');
   assert(html.includes('--md-measure:840px') && html.includes('--md-surface-hover') && html.includes('text-rendering:optimizeLegibility') && html.includes('@container (max-width:460px)') && html.includes('reading-md-property-tag') && html.includes('mdPropertyValue') && html.includes('reading-md-generated-title') && html.includes('orderedBlocks'), 'Markdown 阅读视图缺少主题化可读行宽、窄栏响应式属性标签或实时编辑回写兼容');
   assert(html.includes("blockquote.md-callout.warning") && html.includes('tbody tr:nth-child(even)') && html.includes("content:'●  ●  ●'") && html.includes('li > ul,.reading-md-editor li > ol'), 'Markdown 主题缺少提示块语义色、表格层次、代码块标题栏或嵌套列表引导线');
   assert(packageJson.dependencies['@milkdown/crepe'] && html.includes('/assets/reading-block-editor.js') && blockEditorSource.includes('new Crepe') && blockEditorSource.includes('[CrepeFeature.BlockEdit]'), 'Markdown 区块模式未接入本地打包的 Milkdown Crepe');
@@ -477,9 +517,30 @@ void bubbleSort(Array& values);
   assert(blockEditorSource.includes('options.onImage') && blockEditorSource.includes("root.addEventListener('drop', onDrop, true)") && blockEditorSource.includes('codescope-image-inserted') && html.includes('uploadKnowledgeEditorImage'), '知识库 Markdown 区块编辑器缺少粘贴/拖入图片自动落盘能力');
   assert(blockEditorSource.includes('data-block-action="image"') && blockEditorSource.includes('data-block-action="delete"') && blockEditorSource.includes('deleteBlockAt') && blockEditorSource.includes('onInsertImages'), '六点手柄菜单缺少插入图片或删除区块操作');
   assert(blockEditorSource.includes("imageBlockSchema.type(ctx)") && blockEditorSource.includes("src:image.url") && html.includes('return result;'), '知识库图片仍通过 Markdown 字符串间接插入，可能在图片区块序列化时丢失地址');
+  /* 文字颜色 / 背景高亮：ProseMirror 留不住 <mark>/<span>，只能借链接 mark 承载颜色（#cc-fg-* / #cc-hl），
+     所以这里同时守住「源码里有这套入口」和「构建产物里也有」，避免改了 src 忘了重新打包。 */
+  assert(blockEditorSource.includes('COLOR_HREF_PREFIX') && blockEditorSource.includes('attachColorControls') && blockEditorSource.includes('applyColorHref') && blockEditorSource.includes('detachColorControls'), 'Markdown 区块编辑器缺少文字颜色 / 背景高亮的色板入口或销毁清理');
+  assert(blockEditorSource.includes("querySelectorAll(':scope > .codescope-color-group')") && blockEditorSource.includes('if (group.parentElement) group.remove()'), 'Markdown 色板缺少同层去重或摘除守卫，连续切换模式会出现两排按钮或色板被旧实例摘掉');
+  /* Crepe 自己也有一条 .milkdown-toolbar（粗体/斜体/删除线/行内代码/行内公式/链接），z-index 180；
+     我们的浮动色板 265，若浮到同一位置就会把它整条盖住 —— 表现为「怎么只剩颜色工具条了」。
+     断言里守住「避让 + 跟随它移动 + 解绑」。 */
+  assert(blockEditorSource.includes("const crepeToolbar = root.querySelector('.milkdown-toolbar')") && blockEditorSource.includes("crepeToolbar.dataset.show === 'true'") && blockEditorSource.includes('anchor.top - height - 8') && blockEditorSource.includes("attributeFilter: ['style', 'data-show']") && blockEditorSource.includes('toolbarObserver.disconnect()'), 'Markdown 色板未避让 Crepe 自带的 .milkdown-toolbar，会把粗体/斜体/链接整条工具条盖住');
+  assert(readingEditorBundle.includes('codescope-color-group') && readingEditorBundle.includes('codescope-color-bar') && readingEditorBundle.includes('cc-fg-') && readingEditorBundle.includes('cc-hl'), '阅读编辑器产物缺少颜色 / 高亮入口，源码与构建产物失配');
+  assert(html.includes('.codescope-color-group') && html.includes('.codescope-color-menu button[data-href]:not(.clear)') && html.includes('--cc-group-w:76px'), 'Markdown 色板缺少样式、清除按钮尺寸豁免或顶栏让位宽度');
+  /* 「摘录」入口由宿主注入：色板本身不知道摘录是什么，知识库的区块编辑器不传就没有这个按钮。 */
+  assert(blockEditorSource.includes("typeof options.onExcerpt === 'function'") && blockEditorSource.includes("bar.querySelector('button.excerpt')") && blockEditorSource.includes('let suppressBar = false') && readingEditorBundle.includes('button.excerpt'), 'Markdown 浮动色条缺少宿主注入的「摘录」入口、点后收起逻辑或构建产物失配');
+  assert(html.includes('onExcerpt:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;return addReadingFragment();}'), '阅读模块没有把「摘录」动作接到浮动色条上');
   assert(html.includes('reading-md-zoom') && html.includes('loadReadingMarkdownZoom') && html.includes("e.deltaY<0?5:-5") && html.includes("e.key==='0'"), 'Markdown 区块编辑器缺少可记忆缩放、触控板缩放或键盘缩放');
   assert(html.includes('reading-md-outline') && html.includes('readingMarkdownHeadings') && html.includes('focusOutlineEntry') && html.includes('syncOutlineFromView') && html.includes('loadReadingMarkdownOutline'), 'Markdown 区块编辑器缺少可记忆大纲、标题层级、点击定位或滚动高亮');
+  /* 窄栏（栏宽 < 900px）时大纲是覆盖层，会压住正文。三道闸：挂载时收、并排变覆盖时收、跳转/点正文后收。
+     注意按钮自己的 onclick（focusOutlineEntry）在真实点击里轮不到执行 ——
+     大纲列表的委托处理器注册在捕获阶段且会 stopImmediatePropagation，所以关闭必须补在委托里。 */
+  assert(html.includes('const closeOverlayOutline=()=>{if(!outlineOpen)return;') && html.includes('closeOverlayOutline();},true);') && html.includes('const syncOutlineOverlay=()=>{') && html.includes('new ResizeObserver(syncOutlineOverlay)'), '窄栏大纲覆盖层缺少自动收起（跳转后 / 点正文 / 栏宽从并排变覆盖时）');
+  assert(html.includes('width:clamp(180px,58%,240px)') && !html.includes('width:min(278px,78%)'), '窄栏大纲抽屉没有收窄，会盖住大部分正文');
   assert(!html.includes("setupReadingLiveBlocks(live,workbench,slot)"), '阅读模块仍在启用旧的自制区块拖拽层');
+  /* renderReadingSlot 是「开头清空、结尾追加」，中间隔着 await；两次渲染重叠就会在同一栏挂出两份区块编辑器。
+     断言里同时守住令牌的存在与「追加前必须核对令牌」这两件事。 */
+  assert(html.includes('READING_SLOT_RENDER_TOKENS') && html.includes('function readingSlotRenderToken') && html.includes('function readingSlotRenderCurrent') && html.includes('const renderToken=readingSlotRenderToken(slot),superseded=') && html.includes('if(superseded())return;els.body.appendChild(shell)') && html.includes('if(superseded())return;els.body.appendChild(frame)'), '阅读栏渲染缺少并发令牌，两次渲染重叠会在同一栏挂出两份区块编辑器');
   assert(html.includes('reading-md-properties') && html.includes('笔记属性') && html.includes("data-md-source") && html.includes('font-size:2.08rem') && html.includes('grid-template-columns:minmax(125px,160px)'), 'Markdown 渲染缺少 Obsidian 风格属性面板或响应式阅读排版层级');
   assert(html.includes('readingSourceSlashContext') && html.includes("snippet:'> [!note] 笔记\\n> '") && html.includes("e.key==='Tab'") && html.includes("e.key.toLowerCase()==='s'"), 'Markdown 源码编辑器缺少斜杠命令、Tab 缩进或快捷保存');
   assert(html.includes('md-code-block') && html.includes('li class="md-task"') && html.includes('~~([^~]+)~~') && html.includes('data-md-start'), 'Markdown 渲染缺少代码围栏、任务列表、删除线或引用块定位');
@@ -617,6 +678,14 @@ void bubbleSort(Array& values);
   const readingWebMeta = await postJson(baseUrl, '/api/readings/meta', { path:readingWeb.path, meta:{ page:1, fragments:[{ id:'web-1', page:1, source:'网页摘录', note:'网页笔记', url:'https://example.com/docs/chapter-1.html', webTitle:'第一章', anchor:'section-1', webStart:12, webEnd:16 }] } });
   const loadedReadingWebMeta = await requestJson(baseUrl, '/api/readings/meta?path=' + encodeURIComponent(readingWeb.path));
   assert(readingWebMeta.ok && loadedReadingWebMeta.ok && loadedReadingWebMeta.meta.fragments[0].url.endsWith('/chapter-1.html') && loadedReadingWebMeta.meta.fragments[0].webStart === 12 && loadedReadingWebMeta.meta.fragments[0].webEnd === 16 && loadedReadingWebMeta.meta.fragments[0].note === '网页笔记', '网页摘录、笔记或正文定位元数据未持久化');
+  /* Markdown 摘录和 PDF / 网页摘录共用同一份 .codescope 标注文件，但它没有页码、矩形和 URL，
+     只靠 kind + anchorText 认人。saveReadingMeta 是按显式白名单落盘的，白名单之外的字段会被整条丢掉 ——
+     漏一个字段，摘录就退化成一条空白记录：面板能显示，但「定位」永远找不到位置。 */
+  const markdownExcerptSave = await postJson(baseUrl, '/api/readings/meta', { path:note.path, meta:{ page:1, fragments:[{ id:'md-1', page:1, source:'全局持久 + 局部隐藏', note:'', kind:'markdown', anchor:'静态变量', anchorText:'静态变量' }] } });
+  const markdownExcerptLoaded = await requestJson(baseUrl, '/api/readings/meta?path=' + encodeURIComponent(note.path));
+  const markdownExcerpt = markdownExcerptLoaded.meta && markdownExcerptLoaded.meta.fragments[0];
+  assert(markdownExcerptSave.ok && markdownExcerpt && markdownExcerpt.kind === 'markdown' && markdownExcerpt.anchorText === '静态变量' && markdownExcerpt.anchor === '静态变量' && markdownExcerpt.source === '全局持久 + 局部隐藏',
+    'Markdown 摘录的 kind / anchorText 未持久化（saveReadingMeta 白名单漏字段会整条丢掉），实际 ' + JSON.stringify(markdownExcerpt));
   const readingWordFile = await fetch(baseUrl + '/api/readings/file?path=' + encodeURIComponent(readingWord.path));
   assert(readingWordFile.ok && readingWordFile.headers.get('content-type').includes('wordprocessingml') && Buffer.from(await readingWordFile.arrayBuffer()).subarray(0,2).toString() === 'PK', '阅读项目 DOCX 原文件读取或 MIME 类型错误');
   const readingTree = await requestJson(baseUrl, '/api/readings/tree');

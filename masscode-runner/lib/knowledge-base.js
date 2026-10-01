@@ -592,7 +592,7 @@ function createKnowledgeBase(options) {
   const sourceDir = () => path.join(getVaultPath(), 'readings', KNOWLEDGE_FOLDER);
   const distDir = () => path.join(dataRoot, 'knowledge', 'site');
   let state = { phase:'idle', message:'尚未生成', startedAt:0, finishedAt:0, durationMs:0, error:'', pending:false };
-  let buildPromise = null, timer = null, watcher = null, poller = null, observedSourceTime = 0, buildChild = null;
+  let buildPromise = null, timer = null, watcher = null, poller = null, observedSourceTime = 0, observedSourceCount = -1, buildChild = null;
 
   function ensure() {
     const root = sourceDir();
@@ -663,6 +663,36 @@ function createKnowledgeBase(options) {
     walk(ensure()); return newest;
   }
 
+  /* 统一的源目录遍历：跳过依赖目录，符号链接不计入（构建用的 node_modules 软链是每台机器自己的）。 */
+  function knowledgeWalk(directory, visit, prefix = '') {
+    let entries = []; try { entries = fs.readdirSync(directory, { withFileTypes:true }); } catch (_) { return; }
+    for (const entry of entries) {
+      if (entry.name === 'node_modules' || (entry.name === 'cache' && path.basename(directory) === '.vitepress')) continue;
+      const full = path.join(directory, entry.name), rel = prefix ? prefix + '/' + entry.name : entry.name;
+      if (entry.isDirectory()) knowledgeWalk(full, visit, rel);
+      else visit(rel, full, entry);
+    }
+  }
+  /* Syncthing 会保留文件原始 mtime：一个新文件完全可能"很久以前被修改过"。
+     只用 mtime 判断"要不要重建"会整批漏掉这类新文件，所以签名里必须带上文件集合与大小。 */
+  function sourceSignature() {
+    const rows = [];
+    knowledgeWalk(ensure(), (rel, full, entry) => {
+      if (entry.isSymbolicLink()) return;
+      try { const stat = fs.statSync(full); rows.push(rel + '\0' + stat.size + '\0' + Math.round(stat.mtimeMs)); } catch (_) {}
+    });
+    rows.sort();
+    return require('crypto').createHash('sha1').update(rows.join('\n')).digest('hex');
+  }
+  function sourceFileCount() {
+    let count = 0;
+    knowledgeWalk(ensure(), (_rel, _full, entry) => { if (!entry.isSymbolicLink()) count += 1; });
+    return count;
+  }
+  function buildStateFile() { return path.join(dataRoot, 'knowledge', 'build-state.json'); }
+  function readBuildState() { try { const value = JSON.parse(fs.readFileSync(buildStateFile(), 'utf8')); return value && typeof value === 'object' ? value : {}; } catch (_) { return {}; } }
+  function writeBuildState(value) { try { fs.mkdirSync(path.dirname(buildStateFile()), { recursive:true }); fs.writeFileSync(buildStateFile(), JSON.stringify(value, null, 2) + '\n', 'utf8'); } catch (_) {} }
+
   function status() {
     const pages = pageRecords(), assets = assetCount(), built = fs.existsSync(path.join(distDir(), 'index.html'));
     let displayState = state;
@@ -725,6 +755,9 @@ function createKnowledgeBase(options) {
           if(ok)try{fs.rmSync(backupDir,{recursive:true,force:true});}catch(_){}
         }else try{fs.rmSync(stagingDir,{recursive:true,force:true});}catch(_){}
         state = { ...state, phase:ok?'ready':'error', message:ok?'知识库已更新':'知识库生成失败（已保留上一版本）', error:ok?'':(swapError||output.trim().slice(-4000)), finishedAt, durationMs:finishedAt-startedAt };
+        // 持久化构建签名：进程重启后依然能发现「产物与源不一致」，并让失败可以自动重试。
+        if (ok) writeBuildState({ signature:sourceSignature(), builtAt:finishedAt, finishedAt, ok:true });
+        else { const previous=readBuildState(); writeBuildState({ signature:previous.signature||'', builtAt:previous.builtAt||0, finishedAt, ok:false, error:String(state.error||'').slice(0,500) }); }
         buildPromise = null; const again = state.pending; state.pending = false; resolve(statusSafe()); if (again) schedule('pending');
       });
     });
@@ -740,7 +773,11 @@ function createKnowledgeBase(options) {
     ensure();
     const entry=path.join(distDir(), 'index.html');let builtAt=0;try{builtAt=fs.statSync(entry).mtimeMs;}catch(_){}
     observedSourceTime=newestSourceModified();
-    if (!builtAt || observedSourceTime > builtAt + 10) schedule('startup', 100);
+    observedSourceCount=sourceFileCount();
+    const savedState=readBuildState(), signature=sourceSignature();
+    // 除了 mtime，还要比「内容签名」和「上次构建是否失败」：
+    // 前者捕捉 Syncthing 送来的、保留旧 mtime 的新文件；后者让失败能自动重试而不是永久卡在旧产物上。
+    if (!builtAt || observedSourceTime > builtAt + 10 || savedState.signature !== signature || savedState.ok === false) schedule('startup', 100);
     try {
       watcher = fs.watch(sourceDir(), { recursive:true }, (_event, file) => {
         const rel = String(file || '').replace(/\\/g, '/');
@@ -749,10 +786,17 @@ function createKnowledgeBase(options) {
       });
       watcher.on('error', () => { try { watcher.close(); } catch (_) {} watcher=null; });
     } catch (_) {}
-    if (!watcher) {
-      poller=setInterval(()=>{const next=newestSourceModified();if(next>observedSourceTime+1){observedSourceTime=next;schedule('watch-poll');}},2500);
-      poller.unref?.();
-    }
+    // 轮询常开（不再只在 fs.watch 建立失败时才开）：15 秒看一次「最新 mtime + 文件数」，
+    // 任一变化即重建；上次构建失败则每 2 分钟自动重试，直至成功——避免失败后永久停在旧产物上。
+    poller=setInterval(()=>{
+      try {
+        const next=newestSourceModified(), count=sourceFileCount();
+        if (next>observedSourceTime+1 || count!==observedSourceCount){ observedSourceTime=next; observedSourceCount=count; schedule('watch-poll'); return; }
+        const last=readBuildState();
+        if (last.ok === false && Date.now() - Number(last.finishedAt || 0) > 120000) schedule('retry-after-error');
+      } catch (_) {}
+    },15000);
+    poller.unref?.();
   }
 
   function stop() {

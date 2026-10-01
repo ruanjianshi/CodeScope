@@ -25,11 +25,18 @@
 <!-- xterm 必须在正文中的 Monaco AMD loader 注册 window.define 之前执行，否则 UMD 会被误判为 AMD 模块。 -->
 <script src="/assets/xterm.js"></script>
 <script src="/assets/study-workspace.js" defer></script>
+<!-- 本机管家：一站式本机管理面板（进程/磁盘缓存/软件/服务端口/Docker/开发环境）。
+     按钮、面板、样式都由这个脚本在运行时自建，所以 index.html 只留这一行，
+     和编辑工作台那边的改动互不覆盖。 -->
+<script src="/assets/system-panel.js" defer></script>
 <style>
   :root {
     --bg: #16181d; --panel: #1e2128; --panel2: #252932; --border: #30353f;
     --text: #e6e8ee; --dim: #9aa3b2; --accent: #4f8cff; --ok: #3fb950; --err: #f85149;
     --mono: "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+      --ui: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      --font: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+      --sans: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -1044,6 +1051,13 @@
   .reading-md-toolbar { display:flex; align-items:center; gap:10px; min-height:42px; padding:6px 12px; border-bottom:1px solid color-mix(in srgb,var(--border) 78%,transparent); background:color-mix(in srgb,var(--md-page) 88%,var(--panel)); box-shadow:0 1px 0 rgba(255,255,255,.018),0 8px 24px rgba(0,0,0,.08); }
   .reading-md-toolbar .kind { display:flex; align-items:center; gap:6px; margin-right:auto; color:var(--dim); font:600 10px var(--ui); }
   .reading-md-toolbar .kind::before { content:'M↓'; display:grid; place-items:center; width:22px; height:20px; border:1px solid color-mix(in srgb,var(--accent) 42%,var(--border)); border-radius:5px; background:var(--accent-soft); color:var(--accent); font:700 9px var(--mono); }
+  /* markdown 阅读栏：原来那一行「文档名 …… ×」只有头尾两个元素，中间全空；
+     现在整行隐藏（× 一并去掉），文档名并入下一行的工具栏左侧。 */
+  .reading-col.reading-col-md > .reading-col-head { display:none; }
+  .reading-md-toolbar .doc { flex:none; max-width:46%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font:600 11.5px var(--ui); }
+  /* Markdown 栏头整行被隐藏，栏头的「关闭此栏」也跟着没了，所以关闭入口要在这里再给一个。 */
+  .reading-md-close-col { flex:none; display:grid; place-items:center; width:26px; height:26px; padding:0; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb,var(--theme-code,var(--bg)) 82%,var(--panel)); color:var(--dim); font:400 16px/1 var(--ui); cursor:pointer; }
+  .reading-md-close-col:hover { border-color:color-mix(in srgb,var(--err,var(--accent)) 52%,var(--border)); background:color-mix(in srgb,var(--err,var(--accent)) 12%,var(--panel)); color:var(--err,var(--accent)); }
   .reading-md-modes { display:flex; align-items:center; padding:2px; border:1px solid var(--border); border-radius:7px; background:var(--theme-code,var(--bg)); }
   .reading-md-mode { min-height:25px; padding:3px 10px; border:0; border-radius:5px; background:transparent; color:var(--dim); font:600 10px var(--ui); cursor:pointer; }
   .reading-md-mode:hover { color:var(--text); }
@@ -1089,6 +1103,139 @@
   .reading-md-block .milkdown .ProseMirror h5,.reading-md-block .milkdown .ProseMirror h6 { margin-top:1.55em; margin-bottom:.5em; color:var(--md-muted); font-size:.91em; line-height:1.55; letter-spacing:.018em; }
   .reading-md-block .milkdown .ProseMirror p { margin:.62em 0 .86em; padding:0; color:var(--md-text); line-height:1.78; overflow-wrap:anywhere; }
   .reading-md-block .milkdown .ProseMirror strong { color:var(--text); font-weight:720; }
+  /* ── 内联语法可辨识度 ──
+     原来：em 只有斜体（中文字体没有真斜体，几乎看不出）；del 只有一条删除线且颜色不变；
+     mark 直接没样式；strong 只比正文亮一点点。六种标记挤在同一个视觉通道里。
+     现在每种标记各占一条独立通道，互相不会认错：
+       斜体 = 倾斜 + 色调偏移   粗体 = 加粗 + 提亮   行内码 = 琥珀色等宽底片
+       高亮 mark = 暖色底 + 下沿加重   删除线 = 整体变暗 + 划线   链接 = 蓝色 + 实线下划线 */
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror :is(em,i),
+  .reading-md-workbench .reading-md-preview-content :is(em,i) {
+    font-style:italic; font-synthesis:style; color:color-mix(in srgb,var(--md-accent) 62%,var(--text)); }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror :is(strong,b),
+  .reading-md-workbench .reading-md-preview-content :is(strong,b) {
+    color:var(--text); font-weight:760; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror code,
+  .reading-md-workbench .reading-md-preview-content code {
+    padding:.12em .38em; border:1px solid color-mix(in srgb,var(--syntax-number,#d99a43) 40%,transparent); border-radius:5px;
+    background:color-mix(in srgb,var(--syntax-number,#d99a43) 13%,transparent);
+    color:color-mix(in srgb,var(--syntax-number,#d99a43) 88%,var(--text)); }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror :is(del,s),
+  .reading-md-workbench .reading-md-preview-content :is(del,s) {
+    color:color-mix(in srgb,var(--dim) 88%,transparent); text-decoration:line-through;
+    text-decoration-color:color-mix(in srgb,var(--dim) 78%,transparent); }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror mark,
+  .reading-md-workbench .reading-md-preview-content mark,
+  .reading-md-workbench .reading-md-preview-content :is(mark,ins) {
+    padding:.02em .3em; border-radius:3px; background:color-mix(in srgb,#f2c14e 27%,transparent); color:var(--text);
+    box-shadow:inset 0 -.09em 0 color-mix(in srgb,#f2c14e 52%,transparent); }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a,
+  .reading-md-workbench .reading-md-preview-content a {
+    color:color-mix(in srgb,var(--accent) 76%,var(--text)); text-decoration:underline;
+    text-underline-offset:.18em; text-decoration-thickness:1px;
+    text-decoration-color:color-mix(in srgb,var(--accent) 46%,transparent); }
+  /* ── 颜色与高亮 ──
+     区块编辑里它们是链接 mark（编辑器只保留原生结构），预览里是同样的锚点，
+     因此两边共用一套按 href 前缀匹配的规则。CSS 直接上色，不写内联样式。 */
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-"] { text-decoration:none; cursor:text; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-hl"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-hl"] {
+    padding:.02em .3em; border-radius:3px; background:color-mix(in srgb,#f2c14e 30%,transparent); color:var(--text);
+    box-shadow:inset 0 -.09em 0 color-mix(in srgb,#f2c14e 52%,transparent); }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-mdref-"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-mdref-"] {
+    display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:999px; vertical-align:1px;
+    border:1px solid color-mix(in srgb,#a9a2ff 42%,var(--border)); background:color-mix(in srgb,#a9a2ff 12%,transparent);
+    color:color-mix(in srgb,#c6c0ff 86%,var(--text)); font:600 11px/1.5 var(--ui); text-decoration:none; cursor:pointer; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-mdref-"]::before,
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-mdref-"]::before { content:'¶'; opacity:.85; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-mdref-"]:hover,
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-mdref-"]:hover { border-color:#a9a2ff; color:var(--text); }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref {
+    flex:none; padding:1px 4px; border-radius:3px; color:var(--dim); font:600 10px/1.35 var(--ui); opacity:0; cursor:pointer; user-select:none; }
+  .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-ref,
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref:focus-visible { opacity:.6; }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref:hover { opacity:1; color:var(--md-accent); background:color-mix(in srgb,var(--md-accent) 15%,transparent); }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref[data-copied] { opacity:1; color:var(--md-accent); }
+  /* 两个悬浮按钮成组贴右，且「隐形时不吃点击」——
+     它们原本各自随标签排布，恰好占住了标题行的几何中心：鼠标悬停时按钮显形，
+     点在行中间本想跳转，却先被复制的委托分支 stopImmediatePropagation 掐掉。
+     隐形即 pointer-events:none，行悬停/按钮聚焦后才可点，中心点击永远落到标题行上。 */
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy { pointer-events:none; }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref { margin-left:auto; pointer-events:none; }
+  .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-copy,
+  .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-ref,
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy:focus-visible,
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref:focus-visible { pointer-events:auto; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-red"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-red"] { color:#f2555a; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-orange"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-orange"] { color:#f0883e; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-yellow"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-yellow"] { color:#dcb13c; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-green"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-green"] { color:#4bbd7a; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-cyan"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-cyan"] { color:#3fb6c4; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-blue"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-blue"] { color:#5b9cf5; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-purple"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-purple"] { color:#a97bf0; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-pink"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-pink"] { color:#ef7bb0; }
+  .reading-md-workbench .reading-md-block .milkdown .ProseMirror a[href^="#cc-fg-gray"],
+  .reading-md-workbench .reading-md-preview-content a[href^="#cc-fg-gray"] { color:#95a0ae; }
+  /* ── 文字颜色 / 背景高亮的操作入口 ──
+     色板挂在 .milkdown-top-bar 下，而不是 Crepe 用 Vue 托管的 .top-bar-inner 里 —— inner 的每次
+     diff 都可能把外来节点抹掉，挂容器下才在我们的控制里。
+     但它当不了普通 flex 子项：inner 里的按钮清一色 flex-shrink:0，inner 的 min-content 本身就已
+     吃满整行，色板无论 flex 怎么写都会被挤到第三行（顶栏凭空高 40px）。所以改成绝对定位，
+     贴在顶栏右下角 —— 那里本来就是空的（第二行只站了两个按钮），同时给顶栏补一段等宽
+     padding-right 把这块地方真正让出来，免得色板压在按钮上。
+     行高：第二行是 32px 按钮 + 上下各 4px 外边距 = 40px，正好等于色板自身高度；
+     底边对齐顶栏 padding-bottom（7px）即可与第二行齐平。 */
+  .reading-md-block .milkdown .milkdown-top-bar { --cc-group-w:76px; padding-right:calc(clamp(12px,4cqw,40px) + var(--cc-group-w) + 10px); }
+  .codescope-color-group { position:absolute; right:clamp(12px,4cqw,40px); bottom:7px; display:flex; align-items:center; }
+  .codescope-color-glyph { position:relative; display:inline-flex; align-items:center; justify-content:center; font:700 14px/1 var(--crepe-font-default,var(--font-sans)); }
+  .codescope-color-glyph .bar { position:absolute; left:1px; right:1px; bottom:-2px; height:3px; border-radius:2px; background:var(--cc-swatch,transparent); }
+  .codescope-color-glyph.is-mark { font-size:13px; }
+  .codescope-color-trigger.is-on { background:color-mix(in srgb,var(--accent) 16%,var(--soft)); }
+  .codescope-color-trigger.is-on .codescope-color-glyph.is-mark { color:#f2c14e; }
+  .codescope-color-menu { position:fixed; z-index:260; width:240px; padding:8px; color:var(--text); border:1px solid color-mix(in srgb,var(--border) 88%,transparent); border-radius:12px; background:color-mix(in srgb,var(--panel) 97%,#111722); box-shadow:0 18px 54px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.04); backdrop-filter:blur(18px); }
+  .codescope-color-menu[hidden] { display:none; }
+  .codescope-color-menu .title { padding:4px 6px 6px; color:var(--dim); font-size:11px; font-weight:700; letter-spacing:.05em; }
+  .codescope-color-menu .title:not(:first-child) { margin-top:6px; padding-top:8px; border-top:1px solid color-mix(in srgb,var(--border) 62%,transparent); }
+  .codescope-color-menu .swatches { display:grid; grid-template-columns:repeat(9,1fr); gap:3px; padding:0 6px; }
+  .codescope-color-menu .clear { width:100%; margin-top:6px; padding:7px 8px; color:var(--muted); border:0; border-radius:7px; background:transparent; text-align:left; cursor:pointer; }
+  .codescope-color-bar { position:fixed; z-index:265; display:flex; align-items:center; gap:3px; padding:5px 7px; border:1px solid color-mix(in srgb,var(--border) 88%,transparent); border-radius:10px; background:color-mix(in srgb,var(--panel) 97%,#111722); box-shadow:0 14px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04); backdrop-filter:blur(18px); }
+  .codescope-color-bar[hidden] { display:none; }
+  .codescope-color-bar .sep { width:1px; height:16px; margin:0 2px; background:color-mix(in srgb,var(--border) 80%,transparent); }
+  .codescope-color-bar .clear { color:var(--dim); font-size:13px; line-height:1; }
+  /* 浮条尾部的「摘录」：宿主（阅读模块）注入的动作，知识库的区块编辑器没有这个按钮。
+     它故意不带 data-href，免得被下面那组小方块尺寸规则命中。 */
+  .codescope-color-bar .excerpt { display:flex; align-items:center; gap:4px; height:22px; padding:0 9px; color:var(--text); border:1px solid color-mix(in srgb,var(--border) 88%,transparent); border-radius:7px; background:color-mix(in srgb,var(--panel2) 72%,transparent); font:600 11px var(--ui); white-space:nowrap; cursor:pointer; }
+  .codescope-color-bar .excerpt:hover { border-color:color-mix(in srgb,var(--accent) 48%,var(--border)); background:color-mix(in srgb,var(--accent) 12%,var(--panel2)); color:var(--accent); }
+  /* 注意 :not(.clear)：清除按钮用的是空 data-href，单纯写 button[data-href] 会把它一并命中小方块尺寸，
+     结果就是「清除颜色与高亮」被挤成每行一个字。 */
+  .codescope-color-menu button[data-href]:not(.clear),
+  .codescope-color-bar button[data-href]:not(.clear) { display:grid; place-items:center; padding:0; border:1px solid transparent; border-radius:6px; background:transparent; cursor:pointer; }
+  .codescope-color-menu button[data-href]:not(.clear) { width:20px; height:20px; }
+  .codescope-color-bar button[data-href]:not(.clear) { width:22px; height:22px; }
+  .codescope-color-menu button[data-href]:not(.clear):hover,
+  .codescope-color-menu button[data-href]:not(.clear):focus-visible,
+  .codescope-color-bar button[data-href]:not(.clear):hover,
+  .codescope-color-bar button[data-href]:not(.clear):focus-visible { border-color:color-mix(in srgb,var(--border) 90%,transparent); background:var(--soft); outline:0; }
+  .codescope-color-menu button[data-href].active,
+  .codescope-color-bar button[data-href].active { border-color:var(--accent); }
+  .codescope-color-menu button i,
+  .codescope-color-bar button i { border-radius:50%; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .codescope-color-menu button i { width:14px; height:14px; }
+  .codescope-color-bar button i { width:15px; height:15px; }
+  .codescope-color-menu button i.hl,
+  .codescope-color-bar button i.hl { border-radius:4px; background:#f2c14e; }
+  .codescope-color-menu .clear:hover,.codescope-color-menu .clear:focus-visible { color:var(--text); background:color-mix(in srgb,var(--accent) 15%,var(--soft)); outline:0; }
+  .codescope-color-bar .clear:hover { color:#ff8c8c; }
   .reading-md-block .milkdown .ProseMirror a:not([href^="#codescope-ref-"]) { color:var(--md-link); text-decoration-color:color-mix(in srgb,var(--md-link) 44%,transparent); text-decoration-thickness:1px; text-underline-offset:3px; }
   .reading-md-block .milkdown .ProseMirror a:not([href^="#codescope-ref-"]):hover { color:color-mix(in srgb,var(--md-link) 70%,var(--text)); text-decoration-color:currentColor; }
   .reading-md-block .milkdown .ProseMirror code { padding:.12em .38em; border:1px solid color-mix(in srgb,var(--border) 78%,transparent); border-radius:5px; background:var(--md-surface); color:color-mix(in srgb,var(--syntax-type,var(--accent)) 76%,var(--text)); font:.84em/1.5 var(--mono); vertical-align:.02em; }
@@ -1139,20 +1286,128 @@
   .codescope-block-transform-menu .block-actions .danger:hover,.codescope-block-transform-menu .block-actions .danger:focus-visible { color:#ff8c8c; background:color-mix(in srgb,#ef4444 14%,var(--soft)); }
   .codescope-block-transform-menu .block-actions .danger .icon { color:#ff8585; border-color:color-mix(in srgb,#ef4444 40%,var(--border)); background:color-mix(in srgb,#ef4444 10%,var(--soft)); }
   .codescope-block-transform-menu .icon { display:grid; place-items:center; flex:0 0 27px; height:27px; color:color-mix(in srgb,var(--accent) 86%,white); border:1px solid color-mix(in srgb,var(--border) 70%,transparent); border-radius:6px; background:color-mix(in srgb,var(--soft) 86%,transparent); font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
-  .reading-md-outline { display:none; grid-column:1; grid-row:1; min-width:0; overflow:auto; border-right:1px solid color-mix(in srgb,var(--border) 76%,transparent); background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 78%,var(--md-page)),color-mix(in srgb,var(--md-page) 95%,var(--panel2))); scrollbar-width:thin; }
+  /* ─── Markdown 文档大纲：按标题层级做四重视觉分层 ──────────────────────────
+     ① 字号 / 字重 / 颜色逐级递减      ② 标记形状逐级变化（竖条→方块→圆环→圆点→短划）
+     ③ 缩进 + 逐级轨道线，形成树形骨架  ④ 当前项 + 其祖先链一起高亮
+     几何：条目内容起点 x = 12 + depth*14；轨道线与活动指示条落在 x = 5 + depth*14；
+           标签起点 x = 30 + depth*14。改缩进步长时这四个数一起改。
+     ⚠ 字体一律用 longhand（font-size / font-weight / font-family:inherit）。
+       不要写成 font:... var(--ui) —— 本项目没有定义 --ui 变量，
+       整条 font 简写会静默失效，所有层级会退化成同一个字号（已实测）。 */
+  .reading-md-outline { display:none; grid-column:1; grid-row:1; min-width:0; overflow:auto; overscroll-behavior:contain; border-right:1px solid color-mix(in srgb,var(--border) 76%,transparent); background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 78%,var(--md-page)),color-mix(in srgb,var(--md-page) 95%,var(--panel2))); scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--border) 92%,transparent) transparent; }
   .reading-md-workbench.outline-open .reading-md-outline { display:block; }
-  .reading-md-outline-head { position:sticky; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; min-height:45px; padding:0 14px; border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent); background:color-mix(in srgb,var(--panel) 88%,transparent); backdrop-filter:blur(14px); }
-  .reading-md-outline-title { color:var(--text); font:720 11px var(--ui); letter-spacing:.02em; }
-  .reading-md-outline-count { display:grid; place-items:center; min-width:22px; height:18px; padding:0 5px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font:650 8px var(--mono); }
-  .reading-md-outline-list { position:relative; padding:10px 8px 30px; }
-  .reading-md-outline-list::before { content:''; position:absolute; top:10px; bottom:30px; left:17px; width:1px; background:linear-gradient(var(--border),transparent); opacity:.62; }
-  .reading-md-outline-item { position:relative; display:flex; align-items:center; width:100%; min-height:29px; box-sizing:border-box; margin:1px 0; padding:4px 8px 4px calc(12px + (var(--outline-depth,0) * 13px)); border:0; border-radius:7px; background:transparent; color:var(--dim); font:500 10px/1.35 var(--ui); text-align:left; cursor:pointer; overflow:hidden; }
-  .reading-md-outline-item::before { content:''; flex:none; width:5px; height:5px; margin-right:8px; border:1px solid color-mix(in srgb,var(--dim) 70%,transparent); border-radius:50%; background:var(--panel); }
-  .reading-md-outline-item .label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .reading-md-outline-item:hover { background:var(--md-surface-hover); color:var(--text); }
-  .reading-md-outline-item.active { background:linear-gradient(90deg,color-mix(in srgb,var(--md-accent) 15%,transparent),transparent); color:var(--md-accent); font-weight:680; }
-  .reading-md-outline-item.active::before { border-color:var(--md-accent); background:var(--md-accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--md-accent) 12%,transparent); }
-  .reading-md-outline-empty { padding:32px 18px; color:var(--muted); font:10px/1.65 var(--ui); text-align:center; }
+  .reading-md-outline-head { position:sticky; top:0; z-index:3; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:0 8px; padding:9px 12px 8px; border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent); background:color-mix(in srgb,var(--panel) 88%,transparent); backdrop-filter:blur(14px); }
+  .reading-md-outline-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-family:inherit; font-size:11.5px; font-weight:720; letter-spacing:.02em; }
+  .reading-md-outline-count { display:grid; place-items:center; min-width:22px; height:18px; padding:0 6px; border-radius:6px; color:var(--muted); font-family:var(--mono); font-size:8px; font-weight:650; font-variant-numeric:tabular-nums; }
+  /* 当前章节路径：直接回答「我现在在文档的第几层、属于哪一节」 */
+  .reading-md-outline-path { grid-column:1 / -1; display:flex; align-items:center; gap:5px; min-width:0; margin-top:5px; opacity:0; transition:opacity .18s ease; }
+  .reading-md-outline-path.on { opacity:1; }
+  .reading-md-outline-path .seg { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:inherit; font-size:9.5px; line-height:1.3; }
+  .reading-md-outline-path .seg.parent { flex:0 1 auto; max-width:52%; color:color-mix(in srgb,var(--muted) 90%,transparent); font-weight:540; }
+  .reading-md-outline-path .seg.current { flex:0 1 auto; color:color-mix(in srgb,var(--md-accent) 58%,var(--text)); font-weight:620; }
+  .reading-md-outline-path .sep { flex:none; color:color-mix(in srgb,var(--muted) 66%,transparent); font-family:var(--mono); font-size:9px; }
+  /* 阅读进度：贴在头部下沿，随正文滚动增长 */
+  .reading-md-outline-progress { grid-column:1 / -1; position:relative; height:2px; margin:8px -12px -8px; background:color-mix(in srgb,var(--border) 52%,transparent); }
+  .reading-md-outline-progress::after { content:''; position:absolute; top:0; bottom:0; left:0; width:calc(var(--outline-progress,0) * 100%); border-radius:0 2px 2px 0; background:linear-gradient(90deg,color-mix(in srgb,var(--md-accent) 48%,transparent),var(--md-accent)); transition:width .14s linear; }
+  /* 列表：4 条逐级轨道线（顶层最亮），叠成树形骨架；第 5、6 层不再加线，靠缩进区分 */
+  .reading-md-outline-list { position:relative; padding:12px 0 34px; --rail:color-mix(in srgb,var(--dim) 34%,transparent); }
+  /* 条目：固定 9px 标记槽，保证各层级标签左边界严格对齐 */
+  /* 重要：全应用有 `html[data-theme] button`（0-1-1）按钮皮肤，优先级高于 .reading-md-outline-item（0-1-0），
+     它会给每个大纲条目套上 6px 圆角 + #17202b 底色 + 白色渐变 + 1px 高光阴影 → 视觉上就是「长条圆角框」。
+     大纲需要的是纯文本行，因此这里用 0-2-0 选择器显式压掉按钮皮肤。 */
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item,
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item:hover,
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item:active,
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item.active,
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item:focus-visible { background:none; border:0; border-radius:0; box-shadow:none; }
+  /* 「复制链接」按钮：默认隐形，悬停/聚焦所在的标题行时才出现，不占常驻视觉 */
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy {
+    flex:none; margin-left:auto; padding:1px 4px; border-radius:3px; color:var(--dim);
+    font:600 10px/1.35 var(--ui); opacity:0; cursor:pointer; user-select:none; }
+  .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-copy,
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy:focus-visible { opacity:.6; }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy:hover { opacity:1; color:var(--md-accent); background:color-mix(in srgb,var(--md-accent) 15%,transparent); }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy[data-copied] { opacity:1; color:var(--md-accent); }
+  .reading-md-outline-item { position:relative; display:flex; align-items:center; gap:9px; width:100%; box-sizing:border-box; margin:0; padding:5px 8px 5px calc(12px + (var(--outline-depth,0) * 14px)); border:0; background:transparent; color:var(--dim); font-family:inherit; font-size:11px; font-weight:520; line-height:1.35; text-align:left; cursor:pointer; overflow:hidden; transition:background .14s ease,color .14s ease; }
+  .reading-md-outline-item .label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .reading-md-outline-item::before { content:''; flex:none; width:9px; height:9px; border-radius:0; background-repeat:no-repeat; background-position:center; background-size:0 0; --mk:color-mix(in srgb,var(--dim) 74%,transparent); transition:background-image .14s ease; }
+  .reading-md-outline-item[data-level="1"]::before { border-radius:1px; background-image:linear-gradient(var(--bar,color-mix(in srgb,var(--md-accent) 76%,transparent)),var(--bar,color-mix(in srgb,var(--md-accent) 76%,transparent))); background-size:3px 9px; }
+  .reading-md-outline-item[data-level="2"]::before { border-radius:2px; background-image:linear-gradient(var(--mk),var(--mk)); background-size:6px 6px; }
+  .reading-md-outline-item[data-level="3"]::before { background-image:radial-gradient(circle at center,transparent 0 1.5px,var(--mk) 1.5px 3px,transparent 3px); background-size:9px 9px; }
+  .reading-md-outline-item[data-level="4"]::before { background-image:radial-gradient(circle at center,var(--mk) 0 1.9px,transparent 1.9px); background-size:9px 9px; }
+  .reading-md-outline-item[data-level="5"]::before,.reading-md-outline-item[data-level="6"]::before { border-radius:1px; background-image:linear-gradient(var(--mk),var(--mk)); background-size:2px 6px; }
+  /* 竖向轨道线：从「条目自身背景」画祖先层级的竖线。
+     为什么不画在列表上：实测列表层的 background-image 不出墨（换了实线/整坐标也一样），
+     而条目自身的背景是画得出来的（活动项底色可见）。每条轨道对准上一级标记中心 x = 17 + 深度*14。
+     注意：这些是 background-image，所以底色一律用 background-color 声明，两者不会互相顶掉。 */
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="2"],
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="3"],
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="4"],
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="5"],
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="6"] { background-repeat:no-repeat; background-size:1px 100%; }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="2"] { background-image:linear-gradient(var(--rail),var(--rail)); background-position:17px 0; }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="3"] { background-image:linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)); background-position:17px 0,31px 0; }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="4"] { background-image:linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)); background-position:17px 0,31px 0,45px 0; }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="5"] { background-image:linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)); background-position:17px 0,31px 0,45px 0,59px 0; }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="6"] { background-image:linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)); background-position:17px 0,31px 0,45px 0,59px 0,73px 0; }
+  /* 层级排版：字号、字重、行高、留白一起递减，形成明确的视觉阶梯 */
+  .reading-md-outline-item[data-level="1"] { min-height:32px; margin:14px 0 3px; color:var(--text); font-size:12.5px; font-weight:730; letter-spacing:-.012em; }
+  .reading-md-outline-item[data-level="2"] { min-height:31px; margin:0; color:color-mix(in srgb,var(--text) 84%,var(--dim)); font-size:11.8px; font-weight:660; }
+  .reading-md-outline-item[data-level="3"] { min-height:27px; color:color-mix(in srgb,var(--dim) 90%,var(--text)); font-size:11.2px; font-weight:600; }
+  .reading-md-outline-item[data-level="4"] { min-height:24px; color:var(--dim); font-size:10.6px; font-weight:560; }
+  .reading-md-outline-item[data-level="5"],.reading-md-outline-item[data-level="6"] { min-height:23px; color:color-mix(in srgb,var(--dim) 86%,var(--text)); font-size:10.2px; font-weight:540; }
+  .reading-md-outline-item:hover { color:var(--text); }
+  .reading-md-outline-item:hover::before { --mk:color-mix(in srgb,var(--text) 72%,transparent); }
+  /* 祖先链：当前项所在的整条路径一起染色，层级归属一眼可见 */
+  .reading-md-outline-item.in-path { color:color-mix(in srgb,var(--md-accent) 42%,var(--dim)); }
+  .reading-md-outline-item.in-path::before { --mk:color-mix(in srgb,var(--md-accent) 50%,var(--dim)); --bar:color-mix(in srgb,var(--md-accent) 52%,transparent); }
+  /* 当前项：地面渐变 + 落在本级轨道线上的发光指示条 */
+  .reading-md-outline-item.active { color:var(--md-accent); font-weight:700; }
+  .reading-md-outline-item.active::before { --mk:var(--md-accent); --bar:var(--md-accent); filter:drop-shadow(0 0 3px color-mix(in srgb,var(--md-accent) 40%,transparent)); }
+  .reading-md-outline-item.active::after { content:''; position:absolute; top:50%; left:calc(5px + (var(--outline-depth,0) * 14px)); width:3px; height:18px; margin-top:-9px; border-radius:1px; background:var(--md-accent); box-shadow:0 0 7px color-mix(in srgb,var(--md-accent) 55%,transparent); }
+  /* 折叠：父级右侧出现 ›，折叠后子项隐藏（display:none 仍保留在 DOM 中，
+     这样「条目顺序 = 标题顺序」的下标约定不会被破坏） */
+  .reading-md-outline-item.has-children { padding-right:22px; }
+  .reading-md-outline-more { position:absolute; right:4px; top:50%; display:grid; place-items:center; width:16px; height:16px; margin-top:-8px; border-radius:5px; color:var(--dim); font-family:var(--mono); font-size:8px; line-height:1; opacity:0; transition:opacity .14s ease,transform .16s ease,background .14s ease,color .14s ease; }
+  .reading-md-outline-item.has-children:hover .reading-md-outline-more,.reading-md-outline-item.active .reading-md-outline-more,.reading-md-outline-item[data-folded="1"] .reading-md-outline-more { opacity:.7; }
+  .reading-md-outline-more:hover { background:color-mix(in srgb,var(--md-accent) 20%,transparent); color:var(--text); opacity:1; }
+  .reading-md-outline-item[data-folded="1"] .reading-md-outline-more { transform:rotate(-90deg); }
+  .reading-md-outline-item[data-folded="1"] { color:color-mix(in srgb,var(--dim) 92%,var(--text)); }
+  .reading-md-outline-item.hidden-by-fold { display:none; }
+  /* 跳转落点闪烁：背景一闪 + 左侧强调条，让人看清跳到哪了 */
+  /* 落点高亮：纯静态样式（不依赖动画，因为全站动画时长被压成 0），
+     由 JS 切换类名做「亮-灭-亮」的闪烁。 */
+  .reading-md-heading-flash { background:color-mix(in srgb,var(--md-accent) 20%,transparent);
+    box-shadow:inset 3px 0 0 var(--md-accent); border-radius:6px; transition:background .18s ease-out,box-shadow .18s ease-out; }
+  /* 落点高亮浮层：fixed 浮层而非给标题加类名（ProseMirror 会重绘掉外部加的类）。
+     注意变量兜底 var(--md-accent,var(--accent))：--md-accent 只定义在 .reading-text-shell.markdown /
+     #md-view.project-md-block 上，而这层挂在 document.body 下，拿不到那个作用域 ——
+     不兜底的话 color-mix 里的变量无效，整条声明被判无效，浮层就是全透明的（等于没高亮）。 */
+  #reading-md-focus-ring { position:fixed; z-index:80; pointer-events:none; opacity:0; border-radius:6px;
+    background:color-mix(in srgb,var(--md-accent,var(--accent)) 26%,transparent);
+    box-shadow:inset 3px 0 0 var(--md-accent,var(--accent)); transition:opacity .16s ease-out; }
+  /* 已摘录文字的正文标记：body 级浮层 + 逐个 fixed 矩形，正文 DOM 一个字都不改。
+     z-index 压到 20：低于编辑器自己的吸顶工具条(24)、大纲抽屉(42)和落点高亮(80)，
+     这样标记不会盖到这些浮层上；矩形本身还会被夹进正文可视区。
+     三重提示叠加（底色 + 左侧粗竖条 + 底部横线），是因为各主题的 --accent 明度差很多：
+     graphite 的 accent 是浅灰蓝 #aebbd0，只给淡底色在近黑背景上几乎看不出来。
+     颜色刻意沿用主题强调色而不是写死琥珀色 —— 琥珀已经被 ==高亮== 语法占了，会混淆。 */
+  #reading-md-excerpt-marks { position:fixed; z-index:20; pointer-events:none; }
+  #reading-md-excerpt-marks > div { position:fixed; border-radius:3px;
+    background:color-mix(in srgb,var(--md-accent,var(--accent)) 34%,transparent);
+    box-shadow:inset 3px 0 0 var(--md-accent,var(--accent)),
+               inset 0 -2px 0 color-mix(in srgb,var(--md-accent,var(--accent)) 62%,transparent); }
+  /* ── 高亮：方角扁平底色带 + 整行高左竖条 ──
+     注意全部保持方角（圆角 ≤2px）：这是刻意避开之前那种「长条圆角框」的观感。
+     这些规则与上面的按钮皮肤压制规则同为 0-4-0，靠「写在后面」取胜。 */
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item:hover { background-color:color-mix(in srgb,var(--text) 8%,transparent); }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item.in-path { background-color:color-mix(in srgb,var(--md-accent) 10%,transparent); }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item.active { background-color:color-mix(in srgb,var(--md-accent) 26%,transparent); box-shadow:inset 4px 0 0 var(--md-accent); }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item[data-level="1"] { box-shadow:inset 0 1px 0 color-mix(in srgb,var(--border) 74%,transparent); }
+  .reading-md-workbench .reading-md-outline-list .reading-md-outline-item.active { box-shadow:inset 3px 0 0 var(--md-accent); }
+  .reading-md-outline-item:focus-visible { outline:1.5px solid color-mix(in srgb,var(--md-accent) 66%,transparent); outline-offset:-1.5px; }
+  .reading-md-outline-empty { padding:30px 20px; color:var(--dim); font-family:inherit; font-size:10.5px; line-height:1.75; text-align:center; }
+  @media (prefers-reduced-motion:reduce) { .reading-md-outline-item,.reading-md-outline-item::before,.reading-md-outline-more,.reading-md-outline-progress::after,.reading-md-outline-path { transition:none; } }
   .reading-text-shell.markdown[data-md-mode="edit"] .reading-md-source { display:block; }
   .reading-text-shell.markdown[data-md-mode="live"] .reading-md-block { display:block; }
   .reading-text-shell.markdown[data-md-mode="preview"] .reading-md-preview { display:block; }
@@ -1250,7 +1505,7 @@
   @media (max-width:900px) { .reading-md-editor { padding-right:42px; padding-left:54px; } .reading-md-properties dl { grid-template-columns:112px minmax(0,1fr); } }
   @container (max-width:680px) { .reading-md-editor { padding:34px 24px 94px 46px; font-size:.94rem; } .reading-md-editor h1 { font-size:1.72rem; } .reading-md-editor h2 { margin-top:2.5rem; font-size:1.3rem; } .reading-md-editor h3 { font-size:1.08rem; } .reading-md-properties { margin-bottom:2.45rem; } .reading-md-properties dl { grid-template-columns:96px minmax(0,1fr); gap:0 .45rem; padding:.35rem .45rem; } .reading-md-properties dt,.reading-md-properties dd { padding:.42rem .38rem; font-size:.76rem; } }
   @container (max-width:460px) { .reading-md-editor { padding-left:38px; padding-right:18px; } .reading-md-properties dl { grid-template-columns:1fr; gap:0; } .reading-md-properties dt { padding:.48rem .42rem .12rem; border-bottom:0; } .reading-md-properties dd { padding:.05rem .42rem .5rem 2.12rem; } }
-  @container (max-width:900px) { .reading-md-workbench.outline-open { grid-template-columns:minmax(0,1fr); } .reading-md-workbench.outline-open > .reading-md-source,.reading-md-workbench.outline-open > .reading-md-block,.reading-md-workbench.outline-open > .reading-md-editor { grid-column:1; } .reading-md-outline { position:absolute; z-index:42; grid-column:auto; grid-row:auto; top:0; left:0; bottom:0; width:min(278px,78%); border-right:1px solid var(--border); box-shadow:18px 0 46px rgba(0,0,0,.32); } }
+  @container (max-width:900px) { .reading-md-workbench.outline-open { grid-template-columns:minmax(0,1fr); } .reading-md-workbench.outline-open > .reading-md-source,.reading-md-workbench.outline-open > .reading-md-block,.reading-md-workbench.outline-open > .reading-md-editor { grid-column:1; } .reading-md-outline { position:absolute; z-index:42; grid-column:auto; grid-row:auto; top:0; left:0; bottom:0; width:clamp(180px,58%,240px); border-right:1px solid var(--border); box-shadow:18px 0 46px rgba(0,0,0,.32); } }
   @container (max-width:680px) { .reading-md-toolbar { gap:6px; padding-inline:8px; } .reading-md-toolbar .kind { display:none; } .reading-md-zoom .value { min-width:41px; } .reading-md-outline-toggle { padding-inline:7px; font-size:0; } .reading-md-outline-toggle::before { content:'☷'; font-size:12px; } .reading-md-block .milkdown .ProseMirror { width:calc(100% - 28px); margin-top:18px; padding:38px 26px 100px; border-radius:12px; } }
   .reading-frag .frag-note { display:flex; gap:4px; align-items:flex-start; }
   .reading-frag .frag-note .fn-pre { flex:none; color:var(--muted); }
@@ -1280,6 +1535,8 @@
   #reading-frag-list { flex:1; min-height:0; overflow:auto; padding:7px; }
   .reading-frag { margin-bottom:7px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--panel2); font-size:10px; line-height:1.55; }
   .reading-frag .page { color:var(--accent); font-weight:650; } .reading-frag .src { margin-top:5px; color:var(--dim); white-space:pre-wrap; }
+  /* 稳定序号：小而暗，只用来在正文标记与卡片之间对号，不抢标题层级链的注意力。 */
+  .reading-frag .frag-no { display:inline-block; margin-right:2px; padding:0 4px; border:1px solid color-mix(in srgb,var(--border) 90%,transparent); border-radius:4px; background:color-mix(in srgb,var(--panel) 70%,transparent); color:var(--dim); font-weight:600; font-size:9px; }
   .reading-frag .zh { margin-top:5px; white-space:pre-wrap; } .reading-frag .actions { display:flex; justify-content:flex-end; gap:4px; margin-top:5px; }
   .reading-frag .actions button { padding:2px 5px; font-size:9px; }
   #reading-status { min-width:100px; color:var(--dim); font-size:10px; text-align:right; }
@@ -1897,10 +2154,10 @@
   #btn-dsh.dsh-bad { border-color:rgba(255,107,99,.45); }
   #btn-dsh.on { color:#dcecff; border-color:rgba(89,156,255,.62); background:rgba(55,116,205,.22); box-shadow:inset 0 -2px 0 #599cff; }
   #knowledge-launch { position:relative; display:flex; align-items:stretch; }
-  #btn-knowledge-launch,#knowledge-launch-more { min-height:34px; color:#c7d2e1; font-weight:700; }
+  #btn-knowledge-launch,#knowledge-launch-more,#workspace-launch-more { min-height:34px; color:#c7d2e1; font-weight:700; }
   #btn-knowledge-launch { display:inline-flex; align-items:center; gap:7px; padding:6px 10px; border-radius:6px 0 0 6px; white-space:nowrap; }
   #btn-knowledge-launch::before { content:'K'; display:grid; place-items:center; width:18px; height:18px; border-radius:5px; background:rgba(99,214,160,.12); color:#70d6a3; font:800 10px/1 var(--mono); }
-  #knowledge-launch-more { width:25px; padding:0; margin-left:-1px; border-radius:0 6px 6px 0; color:#8290a3; }
+  #knowledge-launch-more,#workspace-launch-more { width:25px; padding:0; margin-left:-1px; border-radius:0 6px 6px 0; color:#8290a3; }
   #btn-knowledge-launch:hover,#knowledge-launch-more:hover,#knowledge-launch.open #btn-knowledge-launch,#knowledge-launch.open #knowledge-launch-more { border-color:#4c806c; background:linear-gradient(180deg,#273a35,#1c2c27); color:#effaf5; }
   #btn-knowledge-launch.on { border-color:#4c9675; background:linear-gradient(180deg,#24503f,#19372c); color:#e8fff5; box-shadow:inset 0 -2px 0 #63d6a0; }
   #knowledge-launch-menu { position:absolute; z-index:540; top:calc(100% + 8px); left:50%; width:270px; padding:7px; transform:translateX(-50%); border:1px solid #3a485c; border-radius:11px; background:#111821; box-shadow:0 18px 55px rgba(0,0,0,.58); }
@@ -1913,7 +2170,7 @@
   #knowledge-workspace { display:none; position:absolute; inset:0; z-index:77; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
   body.knowledge-mode #knowledge-workspace { display:flex; }
   body.knowledge-mode #side,body.knowledge-mode #split-v,body.knowledge-mode #split-v2,body.knowledge-mode #outline-panel { display:none !important; }
-  body.knowledge-mode #toolbar,body.knowledge-mode #tabs,body.knowledge-mode #document-mode-tools,body.knowledge-mode #code-context-bar,body.knowledge-mode #draw-editor,body.knowledge-mode #office-workspace,body.knowledge-mode #reading-workspace,body.knowledge-mode #study-workspace,body.knowledge-mode #dsh-workspace,body.knowledge-mode #edit-split,body.knowledge-mode #resource-viewer,body.knowledge-mode #preview,body.knowledge-mode #input-area,body.knowledge-mode #split-h,body.knowledge-mode #output { display:none !important; }
+  body.knowledge-mode #toolbar,body.knowledge-mode #tabs,body.knowledge-mode #document-mode-tools,body.knowledge-mode #code-context-bar,body.knowledge-mode #draw-editor,body.knowledge-mode #office-workspace,body.knowledge-mode #reading-workspace,body.knowledge-mode #study-workspace,body.knowledge-mode #dsh-workspace,body.knowledge-mode #opencode-workspace,body.knowledge-mode #vscode-workspace,body.knowledge-mode #edit-split,body.knowledge-mode #resource-viewer,body.knowledge-mode #preview,body.knowledge-mode #input-area,body.knowledge-mode #split-h,body.knowledge-mode #output { display:none !important; }
   body.knowledge-mode #main { flex:1; min-width:0; }
   #knowledge-workspace-head { height:44px; flex:none; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--border); background:var(--panel); }
   #knowledge-workspace-head strong { font-size:13px; }
@@ -1923,21 +2180,23 @@
   #knowledge-workspace-frame { width:100%; height:100%; border:0; background:#fff; }
   #knowledge-workspace-loading { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; color:var(--dim); background:radial-gradient(circle at 50% 38%,rgba(99,214,160,.12),transparent 34%),var(--bg); }
   #knowledge-workspace-loading.hidden { display:none; }
-  #dsh-workspace { display:none; position:absolute; inset:0; z-index:76; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
-  body.dsh-mode #dsh-workspace { display:flex; }
-  body.dsh-mode #side,body.dsh-mode #split-v,body.dsh-mode #split-v2,body.dsh-mode #outline-panel { display:none !important; }
-  body.dsh-mode #toolbar,body.dsh-mode #tabs,body.dsh-mode #document-mode-tools,body.dsh-mode #code-context-bar,body.dsh-mode #draw-editor,body.dsh-mode #office-workspace,body.dsh-mode #reading-workspace,body.dsh-mode #study-workspace,body.dsh-mode #edit-split,body.dsh-mode #resource-viewer,body.dsh-mode #preview,body.dsh-mode #input-area,body.dsh-mode #split-h,body.dsh-mode #output { display:none !important; }
-  body.dsh-mode #main { flex:1; min-width:0; }
-  #dsh-head { height:44px; flex:none; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--border); background:var(--panel); }
-  #dsh-head strong { color:var(--text); font-size:13px; }
-  #dsh-head .sp { flex:1; }
-  #dsh-head-status { color:var(--dim); font-size:11px; }
-  #dsh-frame-wrap { position:relative; flex:1; min-height:0; background:#0c1119; }
-  #dsh-frame { width:100%; height:100%; border:0; background:#0c1119; }
-  #dsh-loading { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; background:radial-gradient(circle at 50% 42%,rgba(55,116,205,.13),transparent 38%),#0c1119; }
-  #dsh-loading.hidden { display:none; }
+  #dsh-workspace,#opencode-workspace,#vscode-workspace { display:none; position:absolute; inset:0; z-index:76; min-height:0; flex-direction:column; overflow:hidden; background:var(--bg); }
+  body.dsh-mode #dsh-workspace,body.opencode-mode #opencode-workspace,body.vscode-mode #vscode-workspace { display:flex; }
+  :is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #side,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #split-v,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #split-v2,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #outline-panel { display:none !important; }
+  :is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #toolbar,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #tabs,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #document-mode-tools,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #code-context-bar,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #draw-editor,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #office-workspace,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #reading-workspace,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #study-workspace,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #edit-split,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #resource-viewer,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #preview,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #input-area,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #split-h,:is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #output { display:none !important; }
+  :is(body.dsh-mode,body.opencode-mode,body.vscode-mode) #main { flex:1; min-width:0; }
+  /* translateZ(0)：Safari 在「fixed 覆盖层 + iframe + hover 重绘」时会整条横栏闪烁（消失再出现），
+     把顶栏提升为独立合成层可稳定合成边界；顶栏内部没有 fixed 子元素，加 transform 无副作用。 */
+  #dsh-head,#opencode-head,#vscode-head { height:44px; flex:none; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--border); background:var(--panel); transform: translateZ(0); }
+  #dsh-head strong,#opencode-head strong,#vscode-head strong { color:var(--text); font-size:13px; }
+  #dsh-head .sp,#opencode-head .sp,#vscode-head .sp { flex:1; }
+  #dsh-head-status,#opencode-head-status,#vscode-head-status { color:var(--dim); font-size:11px; }
+  #dsh-frame-wrap,#opencode-frame-wrap,#vscode-frame-wrap { position:relative; flex:1; min-height:0; background:#0c1119; }
+  #dsh-frame,#opencode-frame,#vscode-frame { width:100%; height:100%; border:0; background:#0c1119; }
+  #dsh-loading,#opencode-loading,#vscode-loading { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; background:radial-gradient(circle at 50% 42%,rgba(55,116,205,.13),transparent 38%),#0c1119; }
+  #dsh-loading.hidden,#opencode-loading.hidden,#vscode-loading.hidden { display:none; }
   @keyframes env-pulse { to { opacity:.35; transform:scale(.72); } }
-  #env-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border); z-index: 50; box-shadow: -8px 0 30px rgba(0,0,0,.4); flex-direction: column; }
+  #env-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border); z-index: 78; box-shadow: -8px 0 30px rgba(0,0,0,.4); flex-direction: column; transform: translateZ(0); }
   #env-panel.open { display: flex; }
   #env-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   #env-head h2 { font-size: 14px; margin: 0; flex: 1; }
@@ -3122,16 +3381,16 @@
   #header-left>.sub { min-width:0; flex:1; }
   #header-right { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
   #header-center { gap:6px; }
-  #header-center>.header-action,#btn-knowledge-launch,#knowledge-launch-more,#site-menu-trigger {
+  #header-center>.header-action,#workspace-launch>.header-action,#btn-knowledge-launch,#knowledge-launch-more,#workspace-launch-more,#site-menu-trigger {
     height:34px; min-height:34px; box-sizing:border-box; flex:0 0 auto; align-items:center; justify-content:center; border-color:#344356;
     color:#cbd6e5; font-size:12px; font-weight:680; line-height:1; white-space:nowrap;
   }
-  #header-center>.header-action,#site-menu-trigger { display:inline-flex; gap:7px; border-radius:7px; padding:6px 11px; }
-  #header-center>.header-action:hover,#btn-knowledge-launch:hover,#knowledge-launch-more:hover,#site-menu-trigger:hover,
-  #knowledge-launch.open #btn-knowledge-launch,#knowledge-launch.open #knowledge-launch-more,#site-menu-trigger.on {
+  #header-center>.header-action,#workspace-launch>.header-action,#site-menu-trigger { display:inline-flex; gap:7px; border-radius:7px; padding:6px 11px; }
+  #header-center>.header-action:hover,#workspace-launch>.header-action:hover,#btn-knowledge-launch:hover,#knowledge-launch-more:hover,#workspace-launch-more:hover,#site-menu-trigger:hover,
+  #knowledge-launch.open #btn-knowledge-launch,#knowledge-launch.open #knowledge-launch-more,#workspace-launch.open #btn-vscode,#workspace-launch.open #workspace-launch-more,#site-menu-trigger.on {
     border-color:#526983; color:#f1f6fd;
   }
-  #header-center>.header-action::before,#btn-knowledge-launch::before,.site-menu-trigger-icon {
+  #header-center>.header-action::before,#workspace-launch>.header-action::before,#btn-knowledge-launch::before,.site-menu-trigger-icon {
     display:grid; place-items:center; width:20px; height:20px; box-sizing:border-box; flex:none;
     border:1px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:5px;
     background:color-mix(in srgb,var(--accent) 10%,transparent); color:#8bb7f5;
@@ -3143,11 +3402,32 @@
   #header-center #btn-dsh.on,#header-center #btn-study.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
   #header-center #btn-dsh-restart { min-width:88px; }
   #header-center #btn-dsh-restart::before { content:'▶'; color:#7fae7f; font-size:11px; line-height:1; }
+  #header-center #btn-dsh-restart.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
+  /* 编辑工作台入口：和 Harness / opencode 同款外观，「其他工作台」的次级菜单挂在它右边的 ⌄ 上。 */
+  /* 注意：.header-action 自带 display，比 UA 对 [hidden] 的 display:none 优先级高 ——
+     不显式写这条，「已收进次级菜单」的按钮其实还挂在顶栏上（属性是 hidden，但照样显示）。 */
+  #header-center #btn-study[hidden] { display:none; }
+  /* 和知识库同款结构：主按钮左圆角 + ⌄ 右圆角，拼成一个整体胶囊（参考 #btn-knowledge-launch）。 */
+  #header-center #btn-vscode { padding:6px 10px; border-radius:7px 0 0 7px; }
+  #header-center #btn-vscode::before { content:'VS'; color:#7aa7f0; font-size:8px; }
+  #header-center #btn-vscode.on { border-color:#527fba; background:#1c3149; box-shadow:inset 0 -2px #6da9fa; }
+  #workspace-launch { position:relative; display:flex; align-items:stretch; }
+  #workspace-launch-more { width:25px; padding:0; margin-left:-1px; border-radius:0 6px 6px 0; color:#8290a3; }
+  #workspace-launch-menu { position:absolute; z-index:540; top:calc(100% + 8px); left:50%; width:250px; padding:7px; transform:translateX(-50%); border:1px solid #3a485c; border-radius:11px; background:#111821; box-shadow:0 18px 55px rgba(0,0,0,.58); }
+  #workspace-launch-menu[hidden] { display:none; }
+  #workspace-launch-menu button { display:grid; grid-template-columns:30px minmax(0,1fr); width:100%; padding:8px 9px; border-color:transparent; background:transparent; color:#dce6f3; text-align:left; }
+  #workspace-launch-menu button:hover { border-color:#30445b; background:#1b2836; }
+  #workspace-launch-menu i { grid-row:1/3; display:grid; place-items:center; width:26px; height:26px; border-radius:7px; background:rgba(122,167,240,.12); color:#8bb7f5; font-style:normal; }
+  #workspace-launch-menu b { font-size:11px; }
+  #workspace-launch-menu small { color:#8290a3; font-size:9px; line-height:1.45; }
+  /* VS Code 顶栏里那个「直接跳到某个绝对路径」的输入框。 */
+  #vscode-head input { flex:1 1 auto; min-width:120px; max-width:460px; margin:0 4px; padding:5px 9px; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text); font:11px var(--mono); }
+  #vscode-head input::placeholder { color:var(--dim); }
   #header-center #btn-dsh-restart.busy { opacity:.55; pointer-events:none; }
   #header-center #btn-knowledge-launch.on { border-color:#4c9675; background:#1b382d; box-shadow:inset 0 -2px #63d6a0; }
   #header-center #knowledge-launch,#header-center #site-menu { flex:0 0 auto; }
   #header-center #btn-knowledge-launch { padding:6px 10px; border-radius:7px 0 0 7px; }
-  #header-center #knowledge-launch-more { width:28px; padding:0; border-radius:0 7px 7px 0; }
+  #header-center #knowledge-launch-more,#workspace-launch-more { width:28px; padding:0; border-radius:0 7px 7px 0; }
   #header-center #site-menu-trigger small { min-width:24px; }
   #app-nav { display:flex; align-items:center; justify-content:flex-end; gap:5px; min-width:0; flex:none; }
   #app-nav .header-action { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:34px; white-space:nowrap; }
@@ -3226,8 +3506,9 @@
     #app-nav #btn-env::after,#app-nav #btn-remote::after { top:5px; right:4px; width:6px; height:6px; }
     #app-nav #theme-btn .theme-dot { margin:0; }
     #sysmon #sm-disk { display:none; }
-    #toolbar { flex-wrap:nowrap; }
+    #toolbar { flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
     #toolbar .sp { min-width:0; }
+    #toolbar::-webkit-scrollbar { display:none; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
@@ -3244,6 +3525,8 @@
     header .sub { display:none; }
     #btn-knowledge-launch { padding-inline:7px; }
     #btn-knowledge-launch span { display:none; }
+    #btn-vscode { padding-inline:7px; }
+    #btn-vscode span { display:none; }
     #sysmon #sm-mem,#sysmon #sm-disk { display:none; }
     .sm-item { min-width:60px; }
     #side { width:280px; max-width:280px; }
@@ -3267,6 +3550,11 @@
   @media (max-width:760px) {
     header { padding-inline:8px; }
     #sysmon,.sync-dot { display:none; }
+    /* 窄窗口（手机浏览器、code-server 内嵌窄栏）里顶栏那一排快捷入口排不下：
+       整条顶栏允许横向滚动，入口一个都不少，但不再把文档撑宽。 */
+    header { overflow-x:auto; overflow-y:hidden; flex-wrap:nowrap; scrollbar-width:none; }
+    header::-webkit-scrollbar { display:none; }
+    #header-center, #header-center > * { min-width:0; }
     #main { min-width:0; overflow:hidden; }
     #toolbar { overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
     #toolbar::-webkit-scrollbar { display:none; }
@@ -3444,7 +3732,15 @@
   <div class="sub" id="vault-path">…</div>
   </div>
   <div id="header-center" aria-label="学习与网址">
-    <button class="header-action header-study" id="btn-study" title="打开学习工作台：网页、视频、代码和笔记自由分屏"><span>学习工作台</span></button>
+    <div id="workspace-launch">
+      <button class="header-action" id="btn-vscode" aria-pressed="false" title="打开编辑工作台：浏览器版 VS Code，可打开本机任意文件夹"><span>编辑工作台</span></button>
+      <button id="workspace-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="workspace-launch-menu" title="其他工作台">⌄</button>
+      <div id="workspace-launch-menu" role="menu" hidden>
+        <button type="button" id="workspace-launch-study" role="menuitem"><i>▤</i><b>学习工作台</b><small>网页、视频、代码与笔记自由分屏</small></button>
+      </div>
+    </div>
+    <!-- 学习工作台的按钮本体留在这里（隐藏）：welcome 页等地方仍然靠 $('btn-study').click() 打开它。 -->
+    <button class="header-action header-study" id="btn-study" hidden title="打开学习工作台：网页、视频、代码和笔记自由分屏"><span>学习工作台</span></button>
     <button class="header-action" id="btn-dsh" title="打开由 CodeScope 托管的 DeepSeek Harness"><span>Harness</span></button>
     <button class="header-action" id="btn-dsh-restart" title="在 CodeScope 内打开 opencode 的 Web 界面"><span>opencode</span></button>
     <div id="knowledge-launch">
@@ -3659,6 +3955,32 @@
         <button id="dsh-external" title="在独立浏览器标签中打开">↗ 外部打开</button>
       </div>
       <div id="dsh-frame-wrap"><div id="dsh-loading">正在连接 CodeScope 托管的 DeepSeek Harness…</div><iframe id="dsh-frame" title="DeepSeek Harness" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer"></iframe></div>
+    </section>
+    <!-- opencode 曾经复用 #dsh-workspace：结果顶栏同时点亮 Harness、标题栏还挂着 DSH 的「刷新 / 外部打开」。
+         两个入口各自一个工作区，互不借用。 -->
+    <section id="opencode-workspace" aria-label="opencode 工作区">
+      <div id="opencode-head">
+        <button id="opencode-back" title="返回代码工作区">← 返回</button>
+        <strong>opencode</strong><span id="opencode-head-status">等待连接</span><span class="sp"></span>
+        <button id="opencode-reload" title="重新载入 opencode">↻ 刷新</button>
+        <button id="opencode-external" title="在独立浏览器标签中打开">↗ 外部打开</button>
+      </div>
+      <div id="opencode-frame-wrap"><div id="opencode-loading">正在连接 CodeScope 托管的 opencode…</div><iframe id="opencode-frame" title="opencode" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer"></iframe></div>
+    </section>
+    <!-- 编辑工作台：浏览器版 VS Code（code-server）。iframe 指向的是 CodeScope 自己的代理端口，
+         VS Code 待在那个端口的根路径下 —— 所以不依赖 code-server 的子路径支持。
+         文件夹由 VS Code 自己的「打开文件夹」来选（它能直接浏览本机），
+         顶栏那个输入框只是「直接跳到某个绝对路径」的快捷方式。 -->
+    <section id="vscode-workspace" aria-label="VS Code 工作区">
+      <div id="vscode-head">
+        <button id="vscode-back" title="返回代码工作区">← 返回</button>
+        <strong>VS Code</strong><span id="vscode-head-status">未启动</span><span class="sp"></span>
+        <input id="vscode-folder" type="text" spellcheck="false" autocomplete="off" placeholder="绝对路径，回车用 VS Code 打开该文件夹" title="在 VS Code 里打开这个文件夹（留空则由 VS Code 自己选）">
+        <button id="vscode-open-folder" title="用 VS Code 打开该文件夹">打开</button>
+        <button id="vscode-reload" title="重新载入 VS Code">↻ 刷新</button>
+        <button id="vscode-external" title="在独立浏览器标签中打开">↗ 外部打开</button>
+      </div>
+      <div id="vscode-frame-wrap"><div id="vscode-loading">正在启动 VS Code…</div><iframe id="vscode-frame" title="VS Code" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer"></iframe></div>
     </section>
     <section id="study-workspace" aria-label="学习工作台">
       <div id="study-head">
@@ -4408,8 +4730,9 @@ async function mountSplitBlockEditor(group, input, entry, ref) {
   try {
     const controller = await window.CodeScopeBlockEditor.create({
       root: host,
-      markdown: String(input.value || entry.code || ''),
-      onChange: (content) => {
+      markdown: mdSyntaxToEditor(String(input.value || entry.code || '')),
+      onChange: (rawContent) => {
+        const content = mdSyntaxFromEditor(rawContent);
         // 初始化时 Crepe 会规范化一次并回调：不是用户编辑（无焦点），不写回
         if (!host.contains(document.activeElement)) return;
         if (input.value === content) return;
@@ -4755,6 +5078,7 @@ function sideGlyphMarkup(kind) {
 /* ------------------------------ 右键菜单 ------------------------------ */
 /* VS Code 风格：项目树的打开 / 新建 / 重命名 / 删除都走右键菜单，行内不再常驻或悬停显示按钮。 */
 let CTX_MENU_OPEN = false;
+let CTX_MENU_OPENED_AT = 0;
 function closeContextMenu() {
   const menu = $('ctx-menu');
   if (!menu || !CTX_MENU_OPEN) return;
@@ -4767,6 +5091,9 @@ function showContextMenu(event, items) {
   if (!menu || !items || !items.length) return;
   event.preventDefault();
   event.stopPropagation();
+  /* 记下打开时刻：紧接着的滚动多半是页面自身的布局抖动（列表重渲染、焦点滚入视口等），
+     不是用户想滚走 —— 见下面 scroll 监听里的宽限期。 */
+  CTX_MENU_OPENED_AT = Date.now();
   menu.replaceChildren();
   for (const item of items) {
     if (item.type === 'separator') { const sep = document.createElement('div'); sep.className = 'ctx-sep'; menu.appendChild(sep); continue; }
@@ -4843,7 +5170,15 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
   else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
 });
-document.addEventListener('scroll', () => closeContextMenu(), true);
+/* 滚动关闭菜单，但要区分「用户滚走了」和「页面自己抖了一下」：
+   这里挂的是 document 捕获，页面上**任何**容器的**任何**滚动都会进来 ——
+   实测右键菜单刚打开 6ms，侧栏列表一次重排滚动就把菜单关掉了（菜单项还没被点到就没了）。
+   打开后 250ms 内的滚动一律忽略，之后照旧关闭。 */
+document.addEventListener('scroll', () => {
+  if (!CTX_MENU_OPEN) return;
+  if (Date.now() - CTX_MENU_OPENED_AT < 250) return;
+  closeContextMenu();
+}, true);
 window.addEventListener('resize', () => closeContextMenu());
 window.addEventListener('blur', () => closeContextMenu());
 
@@ -5657,11 +5992,11 @@ async function ensureKnowledgeSite(force=false){
 }
 async function leaveWorkspaceModesForKnowledge(){
   if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
-  if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();
+  if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();if(document.body.classList.contains('vscode-mode'))closeVSCodeWorkspace();
   if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
   if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
   if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
-  document.body.classList.remove('study-mode','dsh-mode','office-mode','reading-mode','drawing-mode');
+  document.body.classList.remove('study-mode','dsh-mode','opencode-mode','vscode-mode','office-mode','reading-mode','drawing-mode');
 }
 async function openKnowledgeWorkspace(forceBuild=false){
   setKnowledgeLaunchMenu(false);closeKnowledgeCenter(false);
@@ -5679,7 +6014,7 @@ function closeKnowledgeWorkspace(){
 }
 async function openKnowledgeSplit(){
   setKnowledgeLaunchMenu(false);closeKnowledgeWorkspace();
-  if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();
+  if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();if(document.body.classList.contains('vscode-mode'))closeVSCodeWorkspace();
   try{await ensureKnowledgeSite(false);if(!window.CodeScopeStudy)throw new Error('学习工作台尚未加载');await window.CodeScopeStudy.open(new URL('/knowledge/',window.location.href).href);}
   catch(error){setStatus('err', '知识库分栏打开失败：'+(error.message||error));}
 }
@@ -5777,18 +6112,36 @@ async function ensureReadingMarkdownNote(projectPath){
   return (project&&project.children&&project.children.find((item)=>item.path===result.path))||readingFragment(result.path)||{path:result.path,kind:'markdown',project:projectPath,name:'阅读笔记.md'};
 }
 async function appendReadingQuoteToNote(doc,item){
-  const projectPath=readingProjectFor(doc.path)||READING_PROJECT_CURRENT;if(!projectPath)throw new Error('当前 PDF 不属于阅读项目');
+  const projectPath=readingProjectFor(doc.path)||READING_PROJECT_CURRENT;if(!projectPath)throw new Error('当前资料不属于阅读项目');
   const note=await ensureReadingMarkdownNote(projectPath);
   let record=READING_TEXT_DOCS.get(note.path);
   if(!record){const result=await api('/api/readings/text-fragment?path='+encodeURIComponent(note.path));if(!result.ok)throw new Error(result.error||'无法读取阅读笔记');record={content:result.content||'',error:''};READING_TEXT_DOCS.set(note.path,record);}
-  const isWeb=!!item.url,block=isWeb?readingWebRefMarkdown(doc,item):readingPdfRefMarkdown(doc,item),before=String(record.content||'').trimEnd(),marker=isWeb?String(item.url||'')+'\n> '+String(item.source||'').slice(0,80):'fragment='+encodeURIComponent(item.id||'');
+  const isWeb=!!item.url,isMarkdown=item.kind==='markdown';
+  const block=isMarkdown?readingMarkdownRefMarkdown(doc,item):isWeb?readingWebRefMarkdown(doc,item):readingPdfRefMarkdown(doc,item),before=String(record.content||'').trimEnd();
+  /* 去重标记：PDF 靠 fragment=ID，网页靠 URL+正文开头，Markdown 没有 ID 落在引用块里，就用摘录开头比对。 */
+  const marker=isMarkdown?'> '+String(item.source||'').slice(0,80):isWeb?String(item.url||'')+'\n> '+String(item.source||'').slice(0,80):'fragment='+encodeURIComponent(item.id||'');
   const existed=before.includes(marker);
   if(!existed){const next=(before?before+'\n\n':'')+block+'\n';record.content=next;const saved=await api('/api/readings/text-fragment',{path:note.path,content:next});if(!saved.ok){record.content=before;throw new Error(saved.error||'引用写入失败');}record.savedContent=next;}
-  const pdfSlot=Math.max(0,READING_SLOTS.findIndex((value)=>value===doc.path)),noteSlot=pdfSlot===0?1:0;
+  const pdfSlot=Math.max(0,READING_SLOTS.findIndex((value)=>value===doc.path)),noteSlot=pdfSlot===0?1:0,previousSlot=READING_ACTIVE_SLOT;
   await openReading(note.path,noteSlot);
+  /* 引用只是把笔记开在另一栏给你看，不该顺手把右侧摘录面板从「你正在摘录的那份原文」上抢走 ——
+     否则一引用，面板就切到笔记自己的（空的）摘录列表，看起来像是摘录丢了。 */
+  if(READING_ACTIVE_SLOT!==previousSlot&&READING_SLOTS[previousSlot]===doc.path){READING_ACTIVE_SLOT=previousSlot;READING_CURRENT=doc.path;renderReadingProjectTabs();renderReadingFragments();syncReadingTools();}
   setTimeout(()=>{const col=document.querySelector('.reading-col[data-slot="'+noteSlot+'"]');const links=col?[...col.querySelectorAll('.reading-pdf-ref')]:[];const link=links.find((el)=>readingPdfRefDecode(el.dataset.fragment)===String(item.id||''));if(link){link.scrollIntoView({block:'center'});link.classList.add('flash');setTimeout(()=>link.classList.remove('flash'),1700);}},80);
-  readingStatus((existed?'该引用已存在于':'已引用到')+'「'+readingBase(note.name)+'」'+(isWeb?' · 网页来源链接已保留':' · 点击来源可返回 PDF'));
+  readingStatus((existed?'该引用已存在于':'已引用到')+'「'+readingBase(note.name)+'」'+(isMarkdown?' · 点击来源可回到原文标题':isWeb?' · 网页来源链接已保留':' · 点击来源可返回 PDF'));
   return note;
+}
+/* Markdown 摘录引用到笔记：来源用 [[md-ref:路径#锚点|标签]] 承载 —— 这条 token 本来就受 mdInline 支持
+   （大纲的「复制引用链接」用的就是它），点击会打开原文并滚到对应标题，不需要新增解析分支。 */
+function readingMarkdownRefMarkdown(doc,item){
+  const title=readingBase(doc.path),source=String(item.source||'').trim();
+  const quote=source.split(/\r?\n/).map((line)=>'> '+line).join('\n');
+  const anchorText=String(item.anchorText||'').trim();
+  const anchor=String(item.anchor||readingMarkdownSlug(anchorText)||'').trim();
+  /* 标签里出现 ] 或 | 会截断 token 本身，先清掉。 */
+  const label=('↩ 回到《'+title+'》'+(anchorText?' · '+anchorText:'')).replace(/[\]|]/g,' ');
+  const head='> [!quote] '+title+(anchorText?' · '+anchorText:'');
+  return anchor?head+'\n'+quote+'\n>\n> [[md-ref:'+readingPdfRefPath(doc.path)+'#'+encodeURIComponent(anchor)+'|'+label+']]':head+'\n'+quote;
 }
 async function savePdfSelectionPayload(payload,cite){
   if(!payload||!payload.path||!payload.text)return null;
@@ -5925,20 +6278,242 @@ function readingMarkdownOutlineKey(path){return 'mc-reading-md-outline:'+String(
 function loadReadingMarkdownOutline(path){try{return localStorage.getItem(readingMarkdownOutlineKey(path))!=='0';}catch(_){return true;}}
 function saveReadingMarkdownOutline(path,value){try{localStorage.setItem(readingMarkdownOutlineKey(path),value?'1':'0');}catch(_){} }
 function readingMarkdownHeadings(content){const result=[],lines=String(content||'').split('\n');let fenced=false;for(let line=0;line<lines.length;line++){if(/^\s*```/.test(lines[line])){fenced=!fenced;continue;}if(fenced)continue;const match=lines[line].match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);if(!match)continue;const text=match[2].replace(/!?(\[([^\]]*)\])\([^)]*\)/g,'$2').replace(/[*_~`]/g,'').trim();if(text)result.push({level:match[1].length,text,line});}return result;}
+/* 大纲层级归属：展开祖先链 → 标记祖先链 → 更新「当前章节路径」。
+   独立成函数，不侵入原有的滚动与高亮逻辑。 */
+function syncReadingMarkdownOutlinePath(outlineList,index){
+  const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
+  const levelOf=(node)=>Number((node&&node.dataset&&node.dataset.level)||0);
+  const labelOf=(node)=>{const label=node&&node.querySelector('.label');return label?label.textContent:'';};
+  const chain=[];let need=levelOf(buttons[index]);
+  for(let i=index-1;i>=0;i--){const level=levelOf(buttons[i]);if(level&&level<need){chain.push(i);need=level;}}
+  buttons.forEach((button,itemIndex)=>button.classList.toggle('in-path',chain.indexOf(itemIndex)>=0));
+  let unfolded=false;
+  chain.forEach((i)=>{if(buttons[i].dataset.folded==='1'){buttons[i].dataset.folded='0';buttons[i].setAttribute('aria-expanded','true');unfolded=true;}});
+  if(unfolded&&typeof outlineList.__refreshFold==='function')outlineList.__refreshFold();
+  const path=outlineList.__path;
+  if(!path)return;
+  const current=buttons[index];
+  if(!current||!chain.length){path.box.classList.remove('on');return;}
+  const parentText=labelOf(buttons[chain[0]]),currentText=labelOf(current);
+  if(path.parent.textContent!==parentText)path.parent.textContent=parentText;
+  if(path.current.textContent!==currentText)path.current.textContent=currentText;
+  path.box.classList.add('on');
+}
+/* 正文滚动比例 → 大纲头部下沿的阅读进度条 */
+function updateReadingMarkdownOutlineProgress(container,outlineList){
+  const outline=outlineList&&outlineList.closest?outlineList.closest('.reading-md-outline'):null;
+  if(!outline)return;
+  const max=Math.max(0,(container.scrollHeight||0)-(container.clientHeight||0));
+  const ratio=max>8?Math.min(1,Math.max(0,(container.scrollTop||0)/max)):0;
+  outline.style.setProperty('--outline-progress',ratio.toFixed(4));
+}
 function setReadingMarkdownOutlineActive(outlineList,index,keepVisible=true){
+  syncReadingMarkdownOutlinePath(outlineList,index);
   const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
   buttons.forEach((button,itemIndex)=>button.classList.toggle('active',itemIndex===index));
   const active=buttons[index];
   if(keepVisible&&active&&outlineList.parentElement){const scroller=outlineList.parentElement,top=active.offsetTop,bottom=top+active.offsetHeight,viewTop=scroller.scrollTop+45,viewBottom=scroller.scrollTop+scroller.clientHeight-12;if(top<viewTop)scroller.scrollTo({top:Math.max(0,top-57),behavior:'smooth'});else if(bottom>viewBottom)scroller.scrollTo({top:Math.max(0,bottom-scroller.clientHeight+18),behavior:'smooth'});}
 }
 function readingMarkdownViewHeadings(container,isPreview){return isPreview?[...container.querySelectorAll('[data-outline-index]')]:[...container.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];}
+/* 大纲条目由源码解析而来，DOM 里的标题常常更多（setext 标题、引用块内标题、HTML 标题…），
+   按下标硬取会点错标题。这里按「层级 + 文本」按顺序配对，配不上再退回同下标。 */
+function readingMarkdownHeadingElement(node){if(!node)return null;if(node.matches&&node.matches('h1,h2,h3,h4,h5,h6'))return node;return node.querySelector?node.querySelector('h1,h2,h3,h4,h5,h6'):null;}
+function readingMarkdownPairOutline(entries,nodes){
+  const norm=(v)=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+  const used=new Array(nodes.length).fill(false),byEntry=new Array(entries.length).fill(-1);
+  let cursor=0;
+  for(let i=0;i<entries.length;i++){
+    const want=norm(entries[i].text),level=Number(entries[i].level)||0;
+    let exact=-1,partial=-1;
+    for(let k=cursor;k<nodes.length;k++){
+      if(used[k])continue;
+      const el=readingMarkdownHeadingElement(nodes[k])||nodes[k];
+      if((Number((el.tagName||'').slice(1))||0)!==level)continue;
+      const text=norm(el.textContent);
+      if(text===want){exact=k;break;}
+      if(partial<0&&want&&(text.startsWith(want)||want.startsWith(text)))partial=k;
+    }
+    let found=exact>=0?exact:partial;
+    if(found<0&&i<nodes.length&&!used[i])found=i;
+    if(found<0){for(let k=0;k<nodes.length;k++){if(!used[k]){found=k;break;}}}
+    if(found<0)break;
+    used[found]=true;cursor=found+1;byEntry[i]=found;
+  }
+  return byEntry;
+}
+function readingMarkdownOutlineNodes(entries,container,isPreview){const nodes=readingMarkdownViewHeadings(container,isPreview);return readingMarkdownPairOutline(entries,nodes).map((k)=>(k>=0?nodes[k]:null));}
+/* 跳转后在文内闪一下，让眼睛知道落点在哪 */
+/* 全应用范围内动画时长被压成 0（任何 animationend 都会立刻触发），
+   所以闪烁不能用 CSS 动画实现：改为「加类 → 去掉 → 再加类」的静态高亮切换。 */
+function flashReadingMarkdownHeading(resolve){
+  /* 不能用「给标题加类名」做高亮：ProseMirror 的 DOMObserver 会监听自身 DOM 上的外部改动
+     并立刻重绘该节点，加上的类名/属性马上被抹掉（实测直接调用命中 0/12）。
+     因此在 body 上放一个 position:fixed 浮层圈覆盖目标标题，并每帧重新解析目标，
+     节点被重绘也能跟上。全程不修改编辑器 DOM。 */
+  const getEl=(typeof resolve==='function')?resolve:()=>resolve;
+  let ring=document.getElementById('reading-md-focus-ring');
+  if(!ring){ring=document.createElement('div');ring.id='reading-md-focus-ring';document.body.appendChild(ring);}
+  const start=performance.now(),DURATION=1600;
+  if(ring.__raf)cancelAnimationFrame(ring.__raf);
+  const tick=()=>{
+    const elapsed=performance.now()-start;
+    if(elapsed>DURATION){ring.style.opacity='0';ring.__raf=0;return;}
+    const el=getEl();
+    if(el&&el.getBoundingClientRect){const r=el.getBoundingClientRect();
+      ring.style.left=r.left+'px';ring.style.top=r.top+'px';ring.style.width=r.width+'px';ring.style.height=r.height+'px';}
+    ring.style.opacity=(elapsed>300&&elapsed<400)?'0':'1';
+    ring.__raf=requestAnimationFrame(tick);
+  };
+  ring.__raf=requestAnimationFrame(tick);
+}
+/* ── 已摘录文字的正文标记 ──
+   和落点高亮同一个理由：不能给正文节点加类名/属性，ProseMirror 的 DOMObserver 会立刻重绘掉，
+   所以在 body 上放一层浮层，按摘录文字在 DOM 里的真实矩形画标记。
+   但落点高亮只闪 1.6 秒可以每帧重算，这层要长期存在，每帧重算太贵 ——
+   改成由「会让文字移动的事件」驱动：编辑器重绘（MutationObserver）、滚动、尺寸变化、模式切换、摘录增删。
+   重算时把矩形夹进正文容器可视区，免得标记画到顶栏、大纲抽屉或右侧面板上。 */
+let READING_MARK_LAYER=null,READING_MARK_FRAME=0,READING_MARK_OBSERVER=null,READING_MARK_HOSTS=new Set();
+function readingMarkLayer(){
+  if(READING_MARK_LAYER&&READING_MARK_LAYER.isConnected)return READING_MARK_LAYER;
+  READING_MARK_LAYER=document.createElement('div');READING_MARK_LAYER.id='reading-md-excerpt-marks';
+  document.body.appendChild(READING_MARK_LAYER);return READING_MARK_LAYER;
+}
+/* 两栏都可能开着 Markdown，所以是「每个可见的 Markdown 栏各一份」，而不是只看活动栏 ——
+   否则点一下 PDF 那栏，Markdown 栏的标记就会整片消失。 */
+function readingMarkTargets(){
+  const targets=[];
+  for(const path of READING_SLOTS){
+    if(!path)continue;
+    const view=readingMarkdownView(path);if(!view||!view.container||view.mode==='edit')continue;
+    const doc=READING_DOCS.get(path);if(!doc)continue;
+    const items=((doc.meta&&doc.meta.fragments)||[]).filter((item)=>item.kind==='markdown'&&item.source);
+    if(items.length)targets.push({view,items});
+  }
+  return targets;
+}
+/* 一个观察器盯多个容器；容器集合变了就整组重挂（disconnect 会清掉全部目标，所以只能重来）。 */
+function syncReadingMarkObservers(containers){
+  if(typeof MutationObserver!=='function')return;
+  const same=containers.length===READING_MARK_HOSTS.size&&containers.every((node)=>READING_MARK_HOSTS.has(node));
+  if(same)return;
+  if(READING_MARK_OBSERVER)READING_MARK_OBSERVER.disconnect();
+  READING_MARK_HOSTS=new Set(containers);
+  if(!containers.length)return;
+  if(!READING_MARK_OBSERVER)READING_MARK_OBSERVER=new MutationObserver(()=>scheduleReadingExcerptMarks());
+  for(const node of containers)READING_MARK_OBSERVER.observe(node,{childList:true,subtree:true,characterData:true});
+}
+function refreshReadingExcerptMarks(){
+  READING_MARK_FRAME=0;
+  const layer=readingMarkLayer(),targets=readingMarkTargets();
+  /* 观察器要「一拿到容器就挂上」，不能等算出矩形再挂：区块编辑器是异步挂载的，
+     第一次重算时正文可能还没渲染出来，若那时才决定挂不挂，就永远等不到后续的重绘事件。
+     观察器只动浮层、不动容器，所以不会自己触发自己。 */
+  syncReadingMarkObservers(targets.map((target)=>target.view.container));
+  if(!targets.length){layer.replaceChildren();layer.hidden=true;return;}
+  const boxes=[];
+  for(const target of targets){
+    const container=target.view.container,clip=container.getBoundingClientRect();
+    for(const item of target.items){
+      const range=readingFindTextRange(container,item.source);if(!range)continue;
+      for(const box of range.getClientRects()){
+        /* 夹进正文可视区：正文会滚动，不夹的话标记会画到顶栏、大纲抽屉或右侧面板上。 */
+        const left=Math.max(box.left,clip.left),right=Math.min(box.right,clip.right);
+        const top=Math.max(box.top,clip.top),bottom=Math.min(box.bottom,clip.bottom);
+        if(right-left<1||bottom-top<1)continue;
+        boxes.push({left,top,width:right-left,height:bottom-top,id:String(item.id||'')});
+      }
+    }
+  }
+  if(!boxes.length){layer.replaceChildren();layer.hidden=true;return;}
+  layer.hidden=false;
+  while(layer.children.length>boxes.length)layer.lastElementChild.remove();
+  boxes.forEach((box,index)=>{
+    let node=layer.children[index];
+    if(!node){node=document.createElement('div');layer.appendChild(node);}
+    node.dataset.fragmentId=box.id;
+    node.style.cssText='left:'+box.left+'px;top:'+box.top+'px;width:'+box.width+'px;height:'+box.height+'px;';
+  });
+}
+function scheduleReadingExcerptMarks(){if(!READING_MARK_FRAME)READING_MARK_FRAME=requestAnimationFrame(refreshReadingExcerptMarks);}
+/* 尺寸变化会让正文换行、矩形全变，跟着重算一次。 */
+window.addEventListener('resize',()=>scheduleReadingExcerptMarks());
 function readingMarkdownViewportOffset(container,isPreview){if(isPreview)return 24;const bar=container.querySelector('.milkdown-top-bar');return Math.max(24,(bar&&bar.getBoundingClientRect().height||0)+18);}
 function syncReadingMarkdownOutlineView(container,outlineList,isPreview){
   const nodes=readingMarkdownViewHeadings(container,isPreview);if(!nodes.length)return setReadingMarkdownOutlineActive(outlineList,-1,false);
   if(Number.isInteger(container.__outlineTargetIndex))return setReadingMarkdownOutlineActive(outlineList,container.__outlineTargetIndex);
-  const bounds=container.getBoundingClientRect(),anchor=bounds.top+readingMarkdownViewportOffset(container,isPreview);let active=0;
-  for(let index=0;index<nodes.length;index++){if(nodes[index].getBoundingClientRect().top<=anchor)active=isPreview?Number(nodes[index].dataset.outlineIndex):index;else break;}
+  /* DOM 标题数与大纲条目数可能不等，先配对出「第 k 个 DOM 标题对应第几条大纲」再算高亮，
+     否则滚动时会高亮到错误的条目（跳转后尤其明显）。 */
+  const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
+  const entryOfNode=new Array(nodes.length).fill(-1);
+  readingMarkdownPairOutline(buttons.map((b)=>({level:Number(b.dataset.level)||0,text:(b.querySelector('.label')||b).textContent})),nodes).forEach((nodeIndex,entryIndex)=>{if(nodeIndex>=0)entryOfNode[nodeIndex]=entryIndex;});
+  const bounds=container.getBoundingClientRect(),anchor=bounds.top+readingMarkdownViewportOffset(container,isPreview);
+  let active=0,last=0;
+  /* 跳转后标题正好停在 anchor 处，亚像素误差会让 top<=anchor 落空，高亮就慢一拍；
+     给 10px 容差（相邻标题间距远大于 10px，不会误判）。 */
+  const slack=anchor+10;
+  for(let index=0;index<nodes.length;index++){
+    if(nodes[index].getBoundingClientRect().top<=slack){if(entryOfNode[index]>=0)last=entryOfNode[index];active=last;}else break;
+  }
   setReadingMarkdownOutlineActive(outlineList,active);
+}
+/* ── 颜色 / 高亮 ──
+   预览侧由 mdInline 直接把语法渲染成锚点；区块编辑侧则不同：编辑器只保留 markdown 原生结构，
+   自定义标签会被丢掉（实测 <mark>、<span> 都留不住），而「链接」是它原生的 mark、能原样保留。
+   所以把 ==文字== 编码成 [文字](#cc-hl)、把 {红|文字} 编码成 [文字](#cc-fg-red) 再交给编辑器，
+   由纯 CSS 按 href 上色 —— 不写内联样式（内联样式同样会被 ProseMirror 重绘抹掉）。
+   内容进出编辑器时做正反两次转换，所以磁盘上的文档永远是用户敲的那套语法，而不是编码后的链接。 */
+const MD_COLOR_KEYS={红:'red',橙:'orange',黄:'yellow',绿:'green',青:'cyan',蓝:'blue',紫:'purple',粉:'pink',灰:'gray'};
+const MD_COLOR_NAMES={red:'红',orange:'橙',yellow:'黄',green:'绿',cyan:'青',blue:'蓝',purple:'紫',pink:'粉',gray:'灰'};
+/* 围栏代码块与行内代码先抽成占位符，免得代码里的 == 或 {红|…} 被颜色规则误伤 */
+function mdColorGuard(text,transform){
+  const holes=[],source=String(text==null?'':text);
+  const keep=(match)=>{holes.push(match);return '\u0002'+(holes.length-1)+'\u0002';};
+  const guarded=source.replace(/```[\s\S]*?```/g,keep).replace(/~~~[\s\S]*?~~~/g,keep).replace(/`[^`\n]*`/g,keep);
+  return transform(guarded).replace(/\u0002(\d+)\u0002/g,(m,index)=>holes[Number(index)]===undefined?m:holes[Number(index)]);
+}
+/* 文档内/跨文档引用也用同一套编码：[[md-ref:路径#锚点|标题]] → [标题](#cc-mdref-<base64url>)。
+   用 base64url 是因为 href 里放原文会撞上转义/大小写归一化，而编辑器只把它当普通链接，
+   只要两端自己认得出来就够了。 */
+function mdRefB64(value){
+  try{const bytes=new TextEncoder().encode(String(value==null?'':value));let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}catch(_){return '';}
+}
+function mdRefUnb64(value){
+  try{const raw=atob(String(value||'').replace(/-/g,'+').replace(/_/g,'/'));const bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new TextDecoder().decode(bytes);}catch(_){return '';}
+}
+function mdSyntaxToEditor(text){
+  return mdColorGuard(text,(t)=>t
+    .replace(/\[\[md-ref:([^#|\]]+)#([^|\]]+)\|([^\]]+)\]\]/g,(m,target,anchor,label)=>'['+label+'](#cc-mdref-'+mdRefB64(readingPdfRefDecode(target)+'#'+readingPdfRefDecode(anchor))+')')
+    .replace(/==([^=\n]+)==/g,'[$1](#cc-hl)')
+    .replace(/\{([红橙黄绿青蓝紫粉灰])\|([^}\n]+)\}/g,(m,key,body)=>'['+body+'](#cc-fg-'+(MD_COLOR_KEYS[key]||'red')+')'));
+}
+function mdSyntaxFromEditor(text){
+  return mdColorGuard(text,(t)=>t
+    .replace(/\[([^\]\n]+)\]\(#cc-mdref-([A-Za-z0-9_-]+)(?:\s+"[^"]*")?\)/g,(m,label,encoded)=>{
+      const payload=mdRefUnb64(encoded),cut=payload.indexOf('#'),target=cut<0?payload:payload.slice(0,cut),anchor=cut<0?'':payload.slice(cut+1);
+      return target?'[[md-ref:'+encodeURIComponent(target)+'#'+encodeURIComponent(anchor)+'|'+label.replace(/\\([\\\[\]])/g,'$1')+']]':m;})
+    .replace(/\[([^\]\n]+)\]\(#cc-hl(?:\s+"[^"]*")?\)/g,'==$1==')
+    .replace(/\[([^\]\n]+)\]\(#cc-fg-([a-z]+)(?:\s+"[^"]*")?\)/g,(m,body,key)=>'{'+(MD_COLOR_NAMES[key]||'红')+'|'+body.replace(/\\([\\\[\]])/g,'$1')+'}'));
+}
+/* 标题 → 锚点 id。与 Crepe 给编辑区标题生成的 id 规则保持一致（空格转连字符，保留中日韩，去掉标点）。 */
+function readingMarkdownSlug(text){return String(text==null?'':text).trim().toLowerCase()
+  .replace(/[\s\u3000]+/g,'-')
+  .replace(/[!"#$%&'()*+,.\/:;<=>?@\[\\\]^_`{|}~]/g,'')
+  .replace(/[。，、；：？！“”‘’（）《》【】〔〕…—～·「」『』]/g,'')
+  .replace(/-{2,}/g,'-').replace(/^-+|-+$/g,'');}
+/* 把 #锚点 解析成工作区里真实的标题节点：先按 id，再按标题文本，最后按 slug 兜底。
+   预览模式的标题原本没有 id，两者都靠文本匹配兜住，所以用户手写的锚点不必和生成规则完全一致。 */
+function readingMarkdownAnchorTarget(container,raw,isPreview){
+  if(!container||!raw)return null;
+  const scope=container.querySelector(isPreview?'.reading-md-preview-content':'.milkdown .ProseMirror')||container;
+  const want=String(raw).trim();
+  let node=null;try{node=scope.querySelector('[id="'+want.replace(/["\\]/g,'\\$&')+'"]');}catch(_){node=null;}
+  if(!node){try{node=scope.querySelector('[id="md-'+want.replace(/["\\]/g,'')+'"]');}catch(_){node=null;}}
+  if(node)return node;
+  const heads=[...scope.querySelectorAll('h1,h2,h3,h4,h5,h6')],norm=(t)=>String(t==null?'':t).replace(/\s+/g,' ').trim();
+  const wantSlug=readingMarkdownSlug(want),wantText=norm(want);
+  return heads.find((h)=>norm(h.textContent)===wantText)||heads.find((h)=>h.id&&(h.id===want||readingMarkdownSlug(h.id)===wantSlug))||heads.find((h)=>readingMarkdownSlug(h.textContent)===wantSlug)||null;
 }
 function scrollReadingMarkdownHeading(container,node,isPreview){if(!node)return;const bounds=container.getBoundingClientRect(),target=container.scrollTop+node.getBoundingClientRect().top-bounds.top-readingMarkdownViewportOffset(container,isPreview);container.scrollTo({top:Math.max(0,target),behavior:'smooth'});}
 function removeReadingMarkdownBlock(content,start,end){const lines=String(content||'').split('\n');lines.splice(Math.max(0,start),Math.max(0,end-start));return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim();}
@@ -6050,8 +6625,11 @@ function renderReadingProjectTabs(){
 async function ensureReadingDoc(path) {
   let doc=READING_DOCS.get(path);if(doc)return doc;
   doc={path,pages:null,pageCount:0,meta:{path,page:1,view:'original',translations:{},fragments:[]},loading:true};READING_DOCS.set(path,doc);
-  const fragment=readingFragment(path),web=fragment&&fragment.kind==='web';
-  const [meta,text]=await Promise.all([api('/api/readings/meta?path='+encodeURIComponent(path)),web?Promise.resolve({ok:true,pages:[],pageCount:0}):api('/api/readings/text?path='+encodeURIComponent(path))]);
+  /* 只有 PDF 才需要抽取分页文本。Markdown / 代码 / HTML / 网页走这个函数只是为了拿标注元数据
+     （摘录、笔记都存在同一份 .codescope 标注里），再去请求 PDF 文本只会白写一个 doc.error，
+     把状态栏染红、还会让「本页未提取到可选择文字」之类的 PDF 文案漏到 Markdown 上。 */
+  const fragment=readingFragment(path),pdf=!fragment||fragment.kind==='pdf';
+  const [meta,text]=await Promise.all([api('/api/readings/meta?path='+encodeURIComponent(path)),pdf?api('/api/readings/text?path='+encodeURIComponent(path)):Promise.resolve({ok:true,pages:[],pageCount:0})]);
   if(meta.ok)doc.meta=meta.meta;
   if(text.ok){doc.pages=text.pages;doc.pageCount=text.pageCount;}else{doc.pages=[];doc.error=text.error||'无法提取文本';}
   doc.loading=false;return doc;
@@ -6081,9 +6659,10 @@ function syncReadingFragmentsPanel(){
   if(resizer)resizer.classList.toggle('hidden',collapsed);
 }
 function syncReadingTools(){
-  const fragment=readingFragment(READING_SLOTS[READING_ACTIVE_SLOT]),pdf=!fragment||fragment.kind==='pdf',web=fragment&&fragment.kind==='web';
+  const fragment=readingFragment(READING_SLOTS[READING_ACTIVE_SLOT]),pdf=!fragment||fragment.kind==='pdf',web=fragment&&fragment.kind==='web',markdown=fragment&&fragment.kind==='markdown';
   const gate=(id,enabled)=>{const el=$(id);if(!el)return;el.disabled=!enabled;el.hidden=!enabled;};
-  gate('reading-add-fragment',pdf||web);
+  /* Markdown 正文同样能划选摘录：摘录写进它自己的 .codescope 标注文件，不改 .md 原文。 */
+  gate('reading-add-fragment',pdf||web||markdown);
   gate('reading-translate-selection',pdf);
   gate('reading-translate-page',pdf);
   gate('reading-translate-all',pdf);
@@ -6091,47 +6670,171 @@ function syncReadingTools(){
 }
 function readingPdfVersions(fragment){const project=fragment&&READING_PROJECT_INDEX.get(fragment.project),pdfs=(project&&project.children||[]).filter((item)=>item.kind==='pdf');return {original:pdfs.find((item)=>item.role==='original')||null,translation:pdfs.find((item)=>item.role==='translation')||null,bilingual:pdfs.find((item)=>item.role==='bilingual')||null};}
 function syncReadingViewOptions(els,versions){const options=els.view.options;options[0].textContent=versions.original?'PDF 原版':'当前 PDF';options[1].textContent='可选文本';options[2].textContent=versions.translation?'中文 PDF':'AI 中文译文';options[3].textContent=versions.bilingual?'双语 PDF':'双语对照';}
+/* 每栏每次渲染领一个令牌，只有最新那一次渲染才准往 DOM 里落东西。
+   renderReadingSlot 是「开头清空、结尾追加」，中间隔着一到多个 await（正文拉取、Milkdown 初始化、PDF 解析）。
+   于是点阅读项目与点片段标签几乎同时触发时，两次渲染会各自走到结尾 appendChild ——
+   开头那次 replaceChildren 谁也清不掉谁，同一个栏里就挂出两份区块编辑器：
+   DOM 重复、自动保存翻倍、querySelector('.reading-md-block') 一次命中两个。
+   令牌保证后发的那次赢，先发的在任意 await 之后就地放弃。 */
+const READING_SLOT_RENDER_TOKENS=new Map();
+function readingSlotRenderToken(slot){const token=(READING_SLOT_RENDER_TOKENS.get(slot)||0)+1;READING_SLOT_RENDER_TOKENS.set(slot,token);return token;}
+function readingSlotRenderCurrent(slot,token){return READING_SLOT_RENDER_TOKENS.get(slot)===token;}
 async function renderReadingSlot(slot) {
   if(READING_SLASH_STATE&&READING_SLASH_STATE.slot===slot)hideReadingSlashMenu();
-  const els=readingSlotElements(slot),path=READING_SLOTS[slot],fragment=readingFragment(path);if(els.body.__readingBlockDestroy)await els.body.__readingBlockDestroy();delete els.body.__readingBlockDestroy;els.body.replaceChildren();els.name.textContent=path?readingBase(path):'拖入项目片段';
+  const renderToken=readingSlotRenderToken(slot),superseded=()=>!readingSlotRenderCurrent(slot,renderToken);
+  const els=readingSlotElements(slot),path=READING_SLOTS[slot],fragment=readingFragment(path);
+  /* markdown 渲染会把文档名挪进工具栏；而本函数开头会 body.replaceChildren()，
+     若不先搬回头部，名字节点会随旧内容一起被清掉。所以每次渲染前先复位。 */
+  {const head=els.col.querySelector('.reading-col-head'),nameEl=els.col.querySelector('.doc'),viewEl=els.col.querySelector('.reading-view');
+   if(head&&nameEl&&nameEl.parentElement!==head)head.insertBefore(nameEl,viewEl&&viewEl.parentElement===head?viewEl:head.firstChild);
+   els.col.classList.remove('reading-col-md');}
+  if(els.body.__readingBlockDestroy)await els.body.__readingBlockDestroy();
+  if(superseded())return;
+  delete els.body.__readingBlockDestroy;els.body.replaceChildren();els.name.textContent=path?readingBase(path):'拖入项目片段';
   els.view.style.display='';els.page.style.display='';els.pages.style.display='';els.col.querySelector('.reading-prev').style.display='';els.col.querySelector('.reading-next').style.display='';
   if(!path){const empty=document.createElement('div');empty.className='reading-paper';empty.innerHTML='<div class="empty">从左侧阅读项目拖入 PDF、Office 文档、网页、Markdown 或代码片段<br>可与另一份资料并排阅读</div>';els.body.appendChild(empty);els.page.disabled=true;return;}
   if(fragment&&['docx','sheet','slides','web'].includes(fragment.kind)){await renderReadingAsset(slot,els,fragment);if(slot===READING_ACTIVE_SLOT)syncReadingTools();return;}
   if(fragment&&['markdown','code','html'].includes(fragment.kind)){
     hideReadingPagination(els);
     let record=READING_TEXT_DOCS.get(path);if(!record){const result=await api('/api/readings/text-fragment?path='+encodeURIComponent(path));record={content:result.ok?result.content:'',savedContent:result.ok?result.content:'',error:result.ok?'':result.error};READING_TEXT_DOCS.set(path,record);}else if(record.savedContent===undefined)record.savedContent=record.content||'';
+    /* 正文拉取是本分支唯一的 await：在这里核对令牌，过期的那次就地放弃，连 DOM 都不建。 */
+    if(superseded())return;
     const shell=document.createElement('div');shell.className='reading-text-shell '+fragment.kind;const editor=document.createElement('textarea');editor.className='reading-text-editor '+fragment.kind;editor.spellcheck=false;editor.value=record.content||'';editor.placeholder=fragment.kind==='markdown'?'在这里记录论文笔记、结论与引用…（输入 / 插入内容块）':'在这里添加与论文相关的代码…';
     const foot=document.createElement('div');foot.className='reading-text-foot';foot.textContent=record.error||((record.content||'').length+' 字符 · 自动保存');
     const saveNow=async()=>{clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.delete(path);const content=record.content,linked=fragment.kind==='markdown'?await syncRemovedReadingPdfRefs(record.savedContent,content):{ok:true,changes:[]};if(!linked.ok){foot.textContent='同步失败：'+linked.error;readingStatus(foot.textContent,true);return linked;}const result=await api('/api/readings/text-fragment',{path,content});if(!result.ok&&linked.changes.length)await restoreReadingPdfRefChanges(linked.changes);if(result.ok)record.savedContent=content;foot.textContent=result.ok?'已保存 · '+content.length+' 字符':'保存失败：'+(result.error||'未知错误');if(result.ok){if(linked.changes.length)readingStatus('Markdown 引用、PDF 摘录与页内标记已同步删除');loadReadings(true);}return result;};
     const scheduleSave=()=>{clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.set(path,setTimeout(saveNow,500));};
     if(fragment.kind==='markdown'){
       const toolbar=document.createElement('div');toolbar.className='reading-md-toolbar';const kind=document.createElement('span');kind.className='kind';kind.textContent='Markdown';const modes=document.createElement('div');modes.className='reading-md-modes';modes.setAttribute('role','tablist');
+      /* 文档名并入工具栏最左侧，整行头部隐藏（含关闭按钮） */
+      els.col.classList.add('reading-col-md');els.name.title=els.name.textContent||'';if(els.name.parentElement!==toolbar)toolbar.insertBefore(els.name,toolbar.firstChild);
       const modeDefs=[['edit','✎ 源码'],['live','▦ 区块编辑'],['preview','▤ 阅读']],modeButtons=new Map();
       for(const [mode,label] of modeDefs){const button=document.createElement('button');button.type='button';button.className='reading-md-mode';button.dataset.mode=mode;button.textContent=label;button.setAttribute('role','tab');button.onclick=()=>applyMode(mode,true);modeButtons.set(mode,button);modes.appendChild(button);}
       const zoomTools=document.createElement('div');zoomTools.className='reading-md-zoom';zoomTools.setAttribute('aria-label','Markdown 缩放');const zoomOut=document.createElement('button'),zoomValueButton=document.createElement('button'),zoomIn=document.createElement('button');zoomOut.type=zoomValueButton.type=zoomIn.type='button';zoomOut.textContent='−';zoomOut.title='缩小（⌘/Ctrl+-）';zoomValueButton.className='value';zoomValueButton.title='恢复 100%（⌘/Ctrl+0）';zoomIn.textContent='＋';zoomIn.title='放大（⌘/Ctrl++）';zoomTools.append(zoomOut,zoomValueButton,zoomIn);const outlineToggle=document.createElement('button');outlineToggle.type='button';outlineToggle.className='reading-md-outline-toggle';outlineToggle.textContent='☷ 大纲';outlineToggle.title='显示或隐藏文档大纲';toolbar.append(kind,zoomTools,outlineToggle,modes);
+      /* Markdown 模式把整行栏头隐藏了（文档名并进工具栏），栏头里那个「关闭此栏」的 × 也跟着没了 ——
+         于是 Markdown 栏根本关不掉：双栏并排时想关掉右边那栏，找不到任何入口。
+         这里把关闭入口补到工具栏最右侧，和栏头那个 × 走同一个 closeReadingColumn。 */
+      const closeColumn=document.createElement('button');closeColumn.type='button';closeColumn.className='reading-md-close-col';closeColumn.title='关闭此栏';closeColumn.setAttribute('aria-label','关闭此栏');closeColumn.textContent='×';closeColumn.onclick=(event)=>{event.stopPropagation();closeReadingColumn(slot);};toolbar.appendChild(closeColumn);
       const workbench=document.createElement('div');workbench.className='reading-md-workbench';const source=document.createElement('textarea');source.className='reading-md-source';source.spellcheck=false;source.value=record.content||'';source.placeholder='# 从这里开始写 Markdown…\n\n输入 / 可插入标题、列表、引用与提示块';source.setAttribute('aria-label','Markdown 源码编辑器');
       const live=document.createElement('div');live.className='reading-md-block';live.dataset.readingPath=path;live.setAttribute('aria-label','Markdown 区块编辑器');
       const preview=document.createElement('div');preview.className='reading-md-editor reading-md-preview';preview.dataset.readingPath=path;preview.setAttribute('aria-label','Markdown 阅读视图');
-      const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineHead.append(outlineTitle,outlineCount);outline.append(outlineHead,outlineList);
+      const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlinePath=document.createElement('div');outlinePath.className='reading-md-outline-path';const outlinePathParent=document.createElement('span');outlinePathParent.className='seg parent';const outlinePathSep=document.createElement('span');outlinePathSep.className='sep';outlinePathSep.textContent='›';const outlinePathCurrent=document.createElement('span');outlinePathCurrent.className='seg current';outlinePath.append(outlinePathParent,outlinePathSep,outlinePathCurrent);const outlineProgress=document.createElement('div');outlineProgress.className='reading-md-outline-progress';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineList.__path={box:outlinePath,parent:outlinePathParent,current:outlinePathCurrent};outlineHead.append(outlineTitle,outlineCount,outlinePath,outlineProgress);outline.append(outlineHead,outlineList);
       const historyKey='reading:'+path;markdownLiveHistory(historyKey,record.content||'');
-      let markdownZoom=loadReadingMarkdownZoom(path),outlineOpen=loadReadingMarkdownOutline(path),outlineEntries=[],blockEditor=null,blockMountId=0;const setMarkdownZoom=(value,persist=true)=>{markdownZoom=Math.max(60,Math.min(180,Math.round(Number(value)||100)));const ratio=markdownZoom/100,fontSize=(16*ratio).toFixed(2)+'px';shell.style.setProperty('--reading-md-zoom',ratio.toFixed(2));shell.style.setProperty('--reading-md-font-size',fontSize);shell.style.setProperty('--reading-md-source-font-size',(12*ratio).toFixed(2)+'px');live.querySelector('.ProseMirror')?.style.setProperty('font-size',fontSize);zoomValueButton.textContent=markdownZoom+'%';zoomValueButton.setAttribute('aria-label','当前缩放 '+markdownZoom+'%，点击恢复 100%');if(persist)saveReadingMarkdownZoom(path,markdownZoom);};const setOutlineOpen=(value,persist=true)=>{outlineOpen=!!value;workbench.classList.toggle('outline-open',outlineOpen);outlineToggle.classList.toggle('active',outlineOpen);outlineToggle.setAttribute('aria-expanded',String(outlineOpen));if(persist)saveReadingMarkdownOutline(path,outlineOpen);};const setOutlineActive=(index)=>{outlineList.querySelectorAll('.reading-md-outline-item').forEach((button,itemIndex)=>button.classList.toggle('active',itemIndex===index));};const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));outlineEntries.forEach((entry,index)=>{const button=document.createElement('button');button.type='button';button.className='reading-md-outline-item';button.style.setProperty('--outline-depth',String(Math.max(0,entry.level-base)));button.title=entry.text;const label=document.createElement('span');label.className='label';label.textContent=entry.text;button.appendChild(label);button.onclick=()=>focusOutlineEntry(entry,index);outlineList.appendChild(button);});setOutlineActive(0);};setMarkdownZoom(markdownZoom,false);setOutlineOpen(outlineOpen,false);outlineToggle.onclick=()=>setOutlineOpen(!outlineOpen);zoomOut.onclick=()=>setMarkdownZoom(markdownZoom-10);zoomIn.onclick=()=>setMarkdownZoom(markdownZoom+10);zoomValueButton.onclick=()=>setMarkdownZoom(100);const renderPreview=()=>{preview.innerHTML='<div class="reading-md-preview-content">'+renderMd(record.content||'')+'</div>';decorateMarkdownLinks(preview);const nodes=[...preview.querySelectorAll('.reading-md-preview-content h1,.reading-md-preview-content h2,.reading-md-preview-content h3,.reading-md-preview-content h4,.reading-md-preview-content h5,.reading-md-preview-content h6')];let cursor=0;outlineEntries=readingMarkdownHeadings(record.content);outlineEntries.forEach((entry,index)=>{for(;cursor<nodes.length;cursor++){const node=nodes[cursor],level=Number(node.tagName.slice(1));if(level===entry.level&&node.textContent.trim()===entry.text){node.dataset.outlineIndex=String(index);cursor++;break;}}});renderOutline();};
+      let markdownZoom=loadReadingMarkdownZoom(path),outlineOpen=loadReadingMarkdownOutline(path),outlineEntries=[],blockEditor=null,blockMountId=0;const setMarkdownZoom=(value,persist=true)=>{markdownZoom=Math.max(60,Math.min(180,Math.round(Number(value)||100)));const ratio=markdownZoom/100,fontSize=(16*ratio).toFixed(2)+'px';shell.style.setProperty('--reading-md-zoom',ratio.toFixed(2));shell.style.setProperty('--reading-md-font-size',fontSize);shell.style.setProperty('--reading-md-source-font-size',(12*ratio).toFixed(2)+'px');live.querySelector('.ProseMirror')?.style.setProperty('font-size',fontSize);zoomValueButton.textContent=markdownZoom+'%';zoomValueButton.setAttribute('aria-label','当前缩放 '+markdownZoom+'%，点击恢复 100%');if(persist)saveReadingMarkdownZoom(path,markdownZoom);};const setOutlineOpen=(value,persist=true)=>{outlineOpen=!!value;workbench.classList.toggle('outline-open',outlineOpen);outlineToggle.classList.toggle('active',outlineOpen);outlineToggle.setAttribute('aria-expanded',String(outlineOpen));if(persist)saveReadingMarkdownOutline(path,outlineOpen);};
+      /* 窄栏时大纲是覆盖层（absolute），会压住正文 —— 所以跳转完就该自己收起来，别让正文一直半遮着。
+         宽栏时它是并排的一列侧栏，点正文当然不该把它关掉，所以先看计算样式里的 position 再决定。
+         收起时一并持久化：否则下次打开这份文档又是「正文被盖住」的状态。 */
+      const closeOverlayOutline=()=>{if(!outlineOpen)return;if(getComputedStyle(outline).position!=='absolute')return;setOutlineOpen(false,true);};
+      const setOutlineActive=(index)=>setReadingMarkdownOutlineActive(outlineList,index);const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);closeOverlayOutline();};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);delete outlineList.__refreshFold;return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));
+      /* 折叠可见性：从头扫一遍，遇到 data-folded=1 就把它后面更深的层级全部隐藏（天然支持嵌套折叠） */
+      const refreshFold=()=>{const nodes=[...outlineList.querySelectorAll('.reading-md-outline-item')];let hideDeeperThan=Infinity;nodes.forEach((node)=>{const level=Number(node.dataset.level||0);if(level>hideDeeperThan){node.classList.add('hidden-by-fold');return;}node.classList.remove('hidden-by-fold');hideDeeperThan=Infinity;if(node.dataset.folded==='1')hideDeeperThan=level;});};
+      outlineList.__refreshFold=refreshFold;
+      /* 相对层级：作者漏写中间层（例如 h2 直接跳 h4）时把跳级收敛成一级，
+         否则会出现空轨道 + 大幅缩进，白白吃掉横向空间。 */
+      let runningDepth=0;
+      outlineEntries.forEach((entry,index)=>{const hasChildren=index+1<outlineEntries.length&&outlineEntries[index+1].level>entry.level;const button=document.createElement('button');button.type='button';button.className='reading-md-outline-item'+(hasChildren?' has-children':'');{const relative=Math.max(0,entry.level-base),depth=index===0?relative:Math.min(relative,runningDepth+1);runningDepth=depth;button.style.setProperty('--outline-depth',String(depth));}button.dataset.level=String(entry.level);button.title=entry.text;const label=document.createElement('span');label.className='label';label.textContent=entry.text;button.appendChild(label);{const copyRef=document.createElement('span');copyRef.className='reading-md-outline-ref';copyRef.setAttribute('role','button');copyRef.tabIndex=0;copyRef.title='复制引用链接 [[md-ref:…]]（可粘到任意笔记里跳转）';copyRef.setAttribute('aria-label','复制引用链接');copyRef.textContent='↗';button.appendChild(copyRef);}{const copy=document.createElement('span');copy.className='reading-md-outline-copy';copy.setAttribute('role','button');copy.tabIndex=0;copy.title='复制指向此标题的链接';copy.setAttribute('aria-label','复制链接');copy.textContent='⧉';button.appendChild(copy);}if(hasChildren){const more=document.createElement('span');more.className='reading-md-outline-more';more.setAttribute('aria-hidden','true');more.textContent='▾';button.appendChild(more);button.setAttribute('aria-expanded','true');}button.onclick=()=>focusOutlineEntry(entry,index);outlineList.appendChild(button);});
+      refreshFold();setOutlineActive(0);};setMarkdownZoom(markdownZoom,false);setOutlineOpen(outlineOpen,false);outlineToggle.onclick=()=>setOutlineOpen(!outlineOpen);
+      /* 覆盖层模式下点正文任意处就收起抽屉（点抽屉本身、点「大纲」按钮都不算）。
+         pointerdown 而不是 click：拖选文字时也应该先把挡路的抽屉收掉。 */
+      workbench.addEventListener('pointerdown',(event)=>{if(!outlineOpen)return;if(getComputedStyle(outline).position!=='absolute')return;const target=event.target;if(!(target instanceof Element))return;if(outline.contains(target)||outlineToggle.contains(target))return;setOutlineOpen(false,true);},true);zoomOut.onclick=()=>setMarkdownZoom(markdownZoom-10);zoomIn.onclick=()=>setMarkdownZoom(markdownZoom+10);zoomValueButton.onclick=()=>setMarkdownZoom(100);const renderPreview=()=>{preview.innerHTML='<div class="reading-md-preview-content">'+renderMd(record.content||'')+'</div>';decorateMarkdownLinks(preview);/* 预览的标题原来完全没有 id，补上后 #锚点 既能被解析也能被高亮定位 */{[...preview.querySelectorAll('.reading-md-preview-content h1,.reading-md-preview-content h2,.reading-md-preview-content h3,.reading-md-preview-content h4,.reading-md-preview-content h5,.reading-md-preview-content h6')].forEach((head)=>{if(head.id)return;const slug=readingMarkdownSlug(head.textContent);if(!slug)return;
+  /* 区块编辑器那份 DOM 常驻在页面上（只是被隐藏），它的标题已经占用了纯 slug，直接同名会产生重复 id，
+     所以预览侧统一加 md- 前缀，两个容器互不干扰；锚点解析两种写法都认。 */
+  const scoped='md-'+slug;if(preview.querySelector('[id="'+scoped.replace(/"/g,'')+'"]'))return;head.id=scoped;});}const nodes=[...preview.querySelectorAll('.reading-md-preview-content h1,.reading-md-preview-content h2,.reading-md-preview-content h3,.reading-md-preview-content h4,.reading-md-preview-content h5,.reading-md-preview-content h6')];let cursor=0;outlineEntries=readingMarkdownHeadings(record.content);outlineEntries.forEach((entry,index)=>{for(;cursor<nodes.length;cursor++){const node=nodes[cursor],level=Number(node.tagName.slice(1));if(level===entry.level&&node.textContent.trim()===entry.text){node.dataset.outlineIndex=String(index);cursor++;break;}}});renderOutline();};
       const openBlockReference=(token)=>{const host=document.createElement('div');host.innerHTML=mdInline(token);const pdf=host.querySelector('.reading-pdf-ref');if(pdf){locateReadingMarkdownRef(pdf,slot);return;}const linked=host.querySelector('.md-code-ref,.md-note-ref');if(linked){decorateMarkdownLinks(host);linked.click();}};
       const destroyBlockEditor=async()=>{blockMountId++;const current=blockEditor;blockEditor=null;if(current)try{await current.destroy();}catch(_){}};
-      const mountBlockEditor=async(focus)=>{await destroyBlockEditor();const id=++blockMountId;live.replaceChildren();const loading=document.createElement('div');loading.className='reading-md-block-loading';loading.textContent='正在加载区块编辑器…';live.appendChild(loading);try{await loadBlockEditor();const controller=await window.CodeScopeBlockEditor.create({root:live,markdown:record.content||'',onChange:(content)=>{record.content=content;source.value=content;recordMarkdownLiveHistory(historyKey,content,{source:false},'typing');renderPreview();foot.textContent='正在编辑… · '+content.length+' 字符';scheduleSave();},onFocus:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;},onReference:openBlockReference,onImage:path.startsWith('知识库/')?(file)=>uploadKnowledgeEditorImage(file,path):null,onError:(error)=>{const message=String(error&&error.message||error);foot.textContent='图片插入失败：'+message;readingStatus(foot.textContent,true);}});if(id!==blockMountId){await controller.destroy();return;}loading.remove();blockEditor=controller;setMarkdownZoom(markdownZoom,false);if(focus)setTimeout(()=>controller.focus(),0);}catch(error){if(id!==blockMountId)return;const failed=document.createElement('div');failed.className='reading-md-block-error';failed.textContent='区块编辑器加载失败：'+(error&&error.message||error);live.replaceChildren(failed);}};
-      const applyMode=(mode,persist)=>{hideReadingSlashMenu();if(!['edit','live','preview'].includes(mode))mode='live';shell.dataset.mdMode=mode;for(const [name,button] of modeButtons){const active=name===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}if(persist)saveReadingMarkdownMode(path,mode);if(mode==='edit'){destroyBlockEditor();source.value=record.content||'';setTimeout(()=>source.focus(),0);}if(mode==='live')mountBlockEditor(true);if(mode==='preview'){destroyBlockEditor();renderPreview();}};
+      const mountBlockEditor=async(focus)=>{await destroyBlockEditor();const id=++blockMountId;live.replaceChildren();const loading=document.createElement('div');loading.className='reading-md-block-loading';loading.textContent='正在加载区块编辑器…';live.appendChild(loading);try{await loadBlockEditor();const controller=await window.CodeScopeBlockEditor.create({root:live,markdown:mdSyntaxToEditor(record.content||''),onChange:(rawContent)=>{const content=mdSyntaxFromEditor(rawContent);record.content=content;source.value=content;recordMarkdownLiveHistory(historyKey,content,{source:false},'typing');renderPreview();foot.textContent='正在编辑… · '+content.length+' 字符';scheduleSave();},onFocus:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;},onExcerpt:()=>{READING_ACTIVE_SLOT=slot;READING_CURRENT=path;return addReadingFragment();},onReference:openBlockReference,onImage:path.startsWith('知识库/')?(file)=>uploadKnowledgeEditorImage(file,path):null,onError:(error)=>{const message=String(error&&error.message||error);foot.textContent='图片插入失败：'+message;readingStatus(foot.textContent,true);}});if(id!==blockMountId){await controller.destroy();return;}loading.remove();blockEditor=controller;setMarkdownZoom(markdownZoom,false);if(focus)setTimeout(()=>controller.focus(),0);}catch(error){if(id!==blockMountId)return;const failed=document.createElement('div');failed.className='reading-md-block-error';failed.textContent='区块编辑器加载失败：'+(error&&error.message||error);live.replaceChildren(failed);}};
+      const applyMode=(mode,persist)=>{hideReadingSlashMenu();if(!['edit','live','preview'].includes(mode))mode='live';shell.dataset.mdMode=mode;for(const [name,button] of modeButtons){const active=name===mode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}if(persist)saveReadingMarkdownMode(path,mode);if(mode==='edit'){destroyBlockEditor();source.value=record.content||'';setTimeout(()=>source.focus(),0);}if(mode==='live')mountBlockEditor(true);if(mode==='preview'){destroyBlockEditor();renderPreview();}scheduleReadingExcerptMarks();};
       const contentChanged=(event)=>{record.content=source.value;recordMarkdownLiveHistory(historyKey,record.content,{source:true,start:source.selectionStart,end:source.selectionEnd},event&&event.isTrusted?'typing':'command');renderPreview();foot.textContent='正在编辑… · '+record.content.length+' 字符';scheduleSave();updateReadingSlashMenu(source,slot);};
       source.addEventListener('input',contentChanged);
       source.addEventListener('click',()=>updateReadingSlashMenu(source,slot));
       source.addEventListener('blur',()=>setTimeout(()=>{if(READING_SLASH_STATE&&READING_SLASH_STATE.editor===source&&(!READING_SLASH_MENU||!READING_SLASH_MENU.contains(document.activeElement)))hideReadingSlashMenu();},0));
       source.addEventListener('keyup',(e)=>{if(!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key))updateReadingSlashMenu(source,slot);});
       source.addEventListener('select',syncOutlineFromSource);source.addEventListener('click',syncOutlineFromSource);source.addEventListener('keyup',syncOutlineFromSource);
-      live.addEventListener('scroll',()=>requestAnimationFrame(()=>syncReadingMarkdownOutlineView(live,outlineList,false)));preview.addEventListener('scroll',()=>requestAnimationFrame(()=>syncReadingMarkdownOutlineView(preview,outlineList,true)));
-      outlineList.addEventListener('click',(event)=>{const button=event.target.closest('.reading-md-outline-item');if(!button||shell.dataset.mdMode==='edit')return;event.preventDefault();event.stopImmediatePropagation();const index=[...outlineList.querySelectorAll('.reading-md-outline-item')].indexOf(button),isPreview=shell.dataset.mdMode==='preview',container=isPreview?preview:live,node=readingMarkdownViewHeadings(container,isPreview).find((heading,nodeIndex)=>(isPreview?Number(heading.dataset.outlineIndex):nodeIndex)===index);clearTimeout(container.__outlineTargetTimer);container.__outlineTargetIndex=index;container.__outlineTargetTimer=setTimeout(()=>{delete container.__outlineTargetIndex;syncReadingMarkdownOutlineView(container,outlineList,isPreview);},750);setReadingMarkdownOutlineActive(outlineList,index,false);scrollReadingMarkdownHeading(container,node,isPreview);},true);
+      live.addEventListener('scroll',()=>requestAnimationFrame(()=>{syncReadingMarkdownOutlineView(live,outlineList,false);updateReadingMarkdownOutlineProgress(live,outlineList);scheduleReadingExcerptMarks();}));preview.addEventListener('scroll',()=>requestAnimationFrame(()=>{syncReadingMarkdownOutlineView(preview,outlineList,true);updateReadingMarkdownOutlineProgress(preview,outlineList);scheduleReadingExcerptMarks();}));
+      outlineList.addEventListener('click',(event)=>{const refHit=event.target.closest('.reading-md-outline-ref');
+        if(refHit){event.preventDefault();event.stopImmediatePropagation();const refItem=refHit.closest('.reading-md-outline-item');
+          const refIndex=refItem?[...outlineList.querySelectorAll('.reading-md-outline-item')].indexOf(refItem):-1;const refEntry=refIndex>=0?outlineEntries[refIndex]:null;
+          if(refEntry){const token='[[md-ref:'+encodeURIComponent(path)+'#'+encodeURIComponent(readingMarkdownSlug(refEntry.text))+'|'+refEntry.text+']]';
+            const settle=(ok)=>{refHit.textContent=ok?'✓':'✗';refHit.dataset.copied='1';setTimeout(()=>{refHit.textContent='↗';delete refHit.dataset.copied;},1300);
+              try{readingStatus(ok?'已复制引用：'+token:'复制失败，请手动复制：'+token,!ok);}catch(_){}};
+            try{Promise.resolve(copyTextValue(token)).then(settle,()=>settle(false));}catch(_){settle(false);}}
+          return;}
+        const copyHit=event.target.closest('.reading-md-outline-copy');if(copyHit){event.preventDefault();event.stopImmediatePropagation();const copyItem=copyHit.closest('.reading-md-outline-item');const copyIndex=copyItem?[...outlineList.querySelectorAll('.reading-md-outline-item')].indexOf(copyItem):-1;const copyEntry=copyIndex>=0?outlineEntries[copyIndex]:null;if(copyEntry){const linkText='['+copyEntry.text+'](#'+readingMarkdownSlug(copyEntry.text)+')';const settle=(ok)=>{copyHit.textContent=ok?'✓':'✗';copyHit.dataset.copied='1';setTimeout(()=>{copyHit.textContent='⧉';delete copyHit.dataset.copied;},1300);try{readingStatus(ok?'已复制链接：'+linkText:'复制失败，请手动复制：'+linkText,!ok);}catch(_){}};try{Promise.resolve(copyTextValue(linkText)).then(settle,()=>settle(false));}catch(_){settle(false);}}return;}const more=event.target.closest('.reading-md-outline-more');if(more){event.preventDefault();event.stopImmediatePropagation();const foldButton=more.closest('.reading-md-outline-item');if(foldButton){const folded=foldButton.dataset.folded==='1';foldButton.dataset.folded=folded?'0':'1';foldButton.setAttribute('aria-expanded',String(folded));if(typeof outlineList.__refreshFold==='function')outlineList.__refreshFold();}return;}const button=event.target.closest('.reading-md-outline-item');if(!button||shell.dataset.mdMode==='edit')return;event.preventDefault();event.stopImmediatePropagation();const index=[...outlineList.querySelectorAll('.reading-md-outline-item')].indexOf(button),isPreview=shell.dataset.mdMode==='preview',container=isPreview?preview:live,node=readingMarkdownOutlineNodes(outlineEntries,container,isPreview)[index]||null;clearTimeout(container.__outlineTargetTimer);container.__outlineTargetIndex=index;container.__outlineTargetTimer=setTimeout(()=>{delete container.__outlineTargetIndex;syncReadingMarkdownOutlineView(container,outlineList,isPreview);},1000);setReadingMarkdownOutlineActive(outlineList,index,false);scrollReadingMarkdownHeading(container,node,isPreview);/* 点大纲会连带触发编辑器重挂载（异步），DOM 节点会被连续替换好几次，把动画类加在同步取到的节点上，加完就被丢弃、等于没闪。所以这里跟踪 1.2 秒：只有解析出来的节点和上次不是同一个（说明被换过了）才重新闪一次；节点没变就绝不重启动画，避免闪个不停。 */flashReadingMarkdownHeading(()=>readingMarkdownOutlineNodes(outlineEntries,container,isPreview)[index]||null);
+        /* 这个委托处理器注册在捕获阶段、又会 stopImmediatePropagation，所以按钮自己的 onclick
+           （focusOutlineEntry）在真实点击里根本轮不到执行 —— 覆盖层模式下「跳完自动收起」得在这里补一刀。 */
+        closeOverlayOutline();},true);
       source.addEventListener('keydown',(e)=>{if(readingSlashKeydown(e,source))return;if(e.key==='Tab'){e.preventDefault();source.setRangeText('  ',source.selectionStart,source.selectionEnd,'end');source.dispatchEvent(new Event('input',{bubbles:true}));return;}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow();}});
       workbench.addEventListener('wheel',(e)=>{if(!(e.metaKey||e.ctrlKey))return;e.preventDefault();setMarkdownZoom(markdownZoom+(e.deltaY<0?5:-5));},{passive:false});
+      /* 文档内锚点跳转：区块编辑与阅读两种模式共用一套逻辑（滚动 + 落点闪烁）。
+         用 capture 阶段抢在 Crepe 的链接编辑弹层之前；只处理真正能解析到的锚点，其余全部放行。
+         不写 location.hash：应用自己的引用胶囊也用 # 开头，改 hash 会污染地址栏历史。 */
+      workbench.addEventListener('click',(event)=>{
+        const link=event.target&&event.target.closest?event.target.closest('a[href]'):null;
+        if(!link||!workbench.contains(link))return;
+        const href=link.getAttribute('href')||'';
+        if(href.charAt(0)!=='#'||href.length<2)return;
+        if(href.indexOf('#codescope-ref-')===0)return;
+        /* 引用跳转：同文档直接滚到标题；跨文档先打开目标笔记再滚。
+           openReading 会重建该栏 DOM，所以必须重新查询容器，不能用上面闭包里的旧引用。 */
+        if(href.indexOf('#cc-mdref-')===0){
+          event.preventDefault();event.stopPropagation();
+          const payload=mdRefUnb64(href.slice('#cc-mdref-'.length)),cut=payload.indexOf('#');
+          const rawTarget=cut<0?payload:payload.slice(0,cut),anchor=cut<0?'':payload.slice(cut+1);
+          const target=rawTarget.startsWith('reading:')?rawTarget.slice(8):rawTarget;
+          const jumpIn=(container,isPreview)=>{const node=readingMarkdownAnchorTarget(container,anchor,isPreview);if(!node)return false;
+            scrollReadingMarkdownHeading(container,node,isPreview);
+            flashReadingMarkdownHeading(()=>readingMarkdownAnchorTarget(container,anchor,isPreview));
+            try{const index=readingMarkdownOutlineNodes(outlineEntries,container,isPreview).indexOf(node);if(index>=0)setReadingMarkdownOutlineActive(outlineList,index,false);}catch(_){}
+            return true;};
+          if(!target||target===path){const currentPreview=shell.dataset.mdMode==='preview';
+            if(!jumpIn(currentPreview?preview:live,currentPreview)){try{readingStatus('引用的标题没找到，可能已经被改名了',true);}catch(_){}}
+            return;}
+          (async()=>{
+            try{readingStatus('正在打开引用的笔记…');}catch(_){}
+            await openReading(target,slot);
+            let tries=0;
+            const settle=()=>{
+              const column=document.querySelector('.reading-col[data-slot="'+slot+'"]');
+              const workbench=column?column.querySelector('.reading-md-workbench'):null;
+              const isPreview=!!workbench&&workbench.dataset.mdMode==='preview';
+              const container=column?(isPreview?column.querySelector('.reading-md-preview'):column.querySelector('.reading-md-block')):null;
+              if(container&&jumpIn(container,isPreview)){try{readingStatus('已跳到引用的标题');}catch(_){}return;}
+              if(++tries>60){try{readingStatus('引用的标题没找到，可能已被改名',true);}catch(_){}return;}
+              setTimeout(settle,120);
+            };
+            setTimeout(settle,150);
+          })();
+          return;
+        }
+        if(href.indexOf('#cc-')===0){event.preventDefault();event.stopPropagation();return;}   /* 颜色/高亮用假链接承载，点击不该跳转，也不该弹出编辑器的链接弹层 */
+        /* 应用自己的三类引用胶囊（PDF 片段 / 关联笔记 / 代码引用）各有各的跳转处理，绝不截胡 */
+        if(link.classList.contains('reading-pdf-ref')||link.classList.contains('md-note-ref')||link.classList.contains('md-code-ref'))return;
+        if(link.dataset&&(link.dataset.pdfPath||link.dataset.notePath||link.dataset.codeFile))return;
+        const mode=shell.dataset.mdMode||'live';
+        if(mode==='edit')return;
+        const isPreview=mode==='preview',container=isPreview?preview:live;
+        let raw=href.slice(1);try{raw=decodeURIComponent(raw);}catch(_){raw=href.slice(1);}
+        if(!readingMarkdownAnchorTarget(container,raw,isPreview))return;
+        event.preventDefault();event.stopPropagation();
+        scrollReadingMarkdownHeading(container,readingMarkdownAnchorTarget(container,raw,isPreview),isPreview);
+        flashReadingMarkdownHeading(()=>readingMarkdownAnchorTarget(container,raw,isPreview));
+      },true);
       workbench.addEventListener('keydown',(e)=>{if(!(e.metaKey||e.ctrlKey))return;if(e.key==='0'){e.preventDefault();setMarkdownZoom(100);return;}if(e.key==='+'||e.key==='='){e.preventDefault();setMarkdownZoom(markdownZoom+10);return;}if(e.key==='-'||e.key==='_'){e.preventDefault();setMarkdownZoom(markdownZoom-10);} },true);
       const previewClick=async(e)=>{const remove=e.target.closest&&e.target.closest('.callout-remove');if(remove){e.preventDefault();e.stopPropagation();const quote=remove.closest('blockquote'),ref=quote&&quote.querySelector('.reading-pdf-ref'),start=Number(quote&&quote.dataset.mdStart),end=Number(quote&&quote.dataset.mdEnd);if(quote&&Number.isFinite(start)&&Number.isFinite(end)){remove.disabled=true;const nextContent=removeReadingMarkdownBlock(record.content,start,end),linked=await removeReadingLinkedPdfFragment(ref);if(!linked.ok){remove.disabled=false;readingStatus('PDF 摘录删除失败：'+(linked.error||'未知错误'),true);return;}const saved=await api('/api/readings/text-fragment',{path,content:nextContent});if(!saved.ok){await restoreReadingLinkedPdfFragment(linked);remove.disabled=false;readingStatus('Markdown 引用删除失败，PDF 摘录已恢复：'+(saved.error||'未知错误'),true);return;}clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.delete(path);record.content=nextContent;record.savedContent=nextContent;source.value=record.content;renderLive(false);renderPreview();foot.textContent='已保存 · '+record.content.length+' 字符';loadReadings(true);readingStatus(linked.removed?'引用、PDF 摘录与页内标记已同步删除':'引用已从 Markdown 笔记中移除');}return;}const ref=e.target.closest&&e.target.closest('.reading-pdf-ref');if(!ref)return;e.preventDefault();e.stopPropagation();locateReadingMarkdownRef(ref,slot);};live.addEventListener('click',previewClick);preview.addEventListener('click',previewClick);
       renderPreview();workbench.append(source,live,preview,outline);shell.append(toolbar,workbench,foot);els.body.__readingBlockDestroy=destroyBlockEditor;applyMode(loadReadingMarkdownMode(path),false);
+      /* 窄栏里大纲是覆盖层（absolute），会压住正文 —— 两种时刻要主动收起：
+         ① 挂载时：这份「展开」偏好往往是在宽栏时留下的，一进来就把正文盖住；
+         ② 从并排侧栏变窄成覆盖层时：例如把同一篇拖到第二栏并排阅读，栏宽掉到 900px 以下。
+         两种都不写回偏好 —— 宽栏下次照样是并排侧栏，窄栏里按「大纲」按钮也照样能展开，只是用完会自己收。
+         只在「首次观察」和「并排 → 覆盖」的跃迁上收，用户自己展开后就不再插手，免得打架。
+         rAF 那一次是必需的：shell 要等这一轮渲染结束才真正进 DOM，那时容器宽度与容器查询才算得出来；
+         rAF 回调跑在绘制之前，所以不会闪一下展开态。 */
+      let outlineOverlay=null;
+      const syncOutlineOverlay=()=>{
+        const overlay=getComputedStyle(outline).position==='absolute',was=outlineOverlay;outlineOverlay=overlay;
+        if(overlay&&outlineOpen&&(was===null||was===false))setOutlineOpen(false,false);
+      };
+      requestAnimationFrame(syncOutlineOverlay);
+      if(typeof ResizeObserver==='function'){shell.__outlineOverlayObserver=new ResizeObserver(syncOutlineOverlay);shell.__outlineOverlayObserver.observe(workbench);}
     }else if(fragment.kind==='html'){
       const workbench=document.createElement('div');workbench.className='reading-html-workbench';
       const sourceWrap=document.createElement('div');sourceWrap.className='reading-html-source';
@@ -6185,7 +6888,7 @@ async function renderReadingSlot(slot) {
       editor.addEventListener('input',()=>{record.content=editor.value;foot.textContent='正在编辑…';scheduleSave();});editor.addEventListener('keydown',(e)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveNow();}});
       shell.append(editor,foot);
     }
-    els.body.appendChild(shell);if(slot===READING_ACTIVE_SLOT)syncReadingTools();return;
+    if(superseded())return;els.body.appendChild(shell);if(slot===READING_ACTIVE_SLOT)syncReadingTools();return;
   }
   const doc=await ensureReadingDoc(path),versions=readingPdfVersions(fragment),view=els.view.value;syncReadingViewOptions(els,versions);let page=Math.max(1,Math.min(doc.pageCount||9999,Number(els.page.value)||doc.meta.page||1));els.page.value=page;els.page.disabled=false;els.page.max=doc.pageCount||9999;els.pages.textContent='/ '+(doc.pageCount||'?');
   if(slot===READING_ACTIVE_SLOT){doc.meta.page=page;doc.meta.view=view;saveReadingDoc(doc);}
@@ -6193,14 +6896,15 @@ async function renderReadingSlot(slot) {
   const physical=view==='original'?(fragment&&fragment.kind==='pdf'?fragment:(versions.original||fragment)):view==='translation'?versions.translation:view==='bilingual'?versions.bilingual:null;
   if(physical){
     const physicalDoc=physical.path===path?doc:await ensureReadingDoc(physical.path);page=Math.max(1,Math.min(physicalDoc.pageCount||9999,page));els.page.value=page;els.page.max=physicalDoc.pageCount||9999;els.pages.textContent='/ '+(physicalDoc.pageCount||'?');els.name.textContent=readingBase(physical.name)+(physical.path===path?'':' · '+readingRoleLabel(physical));
+    if(superseded())return;
     if (window.__pdfViewerReady) { await renderPdfViewer(els.body, physical.path, page); return; }
-    const frame=document.createElement('iframe');frame.className='reading-pdf';frame.title=readingBase(physical.path);frame.src='/api/readings/file?path='+encodeURIComponent(physical.path)+'#page='+page+'&zoom=page-width';els.body.appendChild(frame);return;
+    const frame=document.createElement('iframe');frame.className='reading-pdf';frame.title=readingBase(physical.path);frame.src='/api/readings/file?path='+encodeURIComponent(physical.path)+'#page='+page+'&zoom=page-width';if(superseded())return;els.body.appendChild(frame);return;
   }
   const sourceFragment=versions.original||fragment,sourceDoc=sourceFragment.path===path?doc:await ensureReadingDoc(sourceFragment.path);const translatedDoc=view==='bilingual'&&versions.translation?await ensureReadingDoc(versions.translation.path):null;
   const paper=document.createElement('div');paper.className='reading-paper '+view;const source=(sourceDoc.pages&&sourceDoc.pages[page-1])||'';const translation=translatedDoc?((translatedDoc.pages&&translatedDoc.pages[page-1])||''):String((sourceDoc.meta.translations||{})[page]||(doc.meta.translations||{})[page]||'');
   const title=document.createElement('h3');title.textContent='第 '+page+' 页 · '+(view==='source'?'可选择原文':view==='bilingual'?'原文 / 中文对照':'中文译文');paper.appendChild(title);
   if(view==='source'||view==='bilingual'){const src=document.createElement('div');src.className='source';src.textContent=source||'本页未提取到可选择文字（可能是扫描版 PDF）';paper.appendChild(src);}
-  if(view!=='source'){const zh=document.createElement('div');zh.className='translation';zh.textContent=translation||'本页尚未生成 AI 译文。';paper.appendChild(zh);}els.body.appendChild(paper);
+  if(view!=='source'){const zh=document.createElement('div');zh.className='translation';zh.textContent=translation||'本页尚未生成 AI 译文。';paper.appendChild(zh);}if(superseded())return;els.body.appendChild(paper);
 }
 async function openReadingProject(project) {
   if(document.body.classList.contains('office-mode'))await closeOffice();
@@ -6217,7 +6921,8 @@ async function openReadingProject(project) {
   READING_SLOTS=[first.path,second?second.path:''];READING_CURRENT=first.path;READING_ACTIVE_SLOT=0;updateReadingColumnLayout();
   readingSlotElements(0).view.value='original';readingSlotElements(1).view.value='original';
   renderReadingList();renderReadingProjectTabs();readingStatus('正在打开项目片段…');
-  const pdfs=[first,second].filter(Boolean).filter((item,index,all)=>item.kind==='pdf'&&all.findIndex((v)=>v.path===item.path)===index);await Promise.all(pdfs.map((item)=>ensureReadingDoc(item.path)));
+  /* 两侧都要有标注文档：PDF 拿分页文本，Markdown 拿摘录列表（面板的数据源）。 */
+  const docs=[first,second].filter(Boolean).filter((item,index,all)=>['pdf','markdown'].includes(item.kind)&&all.findIndex((v)=>v.path===item.path)===index);await Promise.all(docs.map((item)=>ensureReadingDoc(item.path)));
   for(let slot=0;slot<2;slot++){const doc=READING_DOCS.get(READING_SLOTS[slot]);if(doc){readingSlotElements(slot).page.value=doc.meta.page||1;readingSlotElements(slot).view.value=['original','source','translation','bilingual'].includes(doc.meta.view)?doc.meta.view:'original';}}
   await Promise.all([renderReadingSlot(0),renderReadingSlot(1)]);renderReadingFragments();
   readingStatus(first&&first.kind==='html'?'HTML 网页 · 左侧编辑源码，右侧自动渲染并自动保存':project.count+' 个片段 · 拖动上方片段到右侧可并排阅读'+(translated?' · 已匹配中文 PDF':bilingual?' · 已匹配双语 PDF':' · 可使用 AI 生成译文'));
@@ -6229,7 +6934,11 @@ async function openReading(path,slot) {
   const fragment=readingFragment(path);READING_PROJECT_CURRENT=readingProjectFor(path);READING_CURRENT=path;READING_ACTIVE_SLOT=slot==null?0:slot;READING_SLOTS[READING_ACTIVE_SLOT]=path;
   updateReadingColumnLayout();
   const project=READING_PROJECT_INDEX.get(READING_PROJECT_CURRENT);document.body.classList.add('reading-mode');$('reading-title').textContent=project?project.name:(READING_PROJECT_CURRENT||readingBase(path));$('reading-project-context').textContent=project?[project.description,(project.tags||[]).map((tag)=>'#'+tag).join(' ')].filter(Boolean).join(' · '):'';renderReadingList();renderReadingProjectTabs();readingStatus(fragment&&fragment.kind!=='pdf'?'正在打开项目片段…':'正在解析 PDF…');
-  if(fragment&&fragment.kind!=='pdf'){await renderReadingSlot(READING_ACTIVE_SLOT);renderReadingFragments();readingStatus(['markdown','code','html'].includes(fragment.kind)?readingRoleLabel(fragment)+' · 编辑内容会自动保存':readingRoleLabel(fragment)+' · 阅读模式');return;}
+  if(fragment&&fragment.kind!=='pdf'){
+    /* Markdown 的摘录挂在它自己的标注文档上，渲染右侧面板前必须先把这份文档取回来；
+       代码 / HTML 没有可摘录的正文，保持原样。 */
+    if(fragment.kind==='markdown')await ensureReadingDoc(path);
+    await renderReadingSlot(READING_ACTIVE_SLOT);renderReadingFragments();readingStatus(['markdown','code','html'].includes(fragment.kind)?readingRoleLabel(fragment)+' · 编辑内容会自动保存':readingRoleLabel(fragment)+' · 阅读模式');return;}
   const doc=await ensureReadingDoc(path);const primary=readingSlotElements(READING_ACTIVE_SLOT);primary.page.value=doc.meta.page||1;const roleView=fragment&&fragment.kind==='pdf'?(fragment.role==='translation'?'translation':fragment.role==='bilingual'?'bilingual':'original'):'original';primary.view.value=doc.meta.view&&doc.meta.view!=='original'?doc.meta.view:roleView;
   await renderReadingSlot(READING_ACTIVE_SLOT);renderReadingFragments();readingStatus(doc.error?doc.error:(doc.pageCount+' 页 · 可选择文字保存摘录'),!!doc.error);
 }
@@ -6243,9 +6952,17 @@ async function translateReadingText(text,label) {
   const out=[];for(let i=0;i<chunks.length;i++){readingStatus((label||'AI 翻译')+' '+(i+1)+'/'+chunks.length+'…');const r=await api('/api/ai/chat',{url:cfg.url,key:cfg.key,model:cfg.model,timeoutMs:300000,messages:[{role:'system',content:'你是专业技术文献翻译。把英文准确翻译为简体中文，保留标题层级、公式编号、变量、API、代码、引用编号和专业术语；只输出译文，不解释。'},{role:'user',content:chunks[i]}]});if(!r.ok)throw new Error(r.error||'AI 翻译失败');out.push(r.content.trim());}
   return out.join('\n\n');
 }
-function selectedReadingText(){const sel=window.getSelection();if(!sel||sel.isCollapsed)return '';const node=sel.anchorNode&&(sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode);if(!node)return '';if(node.closest&&node.closest('.reading-paper,.reading-web-article'))return String(sel.toString()).trim();const layer=node.closest&&node.closest('.pdf-text-layer');if(layer){const v=window.__readingPdfViewer;if(!v||!v.alive||!v.alive())return '';const selected=selectedRectsIn(layer);return selected?selected.text:'';}return '';}
+function selectedReadingText(){
+  /* 源码模式是 textarea：window.getSelection() 拿不到里面的选区，只能读它自己的 selectionStart/End。 */
+  const active=document.activeElement;
+  if(active&&active.tagName==='TEXTAREA'&&active.classList.contains('reading-md-source')){const start=active.selectionStart,end=active.selectionEnd;return start!=null&&end!=null&&end>start?String(active.value.slice(start,end)).trim():'';}
+  const sel=window.getSelection();if(!sel||sel.isCollapsed)return '';const node=sel.anchorNode&&(sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode);if(!node)return '';
+  /* .reading-md-preview-content / .reading-md-block 分别是 Markdown 的阅读视图与区块编辑器 */
+  if(node.closest&&node.closest('.reading-paper,.reading-web-article,.reading-md-preview-content,.reading-md-block'))return String(sel.toString()).trim();
+  const layer=node.closest&&node.closest('.pdf-text-layer');if(layer){const v=window.__readingPdfViewer;if(!v||!v.alive||!v.alive())return '';const selected=selectedRectsIn(layer);return selected?selected.text:'';}return '';}
 async function requireSelectableReadingText(action){
   const text=selectedReadingText();if(text)return text;const els=readingSlotElements(READING_ACTIVE_SLOT),fragment=readingFragment(READING_SLOTS[READING_ACTIVE_SLOT]);
+  if(fragment&&fragment.kind==='markdown'){readingStatus('请先在 Markdown 正文（区块编辑或阅读视图）里划选要'+action+'的文字',true);return '';}
   if(fragment&&fragment.kind==='pdf'){
     const viewer=window.__readingPdfViewer;
     if(window.__pdfViewerReady&&viewer&&viewer.alive&&viewer.alive()){readingStatus('请在 PDF 页面上直接划选文字后再点击“'+action+'”',true);return '';}
@@ -6268,6 +6985,7 @@ async function translateReadingAll() {
 }
 async function addReadingFragment() {
   const fragment=readingFragment(READING_SLOTS[READING_ACTIVE_SLOT]);if(fragment&&fragment.kind==='web'){const reader=READING_WEB_READERS.get(fragment.path);if(reader)return reader.saveSelection(false);}
+  if(fragment&&fragment.kind==='markdown'){const text=await requireSelectableReadingText('摘录');if(!text)return;return saveReadingMarkdownExcerpt(fragment.path,text);}
   const doc=activeReadingDoc(),text=await requireSelectableReadingText('摘录'),page=currentReadingPage();if(!doc||!text)return;
   let rects=[],scale=1;
   const v=window.__readingPdfViewer;
@@ -6281,21 +6999,126 @@ async function addReadingFragment() {
   }
   await savePdfSelectionPayload({path:doc.path,page,text,rects,scale},false);if(window.hidePdfToolbar)window.hidePdfToolbar();
 }
+/* ── Markdown 摘录 ──
+   Markdown 片段没有 PDF 那套「页码 + 矩形」坐标，所以只记两样东西：摘录文本本身，以及选区之前
+   最近的那个标题。定位时按文本在渲染结果里查找，命中就滚动并把焦点环圈上去；找不到就如实说
+   「原文已被改写」，不假装成功。摘录统一写进该 Markdown 自己的 .codescope 标注文件，.md 原文不动。 */
+/* 摘录卡片第一行原来只写「§ 最近的那一级标题」。同一个 H1 下面往往挂着好几条摘录，
+   于是每张卡片看起来一模一样，分不清谁是谁。这里改成标题层级链（H1 › H2 › H3）。
+   刻意不靠 DOM 定位：面板经常在区块编辑器挂载完成之前就渲染了，那时正文 DOM 还不存在，
+   靠 DOM 算出来的层级链会整批退化成「§ 最近一级标题」。改为按「保存时记下的锚点」在
+   markdown 源码的标题列表里定位，纯字符串计算，任何时刻都算得出来。 */
+function readingMarkdownExcerptTrail(doc,item){
+  const record=doc&&doc.path?READING_TEXT_DOCS.get(doc.path):null,content=record&&record.content;
+  if(!content)return [];
+  const entries=readingMarkdownHeadings(content);if(!entries.length)return [];
+  let index=-1;
+  if(item.anchor){const slug=String(item.anchor);index=entries.findIndex((entry)=>readingMarkdownSlug(entry.text)===slug);}
+  if(index<0){
+    const at=content.indexOf(String(item.source||''));
+    if(at>=0){const line=content.slice(0,at).split('\n').length-1;entries.forEach((entry,position)=>{if(entry.line<=line)index=position;});}
+  }
+  if(index<0){const text=String(item.anchorText||'');index=entries.findIndex((entry)=>entry.text===text);}
+  if(index<0)return [];
+  const stack=[];
+  for(let position=0;position<=index;position++){
+    const level=Number(entries[position].level)||0,text=String(entries[position].text||'').replace(/\s+/g,' ').trim();
+    if(!level||!text)continue;
+    while(stack.length&&stack[stack.length-1].level>=level)stack.pop();
+    stack.push({level,text});
+  }
+  return stack;
+}
+function readingMarkdownView(path){  const slot=Math.max(0,READING_SLOTS.findIndex((value)=>value===path));
+  const col=document.querySelector('.reading-col[data-slot="'+slot+'"]'),shell=col&&col.querySelector('.reading-text-shell.markdown');
+  if(!col||!shell)return null;
+  const mode=shell.dataset.mdMode||'live';
+  const source=col.querySelector('.reading-md-source'),preview=col.querySelector('.reading-md-preview'),block=col.querySelector('.reading-md-block');
+  return {col,shell,mode,source,preview,block,isPreview:mode==='preview',container:mode==='preview'?preview:block};
+}
+function readingMarkdownSelectionAnchor(path){
+  const view=readingMarkdownView(path);if(!view)return null;
+  /* 源码模式：选区之前最后一个 ATX 标题 */
+  if(view.mode==='edit'){
+    const start=view.source&&view.source.selectionStart;if(start==null)return null;
+    let found='';
+    for(const match of String(view.source.value||'').slice(0,start).matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm))found=match[1].replace(/[`*_~]/g,'').trim();
+    return found?{text:found,slug:readingMarkdownSlug(found)}:null;
+  }
+  if(!view.container)return null;
+  const sel=window.getSelection();if(!sel||!sel.rangeCount||sel.isCollapsed)return null;
+  const start=sel.getRangeAt(0).startContainer;
+  const heads=[...view.container.querySelectorAll(view.isPreview?'.reading-md-preview-content h1,.reading-md-preview-content h2,.reading-md-preview-content h3,.reading-md-preview-content h4,.reading-md-preview-content h5,.reading-md-preview-content h6':'.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];
+  /* 标题按文档顺序排列，取最后一个「排在选区起点之前（或正好包住它）」的 */
+  let found=null;
+  for(const head of heads){if(head===start||head.contains(start)||(head.compareDocumentPosition(start)&Node.DOCUMENT_POSITION_FOLLOWING))found=head;else break;}
+  const text=found?String(found.textContent||'').trim():'';
+  return text?{text,slug:readingMarkdownSlug(text)}:null;
+}
+async function saveReadingMarkdownExcerpt(path,text){
+  const doc=await ensureReadingDoc(path),anchor=readingMarkdownSelectionAnchor(path);
+  const item={id:cryptoRandomId(),kind:'markdown',page:1,source:String(text).trim(),translation:'',note:'',createdAt:Date.now()};
+  if(anchor){item.anchor=anchor.slug;item.anchorText=anchor.text;}
+  if(!Array.isArray(doc.meta.fragments))doc.meta.fragments=[];
+  doc.meta.fragments.unshift(item);await saveReadingDoc(doc);renderReadingFragments();
+  readingStatus('摘录已保存 · 可随时引用到 Markdown 笔记');
+  return item;
+}
+/* 在渲染结果里按文本查找：先把所有文本节点拼成一条长串做一次 indexOf，再映射回 DOM 范围。
+   这样即使摘录跨了加粗/链接等行内元素（DOM 里被拆成多个文本节点）也照样命中。 */
+function readingFindTextRange(container,text){
+  if(!container||!text)return null;
+  const nodes=[],offsets=[];let joined='';
+  const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT,null);
+  for(let node=walker.nextNode();node;node=walker.nextNode()){nodes.push(node);offsets.push(joined.length);joined+=node.nodeValue||'';}
+  const index=joined.indexOf(text);if(index<0)return null;
+  const locate=(offset)=>{for(let i=nodes.length-1;i>=0;i--)if(offsets[i]<=offset)return {node:nodes[i],offset:offset-offsets[i]};return null;};
+  const start=locate(index),stop=locate(index+text.length);if(!start||!stop)return null;
+  const range=document.createRange();
+  try{range.setStart(start.node,start.offset);range.setEnd(stop.node,stop.offset);}catch(_){return null;}
+  return range;
+}
+function locateReadingMarkdownExcerpt(doc,item){
+  const view=readingMarkdownView(doc.path),source=String(item.source||'');if(!view||!source)return false;
+  /* 源码模式是纯文本域，没法在里面圈出一段高亮，只能把光标与选区落到那段文字上。 */
+  if(view.mode==='edit'){
+    const value=String(view.source&&view.source.value||''),at=value.indexOf(source);if(at<0)return false;
+    view.source.focus();view.source.setSelectionRange(at,at+source.length);
+    const lines=value.slice(0,at).split('\n').length-1;
+    view.source.scrollTop=Math.max(0,lines*18-view.source.clientHeight/2);
+    return true;
+  }
+  const range=readingFindTextRange(view.container,source);if(!range)return false;
+  scrollReadingMarkdownHeading(view.container,range,view.isPreview);
+  /* 焦点环每帧重新解析目标，编辑器重绘也跟得上；传 Range 即可，它同样有 getBoundingClientRect。 */
+  flashReadingMarkdownHeading(()=>readingFindTextRange(view.container,source));
+  return true;
+}
 function renderReadingFragments() {
   const host=$('reading-frag-list'),doc=activeReadingDoc(),items=(doc&&doc.meta.fragments)||[];host.replaceChildren();$('reading-frag-count').textContent=items.length;
-  if(!items.length){const e=document.createElement('div');e.className='draw-empty';e.textContent='选择原文后点击“摘录”，集中管理重要定义、结论和引用。';host.appendChild(e);return;}
+  /* 稳定序号：按创建先后编号。列表是新摘录在最前，若按下标编号，每加一条旧卡片都会集体改名。 */
+  const order=new Map([...items].sort((a,b)=>(Number(a.createdAt)||0)-(Number(b.createdAt)||0)).map((entry,index)=>[String(entry.id),index+1]));
+  if(!items.length){const e=document.createElement('div');e.className='draw-empty';e.textContent='在 PDF、网页或 Markdown 正文里划选文字后点击“摘录”，集中管理重要定义、结论和引用。';host.appendChild(e);scheduleReadingExcerptMarks();return;}
   for(const item of items){
-    const web=!!item.url,card=document.createElement('div');card.className='reading-frag';card.dataset.fragmentId=String(item.id||'');
-    const page=document.createElement('span');page.className='page';page.textContent=web?'网页 · '+String(item.webTitle||'原文').slice(0,38):'P.'+item.page;
+    const web=!!item.url,markdown=item.kind==='markdown',card=document.createElement('div');card.className='reading-frag';card.dataset.fragmentId=String(item.id||'');
+    const page=document.createElement('span');page.className='page';
+    if(markdown){
+      const trail=readingMarkdownExcerptTrail(doc,item).slice(-3).map((entry)=>entry.text);
+      const label=trail.length?trail.join(' › '):String(item.anchorText||'Markdown 摘录');
+      const no=document.createElement('span');no.className='frag-no';no.textContent='#'+(order.get(String(item.id))||'?');
+      page.append(no,document.createTextNode(' § '+label.slice(0,72)));
+    }else page.textContent=web?'网页 · '+String(item.webTitle||'原文').slice(0,38):'P.'+item.page;
     const src=document.createElement('div');src.className='src';src.textContent=item.source;card.append(page,src);
     if(item.translation){const zh=document.createElement('div');zh.className='zh';zh.textContent=item.translation;card.appendChild(zh);}
-    const actions=document.createElement('div');actions.className='actions';const go=document.createElement('button');go.textContent='定位';go.onclick=async()=>{if(web){const reader=READING_WEB_READERS.get(doc.path);if(reader&&await reader.locate(item))return;readingStatus('网页定位信息已失效，可重新选择原文建立定位',true);return;}if(!window.locateReadingFragment||!(await window.locateReadingFragment(doc,item)))setReadingPage(READING_ACTIVE_SLOT,item.page);};
+    const actions=document.createElement('div');actions.className='actions';const go=document.createElement('button');go.textContent='定位';go.onclick=async()=>{if(web){const reader=READING_WEB_READERS.get(doc.path);if(reader&&await reader.locate(item))return;readingStatus('网页定位信息已失效，可重新选择原文建立定位',true);return;}if(markdown){if(locateReadingMarkdownExcerpt(doc,item)){readingStatus('已定位到摘录位置');return;}readingStatus('原文里已经找不到这段摘录，可能已被改写',true);return;}if(!window.locateReadingFragment||!(await window.locateReadingFragment(doc,item)))setReadingPage(READING_ACTIVE_SLOT,item.page);};
     const cite=document.createElement('button');cite.textContent='↗ 引用';cite.title='引用到项目 Markdown 阅读笔记，并保留原文来源';cite.onclick=async()=>{try{await appendReadingQuoteToNote(doc,item);}catch(error){readingStatus(error.message,true);}};
     const note=document.createElement('button');note.textContent=item.note?'✎ 笔记':'＋ 笔记';note.onclick=()=>startFragNoteEdit(card,doc,item);
     const del=document.createElement('button');del.textContent='删除';del.onclick=async()=>{doc.meta.fragments=items.filter(v=>v.id!==item.id);await saveReadingDoc(doc);renderReadingFragments();if(web)READING_WEB_READERS.get(doc.path)?.refreshMarks();if(window.refreshFragmentMarksAll)window.refreshFragmentMarksAll();};actions.append(go,cite,note,del);
     if(item.note){const n=document.createElement('div');n.className='frag-note zh md';n.title='点击编辑笔记（支持 Markdown 排版）';const pre=document.createElement('span');pre.className='fn-pre';pre.textContent='✎ ';const box=document.createElement('div');box.className='fn-md';box.innerHTML=renderMd(item.note)||'';n.append(pre,box);n.onclick=()=>startFragNoteEdit(card,doc,item);card.appendChild(n);}card.appendChild(actions);host.appendChild(card);
   }
   if(window.refreshFragmentMarksAll)window.refreshFragmentMarksAll();
+  /* PDF 的页内标记由 refreshFragmentMarksAll 管；Markdown 的正文标记走这一条。 */
+  scheduleReadingExcerptMarks();
 }
 function startFragNoteEdit(card, doc, item) {
   if (!card || !doc || !item) return;
@@ -9366,7 +10189,13 @@ function aiCodeLanguage(raw) {
 /* ---- 轻量 markdown 渲染（零依赖）：AI 回复中的标题/列表/表格/加粗等按 md 显示；用前先 escape，安全注入 ---- */
 function mdInline(s) {
   s = escapeHtml(s);
-  s = s.replace(/`([^`]+)`/g, (m, c) => '<code>' + c + '</code>');
+  /* 行内代码先占位，避免代码里的 == 或 {红|…} 被下面的颜色规则误伤 */
+  const __codeHoles=[];s = s.replace(/`([^`]+)`/g, (m, c) => { __codeHoles.push(c); return '\u0001'+(__codeHoles.length-1)+'\u0001'; });
+  /* 颜色与高亮：与区块编辑器使用完全相同的 href 形式，两边共用一套 CSS */
+  s = s.replace(/\[\[md-ref:([^#|\]]+)#([^|\]]+)\|([^\]]+)\]\]/g, (m, target, anchor, label) =>
+    '<a href="#cc-mdref-' + mdRefB64(readingPdfRefDecode(target) + '#' + readingPdfRefDecode(anchor)) + '" class="md-md-ref" data-md-path="' + target + '" data-md-anchor="' + anchor + '" title="点开并跳到该标题">' + label + '</a>');
+  s = s.replace(/==([^=\n]+)==/g, '<a href="#cc-hl" class="md-color" title="高亮">$1</a>');
+  s = s.replace(/\{([红橙黄绿青蓝紫粉灰])\|([^}\n]+)\}/g, (m, key, body) => '<a href="#cc-fg-' + (MD_COLOR_KEYS[key] || 'red') + '" class="md-color" title="' + key + '色文字">' + body + '</a>');
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
@@ -9374,7 +10203,10 @@ function mdInline(s) {
   s = s.replace(/\[\[pdf-ref:([^#|\]]+)#page=(\d+)(?:&amp;|&)fragment=([^|\]]*)\|([^\]]+)\]\]/g, '<a href="#" class="reading-pdf-ref" data-pdf-path="$1" data-page="$2" data-fragment="$3" title="在 PDF 中定位原文">$4</a>');
   s = s.replace(/\[\[code-ref:([^#|\]]+)#fragment=(\d+)(?:&amp;|&)line=(\d+)(?:(?:&amp;|&)end=(\d+))?\|([^\]]+)\]\]/g, '<a href="#" class="md-code-ref" data-code-file="$1" data-code-fragment="$2" data-code-line="$3" data-code-end="$4" title="定位到代码定义">$5</a>');
   s = s.replace(/\[\[note-ref:([^|\]]+)\|([^\]]+)\]\]/g, '<a href="#" class="md-note-ref" data-note-path="$1" title="打开关联笔记">$2</a>');
+  /* 文档内锚点：[标题](#某标题) —— 原实现只认 https?:，锚点链接会被整条丢掉，导致「跳转」在阅读模式失效 */
+  s = s.replace(/\[([^\]]+)\]\(#([^)\s]+)\)/g, '<a href="#$2" class="md-anchor-ref" title="在文档内跳转到此处">$1</a>');
   s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\u0001(\d+)\u0001/g, (m, index) => '<code>' + __codeHoles[Number(index)] + '</code>');
   s = s.replace(/\n/g, '<br>');
   return s;
 }
@@ -12193,8 +13025,9 @@ async function mountProjectBlockEditorNow() {
     await loadBlockEditor();
     const controller = await window.CodeScopeBlockEditor.create({
       root: host,
-      markdown: String(fragment.code || ''),
-      onChange: (content) => {
+      markdown: mdSyntaxToEditor(String(fragment.code || '')),
+      onChange: (rawContent) => {
+        const content = mdSyntaxFromEditor(rawContent);
         // Crepe 在挂载时会把 Markdown 规范化一次并回调（并非用户编辑）：
         // 此时不落盘，避免“只是打开片段”就把文件重写；只有编辑器内获得焦点后的改动才算编辑。
         const host = document.querySelector('#md-view .reading-md-block');
@@ -15292,7 +16125,8 @@ function dshLaunchUrl(service){
   return local ? service.url : (service.publicUrl||service.url);
 }
 let DSH_SERVICE=null;
-let opencodeActive=false;
+/* VS Code 代理端口：以服务端返回的为准，这里只是启动前的占位。 */
+let VSCODE_PROXY_PORT=4878;
 function renderDshService(service){
   if(!service)return;
   DSH_SERVICE=service;
@@ -15323,6 +16157,7 @@ async function openDsh(){
     if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
     if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
     document.body.classList.remove('study-mode','office-mode','reading-mode','drawing-mode');
+    leaveEmbeddedWorkspaces('dsh-mode');
     document.body.classList.add('dsh-mode');
     $('btn-dsh').classList.add('on');$('btn-dsh').setAttribute('aria-pressed','true');
     $('dsh-head-status').textContent=service.managed?'CodeScope 托管运行':'已连接现有服务';
@@ -15332,10 +16167,8 @@ async function openDsh(){
   }catch(error){setStatus('err', 'DeepSeek Harness 打开失败：'+(error.message||error));}
 }
 function closeDshWorkspace(){
-  opencodeActive=false;
   document.body.classList.remove('dsh-mode');
   $('btn-dsh').classList.remove('on');$('btn-dsh').setAttribute('aria-pressed','false');
-  $('btn-dsh-restart').classList.remove('on');
   setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
 }
 async function openDshExternal(){
@@ -15347,9 +16180,19 @@ async function openDshExternal(){
     window.open(dshLaunchUrl(service),'codescope-dsh-external','noopener');
   }catch(error){setStatus('err', 'DeepSeek Harness 打开失败：'+(error.message||error));}
 }
+function closeOpencodeWorkspace(){
+  document.body.classList.remove('opencode-mode');
+  $('btn-dsh-restart').classList.remove('on');$('btn-dsh-restart').setAttribute('aria-pressed','false');
+  setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+}
+async function openOpencodeExternal(){
+  try{
+    const service=(await api('/api/integrations/opencode',{action:'open'})).service;
+    if(!service||!service.available)throw new Error(service.message||'opencode 未能启动');
+    window.open(dshLaunchUrl(service),'codescope-opencode-external','noopener');
+  }catch(error){setStatus('err', 'opencode 打开失败：'+(error.message||error));}
+}
 async function openOpencode(){
-  opencodeActive=true;
-  $('btn-dsh-restart').classList.add('on');
   const btn=$('btn-dsh-restart');if(btn.classList.contains('busy'))return;
   btn.classList.add('busy');btn.disabled=true;
   try{
@@ -15361,15 +16204,82 @@ async function openOpencode(){
     if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
     if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
     document.body.classList.remove('study-mode','office-mode','reading-mode','drawing-mode');
-    document.body.classList.add('dsh-mode');
-    $('btn-dsh').classList.add('on');$('btn-dsh').setAttribute('aria-pressed','true');
-    $('dsh-head-status').textContent=service.managed?'已连接 · CodeScope 托管':'已连接 opencode';
-    const frame=$('dsh-frame');
-    const url=dshLaunchUrl(service);
-    if(frame.src!==url){$('dsh-loading').classList.remove('hidden');frame.src=url;}
+    /* 用自己的工作区，并且只点亮自己那颗按钮 —— 以前复用 dsh-mode 会连带把 Harness 点亮，
+       标题栏也还是 DSH 的「刷新 / 外部打开」。 */
+    leaveEmbeddedWorkspaces('opencode-mode');
+    document.body.classList.add('opencode-mode');
+    btn.classList.add('on');btn.setAttribute('aria-pressed','true');
+    $('opencode-head-status').textContent=service.managed?'已连接 · CodeScope 托管':'已连接 opencode';
+    const frame=$('opencode-frame'),url=dshLaunchUrl(service);
+    if(frame.src!==url){$('opencode-loading').classList.remove('hidden');frame.src=url;}
     setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
   }catch(error){setStatus('err', 'opencode 打开失败：'+(error.message||error));}
   finally{btn.classList.remove('busy');btn.disabled=false;}
+}
+/* 三个嵌入式工作区（Harness / opencode / VS Code）互斥：进哪个就把另外两个的 mode 与按钮高亮收干净。 */
+function leaveEmbeddedWorkspaces(keep){
+  const buttons={'dsh-mode':'btn-dsh','opencode-mode':'btn-dsh-restart','vscode-mode':'btn-vscode'};
+  for(const [mode,id] of Object.entries(buttons)){
+    if(mode===keep)continue;
+    document.body.classList.remove(mode);
+    const button=$(id);if(!button)continue;
+    button.classList.remove('on');button.setAttribute('aria-pressed','false');
+  }
+}
+function closeVSCodeWorkspace(){
+  document.body.classList.remove('vscode-mode');
+  $('btn-vscode').classList.remove('on');$('btn-vscode').setAttribute('aria-pressed','false');
+  setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+}
+/* iframe 必须指向「当前访问 CodeScope 用的主机名」+ 代理端口：
+   写死 127.0.0.1 的话，从局域网另一台机器打开会指到它自己身上去。 */
+function vscodeProxyUrl(folder){
+  const base='http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/';
+  const target=String(folder||'').trim();
+  return target?base+'?folder='+encodeURIComponent(target):base;
+}
+async function openVSCode(folder){
+  const btn=$('btn-vscode');if(btn.classList.contains('busy'))return;
+  btn.classList.add('busy');btn.disabled=true;
+  const loading=$('vscode-loading');loading.classList.remove('hidden');loading.textContent='正在启动 VS Code…';
+  try{
+    const response=await api('/api/integrations/code-server',{action:'open'});
+    const service=response.service||{};
+    if(service.proxyPort)VSCODE_PROXY_PORT=service.proxyPort;
+    if(!service.available)throw new Error(service.message||service.hint||(/Not Found|404/.test(String(response.error||''))?'VS Code 接口未生效：服务端可能是旧进程，重启一次 CodeScope 就好':(response.error||'VS Code 未能启动')));
+    if(!service.proxyListening)throw new Error('VS Code 代理端口未就绪（'+VSCODE_PROXY_PORT+'）');
+    if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
+    if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
+    if(document.body.classList.contains('reading-mode')&&typeof window.closeReading==='function')window.closeReading();
+    if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
+    document.body.classList.remove('study-mode','office-mode','reading-mode','drawing-mode');
+    leaveEmbeddedWorkspaces('vscode-mode');
+    document.body.classList.add('vscode-mode');
+    btn.classList.add('on');btn.setAttribute('aria-pressed','true');
+    $('vscode-head-status').textContent=service.managed?'已连接 · CodeScope 托管':'已连接 VS Code';
+    if(folder)$('vscode-folder').value=String(folder);
+    const frame=$('vscode-frame'),url=vscodeProxyUrl(folder);
+    if(frame.src!==url)frame.src=url;
+    setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+  }catch(error){
+    loading.textContent='VS Code 打开失败：'+(error.message||error);
+    setStatus('err', 'VS Code 打开失败：'+(error.message||error));
+  }finally{btn.classList.remove('busy');btn.disabled=false;}
+}
+async function openVSCodeExternal(){
+  try{
+    const service=(await api('/api/integrations/code-server',{action:'open'})).service||{};
+    if(service.proxyPort)VSCODE_PROXY_PORT=service.proxyPort;
+    if(!service.available)throw new Error(service.message||service.hint||(/Not Found|404/.test(String(response.error||''))?'VS Code 接口未生效：服务端可能是旧进程，重启一次 CodeScope 就好':(response.error||'VS Code 未能启动')));
+    window.open(vscodeProxyUrl(''),'codescope-vscode-external','noopener');
+  }catch(error){setStatus('err', 'VS Code 打开失败：'+(error.message||error));}
+}
+function setWorkspaceLaunchMenu(open){
+  const wrap=$('workspace-launch'),menu=$('workspace-launch-menu'),more=$('workspace-launch-more');
+  if(!menu||!more)return;
+  const next=typeof open==='boolean'?open:menu.hidden;
+  menu.hidden=!next;wrap.classList.toggle('open',next);more.setAttribute('aria-expanded',String(next));
+  if(next){const item=$('workspace-launch-study');if(item)item.classList.toggle('on',$('btn-study').classList.contains('on'));}
 }
 async function loadEnv(refreshNow, quiet) {
   if (ENV_LOADING) return ENV_DATA;
@@ -15517,13 +16427,30 @@ $('btn-dsh').setAttribute('aria-pressed','false');
 $('btn-dsh').onclick=()=>document.body.classList.contains('dsh-mode')?closeDshWorkspace():openDsh();
 $('btn-env-dsh-open').onclick=openDsh;
 $('btn-env-dsh-restart').onclick=async()=>{try{renderDshService({...((ENV_DATA&&ENV_DATA.env&&ENV_DATA.env.dsh)||{}),state:'starting',message:'正在重启 DSH…'});await dshAction('restart');}catch(error){setStatus('err', 'DSH 重启失败：'+(error.message||error));}};
-$('btn-dsh-restart').onclick=()=>{if(opencodeActive){opencodeActive=false;closeDshWorkspace();}else openOpencode();};
+$('btn-dsh-restart').onclick=()=>{if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();else openOpencode();};
 $('dsh-back').onclick=closeDshWorkspace;
 $('dsh-reload').onclick=()=>{const frame=$('dsh-frame');$('dsh-loading').classList.remove('hidden');frame.src=frame.src;};
 $('dsh-external').onclick=openDshExternal;
+$('btn-dsh-restart').setAttribute('aria-pressed','false');
+$('opencode-back').onclick=closeOpencodeWorkspace;
+$('opencode-reload').onclick=()=>{const frame=$('opencode-frame');$('opencode-loading').classList.remove('hidden');frame.src=frame.src;};
+$('opencode-external').onclick=openOpencodeExternal;
+$('btn-vscode').setAttribute('aria-pressed','false');
+$('btn-vscode').onclick=()=>document.body.classList.contains('vscode-mode')?closeVSCodeWorkspace():openVSCode();
+$('workspace-launch-more').onclick=(event)=>{event.stopPropagation();setWorkspaceLaunchMenu($('workspace-launch-menu').hidden);};
+$('workspace-launch-study').onclick=()=>{setWorkspaceLaunchMenu(false);$('btn-study').click();};
+document.addEventListener('pointerdown',(event)=>{const menu=$('workspace-launch-menu');if(!menu||menu.hidden)return;if(event.target instanceof Element&&event.target.closest('#workspace-launch'))return;setWorkspaceLaunchMenu(false);},true);
+document.addEventListener('keydown',(event)=>{if(event.key==='Escape')setWorkspaceLaunchMenu(false);},true);
+$('vscode-back').onclick=closeVSCodeWorkspace;
+$('vscode-reload').onclick=()=>{const frame=$('vscode-frame');$('vscode-loading').classList.remove('hidden');frame.src=frame.src;};
+$('vscode-external').onclick=openVSCodeExternal;
+$('vscode-open-folder').onclick=()=>{const value=String($('vscode-folder').value||'').trim();if(!value){setStatus('err','请先填写要用 VS Code 打开的绝对路径');return;}openVSCode(value);};
+$('vscode-folder').addEventListener('keydown',(event)=>{if(event.key==='Enter'){$('vscode-open-folder').click();}});
+$('vscode-frame').addEventListener('load',()=>{$('vscode-loading').classList.add('hidden');$('vscode-head-status').textContent='已连接';});
+$('opencode-frame').addEventListener('load',()=>{$('opencode-loading').classList.add('hidden');$('opencode-head-status').textContent='已连接 opencode';});
 $('dsh-frame').addEventListener('load',()=>{$('dsh-loading').classList.add('hidden');$('dsh-head-status').textContent=DSH_SERVICE&&DSH_SERVICE.managed?'已连接 · CodeScope 托管':'已连接';});
-new MutationObserver(()=>{if(document.body.classList.contains('dsh-mode')&&['study-mode','office-mode','reading-mode','drawing-mode'].some(mode=>document.body.classList.contains(mode)))closeDshWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
-new MutationObserver(()=>{if(document.body.classList.contains('knowledge-mode')&&['study-mode','dsh-mode','office-mode','reading-mode','drawing-mode'].some(mode=>document.body.classList.contains(mode)))closeKnowledgeWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
+new MutationObserver(()=>{if(!['study-mode','office-mode','reading-mode','drawing-mode'].some((mode)=>document.body.classList.contains(mode)))return;if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();if(document.body.classList.contains('vscode-mode'))closeVSCodeWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
+new MutationObserver(()=>{if(document.body.classList.contains('knowledge-mode')&&['study-mode','dsh-mode','opencode-mode','vscode-mode','office-mode','reading-mode','drawing-mode'].some(mode=>document.body.classList.contains(mode)))closeKnowledgeWorkspace();}).observe(document.body,{attributes:true,attributeFilter:['class']});
 
 initAppThemes();
 initEditorGroups();

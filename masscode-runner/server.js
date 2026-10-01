@@ -31,7 +31,10 @@ const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = requir
 const { createOfficeEngine } = require('./lib/office-engine');
 const { createDshService } = require('./lib/dsh-service');
 const { createOpencodeService } = require('./lib/opencode-service');
+const { createCodeServerService } = require('./lib/code-server-service');
+const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
+const { createSystemPanel } = require('./lib/system-panel');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
@@ -128,6 +131,33 @@ const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '
 const DSH = createDshService({ projectRoot:__dirname, dataRoot:applicationDataRoot() });
 const OPENCODE = createOpencodeService({});
 
+/* ── 浏览器版 VS Code（code-server）──
+   code-server 只绑回环，对外只经 CodeScope 的代理端口 —— 它的鉴权只有「一个密码」这一档，
+   直接开到局域网上等于绕开 CodeScope 给整台机器开门。代理跟着主服务的 HOST 走：
+   主服务只监听回环时代理也只监听回环。 */
+const VSCODE_INTERNAL_PORT = Number(process.env.CODESCOPE_VSCODE_INTERNAL_PORT) || 4899;
+const VSCODE_PROXY_PORT = Number(process.env.CODESCOPE_VSCODE_PORT) || 4878;
+const VSCODE = createCodeServerService({
+  port: VSCODE_INTERNAL_PORT,
+  dataRoot: applicationDataRoot(),
+  /* 内部端口被占时服务会自动换空闲端口——代理的转发目标必须同步切换，
+     否则代理还指向旧端口，整条链路静默断掉（iframe 一直 502）。 */
+  onPortChange: (nextPort) => { try { VSCODE_PROXY.setTargetPort(nextPort); } catch (_) {} },
+});
+const VSCODE_PROXY = createCodeServerProxy({
+  listenHost: HOST,
+  listenPort: VSCODE_PROXY_PORT,
+  targetHost: '127.0.0.1',
+  targetPort: VSCODE_INTERNAL_PORT,
+  isAllowed: trustedHttpOrigin,
+  onNotice: (message) => console.log('[VS Code] ' + message),
+});
+/* 代理状态要合进 service：前端得知道 iframe 该指向哪个端口，以及代理是否已就绪。 */
+function codeServerStatus(base) {
+  const service = base || VSCODE.status();
+  return { ...service, proxyListening: VSCODE_PROXY.isListening(), proxyPort: VSCODE_PROXY_PORT, internalPort: VSCODE_INTERNAL_PORT };
+}
+
 /* ---------------------------------- 路径发现 ---------------------------------- */
 
 function defaultVaultPath() {
@@ -178,6 +208,7 @@ function vaultPath() {
 }
 
 const KNOWLEDGE = createKnowledgeBase({ projectRoot:__dirname, dataRoot:applicationDataRoot(), getVaultPath:vaultPath });
+const SYSTEM_PANEL = createSystemPanel({ dataRoot: applicationDataRoot(), log: (line) => console.log(line) });
 
 /* -------------------------------- 实时系统状态 -------------------------------- */
 
@@ -3593,6 +3624,10 @@ function saveReadingMeta(rel, value) {
     anchor:String(item && item.anchor || '').slice(0, 1000),
     webStart:Math.max(0, Number(item && item.webStart) || 0),
     webEnd:Math.max(0, Number(item && item.webEnd) || 0),
+    /* Markdown 摘录：没有页码和矩形，只记来源标题（anchorText 给人看，anchor 用来定位）。
+       这里必须显式列进来 —— 白名单之外的字段会在落盘时被整条丢掉。 */
+    kind:item && item.kind === 'markdown' ? 'markdown' : '',
+    anchorText:String(item && item.anchorText || '').slice(0, 500),
   })) : [];
   clean.updatedAt = Date.now();
   const target = readingMetaFile(rel);
@@ -4456,6 +4491,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/api/system/status') {
       return send(res, 200, await systemStatus());
     }
+    /* 本机管家（一站式本机管理面板）。接口全部收在 /api/system-panel/ 下，
+       和上面 /api/system/status 那套健康检查互不干扰；非 GET 请求已经由前面的
+       trustedHttpOrigin 网关拦过一道，所以这里只做参数校验与执行。 */
+    if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {
+      try {
+        if (await SYSTEM_PANEL.handle(req, res, u)) return;
+      } catch (error) {
+        return send(res, 500, { ok:false, error:String((error && error.message) || error) });
+      }
+    }
     if (u.pathname === '/api/study/config') {
       if (req.method === 'GET') return send(res, 200, { ok:true, config:readStudyConfig() });
       if (req.method === 'POST') {
@@ -4974,6 +5019,23 @@ const server = http.createServer(async (req, res) => {
         if (!['start', 'stop', 'restart'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 DSH 操作' });
         const service = await DSH[action]();
         return send(res, service.available || action === 'stop' ? 200 : 503, { ok:service.available || action === 'stop', service });
+      }
+      return send(res, 405, { ok:false, error:'Method Not Allowed' });
+    }
+    if (u.pathname === '/api/integrations/code-server') {
+      if (req.method === 'GET') return send(res, 200, { ok:true, service: codeServerStatus() });
+      if (req.method === 'POST') {
+        const body = await readBody(req, 64 * 1024);
+        const action = String(body && body.action || 'open');
+        if (action === 'stop') {
+          VSCODE_PROXY.stop();
+          return send(res, 200, { ok:true, service: codeServerStatus(await VSCODE.stop()) });
+        }
+        if (action !== 'open') return send(res, 400, { ok:false, error:'不支持的 VS Code 操作' });
+        const service = await VSCODE.start();
+        /* 代理按需启动：没用这个功能就不额外占端口。 */
+        if (service.available) await VSCODE_PROXY.start();
+        return send(res, service.available ? 200 : 503, { ok:service.available, service: codeServerStatus(service) });
       }
       return send(res, 405, { ok:false, error:'Method Not Allowed' });
     }
@@ -6447,6 +6509,8 @@ async function shutdown(signal) {
   try { stopPdfWorker('进程退出'); } catch (_) {}
   try { KNOWLEDGE.stop(); } catch (_) {}
   try { stopTerm(); } catch (_) {}
+  try { VSCODE_PROXY.stop(); } catch (_) {}
+  try { await VSCODE.stop(); } catch (_) {}
   try { await OPENCODE.stop(); } catch (_) {}
   try { await DSH.stop(); } catch (_) {}
   server.close(() => process.exit(0));
