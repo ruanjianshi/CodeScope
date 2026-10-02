@@ -335,8 +335,17 @@ body.system-mode #main{flex:1;min-width:0;}
 
 /* ── 骨架：左侧分区栏 + 右侧内容。分区固定六个加底部设置，子视图在分区内切换。 ── */
 #system-shell{flex:1;min-height:0;display:flex;align-items:stretch;}
-#system-nav{width:198px;flex:none;display:flex;flex-direction:column;gap:2px;padding:12px 10px;
+#system-nav{position:relative;width:198px;flex:none;display:flex;flex-direction:column;gap:2px;padding:12px 10px;
   border-right:1px solid var(--sp-hair);background:var(--sp-surface);overflow:auto;}
+/* 拖拽手柄：6px 热区贴右边缘，平时透明、hover/拖动才亮 —— 不占视觉、但好抓。
+   注意两点（都踩过）：① 必须**完全落在侧栏内**（right:0），侧栏是 overflow:auto，
+   探出去的部分会被裁掉、拿不到指针；② z-index 要高过侧栏内容，否则命中测试拿到的是 aside 本身。 */
+#system-workspace .nav-resizer{position:absolute;top:0;right:0;bottom:0;width:6px;cursor:col-resize;z-index:20;touch-action:none;}
+#system-workspace .nav-resizer::after{content:'';position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;
+  transition:background var(--sp-ease);}
+#system-workspace .nav-resizer:hover::after,#system-workspace .nav-resizer.active::after{background:var(--accent);}
+/* 拖动期间整页光标保持 col-resize，并且不要选中文字 */
+body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-nav .nav-title{padding:2px 8px 10px;font-size:var(--sp-fs-md);font-weight:600;color:var(--text);display:flex;align-items:baseline;gap:6px;}
 #system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-nav-list{display:flex;flex-direction:column;gap:1px;}
@@ -920,7 +929,9 @@ body.system-mode #main{flex:1;min-width:0;}
   #system-workspace .sp-skel{animation:none;opacity:.6;}
 }
 @media (max-width:820px){
-  #system-nav{width:60px;padding:10px 8px;}
+  /* 窄屏是图标栏，宽度写死，拖拽手柄一并收起 */
+  #system-nav{width:60px !important;padding:10px 8px;}
+  #system-workspace .nav-resizer{display:none;}
   #system-nav .nav-title span, #system-nav-list button span, #system-nav .nav-foot button span{display:none;}
   #system-body{padding:14px 14px 26px;}
 }
@@ -1085,6 +1096,7 @@ body.system-mode #main{flex:1;min-width:0;}
               <button id="system-palette" type="button" title="搜索文件、进程与功能（⌘K）"><span>⌘K</span> 搜索与命令</button>
               <label class="sp-auto" title="自动刷新实时数据"><input type="checkbox" id="system-auto" checked> 实时刷新</label>
             </div>
+            <div class="nav-resizer" role="separator" aria-orientation="vertical" title="拖动调整侧栏宽度（双击恢复默认）"></div>
           </aside>
           <div id="system-main">
             <header id="system-head">
@@ -1118,6 +1130,8 @@ body.system-mode #main{flex:1;min-width:0;}
       else document.body.appendChild(section);
     }
     wireShellEvents();
+    wireNavResizer();
+    restoreNavWidth();
     state.built = true;
   }
 
@@ -1491,6 +1505,58 @@ body.system-mode #main{flex:1;min-width:0;}
   }
 
   /* ---------------------------------------------------------------- 骨架事件 */
+
+  /* 侧栏宽度：可拖拽调整并记住（双击手柄恢复默认）。
+     和宿主左侧代码树是同一套手感：pointer capture + 整页 col-resize 光标；
+     但**自己实现**而不复用宿主函数 —— 本机管家要能在拿不到宿主能力时独立可用。 */
+  const NAV_W_KEY = 'codescope-system-nav-w';
+  const NAV_W_DEFAULT = 198;
+  const NAV_W_MIN = 160;
+  const NAV_W_MAX = 420;
+
+  function applyNavWidth(width, persist) {
+    const nav = $('system-nav');
+    if (!nav) return;
+    const value = Math.max(NAV_W_MIN, Math.min(NAV_W_MAX, Math.round(Number(width) || NAV_W_DEFAULT)));
+    nav.style.width = value + 'px';
+    if (persist) { try { localStorage.setItem(NAV_W_KEY, String(value)); } catch (_) {} }
+  }
+
+  function restoreNavWidth() {
+    try {
+      const saved = parseInt(localStorage.getItem(NAV_W_KEY), 10);
+      if (Number.isFinite(saved)) applyNavWidth(saved, false);
+    } catch (_) {}
+  }
+
+  function wireNavResizer() {
+    const handle = document.querySelector('#system-nav .nav-resizer');
+    const nav = $('system-nav');
+    if (!handle || !nav || handle.dataset.wired) return;
+    handle.dataset.wired = '1';
+    let start = null;
+    handle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      start = { x: event.clientX, width: nav.getBoundingClientRect().width };
+      try { handle.setPointerCapture(event.pointerId); } catch (_) {}
+      handle.classList.add('active');
+      document.body.classList.add('sp-nav-resizing');
+    });
+    handle.addEventListener('pointermove', (event) => {
+      if (!start) return;
+      applyNavWidth(start.width + (event.clientX - start.x), true);
+    });
+    const end = () => {
+      if (!start) return;
+      start = null;
+      handle.classList.remove('active');
+      document.body.classList.remove('sp-nav-resizing');
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    /* 双击恢复默认宽度：拖窄了想快速还原时不用来回找位置 */
+    handle.addEventListener('dblclick', () => applyNavWidth(NAV_W_DEFAULT, true));
+  }
 
   function wireShellEvents() {
     const back = $('system-back'); if (back) back.onclick = () => close();
