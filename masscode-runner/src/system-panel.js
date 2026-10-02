@@ -464,17 +464,33 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
 /* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
 #system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:18px 14px;}
-#system-workspace .sp-gcell{flex:0 0 auto;width:132px;display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;}
-#system-workspace .sp-gcell .sp-gauge-ring{width:112px;height:112px;}
-#system-workspace .sp-gcell .sp-gauge-center b{font-size:23px;}
+#system-workspace .sp-gcell{flex:0 0 auto;width:140px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
+#system-workspace .sp-gcell .sp-gauge-ring{width:124px;height:124px;}
+#system-workspace .sp-gcell .sp-gauge-center b{font-size:25px;}
 #system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
 #system-workspace .sp-gsub{font-size:var(--sp-fs-xs);color:var(--dim);line-height:1.45;min-height:2.9em;}
 #system-workspace .sp-gcell .sp-cores{justify-content:center;gap:1.5px;margin-top:1px;}
 #system-workspace .sp-gcell .sp-core{width:11px;height:16px;}
 #system-workspace .sp-gcell .sp-gauge-ring.crit .sp-gauge-center b{color:var(--sp-danger);}
 /* 右侧栏的快捷操作：竖排更好点，也省得文字被挤断行 */
-#system-workspace .sp-actions-stack{flex-direction:column;align-items:stretch;margin:0;}
-#system-workspace .sp-actions-stack .sp-btn{justify-content:flex-start;text-align:left;}
+#system-workspace .sp-actions-stack{flex-direction:column;align-items:stretch;margin:0;gap:6px;}
+#system-workspace .sp-actions-stack .sp-btn{display:flex;align-items:center;gap:9px;justify-content:flex-start;
+  text-align:left;padding:8px 11px;font-size:var(--sp-fs);}
+#system-workspace .sp-actions-stack .sp-btn .gi{font-style:normal;flex:none;width:16px;text-align:center;opacity:.85;}
+/* 磁盘卷：两行式（上行路径与容量、下行整条进度条）。挤在一行时中间会空一大块。 */
+#system-workspace .sp-vols{display:flex;flex-direction:column;gap:14px;}
+#system-workspace .sp-vol{min-width:0;}
+#system-workspace .sp-vol-top{display:flex;align-items:baseline;gap:10px;margin-bottom:7px;font-size:var(--sp-fs);}
+#system-workspace .sp-vol-name{color:var(--text);font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#system-workspace .sp-vol-dev{flex:1 1 auto;min-width:0;font-size:var(--sp-fs-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#system-workspace .sp-vol-free{flex:none;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
+#system-workspace .sp-vol-pct{flex:none;min-width:38px;text-align:right;font-size:var(--sp-fs-sm);font-weight:600;}
+#system-workspace .sp-vol .sp-bar{height:8px;}
+#system-workspace .sp-vol .sp-rowbtn{flex:none;}
+#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:20px;}
+/* 右栏的核心条：这里宽度充裕，格子放大些，一眼看清哪个核在忙 */
+#system-workspace .sp-cores-lg{gap:3px;margin-top:2px;}
+#system-workspace .sp-cores-lg .sp-core{width:16px;height:28px;border-radius:4px;}
 @media (max-width:1080px){
   #system-workspace .sp-ov{grid-template-columns:1fr;}
 }
@@ -538,7 +554,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-cores{display:flex;gap:3px;margin-top:10px;flex-wrap:wrap;}
 #system-workspace .sp-core{width:16px;height:24px;border-radius:3px;background:var(--sp-tint-strong);position:relative;overflow:hidden;}
 #system-workspace .sp-core i{position:absolute;bottom:0;left:0;right:0;background:var(--accent);}
-#system-workspace .sp-spark{margin-top:8px;height:46px;width:100%;display:block;overflow:visible;}
+#system-workspace .sp-spark{margin-top:8px;height:96px;width:100%;display:block;overflow:visible;}
 #system-workspace .sp-spark .grid{stroke:var(--sp-hair);stroke-width:1;}
 #system-workspace .sp-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
 #system-workspace .sp-spark .fill{fill:color-mix(in srgb, var(--accent) 15%, transparent);stroke:none;}
@@ -1923,8 +1939,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
      ① 点数不足时也要给一张「有底」的图（网格 + 采集提示），否则首屏是一片空白；
      ② 面积填充（.fill）之前只有样式、没有几何，等于白定义；
      ③ preserveAspectRatio=none 会把线宽也拉变形，靠 vector-effect=non-scaling-stroke 固定线宽。 */
-  const SPARK_H = 46;
-  const SPARK_GRID = [0.25, 0.5, 0.75].map((ratio) =>
+  const SPARK_H = 96;
+  const SPARK_GRID = [0.2, 0.4, 0.6, 0.8].map((ratio) =>
     '<line class="grid" x1="0" y1="' + (SPARK_H * ratio).toFixed(1) + '" x2="100" y2="' + (SPARK_H * ratio).toFixed(1) + '" vector-effect="non-scaling-stroke"/>').join('');
   function sparkline(values, series) {
     const cls = 'sp-spark' + (series === 'mem' ? ' mem' : '');
@@ -2026,7 +2042,6 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
                 ${gauge(cpu.usage, '')}
                 <div class="sp-gcap">CPU</div>
                 <div class="sp-gsub">${cpu.cores} 核<br>负载 ${loadText || '—'}</div>
-                <div class="sp-cores">${cores}</div>
               </div>
               <div class="sp-gcell">
                 ${gauge(memory.usage, '')}
@@ -2060,14 +2075,17 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
           <section class="sp-sec">
             <h3>磁盘卷<span class="sp-hint">含外接与网络卷</span></h3>
-            <div class="sp-list">
+            <div class="sp-vols">
               ${(data.disks || []).map((item) => `
-                <div class="sp-li">
-                  <span class="grow" title="${esc(item.mount)}">${esc(item.mount)} <span class="muted">${esc(item.device)}</span></span>
-                  <span class="muted">${fmtBytes(item.free)} 可用 / ${fmtBytes(item.total)}</span>
-                  <span class="barwrap">${bar(item.capacity, '容量 ' + item.capacity + '%')}</span>
-                  <span class="num cap${levelClass(item.capacity)}">${Number(item.capacity).toFixed(0)}%</span>
-                  <button class="sp-btn sp-rowbtn" data-reveal="${esc(item.mount)}">在访达显示</button>
+                <div class="sp-vol" title="${esc(item.mount)}">
+                  <div class="sp-vol-top">
+                    <span class="sp-vol-name">${esc(item.mount)}</span>
+                    <span class="sp-vol-dev muted">${esc(item.device)}</span>
+                    <span class="sp-vol-free">${fmtBytes(item.free)} 可用 / ${fmtBytes(item.total)}</span>
+                    <span class="sp-vol-pct num cap${levelClass(item.capacity)}">${Number(item.capacity).toFixed(0)}%</span>
+                    <button class="sp-btn sp-rowbtn" data-reveal="${esc(item.mount)}">在访达显示</button>
+                  </div>
+                  ${bar(item.capacity, '容量 ' + item.capacity + '%')}
                 </div>`).join('') || '<div class="sp-empty">没有读到磁盘</div>'}
             </div>
           </section>
@@ -2082,6 +2100,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               <span class="k">系统</span><span>${esc(data.identity.osName)} ${esc(data.identity.osVersion)}</span>
               <span class="k">型号</span><span>${esc(data.identity.model || '—')}</span>
               <span class="k">架构</span><span>${esc(data.identity.arch)}</span>
+              <span class="k">处理器</span><span>${esc(cpu.model || '—')}</span>
+              <span class="k">核心</span><span>${cpu.cores || '—'} 核</span>
+              <span class="k">内存</span><span>${fmtBytes(memory.total)}</span>
+              <span class="k">主磁盘</span><span>${disk ? fmtBytes(disk.total) + '（可用 ' + fmtBytes(disk.free) + '）' : '—'}</span>
               <span class="k">已运行</span><span>${fmtDuration(data.identity.uptime)}</span>
               <span class="k">开机于</span><span>${esc(fmtTime(data.identity.bootAt))}</span>
               <span class="k">Node</span><span>${esc(data.identity.node)}</span>
@@ -2089,12 +2111,16 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             </div>
           </section>
           <section class="sp-sec">
+            <h3>处理器<span class="sp-hint">每格一个核心</span></h3>
+            <div class="sp-cores sp-cores-lg">${cores || '<span class="sp-empty">没有每核数据</span>'}</div>
+          </section>
+          <section class="sp-sec">
             <h3>快捷操作</h3>
             <div class="sp-actions sp-actions-stack">
-              <button class="sp-btn primary" data-goto="storage">去清理磁盘 / 缓存</button>
-              <button class="sp-btn" data-goto="processes">看谁在吃 CPU</button>
-              <button class="sp-btn" data-goto="software">检查软件更新</button>
-              <button class="sp-btn" data-goto="docker">Docker 状态</button>
+              <button class="sp-btn primary" data-goto="storage"><i class="gi">◍</i>去清理磁盘 / 缓存</button>
+              <button class="sp-btn" data-goto="processes"><i class="gi">◈</i>看谁在吃 CPU</button>
+              <button class="sp-btn" data-goto="software"><i class="gi">⤓</i>检查软件更新</button>
+              <button class="sp-btn" data-goto="docker"><i class="gi">▣</i>Docker 状态</button>
             </div>
           </section>
         </aside>
