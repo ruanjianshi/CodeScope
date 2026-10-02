@@ -349,11 +349,17 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-nav .nav-title{padding:2px 8px 10px;font-size:var(--sp-fs-md);font-weight:600;color:var(--text);display:flex;align-items:baseline;gap:6px;}
 #system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* 搜索放在侧栏顶部：高频入口不该塞在左下角。做成输入框的样子，点哪儿都能进搜索面板。 */
+/* 搜索框做成「内凹」：按钮凸、输入凹，这是苹果控件的基本对照关系 */
 #system-nav .nav-search{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;box-sizing:border-box;
-  background:var(--sp-surface-2);border:1px solid var(--sp-hair);border-radius:var(--sp-r-sm);
-  padding:6px 9px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;text-align:left;
-  transition:border-color var(--sp-ease),background var(--sp-ease),color var(--sp-ease);}
-#system-nav .nav-search:hover{color:var(--text);border-color:var(--sp-hair-strong);background:var(--sp-tint);}
+  background:color-mix(in srgb, var(--bg) 45%, var(--sp-surface-2));
+  border:1px solid var(--sp-hair-strong);border-radius:9px;
+  box-shadow:inset 0 2px 4px color-mix(in srgb, var(--bg) 55%, transparent),
+             inset 0 -1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+  padding:6px 10px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;text-align:left;
+  transition:border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;}
+#system-nav .nav-search:hover{color:var(--text);border-color:color-mix(in srgb, var(--accent) 45%, var(--sp-hair-strong));
+  box-shadow:inset 0 2px 4px color-mix(in srgb, var(--bg) 45%, transparent),
+             inset 0 -1px 0 color-mix(in srgb, var(--text) 7%, transparent);}
 #system-nav .nav-search .ico{flex:none;font-size:var(--sp-fs-md);line-height:1;opacity:.85;}
 #system-nav .nav-search .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-nav .nav-search kbd{flex:none;font:var(--sp-fs-xs) var(--sp-mono);border:1px solid var(--sp-hair);
@@ -394,9 +400,21 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-head #system-subtitle{color:var(--dim);font-size:var(--sp-fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-head #system-head-status{color:var(--dim);font-size:var(--sp-fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums;}
 #system-head .sp{flex:1;}
-#system-head button{background:transparent;color:var(--dim);border:1px solid transparent;border-radius:var(--sp-r-sm);
-  padding:5px 10px;font-size:var(--sp-fs-sm);cursor:pointer;transition:background var(--sp-ease),color var(--sp-ease);}
-#system-head button:hover{color:var(--text);background:var(--sp-tint);}
+#system-head button{background:linear-gradient(180deg,
+    color-mix(in srgb, var(--sp-surface-2) 90%, var(--text) 10%),
+    color-mix(in srgb, var(--sp-surface-2) 97%, var(--bg) 3%));
+  color:var(--text);border:1px solid var(--sp-hair-strong);border-radius:9px;
+  padding:5px 11px;font-size:var(--sp-fs-sm);cursor:pointer;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--bg) 55%, transparent),
+    0 1px 2px color-mix(in srgb, var(--bg) 55%, transparent);
+  transition:background 140ms ease, box-shadow 140ms ease, transform 90ms ease, border-color 140ms ease;}
+#system-head button:hover{background:linear-gradient(180deg,
+    color-mix(in srgb, var(--sp-surface-2) 80%, var(--text) 20%),
+    color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%));
+  border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
+#system-head button:active{transform:translateY(1px);box-shadow:inset 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent);}
 /* 子视图：分段控件（一个底槽 + 选中态浮起），不再是一排各自描边的胶囊。 */
 #system-subnav{flex:none;display:flex;gap:3px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--sp-hair);overflow-x:auto;}
 #system-subnav[hidden]{display:none;}
@@ -621,17 +639,70 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-tag.low, #system-workspace .sp-tag.good{color:var(--ok);background:color-mix(in srgb, var(--ok) 15%, transparent);}
 #system-workspace .sp-tag.medium{color:var(--sp-warn);background:color-mix(in srgb, var(--sp-warn) 15%, transparent);}
 #system-workspace .sp-tag.high, #system-workspace .sp-tag.bad{color:var(--sp-danger);background:color-mix(in srgb, var(--sp-danger) 15%, transparent);}
-/* 按钮：次级一律幽灵态（无框无底），悬浮才浮出底色 —— 工具栏因此安静很多。 */
-#system-workspace .sp-btn, .fsv-menu .sp-btn, .fsv-preview .sp-btn{background:transparent;color:var(--dim);border:1px solid transparent;border-radius:var(--sp-r-sm);
-  padding:5px 10px;font-size:var(--sp-fs-sm);cursor:pointer;white-space:nowrap;
-  transition:background var(--sp-ease),color var(--sp-ease),border-color var(--sp-ease);}
-#system-workspace .sp-btn:hover{color:var(--text);background:var(--sp-tint);}
-#system-workspace .sp-btn:active{background:var(--sp-tint-strong);}
-#system-workspace .sp-btn[disabled]{opacity:.42;cursor:not-allowed;background:transparent;}
-#system-workspace .sp-btn.danger{color:var(--sp-danger);}
-#system-workspace .sp-btn.danger:hover{background:color-mix(in srgb, var(--sp-danger) 14%, transparent);}
-#system-workspace .sp-btn.primary{background:var(--accent);border-color:transparent;color:var(--bg);font-weight:600;}
-#system-workspace .sp-btn.primary:hover{background:color-mix(in srgb, var(--accent) 88%, var(--text));color:var(--bg);}
+/* ── 按钮：苹果风格的立体按钮 ──
+   做法（纯 CSS，不引图片）：上亮下暗的渐变面 + 顶部 1px 内高光 + 底部内暗边 +
+   两层外投影；按下时整体下沉 1px 并把投影换成内凹阴影 —— 手感接近 macOS 控件。
+   颜色一律从主题变量用 color-mix 派生，7 套主题（含浅色）都跟着走，不写死色值。 */
+#system-workspace .sp-btn, .fsv-menu .sp-btn, .fsv-preview .sp-btn{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--sp-surface-2) 90%, var(--text) 10%),
+    color-mix(in srgb, var(--sp-surface-2) 97%, var(--bg) 3%));
+  color:var(--text);
+  border:1px solid var(--sp-hair-strong);
+  border-radius:9px;
+  padding:5px 11px;font-size:var(--sp-fs-sm);cursor:pointer;white-space:nowrap;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--bg) 55%, transparent),
+    0 1px 2px color-mix(in srgb, var(--bg) 55%, transparent),
+    0 2px 5px color-mix(in srgb, var(--bg) 30%, transparent);
+  transition:background 140ms ease, box-shadow 140ms ease, transform 90ms ease, border-color 140ms ease, color 140ms ease;}
+#system-workspace .sp-btn:hover, .fsv-menu .sp-btn:hover, .fsv-preview .sp-btn:hover{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--sp-surface-2) 80%, var(--text) 20%),
+    color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%));
+  border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
+/* 按下：下沉 + 阴影翻转为内凹，模拟「压下去」 */
+#system-workspace .sp-btn:active, .fsv-menu .sp-btn:active, .fsv-preview .sp-btn:active{
+  transform:translateY(1px);
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--text) 6%, transparent),
+    0 1px 1px color-mix(in srgb, var(--bg) 40%, transparent);}
+#system-workspace .sp-btn:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 60%, transparent);outline-offset:2px;}
+#system-workspace .sp-btn[disabled]{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none;
+  background:var(--sp-tint);border-color:var(--sp-hair);color:var(--dim);}
+/* 危险：红调实体按钮，而不是只有红字 */
+#system-workspace .sp-btn.danger{color:color-mix(in srgb, var(--sp-danger) 88%, var(--text));
+  border-color:color-mix(in srgb, var(--sp-danger) 28%, var(--sp-hair-strong));}
+#system-workspace .sp-btn.danger:hover{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--sp-surface-2) 74%, var(--sp-danger) 26%),
+    color-mix(in srgb, var(--sp-surface-2) 88%, var(--sp-danger) 12%));
+  border-color:color-mix(in srgb, var(--sp-danger) 55%, transparent);
+  color:var(--text);}
+/* 主按钮：accent 蓝的三段渐变 + 顶部强高光 + 品牌色投影 */
+#system-workspace .sp-btn.primary{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 78%, white),
+    var(--accent) 52%,
+    color-mix(in srgb, var(--accent) 84%, black));
+  border-color:color-mix(in srgb, var(--accent) 62%, black);
+  color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(0,0,0,.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.38),
+    inset 0 -1px 0 rgba(0,0,0,.16),
+    0 1px 2px rgba(0,0,0,.32),
+    0 3px 9px color-mix(in srgb, var(--accent) 34%, transparent);}
+#system-workspace .sp-btn.primary:hover{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 70%, white),
+    color-mix(in srgb, var(--accent) 94%, white) 52%,
+    color-mix(in srgb, var(--accent) 88%, black));
+  color:#fff;}
+#system-workspace .sp-btn.primary:active{
+  transform:translateY(1px);
+  box-shadow:inset 0 2px 6px color-mix(in srgb, var(--accent) 45%, black), 0 1px 2px rgba(0,0,0,.3);}
 #system-workspace .sp-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 16px;}
 #system-workspace .sp-input{background:var(--sp-surface-2);color:var(--text);border:1px solid var(--sp-hair);border-radius:var(--sp-r-sm);
   padding:6px 10px;font-size:var(--sp-fs);min-width:120px;height:var(--ui-control-height,30px);
