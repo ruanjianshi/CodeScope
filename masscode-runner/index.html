@@ -6011,16 +6011,27 @@ function knowledgePageUrl(state){
   const rel=target.replace(/\\/g,'/').replace(/\.(md|markdown)$/i,'');
   return '/knowledge/'+rel.split('/').filter(Boolean).map(encodeURIComponent).join('/')+'.html';
 }
-/* 从 iframe 当前地址反推「正在读哪篇」，存下来供下次直接回到这里。 */
+/* 从 iframe 当前地址反推「正在读哪篇」，存下来供下次直接回到这里。
+   不能只在 iframe 的 load 事件里记：站点内部翻页是 SPA 路由，不会再触发 load，
+   只在打开时记一次的话，翻到别的文章后关掉再开还是会回到上一篇。 */
+let kbTrackTimer=null,kbLastSeenPath='';
 function rememberKnowledgePage(){
   const frame=$('knowledge-workspace-frame');
   if(!frame)return;
   try{
     const pathname=frame.contentWindow.location.pathname||'';
-    if(!pathname.startsWith('/knowledge/'))return;
+    if(!pathname.startsWith('/knowledge/')||pathname===kbLastSeenPath)return;
+    kbLastSeenPath=pathname;
     const rel=decodeURIComponent(pathname.slice('/knowledge/'.length)).replace(/\.html?$/i,'');
     if(rel)localStorage.setItem(KB_LAST_PAGE_KEY,rel+'.md');
   }catch(_){}
+}
+function startKnowledgePageTracking(){
+  if(kbTrackTimer)return;
+  kbTrackTimer=setInterval(()=>{if(document.body.classList.contains('knowledge-mode'))rememberKnowledgePage();},1500);
+}
+function stopKnowledgePageTracking(){
+  if(kbTrackTimer){clearInterval(kbTrackTimer);kbTrackTimer=null;}
 }
 async function openKnowledgeWorkspace(forceBuild=false){
   setKnowledgeLaunchMenu(false);closeKnowledgeCenter(false);
@@ -6030,11 +6041,12 @@ async function openKnowledgeWorkspace(forceBuild=false){
     document.body.classList.add('knowledge-mode');syncKnowledgeWorkspaceButton();
     const frame=$('knowledge-workspace-frame'),url=knowledgePageUrl(site)+'?embedded=1&view='+Date.now();
     frame.src=url;
+    startKnowledgePageTracking();
     setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
   }catch(error){loading.textContent='知识库打开失败：'+(error.message||error);setStatus('err', '知识库打开失败：'+(error.message||error));}
 }
 function closeKnowledgeWorkspace(){
-  document.body.classList.remove('knowledge-mode');syncKnowledgeWorkspaceButton();setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+  document.body.classList.remove('knowledge-mode');stopKnowledgePageTracking();syncKnowledgeWorkspaceButton();setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
 }
 async function openKnowledgeSplit(){
   setKnowledgeLaunchMenu(false);closeKnowledgeWorkspace();

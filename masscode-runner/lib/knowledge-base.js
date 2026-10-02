@@ -87,6 +87,13 @@ function homeSource(root) {
   if (!first) {
     return '---\ntitle: 我的知识库\n---\n\n# 我的知识库\n\n这个知识库还是空的。在 CodeScope 里新建分类和 Markdown 片段后，这里会自动出现内容。\n';
   }
+  const link = first + '.html';
+  /* 用 location.replace 整页跳转，而不是 router.replace：
+     试过 router.replace('/快速开始/…/xxx.html')（解码后的路径也试过），
+     vue-router 匹配不上、静默失败，页面就停在「正在打开知识库…」。
+     这里跳的是真实静态文件 URL，服务端确实能提供，最稳。
+     代价是一次整页加载 —— 对一个「跳过落地页」的跳板来说完全值得。 */
+  const target = '/knowledge' + link;
   return [
     '---',
     'title: 我的知识库',
@@ -94,17 +101,12 @@ function homeSource(root) {
     '',
     '<script setup>',
     "import { onMounted } from 'vue'",
-    "import { useRouter } from 'vitepress'",
-    'const router = useRouter()',
-    /* 用 router.replace 而不是 meta refresh：meta refresh 是整页跳转，
-       实测会被 VitePress 的客户端路由把地址改写成源码目录路径
-       （/private/var/.../readings/知识库/...），router.replace 是纯 SPA 跳转，没这个问题。 */
-    'onMounted(() => { router.replace(' + JSON.stringify(first + '.html') + ') })',
+    'onMounted(() => { window.location.replace(' + JSON.stringify(target) + ') })',
     '</script>',
     '',
     '# 正在打开知识库…',
     '',
-    '如果没有自动跳转，点[这里](' + first + ')。',
+    '如果没有自动跳转，点[这里](' + link + ')。',
     '',
   ].join('\n');
 }
