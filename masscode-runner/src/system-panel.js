@@ -488,15 +488,26 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    之前是 flex:1 + .sp-ov/.sp-ov-main 上的 overflow:hidden：高度被硬压到容器内，
    结果右栏「常用应用 / 快捷操作」和左栏「磁盘卷」直接被裁掉且滚不到 —— 用户看不到磁盘卷。
    现在不再裁切，宁可滚动也不丢内容。浮层是 position:fixed，不受影响。 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:12px var(--sp-gap-lg);
-  align-items:start;flex:1 0 auto;min-height:0;}
+/* grid-template-rows:auto 1fr 是必须的 —— 只写列的话，grid 的 align-content 默认
+   是 stretch，会把「概述卡片」那一行也拉高去分掉多余高度，结果卡片下面空出一大段
+   （1920×1080 实测行高 143px 而卡片只有 96px，空了 47px）。写死 auto 1fr 后，
+   第一行只按内容高，多余高度全部落到第二行由「监控」吸收 —— 曲线顺势变高。 */
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr;
+  gap:12px var(--sp-gap-lg);align-items:start;flex:1 0 auto;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
 /* 左栏撑满容器高度（右栏保持内容高度）——不这样写，grid 会按内容收缩左栏，
    监控区的 flex:1 就失去参照，曲线永远停在固定高度。
    对齐用 flex-start：多余高度交给「监控」吸收，而不是摊成区块之间的大段空白。 */
 #system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:flex-start;}
-/* 右栏按内容高度排，不被拉伸，避免出现「栏内大段空白」 */
-#system-workspace .sp-ov-side{flex:0 0 auto;}
+/* 右栏也撑满行高：不然左栏被监控撑到 900+px 时，右栏在「快捷操作」下面空出一大截
+   （1728×1117 实测空 146px，2560×1440 空 469px）。多出来的高度给「常用应用」的
+   图标墙吸收 —— 格子等比变高，比在区块之间摊成空白好看，也更有「应用墙」的感觉。 */
+#system-workspace .sp-ov-side{align-self:stretch;flex:0 0 auto;justify-content:space-between;}
+/* 应用墙吃掉富余高度；但格子不能无限拉高（380px 上限 ≈ 每格 114px），
+   超过上限的那部分（2560×1440 上还有约 340px）再由 justify-content:space-between
+   平摊到区块之间 —— 富余不够时应用墙会全部吃掉，space-between 自然不起作用。 */
+#system-workspace .sp-sec-apps{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;max-height:380px;}
+#system-workspace .sp-sec-apps .sp-applist{flex:1 1 auto;min-height:0;grid-auto-rows:minmax(62px, 1fr);}
 /* 监控区是可伸展的那一块：窗口变高 → 曲线跟着变高，而不是在底部留白。
    现在父级没有 overflow:hidden 了，flex:1 只会往「多出来的空间」里长，
    不会再像以前那样把磁盘卷顶出视口（不够高时由 #system-body 滚动兜底）。 */
@@ -563,11 +574,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 17%, transparent);}
 #system-workspace .sp-stat b{font-size:25px;font-weight:600;color:var(--text);line-height:1.08;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 #system-workspace .sp-stat span{font-size:var(--sp-fs-xs);color:var(--dim);}
+/* 卡片第三行：一行真实数据（最高占用进程 / 对外端口数 / 启动项是否正常…）。
+   做成淡色小药丸而不是裸文字 —— 裸文字会和上面的标签混成一片，分不出层级。 */
+#system-workspace .sp-stat em{font-style:normal;font-size:10px;line-height:1.5;color:var(--dim);
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:2px 8px;border-radius:999px;background:var(--sp-tint);
+  box-shadow:inset 0 0 0 1px var(--sp-hair);}
+#system-workspace .sp-stat em:empty{visibility:hidden;}
 /* 应用墙：3 列图标网格（图标在上、名称在下），点一下启动。
    原来是一行一个的列表，8 个就吃掉 348px，正是把右栏顶出视口的元凶之一；
    换成网格后同样的应用数只占一半高度，也更像 1Panel 那种「应用图标区」。 */
 #system-workspace .sp-applist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
-#system-workspace .sp-app{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px 9px;
+#system-workspace .sp-app{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 4px 9px;
   border-radius:var(--sp-r-sm);cursor:pointer;background:var(--sp-tint);
   box-shadow:inset 0 0 0 1px var(--sp-hair);
   transition:background var(--sp-ease),box-shadow var(--sp-ease),transform var(--sp-ease);}
@@ -1908,22 +1926,42 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
      放在首屏之后异步取，拿到谁填谁 —— 不阻塞概览渲染，也不整页重绘。 */
   async function loadOverviewExtras() {
     const [proc, svc, apps] = await Promise.all([
-      api('/processes?limit=1').catch(() => null),
+      /* limit=3 而不是 1：除了总数，还要拿占用最高的那个进程名给概述卡当副标题 */
+      api('/processes?limit=3').catch(() => null),
       api('/services').catch(() => null),
       api('/apps').catch(() => null),
     ]);
     const row = $('system-stat-row');
     if (row) {
+      /* 每张卡除了数字，再挂一行「所以呢」的真实数据 —— 光有 450 / 24 / 20 这些数字
+         看不出好坏，补上「最高占用是谁」「有几个端口对外」「启动项有没有异常」才有用。 */
+      const topProc = proc && Array.isArray(proc.list) ? proc.list[0] : null;
+      const brew = (svc && svc.brew) || [];
+      const ports = (svc && svc.ports) || [];
+      const agents = (svc && svc.agents) || [];
+      /* bind 是 * / 0.0.0.0 / :: 的才叫「对外」—— 只听 127.0.0.1 的出了这台机器也连不上 */
+      const exposed = ports.filter((item) => ['*', '0.0.0.0', '::'].includes(String(item.bind))).length;
+      const failedAgents = agents.filter((item) => item.failed).length;
+      const favorites = apps && Array.isArray(apps.favorites) ? apps.favorites.length : 0;
+
       const stats = [
-        ['进程', proc && Number(proc.total)],
-        ['常驻服务', svc ? (svc.brew || []).length : null],
-        ['监听端口', svc ? (svc.ports || []).length : null],
-        ['开机启动项', svc ? (svc.agents || []).length : null],
-        ['已装应用', apps && Number(apps.total)],
+        ['进程', proc && Number(proc.total),
+          topProc ? '最高 ' + (topProc.app || '?') + ' ' + (Number(topProc.cpu) || 0).toFixed(1) + '%' : ''],
+        ['常驻服务', svc ? brew.length : null,
+          brew.length ? brew[0].name + (brew[0].running ? ' 运行中' : ' 已停止') : '暂无 brew 服务'],
+        ['监听端口', svc ? ports.length : null,
+          ports.length ? '对外监听 ' + exposed + ' 个' : ''],
+        ['开机启动项', svc ? agents.length : null,
+          agents.length ? (failedAgents ? failedAgents + ' 个异常' : '全部正常') : ''],
+        ['已装应用', apps && Number(apps.total),
+          favorites ? '收藏 ' + favorites + ' 个' : ''],
       ];
       const icons = ['◈', '⚙', '⇄', '↻', '▤'];
-      row.innerHTML = stats.map((pair, index) =>
-        '<div class="sp-stat"><i>' + (icons[index] || '·') + '</i><b>' + (Number.isFinite(pair[1]) ? pair[1] : '—') + '</b><span>' + pair[0] + '</span></div>').join('');
+      row.innerHTML = stats.map((triple, index) =>
+        '<div class="sp-stat"><i>' + (icons[index] || '·') + '</i>' +
+        '<b>' + (Number.isFinite(triple[1]) ? triple[1] : '—') + '</b>' +
+        '<span>' + triple[0] + '</span>' +
+        '<em>' + esc(triple[2] || '') + '</em></div>').join('');
     }
     const list = $('system-app-list');
     if (list && apps && Array.isArray(apps.apps)) {
@@ -2583,11 +2621,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       <div class="sp-ov">
         <section class="sp-sec sp-overview">
           <div class="sp-stat-row" id="system-stat-row">
-            <div class="sp-stat"><i>◈</i><b>—</b><span>进程</span></div>
-            <div class="sp-stat"><i>⚙</i><b>—</b><span>常驻服务</span></div>
-            <div class="sp-stat"><i>⇄</i><b>—</b><span>监听端口</span></div>
-            <div class="sp-stat"><i>↻</i><b>—</b><span>开机启动项</span></div>
-            <div class="sp-stat"><i>▤</i><b>—</b><span>已装应用</span></div>
+            <div class="sp-stat"><i>◈</i><b>—</b><span>进程</span><em></em></div>
+            <div class="sp-stat"><i>⚙</i><b>—</b><span>常驻服务</span><em></em></div>
+            <div class="sp-stat"><i>⇄</i><b>—</b><span>监听端口</span><em></em></div>
+            <div class="sp-stat"><i>↻</i><b>—</b><span>开机启动项</span><em></em></div>
+            <div class="sp-stat"><i>▤</i><b>—</b><span>已装应用</span><em></em></div>
           </div>
         </section>
         <div class="sp-ov-main">
@@ -2670,7 +2708,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             <h3>处理器<span class="sp-hint">每格一个核心</span></h3>
             <div class="sp-cores sp-cores-lg">${cores || '<span class="sp-empty">没有每核数据</span>'}</div>
           </section>
-          <section class="sp-sec">
+          <section class="sp-sec sp-sec-apps">
             <h3>常用应用<span class="sp-hint">点一下即启动</span></h3>
             <div class="sp-applist" id="system-app-list"><div class="sp-empty">读取中…</div></div>
           </section>
