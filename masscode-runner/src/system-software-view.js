@@ -237,19 +237,51 @@
       return bar;
     }
 
+    /* 分类配色：黄金角取色（每次 +137.5°），不管有多少个分类，相邻两个的色相
+       都差得够远 —— 顺序取色的话 15 个分类会绕回重复的颜色。
+       饱和度压到 44%：15 段排在一起时，高饱和的彩虹条太吵，压暗一点更像仪表。 */
+    function categoryColor(index) {
+      return 'hsl(' + Math.round((index * 137.5 + 205) % 360) + ' 44% 57%)';
+    }
+
     function renderCategories() {
       const groups = (S.data && S.data.groups) || [];
-      const wrap = el('div', 'sw-cats');
       const total = (S.data && S.data.total) || 0;
-      const chips = [['', '全部 ' + total]].concat(groups.map((group) => [group.category, group.category + ' ' + group.count]));
-      for (const [key, label] of chips) {
+      const sorted = groups.slice().sort((a, b) => b.count - a.count);
+      const wrap = el('div', 'sw-cats');
+
+      /* 分布条：一条按分类分段的横条，段宽 = 该类占比。
+         光看下面那串「实用工具 28 效率办公 18 …」是读不出重心的，条子一眼就有。
+         段本身就是筛选按钮，色点和下面的胶囊一一对应，不用额外做图例。 */
+      if (sorted.length) {
+        const bar = el('div', 'sw-dist-bar');
+        sorted.forEach((group, index) => {
+          const seg = el('button', 'sw-dist-seg');
+          seg.type = 'button';
+          seg.style.width = (group.count / Math.max(1, total) * 100) + '%';
+          seg.style.background = categoryColor(index);
+          seg.title = group.category + '：' + group.count + ' 个（占 ' +
+            Math.round(group.count / Math.max(1, total) * 100) + '%）· 点一下只看这一类';
+          seg.addEventListener('click', () => { S.category = S.category === group.category ? '' : group.category; render(); });
+          bar.appendChild(seg);
+        });
+        wrap.appendChild(bar);
+      }
+
+      const row = el('div', 'sw-cat-row');
+      const chips = [['', '全部 ' + total]].concat(sorted.map((group) => [group.category, group.category + ' ' + group.count]));
+      chips.forEach(([key, label], index) => {
         const chip = el('button', 'sw-cat' + (S.category === key ? ' on' : ''));
         chip.type = 'button';
-        if (key) chip.appendChild(el('i', null, glyph(key)));
+        const dot = el('i', 'sw-dot');
+        /* 第一个是「全部」，不给分类色；其余按分布条里的同一套色，颜色对得上 */
+        dot.style.background = key ? categoryColor(index - 1) : 'var(--dim)';
+        chip.appendChild(dot);
         chip.appendChild(el('span', null, label));
         chip.addEventListener('click', () => { S.category = key; render(); });
-        wrap.appendChild(chip);
-      }
+        row.appendChild(chip);
+      });
+      wrap.appendChild(row);
       return wrap;
     }
 

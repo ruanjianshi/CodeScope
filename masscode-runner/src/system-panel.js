@@ -919,10 +919,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   color:var(--dim);border-radius:var(--sp-r-xs);padding:2px 8px;text-align:left;font-size:var(--sp-fs);cursor:text;
   transition:background var(--sp-ease),border-color var(--sp-ease),color var(--sp-ease);}
 #system-workspace .fsv-crumb-blank:hover{background:var(--sp-tint);border-color:var(--sp-hair);color:var(--text);}
-#system-workspace .fsv-tabs{display:flex;gap:2px;align-items:center;}
-#system-workspace .fsv-tab{background:transparent;border:0;color:var(--dim);border-radius:var(--sp-r-xs);padding:4px 10px;font-size:var(--sp-fs-sm);cursor:pointer;}
-#system-workspace .fsv-tab:hover{color:var(--text);background:var(--sp-tint);}
-#system-workspace .fsv-tab.on{color:var(--text);background:var(--ui-accent-soft, var(--sp-tint-strong));font-weight:600;}
+/* .fsv-tabs/.fsv-tab 已删：那是文件视图里和外层子导航重复的第二排标签 */
 #system-workspace .fsv-tbody tr{transition:background var(--sp-ease);}
 #system-workspace .fsv-tbody tr:hover{background:var(--sp-tint);}
 #system-workspace .fsv-tbody tr:has(input[type=checkbox]:checked){background:var(--ui-accent-soft, var(--sp-tint));}
@@ -986,24 +983,40 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .fsv-switch{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;user-select:none;}
 #system-workspace .fsv-switch input{margin:0;}
 
+/* ── 可视化小件（sp-viz-*）：一条按比例分段的横条 + 图例 + 大白话解释 ──
+   分段本身不放文字：占比很小时那条会窄到塞不下字，标签一律放下面一行。 */
+#system-workspace .sp-viz-bar{display:flex;gap:2px;height:14px;border-radius:7px;overflow:hidden;background:var(--sp-tint);}
+#system-workspace .sp-viz-seg{display:block;min-width:3px;transition:width 420ms cubic-bezier(.22,.61,.36,1);}
+#system-workspace .sp-viz-seg.warn{background:var(--sp-warn);}
+#system-workspace .sp-viz-seg.ok{background:color-mix(in srgb, var(--ok) 72%, transparent);}
+#system-workspace .sp-viz-key{display:flex;gap:20px;flex-wrap:wrap;margin-top:9px;font-size:var(--sp-fs-sm);color:var(--dim);}
+#system-workspace .sp-viz-key i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;font-style:normal;}
+#system-workspace .sp-viz-key i.warn{background:var(--sp-warn);}
+#system-workspace .sp-viz-key i.ok{background:color-mix(in srgb, var(--ok) 72%, transparent);}
+#system-workspace .sp-viz-key b{color:var(--text);font-variant-numeric:tabular-nums;}
+
 /* ── 软件管理（sw-*）：图标网格 + 分类 + 常用；同样不做「满屏方框」 ── */
 #system-workspace .sw-root{display:flex;flex-direction:column;gap:10px;}
 #system-workspace .sw-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 #system-workspace .sw-search{flex:1 1 260px;max-width:340px;}
 #system-workspace .sw-sort{flex:none;min-width:130px;cursor:pointer;}
-/* 分类筛选：16 个分类如果做成「无边框小字」挤在一行，看起来就是一坨噪声，
-   还认不出哪些能点。改成独立的筛选条 + 胶囊，一眼就是一组控件。
-   胶囊之间留 6px、条本身给底色，换行时也不会糊成一片。 */
-#system-workspace .sw-cats{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;
+/* 分类筛选：上面一条「分类分布」横条（段宽=占比、可点），下面一排胶囊。
+   16 个分类如果做成「无边框小字」挤在一行，看起来就是一坨噪声，还认不出哪些能点；
+   现在胶囊带色点，色点和分布条一一对应，等于自带图例，不用再单独画一个。 */
+#system-workspace .sw-cats{display:flex;flex-direction:column;gap:9px;padding:10px 12px;
   background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);}
+#system-workspace .sw-dist-bar{display:flex;gap:1px;height:10px;border-radius:999px;overflow:hidden;background:var(--sp-tint);}
+#system-workspace .sw-dist-seg{border:0;padding:0;min-width:2px;cursor:pointer;
+  transition:opacity var(--sp-ease);}
+#system-workspace .sw-dist-seg:hover{opacity:.7;}
+#system-workspace .sw-cat-row{display:flex;gap:6px;flex-wrap:wrap;}
 #system-workspace .sw-cat{display:inline-flex;align-items:center;gap:6px;background:var(--sp-tint);border:1px solid transparent;
   color:var(--dim);border-radius:999px;padding:4px 11px;font-size:var(--sp-fs-sm);cursor:pointer;
   transition:background var(--sp-ease),color var(--sp-ease),box-shadow var(--sp-ease);}
-#system-workspace .sw-cat i{font-style:normal;opacity:.7;font-size:var(--sp-fs);}
+#system-workspace .sw-dot{flex:none;width:8px;height:8px;border-radius:50%;font-style:normal;background:var(--sp-tint-strong);}
 #system-workspace .sw-cat:hover{color:var(--text);background:var(--sp-tint-strong);}
 #system-workspace .sw-cat.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 16%, transparent);font-weight:600;
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);}
-#system-workspace .sw-cat.on i{opacity:1;}
 #system-workspace .sw-info{display:flex;gap:14px;align-items:baseline;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
 #system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;}
 #system-workspace .sw-list{display:flex;flex-direction:column;gap:2px;}
@@ -1449,14 +1462,21 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
        - 「应用管理」与分区「软件」语义重复 → 「已安装」；
        - 「浏览 / 占用分析」→「文件浏览 / 空间分析」，与「存储」分区区分开。
      · id 保持原样（只改展示名），避免动到任何逻辑分支。 */
+  /* note：分区的一句话说明。侧栏只有名字的话，用户得一个个点进去才知道是干嘛的；
+     挂到按钮的 title 上，鼠标停一下就懂了。
+     分组逻辑：分区按「你想干什么」分，不按「技术模块」分 ——
+     · 文件 = 对文件本身动手（浏览、整理、回收站、安全规则）
+     · 存储 = 看空间去哪了（容量、占用分析、全盘扫描）
+     原来「空间分析 / 全盘扫描」挂在「文件」下，而「存储」只有一个页面，
+     两边都不好找；这两个本来就是回答「我的磁盘被什么占了」，归到存储才对。 */
   const SECTIONS = [
-    { id: 'home', group: '查看', label: '概览', icon: '◎', views: [['overview', '概览']] },
-    { id: 'monitor', group: '查看', label: '性能', icon: '◈', views: [['processes', '进程']] },
-    { id: 'files', group: '查看', label: '文件', icon: '▤', views: [['files', '文件浏览'], ['files-usage', '空间分析'], ['files-organize', '整理归类'], ['files-trash', '回收站'], ['scan', '全盘扫描'], ['safety', '安全管理']] },
-    { id: 'storage', group: '查看', label: '存储', icon: '◍', views: [['storage', '磁盘与清理']] },
-    { id: 'runtime', group: '管理', label: '系统', icon: '⚙', views: [['services', '服务与端口'], ['docker', '容器'], ['dev', '开发环境'], ['env', '环境与更新'], ['sync', '远程同步'] ] },
-    { id: 'software', group: '管理', label: '软件', icon: '⤓', views: [['apps', '已安装'], ['software', '更新与安装']] },
-    { id: 'settings', group: '管理', label: '设置', icon: '⌥', views: [['settings', '设置']] },
+    { id: 'home', group: '查看', label: '概览', icon: '◎', note: '这台电脑现在怎么样：CPU、内存、磁盘、温度', views: [['overview', '概览']] },
+    { id: 'monitor', group: '查看', label: '性能', icon: '◈', note: '谁在吃 CPU 和内存，按占用从高到低排', views: [['processes', '进程']] },
+    { id: 'files', group: '查看', label: '文件', icon: '▤', note: '浏览、搜索、整理你的文件；以及哪些目录受保护', views: [['files', '文件浏览'], ['files-organize', '整理归类'], ['files-trash', '回收站'], ['safety', '安全管理']] },
+    { id: 'storage', group: '查看', label: '存储', icon: '◍', note: '磁盘容量、空间被什么占了、能清出多少', views: [['storage', '磁盘与清理'], ['files-usage', '空间分析'], ['scan', '全盘扫描']] },
+    { id: 'runtime', group: '管理', label: '系统', icon: '⚙', note: '后台服务、开机启动项、端口、容器、开发环境', views: [['services', '服务与端口'], ['docker', '容器'], ['dev', '开发环境'], ['env', '环境与更新'], ['sync', '远程同步'] ] },
+    { id: 'software', group: '管理', label: '软件', icon: '⤓', note: '装了哪些应用、哪些包可以升级', views: [['apps', '已安装'], ['software', '更新与安装']] },
+    { id: 'settings', group: '管理', label: '设置', icon: '⌥', note: '面板自己的行为与安全选项', views: [['settings', '设置']] },
   ];
 
   /* 每个视图一句话说明：管理面板的标配，告诉用户「这一页是干嘛的」，
@@ -1497,7 +1517,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         ? '<div class="nav-group">' + esc(section.group) + '</div>'
         : '';
       lastGroup = section.group || lastGroup;
-      return head + '<button type="button" data-section="' + section.id + '"' + on + '><i>' + section.icon + '</i><span>' + esc(section.label) + '</span></button>';
+      return head + '<button type="button" data-section="' + section.id + '"' + on +
+        ' title="' + esc(section.note || '') + '"><i>' + section.icon + '</i><span>' + esc(section.label) + '</span></button>';
     }).join('');
     const host = $('system-nav-host');
     if (host) {
@@ -1519,7 +1540,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     nav.hidden = false;
     nav.innerHTML = active.views.map((pair) => {
       const on = pair[0] === state.tab ? ' class="on"' : '';
-      return '<button type="button" data-view="' + pair[0] + '"' + on + '>' + esc(pair[1]) + '</button>';
+      return '<button type="button" data-view="' + pair[0] + '"' + on +
+        ' title="' + esc(VIEW_NOTES[pair[0]] || '') + '">' + esc(pair[1]) + '</button>';
     }).join('');
   }
 
@@ -3262,8 +3284,28 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       '<span class="muted">· ' + ports.length + ' 个端口在监听' +
       (lanCount ? '，其中 <b class="sp-warn">' + lanCount + ' 个局域网可访问</b>' : '，都只对本机开放') + '</span></div>';
 
+    /* 端口暴露可视化：光说「24 个端口在监听」看不出风险，重点是「有几个能被别人连上」。
+       一条按比例分段的横条 + 一句大白话解释，比一列数字直观得多。
+       分段本身不放文字 —— 只有 1/24 时那条只有 4% 宽，字塞不进去；标签放下面一行。 */
+    const localCount = ports.length - lanCount;
+    const portViz = ports.length ? '<div class="sp-band sp-viz">' +
+      '<h3>端口对外暴露情况<span class="sp-hint">' + (lanCount
+        ? '有 ' + lanCount + ' 个能被同一网络下的其他设备连上'
+        : '全部只对本机开放') + '</span></h3>' +
+      '<div class="sp-viz-bar">' +
+        (lanCount ? '<span class="sp-viz-seg warn" style="width:' + (lanCount / ports.length * 100).toFixed(2) + '%"></span>' : '') +
+        '<span class="sp-viz-seg ok" style="width:' + (localCount / ports.length * 100).toFixed(2) + '%"></span>' +
+      '</div>' +
+      '<div class="sp-viz-key">' +
+        (lanCount ? '<span><i class="warn"></i>局域网可访问 <b>' + lanCount + '</b> 个</span>' : '') +
+        '<span><i class="ok"></i>仅本机 <b>' + localCount + '</b> 个</span>' +
+      '</div>' +
+      '<p class="sp-note">「局域网可访问」= 和这台电脑连同一个 Wi-Fi / 网线的手机、平板也能连进来；只监听 127.0.0.1 的服务，出了这台电脑谁也连不上。下面表格里标了「局域网可访问」的，如果不是你特意要对外提供的，建议关掉。</p>' +
+      '</div>' : '';
+
     body.innerHTML = `
       ${summary}
+      ${portViz}
       <div class="sp-cols">
         <div class="sp-band">
           <h3>Homebrew 后台服务（${brew.length}）<span class="sp-hint">brew services 托管的常驻服务</span></h3>

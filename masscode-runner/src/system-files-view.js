@@ -733,19 +733,9 @@ function createFilesView(host) {
     if (S.preview) renderPreview();
   }
 
-  function tabBar() {
-    const bar = el('div', 'fsv-tabs');
-    const views = [['files', '浏览'], ['files-usage', '占用分析'], ['files-organize', '整理'], ['files-trash', '回收站']];
-    for (const [id, label] of views) {
-      const button = el('button', 'fsv-tab' + (S.view === id ? ' on' : ''), label);
-      button.type = 'button';
-      button.dataset.fsvView = id;
-      button.onclick = () => setView(id);
-      bar.appendChild(button);
-    }
-    return bar;
-  }
-
+  /* 这里原本还有一行自己的标签（浏览 / 占用分析 / 整理 / 回收站），
+     和外层「文件」分区的子导航（文件浏览 / 空间分析 / 整理归类 / 回收站）完全重复 ——
+     同一页出现两排标签、名字还不一样，谁都会看懵。已删掉，统一走外层子导航。 */
   function setView(view) {
     if (S.view === view) return;
     closePreview(); closeMenu();
@@ -887,7 +877,6 @@ function createFilesView(host) {
 
   function viewBrowse() {
     const wrap = el('div', 'fsv-view');
-    wrap.appendChild(tabBar());
     wrap.appendChild(toolbar());
     wrap.appendChild(crumbs());
 
@@ -1163,7 +1152,6 @@ function createFilesView(host) {
 
   function viewUsage() {
     const wrap = el('div', 'fsv-view');
-    wrap.appendChild(tabBar());
     const bar = el('div', 'fsv-toolbar');
     const input = document.createElement('input');
     input.className = 'sp-input fsv-usage-path';
@@ -1288,7 +1276,6 @@ function createFilesView(host) {
 
   function viewTrash() {
     const wrap = el('div', 'fsv-view');
-    wrap.appendChild(tabBar());
     const bar = el('div', 'fsv-toolbar');
     const refresh = el('button', 'sp-btn', '↻ 刷新');
     refresh.type = 'button';
@@ -1588,7 +1575,6 @@ function createFilesView(host) {
 
   function viewOrganize() {
     const wrap = el('div', 'fsv-view');
-    wrap.appendChild(tabBar());
     const bar = el('div', 'fsv-toolbar');
     const input = document.createElement('input');
     input.className = 'sp-input fsv-organize-path';
