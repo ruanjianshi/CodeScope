@@ -519,6 +519,36 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-vol .sp-bar{height:8px;}
 #system-workspace .sp-vol .sp-rowbtn{flex:none;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:20px;}
+/* 概述区：跨两栏的一排关键数字（1Panel 顶部那种） */
+#system-workspace .sp-overview{grid-column:1/-1;}
+#system-workspace .sp-stat-row{display:flex;gap:10px;flex-wrap:wrap;}
+#system-workspace .sp-stat{flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:13px 8px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);}
+#system-workspace .sp-stat b{font-size:26px;font-weight:600;color:var(--text);line-height:1.1;font-variant-numeric:tabular-nums;}
+#system-workspace .sp-stat span{font-size:var(--sp-fs-xs);color:var(--dim);}
+/* 应用列表：图标 + 名称，点一下启动 */
+#system-workspace .sp-applist{display:flex;flex-direction:column;gap:2px;}
+#system-workspace .sp-app{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--sp-r-sm);
+  cursor:pointer;transition:background var(--sp-ease);}
+#system-workspace .sp-app:hover{background:var(--sp-tint);}
+#system-workspace .sp-app img{width:26px;height:26px;flex:none;object-fit:contain;border-radius:6px;}
+#system-workspace .sp-app .ph{width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:6px;
+  background:var(--sp-tint);color:var(--dim);font-size:11px;font-weight:600;}
+#system-workspace .sp-app .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sp-fs-sm);color:var(--text);}
+#system-workspace .sp-app .go{flex:none;color:var(--dim);font-size:var(--sp-fs-xs);opacity:0;transition:opacity var(--sp-ease);}
+#system-workspace .sp-app:hover .go{opacity:1;}
+
+/* 圆环详情浮层：hover 时把该指标的完整数据摊开（1Panel 的做法）。
+   pointer-events:none 很关键 —— 否则浮层会盖住圆环，鼠标一抖就闪。 */
+#system-workspace .sp-gtip{position:fixed;z-index:82;min-width:190px;max-width:300px;padding:10px 12px;
+  background:var(--sp-surface);border:1px solid var(--sp-hair-strong);border-radius:var(--sp-r);
+  box-shadow:var(--sp-raise);font-size:var(--sp-fs-sm);color:var(--text);pointer-events:none;line-height:1.5;}
+#system-workspace .sp-gtip[hidden]{display:none;}
+#system-workspace .sp-gtip .t{font-weight:600;margin-bottom:7px;display:flex;align-items:baseline;gap:7px;}
+#system-workspace .sp-gtip .t em{font-style:normal;font-weight:400;color:var(--dim);font-size:var(--sp-fs-xs);}
+#system-workspace .sp-gtip .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:var(--sp-fs-sm);}
+#system-workspace .sp-gtip .kv .k{color:var(--dim);}
+#system-workspace .sp-gtip .kv .v{text-align:right;font-variant-numeric:tabular-nums;}
 /* 右栏的核心条：这里宽度充裕，格子放大些，一眼看清哪个核在忙 */
 #system-workspace .sp-cores-lg{gap:3px;margin-top:2px;}
 #system-workspace .sp-cores-lg .sp-core{width:16px;height:28px;border-radius:4px;}
@@ -1104,6 +1134,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     timer: null,
     busy: false,
     history: { cpu: [], mem: [], ts: [] },
+    series: [],
+    seriesInterval: 5000,
     overview: null,
     processes: null,
     processSort: 'cpu',
@@ -1738,6 +1770,147 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     requestAnimationFrame(() => { fitOverviewHeight(); requestAnimationFrame(fitOverviewHeight); });
   }
 
+  /* 圆环详情：把 state.overview 里该项的完整数据摊开。
+     数值都来自后端 overview，不额外请求；拿不到的项如实写「—」，不编。 */
+  function gaugeTipHTML(key) {
+    const data = state.overview || {};
+    const cpu = data.cpu || {};
+    const memory = data.memory || {};
+    const swap = data.swap;
+    const disk = data.primaryDisk;
+    const thermal = data.thermal;
+    const row = (k, v) => '<span class="k">' + k + '</span><span class="v">' + v + '</span>';
+    if (key === 'cpu') {
+      return '<div class="t">CPU<em>' + esc(cpu.model || '') + '</em></div><div class="kv">' +
+        row('当前占用', (Number(cpu.usage) || 0).toFixed(1) + '%') +
+        row('核心数', (cpu.cores || '—') + ' 核') +
+        row('每核占用', (cpu.perCore || []).map((v) => Number(v).toFixed(0) + '%').join(' · ') || '—') +
+        row('负载 1/5/15', (cpu.load || []).map((v) => Number(v).toFixed(2)).join(' / ') || '—') +
+        '</div>';
+    }
+    if (key === 'mem') {
+      const total = Number(memory.total) || 0;
+      const used = Number(memory.used) || 0;
+      return '<div class="t">内存</div><div class="kv">' +
+        row('总数', fmtBytes(total)) +
+        row('已用', fmtBytes(used) + '（' + (Number(memory.usage) || 0).toFixed(1) + '%）') +
+        row('可用', fmtBytes(Math.max(0, total - used))) +
+        row('缓存', fmtBytes(memory.cached)) +
+        row('压缩', fmtBytes(memory.compressed)) +
+        row('联动内存', fmtBytes(memory.wired)) +
+        (swap ? row('交换区', fmtBytes(swap.used) + ' / ' + fmtBytes(swap.total)) : '') +
+        '</div>';
+    }
+    if (key === 'disk') {
+      if (!disk) return '<div class="t">主磁盘</div><div class="kv">' + row('状态', '未读到') + '</div>';
+      return '<div class="t">主磁盘<em>' + esc(disk.mount) + '</em></div><div class="kv">' +
+        row('设备', esc(disk.device || '—')) +
+        row('总容量', fmtBytes(disk.total)) +
+        row('已用', fmtBytes(disk.used) + '（' + Number(disk.capacity).toFixed(0) + '%）') +
+        row('可用', fmtBytes(disk.free)) +
+        (disk.fstype ? row('文件系统', esc(disk.fstype)) : '') +
+        '</div>';
+    }
+    if (key === 'load') {
+      const load = cpu.load || [];
+      const per = cpu.loadPercent || [];
+      return '<div class="t">系统负载</div><div class="kv">' +
+        row('1 分钟', (Number(load[0]) || 0).toFixed(2) + '（每核 ' + (Number(per[0]) || 0).toFixed(0) + '%）') +
+        row('5 分钟', (Number(load[1]) || 0).toFixed(2) + '（每核 ' + (Number(per[1]) || 0).toFixed(0) + '%）') +
+        row('15 分钟', (Number(load[2]) || 0).toFixed(2) + '（每核 ' + (Number(per[2]) || 0).toFixed(0) + '%）') +
+        row('说明', '每核 100% 表示跑满') +
+        '</div>';
+    }
+    if (key === 'temp') {
+      const has = thermal && thermal.available && thermal.celsius != null;
+      return '<div class="t">温度与热压力</div><div class="kv">' +
+        row('温度', has ? Number(thermal.celsius).toFixed(1) + ' ℃' : '暂不可读') +
+        row('热压力', { normal: '正常', high: '偏高', unknown: '未知' }[(thermal && thermal.pressure) || 'unknown'] || '—') +
+        (thermal && thermal.speedLimit != null ? row('CPU 限速', thermal.speedLimit + '%') : '') +
+        (has && thermal.source ? row('来源', esc(thermal.source)) : '') +
+        (has ? '' : row('提示', esc((thermal && thermal.hint) || ''))) +
+        '</div>';
+    }
+    return '';
+  }
+
+  /* 概述数字 + 常用应用：三个接口都要跑命令（ps / lsof / 扫 /Applications），
+     放在首屏之后异步取，拿到谁填谁 —— 不阻塞概览渲染，也不整页重绘。 */
+  async function loadOverviewExtras() {
+    const [proc, svc, apps] = await Promise.all([
+      api('/processes?limit=1').catch(() => null),
+      api('/services').catch(() => null),
+      api('/apps').catch(() => null),
+    ]);
+    const row = $('system-stat-row');
+    if (row) {
+      const stats = [
+        ['进程', proc && Number(proc.total)],
+        ['常驻服务', svc ? (svc.brew || []).length : null],
+        ['监听端口', svc ? (svc.ports || []).length : null],
+        ['开机启动项', svc ? (svc.agents || []).length : null],
+        ['已装应用', apps && Number(apps.total)],
+      ];
+      row.innerHTML = stats.map((pair) =>
+        '<div class="sp-stat"><b>' + (Number.isFinite(pair[1]) ? pair[1] : '—') + '</b><span>' + pair[0] + '</span></div>').join('');
+    }
+    const list = $('system-app-list');
+    if (list && apps && Array.isArray(apps.apps)) {
+      /* 常用优先，其次按启动次数 —— 「常用应用」就该是用户真的会点的那些 */
+      const items = apps.apps.slice().sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (Number(b.runs) || 0) - (Number(a.runs) || 0)).slice(0, 8);
+      list.innerHTML = items.map((app) => {
+        const initial = esc(String(app.name || '?').trim().slice(0, 1));
+        return '<div class="sp-app" data-launch="' + esc(app.path) + '" title="' + esc(app.name + (app.version ? ' · ' + app.version : '')) + '">' +
+          '<img src="/api/system-panel/apps/icon?id=' + encodeURIComponent(app.id || '') + '" alt="" data-initial="' + esc(initial) + '">' +
+          '<span class="nm">' + esc(app.name) + '</span><span class="go">启动 ›</span></div>';
+      }).join('') || '<div class="sp-empty">没有读到应用</div>';
+      /* 图标取不到就换成首字母占位块（不写内联 onerror：引号嵌套很容易把语法搞崩） */
+      list.querySelectorAll('.sp-app img').forEach((img) => {
+        img.onerror = () => {
+          const span = document.createElement('span');
+          span.className = 'ph';
+          span.textContent = img.dataset.initial || '?';
+          img.replaceWith(span);
+        };
+      });
+      list.querySelectorAll('.sp-app[data-launch]').forEach((node) => {
+        node.onclick = async () => {
+          try { await api('/apps/launch', { path: node.dataset.launch }); }
+          catch (error) { toast('err', String(error.message || error)); }
+        };
+      });
+    } else if (list) {
+      list.innerHTML = '<div class="sp-empty">没有读到应用</div>';
+    }
+  }
+
+  function bindGaugeTips() {
+    const tip = $('system-gauge-tip');
+    const cells = document.querySelectorAll('#system-workspace .sp-gcell');
+    if (!tip) return;
+    for (const cell of cells) {
+      if (cell.dataset.tipBound) continue;
+      cell.dataset.tipBound = '1';
+      const key = cell.dataset.gauge;
+      if (!key) continue;
+      cell.addEventListener('mouseenter', () => {
+        const html = gaugeTipHTML(key);
+        if (!html) return;
+        tip.innerHTML = html;
+        tip.hidden = false;
+        /* 定位到圆环右侧；靠右边界时翻到左侧，避免被窗口裁掉 */
+        const ring = cell.getBoundingClientRect();
+        const box = tip.getBoundingClientRect();
+        let left = ring.right + 12;
+        if (left + box.width > window.innerWidth - 12) left = Math.max(12, ring.left - box.width - 12);
+        const top = Math.min(Math.max(12, ring.top), Math.max(12, window.innerHeight - box.height - 12));
+        tip.style.left = Math.round(left) + 'px';
+        tip.style.top = Math.round(top) + 'px';
+      });
+      cell.addEventListener('mouseleave', () => { tip.hidden = true; });
+    }
+  }
+
   function wireShellEvents() {
     const back = $('system-back'); if (back) back.onclick = () => close();
     const refreshButton = $('system-refresh'); if (refreshButton) refreshButton.onclick = () => refresh(true);
@@ -1964,6 +2137,15 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       if (state.tab === 'overview') {
         state.overview = requireShape(await api('/overview'), ['cpu', 'memory', 'disks', 'identity'], '总览');
         pushHistory(state.overview);
+        /* 曲线数据取自后端的采样环：它 5 秒一采、跨会话保留，比前端自己攒的点更完整
+           （也能一次拿到网络流量与磁盘 IO，这两项前端拿不到）。失败不影响主体渲染。 */
+        try {
+          const hist = await api('/history?minutes=30');
+          if (hist && Array.isArray(hist.samples) && hist.samples.length) {
+            state.series = hist.samples;
+            if (Number(hist.interval) > 0) state.seriesInterval = Number(hist.interval);
+          }
+        } catch (_) { /* 拿不到就退回前端自己攒的点 */ }
         renderOverview(body);
         setHeadStatus();
       } else if (state.tab === 'processes') {
@@ -2067,18 +2249,28 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   const SPARK_H = 96;
   const SPARK_GRID = [0.2, 0.4, 0.6, 0.8].map((ratio) =>
     '<line class="grid" x1="0" y1="' + (SPARK_H * ratio).toFixed(1) + '" x2="100" y2="' + (SPARK_H * ratio).toFixed(1) + '" vector-effect="non-scaling-stroke"/>').join('');
-  function sparkline(values, series) {
-    const cls = 'sp-spark' + (series === 'mem' ? ' mem' : '');
+  function sparkline(values, series, max) {
+    const cls = 'sp-spark' + (series ? ' ' + series : '');
     const head = '<svg class="' + cls + '" viewBox="0 0 100 ' + SPARK_H + '" preserveAspectRatio="none" aria-hidden="true">' + SPARK_GRID;
     if (!values || values.length < 2) return head + '</svg>';
+    /* 上限：百分比类固定 100；流量/磁盘 IO 是速率，按峰值自适应，否则小流量会贴底看不出形状 */
+    const top = Number(max) > 0 ? Number(max) : 100;
     const pad = 2;
     const points = values.map((value, index) => {
       const x = index / (values.length - 1) * 100;
-      const y = SPARK_H - pad - Math.max(0, Math.min(1, (Number(value) || 0) / 100)) * (SPARK_H - pad * 2);
+      const y = SPARK_H - pad - Math.max(0, Math.min(1, (Number(value) || 0) / top)) * (SPARK_H - pad * 2);
       return x.toFixed(2) + ',' + y.toFixed(2);
     }).join(' ');
     return head + '<polygon class="fill" points="0,' + SPARK_H + ' ' + points + ' 100,' + SPARK_H + '"/>' +
       '<polyline points="' + points + '" vector-effect="non-scaling-stroke"/></svg>';
+  }
+
+  /* 速率格式化：网络与磁盘 IO 用 MB/s，小流量退回 KB/s */
+  function fmtRate(bytesPerSec) {
+    const value = Number(bytesPerSec) || 0;
+    if (value >= 1024 * 1024) return (value / 1024 / 1024).toFixed(1) + ' MB/s';
+    if (value >= 1024) return (value / 1024).toFixed(0) + ' KB/s';
+    return Math.round(value) + ' B/s';
   }
 
   /* 曲线下方的时间轴：左/中/右三个刻度，回答「这条线覆盖的是哪段时间」。 */
@@ -2095,12 +2287,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   }
 
   /* 曲线下的一行统计：当前 / 均值 / 峰值。数字比一条线更能说明「稳不稳」。 */
-  function sparkStats(values) {
+  function sparkStats(values, fmt) {
     if (!values || values.length < 2) return '<div class="sp-stats"><span>采集中…</span></div>';
+    const show = typeof fmt === 'function' ? fmt : (v) => v.toFixed(1) + '%';
     const sum = values.reduce((acc, value) => acc + (Number(value) || 0), 0);
-    return '<div class="sp-stats"><span>当前 <b>' + values[values.length - 1].toFixed(1) + '%</b></span>' +
-      '<span>均值 <b>' + (sum / values.length).toFixed(1) + '%</b></span>' +
-      '<span>峰值 <b>' + Math.max(...values).toFixed(1) + '%</b></span></div>';
+    return '<div class="sp-stats"><span>当前 <b>' + show(values[values.length - 1]) + '</b></span>' +
+      '<span>均值 <b>' + show(sum / values.length) + '</b></span>' +
+      '<span>峰值 <b>' + show(Math.max(...values)) + '</b></span></div>';
   }
 
   /* 采样历史持久化：关掉面板再打开（或刷新页面）曲线还在，不用从零等 3 秒。 */
@@ -2133,6 +2326,54 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     setTimeout(tick, 420);
   }
 
+  /* 监控区：4 条曲线（CPU / 内存 / 流量 / 磁盘 IO）。
+     有后端采样就用它（含流量与磁盘 IO），否则退回前端自己攒的 CPU/内存两点。 */
+  function monitorSource() {
+    const series = Array.isArray(state.series) ? state.series : [];
+    if (series.length >= 2) {
+      return {
+        from: 'backend',
+        ts: series.map((item) => item.t),
+        cpu: series.map((item) => Number(item.cpu) || 0),
+        mem: series.map((item) => (Number(item.mem) || 0) * 100),
+        net: series.map((item) => (Number(item.netIn) || 0) + (Number(item.netOut) || 0)),
+        disk: series.map((item) => (Number(item.disk) || 0) * 1024 * 1024),   /* MB/s → B/s，和流量统一单位 */
+      };
+    }
+    return {
+      from: 'local',
+      ts: state.history.ts,
+      cpu: state.history.cpu,
+      mem: state.history.mem,
+      net: [], disk: [],
+    };
+  }
+
+  function monitorHint() {
+    const src = monitorSource();
+    if (src.from === 'backend') {
+      const seconds = Math.max(1, Math.round(state.seriesInterval / 1000));
+      return '后端采样 · 每 ' + seconds + ' 秒一次 · 最近 ' + src.cpu.length + ' 个点';
+    }
+    return '最近 ' + src.cpu.length + ' 次采样 · 每 1.5 秒一次';
+  }
+
+  function monitorCharts() {
+    const src = monitorSource();
+    const peak = (list) => Math.max(1, ...list);
+    const charts = [
+      { key: 'cpu', label: 'CPU', values: src.cpu, max: 100, fmt: (v) => v.toFixed(1) + '%' },
+      { key: 'mem', label: '内存', values: src.mem, max: 100, fmt: (v) => v.toFixed(1) + '%' },
+    ];
+    if (src.net.length) charts.push({ key: 'net', label: '流量', values: src.net, max: peak(src.net), fmt: (v) => fmtRate(v) });
+    if (src.disk.length) charts.push({ key: 'disk', label: '磁盘 IO', values: src.disk, max: peak(src.disk), fmt: (v) => fmtRate(v) });
+    return charts.map((chart) => {
+      const last = chart.values.length ? chart.values[chart.values.length - 1] : 0;
+      return '<div><div class="sp-row"><span class="k">' + chart.label + '</span><span class="v">' + chart.fmt(last) + '</span></div>' +
+        sparkline(chart.values, chart.key, chart.max) + sparkAxis(src.ts) + sparkStats(chart.values, chart.fmt) + '</div>';
+    }).join('');
+  }
+
   /* ---------------------------------------------------------------- 总览 */
 
     function renderOverview(body) {
@@ -2151,7 +2392,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const hasTemp = thermal && thermal.available && thermal.celsius != null;
     const tempLevel = hasTemp ? (thermal.celsius >= 80 ? ' hot' : thermal.celsius >= 60 ? ' warm' : '') : '';
     const pressureText = { normal: '热压力正常', high: '热压力偏高', unknown: '热压力未知' }[(thermal && thermal.pressure) || 'unknown'] || '';
-    const tempCell = '<div class="sp-gcell' + tempLevel + '" title="' + esc((thermal && thermal.hint) || '') + '">' +
+    const tempCell = '<div class="sp-gcell' + tempLevel + '" data-gauge="temp">' +
       (hasTemp ? gauge(thermal.celsius, '') : '<div class="sp-gauge-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="42"/></svg><div class="sp-gauge-center"><span class="v"><b>—</b></span></div></div>') +
       '<div class="sp-gcap">温度</div>' +
       '<div class="sp-gsub">' + (hasTemp ? Number(thermal.celsius).toFixed(1) + ' ℃<br>' + esc(pressureText) : esc(pressureText) + '<br>温度暂不可读') + '</div>' +
@@ -2159,26 +2400,35 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
     body.innerHTML = `
       <div class="sp-ov">
+        <section class="sp-sec sp-overview">
+          <div class="sp-stat-row" id="system-stat-row">
+            <div class="sp-stat"><b>—</b><span>进程</span></div>
+            <div class="sp-stat"><b>—</b><span>常驻服务</span></div>
+            <div class="sp-stat"><b>—</b><span>监听端口</span></div>
+            <div class="sp-stat"><b>—</b><span>开机启动项</span></div>
+            <div class="sp-stat"><b>—</b><span>已装应用</span></div>
+          </div>
+        </section>
         <div class="sp-ov-main">
           <section class="sp-sec">
             <h3>状态<span class="sp-hint">实时 · 每 1.5 秒刷新</span></h3>
             <div class="sp-gauges">
-              <div class="sp-gcell">
+              <div class="sp-gcell" data-gauge="cpu">
                 ${gauge(cpu.usage, '')}
                 <div class="sp-gcap">CPU</div>
                 <div class="sp-gsub">${cpu.cores} 核<br>负载 ${loadText || '—'}</div>
               </div>
-              <div class="sp-gcell">
+              <div class="sp-gcell" data-gauge="mem">
                 ${gauge(memory.usage, '')}
                 <div class="sp-gcap">内存</div>
                 <div class="sp-gsub">已用 ${fmtBytes(memory.used)}<br>共 ${fmtBytes(memory.total)}</div>
               </div>
-              <div class="sp-gcell">
+              <div class="sp-gcell" data-gauge="disk">
                 ${gauge(disk ? disk.capacity : 0, '')}
                 <div class="sp-gcap">主磁盘</div>
                 <div class="sp-gsub">可用 ${disk ? fmtBytes(disk.free) : '—'}<br>共 ${disk ? fmtBytes(disk.total) : '—'}</div>
               </div>
-              <div class="sp-gcell">
+              <div class="sp-gcell" data-gauge="load">
                 ${gauge(loadPercent.length ? loadPercent[0] : 0, '')}
                 <div class="sp-gcap">负载</div>
                 <div class="sp-gsub">每核 ${loadPercent.length ? loadPercent[0].toFixed(0) + '%' : '—'}<br>1 / 5 / 15 分钟</div>
@@ -2190,11 +2440,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               : ''}
           </section>
 
+          <div class="sp-gtip" id="system-gauge-tip" hidden></div>
           <section class="sp-sec sp-sec-monitor">
-            <h3>监控<span class="sp-hint">最近 ${state.history.cpu.length} 次采样 · 每 1.5 秒一次</span></h3>
+            <h3>监控<span class="sp-hint">${monitorHint()}</span></h3>
             <div class="sp-cols">
-              <div><div class="sp-row"><span class="k">CPU</span><span class="v">${(Number(cpu.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.cpu, 'cpu')}${sparkAxis(state.history.ts)}${sparkStats(state.history.cpu)}</div>
-              <div><div class="sp-row"><span class="k">内存</span><span class="v">${(Number(memory.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.mem, 'mem')}${sparkAxis(state.history.ts)}${sparkStats(state.history.mem)}</div>
+              ${monitorCharts()}
             </div>
           </section>
 
@@ -2240,6 +2490,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             <div class="sp-cores sp-cores-lg">${cores || '<span class="sp-empty">没有每核数据</span>'}</div>
           </section>
           <section class="sp-sec">
+            <h3>常用应用<span class="sp-hint">点一下即启动</span></h3>
+            <div class="sp-applist" id="system-app-list"><div class="sp-empty">读取中…</div></div>
+          </section>
+          <section class="sp-sec">
             <h3>快捷操作</h3>
             <div class="sp-actions sp-actions-stack">
               <button class="sp-btn primary" data-goto="storage"><i class="gi">◍</i>去清理磁盘 / 缓存</button>
@@ -2252,7 +2506,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       </div>`;
     body.querySelectorAll('button[data-goto]').forEach((button) => { button.onclick = () => setView(button.dataset.goto); });
     body.querySelectorAll('button[data-reveal]').forEach((button) => { button.onclick = () => reveal(button.dataset.reveal); });
+    bindGaugeTips();
     scheduleFitOverview();
+    loadOverviewExtras().catch(() => {});
   }
 
 

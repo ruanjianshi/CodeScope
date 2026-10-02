@@ -550,6 +550,25 @@ async function thermalInfo() {
   });
 }
 
+/* 磁盘 IO（整机吞吐 MB/s）。
+   用 iostat -c 2：**第一次输出是「自启动以来的平均」，第二次才是当前速率**，所以取最后一行。
+   每块盘三列（KB/t、tps、MB/s），把各盘的 MB/s 相加得到整机吞吐。
+   非 macOS 或拿不到数据就返回 null —— 曲线该断就断，不编数字。 */
+async function diskIo() {
+  if (!IS_MAC) return null;
+  if (!(await which('iostat'))) return null;
+  const out = await text('iostat', ['-d', '-c', '2', '-w', '1'], 5000);
+  if (!out) return null;
+  /* 只保留数据行（形如「15.41  319  4.80  ...」），跳过两行表头 */
+  const rows = out.split(/\r?\n/).filter((line) => /^\s*[\d.]+(\s+[\d.]+){2,}\s*$/.test(line));
+  if (!rows.length) return null;
+  const nums = rows[rows.length - 1].trim().split(/\s+/).map(Number);
+  let mbPerSec = 0;
+  for (let i = 2; i < nums.length; i += 3) mbPerSec += Number(nums[i]) || 0;
+  if (!Number.isFinite(mbPerSec)) return null;
+  return { mbPerSec: Math.round(mbPerSec * 100) / 100, at: Date.now() };
+}
+
 /* 采样环：面板的实时曲线要有真历史 —— 只存在浏览器内存里的话，一刷新就断，
    用户永远看不到「过去十分钟发生了什么」。5 秒一采样，保留 60 分钟（720 点）。
    定时器 unref，绝不阻止进程退出；采样只读、幂等、失败不抛。 */
@@ -609,6 +628,7 @@ async function sampleHistory() {
   const memory = await memoryInfo().catch(() => null);
   const swap = await swapInfo().catch(() => null);
   const net = await netCounters().catch(() => null);
+  const disk = await diskIo().catch(() => null);
   const at = Date.now();
   let netIn = 0;
   let netOut = 0;
@@ -630,6 +650,7 @@ async function sampleHistory() {
     swapTotal: swap ? swap.total : 0,
     load: Number(os.loadavg()[0]) || 0,
     netIn, netOut,
+    disk: disk ? disk.mbPerSec : 0,
   });
   while (HISTORY.samples.length > HISTORY.max) HISTORY.samples.shift();
 }
