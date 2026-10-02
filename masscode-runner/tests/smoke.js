@@ -405,7 +405,11 @@ void bubbleSort(Array& values);
   assert(serverSource.includes("'/api/integrations/code-server'") && serverSource.includes('createCodeServerProxy') && serverSource.includes('VSCODE_PROXY.stop()'), '服务端缺少 VS Code 的托管接口、代理接线或退出清理');
   assert(codeServerSource.includes("'--bind-addr'") && codeServerSource.includes("'--auth', 'none'") && codeServerSource.includes('--extensions-dir') && codeServerSource.includes('--user-data-dir'), 'VS Code 服务启动参数不全（绑定地址 / 免密 / 数据与扩展目录）');
   assert(codeServerSource.includes("path.join(home, '.codescope'") && codeServerSource.includes("const home = os.homedir()") && codeServerSource.includes('resolveNodeRuntime'), 'VS Code 服务没有按约定目录找 code-server，或没处理「桌面版 process.execPath 是 Electron」的情况');
-  assert(codeServerProxySource.includes("server.on('upgrade'") && codeServerProxySource.includes("lower === 'host'") && codeServerProxySource.includes("lower === 'origin'"), 'VS Code 代理缺少 WebSocket 升级转发，或没有改写 Host/Origin（上游会判跨源）');
+  /* Origin 现在**故意保持原样**：VS Code 会用它生成 webview 的校验参数
+     （pre/index.html?origin=...），改写成上游地址会让 iframe 的校验与浏览器实际的
+     父窗口 origin 对不上，图片 / Markdown 预览就会一直转圈。
+     同源判断交给 Host（仍然改写），实测足够，上游不会判跨源。 */
+  assert(codeServerProxySource.includes("server.on('upgrade'") && codeServerProxySource.includes("lower === 'host'") && !codeServerProxySource.includes("lower === 'origin'"), 'VS Code 代理缺少 WebSocket 升级转发 / Host 改写，或又把 Origin 改写了（会让 webview 预览无限转圈）');
   assert(html.includes('#tree-head,#git-head,#tag-head,#draw-head,#office-head,#reading-head') && html.includes('#tree-head .side-head-actions button,#draw-head .side-head-actions button,#office-head .side-head-actions button,#reading-head .side-head-actions button'), 'Office 与其他一级模块未使用统一侧栏 UI');
   assert(serverSource.includes('function runtimeReadiness') && serverSource.includes("releaseChannel:'stable'") && launchers.includes('node preflight.js --quiet'), '跨平台运行预检或 v2 稳定版契约缺失');
   assert(preflightSource.includes("process.argv.includes('--json')") && preflightSource.includes('missingDependencies') && preflightSource.includes('fs.constants.R_OK | fs.constants.W_OK'), '启动预检缺少 JSON、依赖或目录权限诊断');
