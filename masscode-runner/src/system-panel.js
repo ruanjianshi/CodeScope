@@ -458,8 +458,19 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* ── 概览页布局（参考 1Panel）：左主区 + 右信息栏 ──
    左区放「状态（大圆环排）/ 监控（曲线）/ 磁盘卷」，右区放系统信息与快捷操作。
    圆环不再被卡片包着 —— 环本身就是主角，卡片框只会加噪。 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);align-items:start;}
+/* 概览页要「自适应高度」：内容撑满内容区，多出来的高度全部给曲线。
+   用 :has() 限定，只影响概览页，不动其它页的布局。 */
+#system-body:has(> .sp-ov){display:flex;flex-direction:column;}
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);
+  align-items:start;flex:1;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
+/* 左栏撑满容器高度（右栏保持内容高度）——不这样写，grid 会按内容收缩左栏，
+   监控区的 flex:1 就失去参照，曲线永远停在固定高度。 */
+#system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:space-between;}
+/* 监控区是可伸展的那一块：窗口变高 → 曲线跟着变高，而不是在底部留白 */
+#system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+#system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;}
+#system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;}
 #system-workspace .sp-sec{min-width:0;}
 #system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
 /* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
@@ -555,6 +566,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-core{width:16px;height:24px;border-radius:3px;background:var(--sp-tint-strong);position:relative;overflow:hidden;}
 #system-workspace .sp-core i{position:absolute;bottom:0;left:0;right:0;background:var(--accent);}
 #system-workspace .sp-spark{margin-top:8px;height:96px;width:100%;display:block;overflow:visible;}
+/* 在概览页里让曲线吃满剩余高度：min-height 保证窗口不高时也够看，
+   max-height 防止超宽屏把一条线拉成一大片色块 */
+#system-workspace .sp-sec-monitor .sp-spark{flex:1 1 auto;height:auto;min-height:96px;max-height:300px;}
 #system-workspace .sp-spark .grid{stroke:var(--sp-hair);stroke-width:1;}
 #system-workspace .sp-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
 #system-workspace .sp-spark .fill{fill:color-mix(in srgb, var(--accent) 15%, transparent);stroke:none;}
@@ -2065,7 +2079,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               : ''}
           </section>
 
-          <section class="sp-sec">
+          <section class="sp-sec sp-sec-monitor">
             <h3>监控<span class="sp-hint">最近 ${state.history.cpu.length} 次采样 · 每 1.5 秒一次</span></h3>
             <div class="sp-cols">
               <div><div class="sp-row"><span class="k">CPU</span><span class="v">${(Number(cpu.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.cpu, 'cpu')}${sparkAxis(state.history.ts)}${sparkStats(state.history.cpu)}</div>

@@ -197,8 +197,19 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* \u2500\u2500 \u6982\u89C8\u9875\u5E03\u5C40\uFF08\u53C2\u8003 1Panel\uFF09\uFF1A\u5DE6\u4E3B\u533A + \u53F3\u4FE1\u606F\u680F \u2500\u2500
    \u5DE6\u533A\u653E\u300C\u72B6\u6001\uFF08\u5927\u5706\u73AF\u6392\uFF09/ \u76D1\u63A7\uFF08\u66F2\u7EBF\uFF09/ \u78C1\u76D8\u5377\u300D\uFF0C\u53F3\u533A\u653E\u7CFB\u7EDF\u4FE1\u606F\u4E0E\u5FEB\u6377\u64CD\u4F5C\u3002
    \u5706\u73AF\u4E0D\u518D\u88AB\u5361\u7247\u5305\u7740 \u2014\u2014 \u73AF\u672C\u8EAB\u5C31\u662F\u4E3B\u89D2\uFF0C\u5361\u7247\u6846\u53EA\u4F1A\u52A0\u566A\u3002 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);align-items:start;}
+/* \u6982\u89C8\u9875\u8981\u300C\u81EA\u9002\u5E94\u9AD8\u5EA6\u300D\uFF1A\u5185\u5BB9\u6491\u6EE1\u5185\u5BB9\u533A\uFF0C\u591A\u51FA\u6765\u7684\u9AD8\u5EA6\u5168\u90E8\u7ED9\u66F2\u7EBF\u3002
+   \u7528 :has() \u9650\u5B9A\uFF0C\u53EA\u5F71\u54CD\u6982\u89C8\u9875\uFF0C\u4E0D\u52A8\u5176\u5B83\u9875\u7684\u5E03\u5C40\u3002 */
+#system-body:has(> .sp-ov){display:flex;flex-direction:column;}
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);
+  align-items:start;flex:1;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
+/* \u5DE6\u680F\u6491\u6EE1\u5BB9\u5668\u9AD8\u5EA6\uFF08\u53F3\u680F\u4FDD\u6301\u5185\u5BB9\u9AD8\u5EA6\uFF09\u2014\u2014\u4E0D\u8FD9\u6837\u5199\uFF0Cgrid \u4F1A\u6309\u5185\u5BB9\u6536\u7F29\u5DE6\u680F\uFF0C
+   \u76D1\u63A7\u533A\u7684 flex:1 \u5C31\u5931\u53BB\u53C2\u7167\uFF0C\u66F2\u7EBF\u6C38\u8FDC\u505C\u5728\u56FA\u5B9A\u9AD8\u5EA6\u3002 */
+#system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:space-between;}
+/* \u76D1\u63A7\u533A\u662F\u53EF\u4F38\u5C55\u7684\u90A3\u4E00\u5757\uFF1A\u7A97\u53E3\u53D8\u9AD8 \u2192 \u66F2\u7EBF\u8DDF\u7740\u53D8\u9AD8\uFF0C\u800C\u4E0D\u662F\u5728\u5E95\u90E8\u7559\u767D */
+#system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+#system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;}
+#system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;}
 #system-workspace .sp-sec{min-width:0;}
 #system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
 /* \u5706\u73AF\u6392\uFF1A\u7B49\u5BBD\u5355\u5143\u7EB5\u5411\u6392\uFF08\u73AF / \u540D\u79F0 / \u660E\u7EC6\uFF09\uFF0C\u73AF\u5F84\u4E00\u81F4\u624D\u80FD\u6A2A\u5411\u6BD4\u51FA\u8C01\u5403\u7D27 */
@@ -294,6 +305,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-core{width:16px;height:24px;border-radius:3px;background:var(--sp-tint-strong);position:relative;overflow:hidden;}
 #system-workspace .sp-core i{position:absolute;bottom:0;left:0;right:0;background:var(--accent);}
 #system-workspace .sp-spark{margin-top:8px;height:96px;width:100%;display:block;overflow:visible;}
+/* \u5728\u6982\u89C8\u9875\u91CC\u8BA9\u66F2\u7EBF\u5403\u6EE1\u5269\u4F59\u9AD8\u5EA6\uFF1Amin-height \u4FDD\u8BC1\u7A97\u53E3\u4E0D\u9AD8\u65F6\u4E5F\u591F\u770B\uFF0C
+   max-height \u9632\u6B62\u8D85\u5BBD\u5C4F\u628A\u4E00\u6761\u7EBF\u62C9\u6210\u4E00\u5927\u7247\u8272\u5757 */
+#system-workspace .sp-sec-monitor .sp-spark{flex:1 1 auto;height:auto;min-height:96px;max-height:300px;}
 #system-workspace .sp-spark .grid{stroke:var(--sp-hair);stroke-width:1;}
 #system-workspace .sp-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
 #system-workspace .sp-spark .fill{fill:color-mix(in srgb, var(--accent) 15%, transparent);stroke:none;}
@@ -812,7 +826,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             ${P&&Number(P.capacity)>=90?'<p class="sp-note sp-warn">\u4E3B\u78C1\u76D8\u5DF2\u7528 '+Number(P.capacity).toFixed(0)+"%\uFF0C\u53BB\u300C\u5B58\u50A8\u300D\u6E05\u7406\u4E00\u4E0B\u7F13\u5B58\u4E0E\u5927\u6587\u4EF6\u3002</p>":""}
           </section>
 
-          <section class="sp-sec">
+          <section class="sp-sec sp-sec-monitor">
             <h3>\u76D1\u63A7<span class="sp-hint">\u6700\u8FD1 ${r.history.cpu.length} \u6B21\u91C7\u6837 \xB7 \u6BCF 1.5 \u79D2\u4E00\u6B21</span></h3>
             <div class="sp-cols">
               <div><div class="sp-row"><span class="k">CPU</span><span class="v">${(Number(i.usage)||0).toFixed(1)}%</span></div>${o(r.history.cpu,"cpu")}${p(r.history.ts)}${h(r.history.cpu)}</div>
