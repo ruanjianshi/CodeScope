@@ -20,9 +20,12 @@ function copyHeaders(rawHeaders, targetHost) {
   for (let index = 0; index < rawHeaders.length; index += 2) {
     const name = rawHeaders[index], value = rawHeaders[index + 1];
     const lower = String(name).toLowerCase();
-    /* Host / Origin 一律改写成目标地址：让 code-server 看到的是一个自洽的同源请求。 */
+    /* Host 改写成目标地址：code-server 用它做同源判断，不改会被拒。
+       Origin **保持原样**（浏览器看到的是代理地址）：
+       VS Code 会用 Origin 生成 webview 的校验参数（pre/index.html?origin=...），
+       如果这里改成上游地址，iframe 里的校验就会与浏览器实际的父窗口 origin 对不上，
+       消息被丢弃 → webview 永远不回报就绪 → 图片/Markdown 预览无限转圈（踩过）。 */
     if (lower === 'host') { lines.push(`${name}: ${targetHost}`); continue; }
-    if (lower === 'origin') { lines.push(`${name}: http://${targetHost}`); continue; }
     if (lower === 'connection' || lower === 'upgrade') continue;
     lines.push(`${name}: ${value}`);
   }
