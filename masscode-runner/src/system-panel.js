@@ -474,8 +474,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-sec{min-width:0;}
 #system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
 /* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
-#system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:18px 14px;}
-#system-workspace .sp-gcell{flex:0 0 auto;width:140px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
+#system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:20px 14px;justify-content:space-between;}
+/* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
+   2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
+#system-workspace .sp-gcell{flex:1 1 140px;min-width:140px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
 #system-workspace .sp-gcell .sp-gauge-ring{width:124px;height:124px;}
 #system-workspace .sp-gcell .sp-gauge-center b{font-size:25px;}
 #system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
@@ -502,6 +504,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* 右栏的核心条：这里宽度充裕，格子放大些，一眼看清哪个核在忙 */
 #system-workspace .sp-cores-lg{gap:3px;margin-top:2px;}
 #system-workspace .sp-cores-lg .sp-core{width:16px;height:28px;border-radius:4px;}
+/* 宽屏：环径与明细字号跟着放大，免得大片空间里只有几个小环 */
+@media (min-width:1800px){
+  #system-workspace .sp-gcell .sp-gauge-ring{width:152px;height:152px;}
+  #system-workspace .sp-gcell .sp-gauge-center b{font-size:30px;}
+  #system-workspace .sp-gcap{font-size:var(--sp-fs-md);}
+  #system-workspace .sp-gsub{font-size:var(--sp-fs-sm);}
+  #system-workspace .sp-gcell .sp-core{width:13px;height:19px;}
+}
 @media (max-width:1080px){
   #system-workspace .sp-ov{grid-template-columns:1fr;}
 }
@@ -1615,6 +1625,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     handle.addEventListener('pointermove', (event) => {
       if (!start) return;
       applyNavWidth(start.width + (event.clientX - start.x), true);
+      fitOverviewHeight();
     });
     const end = () => {
       if (!start) return;
@@ -1628,6 +1639,34 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     handle.addEventListener('dblclick', () => applyNavWidth(NAV_W_DEFAULT, true));
   }
 
+  /* 概览页自适应高度。
+     为什么不纯用 CSS：`:has()`、grid 的 `align-self:stretch` 在 Safari 上与 Chrome
+     表现并不一致（实测在 Chrome 里已经撑满，用户侧仍有底部空白）。
+     这里直接量内容区的可用高度写进 min-height —— 纯 DOM 读写，任何浏览器都一样；
+     多出来的空间由左栏的 justify-content:space-between 分配到区块间距。 */
+  function fitOverviewHeight() {
+    const body = $('system-body');
+    if (!body) return;
+    const ov = body.querySelector(':scope > .sp-ov');
+    if (!ov) return;   /* 不是概览页，什么都不做 */
+    const cs = getComputedStyle(body);
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const available = Math.max(0, body.clientHeight - pad);
+    const needed = ov.scrollHeight;   /* 内容自然高度 */
+    const target = Math.max(available, needed);
+    ov.style.minHeight = target + 'px';
+    /* 左栏也显式给高度：grid 的 align-self:stretch 在 Safari 上与 Chrome 表现不一致
+       （Chrome 能撑满、Safari 会按内容收缩）。显式设高度后，左栏内部的
+       justify-content:space-between 和曲线的 flex:1 才有确定的参照。 */
+    const main = ov.querySelector('.sp-ov-main');
+    if (main) main.style.minHeight = target + 'px';
+  }
+
+  function scheduleFitOverview() {
+    /* 渲染后布局可能还要一拍才稳定（字体、滚动条），用 rAF 兜一次 */
+    requestAnimationFrame(() => { fitOverviewHeight(); requestAnimationFrame(fitOverviewHeight); });
+  }
+
   function wireShellEvents() {
     const back = $('system-back'); if (back) back.onclick = () => close();
     const refreshButton = $('system-refresh'); if (refreshButton) refreshButton.onclick = () => refresh(true);
@@ -1636,6 +1675,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       auto.checked = state.auto;
       auto.onchange = () => { state.auto = auto.checked; schedule(); };
     }
+    window.addEventListener('resize', () => { fitOverviewHeight(); });
     const navList = $('system-nav-list');
     if (navList) {
       navList.onclick = (event) => {
@@ -2141,6 +2181,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       </div>`;
     body.querySelectorAll('button[data-goto]').forEach((button) => { button.onclick = () => setView(button.dataset.goto); });
     body.querySelectorAll('button[data-reveal]').forEach((button) => { button.onclick = () => reveal(button.dataset.reveal); });
+    scheduleFitOverview();
   }
 
 
