@@ -525,7 +525,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:20px 14px;justify-content:space-between;}
 /* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
    2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
-#system-workspace .sp-gcell{flex:1 1 140px;min-width:140px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}
+/* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
+   2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
+#system-workspace .sp-gcell{flex:1 1 140px;min-width:124px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}
 #system-workspace .sp-gcell .sp-gauge-ring{width:100px;height:100px;}
 #system-workspace .sp-gcell .sp-gauge-center b{font-size:23px;}
 #system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
@@ -533,6 +535,15 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gcell .sp-cores{justify-content:center;gap:1.5px;margin-top:1px;}
 #system-workspace .sp-gcell .sp-core{width:11px;height:16px;}
 #system-workspace .sp-gcell .sp-gauge-ring.crit .sp-gauge-center b{color:var(--sp-danger);}
+/* 接了外置盘后环会变多（最多 8 个）。实测概览左栏只有 962px 宽，7 个 140px 的环
+   放不下就会换行 —— 多出一整行约 178px，直接把页面顶到要滚动。所以超过 6 个时
+   整体收紧一档：宁可环小一点，也要保住一行。
+   注意必须改 flex-basis —— 换行是按 flex base size 算的，只压 min-width 没用。 */
+#system-workspace .sp-gauges-dense .sp-gcell{flex:1 1 96px;min-width:96px;gap:5px;}
+#system-workspace .sp-gauges-dense .sp-gcell .sp-gauge-ring{width:86px;height:86px;}
+#system-workspace .sp-gauges-dense .sp-gcell .sp-gauge-center b{font-size:20px;}
+#system-workspace .sp-gauges-dense .sp-gcap{font-size:var(--sp-fs-xs);}
+#system-workspace .sp-gauges-dense .sp-gsub{font-size:10px;min-height:2.4em;}
 /* 右侧栏的快捷操作：2×2 网格 —— 竖排 4 行太占高度，横排又会把文字挤断；
    两列刚好容下「图标 + 四字」，主操作占一格不抢戏。 */
 /* 用两个 class 提高特异性：.sp-actions 的 display:flex 与单 class 写法特异性相同，
@@ -1919,6 +1930,24 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         (has ? '' : row('提示', esc((thermal && thermal.hint) || ''))) +
         '</div>';
     }
+    if (key === 'ext-none') {
+      return '<div class="t">外置盘</div><div class="kv">' +
+        row('状态', '当前没有接外置盘') +
+        row('说明', '插上 U 盘或移动硬盘后，这里会自动多出一个环') +
+        '</div>';
+    }
+    if (key.indexOf('ext:') === 0) {
+      const item = findVolumeByKey(key);
+      if (!item) return '<div class="t">外置盘</div><div class="kv">' + row('状态', '已拔出') + '</div>';
+      return '<div class="t">外置盘<em>' + esc(volumeName(item)) + '</em></div><div class="kv">' +
+        row('挂载点', esc(item.mount || '—')) +
+        row('设备', esc(item.device || '—')) +
+        row('总容量', fmtBytes(item.total)) +
+        row('已用', fmtBytes(item.used) + '（' + Number(item.capacity).toFixed(0) + '%）') +
+        row('可用', fmtBytes(item.free)) +
+        row('只读', item.readOnly ? '是（可能是 NTFS 等未装驱动的格式）' : '否') +
+        '</div>';
+    }
     return '';
   }
 
@@ -2359,6 +2388,42 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       '</div></div>';
   }
 
+  /* ── 外置盘（U 盘 / 移动硬盘 / 外接 SSD）──
+     后端在 disks[] 里已经标了 kind，直接用它，不靠「路径是不是 /Volumes/」去猜 ——
+     macOS 会把一堆 APFS 系统辅助卷也挂在 /Volumes 下面，按路径猜会认错。
+     为什么单拎出来：主磁盘那个环管不到外接盘，而外接盘恰恰是最容易满的
+     （实测一块 58GB 的 U 盘已经 100%）。
+     排在「温度」后面而不是「主磁盘」后面：盘的数量会随插拔变，放末尾
+     才能保证 CPU / 内存 / 主磁盘 / 负载 / 温度 的位置永远不动。 */
+  const MAX_EXT_RINGS = 3;
+  function externalVolumes(data) {
+    return ((data && data.disks) || []).filter((item) => item.kind === 'external');
+  }
+  /* 卷名：label 优先。df 出来的挂载路径在非 ASCII 上会变成 EAGET?? 这种乱码，
+     而 label 是干净的（EAGET忆捷）；没有 label 才退回路径最后一段。 */
+  function volumeName(item) {
+    const label = String((item && item.label) || '').trim();
+    if (label) return label;
+    const parts = String((item && item.mount) || '').split('/').filter(Boolean);
+    return parts[parts.length - 1] || (item && item.device) || '外置盘';
+  }
+  /* 环的 key 用设备名（/dev/disk7s1 → ext:disk7s1）：比下标稳，
+     插拔别的盘导致顺序变化时不会把 tip 指到另一块盘上。 */
+  function volumeKey(item) {
+    return 'ext:' + String((item && (item.device || item.mount)) || '').replace(/^\/dev\//, '');
+  }
+  function findVolumeByKey(key) {
+    const id = String(key || '').slice(4);
+    return externalVolumes(state.overview).find((item) => String(item.device || '').replace(/^\/dev\//, '') === id) || null;
+  }
+
+  /* 读不到数据的环：只有底环 + 一个「—」。不编数字，也不留空位。 */
+  function emptyRing() {
+    return '<div class="sp-gauge-ring"><svg viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle class="track" cx="50" cy="50" r="42"/></svg>' +
+      '<div class="sp-gauge-center"><span class="v"><b>—</b></span></div></div>';
+  }
+
   /* 曲线：网格基线 + 面积填充 + 系列配色。
      三个要点：
      ① 点数不足时也要给一张「有底」的图（网格 + 采集提示），否则首屏是一片空白；
@@ -2530,6 +2595,19 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     setGauge('disk', disk ? disk.capacity : 0);
     setGauge('load', (cpu.loadPercent || [])[0]);
 
+    /* 外置盘：数量变了（插了 / 拔了盘）就整页重建一次，平时只改数值。
+       插拔是低频事件，为它单独做一套增删 DOM 的逻辑不值得，重建一次的闪可以接受；
+       但绝不能每 1.5 秒都重建 —— 那正是之前「页面在闪」的老毛病。 */
+    const extShown = Math.min(externalVolumes(data).length, MAX_EXT_RINGS);
+    const extRendered = body.querySelectorAll('.sp-gcell[data-gauge^="ext:"]').length;
+    if (extShown !== extRendered) { body.innerHTML = ''; renderOverview(body); return; }
+    for (const item of externalVolumes(data)) {
+      const key = volumeKey(item);
+      setGauge(key, item.capacity);
+      const sub = body.querySelector('.sp-gcell[data-gauge="' + key + '"] .sp-gsub');
+      if (sub) sub.textContent = '可用 ' + fmtBytes(item.free) + ' · 共 ' + fmtBytes(item.total);
+    }
+
     /* 曲线：只改 points，不重建 SVG */
     const src = monitorSource();
     const peak = (list) => Math.max(1, ...list);
@@ -2612,10 +2690,36 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const tempLevel = hasTemp ? (thermal.celsius >= 80 ? ' hot' : thermal.celsius >= 60 ? ' warm' : '') : '';
     const pressureText = { normal: '热压力正常', high: '热压力偏高', unknown: '热压力未知' }[(thermal && thermal.pressure) || 'unknown'] || '';
     const tempCell = '<div class="sp-gcell' + tempLevel + '" data-gauge="temp">' +
-      (hasTemp ? gauge(thermal.celsius, '') : '<div class="sp-gauge-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="42"/></svg><div class="sp-gauge-center"><span class="v"><b>—</b></span></div></div>') +
+      (hasTemp ? gauge(thermal.celsius, '') : emptyRing()) +
       '<div class="sp-gcap">温度</div>' +
       '<div class="sp-gsub">' + (hasTemp ? Number(thermal.celsius).toFixed(1) + ' ℃ · ' + esc(pressureText) : esc(pressureText) + ' · 温度暂不可读') + '</div>' +
       '</div>';
+
+    /* 外置盘单元：一块盘一个环，最多 3 个（再多会把这一行挤到换行，反而更乱），
+       超出的用一格说明「还有 N 块，见下方磁盘卷」。
+       一块都没接时给一个「—」占位 —— 让人知道这里本来该有东西，而不是以为面板漏了。 */
+    const externals = externalVolumes(data);
+    const shownExt = externals.slice(0, MAX_EXT_RINGS);
+    const extCells = shownExt.map((item) =>
+      '<div class="sp-gcell" data-gauge="' + esc(volumeKey(item)) + '">' +
+      gauge(item.capacity, '') +
+      '<div class="sp-gcap">' + esc(volumeName(item)) + '</div>' +
+      '<div class="sp-gsub">可用 ' + fmtBytes(item.free) + ' · 共 ' + fmtBytes(item.total) + '</div>' +
+      '</div>').join('');
+    const hiddenExt = externals.length - shownExt.length;
+    const extCell = externals.length
+      ? extCells + (hiddenExt > 0
+          ? '<div class="sp-gcell">' + emptyRing() +
+            '<div class="sp-gcap">还有 ' + hiddenExt + ' 块</div>' +
+            '<div class="sp-gsub">见下方「磁盘卷」</div></div>'
+          : '')
+      : '<div class="sp-gcell" data-gauge="ext-none">' + emptyRing() +
+        '<div class="sp-gcap">外置盘</div>' +
+        '<div class="sp-gsub">未接外置盘</div></div>';
+
+    /* 环多到超过 6 个（接了外置盘）就收紧一档，见 .sp-gauges-dense 的注释 */
+    const gaugeCount = 5 + Math.min(externals.length, MAX_EXT_RINGS) + (hiddenExt > 0 ? 1 : 0);
+    const gaugesCls = 'sp-gauges' + (gaugeCount > 6 ? ' sp-gauges-dense' : '');
 
     body.innerHTML = `
       <div class="sp-ov">
@@ -2631,7 +2735,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         <div class="sp-ov-main">
           <section class="sp-sec">
             <h3>状态<span class="sp-hint">实时 · 每 1.5 秒刷新</span></h3>
-            <div class="sp-gauges">
+            <div class="${gaugesCls}">
               <div class="sp-gcell" data-gauge="cpu">
                 ${gauge(cpu.usage, '')}
                 <div class="sp-gcap">CPU</div>
@@ -2653,6 +2757,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
                 <div class="sp-gsub">每核 ${loadPercent.length ? loadPercent[0].toFixed(0) + '%' : '—'} · 1 / 5 / 15 分钟</div>
               </div>
               ${tempCell}
+              ${extCell}
             </div>
             <div id="system-disk-warn">${disk && Number(disk.capacity) >= 90
               ? '<p class="sp-note sp-warn">主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%，去「存储」清理一下缓存与大文件。</p>'
@@ -2673,7 +2778,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               ${(data.disks || []).map((item) => `
                 <div class="sp-vol" data-mount="${esc(item.mount)}" title="${esc(item.mount)}">
                   <div class="sp-vol-top">
-                    <span class="sp-vol-name">${esc(item.mount)}</span>
+                    <span class="sp-vol-name">${esc(volumeName(item))}</span>
                     <span class="sp-vol-dev muted">${esc(item.device)}</span>
                     <span class="sp-vol-free">${fmtBytes(item.free)} 可用 / ${fmtBytes(item.total)}</span>
                     <span class="sp-vol-pct num cap${levelClass(item.capacity)}">${Number(item.capacity).toFixed(0)}%</span>
