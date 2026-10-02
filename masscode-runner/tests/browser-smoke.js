@@ -296,9 +296,17 @@ print(r.run())
   if(await knowledgePage.locator('.VPHero').count())throw new Error('知识库站点根仍是落地页（VPHero 还在）');
   if(/开始阅读|长期积累/.test(await knowledgePage.content()))throw new Error('知识库站点根仍带旧落地页内容');
   if(!await knowledgePage.locator('a.codescope-return[href="/"]').count()||!await knowledgePage.getByRole('button',{name:'搜索知识库'}).count())throw new Error('知识库阅读站缺少返回入口或本地全文搜索');
-  const kbPalette=knowledgePage.getByLabel('配色',{exact:true}),kbWidth=knowledgePage.getByLabel('版心',{exact:true});
-  if(!await kbPalette.count()||!await kbWidth.count())throw new Error('知识库阅读站缺少配色或版心切换器');
-  await kbPalette.selectOption('forest');await kbWidth.selectOption('wide');await knowledgePage.waitForFunction(()=>document.documentElement.dataset.kbTheme==='forest'&&document.documentElement.dataset.kbWidth==='wide');
+  const kbPalette=knowledgePage.getByLabel('配色',{exact:true}),kbWidth=knowledgePage.getByLabel('版心',{exact:true}),kbSize=knowledgePage.getByLabel('字号',{exact:true});
+  if(!await kbPalette.count()||!await kbWidth.count()||!await kbSize.count())throw new Error('知识库阅读站缺少配色、版心或字号切换器');
+  await kbPalette.selectOption('forest');await kbWidth.selectOption('wide');await kbSize.selectOption('large');
+  await knowledgePage.waitForFunction(()=>document.documentElement.dataset.kbTheme==='forest'&&document.documentElement.dataset.kbWidth==='wide'&&document.documentElement.dataset.kbSize==='large');
+  /* 字号档位必须同时放大正文和标题（标题走 rem，只改 .vp-doc 的 font-size 是不生效的）。 */
+  const kbSized=await knowledgePage.evaluate(()=>{
+    const doc=document.querySelector('.vp-doc'),h1=document.querySelector('.vp-doc h1');
+    return { doc:parseFloat(getComputedStyle(doc).fontSize), h1:parseFloat(getComputedStyle(h1).fontSize) };
+  });
+  if(!(kbSized.doc>16.5&&kbSized.h1>39))throw new Error('字号档位未同时放大正文与标题：'+JSON.stringify(kbSized));
+  await kbSize.selectOption('normal');
   const kbAppearance=await knowledgePage.evaluate(()=>({brand:getComputedStyle(document.documentElement).getPropertyValue('--vp-c-brand-1').trim(),contentWidth:getComputedStyle(document.documentElement).getPropertyValue('--kb-content-width').trim(),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}));
   if(kbAppearance.brand!=='#49b889'||kbAppearance.contentWidth!=='1080px'||kbAppearance.overflow>1)throw new Error('知识库主题、宽屏版心或响应式布局未生效：'+JSON.stringify(kbAppearance));
   await kbPalette.selectOption('ocean');await kbWidth.selectOption('standard');

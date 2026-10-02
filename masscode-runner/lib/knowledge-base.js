@@ -163,7 +163,7 @@ export default defineConfig({
      于是每次打开都会先按默认的海洋蓝渲染一遍，再跳成你选的配色（森林绿等），
      看起来就是「打开时颜色不对、闪一下」。这段内联脚本在 CSS 生效前就跑完了。 */
   head: [
-    ['script', {}, "(function(){try{var d=document.documentElement;var p=localStorage.getItem('codescope-kb-theme');var w=localStorage.getItem('codescope-kb-width');if(p&&['ocean','forest','violet','paper'].indexOf(p)>=0){d.dataset.kbTheme=p}if(w&&['standard','compact','wide'].indexOf(w)>=0){d.dataset.kbWidth=w}}catch(e){}})()"]
+    ['script', {}, "(function(){try{var d=document.documentElement;var p=localStorage.getItem('codescope-kb-theme');var w=localStorage.getItem('codescope-kb-width');var s=localStorage.getItem('codescope-kb-size');if(p&&['ocean','forest','violet','paper'].indexOf(p)>=0){d.dataset.kbTheme=p}if(w&&['standard','compact','wide'].indexOf(w)>=0){d.dataset.kbWidth=w}if(s&&['small','normal','large','huge'].indexOf(s)>=0){d.dataset.kbSize=s}}catch(e){}})()"]
   ],
   base: '/knowledge/',
   cleanUrls: false,
@@ -222,28 +222,40 @@ const WIDTHS = [
   ['compact', '紧凑'],
   ['wide', '宽屏']
 ]
+const SIZES = [
+  ['small', '小'],
+  ['normal', '标准'],
+  ['large', '大'],
+  ['huge', '特大']
+]
 const ReaderControls = defineComponent({
   setup() {
     const palette = ref('ocean')
     const width = ref('standard')
+    const size = ref('normal')
     const apply = () => {
       if (typeof document === 'undefined') return
-      document.documentElement.dataset.kbTheme = palette.value
-      document.documentElement.dataset.kbWidth = width.value
+      const root = document.documentElement
+      root.dataset.kbTheme = palette.value
+      root.dataset.kbWidth = width.value
+      root.dataset.kbSize = size.value
     }
     const save = () => {
       apply()
       try {
         localStorage.setItem('codescope-kb-theme', palette.value)
         localStorage.setItem('codescope-kb-width', width.value)
+        localStorage.setItem('codescope-kb-size', size.value)
       } catch {}
     }
     onMounted(() => {
       try {
         const savedPalette = localStorage.getItem('codescope-kb-theme')
         const savedWidth = localStorage.getItem('codescope-kb-width')
+        const savedSize = localStorage.getItem('codescope-kb-size')
         if (PALETTES.some(([value]) => value === savedPalette)) palette.value = savedPalette
         if (WIDTHS.some(([value]) => value === savedWidth)) width.value = savedWidth
+        if (SIZES.some(([value]) => value === savedSize)) size.value = savedSize
       } catch {}
       apply()
     })
@@ -253,7 +265,32 @@ const ReaderControls = defineComponent({
     ])
     return () => h('div', { class:'kb-reader-controls', 'aria-label':'阅读外观' }, [
       select('配色', palette, PALETTES, (event) => { palette.value = event.target.value; save() }),
-      select('版心', width, WIDTHS, (event) => { width.value = event.target.value; save() })
+      select('版心', width, WIDTHS, (event) => { width.value = event.target.value; save() }),
+      select('字号', size, SIZES, (event) => { size.value = event.target.value; save() })
+    ])
+  }
+})
+
+/* 右下角的阅读浮标：阅读进度百分比 + 回到顶部。
+   知识库里的文档动辄几千像素高（实测一篇 5300px），滚到一半想回顶部得一路划回去；
+   顶部那条 2px 的进度线只能看个大概，给个准确数字更有用。 */
+const ReadingHud = defineComponent({
+  setup() {
+    const progress = ref(0)
+    const show = ref(false)
+    const sync = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      progress.value = max > 40 ? Math.min(100, Math.max(0, Math.round(window.scrollY / max * 100))) : 0
+      show.value = window.scrollY > 320
+    }
+    onMounted(() => { sync(); window.addEventListener('scroll', sync, { passive:true }); window.addEventListener('resize', sync) })
+    onUnmounted(() => { window.removeEventListener('scroll', sync); window.removeEventListener('resize', sync) })
+    return () => h('div', { class:'kb-hud' + (show.value ? ' on' : '') }, [
+      h('span', { class:'kb-hud-pct', 'aria-hidden':'true' }, progress.value + '%'),
+      h('button', {
+        class:'kb-hud-top', type:'button', title:'回到顶部', 'aria-label':'回到顶部',
+        onClick: () => window.scrollTo({ top:0, behavior:'smooth' })
+      }, '↑')
     ])
   }
 })
@@ -356,6 +393,7 @@ export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, {
     'layout-top': () => [h(ReadingProgress), h(AccurateOutline)],
+    'layout-bottom': () => h(ReadingHud),
     'doc-before': () => h(DocContext),
     'nav-bar-content-after': () => h('div', { class:'kb-nav-extras' }, [
       h(ReaderControls),
@@ -396,6 +434,11 @@ const THEME_CSS = `:root {
 html[data-kb-width="compact"] { --kb-content-width:760px; }
 html[data-kb-width="standard"] { --kb-content-width:900px; }
 html[data-kb-width="wide"] { --kb-content-width:1080px; }
+/* 字号档位：正文和标题一起缩放（只放大正文会让标题显得越来越小） */
+html[data-kb-size="small"] { --kb-font-scale:.93; }
+html[data-kb-size="normal"] { --kb-font-scale:1; }
+html[data-kb-size="large"] { --kb-font-scale:1.12; }
+html[data-kb-size="huge"] { --kb-font-scale:1.26; }
 html[data-kb-theme="forest"] {
   --vp-c-brand-1:#49b889;--vp-c-brand-2:#6dcc9f;--vp-c-brand-3:#328464;
   --vp-c-brand-soft:rgba(73,184,137,.14);--kb-page-glow:rgba(73,184,137,.09);
@@ -454,6 +497,10 @@ body {
 }
 .VPDoc .container { max-width:calc(var(--kb-content-width) + 380px)!important; }
 .VPDoc .main { padding-top:22px; }
+/* 文档里没有 h2/h3 时，右侧大纲栏会空着一条 200+px 的白条 —— 既浪费宽度又显得没做完。
+   没有大纲就整条收掉，并把容器收窄让正文居中（有大纲时行为完全不变）。 */
+html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container > .aside.aside { display:none; }
+html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:calc(var(--kb-content-width) + 80px)!important; }
 .vp-doc { counter-reset:kb-h2;color:color-mix(in srgb,var(--vp-c-text-1) 89%,var(--vp-c-text-2));font-size:16px;line-height:1.82; }
 .vp-doc > :first-child { margin-top:0; }
 .vp-doc h1,.vp-doc h2,.vp-doc h3,.vp-doc h4 { color:var(--kb-heading);letter-spacing:-.025em;scroll-margin-top:90px; }
@@ -474,6 +521,12 @@ body {
 .vp-doc h2::before { content:counter(kb-h2,decimal-leading-zero);display:inline-grid;place-items:center;min-width:30px;height:24px;padding:0 5px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));border-radius:7px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font:750 11px/1 var(--vp-font-family-mono);letter-spacing:0; }
 .vp-doc h3 { position:relative;margin-top:1.85em;padding-left:14px;font-size:1.16rem; }
 .vp-doc h3::before { content:'';position:absolute;left:0;top:.42em;width:4px;height:1em;border-radius:99px;background:var(--vp-c-brand-1);box-shadow:0 0 12px var(--vp-c-brand-soft); }
+/* 字号档位：标题用的是 rem（跟根字号走），所以只改 .vp-doc 的 font-size 标题不会跟着变，
+   这里把正文和各级标题一起乘上 --kb-font-scale。 */
+.vp-doc { font-size:calc(16px * var(--kb-font-scale,1)); }
+.vp-doc h1 { font-size:calc(2.35rem * var(--kb-font-scale,1)); }
+.vp-doc h2 { font-size:calc(1.5rem * var(--kb-font-scale,1)); }
+.vp-doc h3 { font-size:calc(1.16rem * var(--kb-font-scale,1)); }
 .vp-doc p,.vp-doc li { text-wrap:pretty; }
 .vp-doc p { margin:14px 0; }
 .vp-doc ul,.vp-doc ol { margin:12px 0;padding-left:1.55em; }
@@ -484,7 +537,7 @@ body {
 .vp-doc h3 + ul,.vp-doc h3 + ol { margin-top:11px;padding:13px 18px 13px 38px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 12%,var(--vp-c-divider));border-radius:12px;background:color-mix(in srgb,var(--vp-c-bg-soft) 72%,transparent); }
 .vp-doc a { text-decoration-color:color-mix(in srgb,var(--vp-c-brand-1) 44%,transparent);text-underline-offset:3px; }
 .vp-doc a:hover { text-decoration-thickness:2px; }
-.vp-doc strong { color:var(--vp-c-text-1);font-weight:720; }
+.vp-doc strong { color:color-mix(in srgb,var(--vp-c-brand-1) 56%,var(--vp-c-text-1));font-weight:720; }
 .vp-doc :not(pre) > code { padding:.16em .42em;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 18%,var(--vp-c-divider));border-radius:6px;background:color-mix(in srgb,var(--vp-c-brand-soft) 72%,var(--vp-c-bg-soft));color:color-mix(in srgb,var(--vp-c-brand-1) 76%,var(--vp-c-text-1));font-size:.88em; }
 .vp-doc div[class*="language-"] { overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
 .vp-doc div[class*="language-"]::before { content:'●  ●  ●';position:absolute;left:16px;top:10px;z-index:2;color:color-mix(in srgb,var(--vp-c-text-3) 66%,var(--vp-c-brand-1));font-size:9px;letter-spacing:2px; }
@@ -500,6 +553,18 @@ body {
 .VPDocAsideOutline .outline-link.kb-current { padding-left:8px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font-weight:650;transform:translateX(2px); }
 .kb-reading-progress { position:fixed;z-index:1000;top:0;left:0;width:100%;height:2px;pointer-events:none; }
 .kb-reading-progress span { display:block;height:100%;border-radius:0 99px 99px 0;background:linear-gradient(90deg,var(--vp-c-brand-3),var(--vp-c-brand-1),var(--vp-c-brand-2));box-shadow:0 0 10px var(--vp-c-brand-1);transition:width .08s linear; }
+/* 右下角阅读浮标：进度百分比 + 回到顶部（滚动 320px 后才出现，不打扰开头） */
+.kb-hud { position:fixed;z-index:1001;right:26px;bottom:26px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;
+  opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .22s var(--sp-ease,ease),transform .22s ease,visibility .22s; }
+.kb-hud.on { opacity:1;visibility:visible;transform:none; }
+.kb-hud-pct { padding:3px 10px;border:1px solid var(--vp-c-divider);border-radius:999px;color:var(--vp-c-text-2);
+  background:color-mix(in srgb,var(--vp-c-bg-elv) 86%,transparent);font:650 11px/1.5 var(--vp-font-family-mono);
+  font-variant-numeric:tabular-nums;backdrop-filter:blur(10px); }
+.kb-hud-top { width:38px;height:38px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));
+  border-radius:50%;color:var(--vp-c-brand-1);background:color-mix(in srgb,var(--vp-c-bg-elv) 90%,transparent);
+  font-size:16px;line-height:1;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.22);backdrop-filter:blur(10px);
+  transition:transform .16s,border-color .16s,background .16s; }
+.kb-hud-top:hover { transform:translateY(-2px);border-color:var(--vp-c-brand-1);background:var(--vp-c-brand-soft); }
 .kb-doc-context { display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 34px;padding:0 0 15px;border-bottom:1px solid color-mix(in srgb,var(--vp-c-brand-1) 12%,var(--vp-c-divider));color:var(--vp-c-text-3);font-size:12px; }
 .kb-breadcrumb,.kb-doc-meta { display:flex;align-items:center;gap:7px;min-width:0; }
 .kb-breadcrumb { overflow:hidden;white-space:nowrap; }
@@ -577,9 +642,9 @@ body {
   .codescope-return { padding:0 9px;font-size:0; }
   .codescope-return::before { content:'↩';font-size:16px; }
   .VPDoc .content-container { padding:24px 20px; }
-  .vp-doc { font-size:15px;line-height:1.82; }
-  .vp-doc h1 { font-size:1.82rem; }
-  .vp-doc h2 { font-size:1.32rem; }
+  .vp-doc { font-size:calc(15px * var(--kb-font-scale,1));line-height:1.82; }
+  .vp-doc h1 { font-size:calc(1.82rem * var(--kb-font-scale,1)); }
+  .vp-doc h2 { font-size:calc(1.32rem * var(--kb-font-scale,1)); }
   .kb-doc-context { align-items:flex-start;flex-direction:column;margin-bottom:28px; }
   .kb-doc-meta span:last-child { display:inline-flex; }
 }
