@@ -53,6 +53,22 @@ function defaultSettings() {
   };
 }
 
+/* code-server 的界面语言来自 --locale 参数，而它**不读 argv.json**（那是桌面版 VS Code 的约定）。
+   这里替它读一次：想换语言时仍然只需改 argv.json 里的 locale，不必翻面板设置。 */
+function readLocaleArg(userDataDir) {
+  try {
+    const file = path.join(userDataDir, 'argv.json');
+    if (!fs.existsSync(file)) return [];
+    /* argv.json 是 JSONC：允许注释与尾随逗号，先清掉再解析，解析失败就当没配。 */
+    const raw = fs.readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/,\s*([}\]])/g, '$1');
+    const locale = String((JSON.parse(raw) || {}).locale || '').trim();
+    return /^[A-Za-z]{2}(-[A-Za-z0-9]+)*$/.test(locale) ? ['--locale', locale] : [];
+  } catch (_) { return []; }
+}
+
 /* 确保用户数据目录里有这份基础设置；已有文件则原样保留（那是用户自己的选择）。 */
 function ensureDefaultSettings(userDataDir) {
   try {
@@ -245,6 +261,7 @@ function portOccupied(host, port) {
 }
 
 function createCodeServerService(options = {}) {
+  const log = typeof options.log === 'function' ? options.log : () => {};
   let port = Number(options.port) || DEFAULT_PORT;
   const hostname = options.hostname || LOOPBACK;
   const proxyPort = Number(options.proxyPort) || 0;
@@ -330,7 +347,7 @@ function createCodeServerService(options = {}) {
       fs.mkdirSync(extensionsDir, { recursive: true });
       state = 'starting';
       message = '正在启动 VS Code 服务…';
-      child = spawn(resolved.command, [...resolved.args,
+      const args = [...resolved.args,
         '--bind-addr', `${hostname}:${port}`,
         '--auth', 'none',
         '--disable-telemetry',
@@ -339,10 +356,15 @@ function createCodeServerService(options = {}) {
            「点打开文件夹没反应、整个界面卡死」。托管场景里直接关掉。 */
         '--disable-workspace-trust',
         '--disable-update-check',
+        ...readLocaleArg(userDataDir),
         '--config', configFile,
         '--user-data-dir', userDataDir,
         '--extensions-dir', extensionsDir,
-      ], {
+      ];
+      /* 把实际启动参数写进服务日志：界面语言这类「传了但没生效」的问题，
+         没有参数记录就只能靠猜（踩过）。放在 spawn 之前，失败时也留得下。 */
+      log('[code-server] 启动参数：' + [resolved.command].concat(args).join(' '));
+      child = spawn(resolved.command, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env, VSCODE_LOGS: path.join(userDataDir, 'logs') },
         /* 自成进程组：code-server 会再派生 extension host 等子进程，

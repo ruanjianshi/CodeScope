@@ -140,6 +140,8 @@ const VSCODE_PROXY_PORT = Number(process.env.CODESCOPE_VSCODE_PORT) || 4878;
 const VSCODE = createCodeServerService({
   port: VSCODE_INTERNAL_PORT,
   dataRoot: applicationDataRoot(),
+  /* 把托管服务的日志接进主日志：界面语言、端口切换这类问题全靠它定位。 */
+  log: (message) => console.log(String(message)),
   /* 内部端口被占时服务会自动换空闲端口——代理的转发目标必须同步切换，
      否则代理还指向旧端口，整条链路静默断掉（iframe 一直 502）。 */
   onPortChange: (nextPort) => { try { VSCODE_PROXY.setTargetPort(nextPort); } catch (_) {} },
