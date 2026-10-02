@@ -6,11 +6,21 @@
    platform:'win32' / 'linux' / 'darwin' 各跑一遍，逐条断言「这条路上不会出现别的平台的
    命令」。真正要执行的那部分（命令跑不跑得起来）交给 docker/colima 里的真 Linux 单独验。
 
-   跑法：node tests/platform-sim.js */
+   跑法：node tests/platform-sim.js
+
+   另外：Windows 的「磁盘/进程/目录占用/监听端口」四项没有可注入的纯「决策」，只有
+   「解析命令输出」这一段是纯函数（lib/system-panel.js 的 _parsers.*）。这一段同样没法在
+   真 Windows 上跑，只能用**官方文档/常见输出格式的固定样本**喂进去断言数值 ——
+   样本不是真机抓的，别把它当「已在 Windows 验证」。 */
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const cp = require('child_process');
 const { createPlatformHost, PLATFORM_IDS } = require('../lib/platform');
+/* 纯解析函数（吃命令输出字符串、吐结构化数组/数字，不执行任何命令）。 */
+const { _parsers: parsers } = require('../lib/system-panel');
 
 let pass = 0;
 const failures = [];
@@ -287,6 +297,225 @@ t('report() 是纯数据：不执行任何命令（传进一个会炸的 exec �
   assert.strictEqual(strict.report().label, 'Linux');
   assert.strictEqual(strict.commands.openExternal('x').file, 'xdg-open');
   assert.strictEqual(strict.trashPlan('/home/demo/y').method, 'xdg-trash');
+});
+
+/* ── Windows 命令输出解析（固定样本）────────────────────────────────────
+   本机没有 Windows：这些样本取自 Windows 官方文档与常见输出格式，**未经真机验证**。
+   能钉住的只有「同一段字符串喂进解析函数，出来的数值对不对」。 */
+
+const NETSTAT_SAMPLE = [
+  '',
+  '活动连接',
+  '',
+  '  协议  本地地址          外部地址        状态           PID',
+  '  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1304',
+  '  TCP    0.0.0.0:445            0.0.0.0:0              LISTENING       4',
+  '  TCP    127.0.0.1:4877         0.0.0.0:0              LISTENING       1234',
+  '  TCP    192.168.1.5:139        0.0.0.0:0              LISTENING       4',
+  '  TCP    [::]:135               [::]:0                 LISTENING       1304',
+  '  TCP    [::]:445               [::]:0                 LISTENING       4',
+  '  TCP    [::1]:4877             [::]:0                 LISTENING       1234',
+  '  UDP    0.0.0.0:500            *:*                                    1560',
+  '  UDP    [::]:500               *:*                                    1560',
+  '  TCP    192.168.1.5:52344      93.184.216.34:443      ESTABLISHED     9012',
+  '',
+  '',
+].join('\r\n');
+
+t('netstat -ano -p TCP 样本：只留 LISTENING，IPv6 认得出，UDP/ESTABLISHED/表头都跳过', () => {
+  const rows = parsers.parseNetstatListen(NETSTAT_SAMPLE);
+  assert.strictEqual(rows.length, 7, '应当只留 7 条 LISTENING，实际 ' + rows.length);
+  assert.deepStrictEqual(rows.map((row) => row.port), [135, 445, 4877, 139, 135, 445, 4877]);
+  const loopback = rows.find((row) => row.port === 4877 && !row.ipv6);
+  assert.strictEqual(loopback.address, '127.0.0.1:4877');
+  assert.strictEqual(loopback.bind, '127.0.0.1');
+  assert.strictEqual(loopback.pid, 1234);
+  assert.strictEqual(loopback.ipv6, false);
+  const v6 = rows.find((row) => row.port === 445 && row.ipv6);
+  assert.strictEqual(v6.address, '[::]:445', '[::] 这种 IPv6 写法必须认');
+  assert.strictEqual(v6.bind, '[::]');
+  assert.strictEqual(v6.pid, 4);
+  /* 英文表头版本同样认得（解析不依赖本地化的标题文字）。 */
+  const english = parsers.parseNetstatListen([
+    '',
+    'Active Connections',
+    '',
+    '  Proto  Local Address          Foreign Address        State           PID',
+    '  TCP    0.0.0.0:80             0.0.0.0:0              LISTENING       777',
+    '',
+  ].join('\r\n'));
+  assert.deepStrictEqual(english.map((row) => [row.port, row.pid]), [[80, 777]]);
+});
+
+t('netstat 样本：空行/垃圾输入返回空数组而不是抛异常', () => {
+  for (const bad of ['', '   ', '\r\n\r\n', '这不是 netstat 的输出', '  TCP 1.2.3.4:80 5.6.7.8:443 ESTABLISHED 11', null, undefined, 12345, {}]) {
+    const rows = parsers.parseNetstatListen(bad);
+    assert.ok(Array.isArray(rows) && rows.length === 0, '坏输入应当给空数组：' + String(bad));
+  }
+});
+
+const TASKLIST_SAMPLE = [
+  '"映像名称","PID","会话名","会话#","内存使用"',
+  '"System Idle Process","0","Services","0","8 K"',
+  '"System","4","Services","0","144 K"',
+  '"chrome.exe","1234","Console","1","123,456 K"',
+  '"node.exe","9876","Console","1","1,234,567 K"',
+  '"svchost.exe","808","Services","0","45,678 K"',
+  '',
+].join('\r\n');
+
+t('tasklist /FO CSV /NH 样本：引号与千位逗号都剥对，内存换成字节', () => {
+  const rows = parsers.parseTasklistCsv(TASKLIST_SAMPLE);
+  assert.strictEqual(rows.length, 5, '表头行必须被跳过，实际 ' + rows.length);
+  const chrome = rows.find((row) => row.pid === 1234);
+  assert.strictEqual(chrome.command, 'chrome.exe');
+  assert.strictEqual(chrome.app, 'chrome.exe');
+  assert.strictEqual(chrome.rss, 123456 * 1024, '千位逗号没剥干净：' + chrome.rss);
+  assert.strictEqual(chrome.state, 'Console');
+  assert.strictEqual(rows.find((row) => row.pid === 9876).rss, 1234567 * 1024);
+  assert.strictEqual(rows.find((row) => row.pid === 4).rss, 144 * 1024);
+  assert.strictEqual(rows.find((row) => row.pid === 0).command, 'System Idle Process');
+  for (const row of rows) {
+    /* 前端拿 cpu 直接 .toFixed(1)：必须是数字 0，给 null/undefined 会当场炸。 */
+    assert.strictEqual(typeof row.cpu, 'number', 'cpu 必须是数字');
+    assert.strictEqual(typeof row.rss, 'number', 'rss 必须是数字');
+    assert.strictEqual(row.user, '', '会话名不是用户名，不能塞进 user 冒充');
+  }
+});
+
+t('tasklist 样本：坏输入/缺列返回空数组，内存单位换算单独钉一遍', () => {
+  for (const bad of ['', '\r\n', 'INFO: No tasks are running which match the specified criteria.', '"a.exe","111","Console"', null, undefined, 42]) {
+    const rows = parsers.parseTasklistCsv(bad);
+    assert.ok(Array.isArray(rows) && rows.length === 0, '坏输入应当给空数组：' + String(bad));
+  }
+  assert.strictEqual(parsers.parseKbLabel('1,234,567 K'), 1234567 * 1024);
+  assert.strictEqual(parsers.parseKbLabel('8 K'), 8 * 1024);
+  assert.strictEqual(parsers.parseKbLabel('12 MB'), 12 * 1024 * 1024);
+  assert.strictEqual(parsers.parseKbLabel('N/A'), null);
+});
+
+const DISK_CSV_SAMPLE = [
+  '"DeviceID","Size","FreeSpace"',
+  '"C:","511,574,536,704","123,456,789,012"',
+  '"D:","2,000,398,934,016","1,999,000,000,000"',
+  '"E:","0","0"',
+  '',
+].join('\r\n');
+
+t('ConvertTo-Csv 磁盘样本：千位逗号剥掉，容量/可用/已用/百分比算对，0 容量盘跳过', () => {
+  const rows = parsers.parseWindowsVolumes(DISK_CSV_SAMPLE);
+  assert.strictEqual(rows.length, 2, 'C:/D: 留下，E:（容量 0）跳过，实际 ' + rows.length);
+  const c = rows[0];
+  assert.strictEqual(c.device, 'C:');
+  assert.strictEqual(c.mount, 'C:\\');
+  assert.strictEqual(c.total, 511574536704);
+  assert.strictEqual(c.free, 123456789012);
+  assert.strictEqual(c.used, 388117747692);
+  assert.strictEqual(c.capacity, 76);
+  assert.ok(Math.abs(c.usage - (388117747692 / 511574536704 * 100)) < 1e-9, 'usage 该是 used/total*100：' + c.usage);
+  assert.strictEqual(c.kind, 'system', '%SystemRoot% 所在的盘要算系统盘');
+  const d = rows[1];
+  assert.strictEqual(d.total, 2000398934016);
+  assert.strictEqual(d.free, 1999000000000);
+  assert.strictEqual(d.used, 1398934016);
+});
+
+t('Win32_LogicalDisk 的 JSON（平台层现有计划）也认：单盘对象与多盘数组都对', () => {
+  const one = parsers.parseWindowsVolumes(JSON.stringify({ DeviceID: 'C:', Size: 511574536704, FreeSpace: 123456789012, DriveType: 3 }));
+  assert.strictEqual(one.length, 1);
+  assert.strictEqual(one[0].mount, 'C:\\');
+  assert.strictEqual(one[0].free, 123456789012);
+  assert.strictEqual(one[0].kind, 'system');
+  const many = parsers.parseWindowsVolumes(JSON.stringify([
+    { DeviceID: 'C:', Size: 511574536704, FreeSpace: 123456789012, DriveType: 3 },
+    { DeviceID: 'E:', Size: 2000398934016, FreeSpace: 1000000000000, DriveType: 3 },
+    { DeviceID: 'Z:', Size: 107374182400, FreeSpace: 10737418240, DriveType: 4 },
+    { DeviceID: 'F:', Size: null, FreeSpace: null, DriveType: 2 },
+  ]));
+  assert.deepStrictEqual(many.map((row) => row.kind), ['system', 'other', 'network'], 'DriveType 4 是网络盘、2 是可移动盘：' + JSON.stringify(many.map((row) => row.kind)));
+  assert.deepStrictEqual(many.map((row) => row.device), ['C:', 'E:', 'Z:'], '没插盘的 F: 不该出现在列表里');
+});
+
+t('磁盘样本：坏 JSON/空输出返回空数组，不抛异常', () => {
+  for (const bad of ['', '   ', '{"DeviceID":', 'Get-CimInstance : 拒绝访问', null, undefined, 42]) {
+    assert.deepStrictEqual(parsers.parseWindowsVolumes(bad), []);
+  }
+});
+
+t('目录占用样本：du 的 KB 与 PowerShell 的字节各按自己的单位换算', () => {
+  assert.strictEqual(parsers.parseDirSizeOutput('1953125\t/Users/demo/Library/Caches', 'kb'), 1953125 * 1024);
+  assert.strictEqual(parsers.parseDirSizeOutput('2000000000\r\n', 'kb'), 2000000000 * 1024);
+  assert.strictEqual(parsers.parseDirSizeOutput('8192', 'bytes'), 8192);
+  assert.strictEqual(parsers.parseDirSizeOutput('\r\n126418944\r\n', 'bytes'), 126418944);
+  /* PowerShell 脚本对空目录兜底输出 0（不是空串）。 */
+  assert.strictEqual(parsers.parseDirSizeOutput('0', 'bytes'), 0);
+  for (const bad of ['du: cannot access foo', '', '   \r\n', null, undefined, 42]) {
+    assert.strictEqual(parsers.parseDirSizeOutput(bad, 'kb'), null, '坏输入应当给 null：' + String(bad));
+  }
+});
+
+/* 真机样本：本机 macOS 的 ps -Ao（列与 lib/system-panel.js 的 PS_FIELDS 完全一致）。 */
+const PS_SAMPLE = [
+  '    1     0 root               0.1  0.1  15856 06:45:02 Ss   /sbin/launchd',
+  '  587     1 root               0.4  0.1  23952 01:38:10 Ss   /usr/libexec/logd',
+  ' 4321     1 ' + os.userInfo().username + '              1.5  0.3  123456 02:10:33 S    /Applications/CodeScope.app/Contents/MacOS/CodeScope --flag',
+  '',
+].join('\n');
+
+t('posix 的 ps -Ao 样本照旧解析（加 Windows 分支不能动 macOS 这条路）', () => {
+  const rows = parsers.parsePsOutput(PS_SAMPLE);
+  assert.strictEqual(rows.length, 3);
+  assert.strictEqual(rows[0].pid, 1);
+  assert.strictEqual(rows[0].user, 'root');
+  assert.strictEqual(rows[0].rss, 15856 * 1024);
+  assert.strictEqual(rows[0].elapsed, '06:45:02');
+  assert.strictEqual(rows[0].state, 'Ss');
+  assert.strictEqual(rows[0].command, '/sbin/launchd');
+  assert.strictEqual(rows[0].app, 'launchd');
+  assert.strictEqual(rows[0].mine, false);
+  const me = rows[2];
+  assert.strictEqual(me.pid, 4321);
+  assert.strictEqual(me.user, os.userInfo().username);
+  assert.strictEqual(me.cpu, 1.5);
+  assert.strictEqual(me.rss, 123456 * 1024);
+  assert.strictEqual(me.app, 'CodeScope', '.app/Contents/MacOS 里取可执行名');
+  assert.strictEqual(me.mine, true);
+});
+
+t('Windows 的进程/目录占用计划来自平台层，且不混进 posix 命令', () => {
+  const win = hosts.win32.commands;
+  const tasklist = win.processList();
+  assert.strictEqual(tasklist.file, 'tasklist');
+  assert.deepStrictEqual(tasklist.args, ['/FO', 'CSV', '/NH']);
+  const usage = win.dirUsage('C:\\A B\\x');
+  assert.strictEqual(usage.file, 'powershell.exe');
+  assert.strictEqual(usage.unit, 'bytes');
+  assert.ok(usage.args.includes('-NoProfile'), 'PowerShell 必须带 -NoProfile');
+  const script = usage.args.join(' ');
+  assert.ok(script.includes('Get-ChildItem') && script.includes('Measure-Object'), '目录占用应当是递归求和：' + script);
+  assert.ok(script.includes("'C:\\A B\\x'"), '带空格的路径必须被 PowerShell 单引号包住：' + script);
+  assert.ok(!/\bdu\b|\bdf\b/.test(script), 'Windows 计划里不该出现 du/df：' + script);
+  /* posix 侧原样：processList() 交回 null（调用方继续用自己的 ps -Ao），dirUsage 还是 du -sk。 */
+  for (const id of ['darwin', 'linux']) {
+    assert.strictEqual(hosts[id].commands.processList(), null, id + ' 不该拿到 tasklist');
+    const plan = hosts[id].commands.dirUsage('/tmp/x');
+    assert.strictEqual(plan.file, 'du');
+    assert.deepStrictEqual(plan.args, ['-sk', '/tmp/x']);
+    assert.strictEqual(plan.unit, 'kb');
+  }
+});
+
+t('真机 posix 回归：du 计划真跑一遍，parseDirSizeOutput 吃真输出', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-platform-sim-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'blob.bin'), Buffer.alloc(8192));
+    const plan = hosts.darwin.commands.dirUsage(tmp);
+    const run = cp.spawnSync(plan.file, plan.args, { encoding: 'utf8', timeout: 20000 });
+    const bytes = parsers.parseDirSizeOutput(run.stdout, plan.unit);
+    assert.ok(typeof bytes === 'number' && bytes >= 8192, 'du 真跑至少应统计到 8KB，实际 ' + bytes);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 console.log('');

@@ -289,12 +289,105 @@ function realVolumeName(mount) {
 
 /* 磁盘排序权重：0 系统盘、1 内置其它卷、2 外接盘。 */
 function diskRank(disk) {
-  if (disk.mount === '/System/Volumes/Data' || disk.mount === '/') return 0;
+  /* kind==='system' 是三平台通用的「系统盘」标记（macOS 只有 mount==='/' 会拿到它，
+     Windows 由盘符与 %SystemRoot% 比对得到）。 */
+  if (disk.kind === 'system' || disk.mount === '/System/Volumes/Data' || disk.mount === '/') return 0;
   if (disk.kind === 'external') return 2;
   return 1;
 }
 
+/* Windows 卷：命令来自平台层的 Win32_LogicalDisk（现有计划给的是 ConvertTo-Json -Compress；
+   单盘是对象、多盘是数组）。这里**同时也认** ConvertTo-Csv -NoTypeInformation 的格式
+   （"C:","511,574,536,704","123,456,789,012"）—— 命令若被换成 CSV 输出也不会静默变成空列表。
+   数字里的千位逗号必须剥掉。格式取自 Windows 官方/常见输出样本，未经真机验证。 */
+
+/* 单元格 → 数字。剥千位逗号；空值/非数字返回 null（没插盘的读卡器、无盘光驱的 Size 就是 null）。 */
+function numFromCell(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim().replace(/[,\s]/g, '');
+  if (!/^\d+$/.test(text)) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
+/* DriveType：2 可移动、3 本地磁盘、4 网络、5 光驱（取自 Win32_LogicalDisk 的官方取值）。 */
+function windowsDriveKind(device, driveType) {
+  const type = Number(driveType);
+  if (type === 4) return 'network';
+  if (type === 2 || type === 5) return 'external';
+  const systemDrive = String(HOST.systemRoot || 'C:\\').slice(0, 2).toLowerCase();
+  if (String(device).toLowerCase() === systemDrive) return 'system';
+  return 'other';
+}
+
+/* Win32_LogicalDisk 的 JSON / CSV 输出 → 和 df 那路同形的卷行（纯函数）。
+   解析失败一律返回空数组，绝不抛异常。 */
+function parseWindowsVolumes(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  const input = raw.trim();
+  if (!input) return [];
+  const parsedRows = [];
+  if (input.startsWith('{') || input.startsWith('[')) {
+    let parsed;
+    try { parsed = JSON.parse(input); } catch (_) { return []; }
+    for (const item of (Array.isArray(parsed) ? parsed : [parsed])) {
+      if (!item || typeof item !== 'object') continue;
+      parsedRows.push({ device: item.DeviceID, total: numFromCell(item.Size), free: numFromCell(item.FreeSpace), driveType: item.DriveType });
+    }
+  } else {
+    const lines = input.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    /* 带表头就按列名找列，没有表头（或列名不认识）就按 Select-Object 的书写顺序兜底。 */
+    let order = { device: 0, total: 1, free: 2 };
+    let body = lines;
+    const header = splitCsvLine(lines[0] || '');
+    if (header.some((cell) => /^devic/i.test(cell.trim()))) {
+      const indexOf = (pattern, fallback) => {
+        const at = header.findIndex((cell) => pattern.test(cell.trim()));
+        return at >= 0 ? at : fallback;
+      };
+      order = { device: indexOf(/^devic/i, 0), total: indexOf(/^size$/i, 1), free: indexOf(/^freespace$/i, 2) };
+      body = lines.slice(1);
+    }
+    for (const line of body) {
+      const fields = splitCsvLine(line);
+      if (fields.length < 3) continue;
+      parsedRows.push({ device: fields[order.device], total: numFromCell(fields[order.total]), free: numFromCell(fields[order.free]), driveType: undefined });
+    }
+  }
+  const rows = [];
+  for (const item of parsedRows) {
+    const device = String(item.device == null ? '' : item.device).trim();
+    if (!device) continue;
+    const total = item.total || 0;
+    const free = item.free || 0;
+    /* 没插盘的读卡器/光驱总容量是 0 或 null —— 跟 df 那路一样跳过，不报一块 0 字节的盘。 */
+    if (total <= 0) continue;
+    const used = Math.max(0, total - free);
+    const usage = total ? used / total * 100 : 0;
+    rows.push({
+      device,
+      mount: /[\\/]$/.test(device) ? device : device + '\\',
+      kind: windowsDriveKind(device, item.driveType),
+      total, used, free,
+      usage,
+      /* Windows 这条命令不报百分比：按 used/total 算一个整数，语义与 df 的 capacity 一致（给人看的数）。 */
+      capacity: Math.round(usage),
+      readOnly: Number(item.driveType) === 5,
+      label: '',
+    });
+  }
+  return rows.sort((a, b) => diskRank(a) - diskRank(b) || b.total - a.total);
+}
+
 async function volumes() {
+  if (IS_WIN) {
+    /* Windows 没有 df：命令来自平台层（Win32_LogicalDisk）。PowerShell 可能带警告退非 0，
+       所以按 stdout 解析、不拿退出码当门槛 —— 和下面 du/lsof 那两条一样的道理。 */
+    const plan = HOST.commands.diskInfo();
+    if (!plan) return [];
+    const raw = (await exec(plan.file, plan.args, { timeout: 15000 })).stdout;
+    return parseWindowsVolumes(raw);
+  }
   /* 版式差异：macOS 的 df -k 带 iused/ifree/%iused 三列，Linux 不带，
      而 -P 又会把 macOS 的 inode 列去掉 —— 所以两种版式都要认，先 9 列再退 6 列。 */
   const raw = await text('df', ['-k'], 8000);
@@ -613,11 +706,10 @@ function appNameOf(command) {
   return path.basename(first);
 }
 
-async function processes(options = {}) {
-  const sort = options.sort === 'mem' ? 'mem' : 'cpu';
-  const limit = clampNumber(options.limit, 10, 400, 60);
-  const raw = await text('ps', ['-Ao', PS_FIELDS], 8000);
+/* ps -Ao 输出 → 进程行（纯函数：吃字符串、吐数组，本机就能拿真 ps 输出验收）。 */
+function parsePsOutput(raw) {
   const list = [];
+  if (!raw || typeof raw !== 'string') return list;
   for (const line of raw.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const match = PS_PATTERN.exec(line);
@@ -638,6 +730,83 @@ async function processes(options = {}) {
       mine: match[3] === os.userInfo().username,
     });
   }
+  return list;
+}
+
+/* 一行 CSV → 字段数组（认 "" 转义）。tasklist 的每个字段都带引号，用 split(',') 会把
+   带千位逗号的 "1,234,567 K" 当场切碎，所以必须按引号状态走一遍。 */
+function splitCsvLine(line) {
+  const fields = [];
+  let current = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { current += '"'; i += 1; } else { quoted = false; }
+      } else current += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { fields.push(current); current = ''; }
+    else current += ch;
+  }
+  fields.push(current);
+  return fields;
+}
+
+/* "123,456 K" → 字节数。千位逗号必须剥掉；K/M/G 按 1024 进位；认不出来返回 null。 */
+function parseKbLabel(value) {
+  const match = /^\s*([\d,]+)\s*([KMG])?B?\s*$/i.exec(String(value == null ? '' : value));
+  if (!match) return null;
+  const number = Number(match[1].replace(/,/g, ''));
+  if (!Number.isFinite(number)) return null;
+  const unit = (match[2] || 'K').toUpperCase();
+  const factor = unit === 'G' ? 1024 * 1024 * 1024 : unit === 'M' ? 1024 * 1024 : 1024;
+  return number * factor;
+}
+
+/* tasklist /FO CSV /NH 输出 → 进程行（纯函数）。
+   格式取自 Windows 官方文档与常见输出样本（"chrome.exe","1234","Console","1","123,456 K"），
+   未经真机验证。
+   只有 5 列：映像名称 / PID / 会话名 / 会话# / 内存使用 —— 没有 CPU%、父进程、用户、运行时长，
+   所以 cpu/ppid/elapsed 给 0 或空（前端会对 cpu 直接 .toFixed(1)，给 null 会当场炸）。
+   会话名不是用户名，不塞进 user 冒充；放 state 里保留信息，user 留空。 */
+function parseTasklistCsv(raw) {
+  const rows = [];
+  if (!raw || typeof raw !== 'string') return rows;
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const fields = splitCsvLine(line);
+    if (fields.length < 5) continue;
+    const name = fields[0].trim();
+    const pid = Number(fields[1].trim());
+    /* PID 列不是数字的行一律跳过：表头（"映像名称","PID",…）和空行都会在这一步落掉。 */
+    if (!name || !Number.isInteger(pid) || pid < 0) continue;
+    const memory = parseKbLabel(fields[4]);
+    rows.push({
+      pid,
+      ppid: null,
+      user: '',
+      cpu: 0,
+      mem: 0,
+      rss: memory == null ? 0 : memory,
+      elapsed: '',
+      state: fields[2].trim(),
+      command: name,
+      app: name,
+      mine: false,
+    });
+  }
+  return rows;
+}
+
+async function processes(options = {}) {
+  const sort = options.sort === 'mem' ? 'mem' : 'cpu';
+  const limit = clampNumber(options.limit, 10, 400, 60);
+  /* 命令问平台层：Windows → tasklist（没有 ps），posix → null，沿用下面的 ps -Ao。
+     两条路的解析都是纯函数（parsePsOutput / parseTasklistCsv），样本测试可直接喂字符串。 */
+  const plan = HOST.commands.processList();
+  const raw = plan ? await text(plan.file, plan.args, 10000) : await text('ps', ['-Ao', PS_FIELDS], 8000);
+  const list = plan ? parseTasklistCsv(raw) : parsePsOutput(raw);
   /* 按应用聚合：Chrome/Electron 一个进程组几十条，聚合后才看得懂谁在吃 CPU。 */
   const groups = new Map();
   for (const item of list) {
@@ -689,6 +858,17 @@ async function killProcess(pidValue, signalValue) {
  * 目录占用 / 大文件
  * ------------------------------------------------------------------ */
 
+/* 目录占用的数量解析（纯函数）：du -sk 给 KB，Windows 的 PowerShell 计划给字节 ——
+   单位由平台计划带着走（plan.unit）。解析不出来返回 null（调用方据此显示「无法统计」），不抛异常。 */
+function parseDirSizeOutput(raw, unit) {
+  if (!raw || typeof raw !== 'string') return null;
+  const match = /^\s*(\d+)/.exec(raw);
+  if (!match) return null;
+  const number = Number(match[1]);
+  if (!Number.isFinite(number)) return null;
+  return unit === 'bytes' ? number : number * 1024;
+}
+
 async function dirSize(target, timeout = 20000) {
   try {
     const stat = await fsp.stat(target);
@@ -696,11 +876,12 @@ async function dirSize(target, timeout = 20000) {
   } catch (_) {
     return null;
   }
-  const result = await exec('du', ['-sk', target], { timeout, maxBuffer: 2 * 1024 * 1024 });
+  /* 命令问平台层：posix → du -sk，Windows → PowerShell 递归求和（没有 du）。 */
+  const plan = HOST.commands.dirUsage(target);
+  const result = await exec(plan.file, plan.args, { timeout, maxBuffer: 2 * 1024 * 1024 });
   /* 重要：du 只要碰到一个读不了的子目录就返回非 0，但 stdout 里已经有总数了 ——
-     所以这里不能以退出码为准，否则整个目录都统计不出来。 */
-  const match = /^(\d+)/.exec(result.stdout.trim());
-  return match ? Number(match[1]) * 1024 : null;
+     所以这里不能以退出码为准，否则整个目录都统计不出来（Windows 的 PowerShell 计划同理）。 */
+  return parseDirSizeOutput(result.stdout, plan.unit);
 }
 
 /** 并列出一级子项占用（宝塔那种目录占用图的基础数据）。 */
@@ -994,11 +1175,12 @@ async function scanTargets(ids, onLine) {
     let size = null;
     let timedOut = false;
     if (target.path) {
-      /* 大目录（用户级缓存动辄几十 GB）du 很慢，给足 3 分钟；超时要能区分出来。 */
-      const measured = await exec('du', ['-sk', target.path], { timeout: 180000, maxBuffer: 2 * 1024 * 1024 });
-      const parsed = /^(\d+)/.exec(measured.stdout.trim());
-      if (parsed) size = Number(parsed[1]) * 1024;
-      else timedOut = !!measured.timedOut;
+      /* 大目录（用户级缓存动辄几十 GB）du 很慢，给足 3 分钟；超时要能区分出来。
+         命令同样问平台层（Windows 没有 du，走 PowerShell 递归求和，单位字节）。 */
+      const plan = HOST.commands.dirUsage(target.path);
+      const measured = await exec(plan.file, plan.args, { timeout: 180000, maxBuffer: 2 * 1024 * 1024 });
+      size = parseDirSizeOutput(measured.stdout, plan.unit);
+      if (size == null) timedOut = !!measured.timedOut;
     }
     const exists = target.path ? await fsp.access(target.path).then(() => true).catch(() => false) : null;
     const row = { id: target.id, category: target.category, label: target.label, risk: target.risk, kind: target.kind, path: target.path, size, exists, timedOut, note: target.note, defaultSelected: !!target.defaultSelected };
@@ -1070,14 +1252,71 @@ async function launchAgents() {
   return [];
 }
 
+/* netstat -ano -p TCP 输出 → 监听行（纯函数）。
+   格式取自 Windows 官方文档与常见输出样本，未经真机验证：
+     协议  本地地址          外部地址        状态           PID
+     TCP   0.0.0.0:135       0.0.0.0:0       LISTENING      1304
+     TCP   [::]:445          [::]:0          LISTENING      4
+   只认「状态列恰好在 PID 前一列、且为 LISTENING」的行 —— 表头、UDP 行、ESTABLISHED 行
+   都会在这一步自然滤掉，不需要认识本地化标题。 */
+function parseNetstatListen(raw) {
+  const rows = [];
+  if (!raw || typeof raw !== 'string') return rows;
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const tokens = trimmed.split(/\s+/);
+    if (tokens.length < 5) continue;
+    if (!/^LISTENING$/i.test(tokens[tokens.length - 2])) continue;
+    const pid = Number(tokens[tokens.length - 1]);
+    if (!Number.isInteger(pid) || pid < 0) continue;
+    /* 本地地址固定是第 2 列（第 1 列是协议）；IPv6 写成 [::]:445 这种带方括号的形式。 */
+    const address = tokens[1] || '';
+    const portMatch = /:(\d+)$/.exec(address);
+    if (!portMatch) continue;
+    rows.push({
+      command: '', pid, user: '',
+      address, port: Number(portMatch[1]),
+      bind: address.replace(/:\d+$/, ''),
+      ipv6: address.startsWith('['),
+    });
+  }
+  return rows;
+}
+
+/* PID → 进程名：Windows 的 netstat 只给 PID，名字要再问一次 tasklist。
+   端口列表 8 秒刷一次，tasklist 没必要跟着刷 —— 这里缓存 60 秒。
+   非 Windows（processList() 返回 null）给空表，调用方自然留空。 */
+async function processNames() {
+  const plan = HOST.commands.processList();
+  if (!plan) return new Map();
+  return remember('process-names', 60 * 1000, async () => {
+    const raw = await text(plan.file, plan.args, 10000);
+    const map = new Map();
+    for (const row of parseTasklistCsv(raw)) map.set(row.pid, row.command);
+    return map;
+  });
+}
+
 /** 监听中的端口：拿去和「哪个服务、哪个项目」对上号。 */
 async function listeningPorts() {
   return remember('ports', 8 * 1000, async () => {
     const rows = [];
-    /* Linux 上 lsof 常常没装（Ubuntu 24.04 就没有），所以「先试哪个」交给 HOST 决定：
-       macOS → lsof；Linux → ss 优先，ss 不在时才退回 lsof。顺序别在这里自己再维护一套。 */
-    const lsofFirst = (HOST.commands.listenerPlans('')[0] || {}).via === 'lsof';
-    const useLsof = lsofFirst ? !!(await which('lsof')) : (!(await which('ss')) && !!(await which('lsof')));
+    /* 「先试哪个」交给 HOST 决定：macOS → lsof；Linux → ss 优先，ss 不在时才退回 lsof；
+       Windows → netstat -ano -p TCP（它只给 PID，进程名由 processNames() 用 tasklist 补齐）。 */
+    const firstPlan = HOST.commands.listenerPlans('')[0] || {};
+    if (firstPlan.via === 'netstat') {
+      const raw = await text(firstPlan.file, firstPlan.args, 12000);
+      const names = await processNames();
+      for (const item of parseNetstatListen(raw)) {
+        rows.push(Object.assign({}, item, { command: names.get(item.pid) || '' }));
+      }
+    }
+    /* 下面这套只走 posix。Windows 上 which('ss')/which('lsof') 本来也都会落空，
+       但显式闸住更安全：万一用户的 PATH 里真有 Git 版 lsof，别在两套输出上叠床架屋。 */
+    const posixChain = firstPlan.via !== 'netstat';
+    const lsofFirst = firstPlan.via === 'lsof';
+    const useLsof = posixChain && (lsofFirst ? !!(await which('lsof')) : (!(await which('ss')) && !!(await which('lsof'))));
     if (useLsof) {
       /* lsof 只要有进程看不了就以非 0 退出，stdout 依旧是有效的 —— 用 exec 不用 text。 */
       const raw = (await exec('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'], { timeout: 12000 })).stdout;
@@ -1100,7 +1339,7 @@ async function listeningPorts() {
           ipv6: /\[/.test(address),
         });
       }
-    } else if (await which('ss')) {
+    } else if (posixChain && await which('ss')) {
       const raw = await text('ss', ['-lntp'], 10000);
       for (const line of raw.split(/\r?\n/)) {
         if (!/^LISTEN/.test(line)) continue;
@@ -2141,4 +2380,11 @@ function createSystemPanel(options = {}) {
   };
 }
 
-module.exports = { createSystemPanel, cacheTargets, TASK_KINDS, PANEL_VERSION };
+module.exports = {
+  createSystemPanel, cacheTargets, TASK_KINDS, PANEL_VERSION,
+  /* 纯解析函数单独导出给测试用：输入「命令输出的字符串」、输出结构化数组/数字，
+     不碰进程、不碰文件系统 —— 本机是 macOS，Windows 分支只能靠样本测试验收。 */
+  _parsers: {
+    parsePsOutput, parseTasklistCsv, parseNetstatListen, parseWindowsVolumes, parseDirSizeOutput, parseKbLabel, splitCsvLine,
+  },
+};

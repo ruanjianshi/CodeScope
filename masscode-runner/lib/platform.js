@@ -147,6 +147,28 @@ function createPlatformHost(options = {}) {
       }
       return [{ via: 'lsof', file: 'lsof', args: lsofArgs }];
     },
+    /* 进程清单计划：Windows 没有 ps，走 tasklist 的 CSV 输出 —— /FO CSV /NH 的字段顺序
+       固定（映像名称,PID,会话名,会话#,内存使用）、每个字段带引号，比按列宽切的默认表格稳。
+       posix 返回 null：那一路调用方继续用既有的 ps -Ao（字段串与解析正则必须成对维护，
+       放在 lib/system-panel.js 里挨着才不容易走散，不在这里再抄一份）。
+       格式取自 Windows 官方文档与常见输出样本，未经真机验证。 */
+    processList() {
+      if (isWin) return { via: 'tasklist', file: 'tasklist', args: ['/FO', 'CSV', '/NH'] };
+      return null;
+    },
+    /* 目录占用计划：posix 是 du -sk（单位 KB），Windows 没有 du，用 PowerShell 递归求和
+       （单位字节）。单位随计划一起给，调用方不再自己乘 1024 —— 两端单位不同正是这块最容易错的地方。
+       -Force 让隐藏项也计入；Get-ChildItem 碰到读不了的子目录会被 SilentlyContinue 跳过，
+       数值因此是「能读到的那部分」，和 du 遇错仍给总数的行为一致。
+       （junction/符号链接理论上可能被重复计数，未在真机验证。） */
+    dirUsage(target) {
+      if (isWin) {
+        const script = '$ErrorActionPreference = "SilentlyContinue"; $sum = (Get-ChildItem -LiteralPath '
+          + quotePsArg(target) + ' -Recurse -Force | Measure-Object -Property Length -Sum).Sum; if ($null -eq $sum) { 0 } else { [long]$sum }';
+        return { via: 'powershell', file: 'powershell.exe', args: ['-NoProfile', '-Command', script], unit: 'bytes' };
+      }
+      return { via: 'du', file: 'du', args: ['-sk', String(target)], unit: 'kb' };
+    },
     diskInfo() {
       if (isWin) return { file: 'powershell.exe', args: ['-NoProfile', '-Command', 'Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,Size,FreeSpace,DriveType | ConvertTo-Json -Compress'] };
       return { file: 'df', args: ['-Pk'] };
