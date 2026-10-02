@@ -346,8 +346,12 @@ body.system-mode #main{flex:1;min-width:0;}
 #system-workspace .nav-resizer:hover::after,#system-workspace .nav-resizer.active::after{background:var(--accent);}
 /* 拖动期间整页光标保持 col-resize，并且不要选中文字 */
 body.sp-nav-resizing{cursor:col-resize;user-select:none;}
-#system-nav .nav-title{padding:2px 8px 10px;font-size:var(--sp-fs-md);font-weight:600;color:var(--text);display:flex;align-items:baseline;gap:6px;}
-#system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* white-space:nowrap 必须写：标题文字是 flex 里的匿名项，主机名那一项带
+   overflow:hidden 后 min-width 会算成 0，于是它优先占位、把「本机管家」挤到
+   只剩 41px 宽 —— 中文可以在字与字之间断行，结果标题被折成两行。
+   现在改成标题不换行、主机名用 flex:1 + min-width:0 自己省略号。 */
+#system-nav .nav-title{padding:2px 8px 10px;font-size:var(--sp-fs-md);font-weight:600;color:var(--text);display:flex;align-items:baseline;gap:6px;white-space:nowrap;min-width:0;}
+#system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0;}
 /* 搜索放在侧栏顶部：高频入口不该塞在左下角。做成输入框的样子，点哪儿都能进搜索面板。 */
 /* 搜索框做成「内凹」：按钮凸、输入凹，这是苹果控件的基本对照关系 */
 #system-nav .nav-search{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;box-sizing:border-box;
@@ -457,6 +461,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--sp-gap);margin-bottom:var(--sp-gap-lg);}
 /* 卡片不再描一圈边框，改用「面板底 + 极淡内描边」：层级靠底色和间距表达。 */
 #system-workspace .sp-card{position:relative;overflow:hidden;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:15px 16px;min-width:0;}
+/* 卡片里的挂载路径：卷名给人看，路径给机器看，两者都留 —— 路径太长就省略号 */
+#system-workspace .sp-card .path{margin-top:3px;font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-card h4{margin:0 0 10px;font-size:var(--sp-fs-xs);font-weight:600;color:var(--dim);letter-spacing:.08em;display:flex;align-items:center;gap:6px;}
 #system-workspace .sp-card .big{font-size:var(--sp-fs-xl);font-weight:600;color:var(--text);line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 #system-workspace .sp-card .big small{font-size:var(--sp-fs);font-weight:500;color:var(--dim);margin-left:4px;letter-spacing:0;}
@@ -984,13 +991,19 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sw-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 #system-workspace .sw-search{flex:1 1 260px;max-width:340px;}
 #system-workspace .sw-sort{flex:none;min-width:130px;cursor:pointer;}
-#system-workspace .sw-cats{display:flex;gap:4px;flex-wrap:wrap;}
-#system-workspace .sw-cat{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px solid transparent;
-  color:var(--dim);border-radius:var(--sp-r-sm);padding:4px 9px;font-size:var(--sp-fs-sm);cursor:pointer;
-  transition:background var(--sp-ease),color var(--sp-ease);}
-#system-workspace .sw-cat i{font-style:normal;opacity:.75;font-size:var(--sp-fs);}
-#system-workspace .sw-cat:hover{color:var(--text);background:var(--sp-tint);}
-#system-workspace .sw-cat.on{color:var(--text);background:var(--ui-accent-soft, var(--sp-tint-strong));font-weight:600;}
+/* 分类筛选：16 个分类如果做成「无边框小字」挤在一行，看起来就是一坨噪声，
+   还认不出哪些能点。改成独立的筛选条 + 胶囊，一眼就是一组控件。
+   胶囊之间留 6px、条本身给底色，换行时也不会糊成一片。 */
+#system-workspace .sw-cats{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;
+  background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);}
+#system-workspace .sw-cat{display:inline-flex;align-items:center;gap:6px;background:var(--sp-tint);border:1px solid transparent;
+  color:var(--dim);border-radius:999px;padding:4px 11px;font-size:var(--sp-fs-sm);cursor:pointer;
+  transition:background var(--sp-ease),color var(--sp-ease),box-shadow var(--sp-ease);}
+#system-workspace .sw-cat i{font-style:normal;opacity:.7;font-size:var(--sp-fs);}
+#system-workspace .sw-cat:hover{color:var(--text);background:var(--sp-tint-strong);}
+#system-workspace .sw-cat.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 16%, transparent);font-weight:600;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);}
+#system-workspace .sw-cat.on i{opacity:1;}
 #system-workspace .sw-info{display:flex;gap:14px;align-items:baseline;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
 #system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;}
 #system-workspace .sw-list{display:flex;flex-direction:column;gap:2px;}
@@ -1016,7 +1029,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   padding:0 3px;border-radius:var(--sp-r-xs);transition:opacity var(--sp-ease),color var(--sp-ease);}
 #system-workspace .sw-tile:hover .sw-star{opacity:.8;}
 #system-workspace .sw-star.on{opacity:1;color:var(--accent);}
-#system-workspace .sw-runs{position:absolute;right:8px;bottom:6px;color:var(--dim);font-size:var(--sp-fs-xs);font-family:var(--sp-mono);}
+/* 启动次数不再做成角标：一个光秃秃的数字没人看得懂，绝对定位又会压到
+   「分类 v版本」那一行。现在并进卡片的 tooltip。 */
 #system-workspace .sw-fav-row{display:flex;gap:6px;flex-wrap:wrap;}
 #system-workspace .sw-fav-chip{display:inline-flex;align-items:center;gap:7px;background:var(--sp-tint);border:1px solid transparent;
   color:var(--text);border-radius:var(--sp-r-sm);padding:5px 10px 5px 6px;font-size:var(--sp-fs);cursor:pointer;
@@ -2983,9 +2997,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       <div class="sp-cards">
         ${disks.slice(0, 3).map((item) => `
           <div class="sp-card">
-            <h4>${esc(item.mount)}</h4>
+            <h4>${esc(volumeName(item))}</h4>
             <div class="big">${fmtBytes(item.free)} 可用</div>
             <div class="sub">共 ${fmtBytes(item.total)} · 已用 ${fmtBytes(item.used)}</div>
+            <div class="path" title="${esc(item.mount)}">${esc(item.mount)}</div>
             ${bar(item.capacity)}
             <div class="sp-actions" style="margin:9px 0 0"><button class="sp-btn" data-reveal="${esc(item.mount)}">在访达显示</button></div>
           </div>`).join('') || '<div class="sp-card"><h4>磁盘</h4><div class="sub">读取中…</div></div>'}
@@ -3105,6 +3120,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     return !query || String(item.name || '').toLowerCase().includes(query);
   }
 
+  /* Homebrew 会把历史版本一并列出来（"2025-12-02,2026-03-19,2026-07-16,2026-08-13"），
+     40 个字符塞进表格会把这一列撑得极宽、同时把「包名」挤扁，整张表看起来就散了。
+     只显示最新那个（列表最后一项才是当前版本），其余折成「+N」，完整列表放 title。 */
+  function versionCell(raw) {
+    const list = String(raw || '').split(',').map((item) => item.trim()).filter(Boolean);
+    if (!list.length) return '<span class="muted">—</span>';
+    const newest = list[list.length - 1];
+    const older = list.length - 1;
+    return '<span title="' + esc(list.join('、')) + '">' + esc(newest) +
+      (older ? ' <span class="sp-tag">+' + older + '</span>' : '') + '</span>';
+  }
+
   function renderSoftware(body) {
     const data = state.software;
     if (!data) { body.innerHTML = '<div class="sp-empty">正在读取软件清单…</div>'; return; }
@@ -3135,7 +3162,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         ${outdated.length ? `<table class="sp-table"><thead><tr><th>包名</th><th>已装</th><th>最新</th><th></th></tr></thead><tbody>
           ${outdated.map((item) => `<tr>
             <td>${esc(item.name)}${item.pinned ? ' <span class="sp-tag">已锁定</span>' : ''}</td>
-            <td class="muted mono">${esc(item.installed || '')}</td>
+            <td class="muted mono">${versionCell(item.installed)}</td>
             <td class="mono">${esc(item.current || '')}</td>
             <td><button class="sp-btn" data-brew-upgrade="${esc(item.name)}">升级</button></td>
           </tr>`).join('')}</tbody></table>`
@@ -3147,7 +3174,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
           ${installed.slice(0, 400).map((item) => `<tr>
             <td class="ellip">${esc(item.name)}</td>
             <td><span class="sp-tag">${item.cask ? 'cask' : 'formula'}</span></td>
-            <td class="muted mono">${esc(item.versions || '')}</td>
+            <td class="muted mono">${versionCell(item.versions)}</td>
             <td><button class="sp-btn danger" data-brew-uninstall="${esc(item.name)}" data-cask="${item.cask ? '1' : ''}">卸载</button></td>
           </tr>`).join('')}</tbody></table>
           ${installed.length > 400 ? '<p class="sp-note">只显示前 400 项，用搜索框过滤。</p>' : ''}`

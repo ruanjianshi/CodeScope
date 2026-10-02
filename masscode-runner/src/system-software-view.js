@@ -186,7 +186,9 @@
     function appTile(app) {
       const tile = el('button', 'sw-tile');
       tile.type = 'button';
-      tile.title = app.path;
+      /* 启动次数并进 tooltip：之前是右下角一个光秃秃的数字，没人知道那是什么，
+         而且绝对定位在 216px 宽的卡片里会压到「分类 v版本」那一行（实测重叠 62px）。 */
+      tile.title = app.path + (app.runs ? '\n从这个面板打开过 ' + app.runs + ' 次' : '');
       tile.appendChild(iconNode(app, 44));
       const body = el('div', 'sw-tile-body');
       const name = el('div', 'sw-tile-name', app.name);
@@ -200,7 +202,6 @@
       star.title = app.favorite ? '取消常用' : '标记常用';
       star.addEventListener('click', (event) => { event.stopPropagation(); toggleFavorite(app); });
       tile.appendChild(star);
-      if (app.runs) tile.appendChild(el('span', 'sw-runs', String(app.runs)));
       tile.addEventListener('click', () => launch(app));
       tile.addEventListener('contextmenu', (event) => { event.preventDefault(); openDetail(app); });
       return tile;
