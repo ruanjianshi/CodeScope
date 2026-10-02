@@ -455,6 +455,30 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-card .big.warn{color:var(--sp-warn);}
 #system-workspace .sp-card .big.crit{color:var(--sp-danger);}
 
+/* ── 概览页布局（参考 1Panel）：左主区 + 右信息栏 ──
+   左区放「状态（大圆环排）/ 监控（曲线）/ 磁盘卷」，右区放系统信息与快捷操作。
+   圆环不再被卡片包着 —— 环本身就是主角，卡片框只会加噪。 */
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);align-items:start;}
+#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
+#system-workspace .sp-sec{min-width:0;}
+#system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
+/* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
+#system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:18px 14px;}
+#system-workspace .sp-gcell{flex:0 0 auto;width:132px;display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;}
+#system-workspace .sp-gcell .sp-gauge-ring{width:112px;height:112px;}
+#system-workspace .sp-gcell .sp-gauge-center b{font-size:23px;}
+#system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
+#system-workspace .sp-gsub{font-size:var(--sp-fs-xs);color:var(--dim);line-height:1.45;min-height:2.9em;}
+#system-workspace .sp-gcell .sp-cores{justify-content:center;gap:1.5px;margin-top:1px;}
+#system-workspace .sp-gcell .sp-core{width:11px;height:16px;}
+#system-workspace .sp-gcell .sp-gauge-ring.crit .sp-gauge-center b{color:var(--sp-danger);}
+/* 右侧栏的快捷操作：竖排更好点，也省得文字被挤断行 */
+#system-workspace .sp-actions-stack{flex-direction:column;align-items:stretch;margin:0;}
+#system-workspace .sp-actions-stack .sp-btn{justify-content:flex-start;text-align:left;}
+@media (max-width:1080px){
+  #system-workspace .sp-ov{grid-template-columns:1fr;}
+}
+
 /* ── 环形仪表（对齐 1Panel 首页那种圆环）──
    三张卡的环径完全一致，弧长直接表达「占满程度」，并排时能横向比出谁更吃紧；
    水位色（绿→黄→红）跟着变，不用读数字也能看出问题。 */
@@ -522,6 +546,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-spark.mem polyline{stroke:var(--ok);}
 #system-workspace .sp-spark.mem .fill{fill:color-mix(in srgb, var(--ok) 14%, transparent);}
 /* 曲线下的统计行：当前 / 均值 / 峰值 */
+#system-workspace .sp-axis{display:flex;justify-content:space-between;margin-top:5px;font-size:var(--sp-fs-xs);
+  color:var(--dim);font-variant-numeric:tabular-nums;opacity:.9;}
 #system-workspace .sp-stats{display:flex;gap:14px;margin-top:7px;font-size:var(--sp-fs-xs);color:var(--dim);font-variant-numeric:tabular-nums;}
 #system-workspace .sp-stats b{color:var(--text);font-weight:600;}
 #system-workspace .sp-hint{font-weight:400;color:var(--dim);font-size:var(--sp-fs-xs);letter-spacing:0;}
@@ -966,7 +992,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     auto: true,
     timer: null,
     busy: false,
-    history: { cpu: [], mem: [] },
+    history: { cpu: [], mem: [], ts: [] },
     overview: null,
     processes: null,
     processSort: 'cpu',
@@ -1855,8 +1881,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   function pushHistory(data) {
     state.history.cpu.push(Number(data && data.cpu && data.cpu.usage) || 0);
     state.history.mem.push(Number(data && data.memory && data.memory.usage) || 0);
-    if (state.history.cpu.length > 90) state.history.cpu.shift();
-    if (state.history.mem.length > 90) state.history.mem.shift();
+    /* 采样时间戳：曲线下方的横轴要标出「这段是从几点到几点」，
+       没有时间戳就只能画一条没有刻度的线（1Panel 的监控区就是带时间轴的）。 */
+    state.history.ts.push(Date.now());
+    for (const key of ['cpu', 'mem', 'ts']) if (state.history[key].length > 90) state.history[key].shift();
     saveHistory();
   }
 
@@ -1912,6 +1940,19 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       '<polyline points="' + points + '" vector-effect="non-scaling-stroke"/></svg>';
   }
 
+  /* 曲线下方的时间轴：左/中/右三个刻度，回答「这条线覆盖的是哪段时间」。 */
+  function sparkAxis(timestamps) {
+    if (!timestamps || timestamps.length < 2) return '';
+    const fmt = (value) => {
+      const date = new Date(value);
+      return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+    };
+    const first = timestamps[0];
+    const last = timestamps[timestamps.length - 1];
+    const mid = timestamps[Math.floor(timestamps.length / 2)];
+    return '<div class="sp-axis"><span>' + fmt(first) + '</span><span>' + fmt(mid) + '</span><span>' + fmt(last) + '</span></div>';
+  }
+
   /* 曲线下的一行统计：当前 / 均值 / 峰值。数字比一条线更能说明「稳不稳」。 */
   function sparkStats(values) {
     if (!values || values.length < 2) return '<div class="sp-stats"><span>采集中…</span></div>';
@@ -1929,10 +1970,15 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       if (!saved) return;
       if (Array.isArray(saved.cpu)) state.history.cpu = saved.cpu.filter((v) => Number.isFinite(v)).slice(-90);
       if (Array.isArray(saved.mem)) state.history.mem = saved.mem.filter((v) => Number.isFinite(v)).slice(-90);
+      if (Array.isArray(saved.ts)) state.history.ts = saved.ts.filter((v) => Number.isFinite(v)).slice(-90);
     } catch (_) {}
   }
   function saveHistory() {
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify({ cpu: state.history.cpu.slice(-90), mem: state.history.mem.slice(-90) })); } catch (_) {}
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify({
+        cpu: state.history.cpu.slice(-90), mem: state.history.mem.slice(-90), ts: state.history.ts.slice(-90),
+      }));
+    } catch (_) {}
   }
 
   /* 首屏补点：进面板时若历史点太少，连着补两次，曲线 1 秒内就出来，而不是空白等 3 秒。 */
@@ -1948,93 +1994,115 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
   /* ---------------------------------------------------------------- 总览 */
 
-  function renderOverview(body) {
+    function renderOverview(body) {
     const data = state.overview;
     if (!data) { body.innerHTML = '<div class="sp-empty">正在读取…</div>'; return; }
     const cpu = data.cpu || {};
     const memory = data.memory || {};
     const swap = data.swap;
     const disk = data.primaryDisk;
+    const loadPercent = (cpu.loadPercent || []).map((v) => Number(v) || 0);
+    const loadText = (cpu.load || []).map((v) => (Number(v) || 0).toFixed(2)).join(' / ');
     const cores = (cpu.perCore || []).map((value) => '<div class="sp-core" title="核心 ' + Number(value).toFixed(0) + '%"><i style="height:' + Math.max(2, Math.min(100, Number(value))).toFixed(1) + '%"></i></div>').join('');
+
+    /* 温度单元：读得到就给温度环，读不到就明确说「不可读」并把热压力摆出来 —— 不编数字。 */
+    const thermal = data.thermal;
+    const hasTemp = thermal && thermal.available && thermal.celsius != null;
+    const tempLevel = hasTemp ? (thermal.celsius >= 80 ? ' hot' : thermal.celsius >= 60 ? ' warm' : '') : '';
+    const pressureText = { normal: '热压力正常', high: '热压力偏高', unknown: '热压力未知' }[(thermal && thermal.pressure) || 'unknown'] || '';
+    const tempCell = '<div class="sp-gcell' + tempLevel + '" title="' + esc((thermal && thermal.hint) || '') + '">' +
+      (hasTemp ? gauge(thermal.celsius, '') : '<div class="sp-gauge-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="42"/></svg><div class="sp-gauge-center"><span class="v"><b>—</b></span></div></div>') +
+      '<div class="sp-gcap">温度</div>' +
+      '<div class="sp-gsub">' + (hasTemp ? Number(thermal.celsius).toFixed(1) + ' ℃<br>' + esc(pressureText) : esc(pressureText) + '<br>温度暂不可读') + '</div>' +
+      '</div>';
+
     body.innerHTML = `
-      <div class="sp-cards">
-        <div class="sp-card cpu">
-          <h4><i>▚</i>CPU · ${esc(cpu.model || '')}</h4>
-          <div class="sp-gauge">
-            ${gauge(cpu.usage, '占用')}
-            <div class="sp-gauge-info">
-              <div class="sub">${cpu.cores} 核 · 每核负载 ${(cpu.loadPercent || []).map((v) => (Number(v) || 0).toFixed(0)).join(' / ')}</div>
-              <div class="sp-cores">${cores}</div>
+      <div class="sp-ov">
+        <div class="sp-ov-main">
+          <section class="sp-sec">
+            <h3>状态<span class="sp-hint">实时 · 每 1.5 秒刷新</span></h3>
+            <div class="sp-gauges">
+              <div class="sp-gcell">
+                ${gauge(cpu.usage, '')}
+                <div class="sp-gcap">CPU</div>
+                <div class="sp-gsub">${cpu.cores} 核<br>负载 ${loadText || '—'}</div>
+                <div class="sp-cores">${cores}</div>
+              </div>
+              <div class="sp-gcell">
+                ${gauge(memory.usage, '')}
+                <div class="sp-gcap">内存</div>
+                <div class="sp-gsub">已用 ${fmtBytes(memory.used)}<br>共 ${fmtBytes(memory.total)}</div>
+              </div>
+              <div class="sp-gcell">
+                ${gauge(disk ? disk.capacity : 0, '')}
+                <div class="sp-gcap">主磁盘</div>
+                <div class="sp-gsub">可用 ${disk ? fmtBytes(disk.free) : '—'}<br>共 ${disk ? fmtBytes(disk.total) : '—'}</div>
+              </div>
+              <div class="sp-gcell">
+                ${gauge(loadPercent.length ? loadPercent[0] : 0, '')}
+                <div class="sp-gcap">负载</div>
+                <div class="sp-gsub">每核 ${loadPercent.length ? loadPercent[0].toFixed(0) + '%' : '—'}<br>1 / 5 / 15 分钟</div>
+              </div>
+              ${tempCell}
             </div>
-          </div>
-          ${thermalRow(data.thermal)}
-        </div>
-        <div class="sp-card mem">
-          <h4><i>▦</i>内存</h4>
-          <div class="sp-gauge">
-            ${gauge(memory.usage, '占用')}
-            <div class="sp-gauge-info">
-              <div class="sub">已用 <b>${fmtBytes(memory.used)}</b> / 共 ${fmtBytes(memory.total)}</div>
-              <div class="sub">缓存 ${fmtBytes(memory.cached)} · 压缩 ${fmtBytes(memory.compressed)}</div>
-              <div class="sub">联动内存 ${fmtBytes(memory.wired)}${swap ? ' · 交换区 ' + fmtBytes(swap.used) + '/' + fmtBytes(swap.total) : ''}</div>
+            ${disk && Number(disk.capacity) >= 90
+              ? '<p class="sp-note sp-warn">主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%，去「存储」清理一下缓存与大文件。</p>'
+              : ''}
+          </section>
+
+          <section class="sp-sec">
+            <h3>监控<span class="sp-hint">最近 ${state.history.cpu.length} 次采样 · 每 1.5 秒一次</span></h3>
+            <div class="sp-cols">
+              <div><div class="sp-row"><span class="k">CPU</span><span class="v">${(Number(cpu.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.cpu, 'cpu')}${sparkAxis(state.history.ts)}${sparkStats(state.history.cpu)}</div>
+              <div><div class="sp-row"><span class="k">内存</span><span class="v">${(Number(memory.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.mem, 'mem')}${sparkAxis(state.history.ts)}${sparkStats(state.history.mem)}</div>
             </div>
-          </div>
-        </div>
-        <div class="sp-card disk">
-          <h4><i>▣</i>主磁盘${disk ? ' · ' + esc(disk.mount) : ''}</h4>
-          <div class="sp-gauge">
-            ${gauge(disk ? disk.capacity : 0, '已用')}
-            <div class="sp-gauge-info">
-              <div class="sub">可用 <b>${disk ? fmtBytes(disk.free) : '—'}</b> / 共 ${disk ? fmtBytes(disk.total) : '—'}</div>
-              <div class="sub">${disk && Number(disk.capacity) >= 90
-                ? '<span class="sp-warn">磁盘快满了，去「存储」清理一下</span>'
-                : '已用 ' + (disk ? fmtBytes(disk.used) : '—')}</div>
+          </section>
+
+          <section class="sp-sec">
+            <h3>磁盘卷<span class="sp-hint">含外接与网络卷</span></h3>
+            <div class="sp-list">
+              ${(data.disks || []).map((item) => `
+                <div class="sp-li">
+                  <span class="grow" title="${esc(item.mount)}">${esc(item.mount)} <span class="muted">${esc(item.device)}</span></span>
+                  <span class="muted">${fmtBytes(item.free)} 可用 / ${fmtBytes(item.total)}</span>
+                  <span class="barwrap">${bar(item.capacity, '容量 ' + item.capacity + '%')}</span>
+                  <span class="num cap${levelClass(item.capacity)}">${Number(item.capacity).toFixed(0)}%</span>
+                  <button class="sp-btn sp-rowbtn" data-reveal="${esc(item.mount)}">在访达显示</button>
+                </div>`).join('') || '<div class="sp-empty">没有读到磁盘</div>'}
             </div>
-          </div>
+          </section>
         </div>
-        <div class="sp-card sys">
-          <h4><i>◫</i>这台电脑</h4>
-          <div class="sp-kv">
-            <span class="k">主机</span><span>${esc(data.identity.hostname)}</span>
-            <span class="k">用户</span><span>${esc(data.identity.user)}</span>
-            <span class="k">系统</span><span>${esc(data.identity.osName)} ${esc(data.identity.osVersion)}</span>
-            <span class="k">型号 / 架构</span><span>${esc(data.identity.model || '—')} · ${esc(data.identity.arch)}</span>
-            <span class="k">已运行</span><span>${fmtDuration(data.identity.uptime)}</span>
-            <span class="k">开机时间</span><span>${esc(fmtTime(data.identity.bootAt))}</span>
-            <span class="k">Node</span><span>${esc(data.identity.node)}</span>
-            ${data.battery ? '<span class="k">电池</span><span>' + data.battery.percent + '%' + (data.battery.charging ? '（供电中）' : '') + (data.battery.remaining ? ' · 剩余 ' + esc(data.battery.remaining) : '') + '</span>' : ''}
-          </div>
-        </div>
-      </div>
-      <div class="sp-band">
-        <h3>实时曲线<span class="sp-hint">最近 ${state.history.cpu.length} 次采样 · 每 1.5 秒一次</span></h3>
-        <div class="sp-cols">
-          <div><div class="sp-row"><span class="k">CPU</span><span class="v">${(Number(cpu.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.cpu, 'cpu')}${sparkStats(state.history.cpu)}</div>
-          <div><div class="sp-row"><span class="k">内存</span><span class="v">${(Number(memory.usage) || 0).toFixed(1)}%</span></div>${sparkline(state.history.mem, 'mem')}${sparkStats(state.history.mem)}</div>
-        </div>
-      </div>
-      <div class="sp-band">
-        <h3>磁盘卷<span class="sp-hint">含外接与网络卷</span></h3>
-        <div class="sp-list">
-          ${(data.disks || []).map((item) => `
-            <div class="sp-li">
-              <span class="grow" title="${esc(item.mount)}">${esc(item.mount)} <span class="muted">${esc(item.device)}</span></span>
-              <span class="muted">${fmtBytes(item.free)} 可用 / ${fmtBytes(item.total)}</span>
-              <span class="barwrap">${bar(item.capacity, '容量 ' + item.capacity + '%')}</span>
-              <span class="num cap${levelClass(item.capacity)}">${Number(item.capacity).toFixed(0)}%</span>
-              <button class="sp-btn sp-rowbtn" data-reveal="${esc(item.mount)}">在访达显示</button>
-            </div>`).join('') || '<div class="sp-empty">没有读到磁盘</div>'}
-        </div>
-      </div>
-      <div class="sp-actions">
-        <button class="sp-btn primary" data-goto="storage">去清理磁盘 / 缓存</button>
-        <button class="sp-btn" data-goto="processes">看谁在吃 CPU</button>
-        <button class="sp-btn" data-goto="software">检查软件更新</button>
-        <button class="sp-btn" data-goto="docker">Docker 状态</button>
+
+        <aside class="sp-ov-side">
+          <section class="sp-sec">
+            <h3>系统信息</h3>
+            <div class="sp-kv">
+              <span class="k">主机</span><span>${esc(data.identity.hostname)}</span>
+              <span class="k">用户</span><span>${esc(data.identity.user)}</span>
+              <span class="k">系统</span><span>${esc(data.identity.osName)} ${esc(data.identity.osVersion)}</span>
+              <span class="k">型号</span><span>${esc(data.identity.model || '—')}</span>
+              <span class="k">架构</span><span>${esc(data.identity.arch)}</span>
+              <span class="k">已运行</span><span>${fmtDuration(data.identity.uptime)}</span>
+              <span class="k">开机于</span><span>${esc(fmtTime(data.identity.bootAt))}</span>
+              <span class="k">Node</span><span>${esc(data.identity.node)}</span>
+              ${data.battery ? '<span class="k">电池</span><span>' + data.battery.percent + '%' + (data.battery.charging ? '（供电中）' : '') + (data.battery.remaining ? ' · 剩余 ' + esc(data.battery.remaining) : '') + '</span>' : ''}
+            </div>
+          </section>
+          <section class="sp-sec">
+            <h3>快捷操作</h3>
+            <div class="sp-actions sp-actions-stack">
+              <button class="sp-btn primary" data-goto="storage">去清理磁盘 / 缓存</button>
+              <button class="sp-btn" data-goto="processes">看谁在吃 CPU</button>
+              <button class="sp-btn" data-goto="software">检查软件更新</button>
+              <button class="sp-btn" data-goto="docker">Docker 状态</button>
+            </div>
+          </section>
+        </aside>
       </div>`;
     body.querySelectorAll('button[data-goto]').forEach((button) => { button.onclick = () => setView(button.dataset.goto); });
     body.querySelectorAll('button[data-reveal]').forEach((button) => { button.onclick = () => reveal(button.dataset.reveal); });
   }
+
 
   async function reveal(target) {
     try { await api('/reveal', { path: target }); }
