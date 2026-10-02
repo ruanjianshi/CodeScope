@@ -476,20 +476,28 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* ── 概览页布局（参考 1Panel）：左主区 + 右信息栏 ──
    左区放「状态（大圆环排）/ 监控（曲线）/ 磁盘卷」，右区放系统信息与快捷操作。
    圆环不再被卡片包着 —— 环本身就是主角，卡片框只会加噪。 */
-/* 概览页要「自适应高度」：内容撑满内容区，多出来的高度全部给曲线。
-   用 :has() 限定，只影响概览页，不动其它页的布局。 */
-#system-body:has(> .sp-ov){display:flex;flex-direction:column;}
+/* 概览页高度：交给 CSS flex，不用 JS 量高度。
+   曾用 JS 读 scrollHeight 再设 min-height，会正反馈（每算一次更大一次，
+   内容被顶出视口、磁盘卷看不见）。现在 .sp-ov 直接撑满内容区，
+   内部只有「监控区」可伸缩 —— 总高天然等于视口，既不留白也不溢出。 */
+#system-body:has(> .sp-ov){display:flex;flex-direction:column;padding-bottom:14px;}
+/* overflow:hidden + min-height:0 让 flex 能真正把高度压到容器内：
+   百分比 max-height 在 flex 子项上不可靠（父高度不是显式值），实测压不住。
+   浮层是 position:fixed，不受这里的 overflow 影响。 */
 #system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);
-  align-items:start;flex:1;min-height:0;}
+  align-items:start;flex:1;min-height:0;overflow:hidden;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
 /* 左栏撑满容器高度（右栏保持内容高度）——不这样写，grid 会按内容收缩左栏，
    监控区的 flex:1 就失去参照，曲线永远停在固定高度。 */
-#system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:space-between;}
+#system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:space-between;overflow:hidden;}
 /* 监控区是可伸展的那一块：窗口变高 → 曲线跟着变高，而不是在底部留白 */
-#system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+/* 监控区不再无限撑高：4 条曲线在 2×2 里各占一半高度，flex:1 会一路把磁盘卷顶出视口
+   （实测用户看不到磁盘卷）。改成按内容高度，曲线自己带上限。 */
+#system-workspace .sp-sec-monitor{flex:0 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 #system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;
   grid-template-columns:repeat(2,minmax(0,1fr));}
-#system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;}
+#system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;
+  padding:10px 12px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r-sm);}
 #system-workspace .sp-sec{min-width:0;}
 #system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
 /* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
@@ -497,7 +505,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
    2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
 #system-workspace .sp-gcell{flex:1 1 140px;min-width:140px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
-#system-workspace .sp-gcell .sp-gauge-ring{width:124px;height:124px;}
+#system-workspace .sp-gcell .sp-gauge-ring{width:110px;height:110px;}
 #system-workspace .sp-gcell .sp-gauge-center b{font-size:25px;}
 #system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
 #system-workspace .sp-gsub{font-size:var(--sp-fs-xs);color:var(--dim);line-height:1.45;min-height:2.9em;}
@@ -519,22 +527,25 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   min-width:0;overflow:hidden;overflow-wrap:anywhere;}
 #system-workspace .sp-actions-stack .sp-btn .gi{font-style:normal;flex:none;width:15px;text-align:center;opacity:.85;}
 /* 磁盘卷：两行式（上行路径与容量、下行整条进度条）。挤在一行时中间会空一大块。 */
-#system-workspace .sp-vols{display:flex;flex-direction:column;gap:14px;}
+#system-workspace .sp-vols{display:flex;flex-direction:column;gap:7px;}
 #system-workspace .sp-vol{min-width:0;}
-#system-workspace .sp-vol-top{display:flex;align-items:baseline;gap:10px;margin-bottom:7px;font-size:var(--sp-fs);}
+#system-workspace .sp-vol-top{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;font-size:var(--sp-fs-sm);}
 #system-workspace .sp-vol-name{color:var(--text);font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-vol-dev{flex:1 1 auto;min-width:0;font-size:var(--sp-fs-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-vol-free{flex:none;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
 #system-workspace .sp-vol-pct{flex:none;min-width:38px;text-align:right;font-size:var(--sp-fs-sm);font-weight:600;}
-#system-workspace .sp-vol .sp-bar{height:8px;}
+#system-workspace .sp-vol .sp-bar{height:5px;}
 #system-workspace .sp-vol .sp-rowbtn{flex:none;}
-#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:20px;}
+#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:12px;}
 /* 概述区：跨两栏的一排关键数字（1Panel 顶部那种） */
 #system-workspace .sp-overview{grid-column:1/-1;}
 #system-workspace .sp-stat-row{display:flex;gap:10px;flex-wrap:wrap;}
-#system-workspace .sp-stat{flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:5px;
-  padding:13px 8px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);}
-#system-workspace .sp-stat b{font-size:26px;font-weight:600;color:var(--text);line-height:1.1;font-variant-numeric:tabular-nums;}
+#system-workspace .sp-stat{position:relative;overflow:hidden;flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:12px 8px 13px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);
+  transition:box-shadow var(--sp-ease),transform var(--sp-ease);}
+#system-workspace .sp-stat:hover{box-shadow:var(--sp-ring), 0 4px 14px color-mix(in srgb, var(--bg) 45%, transparent);transform:translateY(-1px);}
+#system-workspace .sp-stat i{font-style:normal;font-size:var(--sp-fs-md);line-height:1;color:var(--accent);opacity:.85;}
+#system-workspace .sp-stat b{font-size:26px;font-weight:600;color:var(--text);line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 #system-workspace .sp-stat span{font-size:var(--sp-fs-xs);color:var(--dim);}
 /* 应用列表：图标 + 名称，点一下启动 */
 #system-workspace .sp-applist{display:flex;flex-direction:column;gap:2px;}
@@ -636,13 +647,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-spark{margin-top:8px;height:96px;width:100%;display:block;overflow:visible;}
 /* 在概览页里让曲线吃满剩余高度：min-height 保证窗口不高时也够看，
    max-height 防止超宽屏把一条线拉成一大片色块 */
-#system-workspace .sp-sec-monitor .sp-spark{flex:1 1 auto;height:auto;min-height:96px;max-height:300px;}
+#system-workspace .sp-sec-monitor .sp-spark{flex:0 1 auto;height:auto;min-height:52px;max-height:74px;}
 #system-workspace .sp-spark .grid{stroke:var(--sp-hair);stroke-width:1;}
 #system-workspace .sp-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
 #system-workspace .sp-spark .fill{fill:color-mix(in srgb, var(--accent) 15%, transparent);stroke:none;}
 /* 内存曲线换一种系列色（绿），两条线叠在同一屏时才分得清谁是谁。 */
 #system-workspace .sp-spark.mem polyline{stroke:var(--ok);}
 #system-workspace .sp-spark.mem .fill{fill:color-mix(in srgb, var(--ok) 14%, transparent);}
+/* 流量与磁盘 IO 各给一个系列色：四条曲线同色就分不清谁是谁 */
+#system-workspace .sp-spark.net polyline{stroke:color-mix(in srgb, var(--accent) 45%, #ffb020);}
+#system-workspace .sp-spark.net .fill{fill:color-mix(in srgb, var(--accent) 45%, #ffb020);opacity:.16;}
+#system-workspace .sp-spark.disk polyline{stroke:color-mix(in srgb, var(--accent) 40%, #c77dff);}
+#system-workspace .sp-spark.disk .fill{fill:color-mix(in srgb, var(--accent) 40%, #c77dff);opacity:.16;}
 /* 曲线下的统计行：当前 / 均值 / 峰值 */
 #system-workspace .sp-axis{display:flex;justify-content:space-between;margin-top:5px;font-size:var(--sp-fs-xs);
   color:var(--dim);font-variant-numeric:tabular-nums;opacity:.9;}
@@ -1738,7 +1754,6 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     handle.addEventListener('pointermove', (event) => {
       if (!start) return;
       applyNavWidth(start.width + (event.clientX - start.x), true);
-      fitOverviewHeight();
     });
     const end = () => {
       if (!start) return;
@@ -1861,8 +1876,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         ['开机启动项', svc ? (svc.agents || []).length : null],
         ['已装应用', apps && Number(apps.total)],
       ];
-      row.innerHTML = stats.map((pair) =>
-        '<div class="sp-stat"><b>' + (Number.isFinite(pair[1]) ? pair[1] : '—') + '</b><span>' + pair[0] + '</span></div>').join('');
+      const icons = ['◈', '⚙', '⇄', '↻', '▤'];
+      row.innerHTML = stats.map((pair, index) =>
+        '<div class="sp-stat"><i>' + (icons[index] || '·') + '</i><b>' + (Number.isFinite(pair[1]) ? pair[1] : '—') + '</b><span>' + pair[0] + '</span></div>').join('');
     }
     const list = $('system-app-list');
     if (list && apps && Array.isArray(apps.apps)) {
@@ -1929,7 +1945,6 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       auto.checked = state.auto;
       auto.onchange = () => { state.auto = auto.checked; schedule(); };
     }
-    window.addEventListener('resize', () => { fitOverviewHeight(); });
     const navList = $('system-nav-list');
     if (navList) {
       navList.onclick = (event) => {
@@ -2500,18 +2515,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const tempCell = '<div class="sp-gcell' + tempLevel + '" data-gauge="temp">' +
       (hasTemp ? gauge(thermal.celsius, '') : '<div class="sp-gauge-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="42"/></svg><div class="sp-gauge-center"><span class="v"><b>—</b></span></div></div>') +
       '<div class="sp-gcap">温度</div>' +
-      '<div class="sp-gsub">' + (hasTemp ? Number(thermal.celsius).toFixed(1) + ' ℃<br>' + esc(pressureText) : esc(pressureText) + '<br>温度暂不可读') + '</div>' +
+      '<div class="sp-gsub">' + (hasTemp ? Number(thermal.celsius).toFixed(1) + ' ℃ · ' + esc(pressureText) : esc(pressureText) + ' · 温度暂不可读') + '</div>' +
       '</div>';
 
     body.innerHTML = `
       <div class="sp-ov">
         <section class="sp-sec sp-overview">
           <div class="sp-stat-row" id="system-stat-row">
-            <div class="sp-stat"><b>—</b><span>进程</span></div>
-            <div class="sp-stat"><b>—</b><span>常驻服务</span></div>
-            <div class="sp-stat"><b>—</b><span>监听端口</span></div>
-            <div class="sp-stat"><b>—</b><span>开机启动项</span></div>
-            <div class="sp-stat"><b>—</b><span>已装应用</span></div>
+            <div class="sp-stat"><i>◈</i><b>—</b><span>进程</span></div>
+            <div class="sp-stat"><i>⚙</i><b>—</b><span>常驻服务</span></div>
+            <div class="sp-stat"><i>⇄</i><b>—</b><span>监听端口</span></div>
+            <div class="sp-stat"><i>↻</i><b>—</b><span>开机启动项</span></div>
+            <div class="sp-stat"><i>▤</i><b>—</b><span>已装应用</span></div>
           </div>
         </section>
         <div class="sp-ov-main">
@@ -2521,22 +2536,22 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               <div class="sp-gcell" data-gauge="cpu">
                 ${gauge(cpu.usage, '')}
                 <div class="sp-gcap">CPU</div>
-                <div class="sp-gsub">${cpu.cores} 核<br>负载 ${loadText || '—'}</div>
+                <div class="sp-gsub">${cpu.cores} 核 · 负载 ${loadText || '—'}</div>
               </div>
               <div class="sp-gcell" data-gauge="mem">
                 ${gauge(memory.usage, '')}
                 <div class="sp-gcap">内存</div>
-                <div class="sp-gsub">已用 ${fmtBytes(memory.used)}<br>共 ${fmtBytes(memory.total)}</div>
+                <div class="sp-gsub">已用 ${fmtBytes(memory.used)} · 共 ${fmtBytes(memory.total)}</div>
               </div>
               <div class="sp-gcell" data-gauge="disk">
                 ${gauge(disk ? disk.capacity : 0, '')}
                 <div class="sp-gcap">主磁盘</div>
-                <div class="sp-gsub">可用 ${disk ? fmtBytes(disk.free) : '—'}<br>共 ${disk ? fmtBytes(disk.total) : '—'}</div>
+                <div class="sp-gsub">可用 ${disk ? fmtBytes(disk.free) : '—'} · 共 ${disk ? fmtBytes(disk.total) : '—'}</div>
               </div>
               <div class="sp-gcell" data-gauge="load">
                 ${gauge(loadPercent.length ? loadPercent[0] : 0, '')}
                 <div class="sp-gcap">负载</div>
-                <div class="sp-gsub">每核 ${loadPercent.length ? loadPercent[0].toFixed(0) + '%' : '—'}<br>1 / 5 / 15 分钟</div>
+                <div class="sp-gsub">每核 ${loadPercent.length ? loadPercent[0].toFixed(0) + '%' : '—'} · 1 / 5 / 15 分钟</div>
               </div>
               ${tempCell}
             </div>
@@ -2612,7 +2627,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     body.querySelectorAll('button[data-goto]').forEach((button) => { button.onclick = () => setView(button.dataset.goto); });
     body.querySelectorAll('button[data-reveal]').forEach((button) => { button.onclick = () => reveal(button.dataset.reveal); });
     bindGaugeTips();
-    scheduleFitOverview();
+    /* 高度不再用 JS 计算：改用 CSS flex 让 .sp-ov 撑满内容区（见概览布局的 CSS 注释）。
+       fitOverviewHeight 保留但不再调用 —— 它读 scrollHeight 的方式会正反馈。 */
     loadOverviewExtras().catch(() => {});
   }
 
