@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "path": "知识库/快速开始/使用指南/接口化程序.md",
+  "page": 1,
+  "view": "original",
+  "translations": {},
+  "fragments": [
+    {
+      "id": "8180fc72-7e17-42aa-bce4-08e959c1025d",
+      "page": 1,
+      "source": "指针常量：指针是一个常量，可以修改指向值，但不可修改指向",
+      "translation": "",
+      "note": "",
+      "createdAt": 1790767630857,
+      "rects": [],
+      "scale": 1,
+      "url": "",
+      "webTitle": "",
+      "anchor": "接口化程序",
+      "webStart": 0,
+      "webEnd": 0
+    }
+  ],
+  "updatedAt": 1790767630861
+}

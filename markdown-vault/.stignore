@@ -1,0 +1,59 @@
+// CodeScope 云同步忽略规则
+// 说明：本文件**不参与同步**（Syncthing 内建忽略），每台设备各自维护同一份内容。
+// 原则：只忽略「无歧义、可再生、或本身就是垃圾」的文件；任何可能是你写的笔记的，都不忽略。
+// 前缀 (?d) = 允许 Syncthing 在必要时删除它（这些文件都可再生，删了没损失）。
+
+// ── 1. 系统垃圾 ──
+(?d).DS_Store
+(?d)Thumbs.db
+(?d)desktop.ini
+
+// ── 2. 写一半的临时态（同步过去只会制造冲突，没意义）──
+(?d)*.tmp
+(?d)*.temp
+(?d)*~
+(?d).~lock.*
+(?d)*.swp
+(?d)*.swx
+(?d)~$*
+
+// ── 3. LaTeX 中间产物（重新编译就有；pdf 不在此列，pdf 一定同步）──
+(?d)*.aux
+(?d)*.out
+(?d)*.toc
+(?d)*.lof
+(?d)*.lot
+(?d)*.fls
+(?d)*.fdb_latexmk
+(?d)*.synctex.gz
+(?d)*.bbl
+(?d)*.blg
+(?d)*.bcf
+(?d)*.run.xml
+
+// ── 4. 依赖与缓存目录（名字无歧义的那些）──
+(?d)node_modules
+(?d)__pycache__
+(?d).pytest_cache
+
+// ── 5. 以下“默认不忽略”，需要时你自己把行首的 // 去掉 ──
+//   注意：这些名字有歧义，一旦忽略，同名目录/文件里的**内容将静默不同步**。
+// (?d)*.log            // LaTeX 的编译日志，但你的日志类笔记也会被忽略
+// (?d)build            // 构建目录，但叫 build 的笔记目录也会被忽略
+// (?d)dist             // 分发目录，但同名笔记目录也会被忽略
+// (?d)target           // Rust/Java 构建目录，但同名笔记目录也会被忽略
+// (?d).venv
+// (?d)venv
+// (?d).cache
+
+// ── 6. 明确永远同步的东西（写在这里当备忘，不要加忽略）──
+//    *.md  *.pdf  *.docx  *.xlsx  *.pptx  *.png  *.jpg  *.xmind  *.bib
+//    .codescope/   ← 阅读进度、学习工作区状态，需要漫游
+//    .stversions/  .stfolder/  ← Syncthing 自己的目录，本就不参与同步
+
+// ── 7. 严禁同步「每台机器各自的绝对路径」软链 ──
+// readings/知识库/.vitepress/node_modules 是 CodeScope 为 VitePress 构建创建的软链，
+// 它指向本机的 masscode-runner/node_modules。一旦同步到另一台机器，
+// 对方拿到的是指向本机磁盘的断链 → VitePress 报 Cannot find package 'vitepress' → 构建直接失败。
+// 每台机器各自的 CodeScope 会自行重建这条链，因此必须排除同步。
+/readings/知识库/.vitepress/node_modules

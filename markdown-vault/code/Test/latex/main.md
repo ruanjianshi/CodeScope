@@ -208,7 +208,7 @@ tags:
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
 {\bfseries\color{primary}研究生阶段}\quad\textcolor{accent}{\faTrophy}\enspace 学业奖学金一等奖（2024、2025） &
 {\bfseries\color{primary}本科阶段}\quad\textcolor{accent}{\faTrophy}\enspace 湖南省物联网设计大赛省一等奖\\
-\textcolor{accent}{\faTrophy}\enspace 睿抗机器人开发者大赛国家二等奖 &
+%\textcolor{accent}{\faTrophy}\enspace 睿抗机器人开发者大赛国家二等奖 &
 \textcolor{accent}{\faTrophy}\enspace 湖南省机械创新设计大赛省二等奖\\
 \textcolor{accent}{\faTrophy}\enspace 三维数字化创新设计大赛省一等奖 &
 \textcolor{accent}{\faTrophy}\enspace 工程实践与创新能力大赛省三等奖\\
