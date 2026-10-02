@@ -478,37 +478,47 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    圆环不再被卡片包着 —— 环本身就是主角，卡片框只会加噪。 */
 /* 概览页高度：交给 CSS flex，不用 JS 量高度。
    曾用 JS 读 scrollHeight 再设 min-height，会正反馈（每算一次更大一次，
-   内容被顶出视口、磁盘卷看不见）。现在 .sp-ov 直接撑满内容区，
-   内部只有「监控区」可伸缩 —— 总高天然等于视口，既不留白也不溢出。 */
+   内容被顶出视口、磁盘卷看不见）。
+   现在的规则是「宁可滚动，也不丢内容」：内容少 → .sp-ov 长满视口不留白；
+   内容多（窗口矮）→ 多出来的高度由「监控区」吸收，仍然放不下就让 #system-body 滚动。
+   实测 1512×982 及以上一屏正好放下，1440×900 会多出约 50px 滚动。 */
 #system-body:has(> .sp-ov){display:flex;flex-direction:column;padding-bottom:14px;}
-/* overflow:hidden + min-height:0 让 flex 能真正把高度压到容器内：
-   百分比 max-height 在 flex 子项上不可靠（父高度不是显式值），实测压不住。
-   浮层是 position:fixed，不受这里的 overflow 影响。 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:var(--sp-gap-lg);
-  align-items:start;flex:1;min-height:0;overflow:hidden;}
+/* flex:1 0 auto —— grow 1 让内容不多时铺满视口（不留白），shrink 0 保证内容多时
+   不被压缩，超出的部分交给 #system-body 滚动。
+   之前是 flex:1 + .sp-ov/.sp-ov-main 上的 overflow:hidden：高度被硬压到容器内，
+   结果右栏「常用应用 / 快捷操作」和左栏「磁盘卷」直接被裁掉且滚不到 —— 用户看不到磁盘卷。
+   现在不再裁切，宁可滚动也不丢内容。浮层是 position:fixed，不受影响。 */
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:12px var(--sp-gap-lg);
+  align-items:start;flex:1 0 auto;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
 /* 左栏撑满容器高度（右栏保持内容高度）——不这样写，grid 会按内容收缩左栏，
-   监控区的 flex:1 就失去参照，曲线永远停在固定高度。 */
-#system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:space-between;overflow:hidden;}
-/* 监控区是可伸展的那一块：窗口变高 → 曲线跟着变高，而不是在底部留白 */
-/* 监控区不再无限撑高：4 条曲线在 2×2 里各占一半高度，flex:1 会一路把磁盘卷顶出视口
-   （实测用户看不到磁盘卷）。改成按内容高度，曲线自己带上限。 */
-#system-workspace .sp-sec-monitor{flex:0 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+   监控区的 flex:1 就失去参照，曲线永远停在固定高度。
+   对齐用 flex-start：多余高度交给「监控」吸收，而不是摊成区块之间的大段空白。 */
+#system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:flex-start;}
+/* 右栏按内容高度排，不被拉伸，避免出现「栏内大段空白」 */
+#system-workspace .sp-ov-side{flex:0 0 auto;}
+/* 监控区是可伸展的那一块：窗口变高 → 曲线跟着变高，而不是在底部留白。
+   现在父级没有 overflow:hidden 了，flex:1 只会往「多出来的空间」里长，
+   不会再像以前那样把磁盘卷顶出视口（不够高时由 #system-body 滚动兜底）。 */
+#system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
 #system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;
   grid-template-columns:repeat(2,minmax(0,1fr));}
 #system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;
-  padding:10px 12px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r-sm);}
+  padding:8px 11px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r-sm);}
 #system-workspace .sp-sec{min-width:0;}
-#system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
+#system-workspace .sp-sec h3{margin:0 0 7px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
+/* 标题前一根强调色小竖条：一眼能分出「区块」边界，比纯文字标题更像面板 */
+#system-workspace .sp-sec h3::before{content:'';flex:none;width:3px;height:12px;border-radius:2px;
+  background:linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));}
 /* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
 #system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:20px 14px;justify-content:space-between;}
 /* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
    2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
-#system-workspace .sp-gcell{flex:1 1 140px;min-width:140px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
-#system-workspace .sp-gcell .sp-gauge-ring{width:110px;height:110px;}
-#system-workspace .sp-gcell .sp-gauge-center b{font-size:25px;}
+#system-workspace .sp-gcell{flex:1 1 140px;min-width:140px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}
+#system-workspace .sp-gcell .sp-gauge-ring{width:100px;height:100px;}
+#system-workspace .sp-gcell .sp-gauge-center b{font-size:23px;}
 #system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
-#system-workspace .sp-gsub{font-size:var(--sp-fs-xs);color:var(--dim);line-height:1.45;min-height:2.9em;}
+#system-workspace .sp-gsub{font-size:var(--sp-fs-xs);color:var(--dim);line-height:1.4;min-height:2.5em;}
 #system-workspace .sp-gcell .sp-cores{justify-content:center;gap:1.5px;margin-top:1px;}
 #system-workspace .sp-gcell .sp-core{width:11px;height:16px;}
 #system-workspace .sp-gcell .sp-gauge-ring.crit .sp-gauge-center b{color:var(--sp-danger);}
@@ -527,37 +537,50 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   min-width:0;overflow:hidden;overflow-wrap:anywhere;}
 #system-workspace .sp-actions-stack .sp-btn .gi{font-style:normal;flex:none;width:15px;text-align:center;opacity:.85;}
 /* 磁盘卷：两行式（上行路径与容量、下行整条进度条）。挤在一行时中间会空一大块。 */
-#system-workspace .sp-vols{display:flex;flex-direction:column;gap:7px;}
+#system-workspace .sp-vols{display:flex;flex-direction:column;gap:5px;}
 #system-workspace .sp-vol{min-width:0;}
-#system-workspace .sp-vol-top{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;font-size:var(--sp-fs-sm);}
+#system-workspace .sp-vol-top{display:flex;align-items:baseline;gap:10px;margin-bottom:3px;font-size:var(--sp-fs-sm);}
 #system-workspace .sp-vol-name{color:var(--text);font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-vol-dev{flex:1 1 auto;min-width:0;font-size:var(--sp-fs-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-vol-free{flex:none;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
 #system-workspace .sp-vol-pct{flex:none;min-width:38px;text-align:right;font-size:var(--sp-fs-sm);font-weight:600;}
 #system-workspace .sp-vol .sp-bar{height:5px;}
 #system-workspace .sp-vol .sp-rowbtn{flex:none;}
-#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:12px;}
+#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:10px;}
 /* 概述区：跨两栏的一排关键数字（1Panel 顶部那种） */
 #system-workspace .sp-overview{grid-column:1/-1;}
 #system-workspace .sp-stat-row{display:flex;gap:10px;flex-wrap:wrap;}
-#system-workspace .sp-stat{position:relative;overflow:hidden;flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:4px;
-  padding:12px 8px 13px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);
+#system-workspace .sp-stat{position:relative;overflow:hidden;flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:10px 8px 11px;background:linear-gradient(180deg, color-mix(in srgb, var(--sp-surface) 93%, var(--text) 7%), var(--sp-surface));box-shadow:var(--sp-ring);border-radius:var(--sp-r);
   transition:box-shadow var(--sp-ease),transform var(--sp-ease);}
 #system-workspace .sp-stat:hover{box-shadow:var(--sp-ring), 0 4px 14px color-mix(in srgb, var(--bg) 45%, transparent);transform:translateY(-1px);}
-#system-workspace .sp-stat i{font-style:normal;font-size:var(--sp-fs-md);line-height:1;color:var(--accent);opacity:.85;}
-#system-workspace .sp-stat b{font-size:26px;font-weight:600;color:var(--text);line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+/* 图标做成一枚圆角色块（像 1Panel 顶部那种）：比一个孤零零的符号更「有重量」，
+   也给数字一个视觉锚点。15px 是配合 27px 方块调的 —— 原来 13.5px 的光杆符号
+   挨着 25px 的数字明显撑不住。 */
+#system-workspace .sp-stat i{font-style:normal;font-size:15px;line-height:1;color:var(--accent);
+  width:27px;height:27px;display:grid;place-items:center;border-radius:9px;
+  background:color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 17%, transparent);}
+#system-workspace .sp-stat b{font-size:25px;font-weight:600;color:var(--text);line-height:1.08;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 #system-workspace .sp-stat span{font-size:var(--sp-fs-xs);color:var(--dim);}
-/* 应用列表：图标 + 名称，点一下启动 */
-#system-workspace .sp-applist{display:flex;flex-direction:column;gap:2px;}
-#system-workspace .sp-app{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--sp-r-sm);
-  cursor:pointer;transition:background var(--sp-ease);}
-#system-workspace .sp-app:hover{background:var(--sp-tint);}
-#system-workspace .sp-app img{width:26px;height:26px;flex:none;object-fit:contain;border-radius:6px;}
-#system-workspace .sp-app .ph{width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:6px;
-  background:var(--sp-tint);color:var(--dim);font-size:11px;font-weight:600;}
-#system-workspace .sp-app .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sp-fs-sm);color:var(--text);}
-#system-workspace .sp-app .go{flex:none;color:var(--dim);font-size:var(--sp-fs-xs);opacity:0;transition:opacity var(--sp-ease);}
-#system-workspace .sp-app:hover .go{opacity:1;}
+/* 应用墙：3 列图标网格（图标在上、名称在下），点一下启动。
+   原来是一行一个的列表，8 个就吃掉 348px，正是把右栏顶出视口的元凶之一；
+   换成网格后同样的应用数只占一半高度，也更像 1Panel 那种「应用图标区」。 */
+#system-workspace .sp-applist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+#system-workspace .sp-app{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px 9px;
+  border-radius:var(--sp-r-sm);cursor:pointer;background:var(--sp-tint);
+  box-shadow:inset 0 0 0 1px var(--sp-hair);
+  transition:background var(--sp-ease),box-shadow var(--sp-ease),transform var(--sp-ease);}
+#system-workspace .sp-app:hover{background:color-mix(in srgb, var(--accent) 12%, var(--sp-tint));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);transform:translateY(-1px);}
+#system-workspace .sp-app:active{transform:translateY(0);}
+#system-workspace .sp-app img{width:30px;height:30px;flex:none;object-fit:contain;border-radius:7px;}
+#system-workspace .sp-app .ph{width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:7px;
+  background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);font-size:13px;font-weight:600;}
+#system-workspace .sp-app .nm{width:100%;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:var(--sp-fs-xs);color:var(--text);}
+/* 「启动 ›」这行字在竖排卡片里放不下，靠 hover 高亮表达可点，直接不渲染 */
+#system-workspace .sp-app .go{display:none;}
 
 /* 圆环详情浮层：hover 时把该指标的完整数据摊开（1Panel 的做法）。
    pointer-events:none 很关键 —— 否则浮层会盖住圆环，鼠标一抖就闪。 */
@@ -589,13 +612,29 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    三张卡的环径完全一致，弧长直接表达「占满程度」，并排时能横向比出谁更吃紧；
    水位色（绿→黄→红）跟着变，不用读数字也能看出问题。 */
 #system-workspace .sp-gauge{display:flex;align-items:center;gap:16px;margin-top:6px;}
-#system-workspace .sp-gauge-ring{position:relative;flex:none;width:100px;height:100px;}
+#system-workspace .sp-gauge-ring{position:relative;flex:none;width:100px;height:100px;
+  --rg-from:var(--accent);--rg-to:color-mix(in srgb, var(--accent) 40%, transparent);
+  --rg-glow:color-mix(in srgb, var(--accent) 42%, transparent);}
+#system-workspace .sp-gauge-ring.warn{--rg-from:var(--sp-warn);--rg-to:color-mix(in srgb, var(--sp-warn) 40%, transparent);
+  --rg-glow:color-mix(in srgb, var(--sp-warn) 42%, transparent);}
+#system-workspace .sp-gauge-ring.crit{--rg-from:var(--sp-danger);--rg-to:color-mix(in srgb, var(--sp-danger) 40%, transparent);
+  --rg-glow:color-mix(in srgb, var(--sp-danger) 42%, transparent);}
 #system-workspace .sp-gauge-ring svg{width:100%;height:100%;display:block;}
+/* 渐变的两端色由 --rg-* 给：stop-color 是 CSS 属性，写在样式表里才吃得到变量，
+   所以描边用 SVG 属性 stroke="url(#…)"，颜色切换靠这里换变量。 */
+#system-workspace .sp-gauge-ring svg .rg-from{stop-color:var(--rg-from);}
+#system-workspace .sp-gauge-ring svg .rg-to{stop-color:var(--rg-to);}
 #system-workspace .sp-gauge-ring .track{fill:none;stroke:var(--sp-tint-strong);stroke-width:7;}
-#system-workspace .sp-gauge-ring .value{fill:none;stroke:var(--accent);stroke-width:7;stroke-linecap:round;
-  transition:stroke-dashoffset 420ms cubic-bezier(.22,.61,.36,1),stroke var(--sp-ease);}
-#system-workspace .sp-gauge-ring.warn .value{stroke:var(--sp-warn);}
-#system-workspace .sp-gauge-ring.crit .value{stroke:var(--sp-danger);}
+/* 进度弧：渐变描边（起笔实、收笔淡）＋ 同色柔光。
+   纯色弧在深色底上就是一根「死线」，加渐变和光晕后环才有金属感、才像仪表。
+   注意这里不能写 stroke —— 一写就会盖掉 SVG 上的 url(#grad)，渐变直接失效。 */
+#system-workspace .sp-gauge-ring .value{fill:none;stroke-width:7;stroke-linecap:round;
+  filter:drop-shadow(0 0 5px var(--rg-glow));
+  transition:stroke-dashoffset 420ms cubic-bezier(.22,.61,.36,1);}
+/* 环心底衬一层极淡的同色径向光，让中心数字「浮」起来 */
+#system-workspace .sp-gauge-ring::before{content:'';position:absolute;inset:11%;border-radius:50%;
+  background:radial-gradient(circle, color-mix(in srgb, var(--rg-from) 11%, transparent), transparent 72%);
+  pointer-events:none;}
 #system-workspace .sp-gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
 #system-workspace .sp-gauge-center .v{display:flex;align-items:baseline;line-height:1;}
 #system-workspace .sp-gauge-center b{font-size:21px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
@@ -644,25 +683,31 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-cores{display:flex;gap:3px;margin-top:10px;flex-wrap:wrap;}
 #system-workspace .sp-core{width:16px;height:24px;border-radius:3px;background:var(--sp-tint-strong);position:relative;overflow:hidden;}
 #system-workspace .sp-core i{position:absolute;bottom:0;left:0;right:0;background:var(--accent);}
-#system-workspace .sp-spark{margin-top:8px;height:96px;width:100%;display:block;overflow:visible;}
-/* 在概览页里让曲线吃满剩余高度：min-height 保证窗口不高时也够看，
-   max-height 防止超宽屏把一条线拉成一大片色块 */
-#system-workspace .sp-sec-monitor .sp-spark{flex:0 1 auto;height:auto;min-height:52px;max-height:74px;}
+#system-workspace .sp-spark{margin-top:6px;height:96px;width:100%;display:block;overflow:visible;}
+/* 概览页里让曲线吃满剩余高度：min-height 保证窗口不高时也够看，
+   max-height 防止超宽屏把一条线拉成一大片色块。
+   flex-basis 必须写成确定值（56px）：写 auto 的话 SVG 会拿 viewBox 的宽高比
+   反推出一个巨大的固有高度，整个左栏被撑爆、反而全屏都放不下。 */
+#system-workspace .sp-sec-monitor .sp-spark{flex:1 1 56px;height:auto;min-height:44px;max-height:170px;}
 #system-workspace .sp-spark .grid{stroke:var(--sp-hair);stroke-width:1;}
-#system-workspace .sp-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
-#system-workspace .sp-spark .fill{fill:color-mix(in srgb, var(--accent) 15%, transparent);stroke:none;}
+/* 系列色统一收进 --spk：线用 --spk 描边，面积渐变的两端也读它，
+   加一条新曲线只要加一行 --spk 就够了。 */
+#system-workspace .sp-spark{--spk:var(--accent);}
+#system-workspace .sp-spark polyline{fill:none;stroke:var(--spk);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
+/* 这里不能写 fill —— 一写就会盖掉 polygon 上的 url(#grad)，渐变面积直接失效 */
+#system-workspace .sp-spark .fill{stroke:none;}
+/* .sp-spark 就是那个 <svg> 自己，所以渐变停靠点要写成它的后代，不能再套一层 svg */
+#system-workspace .sp-spark .spk-top{stop-color:var(--spk);stop-opacity:.36;}
+#system-workspace .sp-spark .spk-bottom{stop-color:var(--spk);stop-opacity:.02;}
 /* 内存曲线换一种系列色（绿），两条线叠在同一屏时才分得清谁是谁。 */
-#system-workspace .sp-spark.mem polyline{stroke:var(--ok);}
-#system-workspace .sp-spark.mem .fill{fill:color-mix(in srgb, var(--ok) 14%, transparent);}
+#system-workspace .sp-spark.mem{--spk:var(--ok);}
 /* 流量与磁盘 IO 各给一个系列色：四条曲线同色就分不清谁是谁 */
-#system-workspace .sp-spark.net polyline{stroke:color-mix(in srgb, var(--accent) 45%, #ffb020);}
-#system-workspace .sp-spark.net .fill{fill:color-mix(in srgb, var(--accent) 45%, #ffb020);opacity:.16;}
-#system-workspace .sp-spark.disk polyline{stroke:color-mix(in srgb, var(--accent) 40%, #c77dff);}
-#system-workspace .sp-spark.disk .fill{fill:color-mix(in srgb, var(--accent) 40%, #c77dff);opacity:.16;}
+#system-workspace .sp-spark.net{--spk:color-mix(in srgb, var(--accent) 45%, #ffb020);}
+#system-workspace .sp-spark.disk{--spk:color-mix(in srgb, var(--accent) 40%, #c77dff);}
 /* 曲线下的统计行：当前 / 均值 / 峰值 */
-#system-workspace .sp-axis{display:flex;justify-content:space-between;margin-top:5px;font-size:var(--sp-fs-xs);
+#system-workspace .sp-axis{display:flex;justify-content:space-between;margin-top:4px;font-size:var(--sp-fs-xs);
   color:var(--dim);font-variant-numeric:tabular-nums;opacity:.9;}
-#system-workspace .sp-stats{display:flex;gap:14px;margin-top:7px;font-size:var(--sp-fs-xs);color:var(--dim);font-variant-numeric:tabular-nums;}
+#system-workspace .sp-stats{display:flex;gap:14px;margin-top:5px;font-size:var(--sp-fs-xs);color:var(--dim);font-variant-numeric:tabular-nums;}
 #system-workspace .sp-stats b{color:var(--text);font-weight:600;}
 #system-workspace .sp-hint{font-weight:400;color:var(--dim);font-size:var(--sp-fs-xs);letter-spacing:0;}
 #system-workspace .sp-row .v{font-weight:600;font-variant-numeric:tabular-nums;}
@@ -673,7 +718,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-band{min-width:0;}
 /* 表格过宽时在区块内横向滚动，而不是把整个面板顶出横向滚动条 */
 #system-workspace .sp-band:has(.sp-table){overflow-x:auto;}
-#system-workspace .sp-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:var(--sp-fs);color:var(--text);}
+#system-workspace .sp-kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:var(--sp-fs-sm);line-height:1.4;color:var(--text);}
 #system-workspace .sp-kv .k{color:var(--dim);}
 /* 表格：只在表头下和行之间留发丝线，不做「行内小方框」。 */
 #system-workspace .sp-table{width:100%;border-collapse:collapse;font-size:var(--sp-fs);}
@@ -1882,8 +1927,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     }
     const list = $('system-app-list');
     if (list && apps && Array.isArray(apps.apps)) {
-      /* 常用优先，其次按启动次数 —— 「常用应用」就该是用户真的会点的那些 */
-      const items = apps.apps.slice().sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (Number(b.runs) || 0) - (Number(a.runs) || 0)).slice(0, 8);
+      /* 常用优先，其次按启动次数 —— 「常用应用」就该是用户真的会点的那些。
+         9 个正好铺满 3×3 的图标墙（多出来的会把右栏顶高，得不偿失）。 */
+      const items = apps.apps.slice().sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (Number(b.runs) || 0) - (Number(a.runs) || 0)).slice(0, 9);
       list.innerHTML = items.map((app) => {
         const initial = esc(String(app.name || '?').trim().slice(0, 1));
         return '<div class="sp-app" data-launch="' + esc(app.path) + '" title="' + esc(app.name + (app.version ? ' · ' + app.version : '')) + '">' +
@@ -2245,17 +2291,26 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   /* 环形仪表（对齐 1Panel 首页那种圆环）：底环 + 进度弧 + 中心大数字。
      为什么比一根横条直观：百分比是个「占满程度」的量，圆环的弧长天然表达它，
      而且三张卡并排时环的大小一致，一眼就能横向比较谁更吃紧。
-     stroke-dasharray/offset 是 SVG 画进度弧的标准做法；rotate(-90) 让弧从 12 点方向起画。 */
+     stroke-dasharray/offset 是 SVG 画进度弧的标准做法；rotate(-90) 让弧从 12 点方向起画。
+     描边颜色走 SVG 渐变（url(#…)）：渐变两端色由 CSS 变量 --rg-from/--rg-to 给，
+     所以水位变色（绿→黄→红）仍然是纯 CSS 的事，JS 不用管颜色。 */
+  let gaugeSeq = 0;
   function gauge(percent, caption) {
     const value = Math.max(0, Math.min(100, Number(percent) || 0));
     const radius = 42;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference * (1 - value / 100);
     const cls = levelClass(value);
+    const gid = 'sp-gauge-grad-' + (++gaugeSeq);
     return '<div class="sp-gauge-ring' + cls + '">' +
       '<svg viewBox="0 0 100 100" aria-hidden="true">' +
+        '<defs><linearGradient id="' + gid + '" x1="0" y1="1" x2="1" y2="0">' +
+          '<stop class="rg-from" offset="0"/>' +
+          '<stop class="rg-to" offset="1"/>' +
+        '</linearGradient></defs>' +
         '<circle class="track" cx="50" cy="50" r="' + radius + '"/>' +
         '<circle class="value" cx="50" cy="50" r="' + radius + '"' +
+          ' stroke="url(#' + gid + ')"' +
           ' stroke-dasharray="' + circumference.toFixed(1) + '"' +
           ' stroke-dashoffset="' + offset.toFixed(1) + '"' +
           ' transform="rotate(-90 50 50)"/>' +
@@ -2272,11 +2327,17 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
      ② 面积填充（.fill）之前只有样式、没有几何，等于白定义；
      ③ preserveAspectRatio=none 会把线宽也拉变形，靠 vector-effect=non-scaling-stroke 固定线宽。 */
   const SPARK_H = 96;
+  let sparkSeq = 0;
   const SPARK_GRID = [0.2, 0.4, 0.6, 0.8].map((ratio) =>
     '<line class="grid" x1="0" y1="' + (SPARK_H * ratio).toFixed(1) + '" x2="100" y2="' + (SPARK_H * ratio).toFixed(1) + '" vector-effect="non-scaling-stroke"/>').join('');
   function sparkline(values, series, max) {
     const cls = 'sp-spark' + (series ? ' ' + series : '');
-    const head = '<svg class="' + cls + '" viewBox="0 0 100 ' + SPARK_H + '" preserveAspectRatio="none" aria-hidden="true">' + SPARK_GRID;
+    /* 面积填充用纵向渐变（上浓下透），比一块实色更透气；
+       两端色由 CSS 变量 --spk 给（见 .sp-spark.mem/.net/.disk），所以换系列色只改 CSS。 */
+    const gid = 'sp-spark-grad-' + (++sparkSeq);
+    const defs = '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop class="spk-top" offset="0"/><stop class="spk-bottom" offset="1"/></linearGradient></defs>';
+    const head = '<svg class="' + cls + '" viewBox="0 0 100 ' + SPARK_H + '" preserveAspectRatio="none" aria-hidden="true">' + defs + SPARK_GRID;
     if (!values || values.length < 2) return head + '</svg>';
     /* 上限：百分比类固定 100；流量/磁盘 IO 是速率，按峰值自适应，否则小流量会贴底看不出形状 */
     const top = Number(max) > 0 ? Number(max) : 100;
@@ -2286,7 +2347,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       const y = SPARK_H - pad - Math.max(0, Math.min(1, (Number(value) || 0) / top)) * (SPARK_H - pad * 2);
       return x.toFixed(2) + ',' + y.toFixed(2);
     }).join(' ');
-    return head + '<polygon class="fill" points="0,' + SPARK_H + ' ' + points + ' 100,' + SPARK_H + '"/>' +
+    return head + '<polygon class="fill" fill="url(#' + gid + ')" points="0,' + SPARK_H + ' ' + points + ' 100,' + SPARK_H + '"/>' +
       '<polyline points="' + points + '" vector-effect="non-scaling-stroke"/></svg>';
   }
 
