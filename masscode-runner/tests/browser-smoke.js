@@ -511,6 +511,34 @@ print(r.run())
   const pre=card.locator('pre');const before=await pre.evaluate(element=>element.scrollTop);await pre.hover();await page.mouse.wheel(0,120);const after=await pre.evaluate(element=>element.scrollTop);
   if((await pre.evaluate(element=>element.scrollHeight>element.clientHeight))&&after<=before)throw new Error('定义卡片无法使用滚轮滚动');
   await page.evaluate(()=>{hideDefinitionHover();const root=document.getElementById('code'),walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node,index=-1;while((node=walker.nextNode())){index=node.textContent.indexOf('led_create');if(index>=0)break;}if(!node||index<0)throw new Error('找不到用于引用的代码');const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+'led_create'.length);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));});
+  /* 引用浮条不再自动弹出：选中代码后不该自己冒出来（以前会挡住正文）。 */
+  await page.waitForTimeout(250);
+  if(await page.locator('#code-ref-bar').isVisible())throw new Error('选中代码后引用浮条仍会自动弹出，遮挡正文');
+  /* 入口改成编辑器的右键菜单动作（同一动作也绑了 ⌘⌥R）。 */
+  const refAction=await page.evaluate(()=>{
+    if(typeof MONACO_EDITOR==='undefined'||!MONACO_EDITOR)return 'no-monaco';
+    const action=MONACO_EDITOR.getAction('codescope.referenceSelection');
+    return action?String(action.label||''):'missing';
+  });
+  if(refAction!=='no-monaco'&&!refAction.includes('引用'))throw new Error('代码编辑器右键菜单缺少「引用选中的代码」动作：'+refAction);
+  /* 没有选区时入口要给出提示、且不弹浮条（右键菜单可能被误点）。
+     注意必须先把浏览器选区也清掉：openCodeReferenceMenu 是实时取选区的，
+     只清 CODE_REF_SELECTION 的话它会拿旧选区真的插一次引用。 */
+  const guard=await page.evaluate(()=>{
+    hideCodeReferenceBar();CODE_REF_SELECTION=null;
+    const selection=window.getSelection&&window.getSelection();if(selection)selection.removeAllRanges();
+    openCodeReferenceMenu();
+    return document.getElementById('code-ref-bar').classList.contains('hidden');
+  });
+  if(!guard)throw new Error('没有选中代码时引用浮条不应弹出');
+  /* 后续验证的是「选目标 Markdown → 写入引用」这条链路，直接喂一份选区进去，
+     不再依赖浏览器选区（跨 evaluate 等待后容易失效）。 */
+  await page.evaluate(()=>{
+    const frag=CURRENT.fragments[CINDEX];
+    CODE_REF_SELECTION={file:CURRENT.file,frag:CINDEX,line:2,endLine:2,label:fragmentDisplayName(frag,CURRENT.name),language:frag.language,selection:'led_create'};
+    $('code-ref-selection-label').textContent='已选 1 行';
+    $('code-ref-bar').classList.remove('hidden');$('code-ref-targets').classList.add('hidden');positionCodeReferenceBar();
+  });
   await page.locator('#code-ref-bar').waitFor({state:'visible'});
   if(await page.locator('#document-mode-tools').getByText('引用代码',{exact:false}).count())throw new Error('Markdown 顶部仍残留旧的引用代码按钮');
   await page.locator('#code-ref-add').click();

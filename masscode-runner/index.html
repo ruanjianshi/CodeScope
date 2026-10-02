@@ -4640,7 +4640,7 @@ function syncProxySelection(editor,input){const model=editor&&editor.getModel(),
 function monacoToken(editor){const model=editor.getModel(),position=editor.getPosition(),word=model&&position&&model.getWordAtPosition(position);return word&&position?{word:word.word,line:position.lineNumber,column:word.startColumn}:null;}
 function monacoSymbol(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel());return token&&context?symbolInContext(token,{snippet:context.snippet,index:context.index,frag:context.fragment}):null;}
 function monacoGoDefinition(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel()),sym=monacoSymbol(editor);if(!token||!context){showNavigationNotice('请把光标放在函数、类型、宏或变量上');return;}goToLspDefinition(token,{snippet:context.snippet,index:context.index,frag:context.fragment},sym);}
-function wireMonacoCommands(editor,isMain){const m=window.monaco;editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyS,()=>{if(isMain)flushSave();else flushSplitEditors();});editor.addCommand(m.KeyMod.CtrlCmd|m.KeyMod.Shift|m.KeyCode.KeyP,()=>openSymModal('command'));editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyP,()=>openSymModal('file'));editor.addCommand(m.KeyCode.F1,()=>openSymModal('command'));editor.addCommand(m.KeyMod.Alt|m.KeyCode.KeyZ,toggleEditorWordWrap);editor.addCommand(m.KeyCode.F8,()=>nextLspProblem(1));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F8,()=>nextLspProblem(-1));editor.addCommand(m.KeyCode.F12,()=>monacoGoDefinition(editor));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F12,()=>{const sym=monacoSymbol(editor);if(sym){SYM_SEL=sym;setSymMode('symbol');}});if(isMain)editor.onDidChangeCursorSelection(()=>{rememberMarkdownCaret();syncCodeReferenceBar();});}
+function wireMonacoCommands(editor,isMain){const m=window.monaco;editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyS,()=>{if(isMain)flushSave();else flushSplitEditors();});editor.addCommand(m.KeyMod.CtrlCmd|m.KeyMod.Shift|m.KeyCode.KeyP,()=>openSymModal('command'));editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyP,()=>openSymModal('file'));editor.addCommand(m.KeyCode.F1,()=>openSymModal('command'));editor.addCommand(m.KeyMod.Alt|m.KeyCode.KeyZ,toggleEditorWordWrap);editor.addCommand(m.KeyCode.F8,()=>nextLspProblem(1));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F8,()=>nextLspProblem(-1));editor.addCommand(m.KeyCode.F12,()=>monacoGoDefinition(editor));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F12,()=>{const sym=monacoSymbol(editor);if(sym){SYM_SEL=sym;setSymMode('symbol');}});if(isMain)editor.onDidChangeCursorSelection(()=>{rememberMarkdownCaret();});if(isMain)editor.addAction({id:'codescope.referenceSelection',label:'↗ 引用选中的代码到 Markdown',contextMenuGroupId:'9_cutcopypaste',contextMenuOrder:9,precondition:'editorHasSelection',keybindings:[m.KeyMod.CtrlCmd|m.KeyMod.Alt|m.KeyCode.KeyR],run:()=>openCodeReferenceMenu()});}
 async function syncMonacoMain(){
   const host=$('monaco-main'),wrap=$('code-wrap'),f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];
   if(!EDITING||!f){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';return;}
@@ -12952,12 +12952,25 @@ function codeReferenceAnchor(){
   const selection=window.getSelection&&window.getSelection();if(selection&&selection.rangeCount&&!selection.isCollapsed){const rect=selection.getRangeAt(0).getBoundingClientRect();if(rect.width||rect.height)return{x:rect.right,y:rect.top};}
   return{x:CODE_REF_MOUSE_X||window.innerWidth/2,y:CODE_REF_MOUSE_Y||80};
 }
+function positionCodeReferenceBar(){
+  const bar=$('code-ref-bar');if(!bar||bar.classList.contains('hidden'))return;
+  const anchor=codeReferenceAnchor(),rect=bar.getBoundingClientRect();
+  bar.style.left=Math.max(8,Math.min(anchor.x-rect.width/2,window.innerWidth-rect.width-8))+'px';
+  bar.style.top=Math.max(8,Math.min(anchor.y-rect.height-9,window.innerHeight-rect.height-8))+'px';
+}
 function syncCodeReferenceBar(){
   const bar=$('code-ref-bar'),ref=currentCodeReferenceSelection();if(!bar)return;
   if(!ref){hideCodeReferenceBar();CODE_REF_SELECTION=null;return;}
   CODE_REF_SELECTION=ref;$('code-ref-selection-label').textContent=ref.endLine>ref.line?'已选 '+(ref.endLine-ref.line+1)+' 行':'已选 '+ref.selection.trim().length+' 字';
   bar.classList.remove('hidden');$('code-ref-targets').classList.add('hidden');
-  const anchor=codeReferenceAnchor(),rect=bar.getBoundingClientRect();bar.style.left=Math.max(8,Math.min(anchor.x-rect.width/2,window.innerWidth-rect.width-8))+'px';bar.style.top=Math.max(8,Math.min(anchor.y-rect.height-9,window.innerHeight-rect.height-8))+'px';
+  positionCodeReferenceBar();
+}
+/* 右键菜单 / ⌘⌥R 的入口：先按当前选区把浮条显示出来，再决定引用到哪个 Markdown。 */
+function openCodeReferenceMenu(){
+  const ref=currentCodeReferenceSelection();
+  if(!ref){hideCodeReferenceBar();setStatus('err','请先选中需要引用的代码');return;}
+  syncCodeReferenceBar();
+  chooseCodeReferenceTarget();
 }
 function insertSelectedCodeReference(targetIndex){
   const ref=CODE_REF_SELECTION,target=CURRENT&&CURRENT.fragments&&CURRENT.fragments[targetIndex];if(!ref||!target||target.language!=='markdown')return;
@@ -12972,7 +12985,7 @@ function chooseCodeReferenceTarget(){
   const targets=(CURRENT.fragments||[]).map((fragment,index)=>({fragment,index})).filter(item=>item.fragment.language==='markdown');
   if(!targets.length){hideCodeReferenceBar();setStatus('err','当前项目没有 Markdown 片段，请先新建 Markdown 片段');return;}
   if(targets.length===1){insertSelectedCodeReference(targets[0].index);return;}
-  const menu=$('code-ref-targets');menu.replaceChildren();targets.forEach(({fragment,index})=>{const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');const label=document.createElement('span');label.textContent='引用到 '+fragmentDisplayName(fragment,'Markdown '+(index+1));button.appendChild(label);button.onclick=()=>insertSelectedCodeReference(index);menu.appendChild(button);});menu.classList.remove('hidden');
+  const menu=$('code-ref-targets');menu.replaceChildren();targets.forEach(({fragment,index})=>{const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');const label=document.createElement('span');label.textContent='引用到 '+fragmentDisplayName(fragment,'Markdown '+(index+1));button.appendChild(label);button.onclick=()=>insertSelectedCodeReference(index);menu.appendChild(button);});menu.classList.remove('hidden');positionCodeReferenceBar();
 }
 /* ── 代码工作区的 Markdown 区块编辑器（与阅读模块共用 window.CodeScopeBlockEditor）──
    同一片段只挂载一次：renderMain 因保存等原因重绘时不会重建编辑器，焦点与光标位置得以保留。 */
@@ -15379,8 +15392,10 @@ $('btn-md').onclick = () => {
 $('document-mode-tools').querySelectorAll('[data-doc-mode]').forEach((button)=>button.onclick=()=>setDocumentMode(button.dataset.docMode));
 $('code-ref-bar').addEventListener('mousedown',(event)=>event.preventDefault());
 $('code-ref-add').onclick=(event)=>{event.stopPropagation();chooseCodeReferenceTarget();};
-document.addEventListener('selectionchange',()=>setTimeout(syncCodeReferenceBar,0));
-document.addEventListener('mouseup',(event)=>{CODE_REF_MOUSE_X=event.clientX;CODE_REF_MOUSE_Y=event.clientY;if(!event.target.closest('#code-ref-bar'))setTimeout(syncCodeReferenceBar,30);});
+/* 引用浮条不再自动弹：它原来挂在「光标/选区变化」「selectionchange」「mouseup」三处，
+   一选中代码就冒出来挡住正文。现在只在右键菜单「↗ 引用选中的代码到 Markdown」
+   或快捷键 ⌘⌥R 触发时才出现（见 openCodeReferenceMenu）。 */
+document.addEventListener('mouseup',(event)=>{CODE_REF_MOUSE_X=event.clientX;CODE_REF_MOUSE_Y=event.clientY;});
 document.addEventListener('mousedown',(event)=>{if(!event.target.closest('#code-ref-bar,#code-wrap'))hideCodeReferenceBar();});
 document.addEventListener('scroll',hideCodeReferenceBar,true);
 $('tag-head').onclick = toggleTagHead;

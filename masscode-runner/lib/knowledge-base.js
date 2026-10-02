@@ -466,7 +466,10 @@ body {
 .vp-doc h3 { color:color-mix(in srgb,var(--vp-c-brand-1) 58%,var(--vp-c-text-1)); }
 .vp-doc h1 { margin-bottom:.72em;font-size:2.35rem;line-height:1.16; }
 .vp-doc h1::after { content:'';display:block;width:44px;height:3px;margin-top:16px;border-radius:99px;background:linear-gradient(90deg,var(--vp-c-brand-1),transparent); }
-.vp-doc h1 + p { max-width:760px;margin:0 0 2.25em;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
+/* 标题后第一段原来额外留 2.25em 下边距（所谓「导语」），结果全篇就它后面空一大截 ——
+   用户看到的「行间距变了」就是这个：同一篇里段间距不均匀。
+   现在统一成和普通段落一样的间距，整篇节奏一致（阅读器那边也是均匀的）。 */
+.vp-doc h1 + p { max-width:760px;margin:0 0 14px;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
 .vp-doc h2 { counter-increment:kb-h2;display:flex;align-items:center;gap:11px;margin-top:2.55em;padding-top:1.05em;border-top:1px solid color-mix(in srgb,var(--vp-c-brand-1) 16%,var(--vp-c-divider));font-size:1.5rem; }
 .vp-doc h2::before { content:counter(kb-h2,decimal-leading-zero);display:inline-grid;place-items:center;min-width:30px;height:24px;padding:0 5px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));border-radius:7px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font:750 11px/1 var(--vp-font-family-mono);letter-spacing:0; }
 .vp-doc h3 { position:relative;margin-top:1.85em;padding-left:14px;font-size:1.16rem; }

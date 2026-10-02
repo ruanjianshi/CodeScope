@@ -557,6 +557,8 @@ void bubbleSort(Array& values);
   assert(html.includes("classList.toggle('markdown-code'") && html.includes('#code-wrap.markdown-code #code .hljs-section') && !html.includes("f.language === 'markdown') return") && html.includes("$('code-edit').classList.add('live-hl')"), 'Markdown 源码编辑缺少兼容编辑器语法高亮、行号或主题样式');
   assert(html.includes('#md-view.project-md-full') && html.includes("classList.toggle('project-md-full'") && html.includes('width:min(100%,1120px)'), 'Markdown 实时或阅读模式仍受旧的半宽 max-width 布局限制');
   assert(html.includes('codeReferenceMarkdown') && html.includes('currentCodeReferenceSelection') && html.includes('chooseCodeReferenceTarget') && html.includes('id="code-ref-add"') && !html.includes('id="btn-code-reference"') && html.includes('md-code-ref') && html.includes('data-code-line') && html.includes('goToLocation({snippet,frag:'), '代码选区引用、Markdown 目标选择、行号定位或回跳能力缺失');
+  /* 引用浮条改成右键菜单入口：不再挂在选区变化上自动弹，必须能从右键菜单 / 快捷键触发。 */
+  assert(html.includes("id:'codescope.referenceSelection'") && html.includes('openCodeReferenceMenu') && html.includes('contextMenuGroupId'), '代码引用未改到右键菜单入口，或缺少触发函数');
   assert(html.includes('fragmentDisplayName') && html.includes('return label||filename||fallback') && html.includes("primaryName.textContent=primaryLabel") && !html.includes("function splitName(ref) { return (ref.frag.filename||ref.frag.label"), '编辑栏标题、面包屑或引用目标仍错误地优先显示底层文件名');
   assert(html.includes("fragment.language==='html'?['source','split','preview']") && html.includes('HTML 预览') && html.includes("setDocumentMode('source')"), 'HTML 缺少源码、分栏、全宽预览或关闭入口');
   assert(html.includes('html[data-theme] .split-editor-input') && html.includes("classList.toggle('plain',!exact)"), '多栏编辑器高亮层遮挡修复或纯文本降级缺失');
