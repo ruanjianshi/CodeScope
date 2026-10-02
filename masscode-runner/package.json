@@ -27,14 +27,16 @@
     "prepublish:desktop": "npm run build:assets && npm run verify:office",
     "prepare:gopls": "node scripts/build-bundled-gopls.js",
     "verify:office": "node scripts/verify-office-package.js",
-    "test": "node tests/smoke.js",
+    "test": "node tests/smoke.js && node tests/platform-sim.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js",
     "build:reading-editor": "node scripts/build-reading-editor.js",
     "build:study-workspace": "node scripts/build-study-workspace.js",
     "build:assets": "npm run build:reading-editor && npm run build:study-workspace && npm run build:system-panel",
     "build:system-panel": "node scripts/build-system-panel.js",
-    "build:knowledge": "node scripts/build-knowledge.js"
+    "build:knowledge": "node scripts/build-knowledge.js",
+    "test:smoke": "node tests/smoke.js",
+    "test:platform": "node tests/platform-sim.js"
   },
   "engines": {
     "node": ">=18"
