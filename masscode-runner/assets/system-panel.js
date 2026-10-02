@@ -87,6 +87,16 @@ body.system-mode #main{flex:1;min-width:0;}
 body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-nav .nav-title{padding:2px 8px 10px;font-size:var(--sp-fs-md);font-weight:600;color:var(--text);display:flex;align-items:baseline;gap:6px;}
 #system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* \u641C\u7D22\u653E\u5728\u4FA7\u680F\u9876\u90E8\uFF1A\u9AD8\u9891\u5165\u53E3\u4E0D\u8BE5\u585E\u5728\u5DE6\u4E0B\u89D2\u3002\u505A\u6210\u8F93\u5165\u6846\u7684\u6837\u5B50\uFF0C\u70B9\u54EA\u513F\u90FD\u80FD\u8FDB\u641C\u7D22\u9762\u677F\u3002 */
+#system-nav .nav-search{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;box-sizing:border-box;
+  background:var(--sp-surface-2);border:1px solid var(--sp-hair);border-radius:var(--sp-r-sm);
+  padding:6px 9px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;text-align:left;
+  transition:border-color var(--sp-ease),background var(--sp-ease),color var(--sp-ease);}
+#system-nav .nav-search:hover{color:var(--text);border-color:var(--sp-hair-strong);background:var(--sp-tint);}
+#system-nav .nav-search .ico{flex:none;font-size:var(--sp-fs-md);line-height:1;opacity:.85;}
+#system-nav .nav-search .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#system-nav .nav-search kbd{flex:none;font:var(--sp-fs-xs) var(--sp-mono);border:1px solid var(--sp-hair);
+  border-radius:var(--sp-r-xs);padding:1px 4px;color:var(--dim);}
 #system-nav-list{display:flex;flex-direction:column;gap:1px;}
 /* \u5206\u7EC4\u5C0F\u6807\u9898\uFF1A\u5C0F\u3001\u758F\u3001\u4E0D\u62A2\u620F\uFF0C\u53EA\u8D1F\u8D23\u628A 7 \u4E2A\u5206\u533A\u5207\u6210\u4E24\u6BB5 */
 #system-nav-list .nav-group{padding:10px 10px 4px;color:var(--dim);font-size:var(--sp-fs-xs);letter-spacing:.1em;opacity:.75;}
@@ -672,6 +682,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   #system-nav{width:60px !important;padding:10px 8px;}
   #system-workspace .nav-resizer{display:none;}
   #system-nav .nav-title span, #system-nav-list button span, #system-nav .nav-foot button span{display:none;}
+  #system-nav .nav-search{justify-content:center;padding:6px 0;}
+  #system-nav .nav-search .txt, #system-nav .nav-search kbd{display:none;}
   #system-body{padding:14px 14px 26px;}
 }
 `;function S(){if(u("codescope-system-panel-style"))return;let t=document.createElement("style");t.id="codescope-system-panel-style",t.textContent=v,document.head.appendChild(t)}let r={built:!1,backend:null,tab:"overview",auto:!0,timer:null,busy:!1,history:{cpu:[],mem:[]},overview:null,processes:null,processSort:"cpu",processQuery:"",processLimit:10,portLimit:8,caches:[],cacheScanAt:0,software:null,softwareQuery:"",showAllAgents:!1,docker:null,dev:null,devRootInput:"",usageRoot:"",usage:null,largeRoot:"",large:null,eventSource:null,taskId:""};r.usageRoot="",r.largeRoot="";function _(t){let a=u("system-task");a&&(a.hidden=!1,u("system-task-label").textContent=t||"\u4EFB\u52A1",u("system-task-status").textContent="\u8FD0\u884C\u4E2D\u2026",u("system-task-out").textContent="",u("system-task-cancel").hidden=!1)}function K(t){let a=u("system-task-out");if(!a)return;let c=document.createElement("span");t.stream==="err"&&(c.className="err"),c.textContent=t.text+`
@@ -682,9 +694,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         <div id="system-shell">
           <aside id="system-nav" aria-label="\u672C\u673A\u7BA1\u5BB6\u5206\u533A">
             <div class="nav-title">\u672C\u673A\u7BA1\u5BB6 <span id="system-nav-host"></span></div>
+            <button id="system-palette" class="nav-search" type="button" title="\u641C\u7D22\u6587\u4EF6\u3001\u8FDB\u7A0B\u4E0E\u529F\u80FD\uFF08\u2318K\uFF09">
+              <span class="ico" aria-hidden="true">\u2315</span><span class="txt">\u641C\u7D22\u4E0E\u547D\u4EE4</span><kbd>\u2318K</kbd>
+            </button>
             <nav id="system-nav-list"></nav>
             <div class="nav-foot">
-              <button id="system-palette" type="button" title="\u641C\u7D22\u6587\u4EF6\u3001\u8FDB\u7A0B\u4E0E\u529F\u80FD\uFF08\u2318K\uFF09"><span>\u2318K</span> \u641C\u7D22\u4E0E\u547D\u4EE4</button>
               <label class="sp-auto" title="\u81EA\u52A8\u5237\u65B0\u5B9E\u65F6\u6570\u636E"><input type="checkbox" id="system-auto" checked> \u5B9E\u65F6\u5237\u65B0</label>
             </div>
             <div class="nav-resizer" role="separator" aria-orientation="vertical" title="\u62D6\u52A8\u8C03\u6574\u4FA7\u680F\u5BBD\u5EA6\uFF08\u53CC\u51FB\u6062\u590D\u9ED8\u8BA4\uFF09"></div>

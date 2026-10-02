@@ -348,6 +348,16 @@ body.system-mode #main{flex:1;min-width:0;}
 body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-nav .nav-title{padding:2px 8px 10px;font-size:var(--sp-fs-md);font-weight:600;color:var(--text);display:flex;align-items:baseline;gap:6px;}
 #system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 搜索放在侧栏顶部：高频入口不该塞在左下角。做成输入框的样子，点哪儿都能进搜索面板。 */
+#system-nav .nav-search{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;box-sizing:border-box;
+  background:var(--sp-surface-2);border:1px solid var(--sp-hair);border-radius:var(--sp-r-sm);
+  padding:6px 9px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;text-align:left;
+  transition:border-color var(--sp-ease),background var(--sp-ease),color var(--sp-ease);}
+#system-nav .nav-search:hover{color:var(--text);border-color:var(--sp-hair-strong);background:var(--sp-tint);}
+#system-nav .nav-search .ico{flex:none;font-size:var(--sp-fs-md);line-height:1;opacity:.85;}
+#system-nav .nav-search .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#system-nav .nav-search kbd{flex:none;font:var(--sp-fs-xs) var(--sp-mono);border:1px solid var(--sp-hair);
+  border-radius:var(--sp-r-xs);padding:1px 4px;color:var(--dim);}
 #system-nav-list{display:flex;flex-direction:column;gap:1px;}
 /* 分组小标题：小、疏、不抢戏，只负责把 7 个分区切成两段 */
 #system-nav-list .nav-group{padding:10px 10px 4px;color:var(--dim);font-size:var(--sp-fs-xs);letter-spacing:.1em;opacity:.75;}
@@ -933,6 +943,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   #system-nav{width:60px !important;padding:10px 8px;}
   #system-workspace .nav-resizer{display:none;}
   #system-nav .nav-title span, #system-nav-list button span, #system-nav .nav-foot button span{display:none;}
+  #system-nav .nav-search{justify-content:center;padding:6px 0;}
+  #system-nav .nav-search .txt, #system-nav .nav-search kbd{display:none;}
   #system-body{padding:14px 14px 26px;}
 }
 `;
@@ -1091,9 +1103,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         <div id="system-shell">
           <aside id="system-nav" aria-label="本机管家分区">
             <div class="nav-title">本机管家 <span id="system-nav-host"></span></div>
+            <button id="system-palette" class="nav-search" type="button" title="搜索文件、进程与功能（⌘K）">
+              <span class="ico" aria-hidden="true">⌕</span><span class="txt">搜索与命令</span><kbd>⌘K</kbd>
+            </button>
             <nav id="system-nav-list"></nav>
             <div class="nav-foot">
-              <button id="system-palette" type="button" title="搜索文件、进程与功能（⌘K）"><span>⌘K</span> 搜索与命令</button>
               <label class="sp-auto" title="自动刷新实时数据"><input type="checkbox" id="system-auto" checked> 实时刷新</label>
             </div>
             <div class="nav-resizer" role="separator" aria-orientation="vertical" title="拖动调整侧栏宽度（双击恢复默认）"></div>
