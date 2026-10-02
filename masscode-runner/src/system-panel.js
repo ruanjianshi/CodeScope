@@ -487,7 +487,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-ov-main{align-self:stretch;min-height:0;justify-content:space-between;}
 /* 监控区是可伸展的那一块：窗口变高 → 曲线跟着变高，而不是在底部留白 */
 #system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
-#system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;}
+#system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;
+  grid-template-columns:repeat(2,minmax(0,1fr));}
 #system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;}
 #system-workspace .sp-sec{min-width:0;}
 #system-workspace .sp-sec h3{margin:0 0 12px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
@@ -503,11 +504,20 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gcell .sp-cores{justify-content:center;gap:1.5px;margin-top:1px;}
 #system-workspace .sp-gcell .sp-core{width:11px;height:16px;}
 #system-workspace .sp-gcell .sp-gauge-ring.crit .sp-gauge-center b{color:var(--sp-danger);}
-/* 右侧栏的快捷操作：竖排更好点，也省得文字被挤断行 */
-#system-workspace .sp-actions-stack{flex-direction:column;align-items:stretch;margin:0;gap:6px;}
-#system-workspace .sp-actions-stack .sp-btn{display:flex;align-items:center;gap:9px;justify-content:flex-start;
-  text-align:left;padding:8px 11px;font-size:var(--sp-fs);}
-#system-workspace .sp-actions-stack .sp-btn .gi{font-style:normal;flex:none;width:16px;text-align:center;opacity:.85;}
+/* 右侧栏的快捷操作：2×2 网格 —— 竖排 4 行太占高度，横排又会把文字挤断；
+   两列刚好容下「图标 + 四字」，主操作占一格不抢戏。 */
+/* 用两个 class 提高特异性：.sp-actions 的 display:flex 与单 class 写法特异性相同，
+   而它在 CSS 里更靠后，会直接盖掉 grid（实测踩到 —— 表现是 grid-template 生效、
+   但 display 还是 flex，按钮宽度参差、排成 3 列）。
+   注意：这段 CSS 在 JS 模板字符串里，注释中不能出现反引号，否则会把字符串截断。 */
+#system-workspace .sp-actions.sp-actions-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;margin:0;gap:7px;}
+/* min-width:0 是必须的：grid 项默认 min-width:auto，文字长的按钮会把格子撑破、
+   把 2×2 挤成 3 列（实测踩到）。overflow-wrap 让长文案在格子里正常折行。 */
+#system-workspace .sp-actions-stack .sp-btn{display:flex;align-items:center;gap:7px;justify-content:flex-start;
+  text-align:left;padding:8px 10px;font-size:var(--sp-fs-sm);white-space:normal;line-height:1.35;
+  min-width:0;overflow:hidden;overflow-wrap:anywhere;}
+#system-workspace .sp-actions-stack .sp-btn .gi{font-style:normal;flex:none;width:15px;text-align:center;opacity:.85;}
 /* 磁盘卷：两行式（上行路径与容量、下行整条进度条）。挤在一行时中间会空一大块。 */
 #system-workspace .sp-vols{display:flex;flex-direction:column;gap:14px;}
 #system-workspace .sp-vol{min-width:0;}
@@ -2369,16 +2379,111 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     if (src.disk.length) charts.push({ key: 'disk', label: '磁盘 IO', values: src.disk, max: peak(src.disk), fmt: (v) => fmtRate(v) });
     return charts.map((chart) => {
       const last = chart.values.length ? chart.values[chart.values.length - 1] : 0;
-      return '<div><div class="sp-row"><span class="k">' + chart.label + '</span><span class="v">' + chart.fmt(last) + '</span></div>' +
+      return '<div class="sp-chart" data-chart="' + chart.key + '"><div class="sp-row"><span class="k">' + chart.label +
+        '</span><span class="v">' + chart.fmt(last) + '</span></div>' +
         sparkline(chart.values, chart.key, chart.max) + sparkAxis(src.ts) + sparkStats(chart.values, chart.fmt) + '</div>';
     }).join('');
   }
 
   /* ---------------------------------------------------------------- 总览 */
 
-    function renderOverview(body) {
+    /* 概览每 1.5 秒刷新一次。原来每次都重建整个 body.innerHTML —— 曲线、圆环、
+     应用列表全部重画，肉眼可见地闪。改成：首次建结构，之后只改数值。 */
+  function patchOverview(body) {
+    const data = state.overview;
+    if (!data || !body) return;
+    const cpu = data.cpu || {};
+    const memory = data.memory || {};
+    const disk = data.primaryDisk;
+
+    /* 圆环：进度弧 + 中心数字 + 水位色，都不动 DOM 结构 */
+    const setGauge = (key, percent) => {
+      const cell = body.querySelector('.sp-gcell[data-gauge="' + key + '"]');
+      if (!cell) return;
+      const value = Math.max(0, Math.min(100, Number(percent) || 0));
+      const arc = cell.querySelector('circle.value');
+      if (arc) arc.setAttribute('stroke-dashoffset', (2 * Math.PI * 42 * (1 - value / 100)).toFixed(1));
+      const num = cell.querySelector('.sp-gauge-center b');
+      if (num) num.textContent = value < 10 ? value.toFixed(1) : value.toFixed(0);
+      const ring = cell.querySelector('.sp-gauge-ring');
+      if (ring) {
+        ring.classList.toggle('warn', value >= 70 && value < 85);
+        ring.classList.toggle('crit', value >= 85);
+      }
+    };
+    setGauge('cpu', cpu.usage);
+    setGauge('mem', memory.usage);
+    setGauge('disk', disk ? disk.capacity : 0);
+    setGauge('load', (cpu.loadPercent || [])[0]);
+
+    /* 曲线：只改 points，不重建 SVG */
+    const src = monitorSource();
+    const peak = (list) => Math.max(1, ...list);
+    const charts = {
+      cpu: { values: src.cpu, max: 100, fmt: (v) => v.toFixed(1) + '%' },
+      mem: { values: src.mem, max: 100, fmt: (v) => v.toFixed(1) + '%' },
+      net: { values: src.net, max: peak(src.net), fmt: (v) => fmtRate(v) },
+      disk: { values: src.disk, max: peak(src.disk), fmt: (v) => fmtRate(v) },
+    };
+    for (const key of Object.keys(charts)) {
+      const chart = charts[key];
+      const wrap = body.querySelector('.sp-chart[data-chart="' + key + '"]');
+      if (!wrap || !chart.values || chart.values.length < 2) continue;
+      const top = chart.max > 0 ? chart.max : 100;
+      const pts = chart.values.map((value, index) => {
+        const x = index / (chart.values.length - 1) * 100;
+        const y = SPARK_H - 2 - Math.max(0, Math.min(1, (Number(value) || 0) / top)) * (SPARK_H - 4);
+        return x.toFixed(2) + ',' + y.toFixed(2);
+      }).join(' ');
+      const line = wrap.querySelector('polyline');
+      if (line) line.setAttribute('points', pts);
+      const fill = wrap.querySelector('polygon.fill');
+      if (fill) fill.setAttribute('points', '0,' + SPARK_H + ' ' + pts + ' 100,' + SPARK_H);
+      const current = wrap.querySelector('.sp-row .v');
+      if (current) current.textContent = chart.fmt(chart.values[chart.values.length - 1]);
+      const stats = wrap.querySelectorAll('.sp-stats b');
+      if (stats.length === 3) {
+        const sum = chart.values.reduce((acc, v) => acc + (Number(v) || 0), 0);
+        stats[0].textContent = chart.fmt(chart.values[chart.values.length - 1]);
+        stats[1].textContent = chart.fmt(sum / chart.values.length);
+        stats[2].textContent = chart.fmt(Math.max(...chart.values));
+      }
+    }
+
+    /* 磁盘卷：百分比与条宽 */
+    for (const item of data.disks || []) {
+      const row = body.querySelector('.sp-vol[data-mount="' + String(item.mount).replace(/"/g, '\\"') + '"]');
+      if (!row) continue;
+      const capacity = Math.max(0, Math.min(100, Number(item.capacity) || 0));
+      const barFill = row.querySelector('.sp-bar i');
+      if (barFill) barFill.style.width = capacity.toFixed(2) + '%';
+      const bar = row.querySelector('.sp-bar');
+      if (bar) { bar.classList.toggle('crit', capacity >= 85); bar.classList.toggle('ok', capacity < 70); }
+      const pct = row.querySelector('.sp-vol-pct');
+      if (pct) pct.textContent = capacity.toFixed(0) + '%';
+      const free = row.querySelector('.sp-vol-free');
+      if (free) free.textContent = fmtBytes(item.free) + ' 可用 / ' + fmtBytes(item.total);
+    }
+
+    /* 系统信息：运行时长（每刷新都在变） */
+    const uptime = body.querySelector('#system-uptime');
+    if (uptime && data.identity) uptime.textContent = fmtDuration(data.identity.uptime);
+
+    /* 磁盘告警提示：按阈值出现/消失 */
+    const warnBox = body.querySelector('#system-disk-warn');
+    if (warnBox) {
+      const need = disk && Number(disk.capacity) >= 90;
+      const has = !!warnBox.querySelector('.sp-note');
+      if (need && !has) warnBox.innerHTML = '<p class="sp-note sp-warn">主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%，去「存储」清理一下缓存与大文件。</p>';
+      else if (!need && has) warnBox.innerHTML = '';
+    }
+  }
+
+  function renderOverview(body) {
     const data = state.overview;
     if (!data) { body.innerHTML = '<div class="sp-empty">正在读取…</div>'; return; }
+    /* 已有结构就走增量更新：不重建 DOM，画面不会闪 */
+    if (body.querySelector('.sp-ov')) { patchOverview(body); return; }
     const cpu = data.cpu || {};
     const memory = data.memory || {};
     const swap = data.swap;
@@ -2435,9 +2540,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               </div>
               ${tempCell}
             </div>
-            ${disk && Number(disk.capacity) >= 90
+            <div id="system-disk-warn">${disk && Number(disk.capacity) >= 90
               ? '<p class="sp-note sp-warn">主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%，去「存储」清理一下缓存与大文件。</p>'
-              : ''}
+              : ''}</div>
           </section>
 
           <div class="sp-gtip" id="system-gauge-tip" hidden></div>
@@ -2452,7 +2557,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             <h3>磁盘卷<span class="sp-hint">含外接与网络卷</span></h3>
             <div class="sp-vols">
               ${(data.disks || []).map((item) => `
-                <div class="sp-vol" title="${esc(item.mount)}">
+                <div class="sp-vol" data-mount="${esc(item.mount)}" title="${esc(item.mount)}">
                   <div class="sp-vol-top">
                     <span class="sp-vol-name">${esc(item.mount)}</span>
                     <span class="sp-vol-dev muted">${esc(item.device)}</span>
@@ -2479,7 +2584,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               <span class="k">核心</span><span>${cpu.cores || '—'} 核</span>
               <span class="k">内存</span><span>${fmtBytes(memory.total)}</span>
               <span class="k">主磁盘</span><span>${disk ? fmtBytes(disk.total) + '（可用 ' + fmtBytes(disk.free) + '）' : '—'}</span>
-              <span class="k">已运行</span><span>${fmtDuration(data.identity.uptime)}</span>
+              <span class="k">已运行</span><span id="system-uptime">${fmtDuration(data.identity.uptime)}</span>
               <span class="k">开机于</span><span>${esc(fmtTime(data.identity.bootAt))}</span>
               <span class="k">Node</span><span>${esc(data.identity.node)}</span>
               ${data.battery ? '<span class="k">电池</span><span>' + data.battery.percent + '%' + (data.battery.charging ? '（供电中）' : '') + (data.battery.remaining ? ' · 剩余 ' + esc(data.battery.remaining) : '') + '</span>' : ''}
