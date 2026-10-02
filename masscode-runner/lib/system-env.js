@@ -20,6 +20,8 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { resolveCodeServer, resetProbe: resetCodeServerProbe } = require('./code-server-service');
+/* 平台差异（命令在哪、这条探测在这个平台上有没有意义）统一问 ./platform 的 HOST。 */
+const { HOST } = require('./platform');
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -285,7 +287,9 @@ async function toolInfo() {
     tools.push({ key, label, for: forWhat, ok: result.ok, version: result.ok ? text.slice(0, 80) : '', missing: result.ok ? '' : '未安装或不在 PATH' });
     return result;
   };
-  await probe('brew', 'Homebrew', '/bin/sh', ['-c', 'command -v brew >/dev/null 2>&1 && brew --version | head -1'], '装/更新命令行软件（软件页的包管理也靠它）');
+  /* 不再借 /bin/sh + command -v 找 brew：Windows 上没有 /bin/sh，这条路必失败。
+     HOST.which 会按各平台的 PATH 与惯例目录找，找不到才退回裸命令名（结果同样是「未安装」）。 */
+  await probe('brew', 'Homebrew', HOST.which('brew') || 'brew', ['--version'], '装/更新命令行软件（软件页的包管理也靠它）');
   await probe('git', 'Git', 'git', ['--version'], '版本控制、克隆仓库');
   await probe('npm', 'npm', 'npm', ['--version'], '安装依赖、装 code-server 都走它');
   await probe('docker', 'Docker CLI', 'docker', ['--version'], '容器工作区');

@@ -27,6 +27,8 @@ const { createFileManager } = require('./system-files');
 const { createSoftwareManager } = require('./system-software');
 const { createEnvManager } = require('./system-env');
 const { createRemoteSync } = require('./remote-sync');
+/* 平台差异（该用哪条命令 / 哪些目录）统一问 ./platform 的 HOST，别在本模块里再拼一套。 */
+const { HOST } = require('./platform');
 
 /* 让 brew 老实点：不自动更新、不报分析、不在安装后自动清理。
    实测（M4 + 满载）brew list 能跑到近 5 分钟，自动更新只会更慢。 */
@@ -482,8 +484,11 @@ async function swapInfo() {
   return { total: totalBytes, used: usedBytes, free: Math.max(0, totalBytes - usedBytes) };
 }
 
-/* netstat -ib 按表头列名定位 Ibytes/Obytes：不同接口的列数不一样，靠位置硬猜会算错。 */
+/* netstat -ib 的 Ibytes/Obytes 是 BSD/macOS 的列名，只有 macOS 的 netstat 有这套输出；
+   其它平台上这条命令要么不存在、要么列名对不上，等于每次采样白跑一个子进程，所以先挡住。
+   命中时按表头列名定位 Ibytes/Obytes：不同接口的列数不一样，靠位置硬猜会算错。 */
 async function netCounters() {
+  if (!HOST.isMac) return null;
   const result = await exec('netstat', ['-ib'], { timeout: 6000 });
   if (result.code !== 0 || !result.stdout) return null;
   const lines = result.stdout.split(/\r?\n/);
@@ -791,7 +796,9 @@ async function largeFiles(root, options = {}) {
 const CACHE_TARGET_IDS = new Set(['brew-cache', 'npm-cache', 'pnpm-store', 'yarn-cache', 'homebrew-downloads', 'xcode-derived', 'simulator-caches', 'go-build', 'pip-cache', 'cargo-cache', 'diagnostic-reports', 'user-caches', 'user-logs', 'trash', 'ios-backups', 'huggingface']);
 
 async function cacheTargets() {
-  const brewCacheDir = (await text('brew', ['--cache'], 8000, { env: BREW_ENV })).trim();
+  /* 先问 brew 在不在：没有 Homebrew 的机器（Windows / 多数 Linux）上这条命令必然 ENOENT，
+     白跑一次还会在清理请求的路径上拖时间。 */
+  const brewCacheDir = (await which('brew')) ? (await text('brew', ['--cache'], 8000, { env: BREW_ENV })).trim() : '';
   const npmCacheDir = (await text('npm', ['config', 'get', 'cache'], 5000)).trim();
   const pnpmStore = (await text('pnpm', ['store', 'path'], 6000)).trim();
   const yarnCache = (await text('yarn', ['cache', 'dir'], 6000)).trim();
@@ -1067,7 +1074,11 @@ async function launchAgents() {
 async function listeningPorts() {
   return remember('ports', 8 * 1000, async () => {
     const rows = [];
-    if (await which('lsof')) {
+    /* Linux 上 lsof 常常没装（Ubuntu 24.04 就没有），所以「先试哪个」交给 HOST 决定：
+       macOS → lsof；Linux → ss 优先，ss 不在时才退回 lsof。顺序别在这里自己再维护一套。 */
+    const lsofFirst = (HOST.commands.listenerPlans('')[0] || {}).via === 'lsof';
+    const useLsof = lsofFirst ? !!(await which('lsof')) : (!(await which('ss')) && !!(await which('lsof')));
+    if (useLsof) {
       /* lsof 只要有进程看不了就以非 0 退出，stdout 依旧是有效的 —— 用 exec 不用 text。 */
       const raw = (await exec('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'], { timeout: 12000 })).stdout;
       for (const line of raw.split(/\r?\n/)) {

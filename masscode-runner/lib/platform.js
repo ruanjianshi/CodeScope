@@ -12,6 +12,9 @@
 
 const os = require('os');
 const path = require('path');
+/* 模拟 Windows 时必须用 Windows 的路径语义：本机的 path 是 posix 的，拿它去 join
+   'C:\\Users\\demo' 会拼出 /宿主家目录/C:\Users\demo\... 这种怪路径，让注入仿真失真。 */
+const winPath = path.win32;
 const fs = require('fs');
 const cp = require('child_process');
 
@@ -75,10 +78,10 @@ function createPlatformHost(options = {}) {
   function searchDirs() {
     if (isWin) {
       return [
-        path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'npm'),
-        path.join(env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Programs'),
-        path.join(env.ProgramFiles || 'C:\\Program Files', 'nodejs'),
-        path.join(systemRoot, 'System32'),
+        winPath.join(env.APPDATA || winPath.join(home, 'AppData', 'Roaming'), 'npm'),
+        winPath.join(env.LOCALAPPDATA || winPath.join(home, 'AppData', 'Local'), 'Programs'),
+        winPath.join(env.ProgramFiles || 'C:\\Program Files', 'nodejs'),
+        winPath.join(systemRoot, 'System32'),
       ];
     }
     if (isLinux) return ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin', '/snap/bin', '/home/linuxbrew/.linuxbrew/bin'];
@@ -198,7 +201,9 @@ function createPlatformHost(options = {}) {
 
   /* 废纸篓/回收站计划（纯函数，只给计划不执行）。 */
   function trashPlan(target) {
-    const full = path.resolve(String(target));
+    /* Windows 分支把 full 直接写进 PowerShell 脚本，仿真 win32 时必须按 Windows 语义解析，
+       否则 path.resolve 会把宿主 cwd 拼在 'C:\...' 前面（真 Windows 上 path 本来就是 win32，行为不变）。 */
+    const full = isWin ? winPath.resolve(String(target)) : path.resolve(String(target));
     if (isMac) {
       return { ok: true, method: 'finder', command: { file: 'osascript', args: ['-e', 'tell application "Finder" to delete POSIX file ' + JSON.stringify(full)], shell: false }, note: '经 Finder 进废纸篓，可以从废纸篓还原' };
     }
@@ -234,11 +239,11 @@ function createPlatformHost(options = {}) {
       { dir: path.join(home, 'Applications'), source: 'user', label: '用户应用' },
     ];
     if (isWin) return [
-      { dir: path.join(env.ProgramData || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'), source: 'system', label: '开始菜单（全局）' },
-      { dir: path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs'), source: 'user', label: '开始菜单（用户）' },
+      { dir: winPath.join(env.ProgramData || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs'), source: 'system', label: '开始菜单（全局）' },
+      { dir: winPath.join(env.APPDATA || winPath.join(home, 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs'), source: 'user', label: '开始菜单（用户）' },
       { dir: env.ProgramFiles || 'C:\\Program Files', source: 'system', label: 'Program Files' },
       { dir: env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', source: 'system', label: 'Program Files (x86)' },
-      { dir: path.join(env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Programs'), source: 'user', label: '用户安装' },
+      { dir: winPath.join(env.LOCALAPPDATA || winPath.join(home, 'AppData', 'Local'), 'Programs'), source: 'user', label: '用户安装' },
     ];
     return [
       { dir: '/usr/share/applications', source: 'system', label: '系统应用' },
