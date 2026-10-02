@@ -5998,13 +5998,37 @@ async function leaveWorkspaceModesForKnowledge(){
   if(document.body.classList.contains('drawing-mode')&&typeof window.closeDrawEditor==='function')await window.closeDrawEditor(true);
   document.body.classList.remove('study-mode','dsh-mode','opencode-mode','vscode-mode','office-mode','reading-mode','drawing-mode');
 }
+/* 知识库的入口地址。站点根 /knowledge/ 只是 VitePress 的落地页，对读者没有意义，
+   所以直接落到具体文档：上次读过哪篇就回到哪篇，否则用第一篇。
+   URL 规则和站点生成脚本里的 pageLink() 对齐（cleanUrls 为 false，所以要带 .html）。 */
+const KB_LAST_PAGE_KEY='codescope-kb-last-page';
+function knowledgePageUrl(state){
+  const pages=(state&&state.pages)||[];
+  let last='';
+  try{last=localStorage.getItem(KB_LAST_PAGE_KEY)||'';}catch(_){}
+  const target=(last&&pages.some((page)=>page.path===last))?last:((pages[0]&&pages[0].path)||'');
+  if(!target)return '/knowledge/';
+  const rel=target.replace(/\\/g,'/').replace(/\.(md|markdown)$/i,'');
+  return '/knowledge/'+rel.split('/').filter(Boolean).map(encodeURIComponent).join('/')+'.html';
+}
+/* 从 iframe 当前地址反推「正在读哪篇」，存下来供下次直接回到这里。 */
+function rememberKnowledgePage(){
+  const frame=$('knowledge-workspace-frame');
+  if(!frame)return;
+  try{
+    const pathname=frame.contentWindow.location.pathname||'';
+    if(!pathname.startsWith('/knowledge/'))return;
+    const rel=decodeURIComponent(pathname.slice('/knowledge/'.length)).replace(/\.html?$/i,'');
+    if(rel)localStorage.setItem(KB_LAST_PAGE_KEY,rel+'.md');
+  }catch(_){}
+}
 async function openKnowledgeWorkspace(forceBuild=false){
   setKnowledgeLaunchMenu(false);closeKnowledgeCenter(false);
   const loading=$('knowledge-workspace-loading');loading.textContent=forceBuild?'正在重新生成知识库…':'正在载入知识库…';loading.classList.remove('hidden');
   try{
-    await ensureKnowledgeSite(forceBuild);await leaveWorkspaceModesForKnowledge();
+    const site=await ensureKnowledgeSite(forceBuild);await leaveWorkspaceModesForKnowledge();
     document.body.classList.add('knowledge-mode');syncKnowledgeWorkspaceButton();
-    const frame=$('knowledge-workspace-frame'),url='/knowledge/?embedded=1&view='+Date.now();
+    const frame=$('knowledge-workspace-frame'),url=knowledgePageUrl(site)+'?embedded=1&view='+Date.now();
     frame.src=url;
     setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
   }catch(error){loading.textContent='知识库打开失败：'+(error.message||error);setStatus('err', '知识库打开失败：'+(error.message||error));}
@@ -6015,10 +6039,14 @@ function closeKnowledgeWorkspace(){
 async function openKnowledgeSplit(){
   setKnowledgeLaunchMenu(false);closeKnowledgeWorkspace();
   if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();if(document.body.classList.contains('vscode-mode'))closeVSCodeWorkspace();
-  try{await ensureKnowledgeSite(false);if(!window.CodeScopeStudy)throw new Error('学习工作台尚未加载');await window.CodeScopeStudy.open(new URL('/knowledge/',window.location.href).href);}
+  try{const site=await ensureKnowledgeSite(false);if(!window.CodeScopeStudy)throw new Error('学习工作台尚未加载');await window.CodeScopeStudy.open(new URL(knowledgePageUrl(site),window.location.href).href);}
   catch(error){setStatus('err', '知识库分栏打开失败：'+(error.message||error));}
 }
-function openKnowledgeExternal(){setKnowledgeLaunchMenu(false);window.open('/knowledge/','codescope-knowledge','noopener');}
+async function openKnowledgeExternal(){
+  setKnowledgeLaunchMenu(false);
+  let site=null;try{site=await api('/api/knowledge/status');}catch(_){}
+  window.open(knowledgePageUrl(site),'codescope-knowledge','noopener');
+}
 function readingStatus(text, error) { const el=$('reading-status');el.textContent=text||'';el.style.color=error?'var(--err)':'var(--dim)'; }
 function readingBase(path) { return String(path||'').split('/').pop().replace(/\.[^.]+$/,''); }
 function readingFragment(path) { return READING_FRAGMENT_INDEX.get(path)||null; }
@@ -15875,7 +15903,7 @@ $('knowledge-workspace-split').onclick=openKnowledgeSplit;
 $('knowledge-workspace-manage').onclick=()=>openKnowledgeCenter();
 $('knowledge-workspace-reload').onclick=()=>openKnowledgeWorkspace(true);
 $('knowledge-workspace-external').onclick=openKnowledgeExternal;
-$('knowledge-workspace-frame').addEventListener('load',()=>{$('knowledge-workspace-loading').classList.add('hidden');});
+$('knowledge-workspace-frame').addEventListener('load',()=>{$('knowledge-workspace-loading').classList.add('hidden');rememberKnowledgePage();});
 document.addEventListener('pointerdown',(event)=>{if(!$('knowledge-launch').contains(event.target))setKnowledgeLaunchMenu(false);});
 $('reading-knowledge').onclick = (event) => { event.stopPropagation(); openKnowledgeCenter(); };
 $('knowledge-close').onclick = () => closeKnowledgeCenter();

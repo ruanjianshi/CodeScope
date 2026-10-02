@@ -58,14 +58,55 @@ function writeManaged(file, content) {
   return true;
 }
 
-function migrateKnowledgeHome(file) {
-  if (!fs.existsSync(file)) return writeIfMissing(file, HOME_SOURCE);
-  let current = '';
-  try { current = fs.readFileSync(file, 'utf8'); } catch (_) { return false; }
-  const next = current.replace(/(\blink:\s*)\/快速开始\/知识库使用指南(?=\s|$)/g, '$1/快速开始/使用指南/知识库使用指南');
-  if (next === current) return false;
-  writeFileAtomicSync(file, next, 'utf8');
-  return true;
+/* 返回站点内路径（不含 base，也不带 .html）——
+   markdown 链接必须用这种形式：VitePress 的链接是相对 base 解析的，
+   写成 /knowledge/xxx 会被再拼一次 base 变成 /knowledge/knowledge/xxx（死链），
+   带 .html 也会被判死链（它期望无扩展名，渲染时自己补）。 */
+function firstPagePath(root) {
+  const walk = (directory, prefix) => {
+    let entries = [];
+    try { entries = fs.readdirSync(directory, { withFileTypes:true }); } catch (_) { return null; }
+    entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name, 'zh-CN', { numeric:true }));
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'public' || entry.name === 'node_modules') continue;
+      const relative = prefix ? prefix + '/' + entry.name : entry.name;
+      if (entry.isDirectory()) {
+        const hit = walk(path.join(directory, entry.name), relative);
+        if (hit) return hit;
+      } else if (MARKDOWN_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) && relative.toLowerCase() !== 'index.md') {
+        return '/' + relative.replace(/\.[^.]+$/, '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+      }
+    }
+    return null;
+  };
+  return walk(root, '');
+}
+
+function homeSource(root) {
+  const first = firstPagePath(root);
+  if (!first) {
+    return '---\ntitle: 我的知识库\n---\n\n# 我的知识库\n\n这个知识库还是空的。在 CodeScope 里新建分类和 Markdown 片段后，这里会自动出现内容。\n';
+  }
+  return [
+    '---',
+    'title: 我的知识库',
+    '---',
+    '',
+    '<script setup>',
+    "import { onMounted } from 'vue'",
+    "import { useRouter } from 'vitepress'",
+    'const router = useRouter()',
+    /* 用 router.replace 而不是 meta refresh：meta refresh 是整页跳转，
+       实测会被 VitePress 的客户端路由把地址改写成源码目录路径
+       （/private/var/.../readings/知识库/...），router.replace 是纯 SPA 跳转，没这个问题。 */
+    'onMounted(() => { router.replace(' + JSON.stringify(first + '.html') + ') })',
+    '</script>',
+    '',
+    '# 正在打开知识库…',
+    '',
+    '如果没有自动跳转，点[这里](' + first + ')。',
+    '',
+  ].join('\n');
 }
 
 function configSource() {
@@ -114,6 +155,13 @@ export default defineConfig({
   lang: 'zh-CN',
   title: '我的知识库',
   description: '由 CodeScope 与 VitePress 自动生成的本地知识库',
+  /* 在首屏绘制之前把用户选过的配色/版心写到 <html> 上。
+     主题里的 apply() 是在组件 onMounted 时才执行的 —— 那已经在首屏之后了，
+     于是每次打开都会先按默认的海洋蓝渲染一遍，再跳成你选的配色（森林绿等），
+     看起来就是「打开时颜色不对、闪一下」。这段内联脚本在 CSS 生效前就跑完了。 */
+  head: [
+    ['script', {}, "(function(){try{var d=document.documentElement;var p=localStorage.getItem('codescope-kb-theme');var w=localStorage.getItem('codescope-kb-width');if(p&&['ocean','forest','violet','paper'].indexOf(p)>=0){d.dataset.kbTheme=p}if(w&&['standard','compact','wide'].indexOf(w)>=0){d.dataset.kbWidth=w}}catch(e){}})()"]
+  ],
   base: '/knowledge/',
   cleanUrls: false,
   lastUpdated: true,
@@ -128,9 +176,9 @@ export default defineConfig({
   },
   themeConfig: {
     logo: { src:'/codescope.svg', alt:'CodeScope' },
-    nav: [
-      { text:'知识库首页', link:'/' }
-    ],
+    /* 没有「首页」了：站点根 index.md 会直接跳到第一篇文档，
+       所以这里不再放「知识库首页」入口，免得点了又被弹回同一篇。 */
+    nav: [],
     sidebar: scan(sourceRoot),
     outline: { level:[2, 4], label:'本页目录' },
     lastUpdated: { text:'最后更新', formatOptions:{ dateStyle:'medium', timeStyle:'short', forceLocale:true } },
@@ -511,34 +559,6 @@ body {
 @media (prefers-reduced-motion:reduce) { .VPFeature,.VPSidebarItem .text,.VPDocAsideOutline .outline-link { transition:none; } }
 `;
 
-const HOME_SOURCE = `---
-layout: home
-
-hero:
-  name: 我的知识库
-  text: 长期积累，随写随读
-  tagline: Markdown 原稿保存在 CodeScope Vault；目录、全文搜索和阅读站点自动生成。
-  actions:
-    - theme: brand
-      text: 开始阅读
-      link: /快速开始/使用指南/知识库使用指南
-
-features:
-  - icon: 📚
-    title: 分层组织
-    details: 按“分类 → 项目 → Markdown 片段”组织，侧边目录随内容自动更新。
-  - icon: 🔎
-    title: 本地全文搜索
-    details: MiniSearch 在浏览器中完成模糊检索，不上传私人笔记。
-  - icon: 🖼️
-    title: 大量图片
-    details: 图片独立存储、按需加载，构建产物带缓存指纹。
-  - icon: ⚡
-    title: 静态预构建
-    details: 页面提前生成，文档量增大后仍保持稳定、快速的阅读体验。
----
-`;
-
 const GUIDE_SOURCE = `---
 title: 知识库使用指南
 ---
@@ -600,7 +620,6 @@ function createKnowledgeBase(options) {
     writeIfMissing(path.join(root, '.codescope-folder.json'), JSON.stringify({ version:1, description:'VitePress 自动生成的长期 Markdown 知识库', updatedAt:Date.now() }, null, 2) + '\n');
     const legacyProjectMeta=path.join(root,'.codescope-project.json');
     if(fs.existsSync(legacyProjectMeta))try{const legacy=JSON.parse(fs.readFileSync(legacyProjectMeta,'utf8'));if(legacy&&legacy.description==='VitePress 自动生成的长期 Markdown 知识库')fs.unlinkSync(legacyProjectMeta);}catch(_){}
-    migrateKnowledgeHome(path.join(root, 'index.md'));
     const legacyGuide = path.join(root, '快速开始', '知识库使用指南.md');
     const guideProject = path.join(root, '快速开始', '使用指南');
     const guideFile = path.join(guideProject, '知识库使用指南.md');
@@ -611,6 +630,8 @@ function createKnowledgeBase(options) {
     }
     writeManaged(guideFile, GUIDE_SOURCE);
     writeIfMissing(path.join(guideProject, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description:'CodeScope 知识库的结构与使用说明', tags:['指南'], updatedAt:Date.now() }, null, 2) + '\n');
+    /* index.md 必须在指南写完之后再生成：它要扫一遍站点内容挑第一篇文档 */
+    writeManaged(path.join(root, 'index.md'), homeSource(root));
     writeManaged(path.join(root, '.vitepress', 'config.mjs'), configSource());
     writeManaged(path.join(root, '.vitepress', 'theme', 'index.mjs'), THEME_SOURCE);
     writeManaged(path.join(root, '.vitepress', 'theme', 'custom.css'), THEME_CSS);

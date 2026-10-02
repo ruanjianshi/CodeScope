@@ -290,8 +290,11 @@ print(r.run())
     await page.keyboard.press('Escape');
   }
   const knowledgePage=await browser.newPage({viewport:{width:1280,height:800}});
+  /* 站点根不再有落地页：/knowledge/ 直接跳到一篇文档，不该再看到 hero 和「开始阅读」。 */
   await knowledgePage.goto(baseUrl+'/knowledge/',{waitUntil:'domcontentloaded'});
-  await knowledgePage.getByRole('heading',{name:'我的知识库'}).waitFor({state:'visible'});
+  await knowledgePage.locator('main h1').first().waitFor({state:'visible'});
+  if(await knowledgePage.locator('.VPHero').count())throw new Error('知识库站点根仍是落地页（VPHero 还在）');
+  if(/开始阅读|长期积累/.test(await knowledgePage.content()))throw new Error('知识库站点根仍带旧落地页内容');
   if(!await knowledgePage.locator('a.codescope-return[href="/"]').count()||!await knowledgePage.getByRole('button',{name:'搜索知识库'}).count())throw new Error('知识库阅读站缺少返回入口或本地全文搜索');
   const kbPalette=knowledgePage.getByLabel('配色',{exact:true}),kbWidth=knowledgePage.getByLabel('版心',{exact:true});
   if(!await kbPalette.count()||!await kbWidth.count())throw new Error('知识库阅读站缺少配色或版心切换器');
@@ -299,9 +302,10 @@ print(r.run())
   const kbAppearance=await knowledgePage.evaluate(()=>({brand:getComputedStyle(document.documentElement).getPropertyValue('--vp-c-brand-1').trim(),contentWidth:getComputedStyle(document.documentElement).getPropertyValue('--kb-content-width').trim(),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}));
   if(kbAppearance.brand!=='#49b889'||kbAppearance.contentWidth!=='1080px'||kbAppearance.overflow>1)throw new Error('知识库主题、宽屏版心或响应式布局未生效：'+JSON.stringify(kbAppearance));
   await kbPalette.selectOption('ocean');await kbWidth.selectOption('standard');
-  const knowledgeStart=knowledgePage.getByRole('link',{name:'开始阅读'}),knowledgeStartHref=await knowledgeStart.getAttribute('href');
-  if(!decodeURIComponent(knowledgeStartHref||'').includes('/快速开始/使用指南/知识库使用指南'))throw new Error('知识库首页“开始阅读”仍指向旧目录：'+knowledgeStartHref);
-  await knowledgeStart.click();
+  /* 下面这些断言检查的是「一篇具体文档」的版式，所以显式打开指南页，
+     不依赖站点根恰好跳到哪一篇。 */
+  const kbGuideUrl=baseUrl+'/knowledge/'+['快速开始','使用指南','知识库使用指南'].map(encodeURIComponent).join('/')+'.html';
+  await knowledgePage.goto(kbGuideUrl,{waitUntil:'domcontentloaded'});
   await knowledgePage.locator('main h1').filter({hasText:'知识库使用指南'}).waitFor({state:'visible'});
   const kbDocLayout=await knowledgePage.evaluate(()=>{const h2=document.querySelector('.vp-doc h2'),list=document.querySelector('.vp-doc h3 + ul,.vp-doc h3 + ol'),context=document.querySelector('.kb-doc-context');return{context:!!context,progress:!!document.querySelector('.kb-reading-progress'),crumbs:context?.querySelector('.kb-breadcrumb')?.textContent||'',meta:context?.querySelector('.kb-doc-meta')?.textContent||'',section:getComputedStyle(h2,'::before').content,listBorder:list?getComputedStyle(list).borderTopWidth:''};});
   if(!kbDocLayout.context||!kbDocLayout.progress||!kbDocLayout.crumbs.includes('使用指南')||kbDocLayout.crumbs.includes('private›var')||!kbDocLayout.meta.includes('分钟阅读'))throw new Error('知识库正文缺少面包屑、阅读进度、预计阅读时间或路径清理：'+JSON.stringify(kbDocLayout));
@@ -321,11 +325,11 @@ print(r.run())
   await knowledgePage.close();
   await page.locator('#btn-knowledge-launch').click();
   await page.locator('#knowledge-workspace').waitFor({state:'visible'});
-  await page.frameLocator('#knowledge-workspace-frame').getByRole('heading',{name:'我的知识库'}).waitFor({state:'visible'});
+  await page.frameLocator('#knowledge-workspace-frame').locator('main h1').first().waitFor({state:'visible'});
   if(!await page.locator('#btn-knowledge-launch').evaluate(node=>node.classList.contains('on')&&node.getAttribute('aria-pressed')==='true'))throw new Error('知识库内嵌阅读打开后顶栏入口未进入活动状态');
   await page.locator('#knowledge-workspace-back').click();
   await page.locator('#btn-knowledge-launch').click();
-  await page.frameLocator('#knowledge-workspace-frame').getByRole('heading',{name:'我的知识库'}).waitFor({state:'visible'});
+  await page.frameLocator('#knowledge-workspace-frame').locator('main h1').first().waitFor({state:'visible'});
   if(!await page.locator('#knowledge-workspace-loading').evaluate(node=>node.classList.contains('hidden')))throw new Error('知识库重复打开后加载遮罩未关闭');
   await page.locator('#knowledge-workspace-manage').click();
   await page.locator('#knowledge-center.open').waitFor({state:'visible'});
