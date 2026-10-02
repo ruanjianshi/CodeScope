@@ -510,8 +510,22 @@ function createSoftwareManager(options = {}) {
     }
     /* Linux：图标不是「从 .app 里提取」，而是 .desktop 里指向的现成文件。 */
     if (HOST.isLinux) return linuxIconFile(app);
-    /* Windows：需要用 PowerShell 的 ExtractAssociatedIcon 生成 png，这一轮还没接。 */
-    if (!IS_MAC) return null;
+    /* Windows：commands.appIconExtract(appPath, outPath) 现在接受输出路径，
+       把与 macOS 同一套缓存的 iconDir/<app.id>.png 交进去；
+       拿不到命令（null）、命令失败、或没落盘，一律老实返回 null，不猜。 */
+    if (!IS_MAC) {
+      const winName = app.id + '.png';
+      const winOut = path.join(iconDir, winName);
+      const spec = HOST.commands.appIconExtract(app.path, winOut);
+      if (!spec) return null;
+      await fsp.mkdir(iconDir, { recursive: true });
+      const done = await run(spec.file, spec.args, 12000);
+      if (!done.ok) return null;
+      try { await fsp.access(winOut); } catch (_) { return null; }
+      cache.icons[app.id] = winName;
+      save();
+      return winOut;
+    }
     const candidates = iconCandidates(app.path, (await readPlist(app.path)) || {});
     if (!candidates.length) return null;
     await fsp.mkdir(iconDir, { recursive: true });

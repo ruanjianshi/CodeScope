@@ -43,6 +43,15 @@ function quoteWinArg(value) {
   return '"' + text.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, '$1$1') + '"';
 }
 
+/* PowerShell 单引号字符串：里面唯一要转义的是单引号本身（写两个）。
+   这里**不能**复用 quoteWinArg —— 它是给 cmd.exe 用的（\" 转义 + 反斜杠倍增，
+   且没有空格时原样不引号）。在 PowerShell 的方法实参里，反斜杠不是转义符，
+   不带空格的裸路径还可能在表达式模式下解析不了；单引号则既恒被引号包住、
+   又不会被 $ 之类的变量插值。 */
+function quotePsArg(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+
 function createPlatformHost(options = {}) {
   const id = options.platform || process.platform;
   const env = options.env || process.env;
@@ -69,7 +78,7 @@ function createPlatformHost(options = {}) {
   const appDataDir = isMac
     ? path.join(home, 'Library', 'Application Support')
     : isWin
-      ? (env.APPDATA || path.join(home, 'AppData', 'Roaming'))
+      ? (env.APPDATA || winPath.join(home, 'AppData', 'Roaming'))
       : (env.XDG_DATA_HOME || path.join(home, '.local', 'share'));
 
   const systemRoot = env.SystemRoot || env.windir || 'C:\\Windows';
@@ -156,9 +165,16 @@ function createPlatformHost(options = {}) {
       if (isLinux) return { file: 'ip', args: ['-o', 'addr'] };
       return { file: 'ifconfig', args: [] };
     },
-    appIconExtract(appPath) {
-      if (isMac) return { file: 'sips', args: ['-s', 'format', 'png', String(appPath), '--out', '/dev/stdout'], via: 'sips' };
-      if (isWin) return { file: 'powershell.exe', args: ['-NoProfile', '-Command', 'Add-Type -AssemblyName System.Drawing; ([System.Drawing.Icon]::ExtractAssociatedIcon("' + String(appPath).replace(/"/g, '') + '")).ToBitmap().Save("' + '' + '")'], via: 'powershell' };
+    /* 第二个参数是「图标落点」（文件路径），不是可选的装饰：
+       macOS 的 sips 一直支持 --out，不传就沿用它原来的 /dev/stdout（既有调用方行为不变）；
+       Windows 的 Bitmap.Save() 必须有落点，不传 outPath 时**返回 null** ——
+       宁可明说「这条路上给不出命令」，也不交出一条 .Save("") 必然抛异常的命令。 */
+    appIconExtract(appPath, outPath) {
+      if (isMac) return { file: 'sips', args: ['-s', 'format', 'png', String(appPath), '--out', outPath ? String(outPath) : '/dev/stdout'], via: 'sips' };
+      if (isWin) {
+        if (!outPath) return null;
+        return { file: 'powershell.exe', args: ['-NoProfile', '-Command', 'Add-Type -AssemblyName System.Drawing; ([System.Drawing.Icon]::ExtractAssociatedIcon(' + quotePsArg(appPath) + ')).ToBitmap().Save(' + quotePsArg(outPath) + ')'], via: 'powershell' };
+      }
       return null; /* Linux 的图标来自 .desktop 的 Icon=，不需要提取可执行文件图标。 */
     },
     launchApp(app) {
@@ -286,7 +302,7 @@ function createPlatformHost(options = {}) {
      Linux 按 FHS，Windows 按 %SystemRoot% 与 Program Files 系列，macOS 按 SIP 常见路径。 */
   function protectedRoots() {
     if (isWin) {
-      return [systemRoot, env.ProgramFiles || 'C:\\Program Files', env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', env.ProgramData || 'C:\\ProgramData', path.join(systemRoot, 'System32')];
+      return [systemRoot, env.ProgramFiles || 'C:\\Program Files', env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', env.ProgramData || 'C:\\ProgramData', winPath.join(systemRoot, 'System32')];
     }
     if (isLinux) return ['/bin', '/sbin', '/lib', '/lib64', '/usr', '/etc', '/var', '/boot', '/proc', '/sys', '/dev', '/snap', '/opt'];
     return ['/System', '/Library', '/Applications', '/usr', '/bin', '/sbin', '/private', '/dev', '/etc', '/var', '/Volumes', '/opt/homebrew'];
@@ -327,8 +343,8 @@ function createPlatformHost(options = {}) {
       shell: isWin ? null : (env.SHELL || (isMac ? '/bin/zsh' : '/bin/bash')),
       npmCmd: isWin ? 'npm.cmd' : 'npm',
       exeSuffix: isWin ? '.exe' : '',
-      pathSep: path.delimiter,
-      sep: path.sep,
+      pathSep: isWin ? winPath.delimiter : path.delimiter,
+      sep: isWin ? winPath.sep : path.sep,
       adapters,
       adaptersReady: Object.keys(adapters).filter((key) => adapters[key].ok),
       adaptersMissing: missing,
@@ -347,7 +363,7 @@ function createPlatformHost(options = {}) {
 
   return {
     id, isMac, isWin, isLinux, label, arch, release, home, appDataDir, systemRoot,
-    sep: path.sep, pathSep: path.delimiter, exeSuffix: isWin ? '.exe' : '',
+    sep: isWin ? winPath.sep : path.sep, pathSep: isWin ? winPath.delimiter : path.delimiter, exeSuffix: isWin ? '.exe' : '',
     shell: isWin ? null : (env.SHELL || (isMac ? '/bin/zsh' : '/bin/bash')),
     npmCmd: isWin ? 'npm.cmd' : 'npm',
     nodeBin: options.nodeBin || process.execPath,

@@ -20,7 +20,7 @@ function t(name, fn) {
 
 const ENVS = {
   darwin: { HOME: '/Users/demo', SHELL: '/bin/zsh' },
-  win32: { APPDATA: 'C:\\Users\\demo\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\demo\\AppData\\Local', ProgramFiles: 'C:\\Program Files', ProgramData: 'C:\\ProgramData', SystemRoot: 'C:\\Windows', ComSpec: 'C:\\Windows\\System32\\cmd.exe' },
+  win32: { USERPROFILE: 'C:\\Users\\demo', APPDATA: 'C:\\Users\\demo\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\demo\\AppData\\Local', ProgramFiles: 'C:\\Program Files', ProgramData: 'C:\\ProgramData', SystemRoot: 'C:\\Windows', ComSpec: 'C:\\Windows\\System32\\cmd.exe' },
   linux: { HOME: '/home/demo', SHELL: '/bin/bash', XDG_DATA_HOME: '/home/demo/.local/share' },
 };
 const HOMES = { darwin: '/Users/demo', win32: 'C:\\Users\\demo', linux: '/home/demo' };
@@ -80,7 +80,28 @@ t('Windows 没有 loadavg 就老实返回 null，不编造', () => {
 t('图标提取：Linux 不给可执行文件图标（走 .desktop），另两个平台各有路', () => {
   assert.strictEqual(hosts.linux.commands.appIconExtract('/usr/bin/foo'), null);
   assert.ok(hosts.darwin.commands.appIconExtract('/Applications/A.app'));
-  assert.ok(hosts.win32.commands.appIconExtract('C:\\A.exe'));
+  assert.ok(hosts.win32.commands.appIconExtract('C:\\A.exe', 'C:\\out\\A.png'));
+});
+/* win32 的 ExtractAssociatedIcon().ToBitmap().Save(...) 必须有输出落点：
+   老实现把空串写进 Save("")，调用方既拿不到图标、原样执行还会直接抛异常。
+   这里钉死两件事：① 给了 outPath 就必须出现在命令里；② 不给 outPath 时宁可 null
+   （「明说给不出」），也绝不再交出空路径命令。 */
+t('win32 图标提取：命令必须带 out 落点，且不传 outPath 时返回 null 而不是空路径命令', () => {
+  const app = 'C:\\Program Files\\X\\x.lnk';
+  const out = 'C:\\out\\x.png';
+  const spec = hosts.win32.commands.appIconExtract(app, out);
+  assert.ok(spec && Array.isArray(spec.args), 'win32 给了 outPath 就该给出完整命令：' + JSON.stringify(spec));
+  const blob = spec.file + ' ' + spec.args.join(' ');
+  /* 用命令原文断言：JSON.stringify 会把反斜杠翻倍，拿它比路径会假失败。 */
+  assert.ok(blob.includes(out), 'win32 命令里没带上 out 路径：' + blob);
+  assert.ok(!blob.includes('.Save("")'), 'win32 命令仍是空路径，原样执行会抛异常：' + blob);
+  assert.ok(blob.includes(app), 'win32 命令里没带上应用路径：' + blob);
+  /* 向后兼容：不传 outPath → null（不可用），而不是一条会炸的命令。 */
+  const bare = hosts.win32.commands.appIconExtract('C:\\A.exe');
+  assert.ok(bare === null || bare === undefined, '不传 outPath 时应当返回 null：' + JSON.stringify(bare));
+  /* macOS 断言不变：sips 命令照旧，且带上 --out。 */
+  const mac = hosts.darwin.commands.appIconExtract('/Applications/A.app');
+  assert.ok(mac && mac.file === 'sips' && mac.args.includes('--out'));
 });
 
 /* ── spawn 规格：Windows 的 .cmd 陷阱 ── */
@@ -136,6 +157,49 @@ t('应用扫描根按平台给，Windows 不出现 /Applications', () => {
   assert.ok(dirs.some((d) => /Start Menu|Program Files/.test(d)));
   assert.ok(hosts.linux.appRoots().some((r) => r.dir === '/usr/share/applications'));
   assert.ok(hosts.darwin.appRoots().some((r) => r.dir === '/Applications'));
+});
+
+/* ── Windows 路径保真度：注入 win32 时不许混进宿主 posix 的路径语义 ──
+   本机是 macOS，宿主的 path.* 全是 posix 的。lib/platform.js 的 Windows 分支一旦漏用
+   path.win32，仿真出来的就是 'C:\Windows/System32' 这种混合分隔符，或者 sep='/'、pathSep=':' ——
+   保护区、回收站这些**安全判断**在 macOS 上就没法验收了（真 Windows 上 path 本来就是 win32，
+   这个错只有注入仿真看得见，所以必须在这里钉死）。 */
+t('注入 win32：扫描根/回收站/搜索目录/保护区里没有宿主 /Users/，分隔符是 Windows 语义', () => {
+  const win = createPlatformHost({ platform: 'win32', env: ENVS.win32, homedir: HOMES.win32, exec: () => ({ ok: false, code: 1, stdout: '', stderr: '' }) });
+  const blob = JSON.stringify(win.appRoots())
+    + JSON.stringify(win.trashPlan('C:\\Users\\demo\\a.txt'))
+    + JSON.stringify(win.searchDirs())
+    + JSON.stringify(win.protectedRoots());
+  assert.ok(!blob.includes('/Users/'), '注入 win32 时不该混进宿主 /Users/：' + blob);
+  /* 字段名以 lib/platform.js 实际导出为准：sep 是路径分隔符，pathSep 是 PATH 分隔符。 */
+  assert.strictEqual(win.sep, '\\');
+  assert.strictEqual(win.pathSep, ';');
+  const report = win.report();
+  assert.strictEqual(report.sep, '\\');
+  assert.strictEqual(report.pathSep, ';');
+});
+t('注入 win32：APPDATA 缺失时的兜底目录与保护区 System32 都是纯反斜杠', () => {
+  /* 专门钉死两处曾用宿主 path.join 的 Windows 兜底：没有 APPDATA 时的
+     %USERPROFILE%\AppData\Roaming，以及 %SystemRoot%\System32。 */
+  const bare = createPlatformHost({
+    platform: 'win32',
+    env: { USERPROFILE: 'C:\\Users\\demo', SystemRoot: 'C:\\Windows', ProgramData: 'C:\\ProgramData', ProgramFiles: 'C:\\Program Files' },
+    exec: () => ({ ok: false, code: 1, stdout: '', stderr: '' }),
+  });
+  assert.strictEqual(bare.appDataDir, 'C:\\Users\\demo\\AppData\\Roaming');
+  assert.ok(!bare.appDataDir.includes('/'), 'AppData 兜底目录混进了 posix 分隔符：' + bare.appDataDir);
+  assert.ok(bare.protectedRoots().includes('C:\\Windows\\System32'), '保护区缺 %SystemRoot%\\System32：' + JSON.stringify(bare.protectedRoots()));
+  for (const dir of bare.searchDirs()) assert.ok(!dir.includes('/'), '搜索目录混进了 posix 分隔符：' + dir);
+});
+t('注入 darwin：分隔符仍是 posix，且扫描根/废纸篓不回归（macOS 不能跟着变）', () => {
+  const mac = createPlatformHost({ platform: 'darwin', env: ENVS.darwin, homedir: HOMES.darwin, exec: () => ({ ok: false, code: 1, stdout: '', stderr: '' }) });
+  assert.strictEqual(mac.sep, '/');
+  assert.strictEqual(mac.pathSep, ':');
+  const report = mac.report();
+  assert.strictEqual(report.sep, '/');
+  assert.strictEqual(report.pathSep, ':');
+  assert.strictEqual(mac.appRoots().map((x) => x.source).join(','), 'system,apple,apple,user');
+  assert.strictEqual(mac.trashPlan('/Users/xiaoq/a.txt').method, 'finder');
 });
 
 /* ── .desktop 解析（拿真实 Ubuntu 格式的样本）── */
