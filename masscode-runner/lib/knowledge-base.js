@@ -116,6 +116,7 @@ function configSource() {
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import kbColor from './kb-color.mjs'
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const modulesRoot = fs.realpathSync(path.resolve(sourceRoot, '.vitepress/node_modules'))
@@ -168,7 +169,7 @@ export default defineConfig({
   cleanUrls: false,
   lastUpdated: true,
   ignoreDeadLinks: 'localhostLinks',
-  markdown: { lineNumbers:true, image:{ lazyLoading:true } },
+  markdown: { lineNumbers:true, image:{ lazyLoading:true }, config:(md) => md.use(kbColor) },
   vite: {
     resolve:{ alias:{
       'vue/server-renderer':path.join(modulesRoot, 'vue/server-renderer/index.js'),
@@ -378,6 +379,20 @@ const THEME_CSS = `:root {
   --kb-heading:color-mix(in srgb,var(--vp-c-text-1) 94%,var(--vp-c-brand-1));
   font-synthesis:none;
 }
+/* CodeScope 阅读模块的行内标注：{红|文字} / ==文字==。
+   色值直接抄自 index.html 里阅读器的定义，两处必须一致 —— 不然同一篇笔记
+   在阅读器和站点里颜色不一样，等于又制造了一种「渲染不一致」。 */
+.kb-fg-red { color:#f2555a; }
+.kb-fg-orange { color:#f0883e; }
+.kb-fg-yellow { color:#dcb13c; }
+.kb-fg-green { color:#4bbd7a; }
+.kb-fg-cyan { color:#3fb6c4; }
+.kb-fg-blue { color:#5b9cf5; }
+.kb-fg-purple { color:#a97bf0; }
+.kb-fg-pink { color:#ef7bb0; }
+.kb-fg-gray { color:#95a0ae; }
+.kb-hl { padding:.02em .3em; border-radius:3px; color:inherit; background:color-mix(in srgb,#f2c14e 30%,transparent);
+  box-shadow:inset 0 -.09em 0 color-mix(in srgb,#f2c14e 52%,transparent); }
 html[data-kb-width="compact"] { --kb-content-width:760px; }
 html[data-kb-width="standard"] { --kb-content-width:900px; }
 html[data-kb-width="wide"] { --kb-content-width:1080px; }
@@ -442,6 +457,13 @@ body {
 .vp-doc { counter-reset:kb-h2;color:color-mix(in srgb,var(--vp-c-text-1) 89%,var(--vp-c-text-2));font-size:16px;line-height:1.82; }
 .vp-doc > :first-child { margin-top:0; }
 .vp-doc h1,.vp-doc h2,.vp-doc h3,.vp-doc h4 { color:var(--kb-heading);letter-spacing:-.025em;scroll-margin-top:90px; }
+/* 标题文字用品牌色，和 CodeScope 阅读器对齐：那边 h1 = 品牌色 84% + 正文色、
+   h2 = 纯品牌色、h3 = 品牌色 58% + 正文色（见 index.html 的 .ProseMirror h1/h2/h3）。
+   站点原来各级标题一律近白色，同一篇笔记在阅读器和站点里标题颜色不一样，
+   看起来就是「渲染不一致」。各级原有的装饰（h1 的渐变条、h2 的编号徽章、h3 的竖线）保留。 */
+.vp-doc h1 { color:color-mix(in srgb,var(--vp-c-brand-1) 84%,var(--vp-c-text-1)); }
+.vp-doc h2 { color:var(--vp-c-brand-1); }
+.vp-doc h3 { color:color-mix(in srgb,var(--vp-c-brand-1) 58%,var(--vp-c-text-1)); }
 .vp-doc h1 { margin-bottom:.72em;font-size:2.35rem;line-height:1.16; }
 .vp-doc h1::after { content:'';display:block;width:44px;height:3px;margin-top:16px;border-radius:99px;background:linear-gradient(90deg,var(--vp-c-brand-1),transparent); }
 .vp-doc h1 + p { max-width:760px;margin:0 0 2.25em;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
@@ -561,6 +583,60 @@ body {
 @media (prefers-reduced-motion:reduce) { .VPFeature,.VPSidebarItem .text,.VPDocAsideOutline .outline-link { transition:none; } }
 `;
 
+/* CodeScope 阅读模块有一套自己的行内标注语法，磁盘上原样落盘（见 index.html 的 MD_COLOR_KEYS）：
+     {红|文字}  → 指定颜色文字，九色：红橙黄绿青蓝紫粉灰
+     ==文字==   → 高亮
+   以前只有 CodeScope 的阅读器认识它，生成的知识库站点会把 {红|…} 连花括号一起原样打出来 ——
+   同一篇笔记两处渲染不一致。这里给 VitePress 补一个 markdown-it 插件，让站点用同一套语法、
+   同一套配色。
+   规则注册在 backticks 之后：行内代码先被吃掉，代码里的 {红|…} 或 == 不会被误伤。
+   （markdown-it 的 text 规则本来就以 { 和 = 作为终止符，所以扫到这两个字符时一定会轮到本规则。） */
+const KB_COLOR_SOURCE = `const COLORS = { 红:'red', 橙:'orange', 黄:'yellow', 绿:'green', 青:'cyan', 蓝:'blue', 紫:'purple', 粉:'pink', 灰:'gray' }
+const KEYS = Object.keys(COLORS).join('')
+
+function kbColorPlugin(md) {
+  function rule(state, silent) {
+    const src = state.src
+    const start = state.pos
+    const ch = src.charCodeAt(start)
+
+    /* {红|文字} —— 0x7b 是 {，写成码点免得和外层模板字符串的花括号混淆 */
+    if (ch === 0x7b) {
+      const key = src[start + 1]
+      if (!key || KEYS.indexOf(key) < 0 || src[start + 2] !== '|') return false
+      const end = src.indexOf('}', start + 3)
+      if (end < 0) return false
+      const body = src.slice(start + 3, end)
+      if (!body || body.indexOf('\\n') >= 0) return false
+      if (!silent) {
+        state.push('html_inline', '', 0).content =
+          '<span class="kb-fg kb-fg-' + COLORS[key] + '">' + md.utils.escapeHtml(body) + '</span>'
+      }
+      state.pos = end + 1
+      return true
+    }
+
+    /* ==文字== */
+    if (ch === 0x3d && src.charCodeAt(start + 1) === 0x3d) {
+      const end = src.indexOf('==', start + 2)
+      if (end < 0) return false
+      const body = src.slice(start + 2, end)
+      if (!body || body.indexOf('\\n') >= 0 || body.indexOf('=') >= 0) return false
+      if (!silent) {
+        state.push('html_inline', '', 0).content = '<mark class="kb-hl">' + md.utils.escapeHtml(body) + '</mark>'
+      }
+      state.pos = end + 2
+      return true
+    }
+
+    return false
+  }
+  md.inline.ruler.after('backticks', 'kb_color', rule)
+}
+
+export default kbColorPlugin
+`;
+
 const GUIDE_SOURCE = `---
 title: 知识库使用指南
 ---
@@ -635,6 +711,7 @@ function createKnowledgeBase(options) {
     /* index.md 必须在指南写完之后再生成：它要扫一遍站点内容挑第一篇文档 */
     writeManaged(path.join(root, 'index.md'), homeSource(root));
     writeManaged(path.join(root, '.vitepress', 'config.mjs'), configSource());
+    writeManaged(path.join(root, '.vitepress', 'kb-color.mjs'), KB_COLOR_SOURCE);
     writeManaged(path.join(root, '.vitepress', 'theme', 'index.mjs'), THEME_SOURCE);
     writeManaged(path.join(root, '.vitepress', 'theme', 'custom.css'), THEME_CSS);
     writeManaged(path.join(root, '.gitignore'), '.vitepress/cache/\n.vitepress/node_modules\n');

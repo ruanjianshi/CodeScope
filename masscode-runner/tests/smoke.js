@@ -236,11 +236,19 @@ void bubbleSort(Array& values);
   assert(knowledgeImageResponse.ok && knowledgeImage.ok && knowledgeImage.markdown.includes('/images/') && fs.existsSync(path.join(vault,'readings','知识库','public','images','设备驱动','示意图.png')), '知识库图片导入、分类存储或 Markdown 语法生成失败');
   const knowledgeEditorImage=await fetch(baseUrl+knowledgeImage.url);
   assert(knowledgeEditorImage.ok && knowledgeEditorImage.headers.get('content-type')==='image/png' && (await knowledgeEditorImage.arrayBuffer()).byteLength>0, '知识库原始图片未通过 CodeScope /images 路由提供，区块编辑器会显示破图');
+  /* CodeScope 阅读器的行内标注语法（{红|文字} / ==文字==）落盘就是原样文本，
+     生成的知识库站点必须用同一套语法渲染，否则同一篇笔记两处不一致。 */
+  fs.writeFileSync(path.join(vault,'readings','知识库','嵌入式 Linux','驱动开发','行内标注.md'),
+    '# 行内标注\n\n{红|重点}与==高亮==，还有 {蓝|蓝色}。\n\n`{红|代码里不转换}`\n');
   const knowledgeBuild = await postJson(baseUrl, '/api/knowledge/build', {});
   assert(knowledgeBuild.phase === 'ready' && knowledgeBuild.built && !knowledgeBuild.pending && knowledgeBuild.pageCount >= 3 && knowledgeBuild.assetCount === 1, 'VitePress 知识库构建、待处理状态或图片统计失败：' + (knowledgeBuild.error || 'unknown'));
   const knowledgeSite = await fetch(baseUrl + '/knowledge/');
   const knowledgeSiteHtml = await knowledgeSite.text();
   assert(knowledgeSite.ok && knowledgeSiteHtml.includes('我的知识库'), '知识库静态站点未正确提供');
+  const kbMarkupHtml = await fetch(baseUrl + '/knowledge/' + ['嵌入式 Linux','驱动开发','行内标注'].map(encodeURIComponent).join('/') + '.html').then((response) => response.text());
+  assert(/class="kb-fg kb-fg-red"[^>]*>重点</.test(kbMarkupHtml) && /class="kb-fg kb-fg-blue"[^>]*>蓝色</.test(kbMarkupHtml) && /class="kb-hl"[^>]*>高亮</.test(kbMarkupHtml),
+    '知识库站点未按 CodeScope 阅读器的语法渲染 {颜色|文字} / ==文字==：' + kbMarkupHtml.slice(0, 240));
+  assert(/<code[^>]*>\{红\|代码里不转换\}<\/code>/.test(kbMarkupHtml), '行内代码里的 {颜色|文字} 被误转换');
   const knowledgePageBeforeBlob = fs.readFileSync(path.join(vault,'readings','知识库','嵌入式 Linux','驱动开发','设备驱动.md'),'utf8');
   const rejectedBlob = await fetch(baseUrl+'/api/readings/text-fragment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'知识库/嵌入式 Linux/驱动开发/设备驱动.md',content:'# 错误图片\n\n![临时图片](blob:http://127.0.0.1:4877/expired)'})});
   const rejectedBlobBody = await rejectedBlob.json();
