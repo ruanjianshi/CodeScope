@@ -359,6 +359,10 @@ void bubbleSort(Array& values);
   const html = await page.text();
   const serverSource = fs.readFileSync(path.join(projectRoot, 'server.js'), 'utf8');
   const blockEditorSource = fs.readFileSync(path.join(projectRoot, 'src', 'reading-block-editor.js'), 'utf8');
+  /* 知识库主题是拼在 JS 模板字符串里的，单个 \s 会被当成无效转义吃掉、正则变成 [s…]，
+     结果是「任何含字母 s 的术语都被过滤掉」（sizeof…、static… 实测就是这么丢的）。 */
+  const knowledgeBaseSource = fs.readFileSync(path.join(projectRoot, 'lib', 'knowledge-base.js'), 'utf8');
+  assert(knowledgeBaseSource.includes('[\\\\s。，,；;、]'), '知识库「本页速览」术语判定里的 \\s 未正确转义（模板字符串会把它吃成 s）');
   const codeServerSource = fs.readFileSync(path.join(projectRoot, 'lib', 'code-server-service.js'), 'utf8');
   const codeServerProxySource = fs.readFileSync(path.join(projectRoot, 'lib', 'code-server-proxy.js'), 'utf8');
   const knowledgeSource = fs.readFileSync(path.join(projectRoot, 'lib', 'knowledge-base.js'), 'utf8');

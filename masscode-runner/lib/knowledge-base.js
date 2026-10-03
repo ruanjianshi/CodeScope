@@ -295,33 +295,77 @@ const ReadingHud = defineComponent({
   }
 })
 
+/* 从一段正文里认出「术语」。这类清单式笔记的写法是「术语：说明」，
+   真正的结构写在这里，比看加粗可靠得多 —— 加粗有时候整句都加粗
+   （**malloc 是 C 语言的库函数，只负责…**），有时候只加粗句子中间一个词
+   （DFS 的核心是**递归**，它沿着…）。
+   注意这里必须用 firstChild 而不是 firstElementChild：后者会跳过文本节点，
+   于是「DFS 的核心是**递归**」这种段落的首个元素正好是那个 <strong>，
+   会被误判成「以术语开头」。 */
+function termLabel(paragraph) {
+  const text = (paragraph.textContent || '').trim()
+  const colon = text.search(/[：:]/)
+  if (colon >= 2 && colon <= 20) {
+    const head = text.slice(0, colon).trim()
+    /* 注意 \\s 要写两个反斜杠：这段代码住在 JS 模板字符串里，
+       单个 \s 是无效转义、反斜杠会被吃掉，正则就变成 [s…] —— 结果是
+       「任何含字母 s 的术语都被过滤掉」（sizeof…、static… 就是这么丢的）。 */
+    if (!/[\\s。，,；;、]/.test(head)) return head
+  }
+  /* 整句加粗的写法：取加粗开头的行内代码（开头是行内代码的加粗整句 → 那个代码名）或短词 */
+  const first = paragraph.firstChild
+  if (first && first.nodeType === 1 && first.tagName === 'STRONG') {
+    const code = first.firstElementChild
+    if (code && code.tagName === 'CODE') {
+      const name = (code.textContent || '').trim()
+      if (name.length >= 2 && name.length <= 20) return name
+    }
+    const bold = (first.textContent || '').trim()
+    if (bold.length >= 2 && bold.length <= 16) return bold
+  }
+  return ''
+}
+
 /* 右栏兜底：文档整篇没有 h2/h3 时，VitePress 的大纲是空的，右栏就空着一条 ——
    三栏框看着就歪（用户报的「没在中间」其实是这个）。这类清单式笔记的结构其实
-   写在正文里：每段都以 **术语** 开头。把这些术语抽出来当「本页速览」，
+   写在正文里：每段都是「术语：说明」。把这些术语抽出来当「本页速览」，
    点一下滚到对应段落，右栏就有了和大纲等价的作用。
    有真大纲时整块隐藏，交给 VitePress 自己那份。 */
 const MiniOutline = defineComponent({
   setup() {
     const { page } = useData()
     const items = ref([])
-    const build = () => nextTick(() => {
+    let observer = null, timer = 0
+    const collect = () => {
       if (document.querySelectorAll('.VPDocAsideOutline .outline-link').length) { items.value = []; return }
       const doc = document.querySelector('.vp-doc')
       if (!doc) { items.value = []; return }
-      const found = []
+      const found = [], seen = new Set()
       for (const paragraph of doc.querySelectorAll('p')) {
-        const strong = paragraph.firstElementChild
-        if (!strong || strong.tagName !== 'STRONG') continue
-        const label = (strong.textContent || '').trim()
-        if (!label || label.length > 20) continue
+        const label = termLabel(paragraph)
+        if (!label || seen.has(label)) continue
+        seen.add(label)
         if (!paragraph.id) paragraph.id = 'kb-term-' + found.length
         found.push({ id: paragraph.id, label })
-        if (found.length >= 40) break
+        if (found.length >= 60) break
       }
-      /* 少于 3 条就不值得占一栏，宁可空着 */
-      items.value = found.length >= 3 ? found : []
-    })
+      /* 少于 4 条就不值得占一栏，宁可空着 */
+      items.value = found.length >= 4 ? found : []
+    }
+    /* 正文是异步挂上来的，而且是长文：nextTick 或固定延时都可能只读到一半，
+       结果就是靠后的术语漏掉（实测少了 2 条）。改成盯着 .vp-doc 的 DOM 变化重算。
+       只观察 childList —— collect 里给段落补 id 属于属性变更，不会触发自己。 */
+    const watchDoc = (attempt) => {
+      const doc = document.querySelector('.vp-doc')
+      if (!doc) { if (attempt < 20) setTimeout(() => watchDoc(attempt + 1), 120); return }
+      if (observer) observer.disconnect()
+      observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(collect, 100) })
+      observer.observe(doc, { childList:true, subtree:true })
+      collect()
+    }
+    const build = () => nextTick(() => watchDoc(0))
     onMounted(build)
+    onUnmounted(() => { if (observer) observer.disconnect(); clearTimeout(timer) })
     watch(() => page.value.relativePath, build)
     return () => {
       if (!items.value.length) return null
