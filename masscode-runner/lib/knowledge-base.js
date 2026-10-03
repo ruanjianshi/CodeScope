@@ -903,6 +903,16 @@ function createKnowledgeBase(options) {
     writeIfMissing(path.join(guideProject, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description:'CodeScope 知识库的结构与使用说明', tags:['指南'], updatedAt:Date.now() }, null, 2) + '\n');
     /* index.md 必须在指南写完之后再生成：它要扫一遍站点内容挑第一篇文档 */
     writeManaged(path.join(root, 'index.md'), homeSource(root));
+    /* 这两个文件必须叫 .mjs，不能改名成 .js —— 实测过：
+       · VitePress 找配置的顺序是 ["js","ts","mjs","mts"]，所以 .vitepress/config.js 会
+         盖住 config.mjs；但 .js 在 Node 里默认按 CommonJS 处理，而 vitepress 是 ESM-only，
+         结果是构建直接失败（"vitepress resolved to an ESM file, cannot be loaded by require"）。
+         也就是说 config.js 不是「优先级更高」，是「一加就崩」。
+       · 主题入口走 Vite 的模块解析（@theme 指向 theme/ 目录），Vite 默认扩展名顺序
+         .mjs 在前，所以 theme/index.js 永远输给 theme/index.mjs（实测两个都在时用的是 .mjs，
+         只留 .js 时才生效）。
+       结论：这里生成的文件就是唯一入口，任何改动都要改这个生成器，不要去 .vitepress 里手改 ——
+       那些文件每次构建都会被 writeManaged 重写。 */
     writeManaged(path.join(root, '.vitepress', 'config.mjs'), configSource());
     writeManaged(path.join(root, '.vitepress', 'kb-color.mjs'), KB_COLOR_SOURCE);
     writeManaged(path.join(root, '.vitepress', 'theme', 'index.mjs'), THEME_SOURCE);
