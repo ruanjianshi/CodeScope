@@ -410,6 +410,11 @@ const THEME_CSS = `:root {
   --vp-c-brand-soft:rgba(91,140,255,.14);
   --vp-layout-max-width:1760px;
   --kb-content-width:900px;
+  /* 正文实际用的宽度。桌面下就等于用户选的版心；超宽屏下会被放宽（见文件末尾的
+     @media (min-width:1700px)）—— 900px 放在 2560 的屏幕上只占三分之一，
+     长句和代码都会折行。所有跟正文宽度相关的规则都走这个变量，别直接用 --kb-content-width，
+     否则侧栏定位、正文容器、网格列宽三处会各算各的、对不齐。 */
+  --kb-content-max:var(--kb-content-width);
   --kb-radius:16px;
   --kb-page-glow:rgba(91,140,255,.09);
   --kb-doc-surface:color-mix(in srgb,var(--vp-c-bg-soft) 54%,var(--vp-c-bg));
@@ -492,15 +497,15 @@ body {
 .VPSidebarItem.level-2.is-active > .item > .link > .text::before { border-color:color-mix(in srgb,var(--vp-c-brand-1) 46%,var(--vp-c-divider));background:var(--vp-c-brand-1);color:#fff; }
 .VPSidebarItem.is-active > .item > .indicator { left:-13px;width:3px;border-radius:99px;background:var(--vp-c-brand-1);box-shadow:0 0 14px var(--vp-c-brand-1); }
 .VPDoc .content-container {
-  max-width:var(--kb-content-width)!important;
+  max-width:var(--kb-content-max)!important;
   padding:clamp(18px,2.5vw,34px) clamp(18px,3.4vw,46px) clamp(210px,38vh,430px);
 }
-.VPDoc .container { max-width:calc(var(--kb-content-width) + 380px)!important; }
+.VPDoc .container { max-width:calc(var(--kb-content-max) + 380px)!important; }
 .VPDoc .main { padding-top:22px; }
 /* 文档里没有 h2/h3 时，右侧大纲栏会空着一条 200+px 的白条 —— 既浪费宽度又显得没做完。
    没有大纲就整条收掉，并把容器收窄让正文居中（有大纲时行为完全不变）。 */
 html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container > .aside.aside { display:none; }
-html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:calc(var(--kb-content-width) + 80px)!important; }
+html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:calc(var(--kb-content-max) + 80px)!important; }
 .vp-doc { counter-reset:kb-h2;color:color-mix(in srgb,var(--vp-c-text-1) 89%,var(--vp-c-text-2));font-size:16px;line-height:1.82; }
 .vp-doc > :first-child { margin-top:0; }
 .vp-doc h1,.vp-doc h2,.vp-doc h3,.vp-doc h4 { color:var(--kb-heading);letter-spacing:-.025em;scroll-margin-top:90px; }
@@ -595,9 +600,19 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
    in one centred, symmetric three-column reading frame. Keep this after the
    regular desktop rules so the wide layout cannot be overwritten. */
 @media (min-width:1700px) {
+  /* 超宽屏下把正文放宽：固定的 900px 放在 2560 的屏幕上只占三分之一，
+     右侧空出一大片、长句和代码还会折行。这里按版心成比例放大（1.45 倍），
+     同时用 64vw 兜住上限 —— 再宽一行就太长、读起来会串行。
+     注意必须写 :root 而不是 html：:root 的特异性比 html 高，
+     写 html 的话这条会被上面 :root 里的基础定义压住、完全不生效。 */
+  :root { --kb-content-max:min(calc(var(--kb-content-width) * 1.45), 64vw, 1400px); }
+  /* 「无大纲收栏」那条规则的特异性比上面的网格规则高（:not(:has(...)) 会被算进特异性），
+     不在这里再压一次的话，容器会被它卡在 content+80px，三列网格拿不到该有的宽度，
+     正文反而被挤得更窄。超宽屏下宽度交给网格决定，容器不设上限。 */
+  html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:none!important; }
   html .VPSidebar.VPSidebar {
     top:64px;
-    left:calc(50vw - (var(--kb-content-width) / 2) - 256px);
+    left:calc(50vw - (var(--kb-content-max) / 2) - 256px);
     width:256px!important;
     height:calc(100vh - 64px);
     padding:38px 20px 72px 24px;
@@ -610,7 +625,7 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
   }
   html .VPDoc.VPDoc > .container.container {
     display:grid;
-    grid-template-columns:256px minmax(640px,var(--kb-content-width)) 256px;
+    grid-template-columns:256px minmax(640px,var(--kb-content-max)) 256px;
     justify-content:center;
     align-items:start;
     max-width:none!important;
