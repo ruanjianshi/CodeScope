@@ -153,6 +153,28 @@ function scan(directory, prefix = '') {
   }
   return items
 }
+/* 「最近更新」入口：内容一多就找不到刚写的东西。构建期扫一遍 mtime 取前几条，
+   做成导航栏下拉 —— 纯静态，不耗运行时、也不怕离线。 */
+function recentPages(limit) {
+  const out = []
+  const walk = (directory, prefix) => {
+    let entries = []
+    try { entries = fs.readdirSync(directory, { withFileTypes:true }) } catch { return }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || ignored.has(entry.name)) continue
+      const relative = prefix ? prefix + '/' + entry.name : entry.name
+      const full = path.join(directory, entry.name)
+      if (entry.isDirectory()) walk(full, relative)
+      else if (/\\.md$/i.test(entry.name) && relative.toLowerCase() !== 'index.md') {
+        let mtime = 0
+        try { mtime = fs.statSync(full).mtimeMs } catch {}
+        out.push({ text: pageTitle(full, path.basename(entry.name, path.extname(entry.name))), link: pageLink(relative), mtime })
+      }
+    }
+  }
+  walk(sourceRoot, '')
+  return out.filter((item) => item.mtime > 0).sort((a, b) => b.mtime - a.mtime).slice(0, limit)
+}
 
 export default defineConfig({
   lang: 'zh-CN',
@@ -180,8 +202,19 @@ export default defineConfig({
   themeConfig: {
     logo: { src:'/codescope.svg', alt:'CodeScope' },
     /* 没有「首页」了：站点根 index.md 会直接跳到第一篇文档，
-       所以这里不再放「知识库首页」入口，免得点了又被弹回同一篇。 */
-    nav: [],
+       所以这里不再放「知识库首页」入口，免得点了又被弹回同一篇。
+       「最近更新」是构建期算出来的静态下拉，不耗运行时。 */
+    nav: (() => {
+      const recent = recentPages(6)
+      if (!recent.length) return []
+      return [{
+        text: '最近更新',
+        items: recent.map((page) => ({
+          text: page.text + ' · ' + new Date(page.mtime).toLocaleDateString('zh-CN', { month:'2-digit', day:'2-digit' }),
+          link: page.link
+        }))
+      }]
+    })(),
     sidebar: scan(sourceRoot),
     outline: { level:[2, 4], label:'本页目录' },
     lastUpdated: { text:'最后更新', formatOptions:{ dateStyle:'medium', timeStyle:'short', forceLocale:true } },
@@ -325,6 +358,81 @@ function termLabel(paragraph) {
   }
   return ''
 }
+
+/* 图片点击放大：笔记里的截图/示意图往往分辨率很高，正文里只有几百像素宽，
+   看不清细节。点一下铺满全屏，再点一下或按 Esc 关掉。
+   自己写而不是引 medium-zoom —— 只有这一件事要做，不值得为它加一个依赖。 */
+const ImageZoom = defineComponent({
+  setup() {
+    const src = ref('')
+    const alt = ref('')
+    const close = () => { src.value = '' }
+    const onKey = (event) => { if (event.key === 'Escape') close() }
+    const bind = () => {
+      for (const img of document.querySelectorAll('.vp-doc img')) {
+        if (img.dataset.kbZoom) continue
+        img.dataset.kbZoom = '1'
+        img.classList.add('kb-zoomable')
+        img.addEventListener('click', () => { src.value = img.currentSrc || img.src; alt.value = img.alt || '' })
+      }
+    }
+    const schedule = () => { nextTick(bind); setTimeout(bind, 400) }
+    onMounted(() => { schedule(); window.addEventListener('keydown', onKey) })
+    onUnmounted(() => window.removeEventListener('keydown', onKey))
+    const { page } = useData()
+    watch(() => page.value.relativePath, schedule)
+    return () => src.value
+      ? h('div', { class:'kb-lightbox', onClick: close, role:'dialog', 'aria-label':'图片预览' }, [
+          h('img', { src: src.value, alt: alt.value }),
+          h('button', { class:'kb-lightbox-close', type:'button', title:'关闭（Esc）', 'aria-label':'关闭' }, '×')
+        ])
+      : null
+  }
+})
+
+/* 阅读位置记忆：长文（实测一篇 5300px）关掉再开又要从头翻。
+   按「滚动比例」而不是绝对像素存 —— 换字号/换窗口宽度后比例仍然对得上。
+   只在没有 #锚点、且上次读到 5% 以上时才恢复，避免干扰正常跳转。 */
+const ReadingPosition = defineComponent({
+  setup() {
+    const { page } = useData()
+    const KEY = 'codescope-kb-scroll'
+    let timer = 0
+    const readMap = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {} } catch (_) { return {} } }
+    const save = (immediate) => {
+      clearTimeout(timer)
+      const run = () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight
+        if (max <= 200) return
+        const ratio = Math.max(0, Math.min(1, window.scrollY / max))
+        try {
+          const all = readMap()
+          if (ratio > 0.02) all[location.pathname] = ratio; else delete all[location.pathname]
+          localStorage.setItem(KEY, JSON.stringify(all))
+        } catch (_) {}
+      }
+      if (immediate) run(); else timer = setTimeout(run, 400)
+    }
+    const restore = () => {
+      if (location.hash) return
+      const ratio = readMap()[location.pathname]
+      if (!(ratio > 0.05)) return
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      if (max <= 200) return
+      window.scrollTo({ top: Math.round(max * ratio) })
+    }
+    const onScroll = () => save(false)
+    onMounted(() => {
+      /* 正文异步挂上来，太早恢复时 scrollHeight 还是 0 */
+      setTimeout(restore, 300)
+      window.addEventListener('scroll', onScroll, { passive:true })
+      window.addEventListener('beforeunload', () => save(true))
+    })
+    onUnmounted(() => { clearTimeout(timer); window.removeEventListener('scroll', onScroll) })
+    watch(() => page.value.relativePath, () => { save(true); setTimeout(restore, 300) })
+    return () => null
+  }
+})
 
 /* 右栏兜底：文档整篇没有 h2/h3 时，VitePress 的大纲是空的，右栏就空着一条 ——
    三栏框看着就歪（用户报的「没在中间」其实是这个）。这类清单式笔记的结构其实
@@ -482,7 +590,7 @@ export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, {
     'layout-top': () => [h(ReadingProgress), h(AccurateOutline)],
-    'layout-bottom': () => [h(ReadingHud), h(MiniOutline)],
+    'layout-bottom': () => [h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
     'doc-before': () => h(DocContext),
     'nav-bar-content-after': () => h('div', { class:'kb-nav-extras' }, [
       h(ReaderControls),
@@ -681,6 +789,16 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
   }
   .kb-mini-outline a:hover { color:var(--vp-c-brand-1);background:var(--vp-c-brand-soft); }
 }
+/* 图片灯箱：正文里的图点一下铺满全屏 */
+.vp-doc img.kb-zoomable { cursor:zoom-in; transition:opacity .15s; }
+.vp-doc img.kb-zoomable:hover { opacity:.9; }
+.kb-lightbox { position:fixed;z-index:2000;inset:0;display:flex;align-items:center;justify-content:center;
+  padding:34px;cursor:zoom-out;background:color-mix(in srgb,var(--vp-c-bg) 88%,transparent);backdrop-filter:blur(6px); }
+.kb-lightbox img { max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 30px 80px rgba(0,0,0,.5);cursor:default; }
+.kb-lightbox-close { position:absolute;top:20px;right:24px;width:38px;height:38px;display:grid;place-items:center;
+  border:1px solid var(--vp-c-divider);border-radius:50%;background:var(--vp-c-bg-elv);color:var(--vp-c-text-1);
+  font-size:20px;line-height:1;cursor:pointer;transition:border-color .16s,color .16s; }
+.kb-lightbox-close:hover { border-color:var(--vp-c-brand-1);color:var(--vp-c-brand-1); }
 .kb-doc-context { display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 34px;padding:0 0 15px;border-bottom:1px solid color-mix(in srgb,var(--vp-c-brand-1) 12%,var(--vp-c-divider));color:var(--vp-c-text-3);font-size:12px; }
 .kb-breadcrumb,.kb-doc-meta { display:flex;align-items:center;gap:7px;min-width:0; }
 .kb-breadcrumb { overflow:hidden;white-space:nowrap; }
@@ -830,6 +948,110 @@ function kbColorPlugin(md) {
 export default kbColorPlugin
 `;
 
+/* 笔记写法示例：把知识库「已经支持」的写法列全。
+   这份文档由生成器写出，和站点实际支持的能力绑在一起 ——
+   改了主题/插件就顺手改这里，不会出现「文档说支持、其实早废了」。
+   里面所有代码围栏都要写成 \`\`\`（外层是 JS 模板字符串，不转义会被截断）。 */
+const SYNTAX_SOURCE = `---
+title: 笔记写法示例
+---
+
+# 笔记写法示例
+
+这份文档列出知识库里**已经支持**的写法。照着写，页面立刻就有「内容感」——
+纯文字堆在一起是最容易显得空洞的。
+
+## 一、文字标注
+
+| 写法 | 效果 |
+| --- | --- |
+| \`{红|文字}\` | 指定颜色文字，九色：红 橙 黄 绿 青 蓝 紫 粉 灰 |
+| \`==文字==\` | 黄底高亮 |
+
+效果示例：函数指针 {红|指向函数的指针}，而 ==指针函数== 是「返回指针的函数」，别混。
+
+## 二、提示框
+
+用三个冒号包起来，适合写「补充说明 / 坑点 / 危险操作 / 可折叠的长内容」。
+
+::: tip 小技巧
+\`::: tip\` 用来写补充说明、经验之谈。
+:::
+
+::: warning 注意
+\`::: warning\` 用来写容易踩的坑。
+:::
+
+::: danger 危险
+\`::: danger\` 用来写「这么做会出事」的地方。
+:::
+
+::: details 点开看展开内容
+\`::: details 标题\` 写可折叠内容，默认收起 —— 长代码、大段日志用它，正文就不会被撑得很长。
+:::
+
+## 三、代码块
+
+**带文件名**：围栏后面用方括号写文件名。
+
+**指定行高亮**：大括号里写行号，支持 \`2\`、\`2,5\`、\`2,5-7\`。
+
+\`\`\`c{2,5-6} [main.c]
+int main(void) {
+    int *p = NULL;          // 这一行被高亮
+    p = (int *)malloc(4);
+    if (!p) return -1;
+    *p = 42;                // 这两行也被高亮
+    free(p);
+    return 0;
+}
+\`\`\`
+
+## 四、代码组（多语言 / 多方案对照）
+
+同一件事的不同写法并排放，点标签切换：
+
+::: code-group
+\`\`\`c [指针常量]
+int *const p = &a;   /* 指向不可改，值可改 */
+\`\`\`
+\`\`\`c [常量指针]
+const int *p = &a;   /* 值不可改，指向可改 */
+\`\`\`
+:::
+
+## 五、表格
+
+| 概念 | 含义 |
+| --- | --- |
+| 指针常量 | 指针本身是常量，不能改指向 |
+| 常量指针 | 指向的内容是常量，不能改值 |
+
+## 六、徽章
+
+给标题或条目加状态标记：<Badge type="tip" text="已验证" /> <Badge type="warning" text="待补充" /> <Badge type="danger" text="有坑" />
+
+## 七、引用与分割线
+
+> 引用一段原文、标准里的描述，或者别人的说法 —— 和自己的想法区分开。
+
+---
+
+## 八、暂时**不要**用的写法
+
+这两条会让构建失败或渲染成乱码，等装了插件再说：
+
+- **脚注**：写成 \`[^1]\` 会**直接报死链、整个站点构建失败**（不是静默忽略，很坑）。
+- **任务列表**：写成 \`- [ ]\` 会原样渲染成字面的 \`[ ]\`，不会变成勾选框。
+
+## 九、写笔记的一点建议
+
+1. **术语用加粗或标注**：正文里 \`**术语**\` 会被自动收进右侧「本页速览」，长文才有导航。
+2. **一段一个点**：每段以「术语：说明」开头，右侧速览就会自动成目录。
+3. **能画就别写**：内存布局、继承关系、调用链，一张图胜过十行字。
+4. **代码块带文件名和行高亮**：回头再看时，一眼知道在说哪一行。
+`;
+
 const GUIDE_SOURCE = `---
 title: 知识库使用指南
 ---
@@ -900,6 +1122,7 @@ function createKnowledgeBase(options) {
       try { if (fs.readFileSync(legacyGuide, 'utf8') === fs.readFileSync(guideFile, 'utf8')) fs.unlinkSync(legacyGuide); } catch (_) {}
     }
     writeManaged(guideFile, GUIDE_SOURCE);
+    writeManaged(path.join(guideProject, '笔记写法示例.md'), SYNTAX_SOURCE);
     writeIfMissing(path.join(guideProject, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description:'CodeScope 知识库的结构与使用说明', tags:['指南'], updatedAt:Date.now() }, null, 2) + '\n');
     /* index.md 必须在指南写完之后再生成：它要扫一遍站点内容挑第一篇文档 */
     writeManaged(path.join(root, 'index.md'), homeSource(root));
