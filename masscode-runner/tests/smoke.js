@@ -414,6 +414,14 @@ void bubbleSort(Array& values);
   assert(html.includes('id="workspace-launch-menu"') && html.includes('id="workspace-launch-study"') && html.includes('id="btn-study" hidden'), '学习工作台没有收进次级菜单（顶栏应当只留「编辑工作台」+ 一个 ⌄）');
   /* iframe 必须按「当前访问用的主机名」拼地址：写死 127.0.0.1 的话，局域网另一台机器会指到它自己。 */
   assert(html.includes("'http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/'") && html.includes('let VSCODE_PROXY_PORT='), 'VS Code 的 iframe 没有按当前主机名拼代理地址，局域网访问会指到本机');
+  /* 「↗ 引用」浮条只能在**主动触发**时出现（编辑器右键菜单 / ⌘⌥R）。
+     这个坑踩过两次：挂到 code-edit 的 select/keyup 上就会「一选中代码就弹出来，
+     正压在刚选中的那几行上」。所以这里钉死两件事：① 自动触发不许回来；② 主动入口不许丢。 */
+  assert(html.includes("id:'codescope.referenceSelection'"), '「↗ 引用选中的代码到 Markdown」的右键菜单项丢了 —— 那是引用功能唯一的主动入口');
+  const selectHandler = (html.match(/\$\('code-edit'\)\.addEventListener\('select',[\s\S]{0,500}?\}\);/) || [''])[0];
+  assert(selectHandler && !selectHandler.includes('syncCodeReferenceBar'), '「引用」浮条又被挂到 code-edit 的 select 自动触发上了（会遮挡刚选中的代码）');
+  const keyupHandler = (html.match(/\$\('code-edit'\)\.addEventListener\('keyup',[\s\S]{0,500}?\}\);/) || [''])[0];
+  assert(keyupHandler && !keyupHandler.includes('syncCodeReferenceBar'), '「引用」浮条又被挂到 code-edit 的 keyup 自动触发上了');
   /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
      VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
   assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');

@@ -15676,7 +15676,7 @@ function makeHResizer(handle, getter, setter) {
   });
   // 光标/输入后同步阅读面板；代码补全只在 Ctrl/⌘+Space 时按需打开。
   $('code-edit').addEventListener('keyup', () => {
-    rememberMarkdownCaret();syncCodeReferenceBar();
+    rememberMarkdownCaret();
     scheduleSyncMdPreview();
     syncRelationToEditorCaret();
     updateCodeContextBar();
@@ -15687,7 +15687,17 @@ function makeHResizer(handle, getter, setter) {
   $('code-edit').addEventListener('mouseleave',()=>scheduleDefinitionHoverHide());
   $('code-edit').addEventListener('selectionchange', scheduleSyncMdPreview);
   $('code-edit').addEventListener('selectionchange', syncRelationToEditorCaret);
-  $('code-edit').addEventListener('select',()=>{rememberMarkdownCaret();syncCodeReferenceBar();});
+  /* 「↗ 引用」浮条只在**主动触发**时出现：编辑器的右键菜单项
+     「↗ 引用选中的代码到 Markdown」或快捷键 ⌘⌥R（见 wireMonacoCommands 里的
+     codescope.referenceSelection，以及 openCodeReferenceMenu）。
+     这里以前挂过 syncCodeReferenceBar，导致「一选中代码就弹出来、正压在刚选中的那几行上」，
+     实测用户报过两次（f90a2a1 修过一次，后来又被加回来）。别再挂回去了。
+     选区变空时只收起浮条，不主动弹出。 */
+  $('code-edit').addEventListener('select', () => {
+    rememberMarkdownCaret();
+    const selection = currentCodeReferenceSelection();
+    if (!selection) hideCodeReferenceBar();
+  });
   // 代码编辑的高亮层与 textarea 滚动同步（含行号列）；markdown 编辑时右侧预览按比例跟随
   // 滚动时同步缩进参考线与折叠装订线
   const syncHierarchyScroll = () => {
