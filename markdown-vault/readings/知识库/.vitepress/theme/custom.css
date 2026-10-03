@@ -5,6 +5,11 @@
   --vp-c-brand-soft:rgba(91,140,255,.14);
   --vp-layout-max-width:1760px;
   --kb-content-width:900px;
+  /* 正文实际用的宽度。桌面下就等于用户选的版心；超宽屏下会被放宽（见文件末尾的
+     @media (min-width:1700px)）—— 900px 放在 2560 的屏幕上只占三分之一，
+     长句和代码都会折行。所有跟正文宽度相关的规则都走这个变量，别直接用 --kb-content-width，
+     否则侧栏定位、正文容器、网格列宽三处会各算各的、对不齐。 */
+  --kb-content-max:var(--kb-content-width);
   --kb-radius:16px;
   --kb-page-glow:rgba(91,140,255,.09);
   --kb-doc-surface:color-mix(in srgb,var(--vp-c-bg-soft) 54%,var(--vp-c-bg));
@@ -12,9 +17,28 @@
   --kb-heading:color-mix(in srgb,var(--vp-c-text-1) 94%,var(--vp-c-brand-1));
   font-synthesis:none;
 }
+/* CodeScope 阅读模块的行内标注：{红|文字} / ==文字==。
+   色值直接抄自 index.html 里阅读器的定义，两处必须一致 —— 不然同一篇笔记
+   在阅读器和站点里颜色不一样，等于又制造了一种「渲染不一致」。 */
+.kb-fg-red { color:#f2555a; }
+.kb-fg-orange { color:#f0883e; }
+.kb-fg-yellow { color:#dcb13c; }
+.kb-fg-green { color:#4bbd7a; }
+.kb-fg-cyan { color:#3fb6c4; }
+.kb-fg-blue { color:#5b9cf5; }
+.kb-fg-purple { color:#a97bf0; }
+.kb-fg-pink { color:#ef7bb0; }
+.kb-fg-gray { color:#95a0ae; }
+.kb-hl { padding:.02em .3em; border-radius:3px; color:inherit; background:color-mix(in srgb,#f2c14e 30%,transparent);
+  box-shadow:inset 0 -.09em 0 color-mix(in srgb,#f2c14e 52%,transparent); }
 html[data-kb-width="compact"] { --kb-content-width:760px; }
 html[data-kb-width="standard"] { --kb-content-width:900px; }
 html[data-kb-width="wide"] { --kb-content-width:1080px; }
+/* 字号档位：正文和标题一起缩放（只放大正文会让标题显得越来越小） */
+html[data-kb-size="small"] { --kb-font-scale:.93; }
+html[data-kb-size="normal"] { --kb-font-scale:1; }
+html[data-kb-size="large"] { --kb-font-scale:1.12; }
+html[data-kb-size="huge"] { --kb-font-scale:1.26; }
 html[data-kb-theme="forest"] {
   --vp-c-brand-1:#49b889;--vp-c-brand-2:#6dcc9f;--vp-c-brand-3:#328464;
   --vp-c-brand-soft:rgba(73,184,137,.14);--kb-page-glow:rgba(73,184,137,.09);
@@ -68,21 +92,41 @@ body {
 .VPSidebarItem.level-2.is-active > .item > .link > .text::before { border-color:color-mix(in srgb,var(--vp-c-brand-1) 46%,var(--vp-c-divider));background:var(--vp-c-brand-1);color:#fff; }
 .VPSidebarItem.is-active > .item > .indicator { left:-13px;width:3px;border-radius:99px;background:var(--vp-c-brand-1);box-shadow:0 0 14px var(--vp-c-brand-1); }
 .VPDoc .content-container {
-  max-width:var(--kb-content-width)!important;
+  max-width:var(--kb-content-max)!important;
   padding:clamp(18px,2.5vw,34px) clamp(18px,3.4vw,46px) clamp(210px,38vh,430px);
 }
-.VPDoc .container { max-width:calc(var(--kb-content-width) + 380px)!important; }
+.VPDoc .container { max-width:calc(var(--kb-content-max) + 380px)!important; }
 .VPDoc .main { padding-top:22px; }
+/* 文档里没有 h2/h3 时，右侧大纲栏会空着一条 200+px 的白条 —— 既浪费宽度又显得没做完。
+   没有大纲就整条收掉，并把容器收窄让正文居中（有大纲时行为完全不变）。 */
+html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container > .aside.aside { display:none; }
+html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:calc(var(--kb-content-max) + 80px)!important; }
 .vp-doc { counter-reset:kb-h2;color:color-mix(in srgb,var(--vp-c-text-1) 89%,var(--vp-c-text-2));font-size:16px;line-height:1.82; }
 .vp-doc > :first-child { margin-top:0; }
 .vp-doc h1,.vp-doc h2,.vp-doc h3,.vp-doc h4 { color:var(--kb-heading);letter-spacing:-.025em;scroll-margin-top:90px; }
+/* 标题文字用品牌色，和 CodeScope 阅读器对齐：那边 h1 = 品牌色 84% + 正文色、
+   h2 = 纯品牌色、h3 = 品牌色 58% + 正文色（见 index.html 的 .ProseMirror h1/h2/h3）。
+   站点原来各级标题一律近白色，同一篇笔记在阅读器和站点里标题颜色不一样，
+   看起来就是「渲染不一致」。各级原有的装饰（h1 的渐变条、h2 的编号徽章、h3 的竖线）保留。 */
+.vp-doc h1 { color:color-mix(in srgb,var(--vp-c-brand-1) 84%,var(--vp-c-text-1)); }
+.vp-doc h2 { color:var(--vp-c-brand-1); }
+.vp-doc h3 { color:color-mix(in srgb,var(--vp-c-brand-1) 58%,var(--vp-c-text-1)); }
 .vp-doc h1 { margin-bottom:.72em;font-size:2.35rem;line-height:1.16; }
 .vp-doc h1::after { content:'';display:block;width:44px;height:3px;margin-top:16px;border-radius:99px;background:linear-gradient(90deg,var(--vp-c-brand-1),transparent); }
-.vp-doc h1 + p { max-width:760px;margin:0 0 2.25em;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
+/* 标题后第一段原来额外留 2.25em 下边距（所谓「导语」），结果全篇就它后面空一大截 ——
+   用户看到的「行间距变了」就是这个：同一篇里段间距不均匀。
+   现在统一成和普通段落一样的间距，整篇节奏一致（阅读器那边也是均匀的）。 */
+.vp-doc h1 + p { max-width:760px;margin:0 0 14px;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
 .vp-doc h2 { counter-increment:kb-h2;display:flex;align-items:center;gap:11px;margin-top:2.55em;padding-top:1.05em;border-top:1px solid color-mix(in srgb,var(--vp-c-brand-1) 16%,var(--vp-c-divider));font-size:1.5rem; }
 .vp-doc h2::before { content:counter(kb-h2,decimal-leading-zero);display:inline-grid;place-items:center;min-width:30px;height:24px;padding:0 5px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));border-radius:7px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font:750 11px/1 var(--vp-font-family-mono);letter-spacing:0; }
 .vp-doc h3 { position:relative;margin-top:1.85em;padding-left:14px;font-size:1.16rem; }
 .vp-doc h3::before { content:'';position:absolute;left:0;top:.42em;width:4px;height:1em;border-radius:99px;background:var(--vp-c-brand-1);box-shadow:0 0 12px var(--vp-c-brand-soft); }
+/* 字号档位：标题用的是 rem（跟根字号走），所以只改 .vp-doc 的 font-size 标题不会跟着变，
+   这里把正文和各级标题一起乘上 --kb-font-scale。 */
+.vp-doc { font-size:calc(16px * var(--kb-font-scale,1)); }
+.vp-doc h1 { font-size:calc(2.35rem * var(--kb-font-scale,1)); }
+.vp-doc h2 { font-size:calc(1.5rem * var(--kb-font-scale,1)); }
+.vp-doc h3 { font-size:calc(1.16rem * var(--kb-font-scale,1)); }
 .vp-doc p,.vp-doc li { text-wrap:pretty; }
 .vp-doc p { margin:14px 0; }
 .vp-doc ul,.vp-doc ol { margin:12px 0;padding-left:1.55em; }
@@ -93,7 +137,7 @@ body {
 .vp-doc h3 + ul,.vp-doc h3 + ol { margin-top:11px;padding:13px 18px 13px 38px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 12%,var(--vp-c-divider));border-radius:12px;background:color-mix(in srgb,var(--vp-c-bg-soft) 72%,transparent); }
 .vp-doc a { text-decoration-color:color-mix(in srgb,var(--vp-c-brand-1) 44%,transparent);text-underline-offset:3px; }
 .vp-doc a:hover { text-decoration-thickness:2px; }
-.vp-doc strong { color:var(--vp-c-text-1);font-weight:720; }
+.vp-doc strong { color:color-mix(in srgb,var(--vp-c-brand-1) 56%,var(--vp-c-text-1));font-weight:720; }
 .vp-doc :not(pre) > code { padding:.16em .42em;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 18%,var(--vp-c-divider));border-radius:6px;background:color-mix(in srgb,var(--vp-c-brand-soft) 72%,var(--vp-c-bg-soft));color:color-mix(in srgb,var(--vp-c-brand-1) 76%,var(--vp-c-text-1));font-size:.88em; }
 .vp-doc div[class*="language-"] { overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
 .vp-doc div[class*="language-"]::before { content:'●  ●  ●';position:absolute;left:16px;top:10px;z-index:2;color:color-mix(in srgb,var(--vp-c-text-3) 66%,var(--vp-c-brand-1));font-size:9px;letter-spacing:2px; }
@@ -109,6 +153,50 @@ body {
 .VPDocAsideOutline .outline-link.kb-current { padding-left:8px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font-weight:650;transform:translateX(2px); }
 .kb-reading-progress { position:fixed;z-index:1000;top:0;left:0;width:100%;height:2px;pointer-events:none; }
 .kb-reading-progress span { display:block;height:100%;border-radius:0 99px 99px 0;background:linear-gradient(90deg,var(--vp-c-brand-3),var(--vp-c-brand-1),var(--vp-c-brand-2));box-shadow:0 0 10px var(--vp-c-brand-1);transition:width .08s linear; }
+/* 右下角阅读浮标：进度百分比 + 回到顶部（滚动 320px 后才出现，不打扰开头） */
+.kb-hud { position:fixed;z-index:1001;right:26px;bottom:26px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;
+  opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .22s var(--sp-ease,ease),transform .22s ease,visibility .22s; }
+.kb-hud.on { opacity:1;visibility:visible;transform:none; }
+.kb-hud-pct { padding:3px 10px;border:1px solid var(--vp-c-divider);border-radius:999px;color:var(--vp-c-text-2);
+  background:color-mix(in srgb,var(--vp-c-bg-elv) 86%,transparent);font:650 11px/1.5 var(--vp-font-family-mono);
+  font-variant-numeric:tabular-nums;backdrop-filter:blur(10px); }
+.kb-hud-top { width:38px;height:38px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));
+  border-radius:50%;color:var(--vp-c-brand-1);background:color-mix(in srgb,var(--vp-c-bg-elv) 90%,transparent);
+  font-size:16px;line-height:1;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.22);backdrop-filter:blur(10px);
+  transition:transform .16s,border-color .16s,background .16s; }
+.kb-hud-top:hover { transform:translateY(-2px);border-color:var(--vp-c-brand-1);background:var(--vp-c-brand-soft); }
+/* 右栏兜底「本页速览」：位置和三栏框的第三列对齐（左边缘 = 视口中心 + 正文半宽）。
+   只在 ≥1320px 的三栏布局里出现，和侧栏一样是 fixed。 */
+.kb-mini-outline { display:none; }
+@media (min-width:1320px) {
+  .kb-mini-outline {
+    display:block;position:fixed;z-index:20;top:112px;
+    left:calc(50vw + (var(--kb-content-max) / 2) + 32px);
+    width:224px;max-height:calc(100vh - 180px);overflow:auto;
+    padding-left:0;border-left:1px solid var(--vp-c-divider);
+    scrollbar-width:thin;
+  }
+  .kb-mini-title { padding:0 0 10px 14px;color:var(--vp-c-text-1);font-size:12px;font-weight:700;letter-spacing:.02em; }
+  .kb-mini-outline ul { margin:0;padding:0;list-style:none; }
+  .kb-mini-outline li { margin:0; }
+  .kb-mini-outline a {
+    display:block;padding:5px 8px 5px 14px;border-radius:6px;
+    color:var(--vp-c-text-2);font-size:12px;line-height:1.5;text-decoration:none;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    transition:color .15s,background .15s;
+  }
+  .kb-mini-outline a:hover { color:var(--vp-c-brand-1);background:var(--vp-c-brand-soft); }
+}
+/* 图片灯箱：正文里的图点一下铺满全屏 */
+.vp-doc img.kb-zoomable { cursor:zoom-in; transition:opacity .15s; }
+.vp-doc img.kb-zoomable:hover { opacity:.9; }
+.kb-lightbox { position:fixed;z-index:2000;inset:0;display:flex;align-items:center;justify-content:center;
+  padding:34px;cursor:zoom-out;background:color-mix(in srgb,var(--vp-c-bg) 88%,transparent);backdrop-filter:blur(6px); }
+.kb-lightbox img { max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 30px 80px rgba(0,0,0,.5);cursor:default; }
+.kb-lightbox-close { position:absolute;top:20px;right:24px;width:38px;height:38px;display:grid;place-items:center;
+  border:1px solid var(--vp-c-divider);border-radius:50%;background:var(--vp-c-bg-elv);color:var(--vp-c-text-1);
+  font-size:20px;line-height:1;cursor:pointer;transition:border-color .16s,color .16s; }
+.kb-lightbox-close:hover { border-color:var(--vp-c-brand-1);color:var(--vp-c-brand-1); }
 .kb-doc-context { display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 34px;padding:0 0 15px;border-bottom:1px solid color-mix(in srgb,var(--vp-c-brand-1) 12%,var(--vp-c-divider));color:var(--vp-c-text-3);font-size:12px; }
 .kb-breadcrumb,.kb-doc-meta { display:flex;align-items:center;gap:7px;min-width:0; }
 .kb-breadcrumb { overflow:hidden;white-space:nowrap; }
@@ -138,10 +226,19 @@ body {
 /* On ultra-wide screens, place category navigation, article and page outline
    in one centred, symmetric three-column reading frame. Keep this after the
    regular desktop rules so the wide layout cannot be overwritten. */
-@media (min-width:1700px) {
+@media (min-width:1320px) {
+  /* 三栏阅读框：左分类 / 中正文 / 右大纲，整体在页面里居中。
+     正文宽度自适应 —— 把两侧栏（256×2）和一点边距让出来，剩下的给正文，
+     上限跟版心设置成比例（再宽一行就太长）。
+     注意必须写 :root 而不是 html：:root 的特异性比 html 高，
+     写 html 的话这条会被上面 :root 里的基础定义压住、完全不生效。 */
+  :root { --kb-content-max:clamp(560px, calc(100vw - 600px), min(calc(var(--kb-content-width) * 1.35), 1400px)); }
+  /* 「无大纲收栏」那条规则的特异性比上面的网格规则高（:not(:has(...)) 会被算进特异性），
+     不在这里再压一次的话，容器会被它卡在 content+80px，三列网格拿不到该有的宽度。 */
+  html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:none!important; }
   html .VPSidebar.VPSidebar {
     top:64px;
-    left:calc(50vw - (var(--kb-content-width) / 2) - 256px);
+    left:calc(50vw - (var(--kb-content-max) / 2) - 256px);
     width:256px!important;
     height:calc(100vh - 64px);
     padding:38px 20px 72px 24px;
@@ -154,7 +251,7 @@ body {
   }
   html .VPDoc.VPDoc > .container.container {
     display:grid;
-    grid-template-columns:256px minmax(640px,var(--kb-content-width)) 256px;
+    grid-template-columns:256px minmax(640px,var(--kb-content-max)) 256px;
     justify-content:center;
     align-items:start;
     max-width:none!important;
@@ -186,9 +283,9 @@ body {
   .codescope-return { padding:0 9px;font-size:0; }
   .codescope-return::before { content:'↩';font-size:16px; }
   .VPDoc .content-container { padding:24px 20px; }
-  .vp-doc { font-size:15px;line-height:1.82; }
-  .vp-doc h1 { font-size:1.82rem; }
-  .vp-doc h2 { font-size:1.32rem; }
+  .vp-doc { font-size:calc(15px * var(--kb-font-scale,1));line-height:1.82; }
+  .vp-doc h1 { font-size:calc(1.82rem * var(--kb-font-scale,1)); }
+  .vp-doc h2 { font-size:calc(1.32rem * var(--kb-font-scale,1)); }
   .kb-doc-context { align-items:flex-start;flex-direction:column;margin-bottom:28px; }
   .kb-doc-meta span:last-child { display:inline-flex; }
 }

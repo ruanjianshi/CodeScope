@@ -1140,7 +1140,10 @@ function createKnowledgeBase(options) {
     writeManaged(path.join(root, '.vitepress', 'kb-color.mjs'), KB_COLOR_SOURCE);
     writeManaged(path.join(root, '.vitepress', 'theme', 'index.mjs'), THEME_SOURCE);
     writeManaged(path.join(root, '.vitepress', 'theme', 'custom.css'), THEME_CSS);
-    writeManaged(path.join(root, '.gitignore'), '.vitepress/cache/\n.vitepress/node_modules\n');
+    /* *.sync-conflict-* 是 iCloud 的冲突副本：生成器每次构建都会重写这几个文件，
+       而 vault 又在 iCloud 里，同步和写入撞上就会生出一份 config.sync-conflict-…。
+       它们是垃圾，但会污染 git status，直接忽略掉。 */
+    writeManaged(path.join(root, '.gitignore'), '.vitepress/cache/\n.vitepress/node_modules\n*.sync-conflict-*\n');
     const modulesLink = path.join(root, '.vitepress', 'node_modules');
     const expectedModules = path.resolve(projectRoot, 'node_modules');
     let repairModules = !fs.existsSync(modulesLink);
