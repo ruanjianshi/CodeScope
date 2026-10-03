@@ -16290,8 +16290,21 @@ function closeVSCodeWorkspace(){
    写死 127.0.0.1 的话，从局域网另一台机器打开会指到它自己身上去。 */
 function vscodeProxyUrl(folder){
   const base='http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/';
-  const target=String(folder||'').trim();
+  const target=unescapeShellPath(folder);
   return target?base+'?folder='+encodeURIComponent(target):base;
+}
+/* 用户经常从终端/文档里复制「shell 转义过」的路径粘进来，比如
+   ~/Library/Mobile\ Documents/com\~apple\~CloudDocs/CodeBase —— 反斜杠在终端里是转义，
+   但这里会被当成**真实字符**，于是 VS Code 去找一个叫 "Mobile\ Documents"（含反斜杠）
+   的目录，报 ENOENT、所有文件都打不开（实测踩过：coder.json 里存进了带 \ 的路径）。
+   所以这里把「反斜杠 + 空格/~ 等 shell 特殊字符」还原成普通字符。
+   只还原这几种紧跟其后的情形，避免误伤真的含反斜杠的目录名。 */
+function unescapeShellPath(value){
+  const text=String(value||'').trim();
+  if(!text)return '';
+  /* 先剥掉可能被一起复制进来的引号 */
+  const unquoted=text.replace(/^(['"])([\s\S]*)\1$/,'$2');
+  return unquoted.replace(/\\([ ~!#$&()*;<>?[\]{}|'"`])/g,'$1');
 }
 async function openVSCode(folder){
   const btn=$('btn-vscode');if(btn.classList.contains('busy'))return;

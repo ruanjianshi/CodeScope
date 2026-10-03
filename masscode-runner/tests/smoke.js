@@ -414,6 +414,9 @@ void bubbleSort(Array& values);
   assert(html.includes('id="workspace-launch-menu"') && html.includes('id="workspace-launch-study"') && html.includes('id="btn-study" hidden'), '学习工作台没有收进次级菜单（顶栏应当只留「编辑工作台」+ 一个 ⌄）');
   /* iframe 必须按「当前访问用的主机名」拼地址：写死 127.0.0.1 的话，局域网另一台机器会指到它自己。 */
   assert(html.includes("'http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/'") && html.includes('let VSCODE_PROXY_PORT='), 'VS Code 的 iframe 没有按当前主机名拼代理地址，局域网访问会指到本机');
+  /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
+     VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
+  assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');
   assert(serverSource.includes("'/api/integrations/code-server'") && serverSource.includes('createCodeServerProxy') && serverSource.includes('VSCODE_PROXY.stop()'), '服务端缺少 VS Code 的托管接口、代理接线或退出清理');
   assert(codeServerSource.includes("'--bind-addr'") && codeServerSource.includes("'--auth', 'none'") && codeServerSource.includes('--extensions-dir') && codeServerSource.includes('--user-data-dir'), 'VS Code 服务启动参数不全（绑定地址 / 免密 / 数据与扩展目录）');
   assert(codeServerSource.includes("path.join(home, '.codescope'") && codeServerSource.includes("const home = os.homedir()") && codeServerSource.includes('resolveNodeRuntime'), 'VS Code 服务没有按约定目录找 code-server，或没处理「桌面版 process.execPath 是 Electron」的情况');
