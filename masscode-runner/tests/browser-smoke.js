@@ -326,7 +326,13 @@ print(r.run())
   if(Math.abs(kbWideGroup.canvasCenter-kbWideGroup.articleCenter)>2||Math.abs(kbWideGroup.sidebar.right-kbWideGroup.article.left)>2||Math.abs(kbWideGroup.aside.left-kbWideGroup.article.right)>2||Math.abs(kbWideGroup.category.top-kbWideGroup.outline.top)>2||kbWideGroup.contentPaddingLeft!=='0px')throw new Error('知识库在 4500px 超宽屏下左侧分类、正文与右侧大纲未形成对称三栏：'+JSON.stringify(kbWideGroup));
   /* 超宽屏下正文必须随屏幕放宽：固定 900px 在 4500 的屏上只占五分之一，长句和代码都会折行。 */
   const kbWideContent=await knowledgePage.evaluate(()=>Math.round(document.querySelector('.vp-doc').getBoundingClientRect().width));
-  if(!(kbWideContent>1100))throw new Error('知识库在 4500px 超宽屏下正文仍然过窄（未随屏幕放宽）：'+kbWideContent+'px');
+  if(!(kbWideContent>1000))throw new Error('知识库在 4500px 超宽屏下正文仍然过窄（未随屏幕放宽）：'+kbWideContent+'px');
+  /* 三栏框必须整体居中：正文左右留白要对称。 */
+  const kbWideBalance=await knowledgePage.evaluate(()=>{
+    const doc=document.querySelector('.vp-doc').getBoundingClientRect();
+    return { left:Math.round(doc.x), right:Math.round(window.innerWidth-doc.right) };
+  });
+  if(Math.abs(kbWideBalance.left-kbWideBalance.right)>4)throw new Error('知识库三栏框没有整体居中（正文左右留白不对称）：'+JSON.stringify(kbWideBalance));
   await knowledgePage.setViewportSize({width:1280,height:800});await knowledgePage.waitForTimeout(100);
   const lastOutline=knowledgePage.locator('.VPDocAsideOutline a.outline-link').filter({hasText:'搜索与定位'});
   await lastOutline.click();

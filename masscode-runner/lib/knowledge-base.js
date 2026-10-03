@@ -295,6 +295,51 @@ const ReadingHud = defineComponent({
   }
 })
 
+/* 右栏兜底：文档整篇没有 h2/h3 时，VitePress 的大纲是空的，右栏就空着一条 ——
+   三栏框看着就歪（用户报的「没在中间」其实是这个）。这类清单式笔记的结构其实
+   写在正文里：每段都以 **术语** 开头。把这些术语抽出来当「本页速览」，
+   点一下滚到对应段落，右栏就有了和大纲等价的作用。
+   有真大纲时整块隐藏，交给 VitePress 自己那份。 */
+const MiniOutline = defineComponent({
+  setup() {
+    const { page } = useData()
+    const items = ref([])
+    const build = () => nextTick(() => {
+      if (document.querySelectorAll('.VPDocAsideOutline .outline-link').length) { items.value = []; return }
+      const doc = document.querySelector('.vp-doc')
+      if (!doc) { items.value = []; return }
+      const found = []
+      for (const paragraph of doc.querySelectorAll('p')) {
+        const strong = paragraph.firstElementChild
+        if (!strong || strong.tagName !== 'STRONG') continue
+        const label = (strong.textContent || '').trim()
+        if (!label || label.length > 20) continue
+        if (!paragraph.id) paragraph.id = 'kb-term-' + found.length
+        found.push({ id: paragraph.id, label })
+        if (found.length >= 40) break
+      }
+      /* 少于 3 条就不值得占一栏，宁可空着 */
+      items.value = found.length >= 3 ? found : []
+    })
+    onMounted(build)
+    watch(() => page.value.relativePath, build)
+    return () => {
+      if (!items.value.length) return null
+      return h('nav', { class:'kb-mini-outline', 'aria-label':'本页速览' }, [
+        h('div', { class:'kb-mini-title' }, '本页速览'),
+        h('ul', null, items.value.map((item) => h('li', null, h('a', {
+          href: '#' + item.id,
+          onClick: (event) => {
+            event.preventDefault()
+            const target = document.getElementById(item.id)
+            if (target) target.scrollIntoView({ behavior:'smooth', block:'start' })
+          }
+        }, item.label))))
+      ])
+    }
+  }
+})
+
 const ReadingProgress = defineComponent({
   setup() {
     const progress = ref(0)
@@ -393,7 +438,7 @@ export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, {
     'layout-top': () => [h(ReadingProgress), h(AccurateOutline)],
-    'layout-bottom': () => h(ReadingHud),
+    'layout-bottom': () => [h(ReadingHud), h(MiniOutline)],
     'doc-before': () => h(DocContext),
     'nav-bar-content-after': () => h('div', { class:'kb-nav-extras' }, [
       h(ReaderControls),
@@ -570,6 +615,28 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
   font-size:16px;line-height:1;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.22);backdrop-filter:blur(10px);
   transition:transform .16s,border-color .16s,background .16s; }
 .kb-hud-top:hover { transform:translateY(-2px);border-color:var(--vp-c-brand-1);background:var(--vp-c-brand-soft); }
+/* 右栏兜底「本页速览」：位置和三栏框的第三列对齐（左边缘 = 视口中心 + 正文半宽）。
+   只在 ≥1320px 的三栏布局里出现，和侧栏一样是 fixed。 */
+.kb-mini-outline { display:none; }
+@media (min-width:1320px) {
+  .kb-mini-outline {
+    display:block;position:fixed;z-index:20;top:112px;
+    left:calc(50vw + (var(--kb-content-max) / 2) + 32px);
+    width:224px;max-height:calc(100vh - 180px);overflow:auto;
+    padding-left:0;border-left:1px solid var(--vp-c-divider);
+    scrollbar-width:thin;
+  }
+  .kb-mini-title { padding:0 0 10px 14px;color:var(--vp-c-text-1);font-size:12px;font-weight:700;letter-spacing:.02em; }
+  .kb-mini-outline ul { margin:0;padding:0;list-style:none; }
+  .kb-mini-outline li { margin:0; }
+  .kb-mini-outline a {
+    display:block;padding:5px 8px 5px 14px;border-radius:6px;
+    color:var(--vp-c-text-2);font-size:12px;line-height:1.5;text-decoration:none;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    transition:color .15s,background .15s;
+  }
+  .kb-mini-outline a:hover { color:var(--vp-c-brand-1);background:var(--vp-c-brand-soft); }
+}
 .kb-doc-context { display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 34px;padding:0 0 15px;border-bottom:1px solid color-mix(in srgb,var(--vp-c-brand-1) 12%,var(--vp-c-divider));color:var(--vp-c-text-3);font-size:12px; }
 .kb-breadcrumb,.kb-doc-meta { display:flex;align-items:center;gap:7px;min-width:0; }
 .kb-breadcrumb { overflow:hidden;white-space:nowrap; }
@@ -599,16 +666,15 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
 /* On ultra-wide screens, place category navigation, article and page outline
    in one centred, symmetric three-column reading frame. Keep this after the
    regular desktop rules so the wide layout cannot be overwritten. */
-@media (min-width:1700px) {
-  /* 超宽屏下把正文放宽：固定的 900px 放在 2560 的屏幕上只占三分之一，
-     右侧空出一大片、长句和代码还会折行。这里按版心成比例放大（1.45 倍），
-     同时用 64vw 兜住上限 —— 再宽一行就太长、读起来会串行。
+@media (min-width:1320px) {
+  /* 三栏阅读框：左分类 / 中正文 / 右大纲，整体在页面里居中。
+     正文宽度自适应 —— 把两侧栏（256×2）和一点边距让出来，剩下的给正文，
+     上限跟版心设置成比例（再宽一行就太长）。
      注意必须写 :root 而不是 html：:root 的特异性比 html 高，
      写 html 的话这条会被上面 :root 里的基础定义压住、完全不生效。 */
-  :root { --kb-content-max:min(calc(var(--kb-content-width) * 1.45), 64vw, 1400px); }
+  :root { --kb-content-max:clamp(560px, calc(100vw - 600px), min(calc(var(--kb-content-width) * 1.35), 1400px)); }
   /* 「无大纲收栏」那条规则的特异性比上面的网格规则高（:not(:has(...)) 会被算进特异性），
-     不在这里再压一次的话，容器会被它卡在 content+80px，三列网格拿不到该有的宽度，
-     正文反而被挤得更窄。超宽屏下宽度交给网格决定，容器不设上限。 */
+     不在这里再压一次的话，容器会被它卡在 content+80px，三列网格拿不到该有的宽度。 */
   html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:none!important; }
   html .VPSidebar.VPSidebar {
     top:64px;
