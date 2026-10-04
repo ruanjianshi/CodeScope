@@ -13516,7 +13516,11 @@ function ensureBlockly() {
 }
 
 /* 颜色按分类（学 Mixly：颜色即分类） */
-const BP_COLOR = { control: '#BA7517', var: '#D85A30', func: '#534AB7', op: '#378ADD', io: '#1D9E75', raw: '#5F5E5A' };
+const BP_COLOR = { control: '#BA7517', var: '#D85A30', func: '#534AB7', op: '#378ADD',
+  io: '#1D9E75', raw: '#5F5E5A',
+  cpp: '#0F6E56',      /* C++ / STL 容器与算法 */
+  thread: '#993556',   /* 多线程 */
+  smart: '#7F77DD' }; /* 智能指针 */
 
 function defineCBlocks() {
   if (BP_READY) return;
@@ -13602,6 +13606,117 @@ function defineCBlocks() {
       colour: BP_COLOR.control, tooltip: 'continue' },
     { type: 'c_comment', message0: '注释 %1', args0: [{ type: 'field_input', name: 'TEXT', text: '说明' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.raw, tooltip: '生成 // 注释' },
+    /* ── C++ 常用：STL / 多线程 / 智能指针 / IO ── */
+    { type: 'cpp_include', message0: '#include <%1>', args0: [
+        { type: 'field_dropdown', name: 'HEADER', options: [
+          ['iostream', 'iostream'], ['vector', 'vector'], ['string', 'string'], ['map', 'map'],
+          ['unordered_map', 'unordered_map'], ['set', 'set'], ['unordered_set', 'unordered_set'],
+          ['queue', 'queue'], ['stack', 'stack'], ['deque', 'deque'], ['list', 'list'], ['array', 'array'],
+          ['algorithm', 'algorithm'], ['numeric', 'numeric'], ['functional', 'functional'],
+          ['memory', 'memory'], ['thread', 'thread'], ['mutex', 'mutex'],
+          ['condition_variable', 'condition_variable'], ['atomic', 'atomic'], ['future', 'future'],
+          ['chrono', 'chrono'], ['utility', 'utility'], ['tuple', 'tuple'], ['optional', 'optional'],
+          ['filesystem', 'filesystem'], ['sstream', 'sstream'], ['cstdint', 'cstdint'], ['cmath', 'cmath']] }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '包含标准库头文件' },
+    { type: 'cpp_container', message0: '容器 %1 %2', args0: [
+        { type: 'field_dropdown', name: 'TYPE', options: [
+          ['vector<int>', 'vector<int>'], ['vector<double>', 'vector<double>'],
+          ['vector<string>', 'vector<string>'], ['vector<uint8_t>', 'vector<uint8_t>'],
+          ['map<string,int>', 'map<string,int>'], ['unordered_map<string,int>', 'unordered_map<string,int>'],
+          ['unordered_map<int,int>', 'unordered_map<int,int>'], ['set<int>', 'set<int>'],
+          ['unordered_set<int>', 'unordered_set<int>'], ['queue<int>', 'queue<int>'],
+          ['stack<int>', 'stack<int>'], ['deque<int>', 'deque<int>'], ['pair<int,int>', 'pair<int,int>']] },
+        { type: 'field_input', name: 'NAME', text: 'v' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '声明一个 STL 容器' },
+    { type: 'cpp_method', message0: '%1 . %2 ( %3 )', args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_dropdown', name: 'METHOD', options: [
+          ['push_back', 'push_back'], ['pop_back', 'pop_back'], ['emplace_back', 'emplace_back'],
+          ['insert', 'insert'], ['erase', 'erase'], ['clear', 'clear'], ['resize', 'resize'],
+          ['reserve', 'reserve'], ['front', 'front'], ['back', 'back'], ['empty', 'empty'],
+          ['size', 'size'], ['at', 'at'], ['count', 'count'], ['find', 'find'],
+          ['begin', 'begin'], ['end', 'end'], ['push', 'push'], ['pop', 'pop'], ['top', 'top'],
+          ['first', 'first'], ['second', 'second']] },
+        { type: 'input_value', name: 'ARG' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '调用容器/对象的方法' },
+    { type: 'cpp_algo', message0: '%1 ( %2 )', args0: [
+        { type: 'field_dropdown', name: 'ALGO', options: [
+          ['sort', 'sort'], ['stable_sort', 'stable_sort'], ['reverse', 'reverse'],
+          ['unique', 'unique'], ['for_each', 'for_each'], ['count', 'count'],
+          ['count_if', 'count_if'], ['find', 'find'], ['find_if', 'find_if'],
+          ['min_element', 'min_element'], ['max_element', 'max_element'],
+          ['accumulate', 'accumulate'], ['lower_bound', 'lower_bound'],
+          ['upper_bound', 'upper_bound'], ['all_of', 'all_of'], ['any_of', 'any_of'],
+          ['none_of', 'none_of'], ['copy', 'copy'], ['fill', 'fill']] },
+        { type: 'input_value', name: 'ARGS' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '调用 STL 算法（参数如 v.begin(), v.end()）' },
+    { type: 'cpp_range_for', message0: '遍历 %1 的元素 %2', args0: [
+        { type: 'input_value', name: 'OBJ' }, { type: 'field_input', name: 'VAR', text: 'x' }],
+      message1: '做 %1', args1: [{ type: 'input_statement', name: 'DO' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: 'C++11 范围 for：for (auto &x : v) { ... }' },
+    { type: 'cpp_lambda', message0: 'lambda [捕获 %1] ( %2 ) -> %3 { %4 }', args0: [
+        { type: 'field_input', name: 'CAP', text: '&' }, { type: 'field_input', name: 'PARAMS', text: 'int x' },
+        { type: 'field_input', name: 'RET', text: 'void' }, { type: 'field_input', name: 'BODY', text: '// 实现' }],
+      output: null, colour: BP_COLOR.cpp, tooltip: 'lambda 表达式' },
+    /* 多线程 */
+    { type: 'cpp_thread', message0: '启动线程 %1 执行 %2 ( %3 )', args0: [
+        { type: 'field_input', name: 'NAME', text: 't' }, { type: 'input_value', name: 'FN' },
+        { type: 'input_value', name: 'ARGS' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: 'std::thread t(fn, args...)' },
+    { type: 'cpp_thread_op', message0: '%1 . %2 ( )', args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_dropdown', name: 'OP', options: [
+          ['join', 'join'], ['detach', 'detach'], ['get', 'get'], ['wait', 'wait'],
+          ['lock', 'lock'], ['unlock', 'unlock'], ['notify_one', 'notify_one'], ['notify_all', 'notify_all'],
+          ['load', 'load'], ['store', 'store'], ['valid', 'valid']] }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '线程 / future / mutex / atomic 的常用操作' },
+    { type: 'cpp_mutex', message0: '互斥量 %1 %2', args0: [
+        { type: 'field_dropdown', name: 'KIND', options: [
+          ['std::mutex', 'std::mutex'], ['std::recursive_mutex', 'std::recursive_mutex'],
+          ['std::shared_mutex', 'std::shared_mutex'], ['std::condition_variable', 'std::condition_variable']] },
+        { type: 'field_input', name: 'NAME', text: 'mtx' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '声明互斥量 / 条件变量' },
+    { type: 'cpp_lock', message0: '自动加锁 %1 ( %2 )', args0: [
+        { type: 'field_dropdown', name: 'KIND', options: [
+          ['std::lock_guard<std::mutex>', 'std::lock_guard<std::mutex>'],
+          ['std::unique_lock<std::mutex>', 'std::unique_lock<std::mutex>'],
+          ['std::scoped_lock', 'std::scoped_lock'], ['std::shared_lock', 'std::shared_lock']] },
+        { type: 'input_value', name: 'MTX' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread,
+      tooltip: 'RAII 自动加锁：出作用域自动解锁，别手动 lock/unlock' },
+    { type: 'cpp_atomic', message0: '原子量 %1 <%2> %3', args0: [
+        { type: 'field_dropdown', name: 'KIND', options: [
+          ['std::atomic', 'std::atomic'], ['std::atomic_flag', 'std::atomic_flag']] },
+        { type: 'field_input', name: 'TYPE', text: 'int' }, { type: 'field_input', name: 'NAME', text: 'n' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '原子变量' },
+    { type: 'cpp_sleep', message0: '等待 %1 %2', args0: [
+        { type: 'field_number', name: 'N', value: 100 },
+        { type: 'field_dropdown', name: 'UNIT', options: [
+          ['毫秒', 'ms'], ['微秒', 'us'], ['秒', 's']] }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread,
+      tooltip: 'std::this_thread::sleep_for' },
+    { type: 'cpp_async', message0: '异步任务 %1 执行 %2', args0: [
+        { type: 'field_input', name: 'NAME', text: 'fut' }, { type: 'input_value', name: 'FN' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: 'auto fut = std::async(fn)' },
+    /* 智能指针 */
+    { type: 'cpp_smart', message0: '智能指针 %1 <%2> %3 ( %4 )', args0: [
+        { type: 'field_dropdown', name: 'KIND', options: [
+          ['std::make_shared', 'std::make_shared'], ['std::make_unique', 'std::make_unique'],
+          ['std::shared_ptr', 'std::shared_ptr'], ['std::unique_ptr', 'std::unique_ptr'],
+          ['std::weak_ptr', 'std::weak_ptr']] },
+        { type: 'field_input', name: 'TYPE', text: 'MyClass' },
+        { type: 'field_input', name: 'NAME', text: 'p' }, { type: 'input_value', name: 'ARGS' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.smart,
+      tooltip: 'make_shared / make_unique 生成：auto p = ...<T>(args)' },
+    /* IO / 字符串 */
+    { type: 'cpp_out', message0: '输出 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.io,
+      tooltip: 'std::cout << 值 << std::endl;' },
+    { type: 'cpp_in', message0: '输入到 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.io, tooltip: 'std::cin >> 值;' },
+    { type: 'cpp_string', message0: '字符串 %1 = %2', args0: [
+        { type: 'field_input', name: 'NAME', text: 's' }, { type: 'field_input', name: 'VALUE', text: '"hello"' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.io, tooltip: 'std::string s = "..."' },
   ]);
   BP_READY = true;
 }
@@ -13625,6 +13740,21 @@ function bpToolbox() {
       { kind: 'block', type: 'c_cast' }, { kind: 'block', type: 'c_null' } ] },
     { kind: 'category', name: '表达式', colour: BP_COLOR.op, contents: [
       { kind: 'block', type: 'c_expr' }, { kind: 'block', type: 'c_num' }, { kind: 'block', type: 'c_text' } ] },
+    { kind: 'category', name: 'C++ 容器', colour: BP_COLOR.cpp, contents: [
+      { kind: 'block', type: 'cpp_include' }, { kind: 'block', type: 'cpp_container' },
+      { kind: 'block', type: 'cpp_string' }, { kind: 'block', type: 'cpp_method' },
+      { kind: 'block', type: 'cpp_range_for' }, { kind: 'block', type: 'cpp_lambda' } ] },
+    { kind: 'category', name: 'STL 算法', colour: BP_COLOR.cpp, contents: [
+      { kind: 'block', type: 'cpp_algo' } ] },
+    { kind: 'category', name: '多线程', colour: BP_COLOR.thread, contents: [
+      { kind: 'block', type: 'cpp_thread' }, { kind: 'block', type: 'cpp_thread_op' },
+      { kind: 'block', type: 'cpp_mutex' }, { kind: 'block', type: 'cpp_lock' },
+      { kind: 'block', type: 'cpp_atomic' }, { kind: 'block', type: 'cpp_sleep' },
+      { kind: 'block', type: 'cpp_async' } ] },
+    { kind: 'category', name: '智能指针', colour: BP_COLOR.smart, contents: [
+      { kind: 'block', type: 'cpp_smart' } ] },
+    { kind: 'category', name: '输入输出', colour: BP_COLOR.io, contents: [
+      { kind: 'block', type: 'cpp_out' }, { kind: 'block', type: 'cpp_in' } ] },
     { kind: 'category', name: '原样代码', colour: BP_COLOR.raw, contents: [
       { kind: 'block', type: 'c_raw' }, { kind: 'block', type: 'c_comment' } ] },
   ] };
@@ -13917,6 +14047,64 @@ function emitOne(b, indent) {
     case 'c_break': return pad + 'break;\n';
     case 'c_continue': return pad + 'continue;\n';
     case 'c_comment': return pad + '// ' + f('TEXT') + '\n';
+    /* ── C++ 常用 ── */
+    case 'cpp_include': return pad + '#include <' + f('HEADER') + '>\n';
+    case 'cpp_container': return pad + f('TYPE') + ' ' + f('NAME') + ';\n';
+    case 'cpp_string': return pad + 'std::string ' + f('NAME') + ' = ' + f('VALUE') + ';\n';
+    case 'cpp_method': {
+      const obj = b.getInputTargetBlock('OBJ');
+      const objCode = obj ? emitChain(obj, 0).trim() : '';
+      const arg = b.getInputTargetBlock('ARG');
+      const argCode = arg ? emitChain(arg, 0).trim() : '';
+      return pad + (objCode || 'obj') + '.' + f('METHOD') + '(' + argCode + ');\n';
+    }
+    case 'cpp_algo': {
+      const a = b.getInputTargetBlock('ARGS');
+      const aCode = a ? emitChain(a, 0).trim() : '';
+      return pad + 'std::' + f('ALGO') + '(' + aCode + ');\n';
+    }
+    case 'cpp_range_for': {
+      const obj = b.getInputTargetBlock('OBJ');
+      const objCode = obj ? emitChain(obj, 0).trim() : '';
+      return pad + 'for (auto &' + f('VAR') + ' : ' + (objCode || 'v') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
+    }
+    case 'cpp_lambda': return '[' + f('CAP') + '](' + f('PARAMS') + ') -> ' + f('RET') + ' { ' + f('BODY') + ' }';
+    case 'cpp_thread': {
+      const fn = b.getInputTargetBlock('FN');
+      const fnCode = fn ? emitChain(fn, 0).trim() : '';
+      const args = b.getInputTargetBlock('ARGS');
+      const argsCode = args ? emitChain(args, 0).trim() : '';
+      return pad + 'std::thread ' + f('NAME') + '(' + (fnCode || 'fn') + (argsCode ? ', ' + argsCode : '') + ');\n';
+    }
+    case 'cpp_thread_op': {
+      const obj = b.getInputTargetBlock('OBJ');
+      const objCode = obj ? emitChain(obj, 0).trim() : '';
+      return pad + (objCode || 'obj') + '.' + f('OP') + '();\n';
+    }
+    case 'cpp_mutex': return pad + f('KIND') + ' ' + f('NAME') + ';\n';
+    case 'cpp_lock': {
+      const mtx = b.getInputTargetBlock('MTX');
+      const mtxCode = mtx ? emitChain(mtx, 0).trim() : '';
+      return pad + f('KIND') + ' lk(' + (mtxCode || 'mtx') + ');\n';
+    }
+    case 'cpp_atomic': return pad + f('KIND') + '<' + f('TYPE') + '> ' + f('NAME') + ';\n';
+    case 'cpp_sleep': return pad + 'std::this_thread::sleep_for(std::chrono::' + f('UNIT') + '(' + f('N') + '));\n';
+    case 'cpp_async': {
+      const fn = b.getInputTargetBlock('FN');
+      const fnCode = fn ? emitChain(fn, 0).trim() : '';
+      return pad + 'auto ' + f('NAME') + ' = std::async(' + (fnCode || 'fn') + ');\n';
+    }
+    case 'cpp_smart': {
+      const args = b.getInputTargetBlock('ARGS');
+      const argsCode = args ? emitChain(args, 0).trim() : '';
+      const kind = f('KIND');
+      const isMake = kind.indexOf('make_') >= 0;
+      const head = isMake ? ('auto ' + f('NAME') + ' = ') : (kind + '<' + f('TYPE') + '> ' + f('NAME'));
+      const tail = isMake ? (kind + '<' + f('TYPE') + '>(' + argsCode + ')') : (argsCode ? ('(' + argsCode + ')') : '');
+      return pad + head + tail + ';\n';
+    }
+    case 'cpp_out': return pad + 'std::cout << ' + bpValue(b, 'VALUE', '""') + ' << std::endl;\n';
+    case 'cpp_in': return pad + 'std::cin >> ' + bpValue(b, 'VALUE', 'x') + ';\n';
     default: return pad + '/* 未知积木 ' + b.type + ' */\n';
   }
 }
