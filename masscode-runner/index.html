@@ -322,6 +322,13 @@
   #bp-inner-split:hover::after, #bp-inner-split.active::after { background: var(--accent); width: 2px; }
   #bp-inner-split:hover::before, #bp-inner-split.active::before { opacity: 1; }
   #bp-workspace { flex: 1.6; min-width: 0; height: 100%; }
+  #bp-code .bpc-kw { color: #ff7b72; }
+  #bp-code .bpc-type { color: #79c0ff; }
+  #bp-code .bpc-str { color: #a5d6ff; }
+  #bp-code .bpc-num { color: #79c0ff; }
+  #bp-code .bpc-fn { color: #d2a8ff; }
+  #bp-code .bpc-cm { color: #6b7684; font-style: italic; }
+  #bp-code .bpc-pre { color: #ffa657; }
   #bp-code { flex: 1; min-width: 0; margin: 0; padding: 10px 12px; overflow: auto;
     background: #0f151d; color: var(--fg);
     font-family: var(--mono,ui-monospace,Menlo,monospace); font-size: 11.5px; line-height: 1.7; white-space: pre; }
@@ -13406,9 +13413,49 @@ let BP_LOADING = null;
 let BP_SEQ = 0;
 let BP_LAST_CODE = '';
 let BP_ORIG_COUNT = 0;
+let BP_BUILDING = false;   /* 程序化重建积木期间，别让 change 监听重绘代码面板 */
 let BP_READY = false;
 let BP_FUNCS = [];   /* 当前文档里的函数名，给调用积木的下拉用 */
 
+/* 当前文档（**所有片段**）里的符号，按类型分组。
+   直接复用应用已有的 buildCompIndex() —— 它就是遍历 CURRENT.fragments 里每个片段
+   调 scanSyms 建的索引（struct/typedef/enum/macro/var/function 都有），
+   不用另写一套扫描。 */
+function bpDocSymbols() {
+  const out = { fn: [], struct: [], typedef: [], enum: [], macro: [], var: [] };
+  try {
+    const idx = buildCompIndex();
+    idx.forEach((kind, name) => {
+      const key = kind === 'function' ? 'fn'
+        : (kind === 'union' || kind === 'class') ? 'struct'
+        : (out[kind] ? kind : null);
+      if (key && out[key] && out[key].length < 80) out[key].push(name);
+    });
+  } catch (_) {}
+  Object.keys(out).forEach((k) => out[k].sort());
+  return out;
+}
+/* 变量/常量/宏 的下拉（值积木用） */
+function bpValueOptions() {
+  const s = bpDocSymbols();
+  const opts = [];
+  s.macro.slice(0, 40).forEach((n) => opts.push([n, n]));
+  s.var.slice(0, 40).forEach((n) => opts.push([n, n]));
+  s.enum.slice(0, 20).forEach((n) => opts.push([n, n]));
+  if (!opts.length) opts.push(['（文档里没识别到变量/宏）', '']);
+  opts.push(['其他…', '__other__']);
+  return opts;
+}
+/* 类型下拉（类型转换用）：文档里的 typedef/struct 优先 */
+function bpTypeOptions() {
+  const s = bpDocSymbols();
+  const opts = [];
+  s.typedef.slice(0, 30).forEach((n) => opts.push([n, n]));
+  s.struct.slice(0, 20).forEach((n) => opts.push([n + ' *', n + ' *']));
+  [['int', 'int'], ['uint8_t', 'uint8_t'], ['uint16_t', 'uint16_t'], ['uint32_t', 'uint32_t'],
+   ['float', 'float'], ['char *', 'char *'], ['void *', 'void *']].forEach((p) => opts.push(p));
+  return opts;
+}
 /* 从文档拉函数列表（走已有的文档级图谱接口，不用新接口） */
 function loadDocFunctions() {
   if (!CURRENT || !CURRENT.file) return Promise.resolve([]);
@@ -13524,11 +13571,13 @@ function defineCBlocks() {
         { type: 'field_input', name: 'NAME', text: 'status' }],
       output: null, colour: BP_COLOR.op, tooltip: '结构体成员访问' },
     { type: 'c_cast', message0: '( %1 ) %2', args0: [
-        { type: 'field_dropdown', name: 'TYPE', options: [['int', 'int'], ['uint8_t', 'uint8_t'], ['uint16_t', 'uint16_t'],
-          ['uint32_t', 'uint32_t'], ['float', 'float'], ['char *', 'char *'], ['void *', 'void *'],
-          ['led_t *', 'led_t *'], ['uint8_t *', 'uint8_t *']] },
+        { type: 'field_dropdown', name: 'TYPE', options: function () { return bpTypeOptions(); } },
         { type: 'input_value', name: 'A' }],
-      output: null, colour: BP_COLOR.op, tooltip: '类型转换' },
+      output: null, colour: BP_COLOR.op, tooltip: '类型转换（下拉里含文档里识别到的 typedef / struct）' },
+    { type: 'c_var', message0: '%1', args0: [
+        { type: 'field_dropdown', name: 'NAME', options: function () { return bpValueOptions(); } }],
+      output: null, colour: BP_COLOR.var,
+      tooltip: '当前文档（所有片段）里识别到的变量 / 常量 / 宏；想手填就用「表达式」积木' },
     { type: 'c_null', message0: 'NULL', output: null, colour: BP_COLOR.op, tooltip: '空指针常量' },
     { type: 'c_break', message0: '跳出循环', previousStatement: null, nextStatement: null,
       colour: BP_COLOR.control, tooltip: 'break' },
@@ -13549,7 +13598,8 @@ function bpToolbox() {
       { kind: 'block', type: 'c_break' }, { kind: 'block', type: 'c_continue' },
       { kind: 'block', type: 'c_return' } ] },
     { kind: 'category', name: '变量', colour: BP_COLOR.var, contents: [
-      { kind: 'block', type: 'c_set' }, { kind: 'block', type: 'c_declare' } ] },
+      { kind: 'block', type: 'c_set' }, { kind: 'block', type: 'c_declare' },
+      { kind: 'block', type: 'c_var' } ] },
     { kind: 'category', name: '函数', colour: BP_COLOR.func, contents: [
       { kind: 'block', type: 'c_fn' }, { kind: 'block', type: 'c_call' }, { kind: 'block', type: 'c_call_any' } ] },
     { kind: 'category', name: '运算', colour: BP_COLOR.op, contents: [
@@ -13794,6 +13844,7 @@ function emitOne(b, indent) {
     case 'c_member': return bpValue(b, 'OBJ', '0') + f('OP') + f('NAME');
     case 'c_cast': return '(' + f('TYPE') + ')' + bpValue(b, 'A', '0');
     case 'c_null': return 'NULL';
+    case 'c_var': return f('NAME');
     case 'c_break': return pad + 'break;\n';
     case 'c_continue': return pad + 'continue;\n';
     case 'c_comment': return pad + '// ' + f('TEXT') + '\n';
@@ -13812,6 +13863,43 @@ function blockJsonToCode() {
   if (!BP_WORKSPACE) return '';
   const tops = BP_WORKSPACE.getTopBlocks(true);
   return tops.map((t) => emitChain(t, 0)).join('\n').trim();
+}
+
+/* ── 生成代码的语法高亮 ──
+   自己写一个小的 C 高亮器，不引外部依赖。
+   做法：先按 token 切分，**每个 token 单独转义**再包 span ——
+   顺序不能反（先整体转义会把 `<` 变成实体，正则就切不准了）。 */
+const BP_KW = new Set(['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break',
+  'continue', 'return', 'goto', 'sizeof', 'typedef', 'struct', 'union', 'enum', 'static', 'extern',
+  'const', 'volatile', 'register', 'inline', 'unsigned', 'signed', 'void', 'restrict']);
+const BP_TYPE = new Set(['int', 'char', 'short', 'long', 'float', 'double', 'bool', 'uint8_t', 'uint16_t',
+  'uint32_t', 'uint64_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t', 'size_t', 'ssize_t', 'NULL',
+  'true', 'false', 'uintptr_t', 'intptr_t', 'wchar_t']);
+const BP_CONST = new Set(['NULL', 'true', 'false']);
+function bpHighlight(code) {
+  const esc = (s) => escapeHtml(String(s));
+  const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(^[ \t]*#[^\n]*)|(\b0[xX][0-9a-fA-F]+\b|\b\d+(?:\.\d+)?[uUlLfF]*\b)|([A-Za-z_]\w*)(?=\s*\()|([A-Za-z_]\w*)|(\s+)|([\s\S])/gm;
+  let out = '', m;
+  while ((m = re.exec(code)) !== null) {
+    if (m[1]) out += '<span class="bpc-cm">' + esc(m[1]) + '</span>';
+    else if (m[2]) out += '<span class="bpc-str">' + esc(m[2]) + '</span>';
+    else if (m[3]) out += '<span class="bpc-pre">' + esc(m[3]) + '</span>';
+    else if (m[4]) out += '<span class="bpc-num">' + esc(m[4]) + '</span>';
+    else if (m[5]) out += '<span class="bpc-fn">' + esc(m[5]) + '</span>';
+    else if (m[6]) {
+      const w = m[6];
+      const cls = BP_KW.has(w) ? 'bpc-kw' : (BP_CONST.has(w) ? 'bpc-num' : (BP_TYPE.has(w) ? 'bpc-type' : ''));
+      out += cls ? '<span class="' + cls + '">' + esc(w) + '</span>' : esc(w);
+    } else out += esc(m[7] || m[8] || '');
+  }
+  return out;
+}
+/* 统一的"把代码放进面板"入口 —— 别处不要再直接 textContent = code */
+function bpPaintCode(code) {
+  const pre = $('bp-code');
+  if (!pre) return;
+  if (!code) { pre.textContent = '（工作区是空的）'; return; }
+  pre.innerHTML = bpHighlight(code);
 }
 
 /* 通知 Blockly 重算画布尺寸。容器（积木栏 / 工作区）尺寸一变就得调一次，
@@ -13866,8 +13954,11 @@ function renderBlockPane() {
       });
       BP_WORKSPACE.addChangeListener(() => {
         if (!BP_ACTIVE) return;
+        /* 程序化重建期间不重绘 —— 否则会抓到"建到一半"的状态，
+           面板里留下旧代码（实测：积木写着 a*b、右边却显示 a+b） */
+        if (BP_BUILDING) return;
         const code = blockJsonToCode();
-        if (code !== BP_LAST_CODE) { BP_LAST_CODE = code; if (body) body.textContent = code || '（工作区是空的）'; }
+        if (code !== BP_LAST_CODE) { BP_LAST_CODE = code; bpPaintCode(code); }
       });
     }
     syncBlocksFromCode();
@@ -13887,6 +13978,7 @@ function syncBlocksFromCode() {
   }).then((r) => r.json()).then((graph) => {
     if (seq !== BP_SEQ || !graph || !graph.ok) throw new Error((graph && graph.error) || '解析失败');
     BP_WORKSPACE.clear();
+    BP_BUILDING = true;
     const count = buildBlocksFromGraph(BP_WORKSPACE, graph);
     /* 建完必须渲染：newBlock 出来的是"无头"块，不 initSvg/render 界面上是空的 */
     BP_WORKSPACE.getAllBlocks(false).forEach((b) => {
@@ -13894,6 +13986,7 @@ function syncBlocksFromCode() {
     });
     BP_WORKSPACE.cleanUp();
     try { BP_WORKSPACE.scrollCenter(); } catch (_) {}
+    BP_BUILDING = false;
     const code = blockJsonToCode();
     BP_LAST_CODE = code;
     if (body) body.textContent = code || '（工作区是空的）';
@@ -13928,7 +14021,7 @@ function wireBlocklyToolbar() {
   if ($('bp-sync')) $('bp-sync').onclick = () => syncBlocksFromCode();
   if ($('bp-gen')) $('bp-gen').onclick = () => {
     const code = blockJsonToCode();
-    if ($('bp-code')) $('bp-code').textContent = code || '（工作区是空的）';
+    bpPaintCode(code);
     /* 生成后自检：把代码再解析一遍，和原始语句数对比 */
     bpConsistencyCheck(BP_ORIG_COUNT).then((res) => {
       if (res.ok) setStatus('ok', '已生成代码 ✓ 自检通过（' + res.generated + ' 条语句，与原函数一致）');
