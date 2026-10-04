@@ -2483,6 +2483,22 @@
   .rel-map-summary .stat.in b { color:var(--accent); }
   .rel-map-summary .stat.out b { color:var(--ok); }
   .rel-section { padding:8px 9px 4px; color:var(--dim); font-size:10px; font-weight:600; }
+  /* 逻辑图：一行一个语句节点，缩进 = 花括号嵌套深度 */
+  .logic-graph { display:flex; flex-direction:column; }
+  .logic-list { display:flex; flex-direction:column; padding:2px 0 6px; }
+  .logic-row { display:flex; align-items:baseline; gap:6px; padding:4px 9px 4px 6px; cursor:pointer;
+    font-size:11px; line-height:1.5; border-left:2px solid transparent; }
+  .logic-row:hover { background:rgba(79,140,255,.10); border-left-color:var(--accent); }
+  .logic-icon { flex:0 0 auto; width:12px; text-align:center; color:var(--dim); }
+  .logic-label { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace); }
+  .logic-line { flex:0 0 auto; color:var(--dim); font-size:10px; }
+  .logic-row.k-branch .logic-icon { color:#e5b567; }
+  .logic-row.k-branch .logic-label { color:#e5b567; }
+  .logic-row.k-loop .logic-icon { color:#7fb3ff; }
+  .logic-row.k-loop .logic-label { color:#7fb3ff; }
+  .logic-row.k-return .logic-icon { color:#8fd694; }
+  .logic-row.k-call .logic-label { color:var(--fg); }
   .rel-row { display:grid; grid-template-columns:14px 15px minmax(0,1fr) auto; align-items:center; gap:5px; min-height:27px; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px; }
   .rel-row:hover { background:var(--panel2); }
   .rel-row.root { background:rgba(79,140,255,.12); outline:1px solid rgba(79,140,255,.3); }
@@ -11582,6 +11598,82 @@ function renderFileGraph(body, root) {
   return incoming.length + outgoing.length;
 }
 function renderRelationPane() { return renderPanelInto('relation', () => withActiveSplitContext(renderRelationPaneContent)); }
+
+/* ── 逻辑图：当前函数的语句级控制流（服务端 /api/logic/graph）──
+   后端把函数体解析成「语句节点 + 控制边」（entry / branch / loop / return / call / exit），
+   这里只负责画出来 + 导出。入口是关系面板的「⇉ 逻辑图」。
+   请求带 {file, fragment, line}：服务端按行号自己定位到那个函数，前端不用传代码。 */
+let LOGIC_GRAPH_SEQ = 0;
+function renderLogicGraphPane(body, root) {
+  const seq = ++LOGIC_GRAPH_SEQ;
+  const host = document.createElement('div'); host.className = 'logic-graph';
+  host.innerHTML = '<span class="ol-empty">正在生成逻辑图…</span>';
+  body.appendChild(host);
+  paneCount('…');
+  const request = (extra) => fetch('/api/logic/graph', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ file: CURRENT.file, fragment: CINDEX, line: root.line, name: root.name }, extra || {}))
+  }).then((response) => response.json());
+  request().then((payload) => {
+    if (seq !== LOGIC_GRAPH_SEQ) return;          /* 期间又切了视图，丢掉这次结果 */
+    if (!payload || !payload.ok) {
+      host.innerHTML = '<span class="ol-empty">逻辑图生成失败：' + escapeHtml((payload && payload.error) || '未知错误') + '</span>';
+      paneCount(''); return;
+    }
+    const nodes = (payload.nodes || []).filter((node) => node.kind !== 'entry' && node.kind !== 'exit');
+    host.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'rel-section';
+    head.textContent = '逻辑图 · ' + (payload.name || root.name) + ' · ' + nodes.length + ' 个节点';
+    host.appendChild(head);
+    if (!nodes.length) { host.insertAdjacentHTML('beforeend', '<span class="ol-empty">这个函数体里没有可分析的语句</span>'); paneCount('0 个节点'); return; }
+    const list = document.createElement('div'); list.className = 'logic-list';
+    const ICON = { branch: '◆', loop: '↻', return: '⏎', call: 'ƒ', stmt: '·' };
+    nodes.forEach((node) => {
+      const row = document.createElement('div');
+      row.className = 'logic-row k-' + node.kind;
+      row.style.paddingLeft = (6 + Math.min(8, Number(node.indent) || 0) * 13) + 'px';
+      row.innerHTML = '<span class="logic-icon">' + (ICON[node.kind] || '·') + '</span>' +
+        '<span class="logic-label">' + escapeHtml(node.label) + '</span>' +
+        '<span class="logic-line">L' + node.line + '</span>';
+      row.title = node.kind + ' · 第 ' + node.line + ' 行 · 点击跳到该行';
+      row.onclick = () => { try { goToLocation({ snippet: CURRENT, frag: CINDEX, line: node.line || 1 }); } catch (_) {} };
+      list.appendChild(row);
+    });
+    host.appendChild(list);
+    const actions = document.createElement('div'); actions.className = 'rel-tools';
+    relationButton(actions, '⤓ 导出 drawio', false, () => {
+      request({ format: 'drawio' }).then((out) => {
+        if (!out || !out.ok || !out.xml) { setStatus('err', '导出失败：' + ((out && out.error) || '没有拿到 xml')); return; }
+        const blob = new Blob([out.xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url; link.download = (out.name || root.name || 'logic') + '.drawio';
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        setStatus('ok', '已导出 ' + link.download);
+      }).catch((error) => setStatus('err', '导出失败：' + String(error.message || error)));
+    });
+    relationButton(actions, '⧉ 复制骨架', false, () => {
+      fetch('/api/logic/skeleton', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graph: { nodes: payload.nodes, edges: payload.edges }, language: payload.language || 'c_cpp', fnName: payload.name || root.name || 'generated' })
+      }).then((response) => response.json()).then((out) => {
+        if (!out || !out.ok) { setStatus('err', '生成骨架失败：' + ((out && out.error) || '未知错误')); return; }
+        const text = out.code || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => setStatus('ok', '骨架已复制到剪贴板')).catch(() => setStatus('ok', '骨架已生成（复制被浏览器拒绝，见控制台）'));
+        }
+        try { console.log('[CodeScope] 逻辑骨架：\n' + text); } catch (_) {}
+      }).catch((error) => setStatus('err', '生成骨架失败：' + String(error.message || error)));
+    });
+    host.appendChild(actions);
+    paneCount(nodes.length + ' 个节点');
+  }).catch((error) => {
+    if (seq !== LOGIC_GRAPH_SEQ) return;
+    host.innerHTML = '<span class="ol-empty">逻辑图生成失败：' + escapeHtml(String(error.message || error)) + '</span>';
+    paneCount('');
+  });
+}
 function renderRelationPaneContent() {
   const body = bodyEl(); body.innerHTML = '';
   paneTitleText(REL_LAYOUT === 'graph' ? '🌳 关系图' : '🌳 关系树');
@@ -11589,6 +11681,9 @@ function renderRelationPaneContent() {
   const tools = document.createElement('div'); tools.className = 'rel-tools'; body.appendChild(tools);
   relationButton(tools, 'ƒ 调用关系', REL_VIEW === 'calls', () => { REL_VIEW = 'calls'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '▤ 文件依赖', REL_VIEW === 'files', () => { REL_VIEW = 'files'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
+  /* 逻辑图：把当前函数的语句级控制流（if/for/while 的嵌套）画出来。
+     后端 /api/logic/graph 早就写好了，但一直没有前端入口 —— 等于没有这个功能。 */
+  relationButton(tools, '⇉ 逻辑图', REL_VIEW === 'logic', () => { REL_VIEW = 'logic'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '◫ 图形', REL_LAYOUT === 'graph', () => { REL_LAYOUT = 'graph'; try { localStorage.setItem('mc-rel-layout', REL_LAYOUT); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '☷ 树形', REL_LAYOUT === 'tree', () => { REL_LAYOUT = 'tree'; try { localStorage.setItem('mc-rel-layout', REL_LAYOUT); } catch (_) {} renderRelationPane(); });
   const divider = document.createElement('span'); divider.style.flexBasis = '100%'; tools.appendChild(divider);
@@ -11598,7 +11693,12 @@ function renderRelationPaneContent() {
   const tip = document.createElement('div'); tip.className = 'rel-tip';
   tip.textContent = REL_LAYOUT === 'graph' ? '箭头表示调用/依赖方向 · 点击节点切换关系中心' : '▸ 展开节点 · 点击跳转 · 双击函数设为根节点'; body.appendChild(tip);
 
-  if (REL_VIEW === 'calls') {
+  if (REL_VIEW === 'logic') {
+    const root = REL_ROOT && REL_ROOT.kind === 'fn' ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
+    if (!root) { body.insertAdjacentHTML('beforeend', '<span class="ol-empty">当前文件没有可用的函数定义；先点击代码中的函数名</span>'); paneCount('无根函数'); return; }
+    REL_ROOT = root;
+    renderLogicGraphPane(body, root);
+  } else if (REL_VIEW === 'calls') {
     let root = REL_ROOT && REL_ROOT.kind === 'fn' ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
     if (!root) { body.insertAdjacentHTML('beforeend', '<span class="ol-empty">当前文件没有可用的函数定义；先点击代码中的函数名</span>'); paneCount('无根函数'); return; }
     REL_ROOT = root;
