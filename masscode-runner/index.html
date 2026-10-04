@@ -257,6 +257,27 @@
   #cg-body .node.doc-node-clickable:hover polygon,
   #cg-body .node.doc-node-clickable:hover path { stroke: var(--accent,#4f8cff) !important; stroke-width: 2px !important; }
   #cg-body .cluster { cursor: pointer; }
+  /* 逻辑图右栏：和 cg-canvas 同款 */
+  #lg-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
+  #lg-split-v.on { display: block; }
+  #lg-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
+  #lg-split-v:hover::after, #lg-split-v.active::after { background: var(--accent); }
+  #lg-canvas { flex: 1.05; min-width: 0; display: none; flex-direction: column; position: relative;
+    margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; }
+  #lg-canvas.on { display: flex; }
+  #lg-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); flex-wrap: wrap; }
+  #lg-toolbar .sp { flex: 1 1 auto; }
+  #lg-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; }
+  #lg-toolbar button.on { color: var(--accent); border-color: var(--accent); background: rgba(79,140,255,.12); }
+  #lg-title { font-weight: 600; color: var(--fg); }
+  #lg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 10px 14px; }
+  #lg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  #lg-code { border-top: 1px solid var(--border); max-height: 40%; overflow: auto; padding: 8px 10px; }
+  #lg-code pre { margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: #0f151d; font-size: 11px; line-height: 1.5; font-family: var(--mono,ui-monospace,Menlo,monospace);
+    white-space: pre; overflow: auto; }
   #mm-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
   #mm-toolbar button { font-size: 12px; padding: 3px 10px; }
   #mm-zoom-lbl { font-size: 12px; color: var(--dim); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -3613,11 +3634,13 @@
     #toolbar .sp { min-width:0; }
     #toolbar::-webkit-scrollbar { display:none; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
+    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-logicgraph, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
     #btn-outline::before { content:'≡'; font-size:16px; }
     #btn-mindmap::before { content:'◇'; font-size:15px; }
     #btn-codegraph::before { content:'🕸'; font-size:14px; }
+    #btn-logicgraph::before { content:'⇉'; font-size:15px; }
+    #btn-logicgraph.on { color:var(--accent); border-color:var(--accent); background:rgba(79,140,255,.12); }
     #btn-codegraph.on { color:var(--accent); border-color:var(--accent); background:rgba(79,140,255,.12); }
     #btn-history::before { content:'↶'; font-size:15px; }
     #btn-pair-switch::before { content:'⇄'; font-size:13px; }
@@ -4118,6 +4141,7 @@
       <button id="btn-outline" title="显示/隐藏代码大纲">大纲</button>
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
       <button id="btn-codegraph" disabled title="把整个文档的代码关系画成图谱（片段 / 函数 / 调用 / 包含）">图谱</button>
+      <button id="btn-logicgraph" disabled title="当前函数的逻辑图（可图形化编辑后生成代码）">逻辑图</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
       <button id="btn-edit" disabled>编辑</button>
       <span id="nav-notice" role="status" aria-live="polite"></span>
@@ -4235,6 +4259,24 @@
       <div id="edit-split-v" title="拖动调整编辑 / 预览宽度"></div>
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
+      <!-- 逻辑图：主区域右栏（左代码 / 右逻辑图），可图形化编辑后生成代码 -->
+      <div id="lg-split-v" title="左右拖动调整代码 / 逻辑图宽度"></div>
+      <div id="lg-canvas">
+        <div id="lg-toolbar">
+          <span id="lg-title">⇉ 逻辑图</span>
+          <span id="lg-stats"></span>
+          <span class="sp"></span>
+          <button id="lg-edit" title="图形化编辑：双击改内容、＋插入、✕删除、↑↓调序">✎ 编辑</button>
+          <button id="lg-gen" title="按当前图生成代码">↩ 生成代码</button>
+          <button id="lg-refresh" title="重新从源码解析">⟳ 刷新</button>
+          <button id="lg-zoom" title="全屏放大查看">⤢ 放大</button>
+          <button id="lg-close" title="关闭（回到纯代码）">✕</button>
+        </div>
+        <div id="lg-body">
+          <span class="ol-empty">正在生成逻辑图…</span>
+        </div>
+        <div id="lg-code" hidden></div>
+      </div>
       <!-- 代码图谱：主区域里和代码并列的右栏（左代码 / 右图谱），与 mm-canvas 同一套布局 -->
       <div id="cg-split-v" title="左右拖动调整代码 / 图谱宽度"></div>
       <div id="cg-canvas">
@@ -12234,8 +12276,11 @@ function logicEditSetLabel(id, label) {
   if (node) node.label = String(label || '').replace(/\s+/g, ' ').trim();
 }
 
-/* 可编辑的流程图：卡片上带 ＋ / ✕ / ↑ / ↓，标签可双击就地编辑 */
-function buildLogicFlowEditable(body, graph) {
+/* 可编辑的流程图：卡片上带 ＋ / ✕ / ↑ / ↓，标签可双击就地编辑。
+   rerender 传进来 —— 这个组件同时用在「关系面板的逻辑图」和「主区域右栏的逻辑图」，
+   两处的重绘入口不同，写死 renderRelationPane 会导致另一处点了没反应。 */
+function buildLogicFlowEditable(body, graph, rerender) {
+  const redraw = typeof rerender === 'function' ? rerender : () => renderRelationPane();
   if (LOGIC_FLOW_OBSERVER) { LOGIC_FLOW_OBSERVER.disconnect(); LOGIC_FLOW_OBSERVER = null; }
   const wrap = document.createElement('div'); wrap.className = 'logic-flow editing';
   const seq = ++LOGIC_GRAPH_SEQ, marker = 'logic-arrow-' + seq;
@@ -12244,7 +12289,6 @@ function buildLogicFlowEditable(body, graph) {
   svg.innerHTML = '<defs><marker id="' + marker + '" markerWidth="6" markerHeight="6" refX="5.4" refY="3" viewBox="0 0 6 6" orient="auto" markerUnits="userSpaceOnUse"><path d="M.6,.7 L5.4,3 L.6,5.3 Z" fill="var(--accent)"/></marker></defs>';
   wrap.appendChild(svg);
   const cards = new Map();
-  const rerender = () => renderRelationPane();
   const nodes = (graph.nodes || []).filter((node) => node.kind !== 'entry' && node.kind !== 'exit');
   nodes.forEach((node) => {
     const card = document.createElement('div');
@@ -12266,7 +12310,7 @@ function buildLogicFlowEditable(body, graph) {
       const done = (save) => {
         labelEl.contentEditable = 'false';
         if (save) logicEditSetLabel(node.id, labelEl.textContent);
-        rerender();
+        redraw();
       };
       labelEl.addEventListener('blur', () => done(true), { once: true });
       labelEl.addEventListener('keydown', (event) => {
@@ -12282,12 +12326,12 @@ function buildLogicFlowEditable(body, graph) {
       return b;
     };
     tools.appendChild(mkTool('＋', node.kind === 'branch' || node.kind === 'loop' ? '在它里面插入一条语句' : '在它后面插入一条语句',
-      () => { logicEditInsertAfter(node.id, 'stmt'); rerender(); }));
-    tools.appendChild(mkTool('◆', '在它后面插入一个判断', () => { logicEditInsertAfter(node.id, 'branch'); rerender(); }));
-    tools.appendChild(mkTool('↻', '在它后面插入一个循环', () => { logicEditInsertAfter(node.id, 'loop'); rerender(); }));
-    tools.appendChild(mkTool('↑', '上移', () => { logicEditMove(node.id, -1); rerender(); }));
-    tools.appendChild(mkTool('↓', '下移', () => { logicEditMove(node.id, 1); rerender(); }));
-    tools.appendChild(mkTool('✕', '删除这个节点', () => { logicEditRemove(node.id); rerender(); }));
+      () => { logicEditInsertAfter(node.id, 'stmt'); redraw(); }));
+    tools.appendChild(mkTool('◆', '在它后面插入一个判断', () => { logicEditInsertAfter(node.id, 'branch'); redraw(); }));
+    tools.appendChild(mkTool('↻', '在它后面插入一个循环', () => { logicEditInsertAfter(node.id, 'loop'); redraw(); }));
+    tools.appendChild(mkTool('↑', '上移', () => { logicEditMove(node.id, -1); redraw(); }));
+    tools.appendChild(mkTool('↓', '下移', () => { logicEditMove(node.id, 1); redraw(); }));
+    tools.appendChild(mkTool('✕', '删除这个节点', () => { logicEditRemove(node.id); redraw(); }));
     card.appendChild(icon); card.appendChild(bodyEl); card.appendChild(tools);
     wrap.appendChild(card);
     cards.set(node.id, card);
@@ -12460,6 +12504,133 @@ function wireCodeGraphToolbar() {
         .catch(() => setStatus('ok', '源码已打印到控制台'));
     }
     try { console.log('[CodeScope] 代码图谱 Mermaid 源码：\n' + CG_SOURCE); } catch (_) {}
+  };
+}
+
+/* ── 逻辑图 · 主区域右栏 ──
+   和代码并列（左代码 / 右逻辑图），工具栏一个按钮直达 ——
+   原来藏在「关系面板 → 逻辑图 → 卡片流程 → 图形化编辑」四层里，根本找不到。
+   这里同时提供「看」和「图形化编辑 → 生成代码」。 */
+let LG_ACTIVE = false;
+let LG_EDIT = null;
+let LG_GRAPH = null;
+let LG_SEQ = 0;
+function setLogicGraphActive(on) {
+  LG_ACTIVE = !!on;
+  const canvas = $('lg-canvas');
+  if (canvas) {
+    canvas.classList.toggle('on', LG_ACTIVE);
+    if (LG_ACTIVE) {
+      let w = 0;
+      try { w = parseInt(localStorage.getItem('mc-lg-w')) || 0; } catch (_) {}
+      if (w >= 260) { canvas.style.flex = 'none'; canvas.style.width = w + 'px'; }
+    }
+  }
+  const splitter = $('lg-split-v');
+  if (splitter) splitter.classList.toggle('on', LG_ACTIVE);
+  const btn = $('btn-logicgraph');
+  if (btn) btn.classList.toggle('on', LG_ACTIVE);
+  if (LG_ACTIVE) renderLogicPaneMain();
+}
+function logicPaneRoot() {
+  const current = typeof relationCurrentFunction === 'function' ? relationCurrentFunction() : null;
+  if (current) return current;
+  return REL_ROOT && REL_ROOT.kind === 'fn' ? (resolveDefinition(REL_ROOT) || REL_ROOT) : null;
+}
+function renderLogicPaneMain() {
+  const body = $('lg-body');
+  if (!body) return;
+  if (!CURRENT || !CURRENT.file) {
+    body.innerHTML = '<span class="ol-empty">先打开一个代码文档</span>';
+    if ($('lg-stats')) $('lg-stats').textContent = '';
+    return;
+  }
+  const root = logicPaneRoot();
+  if (!root) {
+    body.innerHTML = '<span class="ol-empty">先把光标放到一个函数里（或用大纲点一个函数）</span>';
+    if ($('lg-stats')) $('lg-stats').textContent = '';
+    return;
+  }
+  const seq = ++LG_SEQ;
+  body.innerHTML = '<span class="ol-empty">正在生成逻辑图…</span>';
+  if ($('lg-stats')) $('lg-stats').textContent = '…';
+  fetch('/api/logic/graph', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: CURRENT.file, fragment: CINDEX, line: root.line, name: root.name }),
+  }).then((response) => response.json()).then((graph) => {
+    if (seq !== LG_SEQ) return;
+    if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
+    LG_GRAPH = graph;
+    const count = (graph.nodes || []).filter((n) => n.kind !== 'entry' && n.kind !== 'exit').length;
+    if ($('lg-stats')) $('lg-stats').textContent = (graph.name || root.name) + ' · ' + count + ' 个节点';
+    if ($('lg-edit')) $('lg-edit').classList.toggle('on', !!LG_EDIT);
+    if (LG_EDIT) { buildLogicFlowEditable(body, LG_EDIT, renderLogicPaneMain); return null; }
+    const made = logicToMermaid(graph, root.name);
+    return ensureMermaid().then((mermaid) => {
+      mermaid.initialize({
+        startOnLoad: false, securityLevel: 'strict',
+        theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+        themeVariables: { fontSize: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+        flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 20, rankSpacing: 30, padding: 8, diagramPadding: 6 },
+      });
+      return mermaid.render('lg-' + Date.now().toString(36), made);
+    }).then((out) => {
+      if (seq !== LG_SEQ) return;
+      body.innerHTML = out && out.svg ? out.svg : '';
+      /* 点节点跳源码 */
+      body.querySelectorAll('.node').forEach((el) => {
+        const short = String(el.id || '').replace(/^flowchart-/, '').replace(/-\d+$/, '');
+        const node = (graph.nodes || []).find((n) => 'm' + String(n.id).replace(/[^A-Za-z0-9_]/g, '_') === short);
+        if (!node || node.kind === 'entry' || node.kind === 'exit') return;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => {
+          try { goToLocation({ snippet: CURRENT, frag: CINDEX, line: node.line || 1 }); setStatus('ok', '跳到第 ' + node.line + ' 行'); } catch (_) {}
+        });
+      });
+    });
+  }).catch((error) => {
+    if (seq !== LG_SEQ) return;
+    body.innerHTML = '<span class="ol-empty">逻辑图失败：' + escapeHtml(String(error.message || error)) + '</span>';
+    if ($('lg-stats')) $('lg-stats').textContent = '';
+  });
+}
+function wireLogicGraphToolbar() {
+  if ($('lg-close')) $('lg-close').onclick = () => { LG_EDIT = null; setLogicGraphActive(false); };
+  if ($('lg-refresh')) $('lg-refresh').onclick = () => renderLogicPaneMain();
+  if ($('lg-edit')) $('lg-edit').onclick = () => {
+    if (!LG_GRAPH) { setStatus('err', '先等图出来'); return; }
+    LG_EDIT = LG_EDIT ? null : logicEditStart(LG_GRAPH);
+    if ($('lg-code')) $('lg-code').hidden = true;
+    renderLogicPaneMain();
+  };
+  if ($('lg-zoom')) $('lg-zoom').onclick = () => {
+    const svg = $('lg-body') && $('lg-body').querySelector('svg');
+    if (svg) openLogicZoom(svg, ($('lg-stats') ? $('lg-stats').textContent : '') || '逻辑图');
+  };
+  if ($('lg-gen')) $('lg-gen').onclick = () => {
+    if (!LG_EDIT) { setStatus('err', '先点「✎ 编辑」进入图形化编辑'); return; }
+    fetch('/api/logic/skeleton', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ graph: { nodes: LG_EDIT.nodes, edges: LG_EDIT.edges }, language: LG_EDIT.language || 'c_cpp', fnName: LG_EDIT.name || 'generated' }),
+    }).then((response) => response.json()).then((out) => {
+      if (!out || !out.ok) { setStatus('err', '生成失败：' + ((out && out.error) || '未知错误')); return; }
+      const box = $('lg-code');
+      if (!box) return;
+      box.hidden = false;
+      box.innerHTML = '<div class="rel-tools"></div>';
+      const bar = box.querySelector('.rel-tools');
+      relationButton(bar, '⧉ 复制代码', false, () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(out.code || '').then(() => setStatus('ok', '代码已复制')).catch(() => setStatus('ok', '代码已打印到控制台'));
+        }
+        try { console.log('[CodeScope] 由图生成的代码：\n' + (out.code || '')); } catch (_) {}
+      });
+      relationButton(bar, '✕ 收起', false, () => { box.hidden = true; });
+      const pre = document.createElement('pre');
+      pre.textContent = out.code || '';
+      box.appendChild(pre);
+      setStatus('ok', '已按当前图生成代码');
+    }).catch((error) => setStatus('err', '生成失败：' + String(error.message || error)));
   };
 }
 
@@ -16639,6 +16810,18 @@ function makeHResizer(handle, getter, setter) {
     setCodeGraphActive(!CG_ACTIVE);
   };
   wireCodeGraphToolbar();
+  wireLogicGraphToolbar();
+  if ($('btn-logicgraph')) $('btn-logicgraph').onclick = () => setLogicGraphActive(!LG_ACTIVE);
+  makeResizer($('lg-split-v'), 'v',
+    () => ($('lg-canvas') ? $('lg-canvas').getBoundingClientRect().width : 0),
+    (v) => {
+      const c = $('lg-canvas');
+      if (!c) return;
+      c.style.flex = 'none';
+      c.style.width = clampV(v, 260, Math.max(360, Math.round(window.innerWidth * 0.72))) + 'px';
+      try { localStorage.setItem('mc-lg-w', String(Math.round(v))); } catch (_) {}
+    },
+    true);
   wireAiPanel();
   wireMindmapEvents();
   initTabStrip();
