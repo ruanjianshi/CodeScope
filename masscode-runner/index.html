@@ -11713,10 +11713,13 @@ function logicNodeDisplayLabel(node) {
   if (!node) return '';
   if (node.kind === 'entry') return '开始';
   if (node.kind === 'exit') return '结束';
-  if (node.kind === 'branch') return /^(switch|case|default|else)\b/.test(raw) ? raw : 'if (' + raw + ')';
+  /* 解析器给的 label 已经带关键字了（`if (v < 0)`、`for (...)`）——
+     再包一层会变成 `if (if (v < 0))`（实测踩过）。只在确实没有关键字时才补。 */
+  if (node.kind === 'branch') return /^(if|switch|case|default|else)\b/.test(raw) ? raw : 'if (' + raw + ')';
   if (node.kind === 'loop') {
+    if (/^(for|while|do)\b/.test(raw)) return raw;
     const kw = node.kw === 'do' ? 'do' : (node.kw || 'while');
-    return kw === 'do' ? 'do … while (' + raw + ')' : kw + ' (' + raw + ')';
+    return kw + ' (' + raw + ')';
   }
   return raw;
 }

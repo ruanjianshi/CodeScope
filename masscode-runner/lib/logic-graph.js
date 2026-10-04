@@ -2,14 +2,24 @@
 /**
  * 逻辑图 · 纯模块（无 fs / 无 DOM）
  * ---------------------------------------------------------------------------
- * 职责：函数实现 → 语句级控制流图（CFG） → draw.io XML；以及逻辑图 → 代码骨架。
+ * 职责：函数实现 → **控制流图（CFG）** → draw.io XML；以及逻辑图 → 代码骨架。
  * 与 lib/code-graph.js 互补：code-graph 回答“谁调用谁”，logic-graph 回答
  * “这个函数内部先做什么、再做什么、哪里分支”。
  *
- * 节点：{ id, kind, label, line, endLine, level }          kind ∈ entry|exit|stmt|branch|loop|call|return|unknown
- * 边：  { from, to, label }                                label ∈ ''|true|false|loop|next|fallthrough
- * 布局：DFS 分层 + 同层按发现序排布（x = order*180, y = depth*120），前端只管画线。
- * draw.io：直接拼合法 mxGraphModel XML（复用 server.js inspectDrawioXml 的格式约束）。
+ * 节点：{ id, kind, label, line, endLine, level, indent }
+ *       kind ∈ entry|exit|stmt|branch|loop|call|return
+ * 边：  { from, to, label }   label ∈ ''|true|false|loop|next
+ * 布局：BFS 分层（assignLevels），前端按边画线；draw.io 直接拼 mxGraphModel。
+ *
+ * 解析方式（v2，2026-10-04 重写）：
+ *   旧版是「逐行建节点」—— 一行一个节点，`if (...)` 的头部和 body 平级，
+ *   画出来就是「代码从上到下」，既看不出分支也看不出嵌套。
+ *   新版先解析成**嵌套结构**，再按控制流连边：
+ *     if / else      → 决策节点 + 是/否两条边 + 汇合
+ *     for / while    → 循环头 + body + 回边（退出从循环头出）
+ *     do … while     → 先 body 后判断
+ *     switch / case  → 多路决策
+ *   产出的是真正的 CFG，前端按边画就是流程图（对齐 Valla.ai 那种「函数逻辑图」）。
  */
 
 const { maskNonCode } = require('./code-graph');
@@ -40,112 +50,258 @@ const shortLabel = (text, maxLen = 42) => {
   return t.length > maxLen ? t.slice(0, maxLen - 1) + '…' : t;
 };
 
-/* 取 if / for / while 的条件表达式。
-   原来的正则末尾是 \) \s* \{? \s*$ —— 要求整行**以 ) 或 { 结尾**，于是：
-     if (v < 0) {              → "v < 0"   ✓
-     if (v < 0) { return -1; } → "if"      ✗ 单行写法
-     if (v < 0) return -1;     → "if"      ✗ 无花括号写法
-   label 退化成关键字后，logicToSkeleton 会生成 `if (if {` 这种坏代码。
-   改成从关键字后的第一个 '(' 开始做**括号配对**扫描：既能吃到行尾，
-   也能正确跨过嵌套括号（if (f(a) > 0)）和字符串里的括号。 */
-const branchCond = (line, kw) => {
-  const text = String(line || '');
-  const at = text.search(new RegExp('\\b' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b'));
-  const open = at < 0 ? -1 : text.indexOf('(', at);
-  if (open < 0) return shortLabel(kw, 36);
+/* 与第 i 行的 { 配对的 } 所在行号。找不到就返回最后一行。 */
+function matchBrace(lines, i) {
+  let depth = 0, started = false;
+  for (let k = i; k < lines.length; k++) {
+    const s = lines[k];
+    for (let c = 0; c < s.length; c++) {
+      if (s[c] === '{') { depth++; started = true; }
+      else if (s[c] === '}') { depth--; if (started && depth === 0) return k; }
+    }
+  }
+  return lines.length - 1;
+}
+
+/* 与 text[open] 处的 ( 配对的 ) 的下标。跳过字符串里的括号。 */
+function matchParen(text, open) {
   let depth = 0, quote = '';
   for (let i = open; i < text.length; i++) {
     const ch = text[i];
     if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = ''; continue; }
     if (ch === '"' || ch === "'") { quote = ch; continue; }
     if (ch === '(') depth++;
-    else if (ch === ')') {
-      depth--;
-      if (depth === 0) return shortLabel(text.slice(open + 1, i).trim() || kw, 36);
-    }
+    else if (ch === ')') { depth--; if (depth === 0) return i; }
   }
-  /* 括号没闭合（多行条件）：退回关键字之后的内容，总比只给关键字有用 */
-  return shortLabel(text.slice(open + 1).trim() || kw, 36);
-};
+  return -1;
+}
 
-/* 单函数体 → 语句节点 + 控制边。braceLang 用 {} 划分块，py 用缩进划分块。 */
+/* 关键字后面的条件表达式。括号配对扫描，能跨嵌套括号（if (f(a) > 0)）
+   和字符串里的括号（strcmp(s, ")")）。 */
+function conditionAfter(text, kw) {
+  const at = text.search(new RegExp('\\b' + kw + '\\b'));
+  const open = at < 0 ? -1 : text.indexOf('(', at);
+  if (open < 0) return '';
+  const close = matchParen(text, open);
+  return (close > open ? text.slice(open + 1, close) : text.slice(open + 1)).trim();
+}
+
+/* 把关键字后面的 {...} 体的行范围取出来。
+   ⚠️ 花括号**同行开闭**（`if (v < 0) { return -1; }`）时必须当单行体处理 ——
+   否则 matchBrace 返回同一行，体范围变成 from > to 的空区间，整个 body 丢掉（实测踩过）。 */
+function bodyRange(lines, headLine) {
+  const text = lines[headLine].trim();
+  if (text.includes('{')) {
+    const close = matchBrace(lines, headLine);
+    if (close === headLine) return { from: headLine, to: headLine + 1, next: headLine + 1, inline: true };
+    return { from: headLine + 1, to: close, next: close + 1 };
+  }
+  return { from: headLine, to: headLine + 1, next: headLine + 1, inline: true };
+}
+
+/* 单行体的正文：`while (v > 10) { v--; }` → `v--;`
+   注意：单行体**不能**拿整行去递归解析 —— 那一行还是 `while (...)`，
+   会重复命中同一个循环头，直接无限递归爆栈（实测踩过）。 */
+function inlineBodyText(text, kw) {
+  const at = text.search(new RegExp('\\b' + kw + '\\b'));
+  const open = at < 0 ? -1 : text.indexOf('(', at);
+  const close = open < 0 ? -1 : matchParen(text, open);
+  let rest = close >= 0 ? text.slice(close + 1).trim() : '';
+  rest = rest.replace(/^\{\s*/, '').replace(/\s*\}$/, '').trim();
+  return rest;
+}
+
+/* 单行语句归类 */
+function classifyStatement(text) {
+  if (/^(return|break|continue|goto|throw)\b/.test(text)) return 'return';
+  /* `a = f(b)` 是赋值，不算调用；`f(b);` 才算 */
+  if (/^[A-Za-z_][\w\.\[\]\->\s]*=[^=]/.test(text)) return 'stmt';
+  if (/\b[A-Za-z_]\w*\s*\(/.test(text)) return 'call';
+  return 'stmt';
+}
+
 function buildLogicGraph(code, { language = 'c_cpp', name = 'fn' } = {}) {
-  const rawLines = String(code || '').replace(/\r\n/g, '\n').split('\n');
-  const maskedLines = maskNonCode(rawLines.join('\n')).split('\n');
-  const nodes = [{ id: 'entry', kind: 'entry', label: 'enter ' + name, line: 1, endLine: 1, level: 0 }];
+  const raw = String(code || '').replace(/\r\n/g, '\n');
+  const rawLines = raw.split('\n');
+  const maskedLines = maskNonCode(raw).split('\n');
+  const nodes = [{ id: 'entry', kind: 'entry', label: '开始', line: 1, endLine: 1, level: 0, indent: 0 }];
   const edges = [];
-  let seq = 0, cursor = 'entry', loopKw = '';
-  const newNode = (kind, label, line, endLine, extra) => {
+  let seq = 0;
+
+  const add = (kind, label, line, endLine, extra) => {
     const id = 'n' + (++seq);
-    nodes.push({ id, kind, label: shortLabel(label), line, endLine, level: 0, ...(extra || {}) });
+    nodes.push({ id, kind, label: shortLabel(label), line, endLine: Math.max(line, endLine || line), level: 0, ...(extra || {}) });
     return id;
   };
-  const link = (to, label = '') => edges.push({ from: cursor, to, label });
+  const link = (from, to, label) => {
+    if (!from || !to) return;
+    if (edges.some((e) => e.from === from && e.to === to)) return;   /* 多路汇合时去重 */
+    edges.push({ from, to, label: label || '' });
+  };
+  const linkAll = (ids, to, label) => ids.forEach((id) => link(id, to, label));
+  /* 记下「从这里出去代表条件为假」的节点，连边时标成 false 而不是 next */
+  const FALSE_TAILS = new Set();
+  /* 终止语句（return 等）要连到「结束」，别让它们悬空 */
+  const TERMINALS = [];
 
-  const pyLang = language === 'python' || language === 'ruby';
-  if (pyLang) {
-    const indentOf = (l) => ((l.match(/^\s*/) || [''])[0]).length;
-    const base = indentOf(rawLines[0] || '');
-    const stack = [{ indent: base, id: 'entry', kind: 'root' }];
-    rawLines.forEach((ln, i) => {
-      const text = stripComments(ln).trim();
-      if (!text || /^(def|class)\b/.test(text)) return;
-      const indent = indentOf(ln);
-      while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
-      const top = stack[stack.length - 1];
-      let kind = 'stmt', label = text, edgeLabel = '';
-      let m = text.match(/^(if|elif)\b(.*):\s*$/);
-      if (m) { kind = 'branch'; label = (m[1] === 'elif' ? 'elif' : 'if') + ' ' + m[2]; edgeLabel = 'true'; }
-      else if (/^else\s*:\s*$/.test(text)) { kind = 'branch'; label = 'else'; edgeLabel = 'false'; }
-      else if (m = text.match(/^(for|while)\b(.*):\s*$/)) { kind = 'loop'; label = m[1] + ' ' + m[2]; edgeLabel = 'loop'; }
-      else if (/^return\b/.test(text)) kind = 'return';
-      else if ((m = text.match(/\b([A-Za-z_]\w*)\s*\(/))) { kind = 'call'; label = m[1] + '(…)'; }
-      const id = newNode(kind, label, i + 1, i + 1);
-      link(id, edgeLabel);
-      if ((kind === 'branch' || kind === 'loop') && !/:.*\S/.test(text.slice(text.indexOf(':') + 1))) {
-        stack.push({ indent, id, kind });
-        cursor = id;
-      } else cursor = id;
-      if (kind === 'return' || /^(break|continue|raise)\b/.test(text)) cursor = top.id;
-    });
-  } else {
-    /* 用**花括号嵌套深度**当缩进依据，而不是图深度。
-       图是线性链（每个节点连下一个），assignLevels 算出来的 level 会一路递增，
-       骨架里就变成越缩越深的阶梯。花括号深度才是源码里真实的嵌套。 */
-    let brace = 0;
-    rawLines.forEach((ln, i) => {
-      const raw = stripComments(ln);
-      const text = raw.trim();
-      const closesFirst = /^\}/.test(text);
-      if (closesFirst) brace = Math.max(0, brace - 1);
-      const depth = brace;
-      const opens = (text.match(/\{/g) || []).length;
-      let closes = (text.match(/\}/g) || []).length;
-      if (closesFirst) closes -= 1;                 /* 这一个已经在上面减过，别重复 */
-      brace = Math.max(0, brace + opens - closes);
-      if (!text || text === '{' || text === '}') return;
-      let kind = 'stmt', label = text.replace(/[{}]/g, '').trim() || text, edgeLabel = '';
-      let m = text.match(/^(if|else\s+if)\b/);
-      if (m) { kind = 'branch'; label = branchCond(text, m[1].startsWith('else') ? 'else if' : 'if'); edgeLabel = 'true'; }
-      else if (/^else\b/.test(text)) { kind = 'branch'; label = 'else'; edgeLabel = 'false'; }
-      else if (m = text.match(/^(for|while|do)\b/)) {
-        kind = 'loop'; loopKw = m[1]; label = m[1] === 'do' ? 'do … while' : branchCond(text, m[1]); edgeLabel = 'loop';
-      } else if (m = text.match(/^(switch|case|default)\b/)) { kind = 'branch'; label = shortLabel(text.replace(/\{?\s*$/, '')); edgeLabel = ''; }
-      else if (/^return\b/.test(text)) kind = 'return';
-      /* 函数签名行（int classify(int v){）不是一次调用 —— 以前会被记成 call 节点，
-         骨架里就多出一行 classify(); 。判据：第一行 + 有 (...) + 以 { 或 ) 结尾。 */
-      else if (i === 0 && /\)\s*\{?\s*$/.test(text) && /\([^;]*\)/.test(text)) { kind = 'stmt'; label = shortLabel(text.replace(/[{}]/g, '').trim(), 36); }
-      else if ((m = text.match(/\b([A-Za-z_]\w*)\s*\(/))) { kind = 'call'; label = m[1] + '(…)'; }
-      const id = newNode(kind, label, i + 1, i + 1, loopKw ? { kw: loopKw, indent: depth } : { indent: depth });
-      loopKw = '';
-      link(id, edgeLabel);
-      cursor = id;
-    });
+  /* 解析 [from, to) 行范围，把语句接到 tails 之后，返回出口节点列表。
+     edgeLabel 只作用于本段第一个节点（决策节点连过来的 是/否/循环 标签）。 */
+  const emitSeq = (from, to, tails, depth, edgeLabel) => {
+    let out = tails.slice();
+    let first = true;
+    const join = (id, label, kind) => {
+      out.forEach((from, index) => {
+        /* 从「条件为假」的出口连过来 → false；本段第一个 → 传入的边标签（是/循环）；其余 → next */
+        const edgeLabel2 = FALSE_TAILS.has(from) ? 'false'
+          : (index === 0 && first ? (edgeLabel || 'next') : 'next');
+        link(from, id, edgeLabel2);
+      });
+      first = false;
+      /* return / break / continue / goto / throw 会**终止这条路径** ——
+         不能把它当成出口继续往下连，否则会画出「return 之后接着执行」这种错图
+         （实测踩过：`return NULL;` 后面连到了 if 之后的赋值语句）。 */
+      if (/^(return|break|continue|goto|throw)\b/.test(kind || '')) { TERMINALS.push(id); out = []; }
+      else out = [id];
+    };
+    let buffer = '', bufferLine = 0;
+    let i = from;
+    while (i < to) {
+      const text = maskedLines[i].trim();
+      const shown = stripComments(rawLines[i] || '').trim();
+      if (!text) { i++; continue; }                      /* 空行 / 纯注释行：不是节点 */
+      if (text === '{' || text === '}') { i++; continue; }
+      if (text === 'else' || /^else\s*$/.test(text)) { i++; continue; }   /* 裸 else 由 if 处理 */
+
+      let m;
+      /* ── if / else if / else ── */
+      if ((m = text.match(/^if\s*\(/))) {
+        const cond = conditionAfter(text, 'if');
+        const head = add('branch', 'if (' + cond + ')', i + 1, i + 1, { indent: depth, cond });
+        join(head, null, 'branch');
+        const then = bodyRange(maskedLines, i);
+        let thenTails;
+        if (then.inline) {
+          /* `if (v < 0) return -1;` —— 体在同一行，直接取关键字后的剩余部分，
+             不能再递归整行（会重复命中同一个 if） */
+          const rest = inlineBodyText(text, 'if');
+          const k = rest ? classifyStatement(rest) : '';
+          thenTails = rest ? [add(k, rest, i + 1, i + 1, { indent: depth + 1 })] : [];
+          link(head, thenTails[0] || null, 'true');
+        } else {
+          thenTails = emitSeq(then.from, then.to, [head], depth + 1, 'true');
+        }
+        let tails2 = thenTails;
+        let next = then.next;
+        let endsWithElse = false;
+        /* 后面跟 else？ */
+        while (next < to) {
+          const ntext = maskedLines[next].trim();
+          if (!ntext) { next++; continue; }
+          if (/^else\s+if\s*\(/.test(ntext)) {
+            const c2 = conditionAfter(ntext, 'if');
+            const h2 = add('branch', 'if (' + c2 + ')', next + 1, next + 1, { indent: depth, cond: c2 });
+            link(head, h2, 'false');                     /* 条件为假 → 下一个判断 */
+            const b2 = bodyRange(maskedLines, next);
+            tails2 = tails2.concat(emitSeq(b2.from, b2.to, [h2], depth + 1, 'true'));
+            next = b2.next;
+          } else if (/^else\b/.test(ntext)) {
+            const b3 = bodyRange(maskedLines, next);
+            tails2 = tails2.concat(emitSeq(b3.from, b3.to, [head], depth + 1, 'false'));
+            endsWithElse = true;
+            next = b3.next;
+          } else break;
+        }
+        /* 没有收尾的 else 时，**条件为假要能直接往下走** ——
+           否则那条路径整个断掉（实测：if 只画出了「是」的一半）。
+           标进 FALSE_TAILS，连边时才写成 false 而不是 next。 */
+        if (!endsWithElse) { tails2 = tails2.concat([head]); FALSE_TAILS.add(head); }
+        out = tails2; first = false; i = next; continue;
+      }
+
+      /* ── for / while ── */
+      if ((m = text.match(/^(for|while)\s*\(/))) {
+        const kw = m[1];
+        const cond = conditionAfter(text, kw);
+        const head = add('loop', kw + ' (' + cond + ')', i + 1, i + 1, { indent: depth, kw, cond });
+        join(head, null, 'loop');
+        const body = bodyRange(maskedLines, i);
+        let bodyTails;
+        if (body.inline) {
+          const rest = inlineBodyText(text, kw);
+          const k = rest ? classifyStatement(rest) : '';
+          bodyTails = rest ? [add(k, rest, i + 1, i + 1, { indent: depth + 1 })] : [];
+          link(head, bodyTails[0] || null, 'loop');
+        } else {
+          bodyTails = emitSeq(body.from, body.to, [head], depth + 1, 'loop');
+        }
+        bodyTails.forEach((id) => link(id, head, 'loop'));   /* 回边 */
+        out = [head]; first = false; i = body.next; continue;  /* 退出循环也从循环头出 */
+      }
+
+      /* ── do { } while (); ── */
+      if (/^do\b/.test(text)) {
+        const body = bodyRange(maskedLines, i);
+        const bodyEntry = add('loop', 'do', i + 1, body.next, { indent: depth, kw: 'do' });
+        join(bodyEntry, null, 'loop');
+        const bodyTails = emitSeq(body.from, body.to, [bodyEntry], depth + 1, 'next');
+        let after = body.next, cond = '';
+        while (after < to && !/^while\s*\(/.test(maskedLines[after].trim())) after++;
+        if (after < to) cond = conditionAfter(maskedLines[after].trim(), 'while');
+        const test = add('loop', 'while (' + cond + ')', after + 1, after + 1, { indent: depth, kw: 'while', cond });
+        linkAll(bodyTails, test, 'next');
+        link(test, bodyEntry, 'loop');                       /* 成立就再转一圈 */
+        out = [test]; first = false; i = after + 1; continue;
+      }
+
+      /* ── switch / case ── */
+      if (/^switch\s*\(/.test(text)) {
+        const cond = conditionAfter(text, 'switch');
+        const head = add('branch', 'switch (' + cond + ')', i + 1, i + 1, { indent: depth, cond });
+        join(head, null, 'branch');
+        const body = bodyRange(maskedLines, i);
+        let tails2 = [head];
+        for (let k = body.from; k < body.to; k++) {
+          const ct = maskedLines[k].trim();
+          if (!/^(case|default)\b/.test(ct)) continue;
+          const label = stripComments(rawLines[k] || '').trim().replace(/\s*\{?\s*$/, '');
+          const caseNode = add('branch', label, k + 1, k + 1, { indent: depth + 1 });
+          link(head, caseNode, '');
+          tails2 = tails2.concat(emitSeq(k + 1, body.to, [caseNode], depth + 2, 'next'));
+          break;                                             /* 只处理第一个 case，其余走 body 内部 */
+        }
+        out = tails2; first = false; i = body.next; continue;
+      }
+
+      /* ── 普通语句：累积到分号（支持跨行表达式）── */
+      if (!buffer) bufferLine = i + 1;
+      buffer = buffer ? buffer + ' ' + shown : shown;
+      if (/;\s*$/.test(shown) || /[{}]\s*$/.test(shown)) {
+        const kind = classifyStatement(buffer);
+        join(add(kind, buffer, bufferLine, i + 1, { indent: depth }), null, kind);
+        buffer = '';
+      }
+      i++;
+    }
+    if (buffer) { const k2 = classifyStatement(buffer); join(add(k2, buffer, bufferLine, to, { indent: depth }), null, k2); }
+    return out;
+  };
+
+  /* 函数体：跳过签名行（第一行），从第一个 { 之后开始 */
+  let bodyStart = 0;
+  for (let i = 0; i < maskedLines.length; i++) {
+    if (maskedLines[i].includes('{')) { bodyStart = i + 1; break; }
   }
-  const exit = newNode('exit', 'exit', rawLines.length, rawLines.length);
-  edges.push({ from: cursor, to: exit, label: 'next' });
+  let bodyEnd = maskedLines.length;
+  for (let i = maskedLines.length - 1; i >= 0; i--) {
+    if (maskedLines[i].trim() === '}') { bodyEnd = i; break; }
+  }
+  const tails = emitSeq(bodyStart, bodyEnd, ['entry'], 0, 'next');
+  const exit = add('exit', '结束', rawLines.length, rawLines.length, { indent: 0 });
+  linkAll(tails, exit, 'next');
+  /* 终止语句（return 等）也连到「结束」—— 否则那些节点在图上悬空 */
+  TERMINALS.forEach((id) => link(id, exit, 'next'));
   assignLevels(nodes, edges);
-  return { ok: true, name, nodes, edges };
+  return { ok: true, name, nodes, edges, language };
 }
 
 function assignLevels(nodes, edges) {
@@ -209,26 +365,23 @@ function logicToSkeleton(graph, { language = 'c_cpp', fnName = 'generated' } = {
   const indentUnit = isPy ? '    ' : '  ';
   const pending = [];   /* 还没闭合的块，存它们的缩进层 */
   nodes.forEach((n) => {
-    /* 缩进优先用解析时记下的花括号深度（真实嵌套）；
-       没有就退回 level（图深度，线性链时会一路递增）。 */
     const depth = Number.isFinite(n.indent) ? n.indent : (Number(n.level) || 1);
     const pad = indentUnit.repeat(Math.max(1, Math.min(8, depth)));
-    /* 先收掉「已经走出去」的块 —— 原来是一遇到分支就立刻补 }，
-       结果 body 全跑到块外面去了（if (x) { } 之后才 return）。 */
     while (pending.length && pending[pending.length - 1] >= depth) {
       lines.push(indentUnit.repeat(Math.max(1, pending.pop())) + '}');
     }
-    if (n.kind === 'branch') { lines.push(pad + (isPy ? '# if ' : 'if (') + n.label + (isPy ? ':' : ') {')); if (!isPy) pending.push(depth); }
-    /* 保留 for / while 的区别：原来一律写成 while，for 循环看起来像 while */
-    else if (n.kind === 'loop') {
-      const kw = n.kw === 'do' ? 'while' : (n.kw || 'while');
-      lines.push(pad + (isPy ? '# loop ' : kw + ' (') + n.label + (isPy ? ':' : ') {'));
+    if (n.kind === 'branch') {
+      /* label 已经是 `if (cond)` 形态，直接用 */
+      const head = /^(if|switch|case|default|else)\b/.test(n.label) ? n.label : 'if (' + n.label + ')';
+      lines.push(pad + (isPy ? '# ' + head : head + ' {'));
       if (!isPy) pending.push(depth);
-    }
-    /* 原来恒为 return; —— 把表达式丢了。节点 label 里本来就带着完整语句 */
-    else if (n.kind === 'return') lines.push(pad + (/^return\b/.test(n.label) ? n.label : 'return;'));
-    else if (n.kind === 'call') lines.push(pad + n.label.replace(/\(…\)$/, '()') + '; // ' + n.id);
-    else lines.push(pad + '// ' + n.label);
+    } else if (n.kind === 'loop') {
+      const head = /^(for|while|do)\b/.test(n.label) ? n.label : (n.kw || 'while') + ' (' + n.label + ')';
+      lines.push(pad + (isPy ? '# ' + head : head + ' {'));
+      if (!isPy) pending.push(depth);
+    } else if (n.kind === 'return') lines.push(pad + (/^(return|break|continue|goto|throw)\b/.test(n.label) ? n.label : 'return;'));
+    else if (n.kind === 'call') lines.push(pad + (/[;{}]\s*$/.test(n.label) ? n.label : n.label + ';'));
+    else lines.push(pad + (/[;{}]\s*$/.test(n.label) ? n.label : n.label + ';'));
   });
   while (pending.length) lines.push(indentUnit.repeat(Math.max(1, pending.pop())) + '}');
   if (!isPy) lines.push('}');
