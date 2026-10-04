@@ -4365,6 +4365,7 @@
           <button id="lg-gen" title="按当前图生成代码">↩ 生成代码</button>
           <button id="lg-refresh" title="重新从源码解析">⟳ 刷新</button>
           <button id="lg-zoom" title="全屏放大查看">⤢ 放大</button>
+          <button id="lg-blocks" title="把当前函数切到图形化编程（积木）视图">🧩 用积木打开</button>
           <button id="lg-mermaid" title="复制 Mermaid 源码">⧉ Mermaid</button>
           <button id="lg-close" title="关闭（回到纯代码）">✕</button>
         </div>
@@ -12792,6 +12793,13 @@ function wireLogicGraphToolbar() {
     if ($('lg-code')) $('lg-code').hidden = true;
     renderLogicPaneMain();
   };
+  if ($('lg-blocks')) $('lg-blocks').onclick = () => {
+    /* 逻辑图 → 积木：同一个函数，换个视图看（两个视图共用同一份 CFG） */
+    if (!logicPaneRoot()) { setStatus('err', '先把光标放到一个函数里'); return; }
+    setLogicGraphActive(false);
+    setBlocklyActive(true);
+    setStatus('ok', '已切到积木视图');
+  };
   if ($('lg-mermaid')) $('lg-mermaid').onclick = () => {
     if (!LG_GRAPH) { setStatus('err', '先等图出来'); return; }
     const src = logicToMermaid(LG_EDIT || LG_GRAPH, (LG_GRAPH.name || ''));
@@ -13139,6 +13147,18 @@ function renderDocGraphForce(host, graph) {
           setStatus('ok', d.kind === 'fn' ? '跳到 ' + d.label + '（第 ' + d.line + ' 行）' : '跳到片段 ' + d.label);
         } catch (_) {}
       })
+      .on('dblclick', (event, d) => {
+        /* 代码图谱 → 积木：双击函数节点，直接把这个函数用积木打开 */
+        if (d.kind !== 'fn') return;
+        event.stopPropagation();
+        try {
+          /* 图谱节点没有 snippet，别走 resolveDefinition（会抛），直接构造 */
+          REL_ROOT = { kind: 'fn', name: d.label, line: d.line || 1, endLine: d.endLine, frag: d.frag };
+          setCodeGraphActive(false);
+          setBlocklyActive(true);
+          setStatus('ok', '已用积木打开 ' + d.label);
+        } catch (_) { setStatus('err', '打不开这个函数'); }
+      })
       .on('mouseenter', function () { d3.select(this).attr('stroke', '#4f8cff').attr('stroke-width', 2.5); })
       .on('mouseleave', function () { d3.select(this).attr('stroke', '#0d1117').attr('stroke-width', 1.5); });
     node.append('title').text((d) => (d.kind === 'fn' ? d.label + ' · 第 ' + d.line + ' 行' : d.label));
@@ -13483,6 +13503,39 @@ function defineCBlocks() {
       output: null, colour: BP_COLOR.op, tooltip: '数字' },
     { type: 'c_expr', message0: '表达式 %1', args0: [{ type: 'field_input', name: 'EXPR', text: 'handler == NULL' }],
       output: null, colour: BP_COLOR.op, tooltip: '任意 C 表达式（条件、右值）' },
+    /* ── 下面这些是为了把「表达式」从自由文本变成可拼装的积木 ── */
+    { type: 'c_op', message0: '%1 %2 %3', args0: [
+        { type: 'input_value', name: 'A' },
+        { type: 'field_dropdown', name: 'OP', options: [
+          ['+', '+'], ['-', '-'], ['*', '*'], ['/', '/'], ['%', '%'],
+          ['==', '=='], ['!=', '!='], ['<', '<'], ['>', '>'], ['<=', '<='], ['>=', '>='],
+          ['&&', '&&'], ['||', '||'], ['&', '&'], ['|', '|'], ['^', '^'], ['<<', '<<'], ['>>', '>>'],
+          ['=', '='], ['+=', '+='], ['-=', '-='] ] },
+        { type: 'input_value', name: 'B' }],
+      output: null, colour: BP_COLOR.op, tooltip: '二元运算（算术 / 比较 / 逻辑 / 位运算）' },
+    { type: 'c_not', message0: '非 %1', args0: [{ type: 'input_value', name: 'A' }],
+      output: null, colour: BP_COLOR.op, tooltip: '逻辑非 / 取反' },
+    { type: 'c_index', message0: '%1 [ %2 ]', args0: [
+        { type: 'input_value', name: 'ARR' }, { type: 'input_value', name: 'IDX' }],
+      output: null, colour: BP_COLOR.op, tooltip: '数组 / 指针下标' },
+    { type: 'c_member', message0: '%1 %2 %3', args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_dropdown', name: 'OP', options: [['.', '.'], ['->', '->']] },
+        { type: 'field_input', name: 'NAME', text: 'status' }],
+      output: null, colour: BP_COLOR.op, tooltip: '结构体成员访问' },
+    { type: 'c_cast', message0: '( %1 ) %2', args0: [
+        { type: 'field_dropdown', name: 'TYPE', options: [['int', 'int'], ['uint8_t', 'uint8_t'], ['uint16_t', 'uint16_t'],
+          ['uint32_t', 'uint32_t'], ['float', 'float'], ['char *', 'char *'], ['void *', 'void *'],
+          ['led_t *', 'led_t *'], ['uint8_t *', 'uint8_t *']] },
+        { type: 'input_value', name: 'A' }],
+      output: null, colour: BP_COLOR.op, tooltip: '类型转换' },
+    { type: 'c_null', message0: 'NULL', output: null, colour: BP_COLOR.op, tooltip: '空指针常量' },
+    { type: 'c_break', message0: '跳出循环', previousStatement: null, nextStatement: null,
+      colour: BP_COLOR.control, tooltip: 'break' },
+    { type: 'c_continue', message0: '继续下一轮', previousStatement: null, nextStatement: null,
+      colour: BP_COLOR.control, tooltip: 'continue' },
+    { type: 'c_comment', message0: '注释 %1', args0: [{ type: 'field_input', name: 'TEXT', text: '说明' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.raw, tooltip: '生成 // 注释' },
   ]);
   BP_READY = true;
 }
@@ -13492,15 +13545,21 @@ function bpToolbox() {
   return { kind: 'categoryToolbox', contents: [
     { kind: 'category', name: '控制', colour: BP_COLOR.control, contents: [
       { kind: 'block', type: 'c_if' }, { kind: 'block', type: 'c_ifelse' },
-      { kind: 'block', type: 'c_while' }, { kind: 'block', type: 'c_for' }, { kind: 'block', type: 'c_return' } ] },
+      { kind: 'block', type: 'c_while' }, { kind: 'block', type: 'c_for' },
+      { kind: 'block', type: 'c_break' }, { kind: 'block', type: 'c_continue' },
+      { kind: 'block', type: 'c_return' } ] },
     { kind: 'category', name: '变量', colour: BP_COLOR.var, contents: [
       { kind: 'block', type: 'c_set' }, { kind: 'block', type: 'c_declare' } ] },
     { kind: 'category', name: '函数', colour: BP_COLOR.func, contents: [
       { kind: 'block', type: 'c_fn' }, { kind: 'block', type: 'c_call' }, { kind: 'block', type: 'c_call_any' } ] },
+    { kind: 'category', name: '运算', colour: BP_COLOR.op, contents: [
+      { kind: 'block', type: 'c_op' }, { kind: 'block', type: 'c_not' },
+      { kind: 'block', type: 'c_index' }, { kind: 'block', type: 'c_member' },
+      { kind: 'block', type: 'c_cast' }, { kind: 'block', type: 'c_null' } ] },
     { kind: 'category', name: '表达式', colour: BP_COLOR.op, contents: [
       { kind: 'block', type: 'c_expr' }, { kind: 'block', type: 'c_num' }, { kind: 'block', type: 'c_text' } ] },
     { kind: 'category', name: '原样代码', colour: BP_COLOR.raw, contents: [
-      { kind: 'block', type: 'c_raw' } ] },
+      { kind: 'block', type: 'c_raw' }, { kind: 'block', type: 'c_comment' } ] },
   ] };
 }
 
@@ -13728,6 +13787,16 @@ function emitOne(b, indent) {
     case 'c_text': return f('TEXT');
     case 'c_num': return String(b.getFieldValue('NUM'));
     case 'c_expr': return f('EXPR');
+    /* 表达式类积木：作为值返回（不带缩进、不带分号） */
+    case 'c_op': return '(' + bpValue(b, 'A', '0') + ' ' + f('OP') + ' ' + bpValue(b, 'B', '0') + ')';
+    case 'c_not': return '!' + bpValue(b, 'A', '0');
+    case 'c_index': return bpValue(b, 'ARR', '0') + '[' + bpValue(b, 'IDX', '0') + ']';
+    case 'c_member': return bpValue(b, 'OBJ', '0') + f('OP') + f('NAME');
+    case 'c_cast': return '(' + f('TYPE') + ')' + bpValue(b, 'A', '0');
+    case 'c_null': return 'NULL';
+    case 'c_break': return pad + 'break;\n';
+    case 'c_continue': return pad + 'continue;\n';
+    case 'c_comment': return pad + '// ' + f('TEXT') + '\n';
     default: return pad + '/* 未知积木 ' + b.type + ' */\n';
   }
 }
