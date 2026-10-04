@@ -288,11 +288,21 @@
     color: var(--fg); font-size: 12px; text-align: left; cursor: pointer; }
   .graph-menu button:hover { background: rgba(79,140,255,.14); }
   .graph-menu button small { color: var(--dim); font-size: 10px; }
+  /* 右栏分隔条（积木/逻辑图/代码图谱通用）：常显细线 + 中间抓手点，别只在 hover 时才看得见 */
+  #bp-split-v, #lg-split-v, #cg-split-v { flex: none; width: 9px; cursor: col-resize; position: relative; background: transparent; display: none; }
+  #bp-split-v.on, #lg-split-v.on, #cg-split-v.on { display: block; }
+  #bp-split-v::after, #lg-split-v::after, #cg-split-v::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+    transform: translateX(-50%); background: var(--border); transition: background .15s, width .15s; }
+  #bp-split-v::before, #lg-split-v::before, #cg-split-v::before {
+    content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 22px;
+    transform: translate(-50%, -50%); border-radius: 2px;
+    background: repeating-linear-gradient(to bottom, var(--dim) 0 3px, transparent 3px 6px); opacity: .55; }
+  #bp-split-v:hover::after, #lg-split-v:hover::after, #cg-split-v:hover::after,
+  #bp-split-v.active::after, #lg-split-v.active::after, #cg-split-v.active::after { background: var(--accent); width: 2px; }
+  #bp-split-v:hover::before, #lg-split-v:hover::before, #cg-split-v:hover::before,
+  #bp-split-v.active::before, #lg-split-v.active::before, #cg-split-v.active::before { opacity: 1; }
   /* 图形化编程（积木）右栏 */
-  #bp-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
-  #bp-split-v.on { display: block; }
-  #bp-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
-  #bp-split-v:hover::after, #bp-split-v.active::after { background: var(--accent); }
   #bp-canvas { flex: 1.25; min-width: 0; display: none; flex-direction: column; position: relative;
     margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   #bp-canvas.on { display: flex; }
@@ -303,15 +313,19 @@
   #bp-title { font-weight: 600; color: var(--fg); white-space: nowrap; }
   #bp-stats { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #bp-main { flex: 1 1 auto; min-height: 0; display: flex; }
+  #bp-inner-split { flex: none; width: 9px; cursor: col-resize; position: relative; background: transparent; }
+  #bp-inner-split::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+    transform: translateX(-50%); background: var(--border); transition: background .15s, width .15s; }
+  #bp-inner-split::before { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 22px;
+    transform: translate(-50%, -50%); border-radius: 2px;
+    background: repeating-linear-gradient(to bottom, var(--dim) 0 3px, transparent 3px 6px); opacity: .55; }
+  #bp-inner-split:hover::after, #bp-inner-split.active::after { background: var(--accent); width: 2px; }
+  #bp-inner-split:hover::before, #bp-inner-split.active::before { opacity: 1; }
   #bp-workspace { flex: 1.6; min-width: 0; height: 100%; }
   #bp-code { flex: 1; min-width: 0; margin: 0; padding: 10px 12px; overflow: auto;
-    border-left: 1px solid var(--border); background: #0f151d; color: var(--fg);
+    background: #0f151d; color: var(--fg);
     font-family: var(--mono,ui-monospace,Menlo,monospace); font-size: 11.5px; line-height: 1.7; white-space: pre; }
   /* 逻辑图右栏：和 cg-canvas 同款 */
-  #lg-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
-  #lg-split-v.on { display: block; }
-  #lg-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
-  #lg-split-v:hover::after, #lg-split-v.active::after { background: var(--accent); }
   #lg-canvas { flex: 1.05; min-width: 0; display: none; flex-direction: column; position: relative;
     margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border);
     border-radius: 8px; overflow: hidden; }
@@ -669,10 +683,6 @@
   #edit-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
   #edit-split-v:hover::after, #edit-split-v.active::after { background: var(--accent); }
   /* 代码图谱分隔条：和 edit-split-v 同款，拖拽调整「代码 / 图谱」宽度 */
-  #cg-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
-  #cg-split-v.on { display: block; }
-  #cg-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
-  #cg-split-v:hover::after, #cg-split-v.active::after { background: var(--accent); }
   #ln { flex: none; padding: 14px 8px 14px 12px; text-align: right; color: #4b5263; font: 12px/1.7 var(--mono); user-select: none; background: #1b1e25; border-right: 1px solid var(--border); white-space: pre; letter-spacing: normal; }
   #code { flex: 1; margin: 0; padding: 14px; font: 12px/1.7 var(--mono); white-space: pre; tab-size: 2; letter-spacing: normal; }
   #code.hljs { background: transparent; }
@@ -4339,6 +4349,7 @@
         </div>
         <div id="bp-main">
           <div id="bp-workspace"></div>
+          <div id="bp-inner-split" title="左右拖动调整「工作区 / 代码」宽度"></div>
           <pre id="bp-code"></pre>
         </div>
       </div>
@@ -13374,7 +13385,30 @@ let BP_WORKSPACE = null;
 let BP_LOADING = null;
 let BP_SEQ = 0;
 let BP_LAST_CODE = '';
+let BP_ORIG_COUNT = 0;
 let BP_READY = false;
+let BP_FUNCS = [];   /* 当前文档里的函数名，给调用积木的下拉用 */
+
+/* 从文档拉函数列表（走已有的文档级图谱接口，不用新接口） */
+function loadDocFunctions() {
+  if (!CURRENT || !CURRENT.file) return Promise.resolve([]);
+  return fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file))
+    .then((r) => r.json())
+    .then((g) => {
+      if (!g || !g.ok) return [];
+      /* ⚠️ 文档图谱的函数节点字段是 label，不是 name（取错过，下拉一直是空的） */
+      BP_FUNCS = (g.nodes || []).filter((n) => n.kind === 'fn').map((n) => n.label || n.name).filter(Boolean);
+      return BP_FUNCS;
+    })
+    .catch(() => []);
+}
+/* 下拉选项：文档内函数优先，末尾给一个「其他」用自由输入 */
+function bpFunctionOptions() {
+  const opts = BP_FUNCS.slice(0, 60).map((n) => [n, n]);
+  if (!opts.length) opts.push(['（暂无文档函数）', '']);
+  opts.push(['其他…', '__other__']);
+  return opts;
+}
 
 function ensureBlockly() {
   if (window.Blockly && window.Blockly.inject) return Promise.resolve(window.Blockly);
@@ -13431,8 +13465,13 @@ function defineCBlocks() {
         { type: 'field_input', name: 'NAME', text: 'x' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '变量声明' },
     { type: 'c_call', message0: '调用 %1 ( %2 )', args0: [
-        { type: 'field_input', name: 'NAME', text: 'LOG_INFO' }, { type: 'input_value', name: 'ARG' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.func, tooltip: '函数调用' },
+        { type: 'field_dropdown', name: 'NAME', options: function () { return bpFunctionOptions(); } },
+        { type: 'input_value', name: 'ARG' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.func,
+      tooltip: '函数调用；下拉里是**当前文档里的函数**（CodeScope 独有），选「其他…」可手填' },
+    { type: 'c_call_any', message0: '调用 %1 ( %2 )', args0: [
+        { type: 'field_input', name: 'NAME', text: 'printf' }, { type: 'input_value', name: 'ARG' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.func, tooltip: '调用任意函数（手填名字）' },
     { type: 'c_return', message0: '返回 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'return' },
     { type: 'c_raw', message0: '原样代码 %1', args0: [{ type: 'field_input', name: 'CODE', text: '// 复杂写法' }],
@@ -13457,7 +13496,7 @@ function bpToolbox() {
     { kind: 'category', name: '变量', colour: BP_COLOR.var, contents: [
       { kind: 'block', type: 'c_set' }, { kind: 'block', type: 'c_declare' } ] },
     { kind: 'category', name: '函数', colour: BP_COLOR.func, contents: [
-      { kind: 'block', type: 'c_fn' }, { kind: 'block', type: 'c_call' } ] },
+      { kind: 'block', type: 'c_fn' }, { kind: 'block', type: 'c_call' }, { kind: 'block', type: 'c_call_any' } ] },
     { kind: 'category', name: '表达式', colour: BP_COLOR.op, contents: [
       { kind: 'block', type: 'c_expr' }, { kind: 'block', type: 'c_num' }, { kind: 'block', type: 'c_text' } ] },
     { kind: 'category', name: '原样代码', colour: BP_COLOR.raw, contents: [
@@ -13591,9 +13630,14 @@ function makeBlockFor(ws, n) {
     e.initSvg(); e.render();
     b.getInput('VALUE').connection.connect(e.outputConnection);
   } else if (n.kind === 'call') {
-    b = mk('c_call');
     const m = /^([A-Za-z_]\w*)\s*\((.*)\)/.exec(label);
-    b.setFieldValue(m ? m[1] : label.replace(/;\s*$/, ''), 'NAME');
+    const callee = m ? m[1] : label.replace(/;\s*$/, '');
+    /* ⚠️ 文档里有这个函数才用「下拉版」，否则用「自由输入版」。
+       下拉版只能 setFieldValue 到选项里已有的值，填不进去就**静默丢名字** ——
+       生成的代码会变成 `("参数");`，函数名没了（实测被自检抓到）。 */
+    const known = BP_FUNCS.indexOf(callee) >= 0;
+    b = mk(known ? 'c_call' : 'c_call_any');
+    b.setFieldValue(callee, 'NAME');
     if (m && m[2]) {
       const t = mk('c_text'); t.setFieldValue(m[2], 'TEXT'); t.initSvg(); t.render();
       b.getInput('ARG').connection.connect(t.outputConnection);
@@ -13672,6 +13716,7 @@ function emitOne(b, indent) {
     case 'c_for': return pad + 'for (' + f('INIT') + '; ' + f('COND') + '; ' + f('STEP') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
     case 'c_set': return pad + f('TARGET') + ' = ' + bpValue(b, 'VALUE', '0') + ';\n';
     case 'c_declare': return pad + f('TYPE') + ' ' + f('NAME') + ';\n';
+    case 'c_call_any':
     case 'c_call': {
       const arg = b.getInputTargetBlock('ARG');
       const argCode = arg ? emitChain(arg, 0).trim() : '';
@@ -13710,6 +13755,9 @@ function setBlocklyActive(on) {
       let w = 0;
       try { w = parseInt(localStorage.getItem('mc-bp-w')) || 0; } catch (_) {}
       if (w >= 320) { canvas.style.flex = 'none'; canvas.style.width = w + 'px'; }
+      let cw = 0;
+      try { cw = parseInt(localStorage.getItem('mc-bp-code-w')) || 0; } catch (_) {}
+      if (cw >= 150 && $('bp-code')) { $('bp-code').style.flex = 'none'; $('bp-code').style.width = cw + 'px'; }
     }
   }
   const sp = $('bp-split-v');
@@ -13772,18 +13820,41 @@ function syncBlocksFromCode() {
     const code = blockJsonToCode();
     BP_LAST_CODE = code;
     if (body) body.textContent = code || '（工作区是空的）';
+    BP_ORIG_COUNT = count;
     if ($('bp-stats')) $('bp-stats').textContent = (graph.name || root.name) + ' · ' + count + ' 个语句';
+    /* 顺便把文档函数拉进「调用」下拉 */
+    loadDocFunctions().then(() => {
+      try { BP_WORKSPACE.updateToolbox(bpToolbox()); } catch (_) {}
+    });
   }).catch((error) => {
     if (seq !== BP_SEQ) return;
     if (body) body.textContent = '解析失败：' + String(error.message || error);
   });
+}
+/* 一致性校验：把生成的代码再送解析器，看语句数对不对得上。
+   对不上说明有构造积木表达不了（宏、位域等），提示用户别直接覆盖原文。 */
+function bpConsistencyCheck(originalCount) {
+  const code = blockJsonToCode();
+  if (!code) return Promise.resolve({ ok: false, reason: '工作区是空的' });
+  return fetch('/api/logic/graph', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    /* ⚠️ 解析接口期望的是**完整函数**（它从第一个 { 之后开始解析）。
+  }).then((r) => r.json()).then((g) => {
+    const n = (g.nodes || []).filter((x) => x.kind !== 'entry' && x.kind !== 'exit').length;
+    return { ok: n === originalCount, generated: n, original: originalCount };
+  }).catch(() => ({ ok: false, reason: '校验请求失败' }));
 }
 function wireBlocklyToolbar() {
   if ($('bp-sync')) $('bp-sync').onclick = () => syncBlocksFromCode();
   if ($('bp-gen')) $('bp-gen').onclick = () => {
     const code = blockJsonToCode();
     if ($('bp-code')) $('bp-code').textContent = code || '（工作区是空的）';
-    setStatus('ok', '已按当前积木生成代码');
+    /* 生成后自检：把代码再解析一遍，和原始语句数对比 */
+    bpConsistencyCheck(BP_ORIG_COUNT).then((res) => {
+      if (res.ok) setStatus('ok', '已生成代码 ✓ 自检通过（' + res.generated + ' 条语句，与原函数一致）');
+      else setStatus('warn', '已生成代码 ⚠ 自检：解析出 ' + (res.generated != null ? res.generated : '?')
+        + ' 条语句，原函数 ' + res.original + ' 条 —— 可能有积木表达不了的构造，别直接覆盖原文');
+    });
   };
   if ($('bp-copy')) $('bp-copy').onclick = () => {
     const code = blockJsonToCode();
@@ -17982,6 +18053,17 @@ function makeHResizer(handle, getter, setter) {
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
     setBlocklyActive(!BP_ACTIVE);
   };
+  /* 积木栏内部：工作区 / 代码 之间也可拖（用户要的是这条，不是外层那条） */
+  makeResizer($('bp-inner-split'), 'v',
+    () => ($('bp-code') ? $('bp-code').getBoundingClientRect().width : 0),
+    (v) => {
+      const code = $('bp-code');
+      if (!code) return;
+      code.style.flex = 'none';
+      code.style.width = clampV(v, 150, Math.max(200, Math.round(window.innerWidth * 0.6))) + 'px';
+      try { localStorage.setItem('mc-bp-code-w', String(Math.round(v))); } catch (_) {}
+    },
+    true);
   makeResizer($('bp-split-v'), 'v',
     () => ($('bp-canvas') ? $('bp-canvas').getBoundingClientRect().width : 0),
     (v) => {
