@@ -236,12 +236,23 @@
   #ai-apply-cancel { color: var(--dim); }
   #ai-sel-bar button { font-size: 12px; padding: 3px 10px; }
   /* ===== 思维导图（markmap） ===== */
-  #mm-canvas { flex: 1; min-width: 0; display: none; flex-direction: column; position: relative; margin: 10px 14px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  /* ⚠️ 右栏面板必须和 #code-wrap 用**同一套**边距/圆角/背景/阴影。
+     下面的值是**实测**出来的（不是猜的）：
+       #code-wrap → margin:7px 8px 0 / radius:8px / bg:#0d131b / 有内阴影
+     之前我写成 10px 12px / radius:10px / bg:var(--panel)，左右两边就"差一点"。
+     （注：另有一条 #code-wrap 规则把它改成扁平，实测生效值是这里的这套） */
+  #cg-canvas, #lg-canvas, #bp-canvas, #mm-canvas {
+    margin: 7px 0 0 0;          /* 上边距对齐代码区；右边贴边（右侧就是窗口边） */
+    border: 1px solid #28313d;
+    border-radius: 8px;
+    background: #0d131b;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.018), var(--shadow);
+    overflow: hidden;
+  }
+  #mm-canvas { flex: 1; min-width: 0; display: none; flex-direction: column; position: relative; }
   #mm-canvas.on { display: flex; }
   /* 代码图谱：与代码并列的右栏（主区域 flex 行里的兄弟节点，和 mm-canvas 同款） */
-  #cg-canvas { flex: 1.15; min-width: 0; display: none; flex-direction: column; position: relative;
-    margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border);
-    border-radius: 8px; overflow: hidden; }
+  #cg-canvas { flex: 1.15; min-width: 0; display: none; flex-direction: column; position: relative; }
   #cg-canvas.on { display: flex; }
   #cg-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
     border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); }
@@ -303,8 +314,7 @@
   #bp-split-v:hover::before, #lg-split-v:hover::before, #cg-split-v:hover::before,
   #bp-split-v.active::before, #lg-split-v.active::before, #cg-split-v.active::before { opacity: 1; }
   /* 图形化编程（积木）右栏 */
-  #bp-canvas { flex: 1.25; min-width: 0; display: none; flex-direction: column; position: relative;
-    margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  #bp-canvas { flex: 1.25; min-width: 0; display: none; flex-direction: column; position: relative; }
   #bp-canvas.on { display: flex; }
   #bp-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
     border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); flex-wrap: nowrap; }
@@ -333,9 +343,7 @@
     background: #0f151d; color: var(--fg);
     font-family: var(--mono,ui-monospace,Menlo,monospace); font-size: 11.5px; line-height: 1.7; white-space: pre; }
   /* 逻辑图右栏：和 cg-canvas 同款 */
-  #lg-canvas { flex: 1.05; min-width: 0; display: none; flex-direction: column; position: relative;
-    margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border);
-    border-radius: 8px; overflow: hidden; }
+  #lg-canvas { flex: 1.05; min-width: 0; display: none; flex-direction: column; position: relative; }
   #lg-canvas.on { display: flex; }
   /* 两个右栏工具栏共用同一套样式，别各写一份 */
   #lg-toolbar, #cg-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
