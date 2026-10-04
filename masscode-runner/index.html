@@ -288,6 +288,25 @@
     color: var(--fg); font-size: 12px; text-align: left; cursor: pointer; }
   .graph-menu button:hover { background: rgba(79,140,255,.14); }
   .graph-menu button small { color: var(--dim); font-size: 10px; }
+  /* 图形化编程（积木）右栏 */
+  #bp-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
+  #bp-split-v.on { display: block; }
+  #bp-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
+  #bp-split-v:hover::after, #bp-split-v.active::after { background: var(--accent); }
+  #bp-canvas { flex: 1.25; min-width: 0; display: none; flex-direction: column; position: relative;
+    margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  #bp-canvas.on { display: flex; }
+  #bp-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); flex-wrap: nowrap; }
+  #bp-toolbar .sp { flex: 1 1 auto; }
+  #bp-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; white-space: nowrap; }
+  #bp-title { font-weight: 600; color: var(--fg); white-space: nowrap; }
+  #bp-stats { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bp-main { flex: 1 1 auto; min-height: 0; display: flex; }
+  #bp-workspace { flex: 1.6; min-width: 0; height: 100%; }
+  #bp-code { flex: 1; min-width: 0; margin: 0; padding: 10px 12px; overflow: auto;
+    border-left: 1px solid var(--border); background: #0f151d; color: var(--fg);
+    font-family: var(--mono,ui-monospace,Menlo,monospace); font-size: 11.5px; line-height: 1.7; white-space: pre; }
   /* 逻辑图右栏：和 cg-canvas 同款 */
   #lg-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
   #lg-split-v.on { display: block; }
@@ -3680,12 +3699,13 @@
     #toolbar .sp { min-width:0; }
     #toolbar::-webkit-scrollbar { display:none; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-logicgraph, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
+    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-logicgraph, #toolbar #btn-blockly, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
     #btn-outline::before { content:'≡'; font-size:16px; }
     #btn-mindmap::before { content:'◇'; font-size:15px; }
     #btn-codegraph::before { content:'🕸'; font-size:14px; }
     #btn-logicgraph::before { content:'⇉'; font-size:15px; }
+    #btn-blockly::before { content:'🧩'; font-size:14px; }
     #btn-codegraph.on { color:var(--accent); border-color:var(--accent); background:rgba(79,140,255,.12); }
     #btn-history::before { content:'↶'; font-size:15px; }
     #btn-pair-switch::before { content:'⇄'; font-size:13px; }
@@ -4187,6 +4207,7 @@
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
       <button id="btn-codegraph" disabled title="代码图谱：整篇文档的片段 / 函数 / 调用 / 包含关系">图谱</button>
       <button id="btn-logicgraph" disabled title="逻辑图：当前函数的控制流，可图形化编辑后生成代码">逻辑图</button>
+      <button id="btn-blockly" disabled title="图形化编程：把当前函数拆成积木，拖拽改完再生成代码">积木</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
       <button id="btn-edit" disabled>编辑</button>
       <span id="nav-notice" role="status" aria-live="polite"></span>
@@ -4304,6 +4325,23 @@
       <div id="edit-split-v" title="拖动调整编辑 / 预览宽度"></div>
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
+      <!-- 图形化编程（积木）：主区域右栏（左代码 / 右积木），参考米思奇 -->
+      <div id="bp-split-v" title="左右拖动调整代码 / 积木宽度"></div>
+      <div id="bp-canvas">
+        <div id="bp-toolbar">
+          <span id="bp-title">🧩 图形化编程</span>
+          <span id="bp-stats"></span>
+          <span class="sp"></span>
+          <button id="bp-sync" title="把当前函数拆成积木（代码 → 积木）">⇄ 从代码同步</button>
+          <button id="bp-gen" title="按当前积木生成代码（积木 → 代码）">↩ 生成代码</button>
+          <button id="bp-copy" title="复制生成的代码">⧉ 复制</button>
+          <button id="bp-close" title="关闭">✕</button>
+        </div>
+        <div id="bp-main">
+          <div id="bp-workspace"></div>
+          <pre id="bp-code"></pre>
+        </div>
+      </div>
       <!-- 逻辑图：主区域右栏（左代码 / 右逻辑图），可图形化编辑后生成代码 -->
       <div id="lg-split-v" title="左右拖动调整代码 / 逻辑图宽度"></div>
       <div id="lg-canvas">
@@ -10938,6 +10976,8 @@ function applyMmMode() {
     graphBtn.classList.toggle('on', CG_ACTIVE);
     const logicBtn = $('btn-logicgraph');
     if (logicBtn) { logicBtn.disabled = !hasCode; logicBtn.style.display = hasCode ? '' : 'none'; }
+    const bpBtn = $('btn-blockly');
+    if (bpBtn) { bpBtn.disabled = !hasCode; bpBtn.style.display = hasCode ? '' : 'none'; }
     /* 换成没有代码的文档就自动收起图谱栏，别留一块空白 */
     if (!hasCode && CG_ACTIVE) setCodeGraphActive(false);
   }
@@ -13319,6 +13359,442 @@ function paintAiLogic(body, mermaid, root, rest) {
     body.innerHTML = '<span class="ol-empty">渲染失败：' + escapeHtml(String(error.message || error)) + '</span>';
   });
 }
+
+/* ── 图形化编程（积木）模块 ────────────────────────────────────────────────
+   参考米思奇 Mixly：三栏（积木库 | 工作区 | 代码），形状即类型、颜色即分类。
+   但 CodeScope 的重点是**双向** —— 核心是「从代码同步」把已有函数拆成积木，
+   而不是让人从零搭。
+
+   技术：vendor 的 Blockly（拖拽吸附 + 连接合法性校验是积木的灵魂，自建不划算）。
+   积木全部自定义（不用 Blockly 内置的），这样才能完全控制 C 代码生成。
+   中间表示复用逻辑图已有的 CFG（/api/logic/graph 返回的 nodes + indent）。 */
+
+let BP_ACTIVE = false;
+let BP_WORKSPACE = null;
+let BP_LOADING = null;
+let BP_SEQ = 0;
+let BP_LAST_CODE = '';
+let BP_READY = false;
+
+function ensureBlockly() {
+  if (window.Blockly && window.Blockly.inject) return Promise.resolve(window.Blockly);
+  if (BP_LOADING) return BP_LOADING;
+  BP_LOADING = new Promise((resolve, reject) => {
+    /* 和 mermaid / d3 同一个坑：本页有 AMD loader，UMD 会走 define() 分支不挂全局 */
+    const saved = window.define;
+    try { window.define = undefined; } catch (_) {}
+    const restore = () => { try { window.define = saved; } catch (_) {} };
+    const script = document.createElement('script');
+    script.src = 'vendor/blockly.min.js';
+    script.onload = () => {
+      restore();
+      if (window.Blockly && window.Blockly.inject) resolve(window.Blockly);
+      else { BP_LOADING = null; reject(new Error('Blockly 已加载但没挂到 window（可能被 AMD 抢走）')); }
+    };
+    script.onerror = () => { restore(); BP_LOADING = null; reject(new Error('vendor/blockly.min.js 加载失败')); };
+    document.head.appendChild(script);
+  });
+  return BP_LOADING;
+}
+
+/* 颜色按分类（学 Mixly：颜色即分类） */
+const BP_COLOR = { control: '#BA7517', var: '#D85A30', func: '#534AB7', op: '#378ADD', io: '#1D9E75', raw: '#5F5E5A' };
+
+function defineCBlocks() {
+  if (BP_READY) return;
+  const B = window.Blockly;
+  B.defineBlocksWithJsonArray([
+    { type: 'c_fn', message0: '函数 %1', args0: [{ type: 'field_input', name: 'NAME', text: 'my_func' }],
+      message1: '%1', args1: [{ type: 'input_statement', name: 'BODY' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.func,
+      tooltip: '函数定义；生成的代码是 int NAME(void) { ... }' },
+    { type: 'c_if', message0: '如果 %1', args0: [{ type: 'input_value', name: 'COND' }],
+      message1: '那么 %1', args1: [{ type: 'input_statement', name: 'DO' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'if 判断' },
+    { type: 'c_ifelse', message0: '如果 %1', args0: [{ type: 'input_value', name: 'COND' }],
+      message1: '那么 %1', args1: [{ type: 'input_statement', name: 'DO' }],
+      message2: '否则 %1', args2: [{ type: 'input_statement', name: 'ELSE' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'if / else' },
+    { type: 'c_while', message0: '当 %1 时循环', args0: [{ type: 'input_value', name: 'COND' }],
+      message1: '做 %1', args1: [{ type: 'input_statement', name: 'DO' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'while 循环' },
+    { type: 'c_for', message0: 'for 初值 %1', args0: [{ type: 'field_input', name: 'INIT', text: 'i = 0' }],
+      message1: '条件 %1', args1: [{ type: 'field_input', name: 'COND', text: 'i < 10' }],
+      message2: '步进 %1', args2: [{ type: 'field_input', name: 'STEP', text: 'i++' }],
+      message3: '做 %1', args3: [{ type: 'input_statement', name: 'DO' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'for 循环' },
+    { type: 'c_set', message0: '设置 %1 = %2', args0: [
+        { type: 'field_input', name: 'TARGET', text: 'handler->status' }, { type: 'input_value', name: 'VALUE' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '赋值' },
+    { type: 'c_declare', message0: '声明 %1 %2', args0: [
+        { type: 'field_dropdown', name: 'TYPE', options: [['int', 'int'], ['uint8_t', 'uint8_t'], ['uint32_t', 'uint32_t'], ['float', 'float'], ['char *', 'char *'], ['void *', 'void *']] },
+        { type: 'field_input', name: 'NAME', text: 'x' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '变量声明' },
+    { type: 'c_call', message0: '调用 %1 ( %2 )', args0: [
+        { type: 'field_input', name: 'NAME', text: 'LOG_INFO' }, { type: 'input_value', name: 'ARG' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.func, tooltip: '函数调用' },
+    { type: 'c_return', message0: '返回 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'return' },
+    { type: 'c_raw', message0: '原样代码 %1', args0: [{ type: 'field_input', name: 'CODE', text: '// 复杂写法' }],
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.raw,
+      tooltip: '积木表达不了的构造（宏、位域、内联汇编）用这个，原文照抄' },
+    { type: 'c_text', message0: '%1', args0: [{ type: 'field_input', name: 'TEXT', text: '""' }],
+      output: null, colour: BP_COLOR.op, tooltip: '文本/表达式' },
+    { type: 'c_num', message0: '%1', args0: [{ type: 'field_number', name: 'NUM', value: 0 }],
+      output: null, colour: BP_COLOR.op, tooltip: '数字' },
+    { type: 'c_expr', message0: '表达式 %1', args0: [{ type: 'field_input', name: 'EXPR', text: 'handler == NULL' }],
+      output: null, colour: BP_COLOR.op, tooltip: '任意 C 表达式（条件、右值）' },
+  ]);
+  BP_READY = true;
+}
+
+function bpToolbox() {
+  const xml = (t, name, colour, shadow) => '<block type="' + t + '">' + (shadow || '') + '</block>';
+  return { kind: 'categoryToolbox', contents: [
+    { kind: 'category', name: '控制', colour: BP_COLOR.control, contents: [
+      { kind: 'block', type: 'c_if' }, { kind: 'block', type: 'c_ifelse' },
+      { kind: 'block', type: 'c_while' }, { kind: 'block', type: 'c_for' }, { kind: 'block', type: 'c_return' } ] },
+    { kind: 'category', name: '变量', colour: BP_COLOR.var, contents: [
+      { kind: 'block', type: 'c_set' }, { kind: 'block', type: 'c_declare' } ] },
+    { kind: 'category', name: '函数', colour: BP_COLOR.func, contents: [
+      { kind: 'block', type: 'c_fn' }, { kind: 'block', type: 'c_call' } ] },
+    { kind: 'category', name: '表达式', colour: BP_COLOR.op, contents: [
+      { kind: 'block', type: 'c_expr' }, { kind: 'block', type: 'c_num' }, { kind: 'block', type: 'c_text' } ] },
+    { kind: 'category', name: '原样代码', colour: BP_COLOR.raw, contents: [
+      { kind: 'block', type: 'c_raw' } ] },
+  ] };
+}
+
+/* ── C 代码生成器 ── */
+function makeCGenerator() {
+  const B = window.Blockly;
+  const gen = new B.Generator('C');
+  gen.INDENT = '    ';
+  const val = (block, name, fallback) => {
+    const code = gen.valueToCode(block, name, 0);
+    return (code && code !== 'null') ? code : (fallback || '0');
+  };
+  const body = (block, name) => {
+    const code = gen.statementToCode(block, name);
+    return code || gen.INDENT + '/* 空 */\n';
+  };
+  gen.forBlock.c_fn = (b) => (b.getFieldValue('NAME') || 'my_func') + '(void) {\n' + body(b, 'BODY') + '}\n';
+  gen.forBlock.c_if = (b) => 'if (' + val(b, 'COND', '1') + ') {\n' + body(b, 'DO') + '}\n';
+  gen.forBlock.c_ifelse = (b) => 'if (' + val(b, 'COND', '1') + ') {\n' + body(b, 'DO') + '} else {\n' + body(b, 'ELSE') + '}\n';
+  gen.forBlock.c_while = (b) => 'while (' + val(b, 'COND', '1') + ') {\n' + body(b, 'DO') + '}\n';
+  gen.forBlock.c_for = (b) => 'for (' + (b.getFieldValue('INIT') || '') + '; ' + (b.getFieldValue('COND') || '')
+    + '; ' + (b.getFieldValue('STEP') || '') + ') {\n' + body(b, 'DO') + '}\n';
+  gen.forBlock.c_set = (b) => (b.getFieldValue('TARGET') || 'x') + ' = ' + val(b, 'VALUE', '0') + ';\n';
+  gen.forBlock.c_declare = (b) => b.getFieldValue('TYPE') + ' ' + (b.getFieldValue('NAME') || 'x') + ';\n';
+  gen.forBlock.c_call = (b) => (b.getFieldValue('NAME') || 'f') + '(' + (gen.valueToCode(b, 'ARG', 0) || '') + ');\n';
+  gen.forBlock.c_return = (b) => 'return ' + val(b, 'VALUE', '0') + ';\n';
+  gen.forBlock.c_raw = (b) => (b.getFieldValue('CODE') || '') + '\n';
+  gen.forBlock.c_text = (b) => [b.getFieldValue('TEXT') || '""', 0];
+  gen.forBlock.c_num = (b) => [String(b.getFieldValue('NUM')), 0];
+  gen.forBlock.c_expr = (b) => [b.getFieldValue('EXPR') || '0', 0];
+  return gen;
+}
+
+/* ── CFG → 积木（核心：把已有代码拆成积木）──
+   复用逻辑图返回的 nodes（带 indent = 花括号嵌套深度）和 edges。 */
+function cfgToBlockJson(graph) {
+  const nodes = (graph.nodes || []).filter((n) => n.kind !== 'entry' && n.kind !== 'exit');
+  const root = { blocks: [] };
+  const stack = [{ indent: -1, blocks: root.blocks, container: null }];
+  nodes.forEach((n) => {
+    const indent = Number(n.indent) || 0;
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+    const parent = stack[stack.length - 1];
+    const label = String(n.label || '');
+    let block = null;
+    if (n.kind === 'branch') {
+      const cond = /\((.*)\)/.exec(label);
+      block = { type: 'c_if', inputs: { COND: { shadow: { type: 'c_expr', fields: { EXPR: cond ? cond[1] : label } } }, DO: { block: null } } };
+      parent.blocks.push(block);
+      const inner = { indent, blocks: [], container: null };
+      stack.push(inner);
+      inner.owner = block;
+      block.inputs.DO = { block: { type: 'c_raw', fields: { CODE: '' }, next: { block: null } } };
+      inner.blocks = [];
+      inner.pending = block;
+      return;
+    }
+    if (n.kind === 'loop') {
+      const isFor = n.kw === 'for';
+      const cond = /\((.*)\)/.exec(label);
+      block = isFor
+        ? { type: 'c_for', fields: { INIT: 'i = 0', COND: cond ? cond[1] : 'i < 10', STEP: 'i++' }, inputs: { DO: { block: null } } }
+        : { type: 'c_while', inputs: { COND: { shadow: { type: 'c_expr', fields: { EXPR: cond ? cond[1] : label } } }, DO: { block: null } } };
+      parent.blocks.push(block);
+      const inner = { indent, blocks: [], owner: block, isFor };
+      stack.push(inner);
+      return;
+    }
+    if (n.kind === 'return') {
+      block = { type: 'c_return', inputs: { VALUE: { shadow: { type: 'c_expr', fields: { EXPR: label.replace(/^return\s*/, '').replace(/;\s*$/, '') || '0' } } } } };
+    } else if (n.kind === 'call') {
+      const m = /^([A-Za-z_]\w*)\s*\((.*)\)/.exec(label);
+      block = { type: 'c_call', fields: { NAME: m ? m[1] : label }, inputs: m && m[2] ? { ARG: { shadow: { type: 'c_text', fields: { TEXT: m[2] } } } } : {} };
+    } else {
+      const m = /^([\w\.\->\[\]]+)\s*=\s*([\s\S]+?);?\s*$/.exec(label);
+      if (m) block = { type: 'c_set', fields: { TARGET: m[1] }, inputs: { VALUE: { shadow: { type: 'c_expr', fields: { EXPR: m[2] } } } } };
+      else block = { type: 'c_raw', fields: { CODE: label } };
+    }
+    parent.blocks.push(block);
+  });
+  /* 把「挂起的 branch/loop」的 body 装回去 */
+  const fix = (list) => {
+    list.forEach((b) => {
+      Object.keys(b.inputs || {}).forEach((k) => {
+        const inp = b.inputs[k];
+        if (inp && inp.block === null) inp.block = undefined;
+      });
+    });
+  };
+  return root;
+}
+
+/* ── 按 CFG 建积木（命令式）──
+   用 indent（花括号嵌套深度）还原层级：分支/循环块开一个 DO 语句槽，
+   紧随其后「缩进更深」的那一段就是它的体。比 JSON 序列化可靠，
+   也能直接接 statement input。 */
+function makeBlockFor(ws, n) {
+  const label = String(n.label || '');
+  const B = window.Blockly;
+  const mk = (type) => ws.newBlock(type);
+  let b = null;
+  if (n.kind === 'branch') {
+    const cond = /\((.*)\)/.exec(label);
+    b = mk('c_if');
+    const e = mk('c_expr'); e.setFieldValue(cond ? cond[1] : label, 'EXPR'); e.initSvg(); e.render();
+    b.getInput('COND').connection.connect(e.outputConnection);
+  } else if (n.kind === 'loop') {
+    const cond = /\((.*)\)/.exec(label);
+    if (n.kw === 'for') {
+      b = mk('c_for');
+      const m = /^for\s*\((.*)\)$/.exec(label);
+      if (m) {
+        const parts = m[1].split(';');
+        if (parts[0]) b.setFieldValue(parts[0].trim(), 'INIT');
+        if (parts[1]) b.setFieldValue(parts[1].trim(), 'COND');
+        if (parts[2]) b.setFieldValue(parts[2].trim(), 'STEP');
+      }
+    } else {
+      b = mk('c_while');
+      const e = mk('c_expr'); e.setFieldValue(cond ? cond[1] : label, 'EXPR'); e.initSvg(); e.render();
+      b.getInput('COND').connection.connect(e.outputConnection);
+    }
+  } else if (n.kind === 'return') {
+    b = mk('c_return');
+    const e = mk('c_expr');
+    e.setFieldValue(label.replace(/^return\s*/, '').replace(/;\s*$/, '') || '0', 'EXPR');
+    e.initSvg(); e.render();
+    b.getInput('VALUE').connection.connect(e.outputConnection);
+  } else if (n.kind === 'call') {
+    b = mk('c_call');
+    const m = /^([A-Za-z_]\w*)\s*\((.*)\)/.exec(label);
+    b.setFieldValue(m ? m[1] : label.replace(/;\s*$/, ''), 'NAME');
+    if (m && m[2]) {
+      const t = mk('c_text'); t.setFieldValue(m[2], 'TEXT'); t.initSvg(); t.render();
+      b.getInput('ARG').connection.connect(t.outputConnection);
+    }
+  } else {
+    const m = /^([\w\.\->\[\]]+)\s*=\s*([\s\S]+?);?\s*$/.exec(label);
+    if (m) {
+      b = mk('c_set');
+      b.setFieldValue(m[1], 'TARGET');
+      const e = mk('c_expr'); e.setFieldValue(m[2], 'EXPR'); e.initSvg(); e.render();
+      b.getInput('VALUE').connection.connect(e.outputConnection);
+    } else {
+      b = mk('c_raw');
+      b.setFieldValue(label, 'CODE');
+    }
+  }
+  return b;
+}
+function buildBlocksFromGraph(ws, graph) {
+  const nodes = (graph.nodes || []).filter((n) => n.kind !== 'entry' && n.kind !== 'exit');
+  const build = (list, baseIndent) => {
+    let first = null, prev = null, i = 0;
+    while (i < list.length) {
+      const n = list[i];
+      const ind = Number(n.indent) || 0;
+      if (ind < baseIndent) break;
+      const b = makeBlockFor(ws, n);
+      if (!b) { i++; continue; }
+      if (n.kind === 'branch' || n.kind === 'loop') {
+        /* 紧随其后、缩进更深的一段就是它的体 */
+        let j = i + 1;
+        while (j < list.length && (Number(list[j].indent) || 0) > ind) j++;
+        const sub = build(list.slice(i + 1, j), ind + 1);
+        const input = b.getInput('DO');
+        /* Blockly v10 没有 getPreviousConnection() 方法（那是旧 API），要用属性 previousConnection */
+        if (sub && input && sub.previousConnection) input.connection.connect(sub.previousConnection);
+        /* ⚠️ 这里必须 continue：分支/循环块已经处理完自己的体和「接上前面」两件事，
+           落到下面的通用连接逻辑会用 b（分支自己）去连，变成**自己连自己**、静默失败，
+           后面的语句就全断了（实测：只出来 2 条语句）。 */
+        if (prev && prev.nextConnection && b.previousConnection) prev.nextConnection.connect(b.previousConnection);
+        if (!first) first = b;
+        prev = b;
+        i = j;
+        continue;
+      }
+      i++;
+      if (prev && prev.nextConnection && b.previousConnection) prev.nextConnection.connect(b.previousConnection);
+      if (!first) first = b;
+      prev = b;
+    }
+    return first;
+  };
+  const head = build(nodes, 0);
+  if (head) head.moveBy(24, 24);
+  return nodes.length;
+}
+/* ── 积木 → C 代码（自己遍历，不用 Blockly 的 generator 链）──
+   Blockly v10 的 generator 在「语句块后面接下一块」这件事上行为不稳（实测只出第一块），
+   干脆自己走链：emitChain 顺着 next 逐块输出，语句槽用 emitChain 递归。 */
+function bpValue(b, name, fallback) {
+  const t = b.getInputTargetBlock(name);
+  const code = t ? emitChain(t, 0).trim() : '';
+  return code || (fallback || '0');
+}
+function bpBody(b, name, indent) {
+  const t = b.getInputTargetBlock(name);
+  if (!t) return '  '.repeat(indent + 1) + '/* 空 */\n';
+  return emitChain(t, indent + 1);
+}
+function emitOne(b, indent) {
+  const pad = '  '.repeat(indent);
+  const f = (n) => b.getFieldValue(n) || '';
+  switch (b.type) {
+    case 'c_if': return pad + 'if (' + bpValue(b, 'COND', '1') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
+    case 'c_while': return pad + 'while (' + bpValue(b, 'COND', '1') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
+    case 'c_for': return pad + 'for (' + f('INIT') + '; ' + f('COND') + '; ' + f('STEP') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
+    case 'c_set': return pad + f('TARGET') + ' = ' + bpValue(b, 'VALUE', '0') + ';\n';
+    case 'c_declare': return pad + f('TYPE') + ' ' + f('NAME') + ';\n';
+    case 'c_call': {
+      const arg = b.getInputTargetBlock('ARG');
+      const argCode = arg ? emitChain(arg, 0).trim() : '';
+      return pad + f('NAME') + '(' + argCode + ');\n';
+    }
+    case 'c_return': return pad + 'return ' + bpValue(b, 'VALUE', '0') + ';\n';
+    case 'c_raw': return pad + f('CODE') + '\n';
+    case 'c_fn': return pad + f('NAME') + '(void) {\n' + bpBody(b, 'BODY', indent) + pad + '}\n';
+    case 'c_text': return f('TEXT');
+    case 'c_num': return String(b.getFieldValue('NUM'));
+    case 'c_expr': return f('EXPR');
+    default: return pad + '/* 未知积木 ' + b.type + ' */\n';
+  }
+}
+function emitChain(first, indent) {
+  let out = '', b = first, guard = 0;
+  while (b && guard++ < 500) {
+    out += emitOne(b, indent);
+    b = b.getNextBlock();
+  }
+  return out;
+}
+function blockJsonToCode() {
+  if (!BP_WORKSPACE) return '';
+  const tops = BP_WORKSPACE.getTopBlocks(true);
+  return tops.map((t) => emitChain(t, 0)).join('\n').trim();
+}
+
+/* ── 面板 ── */
+function setBlocklyActive(on) {
+  BP_ACTIVE = !!on;
+  const canvas = $('bp-canvas');
+  if (canvas) {
+    canvas.classList.toggle('on', BP_ACTIVE);
+    if (BP_ACTIVE) {
+      let w = 0;
+      try { w = parseInt(localStorage.getItem('mc-bp-w')) || 0; } catch (_) {}
+      if (w >= 320) { canvas.style.flex = 'none'; canvas.style.width = w + 'px'; }
+    }
+  }
+  const sp = $('bp-split-v');
+  if (sp) sp.classList.toggle('on', BP_ACTIVE);
+  const btn = $('btn-blockly');
+  if (btn) btn.classList.toggle('on', BP_ACTIVE);
+  if (BP_ACTIVE) renderBlockPane();
+}
+function renderBlockPane() {
+  const host = $('bp-workspace');
+  if (!host) return;
+  const body = $('bp-code');
+  if (!CURRENT || !CURRENT.file) {
+    if (body) body.textContent = '先打开一个代码文档';
+    return;
+  }
+  ensureBlockly().then((B) => {
+    defineCBlocks();
+    if (!BP_WORKSPACE) {
+      BP_WORKSPACE = B.inject(host, {
+        toolbox: bpToolbox(), renderer: 'zelos',
+        grid: { spacing: 22, length: 3, colour: '#2a3340', snap: true },
+        zoom: { controls: true, wheel: true, startScale: 0.9 },
+        trashcan: true, move: { scrollbars: true, drag: true, wheel: true },
+        theme: B.Theme.defineTheme('cs', { base: B.Themes.Classic, componentStyles: {
+          workspaceBackgroundColour: '#0d1117', toolboxBackgroundColour: '#151b24',
+          toolboxForegroundColour: '#c9d1d9', flyoutBackgroundColour: '#151b24',
+          flyoutForegroundColour: '#c9d1d9', scrollbarColour: '#2a3340' } }),
+      });
+      BP_WORKSPACE.addChangeListener(() => {
+        if (!BP_ACTIVE) return;
+        const code = blockJsonToCode();
+        if (code !== BP_LAST_CODE) { BP_LAST_CODE = code; if (body) body.textContent = code || '（工作区是空的）'; }
+      });
+    }
+    syncBlocksFromCode();
+  }).catch((error) => {
+    if (body) body.textContent = 'Blockly 加载失败：' + String(error.message || error);
+  });
+}
+/* 从当前函数生成积木（核心：代码 → 积木） */
+function syncBlocksFromCode() {
+  const root = logicPaneRoot();
+  const body = $('bp-code');
+  if (!root || !CURRENT) { if (body) body.textContent = '先把光标放到一个函数里'; return; }
+  const seq = ++BP_SEQ;
+  fetch('/api/logic/graph', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: CURRENT.file, fragment: CINDEX, line: root.line, name: root.name }),
+  }).then((r) => r.json()).then((graph) => {
+    if (seq !== BP_SEQ || !graph || !graph.ok) throw new Error((graph && graph.error) || '解析失败');
+    BP_WORKSPACE.clear();
+    const count = buildBlocksFromGraph(BP_WORKSPACE, graph);
+    /* 建完必须渲染：newBlock 出来的是"无头"块，不 initSvg/render 界面上是空的 */
+    BP_WORKSPACE.getAllBlocks(false).forEach((b) => {
+      try { b.initSvg(); b.render(); } catch (_) {}
+    });
+    BP_WORKSPACE.cleanUp();
+    try { BP_WORKSPACE.scrollCenter(); } catch (_) {}
+    const code = blockJsonToCode();
+    BP_LAST_CODE = code;
+    if (body) body.textContent = code || '（工作区是空的）';
+    if ($('bp-stats')) $('bp-stats').textContent = (graph.name || root.name) + ' · ' + count + ' 个语句';
+  }).catch((error) => {
+    if (seq !== BP_SEQ) return;
+    if (body) body.textContent = '解析失败：' + String(error.message || error);
+  });
+}
+function wireBlocklyToolbar() {
+  if ($('bp-sync')) $('bp-sync').onclick = () => syncBlocksFromCode();
+  if ($('bp-gen')) $('bp-gen').onclick = () => {
+    const code = blockJsonToCode();
+    if ($('bp-code')) $('bp-code').textContent = code || '（工作区是空的）';
+    setStatus('ok', '已按当前积木生成代码');
+  };
+  if ($('bp-copy')) $('bp-copy').onclick = () => {
+    const code = blockJsonToCode();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => setStatus('ok', '代码已复制')).catch(() => setStatus('ok', '代码已打印到控制台'));
+    }
+    try { console.log('[CodeScope] 积木生成的代码：\n' + code); } catch (_) {}
+  };
+  if ($('bp-close')) $('bp-close').onclick = () => setBlocklyActive(false);
+}
+
 
 let LOGIC_GRAPH_SEQ = 0;
 let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'mermaid'; } catch (_) { return 'mermaid'; } })();
@@ -17501,6 +17977,21 @@ function makeHResizer(handle, getter, setter) {
   };
   wireCodeGraphToolbar();
   wireLogicGraphToolbar();
+  wireBlocklyToolbar();
+  if ($('btn-blockly')) $('btn-blockly').onclick = () => {
+    if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
+    setBlocklyActive(!BP_ACTIVE);
+  };
+  makeResizer($('bp-split-v'), 'v',
+    () => ($('bp-canvas') ? $('bp-canvas').getBoundingClientRect().width : 0),
+    (v) => {
+      const c = $('bp-canvas');
+      if (!c) return;
+      c.style.flex = 'none';
+      c.style.width = clampV(v, 380, Math.max(460, Math.round(window.innerWidth * 0.8))) + 'px';
+      try { localStorage.setItem('mc-bp-w', String(Math.round(v))); } catch (_) {}
+    },
+    true);
   makeResizer($('lg-split-v'), 'v',
     () => ($('lg-canvas') ? $('lg-canvas').getBoundingClientRect().width : 0),
     (v) => {
