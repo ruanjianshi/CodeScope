@@ -249,7 +249,8 @@
   #cg-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; }
   #cg-title { font-weight: 600; color: var(--fg); }
   #cg-stats { color: var(--dim); }
-  #cg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 14px; }
+  #cg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 6px 14px;
+    display: flex; flex-direction: column; justify-content: center; }
   #cg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   #cg-body .node.doc-node-clickable { cursor: pointer; transition: opacity .15s; }
   #cg-body .node.doc-node-clickable:hover { opacity: .78; }
@@ -258,8 +259,9 @@
   #cg-body .node.doc-node-clickable:hover path { stroke: var(--accent,#4f8cff) !important; stroke-width: 2px !important; }
   #cg-body .cluster { cursor: pointer; }
   /* 代码图谱 · 自绘：片段面板 + 函数胶囊 + SVG 连线 */
-  .dg { position:relative; display:flex; flex-wrap:wrap; gap:14px; align-content:flex-start;
-    justify-content:center; padding:6px 4px 12px; }
+  .dg { position:relative; display:flex; flex-wrap:nowrap; gap:64px; align-items:flex-start;
+    justify-content:center; padding:10px 16px 16px; }
+  .dg-col { display:flex; flex-direction:column; gap:14px; min-width:0; }
   .dg-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
   .dg-panel { position:relative; z-index:1; min-width:176px; max-width:100%;
     border:1px solid var(--border); border-radius:10px; background:var(--panel2,#151b24); padding:8px 10px 10px; }
@@ -12718,13 +12720,24 @@ function openGraphMenu(anchor) {
    · 顶部图例说明颜色含义；整体居中，不留大片空白
    · 节点可点 → 跳源码 */
 let DOC_GRAPH_OBSERVER = null;
+/* 按依赖深度分层：`main.c --include--> led.h` 说明 led.h 更深，排在更右边。
+   松弛 N 轮（N=片段数）足够收敛，片段数很少，不用上拓扑排序。 */
+function docGraphLayers(files, edges) {
+  const depth = new Map(files.map((f) => [String(f.id), 0]));
+  for (let i = 0; i < files.length; i++) {
+    edges.forEach((e) => {
+      if (e.kind !== 'include') return;
+      const from = depth.get(String(e.from)), to = depth.get(String(e.to));
+      if (from == null || to == null) return;
+      if (to < from + 1) depth.set(String(e.to), from + 1);
+    });
+  }
+  return depth;
+}
 function renderDocGraphCustom(host, graph) {
   if (DOC_GRAPH_OBSERVER) { DOC_GRAPH_OBSERVER.disconnect(); DOC_GRAPH_OBSERVER = null; }
-  const wrap = document.createElement('div'); wrap.className = 'dg';
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'dg-svg');
-  wrap.appendChild(svg);
-
+  /* ⚠️ 必须先清空 —— 之前没清，「正在生成代码图谱…」一直留在图上面（实测踩过） */
+  host.innerHTML = '';
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
   const files = nodes.filter((n) => n.kind === 'file');
@@ -12734,44 +12747,57 @@ function renderDocGraphCustom(host, graph) {
     if (!fnsOf.has(key)) fnsOf.set(key, []);
     fnsOf.get(key).push(n);
   });
-  /* 既没函数、又不参与连边的片段不画（否则一个空面板白占位置） */
-  const linked = new Set();
-  edges.forEach((e) => { if (e.kind === 'include') { linked.add(String(e.from)); linked.add(String(e.to)); } });
+  const drawn = files.filter((f) => (fnsOf.get(f.file + '|' + f.frag) || []).length || edges.some((e) => String(e.from) === String(f.id) || String(e.to) === String(f.id)));
+  if (!drawn.length) { host.innerHTML = '<span class="ol-empty">这个文档里没有可画的片段</span>'; return; }
 
-  const panelOf = new Map();   /* 片段 key → 面板元素 */
-  const pillOf = new Map();    /* 函数 id → 胶囊元素 */
-  const drawn = files.filter((f) => (fnsOf.get(f.file + '|' + f.frag) || []).length || linked.has(String(f.id)));
-  if (!drawn.length) { host.appendChild(wrap); return; }
+  const depth = docGraphLayers(files, edges);
+  const byLayer = new Map();
   drawn.forEach((f) => {
-    const kids = fnsOf.get(f.file + '|' + f.frag) || [];
-    const panel = document.createElement('div');
-    panel.className = 'dg-panel';
-    const head = document.createElement('div');
-    head.className = 'dg-panel-head';
-    head.innerHTML = '<span class="dg-file-icon">▤</span><b>' + escapeHtml(f.label) + '</b>'
-      + '<span class="dg-panel-count">' + (kids.length ? kids.length + ' 个函数' : '仅被引用') + '</span>';
-    panel.appendChild(head);
-    const list = document.createElement('div'); list.className = 'dg-pills';
-    kids.forEach((k) => {
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'dg-pill';
-      pill.innerHTML = '<i>ƒ</i>' + escapeHtml(k.label);
-      pill.title = k.label + ' · 第 ' + k.line + ' 行 · 点击跳到定义';
-      pill.onclick = () => {
-        try { goToLocation({ snippet: CURRENT, frag: k.frag, line: k.line || 1 }); setStatus('ok', '跳到 ' + k.label + '（第 ' + k.line + ' 行）'); } catch (_) {}
-      };
-      list.appendChild(pill);
-      pillOf.set(String(k.id), pill);
+    const d = depth.get(String(f.id)) || 0;
+    if (!byLayer.has(d)) byLayer.set(d, []);
+    byLayer.get(d).push(f);
+  });
+
+  const wrap = document.createElement('div'); wrap.className = 'dg';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'dg-svg');
+  wrap.appendChild(svg);
+  const panelOf = new Map();        /* 片段 id → 面板 */
+  const panelOfFn = new Map();      /* 函数 id → 它所在的面板 */
+  const pillOf = new Map();         /* 函数 id → 胶囊 */
+  [...byLayer.keys()].sort((a, b) => a - b).forEach((d) => {
+    const col = document.createElement('div'); col.className = 'dg-col';
+    byLayer.get(d).forEach((f) => {
+      const kids = fnsOf.get(f.file + '|' + f.frag) || [];
+      const panel = document.createElement('div');
+      panel.className = 'dg-panel';
+      const head = document.createElement('div');
+      head.className = 'dg-panel-head';
+      head.innerHTML = '<span class="dg-file-icon">▤</span><b>' + escapeHtml(f.label) + '</b>'
+        + '<span class="dg-panel-count">' + (kids.length ? kids.length + ' 个函数' : '头文件') + '</span>';
+      panel.appendChild(head);
+      if (kids.length) {
+        const list = document.createElement('div'); list.className = 'dg-pills';
+        kids.forEach((k) => {
+          const pill = document.createElement('button');
+          pill.type = 'button'; pill.className = 'dg-pill';
+          pill.innerHTML = '<i>ƒ</i>' + escapeHtml(k.label);
+          pill.title = k.label + ' · 第 ' + k.line + ' 行 · 点击跳到定义';
+          pill.onclick = (event) => {
+            event.stopPropagation();
+            try { goToLocation({ snippet: CURRENT, frag: k.frag, line: k.line || 1 }); setStatus('ok', '跳到 ' + k.label + '（第 ' + k.line + ' 行）'); } catch (_) {}
+          };
+          list.appendChild(pill);
+          pillOf.set(String(k.id), pill);
+          panelOfFn.set(String(k.id), panel);
+        });
+        panel.appendChild(list);
+      }
+      panel.onclick = () => { try { goToLocation({ snippet: CURRENT, frag: f.frag, line: 1 }); setStatus('ok', '跳到片段 ' + f.label); } catch (_) {} };
+      col.appendChild(panel);
+      panelOf.set(String(f.id), panel);
     });
-    if (!kids.length) { const empty = document.createElement('div'); empty.className = 'dg-empty'; empty.textContent = '（只被 include）'; list.appendChild(empty); }
-    panel.appendChild(list);
-    panel.onclick = (event) => {
-      if (event.target.closest('.dg-pill')) return;
-      try { goToLocation({ snippet: CURRENT, frag: f.frag, line: 1 }); setStatus('ok', '跳到片段 ' + f.label); } catch (_) {}
-    };
-    wrap.appendChild(panel);
-    panelOf.set(String(f.id), panel);
+    wrap.appendChild(col);
   });
   host.appendChild(wrap);
 
@@ -12782,41 +12808,63 @@ function renderDocGraphCustom(host, graph) {
     const mk = (a, b, dashed, color, count) => {
       if (!a || !b) return;
       const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-      const x1 = ra.left + ra.width / 2 - box.left, y1 = ra.top + ra.height / 2 - box.top;
-      const x2 = rb.left + rb.width / 2 - box.left, y2 = rb.top + rb.height / 2 - box.top;
-      const dx = Math.max(24, Math.abs(x2 - x1) * 0.4), dy = Math.max(18, Math.abs(y2 - y1) * 0.35);
+      /* 面板级连线：从右边缘中点连到左边缘中点，走水平贝塞尔 —— 比胶囊到胶囊干净得多 */
+      const lr = ra.left + ra.width / 2 <= rb.left + rb.width / 2;
+      const x1 = (lr ? ra.right : ra.left) - box.left, y1 = ra.top + ra.height / 2 - box.top;
+      const x2 = (lr ? rb.left : rb.right) - box.left, y2 = rb.top + rb.height / 2 - box.top;
+      const bend = Math.max(26, Math.abs(x2 - x1) * 0.45);
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('class', 'dg-link');
-      path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + (x1 + dx) + ',' + (y1 + dy) + ' ' + (x2 - dx) + ',' + (y2 - dy) + ' ' + x2 + ',' + y2);
+      path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + (x1 + (lr ? bend : -bend)) + ',' + y1
+        + ' ' + (x2 - (lr ? bend : -bend)) + ',' + y2 + ' ' + x2 + ',' + y2);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', color);
-      path.setAttribute('stroke-width', '1.3');
-      path.setAttribute('opacity', '.75');
+      path.setAttribute('stroke-width', '1.4');
+      path.setAttribute('opacity', '.8');
       if (dashed) path.setAttribute('stroke-dasharray', '5 4');
       svg.appendChild(path);
-      if (count && count > 1) {
+      if (count) {
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('class', 'dg-count');
-        text.setAttribute('x', String((x1 + x2) / 2)); text.setAttribute('y', String((y1 + y2) / 2 - 3));
-        text.setAttribute('fill', color); text.setAttribute('font-size', '9');
-        text.setAttribute('text-anchor', 'middle');
-        text.textContent = '×' + count;
+        text.setAttribute('x', String((x1 + x2) / 2)); text.setAttribute('y', String((y1 + y2) / 2 - 4));
+        text.setAttribute('fill', color); text.setAttribute('font-size', '9'); text.setAttribute('text-anchor', 'middle');
+        text.textContent = count;
         svg.appendChild(text);
       }
     };
-    /* 调用边：函数胶囊 → 函数胶囊；同一对之间合并成一条并标 ×N（避免 spaghetti 和满屏「调用」） */
-    const grouped = new Map();
+    /* 面板 → 面板：同一对之间合并计数，避免一屏线 */
+    const pairs = new Map();
+    /* 调用边两端是**函数 id**，要先映射到所属片段面板；
+       include 边两端本来就是片段 id。之前没做这个映射，调用边全被跳过（实测踩过）。 */
+    const panelFor = (id) => panelOf.get(String(id)) || panelOfFn.get(String(id));
     edges.forEach((e) => {
-      if (e.kind === 'call') {
-        const key = e.from + '>' + e.to;
-        grouped.set(key, (grouped.get(key) || 0) + 1);
-      } else if (e.kind === 'include') {
-        mk(panelOf.get(String(e.from)), panelOf.get(String(e.to)), true, 'var(--dim,#8b949e)');
-      }
+      const a = panelFor(e.from), b = panelFor(e.to);
+      if (!a || !b || a === b) return;
+      const key = e.kind + ':' + e.from + '>' + e.to;
+      pairs.set(key, { a, b, kind: e.kind, n: (pairs.get(key) ? pairs.get(key).n : 0) + 1 });
     });
-    grouped.forEach((count, key) => {
-      const [from, to] = key.split('>');
-      mk(pillOf.get(from), pillOf.get(to), false, 'var(--accent,#4f8cff)', count);
+    pairs.forEach((p) => {
+      if (p.kind === 'include') mk(p.a, p.b, true, 'var(--dim,#8b949e)', 'include');
+      /* 只有 1 次就不标了（图例已经说明实线=调用），多于 1 次才标 ×N，免得满屏「1 次调用」 */
+      else if (p.kind === 'call') mk(p.a, p.b, false, 'var(--accent,#4f8cff)', p.n > 1 ? '×' + p.n : '');
+    });
+    /* 胶囊级连线只作为弱提示画在最底层（很淡），悬停时靠 title 看具体关系 */
+    edges.forEach((e) => {
+      if (e.kind !== 'call') return;
+      const a = pillOf.get(String(e.from)), b = pillOf.get(String(e.to));
+      if (!a || !b) return;
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      if (ra.left === 0 && rb.left === 0) return;
+      const x1 = ra.left + ra.width / 2 - box.left, y1 = ra.top + ra.height / 2 - box.top;
+      const x2 = rb.left + rb.width / 2 - box.left, y2 = rb.top + rb.height / 2 - box.top;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'dg-link dg-link-thin');
+      path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + (x1 + 30) + ',' + y1 + ' ' + (x2 - 30) + ',' + y2 + ' ' + x2 + ',' + y2);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'var(--accent,#4f8cff)');
+      path.setAttribute('stroke-width', '1');
+      path.setAttribute('opacity', '.18');
+      svg.insertBefore(path, svg.firstChild);
     });
   };
   requestAnimationFrame(draw);
