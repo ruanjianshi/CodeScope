@@ -35,6 +35,8 @@ const { createCodeServerService } = require('./lib/code-server-service');
 const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
 const { createSystemPanel } = require('./lib/system-panel');
+const { buildCodeGraph, buildSnippetIndex, resolveDefinition } = require('./lib/code-graph');
+const { buildLogicGraph, logicToDrawio, logicToSkeleton } = require('./lib/logic-graph');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
@@ -6272,6 +6274,65 @@ const server = http.createServer(async (req, res) => {
       const code = typeof b.code === 'string' ? b.code : source.code;
       if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'LSP 文件内容超过 2 MB' });
       return send(res, 200, await LSP.query({ snippet, fragment, language:source.language, code, action, line:b.line, column:b.column, newName:b.newName, triggerKind:b.triggerKind, triggerCharacter:b.triggerCharacter, range:b.range, only:b.only }));
+    }
+    // ===== 代码图谱：单文件多片段 → 符号索引 → 函数/文件子图（薄路由，计算在 lib/code-graph.js） =====
+    if (req.method === 'GET' && u.pathname === '/api/graph') {
+      try {
+        const snippets = walkSnippets();
+        const depth = Math.max(1, Math.min(5, Number(u.searchParams.get('depth')) || 3));
+        const direction = String(u.searchParams.get('direction') || 'both');
+        if (!['up', 'down', 'both'].includes(direction)) return send(res, 400, { ok:false, error:'direction 仅支持 up/down/both' });
+        const result = buildCodeGraph(snippets, {
+          rootFunction: String(u.searchParams.get('rootFunction') || '').slice(0, 500),
+          rootFile: String(u.searchParams.get('rootFile') || '').slice(0, 1000),
+          depth, direction,
+        });
+        if (!result.functionGraph.ok) return send(res, 404, result.functionGraph);
+        if (!result.fileGraph.ok) return send(res, 404, result.fileGraph);
+        return send(res, 200, { ok:true, rev:computeRev(), depth, direction, ...result });
+      } catch (error) { return send(res, 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
+    }
+    // ===== 逻辑图：函数实现 ↔ 语句级控制流（薄路由，计算在 lib/logic-graph.js） =====
+    if (req.method === 'POST' && u.pathname === '/api/logic/graph') {
+      try {
+        const b = await readBody(req, 3 * 1024 * 1024);
+        const snippets = walkSnippets();
+        let code = typeof b.code === 'string' ? b.code : '';
+        let language = String(b.language || ''), name = String(b.name || 'fn').slice(0, 120);
+        if (!code) {
+          const snippet = snippets.find((item) => item.file === String(b.file || ''));
+          if (!snippet) return send(res, 404, { ok:false, error:'片段不存在（vault 可能已变动）' });
+          const fragment = Number(b.fragment);
+          if (!Number.isInteger(fragment) || fragment < 0 || fragment >= snippet.fragments.length) return send(res, 400, { ok:false, error:'片段索引无效' });
+          const source = snippet.fragments[fragment];
+          language = language || source.language;
+          const full = String(source.code || '');
+          const line = Number(b.line);
+          if (Number.isInteger(line) && line >= 1) {
+            const idx = buildSnippetIndex(snippet);
+            const hit = idx.find((s) => s.kind === 'fn' && s.frag === fragment && line >= s.line && line <= (s.endLine || s.line));
+            const target = hit ? (resolveDefinition(hit, idx) || hit) : null;
+            if (target && target.endLine) {
+              code = full.replace(/\r\n/g, '\n').split('\n').slice(target.line - 1, target.endLine).join('\n');
+              name = target.name || name;
+            } else code = full;
+          } else code = full;
+        }
+        if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'函数内容超过 2 MB' });
+        const graph = buildLogicGraph(code, { language: language || 'c_cpp', name });
+        if (String(b.format) === 'drawio') return send(res, 200, { ok:true, ...graph, xml:logicToDrawio(graph, { title:name }) });
+        return send(res, 200, { ok:true, ...graph });
+      } catch (error) { return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
+    }
+    if (req.method === 'POST' && u.pathname === '/api/logic/skeleton') {
+      try {
+        const b = await readBody(req, 2 * 1024 * 1024);
+        const graph = b && b.graph;
+        if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length > 2000) return send(res, 400, { ok:false, error:'逻辑图节点不合法（1–2000 个）' });
+        return send(res, 200, { ok:true, ...logicToSkeleton(graph, {
+          language:String(b.language || 'c_cpp'), fnName:String(b.fnName || b.name || 'generated').slice(0, 120),
+        }) });
+      } catch (error) { return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
     }
     // ===== 云同步：Tailscale 组网 / Syncthing 数据面 / restic 历史层 =====
     if (req.method === 'GET' && u.pathname === '/api/sync/status') {
