@@ -13745,6 +13745,12 @@ function blockJsonToCode() {
   return tops.map((t) => emitChain(t, 0)).join('\n').trim();
 }
 
+/* 通知 Blockly 重算画布尺寸。容器（积木栏 / 工作区）尺寸一变就得调一次，
+   否则里面的 SVG 保持旧尺寸、和容器对不上，看起来像「两块各干各的」。 */
+function bpResize() {
+  if (!BP_WORKSPACE || !window.Blockly) return;
+  try { window.Blockly.svgResize(BP_WORKSPACE); } catch (_) {}
+}
 /* ── 面板 ── */
 function setBlocklyActive(on) {
   BP_ACTIVE = !!on;
@@ -13765,6 +13771,8 @@ function setBlocklyActive(on) {
   const btn = $('btn-blockly');
   if (btn) btn.classList.toggle('on', BP_ACTIVE);
   if (BP_ACTIVE) renderBlockPane();
+  /* 打开后再补一次 resize：面板刚显示时尺寸才算得准 */
+  setTimeout(bpResize, 60);
 }
 function renderBlockPane() {
   const host = $('bp-workspace');
@@ -13822,6 +13830,7 @@ function syncBlocksFromCode() {
     if (body) body.textContent = code || '（工作区是空的）';
     BP_ORIG_COUNT = count;
     if ($('bp-stats')) $('bp-stats').textContent = (graph.name || root.name) + ' · ' + count + ' 个语句';
+    bpResize();
     /* 顺便把文档函数拉进「调用」下拉 */
     loadDocFunctions().then(() => {
       try { BP_WORKSPACE.updateToolbox(bpToolbox()); } catch (_) {}
@@ -18051,6 +18060,8 @@ function makeHResizer(handle, getter, setter) {
   wireCodeGraphToolbar();
   wireLogicGraphToolbar();
   wireBlocklyToolbar();
+  /* 窗口尺寸变化时也要让 Blockly 重算画布 */
+  window.addEventListener('resize', bpResize);
   if ($('btn-blockly')) $('btn-blockly').onclick = () => {
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
     setBlocklyActive(!BP_ACTIVE);
@@ -18064,6 +18075,9 @@ function makeHResizer(handle, getter, setter) {
       code.style.flex = 'none';
       code.style.width = clampV(v, 150, Math.max(200, Math.round(window.innerWidth * 0.6))) + 'px';
       try { localStorage.setItem('mc-bp-code-w', String(Math.round(v))); } catch (_) {}
+      /* ⚠️ 容器宽度变了必须显式通知 Blockly 重算画布尺寸，
+         否则里面的 SVG 还是旧尺寸、和容器对不上，看起来像「两块各干各的」 */
+      bpResize();
     },
     true);
   makeResizer($('bp-split-v'), 'v',
@@ -18074,6 +18088,7 @@ function makeHResizer(handle, getter, setter) {
       c.style.flex = 'none';
       c.style.width = clampV(v, 380, Math.max(460, Math.round(window.innerWidth * 0.8))) + 'px';
       try { localStorage.setItem('mc-bp-w', String(Math.round(v))); } catch (_) {}
+      bpResize();
     },
     true);
   makeResizer($('lg-split-v'), 'v',
