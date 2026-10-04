@@ -437,6 +437,9 @@ void bubbleSort(Array& values);
   /* 「⚡ AI 解读」按钮高亮必须跟「当前是否在显示 AI 解析」走，
      不能跟 LG_MODE（偏好，默认就是 ai）走，否则一次没点也一直高亮。 */
   assert(/b\.classList\.toggle\('on', showing\)/.test(html), 'AI 解读按钮的高亮没跟显示状态走：拿 LG_MODE 判会导致没点过也一直高亮');
+  /* 生成代码必须走高亮入口：主路径（从代码同步）漏改过一次，面板一直是纯文本 */
+  assert(!/body\.textContent = code/.test(html), '代码面板又直接用 textContent 了：要走 bpPaintCode 才有语法高亮');
+  assert(/function bpPaintCode/.test(html), '缺少 bpPaintCode 高亮入口');
   /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
      VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
   assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');
