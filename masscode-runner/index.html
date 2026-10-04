@@ -2483,9 +2483,25 @@
   .rel-map-summary .stat.in b { color:var(--accent); }
   .rel-map-summary .stat.out b { color:var(--ok); }
   .rel-section { padding:8px 9px 4px; color:var(--dim); font-size:10px; font-weight:600; }
-  /* Mermaid 渲染区：SVG 自适应面板宽度 */
-  .logic-mermaid { padding:10px 8px 14px; overflow-x:auto; }
+  /* Mermaid 渲染区：SVG 自适应面板宽度；点图放大到全屏浮层 */
+  .logic-mermaid { padding:10px 8px 14px; overflow-x:auto; cursor:zoom-in; position:relative; }
   .logic-mermaid svg { max-width:100%; height:auto; display:block; margin:0 auto; }
+  .logic-mermaid::after { content:'⤢ 点击放大'; position:absolute; right:10px; top:8px;
+    font-size:9px; color:var(--dim,#8b949e); opacity:0; transition:opacity .15s; pointer-events:none; }
+  .logic-mermaid:hover::after { opacity:1; }
+  /* 放大浮层 */
+  .logic-zoom { position:fixed; inset:0; z-index:99998; display:flex; flex-direction:column;
+    background:rgba(3,7,12,.93); backdrop-filter:blur(2px); }
+  .logic-zoom-bar { display:flex; align-items:center; gap:6px; padding:8px 12px;
+    border-bottom:1px solid #22303c; background:#0d1117; color:#c9d1d9; font-size:12px; }
+  .logic-zoom-bar .sp { flex:1 1 auto; }
+  .logic-zoom-title { font-weight:600; }
+  .logic-zoom-pct { color:var(--dim,#8b949e); min-width:46px; text-align:right; }
+  .logic-zoom-bar button { padding:4px 9px; font-size:11px; }
+  .logic-zoom-stage { flex:1 1 auto; position:relative; overflow:hidden; cursor:grab; }
+  .logic-zoom-stage.dragging { cursor:grabbing; }
+  .logic-zoom-holder { position:absolute; transform-origin:center center; will-change:transform; }
+  .logic-zoom-holder svg { max-width:none !important; height:auto; display:block; }
   /* 逻辑图 · 流程图布局：节点卡片竖排 + SVG 覆盖层画箭头 */
   .logic-flow { position:relative; display:flex; flex-direction:column; gap:16px; padding:12px 10px 18px; }
   .logic-flow-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
@@ -11780,13 +11796,98 @@ function renderLogicMermaid(host, graph, root) {
     return mermaid.render('logic-mmd-' + Date.now().toString(36), source);
   }).then((out) => {
     box.innerHTML = out && out.svg ? out.svg : '';
-    if (!box.innerHTML) box.innerHTML = '<span class="ol-empty">Mermaid 没有输出</span>';
+    if (!box.innerHTML) { box.innerHTML = '<span class="ol-empty">Mermaid 没有输出</span>'; return; }
+    /* 点图放大到全屏浮层（面板太窄，流程图看不清） */
+    const svg = box.querySelector('svg');
+    if (svg) {
+      box.title = '点击放大查看';
+      box.addEventListener('click', () => openLogicZoom(svg, (root && root.name) || ''));
+    }
   }).catch((error) => {
     box.innerHTML = '<span class="ol-empty">Mermaid 渲染失败：' + escapeHtml(String(error.message || error)) +
       '<br>（可以点「⧉ 复制 Mermaid」把源码粘到别处渲染）</span>';
   });
   return source;
 }
+/* ── 逻辑图放大查看 ──
+   关系面板很窄，流程图会被压得看不清。点图开一个全屏浮层：
+   滚轮/按钮缩放、按住拖动、Esc 关闭。SVG 是矢量的，放大不会糊。 */
+let LOGIC_ZOOM = null;
+function closeLogicZoom() {
+  if (!LOGIC_ZOOM) return;
+  try { document.removeEventListener('keydown', LOGIC_ZOOM.onKey); } catch (_) {}
+  LOGIC_ZOOM.overlay.remove();
+  LOGIC_ZOOM = null;
+}
+function openLogicZoom(svgEl, title) {
+  closeLogicZoom();
+  const overlay = document.createElement('div'); overlay.className = 'logic-zoom';
+  const bar = document.createElement('div'); bar.className = 'logic-zoom-bar';
+  const name = document.createElement('span'); name.className = 'logic-zoom-title';
+  name.textContent = '逻辑图 · ' + (title || '');
+  const spacer = document.createElement('span'); spacer.className = 'sp';
+  const mkBtn = (text, hint, onclick) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = hint;
+    b.onclick = onclick; return b;
+  };
+  const stage = document.createElement('div'); stage.className = 'logic-zoom-stage';
+  const holder = document.createElement('div'); holder.className = 'logic-zoom-holder';
+  holder.style.left = '50%'; holder.style.top = '50%';
+  holder.appendChild(svgEl.cloneNode(true));
+  stage.appendChild(holder);
+  let scale = 1.6;
+  const apply = () => {
+    holder.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+    pct.textContent = Math.round(scale * 100) + '%';
+  };
+  const pct = document.createElement('span'); pct.className = 'logic-zoom-pct';
+  const setScale = (next) => { scale = Math.max(0.3, Math.min(6, next)); apply(); };
+  bar.appendChild(name); bar.appendChild(spacer); bar.appendChild(pct);
+  bar.appendChild(mkBtn('−', '缩小（滚轮下滚）', () => setScale(scale / 1.2)));
+  bar.appendChild(mkBtn('+', '放大（滚轮上滚）', () => setScale(scale * 1.2)));
+  bar.appendChild(mkBtn('适应', '缩放到适合屏幕', () => {
+    const box = stage.getBoundingClientRect(), svg = holder.querySelector('svg');
+    const w = svg ? (svg.getBoundingClientRect().width / scale) : 0, h = svg ? (svg.getBoundingClientRect().height / scale) : 0;
+    if (!w || !h) { setScale(1.6); return; }
+    setScale(Math.min((box.width - 48) / w, (box.height - 48) / h));
+  }));
+  bar.appendChild(mkBtn('100%', '原始大小', () => setScale(1)));
+  bar.appendChild(mkBtn('✕ 关闭', '关闭（Esc）', closeLogicZoom));
+  overlay.appendChild(bar); overlay.appendChild(stage);
+  document.body.appendChild(overlay);
+  apply();
+  /* 滚轮缩放 */
+  stage.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    setScale(scale * (event.deltaY < 0 ? 1.12 : 1 / 1.12));
+  }, { passive: false });
+  /* 按住拖动平移 */
+  let drag = null;
+  stage.addEventListener('mousedown', (event) => {
+    if (event.target.closest('.logic-zoom-bar')) return;
+    drag = { x: event.clientX, y: event.clientY, left: holder.offsetLeft, top: holder.offsetTop };
+    stage.classList.add('dragging');
+  });
+  const onMove = (event) => {
+    if (!drag) return;
+    holder.style.left = (drag.left + event.clientX - drag.x) + 'px';
+    holder.style.top = (drag.top + event.clientY - drag.y) + 'px';
+  };
+  const onUp = () => { drag = null; stage.classList.remove('dragging'); };
+  stage.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  const onKey = (event) => {
+    if (event.key === 'Escape') { closeLogicZoom(); return; }
+    if (event.key === '+' || event.key === '=') setScale(scale * 1.2);
+    if (event.key === '-' || event.key === '_') setScale(scale / 1.2);
+    if (event.key === '0') setScale(1);
+  };
+  LOGIC_ZOOM = { overlay, onKey };
+  document.addEventListener('keydown', onKey);
+  /* 点浮层空白处也关闭 */
+  overlay.addEventListener('mousedown', (event) => { if (event.target === overlay || event.target === stage) closeLogicZoom(); });
+}
+
 let LOGIC_GRAPH_SEQ = 0;
 let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'mermaid'; } catch (_) { return 'mermaid'; } })();
 let LOGIC_FLOW_OBSERVER = null;
