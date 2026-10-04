@@ -366,9 +366,12 @@ function logicToSkeleton(graph, { language = 'c_cpp', fnName = 'generated' } = {
   const pending = [];   /* 还没闭合的块，存它们的缩进层 */
   nodes.forEach((n) => {
     const depth = Number.isFinite(n.indent) ? n.indent : (Number(n.level) || 1);
-    const pad = indentUnit.repeat(Math.max(1, Math.min(8, depth)));
+    /* +1：节点 indent 是「相对函数体的花括号深度」，函数体本身已经要缩一层。
+       原来写 Math.max(1, depth) —— indent 0 和 1 都渲染成一层，
+       插进 if 体内的语句会和 if 自己平级（实测踩过）。 */
+    const pad = indentUnit.repeat(Math.max(1, Math.min(8, depth + 1)));
     while (pending.length && pending[pending.length - 1] >= depth) {
-      lines.push(indentUnit.repeat(Math.max(1, pending.pop())) + '}');
+      lines.push(indentUnit.repeat(Math.max(1, (pending.pop() || 0) + 1)) + '}');
     }
     if (n.kind === 'branch') {
       /* label 已经是 `if (cond)` 形态，直接用 */
@@ -383,7 +386,7 @@ function logicToSkeleton(graph, { language = 'c_cpp', fnName = 'generated' } = {
     else if (n.kind === 'call') lines.push(pad + (/[;{}]\s*$/.test(n.label) ? n.label : n.label + ';'));
     else lines.push(pad + (/[;{}]\s*$/.test(n.label) ? n.label : n.label + ';'));
   });
-  while (pending.length) lines.push(indentUnit.repeat(Math.max(1, pending.pop())) + '}');
+  while (pending.length) lines.push(indentUnit.repeat(Math.max(1, (pending.pop() || 0) + 1)) + '}');
   if (!isPy) lines.push('}');
   return { ok: true, code: lines.join('\n'), language };
 }

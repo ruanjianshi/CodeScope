@@ -2534,6 +2534,18 @@
   .logic-node.k-return { border-left:3px solid #8fd694; }
   .logic-node.k-return .logic-node-icon { color:#8fd694; }
   .logic-node.k-call { border-left:3px solid var(--accent); }
+  /* 图形化编辑：悬停露出工具按钮，标签双击可就地编辑 */
+  .logic-node-tools { flex:0 0 auto; display:flex; gap:2px; opacity:0; transition:opacity .15s; }
+  .logic-node.editable:hover .logic-node-tools { opacity:1; }
+  .logic-node-tools button { width:18px; height:18px; padding:0; font-size:10px; line-height:1;
+    border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--dim,#8b949e); cursor:pointer; }
+  .logic-node-tools button:hover { color:var(--accent); border-color:var(--accent); }
+  .logic-node-label[contenteditable="true"] { outline:1px solid var(--accent); border-radius:3px;
+    padding:0 3px; background:rgba(79,140,255,.10); white-space:pre-wrap; }
+  .logic-edit-code { padding:0 8px 10px; }
+  .logic-edit-pre { margin:6px 0; padding:8px 10px; max-height:320px; overflow:auto;
+    border:1px solid var(--border); border-radius:8px; background:var(--panel,#141a22);
+    font-size:11px; line-height:1.5; font-family:var(--mono,ui-monospace,Menlo,monospace); white-space:pre; }
   /* 逻辑图：一行一个语句节点，缩进 = 花括号嵌套深度 */
   .logic-graph { display:flex; flex-direction:column; }
   .logic-list { display:flex; flex-direction:column; padding:2px 0 6px; }
@@ -3577,10 +3589,11 @@
     #toolbar .sp { min-width:0; }
     #toolbar::-webkit-scrollbar { display:none; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
+    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
     #btn-outline::before { content:'≡'; font-size:16px; }
     #btn-mindmap::before { content:'◇'; font-size:15px; }
+    #btn-codegraph::before { content:'🕸'; font-size:14px; }
     #btn-history::before { content:'↶'; font-size:15px; }
     #btn-pair-switch::before { content:'⇄'; font-size:13px; }
     #btn-edit { flex:none; white-space:nowrap; }
@@ -12082,6 +12095,224 @@ function renderDocGraphPane(body) {
     });
 }
 
+/* ── 逻辑图 · 图形化编辑（改图 → 生成代码）─────────────────────────────
+   参考市面上的图形化编程工具：**不编辑文本，直接在图上操作** ——
+   点节点就地改内容、＋ 插入、✕ 删除、拖拽调顺序，改完一键生成代码。
+
+   编辑的是一份**可变副本** LOGIC_EDIT（不动原图，也不动源码）；
+   「⟳ 从代码重载」丢弃改动重新解析。生成走 logicToSkeleton（本来就吃 nodes/edges）。
+   节点在数组里的顺序 = 执行顺序（logicToSkeleton 按它渲染），所以插入/删除都在数组上做。 */
+let LOGIC_EDIT = null;
+let LOGIC_EDIT_SEQ = 0;
+
+function logicEditStart(graph) {
+  LOGIC_EDIT = {
+    nodes: (graph.nodes || []).map((n) => Object.assign({}, n)),
+    edges: (graph.edges || []).map((e) => Object.assign({}, e)),
+    language: graph.language || 'c_cpp',
+    name: graph.name || 'fn',
+  };
+  return LOGIC_EDIT;
+}
+function logicEditNode(id) {
+  return LOGIC_EDIT ? LOGIC_EDIT.nodes.find((n) => n.id === id) : null;
+}
+function logicEditNextId() {
+  let max = 0;
+  (LOGIC_EDIT ? LOGIC_EDIT.nodes : []).forEach((n) => {
+    const m = /^n(\d+)$/.exec(String(n.id || ''));
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return 'n' + (max + 1);
+}
+/* 在 afterId 之后插入一个新节点。
+   分支/循环头上点「＋」→ 插到它体内（indent+1），其余插到同层。
+   原来从 afterId 出去的边改接到新节点上，再补一条 after → new。 */
+function logicEditInsertAfter(afterId, kind, label) {
+  if (!LOGIC_EDIT) return null;
+  const after = logicEditNode(afterId);
+  const inBody = !!after && (after.kind === 'branch' || after.kind === 'loop');
+  const node = {
+    id: logicEditNextId(), kind,
+    label: label || (kind === 'branch' ? 'if (条件)' : kind === 'loop' ? 'while (条件)' : '语句;'),
+    line: after ? after.line : 1, endLine: after ? after.line : 1,
+    indent: after ? Math.max(0, Number(after.indent) || 0) + (inBody ? 1 : 0) : 1,
+    level: after ? (Number(after.level) || 1) : 1,
+    kw: kind === 'loop' ? 'while' : '',
+  };
+  const index = LOGIC_EDIT.nodes.findIndex((n) => n.id === afterId);
+  LOGIC_EDIT.nodes.splice(index < 0 ? LOGIC_EDIT.nodes.length : index + 1, 0, node);
+  LOGIC_EDIT.edges.forEach((e) => { if (e.from === afterId) e.from = node.id; });
+  if (after) LOGIC_EDIT.edges.push({ from: afterId, to: node.id, label: 'next' });
+  return node;
+}
+/* 删除节点：把「进来的边」直接接到「出去的边」上，保持连通 */
+function logicEditRemove(id) {
+  if (!LOGIC_EDIT) return;
+  const outs = LOGIC_EDIT.edges.filter((e) => e.from === id);
+  const ins = LOGIC_EDIT.edges.filter((e) => e.to === id);
+  LOGIC_EDIT.edges = LOGIC_EDIT.edges.filter((e) => e.from !== id && e.to !== id);
+  ins.forEach((i) => outs.forEach((o) => {
+    if (i.from === o.to) return;
+    if (LOGIC_EDIT.edges.some((e) => e.from === i.from && e.to === o.to)) return;
+    LOGIC_EDIT.edges.push({ from: i.from, to: o.to, label: i.label });
+  }));
+  LOGIC_EDIT.nodes = LOGIC_EDIT.nodes.filter((n) => n.id !== id);
+}
+/* 上移 / 下移：换数组位置，indent 跟着换（这样生成的代码顺序也变） */
+function logicEditMove(id, delta) {
+  if (!LOGIC_EDIT) return;
+  const i = LOGIC_EDIT.nodes.findIndex((n) => n.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= LOGIC_EDIT.nodes.length) return;
+  const a = LOGIC_EDIT.nodes[i];
+  LOGIC_EDIT.nodes[i] = LOGIC_EDIT.nodes[j];
+  LOGIC_EDIT.nodes[j] = a;
+}
+function logicEditSetLabel(id, label) {
+  const node = logicEditNode(id);
+  if (node) node.label = String(label || '').replace(/\s+/g, ' ').trim();
+}
+
+/* 可编辑的流程图：卡片上带 ＋ / ✕ / ↑ / ↓，标签可双击就地编辑 */
+function buildLogicFlowEditable(body, graph) {
+  if (LOGIC_FLOW_OBSERVER) { LOGIC_FLOW_OBSERVER.disconnect(); LOGIC_FLOW_OBSERVER = null; }
+  const wrap = document.createElement('div'); wrap.className = 'logic-flow editing';
+  const seq = ++LOGIC_GRAPH_SEQ, marker = 'logic-arrow-' + seq;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'logic-flow-svg');
+  svg.innerHTML = '<defs><marker id="' + marker + '" markerWidth="6" markerHeight="6" refX="5.4" refY="3" viewBox="0 0 6 6" orient="auto" markerUnits="userSpaceOnUse"><path d="M.6,.7 L5.4,3 L.6,5.3 Z" fill="var(--accent)"/></marker></defs>';
+  wrap.appendChild(svg);
+  const cards = new Map();
+  const rerender = () => renderRelationPane();
+  const nodes = (graph.nodes || []).filter((node) => node.kind !== 'entry' && node.kind !== 'exit');
+  nodes.forEach((node) => {
+    const card = document.createElement('div');
+    card.className = 'logic-node k-' + node.kind + ' editable';
+    card.style.marginLeft = (Math.min(6, Number(node.indent) || 0) * 18) + 'px';
+    card.dataset.id = node.id;
+    const icon = document.createElement('span'); icon.className = 'logic-node-icon';
+    icon.textContent = LOGIC_KIND_ICON[node.kind] || '·';
+    const bodyEl = document.createElement('span'); bodyEl.className = 'logic-node-body';
+    const kindEl = document.createElement('span'); kindEl.className = 'logic-node-kind';
+    kindEl.textContent = (LOGIC_KIND_TEXT[node.kind] || node.kind) + (node.kind === 'branch' || node.kind === 'loop' ? ' · 双击改条件' : ' · 双击改内容');
+    const labelEl = document.createElement('span'); labelEl.className = 'logic-node-label';
+    labelEl.textContent = logicNodeDisplayLabel(node);
+    labelEl.title = '双击编辑';
+    labelEl.addEventListener('dblclick', () => {
+      labelEl.contentEditable = 'true';
+      labelEl.textContent = String(node.label || '');
+      labelEl.focus();
+      const done = (save) => {
+        labelEl.contentEditable = 'false';
+        if (save) logicEditSetLabel(node.id, labelEl.textContent);
+        rerender();
+      };
+      labelEl.addEventListener('blur', () => done(true), { once: true });
+      labelEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') { event.preventDefault(); done(true); }
+        if (event.key === 'Escape') { event.preventDefault(); done(false); }
+      });
+    });
+    bodyEl.appendChild(kindEl); bodyEl.appendChild(labelEl);
+    const tools = document.createElement('span'); tools.className = 'logic-node-tools';
+    const mkTool = (text, hint, onclick) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = hint;
+      b.onclick = (event) => { event.stopPropagation(); onclick(); };
+      return b;
+    };
+    tools.appendChild(mkTool('＋', node.kind === 'branch' || node.kind === 'loop' ? '在它里面插入一条语句' : '在它后面插入一条语句',
+      () => { logicEditInsertAfter(node.id, 'stmt'); rerender(); }));
+    tools.appendChild(mkTool('◆', '在它后面插入一个判断', () => { logicEditInsertAfter(node.id, 'branch'); rerender(); }));
+    tools.appendChild(mkTool('↻', '在它后面插入一个循环', () => { logicEditInsertAfter(node.id, 'loop'); rerender(); }));
+    tools.appendChild(mkTool('↑', '上移', () => { logicEditMove(node.id, -1); rerender(); }));
+    tools.appendChild(mkTool('↓', '下移', () => { logicEditMove(node.id, 1); rerender(); }));
+    tools.appendChild(mkTool('✕', '删除这个节点', () => { logicEditRemove(node.id); rerender(); }));
+    card.appendChild(icon); card.appendChild(bodyEl); card.appendChild(tools);
+    wrap.appendChild(card);
+    cards.set(node.id, card);
+  });
+  body.appendChild(wrap);
+  const draw = () => {
+    const box = wrap.getBoundingClientRect();
+    svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
+    svg.querySelectorAll('.logic-link,.logic-link-label').forEach((el) => el.remove());
+    (graph.edges || []).forEach((edge) => {
+      const from = cards.get(edge.from), to = cards.get(edge.to);
+      if (!from || !to) return;
+      const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+      const x1 = a.left + a.width / 2 - box.left, y1 = a.bottom - box.top;
+      const x2 = b.left + b.width / 2 - box.left, y2 = b.top - box.top;
+      if (y2 < y1) return;
+      const bend = Math.max(14, Math.min(46, Math.abs(y2 - y1) * 0.42));
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'logic-link' + (edge.label ? ' e-' + edge.label : ''));
+      path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + x1 + ',' + (y1 + bend) + ' ' + x2 + ',' + (y2 - bend) + ' ' + x2 + ',' + y2);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', edge.label === 'true' ? 'var(--ok)' : edge.label === 'false' ? '#e57373' : 'var(--accent)');
+      path.setAttribute('stroke-width', '1.4'); path.setAttribute('opacity', '.85');
+      path.setAttribute('marker-end', 'url(#' + marker + ')');
+      svg.appendChild(path);
+    });
+  };
+  requestAnimationFrame(draw);
+  if (window.ResizeObserver) { LOGIC_FLOW_OBSERVER = new ResizeObserver(draw); LOGIC_FLOW_OBSERVER.observe(wrap); }
+}
+
+/* 图形化编辑的底部面板：生成代码 / 复制 / 丢弃改动 */
+function renderLogicEditPanel(host) {
+  const bar = document.createElement('div'); bar.className = 'rel-tools';
+  relationButton(bar, '↩ 生成代码', false, () => {
+    if (!LOGIC_EDIT) return;
+    setStatus('ok', '正在生成代码…');
+    fetch('/api/logic/skeleton', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        graph: { nodes: LOGIC_EDIT.nodes, edges: LOGIC_EDIT.edges },
+        language: LOGIC_EDIT.language || 'c_cpp', fnName: LOGIC_EDIT.name || 'generated',
+      }),
+    }).then((response) => response.json()).then((out) => {
+      if (!out || !out.ok) { setStatus('err', '生成失败：' + ((out && out.error) || '未知错误')); return; }
+      showLogicEditCode(host, out.code || '');
+      setStatus('ok', '已按当前图生成代码');
+    }).catch((error) => setStatus('err', '生成失败：' + String(error.message || error)));
+  });
+  relationButton(bar, '⟳ 丢弃改动', false, () => { LOGIC_EDIT = null; renderRelationPane(); });
+  host.appendChild(bar);
+  const tip = document.createElement('div'); tip.className = 'rel-tip';
+  tip.textContent = '双击节点改内容 · ＋ 插入语句 · ◆ 插判断 · ↻ 插循环 · ↑↓ 调序 · ✕ 删除 · 改完点「↩ 生成代码」';
+  host.appendChild(tip);
+  const box = document.createElement('div'); box.className = 'logic-edit-code';
+  box.id = '__logic_edit_code__';
+  box.innerHTML = '<span class="ol-empty">改完图后点上面的「↩ 生成代码」</span>';
+  host.appendChild(box);
+}
+function showLogicEditCode(host, code) {
+  const box = host.querySelector('#__logic_edit_code__');
+  if (!box) return;
+  box.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'rel-section';
+  head.textContent = '生成结果';
+  const pre = document.createElement('pre'); pre.className = 'logic-edit-pre';
+  pre.textContent = code;
+  const actions = document.createElement('div'); actions.className = 'rel-tools';
+  relationButton(actions, '⧉ 复制代码', false, () => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => setStatus('ok', '代码已复制')).catch(() => setStatus('ok', '代码已打印到控制台'));
+    }
+    try { console.log('[CodeScope] 由图生成的代码：\n' + code); } catch (_) {}
+  });
+  relationButton(actions, '⤓ 下载 .c', false, () => {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = (LOGIC_EDIT && LOGIC_EDIT.name ? LOGIC_EDIT.name : 'generated') + '.c';
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  });
+  box.appendChild(head); box.appendChild(pre); box.appendChild(actions);
+}
+
 let LOGIC_GRAPH_SEQ = 0;
 let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'mermaid'; } catch (_) { return 'mermaid'; } })();
 let LOGIC_FLOW_OBSERVER = null;
@@ -12181,8 +12412,17 @@ function renderLogicGraphPane(body, root) {
     relationButton(layoutBar, '◇ Mermaid 图', LOGIC_LAYOUT === 'mermaid', () => setLayout('mermaid'));
     relationButton(layoutBar, '◫ 卡片流程', LOGIC_LAYOUT === 'flow', () => setLayout('flow'));
     relationButton(layoutBar, '☷ 列表', LOGIC_LAYOUT === 'list', () => setLayout('list'));
+    /* 图形化编辑：进入后在「卡片流程」上直接改（双击改内容、＋ 插入、✕ 删除、↑↓ 调序） */
+    relationButton(layoutBar, LOGIC_EDIT ? '✓ 编辑中' : '✎ 图形化编辑', !!LOGIC_EDIT, () => {
+      if (LOGIC_EDIT) { LOGIC_EDIT = null; }
+      else { logicEditStart(payload); LOGIC_LAYOUT = 'flow'; try { localStorage.setItem('mc-logic-layout', 'flow'); } catch (_) {} }
+      renderRelationPane();
+    });
     host.appendChild(layoutBar);
-    if (LOGIC_LAYOUT === 'mermaid') {
+    if (LOGIC_EDIT) {
+      buildLogicFlowEditable(host, LOGIC_EDIT);
+      renderLogicEditPanel(host);
+    } else if (LOGIC_LAYOUT === 'mermaid') {
       renderLogicMermaid(host, payload, root);
     } else if (LOGIC_LAYOUT === 'flow') {
       buildLogicFlow(host, payload);
