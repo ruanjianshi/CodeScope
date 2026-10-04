@@ -12932,6 +12932,15 @@ function renderDocGraphForce(host, graph) {
     const svg = d3.select(host).append('svg')
       .attr('class', 'dg-force').attr('width', '100%').attr('height', H)
       .attr('viewBox', [0, 0, W, H]);
+    /* 发光滤镜 + 箭头，让节点有层次、边有方向 */
+    svg.append('defs').html(
+      '<filter id="dgGlow" x="-60%" y="-60%" width="220%" height="220%">'
+      + '<feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
+      + '<marker id="dgArrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" viewBox="0 0 7 7" orient="auto">'
+      + '<path d="M1,1 L6,3.5 L1,6" fill="none" stroke="#58a6ff" stroke-width="1.2" stroke-linecap="round"/></marker>'
+      + '<marker id="dgArrowDim" markerWidth="7" markerHeight="7" refX="6" refY="3.5" viewBox="0 0 7 7" orient="auto">'
+      + '<path d="M1,1 L6,3.5 L1,6" fill="none" stroke="#6b7684" stroke-width="1.2" stroke-linecap="round"/></marker>'
+    );
     const root = svg.append('g');
     /* 缩放 + 平移 */
     const zoom = d3.zoom().scaleExtent([0.25, 4]).on('zoom', (event) => root.attr('transform', event.transform));
@@ -12940,18 +12949,31 @@ function renderDocGraphForce(host, graph) {
     const nodeG = root.append('g').attr('class', 'dgf-nodes');
     const labelG = root.append('g').attr('class', 'dgf-labels');
 
+    /* 度数：连得多的节点画大一点，一眼看出枢纽 */
+    const degree = new Map();
+    links.forEach((l) => {
+      degree.set(l.source, (degree.get(l.source) || 0) + 1);
+      degree.set(l.target, (degree.get(l.target) || 0) + 1);
+    });
+    const radiusOf = (d) => {
+      const deg = degree.get(d.key) || 0;
+      return d.kind === 'file' ? 8 + Math.min(6, deg) : 4.5 + Math.min(4, deg * 0.7);
+    };
+
     const link = linkG.selectAll('line').data(links).join('line')
       .attr('stroke', (d) => (d.kind === 'include' ? '#6b7684' : '#58a6ff'))
-      .attr('stroke-width', (d) => (d.kind === 'include' ? 1 : 1.2))
-      .attr('stroke-opacity', 0.75)
-      .attr('stroke-dasharray', (d) => (d.kind === 'include' ? '4 4' : null));
+      .attr('stroke-width', (d) => (d.kind === 'include' ? 1 : 1.1))
+      .attr('stroke-opacity', (d) => (d.kind === 'include' ? 0.6 : 0.45))
+      .attr('stroke-dasharray', (d) => (d.kind === 'include' ? '4 4' : null))
+      .attr('marker-end', (d) => (d.kind === 'include' ? 'url(#dgArrowDim)' : 'url(#dgArrow)'));
     const edgeLabel = labelG.selectAll('text.dgf-edge').data(links.filter((d) => d.kind === 'include')).join('text')
       .attr('class', 'dgf-edge').attr('fill', '#6b7684').attr('font-size', 9)
       .attr('text-anchor', 'middle').text('include');
     const node = nodeG.selectAll('circle').data(nodes).join('circle')
-      .attr('r', (d) => (d.kind === 'file' ? 9 : 5.5))
+      .attr('r', radiusOf)
       .attr('fill', (d) => DG_COLOR[d.kind] || '#8b949e')
       .attr('stroke', '#0d1117').attr('stroke-width', 1.5)
+      .attr('filter', 'url(#dgGlow)')
       .attr('cursor', 'pointer')
       .on('click', (event, d) => {
         event.stopPropagation();
@@ -12964,22 +12986,40 @@ function renderDocGraphForce(host, graph) {
       .on('mouseleave', function () { d3.select(this).attr('stroke', '#0d1117').attr('stroke-width', 1.5); });
     node.append('title').text((d) => (d.kind === 'fn' ? d.label + ' · 第 ' + d.line + ' 行' : d.label));
     const label = labelG.selectAll('text.dgf-node').data(nodes).join('text')
-      .attr('class', 'dgf-node').attr('font-size', (d) => (d.kind === 'file' ? 11 : 9.5))
-      .attr('fill', (d) => (d.kind === 'file' ? '#e3b341' : '#adbac7'))
-      .attr('dx', (d) => (d.kind === 'file' ? 12 : 8)).attr('dy', 3)
+      .attr('class', 'dgf-node').attr('font-size', (d) => (d.kind === 'file' ? 11.5 : 10))
+      .attr('fill', (d) => (d.kind === 'file' ? '#e3b341' : '#c3ccd8'))
+      .attr('font-weight', (d) => (d.kind === 'file' ? 600 : 400))
+      .attr('dx', (d) => radiusOf(d) + 5).attr('dy', 3.5)
       .attr('pointer-events', 'none').text((d) => d.label);
 
     const sim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d) => d.key).distance((d) => (d.kind === 'include' ? 120 : 62)).strength(0.5))
-      .force('charge', d3.forceManyBody().strength((d) => (d.kind === 'file' ? -420 : -130)))
+      .force('link', d3.forceLink(links).id((d) => d.key).distance((d) => (d.kind === 'include' ? 150 : 74)).strength(0.5))
+      .force('charge', d3.forceManyBody().strength((d) => (d.kind === 'file' ? -520 : -160)))
       .force('center', d3.forceCenter(W / 2, H / 2))
-      .force('collide', d3.forceCollide().radius((d) => (d.kind === 'file' ? 26 : 16)))
+      .force('collide', d3.forceCollide().radius((d) => radiusOf(d) + 16 + Math.min(46, String(d.label || '').length * 5.2)))
       .on('tick', () => {
         link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
         edgeLabel.attr('x', (d) => (d.source.x + d.target.x) / 2).attr('y', (d) => (d.source.y + d.target.y) / 2 - 3);
         node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
         label.attr('x', (d) => d.x).attr('y', (d) => d.y);
       });
+    /* 布局稳定后自动缩放到刚好铺满 —— 否则图缩在中间一小块，上下大片空白 */
+    let fitted = false;
+    sim.on('end', () => {
+      if (fitted) return;
+      fitted = true;
+      fitToView();
+    });
+    function fitToView() {
+      if (!nodes.length) return;
+      const xs = nodes.map((d) => d.x), ys = nodes.map((d) => d.y);
+      const pad = 60;
+      const minX = Math.min.apply(null, xs) - pad, maxX = Math.max.apply(null, xs) + pad;
+      const minY = Math.min.apply(null, ys) - pad, maxY = Math.max.apply(null, ys) + pad;
+      const k = Math.min(3, 0.95 * Math.min(W / Math.max(1, maxX - minX), H / Math.max(1, maxY - minY)));
+      const tx = W / 2 - k * (minX + maxX) / 2, ty = H / 2 - k * (minY + maxY) / 2;
+      svg.transition().duration(420).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+    }
     /* 拖拽节点 */
     node.call(d3.drag()
       .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
@@ -12992,7 +13032,7 @@ function renderDocGraphForce(host, graph) {
     };
     tools.appendChild(mkBtn('＋', '放大', () => svg.transition().duration(200).call(zoom.scaleBy, 1.3)));
     tools.appendChild(mkBtn('－', '缩小', () => svg.transition().duration(200).call(zoom.scaleBy, 1 / 1.3)));
-    tools.appendChild(mkBtn('⤢', '适应窗口', () => svg.transition().duration(250).call(zoom.transform, d3.zoomIdentity)));
+    tools.appendChild(mkBtn('⤢', '适应内容', () => fitToView()));
     tools.appendChild(mkBtn('⟳', '重新布局', () => { nodes.forEach((n) => { n.fx = null; n.fy = null; }); sim.alpha(1).restart(); }));
     host.appendChild(tools);
   }).catch((error) => {
