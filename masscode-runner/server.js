@@ -6306,6 +6306,10 @@ const server = http.createServer(async (req, res) => {
         const snippets = walkSnippets();
         let code = typeof b.code === 'string' ? b.code : '';
         let language = String(b.language || ''), name = String(b.name || 'fn').slice(0, 120);
+        /* 函数体是**切片**出来再解析的，所以图里的行号是「函数内相对行」。
+           这里记下偏移量，返回前加回去 —— 否则前端点节点跳转会整体错位
+           （用户报过：图上写 L2，实际在编辑器第 27 行）。 */
+        let lineOffset = 0;
         if (!code) {
           const snippet = snippets.find((item) => item.file === String(b.file || ''));
           if (!snippet) return send(res, 404, { ok:false, error:'片段不存在（vault 可能已变动）' });
@@ -6322,11 +6326,19 @@ const server = http.createServer(async (req, res) => {
             if (target && target.endLine) {
               code = full.replace(/\r\n/g, '\n').split('\n').slice(target.line - 1, target.endLine).join('\n');
               name = target.name || name;
+              lineOffset = Math.max(0, target.line - 1);
             } else code = full;
           } else code = full;
         }
         if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'函数内容超过 2 MB' });
         const graph = buildLogicGraph(code, { language: language || 'c_cpp', name });
+        /* 相对行号 → 片段绝对行号（前端 goToLocation 用的是后者） */
+        if (lineOffset) {
+          graph.nodes.forEach((n) => {
+            n.line = (Number(n.line) || 1) + lineOffset;
+            n.endLine = (Number(n.endLine) || Number(n.line) || 1) + lineOffset;
+          });
+        }
         if (String(b.format) === 'drawio') return send(res, 200, { ok:true, ...graph, xml:logicToDrawio(graph, { title:name }) });
         return send(res, 200, { ok:true, ...graph });
       } catch (error) { return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
