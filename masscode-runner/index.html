@@ -13989,7 +13989,7 @@ function syncBlocksFromCode() {
     BP_BUILDING = false;
     const code = blockJsonToCode();
     BP_LAST_CODE = code;
-    if (body) body.textContent = code || '（工作区是空的）';
+    bpPaintCode(code);   /* 走高亮入口；之前这里漏改，主路径一直没有高亮 */
     BP_ORIG_COUNT = count;
     if ($('bp-stats')) $('bp-stats').textContent = (graph.name || root.name) + ' · ' + count + ' 个语句';
     bpResize();
