@@ -257,6 +257,26 @@
   #cg-body .node.doc-node-clickable:hover polygon,
   #cg-body .node.doc-node-clickable:hover path { stroke: var(--accent,#4f8cff) !important; stroke-width: 2px !important; }
   #cg-body .cluster { cursor: pointer; }
+  /* 代码图谱 · 自绘：片段面板 + 函数胶囊 + SVG 连线 */
+  .dg { position:relative; display:flex; flex-wrap:wrap; gap:14px; align-content:flex-start;
+    justify-content:center; padding:6px 4px 12px; }
+  .dg-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+  .dg-panel { position:relative; z-index:1; min-width:176px; max-width:100%;
+    border:1px solid var(--border); border-radius:10px; background:var(--panel2,#151b24); padding:8px 10px 10px; }
+  .dg-panel-head { display:flex; align-items:center; gap:5px; margin-bottom:8px; font-size:11px; color:var(--fg); }
+  .dg-file-icon { color:var(--dim); }
+  .dg-panel-count { margin-left:auto; color:var(--dim); font-size:10px; }
+  .dg-pills { display:flex; flex-wrap:wrap; gap:5px; }
+  .dg-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 9px;
+    border:1px solid var(--border); border-radius:999px; background:rgba(79,140,255,.10);
+    color:var(--fg); font-size:11px; font-family:var(--mono,ui-monospace,Menlo,monospace);
+    cursor:pointer; transition:border-color .15s, background .15s; }
+  .dg-pill i { color:var(--accent); font-style:normal; }
+  .dg-pill:hover { border-color:var(--accent); background:rgba(79,140,255,.22); }
+  .dg-empty { color:var(--dim); font-size:10px; padding:3px 2px; }
+  .dg-legend { display:flex; gap:14px; padding:8px 12px 2px; color:var(--dim); font-size:10px; }
+  .dg-legend i { display:inline-block; width:16px; height:0; border-top:2px solid var(--accent); vertical-align:middle; margin-right:4px; }
+  .dg-legend i.dashed { border-top-style:dashed; border-color:var(--dim); }
   /* 工具栏「图谱」的下拉菜单 */
   .graph-menu { position: fixed; z-index: 9999; min-width: 240px; padding: 5px;
     background: var(--panel2,#151b24); border: 1px solid var(--border); border-radius: 10px;
@@ -12475,6 +12495,15 @@ function renderCodeGraphPane() {
       }
       const made = docGraphToMermaid(graph);
       CG_SOURCE = made.source;
+      /* 自绘（Mermaid 的布局控制不了：细长条、大片空白、满屏「调用」标签） */
+      if (true) {
+        renderDocGraphCustom(body, graph);
+        const legend = document.createElement("div");
+        legend.className = "dg-legend";
+        legend.innerHTML = "<span><i></i>调用</span><span><i class=\"dashed\"></i>include</span><span>点函数跳定义 · 点面板跳片段</span>";
+        body.insertBefore(legend, body.firstChild);
+        return null;
+      }
       return ensureMermaid().then((mermaid) => {
         mermaid.initialize({
           startOnLoad: false, securityLevel: 'strict',
@@ -12677,6 +12706,121 @@ function openGraphMenu(anchor) {
   const onDoc = (event) => { if (!menu.contains(event.target) && event.target !== anchor) closeGraphMenu(); };
   setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
   GRAPH_MENU = { menu, onDoc };
+}
+
+/* ── 代码图谱 · 自绘版 ──
+   之前用 Mermaid 画，但布局完全不受控：片段框又高又窄、大片空白、
+   每条边都挂「调用」标签很吵、空片段还显示个「空」。
+   改成自绘（和项目里关系图同一套思路：DOM 卡片 + SVG 覆盖层 + ResizeObserver 重画）：
+   · 片段 = 圆角面板（带文件名 + 函数个数），横向 flex-wrap 排，不再挤成细长条
+   · 函数 = 面板里的胶囊（ƒ 图标 + 名字），自动换行
+   · 边 = SVG 曲线，**按类型上色**（调用=实线强调色 / include=虚线灰），不再逐条写标签
+   · 顶部图例说明颜色含义；整体居中，不留大片空白
+   · 节点可点 → 跳源码 */
+let DOC_GRAPH_OBSERVER = null;
+function renderDocGraphCustom(host, graph) {
+  if (DOC_GRAPH_OBSERVER) { DOC_GRAPH_OBSERVER.disconnect(); DOC_GRAPH_OBSERVER = null; }
+  const wrap = document.createElement('div'); wrap.className = 'dg';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'dg-svg');
+  wrap.appendChild(svg);
+
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  const files = nodes.filter((n) => n.kind === 'file');
+  const fnsOf = new Map();
+  nodes.filter((n) => n.kind === 'fn').forEach((n) => {
+    const key = n.file + '|' + n.frag;
+    if (!fnsOf.has(key)) fnsOf.set(key, []);
+    fnsOf.get(key).push(n);
+  });
+  /* 既没函数、又不参与连边的片段不画（否则一个空面板白占位置） */
+  const linked = new Set();
+  edges.forEach((e) => { if (e.kind === 'include') { linked.add(String(e.from)); linked.add(String(e.to)); } });
+
+  const panelOf = new Map();   /* 片段 key → 面板元素 */
+  const pillOf = new Map();    /* 函数 id → 胶囊元素 */
+  const drawn = files.filter((f) => (fnsOf.get(f.file + '|' + f.frag) || []).length || linked.has(String(f.id)));
+  if (!drawn.length) { host.appendChild(wrap); return; }
+  drawn.forEach((f) => {
+    const kids = fnsOf.get(f.file + '|' + f.frag) || [];
+    const panel = document.createElement('div');
+    panel.className = 'dg-panel';
+    const head = document.createElement('div');
+    head.className = 'dg-panel-head';
+    head.innerHTML = '<span class="dg-file-icon">▤</span><b>' + escapeHtml(f.label) + '</b>'
+      + '<span class="dg-panel-count">' + (kids.length ? kids.length + ' 个函数' : '仅被引用') + '</span>';
+    panel.appendChild(head);
+    const list = document.createElement('div'); list.className = 'dg-pills';
+    kids.forEach((k) => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'dg-pill';
+      pill.innerHTML = '<i>ƒ</i>' + escapeHtml(k.label);
+      pill.title = k.label + ' · 第 ' + k.line + ' 行 · 点击跳到定义';
+      pill.onclick = () => {
+        try { goToLocation({ snippet: CURRENT, frag: k.frag, line: k.line || 1 }); setStatus('ok', '跳到 ' + k.label + '（第 ' + k.line + ' 行）'); } catch (_) {}
+      };
+      list.appendChild(pill);
+      pillOf.set(String(k.id), pill);
+    });
+    if (!kids.length) { const empty = document.createElement('div'); empty.className = 'dg-empty'; empty.textContent = '（只被 include）'; list.appendChild(empty); }
+    panel.appendChild(list);
+    panel.onclick = (event) => {
+      if (event.target.closest('.dg-pill')) return;
+      try { goToLocation({ snippet: CURRENT, frag: f.frag, line: 1 }); setStatus('ok', '跳到片段 ' + f.label); } catch (_) {}
+    };
+    wrap.appendChild(panel);
+    panelOf.set(String(f.id), panel);
+  });
+  host.appendChild(wrap);
+
+  const draw = () => {
+    const box = wrap.getBoundingClientRect();
+    svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
+    svg.querySelectorAll('.dg-link,.dg-count').forEach((el) => el.remove());
+    const mk = (a, b, dashed, color, count) => {
+      if (!a || !b) return;
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      const x1 = ra.left + ra.width / 2 - box.left, y1 = ra.top + ra.height / 2 - box.top;
+      const x2 = rb.left + rb.width / 2 - box.left, y2 = rb.top + rb.height / 2 - box.top;
+      const dx = Math.max(24, Math.abs(x2 - x1) * 0.4), dy = Math.max(18, Math.abs(y2 - y1) * 0.35);
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'dg-link');
+      path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + (x1 + dx) + ',' + (y1 + dy) + ' ' + (x2 - dx) + ',' + (y2 - dy) + ' ' + x2 + ',' + y2);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', color);
+      path.setAttribute('stroke-width', '1.3');
+      path.setAttribute('opacity', '.75');
+      if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+      svg.appendChild(path);
+      if (count && count > 1) {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('class', 'dg-count');
+        text.setAttribute('x', String((x1 + x2) / 2)); text.setAttribute('y', String((y1 + y2) / 2 - 3));
+        text.setAttribute('fill', color); text.setAttribute('font-size', '9');
+        text.setAttribute('text-anchor', 'middle');
+        text.textContent = '×' + count;
+        svg.appendChild(text);
+      }
+    };
+    /* 调用边：函数胶囊 → 函数胶囊；同一对之间合并成一条并标 ×N（避免 spaghetti 和满屏「调用」） */
+    const grouped = new Map();
+    edges.forEach((e) => {
+      if (e.kind === 'call') {
+        const key = e.from + '>' + e.to;
+        grouped.set(key, (grouped.get(key) || 0) + 1);
+      } else if (e.kind === 'include') {
+        mk(panelOf.get(String(e.from)), panelOf.get(String(e.to)), true, 'var(--dim,#8b949e)');
+      }
+    });
+    grouped.forEach((count, key) => {
+      const [from, to] = key.split('>');
+      mk(pillOf.get(from), pillOf.get(to), false, 'var(--accent,#4f8cff)', count);
+    });
+  };
+  requestAnimationFrame(draw);
+  if (window.ResizeObserver) { DOC_GRAPH_OBSERVER = new ResizeObserver(draw); DOC_GRAPH_OBSERVER.observe(wrap); }
 }
 
 let LOGIC_GRAPH_SEQ = 0;
