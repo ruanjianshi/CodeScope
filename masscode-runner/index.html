@@ -13414,6 +13414,7 @@ let BP_SEQ = 0;
 let BP_LAST_CODE = '';
 let BP_ORIG_COUNT = 0;
 let BP_BUILDING = false;   /* 程序化重建积木期间，别让 change 监听重绘代码面板 */
+let BP_DIRTY = false;      /* 用户在积木上改过东西（切函数时别自动覆盖） */
 let BP_READY = false;
 let BP_FUNCS = [];   /* 当前文档里的函数名，给调用积木的下拉用 */
 
@@ -13859,10 +13860,31 @@ function emitChain(first, indent) {
   }
   return out;
 }
+/* 取当前函数的**签名**（从函数起始行到第一个 `{` 之前）。
+   有签名才能生成"完整函数"，不然用户粘回去还得自己接签名。
+   从片段源码里切，不去猜类型 —— 原样保留返回类型/参数/限定符。 */
+function bpFunctionSignature() {
+  const root = typeof logicPaneRoot === 'function' ? logicPaneRoot() : null;
+  if (!root || !CURRENT || !CURRENT.fragments[CINDEX]) return '';
+  const lines = String(CURRENT.fragments[CINDEX].code || '').replace(/\r\n/g, '\n').split('\n');
+  const start = Math.max(0, (Number(root.line) || 1) - 1);
+  const chunk = lines.slice(start, Math.min(lines.length, start + 8)).join('\n');
+  const at = chunk.indexOf('{');
+  if (at < 0) return '';
+  /* 收紧空白：只压括号/逗号周围的空格，**指针的 * 保留原样**
+     （`led_t *p` 比 `led_t*p` 好看，而且别动指针语义） */
+  return chunk.slice(0, at).replace(/\s+/g, ' ').replace(/\s*([(),])\s*/g, '$1').trim();
+}
 function blockJsonToCode() {
   if (!BP_WORKSPACE) return '';
   const tops = BP_WORKSPACE.getTopBlocks(true);
-  return tops.map((t) => emitChain(t, 0)).join('\n').trim();
+  const body = tops.map((t) => emitChain(t, 0)).join('\n').trim();
+  if (!body) return '';
+  const sig = bpFunctionSignature();
+  if (!sig) return body;
+  /* 有签名就生成**完整函数**（方便整段替换），体缩进两格 */
+  const indented = body.split('\n').map((l) => (l.trim() ? '  ' + l : l)).join('\n');
+  return sig + '\n{\n' + indented + '\n}';
 }
 
 /* ── 生成代码的语法高亮 ──
@@ -13900,6 +13922,29 @@ function bpPaintCode(code) {
   if (!pre) return;
   if (!code) { pre.textContent = '（工作区是空的）'; return; }
   pre.innerHTML = bpHighlight(code);
+}
+
+/* 文档 / 片段 / 当前函数 变了，积木栏就失效了 —— 自动重新同步。
+   之前只在「打开面板」和「点从代码同步」时才算，切到别的文档时
+   还显示**上一个文档的函数**的积木和代码（用户以为坏了）。
+   例外：如果用户**改过积木**（脏了），不自动覆盖，只提示 —— 别把人家改的丢了。 */
+let BP_DOC_KEY = '';
+function bpContextKey() {
+  const root = logicPaneRoot();
+  return (CURRENT ? CURRENT.file : '') + '#' + CINDEX + '#' + (root ? (root.name || '') + '@' + (root.line || 0) : '');
+}
+function bpOnContextChanged() {
+  if (!BP_ACTIVE || !BP_WORKSPACE) return;
+  const key = bpContextKey();
+  if (key === BP_DOC_KEY) return;
+  /* 文档/片段换了：旧积木一定无效，直接清掉重来 */
+  const docChanged = BP_DOC_KEY.split('#').slice(0, 2).join('#') !== key.split('#').slice(0, 2).join('#');
+  BP_DOC_KEY = key;
+  if (BP_DIRTY && !docChanged) {
+    setStatus('warn', '函数已切换，但你在积木上的改动还在 —— 点「⇄ 从代码同步」才会覆盖');
+    return;
+  }
+  syncBlocksFromCode();
 }
 
 /* 通知 Blockly 重算画布尺寸。容器（积木栏 / 工作区）尺寸一变就得调一次，
@@ -13957,6 +14002,7 @@ function renderBlockPane() {
         /* 程序化重建期间不重绘 —— 否则会抓到"建到一半"的状态，
            面板里留下旧代码（实测：积木写着 a*b、右边却显示 a+b） */
         if (BP_BUILDING) return;
+        BP_DIRTY = true;   /* 用户改过积木了，切函数时别自动覆盖 */
         const code = blockJsonToCode();
         if (code !== BP_LAST_CODE) { BP_LAST_CODE = code; bpPaintCode(code); }
       });
@@ -13977,8 +14023,10 @@ function syncBlocksFromCode() {
     body: JSON.stringify({ file: CURRENT.file, fragment: CINDEX, line: root.line, name: root.name }),
   }).then((r) => r.json()).then((graph) => {
     if (seq !== BP_SEQ || !graph || !graph.ok) throw new Error((graph && graph.error) || '解析失败');
-    BP_WORKSPACE.clear();
+    /* 先立标记再 clear —— clear() 本身会触发 change 事件，
+       顺序反了会被误判成"用户改过积木"（脏标记） */
     BP_BUILDING = true;
+    BP_WORKSPACE.clear();
     const count = buildBlocksFromGraph(BP_WORKSPACE, graph);
     /* 建完必须渲染：newBlock 出来的是"无头"块，不 initSvg/render 界面上是空的 */
     BP_WORKSPACE.getAllBlocks(false).forEach((b) => {
@@ -13987,6 +14035,8 @@ function syncBlocksFromCode() {
     BP_WORKSPACE.cleanUp();
     try { BP_WORKSPACE.scrollCenter(); } catch (_) {}
     BP_BUILDING = false;
+    BP_DIRTY = false;                 /* 刚同步过，不算脏 */
+    BP_DOC_KEY = bpContextKey();      /* 记住这份积木属于哪个文档/函数 */
     const code = blockJsonToCode();
     BP_LAST_CODE = code;
     bpPaintCode(code);   /* 走高亮入口；之前这里漏改，主路径一直没有高亮 */
@@ -14010,8 +14060,19 @@ function bpConsistencyCheck(originalCount) {
   return fetch('/api/logic/graph', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     /* ⚠️ 解析接口期望的是**完整函数**（它从第一个 { 之后开始解析）。
-       直接传函数体会从 if 的 { 开始，只解析出 1 条语句（实测踩过）。套个壳。 */
-    body: JSON.stringify({ code: 'void __bp_check(void) {\n' + code + '\n}', language: 'c_cpp', name: '__bp_check' }),
+       直接传函数体会从 if 的 { 开始，只解析出 1 条语句（实测踩过）。
+       现在生成的代码本身可能已经是完整函数（含签名），那就别再套壳。
+       判断方式：第一个 { 之前有 ')' 且开头不是控制关键字。 */
+    body: JSON.stringify({
+      code: (function () {
+        const t = String(code).trim();
+        const brace = t.indexOf('{');
+        const head = brace >= 0 ? t.slice(0, brace) : '';
+        const looksLikeFn = head.indexOf(')') >= 0 && !/^(if|for|while|switch|do)\b/.test(t);
+        return looksLikeFn ? code : ('void __bp_check(void) {\n' + code + '\n}');
+      })(),
+      language: 'c_cpp', name: '__bp_check',
+    }),
   }).then((r) => r.json()).then((g) => {
     const n = (g.nodes || []).filter((x) => x.kind !== 'entry' && x.kind !== 'exit').length;
     return { ok: n === originalCount, generated: n, original: originalCount };
@@ -15333,6 +15394,7 @@ function renderCode() {
   $('code-wrap').classList.toggle('markdown-code', !!isMd);
   applyEditorWordWrap();   /* 按当前片段语言重算换行：LaTeX 等长句片段默认换行 */
   applyMmMode();   /* 同步导图按钮态；切换片段后按需保留/退出导图模式（非 md 自动关闭） */
+  bpOnContextChanged();
   if (EDITING) {
     // 编辑模式：所有源码（含 Markdown）都使用透明 textarea + 语法高亮层；Monaco 可用时由其接管。
     // 绝不在编辑中覆盖用户输入（保护内容 + 保留原生撤销栈）
