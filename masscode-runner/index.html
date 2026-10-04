@@ -238,6 +238,25 @@
   /* ===== 思维导图（markmap） ===== */
   #mm-canvas { flex: 1; min-width: 0; display: none; flex-direction: column; position: relative; margin: 10px 14px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   #mm-canvas.on { display: flex; }
+  /* 代码图谱：与代码并列的右栏（主区域 flex 行里的兄弟节点，和 mm-canvas 同款） */
+  #cg-canvas { flex: 1.15; min-width: 0; display: none; flex-direction: column; position: relative;
+    margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; }
+  #cg-canvas.on { display: flex; }
+  #cg-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); }
+  #cg-toolbar .sp { flex: 1 1 auto; }
+  #cg-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; }
+  #cg-title { font-weight: 600; color: var(--fg); }
+  #cg-stats { color: var(--dim); }
+  #cg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 14px; }
+  #cg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  #cg-body .node.doc-node-clickable { cursor: pointer; transition: opacity .15s; }
+  #cg-body .node.doc-node-clickable:hover { opacity: .78; }
+  #cg-body .node.doc-node-clickable:hover rect,
+  #cg-body .node.doc-node-clickable:hover polygon,
+  #cg-body .node.doc-node-clickable:hover path { stroke: var(--accent,#4f8cff) !important; stroke-width: 2px !important; }
+  #cg-body .cluster { cursor: pointer; }
   #mm-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
   #mm-toolbar button { font-size: 12px; padding: 3px 10px; }
   #mm-zoom-lbl { font-size: 12px; color: var(--dim); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -3594,6 +3613,7 @@
     #btn-outline::before { content:'≡'; font-size:16px; }
     #btn-mindmap::before { content:'◇'; font-size:15px; }
     #btn-codegraph::before { content:'🕸'; font-size:14px; }
+    #btn-codegraph.on { color:var(--accent); border-color:var(--accent); background:rgba(79,140,255,.12); }
     #btn-history::before { content:'↶'; font-size:15px; }
     #btn-pair-switch::before { content:'⇄'; font-size:13px; }
     #btn-edit { flex:none; white-space:nowrap; }
@@ -4210,6 +4230,21 @@
       <div id="edit-split-v" title="拖动调整编辑 / 预览宽度"></div>
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
+      <!-- 代码图谱：主区域里和代码并列的右栏（左代码 / 右图谱），与 mm-canvas 同一套布局 -->
+      <div id="cg-canvas">
+        <div id="cg-toolbar">
+          <span id="cg-title">🕸 代码图谱</span>
+          <span id="cg-stats"></span>
+          <span class="sp"></span>
+          <button id="cg-refresh" title="重新生成">⟳ 刷新</button>
+          <button id="cg-zoom" title="全屏放大查看">⤢ 放大</button>
+          <button id="cg-copy" title="复制 Mermaid 源码">⧉ Mermaid</button>
+          <button id="cg-close" title="关闭（回到纯代码）">✕</button>
+        </div>
+        <div id="cg-body">
+          <span class="ol-empty">正在生成代码图谱…</span>
+        </div>
+      </div>
       <div id="mm-canvas">
         <div id="mm-toolbar">
           <button id="mm-zoom-out" title="缩小">－</button>
@@ -10804,7 +10839,9 @@ function applyMmMode() {
     const hasCode = !!(CURRENT && (CURRENT.fragments || []).some(
       (x) => x && x.language && !['markdown', 'latex', 'plain_text'].includes(x.language)));
     graphBtn.disabled = !hasCode;
-    graphBtn.textContent = '🕸 图谱';
+    graphBtn.classList.toggle('on', CG_ACTIVE);
+    /* 换成没有代码的文档就自动收起图谱栏，别留一块空白 */
+    if (!hasCode && CG_ACTIVE) setCodeGraphActive(false);
   }
   $('btn-mindmap').disabled = !isMd;
   if (!isMd) { MM_ACTIVE = false; $('mm-canvas').classList.remove('on'); return; }
@@ -12313,6 +12350,86 @@ function showLogicEditCode(host, code) {
   box.appendChild(head); box.appendChild(pre); box.appendChild(actions);
 }
 
+/* ── 代码图谱 · 主区域右栏 ──
+   和代码并列显示（左代码 / 右图谱），不是塞在右侧的「大纲/关系图」面板里。
+   布局与 mm-canvas 同款：主区域 flex 行里的兄弟节点，加 .on 才显示。 */
+let CG_ACTIVE = false;
+let CG_SEQ = 0;
+let CG_SOURCE = '';
+function setCodeGraphActive(on) {
+  CG_ACTIVE = !!on;
+  const canvas = $('cg-canvas');
+  if (canvas) canvas.classList.toggle('on', CG_ACTIVE);
+  const btn = $('btn-codegraph');
+  if (btn) btn.classList.toggle('on', CG_ACTIVE);
+  if (CG_ACTIVE) renderCodeGraphPane();
+}
+function renderCodeGraphPane() {
+  const body = $('cg-body');
+  if (!body) return;
+  if (!CURRENT || !CURRENT.file) {
+    body.innerHTML = '<span class="ol-empty">先打开一个代码文档</span>';
+    if ($('cg-stats')) $('cg-stats').textContent = '';
+    return;
+  }
+  const seq = ++CG_SEQ;
+  body.innerHTML = '<span class="ol-empty">正在生成代码图谱…</span>';
+  if ($('cg-stats')) $('cg-stats').textContent = '…';
+  fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file))
+    .then((response) => response.json())
+    .then((graph) => {
+      if (seq !== CG_SEQ) return;
+      if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
+      if (!(graph.nodes || []).length) {
+        body.innerHTML = '<span class="ol-empty">这个文档里没有代码片段</span>';
+        if ($('cg-stats')) $('cg-stats').textContent = '';
+        return;
+      }
+      const stats = graph.stats || {};
+      if ($('cg-stats')) {
+        $('cg-stats').textContent = (stats.fragments || 0) + ' 个片段 · ' + (stats.functions || 0)
+          + ' 个函数 · ' + (stats.calls || 0) + ' 条调用 · ' + (stats.includes || 0) + ' 条包含';
+      }
+      const made = docGraphToMermaid(graph);
+      CG_SOURCE = made.source;
+      return ensureMermaid().then((mermaid) => {
+        mermaid.initialize({
+          startOnLoad: false, securityLevel: 'strict',
+          theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+          themeVariables: { fontSize: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+          flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 18, rankSpacing: 40, padding: 8, diagramPadding: 6 },
+        });
+        return mermaid.render('cg-' + Date.now().toString(36), made.source);
+      }).then((out) => {
+        if (seq !== CG_SEQ) return;
+        body.innerHTML = out && out.svg ? out.svg : '';
+        if (!body.innerHTML) { body.innerHTML = '<span class="ol-empty">Mermaid 没有输出</span>'; return; }
+        wireDocGraphClicks(body, graph, made.ids);
+      });
+    })
+    .catch((error) => {
+      if (seq !== CG_SEQ) return;
+      body.innerHTML = '<span class="ol-empty">代码图谱失败：' + escapeHtml(String(error.message || error)) + '</span>';
+      if ($('cg-stats')) $('cg-stats').textContent = '';
+    });
+}
+function wireCodeGraphToolbar() {
+  if ($('cg-close')) $('cg-close').onclick = () => setCodeGraphActive(false);
+  if ($('cg-refresh')) $('cg-refresh').onclick = () => renderCodeGraphPane();
+  if ($('cg-zoom')) $('cg-zoom').onclick = () => {
+    const svg = $('cg-body') && $('cg-body').querySelector('svg');
+    if (svg) openLogicZoom(svg, ((CURRENT && CURRENT.file ? CURRENT.file.split('/').pop() : '') || '') + ' · 代码图谱');
+  };
+  if ($('cg-copy')) $('cg-copy').onclick = () => {
+    if (!CG_SOURCE) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(CG_SOURCE).then(() => setStatus('ok', '代码图谱 Mermaid 源码已复制'))
+        .catch(() => setStatus('ok', '源码已打印到控制台'));
+    }
+    try { console.log('[CodeScope] 代码图谱 Mermaid 源码：\n' + CG_SOURCE); } catch (_) {}
+  };
+}
+
 let LOGIC_GRAPH_SEQ = 0;
 let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'mermaid'; } catch (_) { return 'mermaid'; } })();
 let LOGIC_FLOW_OBSERVER = null;
@@ -12496,8 +12613,6 @@ function renderRelationPaneContent() {
   /* 逻辑图：把当前函数的语句级控制流（if/for/while 的嵌套）画出来。
      后端 /api/logic/graph 早就写好了，但一直没有前端入口 —— 等于没有这个功能。 */
   relationButton(tools, '⇉ 逻辑图', REL_VIEW === 'logic', () => { REL_VIEW = 'logic'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
-  /* 代码图谱（文档级）：整篇文档的片段 / 函数 / 调用 / 包含，画在面板里，节点可点 */
-  relationButton(tools, '🕸 代码图谱', REL_VIEW === 'docgraph', () => { REL_VIEW = 'docgraph'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '◫ 图形', REL_LAYOUT === 'graph', () => { REL_LAYOUT = 'graph'; try { localStorage.setItem('mc-rel-layout', REL_LAYOUT); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '☷ 树形', REL_LAYOUT === 'tree', () => { REL_LAYOUT = 'tree'; try { localStorage.setItem('mc-rel-layout', REL_LAYOUT); } catch (_) {} renderRelationPane(); });
   const divider = document.createElement('span'); divider.style.flexBasis = '100%'; tools.appendChild(divider);
@@ -16474,16 +16589,12 @@ function makeHResizer(handle, getter, setter) {
   };
   $('tab-ai').onclick = () => chooseSymMode('ai');
   $('btn-mindmap').onclick = () => { MM_ACTIVE = !MM_ACTIVE; applyMmMode(); };
-  /* 工具栏「🕸 图谱」→ 切到关系面板的代码图谱视图（在右侧显示，不是全屏浮层） */
+  /* 工具栏「🕸 图谱」→ 在**主区域右侧**打开代码图谱（左代码 / 右图谱），再点收起 */
   if ($('btn-codegraph')) $('btn-codegraph').onclick = () => {
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
-    REL_VIEW = 'docgraph';
-    try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {}
-    /* 关系面板可能不在前台，先把它的标签激活，否则切了视图也看不到 */
-    const tab = document.querySelector('button[data-tab="relation"]');
-    if (tab) { try { tab.click(); } catch (_) {} }
-    renderRelationPane();
+    setCodeGraphActive(!CG_ACTIVE);
   };
+  wireCodeGraphToolbar();
   wireAiPanel();
   wireMindmapEvents();
   initTabStrip();
