@@ -11689,27 +11689,74 @@ function ensureMermaid() {
   });
   return MERMAID_LOADING;
 }
-/* 逻辑图 → Mermaid flowchart 源码。branch 用菱形、loop/return 用圆角、其余用方框；
-   entry/exit 也要声明，否则边引用了未定义的节点，Mermaid 会直接报错。 */
+/* 逻辑图 → Mermaid flowchart 源码。
+   可读性上做了五件事（原来那张图太丑，用户提过）：
+   ① 去掉函数签名节点 —— 图本身就是这个函数，`int classify(int v)` 是噪音
+   ② 条件补回关键字：`if (v < 0)` / `for (int i=0;i<3;i++)` / `while (v > 10)`，
+      光一个表达式看不出是判断还是循环
+   ③ entry/exit 写成「开始 / 结束」，不再中英混搭
+   ④ 每个节点带上行号（L2 · ...），点着能对回源码
+   ⑤ classDef 按 kind 上色，和面板里的配色一致
+   另外 entry/exit 也必须声明，否则边引用未定义节点，Mermaid 会直接报错。 */
+const LOGIC_MERMAID_STYLE = [
+  'classDef startN fill:#12261a,stroke:#3fb950,color:#7ee787',
+  'classDef endN fill:#2d1418,stroke:#f85149,color:#ff7b72',
+  'classDef branchN fill:#2f2610,stroke:#d29922,color:#e3b341',
+  'classDef loopN fill:#0d2440,stroke:#58a6ff,color:#79c0ff',
+  'classDef returnN fill:#12261a,stroke:#3fb950,color:#7ee787',
+  'classDef callN fill:#1b2230,stroke:#8b949e,color:#c9d1d9',
+  'classDef stmtN fill:#161b22,stroke:#30363d,color:#adbac7',
+];
+const LOGIC_MERMAID_CLASS = { entry: 'startN', exit: 'endN', branch: 'branchN', loop: 'loopN', return: 'returnN', call: 'callN', stmt: 'stmtN' };
+function logicNodeDisplayLabel(node) {
+  const raw = String((node && node.label) || '');
+  if (!node) return '';
+  if (node.kind === 'entry') return '开始';
+  if (node.kind === 'exit') return '结束';
+  if (node.kind === 'branch') return /^(switch|case|default|else)\b/.test(raw) ? raw : 'if (' + raw + ')';
+  if (node.kind === 'loop') {
+    const kw = node.kw === 'do' ? 'do' : (node.kw || 'while');
+    return kw === 'do' ? 'do … while (' + raw + ')' : kw + ' (' + raw + ')';
+  }
+  return raw;
+}
 function logicToMermaid(graph, name) {
   const nid = (raw) => 'm' + String(raw == null ? '' : raw).replace(/[^A-Za-z0-9_]/g, '_');
-  const esc = (text) => String(text == null ? '' : text).replace(/"/g, '&quot;').replace(/\n/g, ' ').slice(0, 120);
+  /* 转义成实体 —— 配合下面的 htmlLabels:true。
+     两种模式的坑都踩过：
+     · htmlLabels:false 时 Mermaid 把 label 当纯文本塞进 <text>，写 &lt; 会**原样显示**成 `if (v &lt; 0)`；
+     · 而直接写裸 < 又会被当成标签。
+     所以：开 htmlLabels + 转义实体，渲染出来才是真正的 `if (v < 0)`。 */
+  const esc = (text) => String(text == null ? '' : text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/\n/g, ' ').slice(0, 120);
+  const all = (graph && graph.nodes) || [];
+  /* 签名节点：第一条**语句**（跳过 entry/exit）且形如「返回类型 函数名(参数)」。
+     注意不能拿 index === 0 判 —— 那是 entry。 */
+  const firstStmt = all.findIndex((node) => node.kind !== 'entry' && node.kind !== 'exit');
+  const isSignature = (node, index) => index === firstStmt && node.kind === 'stmt' && /\(/.test(node.label || '') && /\)\s*$/.test(node.label || '');
+  const nodes = all.filter((node, index) => !isSignature(node, index));
   const lines = ['flowchart TD'];
-  const nodes = ((graph && graph.nodes) || []);
+  const classed = [];
   nodes.forEach((node) => {
-    const label = '"' + esc(node.label) + '"';
+    const isEnd = node.kind === 'entry' || node.kind === 'exit';
+    const text = esc(isEnd ? logicNodeDisplayLabel(node) : ('L' + node.line + ' · ' + logicNodeDisplayLabel(node)));
+    const label = '"' + text + '"';
     const shape = node.kind === 'branch' ? '{' + label + '}'
-      : (node.kind === 'loop' || node.kind === 'return' || node.kind === 'entry' || node.kind === 'exit') ? '([' + label + '])'
+      : isEnd || node.kind === 'loop' || node.kind === 'return' ? '([' + label + '])'
       : '[' + label + ']';
     lines.push('  ' + nid(node.id) + shape);
+    classed.push({ id: nid(node.id), cls: LOGIC_MERMAID_CLASS[node.kind] || 'stmtN' });
   });
   const known = new Set(nodes.map((node) => nid(node.id)));
   ((graph && graph.edges) || []).forEach((edge) => {
     const from = nid(edge.from), to = nid(edge.to);
-    if (!known.has(from) || !known.has(to)) return;      /* 两端都得有声明 */
+    if (!known.has(from) || !known.has(to)) return;
     const text = edge.label === 'true' ? '是' : edge.label === 'false' ? '否' : edge.label === 'loop' ? '循环' : '';
     lines.push('  ' + from + (text ? ' -->|' + text + '| ' : ' --> ') + to);
   });
+  LOGIC_MERMAID_STYLE.forEach((rule) => lines.push('  ' + rule));
+  classed.forEach((item) => lines.push('  class ' + item.id + ' ' + item.cls));
   return lines.join('\n');
 }
 function renderLogicMermaid(host, graph, root) {
@@ -11718,9 +11765,14 @@ function renderLogicMermaid(host, graph, root) {
   host.appendChild(box);
   const source = logicToMermaid(graph, root && root.name);
   ensureMermaid().then((mermaid) => {
+    const dark = document.documentElement.classList.contains('dark');
     mermaid.initialize({
-      startOnLoad: false, securityLevel: 'strict', theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
-      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: false },
+      startOnLoad: false, securityLevel: 'strict',
+      theme: dark ? 'dark' : 'default',
+      themeVariables: { fontSize: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' },
+      /* 面板窄，纵向排 + 收紧间距，别让图拉得又长又散。
+         htmlLabels 开 true：配合上面的实体转义，`<` 才会显示成 `<` 而不是 `&lt;`。 */
+      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 24, rankSpacing: 24, padding: 8, diagramPadding: 4 },
     });
     return mermaid.render('logic-mmd-' + Date.now().toString(36), source);
   }).then((out) => {
