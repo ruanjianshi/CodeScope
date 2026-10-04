@@ -257,6 +257,15 @@
   #cg-body .node.doc-node-clickable:hover polygon,
   #cg-body .node.doc-node-clickable:hover path { stroke: var(--accent,#4f8cff) !important; stroke-width: 2px !important; }
   #cg-body .cluster { cursor: pointer; }
+  /* 工具栏「图谱」的下拉菜单 */
+  .graph-menu { position: fixed; z-index: 9999; min-width: 240px; padding: 5px;
+    background: var(--panel2,#151b24); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 3px; }
+  .graph-menu button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    width: 100%; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent;
+    color: var(--fg); font-size: 12px; text-align: left; cursor: pointer; }
+  .graph-menu button:hover { background: rgba(79,140,255,.14); }
+  .graph-menu button small { color: var(--dim); font-size: 10px; }
   /* 逻辑图右栏：和 cg-canvas 同款 */
   #lg-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
   #lg-split-v.on { display: block; }
@@ -3634,13 +3643,11 @@
     #toolbar .sp { min-width:0; }
     #toolbar::-webkit-scrollbar { display:none; }
     #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-logicgraph, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
+    #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
     #btn-outline::before { content:'≡'; font-size:16px; }
     #btn-mindmap::before { content:'◇'; font-size:15px; }
     #btn-codegraph::before { content:'🕸'; font-size:14px; }
-    #btn-logicgraph::before { content:'⇉'; font-size:15px; }
-    #btn-logicgraph.on { color:var(--accent); border-color:var(--accent); background:rgba(79,140,255,.12); }
     #btn-codegraph.on { color:var(--accent); border-color:var(--accent); background:rgba(79,140,255,.12); }
     #btn-history::before { content:'↶'; font-size:15px; }
     #btn-pair-switch::before { content:'⇄'; font-size:13px; }
@@ -4140,8 +4147,7 @@
       <button id="btn-symbols" title="AI、符号、全文和文件搜索；Ctrl/⌘+P 快速打开，Ctrl/⌘+Shift+F 全文搜索">AI 搜索</button>
       <button id="btn-outline" title="显示/隐藏代码大纲">大纲</button>
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
-      <button id="btn-codegraph" disabled title="把整个文档的代码关系画成图谱（片段 / 函数 / 调用 / 包含）">图谱</button>
-      <button id="btn-logicgraph" disabled title="当前函数的逻辑图（可图形化编辑后生成代码）">逻辑图</button>
+      <button id="btn-codegraph" disabled title="图谱：整篇文档的代码关系 / 当前函数的逻辑图（可图形化编辑）">图谱</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
       <button id="btn-edit" disabled>编辑</button>
       <span id="nav-notice" role="status" aria-live="polite"></span>
@@ -12528,8 +12534,8 @@ function setLogicGraphActive(on) {
   }
   const splitter = $('lg-split-v');
   if (splitter) splitter.classList.toggle('on', LG_ACTIVE);
-  const btn = $('btn-logicgraph');
-  if (btn) btn.classList.toggle('on', LG_ACTIVE);
+  const btn = $('btn-codegraph');
+  if (btn) btn.classList.toggle('on', LG_ACTIVE || CG_ACTIVE);
   if (LG_ACTIVE) renderLogicPaneMain();
 }
 function logicPaneRoot() {
@@ -12632,6 +12638,45 @@ function wireLogicGraphToolbar() {
       setStatus('ok', '已按当前图生成代码');
     }).catch((error) => setStatus('err', '生成失败：' + String(error.message || error)));
   };
+}
+
+/* 工具栏塞不下两个按钮 —— 实测加第二个（逻辑图）就溢出、被裁掉点不到，
+   而且把 autosave-hint 挤到 sym-tabs 底下（browser-smoke 报「按钮被遮挡」）。
+   所以合成**一个下拉**：一个「🕸 图谱」按钮 → 菜单里两个入口。 */
+let GRAPH_MENU = null;
+function closeGraphMenu() {
+  if (!GRAPH_MENU) return;
+  try { document.removeEventListener('mousedown', GRAPH_MENU.onDoc); } catch (_) {}
+  GRAPH_MENU.menu.remove();
+  GRAPH_MENU = null;
+}
+function openGraphMenu(anchor) {
+  closeGraphMenu();
+  const menu = document.createElement('div');
+  menu.className = 'graph-menu';
+  const mk = (act, title, sub) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.act = act;
+    b.innerHTML = '<b>' + title + '</b><small>' + sub + '</small>';
+    return b;
+  };
+  menu.appendChild(mk('doc', '🕸 代码图谱', '整篇文档：片段 / 函数 / 调用 / 包含'));
+  menu.appendChild(mk('logic', '⇉ 逻辑图', '当前函数：控制流，可图形化编辑生成代码'));
+  document.body.appendChild(menu);
+  const box = anchor.getBoundingClientRect();
+  menu.style.left = Math.round(box.left) + 'px';
+  menu.style.top = Math.round(box.bottom + 6) + 'px';
+  menu.querySelectorAll('button').forEach((b) => {
+    b.onclick = () => {
+      const act = b.dataset.act;
+      closeGraphMenu();
+      if (act === 'doc') setCodeGraphActive(true);
+      else setLogicGraphActive(true);
+    };
+  });
+  const onDoc = (event) => { if (!menu.contains(event.target) && event.target !== anchor) closeGraphMenu(); };
+  setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+  GRAPH_MENU = { menu, onDoc };
 }
 
 let LOGIC_GRAPH_SEQ = 0;
@@ -16804,14 +16849,14 @@ function makeHResizer(handle, getter, setter) {
   };
   $('tab-ai').onclick = () => chooseSymMode('ai');
   $('btn-mindmap').onclick = () => { MM_ACTIVE = !MM_ACTIVE; applyMmMode(); };
-  /* 工具栏「🕸 图谱」→ 在**主区域右侧**打开代码图谱（左代码 / 右图谱），再点收起 */
-  if ($('btn-codegraph')) $('btn-codegraph').onclick = () => {
+  /* 工具栏「🕸 图谱」→ 下拉菜单（代码图谱 / 逻辑图），两个功能共用一个按钮省位置 */
+  if ($('btn-codegraph')) $('btn-codegraph').onclick = (event) => {
+    event.stopPropagation();
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
-    setCodeGraphActive(!CG_ACTIVE);
+    if (GRAPH_MENU) closeGraphMenu(); else openGraphMenu($('btn-codegraph'));
   };
   wireCodeGraphToolbar();
   wireLogicGraphToolbar();
-  if ($('btn-logicgraph')) $('btn-logicgraph').onclick = () => setLogicGraphActive(!LG_ACTIVE);
   makeResizer($('lg-split-v'), 'v',
     () => ($('lg-canvas') ? $('lg-canvas').getBoundingClientRect().width : 0),
     (v) => {
