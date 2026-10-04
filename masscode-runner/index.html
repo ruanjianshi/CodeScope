@@ -11697,14 +11697,28 @@ function syncRelationRoot(root) {
      所以只开逻辑图栏时整个光标同步都不跑，换函数图永远不变（用户报过）。
      LG_ACTIVE 要一起放行。 */
   const relationOpen = DOCKED.includes('relation') || SYM_MODE === 'relation';
-  if (!root || !(relationOpen || LG_ACTIVE)) return;
-  const def = resolveDefinition(root) || root;
-  const changed = !(REL_ROOT && symbolId(resolveDefinition(REL_ROOT) || REL_ROOT) === symbolId(def));
+  /* BP_ACTIVE 也要放行 —— 积木栏同样关心"当前是哪个函数"。
+     （当初逻辑图栏就是因为这个守卫没放行，光标同步整个不跑） */
+  if (!root || !(relationOpen || LG_ACTIVE || BP_ACTIVE)) return;
+  /* resolveDefinition 对**没有 snippet 的对象会抛**（图谱节点、手造的对象都这样），
+     兜住异常退回原对象，别让它中断整个光标同步 */
+  let def = root;
+  try { def = resolveDefinition(root) || root; } catch (_) { def = root; }
+  /* 用 name/line/frag 组 key 比较，**不依赖 symbolId()** ——
+     symbolId 会读 snippet，图谱节点/手造对象没有它就会抛
+     `Cannot read properties of undefined (reading 'file')`，
+     而这里抛错会中断整个光标同步（积木栏/逻辑图栏都不跟光标走）。 */
+  const keyOf = (r) => (r ? ((r.name || '') + '@' + (r.line || 0) + '#' + (r.frag == null ? '' : r.frag)) : '');
+  const changed = keyOf(REL_ROOT) !== keyOf(def);
   if (!changed) return;
   REL_ROOT = def; REL_EXPANDED.clear();
   if (relationOpen) renderRelationPane();
   /* 防抖：光标连动时别每一格都重渲染（AI 模式下会连发请求，直接被限流） */
   if (LG_ACTIVE) { clearTimeout(AI_LOGIC_TIMER); AI_LOGIC_TIMER = setTimeout(() => renderLogicPaneMain(), 380); }
+  /* 积木栏也要跟着当前函数走 —— 否则光标移到别的函数了，积木栏还显示上一个
+     （实测：光标在 Ln 44 的 led_open，积木栏却写着 led_create）。
+     同样防抖；脏了（用户改过积木）会被 bpOnContextChanged 内部挡掉。 */
+  if (BP_ACTIVE) { clearTimeout(BP_SYNC_TIMER); BP_SYNC_TIMER = setTimeout(bpOnContextChanged, 400); }
 }
 function syncRelationToCodeFocus() {
   if(ACTIVE_SPLIT_KEY)return;
@@ -13415,6 +13429,8 @@ let BP_LAST_CODE = '';
 let BP_ORIG_COUNT = 0;
 let BP_BUILDING = false;   /* 程序化重建积木期间，别让 change 监听重绘代码面板 */
 let BP_DIRTY = false;      /* 用户在积木上改过东西（切函数时别自动覆盖） */
+let BP_SYNC_TIMER = 0;     /* 光标联动的防抖定时器 */
+let BP_BUILT_STATE = '';  /* 刚同步完时积木的序列化状态，用来判断"用户有没有改过" */
 let BP_READY = false;
 let BP_FUNCS = [];   /* 当前文档里的函数名，给调用积木的下拉用 */
 
@@ -13929,6 +13945,15 @@ function bpPaintCode(code) {
    还显示**上一个文档的函数**的积木和代码（用户以为坏了）。
    例外：如果用户**改过积木**（脏了），不自动覆盖，只提示 —— 别把人家改的丢了。 */
 let BP_DOC_KEY = '';
+/* 积木有没有被用户改过？直接比对序列化状态 —— 最准。
+   不能用 change 事件标记（程序化动作也会触发，会一直误判成脏）。 */
+function bpIsDirty() {
+  if (!BP_WORKSPACE || !window.Blockly || !window.Blockly.serialization) return false;
+  try {
+    const now = JSON.stringify(window.Blockly.serialization.workspaces.save(BP_WORKSPACE));
+    return BP_BUILT_STATE !== '' && now !== BP_BUILT_STATE;
+  } catch (_) { return false; }
+}
 function bpContextKey() {
   const root = logicPaneRoot();
   return (CURRENT ? CURRENT.file : '') + '#' + CINDEX + '#' + (root ? (root.name || '') + '@' + (root.line || 0) : '');
@@ -13997,12 +14022,15 @@ function renderBlockPane() {
           toolboxForegroundColour: '#c9d1d9', flyoutBackgroundColour: '#151b24',
           flyoutForegroundColour: '#c9d1d9', scrollbarColour: '#2a3340' } }),
       });
-      BP_WORKSPACE.addChangeListener(() => {
+      BP_WORKSPACE.addChangeListener((event) => {
         if (!BP_ACTIVE) return;
         /* 程序化重建期间不重绘 —— 否则会抓到"建到一半"的状态，
            面板里留下旧代码（实测：积木写着 a*b、右边却显示 a+b） */
         if (BP_BUILDING) return;
-        BP_DIRTY = true;   /* 用户改过积木了，切函数时别自动覆盖 */
+        /* 脏不脏**直接比对积木的序列化状态** —— 比用 change 事件标记靠谱：
+           updateToolbox / cleanUp / render 这些程序化动作也会触发变更事件，
+           用事件判脏会让"切函数自动同步"永远被挡掉（实测：脏标记一直是 true）。 */
+        if (bpIsDirty()) BP_DIRTY = true;
         const code = blockJsonToCode();
         if (code !== BP_LAST_CODE) { BP_LAST_CODE = code; bpPaintCode(code); }
       });
@@ -14037,6 +14065,7 @@ function syncBlocksFromCode() {
     BP_BUILDING = false;
     BP_DIRTY = false;                 /* 刚同步过，不算脏 */
     BP_DOC_KEY = bpContextKey();      /* 记住这份积木属于哪个文档/函数 */
+    try { BP_BUILT_STATE = JSON.stringify(window.Blockly.serialization.workspaces.save(BP_WORKSPACE)); } catch (_) { BP_BUILT_STATE = ''; }
     const code = blockJsonToCode();
     BP_LAST_CODE = code;
     bpPaintCode(code);   /* 走高亮入口；之前这里漏改，主路径一直没有高亮 */

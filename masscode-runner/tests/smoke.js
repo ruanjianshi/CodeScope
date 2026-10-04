@@ -440,6 +440,12 @@ void bubbleSort(Array& values);
   /* 生成代码必须走高亮入口：主路径（从代码同步）漏改过一次，面板一直是纯文本 */
   assert(!/body\.textContent = code/.test(html), '代码面板又直接用 textContent 了：要走 bpPaintCode 才有语法高亮');
   assert(/function bpPaintCode/.test(html), '缺少 bpPaintCode 高亮入口');
+  /* 积木栏要跟光标走：syncRelationRoot 的守卫必须放行 BP_ACTIVE，
+     且里面要调度 bpOnContextChanged（和当初逻辑图栏同一个坑） */
+  assert(/relationOpen \|\| LG_ACTIVE \|\| BP_ACTIVE/.test(html), 'syncRelationRoot 没放行 BP_ACTIVE：积木栏不会跟光标走');
+  assert(/setTimeout\(bpOnContextChanged/.test(html), 'syncRelationRoot 里没调度积木栏同步');
+  /* 光标同步里不能用 symbolId 比较 root（它读 snippet，缺了会抛并中断整个同步） */
+  assert(!/symbolId\(safeResolve/.test(html) && /const keyOf = \(r\)/.test(html), 'syncRelationRoot 用 symbolId 比较 root：缺 snippet 会抛错中断光标同步');
   /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
      VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
   assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');
