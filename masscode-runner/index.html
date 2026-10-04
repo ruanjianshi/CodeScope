@@ -12637,6 +12637,7 @@ function renderLogicPaneMain() {
   renderLogicStructDiagram(root);
   if (!$('lg-stats')) return;
   if (LG_MODE === 'ai') $('lg-stats').textContent = (root.name || '') + ' · 点「⚡ AI 解读」生成解析';
+  if (typeof syncLogicModeButton === 'function') syncLogicModeButton();
 }
 function renderLogicStructDiagram(root) {
   const body = $('lg-body');
@@ -12684,16 +12685,24 @@ function renderLogicStructDiagram(root) {
     if ($('lg-stats')) $('lg-stats').textContent = '';
   });
 }
+/* 「⚡ AI 解读」按钮的状态：
+   ⚠️ 高亮要跟「**当前是否正在显示 AI 解析**」走，不能跟 LG_MODE 走 ——
+   LG_MODE 是偏好（还存了 localStorage、默认就是 ai），拿它判会导致
+   **一次都没点过也一直高亮**（用户报过）。 */
+function syncLogicModeButton() {
+  const b = $('lg-mode');
+  if (!b) return;
+  const root = logicPaneRoot();
+  const cached = !!(root && AI_LOGIC_CACHE.has(aiLogicKey(root)));
+  const showing = cached && LG_MODE === 'ai' && !LG_EDIT;
+  b.textContent = cached ? (showing ? '⚡ 已解读' : '⚡ 看解读') : '⚡ AI 解读';
+  b.classList.toggle('on', showing);
+  b.title = showing ? '当前显示：AI 解析（点一下切回结构图）'
+    : cached ? '这个函数已解读过（点一下查看）'
+    : '点一下让 AI 解读这个函数';
+}
 function wireLogicGraphToolbar() {
-  const syncMode = () => {
-    const b = $('lg-mode');
-    if (!b) return;
-    const cached = LG_GRAPH && AI_LOGIC_CACHE.has(aiLogicKey(logicPaneRoot() || {}));
-    b.textContent = cached ? '⚡ 已解读' : '⚡ AI 解读';
-    b.classList.toggle('on', !!LG_MODE && LG_MODE === 'ai');
-    b.title = LG_MODE === 'ai' ? '当前：AI 语义逻辑导图（点一下切到结构控制流图）' : '当前：结构控制流图（点一下切回 AI 语义导图）';
-  };
-  syncMode();
+  syncLogicModeButton();
   if ($('lg-mode')) $('lg-mode').onclick = () => {
     const root = logicPaneRoot();
     if (!root) { setStatus('err', '先把光标放到一个函数里'); return; }
@@ -12704,7 +12713,7 @@ function wireLogicGraphToolbar() {
       /* 已有解析 → 在「解析」和「结构图」之间切换 */
       LG_MODE = LG_MODE === 'ai' ? 'struct' : 'ai';
       try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
-      syncMode();
+      syncLogicModeButton();
       renderLogicPaneMain();
     } else {
       /* 没有解析 → **直接发起 AI 解读**。
@@ -12712,7 +12721,7 @@ function wireLogicGraphToolbar() {
          只认缓存命中，没缓存就落到结构图 —— 点了等于没点（实测踩过）。 */
       LG_MODE = 'ai';
       try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
-      syncMode();
+      syncLogicModeButton();
       renderAiLogicDiagram($('lg-body'), root);
     }
   };
@@ -13292,6 +13301,7 @@ function paintAiLogic(body, mermaid, root, rest) {
     return m.render('lgai-' + Date.now().toString(36), mermaid);
   }).then((out) => {
     flowBox.innerHTML = out && out.svg ? out.svg : '<span class="ol-empty">Mermaid 没有输出</span>';
+    if (typeof syncLogicModeButton === 'function') syncLogicModeButton();
     if ($('lg-stats')) {
       const title = (mermaid.match(/%%\s*作用[:：]\s*(.+)/) || [])[1];
       $('lg-stats').textContent = (root.name || '') + (title ? ' · ' + title.trim().slice(0, 40) : '');
