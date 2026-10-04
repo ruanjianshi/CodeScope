@@ -425,6 +425,10 @@ void bubbleSort(Array& values);
   /* 逻辑图要跟着「当前函数」走：relationFunctionAtLine 只放行 'calls' 的话，
      切到逻辑图后 REL_ROOT 永远不更新 —— 换到别的函数图还是旧的（用户报过）。 */
   assert(/REL_VIEW !== 'calls' && REL_VIEW !== 'logic'/.test(html), '逻辑图的「当前函数」联动被关掉了：relationFunctionAtLine 必须同时放行 calls 与 logic，否则换函数时图不更新');
+  /* 主区域右栏的逻辑图也要跟着光标走：syncRelationRoot 里必须放行 LG_ACTIVE 并刷新它，
+     否则只开逻辑图栏时光标同步整个不跑（用户报过「逻辑图不会自动更新」）。 */
+  assert(/relationOpen \|\| LG_ACTIVE/.test(html), 'syncRelationRoot 没放行 LG_ACTIVE：只开逻辑图栏时光标同步不跑，图不会跟着当前函数更新');
+  assert(/if \(LG_ACTIVE\) renderLogicPaneMain\(\)/.test(html), 'syncRelationRoot 里没有刷新逻辑图栏：换函数时右栏的图不会更新');
   /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
      VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
   assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');

@@ -11610,10 +11610,17 @@ function relationFunctionAtLine(line) {
     functions.find(s => s.line === line) || null;
 }
 function syncRelationRoot(root) {
-  if (!root || !(DOCKED.includes('relation') || SYM_MODE === 'relation')) return;
+  /* 逻辑图右栏开着时也要跟着光标走 —— 原来这里只认「关系面板停靠/展开」，
+     所以只开逻辑图栏时整个光标同步都不跑，换函数图永远不变（用户报过）。
+     LG_ACTIVE 要一起放行。 */
+  const relationOpen = DOCKED.includes('relation') || SYM_MODE === 'relation';
+  if (!root || !(relationOpen || LG_ACTIVE)) return;
   const def = resolveDefinition(root) || root;
-  if (REL_ROOT && symbolId(resolveDefinition(REL_ROOT) || REL_ROOT) === symbolId(def)) return;
-  REL_ROOT = def; REL_EXPANDED.clear(); renderRelationPane();
+  const changed = !(REL_ROOT && symbolId(resolveDefinition(REL_ROOT) || REL_ROOT) === symbolId(def));
+  if (!changed) return;
+  REL_ROOT = def; REL_EXPANDED.clear();
+  if (relationOpen) renderRelationPane();
+  if (LG_ACTIVE) renderLogicPaneMain();   /* 右栏的逻辑图跟着当前函数刷新 */
 }
 function syncRelationToCodeFocus() {
   if(ACTIVE_SPLIT_KEY)return;
