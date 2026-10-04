@@ -309,6 +309,18 @@
   #lg-canvas, #cg-canvas { position: relative; }
   #lg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   #lg-code { border-top: 1px solid var(--border); max-height: 40%; overflow: auto; padding: 8px 10px; }
+  /* AI 解读：流程图在上，文字解析在下（用无衬线，给人读） */
+  .lg-ai-flow { padding: 6px 2px 10px; }
+  .lg-ai-note { padding: 10px 12px 16px; border-top: 1px dashed var(--border); margin-top: 8px;
+    font-size: 12.5px; line-height: 1.75; color: var(--fg);
+    font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .lg-ai-note h4 { margin: 13px 0 5px; font-size: 12.5px; color: var(--accent); font-weight: 600; }
+  .lg-ai-note h4:first-child { margin-top: 0; }
+  .lg-ai-note ul, .lg-ai-note ol { margin: 0 0 6px; padding-left: 20px; }
+  .lg-ai-note li { margin: 3px 0; }
+  .lg-ai-note p { margin: 4px 0; }
+  .lg-ai-note code { padding: 1px 5px; border-radius: 4px; background: rgba(79,140,255,.14);
+    font-family: var(--mono,ui-monospace,Menlo,monospace); font-size: 11.5px; }
   #lg-code pre { margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     background: #0f151d; font-size: 11px; line-height: 1.5; font-family: var(--mono,ui-monospace,Menlo,monospace);
     white-space: pre; overflow: auto; }
@@ -12612,8 +12624,12 @@ function renderLogicPaneMain() {
     if ($('lg-stats')) $('lg-stats').textContent = '';
     return;
   }
-  if (LG_MODE === 'ai' && !LG_EDIT) { renderAiLogicDiagram(body, root); return; }
+  /* 只有用户点过「⚡ AI 解读」才跑模型；否则一律先给结构图（即时、不烧配额）。
+     已经解读过的函数走缓存，切回来仍然直接显示解析结果。 */
+  if (LG_MODE === 'ai' && !LG_EDIT && AI_LOGIC_CACHE.has(aiLogicKey(root))) { renderAiLogicDiagram(body, root); return; }
   renderLogicStructDiagram(root);
+  if (!$('lg-stats')) return;
+  if (LG_MODE === 'ai') $('lg-stats').textContent = (root.name || '') + ' · 点「⚡ AI 解读」生成解析';
 }
 function renderLogicStructDiagram(root) {
   const body = $('lg-body');
@@ -12665,15 +12681,25 @@ function wireLogicGraphToolbar() {
   const syncMode = () => {
     const b = $('lg-mode');
     if (!b) return;
-    b.textContent = LG_MODE === 'ai' ? '⚡ AI 解读' : '▦ 结构图';
-    b.classList.toggle('on', LG_MODE === 'ai');
+    const cached = LG_GRAPH && AI_LOGIC_CACHE.has(aiLogicKey(logicPaneRoot() || {}));
+    b.textContent = cached ? '⚡ 已解读' : '⚡ AI 解读';
+    b.classList.toggle('on', !!LG_MODE && LG_MODE === 'ai');
     b.title = LG_MODE === 'ai' ? '当前：AI 语义逻辑导图（点一下切到结构控制流图）' : '当前：结构控制流图（点一下切回 AI 语义导图）';
   };
   syncMode();
   if ($('lg-mode')) $('lg-mode').onclick = () => {
-    LG_MODE = LG_MODE === 'ai' ? 'struct' : 'ai';
-    try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
+    const root = logicPaneRoot();
+    if (!root) { setStatus('err', '先把光标放到一个函数里'); return; }
     LG_EDIT = null;
+    /* 已有解析 → 在「解析」和「结构图」之间切换；没有 → 触发一次 AI 解读 */
+    const key = aiLogicKey(root);
+    if (AI_LOGIC_CACHE.has(key)) {
+      LG_MODE = LG_MODE === 'ai' ? 'struct' : 'ai';
+      try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
+    } else {
+      LG_MODE = 'ai';
+      try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
+    }
     syncMode();
     renderLogicPaneMain();
   };
@@ -13100,19 +13126,34 @@ const AI_LOGIC_INFLIGHT = new Set();   /* 正在请求的函数，避免重复�
 let AI_LOGIC_COOLDOWN = 0;             /* 被 429 限流后的冷却截止时间戳 */
 let AI_LOGIC_TIMER = 0;                /* 光标联动防抖 */
 const AI_LOGIC_PROMPT = [
-  '你是资深工程师，负责把一段函数代码画成**给同事看的逻辑导图**。',
+  '你是资深工程师，负责把一个函数**讲清楚**给同事听。请输出一份中文解析，包含以下四部分。',
   '',
-  '要求（很重要，按此执行）：',
-  '1. 节点文字用**简体中文说清"这一步在做什么"**，绝对不要照抄代码语句。',
-  '   反例：`if (led_handler == NULL) return -1;`',
-  '   正例：`句柄为空？` → `返回参数错误`',
-  '2. 形状按语义选：判断用菱形 `{条件}`，开始/结束/返回用圆角 `([文字])`，普通步骤用方框 `[文字]`。',
-  '3. **只画主干逻辑**（6~14 个节点）。琐碎的赋值、日志可以合并成一步或省略，别把每一行都搬上去。',
-  '4. 判断节点的出边要标 `是` / `否`（或具体条件值）。',
-  '5. 图的第一行用 `flowchart TD`，紧接着加一句注释说明这个函数的**作用**：',
-  '   `%% 作用：……`（一句话讲清这个函数干嘛、输入什么、返回什么）。',
-  '6. 用 `classDef` 区分：判断=琥珀、返回/结束=绿、普通步骤=中性灰蓝。',
-  '7. **只输出 Mermaid 代码**，不要任何解释、不要 ``` 围栏。',
+  '格式要求（严格按此，用 Markdown）：',
+  '',
+  '### 一句话作用',
+  '用一句话说清这个函数**干嘛用的**（不要复述签名）。',
+  '',
+  '### 输入输出',
+  '- 输入：参数分别是什么、有什么约束（可为空？范围？）',
+  '- 返回：返回值含义、错误码/特殊值的含义',
+  '',
+  '### 逻辑导图',
+  '给一张 \`\`\`mermaid 代码块，内容是 flowchart TD：',
+  '- 节点文字用**中文说清"这一步在做什么"**，绝对不要照抄代码语句',
+  '  反例：\`if (led_handler == NULL) return -1;\`',
+  '  正例：\`句柄为空？\` → \`返回参数错误\`',
+  '- **只画主干逻辑**（6~14 个节点），琐碎的赋值、日志合并或省略',
+  '- 形状按语义：判断用菱形 \`{条件}\`，开始/结束/返回用圆角 \`([文字])\`，普通步骤用方框 \`[文字]\`',
+  '- 判断的出边标 \`是\` / \`否\`（或具体条件值）',
+  '- 用 classDef 给判断、返回、普通步骤分别配色',
+  '',
+  '### 关键步骤',
+  '按执行顺序列 3~6 条，每条一句话说清"做了什么、为什么这么做"。',
+  '',
+  '### 注意事项',
+  '列 2~4 条：边界情况、易错点、线程安全、资源释放、隐含约定等（没有就写"无明显风险"）。',
+  '',
+  '只输出上述内容，不要额外寒暄。',
 ].join('\n');
 function aiLogicKey(root) {
   return (CURRENT ? CURRENT.file : '') + '|' + CINDEX + '|' + (root.name || '') + '|' + (root.line || 0);
@@ -13126,6 +13167,35 @@ function functionSourceText(root) {
   const to = Number(root.endLine) > from ? Number(root.endLine) : Math.min(lines.length, from + 80);
   return lines.slice(from, to).join('\n');
 }
+/* 把模型回答拆成「流程图源码」+「其余说明文字」 */
+function splitAiAnswer(content) {
+  const text = String(content || '');
+  const m = text.match(/```(?:mermaid)?\s*((?:flowchart|graph)[\s\S]*?)```/) || text.match(/```mermaid\s*([\s\S]*?)```/);
+  if (!m) return { mermaid: extractMermaid(text), rest: '' };
+  let rest = (text.slice(0, m.index) + text.slice(m.index + m[0].length));
+  /* 把 mermaid 块挖掉后会留下空的「### 逻辑导图」标题，一并清掉 */
+  rest = rest.replace(/^#{2,6}\s*逻辑导图\s*$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { mermaid: m[1].trim(), rest };
+}
+/* 精简 markdown 渲染：只支持标题/有序无序列表/加粗/行内代码，够用且安全（全程转义） */
+function aiMiniMarkdown(md) {
+  const esc = (t) => escapeHtml(String(t == null ? '' : t));
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const lines = String(md || '').split('\n');
+  let html = '', list = null;
+  const flush = () => { if (list) { html += '</' + list + '>'; list = null; } };
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line) { flush(); return; }
+    let m;
+    if ((m = line.match(/^#{2,6}\s+(.*)$/))) { flush(); html += '<h4>' + inline(m[1]) + '</h4>'; return; }
+    if ((m = line.match(/^[-*]\s+(.*)$/))) { if (list !== 'ul') { flush(); html += '<ul>'; list = 'ul'; } html += '<li>' + inline(m[1]) + '</li>'; return; }
+    if ((m = line.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { flush(); html += '<ol>'; list = 'ol'; } html += '<li>' + inline(m[1]) + '</li>'; return; }
+    flush(); html += '<p>' + inline(line) + '</p>';
+  });
+  flush();
+  return html;
+}
 function extractMermaid(text) {
   let out = String(text || '').trim();
   const fence = out.match(/```(?:mermaid)?\s*([\s\S]*?)```/);
@@ -13138,7 +13208,7 @@ async function renderAiLogicDiagram(host, root) {
   const key = aiLogicKey(root);
   const cached = AI_LOGIC_CACHE.get(key);
   const body = $('lg-body');
-  if (cached) { return paintAiLogic(body, cached, root); }
+  if (cached) { return paintAiLogic(body, cached.mermaid, root, cached.rest); }
   /* 同一个函数已经在请求了，别再打一次（光标抖动会连发好几次） */
   if (AI_LOGIC_INFLIGHT.has(key)) return;
   /* 刚被 429 限流过：冷却期内直接用结构图，别继续撞墙、也别把界面切来切去 */
@@ -13164,11 +13234,12 @@ async function renderAiLogicDiagram(host, root) {
       ],
     });
     if (!r || !r.ok) throw new Error((r && r.error) || 'AI 返回失败');
-    const mermaid = extractMermaid(r.content);
+    const parsed = splitAiAnswer(r.content);
+    const mermaid = parsed.mermaid;
     if (!/^(flowchart|graph)\s/m.test(mermaid)) throw new Error('AI 没有返回 Mermaid（返回内容：' + String(r.content || '').slice(0, 80) + '…）');
-    AI_LOGIC_CACHE.set(key, mermaid);
+    AI_LOGIC_CACHE.set(key, { mermaid, rest: parsed.rest });
     AI_LOGIC_INFLIGHT.delete(key);
-    paintAiLogic(body, mermaid, root);
+    paintAiLogic(body, mermaid, root, parsed.rest);
   } catch (error) {
     AI_LOGIC_INFLIGHT.delete(key);
     const msg = String(error.message || error);
@@ -13186,7 +13257,18 @@ async function renderAiLogicDiagram(host, root) {
     setStatus('err', 'AI 解读失败：' + String(error.message || error));
   }
 }
-function paintAiLogic(body, mermaid, root) {
+function paintAiLogic(body, mermaid, root, rest) {
+  const explanation = rest || '';
+  body.innerHTML = '';
+  const flowBox = document.createElement('div');
+  flowBox.className = 'lg-ai-flow';
+  body.appendChild(flowBox);
+  if (explanation) {
+    const note = document.createElement('div');
+    note.className = 'lg-ai-note';
+    note.innerHTML = aiMiniMarkdown(explanation);
+    body.appendChild(note);
+  }
   ensureMermaid().then((m) => {
     m.initialize({
       startOnLoad: false, securityLevel: 'strict',
@@ -13196,7 +13278,7 @@ function paintAiLogic(body, mermaid, root) {
     });
     return m.render('lgai-' + Date.now().toString(36), mermaid);
   }).then((out) => {
-    body.innerHTML = out && out.svg ? out.svg : '<span class="ol-empty">Mermaid 没有输出</span>';
+    flowBox.innerHTML = out && out.svg ? out.svg : '<span class="ol-empty">Mermaid 没有输出</span>';
     if ($('lg-stats')) {
       const title = (mermaid.match(/%%\s*作用[:：]\s*(.+)/) || [])[1];
       $('lg-stats').textContent = (root.name || '') + (title ? ' · ' + title.trim().slice(0, 40) : '');
