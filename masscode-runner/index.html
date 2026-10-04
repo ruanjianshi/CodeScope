@@ -13938,8 +13938,26 @@ function wireBlocklyToolbar() {
   };
   if ($('bp-copy')) $('bp-copy').onclick = () => {
     const code = blockJsonToCode();
+    if (!code) { setStatus('err', '工作区是空的，先点「⇄ 从代码同步」或拖几个积木'); return; }
+    /* 只复制、不改文件（用户选的 A 方案）。剪贴板失败就退化成"自动选中"，
+       让用户自己 Ctrl+C —— 总比什么都没发生强。 */
+    const fallbackSelect = () => {
+      const pre = $('bp-code');
+      if (!pre) return;
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(range);
+      } catch (_) {}
+    };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(() => setStatus('ok', '代码已复制')).catch(() => setStatus('ok', '代码已打印到控制台'));
+      navigator.clipboard.writeText(code)
+        .then(() => setStatus('ok', '代码已复制 ✓ 到编辑器里选中原函数、粘贴覆盖即可（原文没有被改动）'))
+        .catch(() => { fallbackSelect(); setStatus('ok', '剪贴板不可用，已帮你选中代码，按 ⌘C 复制'); });
+    } else {
+      fallbackSelect();
+      setStatus('ok', '剪贴板不可用，已帮你选中代码，按 ⌘C 复制');
     }
     try { console.log('[CodeScope] 积木生成的代码：\n' + code); } catch (_) {}
   };
