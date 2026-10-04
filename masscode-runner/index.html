@@ -2483,6 +2483,9 @@
   .rel-map-summary .stat.in b { color:var(--accent); }
   .rel-map-summary .stat.out b { color:var(--ok); }
   .rel-section { padding:8px 9px 4px; color:var(--dim); font-size:10px; font-weight:600; }
+  /* Mermaid 渲染区：SVG 自适应面板宽度 */
+  .logic-mermaid { padding:10px 8px 14px; overflow-x:auto; }
+  .logic-mermaid svg { max-width:100%; height:auto; display:block; margin:0 auto; }
   /* 逻辑图 · 流程图布局：节点卡片竖排 + SVG 覆盖层画箭头 */
   .logic-flow { position:relative; display:flex; flex-direction:column; gap:16px; padding:12px 10px 18px; }
   .logic-flow-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
@@ -11435,7 +11438,10 @@ function relationCurrentFunction() {
   return defs.find(s => s.line <= line && (s.endLine || s.line) >= line) || defs[0] || null;
 }
 function relationFunctionAtLine(line) {
-  if (!CURRENT || REL_VIEW !== 'calls') return null;
+  /* logic 视图也要跟着光标走 —— 它画的就是「当前函数」的控制流。
+     原来这里只放行 'calls'，于是切到逻辑图后 REL_ROOT 永远不更新，
+     换到别的函数图还是旧的（用户报过「我选择了其他函数，他怎么不变」）。 */
+  if (!CURRENT || (REL_VIEW !== 'calls' && REL_VIEW !== 'logic')) return null;
   const functions = outlineSymbols().filter(s => s.frag === CINDEX && s.kind === 'fn');
   return functions.find(s => s.isDefinition && s.line <= line && (s.endLine || s.line) >= line) ||
     functions.find(s => s.line === line) || null;
@@ -11654,8 +11660,80 @@ function renderRelationPane() { return renderPanelInto('relation', () => withAct
    后端把函数体解析成「语句节点 + 控制边」（entry / branch / loop / return / call / exit），
    这里只负责画出来 + 导出。入口是关系面板的「⇉ 逻辑图」。
    请求带 {file, fragment, line}：服务端按行号自己定位到那个函数，前端不用传代码。 */
+/* ── Mermaid 流程图 ──
+   mermaid 是**懒加载**的：3.2 MB 的 UMD 单文件（vendor/mermaid.min.js，动态 import 为 0，完全自足），
+   只有真的切到 mermaid 布局才去加载，不给正常打开页面加负担。
+   为什么不用 npm 装：`npm install mermaid` 空跑显示会 removed 485 packages
+   （本项目 lockfile 与实际安装树不同步），风险太高；vendor 单文件只有它的 1/40。 */
+let MERMAID_LOADING = null;
+function ensureMermaid() {
+  if (window.mermaid) return Promise.resolve(window.mermaid);
+  if (MERMAID_LOADING) return MERMAID_LOADING;
+  MERMAID_LOADING = new Promise((resolve, reject) => {
+    /* mermaid 的 UMD 会先检测 define.amd —— 而本页面里有 AMD loader，
+       于是它走 AMD 分支注册模块、**不挂 window.mermaid**（实测踩过：
+       script.onload 触发了，window.mermaid 却是 undefined）。
+       加载期间临时把 define 摘掉，逼它走「挂到全局」那条分支。 */
+    const savedDefine = window.define;
+    try { window.define = undefined; } catch (_) {}
+    const restore = () => { try { window.define = savedDefine; } catch (_) {} };
+    const script = document.createElement('script');
+    script.src = 'vendor/mermaid.min.js';
+    script.onload = () => {
+      restore();
+      if (window.mermaid) resolve(window.mermaid);
+      else { MERMAID_LOADING = null; reject(new Error('mermaid 已加载但未挂到 window')); }
+    };
+    script.onerror = () => { restore(); MERMAID_LOADING = null; reject(new Error('vendor/mermaid.min.js 加载失败')); };
+    document.head.appendChild(script);
+  });
+  return MERMAID_LOADING;
+}
+/* 逻辑图 → Mermaid flowchart 源码。branch 用菱形、loop/return 用圆角、其余用方框；
+   entry/exit 也要声明，否则边引用了未定义的节点，Mermaid 会直接报错。 */
+function logicToMermaid(graph, name) {
+  const nid = (raw) => 'm' + String(raw == null ? '' : raw).replace(/[^A-Za-z0-9_]/g, '_');
+  const esc = (text) => String(text == null ? '' : text).replace(/"/g, '&quot;').replace(/\n/g, ' ').slice(0, 120);
+  const lines = ['flowchart TD'];
+  const nodes = ((graph && graph.nodes) || []);
+  nodes.forEach((node) => {
+    const label = '"' + esc(node.label) + '"';
+    const shape = node.kind === 'branch' ? '{' + label + '}'
+      : (node.kind === 'loop' || node.kind === 'return' || node.kind === 'entry' || node.kind === 'exit') ? '([' + label + '])'
+      : '[' + label + ']';
+    lines.push('  ' + nid(node.id) + shape);
+  });
+  const known = new Set(nodes.map((node) => nid(node.id)));
+  ((graph && graph.edges) || []).forEach((edge) => {
+    const from = nid(edge.from), to = nid(edge.to);
+    if (!known.has(from) || !known.has(to)) return;      /* 两端都得有声明 */
+    const text = edge.label === 'true' ? '是' : edge.label === 'false' ? '否' : edge.label === 'loop' ? '循环' : '';
+    lines.push('  ' + from + (text ? ' -->|' + text + '| ' : ' --> ') + to);
+  });
+  return lines.join('\n');
+}
+function renderLogicMermaid(host, graph, root) {
+  const box = document.createElement('div'); box.className = 'logic-mermaid';
+  box.innerHTML = '<span class="ol-empty">正在加载 Mermaid…</span>';
+  host.appendChild(box);
+  const source = logicToMermaid(graph, root && root.name);
+  ensureMermaid().then((mermaid) => {
+    mermaid.initialize({
+      startOnLoad: false, securityLevel: 'strict', theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: false },
+    });
+    return mermaid.render('logic-mmd-' + Date.now().toString(36), source);
+  }).then((out) => {
+    box.innerHTML = out && out.svg ? out.svg : '';
+    if (!box.innerHTML) box.innerHTML = '<span class="ol-empty">Mermaid 没有输出</span>';
+  }).catch((error) => {
+    box.innerHTML = '<span class="ol-empty">Mermaid 渲染失败：' + escapeHtml(String(error.message || error)) +
+      '<br>（可以点「⧉ 复制 Mermaid」把源码粘到别处渲染）</span>';
+  });
+  return source;
+}
 let LOGIC_GRAPH_SEQ = 0;
-let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'flow'; } catch (_) { return 'flow'; } })();
+let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'mermaid'; } catch (_) { return 'mermaid'; } })();
 let LOGIC_FLOW_OBSERVER = null;
 const LOGIC_KIND_ICON = { branch: '◆', loop: '↻', return: '⏎', call: 'ƒ', stmt: '·' };
 const LOGIC_KIND_TEXT = { branch: '分支', loop: '循环', return: '返回', call: '调用', stmt: '语句' };
@@ -11747,12 +11825,16 @@ function renderLogicGraphPane(body, root) {
     head.textContent = '逻辑图 · ' + (payload.name || root.name) + ' · ' + nodes.length + ' 个节点';
     host.appendChild(head);
     if (!nodes.length) { host.insertAdjacentHTML('beforeend', '<span class="ol-empty">这个函数体里没有可分析的语句</span>'); paneCount('0 个节点'); return; }
-    /* 布局切换：流程图（默认）/ 列表 */
+    /* 布局切换：Mermaid 流程图（默认）/ 卡片流程图 / 列表 */
     const layoutBar = document.createElement('div'); layoutBar.className = 'rel-tools';
-    relationButton(layoutBar, '◫ 流程图', LOGIC_LAYOUT === 'flow', () => { LOGIC_LAYOUT = 'flow'; try { localStorage.setItem('mc-logic-layout', LOGIC_LAYOUT); } catch (_) {} renderRelationPane(); });
-    relationButton(layoutBar, '☷ 列表', LOGIC_LAYOUT === 'list', () => { LOGIC_LAYOUT = 'list'; try { localStorage.setItem('mc-logic-layout', LOGIC_LAYOUT); } catch (_) {} renderRelationPane(); });
+    const setLayout = (next) => { LOGIC_LAYOUT = next; try { localStorage.setItem('mc-logic-layout', LOGIC_LAYOUT); } catch (_) {} renderRelationPane(); };
+    relationButton(layoutBar, '◇ Mermaid 图', LOGIC_LAYOUT === 'mermaid', () => setLayout('mermaid'));
+    relationButton(layoutBar, '◫ 卡片流程', LOGIC_LAYOUT === 'flow', () => setLayout('flow'));
+    relationButton(layoutBar, '☷ 列表', LOGIC_LAYOUT === 'list', () => setLayout('list'));
     host.appendChild(layoutBar);
-    if (LOGIC_LAYOUT === 'flow') {
+    if (LOGIC_LAYOUT === 'mermaid') {
+      renderLogicMermaid(host, payload, root);
+    } else if (LOGIC_LAYOUT === 'flow') {
       buildLogicFlow(host, payload);
     } else {
       const list = document.createElement('div'); list.className = 'logic-list';
@@ -11770,6 +11852,14 @@ function renderLogicGraphPane(body, root) {
       host.appendChild(list);
     }
     const actions = document.createElement('div'); actions.className = 'rel-tools';
+    relationButton(actions, '⧉ 复制 Mermaid', false, () => {
+      const source = logicToMermaid(payload, root && root.name);
+      const done = () => setStatus('ok', 'Mermaid 源码已复制（可直接粘到 mermaid.live / Typora / draw.io）');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(source).then(done).catch(() => setStatus('ok', 'Mermaid 源码已打印到控制台'));
+      }
+      try { console.log('[CodeScope] Mermaid 逻辑图源码：\n' + source); } catch (_) {}
+    });
     relationButton(actions, '⤓ 导出 drawio', false, () => {
       request({ format: 'drawio' }).then((out) => {
         if (!out || !out.ok || !out.xml) { setStatus('err', '导出失败：' + ((out && out.error) || '没有拿到 xml')); return; }
