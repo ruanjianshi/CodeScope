@@ -249,8 +249,8 @@
   #cg-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; }
   #cg-title { font-weight: 600; color: var(--fg); }
   #cg-stats { color: var(--dim); }
-  #cg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 6px 14px;
-    display: flex; flex-direction: column; justify-content: center; }
+  #cg-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 4px 6px 10px; position: relative;
+    display: flex; flex-direction: column; }
   #cg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   #cg-body .node.doc-node-clickable { cursor: pointer; transition: opacity .15s; }
   #cg-body .node.doc-node-clickable:hover { opacity: .78; }
@@ -304,6 +304,7 @@
   #lg-toolbar button.on { color: var(--accent); border-color: var(--accent); background: rgba(79,140,255,.12); }
   #lg-title { font-weight: 600; color: var(--fg); }
   #lg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 10px 14px; }
+  #lg-canvas, #cg-canvas { position: relative; }
   #lg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   #lg-code { border-top: 1px solid var(--border); max-height: 40%; overflow: auto; padding: 8px 10px; }
   #lg-code pre { margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
@@ -12498,11 +12499,13 @@ function renderCodeGraphPane() {
       const made = docGraphToMermaid(graph);
       CG_SOURCE = made.source;
       /* 自绘（Mermaid 的布局控制不了：细长条、大片空白、满屏「调用」标签） */
-      if (true) {
-        renderDocGraphCustom(body, graph);
+      {
+        renderDocGraphForce(body, graph);
         const legend = document.createElement("div");
         legend.className = "dg-legend";
-        legend.innerHTML = "<span><i></i>调用</span><span><i class=\"dashed\"></i>include</span><span>点函数跳定义 · 点面板跳片段</span>";
+        legend.innerHTML = "<span><b class=\"dot file\"></b>片段</span><span><b class=\"dot fn\"></b>函数</span>"
+          + "<span><i></i>调用</span><span><i class=\"dashed\"></i>include</span>"
+          + "<span class=\"hint\">拖拽节点 · 滚轮缩放 · 点节点跳源码</span>";
         body.insertBefore(legend, body.firstChild);
         return null;
       }
@@ -12869,6 +12872,132 @@ function renderDocGraphCustom(host, graph) {
   };
   requestAnimationFrame(draw);
   if (window.ResizeObserver) { DOC_GRAPH_OBSERVER = new ResizeObserver(draw); DOC_GRAPH_OBSERVER.observe(wrap); }
+}
+
+/* ── 代码图谱 · 力导向网络图 ──
+   用户要的是「知识图谱那种」效果：圆点节点 + 旁边标签 + 细线连边 + 自由布局 + 缩放拖拽。
+   用项目里**已经 vendor 好的 d3**（`vendor/d3.min.js`，有 forceSimulation），懒加载。
+   节点：片段（大圆，琥珀色）/ 函数（中圆，蓝色）；边：调用（实线带标签）/ include（虚线）。 */
+let D3_LOADING = null;
+function ensureD3() {
+  if (window.d3 && window.d3.forceSimulation) return Promise.resolve(window.d3);
+  if (D3_LOADING) return D3_LOADING;
+  D3_LOADING = new Promise((resolve, reject) => {
+    /* 和 mermaid 同一个坑：本页有 AMD loader（define.amd 为真），
+       d3 的 UMD 会走 define() 分支注册模块、**不挂 window.d3**。
+       加载期间临时把 define 摘掉，逼它走全局那条分支。 */
+    const savedDefine = window.define;
+    try { window.define = undefined; } catch (_) {}
+    const restore = () => { try { window.define = savedDefine; } catch (_) {} };
+    const script = document.createElement('script');
+    script.src = 'vendor/d3.min.js';
+    script.onload = () => {
+      restore();
+      if (window.d3 && window.d3.forceSimulation) resolve(window.d3);
+      else { D3_LOADING = null; reject(new Error('d3 已加载但没挂到 window（可能被 AMD 抢走）')); }
+    };
+    script.onerror = () => { restore(); D3_LOADING = null; reject(new Error('vendor/d3.min.js 加载失败')); };
+    document.head.appendChild(script);
+  });
+  return D3_LOADING;
+}
+const DG_COLOR = { file: '#d29922', fn: '#58a6ff' };
+function renderDocGraphForce(host, graph) {
+  if (DOC_GRAPH_OBSERVER) { DOC_GRAPH_OBSERVER.disconnect(); DOC_GRAPH_OBSERVER = null; }
+  host.innerHTML = '<span class="ol-empty">正在加载图形库…</span>';
+  ensureD3().then((d3) => {
+    host.innerHTML = '';
+    const nodesRaw = graph.nodes || [];
+    const edgesRaw = graph.edges || [];
+    const box = host.getBoundingClientRect();
+    const W = Math.max(320, box.width), H = Math.max(320, box.height - 8);
+    /* 只画「有函数」或「参与连边」的片段，空片段不占地方 */
+    const fnsOf = new Map();
+    nodesRaw.filter((n) => n.kind === 'fn').forEach((n) => {
+      const key = n.file + '|' + n.frag;
+      if (!fnsOf.has(key)) fnsOf.set(key, []);
+      fnsOf.get(key).push(n);
+    });
+    const keepFile = new Set(nodesRaw.filter((n) => n.kind === 'file').filter(
+      (f) => (fnsOf.get(f.file + '|' + f.frag) || []).length || edgesRaw.some((e) => String(e.from) === String(f.id) || String(e.to) === String(f.id))
+    ).map((f) => String(f.id)));
+    const nodes = nodesRaw
+      .filter((n) => (n.kind === 'file' ? keepFile.has(String(n.id)) : true))
+      .map((n) => Object.assign({}, n, { key: String(n.id) }));
+    const byKey = new Map(nodes.map((n) => [n.key, n]));
+    const links = edgesRaw
+      .filter((e) => byKey.has(String(e.from)) && byKey.has(String(e.to)) && String(e.from) !== String(e.to))
+      .map((e) => Object.assign({}, e, { source: String(e.from), target: String(e.to) }));
+
+    const svg = d3.select(host).append('svg')
+      .attr('class', 'dg-force').attr('width', '100%').attr('height', H)
+      .attr('viewBox', [0, 0, W, H]);
+    const root = svg.append('g');
+    /* 缩放 + 平移 */
+    const zoom = d3.zoom().scaleExtent([0.25, 4]).on('zoom', (event) => root.attr('transform', event.transform));
+    svg.call(zoom);
+    const linkG = root.append('g').attr('class', 'dgf-links');
+    const nodeG = root.append('g').attr('class', 'dgf-nodes');
+    const labelG = root.append('g').attr('class', 'dgf-labels');
+
+    const link = linkG.selectAll('line').data(links).join('line')
+      .attr('stroke', (d) => (d.kind === 'include' ? '#6b7684' : '#58a6ff'))
+      .attr('stroke-width', (d) => (d.kind === 'include' ? 1 : 1.2))
+      .attr('stroke-opacity', 0.75)
+      .attr('stroke-dasharray', (d) => (d.kind === 'include' ? '4 4' : null));
+    const edgeLabel = labelG.selectAll('text.dgf-edge').data(links.filter((d) => d.kind === 'include')).join('text')
+      .attr('class', 'dgf-edge').attr('fill', '#6b7684').attr('font-size', 9)
+      .attr('text-anchor', 'middle').text('include');
+    const node = nodeG.selectAll('circle').data(nodes).join('circle')
+      .attr('r', (d) => (d.kind === 'file' ? 9 : 5.5))
+      .attr('fill', (d) => DG_COLOR[d.kind] || '#8b949e')
+      .attr('stroke', '#0d1117').attr('stroke-width', 1.5)
+      .attr('cursor', 'pointer')
+      .on('click', (event, d) => {
+        event.stopPropagation();
+        try {
+          goToLocation({ snippet: CURRENT, frag: d.frag, line: d.kind === 'fn' ? (d.line || 1) : 1 });
+          setStatus('ok', d.kind === 'fn' ? '跳到 ' + d.label + '（第 ' + d.line + ' 行）' : '跳到片段 ' + d.label);
+        } catch (_) {}
+      })
+      .on('mouseenter', function () { d3.select(this).attr('stroke', '#4f8cff').attr('stroke-width', 2.5); })
+      .on('mouseleave', function () { d3.select(this).attr('stroke', '#0d1117').attr('stroke-width', 1.5); });
+    node.append('title').text((d) => (d.kind === 'fn' ? d.label + ' · 第 ' + d.line + ' 行' : d.label));
+    const label = labelG.selectAll('text.dgf-node').data(nodes).join('text')
+      .attr('class', 'dgf-node').attr('font-size', (d) => (d.kind === 'file' ? 11 : 9.5))
+      .attr('fill', (d) => (d.kind === 'file' ? '#e3b341' : '#adbac7'))
+      .attr('dx', (d) => (d.kind === 'file' ? 12 : 8)).attr('dy', 3)
+      .attr('pointer-events', 'none').text((d) => d.label);
+
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id((d) => d.key).distance((d) => (d.kind === 'include' ? 120 : 62)).strength(0.5))
+      .force('charge', d3.forceManyBody().strength((d) => (d.kind === 'file' ? -420 : -130)))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .force('collide', d3.forceCollide().radius((d) => (d.kind === 'file' ? 26 : 16)))
+      .on('tick', () => {
+        link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+        edgeLabel.attr('x', (d) => (d.source.x + d.target.x) / 2).attr('y', (d) => (d.source.y + d.target.y) / 2 - 3);
+        node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
+        label.attr('x', (d) => d.x).attr('y', (d) => d.y);
+      });
+    /* 拖拽节点 */
+    node.call(d3.drag()
+      .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+    /* 缩放按钮（和参考图一样放右侧） */
+    const tools = document.createElement('div'); tools.className = 'dg-force-tools';
+    const mkBtn = (text, hint, onclick) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = hint; b.onclick = onclick; return b;
+    };
+    tools.appendChild(mkBtn('＋', '放大', () => svg.transition().duration(200).call(zoom.scaleBy, 1.3)));
+    tools.appendChild(mkBtn('－', '缩小', () => svg.transition().duration(200).call(zoom.scaleBy, 1 / 1.3)));
+    tools.appendChild(mkBtn('⤢', '适应窗口', () => svg.transition().duration(250).call(zoom.transform, d3.zoomIdentity)));
+    tools.appendChild(mkBtn('⟳', '重新布局', () => { nodes.forEach((n) => { n.fx = null; n.fy = null; }); sim.alpha(1).restart(); }));
+    host.appendChild(tools);
+  }).catch((error) => {
+    host.innerHTML = '<span class="ol-empty">图形库加载失败：' + escapeHtml(String(error.message || error)) + '</span>';
+  });
 }
 
 let LOGIC_GRAPH_SEQ = 0;
