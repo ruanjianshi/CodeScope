@@ -13481,6 +13481,57 @@ function bpTypeOptions() {
    ['float', 'float'], ['char *', 'char *'], ['void *', 'void *']].forEach((p) => opts.push(p));
   return opts;
 }
+/* 从当前文档（**所有片段**）里找某个函数的签名 ——
+   给调用积木做"悬停看参数"的提示（像 IDE 的签名帮助）。
+   做法：在片段源码里找 `名字(` 且该行不是调用（前面有类型/返回类型），
+   取到第一个 `{` 之前的部分。找不到返回空串。 */
+function bpSignatureOf(name) {
+  if (!name || !CURRENT) return '';
+  for (let i = 0; i < (CURRENT.fragments || []).length; i++) {
+    const lines = String(CURRENT.fragments[i].code || '').replace(/\r\n/g, '\n').split('\n');
+    for (let k = 0; k < lines.length; k++) {
+      const l = lines[k];
+      /* 宏：`#define NAME(...)`，只取那一行 */
+      if (l.indexOf('#define') >= 0 && l.indexOf(name) >= 0 && l.indexOf(name + '(') >= 0) return l.trim();
+      /* 用**字符串扫描**找 `name` 后面紧跟 `(`（允许中间空格）。
+         不用正则 —— 这个函数的正则被 shell 转义坑过好几次，字符串更稳。 */
+      let from = 0, at = -1;
+      while (true) {
+        const p = l.indexOf(name, from);
+        if (p < 0) break;
+        /* ⚠️ 前一个字符不能是标识符 —— 否则找 `open` 会匹配到 `dev_open` 里（实测踩到） */
+        if (p > 0 && /[\w]/.test(l[p - 1])) { from = p + 1; continue; }
+        let q = p + name.length;
+        while (q < l.length && (l[q] === ' ' || l[q] === '\t')) q++;
+        if (l[q] === '(') { at = p; break; }
+        from = p + 1;
+      }
+      if (at < 0) continue;
+      const before = l.slice(0, at);
+      /* 前面是 . 或 -> 说明是成员/调用，不是定义 */
+      if (/[.]\s*$/.test(before) || /->\s*$/.test(before)) continue;
+      if (/^\s*(if|for|while|switch|return|else)\b/.test(l)) continue;
+      /* 前面只能是类型/限定符/空白（`led_t *`、`static int `、`void `）。
+         **不能有括号** —— 有括号说明是结构体成员（`int (*open)(...)`）或别的上下文。 */
+      if (/[()]/.test(before)) continue;
+      if (!/^[\s\w:*&<>,\[\]]*$/.test(before)) continue;
+      /* 收集到第一个 { 或 ; 为止 */
+      let text = '', depth = 0, done = false;
+      for (let j = k; j < Math.min(lines.length, k + 6); j++) {
+        text += (text ? ' ' : '') + lines[j].trim();
+        for (const ch of lines[j]) { if (ch === '(') depth++; else if (ch === ')') depth--; }
+        if (depth <= 0 && (lines[j].indexOf('{') >= 0 || lines[j].indexOf(';') >= 0)) { done = true; break; }
+      }
+      if (!done) continue;
+      const cut = Math.min.apply(null, [text.indexOf('{'), text.indexOf(';')].filter((n) => n >= 0));
+      const sig = (cut >= 0 ? text.slice(0, cut) : text).replace(/\s+/g, ' ').trim();
+      if (sig && sig.length < 200) return sig;
+    }
+  }
+  return '';
+}
+/* 从文档拉函数列表（走已有的文档级图谱接口，不用新接口） */
+
 /* 从文档拉函数列表（走已有的文档级图谱接口，不用新接口） */
 function loadDocFunctions() {
   if (!CURRENT || !CURRENT.file) return Promise.resolve([]);
@@ -13540,45 +13591,45 @@ function defineCBlocks() {
       tooltip: '函数定义；生成的代码是 int NAME(void) { ... }' },
     { type: 'c_if', message0: '如果 %1', args0: [{ type: 'input_value', name: 'COND' }],
       message1: '那么 %1', args1: [{ type: 'input_statement', name: 'DO' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'if 判断' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'if 判断：条件槽接布尔表达式（如 x > 0），那么槽接要执行的语句' },
     { type: 'c_ifelse', message0: '如果 %1', args0: [{ type: 'input_value', name: 'COND' }],
       message1: '那么 %1', args1: [{ type: 'input_statement', name: 'DO' }],
       message2: '否则 %1', args2: [{ type: 'input_statement', name: 'ELSE' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'if / else' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'if / else：条件成立走「那么」，否则走「否则」' },
     { type: 'c_while', message0: '当 %1 时循环', args0: [{ type: 'input_value', name: 'COND' }],
       message1: '做 %1', args1: [{ type: 'input_statement', name: 'DO' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'while 循环' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'while 循环：条件为真就一直执行「做」里的语句' },
     { type: 'c_for', message0: 'for 初值 %1', args0: [{ type: 'field_input', name: 'INIT', text: 'i = 0' }],
       message1: '条件 %1', args1: [{ type: 'field_input', name: 'COND', text: 'i < 10' }],
       message2: '步进 %1', args2: [{ type: 'field_input', name: 'STEP', text: 'i++' }],
       message3: '做 %1', args3: [{ type: 'input_statement', name: 'DO' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'for 循环' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'for 循环：初值 / 条件 / 步进 三段都要填，例：i = 0 / i < n / i++' },
     { type: 'c_set', message0: '设置 %1 = %2', args0: [
         { type: 'field_input', name: 'TARGET', text: 'handler->status' }, { type: 'input_value', name: 'VALUE' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '赋值' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '赋值：左边填变量或成员（如 p->status、arr[i]），右边接要赋的值。声明并赋值也可以写在这（如 int x）' },
     { type: 'c_declare', message0: '声明 %1 %2', args0: [
         { type: 'field_dropdown', name: 'TYPE', options: [['int', 'int'], ['uint8_t', 'uint8_t'], ['uint32_t', 'uint32_t'], ['float', 'float'], ['char *', 'char *'], ['void *', 'void *']] },
         { type: 'field_input', name: 'NAME', text: 'x' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '变量声明' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.var, tooltip: '变量声明：先选类型再填名字，例：int count、uint8_t *buf' },
     { type: 'c_call', message0: '调用 %1 ( %2 )', args0: [
         { type: 'field_dropdown', name: 'NAME', options: function () { return bpFunctionOptions(); } },
         { type: 'input_value', name: 'ARG' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.func,
-      tooltip: '函数调用；下拉里是**当前文档里的函数**（CodeScope 独有），选「其他…」可手填' },
+      tooltip: '调用函数。第一个下拉是**当前文档里的函数**（选「其他…」可手填）；括号里填实参，多个用逗号分隔。悬停可看它的签名' },
     { type: 'c_call_any', message0: '调用 %1 ( %2 )', args0: [
         { type: 'field_input', name: 'NAME', text: 'printf' }, { type: 'input_value', name: 'ARG' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.func, tooltip: '调用任意函数（手填名字）' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.func, tooltip: '调用任意函数。名字手填（如 printf / memcpy）；括号里填实参' },
     { type: 'c_return', message0: '返回 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: 'return' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.control, tooltip: '返回：接要返回的值；函数返回 void 时接一个空表达式即可' },
     { type: 'c_raw', message0: '原样代码 %1', args0: [{ type: 'field_input', name: 'CODE', text: '// 复杂写法' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.raw,
-      tooltip: '积木表达不了的构造（宏、位域、内联汇编）用这个，原文照抄' },
+      tooltip: '原样代码：积木表达不了的构造（宏、位域、内联汇编）写这里，原文照抄不解析' },
     { type: 'c_text', message0: '%1', args0: [{ type: 'field_input', name: 'TEXT', text: '""' }],
       output: null, colour: BP_COLOR.op, tooltip: '文本/表达式' },
     { type: 'c_num', message0: '%1', args0: [{ type: 'field_number', name: 'NUM', value: 0 }],
       output: null, colour: BP_COLOR.op, tooltip: '数字' },
     { type: 'c_expr', message0: '表达式 %1', args0: [{ type: 'field_input', name: 'EXPR', text: 'handler == NULL' }],
-      output: null, colour: BP_COLOR.op, tooltip: '任意 C 表达式（条件、右值）' },
+      output: null, colour: BP_COLOR.op, tooltip: '任意 C 表达式：判断条件、右值、函数调用都能写。例：a > 0、x == NULL、p->status、arr[i] + 1' },
     /* ── 下面这些是为了把「表达式」从自由文本变成可拼装的积木 ── */
     { type: 'c_op', message0: '%1 %2 %3', args0: [
         { type: 'input_value', name: 'A' },
@@ -13588,17 +13639,17 @@ function defineCBlocks() {
           ['&&', '&&'], ['||', '||'], ['&', '&'], ['|', '|'], ['^', '^'], ['<<', '<<'], ['>>', '>>'],
           ['=', '='], ['+=', '+='], ['-=', '-='] ] },
         { type: 'input_value', name: 'B' }],
-      output: null, colour: BP_COLOR.op, tooltip: '二元运算（算术 / 比较 / 逻辑 / 位运算）' },
+      output: null, colour: BP_COLOR.op, tooltip: '二元运算：左右各接一个值，中间选运算符。例：(a + b) * 2、x == 0、flags & MASK' },
     { type: 'c_not', message0: '非 %1', args0: [{ type: 'input_value', name: 'A' }],
       output: null, colour: BP_COLOR.op, tooltip: '逻辑非 / 取反' },
     { type: 'c_index', message0: '%1 [ %2 ]', args0: [
         { type: 'input_value', name: 'ARR' }, { type: 'input_value', name: 'IDX' }],
-      output: null, colour: BP_COLOR.op, tooltip: '数组 / 指针下标' },
+      output: null, colour: BP_COLOR.op, tooltip: '下标访问：左边接数组或指针，右边接下标。例：arr[i]、buf[0]' },
     { type: 'c_member', message0: '%1 %2 %3', args0: [
         { type: 'input_value', name: 'OBJ' },
         { type: 'field_dropdown', name: 'OP', options: [['.', '.'], ['->', '->']] },
         { type: 'field_input', name: 'NAME', text: 'status' }],
-      output: null, colour: BP_COLOR.op, tooltip: '结构体成员访问' },
+      output: null, colour: BP_COLOR.op, tooltip: '成员访问：左边接对象（指针用 ->，对象用 .），右边填成员名，例：p->status、obj.name' },
     { type: 'c_cast', message0: '( %1 ) %2', args0: [
         { type: 'field_dropdown', name: 'TYPE', options: function () { return bpTypeOptions(); } },
         { type: 'input_value', name: 'A' }],
@@ -13625,7 +13676,7 @@ function defineCBlocks() {
           ['condition_variable', 'condition_variable'], ['atomic', 'atomic'], ['future', 'future'],
           ['chrono', 'chrono'], ['utility', 'utility'], ['tuple', 'tuple'], ['optional', 'optional'],
           ['filesystem', 'filesystem'], ['sstream', 'sstream'], ['cstdint', 'cstdint'], ['cmath', 'cmath']] }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '包含标准库头文件' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '包含头文件：从下拉选标准库头文件，例：<vector>、<thread>、<mutex>' },
     { type: 'cpp_container', message0: '容器 %1 %2', args0: [
         { type: 'field_dropdown', name: 'TYPE', options: [
           ['vector<int>', 'vector<int>'], ['vector<double>', 'vector<double>'],
@@ -13635,7 +13686,7 @@ function defineCBlocks() {
           ['unordered_set<int>', 'unordered_set<int>'], ['queue<int>', 'queue<int>'],
           ['stack<int>', 'stack<int>'], ['deque<int>', 'deque<int>'], ['pair<int,int>', 'pair<int,int>']] },
         { type: 'field_input', name: 'NAME', text: 'v' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '声明一个 STL 容器' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '声明容器：先选容器类型（如 vector<int>）再填变量名，例：v、m、cache' },
     { type: 'cpp_method', message0: '%1 . %2 ( %3 )', args0: [
         { type: 'input_value', name: 'OBJ' },
         { type: 'field_dropdown', name: 'METHOD', options: [
@@ -13646,7 +13697,7 @@ function defineCBlocks() {
           ['begin', 'begin'], ['end', 'end'], ['push', 'push'], ['pop', 'pop'], ['top', 'top'],
           ['first', 'first'], ['second', 'second']] },
         { type: 'input_value', name: 'ARG' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '调用容器/对象的方法' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '调用方法：左边接对象（如 v），中间选方法（如 push_back），括号里填实参' },
     { type: 'cpp_algo', message0: '%1 ( %2 )', args0: [
         { type: 'field_dropdown', name: 'ALGO', options: [
           ['sort', 'sort'], ['stable_sort', 'stable_sort'], ['reverse', 'reverse'],
@@ -13657,11 +13708,11 @@ function defineCBlocks() {
           ['upper_bound', 'upper_bound'], ['all_of', 'all_of'], ['any_of', 'any_of'],
           ['none_of', 'none_of'], ['copy', 'copy'], ['fill', 'fill']] },
         { type: 'input_value', name: 'ARGS' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '调用 STL 算法（参数如 v.begin(), v.end()）' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: 'STL 算法：选算法名，括号里填参数。例：sort → v.begin(), v.end()；accumulate → v.begin(), v.end(), 0' },
     { type: 'cpp_range_for', message0: '遍历 %1 的元素 %2', args0: [
         { type: 'input_value', name: 'OBJ' }, { type: 'field_input', name: 'VAR', text: 'x' }],
       message1: '做 %1', args1: [{ type: 'input_statement', name: 'DO' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: 'C++11 范围 for：for (auto &x : v) { ... }' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '范围 for：左边接要遍历的容器，右边填元素变量名，下面接循环体。生成 for (auto &x : v)' },
     { type: 'cpp_lambda', message0: 'lambda [捕获 %1] ( %2 ) -> %3 { %4 }', args0: [
         { type: 'field_input', name: 'CAP', text: '&' }, { type: 'field_input', name: 'PARAMS', text: 'int x' },
         { type: 'field_input', name: 'RET', text: 'void' }, { type: 'field_input', name: 'BODY', text: '// 实现' }],
@@ -13670,14 +13721,14 @@ function defineCBlocks() {
     { type: 'cpp_thread', message0: '启动线程 %1 执行 %2 ( %3 )', args0: [
         { type: 'field_input', name: 'NAME', text: 't' }, { type: 'input_value', name: 'FN' },
         { type: 'input_value', name: 'ARGS' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: 'std::thread t(fn, args...)' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '启动线程：填线程变量名，接要执行的函数和它的参数。例：t + 函数 + arg1, arg2' },
     { type: 'cpp_thread_op', message0: '%1 . %2 ( )', args0: [
         { type: 'input_value', name: 'OBJ' },
         { type: 'field_dropdown', name: 'OP', options: [
           ['join', 'join'], ['detach', 'detach'], ['get', 'get'], ['wait', 'wait'],
           ['lock', 'lock'], ['unlock', 'unlock'], ['notify_one', 'notify_one'], ['notify_all', 'notify_all'],
           ['load', 'load'], ['store', 'store'], ['valid', 'valid']] }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '线程 / future / mutex / atomic 的常用操作' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '线程操作：左边接线程/future/mutex/atomic，中间选操作（join / detach / get / lock / notify_one…）' },
     { type: 'cpp_mutex', message0: '互斥量 %1 %2', args0: [
         { type: 'field_dropdown', name: 'KIND', options: [
           ['std::mutex', 'std::mutex'], ['std::recursive_mutex', 'std::recursive_mutex'],
@@ -13691,18 +13742,18 @@ function defineCBlocks() {
           ['std::scoped_lock', 'std::scoped_lock'], ['std::shared_lock', 'std::shared_lock']] },
         { type: 'input_value', name: 'MTX' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.thread,
-      tooltip: 'RAII 自动加锁：出作用域自动解锁，别手动 lock/unlock' },
+      tooltip: '自动加锁：选锁类型，接互斥量。作用域结束自动解锁 —— **别手动 lock/unlock**' },
     { type: 'cpp_atomic', message0: '原子量 %1 <%2> %3', args0: [
         { type: 'field_dropdown', name: 'KIND', options: [
           ['std::atomic', 'std::atomic'], ['std::atomic_flag', 'std::atomic_flag']] },
         { type: 'field_input', name: 'TYPE', text: 'int' }, { type: 'field_input', name: 'NAME', text: 'n' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '原子变量' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '原子变量：选 atomic，填类型和名字，例：atomic<int> counter' },
     { type: 'cpp_sleep', message0: '等待 %1 %2', args0: [
         { type: 'field_number', name: 'N', value: 100 },
         { type: 'field_dropdown', name: 'UNIT', options: [
           ['毫秒', 'ms'], ['微秒', 'us'], ['秒', 's']] }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.thread,
-      tooltip: 'std::this_thread::sleep_for' },
+      tooltip: '等待：填时长和单位，生成 std::this_thread::sleep_for(std::chrono::ms(100))' },
     { type: 'cpp_async', message0: '异步任务 %1 执行 %2', args0: [
         { type: 'field_input', name: 'NAME', text: 'fut' }, { type: 'input_value', name: 'FN' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: 'auto fut = std::async(fn)' },
@@ -13715,13 +13766,13 @@ function defineCBlocks() {
         { type: 'field_input', name: 'TYPE', text: 'MyClass' },
         { type: 'field_input', name: 'NAME', text: 'p' }, { type: 'input_value', name: 'ARGS' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.smart,
-      tooltip: 'make_shared / make_unique 生成：auto p = ...<T>(args)' },
+      tooltip: '智能指针：make_shared/make_unique 会自动生成 auto p = ...<T>(args)；shared_ptr/unique_ptr 生成声明' },
     /* IO / 字符串 */
     { type: 'cpp_out', message0: '输出 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.io,
-      tooltip: 'std::cout << 值 << std::endl;' },
+      tooltip: '输出：接要打印的值，生成 std::cout << 值 << std::endl' },
     { type: 'cpp_in', message0: '输入到 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.io, tooltip: 'std::cin >> 值;' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.io, tooltip: '输入：接要读入的变量，生成 std::cin >> 变量' },
     { type: 'cpp_string', message0: '字符串 %1 = %2', args0: [
         { type: 'field_input', name: 'NAME', text: 's' }, { type: 'field_input', name: 'VALUE', text: '"hello"' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.io, tooltip: 'std::string s = "..."' },
@@ -13954,6 +14005,12 @@ function makeBlockFor(ws, n) {
     const known = BP_FUNCS.indexOf(callee) >= 0;
     b = mk(known ? 'c_call' : 'c_call_any');
     b.setFieldValue(callee, 'NAME');
+    /* 悬停显示这个函数在文档里的真实签名（像 IDE 的参数提示） */
+    const sig = bpSignatureOf(callee);
+    if (sig) {
+      b.setTooltip('<b>' + escapeHtml(sig) + '</b><br><span style="opacity:.75">'
+        + escapeHtml(callee) + ' 的定义（来自当前文档）</span><br>括号里的槽填实参，多个用逗号分隔');
+    }
     if (m && m[2]) {
       const t = mk('c_text'); t.setFieldValue(m[2], 'TEXT'); t.initSvg(); t.render();
       b.getInput('ARG').connection.connect(t.outputConnection);
