@@ -4297,6 +4297,7 @@
           <span id="lg-title">⇉ 逻辑图</span>
           <span id="lg-stats"></span>
           <span class="sp"></span>
+          <button id="lg-mode" title="切换：AI 语义逻辑导图 / 结构控制流图">⚡ AI 解读</button>
           <button id="lg-edit" title="图形化编辑：双击改内容、＋插入、✕删除、↑↓调序">✎ 编辑</button>
           <button id="lg-gen" title="按当前图生成代码">↩ 生成代码</button>
           <button id="lg-refresh" title="重新从源码解析">⟳ 刷新</button>
@@ -12563,6 +12564,8 @@ function wireCodeGraphToolbar() {
    这里同时提供「看」和「图形化编辑 → 生成代码」。 */
 let LG_ACTIVE = false;
 let LG_EDIT = null;
+/* 默认走 AI 语义解读（用户要的是「给人看的逻辑导图」，不是照抄代码的结构图） */
+let LG_MODE = (() => { try { return localStorage.getItem("mc-lg-mode") || "ai"; } catch (_) { return "ai"; } })();
 let LG_GRAPH = null;
 let LG_SEQ = 0;
 function setLogicGraphActive(on) {
@@ -12608,6 +12611,12 @@ function renderLogicPaneMain() {
     if ($('lg-stats')) $('lg-stats').textContent = '';
     return;
   }
+  if (LG_MODE === 'ai' && !LG_EDIT) { renderAiLogicDiagram(body, root); return; }
+  renderLogicStructDiagram(root);
+}
+function renderLogicStructDiagram(root) {
+  const body = $('lg-body');
+  if (!body) return;
   const seq = ++LG_SEQ;
   body.innerHTML = '<span class="ol-empty">正在生成逻辑图…</span>';
   if ($('lg-stats')) $('lg-stats').textContent = '…';
@@ -12652,6 +12661,21 @@ function renderLogicPaneMain() {
   });
 }
 function wireLogicGraphToolbar() {
+  const syncMode = () => {
+    const b = $('lg-mode');
+    if (!b) return;
+    b.textContent = LG_MODE === 'ai' ? '⚡ AI 解读' : '▦ 结构图';
+    b.classList.toggle('on', LG_MODE === 'ai');
+    b.title = LG_MODE === 'ai' ? '当前：AI 语义逻辑导图（点一下切到结构控制流图）' : '当前：结构控制流图（点一下切回 AI 语义导图）';
+  };
+  syncMode();
+  if ($('lg-mode')) $('lg-mode').onclick = () => {
+    LG_MODE = LG_MODE === 'ai' ? 'struct' : 'ai';
+    try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
+    LG_EDIT = null;
+    syncMode();
+    renderLogicPaneMain();
+  };
   if ($('lg-close')) $('lg-close').onclick = () => { LG_EDIT = null; setLogicGraphActive(false); };
   if ($('lg-refresh')) $('lg-refresh').onclick = () => renderLogicPaneMain();
   if ($('lg-edit')) $('lg-edit').onclick = () => {
@@ -13062,6 +13086,99 @@ function renderDocGraphForce(host, graph) {
     host.appendChild(tools);
   }).catch((error) => {
     host.innerHTML = '<span class="ol-empty">图形库加载失败：' + escapeHtml(String(error.message || error)) + '</span>';
+  });
+}
+
+/* ── 逻辑导图 · AI 语义版 ──
+   用户要的是「给人看的逻辑导图」：节点说「这一步在做什么」，
+   而不是照抄代码（`L43 · if (led_handler == NULL)` 那是"代码导图"不是"逻辑导图"）。
+   这种语义概括只能靠模型。结构图（CFG）保留作为兜底/对照。
+   按「函数」缓存，切来切去不重复烧 token。 */
+const AI_LOGIC_CACHE = new Map();
+const AI_LOGIC_PROMPT = [
+  '你是资深工程师，负责把一段函数代码画成**给同事看的逻辑导图**。',
+  '',
+  '要求（很重要，按此执行）：',
+  '1. 节点文字用**简体中文说清"这一步在做什么"**，绝对不要照抄代码语句。',
+  '   反例：`if (led_handler == NULL) return -1;`',
+  '   正例：`句柄为空？` → `返回参数错误`',
+  '2. 形状按语义选：判断用菱形 `{条件}`，开始/结束/返回用圆角 `([文字])`，普通步骤用方框 `[文字]`。',
+  '3. **只画主干逻辑**（6~14 个节点）。琐碎的赋值、日志可以合并成一步或省略，别把每一行都搬上去。',
+  '4. 判断节点的出边要标 `是` / `否`（或具体条件值）。',
+  '5. 图的第一行用 `flowchart TD`，紧接着加一句注释说明这个函数的**作用**：',
+  '   `%% 作用：……`（一句话讲清这个函数干嘛、输入什么、返回什么）。',
+  '6. 用 `classDef` 区分：判断=琥珀、返回/结束=绿、普通步骤=中性灰蓝。',
+  '7. **只输出 Mermaid 代码**，不要任何解释、不要 ``` 围栏。',
+].join('\n');
+function aiLogicKey(root) {
+  return (CURRENT ? CURRENT.file : '') + '|' + CINDEX + '|' + (root.name || '') + '|' + (root.line || 0);
+}
+/* 取函数的源码文本（按行范围从片段里切） */
+function functionSourceText(root) {
+  if (!CURRENT || !CURRENT.fragments[CINDEX]) return '';
+  const code = String(CURRENT.fragments[CINDEX].code || '').replace(/\r\n/g, '\n');
+  const lines = code.split('\n');
+  const from = Math.max(0, (Number(root.line) || 1) - 1);
+  const to = Number(root.endLine) > from ? Number(root.endLine) : Math.min(lines.length, from + 80);
+  return lines.slice(from, to).join('\n');
+}
+function extractMermaid(text) {
+  let out = String(text || '').trim();
+  const fence = out.match(/```(?:mermaid)?\s*([\s\S]*?)```/);
+  if (fence) out = fence[1].trim();
+  const at = out.search(/^(flowchart|graph)\s/m);
+  if (at > 0) out = out.slice(at);
+  return out.trim();
+}
+async function renderAiLogicDiagram(host, root) {
+  const key = aiLogicKey(root);
+  const cached = AI_LOGIC_CACHE.get(key);
+  const body = $('lg-body');
+  if (cached) { return paintAiLogic(body, cached, root); }
+  const source = functionSourceText(root);
+  if (!source) { renderLogicStructDiagram(root); return; }
+  body.innerHTML = '<span class="ol-empty">⚡ 正在让 AI 解读这个函数…（首次会慢一点，之后走缓存）</span>';
+  if ($('lg-stats')) $('lg-stats').textContent = (root.name || '') + ' · AI 解读中…';
+  try {
+    const cfg = typeof AI_CFG !== 'undefined' ? AI_CFG : null;
+    if (!cfg || !cfg.url) throw new Error('还没配置 AI（右上角「AI 搜索」里设置接口地址与密钥）');
+    const r = await api('/api/ai/chat', {
+      url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 300000,
+      messages: [
+        { role: 'system', content: AI_LOGIC_PROMPT },
+        { role: 'user', content: '函数名：' + (root.name || '') + '\n\n```\n' + source + '\n```' },
+      ],
+    });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'AI 返回失败');
+    const mermaid = extractMermaid(r.content);
+    if (!/^(flowchart|graph)\s/m.test(mermaid)) throw new Error('AI 没有返回 Mermaid（返回内容：' + String(r.content || '').slice(0, 80) + '…）');
+    AI_LOGIC_CACHE.set(key, mermaid);
+    paintAiLogic(body, mermaid, root);
+  } catch (error) {
+    /* 失败就退回结构图，并把原因显示出来，别让用户对着空白 */
+    renderLogicStructDiagram(root);
+    if ($('lg-stats')) $('lg-stats').textContent = 'AI 解读失败，已退回结构图';
+    setStatus('err', 'AI 解读失败：' + String(error.message || error));
+  }
+}
+function paintAiLogic(body, mermaid, root) {
+  ensureMermaid().then((m) => {
+    m.initialize({
+      startOnLoad: false, securityLevel: 'strict',
+      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+      themeVariables: { fontSize: '13px', fontFamily: 'ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' },
+      flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 22, rankSpacing: 34, padding: 10, diagramPadding: 8 },
+    });
+    return m.render('lgai-' + Date.now().toString(36), mermaid);
+  }).then((out) => {
+    body.innerHTML = out && out.svg ? out.svg : '<span class="ol-empty">Mermaid 没有输出</span>';
+    if ($('lg-stats')) {
+      const title = (mermaid.match(/%%\s*作用[:：]\s*(.+)/) || [])[1];
+      $('lg-stats').textContent = (root.name || '') + (title ? ' · ' + title.trim().slice(0, 40) : '');
+      $('lg-stats').title = title ? title.trim() : '';
+    }
+  }).catch((error) => {
+    body.innerHTML = '<span class="ol-empty">渲染失败：' + escapeHtml(String(error.message || error)) + '</span>';
   });
 }
 
