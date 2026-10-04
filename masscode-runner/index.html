@@ -2483,6 +2483,27 @@
   .rel-map-summary .stat.in b { color:var(--accent); }
   .rel-map-summary .stat.out b { color:var(--ok); }
   .rel-section { padding:8px 9px 4px; color:var(--dim); font-size:10px; font-weight:600; }
+  /* 逻辑图 · 流程图布局：节点卡片竖排 + SVG 覆盖层画箭头 */
+  .logic-flow { position:relative; display:flex; flex-direction:column; gap:16px; padding:12px 10px 18px; }
+  .logic-flow-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+  .logic-node { position:relative; z-index:1; display:flex; align-items:center; gap:7px;
+    padding:6px 9px; border:1px solid var(--border); border-radius:8px;
+    background:var(--panel,#141a22); font-size:11px; cursor:pointer;
+    transition:border-color .16s, transform .16s; }
+  .logic-node:hover { border-color:var(--accent); transform:translateX(2px); }
+  .logic-node-icon { flex:0 0 auto; width:14px; text-align:center; }
+  .logic-node-body { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .logic-node-kind { color:var(--dim); font-size:9px; }
+  .logic-node-label { font-family:var(--mono,ui-monospace,Menlo,monospace);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .logic-node-line { flex:0 0 auto; color:var(--dim); font-size:9px; }
+  .logic-node.k-branch { border-left:3px solid #e5b567; }
+  .logic-node.k-branch .logic-node-icon, .logic-node.k-branch .logic-node-label { color:#e5b567; }
+  .logic-node.k-loop { border-left:3px solid #7fb3ff; }
+  .logic-node.k-loop .logic-node-icon, .logic-node.k-loop .logic-node-label { color:#7fb3ff; }
+  .logic-node.k-return { border-left:3px solid #8fd694; }
+  .logic-node.k-return .logic-node-icon { color:#8fd694; }
+  .logic-node.k-call { border-left:3px solid var(--accent); }
   /* 逻辑图：一行一个语句节点，缩进 = 花括号嵌套深度 */
   .logic-graph { display:flex; flex-direction:column; }
   .logic-list { display:flex; flex-direction:column; padding:2px 0 6px; }
@@ -11634,6 +11655,70 @@ function renderRelationPane() { return renderPanelInto('relation', () => withAct
    这里只负责画出来 + 导出。入口是关系面板的「⇉ 逻辑图」。
    请求带 {file, fragment, line}：服务端按行号自己定位到那个函数，前端不用传代码。 */
 let LOGIC_GRAPH_SEQ = 0;
+let LOGIC_LAYOUT = (() => { try { return localStorage.getItem('mc-logic-layout') || 'flow'; } catch (_) { return 'flow'; } })();
+let LOGIC_FLOW_OBSERVER = null;
+const LOGIC_KIND_ICON = { branch: '◆', loop: '↻', return: '⏎', call: 'ƒ', stmt: '·' };
+const LOGIC_KIND_TEXT = { branch: '分支', loop: '循环', return: '返回', call: '调用', stmt: '语句' };
+/* 逻辑图 · 流程图布局：节点按控制流顺序竖排，边用 SVG 曲线连（复用关系图那套做法：
+   DOM 卡片 + SVG 覆盖层 + ResizeObserver 重画），带 true/false/loop/next 边标签。 */
+function buildLogicFlow(body, graph) {
+  if (LOGIC_FLOW_OBSERVER) { LOGIC_FLOW_OBSERVER.disconnect(); LOGIC_FLOW_OBSERVER = null; }
+  const wrap = document.createElement('div'); wrap.className = 'logic-flow';
+  const seq = ++LOGIC_GRAPH_SEQ, marker = 'logic-arrow-' + seq;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'logic-flow-svg');
+  svg.innerHTML = '<defs><marker id="' + marker + '" markerWidth="6" markerHeight="6" refX="5.4" refY="3" viewBox="0 0 6 6" orient="auto" markerUnits="userSpaceOnUse"><path d="M.6,.7 L5.4,3 L.6,5.3 Z" fill="var(--accent)"/></marker></defs>';
+  wrap.appendChild(svg);
+  const cards = new Map();
+  const nodes = (graph.nodes || []).filter((node) => node.kind !== 'entry' && node.kind !== 'exit');
+  nodes.forEach((node) => {
+    const card = document.createElement('div');
+    card.className = 'logic-node k-' + node.kind;
+    card.style.marginLeft = (Math.min(6, Number(node.indent) || 0) * 18) + 'px';
+    card.innerHTML = '<span class="logic-node-icon">' + (LOGIC_KIND_ICON[node.kind] || '·') + '</span>' +
+      '<span class="logic-node-body"><span class="logic-node-kind">' + (LOGIC_KIND_TEXT[node.kind] || node.kind) + '</span>' +
+      '<span class="logic-node-label">' + escapeHtml(node.label) + '</span></span>' +
+      '<span class="logic-node-line">L' + node.line + '</span>';
+    card.title = (LOGIC_KIND_TEXT[node.kind] || node.kind) + ' · 第 ' + node.line + ' 行 · 点击跳到该行';
+    card.onclick = () => { try { goToLocation({ snippet: CURRENT, frag: CINDEX, line: node.line || 1 }); } catch (_) {} };
+    wrap.appendChild(card);
+    cards.set(node.id, card);
+  });
+  body.appendChild(wrap);
+  const draw = () => {
+    const box = wrap.getBoundingClientRect();
+    svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + box.height);
+    svg.querySelectorAll('.logic-link,.logic-link-label').forEach((el) => el.remove());
+    (graph.edges || []).forEach((edge) => {
+      const from = cards.get(edge.from), to = cards.get(edge.to);
+      if (!from || !to) return;
+      const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+      const x1 = a.left + a.width / 2 - box.left, y1 = a.bottom - box.top;
+      const x2 = b.left + b.width / 2 - box.left, y2 = b.top - box.top;
+      if (y2 < y1) return;                                  /* 回边（循环向上）先不画，免得线缠成一团 */
+      const bend = Math.max(14, Math.min(46, Math.abs(y2 - y1) * 0.42));
+      const d = 'M' + x1 + ',' + y1 + ' C' + x1 + ',' + (y1 + bend) + ' ' + x2 + ',' + (y2 - bend) + ' ' + x2 + ',' + y2;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      line.setAttribute('class', 'logic-link' + (edge.label ? ' e-' + edge.label : ''));
+      line.setAttribute('d', d); line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', edge.label === 'true' ? 'var(--ok)' : edge.label === 'false' ? '#e57373' : 'var(--accent)');
+      line.setAttribute('stroke-width', '1.4'); line.setAttribute('opacity', '.85');
+      line.setAttribute('marker-end', 'url(#' + marker + ')');
+      svg.appendChild(line);
+      if (edge.label && edge.label !== 'next') {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('class', 'logic-link-label');
+        text.setAttribute('x', String((x1 + x2) / 2 + 6)); text.setAttribute('y', String((y1 + y2) / 2));
+        text.setAttribute('fill', edge.label === 'true' ? 'var(--ok)' : edge.label === 'false' ? '#e57373' : 'var(--dim)');
+        text.setAttribute('font-size', '9');
+        text.textContent = edge.label === 'loop' ? '循环' : edge.label === 'true' ? '是' : edge.label === 'false' ? '否' : edge.label;
+        svg.appendChild(text);
+      }
+    });
+  };
+  requestAnimationFrame(draw);
+  if (window.ResizeObserver) { LOGIC_FLOW_OBSERVER = new ResizeObserver(draw); LOGIC_FLOW_OBSERVER.observe(wrap); }
+}
 function renderLogicGraphPane(body, root) {
   /* 没有打开任何文件时直接给出提示，别让 CURRENT.file 抛异常
      （实测从外部直接调这个函数会炸在 request() 里的 CURRENT.file 上）。 */
@@ -11662,20 +11747,28 @@ function renderLogicGraphPane(body, root) {
     head.textContent = '逻辑图 · ' + (payload.name || root.name) + ' · ' + nodes.length + ' 个节点';
     host.appendChild(head);
     if (!nodes.length) { host.insertAdjacentHTML('beforeend', '<span class="ol-empty">这个函数体里没有可分析的语句</span>'); paneCount('0 个节点'); return; }
-    const list = document.createElement('div'); list.className = 'logic-list';
-    const ICON = { branch: '◆', loop: '↻', return: '⏎', call: 'ƒ', stmt: '·' };
-    nodes.forEach((node) => {
-      const row = document.createElement('div');
-      row.className = 'logic-row k-' + node.kind;
-      row.style.paddingLeft = (6 + Math.min(8, Number(node.indent) || 0) * 13) + 'px';
-      row.innerHTML = '<span class="logic-icon">' + (ICON[node.kind] || '·') + '</span>' +
-        '<span class="logic-label">' + escapeHtml(node.label) + '</span>' +
-        '<span class="logic-line">L' + node.line + '</span>';
-      row.title = node.kind + ' · 第 ' + node.line + ' 行 · 点击跳到该行';
-      row.onclick = () => { try { goToLocation({ snippet: CURRENT, frag: CINDEX, line: node.line || 1 }); } catch (_) {} };
-      list.appendChild(row);
-    });
-    host.appendChild(list);
+    /* 布局切换：流程图（默认）/ 列表 */
+    const layoutBar = document.createElement('div'); layoutBar.className = 'rel-tools';
+    relationButton(layoutBar, '◫ 流程图', LOGIC_LAYOUT === 'flow', () => { LOGIC_LAYOUT = 'flow'; try { localStorage.setItem('mc-logic-layout', LOGIC_LAYOUT); } catch (_) {} renderRelationPane(); });
+    relationButton(layoutBar, '☷ 列表', LOGIC_LAYOUT === 'list', () => { LOGIC_LAYOUT = 'list'; try { localStorage.setItem('mc-logic-layout', LOGIC_LAYOUT); } catch (_) {} renderRelationPane(); });
+    host.appendChild(layoutBar);
+    if (LOGIC_LAYOUT === 'flow') {
+      buildLogicFlow(host, payload);
+    } else {
+      const list = document.createElement('div'); list.className = 'logic-list';
+      nodes.forEach((node) => {
+        const row = document.createElement('div');
+        row.className = 'logic-row k-' + node.kind;
+        row.style.paddingLeft = (6 + Math.min(8, Number(node.indent) || 0) * 13) + 'px';
+        row.innerHTML = '<span class="logic-icon">' + (LOGIC_KIND_ICON[node.kind] || '·') + '</span>' +
+          '<span class="logic-label">' + escapeHtml(node.label) + '</span>' +
+          '<span class="logic-line">L' + node.line + '</span>';
+        row.title = node.kind + ' · 第 ' + node.line + ' 行 · 点击跳到该行';
+        row.onclick = () => { try { goToLocation({ snippet: CURRENT, frag: CINDEX, line: node.line || 1 }); } catch (_) {} };
+        list.appendChild(row);
+      });
+      host.appendChild(list);
+    }
     const actions = document.createElement('div'); actions.className = 'rel-tools';
     relationButton(actions, '⤓ 导出 drawio', false, () => {
       request({ format: 'drawio' }).then((out) => {
@@ -11689,7 +11782,7 @@ function renderLogicGraphPane(body, root) {
         setStatus('ok', '已导出 ' + link.download);
       }).catch((error) => setStatus('err', '导出失败：' + String(error.message || error)));
     });
-    relationButton(actions, '⧉ 复制骨架', false, () => {
+    relationButton(actions, '↩ 反向生成骨架代码', false, () => {
       fetch('/api/logic/skeleton', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ graph: { nodes: payload.nodes, edges: payload.edges }, language: payload.language || 'c_cpp', fnName: payload.name || root.name || 'generated' })
@@ -11703,6 +11796,9 @@ function renderLogicGraphPane(body, root) {
       }).catch((error) => setStatus('err', '生成骨架失败：' + String(error.message || error)));
     });
     host.appendChild(actions);
+    const hint = document.createElement('div'); hint.className = 'rel-tip';
+    hint.textContent = '「调用关系 / 文件依赖」是代码图谱（函数调用与文件依赖，可切 ◫ 图形）· 这里是逻辑图（语句级控制流）· 点节点跳源码';
+    host.appendChild(hint);
     paneCount(nodes.length + ' 个节点');
   }).catch((error) => {
     if (seq !== LOGIC_GRAPH_SEQ) return;
