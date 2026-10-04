@@ -12605,7 +12605,14 @@ function logicPaneRoot() {
      于是右栏永远显示「屏幕中间那个函数」而不是「光标所在函数」。
      之前我把优先级写反了（先 relationCurrentFunction 后 REL_ROOT），就是这个 bug。 */
   if (REL_ROOT && REL_ROOT.kind === 'fn') {
-    const def = resolveDefinition(REL_ROOT) || REL_ROOT;
+    /* REL_ROOT 在 syncRelationRoot 里**已经是解析过的结果**（带 snippet），
+       这里再 resolveDefinition 一次是多余的，而且遇到没有 snippet 的对象会抛
+       `Cannot read properties of undefined (reading 'file')` —— 抛错会中断整个渲染，
+       表现为「点什么都没反应」（实测踩过）。只在缺 snippet 时才解析，并兜住异常。 */
+    let def = REL_ROOT;
+    if (!def.snippet && typeof resolveDefinition === 'function') {
+      try { def = resolveDefinition(REL_ROOT) || REL_ROOT; } catch (_) { def = REL_ROOT; }
+    }
     if (def) return def;
   }
   return typeof relationCurrentFunction === 'function' ? relationCurrentFunction() : null;
@@ -12694,14 +12701,20 @@ function wireLogicGraphToolbar() {
     /* 已有解析 → 在「解析」和「结构图」之间切换；没有 → 触发一次 AI 解读 */
     const key = aiLogicKey(root);
     if (AI_LOGIC_CACHE.has(key)) {
+      /* 已有解析 → 在「解析」和「结构图」之间切换 */
       LG_MODE = LG_MODE === 'ai' ? 'struct' : 'ai';
       try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
+      syncMode();
+      renderLogicPaneMain();
     } else {
+      /* 没有解析 → **直接发起 AI 解读**。
+         注意不能只设 LG_MODE 再调 renderLogicPaneMain：那个入口为了「不自动跑」
+         只认缓存命中，没缓存就落到结构图 —— 点了等于没点（实测踩过）。 */
       LG_MODE = 'ai';
       try { localStorage.setItem('mc-lg-mode', LG_MODE); } catch (_) {}
+      syncMode();
+      renderAiLogicDiagram($('lg-body'), root);
     }
-    syncMode();
-    renderLogicPaneMain();
   };
   if ($('lg-close')) $('lg-close').onclick = () => { LG_EDIT = null; setLogicGraphActive(false); };
   if ($('lg-refresh')) $('lg-refresh').onclick = () => renderLogicPaneMain();

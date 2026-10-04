@@ -429,6 +429,11 @@ void bubbleSort(Array& values);
      否则只开逻辑图栏时光标同步整个不跑（用户报过「逻辑图不会自动更新」）。 */
   assert(/relationOpen \|\| LG_ACTIVE/.test(html), 'syncRelationRoot 没放行 LG_ACTIVE：只开逻辑图栏时光标同步不跑，图不会跟着当前函数更新');
   assert(/if \(LG_ACTIVE\) renderLogicPaneMain\(\)/.test(html), 'syncRelationRoot 里没有刷新逻辑图栏：换函数时右栏的图不会更新');
+  /* 「⚡ AI 解读」按钮：没缓存时必须**直接发起解读**，
+     不能只改 LG_MODE 再调 renderLogicPaneMain（那个入口只认缓存命中，点了等于没点）。 */
+  assert(/renderAiLogicDiagram\(\$\('lg-body'\), root\)/.test(html), '点「⚡ AI 解读」没有直接发起解读：只改模式会落到结构图，表现为点了没反应');
+  /* logicPaneRoot 不能对已解析的 REL_ROOT 再 resolveDefinition 一次（会抛 file 未定义、中断渲染） */
+  assert(/if \(!def\.snippet && typeof resolveDefinition/.test(html), 'logicPaneRoot 对已解析的 REL_ROOT 重复解析：缺 snippet 时会抛错并中断整个渲染');
   /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
      VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
   assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');
