@@ -422,6 +422,9 @@ void bubbleSort(Array& values);
   assert(selectHandler && !selectHandler.includes('syncCodeReferenceBar'), '「引用」浮条又被挂到 code-edit 的 select 自动触发上了（会遮挡刚选中的代码）');
   const keyupHandler = (html.match(/\$\('code-edit'\)\.addEventListener\('keyup',[\s\S]{0,500}?\}\);/) || [''])[0];
   assert(keyupHandler && !keyupHandler.includes('syncCodeReferenceBar'), '「引用」浮条又被挂到 code-edit 的 keyup 自动触发上了');
+  /* 逻辑图要跟着「当前函数」走：relationFunctionAtLine 只放行 'calls' 的话，
+     切到逻辑图后 REL_ROOT 永远不更新 —— 换到别的函数图还是旧的（用户报过）。 */
+  assert(/REL_VIEW !== 'calls' && REL_VIEW !== 'logic'/.test(html), '逻辑图的「当前函数」联动被关掉了：relationFunctionAtLine 必须同时放行 calls 与 logic，否则换函数时图不更新');
   /* 用户常把终端里转义过的路径（含 \ 空格 / \~）粘进目录框，不还原的话
      VS Code 会去找一个名字里带反斜杠的目录 → ENOENT → 所有文件都打不开。 */
   assert(html.includes('function unescapeShellPath') && html.includes('const target=unescapeShellPath(folder)'), 'VS Code 目录框未还原 shell 转义路径（粘贴带反斜杠的路径会导致整个工作区打不开）');
