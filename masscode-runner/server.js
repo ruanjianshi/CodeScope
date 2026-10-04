@@ -6278,7 +6278,14 @@ const server = http.createServer(async (req, res) => {
     // ===== 代码图谱：单文件多片段 → 符号索引 → 函数/文件子图（薄路由，计算在 lib/code-graph.js） =====
     if (req.method === 'GET' && u.pathname === '/api/graph') {
       try {
-        const snippets = walkSnippets();
+        /* file 必须真的用来收窄范围。原来直接 walkSnippets() 拿全库，
+           file 参数被忽略 —— 传一个不存在的路径也会返回全库 230 个符号，
+           ok 还是 true。前端拿它当某个文件的索引就会串味
+           （实测：把临时项目的文件塞满全库符号，Sticky Scope 直接失灵）。 */
+        const wanted = String(u.searchParams.get('file') || '').trim();
+        const all = walkSnippets();
+        const snippets = wanted ? all.filter((item) => item.file === wanted) : all;
+        if (wanted && !snippets.length) return send(res, 404, { ok:false, error:'片段不存在（vault 可能已变动）' });
         const depth = Math.max(1, Math.min(5, Number(u.searchParams.get('depth')) || 3));
         const direction = String(u.searchParams.get('direction') || 'both');
         if (!['up', 'down', 'both'].includes(direction)) return send(res, 400, { ok:false, error:'direction 仅支持 up/down/both' });

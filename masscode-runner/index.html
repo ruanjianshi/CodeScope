@@ -9368,10 +9368,40 @@ function parserSelfCheck() {
   return issues;
 }
 
+/* ── 符号索引：优先用服务端结果（混合方案）──
+   前端 buildSnippetIndex 与后端 lib/code-graph.js 是**两套解析器**
+   （后端自检夹具特意和前端做成一样，就是为了防分叉），这里让前端优先采用服务端的符号，
+   避免两边长期漂移。
+   只换「数据源」—— 索引本身仍是同步可读的，所以 resolveDefinition 那 17 个调用点
+   （renderRelationPaneContent / openDefinitionPeek / onCodeClick … 大多是同步渲染路径）
+   一行都不用改，不会产生 async 涟漪。服务端没返回就回退本地解析，功能不受影响。 */
+const SERVER_INDEX = new Map();
+function serverIndex(snip) {
+  const hit = SERVER_INDEX.get(snip.file);
+  if (!hit || !hit.length) return null;
+  /* 服务端只回符号本身，本地还需要 snippet 反向引用（fragmentOf / symbolId 要用） */
+  return hit.map((symbol) => Object.assign({}, symbol, { snippet: snip }));
+}
+function prefetchServerIndex(snip) {
+  if (!snip || !snip.file || SERVER_INDEX.has(snip.file)) return;
+  SERVER_INDEX.set(snip.file, []);            /* 先占位，避免同一文件重复请求 */
+  fetch('/api/graph?file=' + encodeURIComponent(snip.file))
+    .then((response) => (response.ok ? response.json() : null))
+    .then((payload) => {
+      if (!payload || !payload.ok || !Array.isArray(payload.symbols) || !payload.symbols.length) return;
+      /* 只认属于这个文件的符号。服务端以前会忽略 file 参数、对不存在的路径也返回全库，
+         串味过一次（临时项目被塞满全库符号，Sticky Scope 直接失灵）。服务端已修，这里再兜一层。 */
+      if (!payload.symbols.every((symbol) => symbol.file === snip.file)) return;
+      SERVER_INDEX.set(snip.file, payload.symbols);
+      SNIPPET_INDEX.delete(snip.file);        /* 索引更新了，丢掉本地缓存，下次渲染用服务端的 */
+    })
+    .catch(() => { SERVER_INDEX.delete(snip.file); });
+}
 function snippetIndex(snip) {
   if (!snip) return [];
   let idx = SNIPPET_INDEX.get(snip.file);
-  if (!idx) { idx = buildSnippetIndex(snip); SNIPPET_INDEX.set(snip.file, idx); }
+  if (!idx) { idx = serverIndex(snip) || buildSnippetIndex(snip); SNIPPET_INDEX.set(snip.file, idx); }
+  prefetchServerIndex(snip);                  /* 预热，不阻塞本次渲染 */
   return idx;
 }
 function globalIndex() {
@@ -11605,6 +11635,12 @@ function renderRelationPane() { return renderPanelInto('relation', () => withAct
    请求带 {file, fragment, line}：服务端按行号自己定位到那个函数，前端不用传代码。 */
 let LOGIC_GRAPH_SEQ = 0;
 function renderLogicGraphPane(body, root) {
+  /* 没有打开任何文件时直接给出提示，别让 CURRENT.file 抛异常
+     （实测从外部直接调这个函数会炸在 request() 里的 CURRENT.file 上）。 */
+  if (!CURRENT || !CURRENT.file) {
+    body.insertAdjacentHTML('beforeend', '<span class="ol-empty">先打开一个代码文件</span>');
+    paneCount(''); return;
+  }
   const seq = ++LOGIC_GRAPH_SEQ;
   const host = document.createElement('div'); host.className = 'logic-graph';
   host.innerHTML = '<span class="ol-empty">正在生成逻辑图…</span>';
