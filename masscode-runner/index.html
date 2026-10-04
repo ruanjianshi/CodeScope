@@ -13796,6 +13796,18 @@ function makeBlockFor(ws, n) {
     e.initSvg(); e.render();
     b.getInput('VALUE').connection.connect(e.outputConnection);
   } else if (n.kind === 'call') {
+    /* ⚠️ CFG 会把「声明并初始化」也判成 call（因为右边有函数调用），
+       例如 `led_t *red = led_create(&red_config, NULL);`。
+       这种情况必须按**赋值**处理 —— 否则会生成
+       `led_t *red = led_create(&red_config, NULL)();` 这种废码（实测踩到）。 */
+    const asg = /^([\w\.\->\[\]\*\s]+?)\s*=\s*([\s\S]+?);?\s*$/.exec(flat);
+    if (asg && asg[2] && asg[2] !== '=') {
+      b = mk('c_set');
+      b.setFieldValue(asg[1].trim(), 'TARGET');
+      const e = mk('c_expr'); e.setFieldValue(asg[2].trim(), 'EXPR'); e.initSvg(); e.render();
+      b.getInput('VALUE').connection.connect(e.outputConnection);
+      return b;
+    }
     const m = /^([A-Za-z_]\w*)\s*\(([\s\S]*)\)\s*;?\s*$/.exec(flat);
     const callee = m ? m[1] : flat.replace(/;\s*$/, '');
     /* ⚠️ 文档里有这个函数才用「下拉版」，否则用「自由输入版」。
