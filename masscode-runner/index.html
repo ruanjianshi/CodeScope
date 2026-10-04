@@ -297,12 +297,14 @@
     margin: 10px 14px 0 0; background: var(--panel); border: 1px solid var(--border);
     border-radius: 8px; overflow: hidden; }
   #lg-canvas.on { display: flex; }
-  #lg-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
-    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); flex-wrap: wrap; }
-  #lg-toolbar .sp { flex: 1 1 auto; }
-  #lg-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; }
+  /* 两个右栏工具栏共用同一套样式，别各写一份 */
+  #lg-toolbar, #cg-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--dim); flex-wrap: nowrap; }
+  #lg-toolbar .sp, #cg-toolbar .sp { flex: 1 1 auto; }
+  #lg-toolbar button, #cg-toolbar button { padding: 3px 8px; font-size: 11px; border-radius: 8px; white-space: nowrap; }
   #lg-toolbar button.on { color: var(--accent); border-color: var(--accent); background: rgba(79,140,255,.12); }
-  #lg-title { font-weight: 600; color: var(--fg); }
+  #lg-title, #cg-title { font-weight: 600; color: var(--fg); white-space: nowrap; }
+  #lg-stats, #cg-stats { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #lg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 10px 14px; }
   #lg-canvas, #cg-canvas { position: relative; }
   #lg-body svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
@@ -4299,6 +4301,7 @@
           <button id="lg-gen" title="按当前图生成代码">↩ 生成代码</button>
           <button id="lg-refresh" title="重新从源码解析">⟳ 刷新</button>
           <button id="lg-zoom" title="全屏放大查看">⤢ 放大</button>
+          <button id="lg-mermaid" title="复制 Mermaid 源码">⧉ Mermaid</button>
           <button id="lg-close" title="关闭（回到纯代码）">✕</button>
         </div>
         <div id="lg-body">
@@ -12580,9 +12583,16 @@ function setLogicGraphActive(on) {
   if (LG_ACTIVE) renderLogicPaneMain();
 }
 function logicPaneRoot() {
-  const current = typeof relationCurrentFunction === 'function' ? relationCurrentFunction() : null;
-  if (current) return current;
-  return REL_ROOT && REL_ROOT.kind === 'fn' ? (resolveDefinition(REL_ROOT) || REL_ROOT) : null;
+  /* ⚠️ 优先用 REL_ROOT —— 它是**光标所在函数**（syncRelationRoot 从 Monaco 光标算出来）。
+     不能用 relationCurrentFunction()：那个按「视口焦点行」（CODE_FOCUS_RATIO，约 1/3 处）
+     算，跟光标没关系 —— 实测光标在 led_read(L50) 时它返回屏幕中段的 led_open，
+     于是右栏永远显示「屏幕中间那个函数」而不是「光标所在函数」。
+     之前我把优先级写反了（先 relationCurrentFunction 后 REL_ROOT），就是这个 bug。 */
+  if (REL_ROOT && REL_ROOT.kind === 'fn') {
+    const def = resolveDefinition(REL_ROOT) || REL_ROOT;
+    if (def) return def;
+  }
+  return typeof relationCurrentFunction === 'function' ? relationCurrentFunction() : null;
 }
 function renderLogicPaneMain() {
   const body = $('lg-body');
@@ -12649,6 +12659,14 @@ function wireLogicGraphToolbar() {
     LG_EDIT = LG_EDIT ? null : logicEditStart(LG_GRAPH);
     if ($('lg-code')) $('lg-code').hidden = true;
     renderLogicPaneMain();
+  };
+  if ($('lg-mermaid')) $('lg-mermaid').onclick = () => {
+    if (!LG_GRAPH) { setStatus('err', '先等图出来'); return; }
+    const src = logicToMermaid(LG_EDIT || LG_GRAPH, (LG_GRAPH.name || ''));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(src).then(() => setStatus('ok', '逻辑图 Mermaid 源码已复制')).catch(() => setStatus('ok', '源码已打印到控制台'));
+    }
+    try { console.log('[CodeScope] 逻辑图 Mermaid 源码：\n' + src); } catch (_) {}
   };
   if ($('lg-zoom')) $('lg-zoom').onclick = () => {
     const svg = $('lg-body') && $('lg-body').querySelector('svg');
