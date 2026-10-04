@@ -582,6 +582,11 @@
   #edit-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
   #edit-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
   #edit-split-v:hover::after, #edit-split-v.active::after { background: var(--accent); }
+  /* 代码图谱分隔条：和 edit-split-v 同款，拖拽调整「代码 / 图谱」宽度 */
+  #cg-split-v { flex: none; width: 7px; cursor: col-resize; position: relative; background: transparent; display: none; }
+  #cg-split-v.on { display: block; }
+  #cg-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
+  #cg-split-v:hover::after, #cg-split-v.active::after { background: var(--accent); }
   #ln { flex: none; padding: 14px 8px 14px 12px; text-align: right; color: #4b5263; font: 12px/1.7 var(--mono); user-select: none; background: #1b1e25; border-right: 1px solid var(--border); white-space: pre; letter-spacing: normal; }
   #code { flex: 1; margin: 0; padding: 14px; font: 12px/1.7 var(--mono); white-space: pre; tab-size: 2; letter-spacing: normal; }
   #code.hljs { background: transparent; }
@@ -4231,6 +4236,7 @@
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
       <!-- 代码图谱：主区域里和代码并列的右栏（左代码 / 右图谱），与 mm-canvas 同一套布局 -->
+      <div id="cg-split-v" title="左右拖动调整代码 / 图谱宽度"></div>
       <div id="cg-canvas">
         <div id="cg-toolbar">
           <span id="cg-title">🕸 代码图谱</span>
@@ -11976,6 +11982,15 @@ function docGraphToMermaid(graph) {
   const esc = (text) => String(text == null ? '' : text)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').slice(0, 60);
   const lines = ['flowchart LR'];
+  const subgraphIds = [];
+  const fnNodeIds = [];
+  /* 既没有函数、又不参与任何连边的片段直接跳过（例如只被 include 的 uart.h），
+     否则图上会多出好几个空框把高度撑开。
+     注意：**参与连边的片段必须保留**，否则边引用到不存在的节点，Mermaid 会再造幽灵节点。 */
+  const linkedFrags = new Set();
+  (graph.edges || []).forEach((e) => {
+    if (e.kind === 'include' || e.kind === 'owns') { linkedFrags.add(String(e.from)); linkedFrags.add(String(e.to)); }
+  });
   const byFrag = new Map();
   (graph.nodes || []).filter((n) => n.kind === 'fn').forEach((n) => {
     const key = n.file + '|' + n.frag;
@@ -11984,20 +11999,28 @@ function docGraphToMermaid(graph) {
   });
   (graph.nodes || []).filter((n) => n.kind === 'file').forEach((f) => {
     const kids = byFrag.get(f.file + '|' + f.frag) || [];
+    if (!kids.length && !linkedFrags.has(String(f.id))) return;   /* 空且孤立 → 跳过 */
     /* 必须用 f.id（形如 `f:文件|片段`）当 subgraph 的 id ——
        边里的 from/to 用的就是这个。之前这里用 `file|frag`（少了 f: 前缀），
        两边对不上，Mermaid 会为边再造一批幽灵节点（图上出现 g18/g19 这种裸 id）。 */
     lines.push('  subgraph ' + nid(f.id) + '["' + esc(f.label) + '"]');
-    lines.push('    direction TB');
-    if (!kids.length) lines.push('    ' + nid('empty:' + f.id) + '["·"]');
-    kids.forEach((k) => lines.push('    ' + nid(k.id) + '(["' + esc(k.label) + '"])'));
+    /* 片段内部横向排（Mermaid 在跨框连边时可能忽略这个，聊胜于无） */
+    lines.push('    direction LR');
+    if (!kids.length) lines.push('    ' + nid('empty:' + f.id) + '(["空"])');
+    kids.forEach((k) => { lines.push('    ' + nid(k.id) + '(["' + esc(k.label) + '"])'); fnNodeIds.push(nid(k.id)); });
     lines.push('  end');
+    subgraphIds.push(nid(f.id));
   });
   (graph.edges || []).forEach((e) => {
     if (e.kind === 'call') lines.push('  ' + nid(e.from) + ' -->|调用| ' + nid(e.to));
     else if (e.kind === 'include') lines.push('  ' + nid(e.from) + ' -.->|include| ' + nid(e.to));
     /* owns 已经用 subgraph 表达了，不再画边 */
   });
+  /* 配色：和深色面板协调（Mermaid 默认那套黄绿在深色 UI 里很突兀） */
+  lines.push('  classDef fnNode fill:#182233,stroke:#3d6ea8,stroke-width:1px,color:#c9d1d9');
+  fnNodeIds.forEach((id) => lines.push('  class ' + id + ' fnNode'));
+  subgraphIds.forEach((id) => lines.push('  style ' + id + ' fill:#121821,stroke:#39465a,stroke-width:1px,color:#8b949e'));
+  lines.push('  linkStyle default stroke:#5a6b80,stroke-width:1.2px');
   return { source: lines.join('\n'), ids };
 }
 async function openDocumentGraph() {
@@ -12359,7 +12382,17 @@ let CG_SOURCE = '';
 function setCodeGraphActive(on) {
   CG_ACTIVE = !!on;
   const canvas = $('cg-canvas');
-  if (canvas) canvas.classList.toggle('on', CG_ACTIVE);
+  if (canvas) {
+    canvas.classList.toggle('on', CG_ACTIVE);
+    if (CG_ACTIVE) {
+      /* 恢复上次拖好的宽度 */
+      let w = 0;
+      try { w = parseInt(localStorage.getItem('mc-cg-w')) || 0; } catch (_) {}
+      if (w >= 260) { canvas.style.flex = 'none'; canvas.style.width = w + 'px'; }
+    }
+  }
+  const splitter = $('cg-split-v');
+  if (splitter) splitter.classList.toggle('on', CG_ACTIVE);
   const btn = $('btn-codegraph');
   if (btn) btn.classList.toggle('on', CG_ACTIVE);
   if (CG_ACTIVE) renderCodeGraphPane();
@@ -16537,6 +16570,17 @@ function makeHResizer(handle, getter, setter) {
   makeResizer($('edit-split-v'), 'v',
     () => $('code-wrap').getBoundingClientRect().width,
     (v) => { $('code-wrap').style.flex = 'none'; $('code-wrap').style.width = clampV(v, 220, Math.max(300, Math.round(window.innerWidth * 0.75))) + 'px'; try { localStorage.setItem('mc-edit-split-w', String(Math.round(v))); } catch (_) {} });
+  /* 代码图谱的分隔条：左侧是代码、右侧是图谱，所以向右拖 = 图谱变窄（反向） */
+  makeResizer($('cg-split-v'), 'v',
+    () => ($('cg-canvas') ? $('cg-canvas').getBoundingClientRect().width : 0),
+    (v) => {
+      const canvas = $('cg-canvas');
+      if (!canvas) return;
+      canvas.style.flex = 'none';
+      canvas.style.width = clampV(v, 260, Math.max(360, Math.round(window.innerWidth * 0.72))) + 'px';
+      try { localStorage.setItem('mc-cg-w', String(Math.round(v))); } catch (_) {}
+    },
+    true);
   // 左侧区域高度：Git 面板默认 220px，标签默认内容高度；均可拖拽调整并记忆
   // 收起状态下加载时面板缩到标题行（auto），避免留空
   const maxPaneH = Math.round(window.innerHeight * 0.7);
