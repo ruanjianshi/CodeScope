@@ -486,6 +486,73 @@ function buildCodeGraph(snippets, { rootFunction = '', rootFile = '', depth = 3,
   };
 }
 
+/* 文档级代码图谱：把一个文档里的**所有片段 + 所有函数**摊平，连上三类边。
+   与 buildCodeGraph 的区别：那个是「以某个函数/文件为中心」的子图（要传 root），
+   这个不需要 root，回答的是「整篇文档里，片段之间、函数之间整体怎么连」。
+
+   节点 kind：
+     file  片段（文档里的一个代码块）
+     fn    函数定义
+   边 kind：
+     call     函数调用函数（跨片段也算）
+     include  片段包含片段（#include / import）
+     owns     片段拥有函数（归属，让片段和它的函数在图上连起来） */
+function buildDocumentGraph(snippets) {
+  const symbols = indexAll(snippets);
+  const codeLookup = codeLookupOf(snippets);
+  const files = allCodeFiles(snippets);
+  const fnId = (s) => 's:' + s.id;
+  const fileId = (f) => 'f:' + fileNodeIdOf(f);
+  const nodes = [];
+  const edges = [];
+  const seenNode = new Set();
+  const pushNode = (node) => { if (seenNode.has(node.id)) return; seenNode.add(node.id); nodes.push(node); };
+  const seenEdge = new Set();
+  const pushEdge = (edge) => {
+    if (!edge.from || !edge.to || edge.from === edge.to) return;
+    const key = edge.from + '>' + edge.to;
+    if (seenEdge.has(key)) return;
+    seenEdge.add(key); edges.push(edge);
+  };
+
+  files.forEach((f) => pushNode({
+    id: fileId(f), kind: 'file', label: f.name || f.file,
+    file: f.file, frag: f.frag, line: 1, language: f.language,
+  }));
+  const defs = symbols.filter((s) => s.kind === 'fn' && s.isDefinition);
+  defs.forEach((s) => pushNode({
+    id: fnId(s), kind: 'fn', label: s.name,
+    file: s.file, frag: s.frag, line: s.line, endLine: s.endLine, language: s.language,
+  }));
+
+  /* 归属边：片段 → 它里面的函数 */
+  defs.forEach((s) => pushEdge({ from: 'f:' + s.file + '|' + s.frag, to: fnId(s), kind: 'owns' }));
+  /* 调用边：函数 → 被调函数 */
+  defs.forEach((s) => {
+    fnCalleeEdges(s, symbols, snippets, codeLookup).forEach((hit) => {
+      if (!hit || !hit.sym || !hit.sym.isDefinition) return;
+      pushEdge({ from: fnId(s), to: fnId(hit.sym), kind: 'call' });
+    });
+  });
+  /* 包含边：片段 → 被包含片段 */
+  files.forEach((f) => {
+    fileIncludes(f).forEach((inc) => {
+      resolveInclude(inc.name, files).forEach((target) => pushEdge({ from: fileId(f), to: fileId(target), kind: 'include' }));
+    });
+  });
+
+  return {
+    ok: true,
+    nodes, edges,
+    stats: {
+      fragments: files.length,
+      functions: defs.length,
+      calls: edges.filter((e) => e.kind === 'call').length,
+      includes: edges.filter((e) => e.kind === 'include').length,
+    },
+  };
+}
+
 /* 自检样例：与前端 parserSelfCheck 同夹具，保证前后端不分叉。 */
 function parserSelfCheck() {
   const fixture = { file: '__parser_self_check__', name: 'parser self check', fragments: [{
@@ -517,5 +584,5 @@ module.exports = {
   resolveDefinition, preferredFunction, functionMaskedBody,
   dynamicDispatchTargets, fnCalleeEdges, fnCallees, fnCallers,
   allCodeFiles, fileIncludes, resolveInclude, fileRelationChildren,
-  buildFunctionSubgraph, buildFileSubgraph, buildCodeGraph, parserSelfCheck,
+  buildFunctionSubgraph, buildFileSubgraph, buildCodeGraph, buildDocumentGraph, parserSelfCheck,
 };

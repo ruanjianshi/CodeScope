@@ -35,7 +35,7 @@ const { createCodeServerService } = require('./lib/code-server-service');
 const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
 const { createSystemPanel } = require('./lib/system-panel');
-const { buildCodeGraph, buildSnippetIndex, resolveDefinition } = require('./lib/code-graph');
+const { buildCodeGraph, buildDocumentGraph, buildSnippetIndex, resolveDefinition } = require('./lib/code-graph');
 const { buildLogicGraph, logicToDrawio, logicToSkeleton } = require('./lib/logic-graph');
 const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
@@ -6286,6 +6286,12 @@ const server = http.createServer(async (req, res) => {
         const all = walkSnippets();
         const snippets = wanted ? all.filter((item) => item.file === wanted) : all;
         if (wanted && !snippets.length) return send(res, 404, { ok:false, error:'片段不存在（vault 可能已变动）' });
+        /* 文档级图谱：把一个文档里所有片段/函数摊平（不需要 root）。
+           前端那个「代码图谱」按钮走这条。 */
+        if (String(u.searchParams.get('scope') || '') === 'document') {
+          const doc = buildDocumentGraph(snippets);
+          return send(res, 200, { ok:true, rev:computeRev(), scope:'document', ...doc });
+        }
         const depth = Math.max(1, Math.min(5, Number(u.searchParams.get('depth')) || 3));
         const direction = String(u.searchParams.get('direction') || 'both');
         if (!['up', 'down', 'both'].includes(direction)) return send(res, 400, { ok:false, error:'direction 仅支持 up/down/both' });

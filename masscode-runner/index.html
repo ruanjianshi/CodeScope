@@ -4068,6 +4068,7 @@
       <button id="btn-symbols" title="AI、符号、全文和文件搜索；Ctrl/⌘+P 快速打开，Ctrl/⌘+Shift+F 全文搜索">AI 搜索</button>
       <button id="btn-outline" title="显示/隐藏代码大纲">大纲</button>
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
+      <button id="btn-codegraph" disabled title="把整个文档的代码关系画成图谱（片段 / 函数 / 调用 / 包含）">图谱</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
       <button id="btn-edit" disabled>编辑</button>
       <span id="nav-notice" role="status" aria-live="polite"></span>
@@ -10773,6 +10774,14 @@ function mmRenderCurrent() {
 function applyMmMode() {
   const f = CURRENT && CURRENT.fragments[CINDEX];
   const isMd = !!f && f.language === 'markdown';
+  /* 代码图谱按钮：只要这个文档里有代码片段就可用（不限当前片段） */
+  const graphBtn = $('btn-codegraph');
+  if (graphBtn) {
+    const hasCode = !!(CURRENT && (CURRENT.fragments || []).some(
+      (x) => x && x.language && !['markdown', 'latex', 'plain_text'].includes(x.language)));
+    graphBtn.disabled = !hasCode;
+    graphBtn.textContent = '🕸 图谱';
+  }
   $('btn-mindmap').disabled = !isMd;
   if (!isMd) { MM_ACTIVE = false; $('mm-canvas').classList.remove('on'); return; }
   $('btn-mindmap').textContent = MM_ACTIVE ? '👁 渲染' : '🧠 导图';
@@ -11886,6 +11895,78 @@ function openLogicZoom(svgEl, title) {
   document.addEventListener('keydown', onKey);
   /* 点浮层空白处也关闭 */
   overlay.addEventListener('mousedown', (event) => { if (event.target === overlay || event.target === stage) closeLogicZoom(); });
+}
+
+/* ── 代码图谱（文档级）──
+   对应「导图」按钮那套思路：把**整个文档**的代码关系画成一张图 ——
+   文档里所有代码片段（subgraph 分组）+ 所有函数 + 它们之间的调用/包含关系。
+   数据来自 /api/graph?scope=document&file=<文档>（不需要 root，是摊平的全景图）。 */
+function docGraphToMermaid(graph) {
+  /* 节点 id 用短序号 —— 直接拿 file/symbolId 当 id 会变成上百字符的绝对路径，
+     Mermaid 能接受但图会很脏（实测踩过）。标签才是给人看的。 */
+  const idMap = new Map();
+  const nid = (raw) => {
+    const key = String(raw == null ? '' : raw);
+    if (!idMap.has(key)) idMap.set(key, 'g' + idMap.size);
+    return idMap.get(key);
+  };
+  const esc = (text) => String(text == null ? '' : text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').slice(0, 60);
+  const lines = ['flowchart LR'];
+  const byFrag = new Map();
+  (graph.nodes || []).filter((n) => n.kind === 'fn').forEach((n) => {
+    const key = n.file + '|' + n.frag;
+    if (!byFrag.has(key)) byFrag.set(key, []);
+    byFrag.get(key).push(n);
+  });
+  (graph.nodes || []).filter((n) => n.kind === 'file').forEach((f) => {
+    const kids = byFrag.get(f.file + '|' + f.frag) || [];
+    /* 必须用 f.id（形如 `f:文件|片段`）当 subgraph 的 id ——
+       边里的 from/to 用的就是这个。之前这里用 `file|frag`（少了 f: 前缀），
+       两边对不上，Mermaid 会为边再造一批幽灵节点（图上出现 g18/g19 这种裸 id）。 */
+    lines.push('  subgraph ' + nid(f.id) + '["' + esc(f.label) + '"]');
+    lines.push('    direction TB');
+    if (!kids.length) lines.push('    ' + nid('empty:' + f.id) + '["·"]');
+    kids.forEach((k) => lines.push('    ' + nid(k.id) + '(["' + esc(k.label) + '"])'));
+    lines.push('  end');
+  });
+  (graph.edges || []).forEach((e) => {
+    if (e.kind === 'call') lines.push('  ' + nid(e.from) + ' -->|调用| ' + nid(e.to));
+    else if (e.kind === 'include') lines.push('  ' + nid(e.from) + ' -.->|include| ' + nid(e.to));
+    /* owns 已经用 subgraph 表达了，不再画边 */
+  });
+  return lines.join('\n');
+}
+async function openDocumentGraph() {
+  if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
+  setStatus('ok', '正在生成代码图谱…');
+  try {
+    const response = await fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file));
+    const graph = await response.json();
+    if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
+    if (!(graph.nodes || []).length) { setStatus('err', '这个文档里没有代码片段'); return; }
+    const mermaid = await ensureMermaid();
+    mermaid.initialize({
+      startOnLoad: false, securityLevel: 'strict',
+      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+      themeVariables: { fontSize: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+      flowchart: { curve: 'basis', useMaxWidth: false, htmlLabels: true, nodeSpacing: 22, rankSpacing: 46, padding: 8 },
+    });
+    const out = await mermaid.render('doc-graph-' + Date.now().toString(36), docGraphToMermaid(graph));
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;';
+    holder.innerHTML = out && out.svg ? out.svg : '';
+    document.body.appendChild(holder);
+    const svg = holder.querySelector('svg');
+    if (!svg) { holder.remove(); throw new Error('Mermaid 没有输出'); }
+    openLogicZoom(svg, (CURRENT.file.split('/').pop() || '') + ' · 代码图谱');
+    holder.remove();
+    setStatus('ok', '代码图谱：' + (graph.stats ? graph.stats.fragments : 0) + ' 个片段 · '
+      + (graph.stats ? graph.stats.functions : 0) + ' 个函数 · '
+      + (graph.stats ? graph.stats.calls : 0) + ' 条调用');
+  } catch (error) {
+    setStatus('err', '代码图谱失败：' + String(error.message || error));
+  }
 }
 
 let LOGIC_GRAPH_SEQ = 0;
@@ -16036,6 +16117,7 @@ function makeHResizer(handle, getter, setter) {
   };
   $('tab-ai').onclick = () => chooseSymMode('ai');
   $('btn-mindmap').onclick = () => { MM_ACTIVE = !MM_ACTIVE; applyMmMode(); };
+  if ($('btn-codegraph')) $('btn-codegraph').onclick = () => openDocumentGraph();
   wireAiPanel();
   wireMindmapEvents();
   initTabStrip();
