@@ -4359,6 +4359,7 @@
           <span class="sp"></span>
           <button id="bp-sync" title="把当前函数拆成积木（代码 → 积木）">⇄ 从代码同步</button>
           <button id="bp-gen" title="按当前积木生成代码（积木 → 代码）">↩ 生成代码</button>
+          <button id="bp-reset" title="丢弃积木上的改动，重新按源码生成">↺ 还原为代码</button>
           <button id="bp-copy" title="复制生成的代码">⧉ 复制</button>
           <button id="bp-close" title="关闭">✕</button>
         </div>
@@ -13439,6 +13440,62 @@ let BP_BUILDING = false;   /* 程序化重建积木期间，别让 change 监听
 let BP_DIRTY = false;      /* 用户在积木上改过东西（切函数时别自动覆盖） */
 let BP_SYNC_TIMER = 0;     /* 光标联动的防抖定时器 */
 let BP_BUILT_STATE = '';  /* 刚同步完时积木的序列化状态，用来判断"用户有没有改过" */
+
+/* ── 积木编辑持久化 ──
+   用户在积木上改完、切到别的文档、再切回来 —— 之前会被"重新从代码生成"覆盖掉。
+   现在按「文档#片段#函数」缓存积木状态（localStorage），切回来优先恢复编辑。
+   没编辑过的函数不缓存（省空间），需要时从代码重新生成。 */
+const BP_EDIT_KEY = 'mc-bp-edits';
+const BP_EDIT_MAX = 40;          /* 最多存 40 份，超了丢最旧的 */
+let BP_EDIT_CACHE = (() => {
+  try { const raw = localStorage.getItem(BP_EDIT_KEY); return raw ? new Map(JSON.parse(raw)) : new Map(); }
+  catch (_) { return new Map(); }
+})();
+let BP_EDIT_TIMER = 0;
+function bpSaveEdits() {
+  try {
+    /* Map 转数组，超上限就截断（先入先出） */
+    let arr = [...BP_EDIT_CACHE.entries()];
+    if (arr.length > BP_EDIT_MAX) arr = arr.slice(arr.length - BP_EDIT_MAX);
+    localStorage.setItem(BP_EDIT_KEY, JSON.stringify(arr));
+  } catch (_) { /* 配额满了就算了，不影响使用 */ }
+}
+/* 防抖保存当前工作区（用户改完 800ms 没再动就存） */
+function bpScheduleSave() {
+  if (BP_BUILDING || !BP_WORKSPACE) return;
+  clearTimeout(BP_EDIT_TIMER);
+  BP_EDIT_TIMER = setTimeout(() => {
+    const key = BP_DOC_KEY || bpContextKey();
+    if (!key) return;
+    try {
+      BP_EDIT_CACHE.set(key, window.Blockly.serialization.workspaces.save(BP_WORKSPACE));
+      bpSaveEdits();
+      if ($('bp-stats') && $('bp-stats').textContent.indexOf('已保存编辑') < 0) {
+        $('bp-stats').textContent += ' · 已保存编辑';
+      }
+    } catch (_) {}
+  }, 800);
+}
+/* 取回某个 key 的编辑（没有返回 null） */
+function bpLoadEdits(key) {
+  const st = BP_EDIT_CACHE.get(key);
+  if (!st) return null;
+  try {
+    BP_BUILDING = true;
+    BP_WORKSPACE.clear();
+    window.Blockly.serialization.workspaces.load(st, BP_WORKSPACE);
+    BP_WORKSPACE.getAllBlocks(false).forEach((b) => { try { b.initSvg(); b.render(); } catch (_) {} });
+    BP_WORKSPACE.cleanUp();
+    try { BP_WORKSPACE.scrollCenter(); } catch (_) {}
+    BP_BUILDING = false;
+    return true;
+  } catch (_) { BP_BUILDING = false; return false; }
+}
+/* 丢掉某个 key 的编辑（点「还原为代码」时用） */
+function bpDropEdits(key) {
+  BP_EDIT_CACHE.delete(key);
+  bpSaveEdits();
+}
 let BP_READY = false;
 let BP_FUNCS = [];   /* 当前文档里的函数名，给调用积木的下拉用 */
 
@@ -14336,7 +14393,7 @@ function renderBlockPane() {
         /* 脏不脏**直接比对积木的序列化状态** —— 比用 change 事件标记靠谱：
            updateToolbox / cleanUp / render 这些程序化动作也会触发变更事件，
            用事件判脏会让"切函数自动同步"永远被挡掉（实测：脏标记一直是 true）。 */
-        if (bpIsDirty()) BP_DIRTY = true;
+        if (bpIsDirty()) { BP_DIRTY = true; bpScheduleSave(); }
         const code = blockJsonToCode();
         if (code !== BP_LAST_CODE) { BP_LAST_CODE = code; bpPaintCode(code); }
       });
@@ -14359,6 +14416,20 @@ function syncBlocksFromCode() {
     if (seq !== BP_SEQ || !graph || !graph.ok) throw new Error((graph && graph.error) || '解析失败');
     /* 先立标记再 clear —— clear() 本身会触发 change 事件，
        顺序反了会被误判成"用户改过积木"（脏标记） */
+    /* ⚠️ 有编辑过的版本就**优先恢复编辑**，不要用代码重新生成覆盖掉 ——
+       用户切走再切回来是想接着改，不是想看代码生成的原始版。 */
+    const ctxKey = bpContextKey();
+    if (BP_EDIT_CACHE.has(ctxKey) && bpLoadEdits(ctxKey)) {
+      BP_DIRTY = false;
+      BP_DOC_KEY = ctxKey;
+      try { BP_BUILT_STATE = JSON.stringify(window.Blockly.serialization.workspaces.save(BP_WORKSPACE)); } catch (_) { BP_BUILT_STATE = ''; }
+      const c = blockJsonToCode();
+      BP_LAST_CODE = c;
+      bpPaintCode(c);
+      if ($('bp-stats')) $('bp-stats').textContent = (graph.name || root.name) + ' · 已恢复上次的编辑（点「↺ 还原为代码」可丢弃）';
+      bpResize();
+      return;
+    }
     BP_BUILDING = true;
     BP_WORKSPACE.clear();
     const count = buildBlocksFromGraph(BP_WORKSPACE, graph);
@@ -14424,6 +14495,14 @@ function wireBlocklyToolbar() {
       else setStatus('warn', '已生成代码 ⚠ 自检：解析出 ' + (res.generated != null ? res.generated : '?')
         + ' 条语句，原函数 ' + res.original + ' 条 —— 可能有积木表达不了的构造，别直接覆盖原文');
     });
+  };
+  if ($('bp-reset')) $('bp-reset').onclick = () => {
+    const key = bpContextKey();
+    if (!key) { setStatus('err', '先把光标放到一个函数里'); return; }
+    bpDropEdits(key);
+    BP_DIRTY = false;
+    syncBlocksFromCode();
+    setStatus('ok', '已丢弃积木上的改动，重新按源码生成');
   };
   if ($('bp-copy')) $('bp-copy').onclick = () => {
     const code = blockJsonToCode();
