@@ -2483,6 +2483,17 @@
   .rel-map-summary .stat.in b { color:var(--accent); }
   .rel-map-summary .stat.out b { color:var(--ok); }
   .rel-section { padding:8px 9px 4px; color:var(--dim); font-size:10px; font-weight:600; }
+  /* 代码图谱（文档级）· 面板内渲染 */
+  .doc-graph { display:flex; flex-direction:column; }
+  .doc-graph-svg { padding:8px 6px 10px; overflow:auto; max-height:none; }
+  .doc-graph-svg svg { max-width:100%; height:auto; display:block; margin:0 auto; }
+  /* 节点可点：悬停高亮 + 轻微放大，给点反馈 */
+  .doc-graph-svg .node.doc-node-clickable { cursor:pointer; transition:opacity .15s; }
+  .doc-graph-svg .node.doc-node-clickable:hover { opacity:.78; }
+  .doc-graph-svg .node.doc-node-clickable:hover rect,
+  .doc-graph-svg .node.doc-node-clickable:hover polygon,
+  .doc-graph-svg .node.doc-node-clickable:hover path { stroke:var(--accent,#4f8cff) !important; stroke-width:2px !important; }
+  .doc-graph-svg .edgePath path { opacity:.75; }
   /* Mermaid 渲染区：SVG 自适应面板宽度；点图放大到全屏浮层 */
   .logic-mermaid { padding:10px 8px 14px; overflow-x:auto; cursor:zoom-in; position:relative; }
   .logic-mermaid svg { max-width:100%; height:auto; display:block; margin:0 auto; }
@@ -11903,11 +11914,13 @@ function openLogicZoom(svgEl, title) {
    数据来自 /api/graph?scope=document&file=<文档>（不需要 root，是摊平的全景图）。 */
 function docGraphToMermaid(graph) {
   /* 节点 id 用短序号 —— 直接拿 file/symbolId 当 id 会变成上百字符的绝对路径，
-     Mermaid 能接受但图会很脏（实测踩过）。标签才是给人看的。 */
-  const idMap = new Map();
+     Mermaid 能接受但图会很脏（实测踩过）。标签才是给人看的。
+     同时把「短 id → 原始 key」的映射带出去，点击节点要用它反查目标。 */
+  const idMap = new Map();     /* 原始 key → 短 id */
+  const ids = new Map();       /* 短 id → 原始 key */
   const nid = (raw) => {
     const key = String(raw == null ? '' : raw);
-    if (!idMap.has(key)) idMap.set(key, 'g' + idMap.size);
+    if (!idMap.has(key)) { const short = 'g' + idMap.size; idMap.set(key, short); ids.set(short, key); }
     return idMap.get(key);
   };
   const esc = (text) => String(text == null ? '' : text)
@@ -11935,7 +11948,7 @@ function docGraphToMermaid(graph) {
     else if (e.kind === 'include') lines.push('  ' + nid(e.from) + ' -.->|include| ' + nid(e.to));
     /* owns 已经用 subgraph 表达了，不再画边 */
   });
-  return lines.join('\n');
+  return { source: lines.join('\n'), ids };
 }
 async function openDocumentGraph() {
   if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
@@ -11952,7 +11965,7 @@ async function openDocumentGraph() {
       themeVariables: { fontSize: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
       flowchart: { curve: 'basis', useMaxWidth: false, htmlLabels: true, nodeSpacing: 22, rankSpacing: 46, padding: 8 },
     });
-    const out = await mermaid.render('doc-graph-' + Date.now().toString(36), docGraphToMermaid(graph));
+    const out = await mermaid.render('doc-graph-' + Date.now().toString(36), docGraphToMermaid(graph).source);
     const holder = document.createElement('div');
     holder.style.cssText = 'position:fixed;left:-99999px;top:0;';
     holder.innerHTML = out && out.svg ? out.svg : '';
@@ -11967,6 +11980,106 @@ async function openDocumentGraph() {
   } catch (error) {
     setStatus('err', '代码图谱失败：' + String(error.message || error));
   }
+}
+
+/* ── 代码图谱（文档级）· 面板内渲染 ──
+   整篇文档的片段 / 函数 / 调用 / 包含，画在**右侧关系面板**里（不是全屏浮层）。
+   节点可点：函数 → 跳到定义行；片段 → 跳到该片段第一行。
+   需要放大时面板里也有「⤢ 放大查看」。 */
+let DOC_GRAPH_SEQ = 0;
+function wireDocGraphClicks(box, graph, ids) {
+  const byKey = new Map((graph.nodes || []).map((n) => [n.id, n]));
+  const jumpTo = (node) => {
+    try {
+      goToLocation({ snippet: CURRENT, frag: node.frag, line: node.kind === 'fn' ? (node.line || 1) : 1 });
+      setStatus('ok', node.kind === 'fn'
+        ? '跳到 ' + node.label + '（第 ' + node.line + ' 行）'
+        : '跳到片段 ' + node.label);
+    } catch (error) { setStatus('err', String(error.message || error)); }
+  };
+  /* 函数节点：Mermaid 给节点组的 id 形如 `flowchart-g3-12`，去掉前缀与尾号还原成 g3 */
+  box.querySelectorAll('.node').forEach((el) => {
+    const short = String(el.id || '').replace(/^flowchart-/, '').replace(/-\d+$/, '');
+    const key = ids.get(short);
+    const node = key ? byKey.get(key) : null;
+    if (!node) return;
+    el.style.cursor = 'pointer';
+    el.classList.add('doc-node-clickable');
+    el.addEventListener('click', (event) => { event.stopPropagation(); jumpTo(node); });
+  });
+  /* 片段方框（subgraph）也可点 —— 按标签文字反查，比猜 Mermaid 的 cluster id 稳 */
+  box.querySelectorAll('.cluster').forEach((el) => {
+    const label = ((el.querySelector('.cluster-label') || {}).textContent || '').trim();
+    const node = (graph.nodes || []).find((n) => n.kind === 'file' && String(n.label).trim() === label);
+    if (!node) return;
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (event) => { event.stopPropagation(); jumpTo(node); });
+  });
+}
+function renderDocGraphPane(body) {
+  if (!CURRENT || !CURRENT.file) {
+    body.insertAdjacentHTML('beforeend', '<span class="ol-empty">先打开一个代码文档</span>');
+    paneCount(''); return;
+  }
+  const seq = ++DOC_GRAPH_SEQ;
+  const host = document.createElement('div'); host.className = 'doc-graph';
+  host.innerHTML = '<span class="ol-empty">正在生成代码图谱…</span>';
+  body.appendChild(host);
+  paneCount('…');
+  fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file))
+    .then((response) => response.json())
+    .then((graph) => {
+      if (seq !== DOC_GRAPH_SEQ) return;
+      if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
+      if (!(graph.nodes || []).length) {
+        host.innerHTML = '<span class="ol-empty">这个文档里没有代码片段</span>';
+        paneCount(''); return;
+      }
+      const stats = graph.stats || {};
+      const head = document.createElement('div'); head.className = 'rel-section';
+      head.textContent = (stats.fragments || 0) + ' 个片段 · ' + (stats.functions || 0) + ' 个函数 · '
+        + (stats.calls || 0) + ' 条调用 · ' + (stats.includes || 0) + ' 条包含';
+      host.appendChild(head);
+      const made = docGraphToMermaid(graph);
+      return ensureMermaid().then((mermaid) => {
+        mermaid.initialize({
+          startOnLoad: false, securityLevel: 'strict',
+          theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+          themeVariables: { fontSize: '11px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+          flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 14, rankSpacing: 34, padding: 6, diagramPadding: 4 },
+        });
+        return mermaid.render('docg-' + Date.now().toString(36), made.source);
+      }).then((out) => {
+        if (seq !== DOC_GRAPH_SEQ) return;
+        const box = document.createElement('div'); box.className = 'doc-graph-svg';
+        box.innerHTML = out && out.svg ? out.svg : '';
+        host.appendChild(box);
+        wireDocGraphClicks(box, graph, made.ids);
+        const actions = document.createElement('div'); actions.className = 'rel-tools';
+        relationButton(actions, '⤢ 放大查看', false, () => {
+          const svg = box.querySelector('svg');
+          if (svg) openLogicZoom(svg, (CURRENT.file.split('/').pop() || '') + ' · 代码图谱');
+        });
+        relationButton(actions, '⧉ 复制 Mermaid', false, () => {
+          const text = made.source;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => setStatus('ok', '代码图谱 Mermaid 源码已复制'))
+              .catch(() => setStatus('ok', '源码已打印到控制台'));
+          }
+          try { console.log('[CodeScope] 代码图谱 Mermaid 源码：\n' + text); } catch (_) {}
+        });
+        host.appendChild(actions);
+        const tip = document.createElement('div'); tip.className = 'rel-tip';
+        tip.textContent = '点函数跳定义 · 点片段跳到该片段 · 实线=调用，虚线=include';
+        host.appendChild(tip);
+        paneCount((graph.nodes || []).length + ' 个节点');
+      });
+    })
+    .catch((error) => {
+      if (seq !== DOC_GRAPH_SEQ) return;
+      host.innerHTML = '<span class="ol-empty">代码图谱失败：' + escapeHtml(String(error.message || error)) + '</span>';
+      paneCount('');
+    });
 }
 
 let LOGIC_GRAPH_SEQ = 0;
@@ -12143,6 +12256,8 @@ function renderRelationPaneContent() {
   /* 逻辑图：把当前函数的语句级控制流（if/for/while 的嵌套）画出来。
      后端 /api/logic/graph 早就写好了，但一直没有前端入口 —— 等于没有这个功能。 */
   relationButton(tools, '⇉ 逻辑图', REL_VIEW === 'logic', () => { REL_VIEW = 'logic'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
+  /* 代码图谱（文档级）：整篇文档的片段 / 函数 / 调用 / 包含，画在面板里，节点可点 */
+  relationButton(tools, '🕸 代码图谱', REL_VIEW === 'docgraph', () => { REL_VIEW = 'docgraph'; REL_EXPANDED.clear(); try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '◫ 图形', REL_LAYOUT === 'graph', () => { REL_LAYOUT = 'graph'; try { localStorage.setItem('mc-rel-layout', REL_LAYOUT); } catch (_) {} renderRelationPane(); });
   relationButton(tools, '☷ 树形', REL_LAYOUT === 'tree', () => { REL_LAYOUT = 'tree'; try { localStorage.setItem('mc-rel-layout', REL_LAYOUT); } catch (_) {} renderRelationPane(); });
   const divider = document.createElement('span'); divider.style.flexBasis = '100%'; tools.appendChild(divider);
@@ -12152,7 +12267,9 @@ function renderRelationPaneContent() {
   const tip = document.createElement('div'); tip.className = 'rel-tip';
   tip.textContent = REL_LAYOUT === 'graph' ? '箭头表示调用/依赖方向 · 点击节点切换关系中心' : '▸ 展开节点 · 点击跳转 · 双击函数设为根节点'; body.appendChild(tip);
 
-  if (REL_VIEW === 'logic') {
+  if (REL_VIEW === 'docgraph') {
+    renderDocGraphPane(body);
+  } else if (REL_VIEW === 'logic') {
     const root = REL_ROOT && REL_ROOT.kind === 'fn' ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
     if (!root) { body.insertAdjacentHTML('beforeend', '<span class="ol-empty">当前文件没有可用的函数定义；先点击代码中的函数名</span>'); paneCount('无根函数'); return; }
     REL_ROOT = root;
@@ -16117,7 +16234,16 @@ function makeHResizer(handle, getter, setter) {
   };
   $('tab-ai').onclick = () => chooseSymMode('ai');
   $('btn-mindmap').onclick = () => { MM_ACTIVE = !MM_ACTIVE; applyMmMode(); };
-  if ($('btn-codegraph')) $('btn-codegraph').onclick = () => openDocumentGraph();
+  /* 工具栏「🕸 图谱」→ 切到关系面板的代码图谱视图（在右侧显示，不是全屏浮层） */
+  if ($('btn-codegraph')) $('btn-codegraph').onclick = () => {
+    if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
+    REL_VIEW = 'docgraph';
+    try { localStorage.setItem('mc-rel-view', REL_VIEW); } catch (_) {}
+    /* 关系面板可能不在前台，先把它的标签激活，否则切了视图也看不到 */
+    const tab = document.querySelector('button[data-tab="relation"]');
+    if (tab) { try { tab.click(); } catch (_) {} }
+    renderRelationPane();
+  };
   wireAiPanel();
   wireMindmapEvents();
   initTabStrip();
