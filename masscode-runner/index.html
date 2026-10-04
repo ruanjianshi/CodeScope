@@ -13719,25 +13719,65 @@ function cfgToBlockJson(graph) {
   return root;
 }
 
+/* ⚠️ 关键：CFG 节点上的 `label` 是**给界面显示用的、被截断过的**（结尾带 …），
+   **不能拿它生成代码** —— 否则会生成出
+   `pool_array[pool_count].ops = (ops != NULL…;` 这种残缺代码（实测踩到，
+   用户报「代码不对应、不一致」就是这个）。
+   正确做法：拿节点上的 `line` 回片段源码里取**原文**。 */
+function bpSourceOfNode(n) {
+  const label = String(n.label || '');
+  /* ① label **没被截断**（不含 …）就优先用它 —— 它比源码整行更精确：
+     同一行里的内联语句（`if (x) return -1;`）源码整行是 if 那句，
+     而 label 恰好就是 `return -1;`。 */
+  if (label && label.indexOf('…') < 0 && label.indexOf('...') < 0) return label;
+  /* ② 被截断了（长表达式）才回源码取原文 */
+  if (!CURRENT || !CURRENT.fragments[CINDEX]) return label;
+  const lines = String(CURRENT.fragments[CINDEX].code || '').replace(/\r\n/g, '\n').split('\n');
+  const from = Math.max(0, (Number(n.line) || 1) - 1);
+  if (from >= lines.length) return label;
+  /* 一条语句可能跨行：从起始行往后收，直到出现 `;`（且括号闭合） */
+  let text = '', depth = 0;
+  for (let i = from; i < Math.min(lines.length, from + 12); i++) {
+    const l = lines[i];
+    text += (text ? '\n' : '') + l;
+    for (const ch of l) { if (ch === '(' || ch === '{' || ch === '[') depth++; else if (ch === ')' || ch === '}' || ch === ']') depth--; }
+    if (depth <= 0 && /;\s*(\/\/.*)?$/.test(l)) break;
+  }
+  const out = text.trim();
+  return out || label;
+}
+/* 从节点取条件：label 完整就用 label，否则从源码行里抽 */
+function bpConditionOf(n) {
+  const label = String(n.label || '');
+  const src = (label.indexOf('…') < 0 && label.indexOf('...') < 0) ? label : bpSourceOfNode(n);
+  const flat = src.replace(/\s+/g, ' ').trim();
+  const m = /(?:if|while|switch)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/.exec(flat);
+  if (m) return m[1].trim();
+  const f = /for\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/.exec(flat);
+  if (f) return f[1].trim();
+  return flat;
+}
 /* ── 按 CFG 建积木（命令式）──
    用 indent（花括号嵌套深度）还原层级：分支/循环块开一个 DO 语句槽，
    紧随其后「缩进更深」的那一段就是它的体。比 JSON 序列化可靠，
    也能直接接 statement input。 */
 function makeBlockFor(ws, n) {
-  const label = String(n.label || '');
+  /* ⚠️ 用**源码原文**（src），不要用 n.label ——
+     label 是「给界面显示用的、被截断过的」文本（结尾带 …），
+     拿它生成代码会产出 `x = (ops != NULL…;` 这种残缺代码（实测踩到）。 */
+  const src = bpSourceOfNode(n);
+  const flat = src.replace(/\s+/g, ' ').trim();
   const B = window.Blockly;
   const mk = (type) => ws.newBlock(type);
   let b = null;
   if (n.kind === 'branch') {
-    const cond = /\((.*)\)/.exec(label);
     b = mk('c_if');
-    const e = mk('c_expr'); e.setFieldValue(cond ? cond[1] : label, 'EXPR'); e.initSvg(); e.render();
+    const e = mk('c_expr'); e.setFieldValue(bpConditionOf(n), 'EXPR'); e.initSvg(); e.render();
     b.getInput('COND').connection.connect(e.outputConnection);
   } else if (n.kind === 'loop') {
-    const cond = /\((.*)\)/.exec(label);
     if (n.kw === 'for') {
       b = mk('c_for');
-      const m = /^for\s*\((.*)\)$/.exec(label);
+      const m = /for\s*\(([\s\S]*)\)\s*\{?\s*$/.exec(flat);
       if (m) {
         const parts = m[1].split(';');
         if (parts[0]) b.setFieldValue(parts[0].trim(), 'INIT');
@@ -13746,18 +13786,18 @@ function makeBlockFor(ws, n) {
       }
     } else {
       b = mk('c_while');
-      const e = mk('c_expr'); e.setFieldValue(cond ? cond[1] : label, 'EXPR'); e.initSvg(); e.render();
+      const e = mk('c_expr'); e.setFieldValue(bpConditionOf(n), 'EXPR'); e.initSvg(); e.render();
       b.getInput('COND').connection.connect(e.outputConnection);
     }
   } else if (n.kind === 'return') {
     b = mk('c_return');
     const e = mk('c_expr');
-    e.setFieldValue(label.replace(/^return\s*/, '').replace(/;\s*$/, '') || '0', 'EXPR');
+    e.setFieldValue(flat.replace(/^return\s*/, '').replace(/;\s*$/, '') || '0', 'EXPR');
     e.initSvg(); e.render();
     b.getInput('VALUE').connection.connect(e.outputConnection);
   } else if (n.kind === 'call') {
-    const m = /^([A-Za-z_]\w*)\s*\((.*)\)/.exec(label);
-    const callee = m ? m[1] : label.replace(/;\s*$/, '');
+    const m = /^([A-Za-z_]\w*)\s*\(([\s\S]*)\)\s*;?\s*$/.exec(flat);
+    const callee = m ? m[1] : flat.replace(/;\s*$/, '');
     /* ⚠️ 文档里有这个函数才用「下拉版」，否则用「自由输入版」。
        下拉版只能 setFieldValue 到选项里已有的值，填不进去就**静默丢名字** ——
        生成的代码会变成 `("参数");`，函数名没了（实测被自检抓到）。 */
@@ -13769,15 +13809,15 @@ function makeBlockFor(ws, n) {
       b.getInput('ARG').connection.connect(t.outputConnection);
     }
   } else {
-    const m = /^([\w\.\->\[\]]+)\s*=\s*([\s\S]+?);?\s*$/.exec(label);
-    if (m) {
+    const m = /^([\w\.\->\[\]]+)\s*=\s*([\s\S]+?);?\s*$/.exec(flat);
+    if (m && m[2] && m[2] !== '=') {
       b = mk('c_set');
       b.setFieldValue(m[1], 'TARGET');
       const e = mk('c_expr'); e.setFieldValue(m[2], 'EXPR'); e.initSvg(); e.render();
       b.getInput('VALUE').connection.connect(e.outputConnection);
     } else {
       b = mk('c_raw');
-      b.setFieldValue(label, 'CODE');
+      b.setFieldValue(flat, 'CODE');   /* 源码原文，不是截断的 label */
     }
   }
   return b;
@@ -13887,9 +13927,10 @@ function bpFunctionSignature() {
   const chunk = lines.slice(start, Math.min(lines.length, start + 8)).join('\n');
   const at = chunk.indexOf('{');
   if (at < 0) return '';
-  /* 收紧空白：只压括号/逗号周围的空格，**指针的 * 保留原样**
-     （`led_t *p` 比 `led_t*p` 好看，而且别动指针语义） */
-  return chunk.slice(0, at).replace(/\s+/g, ' ').replace(/\s*([(),])\s*/g, '$1').trim();
+  /* 收紧空白：压括号周围的空格、逗号后留一个空格，
+     **指针的 * 保留原样**（`led_t *p` 比 `led_t*p` 好看，也别动指针语义） */
+  return chunk.slice(0, at).replace(/\s+/g, ' ')
+    .replace(/\s*([()])\s*/g, '$1').replace(/\s*,\s*/g, ', ').trim();
 }
 function blockJsonToCode() {
   if (!BP_WORKSPACE) return '';
