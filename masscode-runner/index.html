@@ -11624,7 +11624,8 @@ function syncRelationRoot(root) {
   if (!changed) return;
   REL_ROOT = def; REL_EXPANDED.clear();
   if (relationOpen) renderRelationPane();
-  if (LG_ACTIVE) renderLogicPaneMain();   /* 右栏的逻辑图跟着当前函数刷新 */
+  /* 防抖：光标连动时别每一格都重渲染（AI 模式下会连发请求，直接被限流） */
+  if (LG_ACTIVE) { clearTimeout(AI_LOGIC_TIMER); AI_LOGIC_TIMER = setTimeout(() => renderLogicPaneMain(), 380); }
 }
 function syncRelationToCodeFocus() {
   if(ACTIVE_SPLIT_KEY)return;
@@ -13095,6 +13096,9 @@ function renderDocGraphForce(host, graph) {
    这种语义概括只能靠模型。结构图（CFG）保留作为兜底/对照。
    按「函数」缓存，切来切去不重复烧 token。 */
 const AI_LOGIC_CACHE = new Map();
+const AI_LOGIC_INFLIGHT = new Set();   /* 正在请求的函数，避免重复打接口 */
+let AI_LOGIC_COOLDOWN = 0;             /* 被 429 限流后的冷却截止时间戳 */
+let AI_LOGIC_TIMER = 0;                /* 光标联动防抖 */
 const AI_LOGIC_PROMPT = [
   '你是资深工程师，负责把一段函数代码画成**给同事看的逻辑导图**。',
   '',
@@ -13135,10 +13139,20 @@ async function renderAiLogicDiagram(host, root) {
   const cached = AI_LOGIC_CACHE.get(key);
   const body = $('lg-body');
   if (cached) { return paintAiLogic(body, cached, root); }
+  /* 同一个函数已经在请求了，别再打一次（光标抖动会连发好几次） */
+  if (AI_LOGIC_INFLIGHT.has(key)) return;
+  /* 刚被 429 限流过：冷却期内直接用结构图，别继续撞墙、也别把界面切来切去 */
+  if (Date.now() < AI_LOGIC_COOLDOWN) {
+    renderLogicStructDiagram(root);
+    if ($('lg-stats')) $('lg-stats').textContent = (root.name || '') + ' · AI 限流冷却中，先看结构图';
+    return;
+  }
   const source = functionSourceText(root);
   if (!source) { renderLogicStructDiagram(root); return; }
-  body.innerHTML = '<span class="ol-empty">⚡ 正在让 AI 解读这个函数…（首次会慢一点，之后走缓存）</span>';
+  /* ⚠️ 不要把已有内容清空 —— 否则每次切函数都闪一下空白，看起来像「一直在变」 */
+  if (!body.querySelector('svg')) body.innerHTML = '<span class="ol-empty">⚡ 正在让 AI 解读这个函数…（首次慢一点，之后走缓存）</span>';
   if ($('lg-stats')) $('lg-stats').textContent = (root.name || '') + ' · AI 解读中…';
+  AI_LOGIC_INFLIGHT.add(key);
   try {
     const cfg = typeof AI_CFG !== 'undefined' ? AI_CFG : null;
     if (!cfg || !cfg.url) throw new Error('还没配置 AI（右上角「AI 搜索」里设置接口地址与密钥）');
@@ -13153,8 +13167,19 @@ async function renderAiLogicDiagram(host, root) {
     const mermaid = extractMermaid(r.content);
     if (!/^(flowchart|graph)\s/m.test(mermaid)) throw new Error('AI 没有返回 Mermaid（返回内容：' + String(r.content || '').slice(0, 80) + '…）');
     AI_LOGIC_CACHE.set(key, mermaid);
+    AI_LOGIC_INFLIGHT.delete(key);
     paintAiLogic(body, mermaid, root);
   } catch (error) {
+    AI_LOGIC_INFLIGHT.delete(key);
+    const msg = String(error.message || error);
+    /* 429 限流：进入冷却，之后一段时间不再打接口，避免界面反复横跳 */
+    if (/429|rate limit|too many requests/i.test(msg)) {
+      AI_LOGIC_COOLDOWN = Date.now() + 90000;
+      renderLogicStructDiagram(root);
+      if ($('lg-stats')) $('lg-stats').textContent = (root.name || '') + ' · AI 限流，90 秒后自动恢复（现显示结构图）';
+      setStatus('err', 'AI 被限流（429）：已暂停 90 秒，期间显示结构图；冷却结束后点「⟳ 刷新」即可重试');
+      return;
+    }
     /* 失败就退回结构图，并把原因显示出来，别让用户对着空白 */
     renderLogicStructDiagram(root);
     if ($('lg-stats')) $('lg-stats').textContent = 'AI 解读失败，已退回结构图';
