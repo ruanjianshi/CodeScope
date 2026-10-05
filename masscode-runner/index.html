@@ -12017,7 +12017,14 @@ function drawRelationGraph(graph) {
 }
 function buildRelationGraph(body, left, center, right, labels) {
   if (REL_GRAPH_OBSERVER) { REL_GRAPH_OBSERVER.disconnect(); REL_GRAPH_OBSERVER = null; }
-  const summary=document.createElement('div');summary.className='rel-map-summary';summary.innerHTML='<span class="kind">'+escapeHtml(center.icon||'◆')+'</span><strong>'+escapeHtml(center.title)+'</strong><span class="sp"></span><span class="stat in"><b>'+left.length+'</b> '+escapeHtml(labels[0])+'</span><span class="stat out"><b>'+right.length+'</b> '+escapeHtml(labels[2])+'</span>';body.appendChild(summary);
+  /* ⚠️ 顶部摘要这行原来直接用 center.icon / center.title ✗ ——
+     绕过了 relationGraphCard 里的类别分类，于是「方法/类」在这里又变回 ƒ 了
+     （用户看到的就是"关系图还是没变化"）。这里也走一遍分类，和卡片保持一致。 */
+  const sumKind = relationSymbolKind(center.sym || center);
+  const sumIcon = sumKind.kind === 'class' ? '▣' : sumKind.kind === 'method' ? '⟐'
+    : sumKind.kind === 'external' ? '◇' : sumKind.kind === 'file' ? '▤' : (center.icon || '◆');
+  const sumTitle = (sumKind.kind === 'method' && sumKind.owner) ? sumKind.owner + '::' + center.title : center.title;
+  const summary=document.createElement('div');summary.className='rel-map-summary';summary.innerHTML='<span class="kind">'+escapeHtml(sumIcon)+'</span><strong>'+escapeHtml(sumTitle)+'</strong><span class="sp"></span><span class="stat in"><b>'+left.length+'</b> '+escapeHtml(labels[0])+'</span><span class="stat out"><b>'+right.length+'</b> '+escapeHtml(labels[2])+'</span>';body.appendChild(summary);
   const graph = document.createElement('div'); graph.className = 'rel-graph'+(!left.length?' no-upstream':'')+(!right.length?' no-downstream':'')+(!left.length&&!right.length?' isolated':'');
   const seq = ++REL_GRAPH_SEQ, upMarker = 'rel-up-' + seq, downMarker = 'rel-down-' + seq;
   graph.dataset.upMarker = upMarker; graph.dataset.downMarker = downMarker;
