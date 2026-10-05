@@ -32,7 +32,8 @@
     lemon: ['#1c1c1a', '#f2e39b'], peach: ['#1c1c1a', '#f2e39b'], rose: ['#1c1c1a', '#f2e39b'] };
 
   const CSS = `
-  .lw-inpanel { position:absolute; inset:0; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden;
+  /* 独立面板：铺满顶栏以下的整个主区域 */
+  .lw-inpanel { position:fixed; left:0; right:0; bottom:0; top:44px; z-index:8800; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden;
     font-family:${UI}; color:${T.text}; font-size:12.5px; letter-spacing:.2px; }
   /* 顶栏 */
   .lw-head { display:flex; align-items:center; gap:16px; padding:12px 18px; flex:none;
@@ -258,7 +259,7 @@
   .lw-form input { height:32px; padding:0 10px; border:2px solid ${T.lineDim}; background:transparent;
     color:${T.text}; font:12px ${UI}; outline:none; letter-spacing:.4px; }
   .lw-form input:focus { border-color:${T.accent}; }
-  #system-nav-list button[data-section="lifework"] i { color:${T.accent}; }
+  #btn-lifework.on { background:${T.accent} !important; color:${T.accentInk} !important; }
   `;
 
   const NAV = [
@@ -321,7 +322,8 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
   else mount();
 
-  /* ── 挂载：注入「本机管家」侧栏（DOM 注入，不改那个 302KB 压缩文件） ── */
+  /* ── 挂载：在**顶部标签栏**加一个「个人管理面板」（不再塞进本机管家的侧栏 ✗）──
+     做法照 system-panel.js：按钮挂在 #header-center，插在「知识库」之前。 */
   function mount() {
     if (MOUNT_TIMER) return;
     if (!document.getElementById('lifework-style')) {
@@ -331,48 +333,46 @@
       document.head.appendChild(st);
     }
     MOUNT_TIMER = setInterval(() => {
-      const nav = document.getElementById('system-nav-list');
-      const main = document.getElementById('system-main');
-      if (!nav || !main) return;
-      try { if (getComputedStyle(main).position === 'static') main.style.position = 'relative'; } catch (_) {}
-      if (nav.querySelector('[data-section="lifework"]')) return;
+      const bar = document.getElementById('header-center');
+      if (!bar) return;
+      if (document.getElementById('btn-lifework')) return;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.dataset.section = 'lifework';
-      btn.title = '个人管理面板：今日 / 待办 / 笔记 / 研究方向 / 论文 / 文件 / 时间 / 邮箱';
-      btn.innerHTML = '<i>🎯</i><span>我的工作台</span>';
-      btn.addEventListener('click', () => openInPanel());
-      nav.appendChild(btn);
-      nav.addEventListener('click', (e) => {
-        const b = e.target && e.target.closest ? e.target.closest('button[data-section]') : null;
-        if (b && b.dataset.section !== 'lifework') hidePanelView();
-      }, true);
+      btn.id = 'btn-lifework';
+      btn.className = 'header-action';
+      btn.textContent = '个人管理面板';
+      btn.title = '个人管理面板：今日 / 备忘录 / 日记 / 研究方向 / 论文检索 / 文件 / 时间 / 邮箱';
+      btn.setAttribute('aria-pressed', 'false');
+      const anchor = document.getElementById('knowledge-launch') || document.getElementById('btn-system');
+      if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(btn, anchor);
+      else bar.appendChild(btn);
+      btn.addEventListener('click', () => {
+        if (document.getElementById('lifework-view')) hidePanelView();
+        else openInPanel();
+      });
     }, 600);
   }
 
+  /* 打开：铺满主区域（在顶栏之下），并高亮顶部标签 */
   function openInPanel() {
     mount();
-    const nav = document.getElementById('system-nav-list');
-    const main = document.getElementById('system-main');
-    if (!nav || !main) return;
-    nav.querySelectorAll('button[data-section]').forEach((b) => b.classList.toggle('on', b.dataset.section === 'lifework'));
-    [...main.children].forEach((c) => { if (c.id !== 'lifework-view') c.style.display = 'none'; });
-    let view = document.getElementById('lifework-view');
-    if (!view) {
-      view = document.createElement('div');
+    if (!document.getElementById('lifework-view')) {
+      const view = document.createElement('div');
       view.id = 'lifework-view';
       view.className = 'lw-inpanel';
-      main.appendChild(view);
+      document.body.appendChild(view);
     }
-    view.style.display = '';
+    const btn = document.getElementById('btn-lifework');
+    if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.classList.add('on'); }
     if (!DATA) load(false); else render();
   }
 
+  /* 关闭：撤掉视图，顶部标签恢复 */
   function hidePanelView() {
     const view = document.getElementById('lifework-view');
     if (view) view.remove();
-    const main = document.getElementById('system-main');
-    if (main) [...main.children].forEach((c) => { c.style.display = ''; });
+    const btn = document.getElementById('btn-lifework');
+    if (btn) { btn.setAttribute('aria-pressed', 'false'); btn.classList.remove('on'); }
   }
 
   async function load(force) {
@@ -437,7 +437,7 @@
     }
     return `<div class="lw-head">
       <div class="lw-logo">🎯</div>
-      <div class="lw-h1">我的工作台<small>Personal Command</small></div>
+      <div class="lw-h1">个人管理面板<small>Personal Console</small></div>
       <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
       ${wxHtml}
       <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>`;
