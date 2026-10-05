@@ -9374,7 +9374,7 @@ function updateOutlineActive() {
     Math.floor((cw.scrollTop + cw.clientHeight * CODE_FOCUS_RATIO - padTop) / lineH) + 1);
   const candidates = snippetIndex(CURRENT).filter(s => s.frag === CINDEX && s.line <= line)
     .sort((a, b) => b.line - a.line);
-  const active = candidates.find(s => s.kind === 'fn' && s.isDefinition && (s.endLine || s.line) >= line) ||
+  const active = candidates.find(s => symIsFnLike(s) && s.isDefinition && (s.endLine || s.line) >= line) ||
     candidates.find(s => s.kind === 'type' && (s.endLine || s.line) >= line) || candidates[0];
   bodyEl().querySelectorAll('.ol-item.active').forEach(x => x.classList.remove('active'));
   if (!active) return;
@@ -11760,7 +11760,7 @@ function fnCalleeEdges(sym) {
 function fnCallees(sym) { return fnCalleeEdges(sym).map(x => x.sym); }
 function fnCallers(sym) {
   const target = resolveDefinition(sym) || sym, id = symbolId(target);
-  return globalIndex().filter(s => s.kind === 'fn' && s.isDefinition && symbolId(s) !== id &&
+  return globalIndex().filter(s => symIsFnLike(s) && s.isDefinition && symbolId(s) !== id &&
     fnCalleeEdges(s).some(x => symbolId(x.sym) === id));
 }
 
@@ -11770,7 +11770,7 @@ function relationCurrentFunction() {
   const split=activeSplitContext(),cw = $('code-wrap'), lineH = parseFloat(getComputedStyle($('code')).lineHeight) || 20;
   const padTop = parseFloat(getComputedStyle($('code')).paddingTop) || 0;
   const line = split ? split.input.value.slice(0,split.input.selectionStart||0).split('\n').length : Math.max(1, Math.floor((currentScrollTop() + cw.clientHeight * CODE_FOCUS_RATIO - padTop) / lineH) + 1);
-  const defs = snippetIndex(CURRENT).filter(s => s.frag === CINDEX && s.kind === 'fn' && s.isDefinition);
+  const defs = snippetIndex(CURRENT).filter(s => s.frag === CINDEX && symIsFnLike(s) && s.isDefinition);
   return defs.find(s => s.line <= line && (s.endLine || s.line) >= line) || defs[0] || null;
 }
 function relationFunctionAtLine(line) {
@@ -11778,7 +11778,7 @@ function relationFunctionAtLine(line) {
      原来这里只放行 'calls'，于是切到逻辑图后 REL_ROOT 永远不更新，
      换到别的函数图还是旧的（用户报过「我选择了其他函数，他怎么不变」）。 */
   if (!CURRENT || (REL_VIEW !== 'calls' && REL_VIEW !== 'logic')) return null;
-  const functions = outlineSymbols().filter(s => s.frag === CINDEX && s.kind === 'fn');
+  const functions = outlineSymbols().filter(s => s.frag === CINDEX && symIsFnLike(s));
   return functions.find(s => s.isDefinition && s.line <= line && (s.endLine || s.line) >= line) ||
     functions.find(s => s.line === line) || null;
 }
@@ -11929,10 +11929,13 @@ let REL_GRAPH_OBSERVER = null, REL_GRAPH_SEQ = 0;
    按行号把符号对上号；depth>0 的 fn 就是类里的方法。结果按片段缓存。 */
 const REL_KIND_CACHE = new Map();
 function relOutlineOf(sym) {
-  const frag = (typeof fragmentOf === 'function') ? fragmentOf(sym) : null;
-  if (!frag || !CURRENT) return null;
-  const idx = (CURRENT.fragments || []).indexOf(frag);
-  if (idx < 0) return null;
+  /* ⚠️ 这里**不能用 `CURRENT.fragments.indexOf(fragmentOf(sym))`** 比对象 ✗ ——
+     关系图的根节点符号是临时构造的（`relationFunctionAtLine` 之类），
+     `snippet` 指向的可能是另一个对象，indexOf 直接 -1 ✗ → 返回 null ✗
+     → 分类退回 fn ✗。改用符号自己的 `frag` 索引，稳。 */
+  const idx = Number.isInteger(sym && sym.frag) ? sym.frag : -1;
+  if (idx < 0 || !CURRENT || !(CURRENT.fragments || [])[idx]) return null;
+  const frag = CURRENT.fragments[idx];
   const key = (CURRENT.file || '') + '#' + idx;
   if (REL_KIND_CACHE.has(key)) return REL_KIND_CACHE.get(key);
   let list = [];
@@ -11940,6 +11943,13 @@ function relOutlineOf(sym) {
   REL_KIND_CACHE.set(key, list);
   if (REL_KIND_CACHE.size > 12) REL_KIND_CACHE.delete(REL_KIND_CACHE.keys().next().value);
   return list;
+}
+/* 「类函数」= 普通函数 或 类里的方法。凡是要"把函数列出来/找调用关系/当关系根"的地方，
+   都应该用它 —— 方法在语义上就是函数，只是多了个所属类。
+   （之前各处都只判 `kind === 'fn'`，导致方法在关系图/逻辑图里**完全被排除** ✗，
+     用户看到的就是"关系图没变化"。） */
+function symIsFnLike(sym) {
+  return !!sym && (sym.kind === 'fn' || sym.kind === 'method');
 }
 function relationSymbolKind(sym) {
   if (!sym) return { kind: 'fn', label: '函数' };
@@ -14698,12 +14708,12 @@ function renderRelationPaneContent() {
   if (REL_VIEW === 'docgraph') {
     renderDocGraphPane(body);
   } else if (REL_VIEW === 'logic') {
-    const root = REL_ROOT && REL_ROOT.kind === 'fn' ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
+    const root = REL_ROOT && (symIsFnLike(REL_ROOT) || REL_ROOT.kind === 'type') ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
     if (!root) { body.insertAdjacentHTML('beforeend', '<span class="ol-empty">当前文件没有可用的函数定义；先点击代码中的函数名</span>'); paneCount('无根函数'); return; }
     REL_ROOT = root;
     renderLogicGraphPane(body, root);
   } else if (REL_VIEW === 'calls') {
-    let root = REL_ROOT && REL_ROOT.kind === 'fn' ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
+    let root = REL_ROOT && (symIsFnLike(REL_ROOT) || REL_ROOT.kind === 'type') ? resolveDefinition(REL_ROOT) : relationCurrentFunction();
     if (!root) { body.insertAdjacentHTML('beforeend', '<span class="ol-empty">当前文件没有可用的函数定义；先点击代码中的函数名</span>'); paneCount('无根函数'); return; }
     REL_ROOT = root;
     if (REL_LAYOUT === 'graph') { const count = renderFunctionGraph(body, root); paneCount(count + ' 个直接关系'); return; }
