@@ -1,60 +1,88 @@
 /*!
- * life-workbench.js —— 「我的工作台」个人管理系统
+ * life-workbench.js —— 「我的工作台」个人管理系统（v2 · 按 2026 仪表盘规范重做）
  * ---------------------------------------------------------------------------
- * 挂在「本机管家」里的一个独立模块（自建 UI，和主界面互不覆盖）。
+ * 挂在「本机管家」里的一个栏目（DOM 注入，不改那个 302KB 压缩文件）。
  * 数据来自 /api/life/index（lib/life-index.js 扫本机 + 按研究方向归类）。
  *
- * 面向：研究生 · 机器人运动控制 / 嵌入式开发 / 论文撰写
- * 五块：今日 / 研究方向 / 论文 / 文件 / 时间
+ * 设计规格（参考 2026 dashboard 设计规范）：
+ *   · 导航项 36px 高 / 圆角 8px / 激活态 8% 主色 + 左侧 3px 条
+ *   · KPI 卡：主数字 30px + 一个对比 + 一个可视化（三选一，不堆）
+ *   · 内容网格 12 列 / 24px 间距
+ *   · 图表优先柱状与折线（长度编码比面积好读），不用环形图
+ *   · 加载用骨架屏（不用 spinner）；空状态给一句话 + 出口
  */
 (() => {
   'use strict';
 
+  const T = {
+    bg: '#0e1116', panel: '#151a22', panel2: '#1a2029', line: '#242c39', line2: '#2e3846',
+    text: '#e8ecf3', dim: '#8b95a6', faint: '#5d6779',
+    accent: '#4f8cff', ok: '#3fb950', warn: '#f0883e', purple: '#a371f7', cyan: '#39c5cf',
+  };
+  const KIND_COLOR = { code: '#4f8cff', doc: '#f0883e', media: '#a371f7', model: '#3fb950', other: '#5d6779' };
+  const KIND_NAME = { code: '代码', doc: '文档', media: '媒体/图', model: '三维模型', other: '其他' };
+
   const CSS = `
-  /* 长在「本机管家」内容区里（不再做浮层）——尺寸跟着 #system-main 走 */
-  .lw-inpanel { position:absolute; inset:0; display:flex; flex-direction:column; background:#11151c; overflow:hidden;
-    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
-  .lw-head { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #232a36; flex:none;
-    background:linear-gradient(180deg,#1a1f29,#161a22); }
-  .lw-h1 { font-size:15px; font-weight:700; letter-spacing:.2px; color:#e6e8ee; }
-  .lw-sub2 { font-size:11.5px; color:#8b95a6; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-btn { height:28px; padding:0 12px; border-radius:8px; border:1px solid #30384a; background:#1d2430;
-    color:#cfd6e2; font-size:12px; cursor:pointer; flex:none; }
-  .lw-btn:hover { background:#232c3b; border-color:#3d4860; }
+  .lw-inpanel { position:absolute; inset:0; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:${T.text}; }
+  .lw-head { display:flex; align-items:center; gap:14px; padding:14px 22px; flex:none;
+    border-bottom:1px solid ${T.line}; background:${T.panel}; }
+  .lw-h1 { font-size:15px; font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:8px; }
+  .lw-sub2 { font-size:12px; color:${T.dim}; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-btn { height:30px; padding:0 13px; border-radius:8px; border:1px solid ${T.line2}; background:${T.panel2};
+    color:#cfd6e2; font-size:12px; cursor:pointer; flex:none; transition:all .15s; }
+  .lw-btn:hover { background:#232c3b; border-color:${T.accent}; color:#fff; }
   .lw-body2 { flex:1; display:flex; min-height:0; }
-  .lw-nav { width:158px; flex:none; padding:12px 9px; border-right:1px solid #232a36; background:#13171f; overflow:auto; }
-  .lw-nav button { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:3px;
-    border:1px solid transparent; border-radius:9px; background:transparent; color:#a9b3c4; font-size:12.5px; cursor:pointer; text-align:left; }
-  .lw-nav button:hover { background:#1b212c; color:#e6e8ee; }
-  .lw-nav button.on { background:linear-gradient(90deg,rgba(79,140,255,.20),rgba(79,140,255,.05));
-    border-color:rgba(79,140,255,.42); color:#eaf1ff; font-weight:600; }
-  .lw-nav .ic { width:17px; text-align:center; }
-  .lw-main { flex:1; min-width:0; overflow:auto; padding:18px 20px 36px; }
+  .lw-nav { width:200px; flex:none; padding:14px 10px; border-right:1px solid ${T.line}; background:#12161d; overflow:auto; }
+  .lw-nav .grp { margin:10px 10px 7px; font-size:11px; letter-spacing:1.2px; color:${T.faint}; text-transform:uppercase; font-weight:600; }
+  .lw-nav button { width:100%; height:36px; display:flex; align-items:center; gap:10px; padding:0 12px; margin-bottom:2px;
+    border:0; border-left:3px solid transparent; border-radius:8px; background:transparent;
+    color:#a9b3c4; font-size:13px; cursor:pointer; text-align:left; transition:background .15s,color .15s; }
+  .lw-nav button:hover { background:rgba(255,255,255,.04); color:${T.text}; }
+  .lw-nav button.on { background:rgba(79,140,255,.08); border-left-color:${T.accent}; color:#eaf1ff; font-weight:600; }
+  .lw-nav .ic { width:18px; text-align:center; font-size:14px; }
+  .lw-main { flex:1; min-width:0; overflow:auto; padding:22px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a3242; border-radius:6px; }
-  .lw-grid { display:grid; gap:13px; }
-  .lw-card { background:linear-gradient(180deg,#1a2029,#171c25); border:1px solid #252d3a; border-radius:13px; padding:15px 17px; }
-  .lw-card h3 { margin:0 0 11px; font-size:12.5px; font-weight:600; color:#c8d1e0; display:flex; align-items:center; gap:8px; }
-  .lw-card h3 .sp { flex:1; }
-  .lw-card h3 small { font-weight:400; color:#7c869a; font-size:11px; }
-  .lw-kpi { font-size:29px; font-weight:700; line-height:1.1; letter-spacing:-.5px; color:#e6e8ee; }
-  .lw-kpi small { font-size:12px; font-weight:400; color:#8b95a6; margin-left:5px; }
-  .lw-hint { font-size:11px; color:#7c869a; margin-top:5px; }
-  .lw-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:9px; }
-  .lw-row:hover { background:#1d232e; }
-  .lw-row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:#dbe2ec; }
-  .lw-row .mt { font-size:11px; color:#7c869a; flex:none; }
-  .lw-row .tag { font-size:10px; padding:1px 7px; border-radius:999px; border:1px solid #333c4d; color:#9aa6ba; flex:none; }
-  .lw-bar { height:7px; border-radius:4px; background:#232b38; overflow:hidden; }
-  .lw-bar i { display:block; height:100%; border-radius:4px; }
-  .lw-empty { color:#6f7a8d; font-size:12.5px; padding:14px 4px; }
-  .lw-heat { display:grid; grid-template-columns:repeat(14,1fr); gap:4px; }
-  .lw-heat i { aspect-ratio:1; border-radius:4px; background:#1e2531; }
-  .lw-chips { display:flex; flex-wrap:wrap; gap:7px; }
-  .lw-chip { font-size:11px; padding:3px 9px; border-radius:999px; border:1px solid #303948; background:#1b2129; color:#a9b3c4; }
-  .lw-open { cursor:pointer; }
-  .lw-open:hover { color:#7fb0ff; }
-  /* 侧栏里我们那个栏目的图标色，和别家区分开 */
-  #system-nav-list button[data-section="lifework"] i { color:#4f8cff; }
+  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:24px; align-items:start; }
+  .lw-c { background:${T.panel}; border:1px solid ${T.line}; border-radius:12px; padding:18px 20px; }
+  .lw-c h3 { margin:0 0 14px; font-size:11.5px; font-weight:600; color:${T.dim}; letter-spacing:.6px;
+    display:flex; align-items:center; gap:8px; text-transform:uppercase; }
+  .lw-c h3 .sp { flex:1; }
+  .lw-c h3 em { font-style:normal; text-transform:none; letter-spacing:0; color:${T.faint}; font-weight:400; font-size:11px; }
+  .lw-kpi { display:flex; flex-direction:column; gap:7px; }
+  .lw-kpi .num { font-size:30px; font-weight:700; line-height:1; letter-spacing:-.8px; }
+  .lw-kpi .num small { font-size:12px; font-weight:500; color:${T.dim}; margin-left:6px; letter-spacing:0; }
+  .lw-kpi .lbl { font-size:12px; color:${T.dim}; }
+  .lw-kpi .cmp { font-size:11.5px; color:${T.faint}; }
+  .lw-kpi .cmp b { color:${T.ok}; font-weight:600; }
+  .lw-tbl { display:flex; flex-direction:column; }
+  .lw-tr { display:flex; align-items:center; gap:12px; min-height:44px; padding:0 10px; border-radius:8px;
+    border-bottom:1px solid rgba(36,44,57,.55); cursor:pointer; transition:background .12s; }
+  .lw-tr:last-child { border-bottom:0; }
+  .lw-tr:hover { background:rgba(79,140,255,.07); }
+  .lw-tr .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+  .lw-tr .nm i { font-style:normal; color:${T.faint}; font-size:11.5px; }
+  .lw-tr .sz { flex:none; font-size:11.5px; color:${T.dim}; font-variant-numeric:tabular-nums; text-align:right; width:64px; }
+  .lw-tr .tm { flex:none; font-size:11.5px; color:${T.faint}; width:72px; text-align:right; }
+  .lw-tr .bd { flex:none; font-size:10px; padding:2px 8px; border-radius:999px; border:1px solid ${T.line2}; color:${T.dim}; }
+  .lw-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    padding:34px 10px; color:${T.faint}; font-size:12.5px; }
+  .lw-empty .big { font-size:26px; opacity:.5; }
+  .lw-sk { background:linear-gradient(90deg,#1a2029 25%,#222a36 37%,#1a2029 63%); background-size:400% 100%;
+    animation:lw-sk 1.3s ease infinite; border-radius:8px; }
+  @keyframes lw-sk { 0%{background-position:100% 50%} 100%{background-position:0 50%} }
+  .lw-bars { display:flex; align-items:flex-end; gap:8px; height:130px; }
+  .lw-bars > div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; }
+  .lw-bars .v { font-size:10px; color:${T.dim}; }
+  .lw-bars .b { width:100%; border-radius:5px 5px 0 0; background:linear-gradient(180deg,${T.accent},#2b5cab); }
+  .lw-bars .k { font-size:10px; color:${T.faint}; }
+  .lw-heat { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,1fr); gap:4px; }
+  .lw-heat i { width:15px; height:15px; border-radius:3px; background:#1b222c; }
+  .lw-chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .lw-chip { font-size:11.5px; padding:4px 10px; border-radius:999px; border:1px solid ${T.line2};
+    background:${T.panel2}; color:#a9b3c4; }
+  .lw-chip b { color:#8fb8ff; font-weight:600; margin-left:4px; }
+  #system-nav-list button[data-section="lifework"] i { color:${T.accent}; }
   `;
 
   const NAV = [
@@ -79,25 +107,48 @@
     if (!ms) return '—';
     const d = Date.now() - ms, m = 60000, h = 3600000, day = 86400000;
     if (d < m) return '刚刚';
-    if (d < h) return Math.floor(d / m) + ' 分钟前';
+    if (d < h) return Math.floor(d / m) + ' 分前';
     if (d < day) return Math.floor(d / h) + ' 小时前';
     if (d < day * 30) return Math.floor(d / day) + ' 天前';
     return new Date(ms).toISOString().slice(0, 10);
   }
   function dstr(ms) { return new Date(ms).toISOString().slice(0, 16).replace('T', ' '); }
 
+  /* 迷你折线（长度编码，比环形图好读） */
+  function spark(vals, w, h, color) {
+    const W = w || 96, H = h || 28, C = color || T.accent;
+    const n = Math.max(2, (vals || []).length);
+    const max = Math.max(1, ...(vals || [0]));
+    const pts = (vals || []).map((v, i) => [(i / (n - 1)) * W, H - (v / max) * (H - 4) - 2]);
+    if (!pts.length) return '';
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
+      <path d="${d} L${W},${H} L0,${H} Z" fill="${C}" opacity=".12"/>
+      <path d="${d}" fill="none" stroke="${C}" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
+  }
+
+  function skeleton() {
+    const kpi = [0, 1, 2, 3].map(() => `<div class="lw-c" style="grid-column:span 3">
+      <div class="lw-sk" style="height:12px;width:52%"></div>
+      <div class="lw-sk" style="height:30px;width:40%;margin:13px 0 11px"></div>
+      <div class="lw-sk" style="height:11px;width:72%"></div></div>`).join('');
+    const rows = [0, 1, 2, 3, 4].map(() => `<div class="lw-sk" style="height:30px;margin-top:11px"></div>`).join('');
+    return `<div class="lw-g12">${kpi}
+      <div class="lw-c" style="grid-column:span 8"><div class="lw-sk" style="height:11px;width:22%"></div>${rows}</div>
+      <div class="lw-c" style="grid-column:span 4"><div class="lw-sk" style="height:11px;width:46%"></div>
+        <div class="lw-sk" style="height:130px;margin-top:13px"></div></div>
+    </div>`;
+  }
+
+  /* ── 挂载：注入「本机管家」侧栏 ──
+     实测结构：SECTION#system-workspace > DIV#system-shell > [ASIDE#system-nav, DIV#system-main]
+     system-panel.js 是 302KB 压缩文件，改源码风险大 ✗ —— 所以运行时注入。 */
   window.LifeWorkbench = { open: openInPanel, close: hidePanelView, refresh: () => load(true) };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
   else mount();
 
-  /* ── 挂载：把「我的工作台」作为一个栏目插进「本机管家」的侧栏 ──
-     实测结构：
-       SECTION#system-workspace > DIV#system-shell > [ ASIDE#system-nav, DIV#system-main ]
-     system-panel.js 是 302KB 压缩文件，改源码风险大 ✗ ——
-     所以用 DOM 注入：往侧栏加一个按钮，点击时**复用它的内容区**显示我们的视图。 */
   function mount() {
     if (MOUNT_TIMER) return;
-    /* 样式只注入一次 */
     if (!document.getElementById('lifework-style')) {
       const st = document.createElement('style');
       st.id = 'lifework-style';
@@ -108,9 +159,8 @@
       const nav = document.getElementById('system-nav-list');
       const main = document.getElementById('system-main');
       if (!nav || !main) return;
-      /* 我们的视图是绝对定位铺满内容区的，所以内容区要有定位基准 */
       try { if (getComputedStyle(main).position === 'static') main.style.position = 'relative'; } catch (_) {}
-      if (nav.querySelector('[data-section="lifework"]')) return;   /* 已经注入过 */
+      if (nav.querySelector('[data-section="lifework"]')) return;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.dataset.section = 'lifework';
@@ -118,7 +168,6 @@
       btn.innerHTML = '<i>🎯</i><span>我的工作台</span>';
       btn.addEventListener('click', () => openInPanel());
       nav.appendChild(btn);
-      /* 用户点它自己的栏目时，撤掉我们的视图（避免两个视图叠在一起） */
       nav.addEventListener('click', (e) => {
         const b = e.target && e.target.closest ? e.target.closest('button[data-section]') : null;
         if (b && b.dataset.section !== 'lifework') hidePanelView();
@@ -126,7 +175,6 @@
     }, 600);
   }
 
-  /* 打开：高亮自己的栏目 + 隐藏它的内容 + 显示我们的视图 */
   function openInPanel() {
     mount();
     const nav = document.getElementById('system-nav-list');
@@ -145,7 +193,6 @@
     if (!DATA) load(false); else render();
   }
 
-  /* 关闭：撤掉视图 + 恢复它的内容 */
   function hidePanelView() {
     const view = document.getElementById('lifework-view');
     if (view) view.remove();
@@ -156,172 +203,193 @@
   function render() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
-    if (!DATA) { host.innerHTML = '<div class="lw-empty">正在读取本机…</div>'; return; }
-    host.innerHTML = shellHtml();
-    const main = host.querySelector('#lw-main');
-    if (TAB === 'today') main.innerHTML = viewToday();
-    else if (TAB === 'tracks') main.innerHTML = viewTracks();
-    else if (TAB === 'paper') main.innerHTML = viewPaper();
-    else if (TAB === 'files') main.innerHTML = viewFiles();
-    else main.innerHTML = viewTime();
-    main.querySelectorAll('[data-path]').forEach((el) => {
-      el.classList.add('lw-open');
-      el.onclick = () => copyPath(el.dataset.path);
-    });
-    host.querySelectorAll('.lw-nav button').forEach((b) => {
-      b.onclick = () => { TAB = b.dataset.tab; render(); };
-    });
-    host.querySelector('#lw-refresh').onclick = () => load(true);
+    if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
+    const main = { today: viewToday, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime }[TAB] || viewToday;
+    host.innerHTML = headHtml() + `<div class="lw-body2">
+      <div class="lw-nav">${NAV.map((n) =>
+        `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span>${n.label}</button>`).join('')}</div>
+      <div class="lw-main">${main()}</div></div>`;
+    bind();
   }
 
-  /* 视图骨架（用本机管家内容区的尺寸，不再做浮层） */
-  function shellHtml() {
-    const sub = DATA ? `已扫 ${DATA.totals.projects} 个项目 · ${DATA.totals.files} 个文件 · ${DATA.totals.sizeText} · 更新于 ${dstr(DATA.scannedAt)}` : '正在读取本机…';
-    return `
-      <div class="lw-head">
-        <div class="lw-h1">🎯 我的工作台</div>
-        <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
-        <button class="lw-btn" id="lw-refresh">↻ 重新扫描</button>
-      </div>
-      <div class="lw-body2">
-        <div class="lw-nav" id="lw-nav">${NAV.map((n) =>
-          `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span>${n.label}</button>`).join('')}</div>
-        <div class="lw-main" id="lw-main"></div>
-      </div>`;
+  function headHtml() {
+    const sub = DATA ? `已扫 ${DATA.totals.projects} 个项目 · ${DATA.totals.files} 个文件 · ${DATA.totals.sizeText} · 更新于 ${dstr(DATA.scannedAt)}` : '正在扫描本机…';
+    return `<div class="lw-head"><div class="lw-h1">🎯 我的工作台</div>
+      <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
+      <button class="lw-btn" id="lw-refresh">↻ 重新扫描</button></div>`;
   }
 
-  function copyPath(p) {
-    try {
-      navigator.clipboard.writeText(p);
-      const sub = document.getElementById('lw-sub');
-      if (sub) sub.textContent = '已复制路径：' + p;
-    } catch (_) {}
+  function bind() {
+    const host = document.getElementById('lifework-view');
+    if (!host) return;
+    host.querySelectorAll('.lw-nav button').forEach((b) => { b.onclick = () => { TAB = b.dataset.tab; render(); }; });
+    const rf = host.querySelector('#lw-refresh');
+    if (rf) rf.onclick = () => load(true);
+    host.querySelectorAll('[data-path]').forEach((el) => {
+      el.onclick = () => {
+        try {
+          navigator.clipboard.writeText(el.dataset.path);
+          const s = document.getElementById('lw-sub');
+          if (s) s.textContent = '已复制路径：' + el.dataset.path;
+        } catch (_) {}
+      };
+    });
   }
 
   async function load(force) {
     if (LOADING) return;
     LOADING = true;
-    const sub = document.getElementById('lw-sub');
-    if (sub) sub.textContent = '正在扫描本机文件…';
+    const s = document.getElementById('lw-sub');
+    if (s) s.textContent = '正在扫描本机文件…';
     try {
       const r = await fetch('/api/life/index?depth=3', { cache: 'no-store' });
       DATA = await r.json();
       if (!DATA || !DATA.ok) throw new Error((DATA && DATA.error) || '读取失败');
     } catch (e) {
       LOADING = false;
-      if (sub) sub.textContent = '读取失败：' + e.message;
+      if (s) s.textContent = '读取失败：' + e.message;
       return;
     }
     LOADING = false;
     render();
   }
 
-  function trackOf(id) { return (DATA.tracks || []).find((t) => t.id === id) || null; }
+  const span = (n) => `grid-column:span ${n}`;
 
   /* ── 今日 ── */
   function viewToday() {
-    const d = new Date();
-    const hour = d.getHours();
+    const d = new Date(), hour = d.getHours();
     const greet = hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 19 ? '下午好' : '晚上好';
-    const today = d.toISOString().slice(0, 10);
-    const todayCount = (DATA.days || []).find((x) => x.date === today);
-    const hot = (DATA.recent || []).slice(0, 9);
-    const maxDay = Math.max(1, ...(DATA.days || []).map((x) => x.count));
+    const days = DATA.days || [];
+    const today = days[days.length - 1] || { count: 0 };
+    const yest = days[days.length - 2] || { count: 0 };
+    const diff = today.count - yest.count;
+    const maxDay = Math.max(1, ...days.map((x) => x.count));
+    const week = days.slice(-7).map((x) => x.count);
+    const hot = (DATA.recent || []).slice(0, 8);
 
-    return `
-    <div class="lw-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
-      <div class="lw-card"><div class="lw-kpi">${DATA.totals.projects}<small>个项目</small></div><div class="lw-hint">本机已纳管</div></div>
-      <div class="lw-card"><div class="lw-kpi">${DATA.totals.files}<small>个文件</small></div><div class="lw-hint">合计 ${DATA.totals.sizeText}</div></div>
-      <div class="lw-card"><div class="lw-kpi">${todayCount ? todayCount.count : 0}<small>个改动</small></div><div class="lw-hint">今天（近 14 天）</div></div>
-      <div class="lw-card"><div class="lw-kpi">${(DATA.tracks || []).length}<small>个方向</small></div><div class="lw-hint">机器人 · 嵌入式 · 论文</div></div>
-    </div>
-    <div class="lw-grid" style="grid-template-columns:1.35fr 1fr">
-      <div class="lw-card">
-        <h3>${greet} · 最近在动的文件 <small>点一下复制路径</small></h3>
-        ${hot.map((f) => `<div class="lw-row" data-path="${esc(f.path)}">
-          <span class="tag">${esc(f.ext || '—')}</span>
-          <span class="nm">${esc(f.name)}</span>
-          <span class="mt">${ago(f.mtime)}</span></div>`).join('') || '<div class="lw-empty">暂无</div>'}
+    const kpi = [
+      { n: DATA.totals.projects, u: '个项目', l: '本机已纳管', c: `覆盖 ${(DATA.tracks || []).length} 个研究方向`, sp: null },
+      { n: DATA.totals.files, u: '个文件', l: '合计 ' + DATA.totals.sizeText, c: `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, sp: spark(week, 96, 26, T.accent) },
+      { n: today.count, u: '个改动', l: '今天', c: diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), sp: spark(week, 96, 26, T.ok) },
+      { n: (DATA.tracks || []).length, u: '个方向', l: '机器人 · 嵌入式 · 论文', c: (DATA.tracks || []).map((t) => t.icon).join(' '), sp: null },
+    ].map((k) => `<div class="lw-c" style="${span(3)}"><div class="lw-kpi">
+        <div class="num">${k.n}<small>${k.u}</small></div>
+        <div class="lbl">${k.l}</div>
+        <div class="cmp">${k.c}</div>
+        ${k.sp ? `<div style="margin-top:2px">${k.sp}</div>` : '<div style="height:26px"></div>'}
+      </div></div>`).join('');
+
+    return `<div class="lw-g12">${kpi}
+      <div class="lw-c" style="${span(8)}">
+        <h3>${greet} · 最近在动的文件 <span class="sp"></span><em>点一行复制完整路径</em></h3>
+        <div class="lw-tbl">${hot.length ? hot.map((f, i) => `<div class="lw-tr" data-path="${esc(f.path)}">
+          <span class="sz" style="width:22px;color:${T.faint}">${i + 1}</span>
+          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
+          <span class="bd">${esc(f.ext || '—')}</span>
+          <span class="sz">${fmtBytes(f.size)}</span>
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : emptyBox('还没有文件改动记录')}</div>
       </div>
-      <div>
-        <div class="lw-card" style="margin-bottom:14px">
-          <h3>近 14 天改动强度</h3>
-          <div class="lw-heat">${(DATA.days || []).map((x) => {
-            const a = x.count / maxDay;
-            return `<i title="${x.date} · ${x.count} 个文件" style="background:${x.count ? `rgba(79,140,255,${0.18 + a * 0.82})` : '#1e2531'}"></i>`;
-          }).join('')}</div>
-          <div class="lw-hint" style="margin-top:8px">${(DATA.days || []).map((x) => x.label).join(' · ')}</div>
-        </div>
-        <div class="lw-card">
-          <h3>文件构成</h3>
-          ${Object.entries(DATA.byKind || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
-            const total = DATA.totals.files || 1, pct = Math.round(v / total * 100);
-            const color = { code: '#4f8cff', doc: '#f0883e', media: '#a371f7', model: '#3fb950', other: '#5b6577' }[k] || '#5b6577';
-            const name = { code: '代码', doc: '文档', media: '媒体/图', model: '三维模型', other: '其他' }[k] || k;
-            return `<div style="margin-bottom:9px"><div style="display:flex;font-size:11.5px;color:#9aa6ba;margin-bottom:4px">
-              <span style="flex:1">${name}</span><span>${v} · ${pct}%</span></div>
-              <div class="lw-bar"><i style="width:${pct}%;background:${color}"></i></div></div>`;
-          }).join('')}
-        </div>
+      <div class="lw-c" style="${span(4)}">
+        <h3>近 14 天 <span class="sp"></span><em>共 ${days.reduce((a, x) => a + x.count, 0)} 个改动</em></h3>
+        <div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count} 个文件">
+          <span class="v">${x.count || ''}</span>
+          <span class="b" style="height:${Math.max(3, Math.round(x.count / maxDay * 96))}px"></span>
+          <span class="k">${x.label}</span></div>`).join('')}</div>
+      </div>
+      <div class="lw-c" style="${span(7)}">
+        <h3>各方向活跃度 <span class="sp"></span><em>按最近改动排序</em></h3>
+        <div class="lw-tbl">${(DATA.tracks || []).map((t) => `<div class="lw-tr" data-path="${esc((t.list[0] || {}).path || '')}">
+          <span style="font-size:15px">${t.icon}</span>
+          <span class="nm">${esc(t.name)} <i>${t.projects} 个项目</i></span>
+          <span class="bd" style="border-color:${t.color};color:${t.color}">${t.files} 文件</span>
+          <span class="sz">${t.sizeText}</span>
+          <span class="tm">${ago(t.newest)}</span></div>`).join('')}</div>
+      </div>
+      <div class="lw-c" style="${span(5)}">
+        <h3>文件构成 <span class="sp"></span><em>${DATA.totals.files} 个文件</em></h3>
+        ${Object.entries(DATA.byKind || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
+          const pct = Math.round(v / (DATA.totals.files || 1) * 100);
+          return `<div style="margin-bottom:11px">
+            <div style="display:flex;font-size:12px;color:${T.dim};margin-bottom:5px"><span style="flex:1">${KIND_NAME[k] || k}</span>
+            <span style="font-variant-numeric:tabular-nums">${v} · ${pct}%</span></div>
+            <div style="height:7px;border-radius:4px;background:#232b38;overflow:hidden">
+              <i style="display:block;height:100%;width:${pct}%;border-radius:4px;background:${KIND_COLOR[k] || T.faint}"></i></div></div>`;
+        }).join('')}
       </div>
     </div>`;
+  }
+
+  function emptyBox(msg) {
+    return `<div class="lw-empty"><div class="big">📭</div>${esc(msg)}</div>`;
   }
 
   /* ── 研究方向 ── */
   function viewTracks() {
     const tracks = DATA.tracks || [];
-    if (!tracks.length) return '<div class="lw-empty">还没扫到项目</div>';
-    const maxFiles = Math.max(1, ...tracks.map((t) => t.files));
-    return `<div class="lw-grid" style="grid-template-columns:repeat(2,1fr)">` + tracks.map((t) => `
-      <div class="lw-card">
-        <h3><span style="font-size:16px">${t.icon}</span>${esc(t.name)}
-          <span class="sp"></span><small>${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}</small></h3>
-        <div class="lw-bar" style="margin-bottom:12px"><i style="width:${Math.round(t.files / maxFiles * 100)}%;background:${t.color}"></i></div>
-        ${t.list.map((p) => `<div class="lw-row" data-path="${esc(p.path)}">
-          <span class="nm">${esc(p.name)}</span>
-          <span class="tag">${p.files} 文件</span>
-          <span class="mt">${ago(p.newest)}</span></div>`).join('')}
-      </div>`).join('') + `</div>`;
+    if (!tracks.length) return emptyBox('还没扫到项目');
+    const max = Math.max(1, ...tracks.map((t) => t.files));
+    const cards = tracks.map((t) => `<div class="lw-c" style="${span(6)}">
+      <h3><span style="font-size:15px">${t.icon}</span>${esc(t.name)}<span class="sp"></span>
+        <em>${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}</em></h3>
+      <div style="height:6px;border-radius:4px;background:#232b38;overflow:hidden;margin-bottom:14px">
+        <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;border-radius:4px;background:${t.color}"></i></div>
+      <div class="lw-tbl">${t.list.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
+        <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
+        <span class="bd">${p.files} 文件</span><span class="sz">${p.sizeText}</span>
+        <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>
+    </div>`).join('');
+    return `<div class="lw-g12">${cards}</div>`;
   }
 
   /* ── 论文 ── */
   function viewPaper() {
-    const paper = trackOf('paper');
     const ps = (DATA.projects || []).filter((p) => p.track === 'paper' || /paper|manuscript|论文|latex|投稿|开题|摘要/i.test(p.name));
-    const docs = (DATA.recent || []).filter((f) => /\.(docx?|tex|pdf|pptx?|md)$/i.test(f.name)).slice(0, 14);
-    return `
-    <div class="lw-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
-      <div class="lw-card"><div class="lw-kpi">${paper ? paper.projects : 0}<small>个论文项目</small></div>
-        <div class="lw-hint">${paper ? paper.files + ' 个文件 · ' + paper.sizeText : '未归类到论文'}</div></div>
-      <div class="lw-card"><div class="lw-kpi">${docs.length}<small>篇文档在近期待办</small></div>
-        <div class="lw-hint">docx / tex / pdf / pptx</div></div>
-    </div>
-    <div class="lw-grid" style="grid-template-columns:1fr 1fr">
-      <div class="lw-card"><h3>论文项目</h3>
-        ${ps.map((p) => `<div class="lw-row" data-path="${esc(p.path)}">
-          <span class="nm">${esc(p.name)}</span><span class="tag">${p.files}</span><span class="mt">${ago(p.newest)}</span></div>`).join('') || '<div class="lw-empty">暂无</div>'}
+    const docs = (DATA.recent || []).filter((f) => /\.(docx?|tex|pdf|pptx?|md)$/i.test(f.name)).slice(0, 12);
+    const track = (DATA.tracks || []).find((t) => t.id === 'paper');
+    return `<div class="lw-g12">
+      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
+        <div class="num">${track ? track.projects : 0}<small>个项目</small></div>
+        <div class="lbl">论文 / 投稿</div>
+        <div class="cmp">${track ? track.files + ' 个文件 · ' + track.sizeText : '未归类到论文'}</div>
+        <div style="height:26px"></div></div></div>
+      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
+        <div class="num">${docs.length}<small>篇</small></div>
+        <div class="lbl">文稿 / 插图</div>
+        <div class="cmp">docx · tex · pdf · pptx</div>
+        <div style="height:26px"></div></div></div>
+      <div class="lw-c" style="${span(6)}">
+        <h3>论文项目 <span class="sp"></span><em>${ps.length} 个</em></h3>
+        <div class="lw-tbl">${ps.length ? ps.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
+          <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
+          <span class="bd">${p.files} 文件</span><span class="tm">${ago(p.newest)}</span></div>`).join('') : emptyBox('还没归类到论文项目')}</div>
       </div>
-      <div class="lw-card"><h3>文稿 / 插图 <small>最近改动</small></h3>
-        ${docs.map((f) => `<div class="lw-row" data-path="${esc(f.path)}">
-          <span class="tag">${esc(f.ext)}</span><span class="nm">${esc(f.name)}</span><span class="mt">${ago(f.mtime)}</span></div>`).join('') || '<div class="lw-empty">暂无</div>'}
+      <div class="lw-c" style="${span(12)}">
+        <h3>文稿与插图 <span class="sp"></span><em>最近改动</em></h3>
+        <div class="lw-tbl">${docs.length ? docs.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
+          <span class="bd">${esc(f.ext)}</span><span class="sz">${fmtBytes(f.size)}</span>
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : emptyBox('最近没有文稿改动')}</div>
       </div>
     </div>`;
   }
 
   /* ── 文件 ── */
   function viewFiles() {
-    const exts = Object.entries(DATA.byExt || {}).sort((a, b) => b[1] - a[1]).slice(0, 22);
-    return `
-    <div class="lw-card" style="margin-bottom:14px">
-      <h3>扩展名分布 <small>共 ${DATA.totals.files} 个文件</small></h3>
-      <div class="lw-chips">${exts.map(([e, n]) => `<span class="lw-chip">${esc(e)} <b style="color:#7fb0ff">${n}</b></span>`).join('')}</div>
-    </div>
-    <div class="lw-card">
-      <h3>最近改动 <small>点一下复制完整路径</small></h3>
-      ${(DATA.recent || []).map((f) => `<div class="lw-row" data-path="${esc(f.path)}">
-        <span class="tag">${esc(f.ext || '—')}</span>
-        <span class="nm">${esc(f.name)}<span style="color:#5f6b7e;font-size:11px"> · ${esc(f.path.replace(DATA.home, '~'))}</span></span>
-        <span class="mt">${fmtBytes(f.size)} · ${ago(f.mtime)}</span></div>`).join('')}
+    const exts = Object.entries(DATA.byExt || {}).sort((a, b) => b[1] - a[1]).slice(0, 26);
+    const recent = (DATA.recent || []).slice(0, 26);
+    return `<div class="lw-g12">
+      <div class="lw-c" style="${span(12)}">
+        <h3>扩展名分布 <span class="sp"></span><em>共 ${DATA.totals.files} 个文件</em></h3>
+        <div class="lw-chips">${exts.map(([e, n]) => `<span class="lw-chip">${esc(e)}<b>${n}</b></span>`).join('')}</div>
+      </div>
+      <div class="lw-c" style="${span(12)}">
+        <h3>最近改动 <span class="sp"></span><em>点一行复制完整路径</em></h3>
+        <div class="lw-tbl">${recent.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
+          <span class="bd">${esc(f.ext || '—')}</span><span class="sz">${fmtBytes(f.size)}</span>
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>
+      </div>
     </div>`;
   }
 
@@ -329,23 +397,36 @@
   function viewTime() {
     const days = DATA.days || [];
     const max = Math.max(1, ...days.map((x) => x.count));
-    return `
-    <div class="lw-card" style="margin-bottom:14px">
-      <h3>近 14 天改动量</h3>
-      <div style="display:flex;align-items:flex-end;gap:8px;height:150px;padding:6px 2px">
-        ${days.map((x) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
-          <span style="font-size:10px;color:#8b95a6">${x.count || ''}</span>
-          <i style="display:block;width:100%;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#4f8cff,#2f5fb0);
-            height:${Math.max(3, Math.round(x.count / max * 110))}px"></i>
-          <span style="font-size:10px;color:#6f7a8d">${x.label}</span></div>`).join('')}
+    const total = days.reduce((a, x) => a + x.count, 0);
+    const active = days.filter((x) => x.count).length;
+    return `<div class="lw-g12">
+      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
+        <div class="num">${total}<small>个改动</small></div><div class="lbl">近 14 天</div>
+        <div class="cmp">日均 ${(total / 14).toFixed(1)} 个</div><div style="height:26px"></div></div></div>
+      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
+        <div class="num">${active}<small>天</small></div><div class="lbl">有改动</div>
+        <div class="cmp">共 14 天</div><div style="height:26px"></div></div></div>
+      <div class="lw-c" style="${span(6)}">
+        <h3>改动趋势 <span class="sp"></span><em>近 14 天</em></h3>
+        <div style="padding-top:6px">${spark(days.map((x) => x.count), 420, 96, T.accent)}</div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:${T.faint};margin-top:6px">
+          <span>${(days[0] || {}).label || ''}</span><span>${(days[days.length - 1] || {}).label || ''}</span></div>
       </div>
-    </div>
-    <div class="lw-card">
-      <h3>各方向最近活跃</h3>
-      ${(DATA.tracks || []).map((t) => `<div class="lw-row" data-path="${esc((t.list[0] || {}).path || '')}">
-        <span class="tag" style="border-color:${t.color};color:${t.color}">${t.icon}</span>
-        <span class="nm">${esc(t.name)}</span>
-        <span class="mt">${t.files} 文件 · ${t.sizeText} · ${ago(t.newest)}</span></div>`).join('')}
+      <div class="lw-c" style="${span(12)}">
+        <h3>每日改动量 <span class="sp"></span><em>峰值 ${max}</em></h3>
+        <div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count}">
+          <span class="v">${x.count || ''}</span>
+          <span class="b" style="height:${Math.max(3, Math.round(x.count / max * 96))}px"></span>
+          <span class="k">${x.label}</span></div>`).join('')}</div>
+      </div>
+      <div class="lw-c" style="${span(12)}">
+        <h3>各方向最近活跃 <span class="sp"></span><em>点一行复制项目路径</em></h3>
+        <div class="lw-tbl">${(DATA.tracks || []).map((t) => `<div class="lw-tr" data-path="${esc((t.list[0] || {}).path || '')}">
+          <span style="font-size:15px">${t.icon}</span><span class="nm">${esc(t.name)} <i>${t.projects} 个项目</i></span>
+          <span class="bd" style="border-color:${t.color};color:${t.color}">${t.files} 文件</span>
+          <span class="sz">${t.sizeText}</span><span class="tm">${ago(t.newest)}</span></div>`).join('')}</div>
+      </div>
     </div>`;
   }
 })();
+
