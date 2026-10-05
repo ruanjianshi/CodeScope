@@ -4509,6 +4509,60 @@ const server = http.createServer(async (req, res) => {
         return send(res, 500, { ok: false, error: String((error && error.message) || error) });
       }
     }
+    /* 天气：代理 open-meteo（免费、无需 key）。按城市名查坐标再查实况 + 当日预报。
+       ⚠️ 不能只用 Node 的 fetch —— 本机环境里配了 HTTP_PROXY 时，
+       undici 默认**不读**这个变量 ✗（实测 `fetch failed`，而 curl 同一个地址 200 ✓）。
+       所以先试 fetch，失败就用 curl 兜底（curl 会读 HTTP_PROXY/HTTPS_PROXY）。 */
+    if (u.pathname === '/api/life/weather') {
+      try {
+        const city = String(u.searchParams.get('city') || '广州').slice(0, 40);
+        const j = async (url) => {
+          try {
+            const r = await fetch(url);
+            if (r.ok) return await r.json();
+          } catch (_) {}
+          const out = await new Promise((resolve, reject) => {
+            require('child_process').execFile('curl', ['-s', '-m', '15', '-L', url], { maxBuffer: 4e6 },
+              (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
+          });
+          return JSON.parse(out);
+        };
+        const geo = await j('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name=' + encodeURIComponent(city));
+        const hit = (geo.results || [])[0];
+        if (!hit) return send(res, 200, { ok: false, error: '没找到城市：' + city });
+        const w = await j('https://api.open-meteo.com/v1/forecast?latitude=' + hit.latitude + '&longitude=' + hit.longitude +
+          '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
+          '&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max' +
+          '&timezone=auto&forecast_days=3');
+        const cur = w.current || {}, day = w.daily || {};
+        return send(res, 200, {
+          ok: true, city: hit.name, admin: hit.admin1 || '', country: hit.country || '',
+          temp: cur.temperature_2m, feels: cur.apparent_temperature, hum: cur.relative_humidity_2m,
+          wind: cur.wind_speed_10m, code: cur.weather_code,
+          days: (day.time || []).map((t, i) => ({ date: t, max: day.temperature_2m_max[i], min: day.temperature_2m_min[i],
+            code: day.weather_code[i], pop: day.precipitation_probability_max[i] })),
+        });
+      } catch (error) {
+        return send(res, 200, { ok: false, error: '天气读取失败：' + String((error && error.message) || error) });
+      }
+    }
+    /* 工作台本地数据（待办 / 笔记 / 设置）—— 存 JSON 文件，纯本地 */
+    if (u.pathname === '/api/life/store') {
+      const file = path.join(applicationDataRoot(), 'life-workbench.json');
+      const read = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return {}; } };
+      if (req.method === 'GET') return send(res, 200, { ok: true, data: read() });
+      if (req.method === 'POST' || req.method === 'PUT') {
+        try {
+          const body = await readBody(req, 4 * 1024 * 1024);
+          const next = body && typeof body === 'object' ? body : {};
+          try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
+          fs.writeFileSync(file, JSON.stringify(next, null, 2));
+          return send(res, 200, { ok: true });
+        } catch (error) {
+          return send(res, 400, { ok: false, error: String((error && error.message) || error) });
+        }
+      }
+    }
     if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {
       try {
         if (await SYSTEM_PANEL.handle(req, res, u)) return;
