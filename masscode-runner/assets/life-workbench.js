@@ -353,15 +353,23 @@
   .lw-nt-menu .mi:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-nt-menu .mi.on::before { content:"✓"; font-size:11px; }
   .lw-nt-menu .sep { height:1px; background:${T.lineDim}; margin:4px 0; }
-  .lw-nt-body { flex:1; overflow:auto; display:flex; flex-direction:column; }
+  .lw-nt-body { flex:1; overflow:auto; display:flex; flex-direction:column; min-height:0; }
   .lw-nt-meta { padding:12px 20px 0; font-size:11px; color:${T.faint}; text-align:center; }
   .lw-nt-title { border:0; background:transparent; color:${T.text}; font:700 18px ${UI};
     padding:6px 20px 4px; outline:none; }
   .lw-nt-title::placeholder { color:${T.faint}; }
+  /* 正文默认就是可编辑的（不再需要双击 ✗）*/
   .lw-nt-ta { flex:1; border:0; background:transparent; color:${T.text}; font:13px/1.85 ${UI};
-    padding:2px 20px 16px; resize:none; outline:none; min-height:240px; }
+    padding:2px 20px 16px; resize:none; outline:none; min-height:260px; width:100%; box-sizing:border-box; }
   .lw-nt-ta::placeholder { color:${T.faint}; }
-  .lw-nt-prev { flex:1; overflow:auto; padding:2px 20px 18px; font-size:13px; line-height:1.85; }
+  /* 格式条：**横排放在工具栏下面**（不再用浮层 ✗）*/
+  .lw-nt-fmt { display:flex; align-items:center; gap:5px; padding:7px 12px; border-bottom:1px solid ${T.lineDim};
+    background:#131312; flex-wrap:wrap; }
+  .lw-nt-fmt .div { width:1px; height:18px; background:${T.lineDim}; margin:0 4px; }
+  .lw-nt-fmt button { height:26px; min-width:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:600 10.5px ${UI}; cursor:pointer; white-space:nowrap; }
+  .lw-nt-fmt button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-nt-fmt button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
   .lw-nt-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
     color:${T.faint}; font-size:12px; gap:8px; }
   .lw-nt-empty .big { font-size:26px; opacity:.5; }
@@ -661,6 +669,16 @@
     });
     /* 文件夹 / 标签 筛选 */
     qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSel = ""; saveStore(); render(); }; });
+    /* 新建文件夹（左栏「＋」）*/
+    const addFol = q("#lw-nt-addfol");
+    if (addFol) addFol.onclick = () => {
+      const name = prompt("新建文件夹名称：", "新文件夹");
+      if (!name || !name.trim()) return;
+      const n = name.trim().slice(0, 24);
+      STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
+      if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
+      STORE.memoFolder = n; STORE.memoSel = ""; saveStore(); render();
+    };
     qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSel = ""; saveStore(); render(); }; });
     /* 搜索 */
     const mQ = q("#lw-memo-q");
@@ -929,7 +947,7 @@
     const tagKeys = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
     const side = '<div class="lw-nt-side">'
       + '<div class="hd"><button class="on" title="文件夹">▤</button><button title="列表">▦</button></div>'
-      + '<div class="grp">iCloud</div>'
+      + '<div class="grp">iCloud <span id="lw-nt-addfol" title="新建文件夹" style="float:right;cursor:pointer;color:' + T.accent + '">＋</span></div>'
       + '<div class="it ' + (fol ? "" : "on") + '" data-mfolder="">▤ iCloud 全部<span class="n">' + raw.filter((m) => !m.trash).length + '</span></div>'
       + folders.map((f) => '<div class="it ' + (fol === f ? "on" : "") + '" data-mfolder="' + esc(f) + '">▤ ' + esc(f) + '<span class="n">' + raw.filter((m) => !m.trash && (m.folder || "备忘录") === f).length + '</span></div>').join("")
       + '<div class="grp">标签</div>'
@@ -942,38 +960,39 @@
       + '<input id="lw-memo-q" placeholder="搜索（⌘F）" value="' + esc((STORE && STORE.memoQ) || "") + '" /></div>'
       + '<div class="lw-nt-scroll">' + listHtml + '</div></div>';
 
-    /* 格式菜单（Aa）*/
-    const fmts = [["title", "标题"], ["h2", "小标题"], ["h3", "副标题"], ["body", "正文"], ["mono", "等宽样式"], ["ul", "• 项目符号列表"], ["dash", "– 短划线列表"], ["ol", "1. 编号列表"], ["quote", "❘ 块引用"]];
-    const curFmt = cur ? (fmt[cur.id] || "body") : "body";
-    const menu = (STORE && STORE.memoMenu) ? '<div class="lw-nt-menu" id="lw-nt-menu" style="top:96px;right:32px">'
-      + '<div class="r"><button data-mwrap="**">B</button><button data-mwrap="*">I</button><button data-mwrap="_">U</button><button data-mwrap="~~">S</button><button data-mwrap="`">笔</button></div>'
-      + fmts.map((f) => '<div class="mi ' + (curFmt === f[0] ? "on" : "") + '" data-mfmt="' + f[0] + '">' + f[1] + '</div>').join("")
-      + '</div>' : "";
+    /* 格式条：**横排**放在工具栏下面（不再弹浮层 ✗）*/
+    const fmts = [["title", "标题"], ["h2", "小标题"], ["h3", "副标题"], ["body", "正文"], ["mono", "等宽"], ["ul", "• 列表"], ["dash", "– 短划线"], ["ol", "1. 编号"], ["quote", "❘ 引用"]];
+    const curFmt = cur ? ((STORE.memoFmt || {})[cur.id] || "body") : "body";
+    const fmtBar = (cur && STORE.memoMenu) ? '<div class="lw-nt-fmt">'
+      + '<button data-mwrap="**" title="粗体">B</button><button data-mwrap="*" title="斜体">I</button>'
+      + '<button data-mwrap="_" title="下划线">U</button><button data-mwrap="~~" title="删除线">S</button>'
+      + '<span class="div"></span>'
+      + fmts.map((f) => '<button data-mfmt="' + f[0] + '" class="' + (curFmt === f[0] ? "on" : "") + '">' + f[1] + '</button>').join("")
+      + '</div>' : '';
 
     const d = cur ? D(cur.edit || cur.at) : null;
     const meta = d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes())) : "";
-    const bodyCls = { mono: "lw-nt-prev", quote: "lw-nt-prev" }[curFmt] || "lw-nt-prev";
     const editor = cur ? '<div class="lw-nt-bar">'
-      + '<button id="lw-memo-new" title="新建">✎ 新建</button>'
+      + '<button id="lw-memo-new" title="新建（⌘N）">✎ 新建</button>'
       + '<button id="lw-nt-aa" class="' + ((STORE && STORE.memoMenu) ? "on" : "") + '" title="格式">Aa</button>'
-      + '<button id="lw-nt-check" title="清单">☑</button>'
+      + '<button id="lw-nt-check" title="插入清单项">☑</button>'
       + '<button id="lw-nt-table" title="插入表格">▦</button>'
       + '<span class="sp"></span>'
       + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已自动保存" : "自动保存") + '</span>'
-      + '<button data-mpin="' + cur.id + '">' + (cur.pin ? "★" : "☆") + '</button>'
-      + '<button id="lw-memo-export">导出</button>'
-      + '<button id="lw-memo-del">删除</button></div>'
+      + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "★" : "☆") + '</button>'
+      + '<button id="lw-memo-export" title="导出 Markdown">导出</button>'
+      + '<button id="lw-memo-del" title="移到回收站">删除</button></div>'
+      + fmtBar
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
       + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
-      + (editing === cur.id
-          ? '<textarea class="lw-nt-ta" id="lw-memo-body">' + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea>'
-          : '<div class="' + bodyCls + '" id="lw-nt-prev">' + (mdToHtml(String(cur.text || "").split("\n").slice(1).join("\n")) || '<span style="color:#5c5a50">点上面「Aa」旁的空白处或双击开始编辑</span>') + '</div>')
+      + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（支持 Markdown：# 标题 / **粗体** / - 列表 / #标签）">'
+      + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea>'
       + '</div>'
-      : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录</div>';
+      : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录，或点「✎ 新建」</div>';
 
     return '<div class="lw-g12"><div class="lw-c" style="grid-column:span 12">'
-      + '<h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>macOS 备忘录 · 三栏 · Markdown · 自动保存</em></h3>'
-      + '<div style="position:relative">' + menu + '<div class="lw-nt">' + side + list + '<div class="lw-nt-edit">' + editor + '</div></div></div>'
+      + '<h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>macOS 备忘录 · 三栏 · 自动保存</em></h3>'
+      + '<div class="lw-nt">' + side + list + '<div class="lw-nt-edit">' + editor + '</div></div>'
       + '</div></div>';
   }
 
