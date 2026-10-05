@@ -373,22 +373,60 @@
   .lw-nt-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
     color:${T.faint}; font-size:12px; gap:8px; }
   .lw-nt-empty .big { font-size:26px; opacity:.5; }
-  /* 实时预览（编辑区下方）*/
-  .lw-nt-live { border-top:2px solid ${T.lineDim}; background:#0d0d0c; max-height:42%; overflow:auto; }
-  .lw-nt-live .hd { padding:6px 14px; font-size:9.5px; letter-spacing:1.4px; color:${T.faint};
-    text-transform:uppercase; border-bottom:1px solid ${T.lineDim}; display:flex; align-items:center; gap:8px; }
-  .lw-nt-live .hd .sp { flex:1; }
-  .lw-nt-live .bd { padding:10px 18px 16px; font-size:13px; line-height:1.85; }
-  .lw-nt-live .bd h1, .lw-nt-live .bd h2, .lw-nt-live .bd h3 { margin:10px 0 6px; color:#fff; font-size:14px; }
-  .lw-nt-live .bd p { margin:6px 0; }
-  .lw-nt-live .bd ul { margin:6px 0; padding-left:20px; }
-  .lw-nt-live .bd code { background:#1b1b19; padding:1px 5px; font-family:${MONO}; font-size:11.5px; color:${T.accent}; }
-  .lw-nt-live .bd pre { background:#141412; border-left:3px solid ${T.accent}; padding:9px 11px; overflow:auto; margin:8px 0; }
-  .lw-nt-live .bd pre code { background:transparent; padding:0; }
-  .lw-nt-live .bd blockquote { margin:6px 0; padding:3px 11px; border-left:3px solid ${T.lineDim}; color:${T.dim}; }
-  .lw-nt-live .bd a { color:${T.accent}; }
-  .lw-nt-live .bd strong { color:#fff; }
-  .lw-nt-live .bd .tag { color:${T.accent}; background:rgba(242,227,155,.12); padding:1px 6px; font-size:11.5px; }
+  /* ── Markdown 渲染：提高区分度（标题/引用/代码/列表/表格/标签 各有明显形态）── */
+  .lw-md2 { font-size:13px; line-height:1.85; color:#d8d5cb; }
+  /* 标题：大 + 左侧黄条 */
+  .lw-md2 h1, .lw-md2 h2, .lw-md2 h3 { color:#fff; font-weight:700; margin:16px 0 8px; padding-left:10px;
+    border-left:3px solid ${T.accent}; line-height:1.35; }
+  .lw-md2 h1 { font-size:21px; letter-spacing:-.3px; }
+  .lw-md2 h2 { font-size:17px; }
+  .lw-md2 h3 { font-size:14.5px; color:${T.accent}; border-left-color:${T.lineDim}; }
+  .lw-md2 > h1:first-child, .lw-md2 > h2:first-child { margin-top:2px; }
+  .lw-md2 p { margin:8px 0; }
+  /* 引用：整块底色 + 左条 */
+  .lw-md2 blockquote { margin:10px 0; padding:8px 13px; background:rgba(242,227,155,.06);
+    border-left:3px solid ${T.accent}; color:#b9b5a8; font-style:italic; }
+  .lw-md2 blockquote p { margin:3px 0; }
+  /* 行内码 / 代码块 */
+  .lw-md2 code { background:#20201d; border:1px solid ${T.lineDim}; padding:1px 6px; font-family:${MONO};
+    font-size:11.5px; color:${T.accent}; }
+  .lw-md2 pre { background:#141412; border:1px solid ${T.lineDim}; border-left:3px solid ${T.accent};
+    padding:11px 13px; overflow:auto; margin:10px 0; }
+  .lw-md2 pre code { background:transparent; border:0; padding:0; color:#cfd6e2; }
+  /* 列表：黄色圆点 + 缩进 */
+  .lw-md2 ul, .lw-md2 ol { margin:9px 0; padding-left:8px; list-style:none; }
+  .lw-md2 li { margin:5px 0; padding-left:17px; position:relative; }
+  .lw-md2 ul > li::before { content:""; position:absolute; left:3px; top:9px; width:5px; height:5px;
+    background:${T.accent}; }
+  .lw-md2 ol { counter-reset:mdol; }
+  .lw-md2 ol > li::before { counter-increment:mdol; content:counter(mdol) "."; position:absolute; left:0; top:0;
+    color:${T.accent}; font-size:11.5px; font-weight:700; }
+  /* 复选框清单 */
+  .lw-md2 li.mdck { list-style:none; }
+  .lw-md2 li.mdck::before { content:"☐"; left:1px; top:0; width:auto; height:auto; background:none;
+    color:${T.dim}; font-size:12px; }
+  .lw-md2 li.mdck.done::before { content:"☑"; color:${T.ok}; }
+  .lw-md2 li.mdck.done { color:${T.faint}; text-decoration:line-through; }
+  /* 表格 */
+  .lw-md2 table { border-collapse:collapse; margin:11px 0; font-size:12px; width:100%; }
+  .lw-md2 th, .lw-md2 td { border:1px solid ${T.lineDim}; padding:6px 10px; text-align:left; }
+  .lw-md2 th { background:#1a1a17; color:${T.accent}; font-weight:700; }
+  .lw-md2 tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+  /* 链接 / 标签 / 强调 */
+  .lw-md2 a { color:${T.accent}; text-decoration:underline; text-underline-offset:2px; }
+  .lw-md2 strong { color:#fff; font-weight:700; background:rgba(242,227,155,.10); padding:0 2px; }
+  .lw-md2 em { color:#cfc9b4; }
+  .lw-md2 del { color:${T.faint}; }
+  .lw-md2 .tag { color:${T.accent}; background:rgba(242,227,155,.14); border:1px solid rgba(242,227,155,.3);
+    padding:1px 7px; font-size:11.5px; }
+  .lw-md2 hr { border:0; border-top:1px dashed ${T.lineDim}; margin:16px 0; }
+  /* 左右分栏（预览开启时）*/
+  .lw-nt-split { flex:1; display:flex; min-height:0; }
+  .lw-nt-split > .pane { flex:1; min-width:0; display:flex; flex-direction:column; overflow:auto; }
+  .lw-nt-split > .pane + .pane { border-left:2px solid ${T.lineDim}; background:#0d0d0c; }
+  .lw-nt-split .panehd { padding:6px 14px; font-size:9.5px; letter-spacing:1.4px; color:${T.faint};
+    text-transform:uppercase; border-bottom:1px solid ${T.lineDim}; flex:none; }
+  .lw-nt-split .panebd { flex:1; overflow:auto; padding:2px 18px 16px; }
   /* 右键菜单 */
   .lw-ctx { position:fixed; z-index:9600; min-width:150px; background:#171715; border:2px solid ${T.line};
     box-shadow:0 14px 36px rgba(0,0,0,.7); padding:4px 0; }
@@ -457,29 +495,58 @@
     while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
     return (v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)) + ' ' + u[i];
   }
-  /* 迷你 Markdown 渲染：标题 / 粗体 / 斜体 / 行内码 / 代码块 / 引用 / 列表 / 链接 / 分隔线 / #标签 */
+  /* 迷你 Markdown 渲染：标题 / 粗体 / 斜体 / 行内码 / 代码块 / 引用 / 列表 / 复选框 / 表格 / 链接 / 分隔线 / #标签 */
   function mdToHtml(src) {
     const lines = String(src == null ? '' : src).split('\n');
-    let out = '', inCode = false, inList = false;
+    let out = '', inCode = false, inList = '', inTable = false;
     const inline = (t) => esc(t)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/~~([^~]+)~~/g, '<del>$1</del>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-      .replace(/#([\u4e00-\u9fa5\w-]+)/g, '<span class="tag">#$1</span>');
-    for (const raw of lines) {
-      const l = String(raw).replace(/\s+$/, '');
-      if (/^\s*```/.test(l)) { out += inCode ? '</code></pre>' : '<pre><code>'; inCode = !inCode; continue; }
+      .replace(/#([\u4e00-\u9fa5\w/-]+)/g, '<span class="tag">#$1</span>');
+    const closeList = () => { if (inList) { out += '</' + inList + '>'; inList = ''; } };
+    const closeTable = () => { if (inTable) { out += '</tbody></table>'; inTable = false; } };
+    for (let i = 0; i < lines.length; i++) {
+      const l = String(lines[i]).replace(/\s+$/, '');
+      if (/^\s*```/.test(l)) { closeList(); closeTable(); out += inCode ? '</code></pre>' : '<pre><code>'; inCode = !inCode; continue; }
       if (inCode) { out += esc(l) + '\n'; continue; }
+      /* 表格：`| a | b |` + `| --- | --- |` */
+      if (/^\s*\|.*\|\s*$/.test(l)) {
+        const cells = l.trim().replace(/^\||\|$/g, '').split('|').map((x) => x.trim());
+        const next = String(lines[i + 1] || '');
+        if (!inTable && /^\s*\|[\s:|-]+\|\s*$/.test(next)) {
+          closeList();
+          out += '<table><thead><tr>' + cells.map((c) => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>';
+          inTable = true; i++; continue;
+        }
+        if (inTable) { out += '<tr>' + cells.map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>'; continue; }
+      } else { closeTable(); }
       const h = l.match(/^(#{1,3})\s+(.*)$/);
-      if (h) { if (inList) { out += '</ul>'; inList = false; } out += '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'; continue; }
-      if (/^\s*[-*+]\s+/.test(l)) { if (!inList) { out += '<ul>'; inList = true; } out += '<li>' + inline(l.replace(/^\s*[-*+]\s+/, '')) + '</li>'; continue; }
-      if (/^\s*>\s?/.test(l)) { out += '<blockquote>' + inline(l.replace(/^\s*>\s?/, '')) + '</blockquote>'; continue; }
-      if (/^\s*(---|\*\*\*)\s*$/.test(l)) { out += '<hr>'; continue; }
-      if (!l.trim()) { if (inList) { out += '</ul>'; inList = false; } continue; }
+      if (h) { closeList(); out += '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'; continue; }
+      /* 复选框清单 - [ ] / - [x] */
+      const ck = l.match(/^\s*[-*+]\s*\[([ xX])\]\s*(.*)$/);
+      if (ck) {
+        if (inList !== 'ul') { closeList(); out += '<ul>'; inList = 'ul'; }
+        const done = ck[1].toLowerCase() === 'x';
+        out += '<li class="mdck' + (done ? ' done' : '') + '">' + inline(ck[2]) + '</li>'; continue;
+      }
+      if (/^\s*[-*+]\s+/.test(l)) {
+        if (inList !== 'ul') { closeList(); out += '<ul>'; inList = 'ul'; }
+        out += '<li>' + inline(l.replace(/^\s*[-*+]\s+/, '')) + '</li>'; continue;
+      }
+      if (/^\s*\d+[.)]\s+/.test(l)) {
+        if (inList !== 'ol') { closeList(); out += '<ol>'; inList = 'ol'; }
+        out += '<li>' + inline(l.replace(/^\s*\d+[.)]\s+/, '')) + '</li>'; continue;
+      }
+      if (/^\s*>\s?/.test(l)) { closeList(); out += '<blockquote>' + inline(l.replace(/^\s*>\s?/, '')) + '</blockquote>'; continue; }
+      if (/^\s*(---|\*\*\*|___)\s*$/.test(l)) { closeList(); out += '<hr>'; continue; }
+      if (!l.trim()) { closeList(); continue; }
+      closeList();
       out += '<p>' + inline(l) + '</p>';
     }
-    if (inList) out += '</ul>';
+    closeList(); closeTable();
     if (inCode) out += '</code></pre>';
     return out;
   }
@@ -1160,13 +1227,19 @@
       + '<button id="lw-memo-del" title="移到回收站">删除</button></div>'
       + fmtBar
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
-      + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
-      + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（支持 Markdown：# 标题 / **粗体** / - 列表 / #标签）">'
-      + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea>'
-      + (STORE.memoLive ? '<div class="lw-nt-live"><div class="hd">◫ Markdown 实时预览<span class="sp"></span>'
-          + (STORE.memoLiveAt || '') + '</div><div class="bd" id="lw-nt-livebody">'
+      + (STORE.memoLive
+        ? '<div class="lw-nt-split">'
+          + '<div class="pane"><div class="panehd">✎ 编辑</div><div class="panebd" style="display:flex;flex-direction:column">'
+          + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
+          + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（# 标题 / **粗体** / - [ ] 清单 / | 表格 | / #标签）">'
+          + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea></div></div>'
+          + '<div class="pane"><div class="panehd">◫ Markdown 实时预览</div><div class="panebd">'
+          + '<div class="lw-md2" id="lw-nt-livebody">'
           + (mdToHtml(String(cur.text || "").split("\n").slice(1).join("\n")) || '<span style="color:#5c5a50">（这里会实时显示渲染结果）</span>')
-          + '</div></div>' : '')
+          + '</div></div></div></div>'
+        : '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
+          + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（支持 Markdown：# 标题 / **粗体** / - 列表 / #标签）">'
+          + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea>')
       + '</div>'
       : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录，或点「✎ 新建」</div>';
 
