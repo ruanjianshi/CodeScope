@@ -11645,7 +11645,7 @@ function renderSymbolList() {
 function symRow(sym) {
   const d = document.createElement('div'); d.className = 'sym-row k-' + (sym.kind || 'fn');
   const role = (sym.kind === 'fn' || sym.kind === 'method') ? '<span class="sym-badge ' + (sym.isDefinition ? 'def' : 'decl') + '">' + (sym.isDefinition ? '定义' : '声明') + '</span>' : '';
-  d.innerHTML = '<span class="ol-ico ' + symKindClass(sym.kind) + '">' + symKindIcon(sym.kind) + '</span><span class="nm">' + escapeHtml(sym.name) + '</span>' + role + '<span class="ol-ln">:' + sym.line + '</span>';
+  d.innerHTML = '<span class="ol-ico ' + symKindClass(sym.kind) + '">' + symKindIcon(sym.kind) + '</span><span class="nm">' + escapeHtml(sym.kind === 'method' && sym.owner ? sym.owner + '::' + sym.name : sym.name) + '</span>' + role + '<span class="ol-ln">:' + sym.line + '</span>';
   d.onclick = () => goToSymbol(sym); return d;
 }
 function appendSection(body, title, count) {
@@ -11972,9 +11972,14 @@ function relationGraphCard(data, side) {
   const k = relationSymbolKind(data.sym || data);
   card.className = 'rel-card ' + side + (data.external ? ' external' : '') + ' k-' + k.kind;
   card.dataset.kind = k.kind;
-  const defIcon = k.kind === 'class' ? '▣' : k.kind === 'external' ? '◇' : k.kind === 'file' ? '▤' : 'ƒ';
-  const icon=data.icon||(side==='root'?'◆':defIcon);
-  card.innerHTML = '<span class="node-icon">' + escapeHtml(icon) + '</span><span class="title">' + escapeHtml(data.title) + '</span><span class="sub">' + escapeHtml(data.meta || '') + '</span>' +
+  const defIcon = k.kind === 'class' ? '▣' : k.kind === 'method' ? '⟐' : k.kind === 'external' ? '◇' : k.kind === 'file' ? '▤' : 'ƒ';
+  /* 方法和类必须**强制**用类别图标 —— 调用方（renderFunctionGraph）给每个节点
+     都传了 icon:'ƒ' / '↘' / '↗'，若写成 `data.icon || defIcon`，这些图标会把
+     类别图标盖掉，用户就分不出方法还是函数（连报两次）。 */
+  const forceIcon = (k.kind === 'method' || k.kind === 'class');
+  const icon = forceIcon ? defIcon : (data.icon || (side === 'root' ? '◆' : defIcon));
+  const relTitle = (k.kind === 'method' && k.owner) ? k.owner + '::' + data.title : data.title;
+  card.innerHTML = '<span class="node-icon">' + escapeHtml(icon) + '</span><span class="title">' + escapeHtml(relTitle) + '</span><span class="sub">' + escapeHtml(data.meta || '') + '</span>' +
     (data.badge ? '<span class="tag">' + escapeHtml(data.badge) + '</span>' : '');
   card.title = data.external ? data.title + '（外部，库内无定义）' : '点击跳转并以此为关系中心';
   if (data.external) card.disabled = true;
