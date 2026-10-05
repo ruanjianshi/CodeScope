@@ -568,23 +568,31 @@
     overflow:auto;
   }
   .lw-live-ta::selection { background:rgba(242,227,155,.28); }
-  /* 渲染层的行内样式（只改视觉，不改度量 ✓）*/
+  /* 渲染层的行内样式（**只改视觉，绝不动字符宽度** ✓）*/
   .lw-live-bd .ln { min-height:1.85em; }
-  .lw-live-bd .h { color:${T.accent}; font-weight:700; }
-  .lw-live-bd .h1 { color:#fff; font-weight:700; border-left:3px solid ${T.accent}; padding-left:8px; margin-left:-11px; }
-  .lw-live-bd .h2 { color:#fff; font-weight:700; border-left:3px solid ${T.lineDim}; padding-left:8px; margin-left:-11px; }
+  .lw-live-bd .mk { color:#4a4a42; }                    /* 语法标记：暗掉 ✓ 但保留占位 ✓ */
+  .lw-live-bd .h1 { color:#fff; font-weight:700; background:linear-gradient(90deg,rgba(242,227,155,.16),transparent 60%); }
+  .lw-live-bd .h2 { color:#fff; font-weight:700; background:linear-gradient(90deg,rgba(242,227,155,.10),transparent 55%); }
+  .lw-live-bd .h3 { color:${T.accent}; font-weight:700; }
+  .lw-live-bd .h1 .mk, .lw-live-bd .h2 .mk { color:${T.accent}; opacity:.75; }
+  .lw-live-bd .h3 .mk { color:${T.accent}; opacity:.55; }
   .lw-live-bd .b { color:#fff; font-weight:700; }
-  .lw-live-bd .i { font-style:italic; color:#cfc9b4; }
-  .lw-live-bd .d { text-decoration:line-through; color:${T.faint}; }
-  .lw-live-bd .c { color:${T.accent}; background:#20201d; border:1px solid ${T.lineDim}; padding:0 4px; }
-  .lw-live-bd .q { color:#b9b5a8; font-style:italic; border-left:3px solid ${T.accent}; padding-left:8px; background:rgba(242,227,155,.05); }
-  .lw-live-bd .li { color:${T.text}; }
-  .lw-live-bd .li::before { content:"· "; color:${T.accent}; font-weight:700; }
+  .lw-live-bd .i { color:#cfc9b4; font-style:italic; }
+  .lw-live-bd .d { color:${T.faint}; text-decoration:line-through; }
+  .lw-live-bd .c { color:${T.accent}; background:#221f14; }
+  .lw-live-bd .q { color:#b9b5a8; font-style:italic; background:rgba(242,227,155,.05); }
+  .lw-live-bd .q .mk { color:${T.accent}; opacity:.7; }
+  .lw-live-bd .li .mk { color:${T.accent}; opacity:.8; }
+  .lw-live-bd .li.done { color:${T.faint}; }
+  .lw-live-bd .li.done .mk { opacity:.45; }
   .lw-live-bd .ck { color:${T.dim}; }
-  .lw-live-bd .ck.on { color:${T.ok}; }
-  .lw-live-bd .tg { color:${T.accent}; background:rgba(242,227,155,.12); }
+  .lw-live-bd .ck.on { color:${T.ok}; font-weight:700; }
+  .lw-live-bd .tg { color:${T.accent}; background:rgba(242,227,155,.14); }
+  .lw-live-bd .tg { }
   .lw-live-bd .lnk { color:${T.accent}; text-decoration:underline; }
-  .lw-live-bd .mark { color:#3a3a34; }
+  .lw-live-bd .fence { color:#7ec8e3; background:rgba(126,200,227,.06); }
+  .lw-live-bd .hr { color:#4a4a42; }
+  .lw-live-bd .mark { color:#4a4a42; }
   .lw-live-bar { display:flex; align-items:center; gap:8px; padding:6px 10px; border:2px solid ${T.lineDim};
     border-bottom:0; background:#131312; font-size:10px; color:${T.faint}; letter-spacing:.6px; }
   .lw-live-bar .sp { flex:1; }
@@ -1707,41 +1715,51 @@
     review: { name: '复盘', icon: '◔', text: '## 做得好的\n- \n\n## 做得不好的\n- \n\n## 学到了什么\n- \n\n## 明天改进\n- ' },
   };
 
-  /* 就地实时渲染：**逐行**渲染（每行一个等高 div ✓）——
-     这样渲染层和 textarea 的行数、行高完全一致 ✓ → 光标不会错位 ✓。
-     和 mdToHtml() 的区别：这里**不产出块级元素**（h1/p/ul）✗，只做行内高亮 ✓。 */
+  /* 就地实时渲染：**逐行 + 字符保留** ✓
+     ⚠️ 关键：**一个字符都不能删/换** ✗ ——
+       渲染层和 textarea 是两层重叠 ✗，只要字符宽度不同，光标就会偏 ✗。
+       所以 `#` / `- ` / `**` / `` ` `` / `#标签` 这些标记**全部保留** ✓，
+       只用**颜色 / 字重 / 底纹 / 竖线**表达语义 ✓（标记本身变暗 ✓）。
+     和 mdToHtml() 的区别：那个会产出块级元素并吃掉标记 ✗（适合只读预览 ✓）。 */
   function mdLines(src) {
+    const H = (t) => '<span class="mk">' + t + '</span>';
     return String(src == null ? '' : src).split('\n').map((raw) => {
-      let l = esc(raw);
+      const L = esc(raw);
       const inline = (t) => t
-        .replace(/\*\*([^*]+)\*\*/g, '<span class="b">$1</span>')
-        .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<span class="i">$1</span>')
-        .replace(/~~([^~]+)~~/g, '<span class="d">$1</span>')
-        .replace(/`([^`]+)`/g, '<span class="c">$1</span>')
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="lnk">$1</span>')
-        .replace(/#([\u4e00-\u9fa5\w/-]+)/g, '<span class="tg">#$1</span>');
+        /* 行内标记：保留符号、变色 */
+        .replace(/\*\*([^*]*)\*\*/g, H('**') + '<span class="b">$1</span>' + H('**'))
+        .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1' + H('*') + '<span class="i">$2</span>' + H('*'))
+        .replace(/~~([^~]*)~~/g, H('~~') + '<span class="d">$1</span>' + H('~~'))
+        .replace(/`([^`]*)`/g, H('`') + '<span class="c">$1</span>' + H('`'))
+        .replace(/\[([^\]]*)\]\(([^)]*)\)/g, H('[') + '<span class="lnk">$1</span>' + H('](') + H('$2') + H(')'))
+        .replace(/#([\u4e00-\u9fa5\w/-]+)/g, H('#') + '<span class="tg">$1</span>');
       /* 代码围栏 */
-      if (/^\s*```/.test(raw)) return '<div class="ln mark">' + l + '</div>';
-      /* 标题 */
-      const h = raw.match(/^(#{1,3})\s+(.*)$/);
+      if (/^\s*```/.test(raw)) return '<div class="ln fence">' + L + '</div>';
+      /* 标题：保留 #、整行变色 + 左侧竖线 */
+      const h = raw.match(/^(#{1,3})(\s+)(.*)$/);
       if (h) {
-        const cls = h[1].length === 1 ? 'h1' : h[1].length === 2 ? 'h2' : 'h';
-        return '<div class="ln ' + cls + '">' + inline(esc(h[2])) + '</div>';
+        const cls = h[1].length === 1 ? 'h1' : h[1].length === 2 ? 'h2' : 'h3';
+        return '<div class="ln ' + cls + '">' + H(h[1]) + h[2] + inline(esc(h[3])) + '</div>';
       }
-      /* 引用 */
-      if (/^\s*>\s?/.test(raw)) return '<div class="ln q">' + inline(esc(raw.replace(/^\s*>\s?/, ''))) + '</div>';
-      /* 复选框 */
-      const ck = raw.match(/^\s*[-*+]\s*\[([ xX])\]\s*(.*)$/);
+      /* 引用：保留 > */
+      if (/^\s*>\s?/.test(raw)) {
+        const m = raw.match(/^(\s*>)(\s?)(.*)$/);
+        return '<div class="ln q">' + H(m[1]) + m[2] + inline(esc(m[3])) + '</div>';
+      }
+      /* 复选框：保留 - [ ] */
+      const ck = raw.match(/^(\s*[-*+]\s*\[)([ xX])(\]\s*)(.*)$/);
       if (ck) {
-        const on = ck[1].toLowerCase() === 'x';
-        return '<div class="ln li"><span class="ck' + (on ? ' on' : '') + '">' + (on ? '☑' : '☐') + '</span> ' + inline(esc(ck[2])) + '</div>';
+        const on = ck[2].toLowerCase() === 'x';
+        return '<div class="ln li' + (on ? ' done' : '') + '">' + H(ck[1]) + '<span class="ck' + (on ? ' on' : '') + '">' + ck[2] + '</span>' + H(ck[3]) + inline(esc(ck[4])) + '</div>';
       }
-      /* 无序 / 有序 */
-      if (/^\s*[-*+]\s+/.test(raw)) return '<div class="ln li">' + inline(esc(raw.replace(/^\s*[-*+]\s+/, ''))) + '</div>';
-      if (/^\s*\d+[.)]\s+/.test(raw)) return '<div class="ln li">' + esc(raw.match(/^\s*(\d+[.)])/)[1]) + ' ' + inline(esc(raw.replace(/^\s*\d+[.)]\s+/, ''))) + '</div>';
+      /* 无序 / 有序：保留标记 */
+      const ul = raw.match(/^(\s*)([-*+])(\s+)(.*)$/);
+      if (ul) return '<div class="ln li">' + ul[1] + H(ul[2]) + ul[3] + inline(esc(ul[4])) + '</div>';
+      const ol = raw.match(/^(\s*)(\d+[.)])(\s+)(.*)$/);
+      if (ol) return '<div class="ln li">' + ol[1] + H(ol[2]) + ol[3] + inline(esc(ol[4])) + '</div>';
       /* 分隔线 */
-      if (/^\s*(---|\*\*\*|___)\s*$/.test(raw)) return '<div class="ln mark">' + l + '</div>';
-      return '<div class="ln">' + inline(l) + '</div>';
+      if (/^\s*(---|\*\*\*|___)\s*$/.test(raw)) return '<div class="ln hr">' + L + '</div>';
+      return '<div class="ln">' + inline(L) + '</div>';
     }).join('');
   }
 
