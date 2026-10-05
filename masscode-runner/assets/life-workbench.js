@@ -11,42 +11,37 @@
   'use strict';
 
   const CSS = `
-  .lw-mask { position:fixed; inset:0; z-index:9600; background:rgba(4,7,12,.72); backdrop-filter:blur(6px);
-    display:none; align-items:center; justify-content:center; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
-  .lw-mask.on { display:flex; }
-  .lw { width:min(1440px,96vw); height:min(920px,94vh); display:flex; flex-direction:column;
-    background:linear-gradient(180deg,#151922,#11151c); border:1px solid #2a3140; border-radius:16px;
-    box-shadow:0 30px 90px rgba(0,0,0,.62); color:#e6e8ee; overflow:hidden; }
-  .lw-top { display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid #232a36;
+  /* 长在「本机管家」内容区里（不再做浮层）——尺寸跟着 #system-main 走 */
+  .lw-inpanel { position:absolute; inset:0; display:flex; flex-direction:column; background:#11151c; overflow:hidden;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  .lw-head { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #232a36; flex:none;
     background:linear-gradient(180deg,#1a1f29,#161a22); }
-  .lw-title { font-size:16px; font-weight:700; letter-spacing:.3px; }
-  .lw-title em { font-style:normal; color:#4f8cff; }
-  .lw-sub { font-size:12px; color:#8b95a6; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-btn { height:30px; padding:0 12px; border-radius:9px; border:1px solid #30384a; background:#1d2430;
-    color:#cfd6e2; font-size:12px; cursor:pointer; }
+  .lw-h1 { font-size:15px; font-weight:700; letter-spacing:.2px; color:#e6e8ee; }
+  .lw-sub2 { font-size:11.5px; color:#8b95a6; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-btn { height:28px; padding:0 12px; border-radius:8px; border:1px solid #30384a; background:#1d2430;
+    color:#cfd6e2; font-size:12px; cursor:pointer; flex:none; }
   .lw-btn:hover { background:#232c3b; border-color:#3d4860; }
-  .lw-body { flex:1; display:flex; min-height:0; }
-  .lw-nav { width:186px; flex:none; padding:14px 10px; border-right:1px solid #232a36; background:#13171f; }
-  .lw-nav button { width:100%; display:flex; align-items:center; gap:9px; padding:9px 11px; margin-bottom:4px;
-    border:1px solid transparent; border-radius:10px; background:transparent; color:#a9b3c4; font-size:13px; cursor:pointer; text-align:left; }
+  .lw-body2 { flex:1; display:flex; min-height:0; }
+  .lw-nav { width:158px; flex:none; padding:12px 9px; border-right:1px solid #232a36; background:#13171f; overflow:auto; }
+  .lw-nav button { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:3px;
+    border:1px solid transparent; border-radius:9px; background:transparent; color:#a9b3c4; font-size:12.5px; cursor:pointer; text-align:left; }
   .lw-nav button:hover { background:#1b212c; color:#e6e8ee; }
   .lw-nav button.on { background:linear-gradient(90deg,rgba(79,140,255,.20),rgba(79,140,255,.05));
     border-color:rgba(79,140,255,.42); color:#eaf1ff; font-weight:600; }
-  .lw-nav .ic { width:18px; text-align:center; }
-  .lw-nav .sep { margin:12px 8px 8px; font-size:10px; letter-spacing:1.4px; color:#5b6577; text-transform:uppercase; }
-  .lw-main { flex:1; min-width:0; overflow:auto; padding:20px 22px 40px; }
+  .lw-nav .ic { width:17px; text-align:center; }
+  .lw-main { flex:1; min-width:0; overflow:auto; padding:18px 20px 36px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a3242; border-radius:6px; }
-  .lw-grid { display:grid; gap:14px; }
-  .lw-card { background:linear-gradient(180deg,#1a2029,#171c25); border:1px solid #252d3a; border-radius:14px; padding:16px 18px; }
-  .lw-card h3 { margin:0 0 12px; font-size:13px; font-weight:600; color:#c8d1e0; display:flex; align-items:center; gap:8px; }
+  .lw-grid { display:grid; gap:13px; }
+  .lw-card { background:linear-gradient(180deg,#1a2029,#171c25); border:1px solid #252d3a; border-radius:13px; padding:15px 17px; }
+  .lw-card h3 { margin:0 0 11px; font-size:12.5px; font-weight:600; color:#c8d1e0; display:flex; align-items:center; gap:8px; }
   .lw-card h3 .sp { flex:1; }
   .lw-card h3 small { font-weight:400; color:#7c869a; font-size:11px; }
-  .lw-kpi { font-size:30px; font-weight:700; line-height:1.1; letter-spacing:-.5px; }
+  .lw-kpi { font-size:29px; font-weight:700; line-height:1.1; letter-spacing:-.5px; color:#e6e8ee; }
   .lw-kpi small { font-size:12px; font-weight:400; color:#8b95a6; margin-left:5px; }
   .lw-hint { font-size:11px; color:#7c869a; margin-top:5px; }
-  .lw-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; }
+  .lw-row { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:9px; }
   .lw-row:hover { background:#1d232e; }
-  .lw-row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; }
+  .lw-row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:#dbe2ec; }
   .lw-row .mt { font-size:11px; color:#7c869a; flex:none; }
   .lw-row .tag { font-size:10px; padding:1px 7px; border-radius:999px; border:1px solid #333c4d; color:#9aa6ba; flex:none; }
   .lw-bar { height:7px; border-radius:4px; background:#232b38; overflow:hidden; }
@@ -58,13 +53,8 @@
   .lw-chip { font-size:11px; padding:3px 9px; border-radius:999px; border:1px solid #303948; background:#1b2129; color:#a9b3c4; }
   .lw-open { cursor:pointer; }
   .lw-open:hover { color:#7fb0ff; }
-  /* 悬浮启动按钮 */
-  .lw-launch { position:fixed; left:14px; bottom:14px; z-index:9400; display:flex; align-items:center; gap:7px;
-    padding:8px 13px 8px 11px; border-radius:11px; border:1px solid #33405a;
-    background:linear-gradient(180deg,#1e2634,#171d27); color:#dbe4f2; font-size:12.5px; font-weight:600;
-    cursor:pointer; box-shadow:0 8px 26px rgba(0,0,0,.5); font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
-  .lw-launch:hover { border-color:#4f8cff; color:#fff; box-shadow:0 10px 30px rgba(79,140,255,.28); }
-  .lw-launch .dot { width:7px; height:7px; border-radius:50%; background:#3fb950; box-shadow:0 0 8px #3fb950; }
+  /* 侧栏里我们那个栏目的图标色，和别家区分开 */
+  #system-nav-list button[data-section="lifework"] i { color:#4f8cff; }
   `;
 
   const NAV = [
@@ -75,7 +65,7 @@
     { id: 'time', icon: '📈', label: '时间' },
   ];
 
-  let ROOT = null, DATA = null, TAB = 'today', LOADING = false;
+  let DATA = null, TAB = 'today', LOADING = false, MOUNT_TIMER = 0;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -96,79 +86,79 @@
   }
   function dstr(ms) { return new Date(ms).toISOString().slice(0, 16).replace('T', ' '); }
 
-  window.LifeWorkbench = { open, close };
-  document.addEventListener('DOMContentLoaded', mount);
+  window.LifeWorkbench = { open: openInPanel, close: hidePanelView, refresh: () => load(true) };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
 
+  /* ── 挂载：把「我的工作台」作为一个栏目插进「本机管家」的侧栏 ──
+     实测结构：
+       SECTION#system-workspace > DIV#system-shell > [ ASIDE#system-nav, DIV#system-main ]
+     system-panel.js 是 302KB 压缩文件，改源码风险大 ✗ ——
+     所以用 DOM 注入：往侧栏加一个按钮，点击时**复用它的内容区**显示我们的视图。 */
   function mount() {
-    if (ROOT) return;
-    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
-    ROOT = document.createElement('div'); ROOT.className = 'lw-mask';
-    ROOT.innerHTML = `
-      <div class="lw">
-        <div class="lw-top">
-          <div class="lw-title">我的工作台 <em>·</em> 研究生</div>
-          <div class="lw-sub" id="lw-sub">正在读取本机…</div>
-          <button class="lw-btn" id="lw-refresh">↻ 重新扫描</button>
-          <button class="lw-btn" id="lw-close">关闭</button>
-        </div>
-        <div class="lw-body">
-          <div class="lw-nav" id="lw-nav"></div>
-          <div class="lw-main" id="lw-main"></div>
-        </div>
-      </div>`;
-    document.body.appendChild(ROOT);
-    ROOT.querySelector('#lw-close').onclick = close;
-    ROOT.querySelector('#lw-refresh').onclick = () => load(true);
-    ROOT.addEventListener('click', (e) => { if (e.target === ROOT) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ROOT.classList.contains('on')) close(); });
-    renderNav();
-    /* 悬浮启动按钮：不占主界面位置，随时能开 */
-    if (!document.querySelector('.lw-launch')) {
-      const lb = document.createElement('button');
-      lb.className = 'lw-launch';
-      lb.innerHTML = '<span class="dot"></span>我的工作台';
-      lb.title = '个人管理系统 · 今日 / 研究方向 / 论文 / 文件 / 时间';
-      lb.onclick = open;
-      document.body.appendChild(lb);
+    if (MOUNT_TIMER) return;
+    /* 样式只注入一次 */
+    if (!document.getElementById('lifework-style')) {
+      const st = document.createElement('style');
+      st.id = 'lifework-style';
+      st.textContent = CSS;
+      document.head.appendChild(st);
     }
+    MOUNT_TIMER = setInterval(() => {
+      const nav = document.getElementById('system-nav-list');
+      const main = document.getElementById('system-main');
+      if (!nav || !main) return;
+      /* 我们的视图是绝对定位铺满内容区的，所以内容区要有定位基准 */
+      try { if (getComputedStyle(main).position === 'static') main.style.position = 'relative'; } catch (_) {}
+      if (nav.querySelector('[data-section="lifework"]')) return;   /* 已经注入过 */
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.section = 'lifework';
+      btn.title = '个人管理系统：今日 / 研究方向 / 论文 / 文件 / 时间';
+      btn.innerHTML = '<i>🎯</i><span>我的工作台</span>';
+      btn.addEventListener('click', () => openInPanel());
+      nav.appendChild(btn);
+      /* 用户点它自己的栏目时，撤掉我们的视图（避免两个视图叠在一起） */
+      nav.addEventListener('click', (e) => {
+        const b = e.target && e.target.closest ? e.target.closest('button[data-section]') : null;
+        if (b && b.dataset.section !== 'lifework') hidePanelView();
+      }, true);
+    }, 600);
   }
 
-  function renderNav() {
-    const nav = ROOT.querySelector('#lw-nav');
-    nav.innerHTML = '<div class="sep">视图</div>' + NAV.map((n) =>
-      `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span>${n.label}</button>`).join('');
-    nav.querySelectorAll('button').forEach((b) => {
-      b.onclick = () => { TAB = b.dataset.tab; renderNav(); render(); };
-    });
-  }
-
-  function open() {
+  /* 打开：高亮自己的栏目 + 隐藏它的内容 + 显示我们的视图 */
+  function openInPanel() {
     mount();
-    ROOT.classList.add('on');
+    const nav = document.getElementById('system-nav-list');
+    const main = document.getElementById('system-main');
+    if (!nav || !main) return;
+    nav.querySelectorAll('button[data-section]').forEach((b) => b.classList.toggle('on', b.dataset.section === 'lifework'));
+    [...main.children].forEach((c) => { if (c.id !== 'lifework-view') c.style.display = 'none'; });
+    let view = document.getElementById('lifework-view');
+    if (!view) {
+      view = document.createElement('div');
+      view.id = 'lifework-view';
+      view.className = 'lw-inpanel';
+      main.appendChild(view);
+    }
+    view.style.display = '';
     if (!DATA) load(false); else render();
   }
-  function close() { if (ROOT) ROOT.classList.remove('on'); }
 
-  async function load(force) {
-    if (LOADING) return;
-    LOADING = true;
-    const sub = ROOT.querySelector('#lw-sub');
-    sub.textContent = '正在扫描本机文件…';
-    try {
-      const r = await fetch('/api/life/index?depth=3', { cache: 'no-store' });
-      DATA = await r.json();
-      if (!DATA || !DATA.ok) throw new Error((DATA && DATA.error) || '读取失败');
-      sub.textContent = `已扫 ${DATA.totals.projects} 个项目 · ${DATA.totals.files} 个文件 · ${DATA.totals.sizeText} · 更新于 ${dstr(DATA.scannedAt)}`;
-    } catch (e) {
-      sub.textContent = '读取失败：' + e.message;
-    }
-    LOADING = false;
-    render();
+  /* 关闭：撤掉视图 + 恢复它的内容 */
+  function hidePanelView() {
+    const view = document.getElementById('lifework-view');
+    if (view) view.remove();
+    const main = document.getElementById('system-main');
+    if (main) [...main.children].forEach((c) => { c.style.display = ''; });
   }
 
   function render() {
-    if (!DATA) return;
-    const main = ROOT.querySelector('#lw-main');
+    const host = document.getElementById('lifework-view');
+    if (!host) return;
+    if (!DATA) { host.innerHTML = '<div class="lw-empty">正在读取本机…</div>'; return; }
+    host.innerHTML = shellHtml();
+    const main = host.querySelector('#lw-main');
     if (TAB === 'today') main.innerHTML = viewToday();
     else if (TAB === 'tracks') main.innerHTML = viewTracks();
     else if (TAB === 'paper') main.innerHTML = viewPaper();
@@ -178,14 +168,52 @@
       el.classList.add('lw-open');
       el.onclick = () => copyPath(el.dataset.path);
     });
+    host.querySelectorAll('.lw-nav button').forEach((b) => {
+      b.onclick = () => { TAB = b.dataset.tab; render(); };
+    });
+    host.querySelector('#lw-refresh').onclick = () => load(true);
+  }
+
+  /* 视图骨架（用本机管家内容区的尺寸，不再做浮层） */
+  function shellHtml() {
+    const sub = DATA ? `已扫 ${DATA.totals.projects} 个项目 · ${DATA.totals.files} 个文件 · ${DATA.totals.sizeText} · 更新于 ${dstr(DATA.scannedAt)}` : '正在读取本机…';
+    return `
+      <div class="lw-head">
+        <div class="lw-h1">🎯 我的工作台</div>
+        <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
+        <button class="lw-btn" id="lw-refresh">↻ 重新扫描</button>
+      </div>
+      <div class="lw-body2">
+        <div class="lw-nav" id="lw-nav">${NAV.map((n) =>
+          `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span>${n.label}</button>`).join('')}</div>
+        <div class="lw-main" id="lw-main"></div>
+      </div>`;
   }
 
   function copyPath(p) {
     try {
       navigator.clipboard.writeText(p);
-      const sub = ROOT.querySelector('#lw-sub');
-      sub.textContent = '已复制路径：' + p;
+      const sub = document.getElementById('lw-sub');
+      if (sub) sub.textContent = '已复制路径：' + p;
     } catch (_) {}
+  }
+
+  async function load(force) {
+    if (LOADING) return;
+    LOADING = true;
+    const sub = document.getElementById('lw-sub');
+    if (sub) sub.textContent = '正在扫描本机文件…';
+    try {
+      const r = await fetch('/api/life/index?depth=3', { cache: 'no-store' });
+      DATA = await r.json();
+      if (!DATA || !DATA.ok) throw new Error((DATA && DATA.error) || '读取失败');
+    } catch (e) {
+      LOADING = false;
+      if (sub) sub.textContent = '读取失败：' + e.message;
+      return;
+    }
+    LOADING = false;
+    render();
   }
 
   function trackOf(id) { return (DATA.tracks || []).find((t) => t.id === id) || null; }
