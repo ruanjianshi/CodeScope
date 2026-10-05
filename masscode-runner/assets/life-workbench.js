@@ -297,6 +297,74 @@
   .lw-mo-edit button.pri { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
   .lw-mo-empty { padding:40px 12px; text-align:center; color:${T.faint}; font-size:12px; }
   .lw-mo-empty .big { font-size:26px; display:block; margin-bottom:9px; opacity:.5; }
+  /* ── macOS 备忘录三栏 ── */
+  .lw-nt { display:flex; height:calc(100vh - 250px); min-height:440px; border:2px solid ${T.lineDim}; }
+  /* 左：文件夹 + 标签 */
+  .lw-nt-side { width:172px; flex:none; background:#0c0c0b; border-right:1px solid ${T.lineDim};
+    padding:10px 8px; overflow:auto; }
+  .lw-nt-side .hd { display:flex; gap:6px; margin-bottom:10px; }
+  .lw-nt-side .hd button { flex:1; height:26px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font-size:12px; cursor:pointer; }
+  .lw-nt-side .hd button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-nt-side .grp { margin:12px 6px 6px; font-size:9.5px; letter-spacing:1.4px; color:${T.faint}; text-transform:uppercase; }
+  .lw-nt-side .it { display:flex; align-items:center; gap:8px; padding:6px 9px; font-size:11.5px; color:${T.dim};
+    cursor:pointer; border:1px solid transparent; }
+  .lw-nt-side .it:hover { background:#161614; color:${T.text}; }
+  .lw-nt-side .it.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; font-weight:700; }
+  .lw-nt-side .it .n { margin-left:auto; font-size:10px; opacity:.7; }
+  /* 中：列表 */
+  .lw-nt-list { width:288px; flex:none; background:#0d0d0c; border-right:1px solid ${T.lineDim}; display:flex; flex-direction:column; }
+  .lw-nt-list .top { padding:9px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-nt-list .top .t1 { font-size:12.5px; font-weight:700; color:${T.text}; }
+  .lw-nt-list .top .t2 { font-size:10px; color:${T.faint}; margin-top:2px; }
+  .lw-nt-list .top input { width:100%; margin-top:8px; height:28px; padding:0 9px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:11.5px ${UI}; outline:none; }
+  .lw-nt-list .top input:focus { border-color:${T.accent}; }
+  .lw-nt-scroll { flex:1; overflow:auto; }
+  .lw-nt-grp { padding:9px 12px 5px; font-size:11px; font-weight:700; color:${T.text}; }
+  .lw-nt-row { display:flex; gap:9px; padding:8px 12px; border-bottom:1px solid #1c1c1a; cursor:pointer; }
+  .lw-nt-row:hover { background:#161614; }
+  .lw-nt-row.on { background:#232320; }
+  .lw-nt-row .c { flex:1; min-width:0; }
+  .lw-nt-row .tt { font-size:12px; font-weight:600; color:${T.text}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-nt-row .mt { font-size:10px; color:${T.faint}; margin-top:2px; }
+  .lw-nt-row .mt b { color:${T.dim}; font-weight:400; }
+  .lw-nt-row .sub { font-size:10.5px; color:${T.faint}; margin-top:3px; display:flex; align-items:center; gap:5px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-nt-row .pin { color:${T.accent}; }
+  /* 右：编辑区 */
+  .lw-nt-edit { flex:1; min-width:0; display:flex; flex-direction:column; background:#0f0f0e; }
+  .lw-nt-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-nt-bar button { height:26px; min-width:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:600 10.5px ${UI}; cursor:pointer; }
+  .lw-nt-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-nt-bar button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-nt-bar .sp { flex:1; }
+  .lw-nt-bar .st { font-size:10px; color:${T.faint}; }
+  .lw-nt-bar .st.ok { color:${T.ok}; }
+  /* 格式菜单（浮层） */
+  .lw-nt-menu { position:absolute; z-index:20; width:186px; background:#151513; border:2px solid ${T.line};
+    box-shadow:0 12px 32px rgba(0,0,0,.6); }
+  .lw-nt-menu .r { display:flex; gap:4px; padding:9px 10px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-nt-menu .r button { width:28px; height:26px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font-size:12px; cursor:pointer; }
+  .lw-nt-menu .r button:hover { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-nt-menu .mi { padding:7px 12px; font-size:12px; color:${T.text}; cursor:pointer; display:flex; align-items:center; gap:8px; }
+  .lw-nt-menu .mi:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-nt-menu .mi.on::before { content:"✓"; font-size:11px; }
+  .lw-nt-menu .sep { height:1px; background:${T.lineDim}; margin:4px 0; }
+  .lw-nt-body { flex:1; overflow:auto; display:flex; flex-direction:column; }
+  .lw-nt-meta { padding:12px 20px 0; font-size:11px; color:${T.faint}; text-align:center; }
+  .lw-nt-title { border:0; background:transparent; color:${T.text}; font:700 18px ${UI};
+    padding:6px 20px 4px; outline:none; }
+  .lw-nt-title::placeholder { color:${T.faint}; }
+  .lw-nt-ta { flex:1; border:0; background:transparent; color:${T.text}; font:13px/1.85 ${UI};
+    padding:2px 20px 16px; resize:none; outline:none; min-height:240px; }
+  .lw-nt-ta::placeholder { color:${T.faint}; }
+  .lw-nt-prev { flex:1; overflow:auto; padding:2px 20px 18px; font-size:13px; line-height:1.85; }
+  .lw-nt-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:${T.faint}; font-size:12px; gap:8px; }
+  .lw-nt-empty .big { font-size:26px; opacity:.5; }
   /* 日记 */
   .lw-jtext { width:100%; min-height:190px; resize:vertical; padding:12px 13px; border:2px solid ${T.lineDim};
     background:transparent; color:${T.text}; font:12.5px/1.8 ${UI}; outline:none; }
@@ -555,57 +623,107 @@
       el.onclick = () => { try { navigator.clipboard.writeText(el.dataset.path); const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已复制路径：' + el.dataset.path; } catch (_) {} };
     });
 
-    /* ── 备忘录（Memos 风格）：发布 / 编辑 / 置顶 / 删除 / 标签 / 回收站 ── */
+    /* ── 备忘录（macOS 三栏）：列表 / 文件夹 / 标签 / 格式菜单 / 编辑 / 回收站 ── */
     const memoById = (id) => (STORE.memos || []).find((x) => x.id === id);
-    const postMemo = () => {
-      const ta = q("#lw-mo-new"); if (!ta) return;
-      const v = String(ta.value || "").trim(); if (!v) return;
-      STORE.memos = STORE.memos || [];
-      STORE.memos.unshift({ id: "m" + Date.now(), text: v, pin: false, at: Date.now(), edit: Date.now() });
-      ta.value = ""; STORE.memoTag = ""; saveStore(); render();
+    const curMemo = () => memoById(STORE.memoSel) || (STORE.memos || []).filter((m) => !m.trash)[0];
+    /* 保存当前编辑内容（自动保存 / 切走 / 保存按钮都用它）*/
+    const flushMemo = () => {
+      const cur = curMemo(); if (!cur) return;
+      const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
+      if (ti) cur.text = ti.value + (ta && ta.value ? "\n" + ta.value : (String(cur.text || "").indexOf("\n") >= 0 ? "\n" + String(cur.text).split("\n").slice(1).join("\n") : ""));
+      else if (ta) { const t0 = String(cur.text || "").split("\n")[0]; cur.text = t0 + (ta.value ? "\n" + ta.value : ""); }
+      cur.edit = Date.now();
+      STORE.memoSaved = true; saveStore();
+      const st = document.getElementById("lw-memo-status");
+      if (st) { st.textContent = "✓ 已自动保存"; st.classList.add("ok"); }
+      setTimeout(() => { STORE.memoSaved = false; }, 1500);
     };
-    const postBtn = q("#lw-mo-post");
-    if (postBtn) postBtn.onclick = postMemo;
-    const newTa = q("#lw-mo-new");
-    if (newTa) newTa.onkeydown = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); postMemo(); } };
-    qa("[data-mtag]").forEach((el) => { el.onclick = () => { STORE.memoTag = el.dataset.mtag || ""; saveStore(); render(); }; });
-    qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { m.pin = !m.pin; saveStore(); render(); } }; });
-    qa("[data-medit]").forEach((el) => {
-      el.onclick = () => {
-        const id = el.dataset.medit;
-        const ta = q("#lw-mo-ta");
-        if (ta && ta.dataset.mid === id) { const m = memoById(id); if (m) { m.text = ta.value; m.edit = Date.now(); } }
-        STORE.memoEditing = (STORE.memoEditing === id) ? "" : id;
-        saveStore(); render();
-        const t2 = document.getElementById("lw-mo-ta"); if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); }
-      };
+    let memoBuf = 0;
+    const autoSave = () => { clearTimeout(memoBuf); memoBuf = setTimeout(flushMemo, 600); };
+    const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
+    if (ti) ti.oninput = autoSave;
+    if (ta) ta.oninput = autoSave;
+    /* 双击正文 → 进入编辑 */
+    const prev = q("#lw-nt-prev");
+    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-body"); if (t2) t2.focus(); };
+    /* 列表点选 */
+    qa("[data-memo]").forEach((el) => {
+      el.onclick = () => { flushMemo(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
     });
-    qa("[data-msave]").forEach((el) => {
-      el.onclick = () => {
-        const m = memoById(el.dataset.msave); const ta = q("#lw-mo-ta");
-        if (m) { if (ta) m.text = ta.value; m.edit = Date.now(); }
-        STORE.memoEditing = ""; saveStore(); render();
-      };
-    });
-    qa("[data-mdel]").forEach((el) => {
-      el.onclick = () => { const m = memoById(el.dataset.mdel); if (m) { m.trash = true; saveStore(); render(); } };
-    });
+    /* 文件夹 / 标签 筛选 */
+    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSel = ""; saveStore(); render(); }; });
+    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSel = ""; saveStore(); render(); }; });
+    /* 搜索 */
     const mQ = q("#lw-memo-q");
     if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+    /* 新建 */
+    const mNew = q("#lw-memo-new");
+    if (mNew) mNew.onclick = () => {
+      flushMemo();
+      const id = "m" + Date.now();
+      STORE.memos = STORE.memos || [];
+      STORE.memos.unshift({ id, text: "新备忘录", folder: STORE.memoFolder || "备忘录", pin: false, at: Date.now(), edit: Date.now() });
+      STORE.memoSel = id; STORE.memoEditing = id; STORE.memoTag = ""; saveStore(); render();
+      const t2 = document.getElementById("lw-memo-title"); if (t2) { t2.focus(); t2.select(); }
+    };
+    /* 格式菜单 Aa */
+    const aa = q("#lw-nt-aa");
+    if (aa) aa.onclick = () => { flushMemo(); STORE.memoMenu = !STORE.memoMenu; saveStore(); render(); };
+    qa("[data-mfmt]").forEach((el) => {
+      el.onclick = () => {
+        const id = STORE.memoSel;
+        STORE.memoFmt = STORE.memoFmt || {};
+        STORE.memoFmt[id] = el.dataset.mfmt;
+        /* 同时把前缀写进正文，导出/预览都保留语义 */
+        const cur = curMemo();
+        if (cur && el.dataset.mfmt !== "body") {
+          const pre = { title: "# ", h2: "## ", h3: "### ", mono: "`", ul: "- ", dash: "– ", ol: "1. ", quote: "> " }[el.dataset.mfmt] || "";
+          const lines = String(cur.text || "").split("\n");
+          if (lines[1]) lines[1] = pre + lines[1].replace(/^(#+ |[-–>] |1\. |`)/, "");
+          cur.text = lines.join("\n");
+        }
+        STORE.memoMenu = false; saveStore(); render();
+      };
+    });
+    qa("[data-mwrap]").forEach((el) => {
+      el.onclick = () => {
+        const w = el.dataset.mwrap;
+        const elTa = document.getElementById("lw-memo-body");
+        if (elTa) { const a = elTa.selectionStart || 0, b = elTa.selectionEnd || 0; const sel = elTa.value.slice(a, b) || "文字"; elTa.value = elTa.value.slice(0, a) + w + sel + w + elTa.value.slice(b); elTa.focus(); }
+        else { const cur = curMemo(); if (cur) { const lines = String(cur.text || "").split("\n"); if (lines[1]) lines[1] = w + lines[1] + w; cur.text = lines.join("\n"); saveStore(); render(); } }
+      };
+    });
+    /* 清单 / 表格 快捷插入 */
+    const ck = q("#lw-nt-check");
+    if (ck) ck.onclick = () => { const elTa = document.getElementById("lw-memo-body"); if (elTa) { elTa.value += (elTa.value ? "\n" : "") + "- [ ] "; elTa.focus(); } else { const cur = curMemo(); if (cur) { cur.text += "\n- [ ] "; saveStore(); render(); } } };
+    const tb = q("#lw-nt-table");
+    if (tb) tb.onclick = () => { const cur = curMemo(); if (!cur) return; cur.text += "\n| 列1 | 列2 |\n| --- | --- |\n|  |  |"; saveStore(); render(); };
+    /* 置顶 / 导出 / 删除 */
+    qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { m.pin = !m.pin; saveStore(); render(); } }; });
+    const mExp = q("#lw-memo-export");
+    if (mExp) mExp.onclick = () => {
+      const cur = curMemo(); if (!cur) return;
+      const blob = new Blob([String(cur.text || "")], { type: "text/markdown;charset=utf-8" });
+      const a2 = document.createElement("a");
+      a2.href = URL.createObjectURL(blob);
+      a2.download = (String(cur.text || "").split("\n")[0] || "note").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_") + ".md";
+      a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 3000);
+    };
+    const mDel = q("#lw-memo-del");
+    if (mDel) mDel.onclick = () => { const cur = curMemo(); if (cur) { cur.trash = true; STORE.memoSel = ""; STORE.memoEditing = ""; saveStore(); render(); } };
+    /* 回收站 */
     qa("[data-mrestore]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mrestore); if (m) { m.trash = false; saveStore(); render(); } }; });
     qa("[data-mkill]").forEach((el) => { el.onclick = () => { STORE.memos = (STORE.memos || []).filter((x) => x.id !== el.dataset.mkill); saveStore(); render(); } });
     const tEmpty = q("#lw-trash-empty");
-    if (tEmpty) tEmpty.onclick = () => {
-      if (!confirm("清空回收站？这些备忘录会被彻底删除，无法恢复。")) return;
-      STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render();
-    };
-    /* 快捷键：⌘F 搜索 / ⌘⏎ 发布 */
+    if (tEmpty) tEmpty.onclick = () => { if (!confirm("清空回收站？无法恢复。")) return; STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render(); };
+    /* 快捷键 */
     if (!bind._keys) {
       bind._keys = (e) => {
         if (!document.getElementById("lifework-view")) return;
         if (!(e.metaKey || e.ctrlKey)) return;
         const k = String(e.key || "").toLowerCase();
         if (k === "f") { e.preventDefault(); const i = document.getElementById("lw-memo-q"); if (i) { i.focus(); i.select(); } }
+        else if (k === "n" && TAB === "memo") { e.preventDefault(); const b2 = document.getElementById("lw-memo-new"); if (b2) b2.click(); }
       };
       document.addEventListener("keydown", bind._keys);
     }
@@ -749,72 +867,105 @@
 
   /* ── 待办 ── */
   /* ── 备忘录：Memos 风格（单列时间线 + Markdown 卡片）── */
+  /* ── 备忘录：macOS 备忘录三栏（文件夹/标签 · 时间分组列表 · 编辑区 + 格式菜单）── */
   function viewMemo() {
-    const all = ((STORE && STORE.memos) || []).filter((m) => !m.trash);
-    const trash = ((STORE && STORE.memos) || []).filter((m) => m.trash);
+    const raw = (STORE && STORE.memos) || [];
+    const folders = (STORE && STORE.memoFolders) || ["备忘录", "Study note"];
+    const fol = (STORE && STORE.memoFolder) || "";
+    const all = raw.filter((m) => !m.trash && (!fol || (m.folder || "备忘录") === fol));
     const kw = String((STORE && STORE.memoQ) || "").trim().toLowerCase();
     const tagF = (STORE && STORE.memoTag) || "";
     const editing = (STORE && STORE.memoEditing) || "";
+    const fmt = (STORE && STORE.memoFmt) || {};
     const tagsOf = (t) => (String(t || "").match(/#[\u4e00-\u9fa5\w/-]+/g) || []).map((x) => x.slice(1));
     const tagCount = {};
-    all.forEach((m) => tagsOf(m.text).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+    raw.filter((m) => !m.trash).forEach((m) => tagsOf(m.text).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
     let shown = all.filter((m) => (!kw || String(m.text || "").toLowerCase().includes(kw)) && (!tagF || tagsOf(m.text).includes(tagF)));
-    shown.sort((a, b) => {
-      if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0);
-      return (b.edit || b.at || 0) - (a.edit || a.at || 0);
-    });
-    const dayKey = (ms) => { const d = new Date(ms || Date.now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-    const todayK = dayKey(Date.now());
-    const yestK = dayKey(Date.now() - 86400000);
-    const dayLabel = (k) => k === todayK ? "今天" : k === yestK ? "昨天" : k.slice(5).replace("-", " 月 ") + " 日";
-    const groups = [];
-    shown.forEach((m) => { const k = dayKey(m.edit || m.at); const g = groups.find((x) => x.k === k); if (g) g.list.push(m); else groups.push({ k, list: [m] }); });
+    shown.sort((a, b) => { if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0); return (b.edit || b.at || 0) - (a.edit || a.at || 0); });
+    const sel = (STORE && STORE.memoSel) || (shown[0] && shown[0].id) || "";
+    const cur = shown.find((x) => x.id === sel) || shown[0] || null;
 
-    const cardHtml = (m) => {
-      const isEdit = editing === m.id;
-      const t = new Date(m.edit || m.at);
-      const hhmm = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0");
-      const head = [
-        '<div class="lw-mo-head">',
-        m.pin ? '<span class="pin">★</span>' : "",
-        '<span class="tm">' + hhmm + (m.edit && m.edit !== m.at ? " · 已编辑" : "") + '</span>',
-        '<span class="sp"></span>',
-        '<button data-mpin="' + m.id + '">' + (m.pin ? "取消置顶" : "置顶") + '</button>',
-        '<button data-medit="' + m.id + '">' + (isEdit ? "收起" : "编辑") + '</button>',
-        '<button class="del" data-mdel="' + m.id + '">删除</button>',
-        '</div>',
-      ].join("");
-      const body = isEdit
-        ? '<div class="lw-mo-edit"><textarea id="lw-mo-ta" data-mid="' + m.id + '" placeholder="写点什么… 支持 Markdown 与 #标签">' + esc(m.text) + '</textarea>'
-          + '<div class="row"><button class="pri" data-msave="' + m.id + '">保存</button>'
-          + '<button data-medit="' + m.id + '">取消</button></div></div>'
-        : '<div class="lw-mo-body">' + (mdToHtml(m.text) || '<span style="color:#5c5a50">（空）</span>') + '</div>';
-      return '<div class="lw-mo-card ' + (m.pin ? "pin" : "") + '">' + head + body + '</div>';
+    /* 时间分组：今天 / 昨天 / M月 / YYYY 年（照 macOS 备忘录的分组方式）*/
+    const D = (ms) => new Date(ms || Date.now());
+    const pad = (n) => String(n).padStart(2, "0");
+    const dayK = (ms) => { const d = D(ms); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+    const now = new Date();
+    const todayK = dayK(Date.now()), yestK = dayK(Date.now() - 86400000);
+    const grpKey = (ms) => {
+      const k = dayK(ms), d = D(ms);
+      if (k === todayK) return "今天";
+      if (k === yestK) return "昨天";
+      if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + " 月";
+      return d.getFullYear() + " 年";
+    };
+    const groups = [];
+    shown.forEach((m) => { const k = grpKey(m.edit || m.at); const g = groups.find((x) => x.k === k); if (g) g.list.push(m); else groups.push({ k, list: [m] }); });
+
+    const rowHtml = (m) => {
+      const d = D(m.edit || m.at);
+      const isToday = dayK(m.edit || m.at) === todayK;
+      const when = isToday ? (pad(d.getHours()) + ":" + pad(d.getMinutes())) : (d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate());
+      const body = String(m.text || "").split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").slice(0, 22);
+      const extra = (String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : (m.todo ? "待办清单" : "备忘录");
+      return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '">'
+        + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(String(m.text || "").split("\n")[0].slice(0, 30) || "新备忘录") + '</div>'
+        + '<div class="mt"><b>' + when + '</b>' + (body ? "  " + esc(body) : "") + '</div>'
+        + '<div class="sub">▤ ' + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
     };
 
-    const timeline = groups.length
-      ? groups.map((g) => '<div class="lw-mo-day">' + dayLabel(g.k) + '</div>' + g.list.map(cardHtml).join("")).join("")
-      : '<div class="lw-mo-empty"><span class="big">✎</span>' + (kw || tagF ? "没有匹配的备忘录" : "还没有备忘录，上面写一条") + '</div>';
+    const listHtml = groups.length
+      ? groups.map((g) => '<div class="lw-nt-grp">' + esc(g.k) + '</div>' + g.list.map(rowHtml).join("")).join("")
+      : '<div class="lw-nt-empty" style="padding:30px 10px">' + (kw || tagF ? "没有匹配的备忘录" : "还没有备忘录") + '</div>';
 
     const tagKeys = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
-    const chip = (t) => '<span data-mtag="' + esc(t) + '" class="' + (tagF === t ? "on" : "") + '">#' + esc(t) + ' ' + tagCount[t] + '</span>';
-    const tagBar = tagKeys.length ? '<div class="lw-mtags" style="padding:0 0 12px"><span data-mtag="" class="' + (tagF ? "" : "on") + '">全部 ' + all.length + '</span>' + tagKeys.map(chip).join("") + '</div>' : "";
-
-    const trashHtml = trash.length ? '<div class="lw-c" style="grid-column:span 12"><h3><span class="code">M-99</span>回收站<span class="sp"></span><em>' + trash.length + ' 条</em><span class="act" id="lw-trash-empty">清空</span></h3>'
-      + trash.map((m) => '<div class="lw-trash"><div class="t">' + esc(String(m.text || "").slice(0, 60).replace(/\n/g, " ")) + '</div><div class="r"><button data-mrestore="' + m.id + '">恢复</button><button data-mkill="' + m.id + '">彻底删除</button></div></div>').join("") + '</div>' : "";
-
-    const stat = '<div class="lw-c"><h3><span class="code">M-02</span>统计<span class="sp"></span></h3><div class="lw-kpi"><div class="row"><div class="ic">✎</div><div style="flex:1;min-width:0"><div class="num">' + all.length + '<small>条</small></div></div></div><div class="cmp">' + tagKeys.length + ' 个标签 · 回收站 ' + trash.length + ' 条</div></div></div>';
-    const search = '<div class="lw-c"><h3><span class="code">M-01</span>搜索<span class="sp"></span></h3><div style="padding:12px 14px"><input id="lw-memo-q" placeholder="搜内容或 #标签（⌘F）" value="' + esc((STORE && STORE.memoQ) || "") + '" style="width:100%;height:32px;padding:0 11px;border:2px solid #3a382f;background:transparent;color:#f2efe6;font:12px SF Mono,Menlo,monospace;outline:none" /></div></div>';
-    const allTags = '<div class="lw-c"><h3><span class="code">M-03</span>全部标签<span class="sp"></span></h3><div style="padding:10px 12px"><div class="lw-mtags" style="padding:0;border:0">' + (tagKeys.length ? tagKeys.map(chip).join("") : '<span style="border:0;color:#5c5a50">还没有标签，正文里写 #标签</span>') + '</div></div></div>';
-
-    return '<div class="lw-g12">'
-      + '<div class="lw-c" style="grid-column:span 8"><h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>' + all.length + ' 条 · Markdown · 自动保存</em></h3>'
-      + '<div style="padding:12px 14px"><div class="lw-mo-write"><textarea id="lw-mo-new" placeholder="写点什么… 支持 Markdown（# 标题 / **粗体** / - 列表）与 #标签"></textarea>'
-      + '<div class="side"><button id="lw-mo-post">发布 ⌘⏎</button></div></div>'
-      + tagBar + '<div class="lw-mo">' + timeline + '</div></div></div>'
-      + '<div style="grid-column:span 4;display:flex;flex-direction:column;gap:14px">' + search + stat + allTags + '</div>'
-      + trashHtml
+    const side = '<div class="lw-nt-side">'
+      + '<div class="hd"><button class="on" title="文件夹">▤</button><button title="列表">▦</button></div>'
+      + '<div class="grp">iCloud</div>'
+      + '<div class="it ' + (fol ? "" : "on") + '" data-mfolder="">▤ iCloud 全部<span class="n">' + raw.filter((m) => !m.trash).length + '</span></div>'
+      + folders.map((f) => '<div class="it ' + (fol === f ? "on" : "") + '" data-mfolder="' + esc(f) + '">▤ ' + esc(f) + '<span class="n">' + raw.filter((m) => !m.trash && (m.folder || "备忘录") === f).length + '</span></div>').join("")
+      + '<div class="grp">标签</div>'
+      + '<div class="it ' + (tagF ? "" : "on") + '" data-mtag=""># 所有标签<span class="n">' + tagKeys.length + '</span></div>'
+      + (tagKeys.length ? tagKeys.map((t) => '<div class="it ' + (tagF === t ? "on" : "") + '" data-mtag="' + esc(t) + '"># ' + esc(t) + '<span class="n">' + tagCount[t] + '</span></div>').join("") : '<div class="it" style="color:#5c5a50">正文里写 #标签</div>')
       + '</div>';
+
+    const list = '<div class="lw-nt-list"><div class="top"><div class="t1">' + (fol ? esc(fol) : "iCloud 全部") + '</div>'
+      + '<div class="t2">' + shown.length + ' 个备忘录</div>'
+      + '<input id="lw-memo-q" placeholder="搜索（⌘F）" value="' + esc((STORE && STORE.memoQ) || "") + '" /></div>'
+      + '<div class="lw-nt-scroll">' + listHtml + '</div></div>';
+
+    /* 格式菜单（Aa）*/
+    const fmts = [["title", "标题"], ["h2", "小标题"], ["h3", "副标题"], ["body", "正文"], ["mono", "等宽样式"], ["ul", "• 项目符号列表"], ["dash", "– 短划线列表"], ["ol", "1. 编号列表"], ["quote", "❘ 块引用"]];
+    const curFmt = cur ? (fmt[cur.id] || "body") : "body";
+    const menu = (STORE && STORE.memoMenu) ? '<div class="lw-nt-menu" id="lw-nt-menu" style="top:96px;right:32px">'
+      + '<div class="r"><button data-mwrap="**">B</button><button data-mwrap="*">I</button><button data-mwrap="_">U</button><button data-mwrap="~~">S</button><button data-mwrap="`">笔</button></div>'
+      + fmts.map((f) => '<div class="mi ' + (curFmt === f[0] ? "on" : "") + '" data-mfmt="' + f[0] + '">' + f[1] + '</div>').join("")
+      + '</div>' : "";
+
+    const d = cur ? D(cur.edit || cur.at) : null;
+    const meta = d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes())) : "";
+    const bodyCls = { mono: "lw-nt-prev", quote: "lw-nt-prev" }[curFmt] || "lw-nt-prev";
+    const editor = cur ? '<div class="lw-nt-bar">'
+      + '<button id="lw-memo-new" title="新建">✎ 新建</button>'
+      + '<button id="lw-nt-aa" class="' + ((STORE && STORE.memoMenu) ? "on" : "") + '" title="格式">Aa</button>'
+      + '<button id="lw-nt-check" title="清单">☑</button>'
+      + '<button id="lw-nt-table" title="插入表格">▦</button>'
+      + '<span class="sp"></span>'
+      + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已自动保存" : "自动保存") + '</span>'
+      + '<button data-mpin="' + cur.id + '">' + (cur.pin ? "★" : "☆") + '</button>'
+      + '<button id="lw-memo-export">导出</button>'
+      + '<button id="lw-memo-del">删除</button></div>'
+      + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
+      + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
+      + (editing === cur.id
+          ? '<textarea class="lw-nt-ta" id="lw-memo-body">' + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea>'
+          : '<div class="' + bodyCls + '" id="lw-nt-prev">' + (mdToHtml(String(cur.text || "").split("\n").slice(1).join("\n")) || '<span style="color:#5c5a50">点上面「Aa」旁的空白处或双击开始编辑</span>') + '</div>')
+      + '</div>'
+      : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录</div>';
+
+    return '<div class="lw-g12"><div class="lw-c" style="grid-column:span 12">'
+      + '<h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>macOS 备忘录 · 三栏 · Markdown · 自动保存</em></h3>'
+      + '<div style="position:relative">' + menu + '<div class="lw-nt">' + side + list + '<div class="lw-nt-edit">' + editor + '</div></div></div>'
+      + '</div></div>';
   }
 
 
