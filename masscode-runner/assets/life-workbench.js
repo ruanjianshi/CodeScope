@@ -1820,47 +1820,6 @@
        所以 `#` / `- ` / `**` / `` ` `` / `#标签` 这些标记**全部保留** ✓，
        只用**颜色 / 字重 / 底纹 / 竖线**表达语义 ✓（标记本身变暗 ✓）。
      和 mdToHtml() 的区别：那个会产出块级元素并吃掉标记 ✗（适合只读预览 ✓）。 */
-  function mdLines(src) {
-    const H = (t) => '<span class="mk">' + t + '</span>';
-    return String(src == null ? '' : src).split('\n').map((raw) => {
-      const L = esc(raw);
-      const inline = (t) => t
-        /* 行内标记：保留符号、变色 */
-        .replace(/\*\*([^*]*)\*\*/g, H('**') + '<span class="b">$1</span>' + H('**'))
-        .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1' + H('*') + '<span class="i">$2</span>' + H('*'))
-        .replace(/~~([^~]*)~~/g, H('~~') + '<span class="d">$1</span>' + H('~~'))
-        .replace(/`([^`]*)`/g, H('`') + '<span class="c">$1</span>' + H('`'))
-        .replace(/\[([^\]]*)\]\(([^)]*)\)/g, H('[') + '<span class="lnk">$1</span>' + H('](') + H('$2') + H(')'))
-        .replace(/#([\u4e00-\u9fa5\w/-]+)/g, H('#') + '<span class="tg">$1</span>');
-      /* 代码围栏 */
-      if (/^\s*```/.test(raw)) return '<div class="ln fence">' + L + '</div>';
-      /* 标题：保留 #、整行变色 + 左侧竖线 */
-      const h = raw.match(/^(#{1,3})(\s+)(.*)$/);
-      if (h) {
-        const cls = h[1].length === 1 ? 'h1' : h[1].length === 2 ? 'h2' : 'h3';
-        return '<div class="ln ' + cls + '">' + H(h[1]) + h[2] + inline(esc(h[3])) + '</div>';
-      }
-      /* 引用：保留 > */
-      if (/^\s*>\s?/.test(raw)) {
-        const m = raw.match(/^(\s*>)(\s?)(.*)$/);
-        return '<div class="ln q">' + H(m[1]) + m[2] + inline(esc(m[3])) + '</div>';
-      }
-      /* 复选框：保留 - [ ] */
-      const ck = raw.match(/^(\s*[-*+]\s*\[)([ xX])(\]\s*)(.*)$/);
-      if (ck) {
-        const on = ck[2].toLowerCase() === 'x';
-        return '<div class="ln li' + (on ? ' done' : '') + '">' + H(ck[1]) + '<span class="ck' + (on ? ' on' : '') + '">' + ck[2] + '</span>' + H(ck[3]) + inline(esc(ck[4])) + '</div>';
-      }
-      /* 无序 / 有序：保留标记 */
-      const ul = raw.match(/^(\s*)([-*+])(\s+)(.*)$/);
-      if (ul) return '<div class="ln li">' + ul[1] + H(ul[2]) + ul[3] + inline(esc(ul[4])) + '</div>';
-      const ol = raw.match(/^(\s*)(\d+[.)])(\s+)(.*)$/);
-      if (ol) return '<div class="ln li">' + ol[1] + H(ol[2]) + ol[3] + inline(esc(ol[4])) + '</div>';
-      /* 分隔线 */
-      if (/^\s*(---|\*\*\*|___)\s*$/.test(raw)) return '<div class="ln hr">' + L + '</div>';
-      return '<div class="ln">' + inline(L) + '</div>';
-    }).join('');
-  }
 
   /* contenteditable 实时渲染：把整篇拆成「每行一个 div」✓
      · curIdx 那一行 → **源码**（contenteditable ✓ 可编辑 ✓ 光标准 ✓）
