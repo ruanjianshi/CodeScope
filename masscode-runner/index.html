@@ -2191,7 +2191,14 @@
      改成**继续显示**：短行完全对齐；只有出现超长行被折行时，它之后的行号才会偏移。
      这比"整片没有行号"好得多 —— 真错位时用户至少还能看个大概，
      而不是完全失去定位手段。 */
-  #code-wrap.wrap-on #ln { visibility: visible; }
+  /* ⚠️ 必须排除 monaco-active：这条规则在本文件里**排在 1991 行那条
+     `#code-wrap.monaco-active #ln { visibility:hidden }` 之后**，两者特异性相同
+     （2 个 id + 1 个 class），同分则后写的赢 —— 于是「Monaco 接管 + 开自动换行」时，
+     这条会把本该隐藏的旧行号列又显示出来（实测 computed visibility 从 hidden 翻成 visible）。
+     当前没有可见后果（#monaco-main 是 z-index:7 的绝对定位 + 不透明背景，
+     矩形完全盖住 #ln，elementFromPoint 命中的是 Monaco 自己的行号槽），
+     但状态已经和注释里写的「Monaco 路径不受影响」不一致，这里用 :not() 把意图写死。 */
+  #code-wrap.wrap-on:not(.monaco-active) #ln { visibility: visible; }
   .split-editor-group.wrap-on .split-editor-code, .split-editor-group.wrap-on .split-editor-input { white-space: pre-wrap; overflow-wrap: anywhere; }
   .split-editor-group.wrap-on .split-editor-input { overflow-x: hidden; }
   .split-editor-group.wrap-on .split-editor-ln { visibility: hidden; }
@@ -2731,6 +2738,15 @@
   .rel-graph-col.downstream .rel-graph-label::before { background:var(--ok); }
   .rel-graph-col.root .rel-graph-label::before { background:var(--syntax-number,#d99a43); }
   .rel-graph-label .count { min-width:17px; padding:1px 5px; border:1px solid var(--border); border-radius:999px; background:var(--theme-deep,var(--bg)); color:var(--dim); font:8px var(--mono); letter-spacing:0; }
+  /* 关系图节点：按符号类别区分 —— 类 / 方法 / 函数 / 外部 */
+  .rel-card.k-class  .node-icon { color: #d2a8ff; }
+  .rel-card.k-method { border-left: 2px solid #39c5cf; }
+  .rel-card.k-method .node-icon { color: #39c5cf; }
+  .rel-card.k-method .title { font-style: italic; }
+  .rel-card.k-fn     .node-icon { color: #79c0ff; }
+  .rel-card.k-external .node-icon { color: var(--dim); }
+  .rel-card.k-external .title { opacity: .72; }
+  .rel-card.k-file   .node-icon { color: #ffa657; }
   .rel-card { appearance:none; width:100%; min-width:0; min-height:48px; display:grid; grid-template-columns:22px minmax(0,1fr); grid-template-rows:auto auto; column-gap:8px; align-items:center; padding:8px 10px; border:1px solid color-mix(in srgb,var(--border) 88%,transparent); border-radius:10px; background:color-mix(in srgb,var(--panel2) 88%,var(--theme-deep,var(--bg))); color:var(--text); text-align:left; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,.12); transition:border-color .14s,background .14s,transform .14s,box-shadow .14s; }
   .rel-card:hover { border-color:color-mix(in srgb,var(--accent) 70%,var(--border)); background:color-mix(in srgb,var(--panel2) 82%,var(--accent)); transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.2); }
   .rel-card .node-icon { grid-row:1 / span 2; display:flex; align-items:center; justify-content:center; width:22px; height:22px; border:1px solid color-mix(in srgb,var(--border) 80%,transparent); border-radius:7px; background:var(--theme-deep,var(--bg)); color:var(--dim); font:600 10px var(--mono); }
@@ -4836,7 +4852,14 @@ const WORD_WRAP_PROSE=new Set(['latex','markdown','plain_text']);
 function editorWordWrapOn(){if(EDITOR_WORD_WRAP_SET)return EDITOR_WORD_WRAP;const f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];return !!(f&&WORD_WRAP_PROSE.has(f.language));}
 const EDITOR_FONT_DEFAULT=14,EDITOR_FONT_MIN=10,EDITOR_FONT_MAX=28;
 let EDITOR_FONT_SIZE=EDITOR_FONT_DEFAULT,EDITOR_ZOOM_DELTA=0;
-try{const saved=Number(localStorage.getItem('mc-editor-font-size'));if(Number.isFinite(saved))EDITOR_FONT_SIZE=Math.max(EDITOR_FONT_MIN,Math.min(EDITOR_FONT_MAX,Math.round(saved)));}catch(_){}
+/* ⚠️ 必须判 `!== null`：没存过时 localStorage.getItem 返回 null，
+   而 Number(null) === 0 且 Number.isFinite(0) === true ——
+   于是「读不到」被当成「存了 0」，EDITOR_FONT_SIZE 被钳到最小值 10px，
+   连 4870 行那次 init 调用还会把 '10' 写回 localStorage，永久锁死在 10px
+   （实测：全新 profile 打开面板，EDITOR_FONT_DEFAULT 是 14，实际字号却是 10px）。
+   同理纯空白也必须视同未存：`Number("  ") === 0`，同样会被钳到 10px，
+   所以判空用 `rawSaved.trim() !== ''`，不能用 `rawSaved !== ''`。 */
+try{const rawSaved=localStorage.getItem('mc-editor-font-size');const saved=Number(rawSaved);if(rawSaved!==null&&rawSaved.trim()!==''&&Number.isFinite(saved))EDITOR_FONT_SIZE=Math.max(EDITOR_FONT_MIN,Math.min(EDITOR_FONT_MAX,Math.round(saved)));}catch(_){}
 function editorLineHeight(size){return Math.max(18,Math.round(Number(size)*1.55));}
 function applyEditorFontSize(value,announce=true){
   const next=Math.max(EDITOR_FONT_MIN,Math.min(EDITOR_FONT_MAX,Math.round(Number(value)||EDITOR_FONT_DEFAULT)));
@@ -11852,10 +11875,55 @@ function relationButton(box, label, active, onclick) {
   const b = document.createElement('button'); b.textContent = label; b.classList.toggle('on', active); b.onclick = onclick; box.appendChild(b);
 }
 let REL_GRAPH_OBSERVER = null, REL_GRAPH_SEQ = 0;
+/* 判断一个符号是「类 / 方法 / 函数 / 变量」—— 关系图里要能一眼分清，
+   尤其**类中的方法**和**自由函数**，原来都画成同一个 ƒ，用户说「没有区别」。
+   做法：复用大纲的 outlineFor()（它已经能分 class / fn，并用 depth 表示嵌套层级），
+   按行号把符号对上号；depth>0 的 fn 就是类里的方法。结果按片段缓存。 */
+const REL_KIND_CACHE = new Map();
+function relOutlineOf(sym) {
+  const frag = (typeof fragmentOf === 'function') ? fragmentOf(sym) : null;
+  if (!frag || !CURRENT) return null;
+  const idx = (CURRENT.fragments || []).indexOf(frag);
+  if (idx < 0) return null;
+  const key = (CURRENT.file || '') + '#' + idx;
+  if (REL_KIND_CACHE.has(key)) return REL_KIND_CACHE.get(key);
+  let list = [];
+  try { list = outlineFor(frag.code || '', frag.language || '') || []; } catch (_) { list = []; }
+  REL_KIND_CACHE.set(key, list);
+  if (REL_KIND_CACHE.size > 12) REL_KIND_CACHE.delete(REL_KIND_CACHE.keys().next().value);
+  return list;
+}
+function relationSymbolKind(sym) {
+  if (!sym) return { kind: 'fn', label: '函数' };
+  if (sym.external) return { kind: 'external', label: '外部' };
+  if (sym.kind === 'file') return { kind: 'file', label: '文件' };
+  const list = relOutlineOf(sym);
+  /* 名字里带 `::` 的多半是方法 —— 先判，别被下面的"对不上号就返回函数"挡住 */
+  const byName = /::/.test(sym.name || '');
+  if (!list) return byName ? { kind: 'method', label: '方法' } : { kind: 'fn', label: '函数' };
+  const at = list.findIndex((e) => e.line === sym.line);
+  const e = at >= 0 ? list[at] : null;
+  if (e && e.type === 'class') return { kind: 'class', label: '类' };
+  if (e && e.type === 'fn' && e.depth > 0) {
+    /* 往回找最近的 class，给出 `类名::方法名` 的提示 */
+    let owner = '';
+    for (let i = at - 1; i >= 0; i--) {
+      if (list[i].type === 'class' && list[i].depth < e.depth) { owner = list[i].name; break; }
+    }
+    return { kind: 'method', label: '方法', owner };
+  }
+  if (e && e.type === 'fn') return { kind: 'fn', label: '函数' };
+  /* 没对上号：按名字猜（首字母大写且带 :: 的多半是方法） */
+  if (/::/.test(sym.name || '')) return { kind: 'method', label: '方法' };
+  return { kind: 'fn', label: '函数' };
+}
 function relationGraphCard(data, side) {
   const card = document.createElement('button'); card.type = 'button';
-  card.className = 'rel-card ' + side + (data.external ? ' external' : '');
-  const icon=data.icon||(side==='root'?'◆':data.external?'◇':'ƒ');
+  const k = relationSymbolKind(data.sym || data);
+  card.className = 'rel-card ' + side + (data.external ? ' external' : '') + ' k-' + k.kind;
+  card.dataset.kind = k.kind;
+  const defIcon = k.kind === 'class' ? '▣' : k.kind === 'external' ? '◇' : k.kind === 'file' ? '▤' : 'ƒ';
+  const icon=data.icon||(side==='root'?'◆':defIcon);
   card.innerHTML = '<span class="node-icon">' + escapeHtml(icon) + '</span><span class="title">' + escapeHtml(data.title) + '</span><span class="sub">' + escapeHtml(data.meta || '') + '</span>' +
     (data.badge ? '<span class="tag">' + escapeHtml(data.badge) + '</span>' : '');
   card.title = data.external ? data.title + '（外部，库内无定义）' : '点击跳转并以此为关系中心';
@@ -11922,10 +11990,10 @@ function activateRelationFunction(sym) {
   const def = resolveDefinition(sym) || sym; REL_ROOT = def; REL_EXPANDED.clear(); goToLocation(def); renderRelationPane();
 }
 function renderFunctionGraph(body, root) {
-  const callers = REL_DIR === 'down' ? [] : fnCallers(root).map(sym => ({ icon:'↘',title: sym.name, meta: ((fragmentOf(sym) || {}).label || '?') + ':' + sym.line, activate: () => activateRelationFunction(sym) }));
-  const callees = REL_DIR === 'up' ? [] : fnCalleeEdges(root).map(x => ({ icon:'↗',title: x.sym.name, meta: ((fragmentOf(x.sym) || {}).label || '?') + ':' + x.sym.line,
+  const callers = REL_DIR === 'down' ? [] : fnCallers(root).map(sym => ({ sym, icon:'↘',title: sym.name, meta: ((fragmentOf(sym) || {}).label || '?') + ':' + sym.line, activate: () => activateRelationFunction(sym) }));
+  const callees = REL_DIR === 'up' ? [] : fnCalleeEdges(root).map(x => ({ sym: x.sym, icon:'↗',title: x.sym.name, meta: ((fragmentOf(x.sym) || {}).label || '?') + ':' + x.sym.line,
     badge: x.edge === 'dynamic' ? '动态候选' : '', activate: () => activateRelationFunction(x.sym) }));
-  const center = { icon:'ƒ',title: root.name, meta: ((fragmentOf(root) || {}).label || '?') + ':' + root.line, activate: () => goToLocation(root) };
+  const center = { sym: root, icon:'ƒ',title: root.name, meta: ((fragmentOf(root) || {}).label || '?') + ':' + root.line, activate: () => goToLocation(root) };
   buildRelationGraph(body, callers, center, callees, ['调用者', '当前函数', '被调用']);
   return callers.length + callees.length;
 }
@@ -13958,6 +14026,13 @@ function emitOne(b, indent) {
   const f = (n) => b.getFieldValue(n) || '';
   switch (b.type) {
     case 'c_if': return pad + 'if (' + bpValue(b, 'COND', '1') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
+    /* ⚠️ 这个 case 以前是漏的：c_ifelse 在 defineCBlocks（积木定义）和工具箱里都在，
+       用户能从积木栏拖出来，但 emitOne 没有分支 → 落到 default →
+       整块被换成一行「未知积木 c_ifelse」注释，if/else 一起消失
+       （实测：拖一个 c_ifelse 进工作区，blockJsonToCode() 只回那一行注释）。
+       makeCGenerator() 里那个同样逻辑的 forBlock.c_ifelse 从来没被调用（makeCGenerator 是死代码），
+       所以这里必须自己补。两个语句槽是 DO / ELSE（见 c_ifelse 定义）。 */
+    case 'c_ifelse': return pad + 'if (' + bpValue(b, 'COND', '1') + ') {\n' + bpBody(b, 'DO', indent) + pad + '} else {\n' + bpBody(b, 'ELSE', indent) + pad + '}\n';
     case 'c_while': return pad + 'while (' + bpValue(b, 'COND', '1') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
     case 'c_for': return pad + 'for (' + f('INIT') + '; ' + f('COND') + '; ' + f('STEP') + ') {\n' + bpBody(b, 'DO', indent) + pad + '}\n';
     case 'c_set': return pad + f('TARGET') + ' = ' + bpValue(b, 'VALUE', '0') + ';\n';
