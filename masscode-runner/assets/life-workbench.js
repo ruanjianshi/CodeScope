@@ -741,6 +741,13 @@
       if (ti) cur.text = ti.value + (ta && ta.value ? "\n" + ta.value : (String(cur.text || "").indexOf("\n") >= 0 ? "\n" + String(cur.text).split("\n").slice(1).join("\n") : ""));
       else if (ta) { const t0 = String(cur.text || "").split("\n")[0]; cur.text = t0 + (ta.value ? "\n" + ta.value : ""); }
       cur.edit = Date.now();
+      /* ⚠️ 空的自动丢弃 ✗ —— 点「新建」后不输入就切走，会留下一堆「新备忘录」垃圾 ✗ */
+      if (!cur.text.trim() || cur.text.trim() === "新备忘录") {
+        STORE.memos = (STORE.memos || []).filter((x) => x.id !== cur.id);
+        if (STORE.memoSel === cur.id) STORE.memoSel = "";
+        saveStore();
+        return;
+      }
       STORE.memoSaved = true; saveStore();
       const st = document.getElementById("lw-memo-status");
       if (st) { st.textContent = "✓ 已自动保存"; st.classList.add("ok"); }
@@ -759,11 +766,11 @@
       el.onclick = () => { flushMemo(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
     });
     /* 文件夹 / 标签 筛选 */
-    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSel = ""; saveStore(); render(); }; });
     /* 视图切换（▤ 文件夹 / ▦ 全部列表）*/
     qa("[data-mview]").forEach((el) => {
       el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); render(); };
     });
+    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); render(); }; });
     /* 智能分组（待办清单 / 置顶 / 今天 / 回收站）*/
     qa("[data-msmart]").forEach((el) => {
       el.onclick = () => {
@@ -880,7 +887,7 @@
       if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
       STORE.memoFolder = n; STORE.memoSel = ""; saveStore(); render();
     };
-    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSel = ""; saveStore(); render(); }; });
+    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); render(); }; });
     /* 搜索 */
     const mQ = q("#lw-memo-q");
     if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
@@ -1181,11 +1188,11 @@
       + '<div class="it ' + (smart === 'today' ? "on" : "") + '" data-msmart="today">◔ 今天<span class="n">' + smartCount.today + '</span></div>'
       + '<div class="it ' + (smart === 'trash' ? "on" : "") + '" data-msmart="trash">🗑 回收站<span class="n">' + smartCount.trash + '</span></div>'
       + '<div class="grp">iCloud <span id="lw-nt-addfol" title="新建文件夹" style="float:right;cursor:pointer;color:' + T.accent + '">＋</span></div>'
-      + '<div class="it ' + (fol ? "" : "on") + '" data-mfolder="" data-mname="iCloud 全部">▤ iCloud 全部<span class="n">' + raw.filter((m) => !m.trash).length + '</span></div>'
-      + folders.map((f) => '<div class="it ' + (fol === f ? "on" : "") + '" data-mfolder="' + esc(f) + '" data-mname="' + esc(f) + '">▤ ' + esc(f) + '<span class="n">' + raw.filter((m) => !m.trash && (m.folder || "备忘录") === f).length + '</span></div>').join("")
+      + '<div class="it ' + (!smart && !fol && !tagF ? "on" : "") + '" data-mfolder="" data-mname="iCloud 全部">▤ iCloud 全部<span class="n">' + raw.filter((m) => !m.trash).length + '</span></div>'
+      + folders.map((f) => '<div class="it ' + (!smart && fol === f ? "on" : "") + '" data-mfolder="' + esc(f) + '" data-mname="' + esc(f) + '">▤ ' + esc(f) + '<span class="n">' + raw.filter((m) => !m.trash && (m.folder || "备忘录") === f).length + '</span></div>').join("")
       + '<div class="grp">标签</div>'
-      + '<div class="it ' + (tagF ? "" : "on") + '" data-mtag="" data-mname="所有标签"># 所有标签<span class="n">' + tagKeys.length + '</span></div>'
-      + (tagKeys.length ? tagKeys.map((t) => '<div class="it ' + (tagF === t ? "on" : "") + '" data-mtag="' + esc(t) + '" data-mname="#' + esc(t) + '"># ' + esc(t) + '<span class="n">' + tagCount[t] + '</span></div>').join("") : '<div class="it" style="color:#5c5a50">正文里写 #标签</div>')
+      + '<div class="it" data-mtag="" data-mname="所有标签"># 所有标签<span class="n">' + tagKeys.length + '</span></div>'
+      + (tagKeys.length ? tagKeys.map((t) => '<div class="it ' + (!smart && tagF === t ? "on" : "") + '" data-mtag="' + esc(t) + '" data-mname="#' + esc(t) + '"># ' + esc(t) + '<span class="n">' + tagCount[t] + '</span></div>').join("") : '<div class="it" style="color:#5c5a50">正文里写 #标签</div>')
       + '</div>';
 
     const SMART_NAME = { todo: "☑ 待办清单", pin: "☆ 置顶", today: "◔ 今天", trash: "🗑 回收站" };
