@@ -570,7 +570,10 @@
   .lw-live-ta::selection { background:rgba(242,227,155,.28); }
   /* 渲染层的行内样式（**只改视觉，绝不动字符宽度** ✓）*/
   .lw-live-bd .ln { min-height:1.85em; }
-  .lw-live-bd .mk { color:#6a6a5e; }                    /* 语法标记：压暗 ✓ 但保留占位 ✓ */
+  /* ★ 语法标记：默认隐藏 ✓（visibility:hidden 仍占位 ✓ → 宽度不变 ✓ 光标不偏 ✓）
+     光标所在行（.cur）才显示源码 ✓ —— 这就是 Obsidian 的 Live Preview 行为 ✓ */
+  .lw-live-bd .mk { color:#8a8a7a; visibility:hidden; }
+  .lw-live-bd .ln.cur .mk { visibility:visible; color:${T.accent}; opacity:.9; }
   /* ⚠️ 竖线用 inset box-shadow ✓ —— 它**不占布局空间** ✓，
      换成 border-left / padding-left 都会改宽度 ✗ → 光标就偏了 ✗。 */
   .lw-live-bd .h1 { color:#fff; font-weight:700;
@@ -1316,13 +1319,23 @@
     const liveTa = q('#lw-j-text');
     const liveBd = q('#lw-j-bd');
     if (liveTa && liveBd) {
+      /* 光标在第几行 → 那一行显示源码（.cur ✓），其他行隐藏标记 ✓ */
+      const markCur = () => {
+        const pos = liveTa.selectionStart || 0;
+        const idx = liveTa.value.slice(0, pos).split('\n').length - 1;
+        const lines = liveBd.querySelectorAll('.ln');
+        for (let i = 0; i < lines.length; i++) lines[i].classList.toggle('cur', i === idx);
+      };
       const sync = () => {
         liveBd.innerHTML = mdLines(liveTa.value);
-        /* ⚠️ 不再自己算高度 ✗ —— 高度由**拖拽**或 flex 决定 ✓，
-           两层都靠 CSS（bd 用 flex:1 + overflow:auto ✓）撑开，避免和拖拽打架 ✗ */
+        markCur();
       };
       liveTa.oninput = sync;
+      liveTa.onclick = markCur;
+      liveTa.onkeyup = markCur;
+      liveTa.onselect = markCur;
       liveTa.onscroll = () => { liveBd.scrollTop = liveTa.scrollTop; };
+      document.addEventListener('selectionchange', () => { if (document.activeElement === liveTa) markCur(); });
       sync();
     }
     /* 工具栏：插入标题 / 清单项 / 切换换行 */
