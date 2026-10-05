@@ -15652,7 +15652,11 @@ function renderCode() {
     syncHighlight(); layoutEditEditor();
   } else {
     $('code-wrap').classList.remove('monaco-active');$('monaco-main').style.display='none';
-    $('code-wrap').style.overflow = '';
+    /* ⚠️ 只读态必须**显式设成 auto**，不能清成 '' ——
+       CSS 里另有一条 `#code-wrap { ... overflow: hidden }`（给 Monaco 用的），
+       清成 '' 会落到那条 hidden 上 → 只读模式下代码区**完全不能滚动**（用户报过）。
+       只读时是原生滚动，得让 code-wrap 自己滚。 */
+    $('code-wrap').style.overflow = 'auto';
     $('code').style.overflow = '';
     $('code-edit').classList.remove('live-hl', 'composing');
     $('code-edit').style.display = 'none';
