@@ -480,12 +480,35 @@
   /* ── 日记：月历 + 当天编辑 ── */
   /* ── 日记：可拖拽的左右分栏（填满高度，自适应窗口 ✓）── */
   .lw-jr { display:flex; height:calc(100vh - 200px); min-height:400px; }
-  .lw-jr-l { flex:none; display:flex; flex-direction:column; min-width:220px; overflow:auto; }
+  .lw-jr-l { flex:none; display:flex; flex-direction:column; min-width:220px; overflow:auto; padding-right:2px; }
   .lw-jr-r { flex:1; min-width:280px; display:flex; flex-direction:column; overflow:hidden; }
   /* 拖拽条（左右拉）*/
   .lw-jr-grip { flex:none; width:6px; cursor:col-resize; background:transparent; position:relative; }
   .lw-jr-grip::after { content:""; position:absolute; left:2px; top:0; bottom:0; width:2px; background:${T.lineDim}; }
   .lw-jr-grip:hover::after, .lw-jr-grip.on::after { background:${T.accent}; }
+  /* 左栏内部：每个面板可单独拖高 ✓ */
+  .lw-jr-l .lw-c { flex:none; display:flex; flex-direction:column; overflow:hidden; }
+  .lw-jr-l .lw-c > .lw-cbd { flex:1; min-height:0; overflow:auto; }
+  .lw-vgrip { flex:none; height:7px; cursor:row-resize; position:relative; }
+  .lw-vgrip::after { content:""; position:absolute; top:3px; left:12px; right:12px; height:1px;
+    background:${T.lineDim}; transition:background .12s; }
+  .lw-vgrip:hover::after, .lw-vgrip.on::after { background:${T.accent}; height:2px; top:2px; }
+  /* 分类管理 */
+  .lw-cats { padding:8px 10px 10px; }
+  .lw-cats .row { display:flex; align-items:center; gap:7px; padding:6px 8px; font-size:11.5px; color:${T.text};
+    cursor:pointer; border:1px solid transparent; }
+  .lw-cats .row:hover { background:#161614; border-color:${T.lineDim}; }
+  .lw-cats .row.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; font-weight:700; }
+  .lw-cats .row .n { margin-left:auto; font-size:10px; opacity:.7; }
+  .lw-cats .row .del { opacity:0; font-size:11px; padding:0 3px; }
+  .lw-cats .row:hover .del { opacity:1; }
+  .lw-cats .row .del:hover { color:${T.red}; }
+  .lw-cats .add { display:flex; gap:6px; margin-top:8px; }
+  .lw-cats .add input { flex:1; min-width:0; height:26px; padding:0 8px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:11px ${UI}; outline:none; }
+  .lw-cats .add input:focus { border-color:${T.accent}; }
+  .lw-cats .add button { height:26px; padding:0 10px; border:1px solid ${T.accent}; background:${T.accent};
+    color:${T.accentInk}; font:700 10px ${UI}; cursor:pointer; }
   /* 右侧上下分：编辑 + 信息，中间也可拖 */
   .lw-jr-r .lw-jr-edit { flex:none; display:flex; flex-direction:column; overflow:hidden; }
   .lw-jr-hgrip { flex:none; height:6px; cursor:row-resize; position:relative; }
@@ -534,8 +557,12 @@
   .lw-live-bd { color:${T.text}; pointer-events:none; min-height:200px; overflow:hidden; }
   .lw-live-ta {
     position:absolute; inset:0; width:100%; height:100%;
-    border:0; outline:none; resize:none; background:transparent;
-    color:transparent !important;   /* 文字透明 ✓ —— 只留光标 ✓（!important 防止被全局 textarea 样式覆盖 ✗）*/
+    border:0; outline:none; resize:none;
+    /* ⚠️ 背景也必须 !important —— 全局 textarea 样式给了不透明底色 ✗，
+       会把下面的渲染层**整个盖住** ✗（表现就是"输入了但看不见" ✗）。 */
+    background:transparent !important;
+    box-shadow:none !important;
+    color:transparent !important;   /* 文字透明 ✓ —— 只留光标 ✓ */
     -webkit-text-fill-color:transparent;   /* Safari/Chrome 需要这个才真透明 ✓ */
     caret-color:${T.accent};
     overflow:auto;
@@ -1177,6 +1204,59 @@
       STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
       saveStore(); render();
     };
+    /* ── 左栏：每个面板单独拖高（记住到 STORE ✓）── */
+    const PANEL_KEY = { cal: 'jpH1', stat: 'jpH2', recent: 'jpH3', cat: 'jpH4', wx: 'jpH5' };
+    qa('[data-vgrip]').forEach((g, idx) => {
+      g.onmousedown = (e) => {
+        e.preventDefault(); g.classList.add('on');
+        const panel = qa('[data-jpanel]')[idx];
+        if (!panel) return;
+        const startY = e.clientY, startH = panel.offsetHeight;
+        const move = (ev) => { panel.style.height = Math.max(90, Math.min(700, startH + (ev.clientY - startY))) + 'px'; };
+        const up = () => {
+          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+          g.classList.remove('on');
+          const key = PANEL_KEY[panel.dataset.jpanel];
+          if (key) { STORE[key] = panel.offsetHeight; saveStore(); }
+        };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      };
+    });
+    /* ── 分类：筛选 / 新增 / 删除 / 给日记设分类 ── */
+    qa('[data-jcat]').forEach((el) => {
+      el.onclick = (ev) => {
+        if (ev.target && ev.target.dataset && ev.target.dataset.jcatdel) return;
+        STORE.journalCat = el.dataset.jcat || ''; saveStore(); render();
+      };
+    });
+    qa('[data-jcatdel]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        const c = el.dataset.jcatdel;
+        if (!confirm('删除分类「' + c + '」？\n日记不会被删，只是取消这个分类。')) return;
+        STORE.journalCats = (STORE.journalCats || []).filter((x) => x !== c);
+        (STORE.journal || []).forEach((j) => { if (j.cat === c) j.cat = ''; });
+        if (STORE.journalCat === c) STORE.journalCat = '';
+        saveStore(); render();
+      };
+    });
+    const catAdd = q('#lw-jcat-add'), catIn = q('#lw-jcat-new');
+    if (catAdd && catIn) {
+      const add = () => {
+        const v = catIn.value.trim().slice(0, 12); if (!v) return;
+        STORE.journalCats = STORE.journalCats || ['学习', '工作', '生活', '科研'];
+        if (!STORE.journalCats.includes(v)) STORE.journalCats.push(v);
+        saveStore(); render();
+      };
+      catAdd.onclick = add;
+      catIn.onkeydown = (e) => { if (e.key === 'Enter') add(); };
+    }
+    const catSel = q('#lw-j-catsel');
+    if (catSel) catSel.onchange = () => {
+      const cur2 = (STORE.journal || []).find((x) => x.date === STORE.journalSel);
+      if (!cur2) { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '先写一篇再设分类 ✓'; return; }
+      cur2.cat = catSel.value; saveStore(); render();
+    };
     /* ── 拖拽调整：左栏宽度 / 编辑区高度（记住到 STORE ✓）── */
     const grip = q('#lw-jr-grip'), hgrip = q('#lw-jr-hgrip');
     const jrL = q('#lw-jr-l'), jrE = q('#lw-jr-edit'), jrR = q('.lw-jr-r');
@@ -1671,8 +1751,15 @@
     const pad2 = (n) => String(n).padStart(2, "0");
     const keyOf = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
     const todayK = keyOf(d0);
-    const all = ((STORE && STORE.journal) || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-    const hasSet = {}; all.forEach((j) => { hasSet[j.date] = j; });
+    /* ⚠️ 这里只能用 STORE.journalCat 直接取 ✗ —— catF 定义在后面 ✗（TDZ ✗）*/
+    const catNow = (STORE && STORE.journalCat) || '';
+    const all = ((STORE && STORE.journal) || []).slice()
+      .filter((j) => !catNow || String(j.cat || '') === catNow)
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    /* ⚠️ hasSet（日历上的黄点）要用**未筛选**的全量 ✓ ——
+       否则筛了分类后，日历上的点也跟着少 ✗ */
+    const hasSet = {};
+    ((STORE && STORE.journal) || []).forEach((j) => { hasSet[j.date] = j; });
     const mon = (STORE && STORE.journalMonth) || todayK.slice(0, 7);
     const sel = (STORE && STORE.journalSel) || todayK;
     const cur = hasSet[sel] || null;
@@ -1720,27 +1807,56 @@
         + '<div class="cmp">' + (WX.days || []).slice(0, 3).map((x) => esc(x.date.slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div></div>';
     }
 
-    /* 布局：左右两栏（可拖拽分隔）+ 右侧上下（编辑 / 信息，也可拖 ✓），整体填满视口 ✓ */
+    /* 布局：左栏多面板（可逐个拖高 ✓）+ 右栏编辑区，整体填满视口 ✓ */
     const lw = (STORE.journalLeftW || 360);
-    const eh = (STORE.journalEditH || 380);
+    const cats = (STORE.journalCats || ['学习', '工作', '生活', '科研']);
+    const catF = (STORE.journalCat || '');
+    const catOf = (j) => String(j.cat || '');
+    const catCount = {};
+    cats.forEach((c) => { catCount[c] = 0; });
+    all.forEach((j) => { if (catOf(j)) catCount[catOf(j)] = (catCount[catOf(j)] || 0) + 1; });
+    const catList = cats.length ? cats.map((c) => '<div class="row ' + (catF === c ? 'on' : '') + '" data-jcat="' + esc(c) + '">'
+        + '<span>▸ ' + esc(c) + '</span><span class="n">' + (catCount[c] || 0) + '</span>'
+        + '<span class="del" data-jcatdel="' + esc(c) + '" title="删除分类">✕</span></div>').join('')
+      : '<div style="padding:8px 4px;color:' + T.faint + ';font-size:11px">还没有分类</div>';
+
     return '<div class="lw-jr" id="lw-jr">'
       + '<div class="lw-jr-l" id="lw-jr-l" style="width:' + lw + 'px">'
-      + '<div class="lw-c" style="flex:none"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>' + cal + '</div>'
-      + '<div class="lw-c" style="flex:none;margin-top:12px"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + all.length + ' 篇</em></h3>'
-      + '<div class="lw-kpi"><div class="row"><div class="ic">◈</div><div style="flex:1;min-width:0"><div class="num">' + streak + '<small>天</small></div></div></div>'
-      + '<div class="cmp">' + (streak ? "继续保持" : "今天开个头") + '</div></div>'
-      + '<h3 style="border-top:1px solid ' + T.lineDim + '"><span class="code">J-05</span>最近写过</h3>'
-      + '<div class="lw-tbl">' + (all.length ? all.slice(0, 6).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
-          + '<span class="nm">' + esc(j.date.slice(5)) + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
-          + '<span class="tm">' + esc(String(j.text || "").slice(0, 10)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div>'
+
+      + '<div class="lw-c" data-jpanel="cal" style="height:' + (STORE.jpH1 || 250) + 'px"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>'
+      + '<div class="lw-cbd">' + cal + '</div></div><div class="lw-vgrip" data-vgrip="1"></div>'
+
+      + '<div class="lw-c" data-jpanel="stat" style="height:' + (STORE.jpH2 || 150) + 'px"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + all.length + ' 篇</em></h3>'
+      + '<div class="lw-cbd"><div class="lw-kpi"><div class="row"><div class="ic">◈</div><div style="flex:1;min-width:0"><div class="num">' + streak + '<small>天</small></div></div></div>'
+      + '<div class="cmp">' + (streak ? "继续保持" : "今天开个头") + '</div></div></div></div><div class="lw-vgrip" data-vgrip="2"></div>'
+
+      + '<div class="lw-c" data-jpanel="recent" style="height:' + (STORE.jpH3 || 170) + 'px"><h3><span class="code">J-05</span>最近写过<span class="sp"></span><em>' + all.length + ' 篇</em></h3>'
+      + '<div class="lw-cbd"><div class="lw-tbl">' + (all.length ? all.slice(0, 8).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
+          + '<span class="nm">' + esc(j.date.slice(5)) + (catOf(j) ? ' <i>#' + esc(catOf(j)) + '</i>' : '') + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
+          + '<span class="tm">' + esc(String(j.text || "").replace(/\n/g, ' ').slice(0, 8)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div></div><div class="lw-vgrip" data-vgrip="3"></div>'
+
+      + '<div class="lw-c" data-jpanel="cat" style="height:' + (STORE.jpH4 || 200) + 'px"><h3><span class="code">J-06</span>管理分类<span class="sp"></span><em>点选筛选</em></h3>'
+      + '<div class="lw-cbd"><div class="lw-cats">'
+      + '<div class="row ' + (catF ? '' : 'on') + '" data-jcat="">▸ 全部分类<span class="n">' + all.length + '</span></div>'
+      + catList
+      + '<div class="add"><input id="lw-jcat-new" placeholder="新分类名…" /><button id="lw-jcat-add">＋ 添加</button></div>'
+      + '</div></div></div><div class="lw-vgrip" data-vgrip="4"></div>'
+
+      + '<div class="lw-c" data-jpanel="wx" style="height:' + (STORE.jpH5 || 190) + 'px"><h3><span class="code">J-04</span>当天天气<span class="sp"></span><em>' + (WX && WX.ok ? esc(WX.city) + '（点顶部天气可换地区）' : '加载中…') + '</em></h3>'
+      + '<div class="lw-cbd">' + (wxHtml || '<div class="lw-empty">天气加载中…</div>') + '</div></div>'
+
       + '</div>'
       + '<div class="lw-jr-grip" id="lw-jr-grip" title="拖动调整宽度"></div>'
       + '<div class="lw-jr-r">'
-      + '<div class="lw-jr-edit" id="lw-jr-edit" style="height:' + eh + 'px">'
-      + '<div class="lw-c" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3 style="flex:none"><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
+      + '<div class="lw-jr-edit" id="lw-jr-edit" style="flex:1;min-height:0">'
+      + '<div class="lw-c" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3 style="flex:none"><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName
+      + (catF ? ' <span style="color:' + T.accent + '">#' + esc(catF) + '</span>' : '')
+      + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
       + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
       + '<div class="lw-live-bar">✎ 就地实时渲染<span class="sp"></span>'
+      + '<select id="lw-j-catsel" style="height:22px;padding:0 6px;border:1px solid ' + T.lineDim + ';background:transparent;color:' + T.text + ';font:10px ' + UI + ';outline:none">'
+      + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
       + '<button id="lw-j-wrap" title="切换自动换行">' + (STORE.journalWrap === false ? '不换行' : '自动换行') + '</button>'
       + '<button id="lw-j-md" title="插入标题"># 标题</button>'
       + '<button id="lw-j-ck" title="插入清单项">☐ 清单</button></div>'
@@ -1751,8 +1867,6 @@
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
       + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
       + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
-      + '<div class="lw-jr-hgrip" id="lw-jr-hgrip" title="拖动调整高度"></div>'
-      + '<div class="lw-jr-info" id="lw-jr-info">' + (wxHtml || '<div class="lw-empty">天气加载中…</div>') + '</div>'
       + '</div></div>';
   }
 
