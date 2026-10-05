@@ -579,6 +579,18 @@
   .lw-ce a { color:${T.accent}; text-decoration:underline; }
   .lw-ce .tag { color:#ffe9a8; background:rgba(242,227,155,.16); padding:1px 5px; }
   .lw-ce .empty { color:${T.faint}; }
+  /* 工具栏（紧凑 ✓ 不换行 ✓）*/
+  .lw-live-bar { display:flex; align-items:center; gap:7px; padding:6px 10px; flex:none;
+    border-bottom:1px solid ${T.lineDim}; background:#131312; font-size:10px; color:${T.faint}; letter-spacing:.4px; }
+  .lw-live-bar .sp { flex:1; min-width:6px; }
+  .lw-live-bar .brand { color:${T.accent}; font-weight:700; white-space:nowrap; }
+  .lw-live-bar .hint { color:${T.faint}; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lw-live-bar button { height:22px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:600 10px ${UI}; cursor:pointer; white-space:nowrap; flex:none; }
+  .lw-live-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-live-bar select { height:22px; padding:0 6px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:10px ${UI}; outline:none; flex:none; }
+  .lw-live-bar select option { background:#111; color:${T.text}; }
   .lw-jtpl { display:flex; align-items:center; gap:7px; padding:9px 14px; border-bottom:1px solid ${T.lineDim};
     font-size:10.5px; color:${T.faint}; flex-wrap:wrap; }
   .lw-jtpl .sp { flex:1; }
@@ -1022,6 +1034,15 @@
     if (!host) return;
     /* 左栏 + 中栏的交互（提出来，方便 renderMemoList() 局部刷新时复用 ✓）*/
     bindMemoSide();
+    /* 今日面板：跳转 + 点待办跳到对应备忘录 ✓
+       （注意：q / qa 是 bindMemoSide() 里的局部变量 ✗，这里不能用 ✗ —— 用原生查询 ✓）*/
+    const view0 = document.getElementById('lifework-view');
+    const gM = document.getElementById('lw-goto-memo'); if (gM) gM.onclick = () => { TAB = 'memo'; render(); };
+    const gJ = document.getElementById('lw-goto-journal'); if (gJ) gJ.onclick = () => { TAB = 'journal'; render(); };
+    const gQ = document.getElementById('lw-goto-quote'); if (gQ) gQ.onclick = () => { TAB = 'quote'; render(); };
+    if (view0) view0.querySelectorAll('[data-todo-go]').forEach((el) => {
+      el.onclick = () => { STORE.memoSel = el.dataset.todoGo; STORE.memoSmart = ''; STORE.memoTag = ''; saveStore(); TAB = 'memo'; render(); };
+    });
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
     qa('.lw-nav button').forEach((b) => { b.onclick = () => { TAB = b.dataset.tab; render(); }; });
@@ -1318,7 +1339,19 @@
         }
       };
       let cebuf = 0;
-      ce.oninput = () => { clearTimeout(cebuf); cebuf = setTimeout(() => { persist(); renderCe(true); }, 260); };
+      /* ⚠️ 打字时**绝不重渲染** ✗ ——
+         之前 oninput 里调 renderCe() ✗ → 每次都把光标**重置到行尾** ✗ →
+         打字快的时候字符会跑到错误的位置 ✗（用户报的"打字有 BUG" ✗）。
+         其实当前行本来就是**源码**（不需要渲染 ✓），其他行也没变 ✓
+         → **只存盘就够了** ✓。只有「换行 / 切行 / 点别的行」才需要重渲染 ✓。 */
+      ce.oninput = () => {
+        clearTimeout(cebuf);
+        cebuf = setTimeout(() => {
+          persist();
+          const s2 = document.getElementById('lw-sub');
+          if (s2) s2.textContent = '✓ 已自动保存';
+        }, 600);
+      };
       /* 点任意行 → 那行变成"当前行"（显示源码 ✓）*/
       ce.onmousedown = (e) => {
         const ln = e.target && e.target.closest ? e.target.closest('.ln') : null;
@@ -1497,28 +1530,52 @@
     const maxDay = Math.max(1, ...days.map((x) => x.count));
     const week = days.slice(-7).map((x) => x.count);
     const hot = (DATA.recent || []).slice(0, 7);
-    const todos = ((STORE && STORE.todos) || []).filter((t) => !t.done).slice(0, 6);
-    const notes = ((STORE && STORE.notes) || []).slice(0, 4);
+    /* ⚠️ 待办和笔记已经合并进「备忘录」了 ✗ ——
+       以前这里读的是 STORE.todos / STORE.notes ✗（早就不存在 ✗）→ 永远显示空 ✗。
+       现在改成从**备忘录**里聚合清单项 ✓，以及读**日记 / 书签** ✓。 */
+    const memos = ((STORE && STORE.memos) || []).filter((m) => !m.trash);
+    const allTodos = [];
+    memos.forEach((m) => {
+      String(m.text || '').split('\n').forEach((l, i) => {
+        const ck = l.match(/^\s*[-*+]\s*\[([ xX])\]\s*(.*)$/);
+        const bx = l.match(/^\s*([☐☑])\s*(.*)$/);
+        if (ck && ck[2].trim()) allTodos.push({ memo: m, idx: i, done: ck[1].toLowerCase() === 'x', text: ck[2].trim() });
+        else if (bx && bx[2].trim()) allTodos.push({ memo: m, idx: i, done: bx[1] === '☑', text: bx[2].trim() });
+      });
+    });
+    const openTodos = allTodos.filter((t) => !t.done).slice(0, 6);
+    const journals = ((STORE && STORE.journal) || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+    const tk = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const todayJ = journals.find((j) => j.date === tk) || null;
+    const quotes = ((STORE && STORE.quotes) || []).slice(0, 3);
+    let streak = 0;
+    for (let i = 0; i < 400; i++) {
+      const dd = new Date(); dd.setDate(dd.getDate() - i);
+      const k = dd.getFullYear() + '-' + String(dd.getMonth() + 1).padStart(2, '0') + '-' + String(dd.getDate()).padStart(2, '0');
+      if (journals.some((x) => x.date === k)) streak++; else if (i > 0) break;
+    }
 
     const kpis = [
       kpiCard('▦', DATA.totals.projects, '个项目', '已纳管', `覆盖 ${(DATA.tracks || []).length} 个方向`, 3, 'sky'),
       kpiCard('▤', DATA.totals.files, '个文件', `合计 ${DATA.totals.sizeText}`, `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, 3, 'lilac'),
       kpiCard('✎', today.count, '个改动', '今天', diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), 3, 'mint'),
-      kpiCard('◈', (DATA.tracks || []).length, '个方向', '机器人 · 嵌入式 · 论文', '按最近改动排序', 3, 'lemon'),
+      kpiCard('◈', streak, '天', '日记连续记录', journals.length ? `共 ${journals.length} 篇 · 待办 ${allTodos.filter((t) => !t.done).length} 项` : '还没写过日记', 3, 'lemon'),
     ].join('');
 
-    const todoBody = todos.length
-      ? `<div>${todos.map((t) => `<div class="lw-todo" data-todo-toggle="${t.id}"><span class="ck">✓</span>
-          <div class="tx">${esc(t.text)}<div class="due">${ago(t.at)}</div></div></div>`).join('')}</div>`
-      : `<div class="lw-empty"><span class="big">✓</span>今天没有待办</div>`;
-    const noteBody = notes.length
-      ? `<div>${notes.map((n) => `<div class="lw-note"><div class="h">${dstr(n.at).slice(5)}</div>
-          <div class="b">${esc(String(n.text).slice(0, 180))}${String(n.text).length > 180 ? '…' : ''}</div></div>`).join('')}</div>`
-      : `<div class="lw-empty"><span class="big">✎</span>还没有笔记</div>`;
+    const todoBody = openTodos.length
+      ? `<div>${openTodos.map((t) => `<div class="lw-todo" data-todo-go="${t.memo.id}"><span class="ck">✓</span>
+          <div class="tx">${esc(t.text)}<div class="due">来自《${esc(String(t.memo.text || '').split('\n')[0].slice(0, 16) || '备忘录')}》</div></div></div>`).join('')}</div>`
+      : `<div class="lw-empty"><span class="big">✓</span>没有未完成的待办</div>`;
+    const todayBody = (todayJ || quotes.length)
+      ? `<div>${todayJ ? `<div class="lw-note"><div class="h">今天的日记 · ${String(todayJ.text || '').length} 字</div>
+          <div class="b">${esc(String(todayJ.text || '').replace(/^#{1,3}\s*/gm, '').replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/gm, '· ').slice(0, 150))}…</div></div>`
+        : `<div class="lw-empty" style="padding:16px"><span class="big">◈</span>今天还没写日记</div>`}
+        ${quotes.map((q) => `<div class="lw-note"><div class="h">❝ 书签</div><div class="b">${esc(String(q.text || '').slice(0, 80))}${q.from ? `<span style="color:${T.faint}"> —— ${esc(String(q.from).slice(0, 20))}</span>` : ''}</div></div>`).join('')}</div>`
+      : `<div class="lw-empty"><span class="big">❝</span>还没有日记和书签</div>`;
 
     return `<div class="lw-g12">${kpis}
-      ${card(`${greet} · 待办`, todos.length ? `${todos.length} 项待处理` : '', todoBody, 4, '<span class="act" id="lw-goto-todo">全部 →</span>')}
-      ${card('最近笔记', '', noteBody, 4, '<span class="act" id="lw-goto-notes">全部 →</span>')}
+      ${card('☑ 待办清单', allTodos.filter((t) => !t.done).length ? `${allTodos.filter((t) => !t.done).length} 项未完成` : '', todoBody, 4, '<span class="act" id="lw-goto-memo">去备忘录 →</span>')}
+      ${card('今日日记 · 书签', todayJ ? '今天已写' : '', todayBody, 4, '<span class="act" id="lw-goto-journal">去日记 →</span>')}
       ${card('近 14 天改动', `共 ${days.reduce((a, x) => a + x.count, 0)} 个`,
         `<div class="lw-pad"><div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count}">
           <span class="v">${x.count || ''}</span><span class="b" style="height:${Math.max(3, Math.round(x.count / maxDay * 88))}px"></span>
@@ -1957,13 +2014,13 @@
       + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
       + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
-      + '<div class="lw-live-bar"><span style="color:' + T.accent + '">✎ 边写边渲染</span>'
-      + '<span style="color:' + T.faint + '">光标所在行显示源码，其他行即时渲染（点任意行即可编辑）</span>'
+      + '<div class="lw-live-bar"><span class="brand">✎ 边写边渲染</span>'
+      + '<span class="hint">光标行显示源码，其他行即时渲染</span>'
       + '<span class="sp"></span>'
-      + '<select id="lw-j-catsel" style="height:22px;padding:0 6px;border:1px solid ' + T.lineDim + ';background:transparent;color:' + T.text + ';font:10px ' + UI + ';outline:none">'
+      + '<select id="lw-j-catsel">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
-      + '<button id="lw-j-md" title="插入标题"># 标题</button>'
-      + '<button id="lw-j-ck" title="插入清单项">☐ 清单</button>'
+      + '<button id="lw-j-md" title="把当前行变成标题"># 标题</button>'
+      + '<button id="lw-j-ck" title="把当前行变成清单项">☐ 清单</button>'
       + '</div>'
       + '<div class="lw-ce" id="lw-j-ce" contenteditable="true" spellcheck="false">' + ceHtml(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text), 0) + '</div>'
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
