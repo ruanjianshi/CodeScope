@@ -4563,6 +4563,89 @@ const server = http.createServer(async (req, res) => {
         }
       }
     }
+    /* 论文检索：arXiv API（免费、无需 key）。
+       ⚠️ 和天气一样，不能只靠 Node 的 fetch —— 环境里配了 HTTP_PROXY 时 undici 不读 ✗，
+       所以走同一个 curl 兜底。 */
+    if (u.pathname === '/api/life/papers') {
+      try {
+        const q = String(u.searchParams.get('q') || '').slice(0, 200) || 'robot locomotion control';
+        const max = Math.min(30, Math.max(3, Number(u.searchParams.get('max')) || 12));
+        const url = 'http://export.arxiv.org/api/query?search_query=all:' + encodeURIComponent(q) +
+          '&start=0&max_results=' + max + '&sortBy=submittedDate&sortOrder=descending';
+        const xml = await new Promise((resolve, reject) => {
+          require('child_process').execFile('curl', ['-s', '-m', '25', '-L', url], { maxBuffer: 8e6 },
+            (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
+        });
+        /* 极简 Atom 解析：只取我们需要的字段，不引依赖 */
+        const items = [];
+        const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+        const pick = (s, tag) => {
+          const m = s.match(new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)</' + tag + '>'));
+          return m ? m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : '';
+        };
+        let m;
+        while ((m = entryRe.exec(xml)) !== null) {
+          const e = m[1];
+          const authors = [];
+          const auRe = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/g;
+          let a;
+          while ((a = auRe.exec(e)) !== null) authors.push(a[1].trim());
+          const linkM = e.match(/<link[^>]*href="([^"]+)"[^>]*rel="alternate"/) || e.match(/<id>([^<]+)<\/id>/);
+          items.push({
+            title: pick(e, 'title'),
+            summary: pick(e, 'summary').slice(0, 420),
+            published: pick(e, 'published').slice(0, 10),
+            updated: pick(e, 'updated').slice(0, 10),
+            authors: authors.slice(0, 6),
+            url: linkM ? linkM[1] : '',
+            id: pick(e, 'id'),
+          });
+        }
+        return send(res, 200, { ok: true, q, count: items.length, items });
+      } catch (error) {
+        return send(res, 200, { ok: false, error: '论文检索失败：' + String((error && error.message) || error) });
+      }
+    }
+    /* 邮箱配置（SMTP / IMAP）：只存本机，不回传密码明文 */
+    if (u.pathname === '/api/life/mail') {
+      const file = path.join(applicationDataRoot(), 'life-mail.json');
+      const read = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return {}; } };
+      if (req.method === 'GET') {
+        const cfg = read();
+        const safe = {};
+        Object.keys(cfg || {}).forEach((k) => {
+          const v = cfg[k] || {};
+          safe[k] = { host: v.host || '', port: v.port || '', user: v.user || '', hasPass: !!v.pass, imapHost: v.imapHost || '', imapPort: v.imapPort || '' };
+        });
+        return send(res, 200, { ok: true, accounts: safe });
+      }
+      if (req.method === 'POST') {
+        try {
+          const body = await readBody(req, 1e6);
+          const cur = read();
+          const next = Object.assign({}, cur);
+          const accounts = (body && body.accounts) || {};
+          Object.keys(accounts).forEach((k) => {
+            const inc = accounts[k] || {};
+            const old = cur[k] || {};
+            next[k] = {
+              host: String(inc.host || '').slice(0, 120),
+              port: String(inc.port || '').slice(0, 8),
+              user: String(inc.user || '').slice(0, 200),
+              /* 密码留空 = 不改（避免前端拿不到明文又被清掉） */
+              pass: inc.pass ? String(inc.pass).slice(0, 200) : (old.pass || ''),
+              imapHost: String(inc.imapHost || '').slice(0, 120),
+              imapPort: String(inc.imapPort || '').slice(0, 8),
+            };
+          });
+          try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
+          fs.writeFileSync(file, JSON.stringify(next, null, 2));
+          return send(res, 200, { ok: true });
+        } catch (error) {
+          return send(res, 400, { ok: false, error: String((error && error.message) || error) });
+        }
+      }
+    }
     if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {
       try {
         if (await SYSTEM_PANEL.handle(req, res, u)) return;

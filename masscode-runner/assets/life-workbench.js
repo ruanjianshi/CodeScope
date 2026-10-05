@@ -157,18 +157,71 @@
   .lw-chips { display:flex; flex-wrap:wrap; gap:7px; }
   .lw-chip { font-size:10.5px; padding:3px 9px; border:1px solid ${T.lineDim}; color:${T.dim}; letter-spacing:.6px; }
   .lw-chip b { color:${T.accent}; font-weight:700; margin-left:5px; }
+  /* 备忘录：左列表 + 右详情（Apple 备忘录的两栏结构） */
+  .lw-mlist { display:flex; flex-direction:column; max-height:560px; overflow:auto; }
+  .lw-mrow { padding:9px 12px; border-bottom:1px solid ${T.lineDim}; cursor:pointer; transition:background .12s; }
+  .lw-mrow:hover { background:#141412; }
+  .lw-mrow.on { background:${T.accent}; color:${T.accentInk}; }
+  .lw-mrow.on .s, .lw-mrow.on .d { color:${T.accentInk}; opacity:.7; }
+  .lw-mrow .t { font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-mrow .s { font-size:10.5px; color:${T.dim}; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-mrow .d { font-size:9.5px; color:${T.faint}; margin-top:3px; letter-spacing:.6px; }
+  .lw-mdetail { display:flex; flex-direction:column; min-height:460px; }
+  .lw-mtitle { border:0; border-bottom:1px solid ${T.lineDim}; background:transparent; color:${T.text};
+    font:600 15px ${UI}; padding:13px 14px; outline:none; }
+  .lw-mbody { flex:1; border:0; background:transparent; color:${T.text}; font:12.5px/1.75 ${UI};
+    padding:12px 14px; resize:none; outline:none; min-height:300px; }
+  .lw-mtools { display:flex; align-items:center; gap:9px; padding:11px 14px; border-top:1px solid ${T.lineDim}; }
+  .lw-mck { display:flex; align-items:center; gap:7px; font-size:11px; color:${T.dim}; cursor:pointer; letter-spacing:.6px; }
+  .lw-mck input { accent-color:${T.accent}; }
+  /* 日记 */
+  .lw-jtext { width:100%; min-height:190px; resize:vertical; padding:12px 13px; border:2px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:12.5px/1.8 ${UI}; outline:none; }
+  .lw-jtext:focus { border-color:${T.accent}; }
+  .lw-jlist { display:flex; flex-direction:column; max-height:420px; overflow:auto; }
+  .lw-jrow { display:flex; gap:14px; padding:12px 14px; border-bottom:1px solid ${T.lineDim}; align-items:flex-start; }
+  .lw-jrow:hover { background:#141412; }
+  .lw-jrow .del { opacity:0; cursor:pointer; color:${T.faint}; }
+  .lw-jrow:hover .del { opacity:1; }
+  .lw-jrow .del:hover { color:${T.red}; }
+  .lw-jdate { flex:none; width:74px; text-align:right; }
+  .lw-jdate b { display:block; font-size:14px; font-weight:700; color:${T.accent}; letter-spacing:.4px; }
+  .lw-jdate span { font-size:9.5px; color:${T.faint}; letter-spacing:1px; }
+  .lw-jbody { flex:1; min-width:0; font-size:12.5px; line-height:1.75; white-space:pre-wrap; word-break:break-word; }
+  /* 论文检索 */
+  .lw-search { display:flex; gap:9px; }
+  .lw-search input { flex:1; min-width:0; height:36px; padding:0 12px; border:2px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:12.5px ${UI}; outline:none; }
+  .lw-search input:focus { border-color:${T.accent}; }
+  .lw-kw { cursor:pointer; }
+  .lw-kw:hover { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-plist { display:flex; flex-direction:column; max-height:620px; overflow:auto; }
+  .lw-parow { padding:12px 14px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-parow:hover { background:#141412; }
+  .lw-parow .t { font-size:12.5px; font-weight:600; line-height:1.5; }
+  .lw-parow .t a { color:${T.accent}; text-decoration:none; }
+  .lw-parow .t a:hover { text-decoration:underline; }
+  .lw-parow .m { font-size:10px; color:${T.faint}; margin-top:5px; letter-spacing:.4px; }
+  .lw-parow .s { font-size:11.5px; color:${T.dim}; line-height:1.7; margin-top:6px; }
+  /* 邮箱表单 */
+  .lw-form { display:flex; flex-direction:column; gap:9px; }
+  .lw-form label { display:flex; flex-direction:column; gap:4px; font-size:10px; letter-spacing:1.2px;
+    color:${T.faint}; text-transform:uppercase; }
+  .lw-form input { height:32px; padding:0 10px; border:2px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:12px ${UI}; outline:none; letter-spacing:.4px; }
+  .lw-form input:focus { border-color:${T.accent}; }
   #system-nav-list button[data-section="lifework"] i { color:${T.accent}; }
   `;
 
   const NAV = [
     { id: 'today', icon: '☀', label: '今日', grp: '面板', key: 'T-01' },
-    { id: 'todo', icon: '✓', label: '待办', grp: '面板', key: 'T-02', badge: true },
-    { id: 'notes', icon: '✎', label: '笔记', grp: '面板', key: 'T-03' },
-    { id: 'tracks', icon: '◈', label: '研究方向', grp: '科研', key: 'F-01' },
-    { id: 'paper', icon: '▤', label: '论文', grp: '科研', key: 'F-02' },
-    { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'F-03' },
-    { id: 'time', icon: '◔', label: '时间', grp: '科研', key: 'F-04' },
-    { id: 'mail', icon: '✉', label: '邮箱 / 入口', grp: '外部', key: 'E-01' },
+    { id: 'memo', icon: '✎', label: '备忘录', grp: '面板', key: 'M-01', badge: true },
+    { id: 'journal', icon: '◈', label: '日记', grp: '面板', key: 'J-01' },
+    { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
+    { id: 'paper', icon: '▤', label: '论文检索', grp: '科研', key: 'P-01' },
+    { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
+    { id: 'time', icon: '◔', label: '时间', grp: '科研', key: 'X-01' },
+    { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
   let DATA = null, STORE = null, WX = null, TAB = 'today', LOADING = false, MOUNT_TIMER = 0, CITY = '广州';
@@ -307,8 +360,8 @@
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
-    const main = { today: viewToday, todo: viewTodo, notes: viewNotes, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime, mail: viewMail }[TAB] || viewToday;
-    const openTodo = ((STORE && STORE.todos) || []).filter((t) => !t.done).length;
+    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime, mail: viewMail }[TAB] || viewToday;
+    const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
     const navHtml = grps.map((g) => `<div class="grp">${g}</div>` + NAV.filter((n) => n.grp === g).map((n) =>
@@ -345,73 +398,98 @@
   function bind() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
-    host.querySelectorAll('.lw-nav button').forEach((b) => { b.onclick = () => { TAB = b.dataset.tab; render(); }; });
-    const rf = host.querySelector('#lw-refresh');
-    if (rf) rf.onclick = () => load(true);
-    host.querySelectorAll('[data-path]').forEach((el) => {
-      el.onclick = () => {
-        try {
-          navigator.clipboard.writeText(el.dataset.path);
-          const s = document.getElementById('lw-sub');
-          if (s) s.textContent = '已复制路径：' + el.dataset.path;
-        } catch (_) {}
+    const q = (sel) => host.querySelector(sel);
+    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    qa('.lw-nav button').forEach((b) => { b.onclick = () => { TAB = b.dataset.tab; render(); }; });
+    const rf = q('#lw-refresh'); if (rf) rf.onclick = () => load(true);
+    qa('[data-path]').forEach((el) => {
+      el.onclick = () => { try { navigator.clipboard.writeText(el.dataset.path); const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已复制路径：' + el.dataset.path; } catch (_) {} };
+    });
+
+    /* ── 备忘录 ── */
+    qa('[data-memo]').forEach((el) => {
+      el.onclick = () => { STORE.memoSel = el.dataset.memo; saveStore(); render(); };
+    });
+    const mNew = q('#lw-memo-new');
+    if (mNew) mNew.onclick = () => {
+      const id = 'm' + Date.now();
+      STORE.memos = STORE.memos || [];
+      STORE.memos.unshift({ id, text: '新备忘录', todo: false, done: false, at: Date.now() });
+      STORE.memoSel = id; saveStore(); render();
+      const t = document.getElementById('lw-memo-title'); if (t) { t.focus(); t.select(); }
+    };
+    const mSave = q('#lw-memo-save');
+    if (mSave) mSave.onclick = () => {
+      const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
+      if (!cur) return;
+      const title = (q('#lw-memo-title') || {}).value || '';
+      const body = (q('#lw-memo-body') || {}).value || '';
+      cur.text = title + (body ? '\n' + body : '');
+      cur.todo = !!(q('#lw-memo-todo') || {}).checked;
+      cur.at = Date.now();
+      saveStore(); render();
+      const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已保存备忘录';
+    };
+    const mDel = q('#lw-memo-del');
+    if (mDel) mDel.onclick = () => {
+      STORE.memos = (STORE.memos || []).filter((x) => x.id !== STORE.memoSel);
+      STORE.memoSel = (STORE.memos[0] || {}).id || '';
+      saveStore(); render();
+    };
+
+    /* ── 日记 ── */
+    const jSave = q('#lw-j-save');
+    if (jSave) jSave.onclick = () => {
+      const d0 = new Date();
+      const k = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
+      const text = ((q('#lw-j-text') || {}).value || '').trim();
+      STORE.journal = STORE.journal || [];
+      const hit = STORE.journal.find((x) => x.date === k);
+      if (hit) { hit.text = text; hit.at = Date.now(); }
+      else STORE.journal.unshift({ date: k, text, at: Date.now() });
+      STORE.journal = STORE.journal.filter((x) => x.text);
+      saveStore(); render();
+      const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已保存今天的日记';
+    };
+    qa('[data-jdel]').forEach((el) => {
+      el.onclick = () => { STORE.journal = (STORE.journal || []).filter((x) => x.date !== el.dataset.jdel); saveStore(); render(); };
+    });
+
+    /* ── 论文检索 ── */
+    const pGo = q('#lw-paper-go');
+    const doSearch = async (kw) => {
+      const input = q('#lw-paper-q');
+      const key = (kw || (input && input.value) || '').trim();
+      if (!key) return;
+      STORE.paperQ = key; STORE.paperLoading = true; render();
+      try {
+        const r = await fetch('/api/life/papers?max=14&q=' + encodeURIComponent(key), { cache: 'no-store' });
+        STORE.paperRes = await r.json();
+      } catch (e) { STORE.paperRes = { ok: false, error: '检索失败：' + e.message }; }
+      STORE.paperLoading = false; render();
+    };
+    if (pGo) pGo.onclick = () => doSearch();
+    const pQ = q('#lw-paper-q');
+    if (pQ) pQ.onkeydown = (e) => { if (e.key === 'Enter') doSearch(); };
+    qa('.lw-kw').forEach((el) => { el.onclick = () => doSearch(el.dataset.kw); });
+
+    /* ── 邮箱配置 ── */
+    qa('[data-mailsave]').forEach((btn) => {
+      btn.onclick = async () => {
+        const k = btn.dataset.mailsave;
+        const acc = Object.assign({}, STORE.mailAcc || {});
+        const cur = Object.assign({}, acc[k] || {});
+        qa('[data-mail="' + k + '"]').forEach((inp) => { cur[inp.dataset.f] = inp.value; });
+        acc[k] = cur;
+        STORE.mailAcc = acc;
+        saveStore();
+        try { await fetch('/api/life/mail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accounts: { [k]: cur } }) }); } catch (_) {}
+        const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '邮箱配置已保存（只存本机）';
+        load(true);
       };
     });
-    /* 待办交互 */
-    host.querySelectorAll('[data-todo-toggle]').forEach((el) => {
-      el.onclick = (e) => {
-        e.stopPropagation();
-        const t = (STORE.todos || []).find((x) => x.id === el.dataset.todoToggle);
-        if (t) { t.done = !t.done; saveStore(); render(); }
-      };
-    });
-    host.querySelectorAll('[data-todo-del]').forEach((el) => {
-      el.onclick = (e) => {
-        e.stopPropagation();
-        STORE.todos = (STORE.todos || []).filter((x) => x.id !== el.dataset.todoDel);
-        saveStore(); render();
-      };
-    });
-    const addBtn = host.querySelector('#lw-todo-add');
-    const addInput = host.querySelector('#lw-todo-input');
-    if (addBtn && addInput) {
-      const add = () => {
-        const v = addInput.value.trim();
-        if (!v) return;
-        STORE.todos = STORE.todos || [];
-        STORE.todos.unshift({ id: 't' + Date.now(), text: v, done: false, at: Date.now() });
-        addInput.value = '';
-        saveStore(); render();
-        const i2 = document.getElementById('lw-todo-input');
-        if (i2) i2.focus();
-      };
-      addBtn.onclick = add;
-      addInput.onkeydown = (e) => { if (e.key === 'Enter') add(); };
-    }
-    /* 笔记交互 */
-    const nSave = host.querySelector('#lw-note-add');
-    const nInput = host.querySelector('#lw-note-input');
-    if (nSave && nInput) {
-      nSave.onclick = () => {
-        const v = nInput.value.trim();
-        if (!v) return;
-        STORE.notes = STORE.notes || [];
-        STORE.notes.unshift({ id: 'n' + Date.now(), text: v, at: Date.now() });
-        nInput.value = '';
-        saveStore(); render();
-      };
-    }
-    host.querySelectorAll('[data-note-del]').forEach((el) => {
-      el.onclick = () => { STORE.notes = (STORE.notes || []).filter((x) => x.id !== el.dataset.noteDel); saveStore(); render(); };
-    });
-    const cityBtn = host.querySelector('#lw-city');
-    if (cityBtn) {
-      cityBtn.onclick = () => {
-        const c = prompt('城市名（中文或英文）：', CITY);
-        if (c && c.trim()) { CITY = c.trim(); STORE.city = CITY; saveStore(); load(true); }
-      };
-    }
   }
+
 
   function skeleton() {
     const kpi = [0, 1, 2, 3].map(() => `<div class="lw-c" style="grid-column:span 3">
@@ -497,41 +575,81 @@
   }
 
   /* ── 待办 ── */
-  function viewTodo() {
-    const all = (STORE && STORE.todos) || [];
-    const open = all.filter((t) => !t.done), done = all.filter((t) => t.done);
-    const body = (list, isDone) => list.length ? list.map((t) => `<div class="lw-todo ${isDone ? 'done' : ''}">
-      <span class="ck" data-todo-toggle="${t.id}">✓</span>
-      <div class="tx">${esc(t.text)}<div class="due">${dstr(t.at)}</div></div>
-      <span class="del" data-todo-del="${t.id}">✕</span></div>`).join('') : `<div class="lw-empty"><span class="big">✓</span>${isDone ? '还没有完成的' : '还没有待办，下面加一条'}</div>`;
+  function viewMemo() {
+    const all = ((STORE && STORE.memos) || []).slice().sort((a, b) => b.at - a.at);
+    const sel = (STORE && STORE.memoSel) || (all[0] && all[0].id) || '';
+    const cur = all.find((x) => x.id === sel) || all[0] || null;
+    const list = all.length ? all.map((m) => {
+      const lines = String(m.text || '').split('\n');
+      const first = (lines[0] || '').slice(0, 30) || '(空)';
+      const sub = lines.slice(1).join(' ').slice(0, 28);
+      return `<div class="lw-mrow ${cur && m.id === cur.id ? 'on' : ''}" data-memo="${m.id}">
+        <div class="t">${m.todo ? '☑ ' : ''}${esc(first)}</div>
+        <div class="s">${esc(sub || (m.todo ? '待办清单' : '备忘录'))}</div>
+        <div class="d">${dstr(m.at).slice(5, 16)}</div></div>`;
+    }).join('') : `<div class="lw-empty"><span class="big">✎</span>还没有备忘录</div>`;
+    const detail = cur ? `<div class="lw-mdetail">
+        <input class="lw-mtitle" id="lw-memo-title" value="${esc(String(cur.text || '').split('\n')[0])}" placeholder="标题" />
+        <textarea class="lw-mbody" id="lw-memo-body" placeholder="正文…">${esc(String(cur.text || '').split('\n').slice(1).join('\n'))}</textarea>
+        <div class="lw-mtools">
+          <label class="lw-mck"><input type="checkbox" id="lw-memo-todo" ${cur.todo ? 'checked' : ''}/> 待办清单</label>
+          <span style="flex:1"></span>
+          <button class="lw-btn" id="lw-memo-save">保存</button>
+          <button class="lw-btn" id="lw-memo-del">删除</button>
+        </div></div>` : `<div class="lw-empty"><span class="big">✎</span>选一条，或点上面「＋ 新建」</div>`;
     return `<div class="lw-g12">
-      ${kpiCard('✓', open.length, '项', '待处理', all.length ? `已完成 ${done.length} / 共 ${all.length}` : '—', 4, 'peach')}
-      ${kpiCard('📅', done.length, '项', '已完成', all.length ? '完成率 ' + Math.round(done.length / all.length * 100) + '%' : '—', 4, 'rose')}
-      ${kpiCard('⏱', open.length ? ago(Math.max(...open.map((t) => t.at))) : '—', '', '最早一条', '按添加时间', 4, 'sky')}
-      ${card('待处理', '', `<div>${body(open, false)}</div><div class="lw-add">
-        <input id="lw-todo-input" placeholder="加一条待办，回车即可…" />
-        <button id="lw-todo-add">添加</button></div>`, 7)}
-      ${card('已完成', done.length ? `${done.length} 项` : '', `<div>${body(done, true)}</div>`, 5)}
+      <div class="lw-c" style="${sp(4)}">
+        <h3><span class="code">M-01</span>备忘录<span class="sp"></span><em>${all.length} 条</em><span class="act" id="lw-memo-new">＋ 新建</span></h3>
+        <div class="lw-mlist">${list}</div>
+      </div>
+      <div class="lw-c" style="${sp(8)}">
+        <h3><span class="code">M-02</span>${cur ? '编辑' : '详情'}<span class="sp"></span><em>${cur ? dstr(cur.at) : ''}</em></h3>
+        ${detail}
+      </div>
     </div>`;
   }
 
-  /* ── 笔记 ── */
-  function viewNotes() {
-    const notes = (STORE && STORE.notes) || [];
-    const recent = DATA.recent || [];
-    const mdFiles = recent.filter((f) => /\.(md|txt|tex|docx?)$/i.test(f.name)).slice(0, 10);
+  /* ── 日记（按天一条 + 时间线）── */
+  function viewJournal() {
+    const d0 = new Date();
+    const tk = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
+    const all = ((STORE && STORE.journal) || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+    const cur = all.find((x) => x.date === tk) || null;
+    let streak = 0;
+    for (let i = 0; i < 400; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (all.some((x) => x.date === k)) streak++; else if (i > 0) break;
+    }
+    const todayFiles = (DATA.recent || []).filter((f) => new Date(f.mtime).toDateString() === d0.toDateString()).slice(0, 8);
+    const WD = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const timeline = all.length ? all.map((j) => {
+      const wd = WD[new Date(j.date + 'T00:00:00').getDay()] || '';
+      return `<div class="lw-jrow"><div class="lw-jdate"><b>${esc(j.date.slice(5))}</b><span>${wd}</span></div>
+        <div class="lw-jbody">${esc(j.text)}</div><span class="del" data-jdel="${esc(j.date)}">✕</span></div>`;
+    }).join('') : `<div class="lw-empty"><span class="big">◈</span>还没有日记</div>`;
     return `<div class="lw-g12">
-      ${card('快速笔记', '存本机 · 随手记',
-        `<div class="lw-note"><textarea id="lw-note-input" placeholder="记点什么…（想法 / 实验现象 / 待查资料）"></textarea>
-         <div style="display:flex;justify-content:flex-end;margin-top:9px"><button class="lw-btn" id="lw-note-add" style="background:linear-gradient(160deg,${T.accent},${T.accent2});border:0;color:#fff">保存</button></div></div>`, 5)}
-      ${card('全部笔记', `${notes.length} 条`, notes.length ? notes.map((n) => `<div class="lw-note">
-        <div class="h">${dstr(n.at)}<span class="del" data-note-del="${n.id}">✕</span></div>
-        <div class="b">${esc(n.text)}</div></div>`).join('') : `<div class="lw-empty"><span class="big">✎</span>还没有笔记</div>`, 7)}
-      ${card('知识库里的笔记文件', '最近改动 · 点一行复制路径',
-        mdFiles.length ? `<div class="lw-tbl">${mdFiles.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
-          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
-          <span class="bd">${esc(f.ext)}</span><span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>`
-          : `<div class="lw-empty">没有找到笔记文件</div>`, 12)}
+      <div class="lw-c" style="${sp(7)}">
+        <h3><span class="code">J-01</span>今天 · ${esc(tk)}<span class="sp"></span><em>${cur ? '已写' : '还没写'}</em></h3>
+        <div class="lw-pad">
+          <textarea class="lw-jtext" id="lw-j-text" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">${cur ? esc(cur.text) : ''}</textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="lw-btn" id="lw-j-save">保存今天</button></div>
+        </div>
+      </div>
+      <div class="lw-c" style="${sp(5)}">
+        <h3><span class="code">J-02</span>连续记录<span class="sp"></span><em>共 ${all.length} 篇</em></h3>
+        <div class="lw-kpi"><div class="row"><div class="ic">◈</div>
+          <div style="flex:1;min-width:0"><div class="num">${streak}<small>天</small></div></div></div>
+          <div class="cmp">${streak ? '继续保持' : '今天开个头'}</div></div>
+        <h3 style="border-top:1px solid ${T.lineDim}"><span class="code">J-03</span>今天动过的文件</h3>
+        <div class="lw-tbl">${todayFiles.length ? todayFiles.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+          <span class="nm">${esc(f.name)}</span><span class="bd">${esc(f.ext || '—')}</span>
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : `<div class="lw-empty">今天还没动文件</div>`}</div>
+      </div>
+      <div class="lw-c" style="${sp(12)}">
+        <h3><span class="code">J-04</span>日记时间线<span class="sp"></span><em>${all.length} 篇</em></h3>
+        <div class="lw-jlist">${timeline}</div>
+      </div>
     </div>`;
   }
 
@@ -553,23 +671,43 @@
 
   /* ── 论文 ── */
   function viewPaper() {
-    const ps = (DATA.projects || []).filter((p) => p.track === 'paper' || /paper|manuscript|论文|latex|投稿|开题|摘要/i.test(p.name));
-    const docs = (DATA.recent || []).filter((f) => /\.(docx?|tex|pdf|pptx?|md)$/i.test(f.name)).slice(0, 12);
-    const track = (DATA.tracks || []).find((t) => t.id === 'paper');
+    const local = (DATA.recent || []).filter((f) => /\.(pdf|docx?|tex|md)$/i.test(f.name));
+    const tracks = (DATA.tracks || []).filter((t) => ['robot', 'rl', 'paper'].includes(t.id));
+    const q = (STORE && STORE.paperQ) || '';
+    const res = (STORE && STORE.paperRes) || null;
+    const kw = ['legged robot locomotion', 'bipedal wheeled robot control', 'reinforcement learning locomotion', 'MPC legged robot'];
+    const resHtml = (STORE && STORE.paperLoading) ? '<div class="lw-empty">正在检索 arXiv…</div>'
+      : (res && res.ok ? (res.items || []).map((p) => `<div class="lw-parow">
+            <div class="t"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
+            <div class="m">${esc((p.authors || []).join(', '))} · ${esc(p.published)}</div>
+            <div class="s">${esc(p.summary)}</div></div>`).join('')
+        : (res && res.error ? `<div class="lw-empty">${esc(res.error)}</div>` : '<div class="lw-empty"><span class="big">▤</span>输入关键词，或点一个推荐词</div>'));
     return `<div class="lw-g12">
-      ${kpiCard('📄', track ? track.projects : 0, '个项目', '论文 / 投稿', track ? track.files + ' 个文件 · ' + track.sizeText : '未归类到论文', 3, 'lilac')}
-      ${kpiCard('✎', docs.length, '篇', '文稿 / 插图', 'docx · tex · pdf · pptx', 3, 'mint')}
-      ${kpiCard('◈', (DATA.tracks || []).length, '个方向', '整体进度', '按最近改动排序', 3, 'lemon')}
-      ${kpiCard('▦', DATA.totals.projects, '个项目', '全部项目', DATA.totals.sizeText, 3, 'peach')}
-      ${card('论文项目', `${ps.length} 个`, ps.length ? `<div class="lw-tbl">${ps.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
-        <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
-        <span class="bd">${p.files} 文件</span><span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>` : emptyBox('还没归类到论文项目'), 6)}
-      ${card('文稿与插图', '最近改动', docs.length ? `<div class="lw-tbl">${docs.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
-        <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
-        <span class="bd">${esc(f.ext)}</span><span class="sz">${fmtBytes(f.size)}</span>
-        <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>` : emptyBox('最近没有文稿改动'), 6)}
+      <div class="lw-c" style="${sp(12)}">
+        <h3><span class="code">P-01</span>论文检索<span class="sp"></span><em>arXiv 在线 + 本机库</em></h3>
+        <div class="lw-pad">
+          <div class="lw-search"><input id="lw-paper-q" placeholder="关键词，如 legged robot MPC…" value="${esc(q)}" /><button class="lw-btn" id="lw-paper-go">检索</button></div>
+          <div class="lw-chips" style="margin-top:10px">${kw.map((k) => `<span class="lw-chip lw-kw" data-kw="${esc(k)}">${esc(k)}</span>`).join('')}</div>
+        </div>
+      </div>
+      <div class="lw-c" style="${sp(7)}">
+        <h3><span class="code">P-02</span>在线论文推荐<span class="sp"></span><em>arXiv 最新</em></h3>
+        <div class="lw-plist">${resHtml}</div>
+      </div>
+      <div class="lw-c" style="${sp(5)}">
+        <h3><span class="code">P-03</span>我电脑里的论文<span class="sp"></span><em>${local.length} 个</em></h3>
+        <div class="lw-tbl">${local.slice(0, 16).map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
+          <span class="bd">${esc(f.ext)}</span><span class="tm">${ago(f.mtime)}</span></div>`).join('') || '<div class="lw-empty">没找到论文文件</div>'}</div>
+      </div>
+      <div class="lw-c" style="${sp(12)}">
+        <h3><span class="code">P-04</span>按研究方向找<span class="sp"></span><em>点一下用该方向的项目名检索</em></h3>
+        <div class="lw-pad"><div class="lw-chips">${tracks.flatMap((t) => (t.list || []).slice(0, 5).map((p) =>
+          `<span class="lw-chip lw-kw" data-kw="${esc(p.name.replace(/[_\-.].*$/, ''))}">${esc(p.name)}</span>`)).join('')}</div></div>
+      </div>
     </div>`;
   }
+
 
   /* ── 文件 ── */
   function viewFiles() {
@@ -620,33 +758,48 @@
   }
 
   /* ── 邮箱 / 外部入口 ── */
+  const MAIL_PRESET = {
+    qq: { name: 'QQ 邮箱', host: 'smtp.qq.com', port: '465', imapHost: 'imap.qq.com', imapPort: '993', web: 'https://mail.qq.com' },
+    '163': { name: '网易邮箱', host: 'smtp.163.com', port: '465', imapHost: 'imap.163.com', imapPort: '993', web: 'https://mail.163.com' },
+    gmail: { name: 'Gmail', host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', web: 'https://mail.google.com' },
+    wx: { name: '无限邮', host: '', port: '', imapHost: '', imapPort: '', web: '' },
+  };
   function viewMail() {
-    const links = [
-      { ic: '📮', n: 'QQ 邮箱', u: 'https://mail.qq.com' },
-      { ic: '✉️', n: '网易邮箱', u: 'https://mail.163.com' },
-      { ic: '📧', n: 'Gmail', u: 'https://mail.google.com' },
-      { ic: '📚', n: '知网', u: 'https://www.cnki.net' },
-      { ic: '🔬', n: 'Google 学术', u: 'https://scholar.google.com' },
-      { ic: '📖', n: 'arXiv', u: 'https://arxiv.org' },
-      { ic: '🐙', n: 'GitHub', u: 'https://github.com' },
-      { ic: '📝', n: 'Overleaf', u: 'https://www.overleaf.com/project' },
-      { ic: '🤗', n: 'HuggingFace', u: 'https://huggingface.co' },
-      { ic: '🧭', n: 'ROS Wiki', u: 'https://wiki.ros.org' },
-      { ic: '⚙️', n: 'STM32 文档', u: 'https://www.st.com' },
-      { ic: '🎓', n: '学校邮箱', u: 'https://mail.qq.com' },
-    ];
-    const mailFiles = (DATA.recent || []).filter((f) => /邮件|mail|revision|审稿|投稿|回复/i.test(f.name)).slice(0, 8);
+    const acc = (STORE && STORE.mailAcc) || {};
+    const keys = Object.keys(MAIL_PRESET);
+    const cards = keys.map((k, i) => {
+      const P = MAIL_PRESET[k];
+      const a = acc[k] || {};
+      return `<div class="lw-c" style="${sp(6)}">
+        <h3><span class="code">E-0${i + 1}</span>${esc(P.name)}<span class="sp"></span><em>${a.user ? esc(a.user) : '未配置'}</em></h3>
+        <div class="lw-pad">
+          <div class="lw-form">
+            <label>SMTP 服务器<input data-mail="${k}" data-f="host" placeholder="${esc(P.host || 'smtp.example.com')}" value="${esc(a.host || '')}"/></label>
+            <label>端口<input data-mail="${k}" data-f="port" placeholder="${esc(P.port || '465')}" value="${esc(a.port || '')}"/></label>
+            <label>邮箱账号<input data-mail="${k}" data-f="user" placeholder="you@example.com" value="${esc(a.user || '')}"/></label>
+            <label>授权码 / 密码<input data-mail="${k}" data-f="pass" type="password" placeholder="${a.hasPass ? '已保存（留空不改）' : '授权码'}" value=""/></label>
+            <label>IMAP 服务器<input data-mail="${k}" data-f="imapHost" placeholder="${esc(P.imapHost || 'imap.example.com')}" value="${esc(a.imapHost || '')}"/></label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button class="lw-btn" data-mailsave="${k}">保存</button>
+            ${P.web ? `<a class="lw-btn" href="${P.web}" target="_blank" rel="noopener" style="text-decoration:none">打开网页版</a>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
     return `<div class="lw-g12">
-      ${card('常用入口', '在新标签打开',
-        `<div class="lw-pad"><div class="lw-links">${links.map((l) =>
-          `<a class="lw-link" href="${l.u}" target="_blank" rel="noopener"><span class="ic">${l.ic}</span>${l.n}</a>`).join('')}</div></div>`, 12)}
-      ${card('邮件相关文件', '最近改动 · 点一行复制路径',
-        mailFiles.length ? `<div class="lw-tbl">${mailFiles.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
-          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
-          <span class="bd">${esc(f.ext || '—')}</span><span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>`
-          : `<div class="lw-empty"><span class="big">✉️</span>没有找到邮件相关文件<br><span style="font-size:11px">把审稿意见、投稿回复放进来就会出现在这</span></div>`, 12)}
+      <div class="lw-c" style="${sp(12)}">
+        <h3><span class="code">E-00</span>说明<span class="sp"></span></h3>
+        <div class="lw-pad" style="font-size:12px;line-height:1.9;color:${T.dim}">
+          填好 SMTP / IMAP 后点「保存」——配置只存本机（life-mail.json），不上传。<br>
+          「密码」要填<b style="color:${T.accent}">授权码</b>，不是登录密码：QQ 在「设置 → 账户 → POP3/SMTP 服务」生成，网易类似，Gmail 要「应用专用密码」。<br>
+          <span style="color:${T.faint}">收信 / 发信还没接 —— 等你的 SMTP 服务就绪后再加。</span>
+        </div>
+      </div>
+      ${cards}
     </div>`;
   }
+
 
   function emptyBox(msg) {
     return `<div class="lw-empty"><span class="big">▢</span>${esc(msg)}</div>`;
