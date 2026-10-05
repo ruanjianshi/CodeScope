@@ -14325,14 +14325,24 @@ function bpOnContextChanged() {
   if (!BP_ACTIVE || !BP_WORKSPACE) return;
   const key = bpContextKey();
   if (key === BP_DOC_KEY) return;
-  /* 文档/片段换了：旧积木一定无效，直接清掉重来 */
-  const docChanged = BP_DOC_KEY.split('#').slice(0, 2).join('#') !== key.split('#').slice(0, 2).join('#');
+  /* ⚠️ 切走前**先把改动落盘**（防抖可能还没触发），这样切回来能恢复。
+     之前这里有个"脏了就不同步"的拦截，但加了持久化之后它就是**纯阻碍**了 ——
+     用户移动光标到别的函数，积木栏却不跟着变，看起来像坏了（用户报过
+     「怎么不会更新了」）。现在：**照常跟随 + 改动先落盘**，两全。 */
+  bpFlushSave();
   BP_DOC_KEY = key;
-  if (BP_DIRTY && !docChanged) {
-    setStatus('warn', '函数已切换，但你在积木上的改动还在 —— 点「⇄ 从代码同步」才会覆盖');
-    return;
-  }
   syncBlocksFromCode();
+}
+/* 立刻把当前工作区存进缓存（不等防抖）。切走 / 关面板时调用。 */
+function bpFlushSave() {
+  clearTimeout(BP_EDIT_TIMER);
+  const key = BP_DOC_KEY;
+  if (!key || !BP_WORKSPACE || BP_BUILDING) return;
+  if (!bpIsDirty()) return;   /* 没改过就不用存 */
+  try {
+    BP_EDIT_CACHE.set(key, window.Blockly.serialization.workspaces.save(BP_WORKSPACE));
+    bpSaveEdits();
+  } catch (_) {}
 }
 
 /* 通知 Blockly 重算画布尺寸。容器（积木栏 / 工作区）尺寸一变就得调一次，
@@ -14343,6 +14353,8 @@ function bpResize() {
 }
 /* ── 面板 ── */
 function setBlocklyActive(on) {
+  /* 关面板前先把改动落盘，别让它躺在防抖里丢掉 */
+  if (!on) { try { bpFlushSave(); } catch (_) {} }
   BP_ACTIVE = !!on;
   const canvas = $('bp-canvas');
   if (canvas) {
@@ -14405,6 +14417,11 @@ function renderBlockPane() {
 }
 /* 从当前函数生成积木（核心：代码 → 积木） */
 function syncBlocksFromCode() {
+  /* ⚠️ 先把当前工作区的改动落盘再重新同步 ——
+     这条路径是多个入口的公共出口（打开面板、点按钮、光标切换），
+     不在这里落盘的话，从「打开面板」进来就会绕过 bpOnContextChanged 的落盘，
+     改动直接丢（实测踩到：跟随光标好了但编辑没了）。 */
+  try { bpFlushSave(); } catch (_) {}
   const root = logicPaneRoot();
   const body = $('bp-code');
   if (!root || !CURRENT) { if (body) body.textContent = '先把光标放到一个函数里'; return; }
@@ -18718,6 +18735,8 @@ function makeHResizer(handle, getter, setter) {
   wireBlocklyToolbar();
   /* 窗口尺寸变化时也要让 Blockly 重算画布 */
   window.addEventListener('resize', bpResize);
+  /* 关页面 / 切后台前把积木改动落盘 */
+  window.addEventListener('beforeunload', () => { try { bpFlushSave(); } catch (_) {} });
   if ($('btn-blockly')) $('btn-blockly').onclick = () => {
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
     setBlocklyActive(!BP_ACTIVE);
