@@ -500,6 +500,14 @@
   .lw-cal-d.sel::after { background:${T.accentInk}; }
   .lw-jday-hd { padding:12px 16px 4px; font-size:12px; color:${T.dim}; letter-spacing:.5px; }
   .lw-jday-hd b { color:${T.accent}; font-weight:700; }
+  /* 日记模板条 */
+  .lw-jtpl { display:flex; align-items:center; gap:7px; padding:9px 14px; border-bottom:1px solid ${T.lineDim};
+    font-size:10.5px; color:${T.faint}; flex-wrap:wrap; }
+  .lw-jtpl .sp { flex:1; }
+  .lw-jtpl button { height:26px; padding:0 11px; border:2px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:600 10.5px ${UI}; letter-spacing:.6px; cursor:pointer; }
+  .lw-jtpl button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-jtpl button:active { background:${T.accent}; color:${T.accentInk}; }
   /* 日记 */
   .lw-jtext { width:100%; min-height:190px; resize:vertical; padding:12px 13px; border:2px solid ${T.lineDim};
     background:transparent; color:${T.text}; font:12.5px/1.8 ${UI}; outline:none; }
@@ -1100,6 +1108,22 @@
       STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
       saveStore(); render();
     };
+    /* 模板：点一下插入（已有内容则询问是替换还是追加 ✓）*/
+    qa('[data-jtpl]').forEach((btn) => {
+      btn.onclick = () => {
+        const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
+        const el = document.getElementById('lw-j-text'); if (!el) return;
+        if (el.value.trim() && !confirm('当前已有内容。\n\n确定 = 替换成模板　取消 = 追加到末尾')) {
+          el.value = el.value.replace(/\s*$/, '') + '\n\n' + tpl.text;
+        } else {
+          el.value = tpl.text;
+        }
+        el.focus(); el.setSelectionRange(el.value.length, el.value.length);
+        const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已插入「' + tpl.name + '」模板，记得保存 ✓';
+      };
+    });
+    const autoTpl = q('#lw-j-autotpl');
+    if (autoTpl) autoTpl.onchange = () => { STORE.journalAutoTpl = autoTpl.checked; saveStore(); };
     const jPrev = q("#lw-j-prev"), jNext = q("#lw-j-next"), jToday = q("#lw-j-today");
     const shiftMonth = (n) => {
       const d = new Date((STORE.journalMonth || new Date().toISOString().slice(0, 7)) + "-01T00:00:00");
@@ -1120,6 +1144,11 @@
       const d0 = new Date();
       const k = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
       const text = ((q('#lw-j-text') || {}).value || '').trim();
+      /* 只填了模板、没动过 → 不算写 ✓（免得日历上白点一片 ✗）*/
+      if (text === J_TPL.daily.text.trim() || text === J_TPL.research.text.trim() || text === J_TPL.review.text.trim()) {
+        const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '还只填了模板 —— 补两句再保存 ✓';
+        return;
+      }
       STORE.journal = STORE.journal || [];
       const hit = STORE.journal.find((x) => x.date === k);
       if (hit) { hit.text = text; hit.at = Date.now(); }
@@ -1460,6 +1489,13 @@
   }
 
   /* ── 日记（按天一条 + 时间线）── */
+  /* ── 日记模板（新建时自动套用，也可手动插入）── */
+  const J_TPL = {
+    daily: { name: '日常', icon: '☀', text: '## 今天做了什么\n- \n\n## 卡在哪里\n- \n\n## 明天要做什么\n- \n\n## 心情 / 收获\n' },
+    research: { name: '科研', icon: '◈', text: '## 今日进展\n- \n\n## 实验 / 数据\n- 跑了什么：\n- 结果如何：\n- 异常现象：\n\n## 遇到的问题\n- \n\n## 下一步\n- \n\n## 文献 / 灵感\n- ' },
+    review: { name: '复盘', icon: '◔', text: '## 做得好的\n- \n\n## 做得不好的\n- \n\n## 学到了什么\n- \n\n## 明天改进\n- ' },
+  };
+
   /* ── 日记：月历 + 选中当天编辑（+ 当天天气）── */
   function viewJournal() {
     const d0 = new Date();
@@ -1518,7 +1554,9 @@
     return '<div class="lw-g12">'
       + '<div class="lw-c" style="grid-column:span 5"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>' + cal + '</div>'
       + '<div class="lw-c" style="grid-column:span 7"><h3><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
-      + '<div class="lw-pad"><textarea class="lw-jtext" id="lw-j-text" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">' + (cur ? esc(cur.text) : "") + '</textarea>'
+      + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
+      + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
+      + '<div class="lw-pad"><textarea class="lw-jtext" id="lw-j-text" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">' + (cur ? esc(cur.text) : (STORE.journalAutoTpl === false ? '' : esc(J_TPL.daily.text))) + '</textarea>'
       + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
       + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
       + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
