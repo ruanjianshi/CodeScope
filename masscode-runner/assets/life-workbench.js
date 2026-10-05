@@ -435,6 +435,71 @@
   .lw-ctx .mi.danger { color:${T.red}; }
   .lw-ctx .mi.danger:hover { background:${T.red}; color:#111; }
   .lw-ctx .sep { height:1px; background:${T.lineDim}; margin:4px 0; }
+  /* ── 书签：好词好句（衬线字体 + 卡片墙 + 引号装饰）── */
+  .lw-bk-hero { border:2px solid ${T.line}; background:#12120f; padding:22px 26px; position:relative; margin-bottom:14px; }
+  .lw-bk-hero .q { font-family:"Songti SC","STSong",Georgia,"Times New Roman",serif;
+    font-size:22px; line-height:1.9; color:#fff; letter-spacing:.5px; }
+  .lw-bk-hero .q::before { content:"❝"; position:absolute; left:6px; top:2px; font-size:40px;
+    color:${T.accent}; opacity:.28; }
+  .lw-bk-hero .from { margin-top:14px; font-size:11.5px; color:${T.dim}; letter-spacing:.6px;
+    display:flex; align-items:center; gap:10px; }
+  .lw-bk-hero .from .sp { flex:1; }
+  .lw-bk-hero .from button { height:26px; padding:0 11px; border:2px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:600 10px ${UI}; letter-spacing:1px; cursor:pointer; }
+  .lw-bk-hero .from button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-bk-write { display:flex; gap:10px; border:2px solid ${T.lineDim}; background:#0d0d0c; padding:12px 14px; margin-bottom:14px; }
+  .lw-bk-write .col { flex:1; display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .lw-bk-write input, .lw-bk-write textarea { width:100%; border:0; border-bottom:1px solid ${T.lineDim};
+    background:transparent; color:${T.text}; outline:none; }
+  .lw-bk-write textarea { font-family:"Songti SC","STSong",Georgia,serif; font-size:15px; line-height:1.8;
+    min-height:56px; resize:vertical; }
+  .lw-bk-write input { font:11.5px ${UI}; padding:4px 0; }
+  .lw-bk-write input::placeholder, .lw-bk-write textarea::placeholder { color:${T.faint}; }
+  .lw-bk-write button { align-self:flex-end; height:30px; padding:0 15px; border:2px solid ${T.accent};
+    background:${T.accent}; color:${T.accentInk}; font:700 10.5px ${UI}; letter-spacing:1.2px; cursor:pointer; }
+  /* 卡片墙 */
+  .lw-bk-wall { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .lw-bk-card { border:2px solid ${T.lineDim}; background:#101010; padding:15px 16px 12px; position:relative;
+    display:flex; flex-direction:column; min-height:132px; }
+  .lw-bk-card:hover { border-color:${T.accent}; }
+  .lw-bk-card.pin { border-left:4px solid ${T.accent}; }
+  .lw-bk-card .txt { font-family:"Songti SC","STSong",Georgia,"Times New Roman",serif;
+    font-size:14px; line-height:1.85; color:#e8e5da; flex:1; word-break:break-word; }
+  .lw-bk-card .txt::first-letter { }
+  .lw-bk-card .src { margin-top:11px; font-size:10.5px; color:${T.faint}; letter-spacing:.4px;
+    display:flex; align-items:center; gap:8px; }
+  .lw-bk-card .src .sp { flex:1; }
+  .lw-bk-card .src .tg { color:${T.accent}; }
+  .lw-bk-card .ops { position:absolute; right:8px; top:8px; display:flex; gap:4px; opacity:0; }
+  .lw-bk-card:hover .ops { opacity:1; }
+  .lw-bk-card .ops button { width:20px; height:20px; border:1px solid ${T.lineDim}; background:#101010;
+    color:${T.dim}; font-size:10px; cursor:pointer; line-height:1; }
+  .lw-bk-card .ops button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-bk-card .ops button.del:hover { border-color:${T.red}; color:${T.red}; }
+  .lw-bk-day { padding:5px 2px 0; font-size:10.5px; color:${T.faint}; letter-spacing:1.2px; }
+  /* ── 日记：月历 + 当天编辑 ── */
+  .lw-cal-hd { display:flex; align-items:center; gap:9px; padding:10px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-cal-hd .m { font-size:13px; font-weight:700; color:${T.text}; letter-spacing:.6px; }
+  .lw-cal-hd .sp { flex:1; }
+  .lw-cal-hd button { height:24px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:600 10.5px ${UI}; cursor:pointer; }
+  .lw-cal-hd button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-cal { padding:8px 10px 12px; }
+  .lw-cal-wk { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-bottom:4px; }
+  .lw-cal-wk span { text-align:center; font-size:9.5px; color:${T.faint}; letter-spacing:.6px; }
+  .lw-cal-g { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .lw-cal-d { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border:1px solid transparent; font-size:11.5px; color:${T.dim}; cursor:pointer; position:relative; }
+  .lw-cal-d:hover { border-color:${T.lineDim}; color:${T.text}; }
+  .lw-cal-d.out { color:#3a3a34; cursor:default; }
+  .lw-cal-d.out:hover { border-color:transparent; }
+  .lw-cal-d.has { color:${T.text}; font-weight:700; }
+  .lw-cal-d.has::after { content:""; position:absolute; bottom:4px; width:4px; height:4px; background:${T.accent}; }
+  .lw-cal-d.today { border-color:${T.lineDim}; }
+  .lw-cal-d.sel { background:${T.accent}; color:${T.accentInk}; font-weight:700; border-color:${T.accent}; }
+  .lw-cal-d.sel::after { background:${T.accentInk}; }
+  .lw-jday-hd { padding:12px 16px 4px; font-size:12px; color:${T.dim}; letter-spacing:.5px; }
+  .lw-jday-hd b { color:${T.accent}; font-weight:700; }
   /* 日记 */
   .lw-jtext { width:100%; min-height:190px; resize:vertical; padding:12px 13px; border:2px solid ${T.lineDim};
     background:transparent; color:${T.text}; font:12.5px/1.8 ${UI}; outline:none; }
@@ -478,6 +543,7 @@
     { id: 'today', icon: '☀', label: '今日', grp: '面板', key: 'T-01' },
     { id: 'memo', icon: '✎', label: '备忘录', grp: '面板', key: 'M-01', badge: true },
     { id: 'journal', icon: '◈', label: '日记', grp: '面板', key: 'J-01' },
+    { id: 'quote', icon: '❝', label: '书签', grp: '面板', key: 'B-01' },
     { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
     { id: 'paper', icon: '▤', label: '论文检索', grp: '科研', key: 'P-01' },
     { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
@@ -694,7 +760,7 @@
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
-    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime, mail: viewMail }[TAB] || viewToday;
+    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime, mail: viewMail }[TAB] || viewToday;
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
@@ -980,7 +1046,75 @@
       document.addEventListener("keydown", bind._keys);
     }
 
-    /* ── 日记 ── */
+    /* ── 书签（好词好句）── */
+    const qById = (id) => (STORE.quotes || []).find((x) => x.id === id);
+    const addQuote = () => {
+      const t = q("#lw-bk-text"), f = q("#lw-bk-from"), g = q("#lw-bk-tag");
+      const text = ((t && t.value) || "").trim(); if (!text) return;
+      STORE.quotes = STORE.quotes || [];
+      STORE.quotes.unshift({ id: "q" + Date.now(), text, from: ((f && f.value) || "").trim(), tag: ((g && g.value) || "").trim(), at: Date.now() });
+      saveStore(); render();
+      const t2 = document.getElementById("lw-bk-text"); if (t2) t2.focus();
+    };
+    const bkAdd = q("#lw-bk-add"); if (bkAdd) bkAdd.onclick = addQuote;
+    const bkTa = q("#lw-bk-text");
+    if (bkTa) bkTa.onkeydown = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); addQuote(); } };
+    qa("[data-bktag]").forEach((el) => { el.onclick = () => { STORE.quoteTag = el.dataset.bktag || ""; saveStore(); render(); }; });
+    qa("[data-bk-pin]").forEach((el) => { el.onclick = () => { const x = qById(el.dataset.bkPin); if (x) { x.pin = !x.pin; saveStore(); render(); } }; });
+    qa("[data-bk-del]").forEach((el) => { el.onclick = () => { STORE.quotes = (STORE.quotes || []).filter((x) => x.id !== el.dataset.bkDel); saveStore(); render(); }; });
+    qa("[data-bk-copy]").forEach((el) => {
+      el.onclick = () => {
+        const x = qById(el.dataset.bkCopy); if (!x) return;
+        try { navigator.clipboard.writeText(x.text + (x.from ? "\n—— " + x.from : "")); const s2 = document.getElementById("lw-sub"); if (s2) s2.textContent = "已复制书签"; } catch (_) {}
+      };
+    });
+    const bkRand = q("[data-bk-random]");
+    if (bkRand) bkRand.onclick = () => {
+      const all = STORE.quotes || []; if (!all.length) return;
+      const i = Math.floor(Math.random() * all.length);
+      const s2 = document.getElementById("lw-sub"); if (s2) s2.textContent = "❝ " + all[i].text + (all[i].from ? " —— " + all[i].from : "");
+      render();
+    };
+    const bkQ = q("#lw-bk-q");
+    if (bkQ) bkQ.oninput = () => { STORE.quoteQ = bkQ.value; render(); const i2 = document.getElementById("lw-bk-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+
+    /* ── 天气：点胶囊换地区 ── */
+    const wxEl = q(".lw-wx");
+    if (wxEl) {
+      wxEl.style.cursor = "pointer";
+      wxEl.title = "点击切换地区";
+      wxEl.onclick = () => {
+        const c = prompt("输入城市（中文或英文）：", CITY);
+        if (c && c.trim()) { CITY = c.trim(); STORE.city = CITY; saveStore(true); load(true); }
+      };
+    }
+
+    /* ── 日记：月历选择日期 ── */
+    qa("[data-jday]").forEach((el) => {
+      el.onclick = () => { STORE.journalSel = el.dataset.jday; STORE.journalMonth = el.dataset.jday.slice(0, 7); saveStore(); render(); };
+    });
+    const jDel = q('#lw-j-del');
+    if (jDel) jDel.onclick = () => {
+      const k = STORE.journalSel;
+      if (!k || !confirm('删除 ' + k + ' 的日记？')) return;
+      STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
+      saveStore(); render();
+    };
+    const jPrev = q("#lw-j-prev"), jNext = q("#lw-j-next"), jToday = q("#lw-j-today");
+    const shiftMonth = (n) => {
+      const d = new Date((STORE.journalMonth || new Date().toISOString().slice(0, 7)) + "-01T00:00:00");
+      d.setMonth(d.getMonth() + n);
+      STORE.journalMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      saveStore(); render();
+    };
+    if (jPrev) jPrev.onclick = () => shiftMonth(-1);
+    if (jNext) jNext.onclick = () => shiftMonth(1);
+    if (jToday) jToday.onclick = () => {
+      const d = new Date();
+      STORE.journalMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      STORE.journalSel = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      saveStore(); render();
+    };
     const jSave = q('#lw-j-save');
     if (jSave) jSave.onclick = () => {
       const d0 = new Date();
@@ -1275,48 +1409,128 @@
 
 
 
+  /* ── 书签：好词好句（衬线字体 · 卡片墙 · 每日一句）── */
+  function viewQuote() {
+    const all = ((STORE && STORE.quotes) || []).slice();
+    const kw = String((STORE && STORE.quoteQ) || '').trim().toLowerCase();
+    const tagF = (STORE && STORE.quoteTag) || '';
+    const tagsOf = (q) => (String(q.tag || '').match(/[\u4e00-\u9fa5\w-]+/g) || []);
+    const tagCount = {};
+    all.forEach((q) => tagsOf(q).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+    let shown = all.filter((q) => (!kw || String(q.text || '').toLowerCase().includes(kw) || String(q.from || '').toLowerCase().includes(kw))
+      && (!tagF || tagsOf(q).includes(tagF)));
+    shown.sort((a, b) => { if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0); return (b.at || 0) - (a.at || 0); });
+    /* 每日一句：按日期做种子，保证同一天看到同一条 ✓ */
+    const d0 = new Date();
+    const daySeed = d0.getFullYear() * 372 + (d0.getMonth() + 1) * 31 + d0.getDate();
+    const hero = all.length ? all[daySeed % all.length] : null;
+    const tagKeys = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
+
+    const heroHtml = hero ? '<div class="lw-bk-hero"><div class="q">' + esc(hero.text) + '</div>'
+      + '<div class="from">' + (hero.from ? '—— ' + esc(hero.from) : '未署出处')
+      + (tagsOf(hero).length ? ' · ' + tagsOf(hero).map((t) => '<span class="tg">#' + esc(t) + '</span>').join(' ') : '')
+      + '<span class="sp"></span><span style="color:' + T.faint + '">每日一句 · ' + (d0.getMonth() + 1) + ' 月 ' + d0.getDate() + ' 日</span>'
+      + '<button data-bk-random="1">换一句</button></div></div>'
+      : '<div class="lw-bk-hero"><div class="q" style="color:' + T.faint + '">还没有书签 —— 下面记下第一句吧</div></div>';
+
+    const write = '<div class="lw-bk-write"><div class="col">'
+      + '<textarea id="lw-bk-text" placeholder="记一句好词好句…"></textarea>'
+      + '<input id="lw-bk-from" placeholder="出处（书名 / 作者 / 场景）" />'
+      + '<input id="lw-bk-tag" placeholder="标签（空格分隔，如 写作 灵感）" /></div>'
+      + '<button id="lw-bk-add">记下 ⌘⏎</button></div>';
+
+    const wall = shown.length ? '<div class="lw-bk-wall">' + shown.map((q) => '<div class="lw-bk-card ' + (q.pin ? 'pin' : '') + '">'
+      + '<div class="ops"><button data-bk-pin="' + q.id + '" title="置顶">' + (q.pin ? '★' : '☆') + '</button>'
+      + '<button data-bk-copy="' + q.id + '" title="复制">⧉</button>'
+      + '<button class="del" data-bk-del="' + q.id + '" title="删除">✕</button></div>'
+      + '<div class="txt">' + esc(q.text) + '</div>'
+      + '<div class="src">' + (q.from ? '—— ' + esc(q.from) : '')
+      + '<span class="sp"></span>' + tagsOf(q).map((t) => '<span class="tg">#' + esc(t) + '</span>').join(' ')
+      + '</div></div>').join('') + '</div>'
+      : '<div class="lw-mo-empty" style="padding:34px 0"><span class="big">❝</span>' + (kw || tagF ? '没有匹配的书签' : '还没有书签') + '</div>';
+
+    const tagBar = tagKeys.length ? '<div class="lw-mtags" style="padding:0 0 12px"><span data-bktag="" class="' + (tagF ? '' : 'on') + '">全部 ' + all.length + '</span>'
+      + tagKeys.map((t) => '<span data-bktag="' + esc(t) + '" class="' + (tagF === t ? 'on' : '') + '">#' + esc(t) + ' ' + tagCount[t] + '</span>').join('') + '</div>' : '';
+
+    return '<div class="lw-g12">'
+      + '<div class="lw-c" style="' + sp(12) + '"><h3><span class="code">B-00</span>书签 · 好词好句<span class="sp"></span>'
+      + '<em>' + all.length + ' 条 · ' + tagKeys.length + ' 个标签</em>'
+      + '<input id="lw-bk-q" placeholder="搜索（⌘F）" value="' + esc((STORE && STORE.quoteQ) || '') + '" style="height:22px;width:150px;padding:0 8px;border:1px solid ' + T.lineDim + ';background:transparent;color:' + T.text + ';font:10.5px ' + UI + ';outline:none" /></h3>'
+      + '<div style="padding:14px 16px">' + heroHtml + write + tagBar + wall + '</div></div></div>';
+  }
+
   /* ── 日记（按天一条 + 时间线）── */
+  /* ── 日记：月历 + 选中当天编辑（+ 当天天气）── */
   function viewJournal() {
     const d0 = new Date();
-    const tk = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const keyOf = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+    const todayK = keyOf(d0);
     const all = ((STORE && STORE.journal) || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-    const cur = all.find((x) => x.date === tk) || null;
+    const hasSet = {}; all.forEach((j) => { hasSet[j.date] = j; });
+    const mon = (STORE && STORE.journalMonth) || todayK.slice(0, 7);
+    const sel = (STORE && STORE.journalSel) || todayK;
+    const cur = hasSet[sel] || null;
+    const WD = ["日", "一", "二", "三", "四", "五", "六"];
+    /* 连续记录 */
     let streak = 0;
-    for (let i = 0; i < 400; i++) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      if (all.some((x) => x.date === k)) streak++; else if (i > 0) break;
+    for (let i = 0; i < 400; i++) { const d = new Date(); d.setDate(d.getDate() - i); const k = keyOf(d); if (hasSet[k]) streak++; else if (i > 0) break; }
+
+    /* 月历网格 */
+    const [yy, mm] = mon.split("-").map(Number);
+    const first = new Date(yy, mm - 1, 1);
+    const startWd = first.getDay();
+    const daysInMon = new Date(yy, mm, 0).getDate();
+    const prevDays = new Date(yy, mm - 1, 0).getDate();
+    const cells = [];
+    for (let i = startWd - 1; i >= 0; i--) cells.push({ d: new Date(yy, mm - 2, prevDays - i), out: true });
+    for (let i = 1; i <= daysInMon; i++) cells.push({ d: new Date(yy, mm - 1, i), out: false });
+    while (cells.length % 7 !== 0) { const last = cells[cells.length - 1].d; cells.push({ d: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), out: true }); }
+    const cal = '<div class="lw-cal-hd"><button id="lw-j-prev">‹</button>'
+      + '<span class="m">' + yy + ' 年 ' + mm + ' 月</span><span class="sp"></span>'
+      + '<button id="lw-j-today">今天</button><button id="lw-j-next">›</button></div>'
+      + '<div class="lw-cal"><div class="lw-cal-wk">' + WD.map((w) => "<span>" + w + "</span>").join("") + '</div><div class="lw-cal-g">'
+      + cells.map((c) => {
+          const k = keyOf(c.d);
+          const cls = ["lw-cal-d"];
+          if (c.out) cls.push("out");
+          if (hasSet[k]) cls.push("has");
+          if (k === todayK) cls.push("today");
+          if (k === sel) cls.push("sel");
+          return '<div class="' + cls.join(" ") + '" ' + (c.out ? "" : 'data-jday="' + k + '"') + '>' + c.d.getDate() + "</div>";
+        }).join("")
+      + '</div></div>';
+
+    /* 当天天气 */
+    const dSel = new Date(sel + "T00:00:00");
+    const wdName = "周" + WD[dSel.getDay()];
+    let wxHtml = "";
+    if (WX && WX.ok) {
+      const ic = wx(WX.code)[0], nm = wx(WX.code)[1];
+      wxHtml = '<div class="lw-c" style="grid-column:span 12"><h3><span class="code">J-04</span>当天天气'
+        + '<span class="sp"></span><em>' + esc(WX.city) + '（点顶部天气可换地区）</em></h3>'
+        + '<div class="lw-kpi"><div class="row"><div class="ic">' + ic + '</div>'
+        + '<div style="flex:1;min-width:0"><div class="num">' + Math.round(WX.temp) + '<small>°C</small></div></div>'
+        + '<div style="text-align:right;font-size:11px;color:' + T.dim + ';line-height:1.8">' + esc(nm) + '<br>体感 ' + Math.round(WX.feels) + '° · 湿 ' + WX.hum + '%<br>风 ' + WX.wind + ' km/h</div></div>'
+        + '<div class="cmp">' + (WX.days || []).slice(0, 3).map((x) => esc(x.date.slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div></div>';
     }
-    const todayFiles = (DATA.recent || []).filter((f) => new Date(f.mtime).toDateString() === d0.toDateString()).slice(0, 8);
-    const WD = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const timeline = all.length ? all.map((j) => {
-      const wd = WD[new Date(j.date + 'T00:00:00').getDay()] || '';
-      return `<div class="lw-jrow"><div class="lw-jdate"><b>${esc(j.date.slice(5))}</b><span>${wd}</span></div>
-        <div class="lw-jbody">${esc(j.text)}</div><span class="del" data-jdel="${esc(j.date)}">✕</span></div>`;
-    }).join('') : `<div class="lw-empty"><span class="big">◈</span>还没有日记</div>`;
-    return `<div class="lw-g12">
-      <div class="lw-c" style="${sp(7)}">
-        <h3><span class="code">J-01</span>今天 · ${esc(tk)}<span class="sp"></span><em>${cur ? '已写' : '还没写'}</em></h3>
-        <div class="lw-pad">
-          <textarea class="lw-jtext" id="lw-j-text" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">${cur ? esc(cur.text) : ''}</textarea>
-          <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="lw-btn" id="lw-j-save">保存今天</button></div>
-        </div>
-      </div>
-      <div class="lw-c" style="${sp(5)}">
-        <h3><span class="code">J-02</span>连续记录<span class="sp"></span><em>共 ${all.length} 篇</em></h3>
-        <div class="lw-kpi"><div class="row"><div class="ic">◈</div>
-          <div style="flex:1;min-width:0"><div class="num">${streak}<small>天</small></div></div></div>
-          <div class="cmp">${streak ? '继续保持' : '今天开个头'}</div></div>
-        <h3 style="border-top:1px solid ${T.lineDim}"><span class="code">J-03</span>今天动过的文件</h3>
-        <div class="lw-tbl">${todayFiles.length ? todayFiles.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
-          <span class="nm">${esc(f.name)}</span><span class="bd">${esc(f.ext || '—')}</span>
-          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : `<div class="lw-empty">今天还没动文件</div>`}</div>
-      </div>
-      <div class="lw-c" style="${sp(12)}">
-        <h3><span class="code">J-04</span>日记时间线<span class="sp"></span><em>${all.length} 篇</em></h3>
-        <div class="lw-jlist">${timeline}</div>
-      </div>
-    </div>`;
+
+    return '<div class="lw-g12">'
+      + '<div class="lw-c" style="grid-column:span 5"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>' + cal + '</div>'
+      + '<div class="lw-c" style="grid-column:span 7"><h3><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
+      + '<div class="lw-pad"><textarea class="lw-jtext" id="lw-j-text" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">' + (cur ? esc(cur.text) : "") + '</textarea>'
+      + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
+      + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
+      + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
+      + '<div class="lw-c" style="grid-column:span 4"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + all.length + ' 篇</em></h3>'
+      + '<div class="lw-kpi"><div class="row"><div class="ic">◈</div><div style="flex:1;min-width:0"><div class="num">' + streak + '<small>天</small></div></div></div>'
+      + '<div class="cmp">' + (streak ? "继续保持" : "今天开个头") + '</div></div>'
+      + '<h3 style="border-top:1px solid ' + T.lineDim + '"><span class="code">J-05</span>最近写过</h3>'
+      + '<div class="lw-tbl">' + (all.length ? all.slice(0, 6).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
+          + '<span class="nm">' + esc(j.date.slice(5)) + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
+          + '<span class="tm">' + esc(String(j.text || "").slice(0, 10)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div>'
+      + wxHtml
+      + '</div>';
   }
 
   /* ── 研究方向 ── */
