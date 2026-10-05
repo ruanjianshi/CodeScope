@@ -697,6 +697,14 @@
     qa("[data-mview]").forEach((el) => {
       el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); render(); };
     });
+    /* 智能分组（待办清单 / 置顶 / 今天 / 回收站）*/
+    qa("[data-msmart]").forEach((el) => {
+      el.onclick = () => {
+        flushMemo();
+        STORE.memoSmart = (STORE.memoSmart === el.dataset.msmart) ? "" : el.dataset.msmart;
+        STORE.memoSel = ""; saveStore(); render();
+      };
+    });
     /* 新建文件夹（左栏「＋」）*/
     const addFol = q("#lw-nt-addfol");
     if (addFol) addFol.onclick = () => {
@@ -1026,7 +1034,31 @@
     const folders = (STORE && STORE.memoFolders) || ["备忘录", "Study note"];
     const fol = (STORE && STORE.memoFolder) || "";
     const view = (STORE && STORE.memoView) || "folder";   /* folder = 只看当前文件夹；all = 跨文件夹看全部 */
-    const all = raw.filter((m) => !m.trash && (view === "all" || !fol || (m.folder || "备忘录") === fol));
+    const smart = (STORE && STORE.memoSmart) || "";        /* todo / pin / today / trash */
+    /* 待办相关：从正文里数出 `- [ ]` / `☐` / `☑` 的条数 */
+    const todoOf = (m) => {
+      const lines = String(m.text || "").split("\n");
+      let open = 0, done = 0;
+      lines.forEach((l) => {
+        if (/^\s*[-*+]\s*\[\s*\]/.test(l) || /^\s*☐/.test(l)) open++;
+        else if (/^\s*[-*+]\s*\[[xX]\]/.test(l) || /^\s*☑/.test(l)) done++;
+      });
+      return { open, done, total: open + done };
+    };
+    const dayK0 = (ms) => { const d = new Date(ms || Date.now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+    const todayK0 = dayK0(Date.now());
+    const allNoTrash = raw.filter((m) => !m.trash);
+    const smartCount = {
+      todo: allNoTrash.filter((m) => todoOf(m).total > 0).length,
+      pin: allNoTrash.filter((m) => m.pin).length,
+      today: allNoTrash.filter((m) => dayK0(m.edit || m.at) === todayK0).length,
+      trash: raw.filter((m) => m.trash).length,
+    };
+    let all = raw.filter((m) => !m.trash && (view === "all" || !fol || (m.folder || "备忘录") === fol));
+    if (smart === "todo") all = allNoTrash.filter((m) => todoOf(m).total > 0);
+    else if (smart === "pin") all = allNoTrash.filter((m) => m.pin);
+    else if (smart === "today") all = allNoTrash.filter((m) => dayK0(m.edit || m.at) === todayK0);
+    else if (smart === "trash") all = raw.filter((m) => m.trash);
     const kw = String((STORE && STORE.memoQ) || "").trim().toLowerCase();
     const tagF = (STORE && STORE.memoTag) || "";
     const editing = (STORE && STORE.memoEditing) || "";
@@ -1059,12 +1091,13 @@
       const d = D(m.edit || m.at);
       const isToday = dayK(m.edit || m.at) === todayK;
       const when = isToday ? (pad(d.getHours()) + ":" + pad(d.getMinutes())) : (d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate());
-      const body = String(m.text || "").split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").slice(0, 22);
-      const extra = (String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : (m.todo ? "待办清单" : "备忘录");
+      const body = String(m.text || "").split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").replace(/^\s*[-*+]\s*\[[ xX]\]\s*/gm, "").slice(0, 22);
+      const td = todoOf(m);
+      const extra = td.total ? ("☑ " + td.done + "/" + td.total) : ((String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : "备忘录");
       return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '">'
         + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(String(m.text || "").split("\n")[0].slice(0, 30) || "新备忘录") + '</div>'
         + '<div class="mt"><b>' + when + '</b>' + (body ? "  " + esc(body) : "") + '</div>'
-        + '<div class="sub">▤ ' + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
+        + '<div class="sub">' + (td.total ? (td.open ? "▣ " : "▣ ") : "▤ ") + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
     };
 
     const listHtml = groups.length
@@ -1075,6 +1108,11 @@
     const side = '<div class="lw-nt-side">'
       + '<div class="hd"><button data-mview="folder" class="' + ((STORE.memoView || 'folder') === 'folder' ? "on" : "") + '" title="文件夹视图">▤</button>'
       + '<button data-mview="all" class="' + (STORE.memoView === 'all' ? "on" : "") + '" title="全部列表">▦</button></div>'
+      + '<div class="grp">智能</div>'
+      + '<div class="it ' + (smart === 'todo' ? "on" : "") + '" data-msmart="todo">☑ 待办清单<span class="n">' + smartCount.todo + '</span></div>'
+      + '<div class="it ' + (smart === 'pin' ? "on" : "") + '" data-msmart="pin">☆ 置顶<span class="n">' + smartCount.pin + '</span></div>'
+      + '<div class="it ' + (smart === 'today' ? "on" : "") + '" data-msmart="today">◔ 今天<span class="n">' + smartCount.today + '</span></div>'
+      + '<div class="it ' + (smart === 'trash' ? "on" : "") + '" data-msmart="trash">🗑 回收站<span class="n">' + smartCount.trash + '</span></div>'
       + '<div class="grp">iCloud <span id="lw-nt-addfol" title="新建文件夹" style="float:right;cursor:pointer;color:' + T.accent + '">＋</span></div>'
       + '<div class="it ' + (fol ? "" : "on") + '" data-mfolder="" data-mname="iCloud 全部">▤ iCloud 全部<span class="n">' + raw.filter((m) => !m.trash).length + '</span></div>'
       + folders.map((f) => '<div class="it ' + (fol === f ? "on" : "") + '" data-mfolder="' + esc(f) + '" data-mname="' + esc(f) + '">▤ ' + esc(f) + '<span class="n">' + raw.filter((m) => !m.trash && (m.folder || "备忘录") === f).length + '</span></div>').join("")
@@ -1083,8 +1121,17 @@
       + (tagKeys.length ? tagKeys.map((t) => '<div class="it ' + (tagF === t ? "on" : "") + '" data-mtag="' + esc(t) + '" data-mname="#' + esc(t) + '"># ' + esc(t) + '<span class="n">' + tagCount[t] + '</span></div>').join("") : '<div class="it" style="color:#5c5a50">正文里写 #标签</div>')
       + '</div>';
 
-    const list = '<div class="lw-nt-list"><div class="top"><div class="t1">' + (fol ? esc(fol) : "iCloud 全部") + '</div>'
-      + '<div class="t2">' + shown.length + ' 个备忘录</div>'
+    const SMART_NAME = { todo: "☑ 待办清单", pin: "☆ 置顶", today: "◔ 今天", trash: "🗑 回收站" };
+    const listTitle = smart ? (SMART_NAME[smart] || "全部") : (fol ? fol : "iCloud 全部");
+    const todoSum = (() => {
+      let open = 0, done = 0;
+      all.forEach((m) => { const t = todoOf(m); open += t.open; done += t.done; });
+      return { open, done };
+    })();
+    const list = '<div class="lw-nt-list"><div class="top"><div class="t1">' + esc(listTitle) + '</div>'
+      + '<div class="t2">' + shown.length + ' 个备忘录'
+      + (smart === 'todo' && todoSum.open + todoSum.done ? ' · 未完成 ' + todoSum.open + ' / 共 ' + (todoSum.open + todoSum.done) : '')
+      + (smart === 'trash' ? ' · 右键可恢复' : '') + '</div>'
       + '<input id="lw-memo-q" placeholder="搜索（⌘F）" value="' + esc((STORE && STORE.memoQ) || "") + '" /></div>'
       + '<div class="lw-nt-scroll">' + listHtml + '</div></div>';
 
