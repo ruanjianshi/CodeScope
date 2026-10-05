@@ -671,13 +671,22 @@
     });
   }
 
-  async function saveStore() {
-    try {
-      await fetch('/api/life/store', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(STORE || {}),
-      });
-    } catch (_) {}
+  /* ⚠️ 存盘要**合并**：以前每次操作都发一次 POST ✗，连打字都会连发 ✗。
+     现在 300ms 防抖 + 只发最后一次 ✓（本地写文件，不怕丢 ✓）。 */
+  let SAVE_TIMER = 0, SAVE_PENDING = false;
+  function saveStore(now) {
+    if (now) {
+      clearTimeout(SAVE_TIMER);
+      SAVE_PENDING = false;
+      fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(STORE || {}) }).catch(() => {});
+      return;
+    }
+    SAVE_PENDING = true;
+    clearTimeout(SAVE_TIMER);
+    SAVE_TIMER = setTimeout(() => {
+      SAVE_PENDING = false;
+      fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(STORE || {}) }).catch(() => {});
+    }, 300);
   }
 
   function render() {
@@ -696,6 +705,26 @@
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机</div></div>
       <div class="lw-main">${main()}</div></div>`;
     bind();
+  }
+
+  /* ⚠️ 只重建「左栏 + 中栏」—— 筛选类操作（点分组/文件夹/标签/搜索）用它 ✓
+     以前一律走 render() ✗，会把**编辑器也重建一遍** ✗ → 每次点击 ~45ms ✗、光标丢失 ✗。 */
+  function renderMemoList() {
+    if (TAB !== 'memo' || !document.getElementById('lifework-view')) { render(); return; }
+    const host = document.getElementById('lifework-view');
+    const wrap = host.querySelector('.lw-nt');
+    if (!wrap) { render(); return; }
+    const html = viewMemo();                       /* 生成完整 HTML */
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const nSide = tmp.querySelector('.lw-nt-side');
+    const nList = tmp.querySelector('.lw-nt-list');
+    const oSide = wrap.querySelector('.lw-nt-side');
+    const oList = wrap.querySelector('.lw-nt-list');
+    if (nSide && oSide) oSide.replaceWith(nSide);
+    if (nList && oList) oList.replaceWith(nList);
+    /* 只重新绑「左栏 + 中栏」相关的交互（编辑器不碰 ✓）*/
+    bindMemoSide();
   }
 
   function headHtml() {
@@ -720,9 +749,127 @@
       <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>`;
   }
 
+  /* 左栏 + 中栏 的交互（筛选类操作用 renderMemoList() 局部刷新 ✓）*/
+  function bindMemoSide() {
+    const host = document.getElementById("lifework-view");
+    if (!host) return;
+    const q = (sel) => host.querySelector(sel);
+    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    const memoById = (id) => (STORE.memos || []).find((x) => x.id === id);
+    const flushMemo = () => {
+      const cur = memoById(STORE.memoSel) || (STORE.memos || []).filter((m) => !m.trash)[0];
+      if (!cur) return;
+      const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
+      if (ti) cur.text = ti.value + (ta && ta.value ? "\n" + ta.value : (String(cur.text || "").indexOf("\n") >= 0 ? "\n" + String(cur.text).split("\n").slice(1).join("\n") : ""));
+      else if (ta) { const t0 = String(cur.text || "").split("\n")[0]; cur.text = t0 + (ta.value ? "\n" + ta.value : ""); }
+      cur.edit = Date.now();
+      if (!cur.text.trim() || cur.text.trim() === "新备忘录") {
+        STORE.memos = (STORE.memos || []).filter((x) => x.id !== cur.id);
+        if (STORE.memoSel === cur.id) STORE.memoSel = "";
+        saveStore(); return;
+      }
+      saveStore();
+    };
+    qa("[data-memo]").forEach((el) => {
+      el.onclick = () => { flushMemo(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
+    });
+    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
+    qa("[data-msmart]").forEach((el) => {
+      el.onclick = () => {
+        flushMemo();
+        STORE.memoSmart = (STORE.memoSmart === el.dataset.msmart) ? "" : el.dataset.msmart;
+        STORE.memoSel = ""; saveStore(); renderMemoList();
+      };
+    });
+    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
+    const mQ = q("#lw-memo-q");
+    if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; renderMemoList(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+    const mView = qa("[data-mview]");
+    mView.forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); renderMemoList(); }; });
+    const addFol = q("#lw-nt-addfol");
+    if (addFol) addFol.onclick = () => {
+      const name = prompt("新建文件夹名称：", "新文件夹");
+      if (!name || !name.trim()) return;
+      const n = name.trim().slice(0, 24);
+      STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
+      if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
+      STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList();
+    };
+    /* 右键菜单：文件夹 / 标签 / 备忘录行 */
+    const closeCtx = () => { const c = document.getElementById("lw-ctx"); if (c) c.remove(); };
+    document.addEventListener("click", (e) => { if (e.button !== 2) closeCtx(); });
+    const openCtx = (e, items) => {
+      e.preventDefault(); e.stopPropagation(); closeCtx();
+      const box = document.createElement("div");
+      box.className = "lw-ctx"; box.id = "lw-ctx";
+      box.innerHTML = items.map((it, i) => it === "-" ? '<div class="sep"></div>' : '<div class="mi ' + (it.danger ? "danger" : "") + '" data-ci="' + i + '">' + it.label + '</div>').join("");
+      document.body.appendChild(box);
+      box.style.left = Math.min(e.clientX, window.innerWidth - box.offsetWidth - 8) + "px";
+      box.style.top = Math.min(e.clientY, window.innerHeight - box.offsetHeight - 8) + "px";
+      box.querySelectorAll("[data-ci]").forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); const it = items[Number(el.dataset.ci)]; closeCtx(); if (it && it.run) it.run(); };
+      });
+    };
+    qa("[data-mfolder]").forEach((el) => {
+      const name = el.dataset.mfolder; if (!name) return;
+      el.oncontextmenu = (e) => openCtx(e, [
+        { label: "✎ 重命名", run: () => {
+            const n = prompt("重命名文件夹：", name); if (!n || !n.trim() || n.trim() === name) return;
+            const nn = n.trim().slice(0, 24);
+            STORE.memoFolders = (STORE.memoFolders || []).map((x) => (x === name ? nn : x));
+            (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = nn; });
+            STORE.memoFolder = nn; saveStore(); renderMemoList();
+          } },
+        { label: "🗑 删除文件夹", danger: true, run: () => {
+            if (!confirm("删除文件夹「" + name + "」？\n里面的备忘录会移到「备忘录」。")) return;
+            STORE.memoFolders = (STORE.memoFolders || []).filter((x) => x !== name);
+            (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = "备忘录"; });
+            STORE.memoFolder = ""; saveStore(); renderMemoList();
+          } },
+      ]);
+    });
+    qa("[data-mtag]").forEach((el) => {
+      const tag = el.dataset.mtag; if (!tag) return;
+      el.oncontextmenu = (e) => openCtx(e, [
+        { label: "✎ 重命名标签", run: () => {
+            const n = prompt("把 #" + tag + " 改成：", tag); if (!n || !n.trim() || n.trim() === tag) return;
+            const nn = n.trim().replace(/^#/, "").slice(0, 24);
+            (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), "#" + nn); });
+            if (STORE.memoTag === tag) STORE.memoTag = nn;
+            saveStore(); renderMemoList();
+          } },
+        { label: "🗑 删除标签（只从正文移除）", danger: true, run: () => {
+            if (!confirm("从所有备忘录里移除 #" + tag + " ？")) return;
+            (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("\\s*#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), ""); });
+            if (STORE.memoTag === tag) STORE.memoTag = "";
+            saveStore(); renderMemoList();
+          } },
+      ]);
+    });
+    qa("[data-memo]").forEach((el) => {
+      const id = el.dataset.memo;
+      el.oncontextmenu = (e) => openCtx(e, [
+        { label: "☆ 置顶 / 取消", run: () => { const m = memoById(id); if (m) { m.pin = !m.pin; saveStore(); renderMemoList(); } } },
+        { label: "📁 移到文件夹…", run: () => {
+            const n = prompt("移到哪个文件夹？（现有：" + (STORE.memoFolders || []).join(" / ") + "）", (STORE.memoFolders || [])[0] || "备忘录");
+            if (!n || !n.trim()) return;
+            const m = memoById(id); if (!m) return;
+            m.folder = n.trim().slice(0, 24);
+            STORE.memoFolders = STORE.memoFolders || [];
+            if (!STORE.memoFolders.includes(m.folder)) STORE.memoFolders.push(m.folder);
+            saveStore(); renderMemoList();
+          } },
+        "-",
+        { label: "🗑 删除", danger: true, run: () => { const m = memoById(id); if (m) { m.trash = true; STORE.memoSel = ""; saveStore(); renderMemoList(); } } },
+      ]);
+    });
+  }
+
   function bind() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
+    /* 左栏 + 中栏的交互（提出来，方便 renderMemoList() 局部刷新时复用 ✓）*/
+    bindMemoSide();
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
     qa('.lw-nav button').forEach((b) => { b.onclick = () => { TAB = b.dataset.tab; render(); }; });
@@ -761,136 +908,6 @@
     /* 双击正文 → 进入编辑 */
     const prev = q("#lw-nt-prev");
     if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-body"); if (t2) t2.focus(); };
-    /* 列表点选 */
-    qa("[data-memo]").forEach((el) => {
-      el.onclick = () => { flushMemo(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
-    });
-    /* 文件夹 / 标签 筛选 */
-    /* 视图切换（▤ 文件夹 / ▦ 全部列表）*/
-    qa("[data-mview]").forEach((el) => {
-      el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); render(); };
-    });
-    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); render(); }; });
-    /* 智能分组（待办清单 / 置顶 / 今天 / 回收站）*/
-    qa("[data-msmart]").forEach((el) => {
-      el.onclick = () => {
-        flushMemo();
-        STORE.memoSmart = (STORE.memoSmart === el.dataset.msmart) ? "" : el.dataset.msmart;
-        STORE.memoSel = ""; saveStore(); render();
-      };
-    });
-    /* 新建文件夹（左栏「＋」）*/
-    const addFol = q("#lw-nt-addfol");
-    if (addFol) addFol.onclick = () => {
-      const name = prompt("新建文件夹名称：", "新文件夹");
-      if (!name || !name.trim()) return;
-      const n = name.trim().slice(0, 24);
-      STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
-      if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
-      STORE.memoFolder = n; STORE.memoSel = ""; saveStore(); render();
-    };
-    /* Markdown 实时预览：输入即更新（不重渲染整个视图 ✗，只改预览区 ✓）*/
-    const liveOn = q("#lw-nt-live");
-    if (liveOn) liveOn.onclick = () => { flushMemo(); STORE.memoLive = !STORE.memoLive; saveStore(); render(); };
-    const taLive = q("#lw-memo-body");
-    if (taLive) {
-      taLive.oninput = () => {
-        autoSave();
-        if (!STORE.memoLive) return;
-        const box = document.getElementById("lw-nt-livebody");
-        if (box) box.innerHTML = mdToHtml(taLive.value) || '<span style="color:#5c5a50">（这里会实时显示渲染结果）</span>';
-      };
-    }
-    /* 右键菜单：文件夹 / 标签 / 备忘录 → 重命名 / 删除 / 移动 */
-    const closeCtx = () => { const c = document.getElementById("lw-ctx"); if (c) c.remove(); };
-    /* ⚠️ 右键也会触发 click（button=2）✗ —— 不排除的话菜单会**刚开就被关掉** ✗ */
-    document.addEventListener("click", (e) => { if (e.button !== 2) closeCtx(); });
-    document.addEventListener("scroll", closeCtx, true);
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCtx(); });
-    const openCtx = (e, items) => {
-      e.preventDefault(); e.stopPropagation(); closeCtx();
-      const box = document.createElement("div");
-      box.className = "lw-ctx"; box.id = "lw-ctx";
-      box.innerHTML = items.map((it, i) => it === "-" ? '<div class="sep"></div>'
-        : '<div class="mi ' + (it.danger ? "danger" : "") + '" data-ci="' + i + '">' + it.label + '</div>').join("");
-      document.body.appendChild(box);
-      const w = box.offsetWidth, h = box.offsetHeight;
-      box.style.left = Math.min(e.clientX, window.innerWidth - w - 8) + "px";
-      box.style.top = Math.min(e.clientY, window.innerHeight - h - 8) + "px";
-      box.querySelectorAll("[data-ci]").forEach((el) => {
-        el.onclick = (ev) => { ev.stopPropagation(); const it = items[Number(el.dataset.ci)]; closeCtx(); if (it && it.run) it.run(); };
-      });
-    };
-    qa("[data-mfolder]").forEach((el) => {
-      const name = el.dataset.mfolder;
-      if (!name) return;
-      el.oncontextmenu = (e) => openCtx(e, [
-        { label: "✎ 重命名", run: () => {
-            const n = prompt("重命名文件夹：", name);
-            if (!n || !n.trim() || n.trim() === name) return;
-            const nn = n.trim().slice(0, 24);
-            STORE.memoFolders = (STORE.memoFolders || []).map((x) => (x === name ? nn : x));
-            (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = nn; });
-            STORE.memoFolder = nn; saveStore(); render();
-          } },
-        { label: "🗑 删除文件夹", danger: true, run: () => {
-            if (!confirm("删除文件夹「" + name + "」？\n里面的备忘录会移到「备忘录」。")) return;
-            STORE.memoFolders = (STORE.memoFolders || []).filter((x) => x !== name);
-            (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = "备忘录"; });
-            STORE.memoFolder = ""; saveStore(); render();
-          } },
-      ]);
-    });
-    qa("[data-mtag]").forEach((el) => {
-      const tag = el.dataset.mtag;
-      if (!tag) return;
-      el.oncontextmenu = (e) => openCtx(e, [
-        { label: "✎ 重命名标签", run: () => {
-            const n = prompt("把 #" + tag + " 改成：", tag);
-            if (!n || !n.trim() || n.trim() === tag) return;
-            const nn = n.trim().replace(/^#/, "").slice(0, 24);
-            (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), "#" + nn); });
-            if (STORE.memoTag === tag) STORE.memoTag = nn;
-            saveStore(); render();
-          } },
-        { label: "🗑 删除标签（只从正文移除）", danger: true, run: () => {
-            if (!confirm("从所有备忘录里移除 #" + tag + " ？")) return;
-            (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("\\s*#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), ""); });
-            if (STORE.memoTag === tag) STORE.memoTag = "";
-            saveStore(); render();
-          } },
-      ]);
-    });
-    /* 备忘录行右键：置顶 / 移到文件夹 / 删除 */
-    qa("[data-memo]").forEach((el) => {
-      const id = el.dataset.memo;
-      el.oncontextmenu = (e) => openCtx(e, [
-        { label: "☆ 置顶 / 取消", run: () => { const m = memoById(id); if (m) { m.pin = !m.pin; saveStore(); render(); } } },
-        { label: "📁 移到文件夹…", run: () => {
-            const n = prompt("移到哪个文件夹？（现有：" + (STORE.memoFolders || []).join(" / ") + "）", (STORE.memoFolders || [])[0] || "备忘录");
-            if (!n || !n.trim()) return;
-            const m = memoById(id); if (!m) return;
-            m.folder = n.trim().slice(0, 24);
-            STORE.memoFolders = STORE.memoFolders || [];
-            if (!STORE.memoFolders.includes(m.folder)) STORE.memoFolders.push(m.folder);
-            saveStore(); render();
-          } },
-        "-",
-        { label: "🗑 删除", danger: true, run: () => { const m = memoById(id); if (m) { m.trash = true; STORE.memoSel = ""; saveStore(); render(); } } },
-      ]);
-    });
-    if (addFol) addFol.onclick = () => {
-      const name = prompt("新建文件夹名称：", "新文件夹");
-      if (!name || !name.trim()) return;
-      const n = name.trim().slice(0, 24);
-      STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
-      if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
-      STORE.memoFolder = n; STORE.memoSel = ""; saveStore(); render();
-    };
-    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); render(); }; });
-    /* 搜索 */
-    const mQ = q("#lw-memo-q");
-    if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
     /* 新建 */
     const mNew = q("#lw-memo-new");
     if (mNew) mNew.onclick = () => {
