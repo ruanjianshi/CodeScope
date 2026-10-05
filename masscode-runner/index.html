@@ -2185,7 +2185,13 @@
      （Monaco 路径自带折行行号，不受影响）。 */
   #code-wrap.wrap-on #code, #code-wrap.wrap-on #code-edit { white-space: pre-wrap; overflow-wrap: anywhere; }
   #code-wrap.wrap-on #code-edit { overflow-x: hidden; }
-  #code-wrap.wrap-on #ln { visibility: hidden; }
+  /* ⚠️ 原来这里把行号**隐藏**了（`visibility: hidden`）—— 理由是"换行后一行对多行、
+     行号会错位"。但实测：**只要没有超长行，行号就是对齐的**，
+     而用户看到的是"没有行号"，直接当成 bug 报上来（「没有行号」）。
+     改成**继续显示**：短行完全对齐；只有出现超长行被折行时，它之后的行号才会偏移。
+     这比"整片没有行号"好得多 —— 真错位时用户至少还能看个大概，
+     而不是完全失去定位手段。 */
+  #code-wrap.wrap-on #ln { visibility: visible; }
   .split-editor-group.wrap-on .split-editor-code, .split-editor-group.wrap-on .split-editor-input { white-space: pre-wrap; overflow-wrap: anywhere; }
   .split-editor-group.wrap-on .split-editor-input { overflow-x: hidden; }
   .split-editor-group.wrap-on .split-editor-ln { visibility: hidden; }
