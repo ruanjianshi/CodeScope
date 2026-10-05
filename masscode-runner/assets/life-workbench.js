@@ -542,47 +542,43 @@
   .lw-cal-d.sel::after { background:${T.accentInk}; }
   .lw-jday-hd { padding:12px 16px 4px; font-size:12px; color:${T.dim}; letter-spacing:.5px; }
   .lw-jday-hd b { color:${T.accent}; font-weight:700; }
-  /* ── 日记编辑区：预览 / 编辑 双模式 ──
-     ⚠️ 为什么不用 overlay 单层？✗
-        overlay 要保证光标不偏 ✗，就必须让语法标记**占位** ✗ →
-        隐藏后会留下"空洞" ✗（井号变成 3 格缩进 ✗），看起来像排版坏了 ✗。
-        而标记一旦不占位 ✗，两层宽度就不同 ✗ → 光标必偏 ✗。
-        **两者不可兼得** ✗ —— 所以拆成两个模式 ✓：
-        · 预览模式：没有光标 ✓ → 可以**彻底丢掉标记** ✓ → 真排版 ✓✓
-        · 编辑模式：纯 textarea ✓ → 光标绝对准确 ✓ */
-  .lw-jpv { flex:1; min-height:0; overflow:auto; padding:12px 14px; font-size:12.5px; line-height:1.9; color:${T.text}; }
-  .lw-jpv h1, .lw-jpv h2, .lw-jpv h3 { margin:14px 0 7px; color:#fff; font-weight:700; padding-left:10px;
-    border-left:3px solid ${T.accent}; line-height:1.5; }
-  .lw-jpv h1 { font-size:17px; } .lw-jpv h2 { font-size:15px; }
-  .lw-jpv h3 { font-size:13.5px; color:${T.accent}; border-left-color:rgba(242,227,155,.45); }
-  .lw-jpv h1:first-child, .lw-jpv h2:first-child, .lw-jpv h3:first-child { margin-top:2px; }
-  .lw-jpv p { margin:7px 0; }
-  .lw-jpv ul, .lw-jpv ol { margin:8px 0; padding-left:20px; }
-  .lw-jpv li { margin:4px 0; }
-  .lw-jpv li.mdck { list-style:none; margin-left:-18px; }
-  .lw-jpv li.mdck::before { content:"☐"; color:${T.dim}; margin-right:6px; }
-  .lw-jpv li.mdck.done::before { content:"☑"; color:${T.ok}; }
-  .lw-jpv li.mdck.done { color:${T.faint}; text-decoration:line-through; }
-  .lw-jpv blockquote { margin:9px 0; padding:7px 13px; background:rgba(242,227,155,.06);
+  /* ── 日记：contenteditable 实时渲染（Obsidian / Typora 的做法）──
+     ★ 原理（这才是关键）：
+       不是 overlay 叠层 ✗，而是**一个 contenteditable 容器，每行一个 div** ✓。
+       · **光标所在行**：内容是**源码** + 可编辑 ✓ → 光标天然准确 ✓
+       · **其他行**：内容是**渲染后的 HTML** + contenteditable=false ✓ → 真排版 ✓
+       两者**不同时存在于同一行** ✓ → 那个"标记占位 vs 光标偏移"的死结自然解开 ✓✓
+     （注意：写这个文件里的 CSS 注释时不要用反引号 / 美元花括号 —— CSS 是模板字符串，
+       会被截断 ✗。这个坑踩过三次了 ✗。）*/
+  .lw-ce { flex:1; min-height:0; overflow:auto; padding:10px 14px; outline:none;
+    font:12.5px/1.9 ${UI}; color:${T.text}; cursor:text; }
+  .lw-ce > .ln { min-height:1.9em; white-space:pre-wrap; word-break:break-word; }
+  /* 当前行（源码）：给一点视觉提示 ✓，但不改字号 ✓ */
+  .lw-ce > .ln.cur { background:rgba(242,227,155,.05); box-shadow:inset 2px 0 0 rgba(242,227,155,.5); }
+  /* 渲染行 */
+  .lw-ce > .ln.r-h1 { font-size:18px; font-weight:700; color:#fff; padding-left:10px;
+    border-left:3px solid ${T.accent}; line-height:1.5; margin:8px 0 4px; }
+  .lw-ce > .ln.r-h2 { font-size:16px; font-weight:700; color:#fff; padding-left:10px;
+    border-left:3px solid ${T.accent}; line-height:1.5; margin:7px 0 3px; }
+  .lw-ce > .ln.r-h3 { font-size:14px; font-weight:700; color:${T.accent}; padding-left:9px;
+    border-left:2px solid rgba(242,227,155,.45); line-height:1.5; margin:6px 0 2px; }
+  .lw-ce > .ln.r-quote { padding:6px 12px; background:rgba(242,227,155,.06);
     border-left:3px solid ${T.accent}; color:#c8c4b6; font-style:italic; }
-  .lw-jpv code { background:#2a2616; color:#ffe08a; padding:1px 6px; font-family:${MONO}; font-size:11.5px; }
-  .lw-jpv pre { background:#141412; border-left:3px solid ${T.accent}; padding:10px 12px; overflow:auto; margin:9px 0; }
-  .lw-jpv pre code { background:transparent; padding:0; color:#cfd6e2; }
-  .lw-jpv table { border-collapse:collapse; margin:10px 0; font-size:12px; }
-  .lw-jpv th, .lw-jpv td { border:1px solid ${T.lineDim}; padding:5px 10px; }
-  .lw-jpv th { background:#1a1a17; color:${T.accent}; }
-  .lw-jpv a { color:${T.accent}; text-decoration:underline; }
-  .lw-jpv strong { color:#fff; font-weight:700; }
-  .lw-jpv em { color:#cfc9b4; font-style:italic; }
-  .lw-jpv del { color:${T.faint}; text-decoration:line-through; }
-  .lw-jpv .tag { color:#ffe9a8; background:rgba(242,227,155,.16); padding:1px 6px; }
-  .lw-jpv hr { border:0; border-top:1px dashed ${T.lineDim}; margin:14px 0; }
-  .lw-jpv .empty { color:${T.faint}; }
-  /* 编辑模式：纯 textarea（无 overlay ✓ → 光标绝对准 ✓）*/
-  .lw-jed { flex:1; min-height:0; display:flex; flex-direction:column; }
-  .lw-jed textarea { flex:1; width:100%; border:0; outline:none; resize:none; background:transparent;
-    color:${T.text}; font:12.5px/1.9 ${UI}; padding:12px 14px; }
-  .lw-jed textarea::placeholder { color:${T.faint}; }
+  .lw-ce > .ln.r-li { padding-left:6px; }
+  .lw-ce > .ln.r-li .bullet { color:${T.accent}; font-weight:700; margin-right:6px; }
+  .lw-ce > .ln.r-li .ckbox { color:${T.dim}; font-weight:700; margin-right:6px; }
+  .lw-ce > .ln.r-li.done .ckbox { color:${T.ok}; }
+  .lw-ce > .ln.r-li.done { color:${T.faint}; text-decoration:line-through; }
+  .lw-ce > .ln.r-code { background:#141412; border-left:3px solid ${T.accent};
+    padding:7px 11px; color:#cfd6e2; font-family:${MONO}; font-size:11.5px; }
+  .lw-ce > .ln.r-hr { color:${T.lineDim}; }
+  .lw-ce b { color:#fff; font-weight:700; }
+  .lw-ce i { color:#cfc9b4; font-style:italic; }
+  .lw-ce s { color:${T.faint}; }
+  .lw-ce code { background:#2a2616; color:#ffe08a; padding:1px 5px; font-family:${MONO}; font-size:11.5px; }
+  .lw-ce a { color:${T.accent}; text-decoration:underline; }
+  .lw-ce .tag { color:#ffe9a8; background:rgba(242,227,155,.16); padding:1px 5px; }
+  .lw-ce .empty { color:${T.faint}; }
   .lw-jtpl { display:flex; align-items:center; gap:7px; padding:9px 14px; border-bottom:1px solid ${T.lineDim};
     font-size:10.5px; color:${T.faint}; flex-wrap:wrap; }
   .lw-jtpl .sp { flex:1; }
@@ -1288,59 +1284,99 @@
         document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
       };
     }
-    /* ── 预览 / 编辑 双模式 ── */
-    const jMode = q('#lw-j-mode');
-    if (jMode) jMode.onclick = () => {
-      const editing = STORE.journalMode === 'edit';
-      if (editing) {
-        /* 从编辑切回预览：先存 ✓ */
-        const t = q('#lw-j-text');
-        if (t) {
-          const k = STORE.journalSel, txt = t.value.trim();
-          if (txt && txt !== J_TPL.daily.text.trim() && txt !== J_TPL.research.text.trim() && txt !== J_TPL.review.text.trim()) {
-            STORE.journal = STORE.journal || [];
-            const hit = STORE.journal.find((x) => x.date === k);
-            if (hit) { hit.text = txt; hit.at = Date.now(); } else STORE.journal.unshift({ date: k, text: txt, at: Date.now() });
-          }
-        }
-      }
-      STORE.journalMode = editing ? 'preview' : 'edit';
-      saveStore(); render();
-      if (STORE.journalMode === 'edit') { const t2 = document.getElementById('lw-j-text'); if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); } }
-    };
-    /* 双击预览区 → 直接进编辑 ✓（不然用户不知道怎么改 ✗）*/
-    const jPv = q('#lw-j-pv');
-    if (jPv) jPv.ondblclick = () => { STORE.journalMode = 'edit'; saveStore(); render(); const t2 = document.getElementById('lw-j-text'); if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); } };
-    /* 编辑模式：输入即存（防抖 ✓）*/
-    const jTa2 = q('#lw-j-text');
-    if (jTa2) {
-      let jbuf = 0;
-      jTa2.oninput = () => { clearTimeout(jbuf); jbuf = setTimeout(() => {
-        const k = STORE.journalSel, txt = jTa2.value.trim();
-        if (!txt) return;
+    /* ── contenteditable 实时渲染 ──
+       规则：**光标所在行 = 源码 ✓，其他行 = 渲染 ✓**（Obsidian 的做法 ✓）*/
+    const ce = q('#lw-j-ce');
+    if (ce) {
+      let ceIdx = (STORE.journalCurLine || 0);
+      /* 把 DOM 读回源码：当前行取 textContent ✓，其他行取 data-src ✓ */
+      const readAll = () => Array.from(ce.querySelectorAll(':scope > .ln')).map((el) => {
+        const isCur = el.classList.contains('cur');
+        return isCur ? String(el.textContent || '') : String(el.dataset.src || el.textContent || '');
+      }).join('\n');
+      const persist = () => {
+        const txt = readAll().replace(/\s+$/, '');
+        const k = STORE.journalSel;
         STORE.journal = STORE.journal || [];
         const hit = STORE.journal.find((x) => x.date === k);
         if (hit) { hit.text = txt; hit.at = Date.now(); } else STORE.journal.unshift({ date: k, text: txt, at: Date.now() });
         saveStore();
-        const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '✓ 已自动保存';
-      }, 700); };
+      };
+      const renderCe = (keepFocus) => {
+        const lines = readAll().split('\n');
+        if (ceIdx >= lines.length) ceIdx = lines.length - 1;
+        if (ceIdx < 0) ceIdx = 0;
+        ce.innerHTML = ceHtml(lines.join('\n'), ceIdx);
+        STORE.journalCurLine = ceIdx;
+        if (keepFocus) {
+          const cur = ce.querySelector(':scope > .ln.cur');
+          if (cur) {
+            cur.focus();
+            try { const r = document.createRange(); r.selectNodeContents(cur); r.collapse(false);
+              const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (_) {}
+          }
+        }
+      };
+      let cebuf = 0;
+      ce.oninput = () => { clearTimeout(cebuf); cebuf = setTimeout(() => { persist(); renderCe(true); }, 260); };
+      /* 点任意行 → 那行变成"当前行"（显示源码 ✓）*/
+      ce.onmousedown = (e) => {
+        const ln = e.target && e.target.closest ? e.target.closest('.ln') : null;
+        if (!ln || ln.classList.contains('cur')) return;
+        e.preventDefault();
+        persist();
+        const all = Array.from(ce.querySelectorAll(':scope > .ln'));
+        ceIdx = all.indexOf(ln);
+        renderCe(true);
+      };
+      /* Enter 换行 / Tab 缩进 */
+      ce.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          persist();
+          const lines = readAll().split('\n');
+          lines.splice(ceIdx + 1, 0, '');
+          ceIdx = ceIdx + 1;
+          ce.innerHTML = ceHtml(lines.join('\n'), ceIdx);
+          STORE.journalCurLine = ceIdx;
+          const cur = ce.querySelector(':scope > .ln.cur');
+          if (cur) { cur.focus(); try { const r = document.createRange(); r.selectNodeContents(cur); r.collapse(false);
+            const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (_) {} }
+        }
+      };
+      /* 初始化：把光标放到当前行 ✓ */
+      renderCe(true);
     }
     /* 工具栏：插入标题 / 清单项 */
     const jMd2 = q('#lw-j-md');
-    if (jMd2) jMd2.onclick = () => { const t = q('#lw-j-text'); if (!t) return; t.value += (t.value && !/\n$/.test(t.value) ? '\n' : '') + '## '; t.focus(); t.setSelectionRange(t.value.length, t.value.length); };
+    if (jMd2) jMd2.onclick = () => {
+      const c2 = q('#lw-j-ce'); if (!c2) return;
+      const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
+      const i = STORE.journalCurLine || 0;
+      lines[i] = '## ' + String(lines[i] || '').replace(/^#{1,3}\s*/, '');
+      c2.innerHTML = ceHtml(lines.join('\n'), i);
+      const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
+    };
     const jCk2 = q('#lw-j-ck');
-    if (jCk2) jCk2.onclick = () => { const t = q('#lw-j-text'); if (!t) return; t.value += (t.value && !/\n$/.test(t.value) ? '\n' : '') + '- [ ] '; t.focus(); t.setSelectionRange(t.value.length, t.value.length); };
+    if (jCk2) jCk2.onclick = () => {
+      const c2 = q('#lw-j-ce'); if (!c2) return;
+      const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
+      const i = STORE.journalCurLine || 0;
+      lines[i] = '- [ ] ' + String(lines[i] || '').replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/, '');
+      c2.innerHTML = ceHtml(lines.join('\n'), i);
+      const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
+    };
     qa('[data-jtpl]').forEach((btn) => {
       btn.onclick = () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
-        const el = document.getElementById('lw-j-text'); if (!el) return;
-        if (el.value.trim() && !confirm('当前已有内容。\n\n确定 = 替换成模板　取消 = 追加到末尾')) {
-          el.value = el.value.replace(/\s*$/, '') + '\n\n' + tpl.text;
-        } else {
-          el.value = tpl.text;
-        }
-        el.focus(); el.setSelectionRange(el.value.length, el.value.length);
-        const bd2 = document.getElementById('lw-j-bd'); if (bd2) bd2.innerHTML = mdLines(el.value);
+        const c2 = document.getElementById('lw-j-ce'); if (!c2) return;
+        const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
+        const curTxt = lines.join('\n').trim();
+        let next = tpl.text;
+        if (curTxt && !confirm('当前已有内容。\n\n确定 = 替换成模板　取消 = 追加到末尾')) next = curTxt.replace(/\s*$/, '') + '\n\n' + tpl.text;
+        c2.innerHTML = ceHtml(next, 0);
+        STORE.journalCurLine = 0;
+        const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
         const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已插入「' + tpl.name + '」模板，记得保存 ✓';
       };
     });
@@ -1363,11 +1399,13 @@
     };
     const jSave = q('#lw-j-save');
     if (jSave) jSave.onclick = () => {
-      const d0 = new Date();
-      const k = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
-      const text = ((q('#lw-j-text') || {}).value || '').trim();
+      const k = STORE.journalSel;
+      const c2 = document.getElementById('lw-j-ce');
+      const text = c2 ? Array.from(c2.querySelectorAll(':scope > .ln'))
+        .map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''))
+        .join('\n').replace(/\s+$/, '') : '';
       /* 只填了模板、没动过 → 不算写 ✓（免得日历上白点一片 ✗）*/
-      if (text === J_TPL.daily.text.trim() || text === J_TPL.research.text.trim() || text === J_TPL.review.text.trim()) {
+      if (!text || text === J_TPL.daily.text.trim() || text === J_TPL.research.text.trim() || text === J_TPL.review.text.trim()) {
         const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '还只填了模板 —— 补两句再保存 ✓';
         return;
       }
@@ -1375,7 +1413,6 @@
       const hit = STORE.journal.find((x) => x.date === k);
       if (hit) { hit.text = text; hit.at = Date.now(); }
       else STORE.journal.unshift({ date: k, text, at: Date.now() });
-      STORE.journal = STORE.journal.filter((x) => x.text);
       saveStore(); render();
       const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已保存今天的日记';
     };
@@ -1768,6 +1805,43 @@
     }).join('');
   }
 
+  /* contenteditable 实时渲染：把整篇拆成「每行一个 div」✓
+     · curIdx 那一行 → **源码**（contenteditable ✓ 可编辑 ✓ 光标准 ✓）
+     · 其他行     → **渲染后的 HTML**（contenteditable=false ✓ 真排版 ✓）
+     行内渲染器：**保留语义但丢掉标记** ✓（这里可以放心丢 ✗ —— 因为不参与光标定位 ✓）*/
+  function ceInline(src) {
+    return esc(src)
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+      .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<i>$2</i>')
+      .replace(/~~([^~]+)~~/g, '<s>$1</s>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/#([\u4e00-\u9fa5\w/-]+)/g, '<span class="tag">#$1</span>');
+  }
+  function ceHtml(text, curIdx) {
+    const lines = String(text == null ? '' : text).split('\n');
+    return lines.map((raw, i) => {
+      if (i === curIdx) {
+        return '<div class="ln cur" contenteditable="true">' + (esc(raw) || '<br>') + '</div>';
+      }
+      const L = raw;
+      let cls = 'ln', body = '';
+      const h = L.match(/^(#{1,3})\s+(.*)$/);
+      const ck = L.match(/^\s*[-*+]\s*\[([ xX])\]\s*(.*)$/);
+      const ul = L.match(/^\s*[-*+]\s+(.*)$/);
+      const ol = L.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (/^\s*```/.test(L)) { cls += ' r-code'; body = esc(L); }
+      else if (h) { cls += ' r-h' + h[1].length; body = ceInline(h[2]); }
+      else if (/^\s*>\s?/.test(L)) { cls += ' r-quote'; body = ceInline(L.replace(/^\s*>\s?/, '')); }
+      else if (ck) { const on = ck[1].toLowerCase() === 'x'; cls += ' r-li' + (on ? ' done' : ''); body = '<span class="ckbox">' + (on ? '☑' : '☐') + '</span>' + ceInline(ck[2]); }
+      else if (ul) { cls += ' r-li'; body = '<span class="bullet">•</span>' + ceInline(ul[1]); }
+      else if (ol) { cls += ' r-li'; body = '<span class="bullet">' + esc(L.match(/^\s*(\d+[.)])/)[1]) + '</span>' + ceInline(L.replace(/^\s*\d+[.)]\s+/, '')); }
+      else if (/^\s*(---|\*\*\*|___)\s*$/.test(L)) { cls += ' r-hr'; body = esc(L); }
+      else { body = ceInline(L) || '<br>'; }
+      return '<div class="' + cls + '" contenteditable="false" data-src="' + esc(L) + '">' + body + '</div>';
+    }).join('');
+  }
+
   /* ── 日记：月历 + 选中当天编辑（+ 当天天气）── */
   function viewJournal() {
     const d0 = new Date();
@@ -1883,19 +1957,15 @@
       + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
       + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
-      + '<div class="lw-live-bar">'
-      + '<button id="lw-j-mode" class="' + (STORE.journalMode === 'edit' ? 'on' : '') + '" style="font-weight:700">'
-      + (STORE.journalMode === 'edit' ? '👁 预览' : '✎ 编辑') + '</button>'
-      + '<span style="color:' + T.faint + '">' + (STORE.journalMode === 'edit' ? '编辑中 · 语法原样显示' : '预览 · 点「编辑」或双击正文可改') + '</span>'
+      + '<div class="lw-live-bar"><span style="color:' + T.accent + '">✎ 边写边渲染</span>'
+      + '<span style="color:' + T.faint + '">光标所在行显示源码，其他行即时渲染（点任意行即可编辑）</span>'
       + '<span class="sp"></span>'
       + '<select id="lw-j-catsel" style="height:22px;padding:0 6px;border:1px solid ' + T.lineDim + ';background:transparent;color:' + T.text + ';font:10px ' + UI + ';outline:none">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
-      + (STORE.journalMode === 'edit' ? '<button id="lw-j-md" title="插入标题"># 标题</button><button id="lw-j-ck" title="插入清单项">☐ 清单</button>' : '')
+      + '<button id="lw-j-md" title="插入标题"># 标题</button>'
+      + '<button id="lw-j-ck" title="插入清单项">☐ 清单</button>'
       + '</div>'
-      + (STORE.journalMode === 'edit'
-        ? '<div class="lw-jed"><textarea id="lw-j-text" spellcheck="false" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">'
-          + esc(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</textarea></div>'
-        : '<div class="lw-jpv" id="lw-j-pv">' + (mdToHtml(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) || '<span class="empty">（还没写，点上面「✎ 编辑」开始）</span>') + '</div>')
+      + '<div class="lw-ce" id="lw-j-ce" contenteditable="true" spellcheck="false">' + ceHtml(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text), 0) + '</div>'
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
       + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
       + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
