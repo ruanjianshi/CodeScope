@@ -4498,6 +4498,17 @@ const server = http.createServer(async (req, res) => {
     /* 本机管家（一站式本机管理面板）。接口全部收在 /api/system-panel/ 下，
        和上面 /api/system/status 那套健康检查互不干扰；非 GET 请求已经由前面的
        trustedHttpOrigin 网关拦过一道，所以这里只做参数校验与执行。 */
+    /* 「我的工作台」—— 本机文件按研究方向归类后的数据。
+       GET /api/life/index?depth=3  扫一次返回全量（本地扫描，0.1s 级）。 */
+    if (u.pathname === '/api/life/index') {
+      try {
+        const depth = Math.min(4, Math.max(1, Number(u.searchParams.get('depth')) || 3));
+        const idx = require('./lib/life-index').buildIndex({ maxDepth: depth });
+        return send(res, 200, idx);
+      } catch (error) {
+        return send(res, 500, { ok: false, error: String((error && error.message) || error) });
+      }
+    }
     if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {
       try {
         if (await SYSTEM_PANEL.handle(req, res, u)) return;
