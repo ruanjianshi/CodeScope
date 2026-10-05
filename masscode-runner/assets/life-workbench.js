@@ -223,6 +223,80 @@
   .lw-mcadd input:focus { border-color:${T.accent}; }
   .lw-mcadd button { height:30px; padding:0 12px; border:2px solid ${T.accent}; background:${T.accent};
     color:${T.accentInk}; font:700 10px ${UI}; letter-spacing:1px; cursor:pointer; }
+  /* Markdown 预览 */
+  .lw-md { flex:1; overflow:auto; padding:4px 18px 16px; font-size:13px; line-height:1.8; color:${T.text}; }
+  .lw-md h1, .lw-md h2, .lw-md h3 { margin:14px 0 8px; font-weight:700; color:#fff; }
+  .lw-md h1 { font-size:19px; } .lw-md h2 { font-size:16px; } .lw-md h3 { font-size:14px; }
+  .lw-md p { margin:8px 0; }
+  .lw-md code { background:#1b1b19; padding:1px 5px; font-family:${MONO}; font-size:11.5px; color:${T.accent}; }
+  .lw-md pre { background:#141412; border-left:3px solid ${T.accent}; padding:10px 12px; overflow:auto; margin:10px 0; }
+  .lw-md pre code { background:transparent; padding:0; }
+  .lw-md blockquote { margin:8px 0; padding:4px 12px; border-left:3px solid ${T.lineDim}; color:${T.dim}; }
+  .lw-md ul, .lw-md ol { margin:8px 0; padding-left:22px; }
+  .lw-md li { margin:3px 0; }
+  .lw-md a { color:${T.accent}; }
+  .lw-md hr { border:0; border-top:1px solid ${T.lineDim}; margin:14px 0; }
+  .lw-md strong { color:#fff; }
+  .lw-md .tag { color:${T.accent}; background:rgba(242,227,155,.12); padding:1px 6px; font-size:11.5px; }
+  /* 标签栏 */
+  .lw-mtags { display:flex; flex-wrap:wrap; gap:6px; padding:8px 11px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-mtags span { font-size:10px; padding:2px 8px; border:1px solid ${T.lineDim}; color:${T.dim}; cursor:pointer; letter-spacing:.4px; }
+  .lw-mtags span:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-mtags span.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; font-weight:700; }
+  .lw-save { font-size:10px; color:${T.faint}; letter-spacing:.6px; }
+  .lw-save.ok { color:${T.ok}; }
+  /* 回收站 */
+  .lw-trash { padding:9px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-trash .t { font-size:11.5px; color:${T.text}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-trash .r { display:flex; gap:8px; margin-top:6px; }
+  .lw-trash button { height:22px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:600 10px ${UI}; cursor:pointer; }
+  .lw-trash button:hover { border-color:${T.accent}; color:${T.accent}; }
+  /* ── Memos 风格：单列时间线 ── */
+  .lw-mo { display:flex; flex-direction:column; gap:0; }
+  .lw-mo-write { display:flex; gap:10px; padding:12px 14px; border:2px solid ${T.lineDim}; background:#0d0d0c; }
+  .lw-mo-write textarea { flex:1; min-height:52px; border:0; background:transparent; color:${T.text};
+    font:12.5px/1.7 ${UI}; resize:vertical; outline:none; }
+  .lw-mo-write textarea::placeholder { color:${T.faint}; }
+  .lw-mo-write .side { display:flex; flex-direction:column; justify-content:flex-end; gap:6px; flex:none; }
+  .lw-mo-write button { height:28px; padding:0 13px; border:2px solid ${T.accent}; background:${T.accent};
+    color:${T.accentInk}; font:700 10px ${UI}; letter-spacing:1px; cursor:pointer; }
+  .lw-mo-write button:disabled { opacity:.35; cursor:default; }
+  .lw-mo-day { margin:16px 0 8px; font-size:10.5px; letter-spacing:1.6px; text-transform:uppercase;
+    color:${T.faint}; display:flex; align-items:center; gap:10px; }
+  .lw-mo-day::after { content:""; flex:1; height:1px; background:${T.lineDim}; }
+  .lw-mo-card { border:2px solid ${T.lineDim}; background:#0f0f0e; padding:11px 13px; margin-bottom:9px; }
+  .lw-mo-card:hover { border-color:${T.line}; }
+  .lw-mo-card.pin { border-left:3px solid ${T.accent}; }
+  .lw-mo-head { display:flex; align-items:center; gap:9px; margin-bottom:7px; }
+  .lw-mo-head .tm { font-size:10px; color:${T.faint}; letter-spacing:.6px; }
+  .lw-mo-head .pin { color:${T.accent}; font-size:11px; }
+  .lw-mo-head .sp { flex:1; }
+  .lw-mo-head button { height:20px; padding:0 8px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.faint}; font:600 9.5px ${UI}; letter-spacing:.6px; cursor:pointer; opacity:0; }
+  .lw-mo-card:hover .lw-mo-head button { opacity:1; }
+  .lw-mo-head button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-mo-head button.del:hover { border-color:${T.red}; color:${T.red}; }
+  .lw-mo-body { font-size:12.5px; line-height:1.8; color:${T.text}; }
+  .lw-mo-body p { margin:6px 0; }
+  .lw-mo-body p:first-child { margin-top:0; }
+  .lw-mo-body ul { margin:6px 0; padding-left:20px; }
+  .lw-mo-body code { background:#1b1b19; padding:1px 5px; font-family:${MONO}; font-size:11px; color:${T.accent}; }
+  .lw-mo-body pre { background:#141412; border-left:3px solid ${T.accent}; padding:9px 11px; overflow:auto; margin:8px 0; }
+  .lw-mo-body pre code { background:transparent; padding:0; }
+  .lw-mo-body blockquote { margin:6px 0; padding:3px 11px; border-left:3px solid ${T.lineDim}; color:${T.dim}; }
+  .lw-mo-body h1, .lw-mo-body h2, .lw-mo-body h3 { margin:9px 0 5px; color:#fff; font-size:13.5px; }
+  .lw-mo-body a { color:${T.accent}; }
+  .lw-mo-body strong { color:#fff; }
+  .lw-mo-body .tag { color:${T.accent}; background:rgba(242,227,155,.12); padding:1px 6px; font-size:11px; cursor:pointer; }
+  .lw-mo-edit textarea { width:100%; min-height:110px; border:2px solid ${T.accent}; background:#0d0d0c;
+    color:${T.text}; font:12.5px/1.7 ${UI}; padding:10px 11px; resize:vertical; outline:none; }
+  .lw-mo-edit .row { display:flex; gap:8px; margin-top:9px; }
+  .lw-mo-edit button { height:26px; padding:0 12px; border:2px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:600 10px ${UI}; letter-spacing:1px; cursor:pointer; }
+  .lw-mo-edit button.pri { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-mo-empty { padding:40px 12px; text-align:center; color:${T.faint}; font-size:12px; }
+  .lw-mo-empty .big { font-size:26px; display:block; margin-bottom:9px; opacity:.5; }
   /* 日记 */
   .lw-jtext { width:100%; min-height:190px; resize:vertical; padding:12px 13px; border:2px solid ${T.lineDim};
     background:transparent; color:${T.text}; font:12.5px/1.8 ${UI}; outline:none; }
@@ -283,6 +357,33 @@
     while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
     return (v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)) + ' ' + u[i];
   }
+  /* 迷你 Markdown 渲染：标题 / 粗体 / 斜体 / 行内码 / 代码块 / 引用 / 列表 / 链接 / 分隔线 / #标签 */
+  function mdToHtml(src) {
+    const lines = String(src == null ? '' : src).split('\n');
+    let out = '', inCode = false, inList = false;
+    const inline = (t) => esc(t)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/#([\u4e00-\u9fa5\w-]+)/g, '<span class="tag">#$1</span>');
+    for (const raw of lines) {
+      const l = String(raw).replace(/\s+$/, '');
+      if (/^\s*```/.test(l)) { out += inCode ? '</code></pre>' : '<pre><code>'; inCode = !inCode; continue; }
+      if (inCode) { out += esc(l) + '\n'; continue; }
+      const h = l.match(/^(#{1,3})\s+(.*)$/);
+      if (h) { if (inList) { out += '</ul>'; inList = false; } out += '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'; continue; }
+      if (/^\s*[-*+]\s+/.test(l)) { if (!inList) { out += '<ul>'; inList = true; } out += '<li>' + inline(l.replace(/^\s*[-*+]\s+/, '')) + '</li>'; continue; }
+      if (/^\s*>\s?/.test(l)) { out += '<blockquote>' + inline(l.replace(/^\s*>\s?/, '')) + '</blockquote>'; continue; }
+      if (/^\s*(---|\*\*\*)\s*$/.test(l)) { out += '<hr>'; continue; }
+      if (!l.trim()) { if (inList) { out += '</ul>'; inList = false; } continue; }
+      out += '<p>' + inline(l) + '</p>';
+    }
+    if (inList) out += '</ul>';
+    if (inCode) out += '</code></pre>';
+    return out;
+  }
+
   function ago(ms) {
     if (!ms) return '—';
     const d = Date.now() - ms, m = 60000, h = 3600000, day = 86400000;
@@ -454,106 +555,59 @@
       el.onclick = () => { try { navigator.clipboard.writeText(el.dataset.path); const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已复制路径：' + el.dataset.path; } catch (_) {} };
     });
 
-    /* ── 备忘录 ── */
-    qa('[data-memo]').forEach((el) => {
-      el.onclick = () => { STORE.memoSel = el.dataset.memo; saveStore(); render(); };
-    });
-    const mQ = q('#lw-memo-q');
-    if (mQ) {
-      mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById('lw-memo-q'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
-    }
-    const mNew = q('#lw-memo-new');
-    if (mNew) mNew.onclick = () => {
-      const id = 'm' + Date.now();
+    /* ── 备忘录（Memos 风格）：发布 / 编辑 / 置顶 / 删除 / 标签 / 回收站 ── */
+    const memoById = (id) => (STORE.memos || []).find((x) => x.id === id);
+    const postMemo = () => {
+      const ta = q("#lw-mo-new"); if (!ta) return;
+      const v = String(ta.value || "").trim(); if (!v) return;
       STORE.memos = STORE.memos || [];
-      STORE.memos.unshift({ id, text: '新备忘录', todo: false, done: false, at: Date.now() });
-      STORE.memoSel = id; saveStore(); render();
-      const t = document.getElementById('lw-memo-title'); if (t) { t.focus(); t.select(); }
+      STORE.memos.unshift({ id: "m" + Date.now(), text: v, pin: false, at: Date.now(), edit: Date.now() });
+      ta.value = ""; STORE.memoTag = ""; saveStore(); render();
     };
-    const mSave = q('#lw-memo-save');
-    if (mSave) mSave.onclick = () => {
-      const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
-      if (!cur) return;
-      const title = (q('#lw-memo-title') || {}).value || '';
-      const body = (q('#lw-memo-body') || {}).value || '';
-      cur.text = title + (body ? '\n' + body : '');
-      cur.edit = Date.now();
-      saveStore(); render();
-      const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已保存备忘录';
-    };
-    const mDel = q('#lw-memo-del');
-    if (mDel) mDel.onclick = () => {
-      const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
-      if (cur && !confirm('删除这条备忘录？\n\n' + String(cur.text || '').split('\n')[0])) return;
-      STORE.memos = (STORE.memos || []).filter((x) => x.id !== STORE.memoSel);
-      STORE.memoSel = (STORE.memos[0] || {}).id || '';
-      saveStore(); render();
-    };
-    const mSort = q('#lw-memo-sort');
-    if (mSort) mSort.onchange = () => { STORE.memoSort = mSort.value; saveStore(); render(); };
-    const mPin = q('#lw-memo-pin');
-    if (mPin) mPin.onclick = () => {
-      const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
-      if (cur) { cur.pin = !cur.pin; saveStore(); render(); }
-    };
-    /* 正文 / 清单 模式切换 */
-    qa('[data-mmode]').forEach((b) => {
-      b.onclick = () => {
-        const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
-        if (!cur) return;
-        const title = (q('#lw-memo-title') || {}).value || '';
-        if (b.dataset.mmode === 'todo') {
-          const body = (q('#lw-memo-body') || {}).value || '';
-          const items = body.split('\n').filter((l) => l.trim()).map((l) => '☐ ' + l.replace(/^[☐☑]\s*/, ''));
-          cur.text = title + (items.length ? '\n' + items.join('\n') : '');
-          cur.todo = true;
-        } else {
-          const lines = [];
-          qa('[data-mcheck]').forEach((el) => {
-            const row = el.parentElement;
-            const tx = (row.querySelector('.tx') || {}).textContent || '';
-            lines.push((row.classList.contains('done') ? '☑ ' : '☐ ') + tx);
-          });
-          cur.text = title + (lines.length ? '\n' + lines.join('\n') : '');
-          cur.todo = false;
-        }
-        cur.edit = Date.now(); saveStore(); render();
-      };
-    });
-    /* 清单：勾选 / 删条目 / 加条目 */
-    const curMemo = () => (STORE.memos || []).find((x) => x.id === STORE.memoSel);
-    const writeItems = (cur, items) => {
-      const title = (q('#lw-memo-title') || {}).value || String(cur.text || '').split('\n')[0];
-      cur.text = title + (items.length ? '\n' + items.map((it) => (it.done ? '☑ ' : '☐ ') + it.text).join('\n') : '');
-      cur.edit = Date.now(); saveStore(); render();
-    };
-    const readItems = (cur) => String(cur.text || '').split('\n').slice(1)
-      .map((l) => ({ done: /^☑/.test(l), text: l.replace(/^[☐☑]\s*/, '') })).filter((x) => x.text.trim());
-    qa('[data-mcheck]').forEach((el) => {
+    const postBtn = q("#lw-mo-post");
+    if (postBtn) postBtn.onclick = postMemo;
+    const newTa = q("#lw-mo-new");
+    if (newTa) newTa.onkeydown = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); postMemo(); } };
+    qa("[data-mtag]").forEach((el) => { el.onclick = () => { STORE.memoTag = el.dataset.mtag || ""; saveStore(); render(); }; });
+    qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { m.pin = !m.pin; saveStore(); render(); } }; });
+    qa("[data-medit]").forEach((el) => {
       el.onclick = () => {
-        const cur = curMemo(); if (!cur) return;
-        const items = readItems(cur); const i = Number(el.dataset.mcheck);
-        if (items[i]) { items[i].done = !items[i].done; writeItems(cur, items); }
+        const id = el.dataset.medit;
+        const ta = q("#lw-mo-ta");
+        if (ta && ta.dataset.mid === id) { const m = memoById(id); if (m) { m.text = ta.value; m.edit = Date.now(); } }
+        STORE.memoEditing = (STORE.memoEditing === id) ? "" : id;
+        saveStore(); render();
+        const t2 = document.getElementById("lw-mo-ta"); if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); }
       };
     });
-    qa('[data-mcdel]').forEach((el) => {
+    qa("[data-msave]").forEach((el) => {
       el.onclick = () => {
-        const cur = curMemo(); if (!cur) return;
-        const items = readItems(cur); items.splice(Number(el.dataset.mcdel), 1);
-        writeItems(cur, items);
+        const m = memoById(el.dataset.msave); const ta = q("#lw-mo-ta");
+        if (m) { if (ta) m.text = ta.value; m.edit = Date.now(); }
+        STORE.memoEditing = ""; saveStore(); render();
       };
     });
-    const mcAdd = q('#lw-mc-add'), mcIn = q('#lw-mc-input');
-    if (mcAdd && mcIn) {
-      const add = () => {
-        const cur = curMemo(); if (!cur) return;
-        const v = mcIn.value.trim(); if (!v) return;
-        const items = readItems(cur); items.push({ done: false, text: v });
-        writeItems(cur, items);
-        const i2 = document.getElementById('lw-mc-input'); if (i2) i2.focus();
+    qa("[data-mdel]").forEach((el) => {
+      el.onclick = () => { const m = memoById(el.dataset.mdel); if (m) { m.trash = true; saveStore(); render(); } };
+    });
+    const mQ = q("#lw-memo-q");
+    if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+    qa("[data-mrestore]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mrestore); if (m) { m.trash = false; saveStore(); render(); } }; });
+    qa("[data-mkill]").forEach((el) => { el.onclick = () => { STORE.memos = (STORE.memos || []).filter((x) => x.id !== el.dataset.mkill); saveStore(); render(); } });
+    const tEmpty = q("#lw-trash-empty");
+    if (tEmpty) tEmpty.onclick = () => {
+      if (!confirm("清空回收站？这些备忘录会被彻底删除，无法恢复。")) return;
+      STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render();
+    };
+    /* 快捷键：⌘F 搜索 / ⌘⏎ 发布 */
+    if (!bind._keys) {
+      bind._keys = (e) => {
+        if (!document.getElementById("lifework-view")) return;
+        if (!(e.metaKey || e.ctrlKey)) return;
+        const k = String(e.key || "").toLowerCase();
+        if (k === "f") { e.preventDefault(); const i = document.getElementById("lw-memo-q"); if (i) { i.focus(); i.select(); } }
       };
-      mcAdd.onclick = add;
-      mcIn.onkeydown = (e) => { if (e.key === 'Enter') add(); };
+      document.addEventListener("keydown", bind._keys);
     }
 
     /* ── 日记 ── */
@@ -694,69 +748,73 @@
   }
 
   /* ── 待办 ── */
+  /* ── 备忘录：Memos 风格（单列时间线 + Markdown 卡片）── */
   function viewMemo() {
-    const all = ((STORE && STORE.memos) || []).slice();
-    const kw = String((STORE && STORE.memoQ) || '').trim().toLowerCase();
-    const sort = (STORE && STORE.memoSort) || 'edit';
-    const pick = (m) => { const t = String(m.text || ''); const i = t.indexOf('\n'); return i < 0 ? t : t.slice(0, i); };
-    const subOf = (m) => { const t = String(m.text || ''); const i = t.indexOf('\n'); return i < 0 ? '' : t.slice(i + 1).replace(/^[☐☑]\s*/gm, '').replace(/\n/g, ' '); };
-    let shown = kw ? all.filter((m) => String(m.text || '').toLowerCase().includes(kw)) : all.slice();
+    const all = ((STORE && STORE.memos) || []).filter((m) => !m.trash);
+    const trash = ((STORE && STORE.memos) || []).filter((m) => m.trash);
+    const kw = String((STORE && STORE.memoQ) || "").trim().toLowerCase();
+    const tagF = (STORE && STORE.memoTag) || "";
+    const editing = (STORE && STORE.memoEditing) || "";
+    const tagsOf = (t) => (String(t || "").match(/#[\u4e00-\u9fa5\w/-]+/g) || []).map((x) => x.slice(1));
+    const tagCount = {};
+    all.forEach((m) => tagsOf(m.text).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+    let shown = all.filter((m) => (!kw || String(m.text || "").toLowerCase().includes(kw)) && (!tagF || tagsOf(m.text).includes(tagF)));
     shown.sort((a, b) => {
       if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0);
-      if (sort === 'title') return pick(a).localeCompare(pick(b), 'zh');
-      if (sort === 'made') return (b.at || 0) - (a.at || 0);
       return (b.edit || b.at || 0) - (a.edit || a.at || 0);
     });
-    const sel = (STORE && STORE.memoSel) || (shown[0] && shown[0].id) || '';
-    const cur = shown.find((x) => x.id === sel) || shown[0] || null;
+    const dayKey = (ms) => { const d = new Date(ms || Date.now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+    const todayK = dayKey(Date.now());
+    const yestK = dayKey(Date.now() - 86400000);
+    const dayLabel = (k) => k === todayK ? "今天" : k === yestK ? "昨天" : k.slice(5).replace("-", " 月 ") + " 日";
+    const groups = [];
+    shown.forEach((m) => { const k = dayKey(m.edit || m.at); const g = groups.find((x) => x.k === k); if (g) g.list.push(m); else groups.push({ k, list: [m] }); });
 
-    const list = shown.length ? shown.map((m) => `<div class="lw-mrow ${cur && m.id === cur.id ? 'on' : ''}" data-memo="${m.id}">
-        <div class="t">${m.pin ? '<span class="pin">★</span>' : ''}${esc(pick(m).slice(0, 30) || '新备忘录')}</div>
-        <div class="d">${dstr(m.edit || m.at).slice(5, 16)}</div>
-        <div class="s">${esc(subOf(m).slice(0, 26) || '无其他文本')}</div></div>`).join('')
-      : '<div class="lw-empty"><span class="big">✎</span>没有备忘录</div>';
+    const cardHtml = (m) => {
+      const isEdit = editing === m.id;
+      const t = new Date(m.edit || m.at);
+      const hhmm = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0");
+      const head = [
+        '<div class="lw-mo-head">',
+        m.pin ? '<span class="pin">★</span>' : "",
+        '<span class="tm">' + hhmm + (m.edit && m.edit !== m.at ? " · 已编辑" : "") + '</span>',
+        '<span class="sp"></span>',
+        '<button data-mpin="' + m.id + '">' + (m.pin ? "取消置顶" : "置顶") + '</button>',
+        '<button data-medit="' + m.id + '">' + (isEdit ? "收起" : "编辑") + '</button>',
+        '<button class="del" data-mdel="' + m.id + '">删除</button>',
+        '</div>',
+      ].join("");
+      const body = isEdit
+        ? '<div class="lw-mo-edit"><textarea id="lw-mo-ta" data-mid="' + m.id + '" placeholder="写点什么… 支持 Markdown 与 #标签">' + esc(m.text) + '</textarea>'
+          + '<div class="row"><button class="pri" data-msave="' + m.id + '">保存</button>'
+          + '<button data-medit="' + m.id + '">取消</button></div></div>'
+        : '<div class="lw-mo-body">' + (mdToHtml(m.text) || '<span style="color:#5c5a50">（空）</span>') + '</div>';
+      return '<div class="lw-mo-card ' + (m.pin ? "pin" : "") + '">' + head + body + '</div>';
+    };
 
-    /* 清单模式：正文每行一个可勾选项（前缀 ☐ / ☑ 存文本里，简单可移植） */
-    const rawLines = cur ? String(cur.text || '').split('\n').slice(1) : [];
-    const items = rawLines.map((l) => ({ done: /^☑/.test(l), text: l.replace(/^[☐☑]\s*/, '') })).filter((x) => x.text.trim());
-    const checklist = cur ? `<div class="lw-mcheck">
-        ${items.length ? items.map((it, i) => `<div class="lw-mcitem ${it.done ? 'done' : ''}">
-          <span class="ck" data-mcheck="${i}">✓</span><span class="tx">${esc(it.text)}</span>
-          <span class="del" data-mcdel="${i}">✕</span></div>`).join('') : '<div class="lw-empty" style="padding:18px 0">还没有条目，下面加一条</div>'}
-      </div><div class="lw-mcadd"><input id="lw-mc-input" placeholder="加一条，回车即可…" /><button id="lw-mc-add">添加</button></div>` : '';
+    const timeline = groups.length
+      ? groups.map((g) => '<div class="lw-mo-day">' + dayLabel(g.k) + '</div>' + g.list.map(cardHtml).join("")).join("")
+      : '<div class="lw-mo-empty"><span class="big">✎</span>' + (kw || tagF ? "没有匹配的备忘录" : "还没有备忘录，上面写一条") + '</div>';
 
-    const editor = cur ? `<div class="lw-memo-tools">
-        <button data-mmode="text" class="${cur.todo ? '' : 'pri'}">正文</button>
-        <button data-mmode="todo" class="${cur.todo ? 'pri' : ''}">清单</button>
-        <span class="sp"></span>
-        <button id="lw-memo-pin">${cur.pin ? '★ 取消置顶' : '☆ 置顶'}</button>
-        <button class="pri" id="lw-memo-save">保存</button>
-        <button class="del" id="lw-memo-del">删除</button>
-      </div>
-      <div class="lw-memo-body">
-        <input class="lw-mtitle" id="lw-memo-title" value="${esc(pick(cur))}" placeholder="标题" />
-        ${cur.todo ? checklist : `<textarea class="lw-mbody" id="lw-memo-body" placeholder="正文">${esc(rawLines.join('\n'))}</textarea>`}
-      </div>
-      <div class="lw-mfoot">${String(cur.text || '').length} 字符 · 最后编辑 ${dstr(cur.edit || cur.at)}</div>`
-      : '<div class="lw-empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"><span class="big">✎</span>选一条，或点「＋ 新建」</div>';
+    const tagKeys = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
+    const chip = (t) => '<span data-mtag="' + esc(t) + '" class="' + (tagF === t ? "on" : "") + '">#' + esc(t) + ' ' + tagCount[t] + '</span>';
+    const tagBar = tagKeys.length ? '<div class="lw-mtags" style="padding:0 0 12px"><span data-mtag="" class="' + (tagF ? "" : "on") + '">全部 ' + all.length + '</span>' + tagKeys.map(chip).join("") + '</div>' : "";
 
-    return `<div class="lw-c" style="${sp(12)}">
-      <h3><span class="code">M-00</span>备忘录<span class="sp"></span>
-        <select id="lw-memo-sort" style="height:22px;padding:0 6px;border:1px solid ${T.lineDim};background:transparent;color:${T.text};font:10px ${UI}">
-          <option value="edit"${sort === 'edit' ? ' selected' : ''}>按编辑时间</option>
-          <option value="made"${sort === 'made' ? ' selected' : ''}>按创建时间</option>
-          <option value="title"${sort === 'title' ? ' selected' : ''}>按标题</option>
-        </select><em>共 ${all.length} 条</em></h3>
-      <div class="lw-memo">
-        <div class="lw-memo-list">
-          <div class="lw-memo-search"><input id="lw-memo-q" placeholder="搜索" value="${esc((STORE && STORE.memoQ) || '')}" /></div>
-          <div class="lw-memo-bar"><span class="n">${shown.length} / ${all.length}</span><span class="sp"></span>
-            <button class="pri" id="lw-memo-new">＋ 新建</button></div>
-          <div class="lw-mlist">${list}</div>
-        </div>
-        <div class="lw-memo-editor">${editor}</div>
-      </div>
-    </div>`;
+    const trashHtml = trash.length ? '<div class="lw-c" style="grid-column:span 12"><h3><span class="code">M-99</span>回收站<span class="sp"></span><em>' + trash.length + ' 条</em><span class="act" id="lw-trash-empty">清空</span></h3>'
+      + trash.map((m) => '<div class="lw-trash"><div class="t">' + esc(String(m.text || "").slice(0, 60).replace(/\n/g, " ")) + '</div><div class="r"><button data-mrestore="' + m.id + '">恢复</button><button data-mkill="' + m.id + '">彻底删除</button></div></div>').join("") + '</div>' : "";
+
+    const stat = '<div class="lw-c"><h3><span class="code">M-02</span>统计<span class="sp"></span></h3><div class="lw-kpi"><div class="row"><div class="ic">✎</div><div style="flex:1;min-width:0"><div class="num">' + all.length + '<small>条</small></div></div></div><div class="cmp">' + tagKeys.length + ' 个标签 · 回收站 ' + trash.length + ' 条</div></div></div>';
+    const search = '<div class="lw-c"><h3><span class="code">M-01</span>搜索<span class="sp"></span></h3><div style="padding:12px 14px"><input id="lw-memo-q" placeholder="搜内容或 #标签（⌘F）" value="' + esc((STORE && STORE.memoQ) || "") + '" style="width:100%;height:32px;padding:0 11px;border:2px solid #3a382f;background:transparent;color:#f2efe6;font:12px SF Mono,Menlo,monospace;outline:none" /></div></div>';
+    const allTags = '<div class="lw-c"><h3><span class="code">M-03</span>全部标签<span class="sp"></span></h3><div style="padding:10px 12px"><div class="lw-mtags" style="padding:0;border:0">' + (tagKeys.length ? tagKeys.map(chip).join("") : '<span style="border:0;color:#5c5a50">还没有标签，正文里写 #标签</span>') + '</div></div></div>';
+
+    return '<div class="lw-g12">'
+      + '<div class="lw-c" style="grid-column:span 8"><h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>' + all.length + ' 条 · Markdown · 自动保存</em></h3>'
+      + '<div style="padding:12px 14px"><div class="lw-mo-write"><textarea id="lw-mo-new" placeholder="写点什么… 支持 Markdown（# 标题 / **粗体** / - 列表）与 #标签"></textarea>'
+      + '<div class="side"><button id="lw-mo-post">发布 ⌘⏎</button></div></div>'
+      + tagBar + '<div class="lw-mo">' + timeline + '</div></div></div>'
+      + '<div style="grid-column:span 4;display:flex;flex-direction:column;gap:14px">' + search + stat + allTags + '</div>'
+      + trashHtml
+      + '</div>';
   }
 
 
