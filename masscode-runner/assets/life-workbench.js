@@ -157,23 +157,71 @@
   .lw-chips { display:flex; flex-wrap:wrap; gap:7px; }
   .lw-chip { font-size:10.5px; padding:3px 9px; border:1px solid ${T.lineDim}; color:${T.dim}; letter-spacing:.6px; }
   .lw-chip b { color:${T.accent}; font-weight:700; margin-left:5px; }
-  /* 备忘录：左列表 + 右详情（Apple 备忘录的两栏结构） */
-  .lw-mlist { display:flex; flex-direction:column; max-height:560px; overflow:auto; }
-  .lw-mrow { padding:9px 12px; border-bottom:1px solid ${T.lineDim}; cursor:pointer; transition:background .12s; }
+  /* 备忘录：结构照 macOS 备忘录，**配色跟 HUD 深色统一**（不再黑壳塞白块 ✗） */
+  .lw-memo { display:flex; height:calc(100vh - 260px); min-height:460px; overflow:hidden; }
+  .lw-memo-list { width:272px; flex:none; background:#0d0d0c; border-right:2px solid ${T.lineDim};
+    display:flex; flex-direction:column; }
+  .lw-memo-search { padding:10px 11px 8px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-memo-search input { width:100%; height:28px; padding:0 10px; border:2px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:11.5px ${UI}; outline:none; }
+  .lw-memo-search input:focus { border-color:${T.accent}; }
+  .lw-memo-search input::placeholder { color:${T.faint}; }
+  .lw-memo-bar { display:flex; align-items:center; gap:8px; padding:7px 11px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-memo-bar .n { font-size:10px; color:${T.faint}; letter-spacing:1px; text-transform:uppercase; }
+  .lw-memo-bar .sp { flex:1; }
+  .lw-memo-bar button, .lw-memo-bar select { height:24px; padding:0 9px; border:2px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:600 10px ${UI}; letter-spacing:.8px; cursor:pointer; }
+  .lw-memo-bar button.pri { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-memo-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-memo-bar button.pri:hover { color:${T.accentInk}; }
+  .lw-memo-bar select option { background:#111; color:${T.text}; }
+  .lw-mlist { flex:1; overflow:auto; }
+  .lw-mrow { padding:9px 12px; border-bottom:1px solid ${T.lineDim}; cursor:pointer; position:relative; }
   .lw-mrow:hover { background:#141412; }
-  .lw-mrow.on { background:${T.accent}; color:${T.accentInk}; }
-  .lw-mrow.on .s, .lw-mrow.on .d { color:${T.accentInk}; opacity:.7; }
-  .lw-mrow .t { font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-mrow .s { font-size:10.5px; color:${T.dim}; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-mrow .d { font-size:9.5px; color:${T.faint}; margin-top:3px; letter-spacing:.6px; }
-  .lw-mdetail { display:flex; flex-direction:column; min-height:460px; }
-  .lw-mtitle { border:0; border-bottom:1px solid ${T.lineDim}; background:transparent; color:${T.text};
-    font:600 15px ${UI}; padding:13px 14px; outline:none; }
-  .lw-mbody { flex:1; border:0; background:transparent; color:${T.text}; font:12.5px/1.75 ${UI};
-    padding:12px 14px; resize:none; outline:none; min-height:300px; }
-  .lw-mtools { display:flex; align-items:center; gap:9px; padding:11px 14px; border-top:1px solid ${T.lineDim}; }
-  .lw-mck { display:flex; align-items:center; gap:7px; font-size:11px; color:${T.dim}; cursor:pointer; letter-spacing:.6px; }
-  .lw-mck input { accent-color:${T.accent}; }
+  .lw-mrow.on { background:${T.accent}; }
+  .lw-mrow.on .t, .lw-mrow.on .d { color:${T.accentInk}; }
+  .lw-mrow.on .s { color:rgba(17,16,8,.6); }
+  .lw-mrow .t { font-size:12px; font-weight:600; color:${T.text}; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; padding-right:62px; }
+  .lw-mrow .d { position:absolute; right:12px; top:9px; font-size:10px; color:${T.faint}; }
+  .lw-mrow .s { font-size:10.5px; color:${T.faint}; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-mrow .pin { color:${T.accent}; font-size:10px; margin-right:4px; }
+  .lw-memo-editor { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .lw-memo-tools { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-memo-tools .sp { flex:1; }
+  .lw-memo-tools button { height:25px; padding:0 10px; border:2px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:600 10px ${UI}; letter-spacing:.8px; cursor:pointer; }
+  .lw-memo-tools button.pri { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-memo-tools button.del { color:${T.red}; border-color:rgba(226,114,91,.5); }
+  .lw-memo-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-memo-tools button.pri:hover { color:${T.accentInk}; }
+  .lw-memo-tools button.del:hover { background:${T.red}; color:#111; border-color:${T.red}; }
+  .lw-memo-body { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .lw-mtitle { border:0; background:transparent; color:${T.text}; font:700 17px ${UI};
+    padding:15px 18px 6px; outline:none; }
+  .lw-mtitle::placeholder { color:${T.faint}; }
+  .lw-mbody { flex:1; border:0; background:transparent; color:${T.text}; font:12.5px/1.8 ${UI};
+    padding:4px 18px 14px; resize:none; outline:none; min-height:200px; }
+  .lw-mbody::placeholder { color:${T.faint}; }
+  .lw-mfoot { padding:7px 18px; border-top:1px solid ${T.lineDim}; font-size:10px; color:${T.faint}; letter-spacing:.6px; }
+  /* 清单模式：每行一个可勾选项 */
+  .lw-mcheck { flex:1; overflow:auto; padding:4px 18px 14px; }
+  .lw-mcitem { display:flex; align-items:flex-start; gap:9px; padding:5px 0; }
+  .lw-mcitem .ck { width:16px; height:16px; flex:none; margin-top:2px; border:2px solid ${T.lineDim};
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:10px; color:transparent; }
+  .lw-mcitem .ck:hover { border-color:${T.accent}; }
+  .lw-mcitem.done .ck { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-mcitem .tx { flex:1; min-width:0; font-size:12.5px; line-height:1.65; word-break:break-word; }
+  .lw-mcitem.done .tx { color:${T.faint}; text-decoration:line-through; }
+  .lw-mcitem .del { flex:none; opacity:0; cursor:pointer; color:${T.faint}; font-size:12px; }
+  .lw-mcitem:hover .del { opacity:1; }
+  .lw-mcitem .del:hover { color:${T.red}; }
+  .lw-mcadd { display:flex; gap:8px; padding:8px 18px 14px; }
+  .lw-mcadd input { flex:1; min-width:0; height:30px; padding:0 10px; border:2px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:12px ${UI}; outline:none; }
+  .lw-mcadd input:focus { border-color:${T.accent}; }
+  .lw-mcadd button { height:30px; padding:0 12px; border:2px solid ${T.accent}; background:${T.accent};
+    color:${T.accentInk}; font:700 10px ${UI}; letter-spacing:1px; cursor:pointer; }
   /* 日记 */
   .lw-jtext { width:100%; min-height:190px; resize:vertical; padding:12px 13px; border:2px solid ${T.lineDim};
     background:transparent; color:${T.text}; font:12.5px/1.8 ${UI}; outline:none; }
@@ -410,6 +458,10 @@
     qa('[data-memo]').forEach((el) => {
       el.onclick = () => { STORE.memoSel = el.dataset.memo; saveStore(); render(); };
     });
+    const mQ = q('#lw-memo-q');
+    if (mQ) {
+      mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById('lw-memo-q'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+    }
     const mNew = q('#lw-memo-new');
     if (mNew) mNew.onclick = () => {
       const id = 'm' + Date.now();
@@ -425,17 +477,84 @@
       const title = (q('#lw-memo-title') || {}).value || '';
       const body = (q('#lw-memo-body') || {}).value || '';
       cur.text = title + (body ? '\n' + body : '');
-      cur.todo = !!(q('#lw-memo-todo') || {}).checked;
-      cur.at = Date.now();
+      cur.edit = Date.now();
       saveStore(); render();
       const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已保存备忘录';
     };
     const mDel = q('#lw-memo-del');
     if (mDel) mDel.onclick = () => {
+      const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
+      if (cur && !confirm('删除这条备忘录？\n\n' + String(cur.text || '').split('\n')[0])) return;
       STORE.memos = (STORE.memos || []).filter((x) => x.id !== STORE.memoSel);
       STORE.memoSel = (STORE.memos[0] || {}).id || '';
       saveStore(); render();
     };
+    const mSort = q('#lw-memo-sort');
+    if (mSort) mSort.onchange = () => { STORE.memoSort = mSort.value; saveStore(); render(); };
+    const mPin = q('#lw-memo-pin');
+    if (mPin) mPin.onclick = () => {
+      const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
+      if (cur) { cur.pin = !cur.pin; saveStore(); render(); }
+    };
+    /* 正文 / 清单 模式切换 */
+    qa('[data-mmode]').forEach((b) => {
+      b.onclick = () => {
+        const cur = (STORE.memos || []).find((x) => x.id === STORE.memoSel);
+        if (!cur) return;
+        const title = (q('#lw-memo-title') || {}).value || '';
+        if (b.dataset.mmode === 'todo') {
+          const body = (q('#lw-memo-body') || {}).value || '';
+          const items = body.split('\n').filter((l) => l.trim()).map((l) => '☐ ' + l.replace(/^[☐☑]\s*/, ''));
+          cur.text = title + (items.length ? '\n' + items.join('\n') : '');
+          cur.todo = true;
+        } else {
+          const lines = [];
+          qa('[data-mcheck]').forEach((el) => {
+            const row = el.parentElement;
+            const tx = (row.querySelector('.tx') || {}).textContent || '';
+            lines.push((row.classList.contains('done') ? '☑ ' : '☐ ') + tx);
+          });
+          cur.text = title + (lines.length ? '\n' + lines.join('\n') : '');
+          cur.todo = false;
+        }
+        cur.edit = Date.now(); saveStore(); render();
+      };
+    });
+    /* 清单：勾选 / 删条目 / 加条目 */
+    const curMemo = () => (STORE.memos || []).find((x) => x.id === STORE.memoSel);
+    const writeItems = (cur, items) => {
+      const title = (q('#lw-memo-title') || {}).value || String(cur.text || '').split('\n')[0];
+      cur.text = title + (items.length ? '\n' + items.map((it) => (it.done ? '☑ ' : '☐ ') + it.text).join('\n') : '');
+      cur.edit = Date.now(); saveStore(); render();
+    };
+    const readItems = (cur) => String(cur.text || '').split('\n').slice(1)
+      .map((l) => ({ done: /^☑/.test(l), text: l.replace(/^[☐☑]\s*/, '') })).filter((x) => x.text.trim());
+    qa('[data-mcheck]').forEach((el) => {
+      el.onclick = () => {
+        const cur = curMemo(); if (!cur) return;
+        const items = readItems(cur); const i = Number(el.dataset.mcheck);
+        if (items[i]) { items[i].done = !items[i].done; writeItems(cur, items); }
+      };
+    });
+    qa('[data-mcdel]').forEach((el) => {
+      el.onclick = () => {
+        const cur = curMemo(); if (!cur) return;
+        const items = readItems(cur); items.splice(Number(el.dataset.mcdel), 1);
+        writeItems(cur, items);
+      };
+    });
+    const mcAdd = q('#lw-mc-add'), mcIn = q('#lw-mc-input');
+    if (mcAdd && mcIn) {
+      const add = () => {
+        const cur = curMemo(); if (!cur) return;
+        const v = mcIn.value.trim(); if (!v) return;
+        const items = readItems(cur); items.push({ done: false, text: v });
+        writeItems(cur, items);
+        const i2 = document.getElementById('lw-mc-input'); if (i2) i2.focus();
+      };
+      mcAdd.onclick = add;
+      mcIn.onkeydown = (e) => { if (e.key === 'Enter') add(); };
+    }
 
     /* ── 日记 ── */
     const jSave = q('#lw-j-save');
@@ -576,38 +695,71 @@
 
   /* ── 待办 ── */
   function viewMemo() {
-    const all = ((STORE && STORE.memos) || []).slice().sort((a, b) => b.at - a.at);
-    const sel = (STORE && STORE.memoSel) || (all[0] && all[0].id) || '';
-    const cur = all.find((x) => x.id === sel) || all[0] || null;
-    const list = all.length ? all.map((m) => {
-      const lines = String(m.text || '').split('\n');
-      const first = (lines[0] || '').slice(0, 30) || '(空)';
-      const sub = lines.slice(1).join(' ').slice(0, 28);
-      return `<div class="lw-mrow ${cur && m.id === cur.id ? 'on' : ''}" data-memo="${m.id}">
-        <div class="t">${m.todo ? '☑ ' : ''}${esc(first)}</div>
-        <div class="s">${esc(sub || (m.todo ? '待办清单' : '备忘录'))}</div>
-        <div class="d">${dstr(m.at).slice(5, 16)}</div></div>`;
-    }).join('') : `<div class="lw-empty"><span class="big">✎</span>还没有备忘录</div>`;
-    const detail = cur ? `<div class="lw-mdetail">
-        <input class="lw-mtitle" id="lw-memo-title" value="${esc(String(cur.text || '').split('\n')[0])}" placeholder="标题" />
-        <textarea class="lw-mbody" id="lw-memo-body" placeholder="正文…">${esc(String(cur.text || '').split('\n').slice(1).join('\n'))}</textarea>
-        <div class="lw-mtools">
-          <label class="lw-mck"><input type="checkbox" id="lw-memo-todo" ${cur.todo ? 'checked' : ''}/> 待办清单</label>
-          <span style="flex:1"></span>
-          <button class="lw-btn" id="lw-memo-save">保存</button>
-          <button class="lw-btn" id="lw-memo-del">删除</button>
-        </div></div>` : `<div class="lw-empty"><span class="big">✎</span>选一条，或点上面「＋ 新建」</div>`;
-    return `<div class="lw-g12">
-      <div class="lw-c" style="${sp(4)}">
-        <h3><span class="code">M-01</span>备忘录<span class="sp"></span><em>${all.length} 条</em><span class="act" id="lw-memo-new">＋ 新建</span></h3>
-        <div class="lw-mlist">${list}</div>
+    const all = ((STORE && STORE.memos) || []).slice();
+    const kw = String((STORE && STORE.memoQ) || '').trim().toLowerCase();
+    const sort = (STORE && STORE.memoSort) || 'edit';
+    const pick = (m) => { const t = String(m.text || ''); const i = t.indexOf('\n'); return i < 0 ? t : t.slice(0, i); };
+    const subOf = (m) => { const t = String(m.text || ''); const i = t.indexOf('\n'); return i < 0 ? '' : t.slice(i + 1).replace(/^[☐☑]\s*/gm, '').replace(/\n/g, ' '); };
+    let shown = kw ? all.filter((m) => String(m.text || '').toLowerCase().includes(kw)) : all.slice();
+    shown.sort((a, b) => {
+      if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0);
+      if (sort === 'title') return pick(a).localeCompare(pick(b), 'zh');
+      if (sort === 'made') return (b.at || 0) - (a.at || 0);
+      return (b.edit || b.at || 0) - (a.edit || a.at || 0);
+    });
+    const sel = (STORE && STORE.memoSel) || (shown[0] && shown[0].id) || '';
+    const cur = shown.find((x) => x.id === sel) || shown[0] || null;
+
+    const list = shown.length ? shown.map((m) => `<div class="lw-mrow ${cur && m.id === cur.id ? 'on' : ''}" data-memo="${m.id}">
+        <div class="t">${m.pin ? '<span class="pin">★</span>' : ''}${esc(pick(m).slice(0, 30) || '新备忘录')}</div>
+        <div class="d">${dstr(m.edit || m.at).slice(5, 16)}</div>
+        <div class="s">${esc(subOf(m).slice(0, 26) || '无其他文本')}</div></div>`).join('')
+      : '<div class="lw-empty"><span class="big">✎</span>没有备忘录</div>';
+
+    /* 清单模式：正文每行一个可勾选项（前缀 ☐ / ☑ 存文本里，简单可移植） */
+    const rawLines = cur ? String(cur.text || '').split('\n').slice(1) : [];
+    const items = rawLines.map((l) => ({ done: /^☑/.test(l), text: l.replace(/^[☐☑]\s*/, '') })).filter((x) => x.text.trim());
+    const checklist = cur ? `<div class="lw-mcheck">
+        ${items.length ? items.map((it, i) => `<div class="lw-mcitem ${it.done ? 'done' : ''}">
+          <span class="ck" data-mcheck="${i}">✓</span><span class="tx">${esc(it.text)}</span>
+          <span class="del" data-mcdel="${i}">✕</span></div>`).join('') : '<div class="lw-empty" style="padding:18px 0">还没有条目，下面加一条</div>'}
+      </div><div class="lw-mcadd"><input id="lw-mc-input" placeholder="加一条，回车即可…" /><button id="lw-mc-add">添加</button></div>` : '';
+
+    const editor = cur ? `<div class="lw-memo-tools">
+        <button data-mmode="text" class="${cur.todo ? '' : 'pri'}">正文</button>
+        <button data-mmode="todo" class="${cur.todo ? 'pri' : ''}">清单</button>
+        <span class="sp"></span>
+        <button id="lw-memo-pin">${cur.pin ? '★ 取消置顶' : '☆ 置顶'}</button>
+        <button class="pri" id="lw-memo-save">保存</button>
+        <button class="del" id="lw-memo-del">删除</button>
       </div>
-      <div class="lw-c" style="${sp(8)}">
-        <h3><span class="code">M-02</span>${cur ? '编辑' : '详情'}<span class="sp"></span><em>${cur ? dstr(cur.at) : ''}</em></h3>
-        ${detail}
+      <div class="lw-memo-body">
+        <input class="lw-mtitle" id="lw-memo-title" value="${esc(pick(cur))}" placeholder="标题" />
+        ${cur.todo ? checklist : `<textarea class="lw-mbody" id="lw-memo-body" placeholder="正文">${esc(rawLines.join('\n'))}</textarea>`}
+      </div>
+      <div class="lw-mfoot">${String(cur.text || '').length} 字符 · 最后编辑 ${dstr(cur.edit || cur.at)}</div>`
+      : '<div class="lw-empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"><span class="big">✎</span>选一条，或点「＋ 新建」</div>';
+
+    return `<div class="lw-c" style="${sp(12)}">
+      <h3><span class="code">M-00</span>备忘录<span class="sp"></span>
+        <select id="lw-memo-sort" style="height:22px;padding:0 6px;border:1px solid ${T.lineDim};background:transparent;color:${T.text};font:10px ${UI}">
+          <option value="edit"${sort === 'edit' ? ' selected' : ''}>按编辑时间</option>
+          <option value="made"${sort === 'made' ? ' selected' : ''}>按创建时间</option>
+          <option value="title"${sort === 'title' ? ' selected' : ''}>按标题</option>
+        </select><em>共 ${all.length} 条</em></h3>
+      <div class="lw-memo">
+        <div class="lw-memo-list">
+          <div class="lw-memo-search"><input id="lw-memo-q" placeholder="搜索" value="${esc((STORE && STORE.memoQ) || '')}" /></div>
+          <div class="lw-memo-bar"><span class="n">${shown.length} / ${all.length}</span><span class="sp"></span>
+            <button class="pri" id="lw-memo-new">＋ 新建</button></div>
+          <div class="lw-mlist">${list}</div>
+        </div>
+        <div class="lw-memo-editor">${editor}</div>
       </div>
     </div>`;
   }
+
+
 
   /* ── 日记（按天一条 + 时间线）── */
   function viewJournal() {
