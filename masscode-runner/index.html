@@ -698,8 +698,8 @@
   #edit-split-v::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; }
   #edit-split-v:hover::after, #edit-split-v.active::after { background: var(--accent); }
   /* 代码图谱分隔条：和 edit-split-v 同款，拖拽调整「代码 / 图谱」宽度 */
-  #ln { flex: none; padding: 14px 8px 14px 12px; text-align: right; color: #4b5263; font: 12px/1.7 var(--mono); user-select: none; background: #1b1e25; border-right: 1px solid var(--border); white-space: pre; letter-spacing: normal; }
-  #code { flex: 1; margin: 0; padding: 14px; font: 12px/1.7 var(--mono); white-space: pre; tab-size: 2; letter-spacing: normal; }
+  #ln { flex: none; padding: 14px 8px 14px 12px; text-align: right; color: #4b5263; font: var(--editor-legacy-font-size,12px)/var(--editor-legacy-line-height,20.4px) var(--mono); user-select: none; background: #1b1e25; border-right: 1px solid var(--border); white-space: pre; letter-spacing: normal; }
+  #code { flex: 1; margin: 0; padding: 14px; font: var(--editor-legacy-font-size,12px)/var(--editor-legacy-line-height,20.4px) var(--mono); white-space: pre; tab-size: 2; letter-spacing: normal; }
   #code.hljs { background: transparent; }
   /* 代码层级：缩进参考线（画布，位于高亮层下方）+ 折叠装订线（行号右侧） */
   #indent-guides { position: absolute; top: 0; pointer-events: none; z-index: 0; }
@@ -1978,7 +1978,7 @@
   .md-doc a { color: #58a6ff; }
   .md-doc img { max-width: 100%; border-radius: 6px; }
   .md-doc code, .md-doc pre { white-space: pre; }
-  #code-edit { flex: 1; margin: 0; padding: 14px; font: 12px/1.7 var(--mono); white-space: pre; tab-size: 2; background: transparent; color: var(--text); border: none; outline: 1px solid var(--accent); outline-offset: -1px; border-radius: 8px; resize: none; letter-spacing: normal; scrollbar-width: none; }
+  #code-edit { flex: 1; margin: 0; padding: 14px; font: var(--editor-legacy-font-size,12px)/var(--editor-legacy-line-height,20.4px) var(--mono); white-space: pre; tab-size: 2; background: transparent; color: var(--text); border: none; outline: 1px solid var(--accent); outline-offset: -1px; border-radius: 8px; resize: none; letter-spacing: normal; scrollbar-width: none; }
   #code-edit::-webkit-scrollbar { display: none; }   /* 隐藏 textarea 滚动条：杜绝滚动条占宽导致的两层水平错位 */
   /* 代码编辑的实时高亮：文字透明、光标可见，叠在 #code 高亮层上；聚焦时仍给编辑框描边 */
   #code-edit.live-hl { color: transparent; caret-color: var(--text); -webkit-text-fill-color: transparent; position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
@@ -4836,8 +4836,12 @@ function applyEditorFontSize(value,announce=true){
   const next=Math.max(EDITOR_FONT_MIN,Math.min(EDITOR_FONT_MAX,Math.round(Number(value)||EDITOR_FONT_DEFAULT)));
   EDITOR_FONT_SIZE=next;
   try{localStorage.setItem('mc-editor-font-size',String(next));}catch(_){}
-  document.documentElement.style.setProperty('--editor-legacy-font-size',Math.max(10,next-2)+'px');
-  document.documentElement.style.setProperty('--editor-legacy-line-height',(Math.max(10,next-2)*1.7)+'px');
+  /* ⚠️ 这两个变量原来是「设了但没人用」的死变量 —— CSS 里 #code/#ln 写死 12px，
+     而 Monaco（编辑态）用 EDITOR_FONT_SIZE，于是**只读态和编辑态字号不一样**
+     （用户报「和编辑模式下的大小不一致」）。现在字号统一取 EDITOR_FONT_SIZE，
+     只读态不再用「-2」那种小一号的旧值。 */
+  document.documentElement.style.setProperty('--editor-legacy-font-size', next + 'px');
+  document.documentElement.style.setProperty('--editor-legacy-line-height', editorLineHeight(next) + 'px');
   const options={fontSize:next,lineHeight:editorLineHeight(next)};
   if(MONACO_EDITOR)MONACO_EDITOR.updateOptions(options);
   for(const editor of MONACO_SPLIT_EDITORS)editor.updateOptions(options);
