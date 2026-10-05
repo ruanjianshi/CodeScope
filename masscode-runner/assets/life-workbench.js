@@ -1905,27 +1905,32 @@
     const pad2 = (n) => String(n).padStart(2, "0");
     const keyOf = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
     const todayK = keyOf(d0);
-    /* ⚠️ 分清两个数：`total` = 全部篇数（给面板计数用 ✓）；
-       `all` = 按分类筛选后的（给列表内容用 ✓）。
-       之前面板计数也用了 `all` ✗ → 一筛分类就全变 0 篇 ✗。 */
+    /* 分类统计 + 筛选 ✓
+       · `total`      = 全部篇数（全部分类用 ✓）
+       · `catCount`   = 每个分类的篇数（分类行用 ✓）
+       · `all`        = 按分类筛选后的（列表 / 日历高亮用 ✓）
+       · `journalAll` = 全量（连续记录用 ✓，streak 不该被筛选影响 ✓）
+       ⚠️ 以前「最近写过」用的是 `journalAll` ✗ → 筛了分类它也不变 ✗，
+          用户反馈"没有实际起到分类查询的作用" ✗ → 改成用 `all` ✓。 */
     const total = ((STORE && STORE.journal) || []).length;
-    /* 「最近写过」用**全量** ✓ —— 它回答的是"我写过什么"，不该被分类筛掉 ✗ */
     const journalAll = ((STORE && STORE.journal) || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
     const catNow = (STORE && STORE.journalCat) || '';
-    const all = ((STORE && STORE.journal) || []).slice()
-      .filter((j) => !catNow || String(j.cat || '') === catNow)
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
-    /* ⚠️ hasSet（日历上的黄点）要用**未筛选**的全量 ✓ ——
-       否则筛了分类后，日历上的点也跟着少 ✗ */
-    const hasSet = {};
-    ((STORE && STORE.journal) || []).forEach((j) => { hasSet[j.date] = j; });
+    const catOf2 = (j) => String(j.cat || '');
+    const catCount2 = {};
+    journalAll.forEach((j) => { const c = catOf2(j); if (c) catCount2[c] = (catCount2[c] || 0) + 1; });
+    const all = journalAll.filter((j) => !catNow || catOf2(j) === catNow);
+    /* 日历高亮用：筛选时只标该分类的日期 ✓ */
+    const hasSet2 = {};
+    journalAll.forEach((j) => { if (!catNow || catOf2(j) === catNow) hasSet2[j.date] = j; });
+    /* 日历黄点：筛选时只标该分类的日期 ✓（用户要的"分类查询"效果 ✓）*/
+    const hasSet = hasSet2;
     const mon = (STORE && STORE.journalMonth) || todayK.slice(0, 7);
     const sel = (STORE && STORE.journalSel) || todayK;
     const cur = hasSet[sel] || null;
     const WD = ["日", "一", "二", "三", "四", "五", "六"];
     /* 连续记录 */
     let streak = 0;
-    for (let i = 0; i < 400; i++) { const d = new Date(); d.setDate(d.getDate() - i); const k = keyOf(d); if (hasSet[k]) streak++; else if (i > 0) break; }
+    for (let i = 0; i < 400; i++) { const d = new Date(); d.setDate(d.getDate() - i); const k = keyOf(d); if (journalAll.some((x) => x.date === k)) streak++; else if (i > 0) break; }
 
     /* 月历网格 */
     const [yy, mm] = mon.split("-").map(Number);
@@ -1971,12 +1976,10 @@
     const lw = (STORE.journalLeftW || 360);
     const cats = (STORE.journalCats || ['学习', '工作', '生活', '科研']);
     const catF = (STORE.journalCat || '');
-    const catOf = (j) => String(j.cat || '');
+    /* catOf 已并入 catOf2 ✓ */
     const catCount = {};
-    cats.forEach((c) => { catCount[c] = 0; });
-    all.forEach((j) => { if (catOf(j)) catCount[catOf(j)] = (catCount[catOf(j)] || 0) + 1; });
     const catList = cats.length ? cats.map((c) => '<div class="row ' + (catF === c ? 'on' : '') + '" data-jcat="' + esc(c) + '">'
-        + '<span>▸ ' + esc(c) + '</span><span class="n">' + (catCount[c] || 0) + '</span>'
+        + '<span>▸ ' + esc(c) + '</span><span class="n">' + (catCount2[c] || 0) + '</span>'
         + '<span class="del" data-jcatdel="' + esc(c) + '" title="删除分类">✕</span></div>').join('')
       : '<div style="padding:8px 4px;color:' + T.faint + ';font-size:11px">还没有分类</div>';
 
@@ -1990,14 +1993,14 @@
       + '<div class="lw-cbd"><div class="lw-kpi"><div class="row"><div class="ic">◈</div><div style="flex:1;min-width:0"><div class="num">' + streak + '<small>天</small></div></div></div>'
       + '<div class="cmp">' + (streak ? "继续保持" : "今天开个头") + '</div></div></div></div><div class="lw-vgrip" data-vgrip="2"></div>'
 
-      + '<div class="lw-c" data-jpanel="recent" style="height:' + (STORE.jpH3 || 170) + 'px"><h3><span class="code">J-05</span>最近写过<span class="sp"></span><em>共 ' + total + ' 篇</em></h3>'
-      + '<div class="lw-cbd"><div class="lw-tbl">' + (journalAll.length ? journalAll.slice(0, 12).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
-          + '<span class="nm">' + esc(j.date.slice(5)) + (catOf(j) ? ' <i>#' + esc(catOf(j)) + '</i>' : '') + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
+      + '<div class="lw-c" data-jpanel="recent" style="height:' + (STORE.jpH3 || 170) + 'px"><h3><span class="code">J-05</span>最近写过<span class="sp"></span><em>' + (catNow ? '筛选中 ' + all.length + ' / 共 ' + total : '共 ' + total) + ' 篇</em></h3>'
+      + '<div class="lw-cbd"><div class="lw-tbl">' + (all.length ? all.slice(0, 12).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
+          + '<span class="nm">' + esc(j.date.slice(5)) + (catOf2(j) ? ' <i>#' + esc(catOf2(j)) + '</i>' : '') + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
           + '<span class="tm">' + esc(String(j.text || "").replace(/\n/g, ' ').slice(0, 8)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div></div><div class="lw-vgrip" data-vgrip="3"></div>'
 
       + '<div class="lw-c" data-jpanel="cat" style="height:' + (STORE.jpH4 || 200) + 'px"><h3><span class="code">J-06</span>管理分类<span class="sp"></span><em>点选筛选</em></h3>'
       + '<div class="lw-cbd"><div class="lw-cats">'
-      + '<div class="row ' + (catF ? '' : 'on') + '" data-jcat="">▸ 全部分类<span class="n">' + all.length + '</span></div>'
+      + '<div class="row ' + (catF ? '' : 'on') + '" data-jcat="">▸ 全部分类<span class="n">' + total + '</span></div>'
       + catList
       + '<div class="add"><input id="lw-jcat-new" placeholder="新分类名…" /><button id="lw-jcat-add">＋ 添加</button></div>'
       + '</div></div></div><div class="lw-vgrip" data-vgrip="4"></div>'
@@ -2018,7 +2021,7 @@
       + '<span class="hint">光标行显示源码，其他行即时渲染</span>'
       + '<span class="sp"></span>'
       + '<select id="lw-j-catsel">'
-      + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
+      + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf2(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
       + '<button id="lw-j-md" title="把当前行变成标题"># 标题</button>'
       + '<button id="lw-j-ck" title="把当前行变成清单项">☐ 清单</button>'
       + '</div>'
