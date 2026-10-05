@@ -542,74 +542,47 @@
   .lw-cal-d.sel::after { background:${T.accentInk}; }
   .lw-jday-hd { padding:12px 16px 4px; font-size:12px; color:${T.dim}; letter-spacing:.5px; }
   .lw-jday-hd b { color:${T.accent}; font-weight:700; }
-  /* ── 就地实时渲染（Obsidian 式）：透明 textarea 叠在渲染层上 ──
-     关键：两层**字体/字号/行高/内边距必须完全一致** ✓，否则光标会错位 ✗。
-     所以渲染层**不改字号**，只用颜色/字重/底色/竖线区分 ✓ —— 逐行等高 ✓。 */
-  .lw-live { position:relative; border:2px solid ${T.lineDim}; background:#0d0d0c; }
-  .lw-live:focus-within { border-color:${T.accent}; }
-  .lw-live-bd, .lw-live-ta {
-    font:12.5px/1.85 ${UI};
-    padding:12px 13px;
-    white-space:pre-wrap;
-    word-break:break-word;
-    letter-spacing:0;
-  }
-  .lw-live-bd { color:${T.text}; pointer-events:none; min-height:200px; overflow:hidden; }
-  .lw-live-ta {
-    position:absolute; inset:0; width:100%; height:100%;
-    border:0; outline:none; resize:none;
-    /* ⚠️ 背景也必须 !important —— 全局 textarea 样式给了不透明底色 ✗，
-       会把下面的渲染层**整个盖住** ✗（表现就是"输入了但看不见" ✗）。 */
-    background:transparent !important;
-    box-shadow:none !important;
-    color:transparent !important;   /* 文字透明 ✓ —— 只留光标 ✓ */
-    -webkit-text-fill-color:transparent;   /* Safari/Chrome 需要这个才真透明 ✓ */
-    caret-color:${T.accent};
-    overflow:auto;
-  }
-  .lw-live-ta::selection { background:rgba(242,227,155,.28); }
-  /* 渲染层的行内样式（**只改视觉，绝不动字符宽度** ✓）*/
-  .lw-live-bd .ln { min-height:1.85em; }
-  /* ★ 语法标记：默认隐藏 ✓（visibility:hidden 仍占位 ✓ → 宽度不变 ✓ 光标不偏 ✓）
-     光标所在行（.cur）才显示源码 ✓ —— 这就是 Obsidian 的 Live Preview 行为 ✓ */
-  .lw-live-bd .mk { color:#8a8a7a; visibility:hidden; }
-  .lw-live-bd .ln.cur .mk { visibility:visible; color:${T.accent}; opacity:.9; }
-  /* ⚠️ 竖线用 inset box-shadow ✓ —— 它**不占布局空间** ✓，
-     换成 border-left / padding-left 都会改宽度 ✗ → 光标就偏了 ✗。 */
-  .lw-live-bd .h1 { color:#fff; font-weight:700;
-    background:linear-gradient(90deg,rgba(242,227,155,.22),transparent 65%);
-    box-shadow:inset 3px 0 0 ${T.accent}; }
-  .lw-live-bd .h2 { color:#fff; font-weight:700;
-    background:linear-gradient(90deg,rgba(242,227,155,.14),transparent 60%);
-    box-shadow:inset 3px 0 0 rgba(242,227,155,.6); }
-  .lw-live-bd .h3 { color:${T.accent}; font-weight:700;
-    box-shadow:inset 2px 0 0 rgba(242,227,155,.35); }
-  .lw-live-bd .h1 .mk { color:${T.accent}; }
-  .lw-live-bd .h2 .mk { color:${T.accent}; opacity:.85; }
-  .lw-live-bd .h3 .mk { color:${T.accent}; opacity:.7; }
-  .lw-live-bd .b { color:#fff; font-weight:700; }
-  .lw-live-bd .i { color:#cfc9b4; font-style:italic; }
-  .lw-live-bd .d { color:${T.faint}; text-decoration:line-through; }
-  .lw-live-bd .c { color:#ffe08a; background:#2a2616; }
-  .lw-live-bd .q { color:#c8c4b6; font-style:italic; background:rgba(242,227,155,.07);
-    box-shadow:inset 3px 0 0 ${T.accent}; }
-  .lw-live-bd .q .mk { color:${T.accent}; }
-  .lw-live-bd .li .mk { color:${T.accent}; }
-  .lw-live-bd .li.done { color:${T.faint}; }
-  .lw-live-bd .li.done .mk { opacity:.45; }
-  .lw-live-bd .ck { color:${T.dim}; font-weight:700; }
-  .lw-live-bd .ck.on { color:${T.ok}; }
-  .lw-live-bd .tg { color:#ffe9a8; background:rgba(242,227,155,.18); }
-  .lw-live-bd .lnk { color:${T.accent}; text-decoration:underline; }
-  .lw-live-bd .fence { color:#7ec8e3; background:rgba(126,200,227,.08); }
-  .lw-live-bd .hr { color:#6a6a5e; }
-  .lw-live-bd .mark { color:#6a6a5e; }
-  .lw-live-bar { display:flex; align-items:center; gap:8px; padding:6px 10px; border:2px solid ${T.lineDim};
-    border-bottom:0; background:#131312; font-size:10px; color:${T.faint}; letter-spacing:.6px; }
-  .lw-live-bar .sp { flex:1; }
-  .lw-live-bar button { height:22px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
-    color:${T.dim}; font:600 10px ${UI}; cursor:pointer; }
-  .lw-live-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
+  /* ── 日记编辑区：预览 / 编辑 双模式 ──
+     ⚠️ 为什么不用 overlay 单层？✗
+        overlay 要保证光标不偏 ✗，就必须让语法标记**占位** ✗ →
+        隐藏后会留下"空洞" ✗（井号变成 3 格缩进 ✗），看起来像排版坏了 ✗。
+        而标记一旦不占位 ✗，两层宽度就不同 ✗ → 光标必偏 ✗。
+        **两者不可兼得** ✗ —— 所以拆成两个模式 ✓：
+        · 预览模式：没有光标 ✓ → 可以**彻底丢掉标记** ✓ → 真排版 ✓✓
+        · 编辑模式：纯 textarea ✓ → 光标绝对准确 ✓ */
+  .lw-jpv { flex:1; min-height:0; overflow:auto; padding:12px 14px; font-size:12.5px; line-height:1.9; color:${T.text}; }
+  .lw-jpv h1, .lw-jpv h2, .lw-jpv h3 { margin:14px 0 7px; color:#fff; font-weight:700; padding-left:10px;
+    border-left:3px solid ${T.accent}; line-height:1.5; }
+  .lw-jpv h1 { font-size:17px; } .lw-jpv h2 { font-size:15px; }
+  .lw-jpv h3 { font-size:13.5px; color:${T.accent}; border-left-color:rgba(242,227,155,.45); }
+  .lw-jpv h1:first-child, .lw-jpv h2:first-child, .lw-jpv h3:first-child { margin-top:2px; }
+  .lw-jpv p { margin:7px 0; }
+  .lw-jpv ul, .lw-jpv ol { margin:8px 0; padding-left:20px; }
+  .lw-jpv li { margin:4px 0; }
+  .lw-jpv li.mdck { list-style:none; margin-left:-18px; }
+  .lw-jpv li.mdck::before { content:"☐"; color:${T.dim}; margin-right:6px; }
+  .lw-jpv li.mdck.done::before { content:"☑"; color:${T.ok}; }
+  .lw-jpv li.mdck.done { color:${T.faint}; text-decoration:line-through; }
+  .lw-jpv blockquote { margin:9px 0; padding:7px 13px; background:rgba(242,227,155,.06);
+    border-left:3px solid ${T.accent}; color:#c8c4b6; font-style:italic; }
+  .lw-jpv code { background:#2a2616; color:#ffe08a; padding:1px 6px; font-family:${MONO}; font-size:11.5px; }
+  .lw-jpv pre { background:#141412; border-left:3px solid ${T.accent}; padding:10px 12px; overflow:auto; margin:9px 0; }
+  .lw-jpv pre code { background:transparent; padding:0; color:#cfd6e2; }
+  .lw-jpv table { border-collapse:collapse; margin:10px 0; font-size:12px; }
+  .lw-jpv th, .lw-jpv td { border:1px solid ${T.lineDim}; padding:5px 10px; }
+  .lw-jpv th { background:#1a1a17; color:${T.accent}; }
+  .lw-jpv a { color:${T.accent}; text-decoration:underline; }
+  .lw-jpv strong { color:#fff; font-weight:700; }
+  .lw-jpv em { color:#cfc9b4; font-style:italic; }
+  .lw-jpv del { color:${T.faint}; text-decoration:line-through; }
+  .lw-jpv .tag { color:#ffe9a8; background:rgba(242,227,155,.16); padding:1px 6px; }
+  .lw-jpv hr { border:0; border-top:1px dashed ${T.lineDim}; margin:14px 0; }
+  .lw-jpv .empty { color:${T.faint}; }
+  /* 编辑模式：纯 textarea（无 overlay ✓ → 光标绝对准 ✓）*/
+  .lw-jed { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .lw-jed textarea { flex:1; width:100%; border:0; outline:none; resize:none; background:transparent;
+    color:${T.text}; font:12.5px/1.9 ${UI}; padding:12px 14px; }
+  .lw-jed textarea::placeholder { color:${T.faint}; }
   .lw-jtpl { display:flex; align-items:center; gap:7px; padding:9px 14px; border-bottom:1px solid ${T.lineDim};
     font-size:10.5px; color:${T.faint}; flex-wrap:wrap; }
   .lw-jtpl .sp { flex:1; }
@@ -1315,37 +1288,48 @@
         document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
       };
     }
-    /* ── 就地实时渲染：输入 → 重画渲染层 + 同步高度/滚动 ── */
-    const liveTa = q('#lw-j-text');
-    const liveBd = q('#lw-j-bd');
-    if (liveTa && liveBd) {
-      /* 光标在第几行 → 那一行显示源码（.cur ✓），其他行隐藏标记 ✓ */
-      const markCur = () => {
-        const pos = liveTa.selectionStart || 0;
-        const idx = liveTa.value.slice(0, pos).split('\n').length - 1;
-        const lines = liveBd.querySelectorAll('.ln');
-        for (let i = 0; i < lines.length; i++) lines[i].classList.toggle('cur', i === idx);
-      };
-      const sync = () => {
-        liveBd.innerHTML = mdLines(liveTa.value);
-        markCur();
-      };
-      liveTa.oninput = sync;
-      liveTa.onclick = markCur;
-      liveTa.onkeyup = markCur;
-      liveTa.onselect = markCur;
-      liveTa.onscroll = () => { liveBd.scrollTop = liveTa.scrollTop; };
-      document.addEventListener('selectionchange', () => { if (document.activeElement === liveTa) markCur(); });
-      sync();
+    /* ── 预览 / 编辑 双模式 ── */
+    const jMode = q('#lw-j-mode');
+    if (jMode) jMode.onclick = () => {
+      const editing = STORE.journalMode === 'edit';
+      if (editing) {
+        /* 从编辑切回预览：先存 ✓ */
+        const t = q('#lw-j-text');
+        if (t) {
+          const k = STORE.journalSel, txt = t.value.trim();
+          if (txt && txt !== J_TPL.daily.text.trim() && txt !== J_TPL.research.text.trim() && txt !== J_TPL.review.text.trim()) {
+            STORE.journal = STORE.journal || [];
+            const hit = STORE.journal.find((x) => x.date === k);
+            if (hit) { hit.text = txt; hit.at = Date.now(); } else STORE.journal.unshift({ date: k, text: txt, at: Date.now() });
+          }
+        }
+      }
+      STORE.journalMode = editing ? 'preview' : 'edit';
+      saveStore(); render();
+      if (STORE.journalMode === 'edit') { const t2 = document.getElementById('lw-j-text'); if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); } }
+    };
+    /* 双击预览区 → 直接进编辑 ✓（不然用户不知道怎么改 ✗）*/
+    const jPv = q('#lw-j-pv');
+    if (jPv) jPv.ondblclick = () => { STORE.journalMode = 'edit'; saveStore(); render(); const t2 = document.getElementById('lw-j-text'); if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); } };
+    /* 编辑模式：输入即存（防抖 ✓）*/
+    const jTa2 = q('#lw-j-text');
+    if (jTa2) {
+      let jbuf = 0;
+      jTa2.oninput = () => { clearTimeout(jbuf); jbuf = setTimeout(() => {
+        const k = STORE.journalSel, txt = jTa2.value.trim();
+        if (!txt) return;
+        STORE.journal = STORE.journal || [];
+        const hit = STORE.journal.find((x) => x.date === k);
+        if (hit) { hit.text = txt; hit.at = Date.now(); } else STORE.journal.unshift({ date: k, text: txt, at: Date.now() });
+        saveStore();
+        const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '✓ 已自动保存';
+      }, 700); };
     }
-    /* 工具栏：插入标题 / 清单项 / 切换换行 */
-    const jMd = q('#lw-j-md');
-    if (jMd) jMd.onclick = () => { const t = q('#lw-j-text'); if (!t) return; t.value += (t.value && !/\n$/.test(t.value) ? '\n' : '') + '## '; t.focus(); t.setSelectionRange(t.value.length, t.value.length); if (liveBd) liveBd.innerHTML = mdLines(t.value); };
-    const jCk = q('#lw-j-ck');
-    if (jCk) jCk.onclick = () => { const t = q('#lw-j-text'); if (!t) return; t.value += (t.value && !/\n$/.test(t.value) ? '\n' : '') + '- [ ] '; t.focus(); t.setSelectionRange(t.value.length, t.value.length); if (liveBd) liveBd.innerHTML = mdLines(t.value); };
-    const jWrap = q('#lw-j-wrap');
-    if (jWrap) jWrap.onclick = () => { STORE.journalWrap = STORE.journalWrap === false; saveStore(); render(); };
-    /* 模板：点一下插入（已有内容则询问是替换还是追加 ✓）*/
+    /* 工具栏：插入标题 / 清单项 */
+    const jMd2 = q('#lw-j-md');
+    if (jMd2) jMd2.onclick = () => { const t = q('#lw-j-text'); if (!t) return; t.value += (t.value && !/\n$/.test(t.value) ? '\n' : '') + '## '; t.focus(); t.setSelectionRange(t.value.length, t.value.length); };
+    const jCk2 = q('#lw-j-ck');
+    if (jCk2) jCk2.onclick = () => { const t = q('#lw-j-text'); if (!t) return; t.value += (t.value && !/\n$/.test(t.value) ? '\n' : '') + '- [ ] '; t.focus(); t.setSelectionRange(t.value.length, t.value.length); };
     qa('[data-jtpl]').forEach((btn) => {
       btn.onclick = () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
@@ -1899,16 +1883,19 @@
       + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
       + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
-      + '<div class="lw-live-bar">✎ 就地实时渲染<span class="sp"></span>'
+      + '<div class="lw-live-bar">'
+      + '<button id="lw-j-mode" class="' + (STORE.journalMode === 'edit' ? 'on' : '') + '" style="font-weight:700">'
+      + (STORE.journalMode === 'edit' ? '👁 预览' : '✎ 编辑') + '</button>'
+      + '<span style="color:' + T.faint + '">' + (STORE.journalMode === 'edit' ? '编辑中 · 语法原样显示' : '预览 · 点「编辑」或双击正文可改') + '</span>'
+      + '<span class="sp"></span>'
       + '<select id="lw-j-catsel" style="height:22px;padding:0 6px;border:1px solid ' + T.lineDim + ';background:transparent;color:' + T.text + ';font:10px ' + UI + ';outline:none">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
-      + '<button id="lw-j-wrap" title="切换自动换行">' + (STORE.journalWrap === false ? '不换行' : '自动换行') + '</button>'
-      + '<button id="lw-j-md" title="插入标题"># 标题</button>'
-      + '<button id="lw-j-ck" title="插入清单项">☐ 清单</button></div>'
-      + '<div class="lw-live" id="lw-j-live" style="border-top:0">'
-      + '<div class="lw-live-bd" id="lw-j-bd">' + mdLines(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</div>'
-      + '<textarea class="lw-live-ta" id="lw-j-text" spellcheck="false" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">'
-      + esc(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</textarea></div>'
+      + (STORE.journalMode === 'edit' ? '<button id="lw-j-md" title="插入标题"># 标题</button><button id="lw-j-ck" title="插入清单项">☐ 清单</button>' : '')
+      + '</div>'
+      + (STORE.journalMode === 'edit'
+        ? '<div class="lw-jed"><textarea id="lw-j-text" spellcheck="false" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">'
+          + esc(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</textarea></div>'
+        : '<div class="lw-jpv" id="lw-j-pv">' + (mdToHtml(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) || '<span class="empty">（还没写，点上面「✎ 编辑」开始）</span>') + '</div>')
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
       + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
       + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
