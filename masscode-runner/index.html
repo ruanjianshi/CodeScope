@@ -13835,6 +13835,40 @@ function defineCBlocks() {
       previousStatement: null, nextStatement: null, colour: BP_COLOR.io, tooltip: 'std::string s = "..."' },
   ]);
   BP_READY = true;
+  /* ⚠️ 调用积木的 tooltip 要设成**函数**，不能是固定字符串 ——
+     悬停时才去查「当前下拉里选的那个函数」的签名，这样：
+       · 用户改了下拉里的函数名，提示跟着变
+       · 从工具箱拖出来的新积木也有（不用等建块时再设）
+     实测踩过：只在建块时 setTooltip(固定字符串) → 从工具箱拖出来的积木
+     悬停只看到通用文案，用户找不到签名（问「怎么悬停查看」）。 */
+  const bpCallTooltip = function (blkArg) {
+    /* ⚠️ Blockly 调 tooltip 函数时把积木作为**参数**传进来，`this` 不一定绑到积木 ——
+       两种都兼容。实测：只认 `this` 的话 getFieldValue 会抛错被吞掉，
+       结果永远是通用文案，签名查不出来。 */
+    const blk = blkArg || this;
+    let nm = '';
+    try { nm = String(blk && blk.getFieldValue ? blk.getFieldValue('NAME') : '' || ''); } catch (_) {}
+    if (nm === '__other__') nm = '';
+    const sig = nm ? bpSignatureOf(nm) : '';
+    if (sig) {
+      return '<b>' + escapeHtml(sig) + '</b>'
+        + '<br><span style="opacity:.75">' + escapeHtml(nm) + ' 的定义（来自当前文档）</span>'
+        + '<br>括号里的槽填实参，多个用逗号分隔';
+    }
+    return '调用函数。下拉里是**当前文档里的函数**（选「其他…」可手填）；'
+      + '括号里填实参，多个用逗号分隔。'
+      + (nm ? '<br><span style="opacity:.75">文档里没找到 ' + escapeHtml(nm) + ' 的定义</span>' : '');
+  };
+  ['c_call', 'c_call_any'].forEach((t) => {
+    if (!B.Blocks[t]) return;
+    const orig = B.Blocks[t].init;
+    B.Blocks[t].init = function () {
+      orig.call(this);
+      /* **bind 把积木绑死** —— 不管 Blockly 是 `fn()` 还是 `fn(block)` 调用都对。
+         （实测：只靠 `this` 或只靠参数都会在某种调用方式下拿不到积木） */
+      this.setTooltip(bpCallTooltip.bind(this));
+    };
+  });
 }
 
 function bpToolbox() {
@@ -14062,12 +14096,8 @@ function makeBlockFor(ws, n) {
     const known = BP_FUNCS.indexOf(callee) >= 0;
     b = mk(known ? 'c_call' : 'c_call_any');
     b.setFieldValue(callee, 'NAME');
-    /* 悬停显示这个函数在文档里的真实签名（像 IDE 的参数提示） */
-    const sig = bpSignatureOf(callee);
-    if (sig) {
-      b.setTooltip('<b>' + escapeHtml(sig) + '</b><br><span style="opacity:.75">'
-        + escapeHtml(callee) + ' 的定义（来自当前文档）</span><br>括号里的槽填实参，多个用逗号分隔');
-    }
+    /* 这里**不再设 tooltip** —— 积木定义里的 init 已经挂了动态 tooltip
+       （悬停时按当前选中的函数名查签名）。在这里设固定字符串会把它覆盖掉。 */
     if (m && m[2]) {
       const t = mk('c_text'); t.setFieldValue(m[2], 'TEXT'); t.initSvg(); t.render();
       b.getInput('ARG').connection.connect(t.outputConnection);
