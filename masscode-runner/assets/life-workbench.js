@@ -478,6 +478,24 @@
   .lw-bk-card .ops button.del:hover { border-color:${T.red}; color:${T.red}; }
   .lw-bk-day { padding:5px 2px 0; font-size:10.5px; color:${T.faint}; letter-spacing:1.2px; }
   /* ── 日记：月历 + 当天编辑 ── */
+  /* ── 日记：可拖拽的左右分栏（填满高度，自适应窗口 ✓）── */
+  .lw-jr { display:flex; height:calc(100vh - 200px); min-height:400px; }
+  .lw-jr-l { flex:none; display:flex; flex-direction:column; min-width:220px; overflow:auto; }
+  .lw-jr-r { flex:1; min-width:280px; display:flex; flex-direction:column; overflow:hidden; }
+  /* 拖拽条（左右拉）*/
+  .lw-jr-grip { flex:none; width:6px; cursor:col-resize; background:transparent; position:relative; }
+  .lw-jr-grip::after { content:""; position:absolute; left:2px; top:0; bottom:0; width:2px; background:${T.lineDim}; }
+  .lw-jr-grip:hover::after, .lw-jr-grip.on::after { background:${T.accent}; }
+  /* 右侧上下分：编辑 + 信息，中间也可拖 */
+  .lw-jr-r .lw-jr-edit { flex:none; display:flex; flex-direction:column; overflow:hidden; }
+  .lw-jr-hgrip { flex:none; height:6px; cursor:row-resize; position:relative; }
+  .lw-jr-hgrip::after { content:""; position:absolute; top:2px; left:0; right:0; height:2px; background:${T.lineDim}; }
+  .lw-jr-hgrip:hover::after, .lw-jr-hgrip.on::after { background:${T.accent}; }
+  .lw-jr-info { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:12px; padding:12px 14px; }
+  .lw-jr .lw-live { flex:1; min-height:120px; display:flex; flex-direction:column; }
+  .lw-jr .lw-live-bd { flex:1; overflow:auto; }
+  /* 日历占满左栏 */
+  .lw-jr .lw-cal-d { height:30px; font-size:12px; }
   .lw-cal-hd { display:flex; align-items:center; gap:9px; padding:10px 12px; border-bottom:1px solid ${T.lineDim}; }
   .lw-cal-hd .m { font-size:13px; font-weight:700; color:${T.text}; letter-spacing:.6px; }
   .lw-cal-hd .sp { flex:1; }
@@ -1159,17 +1177,53 @@
       STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
       saveStore(); render();
     };
+    /* ── 拖拽调整：左栏宽度 / 编辑区高度（记住到 STORE ✓）── */
+    const grip = q('#lw-jr-grip'), hgrip = q('#lw-jr-hgrip');
+    const jrL = q('#lw-jr-l'), jrE = q('#lw-jr-edit'), jrR = q('.lw-jr-r');
+    if (grip && jrL && jrR) {
+      grip.onmousedown = (e) => {
+        e.preventDefault(); grip.classList.add('on');
+        const startX = e.clientX, startW = jrL.offsetWidth;
+        const totalW = (jrL.parentElement || {}).clientWidth || window.innerWidth;
+        const move = (ev) => {
+          const w = Math.max(220, Math.min(totalW - 300, startW + (ev.clientX - startX)));
+          jrL.style.width = w + 'px';
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+          grip.classList.remove('on');
+          STORE.journalLeftW = jrL.offsetWidth; saveStore();
+        };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      };
+    }
+    if (hgrip && jrE) {
+      hgrip.onmousedown = (e) => {
+        e.preventDefault(); hgrip.classList.add('on');
+        const startY = e.clientY, startH = jrE.offsetHeight;
+        const wrapH = (jrE.parentElement || {}).clientHeight || window.innerHeight;
+        const move = (ev) => {
+          const h = Math.max(160, Math.min(wrapH - 120, startH + (ev.clientY - startY)));
+          jrE.style.height = h + 'px';
+          const bd = document.getElementById('lw-j-bd'), ta = document.getElementById('lw-j-text');
+          if (bd && ta) { const h2 = Math.max(80, h - 170); ta.style.height = h2 + 'px'; bd.style.height = h2 + 'px'; }
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+          hgrip.classList.remove('on');
+          STORE.journalEditH = jrE.offsetHeight; saveStore();
+        };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      };
+    }
     /* ── 就地实时渲染：输入 → 重画渲染层 + 同步高度/滚动 ── */
     const liveTa = q('#lw-j-text');
     const liveBd = q('#lw-j-bd');
     if (liveTa && liveBd) {
       const sync = () => {
         liveBd.innerHTML = mdLines(liveTa.value);
-        /* 高度：渲染层撑开 textarea ✓（这样内容多了自然变高，不需要拖 ✗）*/
-        liveBd.style.height = 'auto';
-        const h = Math.max(200, liveBd.scrollHeight);
-        liveTa.style.height = h + 'px';
-        liveBd.style.height = h + 'px';
+        /* ⚠️ 不再自己算高度 ✗ —— 高度由**拖拽**或 flex 决定 ✓，
+           两层都靠 CSS（bd 用 flex:1 + overflow:auto ✓）撑开，避免和拖拽打架 ✗ */
       };
       liveTa.oninput = sync;
       liveTa.onscroll = () => { liveBd.scrollTop = liveTa.scrollTop; };
@@ -1666,31 +1720,40 @@
         + '<div class="cmp">' + (WX.days || []).slice(0, 3).map((x) => esc(x.date.slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div></div>';
     }
 
-    return '<div class="lw-g12">'
-      + '<div class="lw-c" style="grid-column:span 5"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>' + cal + '</div>'
-      + '<div class="lw-c" style="grid-column:span 7"><h3><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
-      + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
-      + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
-      + '<div class="lw-live-bar">✎ 就地实时渲染<span class="sp"></span>'
-      + '<button id="lw-j-wrap" title="切换自动换行">' + (STORE.journalWrap === false ? '不换行' : '自动换行') + '</button>'
-      + '<button id="lw-j-md" title="插入标题"># 标题</button>'
-      + '<button id="lw-j-ck" title="插入清单项">☐ 清单</button></div>'
-      + '<div class="lw-live" id="lw-j-live">'
-      + '<div class="lw-live-bd" id="lw-j-bd">' + mdLines(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</div>'
-      + '<textarea class="lw-live-ta" id="lw-j-text" spellcheck="false" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">'
-      + esc(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</textarea></div>'
-      + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'
-      + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
-      + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
-      + '<div class="lw-c" style="grid-column:span 4"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + all.length + ' 篇</em></h3>'
+    /* 布局：左右两栏（可拖拽分隔）+ 右侧上下（编辑 / 信息，也可拖 ✓），整体填满视口 ✓ */
+    const lw = (STORE.journalLeftW || 360);
+    const eh = (STORE.journalEditH || 380);
+    return '<div class="lw-jr" id="lw-jr">'
+      + '<div class="lw-jr-l" id="lw-jr-l" style="width:' + lw + 'px">'
+      + '<div class="lw-c" style="flex:none"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>' + cal + '</div>'
+      + '<div class="lw-c" style="flex:none;margin-top:12px"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + all.length + ' 篇</em></h3>'
       + '<div class="lw-kpi"><div class="row"><div class="ic">◈</div><div style="flex:1;min-width:0"><div class="num">' + streak + '<small>天</small></div></div></div>'
       + '<div class="cmp">' + (streak ? "继续保持" : "今天开个头") + '</div></div>'
       + '<h3 style="border-top:1px solid ' + T.lineDim + '"><span class="code">J-05</span>最近写过</h3>'
       + '<div class="lw-tbl">' + (all.length ? all.slice(0, 6).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
           + '<span class="nm">' + esc(j.date.slice(5)) + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
           + '<span class="tm">' + esc(String(j.text || "").slice(0, 10)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div>'
-      + wxHtml
-      + '</div>';
+      + '</div>'
+      + '<div class="lw-jr-grip" id="lw-jr-grip" title="拖动调整宽度"></div>'
+      + '<div class="lw-jr-r">'
+      + '<div class="lw-jr-edit" id="lw-jr-edit" style="height:' + eh + 'px">'
+      + '<div class="lw-c" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3 style="flex:none"><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
+      + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
+      + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
+      + '<div class="lw-live-bar">✎ 就地实时渲染<span class="sp"></span>'
+      + '<button id="lw-j-wrap" title="切换自动换行">' + (STORE.journalWrap === false ? '不换行' : '自动换行') + '</button>'
+      + '<button id="lw-j-md" title="插入标题"># 标题</button>'
+      + '<button id="lw-j-ck" title="插入清单项">☐ 清单</button></div>'
+      + '<div class="lw-live" id="lw-j-live" style="border-top:0">'
+      + '<div class="lw-live-bd" id="lw-j-bd">' + mdLines(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</div>'
+      + '<textarea class="lw-live-ta" id="lw-j-text" spellcheck="false" placeholder="今天做了什么 / 卡在哪 / 明天要做什么…">'
+      + esc(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text)) + '</textarea></div>'
+      + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
+      + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
+      + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
+      + '<div class="lw-jr-hgrip" id="lw-jr-hgrip" title="拖动调整高度"></div>'
+      + '<div class="lw-jr-info" id="lw-jr-info">' + (wxHtml || '<div class="lw-empty">天气加载中…</div>') + '</div>'
+      + '</div></div>';
   }
 
   /* ── 研究方向 ── */
