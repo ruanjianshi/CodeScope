@@ -570,29 +570,37 @@
   .lw-live-ta::selection { background:rgba(242,227,155,.28); }
   /* 渲染层的行内样式（**只改视觉，绝不动字符宽度** ✓）*/
   .lw-live-bd .ln { min-height:1.85em; }
-  .lw-live-bd .mk { color:#4a4a42; }                    /* 语法标记：暗掉 ✓ 但保留占位 ✓ */
-  .lw-live-bd .h1 { color:#fff; font-weight:700; background:linear-gradient(90deg,rgba(242,227,155,.16),transparent 60%); }
-  .lw-live-bd .h2 { color:#fff; font-weight:700; background:linear-gradient(90deg,rgba(242,227,155,.10),transparent 55%); }
-  .lw-live-bd .h3 { color:${T.accent}; font-weight:700; }
-  .lw-live-bd .h1 .mk, .lw-live-bd .h2 .mk { color:${T.accent}; opacity:.75; }
-  .lw-live-bd .h3 .mk { color:${T.accent}; opacity:.55; }
+  .lw-live-bd .mk { color:#6a6a5e; }                    /* 语法标记：压暗 ✓ 但保留占位 ✓ */
+  /* ⚠️ 竖线用 inset box-shadow ✓ —— 它**不占布局空间** ✓，
+     换成 border-left / padding-left 都会改宽度 ✗ → 光标就偏了 ✗。 */
+  .lw-live-bd .h1 { color:#fff; font-weight:700;
+    background:linear-gradient(90deg,rgba(242,227,155,.22),transparent 65%);
+    box-shadow:inset 3px 0 0 ${T.accent}; }
+  .lw-live-bd .h2 { color:#fff; font-weight:700;
+    background:linear-gradient(90deg,rgba(242,227,155,.14),transparent 60%);
+    box-shadow:inset 3px 0 0 rgba(242,227,155,.6); }
+  .lw-live-bd .h3 { color:${T.accent}; font-weight:700;
+    box-shadow:inset 2px 0 0 rgba(242,227,155,.35); }
+  .lw-live-bd .h1 .mk { color:${T.accent}; }
+  .lw-live-bd .h2 .mk { color:${T.accent}; opacity:.85; }
+  .lw-live-bd .h3 .mk { color:${T.accent}; opacity:.7; }
   .lw-live-bd .b { color:#fff; font-weight:700; }
   .lw-live-bd .i { color:#cfc9b4; font-style:italic; }
   .lw-live-bd .d { color:${T.faint}; text-decoration:line-through; }
-  .lw-live-bd .c { color:${T.accent}; background:#221f14; }
-  .lw-live-bd .q { color:#b9b5a8; font-style:italic; background:rgba(242,227,155,.05); }
-  .lw-live-bd .q .mk { color:${T.accent}; opacity:.7; }
-  .lw-live-bd .li .mk { color:${T.accent}; opacity:.8; }
+  .lw-live-bd .c { color:#ffe08a; background:#2a2616; }
+  .lw-live-bd .q { color:#c8c4b6; font-style:italic; background:rgba(242,227,155,.07);
+    box-shadow:inset 3px 0 0 ${T.accent}; }
+  .lw-live-bd .q .mk { color:${T.accent}; }
+  .lw-live-bd .li .mk { color:${T.accent}; }
   .lw-live-bd .li.done { color:${T.faint}; }
   .lw-live-bd .li.done .mk { opacity:.45; }
-  .lw-live-bd .ck { color:${T.dim}; }
-  .lw-live-bd .ck.on { color:${T.ok}; font-weight:700; }
-  .lw-live-bd .tg { color:${T.accent}; background:rgba(242,227,155,.14); }
-  .lw-live-bd .tg { }
+  .lw-live-bd .ck { color:${T.dim}; font-weight:700; }
+  .lw-live-bd .ck.on { color:${T.ok}; }
+  .lw-live-bd .tg { color:#ffe9a8; background:rgba(242,227,155,.18); }
   .lw-live-bd .lnk { color:${T.accent}; text-decoration:underline; }
-  .lw-live-bd .fence { color:#7ec8e3; background:rgba(126,200,227,.06); }
-  .lw-live-bd .hr { color:#4a4a42; }
-  .lw-live-bd .mark { color:#4a4a42; }
+  .lw-live-bd .fence { color:#7ec8e3; background:rgba(126,200,227,.08); }
+  .lw-live-bd .hr { color:#6a6a5e; }
+  .lw-live-bd .mark { color:#6a6a5e; }
   .lw-live-bar { display:flex; align-items:center; gap:8px; padding:6px 10px; border:2px solid ${T.lineDim};
     border-bottom:0; background:#131312; font-size:10px; color:${T.faint}; letter-spacing:.6px; }
   .lw-live-bar .sp { flex:1; }
