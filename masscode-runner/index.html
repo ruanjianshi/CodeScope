@@ -2740,6 +2740,10 @@
   .rel-graph-label .count { min-width:17px; padding:1px 5px; border:1px solid var(--border); border-radius:999px; background:var(--theme-deep,var(--bg)); color:var(--dim); font:8px var(--mono); letter-spacing:0; }
   /* 关系图节点：按符号类别区分 —— 类 / 方法 / 函数 / 外部 */
   .rel-card.k-class  .node-icon { color: #d2a8ff; }
+  /* 大纲 / 符号面板里的「方法」：青色图标 + 斜体名字，和函数区分开 */
+  .ol-item .ol-ico.k-method, .sym-row .sym-ico.k-method { color: #39c5cf; }
+  .ol-item.method .ol-name, .sym-row.k-method .sym-name { font-style: italic; }
+  .ol-item.method .ol-ico, .sym-row.k-method .sym-ico { color: #39c5cf; }
   .rel-card.k-method { border-left: 2px solid #39c5cf; }
   .rel-card.k-method .node-icon { color: #39c5cf; }
   .rel-card.k-method .title { font-style: italic; }
@@ -9280,11 +9284,11 @@ function outlineGroup(body, key, title, items, renderItem) {
 }
 function outlineRow(sym) {
   const d = document.createElement('div');
-  d.className = 'ol-item rich ' + (sym.kind === 'type' ? 'class' : sym.kind === 'fn' ? 'fn' : '');
+  d.className = 'ol-item rich ' + (sym.kind === 'type' ? 'class' : sym.kind === 'method' ? 'method' : sym.kind === 'fn' ? 'fn' : '');
   d.dataset.line = sym.line; d.dataset.frag = sym.frag; d.dataset.oid = symbolId(sym); d.title = symbolSignature(sym) || sym.name;
-  const role = sym.kind === 'fn' ? '<span class="sym-badge ' + (sym.isDefinition ? 'def' : 'decl') + '">' + (sym.isDefinition ? '定义' : '声明') + '</span>' : '';
+  const role = (sym.kind === 'fn' || sym.kind === 'method') ? '<span class="sym-badge ' + (sym.isDefinition ? 'def' : 'decl') + '">' + (sym.isDefinition ? '定义' : '声明') + '</span>' : '';
   d.innerHTML = '<span class="ol-ico ' + symKindClass(sym.kind) + '">' + symKindIcon(sym.kind) + '</span>' +
-    '<span class="ol-main"><span class="ol-name">' + escapeHtml(sym.name) + '</span><span class="ol-sig">' + escapeHtml(symbolSignature(sym)) + '</span></span>' +
+    '<span class="ol-main"><span class="ol-name">' + escapeHtml(sym.kind === 'method' && sym.owner ? sym.owner + '::' + sym.name : sym.name) + '</span><span class="ol-sig">' + escapeHtml(symbolSignature(sym)) + '</span></span>' +
     role + '<span class="ol-ln">:' + sym.line + '</span>';
   d.onclick = () => { goToLocation(sym); setSymMode('outline'); };
   bodyEl().appendChild(d); return d;
@@ -9349,6 +9353,7 @@ function renderOutlineContent() {
     });
   } else {
     outlineGroup(body, 'kind:type', '类型', items.filter(s => s.kind === 'type'), outlineRow);
+    outlineGroup(body, 'kind:method', '方法', items.filter(s => s.kind === 'method'), outlineRow);
     outlineGroup(body, 'kind:fn', '函数', items.filter(s => s.kind === 'fn'), outlineRow);
     outlineGroup(body, 'kind:macro', '宏', items.filter(s => s.kind === 'macro'), outlineRow);
     outlineGroup(body, 'kind:var', '文件级变量', items.filter(s => s.kind === 'var'), outlineRow);
@@ -9455,7 +9460,7 @@ let REL_LAYOUT = (() => { try { return localStorage.getItem('mc-rel-layout') || 
 let REL_ROOT = null;
 const REL_EXPANDED = new Set();
 
-const symKindIcon = (k) => (k === 'fn' ? 'ƒ' : k === 'type' ? '▣' : k === 'macro' ? '#' : '=');
+const symKindIcon = (k) => (k === 'fn' ? 'ƒ' : k === 'method' ? '⟐' : k === 'type' ? '▣' : k === 'macro' ? '#' : '=');
 const symKindClass = (k) => 'kind-' + k;
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const symbolId = (s) => [s.snippet.file, s.frag, s.line, s.kind, s.name].join('|');
@@ -9604,12 +9609,25 @@ function buildSnippetIndex(snip) {
     if (!f || typeof f.code !== 'string' || f.language === 'markdown' || f.language === 'latex' || f.language === 'plain_text') return;
     const lines = f.code.replace(/\r\n/g, '\n').split('\n');
     const maskedLines = maskNonCode(f.code.replace(/\r\n/g, '\n')).split('\n');
-    outlineFor(f.code, f.language).forEach(o => {
-      const kind = o.type === 'class' ? 'type' : 'fn';
-      const ext = kind === 'fn'
+    const list = outlineFor(f.code, f.language);
+    list.forEach((o, oi) => {
+      /* ⚠️ 原来只有 `class ? 'type' : 'fn'` 两种 —— **类里的方法被当成普通函数** ✗，
+         于是大纲、符号、关系图全都分不出「方法」和「自由函数」（用户报过）。
+         outlineFor 已经给了 depth（嵌套层级），`fn` 且 depth>0 就是方法。 */
+      const isMethod = o.type === 'fn' && o.depth > 0;
+      const kind = o.type === 'class' ? 'type' : (isMethod ? 'method' : 'fn');
+      /* 往回找最近的 class 作为归属，用来显示 `类名::方法名` */
+      let owner = '';
+      if (isMethod) {
+        for (let bi = oi - 1; bi >= 0; bi--) {
+          const b = list[bi];
+          if (b && b.type === 'class' && b.depth < o.depth) { owner = b.name; break; }
+        }
+      }
+      const ext = kind === 'fn' || kind === 'method'
         ? functionExtent(lines, maskedLines, o.line, f.language)
         : { isDefinition: true, endLine: typeExtent(lines, maskedLines, o.line) };
-      syms.push({ name: o.name, kind, frag: fi, line: o.line, endLine: ext.endLine,
+      syms.push({ name: o.name, kind, owner, frag: fi, line: o.line, endLine: ext.endLine,
         isDefinition: ext.isDefinition, snippet: snip });
     });
     lines.forEach((ln, i) => {
@@ -11590,13 +11608,14 @@ function renderSymbolList() {
     const h = document.createElement('div'); h.className = 'sym-sec'; h.textContent = title + ' (' + list.length + ')'; body.appendChild(h);
     list.forEach(sym => body.appendChild(symRow(sym)));
   };
+  addGroup('方法', idx.filter(s => s.kind === 'method'));
   addGroup('函数', idx.filter(s => s.kind === 'fn'));
   addGroup('类型', idx.filter(s => s.kind === 'type'));
   addGroup('宏 / 变量', idx.filter(s => s.kind === 'macro' || s.kind === 'var'));
 }
 function symRow(sym) {
-  const d = document.createElement('div'); d.className = 'sym-row';
-  const role = sym.kind === 'fn' ? '<span class="sym-badge ' + (sym.isDefinition ? 'def' : 'decl') + '">' + (sym.isDefinition ? '定义' : '声明') + '</span>' : '';
+  const d = document.createElement('div'); d.className = 'sym-row k-' + (sym.kind || 'fn');
+  const role = (sym.kind === 'fn' || sym.kind === 'method') ? '<span class="sym-badge ' + (sym.isDefinition ? 'def' : 'decl') + '">' + (sym.isDefinition ? '定义' : '声明') + '</span>' : '';
   d.innerHTML = '<span class="ol-ico ' + symKindClass(sym.kind) + '">' + symKindIcon(sym.kind) + '</span><span class="nm">' + escapeHtml(sym.name) + '</span>' + role + '<span class="ol-ln">:' + sym.line + '</span>';
   d.onclick = () => goToSymbol(sym); return d;
 }
@@ -11897,6 +11916,8 @@ function relationSymbolKind(sym) {
   if (!sym) return { kind: 'fn', label: '函数' };
   if (sym.external) return { kind: 'external', label: '外部' };
   if (sym.kind === 'file') return { kind: 'file', label: '文件' };
+  if (sym.kind === 'method') return { kind: 'method', label: '方法', owner: sym.owner || '' };
+  if (sym.kind === 'type') return { kind: 'class', label: '类' };
   const list = relOutlineOf(sym);
   /* 名字里带 `::` 的多半是方法 —— 先判，别被下面的"对不上号就返回函数"挡住 */
   const byName = /::/.test(sym.name || '');
