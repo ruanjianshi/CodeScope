@@ -13,144 +13,148 @@
 (() => {
   'use strict';
 
+  /* ── 设计令牌：苹果风 · 柔和马卡龙（参考 Intelly Healthcare Dashboard）──
+     要点：柔和的粉彩底 + 大圆角 + 柔和阴影（不用硬描边）+ 明快对比 +
+     圆润的图标块（像 iOS 设置页）。整体感觉「轻、亮、有活力」。 */
   const T = {
-    bg: '#0c0d10', bg2: '#0f1115', card: 'rgba(255,255,255,.028)', card2: 'rgba(255,255,255,.05)',
-    line: 'rgba(255,255,255,.075)', line2: 'rgba(255,255,255,.14)',
-    text: '#e9ecf1', dim: '#8f98a8', faint: '#5f6878',
-    accent: '#5b9dff', accent2: '#7c6cff', ok: '#4ade80', warn: '#fbbf24', red: '#f87171',
-    grad: 'linear-gradient(135deg,#5b9dff,#7c6cff)',
+    bg: '#f6f7fb', bg2: '#ffffff', card: '#ffffff',
+    line: 'rgba(17,24,39,.07)', line2: 'rgba(17,24,39,.12)',
+    text: '#1b1f2a', dim: '#6b7280', faint: '#9aa3b2',
+    accent: '#5b8def', accent2: '#8b7cf6', ok: '#34c77b', warn: '#f5a524', red: '#f26d6d',
+    mint: '#e8f8f1', lilac: '#efecfe', sky: '#e8f0fe', peach: '#fef1e8', rose: '#fdeef3', lemon: '#fdf6e3',
+    mintInk: '#1f9d68', lilacInk: '#6d5ce0', skyInk: '#3b74d6', peachInk: '#d9782f', roseInk: '#d8557f', lemonInk: '#c08a12',
+    shadow: '0 1px 2px rgba(17,24,39,.04), 0 6px 20px rgba(17,24,39,.06)',
+    shadowHover: '0 2px 6px rgba(17,24,39,.06), 0 12px 32px rgba(17,24,39,.10)',
   };
-  const KIND_COLOR = { code: '#5b9dff', doc: '#fbbf24', media: '#7c6cff', model: '#4ade80', other: '#5f6878' };
+  const KIND_COLOR = { code: '#5b8def', doc: '#f5a524', media: '#8b7cf6', model: '#34c77b', other: '#9aa3b2' };
   const KIND_NAME = { code: '代码', doc: '文档', media: '媒体/图', model: '三维模型', other: '其他' };
-  const UI = '-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif';
-  const MONO = '"SF Mono",SFMono-Regular,Menlo,Consolas,monospace';
+  const UI = '-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",system-ui,sans-serif';
+  const MONO = '"SF Mono",SFMono-Regular,Menlo,monospace';
 
   const CSS = `
   .lw-inpanel { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden;
-    background:radial-gradient(1200px 600px at 15% -10%, #151b2b 0%, ${T.bg} 55%) ${T.bg};
-    font-family:${UI}; color:${T.text}; font-size:13px; }
-  /* 顶栏 */
-  .lw-head { display:flex; align-items:center; gap:18px; padding:14px 22px; flex:none;
-    border-bottom:1px solid ${T.line}; background:rgba(255,255,255,.015); backdrop-filter:blur(8px); }
-  .lw-logo { width:34px; height:34px; flex:none; border-radius:11px; background:${T.grad};
-    display:flex; align-items:center; justify-content:center; font-size:16px; box-shadow:0 4px 14px rgba(91,157,255,.32); }
-  .lw-h1 { font-size:14px; font-weight:650; letter-spacing:.2px; line-height:1.2; }
-  .lw-h1 small { display:block; font-size:10.5px; color:${T.faint}; font-weight:400; margin-top:2px; letter-spacing:.3px; }
-  .lw-sub2 { font-size:11.5px; color:${T.dim}; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-btn { height:32px; padding:0 14px; border-radius:9px; border:1px solid ${T.line2}; background:${T.card2};
-    color:${T.text}; font:500 12px ${UI}; cursor:pointer; flex:none; transition:all .15s; }
-  .lw-btn:hover { background:rgba(91,157,255,.16); border-color:${T.accent}; }
+    background:${T.bg}; font-family:${UI}; color:${T.text}; font-size:13.5px;
+    -webkit-font-smoothing:antialiased; }
+  /* 顶栏：白底 + 极轻分隔 */
+  .lw-head { display:flex; align-items:center; gap:16px; padding:14px 24px; flex:none;
+    background:${T.bg2}; border-bottom:1px solid ${T.line}; }
+  .lw-logo { width:38px; height:38px; flex:none; border-radius:12px;
+    background:linear-gradient(160deg,${T.accent},${T.accent2}); display:flex; align-items:center;
+    justify-content:center; font-size:18px; box-shadow:0 4px 12px rgba(91,141,239,.28); }
+  .lw-h1 { font-size:15px; font-weight:600; letter-spacing:-.2px; line-height:1.2; }
+  .lw-h1 small { display:block; font-size:11px; color:${T.faint}; font-weight:400; margin-top:2px; }
+  .lw-sub2 { font-size:12.5px; color:${T.dim}; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-btn { height:34px; padding:0 16px; border-radius:11px; border:1px solid ${T.line2}; background:${T.bg2};
+    color:${T.text}; font:500 13px ${UI}; cursor:pointer; flex:none; transition:all .16s; }
+  .lw-btn:hover { background:${T.sky}; border-color:rgba(91,141,239,.35); color:${T.skyInk}; }
   /* 天气胶囊 */
-  .lw-wx { display:flex; align-items:center; gap:11px; padding:5px 14px 5px 11px; border-radius:11px;
-    border:1px solid ${T.line}; background:${T.card}; flex:none; }
-  .lw-wx .wi { font-size:20px; line-height:1; }
-  .lw-wx .wt { font-size:16px; font-weight:650; font-variant-numeric:tabular-nums; }
-  .lw-wx .wc { font-size:10.5px; color:${T.dim}; line-height:1.35; }
+  .lw-wx { display:flex; align-items:center; gap:11px; padding:6px 15px 6px 12px; border-radius:14px;
+    background:${T.lemon}; flex:none; }
+  .lw-wx .wi { font-size:21px; line-height:1; }
+  .lw-wx .wt { font-size:17px; font-weight:600; color:${T.lemonInk}; letter-spacing:-.3px; }
+  .lw-wx .wc { font-size:11px; color:${T.lemonInk}; opacity:.85; line-height:1.35; }
   /* 主体 */
   .lw-body2 { flex:1; display:flex; min-height:0; }
-  .lw-nav { width:186px; flex:none; padding:14px 11px; border-right:1px solid ${T.line};
+  .lw-nav { width:196px; flex:none; padding:16px 12px; background:${T.bg2}; border-right:1px solid ${T.line};
     display:flex; flex-direction:column; overflow:auto; }
-  .lw-nav .grp { margin:9px 9px 7px; font-size:10px; letter-spacing:1.1px; color:${T.faint}; font-weight:600; text-transform:uppercase; }
-  .lw-nav button { width:100%; height:34px; display:flex; align-items:center; gap:10px; padding:0 10px; margin-bottom:3px;
-    border:1px solid transparent; border-radius:9px; background:transparent; color:${T.dim};
-    font:500 12.5px ${UI}; cursor:pointer; text-align:left; transition:all .14s; }
-  .lw-nav button:hover { background:${T.card}; color:${T.text}; }
-  .lw-nav button.on { background:linear-gradient(90deg,rgba(91,157,255,.20),rgba(124,108,255,.10));
-    border-color:rgba(91,157,255,.38); color:#fff; font-weight:600; }
-  .lw-nav .ic { width:18px; text-align:center; font-size:14px; }
-  .lw-nav .badge { margin-left:auto; font-size:10px; padding:1px 7px; border-radius:999px;
-    background:rgba(91,157,255,.18); color:#9ec3ff; font-weight:600; }
-  .lw-nav .foot { margin-top:auto; padding:12px 9px 0; border-top:1px solid ${T.line};
-    font-size:10.5px; color:${T.faint}; line-height:1.8; }
+  .lw-nav .grp { margin:10px 10px 7px; font-size:11px; letter-spacing:.4px; color:${T.faint}; font-weight:600; }
+  .lw-nav button { width:100%; height:36px; display:flex; align-items:center; gap:11px; padding:0 11px; margin-bottom:3px;
+    border:0; border-radius:10px; background:transparent; color:${T.dim};
+    font:500 13px ${UI}; cursor:pointer; text-align:left; transition:all .15s; }
+  .lw-nav button:hover { background:${T.bg}; color:${T.text}; }
+  .lw-nav button.on { background:${T.sky}; color:${T.skyInk}; font-weight:600; }
+  .lw-nav .ic { width:20px; text-align:center; font-size:15px; }
+  .lw-nav .badge { margin-left:auto; font-size:11px; padding:1px 8px; border-radius:999px;
+    background:${T.rose}; color:${T.roseInk}; font-weight:600; }
+  .lw-nav .foot { margin-top:auto; padding:14px 10px 0; border-top:1px solid ${T.line};
+    font-size:11px; color:${T.faint}; line-height:1.8; }
   .lw-nav .foot b { color:${T.ok}; font-weight:600; }
-  .lw-main { flex:1; min-width:0; overflow:auto; padding:18px 20px 32px; }
-  .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:6px; }
-  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
-  /* 玻璃卡 */
-  .lw-c { background:${T.card}; border:1px solid ${T.line}; border-radius:14px; overflow:hidden;
-    box-shadow:0 1px 2px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03); }
-  .lw-c > h3 { margin:0; padding:12px 15px 11px; font-size:12.5px; font-weight:600; color:${T.text};
-    display:flex; align-items:center; gap:9px; border-bottom:1px solid ${T.line}; }
+  .lw-main { flex:1; min-width:0; overflow:auto; padding:22px 24px 36px; }
+  .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:rgba(17,24,39,.14); border-radius:6px; }
+  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:18px; align-items:start; }
+  /* 卡片：白底 + 大圆角 + 柔和阴影（不描边） */
+  .lw-c { background:${T.card}; border-radius:18px; overflow:hidden; box-shadow:${T.shadow}; transition:box-shadow .2s; }
+  .lw-c:hover { box-shadow:${T.shadowHover}; }
+  .lw-c > h3 { margin:0; padding:15px 18px 12px; font-size:13.5px; font-weight:600; color:${T.text};
+    display:flex; align-items:center; gap:9px; letter-spacing:-.1px; }
   .lw-c > h3 .sp { flex:1; }
-  .lw-c > h3 em { font-style:normal; color:${T.faint}; font-weight:400; font-size:11px; }
-  .lw-c > h3 .act { font-size:11px; color:${T.accent}; cursor:pointer; font-weight:500; }
+  .lw-c > h3 em { font-style:normal; color:${T.faint}; font-weight:400; font-size:11.5px; }
+  .lw-c > h3 .act { font-size:12px; color:${T.accent}; cursor:pointer; font-weight:500; }
   .lw-c > h3 .act:hover { text-decoration:underline; }
-  .lw-pad { padding:14px 15px; }
-  /* KPI */
-  .lw-kpi { padding:15px 16px; }
-  .lw-kpi .row { display:flex; align-items:center; gap:11px; }
-  .lw-kpi .ic { width:34px; height:34px; flex:none; border-radius:10px; display:flex; align-items:center; justify-content:center;
-    font-size:15px; background:rgba(91,157,255,.13); }
-  .lw-kpi .num { font-size:27px; font-weight:680; line-height:1; letter-spacing:-.7px; font-variant-numeric:tabular-nums; }
-  .lw-kpi .num small { font-size:11.5px; font-weight:500; color:${T.dim}; margin-left:5px; letter-spacing:0; }
-  .lw-kpi .lbl { font-size:11.5px; color:${T.dim}; margin-top:9px; }
-  .lw-kpi .cmp { font-size:11px; color:${T.faint}; margin-top:4px; }
+  .lw-pad { padding:0 18px 18px; }
+  /* KPI：圆润图标块 + 大数字 */
+  .lw-kpi { padding:18px; }
+  .lw-kpi .row { display:flex; align-items:center; gap:13px; }
+  .lw-kpi .ic { width:44px; height:44px; flex:none; border-radius:14px; display:flex; align-items:center;
+    justify-content:center; font-size:19px; }
+  .lw-kpi .num { font-size:29px; font-weight:600; line-height:1; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+  .lw-kpi .num small { font-size:12px; font-weight:500; color:${T.dim}; margin-left:5px; letter-spacing:0; }
+  .lw-kpi .lbl { font-size:12.5px; color:${T.dim}; margin-top:12px; }
+  .lw-kpi .cmp { font-size:12px; color:${T.faint}; margin-top:4px; }
   .lw-kpi .cmp b { color:${T.ok}; font-weight:600; }
   /* 列表 */
-  .lw-tbl { display:flex; flex-direction:column; }
-  .lw-tr { display:flex; align-items:center; gap:11px; min-height:42px; padding:0 15px; cursor:pointer;
-    border-bottom:1px solid rgba(255,255,255,.045); transition:background .12s; }
-  .lw-tr:last-child { border-bottom:0; }
-  .lw-tr:hover { background:${T.card2}; }
-  .lw-tr .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; }
-  .lw-tr .nm i { font-style:normal; color:${T.faint}; font-size:11px; }
-  .lw-tr .sz { flex:none; font-size:11px; color:${T.dim}; text-align:right; width:62px; font-variant-numeric:tabular-nums; }
-  .lw-tr .tm { flex:none; font-size:11px; color:${T.faint}; width:66px; text-align:right; }
-  .lw-tr .bd { flex:none; font-size:10px; padding:2px 8px; border-radius:6px; background:${T.card2}; color:${T.dim}; }
+  .lw-tbl { display:flex; flex-direction:column; padding:0 6px 8px; }
+  .lw-tr { display:flex; align-items:center; gap:12px; min-height:44px; padding:0 12px; cursor:pointer;
+    border-radius:11px; transition:background .14s; }
+  .lw-tr:hover { background:${T.bg}; }
+  .lw-tr .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+  .lw-tr .nm i { font-style:normal; color:${T.faint}; font-size:11.5px; }
+  .lw-tr .sz { flex:none; font-size:11.5px; color:${T.dim}; text-align:right; width:64px; font-variant-numeric:tabular-nums; }
+  .lw-tr .tm { flex:none; font-size:11.5px; color:${T.faint}; width:68px; text-align:right; }
+  .lw-tr .bd { flex:none; font-size:11px; padding:3px 9px; border-radius:8px; background:${T.bg}; color:${T.dim}; }
   /* 待办 */
-  .lw-todo { display:flex; align-items:flex-start; gap:11px; padding:10px 15px; border-bottom:1px solid rgba(255,255,255,.045); }
-  .lw-todo:last-child { border-bottom:0; }
-  .lw-todo:hover { background:${T.card2}; }
-  .lw-todo .ck { width:17px; height:17px; flex:none; margin-top:1px; border-radius:5px; border:1.5px solid ${T.line2};
-    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; color:transparent; transition:all .14s; }
-  .lw-todo .ck:hover { border-color:${T.accent}; }
-  .lw-todo.done .ck { background:${T.ok}; border-color:${T.ok}; color:#0c0d10; }
-  .lw-todo .tx { flex:1; min-width:0; font-size:12.5px; line-height:1.5; word-break:break-word; }
+  .lw-todo { display:flex; align-items:flex-start; gap:12px; padding:11px 18px; }
+  .lw-todo:hover { background:${T.bg}; }
+  .lw-todo .ck { width:20px; height:20px; flex:none; margin-top:1px; border-radius:7px; border:1.5px solid ${T.line2};
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; color:transparent; transition:all .15s; }
+  .lw-todo .ck:hover { border-color:${T.ok}; }
+  .lw-todo.done .ck { background:${T.ok}; border-color:${T.ok}; color:#fff; }
+  .lw-todo .tx { flex:1; min-width:0; font-size:13px; line-height:1.5; word-break:break-word; }
   .lw-todo.done .tx { color:${T.faint}; text-decoration:line-through; }
-  .lw-todo .due { font-size:10.5px; color:${T.faint}; margin-top:3px; }
-  .lw-todo .due.soon { color:${T.warn}; }
-  .lw-todo .del { flex:none; font-size:14px; color:${T.faint}; cursor:pointer; opacity:0; padding:0 4px; }
+  .lw-todo .due { font-size:11px; color:${T.faint}; margin-top:3px; }
+  .lw-todo .del { flex:none; font-size:15px; color:${T.faint}; cursor:pointer; opacity:0; padding:0 5px; }
   .lw-todo:hover .del { opacity:1; }
   .lw-todo .del:hover { color:${T.red}; }
-  .lw-add { display:flex; gap:8px; padding:11px 15px; border-top:1px solid ${T.line}; }
-  .lw-add input { flex:1; min-width:0; height:32px; padding:0 11px; border-radius:9px;
-    border:1px solid ${T.line2}; background:rgba(0,0,0,.28); color:${T.text}; font:12.5px ${UI}; outline:none; }
-  .lw-add input:focus { border-color:${T.accent}; }
-  .lw-add button { height:32px; padding:0 14px; border-radius:9px; border:0; background:${T.grad};
-    color:#fff; font:600 12px ${UI}; cursor:pointer; }
+  .lw-add { display:flex; gap:9px; padding:13px 18px 16px; }
+  .lw-add input { flex:1; min-width:0; height:36px; padding:0 13px; border-radius:11px;
+    border:1px solid ${T.line2}; background:${T.bg}; color:${T.text}; font:13px ${UI}; outline:none; transition:all .15s; }
+  .lw-add input:focus { border-color:${T.accent}; background:#fff; box-shadow:0 0 0 3px rgba(91,141,239,.12); }
+  .lw-add button { height:36px; padding:0 17px; border-radius:11px; border:0;
+    background:linear-gradient(160deg,${T.accent},${T.accent2}); color:#fff; font:600 13px ${UI};
+    cursor:pointer; box-shadow:0 3px 10px rgba(91,141,239,.28); }
   /* 笔记 */
-  .lw-note { padding:11px 15px; border-bottom:1px solid rgba(255,255,255,.045); }
-  .lw-note:last-child { border-bottom:0; }
-  .lw-note .h { display:flex; align-items:center; gap:8px; font-size:10.5px; color:${T.faint}; margin-bottom:5px; }
+  .lw-note { padding:12px 18px; }
+  .lw-note:hover { background:${T.bg}; }
+  .lw-note .h { display:flex; align-items:center; gap:8px; font-size:11px; color:${T.faint}; margin-bottom:6px; }
   .lw-note .h .del { margin-left:auto; cursor:pointer; opacity:0; }
   .lw-note:hover .h .del { opacity:1; }
   .lw-note .h .del:hover { color:${T.red}; }
-  .lw-note .b { font-size:12.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
-  .lw-note textarea { width:100%; min-height:70px; resize:vertical; padding:10px 11px; border-radius:9px;
-    border:1px solid ${T.line2}; background:rgba(0,0,0,.28); color:${T.text}; font:12.5px/1.6 ${UI}; outline:none; }
-  .lw-note textarea:focus { border-color:${T.accent}; }
-  /* 邮箱 / 快捷入口 */
-  .lw-links { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:9px; }
-  .lw-link { display:flex; align-items:center; gap:9px; padding:11px 12px; border-radius:10px;
-    border:1px solid ${T.line}; background:${T.card}; color:${T.text}; text-decoration:none;
-    font-size:12px; cursor:pointer; transition:all .14s; }
-  .lw-link:hover { border-color:${T.accent}; background:rgba(91,157,255,.10); transform:translateY(-1px); }
-  .lw-link .ic { font-size:15px; }
+  .lw-note .b { font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+  .lw-note textarea { width:100%; min-height:76px; resize:vertical; padding:12px 13px; border-radius:12px;
+    border:1px solid ${T.line2}; background:${T.bg}; color:${T.text}; font:13px/1.6 ${UI}; outline:none; transition:all .15s; }
+  .lw-note textarea:focus { border-color:${T.accent}; background:#fff; box-shadow:0 0 0 3px rgba(91,141,239,.12); }
+  /* 快捷入口：马卡龙色块 */
+  .lw-links { display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:11px; }
+  .lw-link { display:flex; align-items:center; gap:11px; padding:13px 14px; border-radius:14px;
+    background:${T.bg}; color:${T.text}; text-decoration:none; font-size:13px; font-weight:500;
+    cursor:pointer; transition:all .16s; }
+  .lw-link:hover { background:${T.sky}; color:${T.skyInk}; transform:translateY(-2px); box-shadow:${T.shadow}; }
+  .lw-link .ic { font-size:17px; }
   /* 柱状 / 折线 */
-  .lw-bars { display:flex; align-items:flex-end; gap:6px; height:124px; }
-  .lw-bars > div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; }
-  .lw-bars .v { font-size:10px; color:${T.dim}; font-variant-numeric:tabular-nums; }
-  .lw-bars .b { width:100%; border-radius:5px 5px 0 0; background:linear-gradient(180deg,${T.accent},rgba(91,157,255,.42)); }
-  .lw-bars > div:hover .b { background:linear-gradient(180deg,#fff,rgba(255,255,255,.55)); }
-  .lw-bars .k { font-size:9.5px; color:${T.faint}; }
-  .lw-empty { padding:28px 14px; text-align:center; color:${T.faint}; font-size:12px; }
-  .lw-empty .big { font-size:22px; display:block; margin-bottom:7px; opacity:.55; }
-  .lw-sk { background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.08) 37%,rgba(255,255,255,.03) 63%);
-    background-size:400% 100%; animation:lw-sk 1.3s ease infinite; border-radius:8px; }
+  .lw-bars { display:flex; align-items:flex-end; gap:7px; height:128px; }
+  .lw-bars > div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; height:100%; }
+  .lw-bars .v { font-size:11px; color:${T.dim}; font-variant-numeric:tabular-nums; }
+  .lw-bars .b { width:100%; border-radius:7px 7px 3px 3px; background:linear-gradient(180deg,#8fb3f5,${T.accent}); }
+  .lw-bars > div:hover .b { background:linear-gradient(180deg,${T.accent2},${T.accent}); }
+  .lw-bars .k { font-size:10.5px; color:${T.faint}; }
+  .lw-empty { padding:30px 18px; text-align:center; color:${T.faint}; font-size:13px; }
+  .lw-empty .big { font-size:24px; display:block; margin-bottom:8px; opacity:.5; }
+  .lw-sk { background:linear-gradient(90deg,#eef0f5 25%,#f7f8fb 37%,#eef0f5 63%);
+    background-size:400% 100%; animation:lw-sk 1.3s ease infinite; border-radius:10px; }
   @keyframes lw-sk { 0%{background-position:100% 50%} 100%{background-position:0 50%} }
-  .lw-chips { display:flex; flex-wrap:wrap; gap:7px; }
-  .lw-chip { font-size:11px; padding:4px 10px; border-radius:8px; border:1px solid ${T.line}; background:${T.card}; color:${T.dim}; }
-  .lw-chip b { color:#9ec3ff; font-weight:600; margin-left:5px; }
+  .lw-chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .lw-chip { font-size:11.5px; padding:5px 11px; border-radius:9px; background:${T.bg}; color:${T.dim}; }
+  .lw-chip b { color:${T.accent}; font-weight:600; margin-left:5px; }
   #system-nav-list button[data-section="lifework"] i { color:${T.accent}; }
   `;
 
@@ -421,10 +425,11 @@
   const sp = (n) => `grid-column:span ${n}`;
   const card = (title, extra, body, n, act) =>
     `<div class="lw-c" style="${sp(n || 12)}"><h3>${title}<span class="sp"></span>${act || ''}${extra ? `<em>${extra}</em>` : ''}</h3>${body}</div>`;
-  const kpiCard = (ic, num, unit, lbl, cmp, n, tint) => `<div class="lw-c" style="${sp(n || 3)}"><div class="lw-kpi">
-    <div class="row"><div class="ic" style="background:${tint || 'rgba(91,157,255,.13)'}">${ic}</div>
+  const TINT = { sky: [T.sky, T.skyInk], lilac: [T.lilac, T.lilacInk], mint: [T.mint, T.mintInk], lemon: [T.lemon, T.lemonInk], peach: [T.peach, T.peachInk], rose: [T.rose, T.roseInk] };
+  const kpiCard = (ic, num, unit, lbl, cmp, n, tint) => { const c = TINT[tint] || TINT.sky; return `<div class="lw-c" style="${sp(n || 3)}"><div class="lw-kpi">
+    <div class="row"><div class="ic" style="background:${c[0]};color:${c[1]}">${ic}</div>
       <div style="flex:1;min-width:0"><div class="num">${num}<small>${unit}</small></div></div></div>
-    <div class="lbl">${lbl}</div>${cmp ? `<div class="cmp">${cmp}</div>` : ''}</div></div>`;
+    <div class="lbl">${lbl}</div>${cmp ? `<div class="cmp">${cmp}</div>` : ''}</div></div>`; };
 
   /* ── 今日 ── */
   function viewToday() {
@@ -441,10 +446,10 @@
     const notes = ((STORE && STORE.notes) || []).slice(0, 4);
 
     const kpis = [
-      kpiCard('▦', DATA.totals.projects, '个项目', '已纳管', `覆盖 ${(DATA.tracks || []).length} 个方向`, 3, 'rgba(91,157,255,.14)'),
-      kpiCard('▤', DATA.totals.files, '个文件', `合计 ${DATA.totals.sizeText}`, `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, 3, 'rgba(124,108,255,.14)'),
-      kpiCard('✎', today.count, '个改动', '今天', diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), 3, 'rgba(74,222,128,.13)'),
-      kpiCard('◈', (DATA.tracks || []).length, '个方向', '机器人 · 嵌入式 · 论文', '按最近改动排序', 3, 'rgba(251,191,36,.13)'),
+      kpiCard('▦', DATA.totals.projects, '个项目', '已纳管', `覆盖 ${(DATA.tracks || []).length} 个方向`, 3, 'sky'),
+      kpiCard('▤', DATA.totals.files, '个文件', `合计 ${DATA.totals.sizeText}`, `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, 3, 'lilac'),
+      kpiCard('✎', today.count, '个改动', '今天', diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), 3, 'mint'),
+      kpiCard('◈', (DATA.tracks || []).length, '个方向', '机器人 · 嵌入式 · 论文', '按最近改动排序', 3, 'lemon'),
     ].join('');
 
     const todoBody = todos.length
@@ -488,9 +493,9 @@
       <div class="tx">${esc(t.text)}<div class="due">${dstr(t.at)}</div></div>
       <span class="del" data-todo-del="${t.id}">✕</span></div>`).join('') : `<div class="lw-empty"><span class="big">✓</span>${isDone ? '还没有完成的' : '还没有待办，下面加一条'}</div>`;
     return `<div class="lw-g12">
-      ${kpiCard('✓', open.length, '项', '待处理', all.length ? `已完成 ${done.length} / 共 ${all.length}` : '—', 4, 'rgba(91,157,255,.14)')}
-      ${kpiCard('📅', done.length, '项', '已完成', all.length ? '完成率 ' + Math.round(done.length / all.length * 100) + '%' : '—', 4, 'rgba(74,222,128,.13)')}
-      ${kpiCard('⏱', open.length ? ago(Math.max(...open.map((t) => t.at))) : '—', '', '最早一条', '按添加时间', 4, 'rgba(251,191,36,.13)')}
+      ${kpiCard('✓', open.length, '项', '待处理', all.length ? `已完成 ${done.length} / 共 ${all.length}` : '—', 4, 'peach')}
+      ${kpiCard('📅', done.length, '项', '已完成', all.length ? '完成率 ' + Math.round(done.length / all.length * 100) + '%' : '—', 4, 'rose')}
+      ${kpiCard('⏱', open.length ? ago(Math.max(...open.map((t) => t.at))) : '—', '', '最早一条', '按添加时间', 4, 'sky')}
       ${card('待处理', '', `<div>${body(open, false)}</div><div class="lw-add">
         <input id="lw-todo-input" placeholder="加一条待办，回车即可…" />
         <button id="lw-todo-add">添加</button></div>`, 7)}
@@ -506,7 +511,7 @@
     return `<div class="lw-g12">
       ${card('快速笔记', '存本机 · 随手记',
         `<div class="lw-note"><textarea id="lw-note-input" placeholder="记点什么…（想法 / 实验现象 / 待查资料）"></textarea>
-         <div style="display:flex;justify-content:flex-end;margin-top:9px"><button class="lw-btn" id="lw-note-add" style="background:${T.grad};border:0;color:#fff">保存</button></div></div>`, 5)}
+         <div style="display:flex;justify-content:flex-end;margin-top:9px"><button class="lw-btn" id="lw-note-add" style="background:linear-gradient(160deg,${T.accent},${T.accent2});border:0;color:#fff">保存</button></div></div>`, 5)}
       ${card('全部笔记', `${notes.length} 条`, notes.length ? notes.map((n) => `<div class="lw-note">
         <div class="h">${dstr(n.at)}<span class="del" data-note-del="${n.id}">✕</span></div>
         <div class="b">${esc(n.text)}</div></div>`).join('') : `<div class="lw-empty"><span class="big">✎</span>还没有笔记</div>`, 7)}
@@ -540,10 +545,10 @@
     const docs = (DATA.recent || []).filter((f) => /\.(docx?|tex|pdf|pptx?|md)$/i.test(f.name)).slice(0, 12);
     const track = (DATA.tracks || []).find((t) => t.id === 'paper');
     return `<div class="lw-g12">
-      ${kpiCard('📄', track ? track.projects : 0, '个项目', '论文 / 投稿', track ? track.files + ' 个文件 · ' + track.sizeText : '未归类到论文', 3, 'rgba(251,191,36,.13)')}
-      ${kpiCard('✎', docs.length, '篇', '文稿 / 插图', 'docx · tex · pdf · pptx', 3, 'rgba(91,157,255,.14)')}
-      ${kpiCard('◈', (DATA.tracks || []).length, '个方向', '整体进度', '按最近改动排序', 3, 'rgba(124,108,255,.14)')}
-      ${kpiCard('▦', DATA.totals.projects, '个项目', '全部项目', DATA.totals.sizeText, 3, 'rgba(74,222,128,.13)')}
+      ${kpiCard('📄', track ? track.projects : 0, '个项目', '论文 / 投稿', track ? track.files + ' 个文件 · ' + track.sizeText : '未归类到论文', 3, 'lilac')}
+      ${kpiCard('✎', docs.length, '篇', '文稿 / 插图', 'docx · tex · pdf · pptx', 3, 'mint')}
+      ${kpiCard('◈', (DATA.tracks || []).length, '个方向', '整体进度', '按最近改动排序', 3, 'lemon')}
+      ${kpiCard('▦', DATA.totals.projects, '个项目', '全部项目', DATA.totals.sizeText, 3, 'peach')}
       ${card('论文项目', `${ps.length} 个`, ps.length ? `<div class="lw-tbl">${ps.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
         <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
         <span class="bd">${p.files} 文件</span><span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>` : emptyBox('还没归类到论文项目'), 6)}
@@ -584,10 +589,10 @@
     const active = days.filter((x) => x.count).length;
     const peak = days.find((x) => x.count === max) || {};
     return `<div class="lw-g12">
-      ${kpiCard('Σ', total, '个改动', '近 14 天', '日均 ' + (total / 14).toFixed(1) + ' 个', 3, 'rgba(91,157,255,.14)')}
-      ${kpiCard('◔', active, '天', '有改动', '共 14 天', 3, 'rgba(74,222,128,.13)')}
-      ${kpiCard('↑', max, '个', '单日峰值', peak.label || '—', 3, 'rgba(251,191,36,.13)')}
-      ${kpiCard('▦', DATA.totals.projects, '个', '在跟的项目', DATA.totals.sizeText, 3, 'rgba(124,108,255,.14)')}
+      ${kpiCard('Σ', total, '个改动', '近 14 天', '日均 ' + (total / 14).toFixed(1) + ' 个', 3, 'rose')}
+      ${kpiCard('◔', active, '天', '有改动', '共 14 天', 3, 'sky')}
+      ${kpiCard('↑', max, '个', '单日峰值', peak.label || '—', 3, 'lilac')}
+      ${kpiCard('▦', DATA.totals.projects, '个', '在跟的项目', DATA.totals.sizeText, 3, 'mint')}
       ${card('改动趋势', '近 14 天', `<div class="lw-pad"><div style="padding:4px 0">${spark(days.map((x) => x.count), 460, 84, T.accent)}</div>
         <div style="display:flex;justify-content:space-between;font-size:10.5px;color:${T.faint};margin-top:6px">
           <span>${(days[0] || {}).label || ''}</span><span>${(days[days.length - 1] || {}).label || ''}</span></div></div>`, 6)}
