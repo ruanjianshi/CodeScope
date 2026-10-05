@@ -533,7 +533,10 @@
     }
     const btn = document.getElementById('btn-lifework');
     if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.classList.add('on'); }
-    if (!DATA) load(false); else render();
+    /* ⚠️ 立刻先画一次（骨架屏）—— 不能等数据回来才渲染 ✗，
+       否则打开面板会有一段**纯黑** ✗，看起来就是"启动很慢"。 */
+    render();
+    if (!DATA) load(false);
   }
 
   /* 关闭：撤掉视图，顶部标签恢复 */
@@ -548,19 +551,25 @@
     if (LOADING) return;
     LOADING = true;
     const s = document.getElementById('lw-sub');
-    if (s) s.textContent = '正在扫描本机文件…';
     const j = async (u, opt) => { try { const r = await fetch(u, opt); return await r.json(); } catch (_) { return null; } };
-    const [idx, store, weather] = await Promise.all([
-      j('/api/life/index?depth=3', { cache: 'no-store' }),
+    if (s) s.textContent = '正在读取本机数据…';
+    /* ⚠️ 分批：先拿「本机数据 + 待办/笔记」，**立刻渲染** ✓；
+       天气单独跑（要走外网、慢得多 ✗），回来了再补一次渲染 ✓。
+       以前三个请求 Promise.all 一起等 ✗ —— 天气最慢，把整个面板卡住 ✗。 */
+    const [idx, store] = await Promise.all([
+      j('/api/life/index?depth=3' + (force ? '&fresh=1' : ''), { cache: 'no-store' }),
       j('/api/life/store', { cache: 'no-store' }),
-      j('/api/life/weather?city=' + encodeURIComponent(CITY), { cache: 'no-store' }),
     ]);
     if (idx && idx.ok) DATA = idx;
     STORE = (store && store.data) || {};
     if (STORE.city) CITY = STORE.city;
-    if (weather && weather.ok) WX = weather;
     LOADING = false;
     render();
+    /* 天气：不阻塞界面，回来再刷一次 */
+    j('/api/life/weather?city=' + encodeURIComponent(CITY), { cache: 'no-store' }).then((weather) => {
+      if (weather && weather.ok) { WX = weather; render(); }
+      else if (weather && weather.error && !WX) { WX = weather; render(); }
+    });
   }
 
   async function saveStore() {

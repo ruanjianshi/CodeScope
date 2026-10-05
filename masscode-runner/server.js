@@ -49,6 +49,10 @@ function applicationDataRoot() {
   return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'CodeScope');
 }
 const ONLYOFFICE_CONNECTION_FILE = path.join(applicationDataRoot(), 'office-connection.json');
+/* 「个人管理面板」的缓存：本机扫描贵（1~3s）✗、天气要出外网（2~5s）✗，
+   都不需要每次刷新 —— 加缓存后二次打开是**瞬间** ✓。 */
+let LIFE_INDEX_CACHE = null;          /* { at, depth, data } */
+const LIFE_WX_CACHE = Object.create(null);   /* city → { at, data } */
 function cleanServiceUrl(value) {
   const text = String(value || '').trim().replace(/\/+$/, '');
   if (!text) return '';
@@ -4499,11 +4503,19 @@ const server = http.createServer(async (req, res) => {
        和上面 /api/system/status 那套健康检查互不干扰；非 GET 请求已经由前面的
        trustedHttpOrigin 网关拦过一道，所以这里只做参数校验与执行。 */
     /* 「我的工作台」—— 本机文件按研究方向归类后的数据。
-       GET /api/life/index?depth=3  扫一次返回全量（本地扫描，0.1s 级）。 */
+       GET /api/life/index?depth=3  扫一次返回全量。
+       ⚠️ 加 60 秒缓存：面板每次打开都重扫一遍太慢 ✗（用户反馈"启动很慢"）。
+       刷新按钮带 ?fresh=1 可以绕过缓存。 */
     if (u.pathname === '/api/life/index') {
       try {
         const depth = Math.min(4, Math.max(1, Number(u.searchParams.get('depth')) || 3));
+        const fresh = u.searchParams.get('fresh') === '1';
+        const now = Date.now();
+        if (!fresh && LIFE_INDEX_CACHE && LIFE_INDEX_CACHE.depth === depth && now - LIFE_INDEX_CACHE.at < 60000) {
+          return send(res, 200, LIFE_INDEX_CACHE.data);
+        }
         const idx = require('./lib/life-index').buildIndex({ maxDepth: depth });
+        LIFE_INDEX_CACHE = { at: now, depth, data: idx };
         return send(res, 200, idx);
       } catch (error) {
         return send(res, 500, { ok: false, error: String((error && error.message) || error) });
@@ -4512,17 +4524,22 @@ const server = http.createServer(async (req, res) => {
     /* 天气：代理 open-meteo（免费、无需 key）。按城市名查坐标再查实况 + 当日预报。
        ⚠️ 不能只用 Node 的 fetch —— 本机环境里配了 HTTP_PROXY 时，
        undici 默认**不读**这个变量 ✗（实测 `fetch failed`，而 curl 同一个地址 200 ✓）。
-       所以先试 fetch，失败就用 curl 兜底（curl 会读 HTTP_PROXY/HTTPS_PROXY）。 */
+       所以先试 fetch，失败就用 curl 兜底（curl 会读 HTTP_PROXY/HTTPS_PROXY）。
+       ⚠️ 加 10 分钟缓存：这个请求要出外网、慢 ✗，而天气不需要秒级新鲜 ✓。 */
     if (u.pathname === '/api/life/weather') {
       try {
         const city = String(u.searchParams.get('city') || '广州').slice(0, 40);
+        const now = Date.now();
+        if (LIFE_WX_CACHE[city] && now - LIFE_WX_CACHE[city].at < 600000) {
+          return send(res, 200, LIFE_WX_CACHE[city].data);
+        }
         const j = async (url) => {
           try {
             const r = await fetch(url);
             if (r.ok) return await r.json();
           } catch (_) {}
           const out = await new Promise((resolve, reject) => {
-            require('child_process').execFile('curl', ['-s', '-m', '15', '-L', url], { maxBuffer: 4e6 },
+            require('child_process').execFile('curl', ['-s', '-m', '12', '-L', url], { maxBuffer: 4e6 },
               (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
           });
           return JSON.parse(out);
@@ -4535,13 +4552,15 @@ const server = http.createServer(async (req, res) => {
           '&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max' +
           '&timezone=auto&forecast_days=3');
         const cur = w.current || {}, day = w.daily || {};
-        return send(res, 200, {
+        const payload = {
           ok: true, city: hit.name, admin: hit.admin1 || '', country: hit.country || '',
           temp: cur.temperature_2m, feels: cur.apparent_temperature, hum: cur.relative_humidity_2m,
           wind: cur.wind_speed_10m, code: cur.weather_code,
           days: (day.time || []).map((t, i) => ({ date: t, max: day.temperature_2m_max[i], min: day.temperature_2m_min[i],
             code: day.weather_code[i], pop: day.precipitation_probability_max[i] })),
-        });
+        };
+        LIFE_WX_CACHE[city] = { at: Date.now(), data: payload };
+        return send(res, 200, payload);
       } catch (error) {
         return send(res, 200, { ok: false, error: '天气读取失败：' + String((error && error.message) || error) });
       }
