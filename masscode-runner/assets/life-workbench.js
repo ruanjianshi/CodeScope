@@ -1777,7 +1777,12 @@
     const pad2 = (n) => String(n).padStart(2, "0");
     const keyOf = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
     const todayK = keyOf(d0);
-    /* ⚠️ 这里只能用 STORE.journalCat 直接取 ✗ —— catF 定义在后面 ✗（TDZ ✗）*/
+    /* ⚠️ 分清两个数：`total` = 全部篇数（给面板计数用 ✓）；
+       `all` = 按分类筛选后的（给列表内容用 ✓）。
+       之前面板计数也用了 `all` ✗ → 一筛分类就全变 0 篇 ✗。 */
+    const total = ((STORE && STORE.journal) || []).length;
+    /* 「最近写过」用**全量** ✓ —— 它回答的是"我写过什么"，不该被分类筛掉 ✗ */
+    const journalAll = ((STORE && STORE.journal) || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
     const catNow = (STORE && STORE.journalCat) || '';
     const all = ((STORE && STORE.journal) || []).slice()
       .filter((j) => !catNow || String(j.cat || '') === catNow)
@@ -1850,15 +1855,15 @@
     return '<div class="lw-jr" id="lw-jr">'
       + '<div class="lw-jr-l" id="lw-jr-l" style="width:' + lw + 'px">'
 
-      + '<div class="lw-c" data-jpanel="cal" style="height:' + (STORE.jpH1 || 250) + 'px"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + all.length + ' 篇</em></h3>'
+      + '<div class="lw-c" data-jpanel="cal" style="height:' + (STORE.jpH1 || 250) + 'px"><h3><span class="code">J-01</span>日历<span class="sp"></span><em>' + total + ' 篇' + (catNow ? ' · 筛选中' : '') + '</em></h3>'
       + '<div class="lw-cbd">' + cal + '</div></div><div class="lw-vgrip" data-vgrip="1"></div>'
 
-      + '<div class="lw-c" data-jpanel="stat" style="height:' + (STORE.jpH2 || 150) + 'px"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + all.length + ' 篇</em></h3>'
+      + '<div class="lw-c" data-jpanel="stat" style="height:' + (STORE.jpH2 || 150) + 'px"><h3><span class="code">J-03</span>连续记录<span class="sp"></span><em>共 ' + total + ' 篇</em></h3>'
       + '<div class="lw-cbd"><div class="lw-kpi"><div class="row"><div class="ic">◈</div><div style="flex:1;min-width:0"><div class="num">' + streak + '<small>天</small></div></div></div>'
       + '<div class="cmp">' + (streak ? "继续保持" : "今天开个头") + '</div></div></div></div><div class="lw-vgrip" data-vgrip="2"></div>'
 
-      + '<div class="lw-c" data-jpanel="recent" style="height:' + (STORE.jpH3 || 170) + 'px"><h3><span class="code">J-05</span>最近写过<span class="sp"></span><em>' + all.length + ' 篇</em></h3>'
-      + '<div class="lw-cbd"><div class="lw-tbl">' + (all.length ? all.slice(0, 8).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
+      + '<div class="lw-c" data-jpanel="recent" style="height:' + (STORE.jpH3 || 170) + 'px"><h3><span class="code">J-05</span>最近写过<span class="sp"></span><em>共 ' + total + ' 篇</em></h3>'
+      + '<div class="lw-cbd"><div class="lw-tbl">' + (journalAll.length ? journalAll.slice(0, 12).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
           + '<span class="nm">' + esc(j.date.slice(5)) + (catOf(j) ? ' <i>#' + esc(catOf(j)) + '</i>' : '') + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
           + '<span class="tm">' + esc(String(j.text || "").replace(/\n/g, ' ').slice(0, 8)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div></div><div class="lw-vgrip" data-vgrip="3"></div>'
 
