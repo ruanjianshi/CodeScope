@@ -1814,15 +1814,16 @@
     /* 当天天气 */
     const dSel = new Date(sel + "T00:00:00");
     const wdName = "周" + WD[dSel.getDay()];
+    /* ⚠️ 只返回**内容**，不带 card 外壳和标题 ✗ ——
+       外层 J-04 面板已经提供了 `<h3>J-04 当天天气</h3>` ✓，
+       这里再带一层就会**标题重复** ✗（之前就踩了 ✗）。 */
     let wxHtml = "";
     if (WX && WX.ok) {
       const ic = wx(WX.code)[0], nm = wx(WX.code)[1];
-      wxHtml = '<div class="lw-c" style="grid-column:span 12"><h3><span class="code">J-04</span>当天天气'
-        + '<span class="sp"></span><em>' + esc(WX.city) + '（点顶部天气可换地区）</em></h3>'
-        + '<div class="lw-kpi"><div class="row"><div class="ic">' + ic + '</div>'
+      wxHtml = '<div class="lw-kpi"><div class="row"><div class="ic">' + ic + '</div>'
         + '<div style="flex:1;min-width:0"><div class="num">' + Math.round(WX.temp) + '<small>°C</small></div></div>'
         + '<div style="text-align:right;font-size:11px;color:' + T.dim + ';line-height:1.8">' + esc(nm) + '<br>体感 ' + Math.round(WX.feels) + '° · 湿 ' + WX.hum + '%<br>风 ' + WX.wind + ' km/h</div></div>'
-        + '<div class="cmp">' + (WX.days || []).slice(0, 3).map((x) => esc(x.date.slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div></div>';
+        + '<div class="cmp" style="margin-top:10px">' + (WX.days || []).slice(0, 3).map((x) => esc(x.date.slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div>';
     }
 
     /* 布局：左栏多面板（可逐个拖高 ✓）+ 右栏编辑区，整体填满视口 ✓ */
