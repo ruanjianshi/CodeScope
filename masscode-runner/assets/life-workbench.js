@@ -14,83 +14,115 @@
 (() => {
   'use strict';
 
+  /* ── 设计令牌：终端 HUD / 粗野主义风 ──
+     参考用户给的界面：纯黑底 + 硬米白边框 + 零圆角 + 淡黄强调色 +
+     等宽字体 + 全大写标签 + 前缀编码（N-01 / CLK / T-01）。 */
   const T = {
-    bg: '#0e1116', panel: '#151a22', panel2: '#1a2029', line: '#242c39', line2: '#2e3846',
-    text: '#e8ecf3', dim: '#8b95a6', faint: '#5d6779',
-    accent: '#4f8cff', ok: '#3fb950', warn: '#f0883e', purple: '#a371f7', cyan: '#39c5cf',
+    bg: '#0b0b0b', panel: '#0f0f0f', panel2: '#141414', line: '#e8e4d8', lineDim: '#3a382f',
+    text: '#f2efe6', dim: '#8a8778', faint: '#5c5a50',
+    accent: '#f2e39b', accentInk: '#111008', ok: '#9bd67a', warn: '#f0a35e', red: '#e2725b',
   };
-  const KIND_COLOR = { code: '#4f8cff', doc: '#f0883e', media: '#a371f7', model: '#3fb950', other: '#5d6779' };
+  const KIND_COLOR = { code: '#f2e39b', doc: '#f0a35e', media: '#9bd67a', model: '#7ec8e3', other: '#5c5a50' };
   const KIND_NAME = { code: '代码', doc: '文档', media: '媒体/图', model: '三维模型', other: '其他' };
+  const MONO = '"SF Mono",SFMono-Regular,Menlo,Consolas,"JetBrains Mono",monospace';
 
   const CSS = `
   .lw-inpanel { position:absolute; inset:0; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden;
-    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:${T.text}; }
-  .lw-head { display:flex; align-items:center; gap:14px; padding:14px 22px; flex:none;
-    border-bottom:1px solid ${T.line}; background:${T.panel}; }
-  .lw-h1 { font-size:15px; font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:8px; }
-  .lw-sub2 { font-size:12px; color:${T.dim}; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-btn { height:30px; padding:0 13px; border-radius:8px; border:1px solid ${T.line2}; background:${T.panel2};
-    color:#cfd6e2; font-size:12px; cursor:pointer; flex:none; transition:all .15s; }
-  .lw-btn:hover { background:#232c3b; border-color:${T.accent}; color:#fff; }
+    font-family:${MONO}; color:${T.text}; font-size:12.5px; letter-spacing:.2px; }
+  /* 顶栏 */
+  .lw-head { display:flex; align-items:center; gap:16px; padding:12px 18px; flex:none;
+    border-bottom:2px solid ${T.line}; background:${T.bg}; }
+  .lw-logo { width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center;
+    border:2px solid ${T.line}; font-size:15px; }
+  .lw-h1 { font-size:13px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; line-height:1.15; }
+  .lw-h1 small { display:block; font-size:9px; letter-spacing:2.4px; color:${T.dim}; font-weight:400; margin-top:2px; }
+  .lw-sub2 { font-size:10.5px; color:${T.dim}; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    letter-spacing:.4px; text-transform:uppercase; }
+  .lw-btn { height:30px; padding:0 13px; border-radius:0; border:2px solid ${T.line}; background:transparent;
+    color:${T.text}; font:600 10.5px ${MONO}; letter-spacing:1.2px; text-transform:uppercase; cursor:pointer; flex:none;
+    transition:background .12s,color .12s; }
+  .lw-btn:hover { background:${T.accent}; color:${T.accentInk}; }
+  /* 主体 */
   .lw-body2 { flex:1; display:flex; min-height:0; }
-  .lw-nav { width:200px; flex:none; padding:14px 10px; border-right:1px solid ${T.line}; background:#12161d; overflow:auto; }
-  .lw-nav .grp { margin:10px 10px 7px; font-size:11px; letter-spacing:1.2px; color:${T.faint}; text-transform:uppercase; font-weight:600; }
-  .lw-nav button { width:100%; height:36px; display:flex; align-items:center; gap:10px; padding:0 12px; margin-bottom:2px;
-    border:0; border-left:3px solid transparent; border-radius:8px; background:transparent;
-    color:#a9b3c4; font-size:13px; cursor:pointer; text-align:left; transition:background .15s,color .15s; }
-  .lw-nav button:hover { background:rgba(255,255,255,.04); color:${T.text}; }
-  .lw-nav button.on { background:rgba(79,140,255,.08); border-left-color:${T.accent}; color:#eaf1ff; font-weight:600; }
-  .lw-nav .ic { width:18px; text-align:center; font-size:14px; }
-  .lw-main { flex:1; min-width:0; overflow:auto; padding:22px; }
-  .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a3242; border-radius:6px; }
-  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:24px; align-items:start; }
-  .lw-c { background:${T.panel}; border:1px solid ${T.line}; border-radius:12px; padding:18px 20px; }
-  .lw-c h3 { margin:0 0 14px; font-size:11.5px; font-weight:600; color:${T.dim}; letter-spacing:.6px;
-    display:flex; align-items:center; gap:8px; text-transform:uppercase; }
-  .lw-c h3 .sp { flex:1; }
-  .lw-c h3 em { font-style:normal; text-transform:none; letter-spacing:0; color:${T.faint}; font-weight:400; font-size:11px; }
-  .lw-kpi { display:flex; flex-direction:column; gap:7px; }
-  .lw-kpi .num { font-size:30px; font-weight:700; line-height:1; letter-spacing:-.8px; }
-  .lw-kpi .num small { font-size:12px; font-weight:500; color:${T.dim}; margin-left:6px; letter-spacing:0; }
-  .lw-kpi .lbl { font-size:12px; color:${T.dim}; }
-  .lw-kpi .cmp { font-size:11.5px; color:${T.faint}; }
-  .lw-kpi .cmp b { color:${T.ok}; font-weight:600; }
+  .lw-nav { width:196px; flex:none; padding:14px 12px; border-right:2px solid ${T.line}; background:${T.bg};
+    display:flex; flex-direction:column; overflow:auto; }
+  .lw-nav .grp { margin:6px 2px 8px; font-size:9px; letter-spacing:2.4px; color:${T.faint}; text-transform:uppercase; }
+  .lw-nav button { width:100%; height:38px; display:flex; align-items:center; gap:9px; padding:0 9px; margin-bottom:5px;
+    border:2px solid ${T.lineDim}; border-radius:0; background:transparent; color:${T.text};
+    font:500 11.5px ${MONO}; letter-spacing:.6px; cursor:pointer; text-align:left; transition:all .12s; }
+  .lw-nav button:hover { border-color:${T.line}; }
+  .lw-nav button.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; font-weight:700; }
+  .lw-nav .ic { width:18px; text-align:center; font-size:13px; }
+  .lw-nav .key { margin-left:auto; font-size:9.5px; letter-spacing:1.2px; color:${T.dim}; }
+  .lw-nav button.on .key { color:${T.accentInk}; opacity:.65; }
+  .lw-nav .foot { margin-top:auto; padding-top:14px; border-top:1px solid ${T.lineDim};
+    font-size:9.5px; letter-spacing:1.4px; color:${T.faint}; text-transform:uppercase; line-height:1.9; }
+  .lw-nav .foot b { color:${T.ok}; font-weight:600; }
+  .lw-main { flex:1; min-width:0; overflow:auto; padding:16px 18px 28px; }
+  .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a2a26; }
+  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:14px; align-items:start; }
+  /* 卡片：硬边框 + 标题栏带前缀编码 */
+  .lw-c { background:${T.panel}; border:2px solid ${T.line}; border-radius:0; }
+  .lw-c > h3 { margin:0; padding:8px 11px; font-size:9.5px; font-weight:600; letter-spacing:2px; text-transform:uppercase;
+    color:${T.dim}; border-bottom:1px solid ${T.lineDim}; display:flex; align-items:center; gap:9px; }
+  .lw-c > h3 .code { color:${T.accent}; letter-spacing:1.6px; }
+  .lw-c > h3 .sp { flex:1; }
+  .lw-c > h3 em { font-style:normal; letter-spacing:.6px; color:${T.faint}; font-weight:400; font-size:9.5px; }
+  .lw-pad { padding:14px 16px; }
+  /* KPI：图标框 + 大数字 */
+  .lw-kpi { padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  .lw-kpi .top { display:flex; align-items:flex-start; gap:12px; }
+  .lw-kpi .ibox { width:38px; height:38px; flex:none; border:2px solid ${T.line}; display:flex; align-items:center;
+    justify-content:center; font-size:17px; }
+  .lw-kpi .num { font-size:32px; font-weight:700; line-height:1; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+  .lw-kpi .num small { font-size:10.5px; font-weight:500; color:${T.dim}; margin-left:5px; letter-spacing:.6px; }
+  .lw-kpi .lbl { font-size:9.5px; letter-spacing:1.6px; color:${T.faint}; text-transform:uppercase; }
+  .lw-kpi .cmp { font-size:10.5px; color:${T.dim}; letter-spacing:.4px; }
+  .lw-kpi .cmp b { color:${T.ok}; font-weight:700; }
+  /* 表格 */
   .lw-tbl { display:flex; flex-direction:column; }
-  .lw-tr { display:flex; align-items:center; gap:12px; min-height:44px; padding:0 10px; border-radius:8px;
-    border-bottom:1px solid rgba(36,44,57,.55); cursor:pointer; transition:background .12s; }
+  .lw-tr { display:flex; align-items:center; gap:11px; min-height:42px; padding:0 11px; cursor:pointer;
+    border-bottom:1px solid ${T.lineDim}; transition:background .12s; }
   .lw-tr:last-child { border-bottom:0; }
-  .lw-tr:hover { background:rgba(79,140,255,.07); }
-  .lw-tr .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
-  .lw-tr .nm i { font-style:normal; color:${T.faint}; font-size:11.5px; }
-  .lw-tr .sz { flex:none; font-size:11.5px; color:${T.dim}; font-variant-numeric:tabular-nums; text-align:right; width:64px; }
-  .lw-tr .tm { flex:none; font-size:11.5px; color:${T.faint}; width:72px; text-align:right; }
-  .lw-tr .bd { flex:none; font-size:10px; padding:2px 8px; border-radius:999px; border:1px solid ${T.line2}; color:${T.dim}; }
-  .lw-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-    padding:34px 10px; color:${T.faint}; font-size:12.5px; }
-  .lw-empty .big { font-size:26px; opacity:.5; }
-  .lw-sk { background:linear-gradient(90deg,#1a2029 25%,#222a36 37%,#1a2029 63%); background-size:400% 100%;
-    animation:lw-sk 1.3s ease infinite; border-radius:8px; }
+  .lw-tr:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-tr:hover .nm i, .lw-tr:hover .sz, .lw-tr:hover .tm, .lw-tr:hover .bd { color:${T.accentInk} !important; opacity:.72; }
+  .lw-tr .ix { flex:none; width:26px; font-size:10px; color:${T.faint}; letter-spacing:.8px; }
+  .lw-tr .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+  .lw-tr .nm i { font-style:normal; color:${T.faint}; font-size:10.5px; }
+  .lw-tr .sz { flex:none; font-size:10.5px; color:${T.dim}; text-align:right; width:62px; font-variant-numeric:tabular-nums; }
+  .lw-tr .tm { flex:none; font-size:10.5px; color:${T.faint}; width:70px; text-align:right; }
+  .lw-tr .bd { flex:none; font-size:9.5px; padding:2px 7px; border:1px solid ${T.lineDim}; color:${T.dim};
+    letter-spacing:.8px; text-transform:uppercase; }
+  .lw-empty { padding:30px 12px; text-align:center; color:${T.faint}; font-size:11px; letter-spacing:1px; text-transform:uppercase; }
+  .lw-empty .big { font-size:22px; display:block; margin-bottom:8px; opacity:.55; }
+  /* 骨架 */
+  .lw-sk { background:linear-gradient(90deg,#141414 25%,#1e1e1c 37%,#141414 63%); background-size:400% 100%;
+    animation:lw-sk 1.3s ease infinite; }
   @keyframes lw-sk { 0%{background-position:100% 50%} 100%{background-position:0 50%} }
-  .lw-bars { display:flex; align-items:flex-end; gap:8px; height:130px; }
+  /* 柱状：淡黄柱 + 柱顶数值 */
+  .lw-bars { display:flex; align-items:flex-end; gap:5px; height:132px; }
   .lw-bars > div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; }
-  .lw-bars .v { font-size:10px; color:${T.dim}; }
-  .lw-bars .b { width:100%; border-radius:5px 5px 0 0; background:linear-gradient(180deg,${T.accent},#2b5cab); }
-  .lw-bars .k { font-size:10px; color:${T.faint}; }
-  .lw-heat { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,1fr); gap:4px; }
-  .lw-heat i { width:15px; height:15px; border-radius:3px; background:#1b222c; }
-  .lw-chips { display:flex; flex-wrap:wrap; gap:8px; }
-  .lw-chip { font-size:11.5px; padding:4px 10px; border-radius:999px; border:1px solid ${T.line2};
-    background:${T.panel2}; color:#a9b3c4; }
-  .lw-chip b { color:#8fb8ff; font-weight:600; margin-left:4px; }
+  .lw-bars .v { font-size:9.5px; color:${T.dim}; }
+  .lw-bars .b { width:100%; background:${T.accent}; }
+  .lw-bars > div:hover .b { background:#fff; }
+  .lw-bars .k { font-size:9px; color:${T.faint}; letter-spacing:.2px; }
+  .lw-chips { display:flex; flex-wrap:wrap; gap:7px; }
+  .lw-chip { font-size:10.5px; padding:3px 9px; border:1px solid ${T.lineDim}; color:${T.dim}; letter-spacing:.6px; }
+  .lw-chip b { color:${T.accent}; font-weight:700; margin-left:5px; }
+  .lw-tabs { display:flex; gap:7px; flex-wrap:wrap; }
+  .lw-tab { padding:4px 11px; border:2px solid ${T.lineDim}; background:transparent; color:${T.dim};
+    font:600 10px ${MONO}; letter-spacing:1.2px; text-transform:uppercase; cursor:pointer; }
+  .lw-tab:hover { border-color:${T.line}; color:${T.text}; }
+  .lw-tab.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
   #system-nav-list button[data-section="lifework"] i { color:${T.accent}; }
   `;
 
   const NAV = [
-    { id: 'today', icon: '☀️', label: '今日' },
-    { id: 'tracks', icon: '🎯', label: '研究方向' },
-    { id: 'paper', icon: '📄', label: '论文' },
-    { id: 'files', icon: '🗂', label: '文件' },
-    { id: 'time', icon: '📈', label: '时间' },
+    { id: 'today', icon: '☀', label: '今日', key: 'T-01' },
+    { id: 'tracks', icon: '◈', label: '研究方向', key: 'F-02' },
+    { id: 'paper', icon: '▤', label: '论文', key: 'P-03' },
+    { id: 'files', icon: '▦', label: '文件', key: 'C-04' },
+    { id: 'time', icon: '◔', label: '时间', key: 'X-05' },
   ];
 
   let DATA = null, TAB = 'today', LOADING = false, MOUNT_TIMER = 0;
@@ -206,15 +238,21 @@
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     const main = { today: viewToday, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime }[TAB] || viewToday;
     host.innerHTML = headHtml() + `<div class="lw-body2">
-      <div class="lw-nav">${NAV.map((n) =>
-        `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span>${n.label}</button>`).join('')}</div>
+      <div class="lw-nav">
+        <div class="grp">Views · 视图</div>
+        ${NAV.map((n) => `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}">
+          <span class="ic">${n.icon}</span><span>${n.label}</span><span class="key">${n.key}</span></button>`).join('')}
+        <div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机</div>
+      </div>
       <div class="lw-main">${main()}</div></div>`;
     bind();
   }
 
   function headHtml() {
-    const sub = DATA ? `已扫 ${DATA.totals.projects} 个项目 · ${DATA.totals.files} 个文件 · ${DATA.totals.sizeText} · 更新于 ${dstr(DATA.scannedAt)}` : '正在扫描本机…';
-    return `<div class="lw-head"><div class="lw-h1">🎯 我的工作台</div>
+    const sub = DATA ? `${DATA.totals.projects} 项目 · ${DATA.totals.files} 文件 · ${DATA.totals.sizeText} · 更新 ${dstr(DATA.scannedAt)}` : '正在扫描本机…';
+    return `<div class="lw-head">
+      <div class="lw-logo">🎯</div>
+      <div class="lw-h1">我的工作台<small>Local Command</small></div>
       <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
       <button class="lw-btn" id="lw-refresh">↻ 重新扫描</button></div>`;
   }
@@ -255,11 +293,13 @@
   }
 
   const span = (n) => `grid-column:span ${n}`;
+  const card = (code, title, extra, body, sp) =>
+    `<div class="lw-c" style="${span(sp || 12)}"><h3><span class="code">${code}</span>${title}<span class="sp"></span>${extra || ''}</h3>${body}</div>`;
 
   /* ── 今日 ── */
   function viewToday() {
     const d = new Date(), hour = d.getHours();
-    const greet = hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 19 ? '下午好' : '晚上好';
+    const greet = hour < 6 ? '深夜' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 19 ? '下午好' : '晚上好';
     const days = DATA.days || [];
     const today = days[days.length - 1] || { count: 0 };
     const yest = days[days.length - 2] || { count: 0 };
@@ -268,60 +308,51 @@
     const week = days.slice(-7).map((x) => x.count);
     const hot = (DATA.recent || []).slice(0, 8);
 
-    const kpi = [
-      { n: DATA.totals.projects, u: '个项目', l: '本机已纳管', c: `覆盖 ${(DATA.tracks || []).length} 个研究方向`, sp: null },
-      { n: DATA.totals.files, u: '个文件', l: '合计 ' + DATA.totals.sizeText, c: `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, sp: spark(week, 96, 26, T.accent) },
-      { n: today.count, u: '个改动', l: '今天', c: diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), sp: spark(week, 96, 26, T.ok) },
-      { n: (DATA.tracks || []).length, u: '个方向', l: '机器人 · 嵌入式 · 论文', c: (DATA.tracks || []).map((t) => t.icon).join(' '), sp: null },
-    ].map((k) => `<div class="lw-c" style="${span(3)}"><div class="lw-kpi">
-        <div class="num">${k.n}<small>${k.u}</small></div>
-        <div class="lbl">${k.l}</div>
+    const kpis = [
+      { ic: '▦', n: DATA.totals.projects, u: '个项目', l: '已纳管', c: `覆盖 ${(DATA.tracks || []).length} 个方向`, sp: null },
+      { ic: '▤', n: DATA.totals.files, u: '个文件', l: `合计 ${DATA.totals.sizeText}`, c: `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, sp: spark(week, 96, 26, T.accent) },
+      { ic: '✎', n: today.count, u: '个改动', l: '今天', c: diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), sp: spark(week, 96, 26, T.ok) },
+      { ic: '◈', n: (DATA.tracks || []).length, u: '个方向', l: '机器人 · 嵌入式 · 论文', c: '按最近改动排序', sp: null },
+    ].map((k, i) => card('K-0' + (i + 1), k.l, '', `<div class="lw-kpi"><div class="top">
+        <div class="ibox">${k.ic}</div><div style="flex:1;min-width:0">
+          <div class="num">${k.n}<small>${k.u}</small></div></div></div>
         <div class="cmp">${k.c}</div>
-        ${k.sp ? `<div style="margin-top:2px">${k.sp}</div>` : '<div style="height:26px"></div>'}
-      </div></div>`).join('');
+        ${k.sp ? `<div>${k.sp}</div>` : ''}</div>`, 3)).join('');
 
-    return `<div class="lw-g12">${kpi}
-      <div class="lw-c" style="${span(8)}">
-        <h3>${greet} · 最近在动的文件 <span class="sp"></span><em>点一行复制完整路径</em></h3>
-        <div class="lw-tbl">${hot.length ? hot.map((f, i) => `<div class="lw-tr" data-path="${esc(f.path)}">
-          <span class="sz" style="width:22px;color:${T.faint}">${i + 1}</span>
-          <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
-          <span class="bd">${esc(f.ext || '—')}</span>
-          <span class="sz">${fmtBytes(f.size)}</span>
-          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : emptyBox('还没有文件改动记录')}</div>
-      </div>
-      <div class="lw-c" style="${span(4)}">
-        <h3>近 14 天 <span class="sp"></span><em>共 ${days.reduce((a, x) => a + x.count, 0)} 个改动</em></h3>
-        <div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count} 个文件">
-          <span class="v">${x.count || ''}</span>
-          <span class="b" style="height:${Math.max(3, Math.round(x.count / maxDay * 96))}px"></span>
-          <span class="k">${x.label}</span></div>`).join('')}</div>
-      </div>
-      <div class="lw-c" style="${span(7)}">
-        <h3>各方向活跃度 <span class="sp"></span><em>按最近改动排序</em></h3>
-        <div class="lw-tbl">${(DATA.tracks || []).map((t) => `<div class="lw-tr" data-path="${esc((t.list[0] || {}).path || '')}">
-          <span style="font-size:15px">${t.icon}</span>
-          <span class="nm">${esc(t.name)} <i>${t.projects} 个项目</i></span>
-          <span class="bd" style="border-color:${t.color};color:${t.color}">${t.files} 文件</span>
-          <span class="sz">${t.sizeText}</span>
-          <span class="tm">${ago(t.newest)}</span></div>`).join('')}</div>
-      </div>
-      <div class="lw-c" style="${span(5)}">
-        <h3>文件构成 <span class="sp"></span><em>${DATA.totals.files} 个文件</em></h3>
-        ${Object.entries(DATA.byKind || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
-          const pct = Math.round(v / (DATA.totals.files || 1) * 100);
-          return `<div style="margin-bottom:11px">
-            <div style="display:flex;font-size:12px;color:${T.dim};margin-bottom:5px"><span style="flex:1">${KIND_NAME[k] || k}</span>
-            <span style="font-variant-numeric:tabular-nums">${v} · ${pct}%</span></div>
-            <div style="height:7px;border-radius:4px;background:#232b38;overflow:hidden">
-              <i style="display:block;height:100%;width:${pct}%;border-radius:4px;background:${KIND_COLOR[k] || T.faint}"></i></div></div>`;
-        }).join('')}
-      </div>
+    const hotBody = hot.length ? `<div class="lw-tbl">${hot.map((f, i) => `<div class="lw-tr" data-path="${esc(f.path)}">
+      <span class="ix">${String(i + 1).padStart(2, '0')}</span>
+      <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
+      <span class="bd">${esc(f.ext || '—')}</span><span class="sz">${fmtBytes(f.size)}</span>
+      <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>` : emptyBox('还没有文件改动记录');
+
+    const barBody = `<div class="lw-pad"><div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count}">
+      <span class="v">${x.count || ''}</span><span class="b" style="height:${Math.max(3, Math.round(x.count / maxDay * 92))}px"></span>
+      <span class="k">${x.label}</span></div>`).join('')}</div></div>`;
+
+    const trackBody = `<div class="lw-tbl">${(DATA.tracks || []).map((t) => `<div class="lw-tr" data-path="${esc((t.list[0] || {}).path || '')}">
+      <span class="ix" style="font-size:13px">${t.icon}</span>
+      <span class="nm">${esc(t.name)} <i>${t.projects} 个项目</i></span>
+      <span class="bd" style="border-color:${t.color};color:${t.color}">${t.files} 文件</span>
+      <span class="sz">${t.sizeText}</span><span class="tm">${ago(t.newest)}</span></div>`).join('')}</div>`;
+
+    const kindBody = `<div class="lw-pad">${Object.entries(DATA.byKind || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
+      const pct = Math.round(v / (DATA.totals.files || 1) * 100);
+      return `<div style="margin-bottom:12px"><div style="display:flex;font-size:10.5px;color:${T.dim};margin-bottom:5px">
+        <span style="flex:1;letter-spacing:1px;text-transform:uppercase">${KIND_NAME[k] || k}</span>
+        <span style="font-variant-numeric:tabular-nums">${v} · ${pct}%</span></div>
+        <div style="height:8px;background:#1c1c1a"><i style="display:block;height:100%;width:${pct}%;background:${KIND_COLOR[k] || T.faint}"></i></div></div>`;
+    }).join('')}</div>`;
+
+    return `<div class="lw-g12">${kpis}
+      ${card('N-01', `${greet} · 最近在动的文件`, '<em>点一行复制完整路径</em>', hotBody, 8)}
+      ${card('N-02', '近 14 天', `<em>共 ${days.reduce((a, x) => a + x.count, 0)} 个改动</em>`, barBody, 4)}
+      ${card('N-03', '各方向活跃度', '<em>按最近改动排序</em>', trackBody, 7)}
+      ${card('N-04', '文件构成', `<em>${DATA.totals.files} 个文件</em>`, kindBody, 5)}
     </div>`;
   }
 
   function emptyBox(msg) {
-    return `<div class="lw-empty"><div class="big">📭</div>${esc(msg)}</div>`;
+    return `<div class="lw-empty"><span class="big">▢</span>${esc(msg)}</div>`;
   }
 
   /* ── 研究方向 ── */
@@ -329,17 +360,14 @@
     const tracks = DATA.tracks || [];
     if (!tracks.length) return emptyBox('还没扫到项目');
     const max = Math.max(1, ...tracks.map((t) => t.files));
-    const cards = tracks.map((t) => `<div class="lw-c" style="${span(6)}">
-      <h3><span style="font-size:15px">${t.icon}</span>${esc(t.name)}<span class="sp"></span>
-        <em>${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}</em></h3>
-      <div style="height:6px;border-radius:4px;background:#232b38;overflow:hidden;margin-bottom:14px">
-        <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;border-radius:4px;background:${t.color}"></i></div>
-      <div class="lw-tbl">${t.list.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
+    return `<div class="lw-g12">` + tracks.map((t, i) => card('F-0' + (i + 1), `${t.icon} ${esc(t.name)}`,
+      `<em>${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}</em>`,
+      `<div class="lw-pad" style="padding-bottom:0"><div style="height:8px;background:#1c1c1a">
+        <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;background:${t.color}"></i></div></div>
+       <div class="lw-tbl">${t.list.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
         <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
         <span class="bd">${p.files} 文件</span><span class="sz">${p.sizeText}</span>
-        <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>
-    </div>`).join('');
-    return `<div class="lw-g12">${cards}</div>`;
+        <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>`, 6)).join('') + `</div>`;
   }
 
   /* ── 论文 ── */
@@ -347,30 +375,21 @@
     const ps = (DATA.projects || []).filter((p) => p.track === 'paper' || /paper|manuscript|论文|latex|投稿|开题|摘要/i.test(p.name));
     const docs = (DATA.recent || []).filter((f) => /\.(docx?|tex|pdf|pptx?|md)$/i.test(f.name)).slice(0, 12);
     const track = (DATA.tracks || []).find((t) => t.id === 'paper');
+    const kpi = (code, ic, n, u, l, c) => card(code, l, '', `<div class="lw-kpi"><div class="top">
+      <div class="ibox">${ic}</div><div style="flex:1;min-width:0"><div class="num">${n}<small>${u}</small></div></div></div>
+      <div class="cmp">${c}</div></div>`, 3);
     return `<div class="lw-g12">
-      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
-        <div class="num">${track ? track.projects : 0}<small>个项目</small></div>
-        <div class="lbl">论文 / 投稿</div>
-        <div class="cmp">${track ? track.files + ' 个文件 · ' + track.sizeText : '未归类到论文'}</div>
-        <div style="height:26px"></div></div></div>
-      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
-        <div class="num">${docs.length}<small>篇</small></div>
-        <div class="lbl">文稿 / 插图</div>
-        <div class="cmp">docx · tex · pdf · pptx</div>
-        <div style="height:26px"></div></div></div>
-      <div class="lw-c" style="${span(6)}">
-        <h3>论文项目 <span class="sp"></span><em>${ps.length} 个</em></h3>
-        <div class="lw-tbl">${ps.length ? ps.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
+      ${kpi('P-01', '▤', track ? track.projects : 0, '个项目', '论文 / 投稿', track ? track.files + ' 个文件 · ' + track.sizeText : '未归类到论文')}
+      ${kpi('P-02', '✎', docs.length, '篇', '文稿 / 插图', 'docx · tex · pdf · pptx')}
+      ${card('P-03', '论文项目', `<em>${ps.length} 个</em>`,
+        `<div class="lw-tbl">${ps.length ? ps.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
           <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
-          <span class="bd">${p.files} 文件</span><span class="tm">${ago(p.newest)}</span></div>`).join('') : emptyBox('还没归类到论文项目')}</div>
-      </div>
-      <div class="lw-c" style="${span(12)}">
-        <h3>文稿与插图 <span class="sp"></span><em>最近改动</em></h3>
-        <div class="lw-tbl">${docs.length ? docs.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+          <span class="bd">${p.files} 文件</span><span class="tm">${ago(p.newest)}</span></div>`).join('') : emptyBox('还没归类到论文项目')}</div>`, 6)}
+      ${card('P-04', '文稿与插图', '<em>最近改动</em>',
+        `<div class="lw-tbl">${docs.length ? docs.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
           <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
           <span class="bd">${esc(f.ext)}</span><span class="sz">${fmtBytes(f.size)}</span>
-          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : emptyBox('最近没有文稿改动')}</div>
-      </div>
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('') : emptyBox('最近没有文稿改动')}</div>`, 12)}
     </div>`;
   }
 
@@ -379,17 +398,13 @@
     const exts = Object.entries(DATA.byExt || {}).sort((a, b) => b[1] - a[1]).slice(0, 26);
     const recent = (DATA.recent || []).slice(0, 26);
     return `<div class="lw-g12">
-      <div class="lw-c" style="${span(12)}">
-        <h3>扩展名分布 <span class="sp"></span><em>共 ${DATA.totals.files} 个文件</em></h3>
-        <div class="lw-chips">${exts.map(([e, n]) => `<span class="lw-chip">${esc(e)}<b>${n}</b></span>`).join('')}</div>
-      </div>
-      <div class="lw-c" style="${span(12)}">
-        <h3>最近改动 <span class="sp"></span><em>点一行复制完整路径</em></h3>
-        <div class="lw-tbl">${recent.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+      ${card('C-01', '扩展名分布', `<em>共 ${DATA.totals.files} 个文件</em>`,
+        `<div class="lw-pad"><div class="lw-chips">${exts.map(([e, n]) => `<span class="lw-chip">${esc(e)}<b>${n}</b></span>`).join('')}</div></div>`, 12)}
+      ${card('C-02', '最近改动', '<em>点一行复制完整路径</em>',
+        `<div class="lw-tbl">${recent.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
           <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
           <span class="bd">${esc(f.ext || '—')}</span><span class="sz">${fmtBytes(f.size)}</span>
-          <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>
-      </div>
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>`, 12)}
     </div>`;
   }
 
@@ -399,33 +414,25 @@
     const max = Math.max(1, ...days.map((x) => x.count));
     const total = days.reduce((a, x) => a + x.count, 0);
     const active = days.filter((x) => x.count).length;
+    const kpi = (code, ic, n, u, l, c) => card(code, l, '', `<div class="lw-kpi"><div class="top">
+      <div class="ibox">${ic}</div><div style="flex:1;min-width:0"><div class="num">${n}<small>${u}</small></div></div></div>
+      <div class="cmp">${c}</div></div>`, 3);
     return `<div class="lw-g12">
-      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
-        <div class="num">${total}<small>个改动</small></div><div class="lbl">近 14 天</div>
-        <div class="cmp">日均 ${(total / 14).toFixed(1)} 个</div><div style="height:26px"></div></div></div>
-      <div class="lw-c" style="${span(3)}"><div class="lw-kpi">
-        <div class="num">${active}<small>天</small></div><div class="lbl">有改动</div>
-        <div class="cmp">共 14 天</div><div style="height:26px"></div></div></div>
-      <div class="lw-c" style="${span(6)}">
-        <h3>改动趋势 <span class="sp"></span><em>近 14 天</em></h3>
-        <div style="padding-top:6px">${spark(days.map((x) => x.count), 420, 96, T.accent)}</div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:${T.faint};margin-top:6px">
-          <span>${(days[0] || {}).label || ''}</span><span>${(days[days.length - 1] || {}).label || ''}</span></div>
-      </div>
-      <div class="lw-c" style="${span(12)}">
-        <h3>每日改动量 <span class="sp"></span><em>峰值 ${max}</em></h3>
-        <div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count}">
-          <span class="v">${x.count || ''}</span>
-          <span class="b" style="height:${Math.max(3, Math.round(x.count / max * 96))}px"></span>
-          <span class="k">${x.label}</span></div>`).join('')}</div>
-      </div>
-      <div class="lw-c" style="${span(12)}">
-        <h3>各方向最近活跃 <span class="sp"></span><em>点一行复制项目路径</em></h3>
-        <div class="lw-tbl">${(DATA.tracks || []).map((t) => `<div class="lw-tr" data-path="${esc((t.list[0] || {}).path || '')}">
-          <span style="font-size:15px">${t.icon}</span><span class="nm">${esc(t.name)} <i>${t.projects} 个项目</i></span>
+      ${kpi('X-01', 'Σ', total, '个改动', '近 14 天', '日均 ' + (total / 14).toFixed(1) + ' 个')}
+      ${kpi('X-02', '◔', active, '天', '有改动', '共 14 天')}
+      ${card('X-03', '改动趋势', '<em>近 14 天</em>',
+        `<div class="lw-pad"><div style="padding:6px 0">${spark(days.map((x) => x.count), 420, 92, T.accent)}</div>
+         <div style="display:flex;justify-content:space-between;font-size:9.5px;color:${T.faint};margin-top:6px">
+          <span>${(days[0] || {}).label || ''}</span><span>${(days[days.length - 1] || {}).label || ''}</span></div></div>`, 6)}
+      ${card('X-04', '每日改动量', `<em>峰值 ${max}</em>`,
+        `<div class="lw-pad"><div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count}">
+          <span class="v">${x.count || ''}</span><span class="b" style="height:${Math.max(3, Math.round(x.count / max * 92))}px"></span>
+          <span class="k">${x.label}</span></div>`).join('')}</div></div>`, 12)}
+      ${card('X-05', '各方向最近活跃', '<em>点一行复制项目路径</em>',
+        `<div class="lw-tbl">${(DATA.tracks || []).map((t) => `<div class="lw-tr" data-path="${esc((t.list[0] || {}).path || '')}">
+          <span class="ix" style="font-size:13px">${t.icon}</span><span class="nm">${esc(t.name)} <i>${t.projects} 个项目</i></span>
           <span class="bd" style="border-color:${t.color};color:${t.color}">${t.files} 文件</span>
-          <span class="sz">${t.sizeText}</span><span class="tm">${ago(t.newest)}</span></div>`).join('')}</div>
-      </div>
+          <span class="sz">${t.sizeText}</span><span class="tm">${ago(t.newest)}</span></div>`).join('')}</div>`, 12)}
     </div>`;
   }
 })();
