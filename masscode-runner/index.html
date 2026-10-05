@@ -13672,7 +13672,7 @@ function defineCBlocks() {
         { type: 'field_dropdown', name: 'NAME', options: function () { return bpFunctionOptions(); } },
         { type: 'input_value', name: 'ARG' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.func,
-      tooltip: '调用函数。第一个下拉是**当前文档里的函数**（选「其他…」可手填）；括号里填实参，多个用逗号分隔。悬停可看它的签名' },
+      tooltip: '调用函数。第一个下拉是当前文档里的函数（选「其他…」可手填）；括号里填实参，多个用逗号分隔。悬停可看它的签名' },
     { type: 'c_call_any', message0: '调用 %1 ( %2 )', args0: [
         { type: 'field_input', name: 'NAME', text: 'printf' }, { type: 'input_value', name: 'ARG' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.func, tooltip: '调用任意函数。名字手填（如 printf / memcpy）；括号里填实参' },
@@ -13733,7 +13733,7 @@ function defineCBlocks() {
           ['condition_variable', 'condition_variable'], ['atomic', 'atomic'], ['future', 'future'],
           ['chrono', 'chrono'], ['utility', 'utility'], ['tuple', 'tuple'], ['optional', 'optional'],
           ['filesystem', 'filesystem'], ['sstream', 'sstream'], ['cstdint', 'cstdint'], ['cmath', 'cmath']] }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '包含头文件：从下拉选标准库头文件，例：<vector>、<thread>、<mutex>' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '包含头文件：从下拉选标准库头文件，例：、、' },
     { type: 'cpp_container', message0: '容器 %1 %2', args0: [
         { type: 'field_dropdown', name: 'TYPE', options: [
           ['vector<int>', 'vector<int>'], ['vector<double>', 'vector<double>'],
@@ -13743,7 +13743,7 @@ function defineCBlocks() {
           ['unordered_set<int>', 'unordered_set<int>'], ['queue<int>', 'queue<int>'],
           ['stack<int>', 'stack<int>'], ['deque<int>', 'deque<int>'], ['pair<int,int>', 'pair<int,int>']] },
         { type: 'field_input', name: 'NAME', text: 'v' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '声明容器：先选容器类型（如 vector<int>）再填变量名，例：v、m、cache' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.cpp, tooltip: '声明容器：先选容器类型（如 vector）再填变量名，例：v、m、cache' },
     { type: 'cpp_method', message0: '%1 . %2 ( %3 )', args0: [
         { type: 'input_value', name: 'OBJ' },
         { type: 'field_dropdown', name: 'METHOD', options: [
@@ -13799,12 +13799,12 @@ function defineCBlocks() {
           ['std::scoped_lock', 'std::scoped_lock'], ['std::shared_lock', 'std::shared_lock']] },
         { type: 'input_value', name: 'MTX' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.thread,
-      tooltip: '自动加锁：选锁类型，接互斥量。作用域结束自动解锁 —— **别手动 lock/unlock**' },
+      tooltip: '自动加锁：选锁类型，接互斥量。作用域结束自动解锁 —— 别手动 lock/unlock' },
     { type: 'cpp_atomic', message0: '原子量 %1 <%2> %3', args0: [
         { type: 'field_dropdown', name: 'KIND', options: [
           ['std::atomic', 'std::atomic'], ['std::atomic_flag', 'std::atomic_flag']] },
         { type: 'field_input', name: 'TYPE', text: 'int' }, { type: 'field_input', name: 'NAME', text: 'n' }],
-      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '原子变量：选 atomic，填类型和名字，例：atomic<int> counter' },
+      previousStatement: null, nextStatement: null, colour: BP_COLOR.thread, tooltip: '原子变量：选 atomic，填类型和名字，例：atomic counter' },
     { type: 'cpp_sleep', message0: '等待 %1 %2', args0: [
         { type: 'field_number', name: 'N', value: 100 },
         { type: 'field_dropdown', name: 'UNIT', options: [
@@ -13823,7 +13823,7 @@ function defineCBlocks() {
         { type: 'field_input', name: 'TYPE', text: 'MyClass' },
         { type: 'field_input', name: 'NAME', text: 'p' }, { type: 'input_value', name: 'ARGS' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.smart,
-      tooltip: '智能指针：make_shared/make_unique 会自动生成 auto p = ...<T>(args)；shared_ptr/unique_ptr 生成声明' },
+      tooltip: '智能指针：make_shared/make_unique 会自动生成 auto p = ...(args)；shared_ptr/unique_ptr 生成声明' },
     /* IO / 字符串 */
     { type: 'cpp_out', message0: '输出 %1', args0: [{ type: 'input_value', name: 'VALUE' }],
       previousStatement: null, nextStatement: null, colour: BP_COLOR.io,
@@ -13842,22 +13842,21 @@ function defineCBlocks() {
      实测踩过：只在建块时 setTooltip(固定字符串) → 从工具箱拖出来的积木
      悬停只看到通用文案，用户找不到签名（问「怎么悬停查看」）。 */
   const bpCallTooltip = function (blkArg) {
-    /* ⚠️ Blockly 调 tooltip 函数时把积木作为**参数**传进来，`this` 不一定绑到积木 ——
-       两种都兼容。实测：只认 `this` 的话 getFieldValue 会抛错被吞掉，
-       结果永远是通用文案，签名查不出来。 */
+    /* ⚠️ tooltip 只返回**纯文本**，不要 HTML ——
+       实测这版 Blockly 的 tooltip 会把标签当文本原样显示出来
+       （用户看到 `<b>...&lt;br&gt;...` 一堆标签，说"太乱了"）。
+       也不要 markdown 的 `**`，同样会原样显示。 */
     const blk = blkArg || this;
     let nm = '';
     try { nm = String(blk && blk.getFieldValue ? blk.getFieldValue('NAME') : '' || ''); } catch (_) {}
     if (nm === '__other__') nm = '';
     const sig = nm ? bpSignatureOf(nm) : '';
     if (sig) {
-      return '<b>' + escapeHtml(sig) + '</b>'
-        + '<br><span style="opacity:.75">' + escapeHtml(nm) + ' 的定义（来自当前文档）</span>'
-        + '<br>括号里的槽填实参，多个用逗号分隔';
+      const short = sig.length > 90 ? sig.slice(0, 88) + '…' : sig;
+      return short + '   —  ' + nm + ' 的定义（来自当前文档）';
     }
-    return '调用函数。下拉里是**当前文档里的函数**（选「其他…」可手填）；'
-      + '括号里填实参，多个用逗号分隔。'
-      + (nm ? '<br><span style="opacity:.75">文档里没找到 ' + escapeHtml(nm) + ' 的定义</span>' : '');
+    if (nm) return '调用 ' + nm + '（文档里没找到它的定义）。括号里填实参，多个用逗号分隔';
+    return '调用函数：下拉是当前文档里的函数（选「其他…」可手填），括号里填实参';
   };
   ['c_call', 'c_call_any'].forEach((t) => {
     if (!B.Blocks[t]) return;
