@@ -596,18 +596,34 @@ print(r.run())
         IMAP 协议层和 MIME 解码由 tests/mime.js + 真实账号手工验证覆盖 ✓。
      ⚠️ 必须在**面板第一次渲染之前**注册 ✓ —— 顶栏胶囊在面板打开时就要拉账号，
         注册晚了会先显示「未配置」再跳变（断言会不稳）✗。 */
+  /* 桩数据：18 封邮件（前 3 封未读、第 1 封标了重要）✓
+     —— 18 > 首屏的 15，正好用来验「分批加载」✓ */
+  const MAIL_TOTAL = 18;
+  const MAIL_UNREAD = 3;
+  const mailStubRows = Array.from({ length: MAIL_TOTAL }, (_, i) => {
+    const uid = MAIL_TOTAL - i;                       /* 18,17,16…1（新的在前）*/
+    return {
+      uid,
+      subject: uid === MAIL_TOTAL ? '桩主题未读' : ('桩主题 ' + uid),
+      fromName: uid === MAIL_TOTAL ? '张三' : ('发件人' + uid),
+      fromAddress: (uid === MAIL_TOTAL ? 'z' : ('a' + uid)) + '@qq.com',
+      date: Date.now() - i * 3600000,
+      size: 1000 + i,
+      seen: i >= MAIL_UNREAD,
+      flagged: i === 0,
+    };
+  });
   const MAIL_STUB = {
     accounts: { qq: { host: 'smtp.qq.com', port: '465', user: 'tester@qq.com', hasPass: true, imapHost: 'imap.qq.com', imapPort: '993' } },
-    status: { ok: true, total: 7, accounts: [{ key: 'qq', user: 'tester@qq.com', ok: true, unseen: 7, messages: 42, latest: { uid: 2, subject: '桩主题未读', from: '张三 <z@qq.com>', date: Date.now() } }] },
-    boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: '垃圾邮件', selectable: true }], inbox: { messages: 42, unseen: 7 } },
-    list: { ok: true, box: 'INBOX', total: 42, unseen: 7, mails: [
-      { uid: 2, subject: '桩主题未读', fromName: '张三', fromAddress: 'z@qq.com', date: Date.now(), size: 1234, seen: false },
-      { uid: 1, subject: '桩主题已读', fromName: '李四', fromAddress: 'l@qq.com', date: Date.now() - 86400000, size: 999, seen: true },
-    ] },
-    read: { ok: true, uid: 2, box: 'INBOX', seen: true, subject: '桩主题未读', from: '张三 <z@qq.com>',
-      to: 'tester@qq.com', cc: '', date: Date.now(), size: 2048, text: '桩纯文本正文',
+    status: { ok: true, total: MAIL_UNREAD, accounts: [{ key: 'qq', user: 'tester@qq.com', ok: true, unseen: MAIL_UNREAD, messages: MAIL_TOTAL, latest: { uid: MAIL_TOTAL, subject: '桩主题未读', from: '张三 <z@qq.com>', date: Date.now() } }] },
+    /* 故意全用**英文系统名** ✓ —— 用来验前端的中文化映射 ✓ */
+    boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: 'Drafts', selectable: true }, { name: 'Deleted Messages', selectable: true }, { name: 'Junk', selectable: true }, { name: '未识别的文件夹', selectable: true }], inbox: { messages: MAIL_TOTAL, unseen: MAIL_UNREAD } },
+    read: { ok: true, uid: MAIL_TOTAL, box: 'INBOX', seen: true, flagged: false, subject: '桩主题未读', from: '张三 <z@qq.com>',
+      to: 'tester@qq.com', cc: '', date: Date.now(), size: 2048,
+      text: '桩第一段正文。这里是第一段，写够四十个非空白字符才会走纯文本这条路，否则会退回去剥 HTML。\n\n桩第二段正文。这里是第二段，同样要够长。',
       html: '<p>桩 HTML 正文 <b>加粗</b></p><script>window.__mailPwned = 1;<\/script><img src="https://tracker.invalid/px.gif">',
       attachments: [{ n: 0, index: 2, name: '报告.pdf', type: 'application/pdf', size: 1234 }], inline: [] },
+    flagCalls: [],
   };
   await page.route('**/api/life/mail**', async (route) => {
     const req = route.request();
@@ -639,10 +655,33 @@ print(r.run())
     }
     if (p === '/api/life/mail/status') return json(MAIL_STUB.status);
     if (p === '/api/life/mail/boxes') return json(MAIL_STUB.boxes);
-    if (p === '/api/life/mail/list') return json(MAIL_STUB.list);
-    if (p === '/api/life/mail/read') return json(MAIL_STUB.read);
-    if (p === '/api/life/mail/flag') return json({ ok: true });
+    if (p === '/api/life/mail/list') {
+      /* ★ 按 limit 截断 ✓（和真实服务端一致）—— 这样才能验「加载更多」真的多拿了 ✓ */
+      const q = new URL(req.url()).searchParams;
+      const limit = Math.min(120, Math.max(5, Number(q.get('limit')) || 15));
+      const onlyUnread = q.get('unread') === '1';
+      const onlyFlagged = q.get('flagged') === '1';
+      let rows = mailStubRows;
+      if (onlyUnread) rows = rows.filter((m) => !m.seen);
+      if (onlyFlagged) rows = rows.filter((m) => m.flagged);
+      return json({ ok: true, box: 'INBOX', total: MAIL_TOTAL, unseen: MAIL_UNREAD, mails: rows.slice(0, limit) });
+    }
+    if (p === '/api/life/mail/read') return json(Object.assign({}, MAIL_STUB.read, { uid: Number(new URL(req.url()).searchParams.get('uid')) || MAIL_STUB.read.uid }));
+    if (p === '/api/life/mail/flag') {
+      try { MAIL_STUB.flagCalls.push(JSON.parse(req.postData() || '{}')); } catch (_) {}
+      return json({ ok: true });
+    }
     return json({ ok: false, error: '测试里没打桩的邮件接口：' + p });
+  });
+  /* 对照翻译的打桩 ✓ —— 真实实现要连用户自己的模型 ✗（测试里不能依赖它）。
+     按输入里的 `[n]` 编号回同样条数的译文 ✓，用来验「编号对齐 + 左右对照渲染」✓。 */
+  await page.route('**/api/ai/chat', (route) => {
+    let body = {};
+    try { body = JSON.parse(route.request().postData() || '{}'); } catch (_) {}
+    const user = (body.messages || []).filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+    const n = (user.match(/^\[\d+\]/gm) || []).length;
+    const content = Array.from({ length: n }, (_, i) => '[' + (i + 1) + ']桩译文第' + (i + 1) + '段').join('\n');
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, content }) });
   });
   /* ---- 个人管理面板 · 备忘录：逐行实时渲染 + 撤销 + 图片导出 ----
      测试跑在临时 CODESCOPE_DATA_HOME 上，不碰真实数据 ✓
@@ -1045,9 +1084,52 @@ print(r.run())
   if (await page.locator('.lw-ml-list').count() !== 1) throw new Error('邮箱页不是三栏布局（缺邮件列表）');
   if (await page.locator('.lw-ml-read').count() !== 1) throw new Error('邮箱页不是三栏布局（缺阅读区）');
   await page.locator('.lw-ml-item').first().waitFor({ state: 'visible', timeout: 15000 });
-  if (await page.locator('.lw-ml-item').count() !== 2) throw new Error('邮件列表条数不对（应为桩里的 2 封）');
-  if (await page.locator('.lw-ml-item.unread').count() !== 1) throw new Error('未读标记不对（应只有 1 封未读）');
+  /* ★ 首屏**只取 15 封** ✓ —— 一次取 40 封头部在 QQ 上要 0.4~2.1 秒 ✗
+     （瓶颈是服务端**每封**的处理成本），分批取才不卡 ✓ */
+  if (await page.locator('.lw-ml-item').count() !== 15) {
+    throw new Error('首屏邮件条数不对（桩有 18 封，首屏应取 15 封，实际 ' + await page.locator('.lw-ml-item').count() + '）');
+  }
+  if (await page.locator('.lw-ml-item.unread').count() !== 3) throw new Error('未读标记不对（应有 3 封未读）');
+  /* ★ 文件夹名要**中文化** ✓（桩里全是英文系统名）*/
+  const boxLabels = await page.locator('.lw-ml-box').evaluateAll((els) => els.map((e) => ({ label: e.innerText.replace(/\n/g, ' ').trim(), title: e.getAttribute('title') || '' })));
+  const hasBox = (cn) => boxLabels.some((b) => b.label.startsWith(cn));
+  if (!hasBox('收件箱')) throw new Error('文件夹名没中文化：没有「收件箱」');
+  if (!hasBox('已发送')) throw new Error('Sent Messages 没映射成「已发送」：' + boxLabels.map((b) => b.label).join(' / '));
+  if (!hasBox('草稿箱')) throw new Error('Drafts 没映射成「草稿箱」');
+  if (!hasBox('已删除')) throw new Error('Deleted Messages 没映射成「已删除」');
+  if (!hasBox('垃圾邮件')) throw new Error('Junk 没映射成「垃圾邮件」');
+  if (!boxLabels.some((b) => b.label.startsWith('未识别的文件夹'))) throw new Error('认不出的文件夹名不该被改写（应原样显示）');
+  const sentBox = boxLabels.find((b) => b.label.startsWith('已发送'));
+  if (!/Sent Messages/.test(sentBox.title)) throw new Error('中文名上应保留原文（title）：' + sentBox.title);
+  /* ★ 「加载更多」—— 18 封，首屏 15，点一次应到 18 ✓ */
+  if (await page.locator('#lw-ml-more').count() !== 1) throw new Error('没有「加载更多」');
+  await page.locator('#lw-ml-more').click();
+  await page.waitForFunction(() => document.querySelectorAll('.lw-ml-item').length > 15, null, { timeout: 15000 });
+  if (await page.locator('.lw-ml-item').count() !== 18) {
+    throw new Error('「加载更多」没有多取邮件（应到 18，实际 ' + await page.locator('.lw-ml-item').count() + '）');
+  }
+  /* ★ ⭐ 重要筛选（\Flagged）*/
+  if (await page.locator('#lw-ml-star').count() !== 1) throw new Error('工具栏没有 ⭐ 重要筛选');
+  await page.locator('#lw-ml-star').click();
+  await page.waitForTimeout(800);
+  const starItems = await page.locator('.lw-ml-item').count();
+  const starMarks = await page.locator('.lw-ml-item .star').count();
+  if (starItems !== 1 || starMarks !== 1) throw new Error('⭐ 筛选结果不对（应只有 1 封重要、且带星标，实际 ' + starItems + '/' + starMarks + '）');
+  await page.locator('#lw-ml-star').click();
+  await page.waitForTimeout(800);
+  if (await page.locator('.lw-ml-item').count() !== 18) throw new Error('取消 ⭐ 筛选后没恢复全部列表');
   /* 打开一封 → 阅读器 */
+  /* ★ 打开邮件前先记下顶栏未读数 —— 打开后应当**立刻减 1** ✓
+     （以前是打开后去 force 刷新 status ✗：那会对每个账号各开一条 IMAP 连接，
+      本机到 gmail 还要等 15 秒超时 ✗，只为把数字减 1，完全不值 ✗；
+      现在是本地改 + 重画胶囊 ✓，服务端缓存到期后会自然校正 ✓）*/
+  const badgeNum = async () => {
+    const t = await page.locator('#lw-mb').innerText();
+    const m = /(\d+)/.exec(t);
+    return m ? Number(m[1]) : -1;
+  };
+  const unreadBefore = await badgeNum();
+  if (unreadBefore !== 3) throw new Error('顶栏未读数应为桩里的 3，实际 ' + unreadBefore);
   await page.locator('.lw-ml-item').first().click();
   await page.locator('.lw-ml-rhd .subj').waitFor({ state: 'visible', timeout: 15000 });
   if (!(await page.locator('.lw-ml-rhd .subj').innerText()).includes('桩主题未读')) throw new Error('阅读区主题不对');
@@ -1068,6 +1150,29 @@ print(r.run())
   /* 桩里的 script 若真跑了会留下全局标记 ✓（双保险） */
   if (await page.evaluate(() => window.__mailPwned === 1)) throw new Error('邮件里的脚本真的执行了');
   if (await page.locator('[data-mimg]').count() !== 1) throw new Error('没有「显示图片」按钮');
+  /* ★ 对照翻译 ✓ —— 原文 / 译文左右并排，段落按编号一一对应 ✓
+     ⚠️ 翻译读的是 localStorage['mc-ai-cfg']（=「本机管家 → AI」那份配置）✗，
+        测试浏览器里是空的 → 只会提示「还没配置 AI」✗，看起来像「翻译没实现」✗。
+        所以要先注入一份假配置 ✓（url 指向死地址没关系，/api/ai/chat 已经打桩了 ✓）。 */
+  await page.evaluate(() => {
+    try { localStorage.setItem('mc-ai-cfg', JSON.stringify({ url: 'http://127.0.0.1:9/dead', key: 'k', model: 'm' })); } catch (_) {}
+  });
+  if (await page.locator('#lw-ml-tr').count() !== 1) throw new Error('阅读区没有「对照翻译」按钮');
+  await page.locator('#lw-ml-tr').click();
+  await page.locator('.lw-ml-tr .row').first().waitFor({ state: 'visible', timeout: 20000 });
+  await page.waitForTimeout(500);
+  const trRows = await page.locator('.lw-ml-tr .row').count();
+  if (trRows < 2) throw new Error('对照翻译没有按段落切开（桩正文有 2 段，实际 ' + trRows + ' 段）');
+  const trFirst = await page.locator('.lw-ml-tr .row').first().evaluate((e) => ({
+    src: e.querySelector('.src').innerText, dst: e.querySelector('.dst').innerText,
+  }));
+  if (!/桩第一段正文/.test(trFirst.src)) throw new Error('对照视图左列不是原文：' + trFirst.src);
+  if (!/桩译文第1段/.test(trFirst.dst)) throw new Error('对照视图右列不是译文：' + trFirst.dst);
+  if (await page.locator('.lw-ml-tr .dst .pending').count() !== 0) throw new Error('还有段落没译完（占位省略号还在）');
+  /* 再点一次收起 → 回到原文 ✓（缓存，不重新请求 ✓）*/
+  await page.locator('#lw-ml-tr').click();
+  await page.waitForTimeout(400);
+  if (await page.locator('.lw-ml-tr').count() !== 0) throw new Error('再点「对照中」没有收起回原文');
   /* 未读筛选 */
   await page.locator('#lw-ml-unread').click();
   await page.waitForTimeout(400);
@@ -1082,8 +1187,10 @@ print(r.run())
   if (await page.locator('.lw-ml-list').count() !== 1) throw new Error('关掉配置后没回到收件箱');
   /* 顶栏胶囊（面板打开时就在） */
   if (await page.locator('#lw-mb').count() !== 1) throw new Error('顶栏没有邮箱状态胶囊');
-  const badgeText = await page.locator('#lw-mb').innerText();
-  if (!/7/.test(badgeText)) throw new Error('顶栏胶囊没显示未读数（实际：' + badgeText.replace(/\n/g, ' ') + '）');
+  const unreadAfter = await badgeNum();
+  if (unreadAfter !== unreadBefore - 1) {
+    throw new Error('打开一封未读邮件后顶栏未读数应减 1（' + unreadBefore + ' → ' + unreadAfter + '）');
+  }
   /* 回到备忘录页，后面的收尾流程还要用 */
   await page.locator('[data-tab="memo"]').click();
   await page.waitForTimeout(1500);

@@ -46,6 +46,12 @@ const MAIL_STATUS_CACHE = new Map();
 const MAIL_LIST_CACHE = new Map();
 const MAIL_STATUS_TTL = 60e3;
 const MAIL_LIST_TTL = 20e3;
+/* ★ 失败账号的**负缓存** ✓ —— 本机到 imap.gmail.com 是不通的（TCP 超时），
+   而顶栏每次刷新未读数都会去连它 ✗ → 整个 /status 被拖到 5~15 秒 ✗。
+   连不上就记下来，5 分钟内不再重试（直接返回上次的错误）✓，
+   这样「一个坏账号」不会把「其他好账号」的未读数一起拖慢 ✓。 */
+const MAIL_FAIL_CACHE = new Map();
+const MAIL_FAIL_TTL = 5 * 60e3;
 const { createSystemPanel } = require('./lib/system-panel');
 const { buildCodeGraph, buildDocumentGraph, buildSnippetIndex, resolveDefinition } = require('./lib/code-graph');
 const { buildLogicGraph, logicToDrawio, logicToSkeleton } = require('./lib/logic-graph');
@@ -4796,6 +4802,13 @@ const server = http.createServer(async (req, res) => {
           });
           const results = await Promise.all(keys.map(async (k) => {
             const account = accountOf(k);
+            /* ★ 负缓存：最近失败过的账号直接返回上次的错误 ✓ ——
+               不再每次刷新都去撞一次（本机连 gmail 要等 TCP 超时 5~15 秒 ✗），
+               否则一个坏账号会把整个 /status 拖垮 ✗。force=1 时仍然真去试一次 ✓。 */
+            const failed = MAIL_FAIL_CACHE.get(k);
+            if (!force && failed && Date.now() - failed.at < MAIL_FAIL_TTL) {
+              return { key: k, user: account.user, ok: false, unseen: 0, messages: 0, latest: null, error: failed.error, cached: true };
+            }
             const r = await MAIL_IMAP.withSession(account, async (s) => {
               const st = await s.status('INBOX');
               let latest = null;
@@ -4816,7 +4829,9 @@ const server = http.createServer(async (req, res) => {
                 }
               }
               return { unseen: st.unseen, messages: st.messages, latest };
-            }, { timeout: 15000 });
+            }, { timeout: 10000 });
+            if (r.ok) MAIL_FAIL_CACHE.delete(k);
+            else MAIL_FAIL_CACHE.set(k, { at: Date.now(), error: r.error || '连接失败' });
             return {
               key: k, user: account.user,
               ok: !!r.ok,
@@ -4856,16 +4871,20 @@ const server = http.createServer(async (req, res) => {
         if (u.pathname === '/api/life/mail/list') {
           const limit = Math.min(80, Math.max(5, Number(u.searchParams.get('limit')) || 30));
           const onlyUnread = u.searchParams.get('unread') === '1';
-          const cacheKey = ['list', key, box, limit, onlyUnread ? 1 : 0].join(':');
+          const onlyFlagged = u.searchParams.get('flagged') === '1';
+          const cacheKey = ['list', key, box, limit, onlyUnread ? 1 : 0, onlyFlagged ? 1 : 0].join(':');
           const cached = cacheGet(MAIL_LIST_CACHE, cacheKey, MAIL_LIST_TTL);
           if (cached) return send(res, 200, cached);
           const r = await MAIL_IMAP.withSession(account, async (s) => {
             await s.select(box);
-            const uids = await s.search(onlyUnread ? 'UNSEEN' : 'ALL');
+            const uids = await s.search(onlyUnread ? 'UNSEEN' : (onlyFlagged ? 'FLAGGED' : 'ALL'));
             const st = await s.status(box);
             /* 取最新的 limit 封 → 倒序（新的在前）✓ */
             const pick = uids.slice(-limit).reverse();
-            const heads = await s.fetchHeaders(pick, ['FROM', 'TO', 'SUBJECT', 'DATE', 'MESSAGE-ID']);
+            /* ⚠️ 只取列表**真正要显示**的字段 ✗（TO / MESSAGE-ID 列表里用不到 ✓）；
+               不过实测瓶颈是服务端**每封**的处理成本（INBOX ~10ms/封、Sent ~53ms/封 ✗），
+               所以真正的解法是前端分批取（见 MAIL_UI.limit）✓。 */
+            const heads = await s.fetchHeaders(pick, ['FROM', 'SUBJECT', 'DATE']);
             const byUid = new Map(heads.map((h) => [h.uid, h]));
             const mails = pick.map((uid) => {
               const h = byUid.get(uid);
@@ -4879,6 +4898,7 @@ const server = http.createServer(async (req, res) => {
                 date: MAIL_MIME.parseMessage(h ? h.headerRaw : Buffer.alloc(0)).date || 0,
                 size: h ? h.size : 0,
                 seen: !!(h && h.flags.includes('\\Seen')),
+                flagged: !!(h && h.flags.includes('\\Flagged')),
               };
             });
             return { box, total: st.messages, unseen: st.unseen, mails };
@@ -4919,6 +4939,7 @@ const server = http.createServer(async (req, res) => {
             }
             return {
               uid, box, seen,
+              flagged: full.flags.includes('\\Flagged'),
               subject: msg.subject, from: msg.from, to: msg.to, cc: msg.cc,
               date: msg.date, text: msg.text, html: msg.html,
               attachments: msg.attachments, inline, size: full.raw.length,
@@ -4966,12 +4987,19 @@ const server = http.createServer(async (req, res) => {
         if (u.pathname === '/api/life/mail/flag') {
           const uid = Number(postBody && postBody.uid);
           const action = String((postBody && postBody.action) || '').trim();
-          if (!uid) return send(res, 200, { ok: false, error: '缺少 uid' });
+          /* `readall` 是整箱操作，不需要 uid ✓ */
+          if (!uid && action !== 'readall') return send(res, 200, { ok: false, error: '缺少 uid' });
           const r = await MAIL_IMAP.withSession(account, async (s) => {
             await s.select(box);
+            /* ⚠️ `UID STORE 1:*` 是「全部」的意思 ✓（不是 UID=1）——
+               用来做「整个文件夹标为已读」✓。 */
+            if (action === 'readall') { await s.store('1:*', 'add', ['\\Seen']); return { action, all: true }; }
             if (action === 'delete') await s.remove(uid);
             else if (action === 'read') await s.store(uid, 'add', ['\\Seen']);
             else if (action === 'unread') await s.store(uid, 'remove', ['\\Seen']);
+            /* ⭐ 重要 = IMAP 的 \Flagged ✓（所有客户端通用，Outlook/Apple Mail 都能看见 ✓）*/
+            else if (action === 'flag') await s.store(uid, 'add', ['\\Flagged']);
+            else if (action === 'unflag') await s.store(uid, 'remove', ['\\Flagged']);
             else throw new Error('不认识的操作：' + action);
             return { uid, action };
           }, { timeout: 25000 });

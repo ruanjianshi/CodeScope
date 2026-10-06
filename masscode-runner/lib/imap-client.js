@@ -431,26 +431,114 @@ class ImapSession {
   close() {
     try { this.sock.destroy(); } catch (_) { }
   }
-}
 
-/* ── 一把梭：连上 → 登录 → 干活 → 退出 ─────────────────────────────────
-   `fn(session)` 里做具体的事 ✓；异常统一转成 `{ ok:false, error }` ✓ */
-async function withSession(account, fn, options) {
-  const timeout = (options && options.timeout) || DEFAULT_TIMEOUT;
-  let session = null;
-  const steps = [];
-  try {
-    session = await ImapSession.connect(account, { timeout });
-    steps.push(...session.steps);
-    await session.fetchCapability();
-    steps.push(...(await session.login(account.user, account.pass)));
-    const result = await fn(session, steps);
-    await session.logout();
-    return Object.assign({ ok: true, steps }, result || {});
-  } catch (error) {
-    if (session) session.close();
-    return { ok: false, steps: steps.concat(session ? session.steps.slice(steps.length) : []), error: error.message, step: error.step || '', response: error.response || '' };
+  /* 会话还活着吗？✓ —— 连接池要靠它决定「复用还是重连」
+     （reader 在 socket 收到 end/close/error 时会置 closed ✓）*/
+  get alive() {
+    try { return !this.reader.closed && !this.sock.destroyed; } catch (_) { return false; }
   }
 }
 
-module.exports = { ImapSession, ImapError, withSession, decodeModifiedUtf7, encodeModifiedUtf7, DEFAULT_TIMEOUT };
+/* ══ 连接池 ══════════════════════════════════════════════════════════════
+   ★★ 为什么要池子：每条请求都 `TLS 握手 + LOGIN` 要 **1~3 秒** ✗，
+      而切个文件夹、点封邮件都要发请求 —— 用户感觉到的「点击很卡」就是它 ✓。
+      复用一条会话后，同样的操作只要 **100~300ms** ✓（少两次往返 + 省掉握手）。
+   ★ 两条硬约束：
+     ① **同一账号不能并发共用一条会话** ✗ —— IMAP 是单命令流，
+        两条命令交叉发出去，响应会互相错位（而且**不报错**，数据会串）✗✗。
+        所以每个账号配一个**串行队列** ✓，请求排队、独占会话。
+     ② 池子里的会话可能被服务器单方面关掉（QQ 有空闲超时）✗ ——
+        所以①复用失败时**丢弃 + 重连 + 重试一次** ✓，②空闲一段时间主动登出回收 ✓。 */
+const POOL = new Map();            /* poolKey -> { session, idleTimer } */
+const QUEUE = new Map();           /* poolKey -> Promise（串行队列的队尾）*/
+const POOL_IDLE_MS = 45000;
+const POOL_MAX = 6;
+
+function poolKeyOf(account) {
+  return [String(account.imapHost || ''), String(account.imapPort || ''), String(account.user || '')].join('|');
+}
+
+function dropPooled(key) {
+  const entry = POOL.get(key);
+  if (!entry) return;
+  POOL.delete(key);
+  clearTimeout(entry.idleTimer);
+  try { entry.session.close(); } catch (_) { }
+}
+
+function putPooled(key, session) {
+  const old = POOL.get(key);
+  if (old && old.session !== session) { clearTimeout(old.idleTimer); try { old.session.close(); } catch (_) { } }
+  const entry = { session, idleTimer: 0 };
+  entry.idleTimer = setTimeout(() => {
+    const cur = POOL.get(key);
+    if (cur && cur.session === session) { POOL.delete(key); try { session.logout(); } catch (_) { } }
+  }, POOL_IDLE_MS);
+  if (entry.idleTimer.unref) entry.idleTimer.unref();
+  POOL.set(key, entry);
+  if (POOL.size > POOL_MAX) {
+    const first = POOL.keys().next().value;
+    if (first !== key) dropPooled(first);
+  }
+}
+
+async function openFresh(account, timeout) {
+  const session = await ImapSession.connect(account, { timeout });
+  const steps = session.steps.slice();
+  await session.fetchCapability();
+  steps.push(...(await session.login(account.user, account.pass)));
+  return { session, steps };
+}
+
+/* 一把梭：连上（或复用）→ 干活 → 归还 ✓
+   `fn(session)` 里做具体的事 ✓；异常统一转成 `{ ok:false, error }` ✓ */
+async function withSession(account, fn, options) {
+  const timeout = (options && options.timeout) || DEFAULT_TIMEOUT;
+  const key = poolKeyOf(account);
+  /* ① 排队：同一账号串行 ✓ */
+  const prev = QUEUE.get(key) || Promise.resolve();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  QUEUE.set(key, prev.then(() => gate));
+  try { await prev; } catch (_) { }
+
+  const steps = [];
+  let session = null;
+  let reused = false;
+  try {
+    const entry = POOL.get(key);
+    if (entry && entry.session && entry.session.alive) {
+      session = entry.session;
+      reused = true;
+      steps.push('复用已有连接（省掉握手与登录）');
+    } else {
+      dropPooled(key);
+      const fresh = await openFresh(account, timeout);
+      session = fresh.session; steps.push(...fresh.steps);
+    }
+
+    let result;
+    try {
+      result = await fn(session, steps);
+    } catch (error) {
+      /* ② 复用的会话坏了（服务器单方面关掉 / 空闲超时）→ 换一条**重试一次** ✓ */
+      if (!reused) throw error;
+      dropPooled(key);
+      steps.push('旧连接已失效，重连重试');
+      const fresh = await openFresh(account, timeout);
+      session = fresh.session; steps.push(...fresh.steps);
+      result = await fn(session, steps);
+    }
+
+    if (session.alive) putPooled(key, session); else dropPooled(key);
+    return Object.assign({ ok: true, steps, reused }, result || {});
+  } catch (error) {
+    dropPooled(key);
+    return { ok: false, steps, error: error.message, step: error.step || '', response: error.response || '', reused };
+  } finally {
+    release();
+    if (QUEUE.get(key) === gate) QUEUE.delete(key);   /* 队尾自己清掉，别攒内存 ✓ */
+  }
+}
+
+module.exports = { ImapSession, ImapError, withSession, decodeModifiedUtf7, encodeModifiedUtf7, DEFAULT_TIMEOUT, POOL_SIZE: () => POOL.size };

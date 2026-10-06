@@ -848,6 +848,24 @@
   .lw-ml-att .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lw-ml-att .sz { color:${T.faint}; font-family:${MONO}; font-size:10px; }
   .lw-ml-empty { padding:34px 20px; text-align:center; color:${T.faint}; font-size:11.5px; line-height:2; }
+  .lw-ml-more { padding:12px; text-align:center; font-size:11px; color:${T.accent}; cursor:pointer;
+    border-top:1px dashed ${T.lineDim}; letter-spacing:.6px; }
+  .lw-ml-more:hover { background:${T.card2}; }
+  .lw-ml-item .star { color:${T.accent}; font-size:10px; flex:none; }
+  /* 对照翻译：原文 / 译文 左右并排，段落一一对应 */
+  .lw-ml-trbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 18px;
+    border-bottom:1px solid ${T.lineDim}; font-size:10px; letter-spacing:1.2px; text-transform:uppercase;
+    color:${T.faint}; }
+  .lw-ml-trbar .sp { flex:1; }
+  .lw-ml-tr { flex:1; min-height:0; overflow:auto; padding:4px 18px 16px; }
+  .lw-ml-tr .row { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:11px 0;
+    border-bottom:1px solid ${T.lineDim}; }
+  .lw-ml-tr .row:last-child { border-bottom:0; }
+  .lw-ml-tr .src { color:${T.dim}; font-size:12px; line-height:1.75; white-space:pre-wrap; word-break:break-word; }
+  .lw-ml-tr .dst { color:${T.text}; font-size:12.5px; line-height:1.85; white-space:pre-wrap; word-break:break-word;
+    border-left:2px solid color-mix(in srgb,${T.accent} 40%,transparent); padding-left:12px; }
+  .lw-ml-tr .dst .pending { color:${T.faint}; }
+  .lw-btn.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
   `;
 
   const NAV = [
@@ -877,11 +895,18 @@
      ⚠️ 不能存在函数局部 ✗ —— render() 会重建整个 DOM，
         存局部的话每渲染一次就丢一次（列表/正文全部重新请求，界面一直闪 ✗）。 */
   const MAIL_UI = {
-    key: '', box: 'INBOX', unreadOnly: false, q: '',
+    key: '', box: 'INBOX', unreadOnly: false, importantOnly: false, q: '',
+    /* ★ 分批加载 ✓ —— 一次取 40 封头部在 QQ 上要 0.4~2.1 秒 ✗（服务端**每封**都要处理），
+       先取 15 封，点「加载更多」每次 +15 ✓ */
+    limit: 15,
     boxes: null, boxesErr: '', boxesLoading: false,
     list: null, listErr: '', listLoading: false,
     uid: 0, msg: null, msgErr: '', msgLoading: false,
     cfgOpen: false, showImages: false,
+    /* 在途去重用：记「正在拉的是哪个 (账号,文件夹)」✓（见 mailLoadList 的注释）*/
+    _loadingKey: '', _loadingBox: '',
+    /* 对照翻译的状态（每封邮件一份）✓ */
+    tr: null, trBusy: false,
   };
   let MAIL_STATUS = null;          /* 顶栏用：{ total, accounts:[…] } */
   let MAIL_STATUS_BUSY = false;
@@ -1839,11 +1864,22 @@
     });
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
-    qa('.lw-nav button').forEach((b) => { b.onclick = () => { JOURNAL_FLUSH(); TAB = b.dataset.tab; render(); if (TAB === 'mail') ensureMailLoad(); }; });
+    qa('.lw-nav button').forEach((b) => {
+      b.onclick = () => {
+        JOURNAL_FLUSH();
+        TAB = b.dataset.tab;
+        render();
+        /* ★ 进邮箱页时**重新拉一次账号配置** ✓ ——
+           `loadMailAccounts` 平时只加载一次（防 render/fetch 乒乓 ✓），
+           但「切到这个页签」是个自然且便宜（服务端读本地 JSON，约 10ms）的刷新点 ✓，
+           配置真变了它自己会 render ✓，没变就什么都不做 ✓。 */
+        if (TAB === 'mail') { loadMailAccounts(true); ensureMailLoad(); }
+      };
+    });
     const rf = q('#lw-refresh'); if (rf) rf.onclick = () => load(true);
     /* 顶栏的邮箱胶囊：点了直接进邮箱页 ✓ */
     const mb = q('#lw-mb');
-    if (mb) mb.onclick = () => { JOURNAL_FLUSH(); TAB = 'mail'; render(); ensureMailLoad(); };
+    if (mb) mb.onclick = () => { JOURNAL_FLUSH(); TAB = 'mail'; render(); loadMailAccounts(true); ensureMailLoad(); };
     qa('[data-path]').forEach((el) => {
       el.onclick = () => { try { navigator.clipboard.writeText(el.dataset.path); const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已复制路径：' + el.dataset.path; } catch (_) {} };
     });
@@ -2574,7 +2610,9 @@
         saveStore();
         try { await fetch('/api/life/mail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accounts: { [k]: cur } }) }); } catch (_) {}
         const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '邮箱配置已保存（只存本机）';
-        load(true);
+        /* ⚠️ 只重新拉**邮箱账号** ✓ —— 以前调 `load(true)` ✗，
+           那会把本机扫描 + 天气全重跑一遍（几秒），只为刷新一个账号配置 ✗。 */
+        loadMailAccounts(true).then(() => { if (TAB === 'mail') { MAIL_KICKED = ''; render(); ensureMailLoad(); } });
       };
     });
 
@@ -3545,21 +3583,34 @@
      ⚠️ 以前只有 POST 没有 GET ✗ —— 保存后一刷新就全变「未配置」，
         用户之前填好的 Gmail 也读不出来（服务端明明存着）✗。 */
   let MAIL_LOADING = false;
-  async function loadMailAccounts() {
+  let MAIL_ACCOUNTS_LOADED = false;
+  /* ★★ 账号配置**只加载一次**（force=true 才重新拉）——
+     以前 `bind()` 里 `TAB==='mail'` 就无条件调它 ✗，而它拉完又会 `render()` ✗
+     → `render()` → `bind()` → 再调它 → **render/fetch 乒乓** ✗。
+     实测：进一次邮箱页发 4×`/boxes` + 4×`/list`（**8 条 IMAP 连接**，
+     每条 0.6~3.7 秒，因为服务端每个请求都要新建 TLS + 登录）✗✗ ——
+     用户感觉到的「点击很卡」就是这个，前端渲染其实只要 8ms ✓。
+     账号配置是用户手动改的，没有理由每次渲染都去问服务端 ✓。 */
+  async function loadMailAccounts(force) {
     if (MAIL_LOADING) return;
+    if (!force && MAIL_ACCOUNTS_LOADED) return;
     MAIL_LOADING = true;
     try {
       const r = await fetch('/api/life/mail', { cache: 'no-store' });
       const d = await r.json();
       if (d && d.ok && d.accounts) {
+        const before = JSON.stringify(STORE.mailAcc || {});
         /* 服务端为准，但保留本地已有的（比如刚填还没保存的）✓ */
         STORE.mailAcc = Object.assign({}, STORE.mailAcc || {}, d.accounts);
+        MAIL_ACCOUNTS_LOADED = true;
         /* ⚠️ 以前只在 TAB==='mail' 时 render() ✗ → 停在「今日」页时
            顶栏的邮箱胶囊永远显示「未配置」✗（账号其实早就读回来了）。
            现在无论在哪一页都重画胶囊 ✓；在邮箱页才整屏重渲染 ✓。 */
         paintMailBadge();
         ensureMailStatusTimer();
-        if (TAB === 'mail' && document.getElementById('lifework-view')) { render(); ensureMailLoad(); }
+        /* ★ 只有账号**真的变了**才整屏重渲染 ✓ —— 否则又成乒乓 ✓ */
+        const changed = before !== JSON.stringify(STORE.mailAcc);
+        if (changed && TAB === 'mail' && document.getElementById('lifework-view')) { render(); ensureMailLoad(); }
         else mailLoadStatus(false);
       }
     } catch (_) {} finally { MAIL_LOADING = false; }
@@ -3713,6 +3764,28 @@
     };
   }
 
+  /* ── IMAP 系统文件夹名 → 中文 ✓ ──────────────────────────────────────────
+     IMAP 返回的是**服务商自己的名字** ✗ —— QQ 是英文（Sent Messages / Drafts /
+     Deleted Messages / Junk），网易、阿里、Gmail 又各不相同 ✓。
+     所以按**常见叫法**做匹配，认不出的**原样显示** ✓（别写死成只有 QQ 那四个 ✗）。
+     原文保留在 `title` 里，鼠标悬停能看见 ✓。 */
+  const MAIL_BOX_CN = [
+    [/^(inbox|收件箱)$/i, '收件箱'],
+    [/^(sent|sent\s*messages|sent\s*items|sent\s*mail|已发送|已发送邮件|已发送的邮件)$/i, '已发送'],
+    [/^(drafts?|草稿|草稿箱)$/i, '草稿箱'],
+    [/^(deleted\s*messages|deleted\s*items|trash|bin|已删除|已删除邮件|垃圾箱|废纸篓)$/i, '已删除'],
+    [/^(junk|junk\s*e-?mail|spam|bulk\s*mail|垃圾邮件|垃圾箱|广告邮件|不明邮件)$/i, '垃圾邮件'],
+    [/^(archive|archives|all\s*mail|归档|存档|所有邮件)$/i, '归档'],
+    [/^(notes?|笔记)$/i, '笔记'],
+    [/^(outbox|发件箱|待发送)$/i, '发件箱'],
+  ];
+  function mailBoxCN(name) {
+    const n = String(name || '').trim();
+    if (!n) return '';
+    for (const [re, cn] of MAIL_BOX_CN) if (re.test(n)) return cn;
+    return n;                                  /* 认不出 → 原样 ✓ */
+  }
+
   /* ── 左栏：账号 + 文件夹 + 配置入口 ────────────────────────────────────── */
   function mailSideHtml() {
     const acc = (STORE && STORE.mailAcc) || {};
@@ -3741,11 +3814,16 @@
       else if (MAIL_UI.boxesErr) boxesHtml = '<div class="lw-ml-box" style="color:' + T.red + '">' + esc(MAIL_UI.boxesErr) + '</div>';
       else if (MAIL_UI.boxes) {
         const inbox = MAIL_UI.boxes.inbox || {};
-        const list = [{ name: 'INBOX', label: '收件箱', n: inbox.unseen }].concat(
+        /* ★ 文件夹名中文化 ✓（原文放 title，认不出的原样显示 ✓）*/
+        const list = [{ name: 'INBOX', label: '收件箱', raw: 'INBOX', n: inbox.unseen }].concat(
           MAIL_UI.boxes.boxes.filter((b) => b.selectable && b.name !== 'INBOX')
-            .map((b) => ({ name: b.name, label: b.name, n: 0 })));
-        boxesHtml = list.map((b) => '<div class="lw-ml-box' + (MAIL_UI.box === b.name ? ' on' : '') + '" data-mbox="' + esc(b.name) + '">'
-          + '<span>' + esc(b.label) + '</span>' + (b.n ? '<span class="n" style="color:' + T.accent + '">' + b.n + '</span>' : '') + '</div>').join('');
+            .map((b) => ({ name: b.name, label: mailBoxCN(b.name), raw: b.name, n: 0 })));
+        boxesHtml = list.map((b) => {
+          const rawTitle = b.label === b.raw ? b.raw : (b.label + '（' + b.raw + '）');
+          return '<div class="lw-ml-box' + (MAIL_UI.box === b.name ? ' on' : '') + '" data-mbox="' + esc(b.name) + '"'
+            + ' title="' + esc(rawTitle) + '">'
+            + '<span>' + esc(b.label) + '</span>' + (b.n ? '<span class="n" style="color:' + T.accent + '">' + b.n + '</span>' : '') + '</div>';
+        }).join('');
       }
     }
 
@@ -3753,6 +3831,7 @@
       + (boxesHtml ? '<div class="lw-ml-hd">文件夹</div>' + boxesHtml : '')
       + '<div class="lw-ml-hd">设置</div>'
       + '<div class="lw-ml-box' + (MAIL_UI.cfgOpen ? ' on' : '') + '" data-mcfg="1"><span>⚙ 账号配置</span></div>'
+      + (MAIL_UI.key ? '<div class="lw-ml-box" id="lw-ml-readall"><span>✓ 本箱全部标为已读</span></div>' : '')
       + '<div class="lw-ml-box" data-mrefresh="1"><span>↻ 重新收信</span></div>';
   }
 
@@ -3767,12 +3846,13 @@
     const tools = '<div class="lw-ml-tools">'
       + '<input id="lw-ml-q" placeholder="筛选发件人 / 主题…" value="' + esc(MAIL_UI.q) + '"/>'
       + '<button id="lw-ml-unread" class="' + (MAIL_UI.unreadOnly ? 'on' : '') + '" title="只看未读">未读</button>'
+      + '<button id="lw-ml-star" class="' + (MAIL_UI.importantOnly ? 'on' : '') + '" title="只看重要（⭐）">⭐</button>'
       + '<button id="lw-ml-reload" title="重新收信">↻</button></div>';
 
     if (MAIL_UI.listLoading) return tools + '<div class="lw-ml-empty">正在收信…</div>';
     if (MAIL_UI.listErr) return tools + '<div class="lw-ml-empty" style="color:' + T.red + '">✗ ' + esc(MAIL_UI.listErr) + '</div>';
     if (!MAIL_UI.list || !MAIL_UI.list.length) {
-      return tools + '<div class="lw-ml-empty">' + (MAIL_UI.unreadOnly ? '没有未读邮件 ✓' : '这个文件夹是空的') + '</div>';
+      return tools + '<div class="lw-ml-empty">' + (MAIL_UI.unreadOnly ? '没有未读邮件 ✓' : (MAIL_UI.importantOnly ? '没有标为重要的邮件<br><span style="color:' + T.faint + '">在阅读区点「☆ 重要」标记</span>' : '这个文件夹是空的')) + '</div>';
     }
     const q = String(MAIL_UI.q || '').trim().toLowerCase();
     const items = MAIL_UI.list.map((m) => {
@@ -3780,11 +3860,139 @@
       const hit = !q || hay.indexOf(q) >= 0;
       return '<div class="lw-ml-item' + (m.seen ? '' : ' unread') + (MAIL_UI.uid === m.uid ? ' on' : '') + '"'
         + ' data-muid="' + m.uid + '" data-hay="' + esc(hay) + '"' + (hit ? '' : ' style="display:none"') + '>'
-        + '<div class="r1"><span class="who">' + esc(String(m.fromName || m.fromAddress || '(未知发件人)').slice(0, 40)) + '</span>'
+        + '<div class="r1">' + (m.flagged ? '<span class="star" title="重要">★</span>' : '')
+        + '<span class="who">' + esc(String(m.fromName || m.fromAddress || '(未知发件人)').slice(0, 40)) + '</span>'
         + '<span class="when">' + esc(mailWhen(m.date)) + '</span></div>'
         + '<div class="subj">' + esc(m.subject) + '</div></div>';
     }).join('');
-    return tools + items;
+    /* ★ 分批加载 ✓ —— 一次取 40 封头部在 QQ 上要 0.4~2.1 秒 ✗
+       （瓶颈是服务端**每封**的处理成本：INBOX ~10ms/封，Sent ~53ms/封 ✗），
+       所以先取 15 封（~0.13/0.8 秒 ✓），要更多再点 ✓。 */
+    const more = (MAIL_UI.list.length >= MAIL_UI.limit && MAIL_UI.limit < 120)
+      ? '<div class="lw-ml-more" id="lw-ml-more">加载更多（已显示 ' + MAIL_UI.list.length + ' 封）</div>'
+      : '';
+    return tools + items + more;
+  }
+
+  /* ── 对照翻译 ────────────────────────────────────────────────────────────
+     走**已有的 AI 入口** ✓（和「逻辑图 · AI 解读」「PDF 翻译」同一个 `/api/ai/chat`），
+     配置也复用同一份（`localStorage['mc-ai-cfg']`，即「本机管家 → AI」里填的那个）✓
+     —— 不另起一套配置，用户不用配两遍 ✓。
+     做法：把正文切成段落 → 分批送模型 → 按**编号**对齐回原文 → 左右对照渲染 ✓。
+     ★ 三件事必须有：① 缓存（同一封不重复请求）② 防重入 ③ 失败兜底提示 ✓。 */
+  function mailAiCfg() {
+    /* 直接读 localStorage ✓ —— 不依赖 index.html 里 `let AI_CFG` 的作用域
+       （它虽然在全局词法作用域里能读到，但换写法就会断 ✗，读存储最稳 ✓） */
+    try {
+      const raw = localStorage.getItem('mc-ai-cfg');
+      if (raw) { const c = JSON.parse(raw); if (c && c.url && c.model) return c; }
+    } catch (_) { }
+    try { if (typeof AI_CFG !== 'undefined' && AI_CFG && AI_CFG.url && AI_CFG.model) return AI_CFG; } catch (_) { }
+    return null;
+  }
+
+  /* 段落太长就**按句子再切** ✓ ——
+     营销邮件常把整封信塞进一个大 `<td>`，剥完标签就是一段 800+ 字 ✗：
+     挤在一个对照格里没法看 ✗，而且模型对**小段落**的翻译质量明显更好 ✓。
+     断点取中英文句末标点（。！？!?.;；）✓，单段上限 260 字 ✓。 */
+  const MAIL_PARA_MAX = 260;
+  function mailSplitLong(text) {
+    const p = String(text || '');
+    if (p.length <= MAIL_PARA_MAX) return p ? [p] : [];
+    const out = [];
+    let buf = '';
+    for (const piece of p.split(/(?<=[。！？!?.;；])\s*/)) {
+      if (buf && (buf + piece).length > MAIL_PARA_MAX) { out.push(buf.trim()); buf = piece; }
+      else buf += piece;
+    }
+    if (buf.trim()) out.push(buf.trim());
+    return out;
+  }
+
+  /* 把邮件正文切成段落 ✓ —— 纯文本优先；HTML 就剥标签后按块级标签切 ✓ */
+  function mailParagraphs(msg) {
+    const text = String((msg && msg.text) || '');
+    /* 纯文本要有**实质内容**才用 ✓ —— 很多营销邮件的 text/plain 只有一片空白 ✗ */
+    if (text.replace(/\s/g, '').length > 40) {
+      return text.split(/\n{2,}/).map((s) => s.trim()).filter((s) => s.length > 1).flatMap(mailSplitLong);
+    }
+    let h = String((msg && msg.html) || '');
+    h = h.replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, '');
+    /* ⚠️ 块级标签必须**列全** ✗ —— 营销邮件大量用 `<table><tr><td>` 排版，
+       漏了 td/th 的话整封信的正文会被粘成一段 ✗（实测：一封 28KB 的邮件只切出 1 段 ✗）。 */
+    h = h.replace(/<\/(p|div|tr|td|th|li|h[1-6]|table|tbody|blockquote|section|article|header|footer|dd|dt|pre|figcaption|center)>/gi, '\n\n');
+    h = h.replace(/<br\s*\/?>/gi, '\n');
+    h = h.replace(/<[^>]+>/g, '');
+    h = h.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    return h.split(/\n{2,}/).map((s) => s.replace(/[ \t\u00a0]+/g, ' ').replace(/\s*\n\s*/g, ' ').trim())
+      .filter((s) => s.length > 1).flatMap(mailSplitLong);
+  }
+
+  let MAIL_TR_TIMER = 0;
+  async function mailTranslate() {
+    const m = MAIL_UI.msg;
+    if (!m) return;
+    const s = document.getElementById('lw-sub');
+    if (MAIL_UI.trBusy) return;
+    /* 已经译过这一封 → 只是切换显示 ✓（缓存，不重复请求 ✓）*/
+    if (MAIL_UI.tr && MAIL_UI.tr.uid === m.uid && MAIL_UI.tr.pairs.length) return;
+    const cfg = mailAiCfg();
+    if (!cfg) {
+      if (s) s.textContent = '✗ 还没配置 AI —— 在「本机管家 → AI」里填 API URL 与模型';
+      MAIL_UI.tr = { uid: m.uid, pairs: [], err: '还没配置 AI（本机管家 → AI）', done: 0, total: 0 };
+      renderMailPane('read');
+      return;
+    }
+    const paras = mailParagraphs(m);
+    if (!paras.length) {
+      MAIL_UI.tr = { uid: m.uid, pairs: [], err: '这封邮件没有可翻译的正文', done: 0, total: 0 };
+      renderMailPane('read');
+      return;
+    }
+    const use = paras.slice(0, 80);                 /* 上限，别把整封巨型营销邮件全丢给模型 ✓ */
+    MAIL_UI.trBusy = true;
+    MAIL_UI.tr = { uid: m.uid, pairs: use.map((p) => ({ src: p, dst: '' })), done: 0, total: use.length, err: '' };
+    renderMailPane('read');
+    try {
+      const CHUNK = 10;
+      for (let i = 0; i < use.length; i += CHUNK) {
+        const part = use.slice(i, i + CHUNK);
+        const numbered = part.map((p, j) => '[' + (j + 1) + '] ' + p).join('\n\n');
+        const r = await fetch('/api/ai/chat', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 180000,
+            messages: [
+              { role: 'system', content: '你是专业邮件翻译。把用户给的每一段翻译成简体中文。必须保留段落编号，输出格式为每行 `[序号]译文`，序号与输入完全一致。只输出译文，不要解释、不要合并段落、不要加标题或前言。' },
+              { role: 'user', content: numbered },
+            ],
+          }),
+        });
+        const d = await r.json();
+        if (!d || !d.ok) throw new Error((d && d.error) || 'AI 请求失败');
+        const body = String(d.content || '');
+        /* ① 优先按 `[n]` 编号对齐 ✓ */
+        const got = {};
+        body.split('\n').forEach((line) => {
+          const mm = /^\s*\[(\d+)\]\s*(.*)$/.exec(line);
+          if (mm) got[Number(mm[1])] = mm[2].trim();
+        });
+        /* ② 模型没守编号时退而求其次：按空行分段、顺序对齐 ✓（总比整块空白强 ✓）*/
+        if (!Object.keys(got).length) {
+          body.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean).forEach((x, j) => { got[j + 1] = x; });
+        }
+        part.forEach((p, j) => { const dst = got[j + 1]; if (dst) MAIL_UI.tr.pairs[i + j].dst = dst; });
+        MAIL_UI.tr.done = Math.min(use.length, i + CHUNK);
+        renderMailPane('read');
+      }
+    } catch (e) {
+      MAIL_UI.tr.err = e.message;
+    } finally {
+      MAIL_UI.trBusy = false;
+      renderMailPane('read');
+      if (s) s.textContent = MAIL_UI.tr && MAIL_UI.tr.err ? ('✗ 翻译失败：' + MAIL_UI.tr.err) : '✓ 对照翻译完成';
+    }
   }
 
   /* ── 右栏：正文阅读 ────────────────────────────────────────────────────── */
@@ -3795,7 +4003,6 @@
     if (!m) return '<div class="lw-ml-empty">← 从中间选一封邮件</div>';
 
     const hasHtml = !!String(m.html || '').trim();
-    const textOnly = !hasHtml;
     const atts = (m.attachments || []).length
       ? '<div class="lw-ml-atts">' + m.attachments.map((a) => '<div class="lw-ml-att">'
           + '<span>📎</span><span class="nm" title="' + esc(a.name) + '">' + esc(a.name) + '</span>'
@@ -3805,14 +4012,19 @@
           + '&uid=' + m.uid + '&n=' + a.n + '">下载</a></div>').join('') + '</div>'
       : '';
 
+    const tr = (MAIL_UI.tr && MAIL_UI.tr.uid === m.uid) ? MAIL_UI.tr : null;
     const head = '<div class="lw-ml-rhd">'
-      + '<div class="subj">' + esc(m.subject) + '</div>'
+      + '<div class="subj">' + (m.flagged ? '<span style="color:' + T.accent + '">★ </span>' : '') + esc(m.subject) + '</div>'
       + '<div class="meta">'
       + '<div><b>' + esc(String(m.from || '').slice(0, 80)) + '</b></div>'
       + '<div>' + esc(mailFullTime(m.date)) + ' · ' + esc(mailSize(m.size))
       + (m.to ? ' · 收件人 ' + esc(String(m.to).slice(0, 60)) : '') + '</div>'
       + '</div>'
       + '<div class="acts">'
+      + '<button class="lw-btn" data-mact="' + (m.flagged ? 'unflag' : 'flag') + '" data-muid="' + m.uid + '"'
+      + ' title="重要（IMAP \\Flagged，其它邮件客户端也能看到）">' + (m.flagged ? '★ 已标重要' : '☆ 标为重要') + '</button>'
+      + '<button class="lw-btn' + (tr ? ' on' : '') + '" id="lw-ml-tr">'
+      + (MAIL_UI.trBusy ? '翻译中…' : (tr ? '⇄ 对照中' : '⇄ 对照翻译')) + '</button>'
       + '<button class="lw-btn" data-mact="' + (m.seen ? 'unread' : 'read') + '" data-muid="' + m.uid + '">'
       + (m.seen ? '标为未读' : '标为已读') + '</button>'
       + (hasHtml ? '<button class="lw-btn" data-mimg="' + (MAIL_UI.showImages ? '0' : '1') + '">'
@@ -3821,7 +4033,19 @@
       + '</div></div>';
 
     let bodyHtml;
-    if (hasHtml) {
+    if (tr && tr.pairs.length) {
+      /* ── 对照视图 ✓ 原文 / 译文 左右并排，段落一一对应 ✓ ── */
+      const rows = tr.pairs.map((p) => '<div class="row">'
+        + '<div class="src">' + esc(p.src) + '</div>'
+        + '<div class="dst">' + (p.dst ? esc(p.dst) : '<span class="pending">…</span>') + '</div></div>').join('');
+      const bar = '<div class="lw-ml-trbar">'
+        + '<span>原文 / 译文 对照</span>'
+        + '<span class="sp"></span>'
+        + (tr.err ? '<span style="color:' + T.red + '">✗ ' + esc(tr.err) + '</span>' : '')
+        + (MAIL_UI.trBusy ? '<span>翻译中 ' + tr.done + '/' + tr.total + '</span>' : '<span>' + tr.total + ' 段</span>')
+        + '</div>';
+      bodyHtml = bar + '<div class="lw-ml-tr">' + rows + '</div>';
+    } else if (hasHtml) {
       /* ★ 邮件 HTML 走 sandbox iframe ✓（详见 mailFrameDoc 的注释）*/
       bodyHtml = '<iframe class="lw-ml-frame" sandbox="" referrerpolicy="no-referrer"'
         + ' srcdoc="' + esc(mailFrameDoc(m, MAIL_UI.showImages)) + '"></iframe>';
@@ -3847,22 +4071,33 @@
   }
 
   /* 局部重绘 ✓ —— 不整屏 render()，否则阅读区的 iframe 每次都被重建、邮件重新加载 ✗ */
+  /* 局部重绘 ✓ —— 不整屏 render()，否则阅读区的 iframe 每次都被重建、邮件重新加载 ✗
+     ★ 可以一次传多个 pane（数组）✓ —— 以前切文件夹要连调 3 次 ✗，
+       每次都跑一遍 `bindMail()`（里面有十几个 querySelectorAll）✗，白做三遍 ✓。 */
   function renderMailPane(which) {
     if (TAB !== 'mail' || !document.getElementById('lifework-view')) return;
     const host = document.getElementById('lifework-view');
     const map = { side: ['.lw-ml-side', mailSideHtml], list: ['.lw-ml-list', mailListHtml], read: ['.lw-ml-read', mailReaderHtml] };
-    const hit = map[which];
-    if (!hit) { render(); return; }
-    const el = host.querySelector(hit[0]);
-    if (!el) { render(); return; }
-    el.innerHTML = hit[1]();
+    for (const w of (Array.isArray(which) ? which : [which])) {
+      const hit = map[w];
+      if (!hit) { render(); return; }
+      const el = host.querySelector(hit[0]);
+      if (!el) { render(); return; }
+      el.innerHTML = hit[1]();
+    }
     bindMail();
   }
 
   /* ── 拉数据 ────────────────────────────────────────────────────────────── */
-  async function mailLoadBoxes() {
+  /* ★★ 所有邮件请求都要有**在途去重** ✓ ——
+     以前靠 `MAIL_UI.list` 是否为空来判断「要不要拉」✗，
+     而请求进行中它本来就是 null ✗ → 同一个请求被反复发起 ✗
+     （实测进一次邮箱页 4×boxes + 4×list = 8 条 IMAP 连接，每条 0.6~3.7 秒）✗✗。 */
+  async function mailLoadBoxes(force) {
     const key = MAIL_UI.key;
     if (!key) return;
+    if (MAIL_UI.boxesLoading) return;
+    if (!force && MAIL_UI.boxes) return;
     MAIL_UI.boxesLoading = true; MAIL_UI.boxesErr = '';
     renderMailPane('side');
     try {
@@ -3875,28 +4110,49 @@
     finally { MAIL_UI.boxesLoading = false; renderMailPane('side'); }
   }
 
-  async function mailLoadList() {
+  async function mailLoadList(force) {
     const key = MAIL_UI.key, box = MAIL_UI.box;
     if (!key) return;
-    MAIL_UI.listLoading = true; MAIL_UI.listErr = '';
+    /* 已经在拉**同一个** (账号, 文件夹) → 别重复发起 ✓（拉别的文件夹不受影响 ✓）*/
+    if (MAIL_UI.listLoading && MAIL_UI._loadingKey === key && MAIL_UI._loadingBox === box) return;
+    MAIL_UI.listLoading = true; MAIL_UI._loadingKey = key; MAIL_UI._loadingBox = box;
+    MAIL_UI.listErr = '';
     renderMailPane('list');
     try {
       const url = '/api/life/mail/list?key=' + encodeURIComponent(key)
-        + '&box=' + encodeURIComponent(box) + '&limit=40' + (MAIL_UI.unreadOnly ? '&unread=1' : '');
+        + '&box=' + encodeURIComponent(box) + '&limit=' + MAIL_UI.limit
+        + (MAIL_UI.unreadOnly ? '&unread=1' : '')
+        + (MAIL_UI.importantOnly ? '&flagged=1' : '');
       const r = await fetch(url, { cache: 'no-store' });
       const d = await r.json();
       if (MAIL_UI.key !== key || MAIL_UI.box !== box) return;
       if (d && d.ok) { MAIL_UI.list = d.mails || []; MAIL_UI.listErr = ''; }
       else { MAIL_UI.list = []; MAIL_UI.listErr = (d && d.error) || '收信失败'; }
     } catch (e) { MAIL_UI.list = []; MAIL_UI.listErr = '收信失败：' + e.message; }
-    finally { MAIL_UI.listLoading = false; renderMailPane('list'); }
+    finally {
+      MAIL_UI.listLoading = false; MAIL_UI._loadingKey = ''; MAIL_UI._loadingBox = '';
+      renderMailPane('list');
+    }
+  }
+
+  /* ★ 本地调整未读数 ✓ —— 标已读 / 删信之后**不要**再 `mailLoadStatus(true)` ✗：
+     那会对**每个账号**各开一条 IMAP 连接（本机到 gmail 还要等 15 秒超时 ✗），
+     只为把一个数字减 1，完全不值 ✗。本地先改、立刻重画胶囊 ✓，
+     服务端的 60 秒缓存 + 顶栏 120 秒轮询会自然校正回来 ✓。 */
+  function mailAdjustUnread(delta) {
+    if (!MAIL_STATUS || !delta) return;
+    MAIL_STATUS.total = Math.max(0, (MAIL_STATUS.total || 0) + delta);
+    const a = (MAIL_STATUS.accounts || []).find((x) => x.key === MAIL_UI.key);
+    if (a) a.unseen = Math.max(0, (a.unseen || 0) + delta);
+    paintMailBadge();
   }
 
   async function mailOpen(uid) {
     const key = MAIL_UI.key, box = MAIL_UI.box;
     MAIL_UI.uid = uid; MAIL_UI.msg = null; MAIL_UI.msgErr = ''; MAIL_UI.msgLoading = true;
     MAIL_UI.showImages = false;                       /* 换一封 → 远程图片重新默认屏蔽 ✓ */
-    renderMailPane('list'); renderMailPane('read');
+    MAIL_UI.tr = null;                                /* 换一封 → 清掉上一封的译文缓存 ✓ */
+    renderMailPane(['list', 'read']);
     try {
       const r = await fetch('/api/life/mail/read?key=' + encodeURIComponent(key)
         + '&box=' + encodeURIComponent(box) + '&uid=' + uid, { cache: 'no-store' });
@@ -3904,56 +4160,84 @@
       if (MAIL_UI.uid !== uid) return;
       if (d && d.ok) {
         MAIL_UI.msg = d;
-        /* 服务端顺手标了已读 ✓ → 本地列表也要跟着变 ✓（否则要点两次才刷新 ✗）*/
+        /* 服务端顺手标了已读 ✓ → 本地列表 + 顶栏未读数都要跟着变 ✓
+           （否则要点两次才刷新 ✗ / 顶栏数字不降 ✗）*/
         const item = (MAIL_UI.list || []).find((x) => x.uid === uid);
+        if (item && !item.seen) mailAdjustUnread(-1);
         if (item) item.seen = true;
       } else MAIL_UI.msgErr = (d && d.error) || '读信失败';
     } catch (e) { MAIL_UI.msgErr = '读信失败：' + e.message; }
     finally {
       MAIL_UI.msgLoading = false;
-      renderMailPane('read'); renderMailPane('list');
-      mailLoadStatus(true);
+      renderMailPane(['read', 'list']);
     }
   }
 
   async function mailFlag(uid, action) {
     try {
+      const item = (MAIL_UI.list || []).find((x) => x.uid === uid);
+      const wasUnseen = item ? !item.seen : false;
       const r = await fetch('/api/life/mail/flag', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ key: MAIL_UI.key, box: MAIL_UI.box, uid, action }),
       });
       const d = await r.json();
       if (!d || !d.ok) { const s = document.getElementById('lw-sub'); if (s) s.textContent = '✗ ' + ((d && d.error) || '操作失败'); return; }
-      const item = (MAIL_UI.list || []).find((x) => x.uid === uid);
       if (action === 'delete') {
         MAIL_UI.list = (MAIL_UI.list || []).filter((x) => x.uid !== uid);
+        if (wasUnseen) mailAdjustUnread(-1);
         if (MAIL_UI.uid === uid) { MAIL_UI.uid = 0; MAIL_UI.msg = null; }
-      } else if (action === 'read' && item) item.seen = true;
-      else if (action === 'unread' && item) item.seen = false;
+      } else if (action === 'read') {
+        if (item && !item.seen) mailAdjustUnread(-1);
+        if (item) item.seen = true;
+      } else if (action === 'unread') {
+        if (item && item.seen) mailAdjustUnread(1);
+        if (item) item.seen = false;
+      } else if (action === 'flag') {
+        if (item) item.flagged = true;
+      } else if (action === 'unflag') {
+        if (item) item.flagged = false;
+      } else if (action === 'readall') {
+        /* 整箱已读 ✓ —— 本地列表全标已读，顶栏未读数直接清零 ✓（不再连 IMAP 去问 ✗）*/
+        (MAIL_UI.list || []).forEach((x) => { x.seen = true; });
+        if (MAIL_STATUS) {
+          const a = (MAIL_STATUS.accounts || []).find((x) => x.key === MAIL_UI.key);
+          if (a) { MAIL_STATUS.total = Math.max(0, (MAIL_STATUS.total || 0) - (a.unseen || 0)); a.unseen = 0; }
+          paintMailBadge();
+        }
+      }
       if (MAIL_UI.msg && MAIL_UI.msg.uid === uid) {
         if (action === 'read') MAIL_UI.msg.seen = true;
         if (action === 'unread') MAIL_UI.msg.seen = false;
+        if (action === 'flag') MAIL_UI.msg.flagged = true;
+        if (action === 'unflag') MAIL_UI.msg.flagged = false;
       }
       const s = document.getElementById('lw-sub');
-      if (s) s.textContent = action === 'delete' ? '已删除' : (action === 'read' ? '已标为已读' : '已标为未读');
-      renderMailPane('list'); renderMailPane('read');
-      mailLoadStatus(true);
+      const word = { delete: '已删除', read: '已标为已读', unread: '已标为未读', flag: '已标为重要 ⭐', unflag: '已取消重要' };
+      if (s) s.textContent = word[action] || '已更新';
+      renderMailPane(['list', 'read']);
+      /* 星标会影响「⭐ 重要」列表的成员 → 该视图下要重新拉一次 ✓（其它视图不用） */
+      if ((action === 'flag' || action === 'unflag') && MAIL_UI.importantOnly) {
+        MAIL_UI.list = null; MAIL_KICKED = ''; ensureMailLoad();
+      }
     } catch (e) {
       const s = document.getElementById('lw-sub'); if (s) s.textContent = '✗ ' + e.message;
     }
   }
 
-  /* 进邮箱页时按需拉一次（别每次都重连 IMAP ✗ —— 服务端有 20~60 秒缓存 ✓）*/
+  /* 进邮箱页时按需拉一次 ✓
+     ★★ 判据用**独立的 stamp**，不能用「`MAIL_UI.list` 非空」✗ ——
+        请求进行中它就是 null ✗，于是同一个请求被反复重新发起 ✗
+        （实测进一次邮箱页 4×boxes + 4×list = **8 条 IMAP 连接**，每条 0.6~3.7 秒）✗✗。
+        任何「想强制重新拉」的动作，先把 `MAIL_KICKED` 清空再调本函数 ✓。 */
   let MAIL_KICKED = '';
   function ensureMailLoad() {
     if (TAB !== 'mail') return;
-    if (!MAIL_UI.key) {
-      const keys = mailConfiguredKeys();
-      MAIL_UI.key = keys[0] || '';
-    }
+    if (!MAIL_UI.key) MAIL_UI.key = mailConfiguredKeys()[0] || '';
     if (!MAIL_UI.key) return;
-    const stamp = MAIL_UI.key + '|' + MAIL_UI.box;
-    if (MAIL_KICKED === stamp && MAIL_UI.list) return;
+    const stamp = MAIL_UI.key + '|' + MAIL_UI.box + '|' + (MAIL_UI.unreadOnly ? 1 : 0)
+      + '|' + (MAIL_UI.importantOnly ? 1 : 0) + '|' + MAIL_UI.limit;
+    if (MAIL_KICKED === stamp) return;
     MAIL_KICKED = stamp;
     if (!MAIL_UI.boxes) mailLoadBoxes();
     mailLoadList();
@@ -3970,6 +4254,7 @@
         const k = el.dataset.mkey;
         if (MAIL_UI.key === k) return;
         MAIL_UI.key = k; MAIL_UI.box = 'INBOX'; MAIL_UI.list = null; MAIL_UI.msg = null;
+        MAIL_UI.limit = 15;                       /* 换账号 → 重新从 15 封开始 ✓ */
         MAIL_UI.uid = 0; MAIL_UI.boxes = null; MAIL_UI.listErr = ''; MAIL_UI.boxesErr = '';
         MAIL_UI.cfgOpen = false;
         MAIL_KICKED = '';
@@ -3981,16 +4266,21 @@
         const b = el.dataset.mbox;
         if (MAIL_UI.box === b) return;
         MAIL_UI.box = b; MAIL_UI.list = null; MAIL_UI.msg = null; MAIL_UI.uid = 0;
+        MAIL_UI.limit = 15;                       /* 换文件夹 → 重新从 15 封开始 ✓ */
+        /* ★ 只切文件夹 → **不用重新拉文件夹列表** ✓（以前会重复请求 boxes ✗）；
+           三个 pane 一次重绘 + 只 bindMail 一次 ✓ */
         MAIL_KICKED = '';
-        renderMailPane('side'); renderMailPane('read'); renderMailPane('list');
-        mailLoadList();
+        renderMailPane(['side', 'read', 'list']);
+        ensureMailLoad();
       };
     });
     qa('[data-mcfg]').forEach((el) => { el.onclick = () => { MAIL_UI.cfgOpen = !MAIL_UI.cfgOpen; render(); }; });
     qa('[data-mrefresh]').forEach((el) => {
       el.onclick = () => {
-        MAIL_UI.boxes = null; MAIL_KICKED = '';
-        mailLoadStatus(true); mailLoadBoxes(); mailLoadList();
+        MAIL_UI.boxes = null; MAIL_UI.list = null; MAIL_KICKED = '';
+        renderMailPane(['side', 'list']);
+        mailLoadStatus(true);
+        ensureMailLoad();
       };
     });
     qa('[data-muid]').forEach((el) => {
@@ -4006,9 +4296,30 @@
       });
     };
     const un = host.querySelector('#lw-ml-unread');
-    if (un) un.onclick = () => { MAIL_UI.unreadOnly = !MAIL_UI.unreadOnly; MAIL_UI.list = null; renderMailPane('list'); mailLoadList(); };
+    if (un) un.onclick = () => {
+      MAIL_UI.unreadOnly = !MAIL_UI.unreadOnly;
+      MAIL_UI.list = null; MAIL_KICKED = '';
+      renderMailPane('list'); ensureMailLoad();
+    };
+    /* ⭐ 只看重要（\Flagged）*/
+    const st = host.querySelector('#lw-ml-star');
+    if (st) st.onclick = () => {
+      MAIL_UI.importantOnly = !MAIL_UI.importantOnly;
+      MAIL_UI.list = null; MAIL_KICKED = '';
+      renderMailPane('list'); ensureMailLoad();
+    };
+    /* 「加载更多」—— 每次 +15 封 ✓（见 MAIL_UI.limit 的注释）*/
+    const more = host.querySelector('#lw-ml-more');
+    if (more) more.onclick = () => {
+      MAIL_UI.limit = Math.min(120, MAIL_UI.limit + 15);
+      MAIL_KICKED = '';
+      ensureMailLoad();
+    };
     const rl = host.querySelector('#lw-ml-reload');
-    if (rl) rl.onclick = () => { MAIL_UI.list = null; renderMailPane('list'); mailLoadList(); mailLoadStatus(true); };
+    if (rl) rl.onclick = () => {
+      MAIL_UI.list = null; MAIL_KICKED = '';
+      renderMailPane('list'); ensureMailLoad(); mailLoadStatus(true);
+    };
     qa('[data-mact]').forEach((el) => {
       el.onclick = (ev) => {
         ev.stopPropagation();
@@ -4018,6 +4329,24 @@
       };
     });
     qa('[data-mimg]').forEach((el) => { el.onclick = () => { MAIL_UI.showImages = el.dataset.mimg === '1'; renderMailPane('read'); }; });
+    /* ⇄ 对照翻译：没译过就去译 ✓，译过了就切换「显示 / 收起」✓（缓存，不重复请求 ✓）*/
+    const trBtn = host.querySelector('#lw-ml-tr');
+    if (trBtn) trBtn.onclick = () => {
+      const m = MAIL_UI.msg;
+      if (!m) return;
+      if (MAIL_UI.tr && MAIL_UI.tr.uid === m.uid && MAIL_UI.tr.pairs.length) {
+        MAIL_UI.tr = null;                 /* 收起 → 回到原文 ✓（再点会重新显示缓存，不重新请求 ✓）*/
+        renderMailPane('read');
+        return;
+      }
+      mailTranslate();
+    };
+    /* 「全部标为已读」 */
+    const ra = host.querySelector('#lw-ml-readall');
+    if (ra) ra.onclick = () => {
+      if (!confirm('把「' + MAIL_UI.box + '」里所有邮件标为已读？')) return;
+      mailFlag(0, 'readall');
+    };
   }
 
   /* ── 邮箱配置（收进可折叠区，不再是页面主体 ✓）───────────────────────── */
