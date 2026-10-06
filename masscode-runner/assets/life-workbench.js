@@ -372,6 +372,9 @@
     color:${T.text}; font:600 10.5px ${UI}; cursor:pointer; }
   .lw-nt-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-nt-bar button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  /* 撤销/重做没有可退的步骤时明确置灰（别让人以为点了没反应） */
+  .lw-nt-bar button:disabled { opacity:.35; cursor:default; }
+  .lw-nt-bar button:disabled:hover { border-color:${T.lineDim}; color:${T.text}; }
   .lw-nt-bar .sp { flex:1; }
   .lw-nt-bar .st { font-size:10px; color:${T.faint}; }
   .lw-nt-bar .st.ok { color:${T.ok}; }
@@ -902,6 +905,66 @@
     }, 300);
   }
 
+  /* ── 撤销 / 重做（备忘录）──────────────────────────────────────────────
+     以前完全没有撤销 ✗：textarea 的原生 ⌘Z 只在「没重渲染过」时有效，
+     一点格式按钮 / 删除就把 textarea 整个换掉 → 原生撤销栈直接丢 ✗，
+     删除、格式化、置顶这些操作更是完全没法回退 ✗（用户反馈「没有撤销功能」）。
+
+     做法：**整份 memos 的快照栈**（深拷贝，几十条备忘录也就几十 KB）。
+     优点是不用给每种操作单独写逆操作，删除 / 格式化 / 置顶 / 新建全都能撤 ✓。
+     ⚠️ 连续打字必须合并成「一步」，否则每敲一个字都压一帧 ✗（见 snapMemo 的 label 判定）。 */
+  let UNDO = [], REDO = [], UNDO_AT = 0, MEMO_STATUS_TIMER = 0;
+  function snapshotMemos() {
+    return {
+      memos: JSON.parse(JSON.stringify((STORE && STORE.memos) || [])),
+      sel: (STORE && STORE.memoSel) || '',
+      editing: (STORE && STORE.memoEditing) || '',
+    };
+  }
+  /* 在**改动之前**调用。kind==='edit' 且距上次不足 900ms → 视为同一次连续输入，不重复压栈。 */
+  function snapMemo(kind) {
+    if (!STORE) return;
+    const now = Date.now();
+    if (kind === 'edit' && now - UNDO_AT < 900 && UNDO.length) { UNDO_AT = now; return; }
+    UNDO.push(Object.assign({ at: now, kind }, snapshotMemos()));
+    if (UNDO.length > 80) UNDO.shift();
+    REDO.length = 0;
+    UNDO_AT = now;
+    syncUndoButtons();
+  }
+  function canUndo() { return UNDO.length > 0; }
+  function canRedo() { return REDO.length > 0; }
+  /* 按钮的 disabled 只在 viewMemo() 里算，而打字时**不会**整屏渲染 ——
+     不单独同步的话，刚打完字「撤销」还是灰的 ✗（点了没反应）。 */
+  function syncUndoButtons() {
+    const u = document.getElementById('lw-memo-undo');
+    const r = document.getElementById('lw-memo-redo');
+    if (u) u.disabled = !canUndo();
+    if (r) r.disabled = !canRedo();
+  }
+  function applySnap(s) {
+    STORE.memos = s.memos;
+    STORE.memoSel = s.sel;
+    STORE.memoEditing = s.editing;
+    /* 立刻落盘：不然刚撤销完，之前排队的防抖保存可能又把旧内容写回来 ✗ */
+    saveStore(true);
+    render();
+  }
+  function undoMemo() {
+    if (!UNDO.length) return false;
+    REDO.push(Object.assign({ at: Date.now() }, snapshotMemos()));
+    applySnap(UNDO.pop());
+    syncUndoButtons();
+    return true;
+  }
+  function redoMemo() {
+    if (!REDO.length) return false;
+    UNDO.push(Object.assign({ at: Date.now() }, snapshotMemos()));
+    applySnap(REDO.pop());
+    syncUndoButtons();
+    return true;
+  }
+
   function render() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
@@ -934,10 +997,41 @@
     const nList = tmp.querySelector('.lw-nt-list');
     const oSide = wrap.querySelector('.lw-nt-side');
     const oList = wrap.querySelector('.lw-nt-list');
+    /* ⚠️ 换掉列表会把滚动位置冲回顶部 ✗ —— 打字时列表要跟着更新（见 refreshMemoDerived），
+       每次跳回顶部就没法用了。记下来再还原。 */
+    const oScroll = oList && oList.querySelector('.lw-nt-scroll');
+    const keepTop = oScroll ? oScroll.scrollTop : 0;
     if (nSide && oSide) oSide.replaceWith(nSide);
     if (nList && oList) oList.replaceWith(nList);
+    const nScroll = wrap.querySelector('.lw-nt-list .lw-nt-scroll');
+    if (nScroll && keepTop) nScroll.scrollTop = keepTop;
     /* 只重新绑「左栏 + 中栏」相关的交互（编辑器不碰 ✓）*/
     bindMemoSide();
+  }
+
+  /* ── 输入时的「派生视图」刷新 ──────────────────────────────────────────
+     ⚠️ 这是「左右不同步」的根因所在：以前 oninput 只做防抖保存（flushMemo），
+     **从不刷新任何视图** ✗ —— 于是左边打字、右边预览和左栏列表摘要都不动，
+     要等到别的操作（删除/切文件夹/点格式）触发整屏 render() 才「追上来」✗。
+     用户看到的「左边改了右边不变」「删了才同步」都是这一个原因。
+
+     注意：**绝对不能调 render()** —— 那会把 textarea 一起重建，
+     光标位置、选区、原生撤销栈全丢 ✗。这里只碰
+     ① 右侧预览的 innerHTML ② 左侧列表（renderMemoList 已经不动编辑器了）。 */
+  let LIVE_BUF = 0;
+  function refreshMemoDerived() {
+    if (TAB !== 'memo') return;
+    const cur = ((STORE && STORE.memos) || []).find((x) => x.id === (STORE && STORE.memoSel));
+    if (!cur) return;
+    const ta = document.getElementById('lw-memo-body');
+    const ti = document.getElementById('lw-memo-title');
+    if (ti) cur.text = ti.value + (ta && ta.value ? '\n' + ta.value : '');
+    /* ① 右侧预览：立即换，成本极低 */
+    const pv = document.getElementById('lw-nt-livebody');
+    if (pv) pv.innerHTML = mdToHtml(ta ? ta.value : '') || '<span style="color:#5c5a50">（这里会实时显示渲染结果）</span>';
+    /* ② 左侧列表摘要 + 侧栏计数：稍作防抖，避免每个字都重建一遍 */
+    clearTimeout(LIVE_BUF);
+    LIVE_BUF = setTimeout(() => { if (TAB === 'memo') renderMemoList(); }, 200);
   }
 
   function headHtml() {
@@ -1283,14 +1377,42 @@
       }
       STORE.memoSaved = true; saveStore();
       const st = document.getElementById("lw-memo-status");
-      if (st) { st.textContent = "✓ 已自动保存"; st.classList.add("ok"); }
+      if (st) { st.textContent = "✓ 已保存"; st.classList.add("ok"); }
       setTimeout(() => { STORE.memoSaved = false; }, 1500);
     };
     let memoBuf = 0;
     const autoSave = () => { clearTimeout(memoBuf); memoBuf = setTimeout(flushMemo, 600); };
     const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
-    if (ti) ti.oninput = autoSave;
-    if (ta) ta.oninput = autoSave;
+    /* ⚠️ 输入时必须**同时**刷新派生视图（右侧预览 + 左侧列表摘要）——
+       以前 oninput 只接 autoSave() ✗，于是「左边改了、右边不动」，
+       要等别的操作触发整屏 render() 才追上来（用户反馈的左右不同步）。
+       refreshMemoDerived 只碰预览和列表，不重建 textarea ✓（光标/选区不丢）。 */
+    const onEdit = () => { snapMemo("edit"); refreshMemoDerived(); autoSave(); };
+    if (ti) ti.oninput = onEdit;
+    if (ta) ta.oninput = onEdit;
+    /* 撤销 / 重做：先把待保存的正文落进 cur.text，再回退（否则 REDO 那一帧是旧的 ✗） */
+    /* 状态提示：⚠️ 定时器放**模块作用域** —— bind() 每次渲染都会重跑，
+       放函数里的话快捷键处理器（只绑一次、捕获的是第一次的闭包）
+       清不掉后来那次渲染留下的定时器 ✗。 */
+    const flashMemoStatus = (text) => {
+      const st = document.getElementById("lw-memo-status");
+      if (!st) return;
+      clearTimeout(MEMO_STATUS_TIMER);
+      st.textContent = text; st.classList.add("ok");
+      MEMO_STATUS_TIMER = setTimeout(() => {
+        const s2 = document.getElementById("lw-memo-status");
+        if (s2) s2.textContent = "✓ 已保存";
+      }, 1600);
+    };
+    const mUndo = q("#lw-memo-undo"), mRedo = q("#lw-memo-redo");
+    if (mUndo) mUndo.onclick = () => {
+      flushMemo(); clearTimeout(memoBuf);
+      if (undoMemo()) flashMemoStatus("↶ 已撤销"); else flashMemoStatus("没有可撤销的操作");
+    };
+    if (mRedo) mRedo.onclick = () => {
+      flushMemo(); clearTimeout(memoBuf);
+      if (redoMemo()) flashMemoStatus("↷ 已重做"); else flashMemoStatus("没有可重做的操作");
+    };
     /* 双击正文 → 进入编辑 */
     const prev = q("#lw-nt-prev");
     if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-body"); if (t2) t2.focus(); };
@@ -1321,7 +1443,8 @@
     /* 新建 */
     const mNew = q("#lw-memo-new");
     if (mNew) mNew.onclick = () => {
-      flushMemo();
+      flushMemo(); clearTimeout(memoBuf);
+      snapMemo("new");
       const id = "m" + Date.now();
       STORE.memos = STORE.memos || [];
       STORE.memos.unshift({ id, text: "新备忘录", folder: STORE.memoFolder || "备忘录", pin: false, at: Date.now(), edit: Date.now() });
@@ -1333,6 +1456,7 @@
     if (aa) aa.onclick = () => { flushMemo(); STORE.memoMenu = !STORE.memoMenu; saveStore(); render(); };
     qa("[data-mfmt]").forEach((el) => {
       el.onclick = () => {
+        snapMemo("format");
         const id = STORE.memoSel;
         STORE.memoFmt = STORE.memoFmt || {};
         STORE.memoFmt[id] = el.dataset.mfmt;
@@ -1349,19 +1473,34 @@
     });
     qa("[data-mwrap]").forEach((el) => {
       el.onclick = () => {
+        snapMemo("format");
         const w = el.dataset.mwrap;
         const elTa = document.getElementById("lw-memo-body");
-        if (elTa) { const a = elTa.selectionStart || 0, b = elTa.selectionEnd || 0; const sel = elTa.value.slice(a, b) || "文字"; elTa.value = elTa.value.slice(0, a) + w + sel + w + elTa.value.slice(b); elTa.focus(); }
+        /* ⚠️ 以前这里改完 elTa.value 就完事了 —— 既不同步预览、也不落盘 ✗，
+           所以「点了粗体，右边预览没反应，切走再回来还丢了」。 */
+        if (elTa) { const a = elTa.selectionStart || 0, b = elTa.selectionEnd || 0; const sel = elTa.value.slice(a, b) || "文字"; elTa.value = elTa.value.slice(0, a) + w + sel + w + elTa.value.slice(b); elTa.focus(); refreshMemoDerived(); autoSave(); }
         else { const cur = curMemo(); if (cur) { const lines = String(cur.text || "").split("\n"); if (lines[1]) lines[1] = w + lines[1] + w; cur.text = lines.join("\n"); saveStore(); render(); } }
       };
     });
     /* 清单 / 表格 快捷插入 */
     const ck = q("#lw-nt-check");
-    if (ck) ck.onclick = () => { const elTa = document.getElementById("lw-memo-body"); if (elTa) { elTa.value += (elTa.value ? "\n" : "") + "- [ ] "; elTa.focus(); } else { const cur = curMemo(); if (cur) { cur.text += "\n- [ ] "; saveStore(); render(); } } };
+    if (ck) ck.onclick = () => {
+      snapMemo("insert");
+      const elTa = document.getElementById("lw-memo-body");
+      if (elTa) { elTa.value += (elTa.value ? "\n" : "") + "- [ ] "; elTa.focus(); refreshMemoDerived(); autoSave(); }
+      else { const cur = curMemo(); if (cur) { cur.text += "\n- [ ] "; saveStore(); render(); } }
+    };
     const tb = q("#lw-nt-table");
-    if (tb) tb.onclick = () => { const cur = curMemo(); if (!cur) return; cur.text += "\n| 列1 | 列2 |\n| --- | --- |\n|  |  |"; saveStore(); render(); };
+    if (tb) tb.onclick = () => {
+      snapMemo("insert");
+      const elTa = document.getElementById("lw-memo-body");
+      const t = "\n| 列1 | 列2 |\n| --- | --- |\n|  |  |";
+      /* 有 textarea 就往光标处插（并同步预览/列表）；没有就直接改数据 */
+      if (elTa) { const p2 = elTa.selectionStart == null ? elTa.value.length : elTa.selectionStart; elTa.value = elTa.value.slice(0, p2) + t + elTa.value.slice(elTa.selectionEnd == null ? p2 : elTa.selectionEnd); elTa.focus(); refreshMemoDerived(); autoSave(); }
+      else { const cur = curMemo(); if (!cur) return; cur.text += t; saveStore(); render(); }
+    };
     /* 置顶 / 导出 / 删除 */
-    qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { m.pin = !m.pin; saveStore(); render(); } }; });
+    qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { snapMemo("pin"); m.pin = !m.pin; saveStore(); render(); } }; });
     const mExp = q("#lw-memo-export");
     if (mExp) mExp.onclick = () => {
       const cur = curMemo(); if (!cur) return;
@@ -1372,12 +1511,23 @@
       a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 3000);
     };
     const mDel = q("#lw-memo-del");
-    if (mDel) mDel.onclick = () => { const cur = curMemo(); if (cur) { cur.trash = true; STORE.memoSel = ""; STORE.memoEditing = ""; saveStore(); render(); } };
+    if (mDel) mDel.onclick = () => {
+      const cur = curMemo(); if (!cur) return;
+      /* 先把 textarea 里最新内容收进 cur.text —— 但**不走 flushMemo**：
+         它会顺手把空内容整条删掉，那条规则是给「切走」用的，删除按钮不需要。 */
+      const t1 = q("#lw-memo-title"), t2 = q("#lw-memo-body");
+      if (t1) cur.text = t1.value + (t2 && t2.value ? "\n" + t2.value : "");
+      clearTimeout(memoBuf);                 /* 别再让排队的自动保存回来搅一遍 */
+      snapMemo("delete");                    /* 删除可撤销 ✓ */
+      cur.trash = true; STORE.memoSel = ""; STORE.memoEditing = "";
+      saveStore(); render();
+      flashMemoStatus("已移到回收站 · ⌘Z 可撤销");
+    };
     /* 回收站 */
-    qa("[data-mrestore]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mrestore); if (m) { m.trash = false; saveStore(); render(); } }; });
-    qa("[data-mkill]").forEach((el) => { el.onclick = () => { STORE.memos = (STORE.memos || []).filter((x) => x.id !== el.dataset.mkill); saveStore(); render(); } });
+    qa("[data-mrestore]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mrestore); if (m) { snapMemo("restore"); m.trash = false; saveStore(); render(); } }; });
+    qa("[data-mkill]").forEach((el) => { el.onclick = () => { snapMemo("kill"); STORE.memos = (STORE.memos || []).filter((x) => x.id !== el.dataset.mkill); saveStore(); render(); }; });
     const tEmpty = q("#lw-trash-empty");
-    if (tEmpty) tEmpty.onclick = () => { if (!confirm("清空回收站？无法恢复。")) return; STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render(); };
+    if (tEmpty) tEmpty.onclick = () => { if (!confirm("清空回收站？无法恢复。")) return; snapMemo("empty-trash"); STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render(); };
     /* 快捷键 */
     if (!bind._keys) {
       bind._keys = (e) => {
@@ -1386,6 +1536,16 @@
         const k = String(e.key || "").toLowerCase();
         if (k === "f") { e.preventDefault(); const i = document.getElementById("lw-memo-q"); if (i) { i.focus(); i.select(); } }
         else if (k === "n" && TAB === "memo") { e.preventDefault(); const b2 = document.getElementById("lw-memo-new"); if (b2) b2.click(); }
+        else if (k === "z" && TAB === "memo") {
+          /* 光标在输入框里 → 让浏览器做**原生文本撤销**（用户预期），不拦 ✓。
+             原生撤销也会触发 input 事件，所以预览/列表照样会跟着刷新 ✓。
+             光标不在输入框（例如刚点完删除/格式）→ 走应用级撤销。 */
+          const ae = document.activeElement;
+          if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return;
+          e.preventDefault();
+          const ok = e.shiftKey ? redoMemo() : undoMemo();
+          flashMemoStatus(ok ? (e.shiftKey ? "↷ 已重做" : "↶ 已撤销") : (e.shiftKey ? "没有可重做的操作" : "没有可撤销的操作"));
+        }
       };
       document.addEventListener("keydown", bind._keys);
     }
@@ -1959,15 +2119,17 @@
     const meta = d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes())) : "";
     const editor = cur ? '<div class="lw-nt-bar">'
       + '<button id="lw-memo-new" title="新建（⌘N）">✎ 新建</button>'
+      + '<button id="lw-memo-undo" title="撤销（⌘Z）"' + (canUndo() ? '' : ' disabled') + '>↶ 撤销</button>'
+      + '<button id="lw-memo-redo" title="重做（⌘⇧Z）"' + (canRedo() ? '' : ' disabled') + '>↷</button>'
       + '<button id="lw-nt-aa" class="' + ((STORE && STORE.memoMenu) ? "on" : "") + '" title="格式">Aa</button>'
       + '<button id="lw-nt-check" title="插入清单项">☑</button>'
       + '<button id="lw-nt-table" title="插入表格">▦</button>'
       + '<button id="lw-nt-live" class="' + (STORE.memoLive ? "on" : "") + '" title="Markdown 实时预览">◫ 预览</button>'
       + '<span class="sp"></span>'
-      + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已自动保存" : "自动保存") + '</span>'
+      + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
       + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "★" : "☆") + '</button>'
       + '<button id="lw-memo-export" title="导出 Markdown">导出</button>'
-      + '<button id="lw-memo-del" title="移到回收站">删除</button></div>'
+      + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button></div>'
       + fmtBar
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
       + (STORE.memoLive
