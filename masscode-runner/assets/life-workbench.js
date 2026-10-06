@@ -1661,8 +1661,15 @@
         e.preventDefault();
         saveMemoText();
         const lines = String(readCe() == null ? '' : readCe()).split('\n');
-        lines.splice(memoCeIdx + 1, 0, '');
-        applyCe(lines.join('\n'), memoCeIdx + 1, true);
+        /* ★ 在**光标处**把当前行切成两半，后半段移到新行 ✓。
+           以前只会「在下面插一个空行」✗ —— 光标在行中间按回车时，后面的文字不跟着换行
+           （用户反馈的「文字不跟着换行」）。光标取不到时退回行尾（= 老行为）✓。 */
+        const curLine = String(lines[memoCeIdx] || '');
+        const caretAt = ceCaretOffset(memoCeNode, memoCeIdx);
+        const cut = caretAt == null ? curLine.length : Math.max(0, Math.min(caretAt, curLine.length));
+        lines[memoCeIdx] = curLine.slice(0, cut);
+        lines.splice(memoCeIdx + 1, 0, curLine.slice(cut));
+        applyCe(lines.join('\n'), memoCeIdx + 1, true, 0);   /* 光标落到新行开头 ✓ */
         saveMemoText();
       };
       /* 初始化：把光标放到上次那一行（存过就恢复 ✓）*/
@@ -2072,8 +2079,14 @@
           e.preventDefault();
           persist();
           const lines = readAll().split('\n');
-          lines.splice(ceIdx + 1, 0, '');
-          applyCeJ(lines.join('\n'), ceIdx + 1, true);
+          /* ★ 和备忘录同一套：在**光标处**把当前行切成两半 ✓
+             （以前只在下面插空行 ✗，行中间回车时后半段不跟着走）*/
+          const curLine = String(lines[ceIdx] || '');
+          const caretAt = ceCaretOffset(ce, ceIdx);
+          const cut = caretAt == null ? curLine.length : Math.max(0, Math.min(caretAt, curLine.length));
+          lines[ceIdx] = curLine.slice(0, cut);
+          lines.splice(ceIdx + 1, 0, curLine.slice(cut));
+          applyCeJ(lines.join('\n'), ceIdx + 1, true, 0);
         }
       };
       /* 初始化：把光标放到当前行 ✓ */
@@ -2594,6 +2607,23 @@
     } catch (_) {}
   }
 
+  /* 光标在第 index 行内的**字符偏移**；光标不在这行（或有选区）时返回 null。
+     行首退格 / 行尾 Delete / 回车切分都要用它 ✓。 */
+  function ceCaretOffset(ce, index) {
+    const sel = window.getSelection();
+    if (!ce || !sel || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return null;
+    const lineEl = Array.from(ce.querySelectorAll(':scope > .ln'))[index];
+    if (!lineEl || !lineEl.contains(range.startContainer)) return null;
+    try {
+      const probe = range.cloneRange();
+      probe.selectNodeContents(lineEl);
+      probe.setEnd(range.startContainer, range.startOffset);
+      return probe.toString().length;
+    } catch (_) { return null; }
+  }
+
   /* ── 行首退格 / 行尾 Delete：**必须自己拦**，不能交给浏览器 ──────────────
      contenteditable 里在行首按退格，浏览器会去「合并上一个块」，
      而上一块是 contenteditable="false" 的渲染行 → 浏览器的处理是**毁灭性**的 ✗✗：
@@ -2603,23 +2633,12 @@
   function ceLineKey(event, opts) {
     if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
     const ce = opts.ce;
-    const sel = window.getSelection();
-    if (!ce || !sel || !sel.rangeCount) return false;
-    const range = sel.getRangeAt(0);
-    if (!range.collapsed) return false;                       /* 有选区 → 交给浏览器正常删除 ✓ */
-    const all = Array.from(ce.querySelectorAll(':scope > .ln'));
-    const lineEl = all[opts.index];
-    if (!lineEl || !lineEl.contains(range.startContainer)) return false;
-    /* 光标前面有多少字符（用 Range 量，比数字符节点稳 ✓）*/
-    let before = '';
-    try {
-      const probe = range.cloneRange();
-      probe.selectNodeContents(lineEl);
-      probe.setEnd(range.startContainer, range.startOffset);
-      before = probe.toString();
-    } catch (_) { return false; }
-    const lineText = String(lineEl.textContent || '');
-    if (event.key === 'Backspace' && before === '') {
+    if (!ce) return false;
+    const offset = ceCaretOffset(ce, opts.index);
+    if (offset == null) return false;                          /* 光标不在这行 / 有选区 → 交给浏览器 ✓ */
+    const lineEl = Array.from(ce.querySelectorAll(':scope > .ln'))[opts.index];
+    const lineText = String(lineEl ? lineEl.textContent : '');
+    if (event.key === 'Backspace' && offset === 0) {
       event.preventDefault();
       if (opts.index <= 0) return true;                       /* 首行行首：什么也不做 ✓（绝不能让它删）*/
       const lines = String(opts.readAll()).split('\n');
@@ -2629,7 +2648,7 @@
       opts.apply(lines.join('\n'), opts.index - 1, true, at);  /* 光标停在合并处 ✓ */
       return true;
     }
-    if (event.key === 'Delete' && before === lineText) {
+    if (event.key === 'Delete' && offset === lineText.length) {
       event.preventDefault();
       const lines = String(opts.readAll()).split('\n');
       if (opts.index >= lines.length - 1) return true;         /* 末行行尾：什么也不做 ✓ */
