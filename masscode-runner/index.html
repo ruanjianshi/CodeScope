@@ -4856,7 +4856,7 @@
   </div>
 </div>
 <div id="vnc-workspace" aria-label="VNC 远程桌面">
-  <div id="vnc-toolbar"><span class="title">▣ VNC 远程桌面</span><span id="vnc-target"></span><span class="sp"></span><span id="vnc-input-hint">点击画面后可输入</span><span id="vnc-state" class="state">未连接</span><span id="vnc-latency" class="remote-latency" title="Runner 到 VNC 主机的网络往返延迟"></span><label class="remote-check" style="grid-column:auto"><input id="vnc-toolbar-viewonly" type="checkbox"> 只读</label><button id="vnc-close">关闭</button></div>
+  <div id="vnc-toolbar"><span class="title">▣ VNC 远程桌面</span><span id="vnc-target"></span><span class="sp"></span><span id="vnc-input-hint">点击画面后可输入</span><span id="vnc-state" class="state">未连接</span><span id="vnc-latency" class="remote-latency" title="Runner 到 VNC 主机的网络往返延迟"></span><label class="remote-check" style="grid-column:auto"><input id="vnc-toolbar-viewonly" type="checkbox"> 只读</label><button id="vnc-panel" title="打开远程面板：SSH 终端 / 远程文件 / 断开 VNC">远程面板</button><button id="vnc-close" title="收起画面（连接保持）：回代码工作区后，点顶栏「远程」可继续这个桌面">收起</button></div>
   <div id="vnc-screen"></div>
   <textarea id="vnc-keyboard-input" aria-label="VNC 键盘输入" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
 </div>
@@ -18129,6 +18129,10 @@ let VNC_RFB = null;
 let VNC_KEYSYMS = null;
 let VNC_COMPOSING = false;
 let VNC_CONNECTED = false;
+/* 记住上次用的远程标签页（ssh / files / vnc）—— 下次打开远程面板直接回到那一页 ✓。
+   以前每次打开都从 SSH 页开始 ✗，用 VNC 的人每次都要再点一次「VNC 桌面」。 */
+let REMOTE_TAB = 'ssh';
+try { const savedTab = localStorage.getItem('mc-remote-tab'); if (['ssh', 'files', 'vnc'].includes(savedTab)) REMOTE_TAB = savedTab; } catch (_) {}
 const REMOTE_LATENCY = {
   ssh: { timer: null, generation: 0 },
   vnc: { timer: null, generation: 0 },
@@ -18178,10 +18182,16 @@ function remoteMessage(id, message, kind = '') {
   el.className = 'remote-msg' + (kind ? ' ' + kind : '');
 }
 function remoteTab(name) {
+  if (!['ssh', 'files', 'vnc'].includes(name)) name = 'ssh';
+  REMOTE_TAB = name;
+  try { localStorage.setItem('mc-remote-tab', name); } catch (_) {}
   for (const key of ['ssh', 'files', 'vnc']) {
     $('remote-tab-' + key).classList.toggle('on', name === key);
     $('remote-' + key).classList.toggle('hidden', name !== key);
   }
+  /* 已经连着 VNC 时，「打开 VNC 桌面」改成「回到桌面」—— 点一下直接回画面，不用重连 ✓ */
+  const vncBtn = $('vnc-connect');
+  if (vncBtn && name === 'vnc') vncBtn.textContent = VNC_CONNECTED ? '回到桌面' : '打开 VNC 桌面';
   if (name === 'files' && !$('remote-files-list').dataset.loaded) {
     remoteMessage('remote-files-msg', $('ssh-host').value.trim() && $('ssh-user').value.trim()
       ? '填写远程文件密码后点击“刷新”；使用私钥或 SSH Agent 时可直接刷新。'
@@ -18214,6 +18224,8 @@ async function loadRemoteStatus() {
     $('vnc-connect').disabled = !vncReady;
     const sshActive = !!(d.terminal && d.terminal.active && d.terminal.mode === 'ssh');
     $('btn-remote').classList.toggle('remote-on', sshActive || VNC_CONNECTED);
+    /* VNC 还连着时，按钮改成「回到桌面」—— 点一下直接回画面，不用重连 ✓ */
+    if ($('vnc-connect')) $('vnc-connect').textContent = VNC_CONNECTED ? '回到桌面' : '打开 VNC 桌面';
     setTerminalMode(sshActive ? 'ssh' : 'local', sshActive ? d.terminal.label : '');
     if (sshActive) startRemoteLatency('ssh', d.terminal.host, d.terminal.port || 22);
     else stopRemoteLatency('ssh');
@@ -18420,6 +18432,30 @@ function closeVnc(message = '已断开') {
   $('btn-remote').classList.remove('remote-on');
   loadRemoteStatus();
 }
+/* ── 收起 / 恢复 VNC 画面（**不断开连接**）────────────────────────────────
+   以前 VNC 工具栏的「关闭」直接调 closeVnc() ✗ —— 它会把 RFB 连接断掉，
+   于是「连上 VNC → 回代码工作区 → 再点远程」必须从头重连 ✗（用户反馈的问题）。
+   现在「关闭」= 只把画面收起来，会话继续在后台跑；顶栏「远程」或面板里的
+   「回到桌面」都能一键回到这个画面 ✓。真正断开走面板里的「断开」按钮 ✓。 */
+function hideVncWorkspace() {
+  $('vnc-workspace').classList.remove('open');
+  try { $('vnc-keyboard-input').blur(); } catch (_) {}
+}
+function showVncWorkspace() {
+  if (!VNC_CONNECTED) return false;
+  $('vnc-workspace').classList.add('open');
+  $('remote-panel').classList.remove('open');
+  /* ⚠️ 藏起来期间画布是 display:none（尺寸 0），重新显示后要让 noVNC 按新容器重新缩放 ✗
+     —— 否则画面会糊成一小块或者拉伸变形。改 scaleViewport 会触发它自己重算，
+     再补一次 resize 事件兜底（要等布局完成，所以放到下一帧）。 */
+  const rfb = VNC_RFB;
+  if (rfb) {
+    try { rfb.scaleViewport = true; rfb.clipViewport = false; } catch (_) {}
+    setTimeout(() => { try { window.dispatchEvent(new Event('resize')); } catch (_) {} }, 50);
+  }
+  $('vnc-state').textContent = '已连接';
+  return true;
+}
 function focusVncKeyboard(clientX, clientY) {
   if (!VNC_RFB || VNC_RFB.viewOnly) return;
   const input = $('vnc-keyboard-input');
@@ -18513,7 +18549,14 @@ async function connectVnc() {
     remoteMessage('vnc-msg', e.message || String(e), 'err');
   }
 }
-$('btn-remote').onclick = () => { $('remote-panel').classList.add('open'); loadRemoteStatus(); };
+$('btn-remote').onclick = () => {
+  /* VNC 还连着 → 直接回到那个画面，不用再点一次「连接」✓（用户要求）。
+     要 SSH / 文件 / 断开，从画面工具栏的「远程面板」进 ✓。 */
+  if (VNC_CONNECTED && showVncWorkspace()) return;
+  $('remote-panel').classList.add('open');
+  remoteTab(REMOTE_TAB);      /* 回到上次用的那一页 ✓ */
+  loadRemoteStatus();
+};
 $('btn-remote-close').onclick = () => $('remote-panel').classList.remove('open');
 $('remote-tab-ssh').onclick = () => remoteTab('ssh');
 $('remote-tab-files').onclick = () => remoteTab('files');
@@ -18540,9 +18583,10 @@ $('remote-file-download').onclick = downloadRemoteFile;
 for(const eventName of ['dragenter','dragover']) $('remote-files-list').addEventListener(eventName,(event)=>{event.preventDefault();event.dataTransfer.dropEffect='copy';$('remote-files-list').classList.add('dragover');});
 $('remote-files-list').addEventListener('dragleave',()=> $('remote-files-list').classList.remove('dragover'));
 $('remote-files-list').addEventListener('drop',async(event)=>{event.preventDefault();$('remote-files-list').classList.remove('dragover');try{await uploadLocalFiles(await droppedRemoteFiles(event.dataTransfer));}catch(error){remoteMessage('remote-files-msg',error.message||String(error),'err');}});
-$('vnc-connect').onclick = connectVnc;
+$('vnc-connect').onclick = () => { if (VNC_CONNECTED && showVncWorkspace()) return; connectVnc(); };
 $('vnc-disconnect').onclick = () => closeVnc();
-$('vnc-close').onclick = () => closeVnc();
+$('vnc-close').onclick = () => hideVncWorkspace();   /* 「收起」：只隐藏画面，**不断开连接** ✓ */
+$('vnc-panel').onclick = () => { $('remote-panel').classList.add('open'); remoteTab('vnc'); loadRemoteStatus(); };
 $('vnc-toolbar-viewonly').onchange = () => {
   $('vnc-viewonly').checked = $('vnc-toolbar-viewonly').checked;
   if (VNC_RFB) VNC_RFB.viewOnly = $('vnc-toolbar-viewonly').checked;
@@ -18636,6 +18680,8 @@ document.querySelectorAll('[data-project-tab]').forEach((button)=>button.onclick
 $('task-run-custom').onclick=()=>runProjectTask({command:$('task-command').value.trim(),cwd:$('task-cwd').value.trim()||'.'},$('task-run-custom'));
 $('debug-start').onclick=startProjectDebug;
 restoreRemoteFields();
+/* 打开页面时就把远程面板恢复到上次用的那一页（不打开面板，只是让内部状态一致 ✓）*/
+remoteTab(REMOTE_TAB);
 restoreRemotePanelSize();
 initRemotePanelResize();
 loadRemoteStatus();
