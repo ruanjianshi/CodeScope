@@ -72,17 +72,24 @@
   .lw-main { flex:1; min-width:0; overflow:auto; padding:16px 18px 28px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a2a26; }
   .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
-  /* ★ 卡片：右下角可拖拽调整大小 ✓
-     用 CSS 的 resize: both ✓（比手写拖拽逻辑简单得多 ✓，而且原生手感 ✓）。
-     注意 resize 要求 overflow 不是 visible ✓，所以给卡片加了 overflow:auto ✓；
-     同时给一个 min-* 防止被拖没了 ✓。
-     （警告：这个文件里的 CSS 是模板字符串，注释里**不要写反引号** ✗ —— 踩过四次了 ✗。）*/
+  /* ★ 卡片：拖边/角改大小 ✓，但**不要原生那个小三角** ✗
+     做法：保留 resize:both（它负责拖拽能力 ✓），
+     把原生 resizer 的**视觉抹掉** ✓，改用自己画的角标 ✓：
+     · 平时完全看不见 ✓
+     · hover 卡片时右下角出现**黄色折角** ✓（一眼知道能拖 ✓）
+     · 光标仍由原生 resizer 提供（nwse-resize ✓）
+     （提醒：这个文件的 CSS 是模板字符串，注释里不要写反引号 ✗ —— 踩过四次 ✗。）*/
   .lw-c { background:${T.card}; border:2px solid ${T.lineDim}; overflow:auto; resize:both;
     min-width:240px; min-height:120px; position:relative; }
   .lw-c:hover { border-color:${T.line}; }
-  .lw-c::-webkit-resizer { background:linear-gradient(135deg, transparent 50%, ${T.lineDim} 50%);
-    border-bottom-right-radius:2px; }
-  .lw-c:hover::-webkit-resizer { background:linear-gradient(135deg, transparent 50%, ${T.accent} 50%); }
+  /* 抹掉原生小三角 ✓（只去掉视觉，拖拽能力还在 ✓）*/
+  .lw-c::-webkit-resizer { background:transparent; }
+  /* 自绘角标：hover 时右下角出现黄色折角 ✓（用 ::after 不占布局 ✓）*/
+  .lw-c::after { content:""; position:absolute; right:1px; bottom:1px; width:14px; height:14px;
+    pointer-events:none; opacity:0; transition:opacity .15s;
+    background:linear-gradient(135deg, transparent 46%, ${T.accent} 46%, ${T.accent} 58%, transparent 58%,
+      transparent 70%, ${T.accent} 70%, ${T.accent} 82%, transparent 82%); }
+  .lw-c:hover::after { opacity:.85; }
   /* 卡片：硬边框 + 标题栏带前缀编码 */
   .lw-c { background:${T.card}; border:2px solid ${T.line}; border-radius:0; }
   .lw-c > h3 { position:sticky; top:0; z-index:2; background:${T.card}; margin:0; padding:8px 11px; font-size:9.5px; font-weight:600; letter-spacing:2px; text-transform:uppercase;
