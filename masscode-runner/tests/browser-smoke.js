@@ -472,7 +472,18 @@ print(r.run())
   await page.locator('#env-runtime-list .tool-row').first().waitFor({state:'visible',timeout:10000});
   if(await page.locator('#env-runtime-list .tool-row').count()<5)throw new Error('运行基础检测条目不完整');
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
-  if(!(await page.locator('#env-meta').innerText()).includes('CodeScope: v'+packageVersion))throw new Error('环境元信息未显示 v'+packageVersion);
+  /* 元信息现在是键值网格（label 与值分属两个元素），只断言「版本号有显示」这件事本身 */
+  if(!(await page.locator('#env-meta').innerText()).includes('v'+packageVersion))throw new Error('环境元信息未显示 v'+packageVersion);
+  /* DSH 四个操作按钮（打开 / 启动 / 关闭 / 重启）必须都在，且启动/关闭按状态互斥 */
+  const dshButtons=await page.evaluate(()=>{
+    const ids=['btn-env-dsh-open','btn-env-dsh-start','btn-env-dsh-stop','btn-env-dsh-restart'];
+    const found=ids.map((id)=>document.getElementById(id));
+    if(found.some((node)=>!node))return {missing:ids.filter((id)=>!document.getElementById(id))};
+    return {打开:found[0].disabled,启动:found[1].disabled,关闭:found[2].disabled,重启:found[3].disabled,状态:document.getElementById('env-dsh-card').dataset.state};
+  });
+  if(dshButtons.missing)throw new Error('DSH 操作按钮缺失：'+dshButtons.missing.join(', '));
+  if(dshButtons.状态==='ok'&&(dshButtons.启动===false||dshButtons.关闭===true))throw new Error('DSH 运行中时按钮状态不对：'+JSON.stringify(dshButtons));
+  if(dshButtons.状态!=='ok'&&(dshButtons.启动===true||dshButtons.关闭===false))throw new Error('DSH 未运行时按钮状态不对：'+JSON.stringify(dshButtons));
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
   if(await page.locator('.env-extensions').getAttribute('open')!==null)throw new Error('按需扩展列表默认未折叠');
   if(!(await page.locator('.env-package-note').innerText()).includes('基础环境')||!(await page.locator('.env-package-note').innerText()).includes('gopls')||!(await page.locator('.env-package-note').innerText()).includes('只使用 ONLYOFFICE'))throw new Error('桌面安装包工具链或 ONLYOFFICE 必选说明缺失');
