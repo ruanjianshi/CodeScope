@@ -618,6 +618,22 @@
     content:'直接在这里写…（# 标题 / **粗体** / - [ ] 清单 / | 表格 | / #标签）';
     position:absolute; left:0; top:0; color:${T.faint}; pointer-events:none;
   }
+  /* ── 图片预览：点「图片」后编辑区切成「左编辑 / 右图片预览」两栏 ──
+     注意这和之前被拆掉的 Markdown 分栏**不是一回事**：
+     这里只是把导出结果先看一眼再下载 ✓（用户要求「先是预览效果，分栏」）。 */
+  .lw-img-split { flex:1; display:flex; min-height:0; }
+  .lw-img-split > .pane { min-width:0; display:flex; flex-direction:column; }
+  .lw-img-split > .pane:first-child { flex:1 1 54%; }
+  .lw-img-split > .pane.img { flex:1 1 46%; border-left:1px solid ${T.lineDim}; background:#0d0d0c; }
+  .lw-img-split .panehd { flex:none; display:flex; align-items:center; gap:8px; padding:7px 12px;
+    border-bottom:1px solid ${T.lineDim}; color:${T.faint}; font-size:9.5px; letter-spacing:1.4px; text-transform:uppercase; }
+  .lw-img-split .panehd .sp { flex:1; }
+  .lw-img-split .panehd button { height:24px; padding:0 9px; font-size:11px; letter-spacing:0; text-transform:none; }
+  .lw-img-size { font:10px ${MONO}; color:${T.dim}; letter-spacing:0; text-transform:none; }
+  .lw-img-split .panebd { flex:1; overflow:auto; padding:12px; }
+  .lw-img-split .panebd img { display:block; width:100%; height:auto; border:1px solid ${T.lineDim}; }
+  .lw-img-hint { padding:26px 6px; color:${T.faint}; font-size:12px; text-align:center; }
+  .lw-img-hint.err { color:${T.red}; }
   /* 工具栏（紧凑 ✓ 不换行 ✓）*/
   .lw-live-bar { display:flex; align-items:center; gap:7px; padding:6px 10px; flex:none;
     border-bottom:1px solid ${T.lineDim}; background:#131312; font-size:10px; color:${T.faint}; letter-spacing:.4px; }
@@ -1020,6 +1036,14 @@
     '.mx-ft{margin-top:26px;padding-top:12px;border-top:1px solid #2b2a24;color:#5c5a50;font-size:10.5px;',
     'display:flex;gap:8px}',
   ].join('');
+  /* 图片预览状态：null = 没开；开了就把编辑区切成「左编辑 / 右图片预览」两栏
+     （用户要求：点「图片」**先出预览**，确认后再下载 ✓）。
+     ⚠️ 只在内存里 —— 刷新页面回到纯编辑状态，不写进 STORE ✓。 */
+  let MEMO_IMG_PREVIEW = null;   /* { url, w, h, blob, base, busy, err } */
+  function closeMemoImgPreview() {
+    if (MEMO_IMG_PREVIEW && MEMO_IMG_PREVIEW.url) { try { URL.revokeObjectURL(MEMO_IMG_PREVIEW.url); } catch (_) {} }
+    MEMO_IMG_PREVIEW = null;
+  }
   function memoImageHtml(title, bodyHtml, whenText) {
     return '<div xmlns="http://www.w3.org/1999/xhtml" class="mx">'
       + '<style>' + MEMO_IMG_CSS + '</style>'
@@ -1035,8 +1059,10 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   }
-  /* 返回 {w,h}（导出后的像素尺寸），失败时抛错由调用方提示。 */
-  async function memoExportImage(title, bodyHtml, whenText, fileBase) {
+  /* 生成图片但**不下载**，返回 { blob, url, w, h }。
+     —— 拆成「生成」和「下载」两步：工具栏的「图片」先出预览、确认后再下载 ✓。
+     url 是 blob 地址，用完（关闭预览 / 重新生成）要 revoke，别漏 ✓。 */
+  async function memoRenderImage(title, bodyHtml, whenText) {
     const html = memoImageHtml(title, bodyHtml, whenText);
     /* 先挂到页面上量高度：<style> 在图片上下文里能用，但高度只能在真实文档里算出来 */
     const host = document.createElement('div');
@@ -1077,8 +1103,17 @@
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise((resolve, reject) => canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error('PNG 编码失败'))), 'image/png'));
-    memoDownload(blob, (fileBase || 'memo') + '.png');
-    return { w: canvas.width, h: canvas.height };
+    return { blob, url: URL.createObjectURL(blob), w: canvas.width, h: canvas.height };
+  }
+  function memoDownloadImage(rendered, fileBase) {
+    if (!rendered || !rendered.blob) return;
+    memoDownload(rendered.blob, (fileBase || 'memo') + '.png');
+  }
+  /* 生成 + 直接下载（一步到位，给需要跳预览的场景用）*/
+  async function memoExportImage(title, bodyHtml, whenText, fileBase) {
+    const rendered = await memoRenderImage(title, bodyHtml, whenText);
+    memoDownloadImage(rendered, fileBase);
+    return { w: rendered.w, h: rendered.h };
   }
 
   function render() {
@@ -1143,6 +1178,13 @@
        cur.text 平时要等 600ms 的 flushMemo 才更新，而列表刷新是 200ms，
        不先写回的话列表读到的是旧数据 ✗（实测：打完字列表摘要少一行）。 */
     memoWriteFromEditor(cur);
+    /* 图片预览开着时改了内容 → 在预览栏提示一下。
+       ⚠️ **不能自动重新生成** —— 那要调 render()，会把编辑器整个重建、抢走光标 ✗，
+          打字时体验直接废掉。所以只提示，让用户自己点「图片」✓。 */
+    if (MEMO_IMG_PREVIEW && !MEMO_IMG_PREVIEW.busy) {
+      const note = document.getElementById('lw-memo-img-note');
+      if (note) note.textContent = '内容已更新 · 点「图片」重新生成';
+    }
     /* 左侧列表摘要 + 侧栏计数：稍作防抖，避免每个字都重建一遍 */
     clearTimeout(LIVE_BUF);
     LIVE_BUF = setTimeout(() => { if (TAB === 'memo') renderMemoList(); }, 200);
@@ -1214,7 +1256,7 @@
       saveStore();
     };
     qa("[data-memo]").forEach((el) => {
-      el.onclick = () => { flushMemo(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
+      el.onclick = () => { flushMemo(); closeMemoImgPreview(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
     });
     qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
     qa("[data-msmart]").forEach((el) => {
@@ -1633,6 +1675,7 @@
     const mNew = q("#lw-memo-new");
     if (mNew) mNew.onclick = () => {
       flushMemo(); clearTimeout(memoBuf);
+      closeMemoImgPreview();
       snapMemo("new");
       const id = "m" + Date.now();
       STORE.memos = STORE.memos || [];
@@ -1696,12 +1739,11 @@
       a2.download = (String(cur.text || "").split("\n")[0] || "note").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_") + ".md";
       a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 3000);
     };
-    /* 导出为图片：把**渲染后**的正文（含标题与日期）存成 PNG。
-       预览关着也能导 —— 直接从正文现渲染一遍，所见即所得。 */
-    const mImg = q("#lw-memo-image");
-    if (mImg) mImg.onclick = async () => {
-      const cur = curMemo(); if (!cur) return;
-      writeMemo();   /* 同上：先收拢编辑器内容 */
+    /* 导出为图片：点「图片」**先出预览**（编辑区切成「左编辑 / 右图片预览」两栏），
+       确认后再点预览栏里的「下载 PNG」✓ —— 不再一点就直接落盘（用户要求）。 */
+    const memoImageParts = () => {
+      const cur = curMemo(); if (!cur) return null;
+      writeMemo();   /* 先收拢编辑器内容，否则生成的是上次保存的 ✗ */
       const lines = String(cur.text || "").split("\n");
       const title = (lines[0] || "备忘录").trim() || "备忘录";
       const body = lines.slice(1).join("\n");
@@ -1710,15 +1752,39 @@
       const when = d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 "
         + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
       const base = title.slice(0, 40).replace(/[\\/:*?"<>|]/g, "_") || "note";
-      mImg.disabled = true;
-      flashMemoStatus("正在生成图片…");
-      try {
-        const size = await memoExportImage(title, mdToHtml(body) || '<p style="color:#5c5a50">（正文还是空的）</p>', when, base);
-        flashMemoStatus("图片已导出 · " + size.w + "×" + size.h);
-      } catch (error) {
-        flashMemoStatus("导出图片失败：" + (error.message || error));
-      } finally { mImg.disabled = false; }
+      return { title, body: mdToHtml(body) || '<p style="color:#5c5a50">（正文还是空的）</p>', when, base };
     };
+    const refreshMemoImage = async () => {
+      const parts = memoImageParts(); if (!parts) return;
+      closeMemoImgPreview();
+      MEMO_IMG_PREVIEW = { url: "", w: 0, h: 0, blob: null, base: parts.base, busy: true, err: "" };
+      render();                       /* 先把预览栏画出来（带「正在生成…」）*/
+      try {
+        const r = await memoRenderImage(parts.title, parts.body, parts.when);
+        /* 生成期间预览可能已被关掉 / 换了条目 → 别把结果塞回去，顺手回收 blob ✓ */
+        if (!MEMO_IMG_PREVIEW) { try { URL.revokeObjectURL(r.url); } catch (_) {} return; }
+        MEMO_IMG_PREVIEW = { url: r.url, w: r.w, h: r.h, blob: r.blob, base: parts.base, busy: false, err: "" };
+        flashMemoStatus("预览已生成 · " + r.w + "×" + r.h);
+      } catch (error) {
+        MEMO_IMG_PREVIEW = { url: "", w: 0, h: 0, blob: null, base: parts.base, busy: false, err: String(error.message || error) };
+        flashMemoStatus("生成图片失败：" + (error.message || error));
+      }
+      render();
+    };
+    const mImg = q("#lw-memo-image");
+    if (mImg) mImg.onclick = () => {
+      if (MEMO_IMG_PREVIEW) { refreshMemoImage(); return; }   /* 已经开着 → 重新生成 ✓ */
+      MEMO_IMG_PREVIEW = { url: "", w: 0, h: 0, blob: null, base: "memo", busy: true, err: "" };
+      refreshMemoImage();
+    };
+    const mImgSave = q("#lw-memo-img-save");
+    if (mImgSave) mImgSave.onclick = () => {
+      if (!MEMO_IMG_PREVIEW || !MEMO_IMG_PREVIEW.blob) return;
+      memoDownloadImage(MEMO_IMG_PREVIEW, MEMO_IMG_PREVIEW.base);
+      flashMemoStatus("已下载 PNG · " + MEMO_IMG_PREVIEW.w + "×" + MEMO_IMG_PREVIEW.h);
+    };
+    const mImgClose = q("#lw-memo-img-close");
+    if (mImgClose) mImgClose.onclick = () => { closeMemoImgPreview(); render(); };
     const mDel = q("#lw-memo-del");
     if (mDel) mDel.onclick = () => {
       const cur = curMemo(); if (!cur) return;
@@ -2341,10 +2407,26 @@
       + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button></div>'
       + fmtBar
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
-      + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
-      + '<div class="lw-ce lw-memo-ce" id="lw-memo-ce" contenteditable="true" spellcheck="false">'
-      + ceHtml(String(cur.text || "").split("\n").slice(1).join("\n"), STORE.memoCurLine || 0, !!STORE.memoSource)
-      + '</div>'
+      + (() => {
+        /* 编辑区（标题 + 正文）。图片预览打开时会和预览栏并排成两栏 ✓ */
+        const editPane = '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
+          + '<div class="lw-ce lw-memo-ce" id="lw-memo-ce" contenteditable="true" spellcheck="false">'
+          + ceHtml(String(cur.text || "").split("\n").slice(1).join("\n"), STORE.memoCurLine || 0, !!STORE.memoSource)
+          + '</div>';
+        const pv = MEMO_IMG_PREVIEW;
+        if (!pv) return editPane;
+        const head = '<div class="panehd">◫ 图片预览<span class="sp"></span>'
+          + '<span class="lw-img-size" id="lw-memo-img-note">' + (pv.busy ? '正在生成…' : (pv.w ? pv.w + '×' + pv.h : '')) + '</span>'
+          + '<button id="lw-memo-img-save"' + (pv.url ? '' : ' disabled') + ' title="保存为 PNG（含标题与日期）">下载 PNG</button>'
+          + '<button id="lw-memo-img-close" title="关掉预览，回到纯编辑">关闭</button></div>';
+        const bodyHtml = pv.busy ? '<div class="lw-img-hint">正在生成预览…</div>'
+          : pv.err ? '<div class="lw-img-hint err">' + esc(pv.err) + '</div>'
+            : '<img id="lw-memo-img" src="' + esc(pv.url || '') + '" alt="图片预览" />';
+        return '<div class="lw-img-split">'
+          + '<div class="pane">' + editPane + '</div>'
+          + '<div class="pane img">' + head + '<div class="panebd">' + bodyHtml + '</div></div>'
+          + '</div>';
+      })()
       + '</div>'
       : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录，或点「✎ 新建」</div>';
 
