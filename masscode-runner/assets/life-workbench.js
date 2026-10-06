@@ -72,24 +72,27 @@
   .lw-main { flex:1; min-width:0; overflow:auto; padding:16px 18px 28px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a2a26; }
   .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
-  /* ★ 卡片：拖边/角改大小 ✓，但**不要原生那个小三角** ✗
-     做法：保留 resize:both（它负责拖拽能力 ✓），
-     把原生 resizer 的**视觉抹掉** ✓，改用自己画的角标 ✓：
-     · 平时完全看不见 ✓
-     · hover 卡片时右下角出现**黄色折角** ✓（一眼知道能拖 ✓）
-     · 光标仍由原生 resizer 提供（nwse-resize ✓）
-     （提醒：这个文件的 CSS 是模板字符串，注释里不要写反引号 ✗ —— 踩过四次 ✗。）*/
-  .lw-c { background:${T.card}; border:2px solid ${T.lineDim}; overflow:auto; resize:both;
+  /* ★ 卡片：**拖「边」改大小** ✓（右边改宽 ✓ / 下边改高 ✓ / 右下角一起改 ✓）
+     原生 resize 只能拖右下角 ✗ —— 所以改成手写三条热区 ✓。
+     热区用绝对定位的细条 ✓，**不占布局** ✓，平时看不见 ✓，hover 时亮起来 ✓。
+     （提醒：CSS 是模板字符串，注释里不要写反引号 ✗ —— 踩过四次 ✗。）*/
+  .lw-c { background:${T.card}; border:2px solid ${T.lineDim}; overflow:auto;
     min-width:240px; min-height:120px; position:relative; }
   .lw-c:hover { border-color:${T.line}; }
-  /* 抹掉原生小三角 ✓（只去掉视觉，拖拽能力还在 ✓）*/
-  .lw-c::-webkit-resizer { background:transparent; }
-  /* 自绘角标：hover 时右下角出现黄色折角 ✓（用 ::after 不占布局 ✓）*/
-  .lw-c::after { content:""; position:absolute; right:1px; bottom:1px; width:14px; height:14px;
-    pointer-events:none; opacity:0; transition:opacity .15s;
-    background:linear-gradient(135deg, transparent 46%, ${T.accent} 46%, ${T.accent} 58%, transparent 58%,
-      transparent 70%, ${T.accent} 70%, ${T.accent} 82%, transparent 82%); }
-  .lw-c:hover::after { opacity:.85; }
+  /* 三条热区 */
+  .lw-rs { position:absolute; z-index:3; }
+  .lw-rs-e  { top:0; bottom:0; right:-3px; width:8px; cursor:ew-resize; }      /* 右边 → 改宽 */
+  .lw-rs-s  { left:0; right:0; bottom:-3px; height:8px; cursor:ns-resize; }    /* 下边 → 改高 */
+  .lw-rs-se { right:-3px; bottom:-3px; width:14px; height:14px; cursor:nwse-resize; }  /* 右下角 */
+  /* hover 时把对应的边点亮 ✓（一眼知道能拖哪里 ✓）*/
+  .lw-c:hover > .lw-rs-e  { box-shadow:inset -3px 0 0 ${T.accent}; }
+  .lw-c:hover > .lw-rs-s  { box-shadow:inset 0 -3px 0 ${T.accent}; }
+  .lw-c:hover > .lw-rs-se { background:linear-gradient(135deg, transparent 40%, ${T.accent} 40%,
+      ${T.accent} 62%, transparent 62%, transparent 72%, ${T.accent} 72%, ${T.accent} 92%, transparent 92%); }
+  .lw-rs.on { box-shadow:none !important; }
+  .lw-rs-e.on  { box-shadow:inset -3px 0 0 ${T.accent} !important; }
+  .lw-rs-s.on  { box-shadow:inset 0 -3px 0 ${T.accent} !important; }
+  .lw-rs-se.on { background:${T.accent} !important; }
   /* 卡片：硬边框 + 标题栏带前缀编码 */
   .lw-c { background:${T.card}; border:2px solid ${T.line}; border-radius:0; }
   .lw-c > h3 { position:sticky; top:0; z-index:2; background:${T.card}; margin:0; padding:8px 11px; font-size:9.5px; font-weight:600; letter-spacing:2px; text-transform:uppercase;
@@ -1062,6 +1065,60 @@
     if (!host) return;
     /* 左栏 + 中栏的交互（提出来，方便 renderMemoList() 局部刷新时复用 ✓）*/
     bindMemoSide();
+    /* ── 卡片：拖「边」改大小 ✓（右边改宽 / 下边改高 / 右下角一起）──
+       给每张卡插三条热区 ✓，拖动时实时改宽高 ✓，松手存进 STORE ✓（下次还记得 ✓）。*/
+    if (!bind._rs) {
+      bind._rs = true;
+      const install = () => {
+        const host = document.getElementById('lifework-view');
+        if (!host) return;
+        host.querySelectorAll('.lw-c').forEach((card, idx) => {
+          /* 先恢复上次拖过的尺寸 ✓（卡片每次 render 都会重建 ✗，所以必须重放 ✓）
+             ⚠️ STORE 首屏可能是 null ✗（`Cannot read properties of null` ✗ —— 第二次踩 ✗）*/
+          const saved = STORE ? STORE['rsz_' + TAB + '_' + idx] : null;
+          if (saved) {
+            if (saved.w) card.style.width = saved.w + 'px';
+            if (saved.h) card.style.height = saved.h + 'px';
+            if (saved.span) card.style.gridColumn = saved.span;
+          }
+          if (card.dataset.rsReady) return;
+          card.dataset.rsReady = '1';
+          ['e', 's', 'se'].forEach((dir) => {
+            const h = document.createElement('div');
+            h.className = 'lw-rs lw-rs-' + dir;
+            card.appendChild(h);
+            h.addEventListener('mousedown', (e) => {
+              e.preventDefault(); e.stopPropagation();
+              h.classList.add('on');
+              const x0 = e.clientX, y0 = e.clientY, w0 = card.offsetWidth, h0 = card.offsetHeight;
+              /* 用元素索引当持久化 key ✓（卡片顺序稳定 ✓）*/
+              const idx = Array.from(host.querySelectorAll('.lw-c')).indexOf(card);
+              const key = 'rsz_' + TAB + '_' + idx;
+              const move = (ev) => {
+                if (dir !== 's') card.style.width = Math.max(240, w0 + (ev.clientX - x0)) + 'px';
+                if (dir !== 'e') card.style.height = Math.max(120, h0 + (ev.clientY - y0)) + 'px';
+                /* 卡片在网格里要跟着改 span ✓，否则宽度会被 grid 拉回去 ✗ */
+                const grid = card.parentElement;
+                if (grid && dir !== 's') {
+                  const colW = (grid.clientWidth - 11 * 16) / 12;
+                  const span = Math.max(1, Math.min(12, Math.round((card.offsetWidth + 16) / (colW + 16))));
+                  card.style.gridColumn = 'span ' + span;
+                }
+              };
+              const up = () => {
+                document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+                h.classList.remove('on');
+                STORE[key] = { w: card.offsetWidth, h: card.offsetHeight, span: card.style.gridColumn };
+                saveStore();
+              };
+              document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+            });
+          });
+        });
+      };
+      bind._rsInstall = install;
+    }
+    if (bind._rsInstall) bind._rsInstall();
     /* ── 网上热点 + AI 助手（研究方向视图 ✓）── */
     const viewEl = document.getElementById('lifework-view');
     const qv = (sel) => (viewEl ? viewEl.querySelector(sel) : null);
