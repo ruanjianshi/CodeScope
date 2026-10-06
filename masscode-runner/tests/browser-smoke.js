@@ -659,6 +659,30 @@ print(r.run())
   if(afterBs!==beforeBs-1)throw new Error('行首退格应当并入上一行（行数 -1），实际 '+beforeBs+' → '+afterBs);
   const textAfterBs=(await memoState()).正文;
   if(textAfterBs.replace(/\s/g,'').length < textBeforeBs.replace(/\s/g,'').length*0.5)throw new Error('行首退格丢了大量内容：'+JSON.stringify(textBeforeBs)+' → '+JSON.stringify(textAfterBs));
+  /* ★ 回车必须在**光标处**把当前行切成两半（后半段跟着换行），
+     而不是在下面插一个空行 ✗（用户反馈「光标放到文字前面按回车，文字不跟着换行」）。 */
+  const beforeEnter=(await memoState()).正文;
+  await page.evaluate(()=>{
+    const ce=document.getElementById('lw-memo-ce');
+    const el=[...ce.querySelectorAll(':scope > .ln')].find((e)=>e.classList.contains('cur'));
+    el.focus();
+    const tn=el.firstChild;
+    const r=document.createRange();
+    if(tn&&tn.nodeType===3)r.setStart(tn,Math.min(2,tn.nodeValue.length)); else r.selectNodeContents(el);
+    r.collapse(true);
+    const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  });
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(700);
+  const enterLines=(await memoState()).正文.split('\n');
+  if(enterLines.length!==2)throw new Error('光标在行中间按回车应当把该行切成两行，实际 '+enterLines.length+' 行：'+JSON.stringify(enterLines));
+  if(enterLines.join('')!==beforeEnter.replace(/\n/g,''))throw new Error('回车切分前后内容对不上（丢字或多字）：'+JSON.stringify(beforeEnter)+' → '+JSON.stringify(enterLines));
+  if(enterLines[0]!==beforeEnter.replace(/\n/g,'').slice(0,2))throw new Error('回车没有切在光标处：前半段='+JSON.stringify(enterLines[0])+'，期望='+JSON.stringify(beforeEnter.replace(/\n/g,'').slice(0,2)));
+  /* 光标应当落在新行开头：接着打字应插到后半段前面 */
+  await page.keyboard.type('插');
+  await page.waitForTimeout(600);
+  const afterSplitType=(await memoState()).正文.split('\n');
+  if(afterSplitType.length!==2||!afterSplitType[1].startsWith('插'))throw new Error('回车后光标没落在新行开头：'+JSON.stringify(afterSplitType));
   /* 导出为图片：点「图片」**先出分栏预览**，确认后再下载 ✓（不再一点就直接落盘）。
      这条路径踩过 foreignObject 污染画布的坑，所以预览图和下载的 PNG 都要验。 */
   let downloads=0;
