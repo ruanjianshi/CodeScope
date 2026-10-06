@@ -655,7 +655,7 @@
     { id: 'journal', icon: '◈', label: '日记', grp: '面板', key: 'J-01' },
     { id: 'quote', icon: '❝', label: '书签', grp: '面板', key: 'B-01' },
     { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
-    { id: 'files', icon: '▦', label: '文件 · 时间', grp: '科研', key: 'C-01' },
+    { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
     { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
@@ -2102,6 +2102,26 @@
   }
 
   /* ── 研究方向 ── */
+  /* 研究方向的项目卡 —— 内容是**本机文件** ✓，所以按用户要求放进「文件」视图 ✓ */
+  function tracksCards() {
+    const tracks = DATA.tracks || [];
+    if (!tracks.length) return '';
+    const max = Math.max(1, ...tracks.map((t) => t.files));
+    return tracks.map((t) => card(`${t.icon} ${esc(t.name)}`,
+      `${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}`,
+      `<div class="lw-pad" style="padding-bottom:2px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:10px;color:${T.faint};letter-spacing:.6px">占比</span>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,.06);overflow:hidden">
+            <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;background:${t.color}"></i></div>
+          <span style="font-size:10px;color:${T.dim}">${Math.round(t.files / max * 100)}%</span>
+        </div></div>
+       <div class="lw-tbl">${t.list.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
+        <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
+        <span class="bd">${p.files} 文件</span><span class="sz">${p.sizeText}</span>
+        <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>`, 6)).join('');
+  }
+
   function viewTracks() {
     const tracks = DATA.tracks || [];
     if (!tracks.length) return emptyBox('还没扫到项目');
@@ -2117,21 +2137,6 @@
       kpiCard('◉', hottest ? hottest.name : '—', '', '最活跃', hottest ? `${hottest.files} 文件 · ${hottest.sizeText}` : '—', 3, 'mint'),
       kpiCard('🔥', ((STORE && STORE.hot) || {}).count || 0, '条', '网上热点', (STORE && STORE.hotQ) ? '关键词：' + esc(STORE.hotQ) : '下面点「搜热点」', 3, 'lemon'),
     ].join('');
-
-    /* 项目卡（排版：进度条 + 更清晰的行）*/
-    const list = tracks.map((t) => card(`${t.icon} ${esc(t.name)}`,
-      `${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}`,
-      `<div class="lw-pad" style="padding-bottom:2px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:10px;color:${T.faint};letter-spacing:.6px">占比</span>
-          <div style="flex:1;height:6px;background:rgba(255,255,255,.06);overflow:hidden">
-            <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;background:${t.color}"></i></div>
-          <span style="font-size:10px;color:${T.dim}">${Math.round(t.files / max * 100)}%</span>
-        </div></div>
-       <div class="lw-tbl">${t.list.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
-        <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
-        <span class="bd">${p.files} 文件</span><span class="sz">${p.sizeText}</span>
-        <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>`, 6)).join('');
 
     /* 🔥 网上热点 —— **自动推** ✓（不用手动搜 ✗）
        关键词自动从**你的研究方向 / 项目名**里提取 ✓。 */
@@ -2228,7 +2233,7 @@
        直接把 viewPaper() 的结果**剥掉外层 lw-g12 容器** ✓ 再拼进来 ✓，
        这样不用改 viewPaper 本身 ✓，两边内容也不会互相覆盖 ✓。 */
     const paperInner = String(viewPaper() || '').replace(/^\s*<div class="lw-g12">/, '').replace(/<\/div>\s*$/, '');
-    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${wsCard}${list}${paperInner}</div>`;
+    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${wsCard}${paperInner}</div>`;
   }
 
   /* ── 论文 ── */
@@ -2293,6 +2298,7 @@
       ${/* 把「时间」的内容并进文件 ✓（用户：「时间也应该放到文件里面」✓）
            同样剥掉 viewTime() 的外层 lw-g12 ✓，两边不互相覆盖 ✓ */
         String(viewTime() || '').replace(/^\s*<div class="lw-g12">/, '').replace(/<\/div>\s*$/, '')}
+      ${tracksCards()}
     </div>`;
   }
 
