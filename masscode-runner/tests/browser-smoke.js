@@ -504,49 +504,64 @@ print(r.run())
   if(!/vault/.test(await page.locator('#env-sync-note').innerText()))throw new Error('云同步未显示 vault 统计');
   if((await page.locator('#btn-env-sync-refresh').count())!==1||(await page.locator('#btn-env-sync-scan').count())!==1||(await page.locator('#btn-env-sync-snapshot').count())!==1)throw new Error('云同步三个操作按钮不完整');
   await page.locator('#btn-env-close').click();
-  /* ---- 个人管理面板 · 备忘录：左右同步 + 撤销 ----
-     用户反馈过三个问题，这里各钉一条断言（测试跑在临时 CODESCOPE_DATA_HOME 上，不碰真实数据 ✓）：
-     ① 左边打字、右边预览和左栏列表摘要都不动（只在别的操作触发整屏渲染时才追上来）
-     ② 完全没有撤销（textarea 的原生撤销一重渲染就丢，删除/格式化更是没法回退）
-     ③ 删除后各栏不同步 */
+  /* ---- 个人管理面板 · 备忘录：逐行实时渲染 + 撤销 + 图片导出 ----
+     测试跑在临时 CODESCOPE_DATA_HOME 上，不碰真实数据 ✓
+     正文现在和日记一样是「整篇一个 contenteditable、每行一个 div」：
+     光标行 = 源码（可编辑），其余行 = 渲染结果（contenteditable=false + data-src）。 */
   await page.locator('#btn-lifework').click();
   await page.locator('#lifework-view').waitFor({state:'visible',timeout:20000});
   await page.locator('[data-tab="memo"]').click();
-  /* ⚠️ 临时库里一条备忘录都没有 → 先进的是空态（没有 textarea）。
-     必须先点「新建」把编辑器叫出来（空态里也有这个按钮 ✓）。 */
+  /* ⚠️ 临时库里一条备忘录都没有 → 先进的是空态。必须先点「新建」把编辑器叫出来。 */
   await page.locator('#lw-memo-new').click();
-  await page.locator('#lw-memo-body').waitFor({state:'visible',timeout:20000});
+  await page.locator('#lw-memo-ce').waitFor({state:'visible',timeout:20000});
   await page.locator('#lw-memo-title').fill('浏览器回归 · 备忘录');
-  await page.locator('#lw-memo-body').fill('第一行');
-  await page.waitForTimeout(900);
-  /* ⚠️ 预览区只在「◫ 预览」打开时才渲染（关着就只有纯 textarea）。
-     临时库里 memoLive 是默认关的，先点开它，否则下面等不到 #lw-nt-livebody。 */
-  await page.locator('#lw-nt-live').click();
-  await page.locator('#lw-nt-livebody').waitFor({state:'visible',timeout:10000});
-  const memoState=()=>page.evaluate(()=>({
-    编辑区:(document.getElementById('lw-memo-body')||{}).value||'',
-    预览:(document.getElementById('lw-nt-livebody')||{}).innerText||'',
-    列表:[...document.querySelectorAll('[data-memo]')].map((e)=>e.innerText.replace(/\s+/g,' ')),
-    撤销可用:!(document.getElementById('lw-memo-undo')||{}).disabled,
-    重做可用:!(document.getElementById('lw-memo-redo')||{}).disabled,
-    行数:document.querySelectorAll('[data-memo]').length,
-  }));
-  await page.locator('#lw-memo-body').click();
-  await page.keyboard.press('End');
+  /* 正文是 contenteditable → 用键盘打字，走真实输入路径 ✓ */
+  await page.locator('#lw-memo-ce > .ln').first().click();
+  await page.keyboard.type('第一行');
+  await page.keyboard.press('Enter');
   await page.keyboard.type('同步探针');
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(800);
+  const memoState=()=>page.evaluate(()=>{
+    const ce=document.getElementById('lw-memo-ce');
+    const lines=ce?[...ce.querySelectorAll(':scope > .ln')]:[];
+    return {
+      正文:lines.map((e)=>e.getAttribute('contenteditable')==='false'?String(e.dataset.src||''):String(e.textContent||'')).join('\n'),
+      可编辑行数:lines.filter((e)=>e.getAttribute('contenteditable')!=='false').length,
+      渲染行数:lines.filter((e)=>e.getAttribute('contenteditable')==='false').length,
+      列表:[...document.querySelectorAll('[data-memo]')].map((e)=>e.innerText.replace(/\s+/g,' ')),
+      撤销可用:!(document.getElementById('lw-memo-undo')||{}).disabled,
+      重做可用:!(document.getElementById('lw-memo-redo')||{}).disabled,
+      行数:document.querySelectorAll('[data-memo]').length,
+    };
+  });
   const afterType=await memoState();
-  if(!afterType.预览.includes('同步探针'))throw new Error('打字后右侧预览没跟上（左右不同步）：'+JSON.stringify(afterType.预览));
+  if(!afterType.正文.includes('同步探针'))throw new Error('正文没记下刚打的字：'+JSON.stringify(afterType.正文));
+  /* ★ 实时渲染的核心：只有光标所在行可编辑，其余行是渲染结果 */
+  if(afterType.可编辑行数!==1)throw new Error('应当只有「光标所在行」可编辑，实际 '+afterType.可编辑行数+' 行可编辑：'+JSON.stringify(afterType.正文));
+  if(afterType.渲染行数<1)throw new Error('除光标行外的行应当是渲染结果，实际渲染行数 '+afterType.渲染行数);
+  /* 渲染行必须带 data-src —— 读回源码全靠它，丢了就会静默吞内容 */
+  const renderedLine=await page.evaluate(()=>{const e=document.querySelector('#lw-memo-ce > .ln[contenteditable="false"]');return e?{cls:e.className,src:e.dataset.src}:null;});
+  if(!renderedLine||!renderedLine.src)throw new Error('渲染行没有 data-src，读回源码会丢内容：'+JSON.stringify(renderedLine));
+  /* 左栏列表摘要跟着更新（以前要等整屏渲染才追上）*/
   if(!afterType.列表.some((r)=>r.includes('同步探针')))throw new Error('打字后左栏列表摘要没跟上：'+JSON.stringify(afterType.列表));
   if(!afterType.撤销可用)throw new Error('打字后「撤销」仍是灰的（没有可撤销状态）');
   await page.locator('#lw-memo-undo').click();
   await page.waitForTimeout(800);
   const afterUndo=await memoState();
-  if(afterUndo.编辑区.includes('同步探针'))throw new Error('点撤销后内容没回退：'+JSON.stringify(afterUndo.编辑区));
+  if(afterUndo.正文.includes('同步探针'))throw new Error('点撤销后内容没回退：'+JSON.stringify(afterUndo.正文));
   if(!afterUndo.重做可用)throw new Error('撤销后「重做」不可用');
   await page.locator('#lw-memo-redo').click();
   await page.waitForTimeout(800);
-  if(!(await memoState()).编辑区.includes('同步探针'))throw new Error('点重做后内容没回来');
+  if(!(await memoState()).正文.includes('同步探针'))throw new Error('点重做后内容没回来');
+  /* 分栏结构必须已经拆掉（改成逐行实时渲染了）*/
+  if(await page.locator('#lw-nt-livebody, .lw-nt-split, #lw-md-grip, #lw-memo-body').count())throw new Error('备忘录的「左编辑 / 右预览」分栏结构还在，没换成逐行实时渲染');
+  /* 「◫ 源码」开关：打开后整篇都变源码（每行都可编辑）*/
+  await page.locator('#lw-nt-live').click();
+  await page.waitForTimeout(700);
+  const srcMode=await memoState();
+  if(srcMode.可编辑行数!==srcMode.正文.split('\n').length)throw new Error('源码模式下所有行都应可编辑：'+JSON.stringify(srcMode));
+  await page.locator('#lw-nt-live').click();
+  await page.waitForTimeout(700);
   /* 导出为图片：必须真的产出一张像样的 PNG（这条路径踩过 foreignObject 污染画布的坑） */
   const imgDownload=page.waitForEvent('download',{timeout:30000});
   await page.locator('#lw-memo-image').click();
