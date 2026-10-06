@@ -655,9 +655,7 @@
     { id: 'journal', icon: '◈', label: '日记', grp: '面板', key: 'J-01' },
     { id: 'quote', icon: '❝', label: '书签', grp: '面板', key: 'B-01' },
     { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
-    { id: 'paper', icon: '▤', label: '论文检索', grp: '科研', key: 'P-01' },
-    { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
-    { id: 'time', icon: '◔', label: '时间', grp: '科研', key: 'X-01' },
+    { id: 'files', icon: '▦', label: '文件 · 时间', grp: '科研', key: 'C-01' },
     { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
@@ -870,7 +868,7 @@
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
-    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewPaper, files: viewFiles, time: viewTime, mail: viewMail }[TAB] || viewToday;
+    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail }[TAB] || viewToday;
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
@@ -1062,6 +1060,24 @@
     const hotGo = qv('#lw-hot-go'); if (hotGo) hotGo.onclick = () => doHot();
     const hotInp = qv('#lw-hot-q'); if (hotInp) hotInp.onkeydown = (e) => { if (e.key === 'Enter') doHot(); };
     qav('.lw-hotkw').forEach((el) => { el.onclick = () => doHot(el.dataset.kw); });
+    /* ★ 自动推 ✓ —— 进研究方向就自动按「我的方向」搜一次 ✓，不用手动点 ✗。
+       只在**没搜过**的时候自动（有缓存就复用 ✓，避免每次切页都请求 ✗）。
+       ⚠️ 必须判 STORE 非空 ✗ —— 首屏渲染时 STORE 可能还是 null ✗
+       （踩过：`Cannot read properties of null (reading 'hot')` ✗）。 */
+    if (STORE && !STORE.hot && !STORE.hotLoading) {
+      const auto = (() => {
+        const words = [];
+        (DATA.tracks || []).forEach((t) => {
+          String(t.name || '').split(/[\/、·]+/).forEach((x) => { const w = x.trim(); if (w.length >= 2) words.push(w); });
+          (t.list || []).slice(0, 4).forEach((p) => {
+            const w = String(p.name || '').replace(/[-_]+/g, ' ').replace(/\b(test|demo|new|old|v?\d+)\b/gi, '').trim();
+            if (w.length >= 3) words.push(w);
+          });
+        });
+        return Array.from(new Set(words)).slice(0, 2).join(' ') || 'robotics';
+      })();
+      doHot(auto);
+    }
     /* AI：**调用 CodeScope 现成的 `/api/ai/chat`** ✓（配置读 localStorage['mc-ai-cfg'] ✓）
        不再自己存一份配置 ✗。 */
     const askAI = async (prompt) => {
@@ -2117,23 +2133,44 @@
         <span class="bd">${p.files} 文件</span><span class="sz">${p.sizeText}</span>
         <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>`, 6)).join('');
 
-    /* 🔥 网上热点（Hacker News ✓ 免费无 key ✓）*/
+    /* 🔥 网上热点 —— **自动推** ✓（不用手动搜 ✗）
+       关键词自动从**你的研究方向 / 项目名**里提取 ✓。 */
     const hotQ = (STORE && STORE.hotQ) || '';
     const hotRes = (STORE && STORE.hot) || null;
-    const hotHtml = (STORE && STORE.hotLoading) ? '<div class="lw-empty">正在搜热点…</div>'
+    /* 自动关键词：取项目名里"有意义的词"（去掉版本号/前缀，保留英文与中文 ✓）*/
+    const autoKw = (() => {
+      const words = [];
+      /* ⚠️ 只要**英文词** ✓ —— Hacker News 是英文站 ✗，中文关键词搜出来是空的 ✗ */
+      const keep = (w) => /[A-Za-z]/.test(w) && !/[\u4e00-\u9fa5]/.test(w) && w.length >= 3;
+      (DATA.tracks || []).forEach((t) => {
+        String(t.id || '').trim().split(/[-_]+/).forEach((x) => { if (keep(x)) words.push(x); });
+        (t.list || []).slice(0, 5).forEach((p) => {
+          String(p.name || '').replace(/[-_]+/g, ' ').replace(/\b(test|demo|new|old|main|master|v?\d+)\b/gi, ' ')
+            .split(/\s+/).forEach((x) => { if (keep(x)) words.push(x); });
+        });
+      });
+      const uniq = Array.from(new Set(words));
+      /* 不够 2 个词就补通用词 ✓（否则搜出来是空的 ✗）*/
+      while (uniq.length < 2) uniq.push(uniq.length === 0 ? 'robotics' : 'robot');
+      return uniq.slice(0, 2).join(' ');
+    })();
+    const hotHtml = (STORE && STORE.hotLoading) ? '<div class="lw-empty">正在自动搜相关热点…</div>'
       : (hotRes && hotRes.ok)
         ? (hotRes.items || []).map((h) => `<div class="lw-hotrow">
             <div class="t"><a href="${esc(h.url)}" target="_blank" rel="noopener">${esc(h.title)}</a></div>
             <div class="m">▲ ${h.points} · 💬 ${h.comments} · ${esc(String(h.at).slice(0, 10))}</div></div>`).join('')
         : (hotRes && hotRes.error ? `<div class="lw-empty">${esc(hotRes.error)}</div>`
-          : '<div class="lw-empty"><span class="big">🔥</span>输入关键词，看网上大家在聊什么</div>');
+          : '<div class="lw-empty"><span class="big">🔥</span>正在准备…</div>');
     const hotCard = `<div class="lw-c" style="${sp(6)}">
-      <h3><span class="code">F-90</span>网上热点<span class="sp"></span><em>Hacker News · 实时</em></h3>
+      <h3><span class="code">F-90</span>网上热点<span class="sp"></span>
+        <em>${hotQ ? '按「' + esc(hotQ) + '」自动推' : '自动推'}</em></h3>
       <div class="lw-pad" style="padding-bottom:10px">
-        <div class="lw-search"><input id="lw-hot-q" placeholder="关键词，如 legged robot…" value="${esc(hotQ)}" />
-          <button class="lw-btn" id="lw-hot-go">搜热点</button></div>
-        <div class="lw-chips" style="margin-top:9px">${(tracks || []).slice(0, 4).map((t) =>
-          `<span class="lw-chip lw-hotkw" data-kw="${esc(t.name)}">${esc(t.name)}</span>`).join('')}</div>
+        <div class="lw-search"><input id="lw-hot-q" placeholder="换关键词（回车即可）" value="${esc(hotQ)}" />
+          <button class="lw-btn" id="lw-hot-go">换一批</button></div>
+        <div class="lw-chips" style="margin-top:9px">
+          ${autoKw ? `<span class="lw-chip lw-hotkw" data-kw="${esc(autoKw)}">★ 我的方向</span>` : ''}
+          ${(tracks || []).slice(0, 4).map((t) => `<span class="lw-chip lw-hotkw" data-kw="${esc(t.name)}">${esc(t.name)}</span>`).join('')}
+        </div>
       </div>
       <div class="lw-hotlist">${hotHtml}</div>
     </div>`;
@@ -2186,7 +2223,12 @@
       <div class="lw-hotlist">${wsHtml}</div>
     </div>`;
 
-    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${wsCard}${list}</div>`;
+    /* 把「论文检索」的内容并进研究方向 ✓
+       （用户：「论文检索，应该放到研究方向里面去」✓）
+       直接把 viewPaper() 的结果**剥掉外层 lw-g12 容器** ✓ 再拼进来 ✓，
+       这样不用改 viewPaper 本身 ✓，两边内容也不会互相覆盖 ✓。 */
+    const paperInner = String(viewPaper() || '').replace(/^\s*<div class="lw-g12">/, '').replace(/<\/div>\s*$/, '');
+    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${wsCard}${list}${paperInner}</div>`;
   }
 
   /* ── 论文 ── */
@@ -2248,6 +2290,9 @@
           <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
           <span class="bd">${esc(f.ext || '—')}</span><span class="sz">${fmtBytes(f.size)}</span>
           <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>`, 12)}
+      ${/* 把「时间」的内容并进文件 ✓（用户：「时间也应该放到文件里面」✓）
+           同样剥掉 viewTime() 的外层 lw-g12 ✓，两边不互相覆盖 ✓ */
+        String(viewTime() || '').replace(/^\s*<div class="lw-g12">/, '').replace(/<\/div>\s*$/, '')}
     </div>`;
   }
 
