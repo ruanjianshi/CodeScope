@@ -660,7 +660,11 @@
   }
   .lw-ce > .ln::before {
     counter-increment: ln; content: counter(ln);
-    position:absolute; left:0; top:0; width:24px; height:var(--ln-lh, 23.75px);
+    /* ⚠️ left 要**减去该行的左边框宽度**：绝对定位的 left 是相对 padding box 的，
+       而 border-left 在 padding box 之外 ✗ → 不补偿的话，标题/引用/代码块（带 3px 左边框）
+       的行号会被整体右移 3px，和普通行对不齐（用户反馈的就是这个）。
+       --ln-bl 由 ceAlignLineNumbers() 量出来写上去 ✓。 */
+    position:absolute; left:calc(-1 * var(--ln-bl, 0px)); top:0; width:24px; height:var(--ln-lh, 23.75px);
     display:flex; align-items:center; justify-content:flex-end;
     color:${T.faint}; font-family:${MONO}; font-size:10px; line-height:1;
     user-select:none; -webkit-user-select:none; pointer-events:none;
@@ -2666,18 +2670,29 @@
     } catch (_) { return null; }
   }
 
-  /* 把每行的**实际行高**写成 CSS 变量 --ln-lh，供行号垂直对齐用 ✓。
-     ⚠️ 行号不能靠 CSS 的 line-height:inherit 对齐 —— 标题 / 代码块那些行的行高是**无单位**值
+  /* 把每行的**实际行高**写成 CSS 变量 --ln-lh，把**左边框宽度**写成 --ln-bl，
+     供行号对齐用 ✓。每次重建正文后都要调（applyCe / applyCeJ 里已经接好了 ✓）。
+
+     ⚠️ 为什么需要 --ln-lh（垂直）：
+        行号不能靠 CSS 的 line-height:inherit 对齐 —— 标题 / 代码块那些行的行高是**无单位**值
         （如 1.5），无单位值会按伪元素**自己的** font-size（10px）重算 ✗ →
         行号行盒 15px、正文行盒 27px，基线对不上（标题行号明显偏高 ✗，实测踩过）。
-        「该行的实际行高」在 CSS 里拿不到，只能渲染后量：getComputedStyle 返回的是**用后值（px）** ✓。
-     每次重建正文后都要调一次（applyCe / applyCeJ 里已经接好了 ✓）。 */
+        「该行的实际行高」在 CSS 里拿不到，只能渲染后量：getComputedStyle 返回**用后值（px）** ✓。
+
+     ⚠️ 为什么需要 --ln-bl（水平）：
+        绝对定位的 left 是相对 **padding box** 的，而 border-left 在 padding box **之外** ✗ →
+        标题 / 引用 / 代码块带 3px 左边框，它们的行号会被整体**往右推 3px** ✗，
+        和普通行对不齐（用户反馈「行号不对齐」就是它）。量出边框宽度，让行号 left 取负值补偿 ✓。 */
   function ceAlignLineNumbers(ce) {
     if (!ce) return;
     for (const el of ce.querySelectorAll(':scope > .ln')) {
-      const lh = getComputedStyle(el).lineHeight;
+      const cs = getComputedStyle(el);
+      const lh = cs.lineHeight;
       if (lh && lh !== 'normal') el.style.setProperty('--ln-lh', lh);
       else el.style.removeProperty('--ln-lh');
+      const bl = parseFloat(cs.borderLeftWidth) || 0;
+      if (bl > 0) el.style.setProperty('--ln-bl', bl + 'px');
+      else el.style.removeProperty('--ln-bl');
     }
   }
 

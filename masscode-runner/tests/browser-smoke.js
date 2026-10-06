@@ -656,6 +656,23 @@ print(r.run())
   const worstLn=lnOffsets.reduce((m,r)=>Math.max(m,r.off),0);
   if(lnOffsets.length<2||worstLn>1)throw new Error('行号和正文没对齐（最大偏差 '+worstLn.toFixed(1)+'px）：'+JSON.stringify(lnOffsets.map((r)=>[r.cls,Math.round(r.off*10)/10])));
   if(!lnOffsets.some((r)=>/r-h\d/.test(r.cls)))throw new Error('测试正文里应当有标题行，才能验出「不同语法行高不同」的对齐问题');
+  /* ★ 行号的**横向**位置也必须一致 —— 绝对定位的 left 是相对 padding box 的，
+     而 border-left 在 padding box **之外** ✗：标题 / 引用 / 代码块带 3px 左边框，
+     不补偿的话它们的行号会被整体**右移 3px**，和普通行对不齐（用户反馈的就是这个）。
+     现在由 ceAlignLineNumbers() 量出边框宽度写进 --ln-bl 做补偿 ✓。 */
+  const lnLefts=await page.evaluate(()=>{
+    const out=[];
+    for(const el of document.querySelectorAll('#lw-memo-ce > .ln')){
+      const cs=getComputedStyle(el),ps=getComputedStyle(el,'::before');
+      const box=el.getBoundingClientRect();
+      const bl=parseFloat(cs.borderLeftWidth)||0,left=parseFloat(ps.left)||0;
+      out.push({cls:el.className,bl,left:Math.round((box.left+bl+left)*10)/10});
+    }
+    return out;
+  });
+  const lmin=Math.min(...lnLefts.map((r)=>r.left)),lmax=Math.max(...lnLefts.map((r)=>r.left));
+  if(lnLefts.length<2||lmax-lmin>0.5)throw new Error('行号横向没对齐（相差 '+(lmax-lmin).toFixed(1)+'px）：'+JSON.stringify(lnLefts));
+  if(!lnLefts.some((r)=>r.bl>0))throw new Error('测试正文里应当有带左边框的行（标题/引用），才能验出横向补偿问题');
   /* ★ 行首退格必须「并入上一行」，**绝不能**把内容删光 ——
      contenteditable 里行首退格会让浏览器去合并上一个 contenteditable=false 的渲染行，
      实测按一次就把 4 行变 0 行、空内容还被存进服务端 ✗（数据丢失）。 */
