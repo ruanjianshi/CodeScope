@@ -367,8 +367,11 @@
   .lw-nt-row .pin { color:${T.accent}; }
   /* 右：编辑区 */
   .lw-nt-edit { flex:1; min-width:0; display:flex; flex-direction:column; background:#0f0f0e; }
-  .lw-nt-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; border-bottom:1px solid ${T.lineDim}; }
-  .lw-nt-bar button { height:26px; min-width:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+  /* ⚠️ 必须允许换行：按钮没有 flex:none 时会被压成 28px 的空壳（文字被裁掉看不清），
+     加了「图片」按钮之后窄屏（~1100px）更是直接溢出、最右边的「删除」被裁掉点不到。
+     改成「放不下就换到第二行」，任何宽度下每个按钮都完整可点。 */
+  .lw-nt-bar { display:flex; align-items:center; gap:6px; row-gap:7px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-nt-bar button { height:26px; min-width:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent; flex:none;
     color:${T.text}; font:600 10.5px ${UI}; cursor:pointer; }
   .lw-nt-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-nt-bar button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
@@ -965,6 +968,120 @@
     return true;
   }
 
+  /* ── 备忘录：导出为图片（PNG）─────────────────────────────────────────
+     做法：把「渲染后的内容」包进 SVG 的 <foreignObject>，载成图片再画到 Canvas 导出。
+
+     ⚠️ 两个必须踩对的点（都实测过，错一个就出不来图）：
+     ① **必须用 data: URL 载入 SVG，不能用 blob: URL。**
+        Chrome 对「blob: URL 的 SVG + foreignObject」会把 Canvas 标记为 tainted，
+        toBlob / getImageData 直接抛错。思维导图那边就是栽在这里，
+        只好退化成「纯 <text> 副本」，结果文字对不齐、一直没修好。
+        换成 data: URL 就不污染 ✓（实测：blob 被污染 ✗ / data 正常 ✓）。
+     ② **样式必须自带**：外部样式表在「图片上下文」里不会加载 ✗。
+        所以导出模板把 CSS 直接写在 foreignObject 里的 <style> 中（不是外链、也不是内联到每个元素）。
+     ③ 序列化要用 XMLSerializer，不能直接拼字符串 ——
+        mdToHtml 产出的 HTML 里有 <br> 这类非自闭合标签，塞进 SVG 会解析失败 ✗。 */
+  const MEMO_IMG_W = 720;
+  const MEMO_IMG_BG = '#141413';
+  const MEMO_IMG_CSS = [
+    '*{box-sizing:border-box}',
+    '.mx{width:' + MEMO_IMG_W + 'px;padding:34px 38px 38px;background:' + MEMO_IMG_BG + ';color:#d8d5cb;',
+    'font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;',
+    'font-size:13px;line-height:1.85;}',
+    '.mx-hd{display:flex;align-items:baseline;gap:12px;padding-bottom:14px;margin-bottom:22px;border-bottom:1px solid #2b2a24;}',
+    '.mx-hd b{font-size:19px;font-weight:700;color:#fff;line-height:1.3;}',
+    '.mx-hd span{margin-left:auto;flex:none;font-size:11px;color:#6f6d63;}',
+    '.mx-bd>*:first-child{margin-top:0}',
+    '.mx-bd h1,.mx-bd h2,.mx-bd h3,.mx-bd h4{color:#fff;font-weight:700;margin:18px 0 8px;padding-left:10px;',
+    'border-left:3px solid #f2e39b;line-height:1.35;}',
+    '.mx-bd h1{font-size:20px}',
+    '.mx-bd h2{font-size:16px}',
+    '.mx-bd h3{font-size:14px;color:#f2e39b;border-left-color:#3a382f}',
+    '.mx-bd h4{font-size:13px;color:#f2e39b;border-left-color:#3a382f}',
+    '.mx-bd p{margin:8px 0}',
+    '.mx-bd strong{color:#fff}',
+    '.mx-bd del{color:#6f6d63}',
+    '.mx-bd a{color:#f2e39b;text-decoration:none}',
+    '.mx-bd blockquote{margin:10px 0;padding:8px 13px;background:rgba(242,227,155,.06);',
+    'border-left:3px solid #f2e39b;color:#b9b5a8;font-style:italic}',
+    '.mx-bd code{background:#20201d;border:1px solid #3a382f;padding:1px 6px;border-radius:3px;',
+    'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:#f2e39b}',
+    '.mx-bd pre{background:#0f0f0d;border:1px solid #3a382f;border-left:3px solid #f2e39b;',
+    'border-radius:4px;padding:11px 13px;margin:10px 0;white-space:pre-wrap;word-break:break-word}',
+    '.mx-bd pre code{background:transparent;border:0;padding:0;color:#cfd6e2}',
+    '.mx-bd ul,.mx-bd ol{margin:9px 0;padding-left:22px}',
+    '.mx-bd li{margin:5px 0}',
+    '.mx-bd ul{list-style:disc}',
+    '.mx-bd ol{list-style:decimal}',
+    '.mx-bd table{border-collapse:collapse;width:100%;margin:12px 0;font-size:12px}',
+    '.mx-bd th,.mx-bd td{border:1px solid #3a382f;padding:7px 10px;text-align:left}',
+    '.mx-bd th{background:#1d1d1a;color:#fff;font-weight:600}',
+    '.mx-bd hr{border:0;border-top:1px solid #2b2a24;margin:16px 0}',
+    '.mx-bd .tag{color:#f2e39b;background:rgba(242,227,155,.1);border-radius:3px;padding:0 5px;font-size:11.5px}',
+    '.mx-ft{margin-top:26px;padding-top:12px;border-top:1px solid #2b2a24;color:#5c5a50;font-size:10.5px;',
+    'display:flex;gap:8px}',
+  ].join('');
+  function memoImageHtml(title, bodyHtml, whenText) {
+    return '<div xmlns="http://www.w3.org/1999/xhtml" class="mx">'
+      + '<style>' + MEMO_IMG_CSS + '</style>'
+      + '<div class="mx-hd"><b>' + esc(title || '备忘录') + '</b><span>' + esc(whenText || '') + '</span></div>'
+      + '<div class="mx-bd">' + bodyHtml + '</div>'
+      + '<div class="mx-ft"><span>码境 CodeScope · 备忘录</span></div>'
+      + '</div>';
+  }
+  function memoDownload(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+  /* 返回 {w,h}（导出后的像素尺寸），失败时抛错由调用方提示。 */
+  async function memoExportImage(title, bodyHtml, whenText, fileBase) {
+    const html = memoImageHtml(title, bodyHtml, whenText);
+    /* 先挂到页面上量高度：<style> 在图片上下文里能用，但高度只能在真实文档里算出来 */
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + MEMO_IMG_W + 'px;pointer-events:none;';
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    let W = MEMO_IMG_W, H = 200, xhtml = '';
+    try {
+      const node = host.firstElementChild;
+      const box = node.getBoundingClientRect();
+      W = Math.max(120, Math.ceil(box.width));
+      H = Math.max(120, Math.ceil(box.height));
+      /* ★ 用 XMLSerializer 产出合法 XHTML；直接拼 innerHTML 会因为 <br> 之类解析失败 */
+      xhtml = new XMLSerializer().serializeToString(node);
+    } finally { host.remove(); }
+
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '">'
+      + '<foreignObject width="100%" height="100%">' + xhtml + '</foreignObject></svg>';
+    /* ★ data: URL —— 换成 blob: URL 会被 Chrome 判为跨域、画布直接污染 ✗ */
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('SVG 图像加载失败'));
+      img.src = url;
+    });
+    /* 2× 输出；同时限住最长边，避免超长笔记撑爆 Canvas 上限 */
+    const scale = Math.max(.5, Math.min(2, 12000 / W, 12000 / H));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(W * scale);
+    canvas.height = Math.round(H * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('浏览器无法创建 Canvas');
+    ctx.fillStyle = MEMO_IMG_BG;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('PNG 编码失败'))), 'image/png'));
+    memoDownload(blob, (fileBase || 'memo') + '.png');
+    return { w: canvas.width, h: canvas.height };
+  }
+
   function render() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
@@ -1509,6 +1626,28 @@
       a2.href = URL.createObjectURL(blob);
       a2.download = (String(cur.text || "").split("\n")[0] || "note").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_") + ".md";
       a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 3000);
+    };
+    /* 导出为图片：把**渲染后**的正文（含标题与日期）存成 PNG。
+       预览关着也能导 —— 直接从正文现渲染一遍，所见即所得。 */
+    const mImg = q("#lw-memo-image");
+    if (mImg) mImg.onclick = async () => {
+      const cur = curMemo(); if (!cur) return;
+      const lines = String(cur.text || "").split("\n");
+      const title = (lines[0] || "备忘录").trim() || "备忘录";
+      const body = lines.slice(1).join("\n");
+      const d = new Date(cur.edit || cur.at || Date.now());
+      const pad2 = (n) => String(n).padStart(2, "0");
+      const when = d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 "
+        + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+      const base = title.slice(0, 40).replace(/[\\/:*?"<>|]/g, "_") || "note";
+      mImg.disabled = true;
+      flashMemoStatus("正在生成图片…");
+      try {
+        const size = await memoExportImage(title, mdToHtml(body) || '<p style="color:#5c5a50">（正文还是空的）</p>', when, base);
+        flashMemoStatus("图片已导出 · " + size.w + "×" + size.h);
+      } catch (error) {
+        flashMemoStatus("导出图片失败：" + (error.message || error));
+      } finally { mImg.disabled = false; }
     };
     const mDel = q("#lw-memo-del");
     if (mDel) mDel.onclick = () => {
@@ -2128,7 +2267,8 @@
       + '<span class="sp"></span>'
       + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
       + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "★" : "☆") + '</button>'
-      + '<button id="lw-memo-export" title="导出 Markdown">导出</button>'
+      + '<button id="lw-memo-export" title="导出 Markdown（.md）">导出</button>'
+      + '<button id="lw-memo-image" title="导出为图片：把渲染后的内容存成 PNG（含标题与日期）">图片</button>'
       + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button></div>'
       + fmtBar
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
