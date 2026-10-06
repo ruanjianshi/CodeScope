@@ -34,6 +34,8 @@ const { createOpencodeService } = require('./lib/opencode-service');
 const { createCodeServerService } = require('./lib/code-server-service');
 const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
+/* 极简 SMTP 客户端（只依赖 Node 内置 tls/net）—— 用于「邮箱」页的测试连接与发信 ✓ */
+const MAIL_CLIENT = require('./lib/mail-client');
 const { createSystemPanel } = require('./lib/system-panel');
 const { buildCodeGraph, buildDocumentGraph, buildSnippetIndex, resolveDefinition } = require('./lib/code-graph');
 const { buildLogicGraph, logicToDrawio, logicToSkeleton } = require('./lib/logic-graph');
@@ -4692,6 +4694,42 @@ const server = http.createServer(async (req, res) => {
         } catch (error) {
           return send(res, 400, { ok: false, error: String((error && error.message) || error) });
         }
+      }
+    }
+    /* 邮箱：测试连接 / 发信。
+       ⚠️ 密码**不回传前端**，所以这里由服务端从 life-mail.json 里取 ✓；
+          请求里带了 account 就用它覆盖（前端刚改还没保存时用得上 ✓），
+          但它没有 pass 时仍然回落到已存的密码 ✓。 */
+    if (u.pathname === '/api/life/mail/test' || u.pathname === '/api/life/mail/send') {
+      if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+      try {
+        const body = await readBody(req, 1e6);
+        const key = String((body && body.key) || '').trim();
+        const file = path.join(applicationDataRoot(), 'life-mail.json');
+        let stored = {};
+        try { stored = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) {}
+        const base = (key && stored[key]) || {};
+        const inc = (body && body.account) || {};
+        const account = {
+          host: String(inc.host || base.host || '').trim(),
+          port: String(inc.port || base.port || '').trim(),
+          user: String(inc.user || base.user || '').trim(),
+          pass: inc.pass ? String(inc.pass) : String(base.pass || ''),
+          imapHost: String(inc.imapHost || base.imapHost || '').trim(),
+          imapPort: String(inc.imapPort || base.imapPort || '').trim(),
+        };
+        if (u.pathname === '/api/life/mail/test') {
+          return send(res, 200, await MAIL_CLIENT.testConnection(account));
+        }
+        const to = String((body && body.to) || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+        return send(res, 200, await MAIL_CLIENT.sendMail(account, {
+          to,
+          subject: String((body && body.subject) || ''),
+          body: String((body && body.body) || ''),
+          fromName: String((body && body.fromName) || ''),
+        }));
+      } catch (error) {
+        return send(res, 400, { ok: false, error: String((error && error.message) || error) });
       }
     }
     if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {

@@ -756,6 +756,23 @@
   .lw-mail-hint { margin-top:9px; padding:7px 10px; border:1px solid color-mix(in srgb,${T.ok} 34%,transparent);
     border-radius:6px; background:color-mix(in srgb,${T.ok} 9%,transparent); color:${T.dim}; font-size:11px; line-height:1.6; }
   .lw-mail-hint b { color:${T.ok}; font-family:${MONO}; }
+  /* 测试连接 / 发信的结果：成功绿、失败红，并把每一步列出来（方便定位卡在哪一步） */
+  .lw-mail-result { margin-top:10px; font-size:11px; line-height:1.7; color:${T.dim}; }
+  .lw-mail-result:empty { display:none; }
+  .lw-mail-result .ok { color:${T.ok}; font-weight:650; }
+  .lw-mail-result .err { color:${T.red}; font-weight:650; }
+  .lw-mail-result .step { color:${T.faint}; font-family:${MONO}; font-size:10.5px; }
+  .lw-mail-result ol { margin:4px 0 0 16px; padding:0; }
+  /* 发信表单 */
+  .lw-mail-send { margin-top:13px; padding-top:11px; border-top:1px dashed ${T.lineDim}; display:flex; flex-direction:column; gap:9px; }
+  .lw-mail-send .hd { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:${T.faint}; }
+  .lw-mail-send label { display:flex; flex-direction:column; gap:4px; font-size:10px; letter-spacing:1.2px;
+    color:${T.faint}; text-transform:uppercase; }
+  .lw-mail-send input, .lw-mail-send textarea { padding:0 10px; border:2px solid ${T.lineDim}; background:transparent;
+    color:${T.text}; font:12px ${UI}; outline:none; letter-spacing:.4px; }
+  .lw-mail-send input { height:32px; }
+  .lw-mail-send textarea { padding:8px 10px; resize:vertical; line-height:1.6; }
+  .lw-mail-send input:focus, .lw-mail-send textarea:focus { border-color:${T.accent}; }
   #btn-lifework.on { background:${T.accent} !important; color:${T.accentInk} !important; }
   `;
 
@@ -2265,6 +2282,58 @@
         load(true);
       };
     });
+
+    /* ── 测试连接 / 发信 ──
+       都交给服务端做（密码不回传前端，服务端从 life-mail.json 里取 ✓）。
+       界面上把每一步都列出来，卡在哪一步一眼能看见 ✓。 */
+    const mailFields = (k) => {
+      const out = {};
+      qa('[data-mail="' + k + '"]').forEach((inp) => { out[inp.dataset.f] = inp.value; });
+      return out;
+    };
+    const mailResult = (k, html) => {
+      const host = document.getElementById('lw-mail-result-' + k);
+      if (host) host.innerHTML = html;
+    };
+    const mailSteps = (title, r) => {
+      const head = r && r.ok
+        ? '<div class="ok">✓ ' + esc(title) + '</div>'
+        : '<div class="err">✗ ' + esc((r && r.error) || '失败') + '</div>';
+      const list = ((r && r.steps) || []).map((s) => '<li class="step">' + esc(s) + '</li>').join('');
+      return head + (list ? '<ol>' + list + '</ol>' : '');
+    };
+    const mailPost = async (path, payload) => {
+      const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      return res.json();
+    };
+    qa('[data-mailtest]').forEach((btn) => {
+      btn.onclick = async () => {
+        const k = btn.dataset.mailtest;
+        btn.disabled = true;
+        mailResult(k, '<div class="step">正在连接…</div>');
+        try {
+          const r = await mailPost('/api/life/mail/test', { key: k, account: mailFields(k) });
+          mailResult(k, mailSteps('连接 + 认证通过', r));
+        } catch (error) { mailResult(k, '<div class="err">✗ ' + esc(String(error.message || error)) + '</div>'); }
+        btn.disabled = false;
+      };
+    });
+    const mailSend = async (k, selfOnly) => {
+      const val = (sel, f) => { const el = q(sel); return el ? el.value : ''; };
+      const to = selfOnly ? val('[data-mail="' + k + '"][data-f="user"]') : val('[data-msend="' + k + '"][data-f="to"]');
+      const subject = selfOnly ? '码境 CodeScope · 发信测试' : val('[data-msend="' + k + '"][data-f="subject"]');
+      const body = selfOnly
+        ? '这是一封来自「码境 CodeScope · 个人管理面板」的测试邮件。\n\n看到它说明这台机器的 SMTP 配置可以正常发信 ✓'
+        : val('[data-msend="' + k + '"][data-f="body"]');
+      if (!String(to).trim()) { mailResult(k, '<div class="err">✗ 没有填收件人</div>'); return; }
+      mailResult(k, '<div class="step">正在发送…</div>');
+      try {
+        const r = await mailPost('/api/life/mail/send', { key: k, account: mailFields(k), to, subject, body });
+        mailResult(k, mailSteps('已发送到 ' + to, r));
+      } catch (error) { mailResult(k, '<div class="err">✗ ' + esc(String(error.message || error)) + '</div>'); }
+    };
+    qa('[data-mailsend]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailsend, false); });
+    qa('[data-mailself]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailself, true); });
   }
 
 
@@ -3119,7 +3188,7 @@
     qq: { name: 'QQ 邮箱', host: 'smtp.qq.com', port: '465', imapHost: 'imap.qq.com', imapPort: '993', web: 'https://mail.qq.com' },
     '163': { name: '网易邮箱', host: 'smtp.163.com', port: '465', imapHost: 'imap.163.com', imapPort: '993', web: 'https://mail.163.com' },
     gmail: { name: 'Gmail', host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', web: 'https://mail.google.com' },
-    wx: { name: '无限邮', host: '', port: '', imapHost: '', imapPort: '', web: '' },
+    wx: { name: '无限邮', host: 'smtp.2925.com', port: '465', imapHost: 'imap.2925.com', imapPort: '993', web: 'https://mail.2925.com' },
   };
 
   /* ── 按邮箱地址自动判断服务商 ──────────────────────────────────────────
@@ -3130,6 +3199,8 @@
     { re: /@(gmail|googlemail)\.com$/i, host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', note: 'Gmail 需要「应用专用密码」，不能用登录密码' },
     { re: /@(qq|foxmail)\.com$/i, host: 'smtp.qq.com', port: '465', imapHost: 'imap.qq.com', imapPort: '993', note: 'QQ 邮箱需要「授权码」（设置 → 账户 → POP3/SMTP 服务）' },
     { re: /@(163|126)\.com$/i, host: 'smtp.163.com', port: '465', imapHost: 'imap.163.com', imapPort: '993', note: '网易邮箱需要「授权码」' },
+    /* 无限邮（2925）：实测 smtp/imap/pop3 都是 465 / 993 / 995（SSL），587 超时不通 ✗ */
+    { re: /@2925\.com$/i, host: 'smtp.2925.com', port: '465', imapHost: 'imap.2925.com', imapPort: '993', note: '无限邮 2925：用 465/993（SSL），587 不通' },
     { re: /@(outlook|hotmail|live)\.(com|cn)$/i, host: 'smtp.office365.com', port: '587', imapHost: 'outlook.office365.com', imapPort: '993', note: 'Outlook / Hotmail 用 STARTTLS（587）' },
     { re: /@(yahoo|ymail)\.com$/i, host: 'smtp.mail.yahoo.com', port: '465', imapHost: 'imap.mail.yahoo.com', imapPort: '993', note: 'Yahoo 需要「应用密码」' },
     { re: /@(icloud|me|mac)\.com$/i, host: 'smtp.mail.me.com', port: '587', imapHost: 'imap.mail.me.com', imapPort: '993', note: 'iCloud 需要「App 专用密码」' },
@@ -3189,9 +3260,21 @@
             <label>授权码 / 密码<input data-mail="${k}" data-f="pass" type="password" placeholder="${a.hasPass ? '已保存（留空不改）' : '授权码'}" value=""/></label>
           </div>
           ${autoNote}
-          <div style="display:flex;gap:8px;margin-top:11px">
+          <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">
             <button class="lw-btn" data-mailsave="${k}">保存</button>
+            <button class="lw-btn" data-mailtest="${k}">测试连接</button>
             ${P.web ? `<a class="lw-btn" href="${P.web}" target="_blank" rel="noopener" style="text-decoration:none">打开网页版</a>` : ''}
+          </div>
+          <div class="lw-mail-result" id="lw-mail-result-${k}"></div>
+          <div class="lw-mail-send">
+            <div class="hd">发一封邮件</div>
+            <label>收件人<input data-msend="${k}" data-f="to" placeholder="someone@example.com（多个用逗号分隔）"/></label>
+            <label>主题<input data-msend="${k}" data-f="subject" placeholder="（无主题）"/></label>
+            <label>正文<textarea data-msend="${k}" data-f="body" rows="4" placeholder="写点什么…"></textarea></label>
+            <div style="display:flex;gap:8px;margin-top:9px">
+              <button class="lw-btn" data-mailsend="${k}">发送</button>
+              <button class="lw-btn" data-mailself="${k}" title="发给自己（用上面的账号），用来验证发信链路">发一封给自己</button>
+            </div>
           </div>
         </div>
       </div>`;
