@@ -158,6 +158,18 @@
   .lw-chips { display:flex; flex-wrap:wrap; gap:7px; }
   .lw-chip { font-size:10.5px; padding:3px 9px; border:1px solid ${T.lineDim}; color:${T.dim}; letter-spacing:.6px; }
   .lw-chip b { color:${T.accent}; font-weight:700; margin-left:5px; }
+  /* 网上热点 / AI 输出 */
+  .lw-hotlist { display:flex; flex-direction:column; max-height:340px; overflow:auto; }
+  .lw-hotrow { padding:9px 14px; border-top:1px solid ${T.lineDim}; }
+  .lw-hotrow:hover { background:#141412; }
+  .lw-hotrow .t { font-size:12.5px; line-height:1.5; }
+  .lw-hotrow .t a { color:${T.text}; text-decoration:none; }
+  .lw-hotrow .t a:hover { color:${T.accent}; text-decoration:underline; }
+  .lw-hotrow .m { font-size:10px; color:${T.faint}; margin-top:4px; letter-spacing:.4px; }
+  .lw-hotkw { cursor:pointer; }
+  .lw-hotkw:hover { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-aiout { padding:12px 14px; font-size:12.5px; line-height:1.85; color:${T.text}; border-top:1px solid ${T.lineDim}; }
+  .lw-btn[disabled] { cursor:default; }
   /* 备忘录：结构照 macOS 备忘录，**配色跟 HUD 深色统一**（不再黑壳塞白块 ✗） */
   .lw-memo { display:flex; height:calc(100vh - 260px); min-height:460px; overflow:hidden; }
   .lw-memo-list { width:272px; flex:none; background:#0d0d0c; border-right:2px solid ${T.lineDim};
@@ -1034,6 +1046,53 @@
     if (!host) return;
     /* 左栏 + 中栏的交互（提出来，方便 renderMemoList() 局部刷新时复用 ✓）*/
     bindMemoSide();
+    /* ── 网上热点 + AI 助手（研究方向视图 ✓）── */
+    const viewEl = document.getElementById('lifework-view');
+    const qv = (sel) => (viewEl ? viewEl.querySelector(sel) : null);
+    const qav = (sel) => (viewEl ? Array.from(viewEl.querySelectorAll(sel)) : []);
+    /* 热点 */
+    const doHot = async (kw) => {
+      const inp = qv('#lw-hot-q');
+      const key = String(kw || (inp && inp.value) || '').trim() || 'robotics';
+      STORE.hotQ = key; STORE.hotLoading = true; render();
+      try { const r = await fetch('/api/life/hot?q=' + encodeURIComponent(key), { cache: 'no-store' }); STORE.hot = await r.json(); }
+      catch (e) { STORE.hot = { ok: false, error: '请求失败：' + e.message }; }
+      STORE.hotLoading = false; render();
+    };
+    const hotGo = qv('#lw-hot-go'); if (hotGo) hotGo.onclick = () => doHot();
+    const hotInp = qv('#lw-hot-q'); if (hotInp) hotInp.onkeydown = (e) => { if (e.key === 'Enter') doHot(); };
+    qav('.lw-hotkw').forEach((el) => { el.onclick = () => doHot(el.dataset.kw); });
+    /* AI 配置 */
+    const aiSave = qv('#lw-ai-save');
+    if (aiSave) aiSave.onclick = async () => {
+      const b = { save: true, baseURL: (qv('#lw-ai-url') || {}).value || '', model: (qv('#lw-ai-model') || {}).value || '', key: (qv('#lw-ai-key') || {}).value || '' };
+      try { await fetch('/api/life/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); } catch (_) {}
+      const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '✓ AI 配置已保存（只存本机）';
+      load(true);
+    };
+    /* AI 调用 */
+    const askAI = async (prompt) => {
+      STORE.aiLoading = true; STORE.aiRes = null; render();
+      try {
+        const r = await fetch('/api/life/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }) });
+        STORE.aiRes = await r.json();
+      } catch (e) { STORE.aiRes = { ok: false, error: '请求失败：' + e.message }; }
+      STORE.aiLoading = false; render();
+    };
+    const aiHot = qv('#lw-ai-hot');
+    if (aiHot) aiHot.onclick = () => {
+      const items = ((STORE.hot || {}).items || []).slice(0, 10).map((h, i) => (i + 1) + '. ' + h.title + '（▲' + h.points + '）').join('\n');
+      if (!items) { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '先搜一次热点，再让 AI 总结 ✓'; return; }
+      askAI('你是科研助手。下面是 Hacker News 上关于「' + ((STORE.hotQ) || '') + '」的热门讨论：\n\n' + items +
+        '\n\n请用中文：\n1) 用 3 句话概括这些讨论反映的技术趋势；\n2) 指出其中 2 个值得深入的方向；\n3) 给 3 条具体可执行的建议。简洁，不要客套。');
+    };
+    const aiIdea = qv('#lw-ai-idea');
+    if (aiIdea) aiIdea.onclick = () => {
+      const tracks = (DATA.tracks || []).map((t) => t.name + '（' + t.projects + ' 个项目）').join('、');
+      askAI('你是科研选题助手。我的研究方向/项目分布是：' + (tracks || '机器人、嵌入式、论文') +
+        '。\n\n请用中文给出 5 个**具体的**、可以在一到两周内启动的小选题，每个包含：\n- 题目\n- 为什么现在做（一句话）\n- 第一步做什么（一句话）\n不要泛泛而谈，要具体到能动手。');
+    };
     /* 今日面板：跳转 + 点待办跳到对应备忘录 ✓
        （注意：q / qa 是 bindMemoSide() 里的局部变量 ✗，这里不能用 ✗ —— 用原生查询 ✓）*/
     const view0 = document.getElementById('lifework-view');
@@ -1996,15 +2055,82 @@
     const tracks = DATA.tracks || [];
     if (!tracks.length) return emptyBox('还没扫到项目');
     const max = Math.max(1, ...tracks.map((t) => t.files));
+    const totalProjects = tracks.reduce((a, t) => a + t.projects, 0);
+    const totalFiles = tracks.reduce((a, t) => a + t.files, 0);
+    const hottest = tracks.slice().sort((a, b) => b.files - a.files)[0] || null;
+
+    /* 顶部概览（原来一上来就是卡片墙 ✗，缺一个总览 ✗）*/
+    const kpis = [
+      kpiCard('◈', tracks.length, '个方向', '研究方向', '按最近改动排序', 3, 'sky'),
+      kpiCard('▦', totalProjects, '个项目', '全部方向', `覆盖 ${totalFiles} 个文件`, 3, 'lilac'),
+      kpiCard('◉', hottest ? hottest.name : '—', '', '最活跃', hottest ? `${hottest.files} 文件 · ${hottest.sizeText}` : '—', 3, 'mint'),
+      kpiCard('🔥', ((STORE && STORE.hot) || {}).count || 0, '条', '网上热点', (STORE && STORE.hotQ) ? '关键词：' + esc(STORE.hotQ) : '下面点「搜热点」', 3, 'lemon'),
+    ].join('');
+
+    /* 项目卡（排版：进度条 + 更清晰的行）*/
     const list = tracks.map((t) => card(`${t.icon} ${esc(t.name)}`,
       `${t.projects} 项目 · ${t.files} 文件 · ${t.sizeText}`,
-      `<div class="lw-pad" style="padding-bottom:0"><div style="height:7px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden">
-        <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;background:${t.color}"></i></div></div>
+      `<div class="lw-pad" style="padding-bottom:2px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:10px;color:${T.faint};letter-spacing:.6px">占比</span>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,.06);overflow:hidden">
+            <i style="display:block;height:100%;width:${Math.round(t.files / max * 100)}%;background:${t.color}"></i></div>
+          <span style="font-size:10px;color:${T.dim}">${Math.round(t.files / max * 100)}%</span>
+        </div></div>
        <div class="lw-tbl">${t.list.map((p) => `<div class="lw-tr" data-path="${esc(p.path)}">
         <span class="nm">${esc(p.name)} <i>${esc(p.base)}</i></span>
         <span class="bd">${p.files} 文件</span><span class="sz">${p.sizeText}</span>
         <span class="tm">${ago(p.newest)}</span></div>`).join('')}</div>`, 6)).join('');
-    return `<div class="lw-g12">${list}</div>`;
+
+    /* 🔥 网上热点（Hacker News ✓ 免费无 key ✓）*/
+    const hotQ = (STORE && STORE.hotQ) || '';
+    const hotRes = (STORE && STORE.hot) || null;
+    const hotHtml = (STORE && STORE.hotLoading) ? '<div class="lw-empty">正在搜热点…</div>'
+      : (hotRes && hotRes.ok)
+        ? (hotRes.items || []).map((h) => `<div class="lw-hotrow">
+            <div class="t"><a href="${esc(h.url)}" target="_blank" rel="noopener">${esc(h.title)}</a></div>
+            <div class="m">▲ ${h.points} · 💬 ${h.comments} · ${esc(String(h.at).slice(0, 10))}</div></div>`).join('')
+        : (hotRes && hotRes.error ? `<div class="lw-empty">${esc(hotRes.error)}</div>`
+          : '<div class="lw-empty"><span class="big">🔥</span>输入关键词，看网上大家在聊什么</div>');
+    const hotCard = `<div class="lw-c" style="${sp(6)}">
+      <h3><span class="code">F-90</span>网上热点<span class="sp"></span><em>Hacker News · 实时</em></h3>
+      <div class="lw-pad" style="padding-bottom:10px">
+        <div class="lw-search"><input id="lw-hot-q" placeholder="关键词，如 legged robot…" value="${esc(hotQ)}" />
+          <button class="lw-btn" id="lw-hot-go">搜热点</button></div>
+        <div class="lw-chips" style="margin-top:9px">${(tracks || []).slice(0, 4).map((t) =>
+          `<span class="lw-chip lw-hotkw" data-kw="${esc(t.name)}">${esc(t.name)}</span>`).join('')}</div>
+      </div>
+      <div class="lw-hotlist">${hotHtml}</div>
+    </div>`;
+
+    /* 🤖 AI 助手（OpenAI 兼容 ✓ 支持本地 ollama ✓）*/
+    const ai = (STORE && STORE.ai) || {};
+    const aiRes = (STORE && STORE.aiRes) || null;
+    const aiCard = `<div class="lw-c" style="${sp(6)}">
+      <h3><span class="code">F-91</span>AI 助手<span class="sp"></span>
+        <em>${ai.hasKey ? '已配置 · ' + esc(ai.model || '') : '未配置'}</em></h3>
+      <div class="lw-pad" style="padding-bottom:10px">
+        <div class="lw-form">
+          <label>接口地址 baseURL<input id="lw-ai-url" placeholder="https://api.deepseek.com/v1 或 http://127.0.0.1:11434/v1" value="${esc(ai.baseURL || '')}" /></label>
+          <label>模型名<input id="lw-ai-model" placeholder="deepseek-chat / qwen2.5 / gpt-4o-mini" value="${esc(ai.model || '')}" /></label>
+          <label>API Key<input id="lw-ai-key" type="password" placeholder="${ai.hasKey ? '已保存（留空不改）' : 'sk-…'}" value="" /></label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="lw-btn" id="lw-ai-save">保存配置</button>
+          <button class="lw-btn" id="lw-ai-hot" ${ai.hasKey ? '' : 'disabled style="opacity:.45"'}>让 AI 总结热点</button>
+          <button class="lw-btn" id="lw-ai-idea" ${ai.hasKey ? '' : 'disabled style="opacity:.45"'}>让 AI 出选题</button>
+        </div>
+        <div style="font-size:10.5px;color:${T.faint};line-height:1.7;margin-top:9px">
+          配置**只存本机**（life-ai.json）✓。任何 OpenAI 兼容服务都行 ✓；<br>
+          本地跑 <b style="color:${T.accent}">Ollama</b> 的话填 <b style="color:${T.accent}">http://127.0.0.1:11434/v1</b> ✓，key 随便填 ✓。
+        </div>
+      </div>
+      <div class="lw-hotlist" id="lw-ai-out">${(STORE && STORE.aiLoading) ? '<div class="lw-empty">AI 思考中…</div>'
+        : (aiRes ? (aiRes.ok ? `<div class="lw-aiout">${esc(aiRes.text).replace(/\n/g, '<br>')}</div>` : `<div class="lw-empty">${esc(aiRes.error)}</div>`)
+          : '<div class="lw-empty"><span class="big">🤖</span>配好之后，可以让 AI 帮你读热点、出选题</div>')}</div>
+    </div>`;
+
+    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${list}</div>`;
   }
 
   /* ── 论文 ── */
