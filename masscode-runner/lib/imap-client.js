@@ -264,6 +264,10 @@ class ImapSession {
     const p = String(pass || '');
     if (!u) throw new ImapError('没有填邮箱账号', 'config');
     if (!p) throw new ImapError('没有填授权码 / 密码', 'config');
+    /* ⚠️ 返回的必须是**本次新增**的步骤 ✗ —— `this.steps` 里已经有「已连接」了，
+       直接 `return this.steps` 会让调用方再 push 一遍 → 步骤里「已连接」出现两次 ✗
+       （实测：接口返回的 steps 里同一句出现两遍）。 */
+    const from = this.steps.length;
     const res = await this.command('LOGIN ' + q(u) + ' ' + q(p), { allowFail: true });
     if (res.status !== 'OK') {
       const hint = /AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed|auth/i.test(res.text)
@@ -280,7 +284,7 @@ class ImapSession {
         this.steps.push('已发送客户端标识（ID）');
       } catch (_) { }
     }
-    return this.steps;
+    return this.steps.slice(from);
   }
 
   async select(box) {
