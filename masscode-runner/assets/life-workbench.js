@@ -997,6 +997,16 @@
     qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
     const mQ = q("#lw-memo-q");
     if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; renderMemoList(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+    /* ★ 预览开关 —— 之前**漏了绑定** ✗（用户反馈"预览点击没用、关不掉" ✗）*/
+    const liveBtn = q('#lw-nt-live');
+    if (liveBtn) liveBtn.onclick = () => {
+      flushMemo();
+      STORE.memoLive = !STORE.memoLive;
+      saveStore(); render();
+      const s2 = document.getElementById('lw-sub');
+      if (s2) s2.textContent = STORE.memoLive ? '已开启实时预览 ✓' : '已关闭预览 ✓';
+    };
+    /* 视图切换（▤ 文件夹 / ▦ 全部列表）*/
     const mView = qa("[data-mview]");
     mView.forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); renderMemoList(); }; });
     const addFol = q("#lw-nt-addfol");
@@ -1891,10 +1901,13 @@
       const body = String(m.text || "").split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").replace(/^\s*[-*+]\s*\[[ xX]\]\s*/gm, "").slice(0, 22);
       const td = todoOf(m);
       const extra = td.total ? ("☑ " + td.done + "/" + td.total) : ((String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : "备忘录");
+      /* ⚠️ `▦ 全部列表` 视图下**显示所属文件夹** ✓ ——
+         否则"文件夹视图"和"全部列表"看起来一模一样 ✗（用户反馈"这两个按钮没用"✗）。*/
+      const folTag = (view === 'all' && (m.folder || '备忘录')) ? '<span class="bd" style="color:' + T.accent + '">' + esc(m.folder || '备忘录') + '</span>' : '';
       return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '">'
         + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(String(m.text || "").split("\n")[0].slice(0, 30) || "新备忘录") + '</div>'
         + '<div class="mt"><b>' + when + '</b>' + (body ? "  " + esc(body) : "") + '</div>'
-        + '<div class="sub">' + (td.total ? (td.open ? "▣ " : "▣ ") : "▤ ") + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
+        + '<div class="sub">' + folTag + (td.total ? (td.open ? "▣ " : "▣ ") : "▤ ") + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
     };
 
     const listHtml = groups.length
