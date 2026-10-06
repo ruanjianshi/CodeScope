@@ -30,6 +30,7 @@
     "test": "node tests/smoke.js && node tests/platform-sim.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js",
+    "test:blockly": "node tests/blockly-ifelse.js",
     "build:reading-editor": "node scripts/build-reading-editor.js",
     "build:study-workspace": "node scripts/build-study-workspace.js",
     "build:assets": "npm run build:reading-editor && npm run build:study-workspace && npm run build:system-panel",

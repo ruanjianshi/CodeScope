@@ -61,5 +61,9 @@ const FILE = process.argv[2] || '/Users/xiaoq/Library/Mobile Documents/com~apple
   console.log('静态检查不匹配:', r.静态不匹配.length ? '✗ ' + r.静态不匹配.join(' | ') : '✓ 无');
   console.log('实际创建失败:', r.创建失败.length ? '✗ ' + r.创建失败.join(' | ') : '✓ 无');
   console.log('页面错误:', errs.length ? errs.slice(0, 2).join(' | ') : '无 ✓');
+  /* 只打印结果不算守门：失败必须给非 0 退出码，自动化里才发现得了 */
+  const failed = r.静态不匹配.length > 0 || r.创建失败.length > 0 || errs.length > 0;
+  console.log('\n积木定义校验：' + (failed ? '✗ 失败' : '✓ 通过'));
   await b.close();
-})();
+  if (failed) process.exit(1);
+})().catch((e) => { console.error('测试本身出错:', (e && e.stack) || e); process.exit(1); });
