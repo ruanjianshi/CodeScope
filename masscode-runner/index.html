@@ -3752,7 +3752,11 @@
     #toolbar { flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
     #toolbar .sp { min-width:0; }
     #toolbar::-webkit-scrollbar { display:none; }
-    #multi-badge { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* 多片段提示条窄屏只留「📦 N 个文件」—— 完整那句会占 161px，
+       把工具栏最后的「自动保存」开关挤出可视区（被裁掉、点不到）。
+       配合 JS 里 .mb-long 的包裹 + title，信息不丢。 */
+    #multi-badge { max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #multi-badge .mb-long { display:none; }
     #toolbar #btn-symbols, #toolbar #btn-outline, #toolbar #btn-mindmap, #toolbar #btn-codegraph, #toolbar #btn-logicgraph, #toolbar #btn-blockly, #toolbar #btn-history, #toolbar #btn-pair-switch { width:34px; flex:none; padding:0; font-size:0; }
     #btn-symbols::before { content:'AI'; font-size:10px; font-weight:800; letter-spacing:.02em; }
     #btn-outline::before { content:'≡'; font-size:16px; }
@@ -15885,11 +15889,16 @@ function renderCode() {
   tabs.appendChild(addB);
   const multi = s.fragments.length > 1;
   if (multi) {
-    $('multi-badge').style.display = '';
+    const badge = $('multi-badge');
+    badge.style.display = '';
     const isC = s.fragments.every(f => ['c_cpp', 'c'].includes(f.language));
-    $('multi-badge').textContent = isC
-      ? `📦 ${s.fragments.length} 个文件 · 运行将一起编译（.cpp/.hpp）`
-      : `📦 ${s.fragments.length} 个文件 · 运行共享目录`;
+    const long = isC ? ' · 运行将一起编译（.cpp/.hpp）' : ' · 运行共享目录';
+    /* ⚠️ 长的那半句要包在 .mb-long 里：窄屏（≤1600px）工具栏本来就紧，
+       这一条能占到 161px，会把**最后的「自动保存」开关挤出可视区**（被裁掉、点不到）。
+       窄屏用 CSS 把 .mb-long 隐藏，只留「📦 N 个文件」；完整说明挂在 title 上，
+       信息不丢。实测：161px → 约 80px，工具栏不再溢出。 */
+    badge.innerHTML = '📦 ' + s.fragments.length + ' 个文件<span class="mb-long">' + long + '</span>';
+    badge.title = '📦 ' + s.fragments.length + ' 个文件' + long;
   } else { $('multi-badge').style.display = 'none'; }
   const f = s.fragments[CINDEX];
   if(f&&['markdown','html','latex'].includes(f.language)&&documentMode(f)!=='preview')EDITING=true;
