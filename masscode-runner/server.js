@@ -36,6 +36,16 @@ const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
 /* 极简 SMTP 客户端（只依赖 Node 内置 tls/net）—— 用于「邮箱」页的测试连接与发信 ✓ */
 const MAIL_CLIENT = require('./lib/mail-client');
+const MAIL_IMAP = require('./lib/imap-client');
+const MAIL_MIME = require('./lib/mime');
+/* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
+   而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
+   `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
+   读信 / 改标记后会 `clear()` 掉 ✓，保证「点开一封 → 列表里那封变已读」是立刻生效的 ✓。 */
+const MAIL_STATUS_CACHE = new Map();
+const MAIL_LIST_CACHE = new Map();
+const MAIL_STATUS_TTL = 60e3;
+const MAIL_LIST_TTL = 20e3;
 const { createSystemPanel } = require('./lib/system-panel');
 const { buildCodeGraph, buildDocumentGraph, buildSnippetIndex, resolveDefinition } = require('./lib/code-graph');
 const { buildLogicGraph, logicToDrawio, logicToSkeleton } = require('./lib/logic-graph');
@@ -4730,6 +4740,248 @@ const server = http.createServer(async (req, res) => {
         }));
       } catch (error) {
         return send(res, 400, { ok: false, error: String((error && error.message) || error) });
+      }
+    }
+    /* ══ 邮箱收信（IMAP）：查阅 / 管理 ══════════════════════════════════
+       ⚠️ 密码只在服务端（life-mail.json）里读 ✓，前端只传账号 key ✓。
+       为什么要缓存：每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
+       顶栏那个未读数还会定时轮询 ✗ —— 不缓存会把邮箱服务器打爆 ✗。 */
+    if (u.pathname === '/api/life/mail/status' || u.pathname === '/api/life/mail/boxes' ||
+        u.pathname === '/api/life/mail/list' || u.pathname === '/api/life/mail/read' ||
+        u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag') {
+      const readCfg = () => {
+        try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
+      };
+      const accountOf = (key) => {
+        const raw = readCfg()[key];
+        if (!raw) return null;
+        return {
+          host: String(raw.host || '').trim(), port: String(raw.port || '').trim(),
+          user: String(raw.user || '').trim(), pass: String(raw.pass || ''),
+          imapHost: String(raw.imapHost || '').trim(), imapPort: String(raw.imapPort || '').trim(),
+        };
+      };
+      const cacheGet = (map, cacheKey, ttl) => {
+        const hit = map.get(cacheKey);
+        if (hit && Date.now() - hit.at < ttl) return hit.data;
+        return null;
+      };
+      const cacheSet = (map, cacheKey, data) => {
+        map.set(cacheKey, { at: Date.now(), data });
+        if (map.size > 40) map.delete(map.keys().next().value);
+        return data;
+      };
+      const needKey = () => String(u.searchParams.get('key') || '').trim();
+      /* ⚠️ `/flag` 是 POST，账号 key 在**请求体**里 ✗ 不在 query ✗ ——
+         以前只从 query 取 → 永远取不到 key → 报「没有这个邮箱账号」✗（实测踩过）。
+         所以先把 body 读出来，key / box 都允许从 body 覆盖 ✓。 */
+      let postBody = null;
+      if (u.pathname === '/api/life/mail/flag') {
+        if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+        try { postBody = await readBody(req, 1e5); } catch (_) { postBody = {}; }
+      }
+
+      try {
+        /* ── 未读数（顶栏用）── */
+        if (u.pathname === '/api/life/mail/status') {
+          const force = u.searchParams.get('force') === '1';
+          if (!force) {
+            const cached = cacheGet(MAIL_STATUS_CACHE, 'all', MAIL_STATUS_TTL);
+            if (cached) return send(res, 200, cached);
+          }
+          const cfg = readCfg();
+          const keys = Object.keys(cfg).filter((k) => {
+            const a = cfg[k] || {};
+            return String(a.imapHost || '').trim() && String(a.user || '').trim() && String(a.pass || '').trim();
+          });
+          const results = await Promise.all(keys.map(async (k) => {
+            const account = accountOf(k);
+            const r = await MAIL_IMAP.withSession(account, async (s) => {
+              const st = await s.status('INBOX');
+              let latest = null;
+              if (st.unseen > 0) {
+                await s.select('INBOX');
+                const unseen = await s.search('UNSEEN');
+                if (unseen.length) {
+                  const hs = await s.fetchHeaders([unseen[unseen.length - 1]], ['FROM', 'SUBJECT', 'DATE']);
+                  if (hs.length) {
+                    const H = MAIL_MIME.parseHeaders(hs[0].headerRaw);
+                    latest = {
+                      uid: hs[0].uid,
+                      subject: MAIL_MIME.decodeHeader(H.subject) || '(无主题)',
+                      from: MAIL_MIME.decodeHeader(H.from),
+                      date: MAIL_MIME.parseMessage(hs[0].headerRaw).date || 0,
+                    };
+                  }
+                }
+              }
+              return { unseen: st.unseen, messages: st.messages, latest };
+            }, { timeout: 15000 });
+            return {
+              key: k, user: account.user,
+              ok: !!r.ok,
+              unseen: r.ok ? r.unseen : 0,
+              messages: r.ok ? r.messages : 0,
+              latest: r.ok ? r.latest : null,
+              error: r.ok ? '' : (r.error || '连接失败'),
+            };
+          }));
+          const total = results.reduce((n, x) => n + (x.unseen || 0), 0);
+          return send(res, 200, cacheSet(MAIL_STATUS_CACHE, 'all', { ok: true, total, accounts: results, at: Date.now() }));
+        }
+
+        /* 后面几条都要指定账号 ✓ */
+        const key = needKey() || String((postBody && postBody.key) || '').trim();
+        const account = key ? accountOf(key) : null;
+        if (!account) return send(res, 200, { ok: false, error: '没有这个邮箱账号（先去「配置」里保存一个）' });
+        if (!account.imapHost) return send(res, 200, { ok: false, error: '这个账号没填 IMAP 服务器，收信需要它' });
+        if (!account.pass) return send(res, 200, { ok: false, error: '这个账号没存授权码 / 密码' });
+        const box = String(u.searchParams.get('box') || (postBody && postBody.box) || 'INBOX').trim() || 'INBOX';
+
+        /* ── 文件夹列表 ── */
+        if (u.pathname === '/api/life/mail/boxes') {
+          const cacheKey = 'boxes:' + key;
+          const cached = cacheGet(MAIL_LIST_CACHE, cacheKey, MAIL_LIST_TTL);
+          if (cached) return send(res, 200, cached);
+          const r = await MAIL_IMAP.withSession(account, async (s) => {
+            const boxes = await s.listBoxes();
+            const inbox = await s.status('INBOX');
+            return { boxes, inbox };
+          }, { timeout: 20000 });
+          if (!r.ok) return send(res, 200, { ok: false, error: r.error });
+          return send(res, 200, cacheSet(MAIL_LIST_CACHE, cacheKey, { ok: true, boxes: r.boxes, inbox: r.inbox }));
+        }
+
+        /* ── 邮件列表 ── */
+        if (u.pathname === '/api/life/mail/list') {
+          const limit = Math.min(80, Math.max(5, Number(u.searchParams.get('limit')) || 30));
+          const onlyUnread = u.searchParams.get('unread') === '1';
+          const cacheKey = ['list', key, box, limit, onlyUnread ? 1 : 0].join(':');
+          const cached = cacheGet(MAIL_LIST_CACHE, cacheKey, MAIL_LIST_TTL);
+          if (cached) return send(res, 200, cached);
+          const r = await MAIL_IMAP.withSession(account, async (s) => {
+            await s.select(box);
+            const uids = await s.search(onlyUnread ? 'UNSEEN' : 'ALL');
+            const st = await s.status(box);
+            /* 取最新的 limit 封 → 倒序（新的在前）✓ */
+            const pick = uids.slice(-limit).reverse();
+            const heads = await s.fetchHeaders(pick, ['FROM', 'TO', 'SUBJECT', 'DATE', 'MESSAGE-ID']);
+            const byUid = new Map(heads.map((h) => [h.uid, h]));
+            const mails = pick.map((uid) => {
+              const h = byUid.get(uid);
+              const H = h ? MAIL_MIME.parseHeaders(h.headerRaw) : {};
+              const from = MAIL_MIME.parseAddress(MAIL_MIME.decodeHeader(H.from));
+              return {
+                uid,
+                subject: MAIL_MIME.decodeHeader(H.subject) || '(无主题)',
+                fromName: from.name || from.address,
+                fromAddress: from.address,
+                date: MAIL_MIME.parseMessage(h ? h.headerRaw : Buffer.alloc(0)).date || 0,
+                size: h ? h.size : 0,
+                seen: !!(h && h.flags.includes('\\Seen')),
+              };
+            });
+            return { box, total: st.messages, unseen: st.unseen, mails };
+          }, { timeout: 30000 });
+          if (!r.ok) return send(res, 200, { ok: false, error: r.error });
+          return send(res, 200, cacheSet(MAIL_LIST_CACHE, cacheKey, {
+            ok: true, box: r.box, total: r.total, unseen: r.unseen, mails: r.mails,
+          }));
+        }
+
+        /* ── 读一封（默认顺手标记已读 ✓，和所有邮件客户端一致）── */
+        if (u.pathname === '/api/life/mail/read') {
+          const uid = Number(u.searchParams.get('uid'));
+          if (!uid) return send(res, 200, { ok: false, error: '缺少 uid' });
+          const markRead = u.searchParams.get('markRead') !== '0';
+          const r = await MAIL_IMAP.withSession(account, async (s) => {
+            await s.select(box);
+            const full = await s.fetchFull(uid);
+            const msg = MAIL_MIME.parseMessage(full.raw);
+            let seen = full.flags.includes('\\Seen');
+            if (markRead && !seen) {
+              try { await s.store(uid, 'add', ['\\Seen']); seen = true; } catch (_) { }
+            }
+            /* ★ 内嵌图片（正文里 `cid:xxx` 引用的）要转成 data URL 一起回传 ✓ ——
+               不然邮件里所有插图都是破图 ✗（浏览器不认 `cid:` 协议 ✗）。
+               ⚠️ 必须有**总量上限** ✗：有些营销邮件内嵌几十张图，
+                  不限的话一次响应能到几十 MB ✗，面板直接卡死 ✗。
+                  超过上限的就不带，前端会显示成「图片未加载」✓。 */
+            const attIndex = new Set(msg.attachments.map((a) => a.index));
+            const inline = [];
+            let inlineBytes = 0;
+            for (const p of msg.parts) {
+              if (!p.cid || attIndex.has(p.index)) continue;
+              if (!/^image\//i.test(p.type)) continue;
+              if (inlineBytes + p.size > 3e6) continue;
+              inlineBytes += p.size;
+              inline.push({ cid: p.cid, type: p.type, dataUrl: 'data:' + p.type + ';base64,' + p.data.toString('base64') });
+            }
+            return {
+              uid, box, seen,
+              subject: msg.subject, from: msg.from, to: msg.to, cc: msg.cc,
+              date: msg.date, text: msg.text, html: msg.html,
+              attachments: msg.attachments, inline, size: full.raw.length,
+            };
+          }, { timeout: 30000 });
+          if (!r.ok) return send(res, 200, { ok: false, error: r.error });
+          MAIL_LIST_CACHE.clear();          /* 已读状态变了 → 列表缓存作废 ✓ */
+          MAIL_STATUS_CACHE.clear();
+          return send(res, 200, r);
+        }
+
+        /* ── 附件下载：重新取整封，按**和阅读页完全一致**的叶子序号切 ✓
+           （不用 `BODY[n]` —— IMAP 的部件编号（1.2 这种）和我们 DFS 得到的序号
+             在嵌套 multipart 下不一定对得上 ✗，取错了会静默给一个错文件 ✗）*/
+        if (u.pathname === '/api/life/mail/part') {
+          const uid = Number(u.searchParams.get('uid'));
+          const n = Number(u.searchParams.get('n'));
+          if (!uid || !Number.isInteger(n) || n < 0) return send(res, 200, { ok: false, error: '参数不对' });
+          const r = await MAIL_IMAP.withSession(account, async (s) => {
+            await s.select(box);
+            const full = await s.fetchFull(uid);
+            const msg = MAIL_MIME.parseMessage(full.raw);
+            const att = msg.attachments[n];
+            if (!att) return { missing: true };
+            const leaf = msg.parts[att.index];
+            return { name: att.name, type: att.type, data: leaf ? leaf.data : Buffer.alloc(0) };
+          }, { timeout: 40000 });
+          if (!r.ok) return send(res, 200, { ok: false, error: r.error });
+          if (r.missing || !r.data) return send(res, 200, { ok: false, error: '这封邮件里没有这个附件' });
+          /* ⚠️ 附件名可能含中文/引号 ✗ —— 用 RFC 5987 的 `filename*=UTF-8''…` ✓，
+             直接塞进 filename= 会被浏览器截断或乱码 ✗ */
+          const asciiName = String(r.name).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+          res.writeHead(200, {
+            'Content-Type': r.type || 'application/octet-stream',
+            'Content-Length': r.data.length,
+            'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(r.name)}`,
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+          });
+          res.end(r.data);
+          return true;
+        }
+
+        /* ── 标记已读 / 未读 / 删除 ── */
+        if (u.pathname === '/api/life/mail/flag') {
+          const uid = Number(postBody && postBody.uid);
+          const action = String((postBody && postBody.action) || '').trim();
+          if (!uid) return send(res, 200, { ok: false, error: '缺少 uid' });
+          const r = await MAIL_IMAP.withSession(account, async (s) => {
+            await s.select(box);
+            if (action === 'delete') await s.remove(uid);
+            else if (action === 'read') await s.store(uid, 'add', ['\\Seen']);
+            else if (action === 'unread') await s.store(uid, 'remove', ['\\Seen']);
+            else throw new Error('不认识的操作：' + action);
+            return { uid, action };
+          }, { timeout: 25000 });
+          if (!r.ok) return send(res, 200, { ok: false, error: r.error });
+          MAIL_LIST_CACHE.clear();
+          MAIL_STATUS_CACHE.clear();
+          return send(res, 200, r);
+        }
+      } catch (error) {
+        return send(res, 200, { ok: false, error: String((error && error.message) || error) });
       }
     }
     if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {

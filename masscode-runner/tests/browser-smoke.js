@@ -589,6 +589,61 @@ print(r.run())
   if(!rs.断开)throw new Error('面板里的「断开」没有真正断开 VNC');
   await page.locator('#btn-remote-close').click();
   await page.waitForTimeout(400);
+  /* ---- 个人管理面板 · 邮箱收件箱（IMAP 收信）的打桩 ----
+     ⚠️ 收信要连真实 IMAP ✗ —— 测试里**绝不能**依赖用户的邮箱和授权码 ✗。
+        所以把 /api/life/mail/* 全部打桩 ✓，只验**前端行为**：
+        顶栏胶囊未读数、三栏布局、列表、阅读器、sandbox、CSP、附件 ✓。
+        IMAP 协议层和 MIME 解码由 tests/mime.js + 真实账号手工验证覆盖 ✓。
+     ⚠️ 必须在**面板第一次渲染之前**注册 ✓ —— 顶栏胶囊在面板打开时就要拉账号，
+        注册晚了会先显示「未配置」再跳变（断言会不稳）✗。 */
+  const MAIL_STUB = {
+    accounts: { qq: { host: 'smtp.qq.com', port: '465', user: 'tester@qq.com', hasPass: true, imapHost: 'imap.qq.com', imapPort: '993' } },
+    status: { ok: true, total: 7, accounts: [{ key: 'qq', user: 'tester@qq.com', ok: true, unseen: 7, messages: 42, latest: { uid: 2, subject: '桩主题未读', from: '张三 <z@qq.com>', date: Date.now() } }] },
+    boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: '垃圾邮件', selectable: true }], inbox: { messages: 42, unseen: 7 } },
+    list: { ok: true, box: 'INBOX', total: 42, unseen: 7, mails: [
+      { uid: 2, subject: '桩主题未读', fromName: '张三', fromAddress: 'z@qq.com', date: Date.now(), size: 1234, seen: false },
+      { uid: 1, subject: '桩主题已读', fromName: '李四', fromAddress: 'l@qq.com', date: Date.now() - 86400000, size: 999, seen: true },
+    ] },
+    read: { ok: true, uid: 2, box: 'INBOX', seen: true, subject: '桩主题未读', from: '张三 <z@qq.com>',
+      to: 'tester@qq.com', cc: '', date: Date.now(), size: 2048, text: '桩纯文本正文',
+      html: '<p>桩 HTML 正文 <b>加粗</b></p><script>window.__mailPwned = 1;<\/script><img src="https://tracker.invalid/px.gif">',
+      attachments: [{ n: 0, index: 2, name: '报告.pdf', type: 'application/pdf', size: 1234 }], inline: [] },
+  };
+  await page.route('**/api/life/mail**', async (route) => {
+    const req = route.request();
+    const p = new URL(req.url()).pathname;
+    const json = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    if (p === '/api/life/mail') {
+      if (req.method() === 'POST') {
+        try {
+          const body = JSON.parse(req.postData() || '{}');
+          Object.keys(body.accounts || {}).forEach((k) => {
+            const inc = body.accounts[k] || {};
+            const old = MAIL_STUB.accounts[k] || {};
+            MAIL_STUB.accounts[k] = Object.assign({}, old, inc, { hasPass: !!(inc.pass || old.hasPass) });
+          });
+        } catch (_) {}
+        return json({ ok: true });
+      }
+      /* ★ 必须**回源**再合并 ✓ —— 下面「邮箱配置从服务端读回」那条用例是从
+         **Node 侧**直接 POST 到真实服务的 ✗，不经过 page.route ✗，
+         桩看不到它 ✗ → 那条老用例会读回空值 ✗（实测踩过）。
+         用 route.fetch() 拿真实响应，再把桩账号并进去 ✓，两边都满足 ✓。 */
+      let realAccounts = {};
+      try {
+        const resp = await route.fetch();
+        const j = await resp.json();
+        realAccounts = (j && j.accounts) || {};
+      } catch (_) {}
+      return json({ ok: true, accounts: Object.assign({}, realAccounts, MAIL_STUB.accounts) });
+    }
+    if (p === '/api/life/mail/status') return json(MAIL_STUB.status);
+    if (p === '/api/life/mail/boxes') return json(MAIL_STUB.boxes);
+    if (p === '/api/life/mail/list') return json(MAIL_STUB.list);
+    if (p === '/api/life/mail/read') return json(MAIL_STUB.read);
+    if (p === '/api/life/mail/flag') return json({ ok: true });
+    return json({ ok: false, error: '测试里没打桩的邮件接口：' + p });
+  });
   /* ---- 个人管理面板 · 备忘录：逐行实时渲染 + 撤销 + 图片导出 ----
      测试跑在临时 CODESCOPE_DATA_HOME 上，不碰真实数据 ✓
      正文现在和日记一样是「整篇一个 contenteditable、每行一个 div」：
@@ -837,6 +892,12 @@ print(r.run())
   if (!mailSeed.ok) throw new Error('准备邮箱测试配置失败：HTTP ' + mailSeed.status);
   await page.locator('[data-tab="mail"]').click();
   await page.waitForTimeout(2000);
+  /* ⚠️ 邮箱页现在默认是**收件箱** ✓，配置字段收在可折叠的「⚙ 账号配置」里 ✓ ——
+     要读配置字段就得先展开 ✗（以前配置就是页面主体，所以老用例没这一步 ✗）。 */
+  if (await page.locator('[data-mail="gmail"][data-f="user"]').count() === 0) {
+    await page.locator('[data-mcfg]').click();
+    await page.waitForTimeout(800);
+  }
   const mailState = () => page.evaluate(() => {
     const g = (k, f) => { const el = document.querySelector('[data-mail="' + k + '"][data-f="' + f + '"]'); return el ? el.value : null; };
     return {
@@ -914,6 +975,61 @@ print(r.run())
   const jS3=await journalStore();
   if((jS3.journal||[]).filter((x)=>x.date===jToday).length!==1) throw new Error('改分类过程中把这一天写成了多条日记');
   if(jEntry(jS3).cat!=='科研') throw new Error('最终分类不对，cat='+jEntry(jS3).cat);
+  /* ---- 个人管理面板 · 邮箱收件箱 ----
+     用户要求：「邮箱不是配置放着，我需要的是通过SMTP来进行邮箱的管理和查阅」
+     所以这里验的是**真的能查阅**（列表 / 正文 / 附件），不是只有配置卡片 ✓。
+     ⚠️ 邮件 HTML 是**不可信内容** ✗ —— sandbox 和 CSP 这两条是安全底线，必须守死 ✓。 */
+  await page.locator('[data-tab="mail"]').click();
+  await page.waitForTimeout(600);
+  /* 上一段用例把配置区展开了 → 这里先收回去，才能验收件箱 ✓ */
+  if (await page.locator('.lw-ml-list').count() === 0) {
+    await page.locator('[data-mcfg]').click();
+    await page.waitForTimeout(600);
+  }
+  await page.waitForSelector('.lw-ml', { timeout: 20000 });
+  if (await page.locator('.lw-ml-side').count() !== 1) throw new Error('邮箱页不是三栏布局（缺左栏账号）');
+  if (await page.locator('.lw-ml-list').count() !== 1) throw new Error('邮箱页不是三栏布局（缺邮件列表）');
+  if (await page.locator('.lw-ml-read').count() !== 1) throw new Error('邮箱页不是三栏布局（缺阅读区）');
+  await page.locator('.lw-ml-item').first().waitFor({ state: 'visible', timeout: 15000 });
+  if (await page.locator('.lw-ml-item').count() !== 2) throw new Error('邮件列表条数不对（应为桩里的 2 封）');
+  if (await page.locator('.lw-ml-item.unread').count() !== 1) throw new Error('未读标记不对（应只有 1 封未读）');
+  /* 打开一封 → 阅读器 */
+  await page.locator('.lw-ml-item').first().click();
+  await page.locator('.lw-ml-rhd .subj').waitFor({ state: 'visible', timeout: 15000 });
+  if (!(await page.locator('.lw-ml-rhd .subj').innerText()).includes('桩主题未读')) throw new Error('阅读区主题不对');
+  if (!(await page.locator('.lw-ml-rhd .meta').innerText()).includes('tester@qq.com')) throw new Error('阅读区没显示收件人');
+  if (await page.locator('.lw-ml-att').count() !== 1) throw new Error('附件清单没显示');
+  if (!(await page.locator('.lw-ml-att').first().innerText()).includes('报告.pdf')) throw new Error('附件名不对');
+  /* ★ 安全底线一：正文走 sandbox iframe，且不带 allow-scripts */
+  const mailFrame = page.locator('iframe.lw-ml-frame');
+  if (await mailFrame.count() !== 1) throw new Error('HTML 正文没有用 iframe 隔离');
+  const mailSandbox = await mailFrame.getAttribute('sandbox');
+  if (mailSandbox === null || /allow-scripts/.test(mailSandbox)) throw new Error('正文 iframe 的 sandbox 不安全：' + mailSandbox);
+  /* ★ 安全底线二：<script> 被剥掉、远程图片被 CSP 挡住 */
+  const mailDoc = await mailFrame.getAttribute('srcdoc');
+  if (/<script/i.test(String(mailDoc))) throw new Error('正文里的 <script> 没有被剥掉');
+  if (/img-src[^;]*https?:/i.test(String(mailDoc))) throw new Error('默认没有屏蔽远程图片（追踪像素会回传）');
+  const mailBodyText = await page.frameLocator('iframe.lw-ml-frame').locator('body').innerText();
+  if (!mailBodyText.includes('桩 HTML 正文')) throw new Error('iframe 里没渲染出正文');
+  /* 桩里的 script 若真跑了会留下全局标记 ✓（双保险） */
+  if (await page.evaluate(() => window.__mailPwned === 1)) throw new Error('邮件里的脚本真的执行了');
+  if (await page.locator('[data-mimg]').count() !== 1) throw new Error('没有「显示图片」按钮');
+  /* 未读筛选 */
+  await page.locator('#lw-ml-unread').click();
+  await page.waitForTimeout(400);
+  if (!(await page.locator('#lw-ml-unread').getAttribute('class') || '').includes('on')) throw new Error('未读筛选没有切到选中态');
+  /* 配置收进可折叠区（不再是页面主体） */
+  await page.locator('[data-mcfg]').click();
+  await page.waitForTimeout(300);
+  if (await page.locator('[data-mail="qq"][data-f="user"]').count() !== 1) throw new Error('账号配置区打不开');
+  if (await page.locator('.lw-ml-list').count() !== 0) throw new Error('配置区应该取代收件箱主体');
+  await page.locator('[data-mcfg]').click();
+  await page.waitForTimeout(300);
+  if (await page.locator('.lw-ml-list').count() !== 1) throw new Error('关掉配置后没回到收件箱');
+  /* 顶栏胶囊（面板打开时就在） */
+  if (await page.locator('#lw-mb').count() !== 1) throw new Error('顶栏没有邮箱状态胶囊');
+  const badgeText = await page.locator('#lw-mb').innerText();
+  if (!/7/.test(badgeText)) throw new Error('顶栏胶囊没显示未读数（实际：' + badgeText.replace(/\n/g, ' ') + '）');
   /* 回到备忘录页，后面的收尾流程还要用 */
   await page.locator('[data-tab="memo"]').click();
   await page.waitForTimeout(1500);
