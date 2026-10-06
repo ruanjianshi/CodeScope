@@ -783,6 +783,39 @@ print(r.run())
   if(!drawerAbove.关闭可点)throw new Error('环境检测的关闭按钮被个人管理面板挡住，点不到');
   await page.locator('#btn-env-close').click();
   await page.waitForTimeout(500);
+  /* ---- 邮箱配置：**从服务端读取** + 按地址自动识别服务商 ----
+     ⚠️ 以前前端只 POST 不 GET ✗ —— 保存后一刷新就全变「未配置」，
+        用户之前填好的邮箱（服务端 life-mail.json 里明明存着）也读不出来。
+     另一条：填了邮箱地址要自动补 SMTP / IMAP（用户要求「自行获取我的谷歌邮箱SMTP」）。 */
+  const mailSeed = await fetch(baseUrl + '/api/life/mail', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accounts: { gmail: { user: 'browser-test@gmail.com', host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', pass: 'app-password' } } }),
+  });
+  if (!mailSeed.ok) throw new Error('准备邮箱测试配置失败：HTTP ' + mailSeed.status);
+  await page.locator('[data-tab="mail"]').click();
+  await page.waitForTimeout(2000);
+  const mailState = () => page.evaluate(() => {
+    const g = (k, f) => { const el = document.querySelector('[data-mail="' + k + '"][data-f="' + f + '"]'); return el ? el.value : null; };
+    return {
+      gmail: { user: g('gmail', 'user'), host: g('gmail', 'host'), port: g('gmail', 'port'), imapHost: g('gmail', 'imapHost'), imapPort: g('gmail', 'imapPort') },
+      密码占位: (document.querySelector('[data-mail="gmail"][data-f="pass"]') || {}).placeholder || '',
+    };
+  });
+  const mailAfter = await mailState();
+  if (mailAfter.gmail.user !== 'browser-test@gmail.com') throw new Error('邮箱配置没从服务端读回来（刷新后变「未配置」）：' + JSON.stringify(mailAfter.gmail));
+  if (mailAfter.gmail.host !== 'smtp.gmail.com' || mailAfter.gmail.imapHost !== 'imap.gmail.com') throw new Error('邮箱配置的服务器没读回来：' + JSON.stringify(mailAfter.gmail));
+  if (!/已保存/.test(mailAfter.密码占位)) throw new Error('服务端已存密码，占位应提示「已保存（留空不改）」：' + mailAfter.密码占位);
+  /* 在空卡片里填一个 QQ 地址 → 应自动补 smtp.qq.com / imap.qq.com */
+  await page.locator('[data-mail="qq"][data-f="user"]').fill('someone@qq.com');
+  await page.waitForTimeout(600);
+  const qqAuto = await page.evaluate(() => {
+    const g = (f) => { const el = document.querySelector('[data-mail="qq"][data-f="' + f + '"]'); return el ? el.value : null; };
+    return { host: g('host'), port: g('port'), imapHost: g('imapHost'), imapPort: g('imapPort') };
+  });
+  if (qqAuto.host !== 'smtp.qq.com' || qqAuto.port !== '465' || qqAuto.imapHost !== 'imap.qq.com') throw new Error('填地址后没有自动识别服务商：' + JSON.stringify(qqAuto));
+  /* 回到备忘录页，后面的收尾流程还要用 */
+  await page.locator('[data-tab="memo"]').click();
+  await page.waitForTimeout(1500);
   /* 收尾：把测试备忘录移走。**趁工作台还开着**验证命令面板在最上层 ——
      工作台是全屏浮层（.lw-inpanel 的 z-index 是 8800），命令面板必须高过它，
      否则按 ⌘⇧P 之后屏幕上什么都看不见、连关闭按钮都点不到（实测踩过）。 */

@@ -4668,17 +4668,22 @@ const server = http.createServer(async (req, res) => {
           const cur = read();
           const next = Object.assign({}, cur);
           const accounts = (body && body.accounts) || {};
+          /* ⚠️ 字段**没提供**就沿用旧值，提供了才覆盖 ——
+             以前一律 `String(inc.x || '')` ✗，只对密码做了保护，
+             所以一个「只改 host」的部分 POST 会把 user / imapHost 全清空 ✗（真踩过：把用户邮箱账号清掉了）。
+             现在用 pick：undefined = 没提供（沿用旧值）；给了空串 = 用户主动清空 ✓。 */
+          const pick = (v, fallback) => (v === undefined || v === null ? String(fallback || '') : String(v));
           Object.keys(accounts).forEach((k) => {
             const inc = accounts[k] || {};
             const old = cur[k] || {};
             next[k] = {
-              host: String(inc.host || '').slice(0, 120),
-              port: String(inc.port || '').slice(0, 8),
-              user: String(inc.user || '').slice(0, 200),
+              host: pick(inc.host, old.host).slice(0, 120),
+              port: pick(inc.port, old.port).slice(0, 8),
+              user: pick(inc.user, old.user).slice(0, 200),
               /* 密码留空 = 不改（避免前端拿不到明文又被清掉） */
               pass: inc.pass ? String(inc.pass).slice(0, 200) : (old.pass || ''),
-              imapHost: String(inc.imapHost || '').slice(0, 120),
-              imapPort: String(inc.imapPort || '').slice(0, 8),
+              imapHost: pick(inc.imapHost, old.imapHost).slice(0, 120),
+              imapPort: pick(inc.imapPort, old.imapPort).slice(0, 8),
             };
           });
           try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}

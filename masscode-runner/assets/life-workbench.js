@@ -752,6 +752,10 @@
   .lw-form input { height:32px; padding:0 10px; border:2px solid ${T.lineDim}; background:transparent;
     color:${T.text}; font:12px ${UI}; outline:none; letter-spacing:.4px; }
   .lw-form input:focus { border-color:${T.accent}; }
+  /* 邮箱：按地址自动识别服务商后的提示条 */
+  .lw-mail-hint { margin-top:9px; padding:7px 10px; border:1px solid color-mix(in srgb,${T.ok} 34%,transparent);
+    border-radius:6px; background:color-mix(in srgb,${T.ok} 9%,transparent); color:${T.dim}; font-size:11px; line-height:1.6; }
+  .lw-mail-hint b { color:${T.ok}; font-family:${MONO}; }
   #btn-lifework.on { background:${T.accent} !important; color:${T.accentInk} !important; }
   `;
 
@@ -2230,6 +2234,23 @@
     qa('.lw-kw').forEach((el) => { el.onclick = () => doSearch(el.dataset.kw); });
 
     /* ── 邮箱配置 ── */
+    /* 进邮箱页就从**服务端**拉一次配置 ✓
+       （权威在 life-mail.json；以前只 POST 不 GET ✗ → 刷新后全变「未配置」）*/
+    if (TAB === 'mail') loadMailAccounts();
+    /* 填了邮箱地址就自动补 SMTP / IMAP（认得出服务商的话）✓
+       只在**空**的时候补，别覆盖用户手填的值 ✓ */
+    qa('[data-mail][data-f="user"]').forEach((inp) => {
+      inp.oninput = () => {
+        const k = inp.dataset.mail;
+        const g = mailGuess(inp.value);
+        if (!g) return;
+        const put = (f, v) => {
+          const el = qa('[data-mail="' + k + '"][data-f="' + f + '"]')[0];
+          if (el && !String(el.value || '').trim()) el.value = v;
+        };
+        put('host', g.host); put('port', g.port); put('imapHost', g.imapHost); put('imapPort', g.imapPort);
+      };
+    });
     qa('[data-mailsave]').forEach((btn) => {
       btn.onclick = async () => {
         const k = btn.dataset.mailsave;
@@ -3100,22 +3121,74 @@
     gmail: { name: 'Gmail', host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', web: 'https://mail.google.com' },
     wx: { name: '无限邮', host: '', port: '', imapHost: '', imapPort: '', web: '' },
   };
+
+  /* ── 按邮箱地址自动判断服务商 ──────────────────────────────────────────
+     用户要求「自行获取我的谷歌邮箱SMTP」—— 不该让人手敲 smtp.gmail.com ✓。
+     只要填了邮箱地址，SMTP / IMAP 的服务器和端口就自动补上 ✓。
+     常见服务商的官方参数（端口 465 = SSL，587 = STARTTLS）： */
+  const MAIL_BY_DOMAIN = [
+    { re: /@(gmail|googlemail)\.com$/i, host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', note: 'Gmail 需要「应用专用密码」，不能用登录密码' },
+    { re: /@(qq|foxmail)\.com$/i, host: 'smtp.qq.com', port: '465', imapHost: 'imap.qq.com', imapPort: '993', note: 'QQ 邮箱需要「授权码」（设置 → 账户 → POP3/SMTP 服务）' },
+    { re: /@(163|126)\.com$/i, host: 'smtp.163.com', port: '465', imapHost: 'imap.163.com', imapPort: '993', note: '网易邮箱需要「授权码」' },
+    { re: /@(outlook|hotmail|live)\.(com|cn)$/i, host: 'smtp.office365.com', port: '587', imapHost: 'outlook.office365.com', imapPort: '993', note: 'Outlook / Hotmail 用 STARTTLS（587）' },
+    { re: /@(yahoo|ymail)\.com$/i, host: 'smtp.mail.yahoo.com', port: '465', imapHost: 'imap.mail.yahoo.com', imapPort: '993', note: 'Yahoo 需要「应用密码」' },
+    { re: /@(icloud|me|mac)\.com$/i, host: 'smtp.mail.me.com', port: '587', imapHost: 'imap.mail.me.com', imapPort: '993', note: 'iCloud 需要「App 专用密码」' },
+    { re: /@(sina|sina\.cn)$/i, host: 'smtp.sina.com', port: '465', imapHost: 'imap.sina.com', imapPort: '993', note: '新浪邮箱需要开启 SMTP 服务' },
+    { re: /@(139|189)\.com$/i, host: 'smtp.139.com', port: '465', imapHost: 'imap.139.com', imapPort: '993', note: '移动 / 电信邮箱需要开启 SMTP 服务' },
+    { re: /@aliyun\.com$|@(aliyun|mxhichina)\./i, host: 'smtp.mxhichina.com', port: '465', imapHost: 'imap.mxhichina.com', imapPort: '993', note: '阿里企业邮箱' },
+  ];
+  function mailGuess(user) {
+    const u = String(user || '').trim();
+    if (!u || u.indexOf('@') < 0) return null;
+    return MAIL_BY_DOMAIN.find((p) => p.re.test(u)) || null;
+  }
+
+  /* 邮箱配置的**权威在服务端**（life-mail.json，密码不回传明文，只回 hasPass）。
+     ⚠️ 以前只有 POST 没有 GET ✗ —— 保存后一刷新就全变「未配置」，
+        用户之前填好的 Gmail 也读不出来（服务端明明存着）✗。 */
+  let MAIL_LOADING = false;
+  async function loadMailAccounts() {
+    if (MAIL_LOADING) return;
+    MAIL_LOADING = true;
+    try {
+      const r = await fetch('/api/life/mail', { cache: 'no-store' });
+      const d = await r.json();
+      if (d && d.ok && d.accounts) {
+        /* 服务端为准，但保留本地已有的（比如刚填还没保存的）✓ */
+        STORE.mailAcc = Object.assign({}, STORE.mailAcc || {}, d.accounts);
+        if (TAB === 'mail' && document.getElementById('lifework-view')) render();
+      }
+    } catch (_) {} finally { MAIL_LOADING = false; }
+  }
+
   function viewMail() {
     const acc = (STORE && STORE.mailAcc) || {};
     const keys = Object.keys(MAIL_PRESET);
     const cards = keys.map((k, i) => {
       const P = MAIL_PRESET[k];
       const a = acc[k] || {};
+      /* ★ 按地址自动识别服务商：用户只要填邮箱地址，SMTP / IMAP 自动补上 ✓
+         （用户要求「自行获取我的谷歌邮箱SMTP」——不该让人手敲 smtp.gmail.com） */
+      const g = mailGuess(a.user);
+      const host = a.host || (g ? g.host : '');
+      const port = a.port || (g ? g.port : '');
+      const imapHost = a.imapHost || (g ? g.imapHost : '');
+      const imapPort = a.imapPort || (g ? g.imapPort : '');
+      const autoNote = (g && !a.host)
+        ? `<div class="lw-mail-hint">✓ 已按地址识别：SMTP <b>${esc(g.host)}:${esc(g.port)}</b> · IMAP <b>${esc(g.imapHost)}:${esc(g.imapPort)}</b>（点「保存」写进配置）</div>`
+        : '';
       return `<div class="lw-c" style="${sp(6)}">
         <h3><span class="code">E-0${i + 1}</span>${esc(P.name)}<span class="sp"></span><em>${a.user ? esc(a.user) : '未配置'}</em></h3>
         <div class="lw-pad">
           <div class="lw-form">
-            <label>SMTP 服务器<input data-mail="${k}" data-f="host" placeholder="${esc(P.host || 'smtp.example.com')}" value="${esc(a.host || '')}"/></label>
-            <label>端口<input data-mail="${k}" data-f="port" placeholder="${esc(P.port || '465')}" value="${esc(a.port || '')}"/></label>
             <label>邮箱账号<input data-mail="${k}" data-f="user" placeholder="you@example.com" value="${esc(a.user || '')}"/></label>
+            <label>SMTP 服务器<input data-mail="${k}" data-f="host" placeholder="${esc(P.host || 'smtp.example.com')}" value="${esc(host)}"/></label>
+            <label>SMTP 端口<input data-mail="${k}" data-f="port" placeholder="${esc(P.port || '465')}" value="${esc(port)}"/></label>
+            <label>IMAP 服务器<input data-mail="${k}" data-f="imapHost" placeholder="${esc(P.imapHost || 'imap.example.com')}" value="${esc(imapHost)}"/></label>
+            <label>IMAP 端口<input data-mail="${k}" data-f="imapPort" placeholder="${esc(P.imapPort || '993')}" value="${esc(imapPort)}"/></label>
             <label>授权码 / 密码<input data-mail="${k}" data-f="pass" type="password" placeholder="${a.hasPass ? '已保存（留空不改）' : '授权码'}" value=""/></label>
-            <label>IMAP 服务器<input data-mail="${k}" data-f="imapHost" placeholder="${esc(P.imapHost || 'imap.example.com')}" value="${esc(a.imapHost || '')}"/></label>
           </div>
+          ${autoNote}
           <div style="display:flex;gap:8px;margin-top:11px">
             <button class="lw-btn" data-mailsave="${k}">保存</button>
             ${P.web ? `<a class="lw-btn" href="${P.web}" target="_blank" rel="noopener" style="text-decoration:none">打开网页版</a>` : ''}
@@ -3127,7 +3200,9 @@
       <div class="lw-c" style="${sp(12)}">
         <h3><span class="code">E-00</span>说明<span class="sp"></span></h3>
         <div class="lw-pad" style="font-size:12px;line-height:1.9;color:${T.dim}">
-          填好 SMTP / IMAP 后点「保存」——配置只存本机（life-mail.json），不上传。<br>
+          只要填<b style="color:${T.accent}">邮箱地址</b>，SMTP / IMAP 的服务器和端口会<b>自动识别</b>填好
+          （Gmail / QQ / 网易 / Outlook / Yahoo / iCloud / 新浪 / 移动·电信 / 阿里 都认），填完点「保存」。<br>
+          配置只存本机（<code>life-mail.json</code>），不上传；密码不回传明文，只记「有没有存过」。<br>
           「密码」要填<b style="color:${T.accent}">授权码</b>，不是登录密码：QQ 在「设置 → 账户 → POP3/SMTP 服务」生成，网易类似，Gmail 要「应用专用密码」。<br>
           <span style="color:${T.faint}">收信 / 发信还没接 —— 等你的 SMTP 服务就绪后再加。</span>
         </div>
