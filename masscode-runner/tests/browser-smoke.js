@@ -474,7 +474,10 @@ print(r.run())
   if(await page.locator('#env-client-list .tool-row').count()<8)throw new Error('浏览器能力检测条目不完整');
   /* 元信息现在是键值网格（label 与值分属两个元素），只断言「版本号有显示」这件事本身 */
   if(!(await page.locator('#env-meta').innerText()).includes('v'+packageVersion))throw new Error('环境元信息未显示 v'+packageVersion);
-  /* DSH 四个操作按钮（打开 / 启动 / 关闭 / 重启）必须都在，且启动/关闭按状态互斥 */
+  /* DSH 四个操作按钮（打开 / 启动 / 关闭 / 重启）必须都在，且启动/关闭按状态互斥。
+     ⚠️ 先等它脱离 data-state="busy"（启动中）—— 那是瞬态，四个按钮全灰是**正常**的，
+     直接断言会把「正在启动」误判成错（实测踩过）。 */
+  await page.waitForFunction(()=>{const c=document.getElementById('env-dsh-card');return c&&c.dataset.state!=='busy';},null,{timeout:25000}).catch(()=>{});
   const dshButtons=await page.evaluate(()=>{
     const ids=['btn-env-dsh-open','btn-env-dsh-start','btn-env-dsh-stop','btn-env-dsh-restart'];
     const found=ids.map((id)=>document.getElementById(id));
@@ -482,6 +485,7 @@ print(r.run())
     return {打开:found[0].disabled,启动:found[1].disabled,关闭:found[2].disabled,重启:found[3].disabled,状态:document.getElementById('env-dsh-card').dataset.state};
   });
   if(dshButtons.missing)throw new Error('DSH 操作按钮缺失：'+dshButtons.missing.join(', '));
+  if(dshButtons.状态==='busy')throw new Error('DSH 一直停在「启动中」，没能收敛：'+JSON.stringify(dshButtons));
   if(dshButtons.状态==='ok'&&(dshButtons.启动===false||dshButtons.关闭===true))throw new Error('DSH 运行中时按钮状态不对：'+JSON.stringify(dshButtons));
   if(dshButtons.状态!=='ok'&&(dshButtons.启动===true||dshButtons.关闭===false))throw new Error('DSH 未运行时按钮状态不对：'+JSON.stringify(dshButtons));
   if((await page.locator('#env-missing').innerText())!=='1')throw new Error('未连接的 ONLYOFFICE 没有被计为 Office 运行问题');
@@ -500,6 +504,78 @@ print(r.run())
   if(!/vault/.test(await page.locator('#env-sync-note').innerText()))throw new Error('云同步未显示 vault 统计');
   if((await page.locator('#btn-env-sync-refresh').count())!==1||(await page.locator('#btn-env-sync-scan').count())!==1||(await page.locator('#btn-env-sync-snapshot').count())!==1)throw new Error('云同步三个操作按钮不完整');
   await page.locator('#btn-env-close').click();
+  /* ---- 个人管理面板 · 备忘录：左右同步 + 撤销 ----
+     用户反馈过三个问题，这里各钉一条断言（测试跑在临时 CODESCOPE_DATA_HOME 上，不碰真实数据 ✓）：
+     ① 左边打字、右边预览和左栏列表摘要都不动（只在别的操作触发整屏渲染时才追上来）
+     ② 完全没有撤销（textarea 的原生撤销一重渲染就丢，删除/格式化更是没法回退）
+     ③ 删除后各栏不同步 */
+  await page.locator('#btn-lifework').click();
+  await page.locator('#lifework-view').waitFor({state:'visible',timeout:20000});
+  await page.locator('[data-tab="memo"]').click();
+  /* ⚠️ 临时库里一条备忘录都没有 → 先进的是空态（没有 textarea）。
+     必须先点「新建」把编辑器叫出来（空态里也有这个按钮 ✓）。 */
+  await page.locator('#lw-memo-new').click();
+  await page.locator('#lw-memo-body').waitFor({state:'visible',timeout:20000});
+  await page.locator('#lw-memo-title').fill('浏览器回归 · 备忘录');
+  await page.locator('#lw-memo-body').fill('第一行');
+  await page.waitForTimeout(900);
+  /* ⚠️ 预览区只在「◫ 预览」打开时才渲染（关着就只有纯 textarea）。
+     临时库里 memoLive 是默认关的，先点开它，否则下面等不到 #lw-nt-livebody。 */
+  await page.locator('#lw-nt-live').click();
+  await page.locator('#lw-nt-livebody').waitFor({state:'visible',timeout:10000});
+  const memoState=()=>page.evaluate(()=>({
+    编辑区:(document.getElementById('lw-memo-body')||{}).value||'',
+    预览:(document.getElementById('lw-nt-livebody')||{}).innerText||'',
+    列表:[...document.querySelectorAll('[data-memo]')].map((e)=>e.innerText.replace(/\s+/g,' ')),
+    撤销可用:!(document.getElementById('lw-memo-undo')||{}).disabled,
+    重做可用:!(document.getElementById('lw-memo-redo')||{}).disabled,
+    行数:document.querySelectorAll('[data-memo]').length,
+  }));
+  await page.locator('#lw-memo-body').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('同步探针');
+  await page.waitForTimeout(700);
+  const afterType=await memoState();
+  if(!afterType.预览.includes('同步探针'))throw new Error('打字后右侧预览没跟上（左右不同步）：'+JSON.stringify(afterType.预览));
+  if(!afterType.列表.some((r)=>r.includes('同步探针')))throw new Error('打字后左栏列表摘要没跟上：'+JSON.stringify(afterType.列表));
+  if(!afterType.撤销可用)throw new Error('打字后「撤销」仍是灰的（没有可撤销状态）');
+  await page.locator('#lw-memo-undo').click();
+  await page.waitForTimeout(800);
+  const afterUndo=await memoState();
+  if(afterUndo.编辑区.includes('同步探针'))throw new Error('点撤销后内容没回退：'+JSON.stringify(afterUndo.编辑区));
+  if(!afterUndo.重做可用)throw new Error('撤销后「重做」不可用');
+  await page.locator('#lw-memo-redo').click();
+  await page.waitForTimeout(800);
+  if(!(await memoState()).编辑区.includes('同步探针'))throw new Error('点重做后内容没回来');
+  /* 删除 → ⌘Z 撤销回来 */
+  const beforeDel=(await memoState()).行数;
+  await page.locator('#lw-memo-del').click();
+  await page.waitForTimeout(1000);
+  const afterDel=await memoState();
+  if(afterDel.行数!==beforeDel-1)throw new Error('删除后列表条数没变：'+beforeDel+' → '+afterDel.行数);
+  await page.keyboard.press(process.platform==='darwin'?'Meta+z':'Control+z');
+  await page.waitForTimeout(1000);
+  if((await memoState()).行数!==beforeDel)throw new Error('⌘Z 没能把删除撤销回来');
+  /* 收尾：把测试备忘录移走。**趁工作台还开着**验证命令面板在最上层 ——
+     工作台是全屏浮层（.lw-inpanel 的 z-index 是 8800），命令面板必须高过它，
+     否则按 ⌘⇧P 之后屏幕上什么都看不见、连关闭按钮都点不到（实测踩过）。 */
+  await page.locator('#lw-memo-del').click();
+  await page.waitForTimeout(700);
+  await page.keyboard.press(process.platform==='darwin'?'Meta+Shift+P':'Control+Shift+P');
+  await page.locator('#sym-modal.open').waitFor({state:'visible',timeout:10000});
+  const paletteHit=await page.evaluate(()=>{
+    const close=document.getElementById('sym-modal-close');
+    if(!close)return {命中:'(没有关闭按钮)'};
+    const r=close.getBoundingClientRect();
+    const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+    return {命中:hit?(hit.id||hit.className||hit.tagName):null};
+  });
+  if(paletteHit.命中!=='sym-modal-close')throw new Error('工作台打开时命令面板被盖住，关闭按钮点不到（命中：'+paletteHit.命中+'）');
+  await page.locator('#sym-modal-close').click();
+  await page.waitForTimeout(400);
+  await page.locator('#btn-lifework').click();
+  await page.locator('#lifework-view').waitFor({state:'detached',timeout:10000}).catch(()=>{});
+  await page.waitForTimeout(400);
   /* ---- 命令面板与工程测试/调试入口 ---- */
   await page.keyboard.press(process.platform==='darwin'?'Meta+Shift+P':'Control+Shift+P');
   await page.locator('#sym-modal.open').waitFor({state:'visible'});
