@@ -230,7 +230,6 @@
   .lw-memo-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-memo-tools button.pri:hover { color:${T.accentInk}; }
   .lw-memo-tools button.del:hover { background:${T.red}; color:#111; border-color:${T.red}; }
-  .lw-memo-body { flex:1; display:flex; flex-direction:column; min-height:0; }
   .lw-mtitle { border:0; background:transparent; color:${T.text}; font:700 17px ${UI};
     padding:15px 18px 6px; outline:none; }
   .lw-mtitle::placeholder { color:${T.faint}; }
@@ -392,15 +391,13 @@
   .lw-nt-menu .mi:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-nt-menu .mi.on::before { content:"✓"; font-size:11px; }
   .lw-nt-menu .sep { height:1px; background:${T.lineDim}; margin:4px 0; }
-  .lw-nt-body { flex:1; overflow:auto; display:flex; flex-direction:column; min-height:0; }
+  /* 不在这里 overflow:auto —— 正文是 .lw-ce，它自己滚 ✓（两层都滚会互相打架 ✗）*/
+  .lw-nt-body { flex:1; display:flex; flex-direction:column; min-height:0; }
   .lw-nt-meta { padding:12px 20px 0; font-size:11px; color:${T.faint}; text-align:center; }
   .lw-nt-title { border:0; background:transparent; color:${T.text}; font:700 18px ${UI};
     padding:6px 20px 4px; outline:none; }
   .lw-nt-title::placeholder { color:${T.faint}; }
-  /* 正文默认就是可编辑的（不再需要双击 ✗）*/
-  .lw-nt-ta { flex:1; border:0; background:transparent; color:${T.text}; font:13px/1.85 ${UI};
-    padding:2px 20px 16px; resize:none; outline:none; min-height:260px; width:100%; box-sizing:border-box; }
-  .lw-nt-ta::placeholder { color:${T.faint}; }
+  /* 正文默认就是可编辑的（不再需要双击 ✗）；编辑区样式见 .lw-ce / .lw-memo-ce */
   /* 格式条：**横排放在工具栏下面**（不再用浮层 ✗）*/
   .lw-nt-fmt { display:flex; align-items:center; gap:5px; padding:7px 12px; border-bottom:1px solid ${T.lineDim};
     background:#131312; flex-wrap:wrap; }
@@ -459,19 +456,8 @@
   .lw-md2 .tag { color:${T.accent}; background:rgba(242,227,155,.14); border:1px solid rgba(242,227,155,.3);
     padding:1px 7px; font-size:11.5px; }
   .lw-md2 hr { border:0; border-top:1px dashed ${T.lineDim}; margin:16px 0; }
-  /* 左右分栏（预览开启时）—— **可拖拽** ✓
-     之前预览区被挤在最右边很窄 ✗ 且不能调 ✗ → 加竖分隔条 ✓，比例存起来 ✓。 */
-  .lw-nt-split { flex:1; display:flex; min-height:0; }
-  .lw-nt-split > .pane { min-width:0; display:flex; flex-direction:column; overflow:auto; }
-  .lw-nt-split > .pane:first-child { flex:none; }
-  .lw-nt-split > .pane:last-child { flex:1; background:#0d0d0c; }
-  .lw-md-grip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
-  .lw-md-grip::after { content:""; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
-  .lw-md-grip:hover::after, .lw-md-grip.on::after { background:${T.accent}; width:2px; left:2px; }
-  .lw-nt-split .panehd { padding:6px 14px; font-size:9.5px; letter-spacing:1.4px; color:${T.faint};
-    text-transform:uppercase; border-bottom:1px solid ${T.lineDim}; flex:none;
-    display:flex; align-items:center; gap:8px; }
-  .lw-nt-split .panebd { flex:1; overflow:auto; padding:2px 18px 16px; }
+  /* 正文：整篇一个 contenteditable，逐行实时渲染（见 .lw-ce）
+     —— 原来这里是「左编辑 / 右预览」的可拖分栏，已按需求改成和日记一致 ✓。 */
   /* 右键菜单 */
   .lw-ctx { position:fixed; z-index:9600; min-width:150px; background:#171715; border:2px solid ${T.line};
     box-shadow:0 14px 36px rgba(0,0,0,.7); padding:4px 0; }
@@ -624,6 +610,14 @@
   .lw-ce a { color:${T.accent}; text-decoration:underline; }
   .lw-ce .tag { color:#ffe9a8; background:rgba(242,227,155,.16); padding:1px 5px; }
   .lw-ce .empty { color:${T.faint}; }
+  /* 备忘录也走同一套「逐行实时渲染」（和日记一致 ✓，不再是左右分栏 ✗）。
+     正文空的时候给一句占位提示 —— 只有「唯一一行且是空行」时才显示 ✓。 */
+  .lw-memo-ce { padding:2px 18px 20px; }
+  .lw-memo-ce > .ln.cur:only-child { position:relative; }
+  .lw-memo-ce > .ln.cur:only-child:has(> br:only-child)::after {
+    content:'直接在这里写…（# 标题 / **粗体** / - [ ] 清单 / | 表格 | / #标签）';
+    position:absolute; left:0; top:0; color:${T.faint}; pointer-events:none;
+  }
   /* 工具栏（紧凑 ✓ 不换行 ✓）*/
   .lw-live-bar { display:flex; align-items:center; gap:7px; padding:6px 10px; flex:none;
     border-bottom:1px solid ${T.lineDim}; background:#131312; font-size:10px; color:${T.faint}; letter-spacing:.4px; }
@@ -924,11 +918,16 @@
       editing: (STORE && STORE.memoEditing) || '',
     };
   }
-  /* 在**改动之前**调用。kind==='edit' 且距上次不足 900ms → 视为同一次连续输入，不重复压栈。 */
+  /* 在**改动之前**调用。kind==='edit' 且「上一次也是 edit」且距上次不足 900ms
+     → 视为同一次连续输入，不重复压栈。
+     ⚠️ 必须同时要求「上一次也是 edit」—— 只看时间的话，「新建后立刻打字」时
+        这次 edit 会被**上一次的 new 吞掉** ✗，撤销就直接退回到「这条备忘录还不存在」，
+        用户按 ⌘Z 想撤的是刚打的字，结果整条都没了 ✗（实测踩过）。 */
   function snapMemo(kind) {
     if (!STORE) return;
     const now = Date.now();
-    if (kind === 'edit' && now - UNDO_AT < 900 && UNDO.length) { UNDO_AT = now; return; }
+    const last = UNDO[UNDO.length - 1];
+    if (kind === 'edit' && last && last.kind === 'edit' && now - UNDO_AT < 900) { UNDO_AT = now; return; }
     UNDO.push(Object.assign({ at: now, kind }, snapshotMemos()));
     if (UNDO.length > 80) UNDO.shift();
     REDO.length = 0;
@@ -1132,23 +1131,46 @@
      要等到别的操作（删除/切文件夹/点格式）触发整屏 render() 才「追上来」✗。
      用户看到的「左边改了右边不变」「删了才同步」都是这一个原因。
 
-     注意：**绝对不能调 render()** —— 那会把 textarea 一起重建，
-     光标位置、选区、原生撤销栈全丢 ✗。这里只碰
-     ① 右侧预览的 innerHTML ② 左侧列表（renderMemoList 已经不动编辑器了）。 */
+     注意：**绝对不能调 render()** —— 那会把正文编辑器一起重建，
+     光标位置、选区全丢 ✗。这里只刷新左侧列表（renderMemoList 不碰编辑器 ✓）。
+     正文本身不用刷新 —— 现在是逐行实时渲染，光标行是源码、其他行本来就是渲染好的 ✓。 */
   let LIVE_BUF = 0;
   function refreshMemoDerived() {
     if (TAB !== 'memo') return;
     const cur = ((STORE && STORE.memos) || []).find((x) => x.id === (STORE && STORE.memoSel));
     if (!cur) return;
-    const ta = document.getElementById('lw-memo-body');
-    const ti = document.getElementById('lw-memo-title');
-    if (ti) cur.text = ti.value + (ta && ta.value ? '\n' + ta.value : '');
-    /* ① 右侧预览：立即换，成本极低 */
-    const pv = document.getElementById('lw-nt-livebody');
-    if (pv) pv.innerHTML = mdToHtml(ta ? ta.value : '') || '<span style="color:#5c5a50">（这里会实时显示渲染结果）</span>';
-    /* ② 左侧列表摘要 + 侧栏计数：稍作防抖，避免每个字都重建一遍 */
+    /* ⚠️ 必须**先**把编辑器内容写回 cur.text 再刷列表 ——
+       cur.text 平时要等 600ms 的 flushMemo 才更新，而列表刷新是 200ms，
+       不先写回的话列表读到的是旧数据 ✗（实测：打完字列表摘要少一行）。 */
+    memoWriteFromEditor(cur);
+    /* 左侧列表摘要 + 侧栏计数：稍作防抖，避免每个字都重建一遍 */
     clearTimeout(LIVE_BUF);
     LIVE_BUF = setTimeout(() => { if (TAB === 'memo') renderMemoList(); }, 200);
+  }
+
+  /* ── 从界面上读回「标题 + 正文」────────────────────────────────────────
+     正文是逐行实时渲染的 contenteditable：**可编辑行取 textContent、渲染行取 data-src**。
+     bind()（编辑器）和 bindMemoSide()（切文件夹/标签前的保存）都要用 → 放模块作用域。 */
+  function memoReadEditor() {
+    const ti = document.getElementById('lw-memo-title');
+    const ce = document.getElementById('lw-memo-ce');
+    const body = ce
+      ? Array.from(ce.querySelectorAll(':scope > .ln')).map((el) =>
+          el.getAttribute('contenteditable') === 'false' ? String(el.dataset.src || '') : String(el.textContent || '')
+        ).join('\n')
+      : null;
+    return { title: ti ? ti.value : null, body };
+  }
+  /* 把界面内容写回 cur.text（只改内存、不落盘）。没有编辑器时返回 null（= 保持原样）。 */
+  function memoWriteFromEditor(cur) {
+    if (!cur) return null;
+    const { title, body } = memoReadEditor();
+    if (title == null && body == null) return null;
+    const old = String(cur.text || '').split('\n');
+    const bodyNext = body == null ? old.slice(1).join('\n') : body;
+    cur.text = (title == null ? old[0] : title) + (bodyNext ? '\n' + bodyNext : '');
+    cur.edit = Date.now();
+    return cur;
   }
 
   function headHtml() {
@@ -1183,10 +1205,7 @@
     const flushMemo = () => {
       const cur = memoById(STORE.memoSel) || (STORE.memos || []).filter((m) => !m.trash)[0];
       if (!cur) return;
-      const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
-      if (ti) cur.text = ti.value + (ta && ta.value ? "\n" + ta.value : (String(cur.text || "").indexOf("\n") >= 0 ? "\n" + String(cur.text).split("\n").slice(1).join("\n") : ""));
-      else if (ta) { const t0 = String(cur.text || "").split("\n")[0]; cur.text = t0 + (ta.value ? "\n" + ta.value : ""); }
-      cur.edit = Date.now();
+      memoWriteFromEditor(cur);
       if (!cur.text.trim() || cur.text.trim() === "新备忘录") {
         STORE.memos = (STORE.memos || []).filter((x) => x.id !== cur.id);
         if (STORE.memoSel === cur.id) STORE.memoSel = "";
@@ -1208,14 +1227,15 @@
     qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
     const mQ = q("#lw-memo-q");
     if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; renderMemoList(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
-    /* ★ 预览开关 —— 之前**漏了绑定** ✗（用户反馈"预览点击没用、关不掉" ✗）*/
-    const liveBtn = q('#lw-nt-live');
-    if (liveBtn) liveBtn.onclick = () => {
+    /* 「◫ 源码」开关：关（默认）= 逐行实时渲染；开 = 整篇显示源码（方便整段改写 / 复制）。
+       —— 原来这里是「左编辑 / 右预览」分栏的开关，分栏已按需求去掉 ✓ */
+    const srcBtn = q('#lw-nt-live');
+    if (srcBtn) srcBtn.onclick = () => {
       flushMemo();
-      STORE.memoLive = !STORE.memoLive;
+      STORE.memoSource = !STORE.memoSource;
       saveStore(); render();
       const s2 = document.getElementById('lw-sub');
-      if (s2) s2.textContent = STORE.memoLive ? '已开启实时预览 ✓' : '已关闭预览 ✓';
+      if (s2) s2.textContent = STORE.memoSource ? '已切到源码模式 ✓' : '已切回实时渲染 ✓';
     };
     /* 视图切换（▤ 文件夹 / ▦ 全部列表）*/
     const mView = qa("[data-mview]");
@@ -1478,13 +1498,60 @@
     /* ── 备忘录（macOS 三栏）：列表 / 文件夹 / 标签 / 格式菜单 / 编辑 / 回收站 ── */
     const memoById = (id) => (STORE.memos || []).find((x) => x.id === id);
     const curMemo = () => memoById(STORE.memoSel) || (STORE.memos || []).filter((m) => !m.trash)[0];
-    /* 保存当前编辑内容（自动保存 / 切走 / 保存按钮都用它）*/
+    /* ── 备忘录正文：整篇一个 contenteditable，逐行实时渲染 ──
+       和日记用同一套做法（.lw-ce / ceHtml ✓）：
+         · 光标所在行 = **源码**（可编辑）· 其余行 = **渲染后的 HTML**（contenteditable=false）
+         · 读回源码：可编辑行取 textContent，渲染行取 data-src
+       ⚠️ 打字时**绝不重渲染** —— 那会把光标重置到行尾，快打时字符会跑到错误的位置 ✗。
+          当前行本来就是源码、其他行也没变 → 只存盘就够了 ✓。
+          只有「换行 / 点别的行 / 切源码模式」才重渲染 ✓。 */
+    let memoCeIdx = (STORE && STORE.memoCurLine) || 0;
+    const memoCeEl = () => q('#lw-memo-ce');
+    const readCe = () => {
+      const ce = memoCeEl(); if (!ce) return null;
+      return Array.from(ce.querySelectorAll(':scope > .ln')).map((el) =>
+        el.getAttribute('contenteditable') === 'false' ? String(el.dataset.src || '') : String(el.textContent || '')
+      ).join('\n');
+    };
+    /* 用给定的文本重渲染（并可选把光标放回第 idx 行）。
+       ⚠️ 不要用 renderMemoCe 来「先改后渲染」—— 它会先 readCe() 把**旧 DOM** 读回来，
+          你刚改的东西会被覆盖掉 ✗。要改内容就用这个直接喂文本。 */
+    const applyCe = (text, idx, keepFocus) => {
+      const ce = memoCeEl(); if (!ce) return;
+      const lines = String(text == null ? '' : text).split('\n');
+      if (idx >= lines.length) idx = lines.length - 1;
+      if (idx < 0) idx = 0;
+      memoCeIdx = idx;
+      ce.innerHTML = ceHtml(lines.join('\n'), idx, !!STORE.memoSource);
+      STORE.memoCurLine = idx;
+      if (!keepFocus) return;
+      const all = Array.from(ce.querySelectorAll(':scope > .ln'));
+      const el = all[idx] || all[all.length - 1];
+      if (!el) return;
+      el.focus();
+      try {
+        const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      } catch (_) {}
+    };
+    const renderMemoCe = (keepFocus) => applyCe(readCe() == null ? '' : readCe(), memoCeIdx, keepFocus);
+    /* 对「光标所在行」做一次变换（格式按钮 / 插入清单 / 插入表格都用它）*/
+    const editCurrentLine = (fn) => {
+      const lines = String(readCe() == null ? '' : readCe()).split('\n');
+      const i = Math.min(Math.max(0, memoCeIdx), Math.max(0, lines.length - 1));
+      lines[i] = fn(String(lines[i] || ''));
+      applyCe(lines.join('\n'), i, true);
+      saveMemoText();
+    };
+    /* 把界面上的内容写回 cur.text（不落盘、**不删条目**）*/
+    const writeMemo = () => memoWriteFromEditor(curMemo());
+    /* 只写不删的保存：光标操作 / 换行用它。
+       ⚠️ 不能直接用 flushMemo —— 它在内容为空时会把整条删掉 ✗，
+          那条规则是给「切走」用的，光标动一下就触发就完了。 */
+    const saveMemoText = () => { if (writeMemo()) saveStore(); };
+    /* 保存当前编辑内容（自动保存 / 切走 / 撤销前都用它）*/
     const flushMemo = () => {
-      const cur = curMemo(); if (!cur) return;
-      const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
-      if (ti) cur.text = ti.value + (ta && ta.value ? "\n" + ta.value : (String(cur.text || "").indexOf("\n") >= 0 ? "\n" + String(cur.text).split("\n").slice(1).join("\n") : ""));
-      else if (ta) { const t0 = String(cur.text || "").split("\n")[0]; cur.text = t0 + (ta.value ? "\n" + ta.value : ""); }
-      cur.edit = Date.now();
+      const cur = writeMemo(); if (!cur) return;
       /* ⚠️ 空的自动丢弃 ✗ —— 点「新建」后不输入就切走，会留下一堆「新备忘录」垃圾 ✗ */
       if (!cur.text.trim() || cur.text.trim() === "新备忘录") {
         STORE.memos = (STORE.memos || []).filter((x) => x.id !== cur.id);
@@ -1499,14 +1566,43 @@
     };
     let memoBuf = 0;
     const autoSave = () => { clearTimeout(memoBuf); memoBuf = setTimeout(flushMemo, 600); };
-    const ti = q("#lw-memo-title"), ta = q("#lw-memo-body");
-    /* ⚠️ 输入时必须**同时**刷新派生视图（右侧预览 + 左侧列表摘要）——
-       以前 oninput 只接 autoSave() ✗，于是「左边改了、右边不动」，
+    const ti = q("#lw-memo-title");
+    /* ⚠️ 输入时必须**同时**刷新派生视图（左侧列表摘要）——
+       以前只 autoSave() ✗，于是「左边改了、左边列表不动」，
        要等别的操作触发整屏 render() 才追上来（用户反馈的左右不同步）。
-       refreshMemoDerived 只碰预览和列表，不重建 textarea ✓（光标/选区不丢）。 */
+       refreshMemoDerived 只碰列表，不重建编辑器 ✓（光标/选区不丢）。 */
     const onEdit = () => { snapMemo("edit"); refreshMemoDerived(); autoSave(); };
     if (ti) ti.oninput = onEdit;
-    if (ta) ta.oninput = onEdit;
+    /* ⚠️ 变量名别用 `ce` —— 下面日记那段已经用了同名 const，同一个函数作用域会撞 ✗ */
+    const memoCeNode = memoCeEl();
+    if (memoCeNode) {
+      memoCeNode.oninput = onEdit;
+      /* 点别的行 → 那行变「当前行」（显示源码 ✓）*/
+      memoCeNode.onmousedown = (e) => {
+        if (STORE.memoSource) return;   /* 源码模式下每行都可编辑，不需要切换 ✗ */
+        const ln = e.target && e.target.closest ? e.target.closest('.ln') : null;
+        if (!ln || ln.classList.contains('cur')) return;
+        e.preventDefault();
+        saveMemoText();
+        const all = Array.from(memoCeNode.querySelectorAll(':scope > .ln'));
+        memoCeIdx = all.indexOf(ln);
+        renderMemoCe(true);
+      };
+      /* Enter 换行：在光标行后面插一行空的，然后重渲染并把光标放过去
+         ⚠️ 必须用 applyCe 直接喂新文本 —— 用 renderMemoCe 的话它会**再读一次旧 DOM**，
+            刚 splice 出来的新行会被覆盖掉 ✗（实测踩过：按回车没反应、字全挤在一行）。 */
+      memoCeNode.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        saveMemoText();
+        const lines = String(readCe() == null ? '' : readCe()).split('\n');
+        lines.splice(memoCeIdx + 1, 0, '');
+        applyCe(lines.join('\n'), memoCeIdx + 1, true);
+        saveMemoText();
+      };
+      /* 初始化：把光标放到上次那一行（存过就恢复 ✓）*/
+      renderMemoCe(true);
+    }
     /* 撤销 / 重做：先把待保存的正文落进 cur.text，再回退（否则 REDO 那一帧是旧的 ✗） */
     /* 状态提示：⚠️ 定时器放**模块作用域** —— bind() 每次渲染都会重跑，
        放函数里的话快捷键处理器（只绑一次、捕获的是第一次的闭包）
@@ -1530,33 +1626,9 @@
       flushMemo(); clearTimeout(memoBuf);
       if (redoMemo()) flashMemoStatus("↷ 已重做"); else flashMemoStatus("没有可重做的操作");
     };
-    /* 双击正文 → 进入编辑 */
+    /* 双击正文 → 进入编辑（现在正文默认就可编辑，留着兼容旧交互）*/
     const prev = q("#lw-nt-prev");
-    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-body"); if (t2) t2.focus(); };
-    /* ── 备忘录：正文 / 预览 的分隔条（拖动改比例 ✓，比例存起来 ✓）──
-       之前预览区被挤在最右边很窄 ✗ 且不能调 ✗ → 现在可拖 ✓。 */
-    const mdGrip = q('#lw-md-grip');
-    if (mdGrip) {
-      mdGrip.onmousedown = (e) => {
-        e.preventDefault(); mdGrip.classList.add('on');
-        const split = mdGrip.parentElement;
-        const first = split && split.querySelector(':scope > .pane');
-        if (!first) return;
-        const startX = e.clientX, startW = first.offsetWidth;
-        const totalW = split.clientWidth || 1;
-        const move = (ev) => {
-          const w = Math.max(180, Math.min(totalW - 200, startW + (ev.clientX - startX)));
-          first.style.width = Math.round(w / totalW * 100) + '%';
-        };
-        const up = () => {
-          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
-          mdGrip.classList.remove('on');
-          STORE.memoPaneW = parseInt(first.style.width, 10) || 46;
-          saveStore();
-        };
-        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-      };
-    }
+    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-ce"); if (t2) t2.focus(); };
     /* 新建 */
     const mNew = q("#lw-memo-new");
     if (mNew) mNew.onclick = () => {
@@ -1577,50 +1649,47 @@
         const id = STORE.memoSel;
         STORE.memoFmt = STORE.memoFmt || {};
         STORE.memoFmt[id] = el.dataset.mfmt;
-        /* 同时把前缀写进正文，导出/预览都保留语义 */
-        const cur = curMemo();
-        if (cur && el.dataset.mfmt !== "body") {
-          const pre = { title: "# ", h2: "## ", h3: "### ", mono: "`", ul: "- ", dash: "– ", ol: "1. ", quote: "> " }[el.dataset.mfmt] || "";
-          const lines = String(cur.text || "").split("\n");
-          if (lines[1]) lines[1] = pre + lines[1].replace(/^(#+ |[-–>] |1\. |`)/, "");
-          cur.text = lines.join("\n");
-        }
+        /* 前缀写进**光标所在行**（不再固定改第二行 ✗），导出 / 渲染都保留语义 ✓ */
+        const pre = { title: "# ", h2: "## ", h3: "### ", mono: "`", ul: "- ", dash: "– ", ol: "1. ", quote: "> " }[el.dataset.mfmt] || "";
+        editCurrentLine((line) => pre + line.replace(/^(#+ |[-–>] |1\. |`)/, ""));
         STORE.memoMenu = false; saveStore(); render();
       };
     });
+    /* 格式按钮（B / I / U / S）：把**光标所在行**整行包起来。
+       正文现在是逐行实时渲染 —— 光标行就是源码，改完立刻重渲染 ✓ */
     qa("[data-mwrap]").forEach((el) => {
       el.onclick = () => {
         snapMemo("format");
         const w = el.dataset.mwrap;
-        const elTa = document.getElementById("lw-memo-body");
-        /* ⚠️ 以前这里改完 elTa.value 就完事了 —— 既不同步预览、也不落盘 ✗，
-           所以「点了粗体，右边预览没反应，切走再回来还丢了」。 */
-        if (elTa) { const a = elTa.selectionStart || 0, b = elTa.selectionEnd || 0; const sel = elTa.value.slice(a, b) || "文字"; elTa.value = elTa.value.slice(0, a) + w + sel + w + elTa.value.slice(b); elTa.focus(); refreshMemoDerived(); autoSave(); }
-        else { const cur = curMemo(); if (cur) { const lines = String(cur.text || "").split("\n"); if (lines[1]) lines[1] = w + lines[1] + w; cur.text = lines.join("\n"); saveStore(); render(); } }
+        editCurrentLine((line) => {
+          if (!line) return line;
+          /* 已经包着就去掉（再点一次 = 取消），否则包起来 */
+          if (line.length > w.length * 2 && line.startsWith(w) && line.endsWith(w)) return line.slice(w.length, -w.length);
+          return w + line + w;
+        });
       };
     });
-    /* 清单 / 表格 快捷插入 */
+    /* 清单 / 表格 快捷插入（都插在光标行上/后面）*/
     const ck = q("#lw-nt-check");
     if (ck) ck.onclick = () => {
       snapMemo("insert");
-      const elTa = document.getElementById("lw-memo-body");
-      if (elTa) { elTa.value += (elTa.value ? "\n" : "") + "- [ ] "; elTa.focus(); refreshMemoDerived(); autoSave(); }
-      else { const cur = curMemo(); if (cur) { cur.text += "\n- [ ] "; saveStore(); render(); } }
+      editCurrentLine((line) => line.replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/, "- [ ] "));
     };
     const tb = q("#lw-nt-table");
     if (tb) tb.onclick = () => {
       snapMemo("insert");
-      const elTa = document.getElementById("lw-memo-body");
-      const t = "\n| 列1 | 列2 |\n| --- | --- |\n|  |  |";
-      /* 有 textarea 就往光标处插（并同步预览/列表）；没有就直接改数据 */
-      if (elTa) { const p2 = elTa.selectionStart == null ? elTa.value.length : elTa.selectionStart; elTa.value = elTa.value.slice(0, p2) + t + elTa.value.slice(elTa.selectionEnd == null ? p2 : elTa.selectionEnd); elTa.focus(); refreshMemoDerived(); autoSave(); }
-      else { const cur = curMemo(); if (!cur) return; cur.text += t; saveStore(); render(); }
+      const lines = String(readCe() == null ? '' : readCe()).split('\n');
+      const i = Math.min(Math.max(0, memoCeIdx), Math.max(0, lines.length - 1));
+      lines.splice(i + 1, 0, "| 列1 | 列2 |", "| --- | --- |", "|  |  |", "");
+      applyCe(lines.join('\n'), i + 1, true);
+      saveMemoText();
     };
     /* 置顶 / 导出 / 删除 */
     qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { snapMemo("pin"); m.pin = !m.pin; saveStore(); render(); } }; });
     const mExp = q("#lw-memo-export");
     if (mExp) mExp.onclick = () => {
       const cur = curMemo(); if (!cur) return;
+      writeMemo();   /* 先把编辑器里的最新内容收进来，否则导出的是上次保存的 ✗ */
       const blob = new Blob([String(cur.text || "")], { type: "text/markdown;charset=utf-8" });
       const a2 = document.createElement("a");
       a2.href = URL.createObjectURL(blob);
@@ -1632,6 +1701,7 @@
     const mImg = q("#lw-memo-image");
     if (mImg) mImg.onclick = async () => {
       const cur = curMemo(); if (!cur) return;
+      writeMemo();   /* 同上：先收拢编辑器内容 */
       const lines = String(cur.text || "").split("\n");
       const title = (lines[0] || "备忘录").trim() || "备忘录";
       const body = lines.slice(1).join("\n");
@@ -1652,10 +1722,9 @@
     const mDel = q("#lw-memo-del");
     if (mDel) mDel.onclick = () => {
       const cur = curMemo(); if (!cur) return;
-      /* 先把 textarea 里最新内容收进 cur.text —— 但**不走 flushMemo**：
+      /* 先把编辑器里最新内容收进 cur.text —— 但**不走 flushMemo**：
          它会顺手把空内容整条删掉，那条规则是给「切走」用的，删除按钮不需要。 */
-      const t1 = q("#lw-memo-title"), t2 = q("#lw-memo-body");
-      if (t1) cur.text = t1.value + (t2 && t2.value ? "\n" + t2.value : "");
+      writeMemo();
       clearTimeout(memoBuf);                 /* 别再让排队的自动保存回来搅一遍 */
       snapMemo("delete");                    /* 删除可撤销 ✓ */
       cur.trash = true; STORE.memoSel = ""; STORE.memoEditing = "";
@@ -2263,7 +2332,7 @@
       + '<button id="lw-nt-aa" class="' + ((STORE && STORE.memoMenu) ? "on" : "") + '" title="格式">Aa</button>'
       + '<button id="lw-nt-check" title="插入清单项">☑</button>'
       + '<button id="lw-nt-table" title="插入表格">▦</button>'
-      + '<button id="lw-nt-live" class="' + (STORE.memoLive ? "on" : "") + '" title="Markdown 实时预览">◫ 预览</button>'
+      + '<button id="lw-nt-live" class="' + (STORE.memoSource ? "on" : "") + '" title="显示全部源码（关掉则是实时渲染）">◫ 源码</button>'
       + '<span class="sp"></span>'
       + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
       + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "★" : "☆") + '</button>'
@@ -2272,22 +2341,10 @@
       + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button></div>'
       + fmtBar
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
-      + (STORE.memoLive
-        ? '<div class="lw-nt-split">'
-          + '<div class="pane" style="width:' + (STORE.memoPaneW || 46) + '%"><div class="panehd">✎ 编辑<span style="flex:1"></span>'
-          + '<span style="color:' + T.faint + ';text-transform:none;letter-spacing:0">拖中间竖条可调宽度</span></div>'
-          + '<div class="panebd" style="display:flex;flex-direction:column">'
-          + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
-          + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（# 标题 / **粗体** / - [ ] 清单 / | 表格 | / #标签）">'
-          + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea></div></div>'
-          + '<div class="lw-md-grip" id="lw-md-grip" title="拖动调整宽度"></div>'
-          + '<div class="pane"><div class="panehd">◫ Markdown 实时预览</div><div class="panebd">'
-          + '<div class="lw-md2" id="lw-nt-livebody">'
-          + (mdToHtml(String(cur.text || "").split("\n").slice(1).join("\n")) || '<span style="color:#5c5a50">（这里会实时显示渲染结果）</span>')
-          + '</div></div></div></div>'
-        : '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
-          + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（支持 Markdown：# 标题 / **粗体** / - 列表 / #标签）">'
-          + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea>')
+      + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
+      + '<div class="lw-ce lw-memo-ce" id="lw-memo-ce" contenteditable="true" spellcheck="false">'
+      + ceHtml(String(cur.text || "").split("\n").slice(1).join("\n"), STORE.memoCurLine || 0, !!STORE.memoSource)
+      + '</div>'
       + '</div>'
       : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录，或点「✎ 新建」</div>';
 
@@ -2379,8 +2436,12 @@
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/#([\u4e00-\u9fa5\w/-]+)/g, '<span class="tag">#$1</span>');
   }
-  function ceHtml(text, curIdx) {
+  function ceHtml(text, curIdx, srcOnly) {
     const lines = String(text == null ? '' : text).split('\n');
+    /* srcOnly：整篇都当源码显示（备忘录的「◫ 源码」模式 ✓，日记不用 ✓） */
+    if (srcOnly) {
+      return lines.map((raw) => '<div class="ln src" contenteditable="true">' + (esc(raw) || '<br>') + '</div>').join('');
+    }
     return lines.map((raw, i) => {
       if (i === curIdx) {
         return '<div class="ln cur" contenteditable="true">' + (esc(raw) || '<br>') + '</div>';
