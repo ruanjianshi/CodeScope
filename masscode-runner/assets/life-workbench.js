@@ -453,12 +453,18 @@
   .lw-md2 .tag { color:${T.accent}; background:rgba(242,227,155,.14); border:1px solid rgba(242,227,155,.3);
     padding:1px 7px; font-size:11.5px; }
   .lw-md2 hr { border:0; border-top:1px dashed ${T.lineDim}; margin:16px 0; }
-  /* 左右分栏（预览开启时）*/
+  /* 左右分栏（预览开启时）—— **可拖拽** ✓
+     之前预览区被挤在最右边很窄 ✗ 且不能调 ✗ → 加竖分隔条 ✓，比例存起来 ✓。 */
   .lw-nt-split { flex:1; display:flex; min-height:0; }
-  .lw-nt-split > .pane { flex:1; min-width:0; display:flex; flex-direction:column; overflow:auto; }
-  .lw-nt-split > .pane + .pane { border-left:2px solid ${T.lineDim}; background:#0d0d0c; }
+  .lw-nt-split > .pane { min-width:0; display:flex; flex-direction:column; overflow:auto; }
+  .lw-nt-split > .pane:first-child { flex:none; }
+  .lw-nt-split > .pane:last-child { flex:1; background:#0d0d0c; }
+  .lw-md-grip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
+  .lw-md-grip::after { content:""; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
+  .lw-md-grip:hover::after, .lw-md-grip.on::after { background:${T.accent}; width:2px; left:2px; }
   .lw-nt-split .panehd { padding:6px 14px; font-size:9.5px; letter-spacing:1.4px; color:${T.faint};
-    text-transform:uppercase; border-bottom:1px solid ${T.lineDim}; flex:none; }
+    text-transform:uppercase; border-bottom:1px solid ${T.lineDim}; flex:none;
+    display:flex; align-items:center; gap:8px; }
   .lw-nt-split .panebd { flex:1; overflow:auto; padding:2px 18px 16px; }
   /* 右键菜单 */
   .lw-ctx { position:fixed; z-index:9600; min-width:150px; background:#171715; border:2px solid ${T.line};
@@ -1278,6 +1284,30 @@
     /* 双击正文 → 进入编辑 */
     const prev = q("#lw-nt-prev");
     if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-body"); if (t2) t2.focus(); };
+    /* ── 备忘录：正文 / 预览 的分隔条（拖动改比例 ✓，比例存起来 ✓）──
+       之前预览区被挤在最右边很窄 ✗ 且不能调 ✗ → 现在可拖 ✓。 */
+    const mdGrip = q('#lw-md-grip');
+    if (mdGrip) {
+      mdGrip.onmousedown = (e) => {
+        e.preventDefault(); mdGrip.classList.add('on');
+        const split = mdGrip.parentElement;
+        const first = split && split.querySelector(':scope > .pane');
+        if (!first) return;
+        const startX = e.clientX, startW = first.offsetWidth;
+        const totalW = split.clientWidth || 1;
+        const move = (ev) => {
+          const w = Math.max(180, Math.min(totalW - 200, startW + (ev.clientX - startX)));
+          first.style.width = Math.round(w / totalW * 100) + '%';
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+          mdGrip.classList.remove('on');
+          STORE.memoPaneW = parseInt(first.style.width, 10) || 46;
+          saveStore();
+        };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      };
+    }
     /* 新建 */
     const mNew = q("#lw-memo-new");
     if (mNew) mNew.onclick = () => {
@@ -1929,10 +1959,13 @@
       + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
       + (STORE.memoLive
         ? '<div class="lw-nt-split">'
-          + '<div class="pane"><div class="panehd">✎ 编辑</div><div class="panebd" style="display:flex;flex-direction:column">'
+          + '<div class="pane" style="width:' + (STORE.memoPaneW || 46) + '%"><div class="panehd">✎ 编辑<span style="flex:1"></span>'
+          + '<span style="color:' + T.faint + ';text-transform:none;letter-spacing:0">拖中间竖条可调宽度</span></div>'
+          + '<div class="panebd" style="display:flex;flex-direction:column">'
           + '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
           + '<textarea class="lw-nt-ta" id="lw-memo-body" placeholder="直接在这里写…（# 标题 / **粗体** / - [ ] 清单 / | 表格 | / #标签）">'
           + esc(String(cur.text || "").split("\n").slice(1).join("\n")) + '</textarea></div></div>'
+          + '<div class="lw-md-grip" id="lw-md-grip" title="拖动调整宽度"></div>'
           + '<div class="pane"><div class="panehd">◫ Markdown 实时预览</div><div class="panebd">'
           + '<div class="lw-md2" id="lw-nt-livebody">'
           + (mdToHtml(String(cur.text || "").split("\n").slice(1).join("\n")) || '<span style="color:#5c5a50">（这里会实时显示渲染结果）</span>')
