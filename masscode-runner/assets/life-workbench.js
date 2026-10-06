@@ -71,10 +71,21 @@
   .lw-nav .foot b { color:${T.ok}; font-weight:600; }
   .lw-main { flex:1; min-width:0; overflow:auto; padding:16px 18px 28px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a2a26; }
-  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:14px; align-items:start; }
+  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
+  /* ★ 卡片：右下角可拖拽调整大小 ✓
+     用 CSS 的 resize: both ✓（比手写拖拽逻辑简单得多 ✓，而且原生手感 ✓）。
+     注意 resize 要求 overflow 不是 visible ✓，所以给卡片加了 overflow:auto ✓；
+     同时给一个 min-* 防止被拖没了 ✓。
+     （警告：这个文件里的 CSS 是模板字符串，注释里**不要写反引号** ✗ —— 踩过四次了 ✗。）*/
+  .lw-c { background:${T.card}; border:2px solid ${T.lineDim}; overflow:auto; resize:both;
+    min-width:240px; min-height:120px; position:relative; }
+  .lw-c:hover { border-color:${T.line}; }
+  .lw-c::-webkit-resizer { background:linear-gradient(135deg, transparent 50%, ${T.lineDim} 50%);
+    border-bottom-right-radius:2px; }
+  .lw-c:hover::-webkit-resizer { background:linear-gradient(135deg, transparent 50%, ${T.accent} 50%); }
   /* 卡片：硬边框 + 标题栏带前缀编码 */
   .lw-c { background:${T.card}; border:2px solid ${T.line}; border-radius:0; }
-  .lw-c > h3 { margin:0; padding:8px 11px; font-size:9.5px; font-weight:600; letter-spacing:2px; text-transform:uppercase;
+  .lw-c > h3 { position:sticky; top:0; z-index:2; background:${T.card}; margin:0; padding:8px 11px; font-size:9.5px; font-weight:600; letter-spacing:2px; text-transform:uppercase;
     color:${T.dim}; border-bottom:1px solid ${T.lineDim}; display:flex; align-items:center; gap:9px; }
   .lw-c > h3 .code { color:${T.accent}; letter-spacing:1.6px; }
   .lw-c > h3 .sp { flex:1; }
