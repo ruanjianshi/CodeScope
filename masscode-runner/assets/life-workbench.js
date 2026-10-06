@@ -794,6 +794,12 @@
   ];
 
   let DATA = null, STORE = null, WX = null, TAB = 'today', LOADING = false, MOUNT_TIMER = 0, CITY = '广州';
+  /* ★ 日记「未落盘内容」的提交钩子（模块级，跨 render 存在 ✓）
+     为什么放模块级而不是 bind() 里：面板关闭 / 页面隐藏时 bind() 的闭包已经拿不到 DOM 了 ✗，
+     但 `visibilitychange` 还得能调它 ✓。bind() 每次 render 都会把它重置成空函数 ✓，
+     只有真的挂上了日记编辑框（`if (ce)`）才会变成真正的实现 ✓ → 不在日记页调用它是安全的 no-op ✓。 */
+  let JOURNAL_FLUSH = () => { };
+  let FLUSH_HOOKS_ON = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -902,6 +908,16 @@
      做法照 system-panel.js：按钮挂在 #header-center，插在「知识库」之前。 */
   function mount() {
     if (MOUNT_TIMER) return;
+    /* ★ 一次性挂「离开前提交」监听 ✓（用 FLUSH_HOOKS_ON 防止 mount 重入时重复挂 ✗）
+       为什么需要：日记编辑框的自动保存是 600ms 防抖 ✗，
+       用户敲完字**立刻**关面板 / 切到别的浏览器标签 → 防抖还没跑 → 这次编辑就丢了 ✗。
+       pagehide / visibilitychange 是浏览器**保证**会触发（比 beforeunload 可靠 ✓）。 */
+    if (!FLUSH_HOOKS_ON) {
+      FLUSH_HOOKS_ON = true;
+      const commit = () => { try { JOURNAL_FLUSH(); } catch (_) { } };
+      window.addEventListener('pagehide', commit);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') commit(); });
+    }
     if (!document.getElementById('lifework-style')) {
       const st = document.createElement('style');
       st.id = 'lifework-style';
@@ -962,6 +978,10 @@
 
   /* 关闭：撤掉视图，顶部标签恢复 */
   function hidePanelView() {
+    /* ★ 关面板 = 整个 DOM 被 remove ✓ → 日记编辑框里没防抖落盘的字会**直接消失** ✗
+       （用户报的"改分类丢内容"是同一类问题：render 重建 DOM 把未落盘的字冲掉 ✗）
+       → 先提交，再删 ✓ */
+    try { JOURNAL_FLUSH(); } catch (_) { }
     const view = document.getElementById('lifework-view');
     if (view) view.remove();
     const btn = document.getElementById('btn-lifework');
@@ -1701,7 +1721,7 @@
     });
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
-    qa('.lw-nav button').forEach((b) => { b.onclick = () => { TAB = b.dataset.tab; render(); }; });
+    qa('.lw-nav button').forEach((b) => { b.onclick = () => { JOURNAL_FLUSH(); TAB = b.dataset.tab; render(); }; });
     const rf = q('#lw-refresh'); if (rf) rf.onclick = () => load(true);
     qa('[data-path]').forEach((el) => {
       el.onclick = () => { try { navigator.clipboard.writeText(el.dataset.path); const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已复制路径：' + el.dataset.path; } catch (_) {} };
@@ -2053,14 +2073,28 @@
       };
     }
 
+    /* ── 日记：把编辑框里的**未落盘内容**先写回条目 ──
+       ⚠️ 这是「改分类丢内容」的第二半原因 ✗ ——
+       编辑框的自动保存是 **600ms 防抖** ✗，而切换分类 / 切日期 / 点筛选
+       都会直接 `render()` ✗ → 整个 DOM（含编辑框）被重建 ✓ → 防抖还没触发，
+       **刚敲的字就没了** ✗。所以凡是会 render() 的日记操作，都先调 JOURNAL_FLUSH() ✓。
+       真实实现在下面的 `if (ce) {...}` 里（那里才拿得到 DOM），这里先占位 ✓。 */
+    JOURNAL_FLUSH = () => { };
+    /* 只填了模板 / 全空 → 不算"写过" ✓（否则模板会被当成正文写进那一天 ✗，
+       日历上就白点一片 ✗ —— 和 #lw-j-save 用同一套判断 ✓）*/
+    const jIsTplOnly = (txt) => {
+      const t = String(txt == null ? '' : txt).trim();
+      return !t || t === J_TPL.daily.text.trim() || t === J_TPL.research.text.trim() || t === J_TPL.review.text.trim();
+    };
     /* ── 日记：月历选择日期 ── */
     qa("[data-jday]").forEach((el) => {
-      el.onclick = () => { STORE.journalSel = el.dataset.jday; STORE.journalMonth = el.dataset.jday.slice(0, 7); saveStore(); render(); };
+      el.onclick = () => { JOURNAL_FLUSH(); STORE.journalSel = el.dataset.jday; STORE.journalMonth = el.dataset.jday.slice(0, 7); saveStore(); render(); };
     });
     const jDel = q('#lw-j-del');
     if (jDel) jDel.onclick = () => {
       const k = STORE.journalSel;
       if (!k || !confirm('删除 ' + k + ' 的日记？')) return;
+      JOURNAL_FLUSH();
       STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
       saveStore(); render();
     };
@@ -2086,6 +2120,7 @@
     qa('[data-jcat]').forEach((el) => {
       el.onclick = (ev) => {
         if (ev.target && ev.target.dataset && ev.target.dataset.jcatdel) return;
+        JOURNAL_FLUSH();                 /* ★ 先落盘，再 render（否则防抖里的字被重建冲掉 ✗）*/
         STORE.journalCat = el.dataset.jcat || ''; saveStore(); render();
       };
     });
@@ -2094,6 +2129,7 @@
         ev.stopPropagation();
         const c = el.dataset.jcatdel;
         if (!confirm('删除分类「' + c + '」？\n日记不会被删，只是取消这个分类。')) return;
+        JOURNAL_FLUSH();
         STORE.journalCats = (STORE.journalCats || []).filter((x) => x !== c);
         (STORE.journal || []).forEach((j) => { if (j.cat === c) j.cat = ''; });
         if (STORE.journalCat === c) STORE.journalCat = '';
@@ -2106,16 +2142,27 @@
         const v = catIn.value.trim().slice(0, 12); if (!v) return;
         STORE.journalCats = STORE.journalCats || ['学习', '工作', '生活', '科研'];
         if (!STORE.journalCats.includes(v)) STORE.journalCats.push(v);
+        JOURNAL_FLUSH();                 /* 同上：新增分类会 render ✗ */
         saveStore(); render();
       };
       catAdd.onclick = add;
       catIn.onkeydown = (e) => { if (e.key === 'Enter') add(); };
     }
+    /* ── 给「当前这一天」设分类 ──
+       ★ 关键顺序：**先 flush 落盘，再改 cat，最后 render** ✓
+         ① 先 flush  → 把编辑框里还没防抖落盘的字写进条目 ✓
+         ② 再改 cat  → 只动分类字段，text 一个字节都不碰 ✓
+         ③ 最后 render → 用新分类重建界面 ✓
+       任何一步颠倒（尤其 ② ③ 之间再 flush）都可能把界面上的旧内容盖回去 ✗。 */
     const catSel = q('#lw-j-catsel');
     if (catSel) catSel.onchange = () => {
-      const cur2 = (STORE.journal || []).find((x) => x.date === STORE.journalSel);
+      JOURNAL_FLUSH();                   /* ① */
+      const k = STORE.journalSel;
+      const cur2 = (STORE.journal || []).find((x) => x.date === k);
+      /* 这天还没写 → 别硬造一条空日记 ✓，提示用户先写 */
       if (!cur2) { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '先写一篇再设分类 ✓'; return; }
-      cur2.cat = catSel.value; saveStore(); render();
+      cur2.cat = catSel.value;          /* ② */
+      saveStore(); render();            /* ③ */
     };
     /* ── 拖拽调整：左栏宽度 / 编辑区高度（记住到 STORE ✓）── */
     const grip = q('#lw-jr-grip'), hgrip = q('#lw-jr-hgrip');
@@ -2205,6 +2252,21 @@
           if (s2) s2.textContent = '✓ 已自动保存';
         }, 600);
       };
+      /* ★ 真正的 flush：把编辑框内容**立刻**落盘（不等 600ms 防抖）✓
+         用于「切分类 / 切日期 / 点筛选 / 关页面」这些会 render() 或会离开的动作 ✓。
+         三种情况**不写**，避免制造垃圾数据 ✗：
+           ① 这天本来没条目，内容又只是模板/空 → 不写 ✓（否则日历白点一片 ✗）
+           ② 有条目、但内容和库里**一模一样** → 不写 ✓（免得白刷 at 时间戳 ✗）
+           ③ 防抖定时器清掉 ✓（否则它稍后会在**重建后的新 DOM** 上再 persist 一次 ✗）*/
+      JOURNAL_FLUSH = () => {
+        clearTimeout(cebuf);
+        const k = STORE.journalSel;
+        const hit = k ? (STORE.journal || []).find((x) => x.date === k) : null;
+        const txt = readAll().replace(/\s+$/, '');
+        if (!hit && jIsTplOnly(txt)) return;       /* ① */
+        if (hit && txt === String(hit.text == null ? '' : hit.text)) return;  /* ② */
+        persist();
+      };
       /* 点任意行 → 那行变成"当前行"（显示源码 ✓）*/
       ce.onmousedown = (e) => {
         const ln = e.target && e.target.closest ? e.target.closest('.ln') : null;
@@ -2244,6 +2306,8 @@
       renderCe(true);
     }
     /* 工具栏：插入标题 / 清单项 */
+    /* ⚠️ 这三个按钮是**直接改 DOM**（不走 applyCeJ）✗ → 改完必须立刻落盘 ✓，
+       否则 STORE 里还是旧文本 → 标题的"已写 N 字"、左栏列表都会显示错的 ✗ */
     const jMd2 = q('#lw-j-md');
     if (jMd2) jMd2.onclick = () => {
       const c2 = q('#lw-j-ce'); if (!c2) return;
@@ -2251,7 +2315,9 @@
       const i = STORE.journalCurLine || 0;
       lines[i] = '## ' + String(lines[i] || '').replace(/^#{1,3}\s*/, '');
       c2.innerHTML = ceHtml(lines.join('\n'), i);
+      ceAlignLineNumbers(c2);
       const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
+      JOURNAL_FLUSH();
     };
     const jCk2 = q('#lw-j-ck');
     if (jCk2) jCk2.onclick = () => {
@@ -2260,7 +2326,9 @@
       const i = STORE.journalCurLine || 0;
       lines[i] = '- [ ] ' + String(lines[i] || '').replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/, '');
       c2.innerHTML = ceHtml(lines.join('\n'), i);
+      ceAlignLineNumbers(c2);
       const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
+      JOURNAL_FLUSH();
     };
     qa('[data-jtpl]').forEach((btn) => {
       btn.onclick = () => {
@@ -2271,8 +2339,10 @@
         let next = tpl.text;
         if (curTxt && !confirm('当前已有内容。\n\n确定 = 替换成模板　取消 = 追加到末尾')) next = curTxt.replace(/\s*$/, '') + '\n\n' + tpl.text;
         c2.innerHTML = ceHtml(next, 0);
+        ceAlignLineNumbers(c2);
         STORE.journalCurLine = 0;
         const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
+        JOURNAL_FLUSH();
         const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已插入「' + tpl.name + '」模板，记得保存 ✓';
       };
     });
@@ -2280,6 +2350,7 @@
     if (autoTpl) autoTpl.onchange = () => { STORE.journalAutoTpl = autoTpl.checked; saveStore(); };
     const jPrev = q("#lw-j-prev"), jNext = q("#lw-j-next"), jToday = q("#lw-j-today");
     const shiftMonth = (n) => {
+      JOURNAL_FLUSH();                   /* ★ 翻月会 render ✗ → 先落盘 */
       const d = new Date((STORE.journalMonth || new Date().toISOString().slice(0, 7)) + "-01T00:00:00");
       d.setMonth(d.getMonth() + n);
       STORE.journalMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
@@ -2288,6 +2359,7 @@
     if (jPrev) jPrev.onclick = () => shiftMonth(-1);
     if (jNext) jNext.onclick = () => shiftMonth(1);
     if (jToday) jToday.onclick = () => {
+      JOURNAL_FLUSH();                   /* ★ 同上 */
       const d = new Date();
       STORE.journalMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
       STORE.journalSel = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -2301,7 +2373,7 @@
         .map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''))
         .join('\n').replace(/\s+$/, '') : '';
       /* 只填了模板、没动过 → 不算写 ✓（免得日历上白点一片 ✗）*/
-      if (!text || text === J_TPL.daily.text.trim() || text === J_TPL.research.text.trim() || text === J_TPL.review.text.trim()) {
+      if (jIsTplOnly(text)) {
         const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '还只填了模板 —— 补两句再保存 ✓';
         return;
       }
@@ -2313,7 +2385,11 @@
       const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '已保存今天的日记';
     };
     qa('[data-jdel]').forEach((el) => {
-      el.onclick = () => { STORE.journal = (STORE.journal || []).filter((x) => x.date !== el.dataset.jdel); saveStore(); render(); };
+      el.onclick = () => {
+        JOURNAL_FLUSH();                 /* ★ 先落盘，再删（删的是别的一天，别把当前这天弄丢 ✗）*/
+        STORE.journal = (STORE.journal || []).filter((x) => x.date !== el.dataset.jdel);
+        saveStore(); render();
+      };
     });
 
     /* ── 论文检索 ── */
@@ -2948,7 +3024,13 @@
     const hasSet = hasSet2;
     const mon = (STORE && STORE.journalMonth) || todayK.slice(0, 7);
     const sel = (STORE && STORE.journalSel) || todayK;
-    const cur = hasSet[sel] || null;
+    /* ⚠️ 编辑器必须按**选中的日期**取条目，**不能**受分类筛选影响 ✗ ——
+       以前 cur 是从分类筛选后的 hasSet 里取的 ✗，于是「把这条日记改成另一个分类」时
+       它不再匹配当前筛选 → cur 变 null → 编辑器显示**模板** ✗，
+       用户看到的就是「改分类把内容弄丢了」✗；更糟的是这时候一打字，
+       persist() 会把模板写进那一天，**真的把原文覆盖掉** ✗✗。
+       日历高亮用筛选后的 hasSet ✓（那是筛选该有的效果），但编辑器用全量 ✓。 */
+    const cur = journalAll.find((x) => x.date === sel) || null;
     const WD = ["日", "一", "二", "三", "四", "五", "六"];
     /* 连续记录 */
     let streak = 0;
@@ -3035,7 +3117,11 @@
       + '<div class="lw-jr-r">'
       + '<div class="lw-jr-edit" id="lw-jr-edit" style="flex:1;min-height:0">'
       + '<div class="lw-c" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3 style="flex:none"><span class="code">J-02</span>' + esc(sel) + ' · ' + wdName
-      + (catF ? ' <span style="color:' + T.accent + '">#' + esc(catF) + '</span>' : '')
+      /* ⚠️ 这里显示的是**条目自己的分类**（cur.cat），**不是**左侧筛选的分类 ✗ ——
+         编辑器按日期取条目、不受筛选影响 ✓，所以筛选「工作」时完全可能在编辑一篇「生活」，
+         标题上写筛选值会让用户以为串了 ✗。筛选值在左栏 J-06 已经高亮了 ✓。 */
+      + (cur && catOf2(cur) ? ' <span style="color:' + T.accent + '">#' + esc(catOf2(cur)) + '</span>' : '')
+      + (catF && (!cur || catOf2(cur) !== catF) ? ' <span style="color:' + T.faint + ';font-weight:400">（不在「' + esc(catF) + '」筛选内）</span>' : '')
       + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
       + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'

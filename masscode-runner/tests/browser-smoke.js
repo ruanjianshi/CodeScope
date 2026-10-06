@@ -89,6 +89,21 @@ async function main() {
   }, null, 2));
   const longMarkdown=['# Anchor Sync Guide','',...Array.from({length:36},(_,index)=>`## Section ${index+1}\n\n第 ${index+1} 节包含用于校验源码与预览双向同步的正文。\n\n| 项目 | 值 |\n| --- | --- |\n| 行号 | ${index+1} |`).join('\n\n')].join('\n');
   fs.writeFileSync(path.join(tempRoot,'package.json'),JSON.stringify({name:'codescope-browser-fixture',private:true,scripts:{test:'node -e "process.exit(0)"'}},null,2));
+  /* 个人管理面板 · 日记夹具：预置**今天**这一篇，分类「工作」。
+     为什么要在起浏览器**之前**写：工作台启动时读一次 store ✓，
+     之后再改文件它内存里也不会知道 ✗（要么重开面板、要么走界面 ✓）。
+     ⚠️ 正文里放一个**唯一标记** —— 断言「改分类后标记还在」比断言字数可靠得多 ✓。 */
+  const jPad = (n) => String(n).padStart(2, '0');
+  const jNow = new Date();
+  const jToday = jNow.getFullYear() + '-' + jPad(jNow.getMonth() + 1) + '-' + jPad(jNow.getDate());
+  const JOURNAL_MARK = '绝对不能被模板覆盖 ABCDEFG';
+  fs.mkdirSync(path.join(tempRoot, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(tempRoot, 'data', 'life-workbench.json'), JSON.stringify({
+    version: 1,
+    journalCats: ['学习', '工作', '生活', '科研'],
+    journal: [{ date: jToday, text: '# 日记夹具\n\n- [ ] 这一行必须活下来\n\n' + JOURNAL_MARK, cat: '工作', at: Date.now() }],
+    journalSel: jToday, journalMonth: jToday.slice(0, 7),
+  }, null, 2));
  fs.writeFileSync(path.join(vault,'code','reading.md'),`---
 contents:
   - id: 1
@@ -841,6 +856,64 @@ print(r.run())
     return { host: g('host'), port: g('port'), imapHost: g('imapHost'), imapPort: g('imapPort') };
   });
   if (qqAuto.host !== 'smtp.qq.com' || qqAuto.port !== '465' || qqAuto.imapHost !== 'imap.qq.com') throw new Error('填地址后没有自动识别服务商：' + JSON.stringify(qqAuto));
+  /* ---- 个人管理面板 · 日记：「改分类丢内容」回归 ----
+     用户原话：「日记这里有问题，改变分类怎么就丢失了内容」。
+     根因有**两个**，缺一不可：
+       ① 编辑器取的当前条目 `cur` 是从**分类筛选后**的集合里拿的 ✗ ——
+          把这篇改成别的分类后它不再匹配筛选 → cur 变 null → 编辑器渲染**模板** ✗。
+       ② 自动保存是 **600ms 防抖** ✗，而改分类会 `render()` 重建整个 DOM ✓ →
+          防抖还没触发，刚敲的字就被冲掉 ✗。
+     所以这里必须验到「屏幕上」和「落盘里」两个层面 ✓。 */
+  await page.locator('[data-tab="journal"]').click();
+  await page.locator('#lw-j-ce').waitFor({state:'visible',timeout:20000});
+  await page.waitForTimeout(400);
+  const journalCeText=()=>page.evaluate(()=>{
+    const ce=document.getElementById('lw-j-ce');
+    if(!ce)return '';
+    return [...ce.querySelectorAll(':scope > .ln')]
+      .map((e)=>e.classList.contains('cur')?String(e.textContent||''):String(e.dataset.src||'')).join('\n');
+  });
+  const journalStore=async()=>{
+    const r=await page.evaluate(async()=>{const x=await fetch('/api/life/store',{cache:'no-store'});return x.json();});
+    return (r&&r.data)||{};
+  };
+  const jEntry=(s)=>((s.journal||[]).find((x)=>x.date===jToday))||{};
+  /* ① 打开时编辑器必须是**真正文**，不是模板 */
+  if(!(await journalCeText()).includes(JOURNAL_MARK)) throw new Error('日记夹具没被读进编辑器（可能显示成了模板）');
+  /* ② 改分类 → 正文在屏幕上、在库里都必须还在，且 cat 真的变了 */
+  await page.locator('#lw-j-catsel').selectOption('生活');
+  await page.waitForTimeout(400);
+  if(!(await journalCeText()).includes(JOURNAL_MARK)) throw new Error('改分类后编辑器里的正文丢了（屏幕上）');
+  const jS1=await journalStore();
+  if(!String(jEntry(jS1).text||'').includes(JOURNAL_MARK)) throw new Error('改分类后落盘的正文丢了（被模板覆盖了？）');
+  if(jEntry(jS1).cat!=='生活') throw new Error('改分类没生效，cat='+jEntry(jS1).cat);
+  /* ③ 打字后**在同一个同步任务里**立刻改分类（防抖必然没跑完）→ 刚敲的字不能丢
+     ⚠️ 别用 page.keyboard.type + selectOption ✗ —— Playwright 的可操作性检查本身耗时 >600ms ✗，
+        防抖早跑完了，这条会**假通过** ✗（实测踩过）。 */
+  await page.evaluate(()=>{
+    const cur=document.querySelector('#lw-j-ce > .ln.cur');
+    cur.textContent=String(cur.textContent||'')+' 刚敲的字ZZZ';
+    cur.dispatchEvent(new Event('input',{bubbles:true}));
+    const sel=document.querySelector('#lw-j-catsel');
+    sel.value='科研';
+    sel.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await page.waitForTimeout(400);
+  if(!(await journalCeText()).includes('刚敲的字ZZZ')) throw new Error('防抖未落盘时改分类，刚敲的字在屏幕上丢了');
+  const jS2=await journalStore();
+  if(!String(jEntry(jS2).text||'').includes('刚敲的字ZZZ')) throw new Error('防抖未落盘时改分类，刚敲的字没落盘');
+  if(!String(jEntry(jS2).text||'').includes(JOURNAL_MARK)) throw new Error('第③步把正文覆盖掉了');
+  /* ④ 筛选**别的**分类时，编辑器仍显示这一天的真内容（不是模板）*/
+  await page.locator('.lw-cats .row[data-jcat="学习"]').click();
+  await page.waitForTimeout(400);
+  if(!(await journalCeText()).includes(JOURNAL_MARK)) throw new Error('筛选其他分类时编辑器显示成了模板（cur 又受筛选影响了）');
+  if(!/不在/.test(await page.locator('#lw-jr-edit h3').innerText())) throw new Error('标题没提示「不在当前筛选内」');
+  await page.locator('.lw-cats .row[data-jcat=""]').click();
+  await page.waitForTimeout(400);
+  if(!(await journalCeText()).includes(JOURNAL_MARK)) throw new Error('取消筛选后正文丢了');
+  const jS3=await journalStore();
+  if((jS3.journal||[]).filter((x)=>x.date===jToday).length!==1) throw new Error('改分类过程中把这一天写成了多条日记');
+  if(jEntry(jS3).cat!=='科研') throw new Error('最终分类不对，cat='+jEntry(jS3).cat);
   /* 回到备忘录页，后面的收尾流程还要用 */
   await page.locator('[data-tab="memo"]').click();
   await page.waitForTimeout(1500);
