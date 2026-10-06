@@ -13,6 +13,34 @@
 (() => {
   'use strict';
 
+  /* ── 面板资源自身的构建时间（显示在页脚）────────────────────────────────
+     目的很实际：前端资源是 no-cache，但**页面不重新加载就拿不到新代码** ——
+     改完看不到效果时，第一步要能判断「我这份页面到底是新的还是旧的」。
+     页脚挂上这行，一眼就能对 ✓（省掉「改了没生效」的来回排查）。
+     ⚠️ document.currentScript 只在脚本**执行期间**有效，必须在顶层立刻存下来 ✓。 */
+  const SELF_SRC = (() => { try { return (document.currentScript && document.currentScript.src) || ''; } catch (_) { return ''; } })();
+  let BUILD_STAMP = '';
+  function buildStampText() { return BUILD_STAMP || '读取中…'; }
+  async function ensureBuildStamp() {
+    if (BUILD_STAMP || !SELF_SRC) return BUILD_STAMP;
+    try {
+      const res = await fetch(SELF_SRC, { method: 'HEAD', cache: 'no-store' });
+      /* 服务端只发 ETag（形如 W/"206373-1791290559011"，后半段就是文件 mtime）——
+         没有 Last-Modified，所以优先解析 ETag，再退回 Last-Modified ✓ */
+      let ms = 0;
+      const etag = res.headers.get('ETag') || '';
+      const hit = /-(\d{10,})\D*$/.exec(etag);
+      if (hit) ms = Number(hit[1]);
+      if (!ms) { const lm = res.headers.get('Last-Modified'); if (lm) ms = new Date(lm).getTime(); }
+      if (ms && !Number.isNaN(ms)) {
+        const d = new Date(ms);
+        const p = (n) => String(n).padStart(2, '0');
+        BUILD_STAMP = p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+      }
+    } catch (_) {}
+    return BUILD_STAMP;
+  }
+
   /* ── 设计令牌：终端 HUD / 粗野主义（用户最终选定的风格）──
      纯黑底 + 硬米白边框 + 零圆角 + 淡黄强调 + 等宽字体 + 全大写标签 + 前缀编码。
      （中途试过玻璃卡、苹果马卡龙，用户最后说「改回终端 HUD」——
@@ -896,6 +924,8 @@
        否则打开面板会有一段**纯黑** ✗，看起来就是"启动很慢"。 */
     render();
     if (!DATA) load(false);
+    /* 页脚要显示「面板资源」的构建时间：拿到后补渲染一次 ✓（只发生一次）*/
+    if (!BUILD_STAMP) ensureBuildStamp().then((stamp) => { if (stamp) render(); });
   }
 
   /* 关闭：撤掉视图，顶部标签恢复 */
@@ -1160,7 +1190,7 @@
       `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span><span>${n.label}</span>` +
       (n.badge && openTodo ? `<span class="badge">${openTodo}</span>` : `<span class="badge">${n.key || ''}</span>`) + `</button>`).join('')).join('');
     host.innerHTML = headHtml() + `<div class="lw-body2">
-      <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机</div></div>
+      <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
       <div class="lw-main">${main()}</div></div>`;
     bind();
   }
