@@ -2347,7 +2347,12 @@
   #dsh-loading,#opencode-loading,#vscode-loading { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:13px; background:radial-gradient(circle at 50% 42%,rgba(55,116,205,.13),transparent 38%),#0c1119; }
   #dsh-loading.hidden,#opencode-loading.hidden,#vscode-loading.hidden { display:none; }
   @keyframes env-pulse { to { opacity:.35; transform:scale(.72); } }
-  #env-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border); z-index: 78; box-shadow: -8px 0 30px rgba(0,0,0,.4); flex-direction: column; transform: translateZ(0); }
+  /* ⚠️ 右侧三个抽屉（环境 / 远程 / 工程）必须高过「个人管理面板」那层全屏浮层
+     （.lw-inpanel 的 z-index 是 8800）：它们的入口是**始终可见的顶栏按钮**
+     （#btn-env / #btn-remote / #btn-project），面板开着时顶栏还在 ——
+     用户点了按钮却什么都看不见 ✗（用户反馈「个人管理面板会遮挡环境检测」）。
+     8900：高于全屏页 8800，低于个人管理面板自己的右键菜单（9600）与命令面板（9700）。 */
+  #env-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 94vw; background: var(--panel); border-left: 1px solid var(--border); z-index: 8900; box-shadow: -8px 0 30px rgba(0,0,0,.4); flex-direction: column; transform: translateZ(0); }
   #env-panel.open { display: flex; }
   #env-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   #env-head h2 { font-size: 14px; margin: 0; flex: 1; }
@@ -2461,7 +2466,7 @@
   #btn-remote { position:relative; padding-right:22px; }
   #btn-remote::after { content:''; position:absolute; top:8px; right:8px; width:7px; height:7px; border-radius:50%; background:#657184; }
   #btn-remote.remote-on::after { background:var(--ok); box-shadow:0 0 6px rgba(86,211,100,.7); }
-  #remote-panel { display:none; position:fixed; inset:auto 0 0 auto; width:460px; height:100vh; max-width:94vw; max-height:100vh; z-index:70; flex-direction:column; background:#101720; border-left:1px solid #324054; border-top:1px solid #324054; box-shadow:-18px -8px 60px rgba(0,0,0,.46); }
+  #remote-panel { display:none; position:fixed; inset:auto 0 0 auto; width:460px; height:100vh; max-width:94vw; max-height:100vh; z-index:8900; flex-direction:column; background:#101720; border-left:1px solid #324054; border-top:1px solid #324054; box-shadow:-18px -8px 60px rgba(0,0,0,.46); }
   #remote-panel.open { display:flex; }
   #remote-resizer { position:absolute; z-index:3; left:-5px; top:0; bottom:0; width:10px; cursor:ew-resize; touch-action:none; }
   #remote-resizer::after { content:''; position:absolute; left:4px; top:0; bottom:0; width:1px; background:#324054; transition:.15s; }
@@ -2511,7 +2516,7 @@
   #remote-file-editor { width:100%; min-height:260px; resize:vertical; padding:10px; color:#dce5ef; background:#080d13; border:1px solid #293646; border-radius:7px; outline:none; font:11px/1.55 var(--mono); tab-size:2; }
   #remote-file-editor:focus { border-color:#4f79b3; }
   /* ---- 通用工程工具 ---- */
-  #project-panel { display:none; position:fixed; inset:0 0 0 auto; width:600px; max-width:96vw; z-index:72; flex-direction:column; background:#101720; border-left:1px solid #324054; box-shadow:-18px 0 60px rgba(0,0,0,.46); }
+  #project-panel { display:none; position:fixed; inset:0 0 0 auto; width:600px; max-width:96vw; z-index:8900; flex-direction:column; background:#101720; border-left:1px solid #324054; box-shadow:-18px 0 60px rgba(0,0,0,.46); }
   #project-panel.open { display:flex; }
   .project-head { min-height:54px; display:flex; align-items:center; gap:9px; padding:10px 14px; border-bottom:1px solid #2b3747; }
   .project-head h2 { margin:0; font-size:14px; } .project-head span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); font:9px var(--mono); }
