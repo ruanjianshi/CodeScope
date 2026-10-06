@@ -632,9 +632,26 @@ print(r.run())
   if(srcMode.可编辑行数!==srcMode.正文.split('\n').length)throw new Error('源码模式下所有行都应可编辑：'+JSON.stringify(srcMode));
   await page.locator('#lw-nt-live').click();
   await page.waitForTimeout(700);
-  /* 导出为图片：必须真的产出一张像样的 PNG（这条路径踩过 foreignObject 污染画布的坑） */
-  const imgDownload=page.waitForEvent('download',{timeout:30000});
+  /* 导出为图片：点「图片」**先出分栏预览**，确认后再下载 ✓（不再一点就直接落盘）。
+     这条路径踩过 foreignObject 污染画布的坑，所以预览图和下载的 PNG 都要验。 */
+  let downloads=0;
+  page.on('download',()=>{downloads++;});
   await page.locator('#lw-memo-image').click();
+  await page.locator('.lw-img-split').waitFor({state:'visible',timeout:15000});
+  await page.waitForFunction(()=>{const i=document.getElementById('lw-memo-img');return i&&i.complete&&i.naturalWidth>0;},null,{timeout:20000});
+  const imgPrev=await page.evaluate(()=>{
+    const i=document.getElementById('lw-memo-img');
+    return {分栏:!!document.querySelector('.lw-img-split'),编辑器还在:!!document.getElementById('lw-memo-ce'),
+      宽:i.naturalWidth,高:i.naturalHeight,提示:(document.getElementById('lw-memo-img-note')||{}).textContent,
+      下载可用:!(document.getElementById('lw-memo-img-save')||{}).disabled};
+  });
+  if(!imgPrev.分栏||!imgPrev.编辑器还在)throw new Error('点「图片」没出现「左编辑 / 右预览」分栏：'+JSON.stringify(imgPrev));
+  if(imgPrev.宽<400||imgPrev.高<150)throw new Error('预览图尺寸异常：'+imgPrev.宽+'×'+imgPrev.高);
+  if(!imgPrev.下载可用)throw new Error('预览出来了但「下载 PNG」不可用');
+  if(downloads!==0)throw new Error('点「图片」就直接下载了（应当先出预览）：downloads='+downloads);
+  /* 下载 PNG（只有点「下载 PNG」才落盘）*/
+  const imgDownload=page.waitForEvent('download',{timeout:30000});
+  await page.locator('#lw-memo-img-save').click();
   const imgFile=await imgDownload;
   if(!/\.png$/i.test(imgFile.suggestedFilename()))throw new Error('导出图片的文件名不是 PNG：'+imgFile.suggestedFilename());
   const imgPath=await imgFile.path();
@@ -644,6 +661,11 @@ print(r.run())
   const imgW=imgBuf.readUInt32BE(16),imgH=imgBuf.readUInt32BE(20);
   if(imgBuf.length<3000)throw new Error('导出的 PNG 太小，疑似空白：'+imgBuf.length+' 字节');
   if(imgW<400||imgH<150)throw new Error('导出的 PNG 尺寸异常：'+imgW+'×'+imgH);
+  /* 「关闭」回到纯编辑 */
+  await page.locator('#lw-memo-img-close').click();
+  await page.waitForTimeout(700);
+  if(await page.locator('.lw-img-split').count())throw new Error('点「关闭」没回到纯编辑，分栏还在');
+  if(!(await page.locator('#lw-memo-ce').count()))throw new Error('关掉图片预览后编辑器不见了');
   /* 删除 → ⌘Z 撤销回来 */
   const beforeDel=(await memoState()).行数;
   await page.locator('#lw-memo-del').click();
@@ -1515,5 +1537,10 @@ print(r.run())
 main().catch(error=>{console.error(error.stack||error);process.exitCode=1;}).finally(async()=>{
   if(browser)await browser.close().catch(()=>{});
   if(server&&server.exitCode===null)server.kill();
-  fs.rmSync(tempRoot,{recursive:true,force:true});
+  /* ⚠️ 知识库构建是**异步**的，测试跑完它可能还在往临时目录里写 ✗ →
+     rmdir 抛 ENOTEMPTY，把「测试通过」变成非 0 退出码 ✗（实测踩过）。
+     maxRetries 会让 rmSync 对 ENOTEMPTY/EBUSY 这类错误自动重试；
+     最后再兜一层 try —— 清理失败不该判定测试失败 ✓。 */
+  try { fs.rmSync(tempRoot,{recursive:true,force:true,maxRetries:20,retryDelay:150}); }
+  catch(_) { /* 临时目录交给系统清理即可，不影响测试结论 */ }
 });
