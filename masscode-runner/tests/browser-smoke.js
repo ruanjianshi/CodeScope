@@ -721,6 +721,34 @@ print(r.run())
   await page.waitForTimeout(600);
   const afterSplitType=(await memoState()).正文.split('\n');
   if(afterSplitType.length!==2||!afterSplitType[1].startsWith('插'))throw new Error('回车后光标没落在新行开头：'+JSON.stringify(afterSplitType));
+  /* ★ 拖拽把备忘录移进文件夹 —— 以前只能靠右键菜单里的 prompt ✗，
+     用户反馈「无法自由移动到文件夹中归属」。 */
+  const folderCount = (name) => page.evaluate((n) => {
+    const f = [...document.querySelectorAll('[data-mfolder]')].find((e) => e.dataset.mfolder === n);
+    return f ? (Number((f.querySelector('.n') || {}).textContent) || 0) : -1;
+  }, name);
+  const studyBefore = await folderCount('Study note');
+  if (studyBefore < 0) throw new Error('没找到「Study note」文件夹，无法验证拖拽归属');
+  await page.locator('[data-memo]').first().dragTo(page.locator('[data-mfolder="Study note"]'));
+  await page.waitForTimeout(1200);
+  const studyAfter = await folderCount('Study note');
+  if (studyAfter !== studyBefore + 1) throw new Error('拖拽后文件夹计数没变：' + studyBefore + ' → ' + studyAfter);
+  /* ★ 三栏之间可以左右拖拽调宽（双击竖条恢复默认） */
+  const sideWidth = () => page.evaluate(() => Math.round(document.querySelector('.lw-nt-side').getBoundingClientRect().width));
+  const sideBefore = await sideWidth();
+  const gripBox = await page.locator('[data-mgrip="side"]').boundingBox();
+  if (!gripBox) throw new Error('没找到三栏之间的拖拽竖条');
+  await page.mouse.move(gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(gripBox.x + 110, gripBox.y + gripBox.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  const sideAfter = await sideWidth();
+  if (!(sideAfter > sideBefore + 50)) throw new Error('左栏拖不宽：' + sideBefore + 'px → ' + sideAfter + 'px');
+  await page.locator('[data-mgrip="side"]').dblclick();
+  await page.waitForTimeout(500);
+  const sideReset = await sideWidth();
+  if (sideReset !== 172) throw new Error('双击竖条没恢复默认宽度（应为 172px）：' + sideReset + 'px');
   /* 导出为图片：点「图片」**先出分栏预览**，确认后再下载 ✓（不再一点就直接落盘）。
      这条路径踩过 foreignObject 污染画布的坑，所以预览图和下载的 PNG 都要验。 */
   let downloads=0;

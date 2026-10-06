@@ -362,6 +362,13 @@
   /* 左：文件夹 + 标签 */
   .lw-nt-side { width:172px; flex:none; background:#0c0c0b; border-right:1px solid ${T.lineDim};
     padding:10px 8px; overflow:auto; }
+  /* 三栏之间可拖拽的竖条（左右自由调宽 ✓，双击恢复默认 ✓） */
+  .lw-nt-grip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
+  .lw-nt-grip::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
+  .lw-nt-grip:hover::after, .lw-nt-grip.on::after { background:${T.accent}; width:2px; left:2px; }
+  /* 拖拽把备忘录移到文件夹时的落点高亮 */
+  .lw-nt-side .it.drop { background:color-mix(in srgb,${T.ok} 18%,transparent); border-color:${T.ok}; color:${T.text}; }
+  .lw-nt-row.dragging { opacity:.45; }
   .lw-nt-side .hd { display:flex; gap:6px; margin-bottom:10px; }
   .lw-nt-side .hd button { flex:1; height:26px; border:1px solid ${T.lineDim}; background:transparent;
     color:${T.dim}; font-size:12px; cursor:pointer; }
@@ -1343,6 +1350,83 @@
     };
     qa("[data-memo]").forEach((el) => {
       el.onclick = () => { flushMemo(); closeMemoImgPreview(); STORE.memoSel = el.dataset.memo; STORE.memoEditing = ""; saveStore(); render(); };
+    });
+
+    /* ── 把备忘录**拖进文件夹**（自由归属 ✓）────────────────────────────────
+       以前只有右键菜单里的「📁 移到文件夹…」+ 一个 prompt ✗ —— 不好发现、也不好用。
+       现在直接拖：拖到左边任意文件夹上松手即可 ✓，落点会高亮 ✓。 */
+    const moveMemoTo = (id, folder) => {
+      const m = memoById(id); if (!m) return;
+      const target = String(folder || '').trim() || '备忘录';   /* 拖到「iCloud 全部」= 放回默认文件夹 ✓ */
+      if ((m.folder || '备忘录') === target) return;
+      snapMemo('move');                                        /* 可撤销 ✓ */
+      m.folder = target.slice(0, 24);
+      STORE.memoFolders = STORE.memoFolders || [];
+      if (!STORE.memoFolders.includes(m.folder)) STORE.memoFolders.push(m.folder);
+      saveStore();
+      renderMemoList();
+      const s2 = document.getElementById('lw-sub');
+      if (s2) s2.textContent = '已移到「' + m.folder + '」';
+    };
+    let DRAG_MEMO = '';
+    qa("[data-memo]").forEach((el) => {
+      el.addEventListener('dragstart', (event) => {
+        DRAG_MEMO = el.dataset.memo;
+        el.classList.add('dragging');
+        try { event.dataTransfer.setData('text/plain', DRAG_MEMO); event.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+      });
+      el.addEventListener('dragend', () => { DRAG_MEMO = ''; el.classList.remove('dragging'); });
+    });
+    qa("[data-mfolder]").forEach((el) => {
+      el.addEventListener('dragover', (event) => {
+        if (!DRAG_MEMO) return;
+        event.preventDefault();
+        try { event.dataTransfer.dropEffect = 'move'; } catch (_) {}
+        el.classList.add('drop');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('drop'));
+      el.addEventListener('drop', (event) => {
+        event.preventDefault();
+        el.classList.remove('drop');
+        const id = DRAG_MEMO || (event.dataTransfer && event.dataTransfer.getData('text/plain')) || '';
+        if (!id) return;
+        moveMemoTo(id, el.dataset.mfolder);
+      });
+    });
+
+    /* ── 三栏之间：拖竖条左右调宽 ✓（双击恢复默认 ✓，宽度记住到 STORE ✓）── */
+    qa('[data-mgrip]').forEach((grip) => {
+      const which = grip.dataset.mgrip;
+      const target = which === 'side' ? q('.lw-nt-side') : q('.lw-nt-list');
+      if (!target) return;
+      grip.onmousedown = (event) => {
+        event.preventDefault();
+        grip.classList.add('on');
+        const startX = event.clientX;
+        const startW = target.getBoundingClientRect().width;
+        const min = which === 'side' ? 120 : 180;
+        const max = which === 'side' ? 420 : 640;
+        const move = (event2) => {
+          const w = Math.max(min, Math.min(max, startW + (event2.clientX - startX)));
+          target.style.width = Math.round(w) + 'px';
+          target.style.flex = 'none';
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+          grip.classList.remove('on');
+          const w = Math.round(target.getBoundingClientRect().width);
+          if (which === 'side') STORE.memoSideW = w; else STORE.memoListW = w;
+          saveStore();
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+      };
+      grip.ondblclick = () => {
+        target.style.width = '';
+        if (which === 'side') STORE.memoSideW = 0; else STORE.memoListW = 0;
+        saveStore();
+      };
     });
     qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
     qa("[data-msmart]").forEach((el) => {
@@ -2515,7 +2599,7 @@
       /* ⚠️ `▦ 全部列表` 视图下**显示所属文件夹** ✓ ——
          否则"文件夹视图"和"全部列表"看起来一模一样 ✗（用户反馈"这两个按钮没用"✗）。*/
       const folTag = (view === 'all' && (m.folder || '备忘录')) ? '<span class="bd" style="color:' + T.accent + '">' + esc(m.folder || '备忘录') + '</span>' : '';
-      return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '">'
+      return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '" draggable="true" title="拖到左边文件夹可移动归属">'
         + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(String(m.text || "").split("\n")[0].slice(0, 30) || "新备忘录") + '</div>'
         + '<div class="mt"><b>' + when + '</b>' + (body ? "  " + esc(body) : "") + '</div>'
         + '<div class="sub">' + folTag + (td.total ? (td.open ? "▣ " : "▣ ") : "▤ ") + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
@@ -2543,7 +2627,13 @@
       + '</div>';
 
     const SMART_NAME = { todo: "☑ 待办清单", pin: "☆ 置顶", today: "◔ 今天", trash: "🗑 回收站" };
-    const listTitle = smart ? (SMART_NAME[smart] || "全部") : (fol ? fol : "iCloud 全部");
+    /* ⚠️ 标题必须和**实际显示的内容**一致：
+       「▦ 全部列表」视图下不按文件夹过滤（那一栏每条都带文件夹标签 ✓），
+       所以标题不能再显示文件夹名 ✗ —— 否则会出现「标题写着「测试文件夹 · 3 个备忘录」、
+       左边那个文件夹的计数却是 0」这种自相矛盾的画面（用户截图里就是这个，
+       很容易让人以为「移进文件夹没生效」✗）。 */
+    const listTitle = smart ? (SMART_NAME[smart] || "全部")
+      : (view === "all" ? ("全部列表" + (fol ? "（不限文件夹）" : "")) : (fol ? fol : "iCloud 全部"));
     const todoSum = (() => {
       let open = 0, done = 0;
       all.forEach((m) => { const t = todoOf(m); open += t.open; done += t.done; });
@@ -2607,9 +2697,17 @@
       + '</div>'
       : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录，或点「✎ 新建」</div>';
 
+    /* 三栏宽度可拖拽调整（记住到 STORE ✓，双击竖条恢复默认 ✓）*/
+    const sideW = Number(STORE.memoSideW) || 0;
+    const listW = Number(STORE.memoListW) || 0;
     return '<div class="lw-g12"><div class="lw-c" style="grid-column:span 12">'
-      + '<h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>macOS 备忘录 · 三栏 · 自动保存</em></h3>'
-      + '<div class="lw-nt">' + side + list + '<div class="lw-nt-edit">' + editor + '</div></div>'
+      + '<h3><span class="code">M-00</span>备忘录<span class="sp"></span><em>macOS 备忘录 · 三栏（可拖宽）· 拖条目到文件夹改归属 · 自动保存</em></h3>'
+      + '<div class="lw-nt">'
+      + side.replace('class="lw-nt-side"', 'class="lw-nt-side"' + (sideW >= 120 ? ' style="width:' + sideW + 'px"' : ''))
+      + '<div class="lw-nt-grip" data-mgrip="side" title="左右拖动调整宽度；双击恢复默认"></div>'
+      + list.replace('class="lw-nt-list"', 'class="lw-nt-list"' + (listW >= 160 ? ' style="width:' + listW + 'px"' : ''))
+      + '<div class="lw-nt-grip" data-mgrip="list" title="左右拖动调整宽度；双击恢复默认"></div>'
+      + '<div class="lw-nt-edit">' + editor + '</div></div>'
       + '</div></div>';
   }
 
