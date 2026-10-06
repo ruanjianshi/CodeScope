@@ -1062,37 +1062,72 @@
     const hotGo = qv('#lw-hot-go'); if (hotGo) hotGo.onclick = () => doHot();
     const hotInp = qv('#lw-hot-q'); if (hotInp) hotInp.onkeydown = (e) => { if (e.key === 'Enter') doHot(); };
     qav('.lw-hotkw').forEach((el) => { el.onclick = () => doHot(el.dataset.kw); });
-    /* AI 配置 */
-    const aiSave = qv('#lw-ai-save');
-    if (aiSave) aiSave.onclick = async () => {
-      const b = { save: true, baseURL: (qv('#lw-ai-url') || {}).value || '', model: (qv('#lw-ai-model') || {}).value || '', key: (qv('#lw-ai-key') || {}).value || '' };
-      try { await fetch('/api/life/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); } catch (_) {}
-      const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '✓ AI 配置已保存（只存本机）';
-      load(true);
-    };
-    /* AI 调用 */
+    /* AI：**调用 CodeScope 现成的 `/api/ai/chat`** ✓（配置读 localStorage['mc-ai-cfg'] ✓）
+       不再自己存一份配置 ✗。 */
     const askAI = async (prompt) => {
+      let cfg = {}; try { cfg = JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) {}
+      if (!cfg.url || !cfg.key) { STORE.aiRes = { ok: false, error: '还没配 AI —— 请到 CodeScope 的 AI 面板配一次 ✓（这里会自动复用 ✓）' }; render(); return; }
       STORE.aiLoading = true; STORE.aiRes = null; render();
       try {
-        const r = await fetch('/api/life/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }) });
-        STORE.aiRes = await r.json();
+        const r = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 300000,
+            messages: [{ role: 'system', content: '你是科研助手。回答用简体中文，简洁具体，不要客套。' }, { role: 'user', content: prompt }] }) });
+        const j = await r.json();
+        /* 兼容两种返回形状：{ok,text} 或 OpenAI 原始 {choices:[{message:{content}}]} */
+        if (j && j.ok === false) STORE.aiRes = { ok: false, error: String(j.error || '调用失败').slice(0, 300) };
+        else {
+          const txt = (j && j.text) || ((((j || {}).choices || [])[0] || {}).message || {}).content || (j && j.content) || '';
+          STORE.aiRes = txt ? { ok: true, text: String(txt) } : { ok: false, error: 'AI 没有返回内容：' + JSON.stringify(j).slice(0, 200) };
+        }
       } catch (e) { STORE.aiRes = { ok: false, error: '请求失败：' + e.message }; }
       STORE.aiLoading = false; render();
     };
     const aiHot = qv('#lw-ai-hot');
     if (aiHot) aiHot.onclick = () => {
-      const items = ((STORE.hot || {}).items || []).slice(0, 10).map((h, i) => (i + 1) + '. ' + h.title + '（▲' + h.points + '）').join('\n');
+      const items = ((STORE.hot || {}).items || []).slice(0, 10).map((h, i) => (i + 1) + '. ' + h.title + '（▲' + h.points + ' 💬' + h.comments + '）').join('\n');
       if (!items) { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '先搜一次热点，再让 AI 总结 ✓'; return; }
-      askAI('你是科研助手。下面是 Hacker News 上关于「' + ((STORE.hotQ) || '') + '」的热门讨论：\n\n' + items +
-        '\n\n请用中文：\n1) 用 3 句话概括这些讨论反映的技术趋势；\n2) 指出其中 2 个值得深入的方向；\n3) 给 3 条具体可执行的建议。简洁，不要客套。');
+      askAI('下面是 Hacker News 上关于「' + ((STORE.hotQ) || '') + '」的热门讨论：\n\n' + items +
+        '\n\n请用中文：\n1) 3 句话概括这些讨论反映的技术趋势；\n2) 指出 2 个值得深入的方向；\n3) 给 3 条具体可执行的建议。');
     };
     const aiIdea = qv('#lw-ai-idea');
     if (aiIdea) aiIdea.onclick = () => {
       const tracks = (DATA.tracks || []).map((t) => t.name + '（' + t.projects + ' 个项目）').join('、');
-      askAI('你是科研选题助手。我的研究方向/项目分布是：' + (tracks || '机器人、嵌入式、论文') +
-        '。\n\n请用中文给出 5 个**具体的**、可以在一到两周内启动的小选题，每个包含：\n- 题目\n- 为什么现在做（一句话）\n- 第一步做什么（一句话）\n不要泛泛而谈，要具体到能动手。');
+      askAI('我的研究方向/项目分布是：' + (tracks || '机器人、嵌入式、论文') +
+        '。\n\n请用中文给出 5 个**具体的**、可以在一到两周内启动的小选题，每个包含：\n- 题目\n- 为什么现在做（一句话）\n- 第一步做什么（一句话）\n要具体到能动手，不要泛泛而谈。');
     };
+    /* AI 读选中的热点（把那条热点的标题 + HN 讨论喂给它）*/
+    const aiRead = qv('#lw-ai-read');
+    if (aiRead) aiRead.onclick = () => {
+      const first = ((STORE.hot || {}).items || [])[0];
+      if (!first) { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '先搜一次热点 ✓'; return; }
+      askAI('请用中文解读这条技术动态，面向一个做机器人/嵌入式的研究生：\n\n标题：' + first.title +
+        '\n链接：' + first.url + '\n热度：▲' + first.points + ' · 💬' + first.comments +
+        '\n\n请说：1) 它在讲什么（3 句）；2) 为什么值得关注；3) 我能从中借鉴什么（具体到做法）。');
+    };
+    /* 联网搜索：**复用 CodeScope 的 `/api/ai/web-search`** ✓ */
+    const doWS = async () => {
+      const inp = qv('#lw-ws-q');
+      const query = String((inp && inp.value) || '').trim();
+      if (!query) return;
+      /* 搜索的 key 从 CodeScope 的配置里找（不同版本键名可能不同，逐个试 ✓）*/
+      let sk = '', provider = '';
+      try {
+        const cfg = JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {};
+        if (cfg.searchKey) { sk = cfg.searchKey; provider = cfg.searchProvider || 'tavily'; }
+        else if (cfg.tavilyKey) { sk = cfg.tavilyKey; provider = 'tavily'; }
+        else if (cfg.braveKey) { sk = cfg.braveKey; provider = 'brave'; }
+      } catch (_) {}
+      if (!sk) { STORE.wsRes = { ok: false, error: '没找到联网搜索的 Key —— 请在 CodeScope 里配置 Tavily / Brave ✓' }; STORE.wsQ = query; render(); return; }
+      STORE.wsQ = query; STORE.wsLoading = true; STORE.wsRes = null; render();
+      try {
+        const r = await fetch('/api/ai/web-search', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, key: sk, query }) });
+        STORE.wsRes = await r.json();
+      } catch (e) { STORE.wsRes = { ok: false, error: '请求失败：' + e.message }; }
+      STORE.wsLoading = false; render();
+    };
+    const wsGo = qv('#lw-ws-go'); if (wsGo) wsGo.onclick = doWS;
+    const wsInp = qv('#lw-ws-q'); if (wsInp) wsInp.onkeydown = (e) => { if (e.key === 'Enter') doWS(); };
     /* 今日面板：跳转 + 点待办跳到对应备忘录 ✓
        （注意：q / qa 是 bindMemoSide() 里的局部变量 ✗，这里不能用 ✗ —— 用原生查询 ✓）*/
     const view0 = document.getElementById('lifework-view');
@@ -2103,34 +2138,55 @@
       <div class="lw-hotlist">${hotHtml}</div>
     </div>`;
 
-    /* 🤖 AI 助手（OpenAI 兼容 ✓ 支持本地 ollama ✓）*/
-    const ai = (STORE && STORE.ai) || {};
+    /* 🤖 AI 助手 —— **复用 CodeScope 已有的配置和接口** ✓
+       ⚠️ 我一开始自己又造了一套 AI 配置 ✗ —— 但 CodeScope 早就有了 ✗：
+        · 配置在 localStorage['mc-ai-cfg'] ✓（{ url, key, model } ✓）
+        · 接口是 POST /api/ai/chat ✓（服务器只做转发 ✓）
+        · 还有 POST /api/ai/web-search ✓（Tavily / Brave 联网搜索 ✓）
+       所以这里**只读现成配置 + 调现成接口** ✓，不再自己存一份 ✗。 */
+    const aiCfg = (() => { try { return JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) { return {}; } })();
+    const aiReady = !!(aiCfg.url && aiCfg.key);
     const aiRes = (STORE && STORE.aiRes) || null;
+    const wsRes = (STORE && STORE.wsRes) || null;
     const aiCard = `<div class="lw-c" style="${sp(6)}">
       <h3><span class="code">F-91</span>AI 助手<span class="sp"></span>
-        <em>${ai.hasKey ? '已配置 · ' + esc(ai.model || '') : '未配置'}</em></h3>
+        <em>${aiReady ? '用 CodeScope 的配置 · ' + esc(aiCfg.model || '未指定模型') : '未配置'}</em></h3>
       <div class="lw-pad" style="padding-bottom:10px">
-        <div class="lw-form">
-          <label>接口地址 baseURL<input id="lw-ai-url" placeholder="https://api.deepseek.com/v1 或 http://127.0.0.1:11434/v1" value="${esc(ai.baseURL || '')}" /></label>
-          <label>模型名<input id="lw-ai-model" placeholder="deepseek-chat / qwen2.5 / gpt-4o-mini" value="${esc(ai.model || '')}" /></label>
-          <label>API Key<input id="lw-ai-key" type="password" placeholder="${ai.hasKey ? '已保存（留空不改）' : 'sk-…'}" value="" /></label>
+        <div style="font-size:11px;color:${T.dim};line-height:1.8;margin-bottom:10px">
+          ${aiReady
+            ? '✓ 已复用 CodeScope 的 AI 配置（<b style="color:' + T.accent + '">' + esc(String(aiCfg.url).replace(/^https?:\/\//, '').slice(0, 34)) + '</b>）——不用再配一遍 ✓'
+            : '⚠️ 还没配 AI —— 请到 <b style="color:' + T.accent + '">CodeScope 的 AI 面板</b> 配一次 ✓，这里会自动复用 ✓（不再重复造配置 ✗）'}
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="lw-btn" id="lw-ai-save">保存配置</button>
-          <button class="lw-btn" id="lw-ai-hot" ${ai.hasKey ? '' : 'disabled style="opacity:.45"'}>让 AI 总结热点</button>
-          <button class="lw-btn" id="lw-ai-idea" ${ai.hasKey ? '' : 'disabled style="opacity:.45"'}>让 AI 出选题</button>
-        </div>
-        <div style="font-size:10.5px;color:${T.faint};line-height:1.7;margin-top:9px">
-          配置**只存本机**（life-ai.json）✓。任何 OpenAI 兼容服务都行 ✓；<br>
-          本地跑 <b style="color:${T.accent}">Ollama</b> 的话填 <b style="color:${T.accent}">http://127.0.0.1:11434/v1</b> ✓，key 随便填 ✓。
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="lw-btn" id="lw-ai-hot" ${aiReady ? '' : 'disabled style="opacity:.45"'}>让 AI 总结热点</button>
+          <button class="lw-btn" id="lw-ai-idea" ${aiReady ? '' : 'disabled style="opacity:.45"'}>让 AI 出选题</button>
+          <button class="lw-btn" id="lw-ai-read" ${aiReady ? '' : 'disabled style="opacity:.45"'}>AI 读这篇（选中热点）</button>
         </div>
       </div>
       <div class="lw-hotlist" id="lw-ai-out">${(STORE && STORE.aiLoading) ? '<div class="lw-empty">AI 思考中…</div>'
         : (aiRes ? (aiRes.ok ? `<div class="lw-aiout">${esc(aiRes.text).replace(/\n/g, '<br>')}</div>` : `<div class="lw-empty">${esc(aiRes.error)}</div>`)
-          : '<div class="lw-empty"><span class="big">🤖</span>配好之后，可以让 AI 帮你读热点、出选题</div>')}</div>
+          : '<div class="lw-empty"><span class="big">🤖</span>可以让 AI 帮你读热点、出选题</div>')}</div>
     </div>`;
 
-    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${list}</div>`;
+    /* 🔍 联网搜索（复用 CodeScope 的 /api/ai/web-search ✓ —— Tavily / Brave ✓）*/
+    const wsHtml = (STORE && STORE.wsLoading) ? '<div class="lw-empty">联网搜索中…</div>'
+      : (wsRes && wsRes.ok)
+        ? (wsRes.results || []).map((r) => `<div class="lw-hotrow">
+            <div class="t"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></div>
+            <div class="m">${esc(String(r.content || r.snippet || '').slice(0, 150))}</div></div>`).join('')
+        : (wsRes && wsRes.error ? `<div class="lw-empty">${esc(wsRes.error)}</div>`
+          : '<div class="lw-empty"><span class="big">🔍</span>输入问题，去网上搜一圈</div>');
+    const wsCard = `<div class="lw-c" style="${sp(12)}">
+      <h3><span class="code">F-92</span>联网搜索<span class="sp"></span><em>复用 CodeScope · Tavily / Brave</em></h3>
+      <div class="lw-pad" style="padding-bottom:10px">
+        <div class="lw-search"><input id="lw-ws-q" placeholder="想问什么？比如「legged robot 最新 SOTA 是什么」" value="${esc((STORE && STORE.wsQ) || '')}" />
+          <button class="lw-btn" id="lw-ws-go">联网搜索</button></div>
+        <div style="font-size:10.5px;color:${T.faint};margin-top:8px">用 CodeScope 已配的搜索 Key ✓；没配的话它会提示 ✓</div>
+      </div>
+      <div class="lw-hotlist">${wsHtml}</div>
+    </div>`;
+
+    return `<div class="lw-g12">${kpis}${hotCard}${aiCard}${wsCard}${list}</div>`;
   }
 
   /* ── 论文 ── */

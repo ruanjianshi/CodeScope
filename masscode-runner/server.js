@@ -4649,61 +4649,6 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: false, error: '热点获取失败：' + String((error && error.message) || error) });
       }
     }
-    /* AI：OpenAI 兼容接口代理 ✓
-       配置存 life-ai.json（baseURL / key / model ✓）——**只存本机** ✓。
-       支持任何 OpenAI 兼容服务 ✓：OpenAI / DeepSeek / 通义 / 本地 Ollama（http://127.0.0.1:11434/v1 ✓）。*/
-    if (u.pathname === '/api/life/ai') {
-      const file = path.join(applicationDataRoot(), 'life-ai.json');
-      const readCfg = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return {}; } };
-      if (req.method === 'GET') {
-        const c = readCfg();
-        return send(res, 200, { ok: true, baseURL: c.baseURL || '', model: c.model || '', hasKey: !!c.key });
-      }
-      if (req.method === 'POST') {
-        try {
-          const body = await readBody(req, 2e6);
-          /* 只配配置，不调用 */
-          if (body && body.save) {
-            const c = readCfg();
-            const next = {
-              baseURL: String(body.baseURL || c.baseURL || '').slice(0, 200),
-              model: String(body.model || c.model || '').slice(0, 100),
-              key: body.key ? String(body.key).slice(0, 300) : (c.key || ''),
-            };
-            try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
-            fs.writeFileSync(file, JSON.stringify(next, null, 2));
-            return send(res, 200, { ok: true });
-          }
-          /* 真正调用 */
-          const c = readCfg();
-          if (!c.baseURL || !c.key) return send(res, 200, { ok: false, error: '还没配置 AI —— 在「AI 助手」卡片里填 baseURL / key / model ✓' });
-          const payload = JSON.stringify({
-            model: c.model || 'gpt-4o-mini',
-            messages: body.messages || [],
-            temperature: typeof body.temperature === 'number' ? body.temperature : 0.6,
-            max_tokens: Math.min(2000, Number(body.max_tokens) || 800),
-          });
-          const out = await new Promise((resolve, reject) => {
-            const cp = require('child_process').spawn('curl', ['-s', '-m', '90', '-L', '-X', 'POST',
-              c.baseURL.replace(/\/+$/, '') + '/chat/completions',
-              '-H', 'Content-Type: application/json',
-              '-H', 'Authorization: Bearer ' + c.key,
-              '--data-binary', '@-']);
-            let so = '', se = '';
-            cp.stdout.on('data', (d) => { so += d; });
-            cp.stderr.on('data', (d) => { se += d; });
-            cp.on('close', (code) => (code === 0 ? resolve(so) : reject(new Error(se || ('curl 退出码 ' + code)))));
-            cp.stdin.write(payload); cp.stdin.end();
-          });
-          let jj; try { jj = JSON.parse(out); } catch (_) { return send(res, 200, { ok: false, error: 'AI 返回无法解析：' + String(out).slice(0, 200) }); }
-          if (jj.error) return send(res, 200, { ok: false, error: String(jj.error.message || jj.error).slice(0, 300) });
-          const text = (((jj.choices || [])[0] || {}).message || {}).content || '';
-          return send(res, 200, { ok: true, text, usage: jj.usage || null });
-        } catch (error) {
-          return send(res, 200, { ok: false, error: String((error && error.message) || error).slice(0, 300) });
-        }
-      }
-    }
     /* 邮箱配置（SMTP / IMAP）：只存本机，不回传密码明文 */
     if (u.pathname === '/api/life/mail') {
       const file = path.join(applicationDataRoot(), 'life-mail.json');
