@@ -12,3 +12,8 @@ markdown-vault/**/.stfolder/
 markdown-vault/**/.codescope-backups/
 # 知识库/文档保存时留下的临时文件（写完即应删除，异常退出时会残留）
 markdown-vault/**/.*.tmp-*
+# VitePress 的构建缓存：只在 dev/build 期间存在，跑完自动清理。
+# 但**构建进行中**（例如重启 CodeScope 会触发知识库重建）git status 会看到它，
+# 每次都要手动忽略很烦，直接按运行时产物排除。
+markdown-vault/**/.vitepress/.temp/
+markdown-vault/**/.vitepress/cache/
