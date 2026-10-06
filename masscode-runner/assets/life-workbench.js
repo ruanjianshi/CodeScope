@@ -795,16 +795,19 @@
       st.textContent = CSS;
       document.head.appendChild(st);
     }
-    MOUNT_TIMER = setInterval(() => {
+    /* ⚠️ 挂载要快 ✗ —— 原来用 setInterval(600ms) 轮询 ✗，
+       按钮最多要等 **600ms** 才出现 ✗ → 用户感觉"这个按钮加载比其他慢" ✗。
+       改法：① 立刻试一次 ✓ ② 间隔缩到 100ms ✓ ③ **挂上就停掉定时器** ✓（不再空转 ✗）。 */
+    const tryMount = () => {
       const bar = document.getElementById('header-center');
-      if (!bar) return;
-      if (document.getElementById('btn-lifework')) return;
+      if (!bar) return false;
+      if (document.getElementById('btn-lifework')) { clearInterval(MOUNT_TIMER); MOUNT_TIMER = 0; return true; }
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.id = 'btn-lifework';
       btn.className = 'header-action';
       btn.textContent = '个人管理面板';
-      btn.title = '个人管理面板：今日 / 备忘录 / 日记 / 研究方向 / 论文检索 / 文件 / 时间 / 邮箱';
+      btn.title = '个人管理面板：今日 / 备忘录 / 日记 / 书签 / 研究方向 / 文件 / 邮箱';
       btn.setAttribute('aria-pressed', 'false');
       const anchor = document.getElementById('knowledge-launch') || document.getElementById('btn-system');
       if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(btn, anchor);
@@ -813,7 +816,16 @@
         if (document.getElementById('lifework-view')) hidePanelView();
         else openInPanel();
       });
-    }, 600);
+      clearInterval(MOUNT_TIMER); MOUNT_TIMER = 0;
+      return true;
+    };
+    if (tryMount()) return;
+    MOUNT_TIMER = setInterval(tryMount, 100);
+    /* 兜底：DOM 一变就试 ✓（比死等定时器更快 ✓）*/
+    try {
+      new MutationObserver(() => { if (MOUNT_TIMER && tryMount()) { /* 挂上就自动停了 ✓ */ } })
+        .observe(document.body, { childList: true, subtree: true });
+    } catch (_) {}
   }
 
   /* 打开：铺满主区域（在顶栏之下），并高亮顶部标签 */
