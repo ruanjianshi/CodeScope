@@ -1988,25 +1988,6 @@ function writeFragments(files) {
   return dir;
 }
 
-/* 语言 -> 运行器 */
-const LANGUAGE_MAP = {
-  javascript: { ext: '.js', label: 'JavaScript' },
-  typescript: { ext: '.ts', label: 'TypeScript' },
-  python:     { ext: '.py', label: 'Python' },
-  bash:       { ext: '.sh', label: 'Bash' },
-  shell:      { ext: '.sh', label: 'Bash' },
-  c_cpp:      { ext: '.cpp', label: 'C/C++' },
-  c:          { ext: '.c', label: 'C' },
-  java:       { ext: '.java', label: 'Java' },
-  ruby:       { ext: '.rb', label: 'Ruby' },
-  swift:      { ext: '.swift', label: 'Swift' },
-  go:         { ext: '.go', label: 'Go' },
-  json:       { ext: '.json', label: 'JSON' },
-  html:       { ext: '.html', label: 'HTML' },
-  markdown:   { ext: '.md', label: 'Markdown' },
-  latex:      { ext: '.tex', label: 'LaTeX' },
-};
-
 // 环境守卫：缺工具时返回明确提示，而不是晦涩的 spawn 报错
 async function guard(key, fn) {
   const { tools: env } = await getEnv();
@@ -4852,17 +4833,32 @@ const server = http.createServer(async (req, res) => {
         if (!account.imapHost) return send(res, 200, { ok: false, error: '这个账号没填 IMAP 服务器，收信需要它' });
         if (!account.pass) return send(res, 200, { ok: false, error: '这个账号没存授权码 / 密码' });
         const box = String(u.searchParams.get('box') || (postBody && postBody.box) || 'INBOX').trim() || 'INBOX';
+        /* ★ 已知连不上的账号**快速失败** ✓ ——
+           负缓存原来只加在 /status 上 ✗，于是点一个连不上的账号（比如本机到 gmail）
+           还要为「看一条错误提示」等 2 秒 ✗。现在所有邮件接口都快速返回同样的错误 ✓；
+           显式带 force=1（点「重新收信」）时才真的去试一次 ✓。 */
+        const wantForce = u.searchParams.get('force') === '1' || !!(postBody && postBody.force);
+        const knownBad = MAIL_FAIL_CACHE.get(key);
+        if (!wantForce && knownBad && Date.now() - knownBad.at < MAIL_FAIL_TTL) {
+          return send(res, 200, { ok: false, error: knownBad.error, cached: true });
+        }
+        /* 统一记录成功/失败 ✓（成功就清掉负缓存，用户修好网络后立刻恢复 ✓）*/
+        const markFail = (r) => {
+          if (r && r.ok) MAIL_FAIL_CACHE.delete(key);
+          else if (r) MAIL_FAIL_CACHE.set(key, { at: Date.now(), error: r.error || '连接失败' });
+          return r;
+        };
 
         /* ── 文件夹列表 ── */
         if (u.pathname === '/api/life/mail/boxes') {
           const cacheKey = 'boxes:' + key;
           const cached = cacheGet(MAIL_LIST_CACHE, cacheKey, MAIL_LIST_TTL);
           if (cached) return send(res, 200, cached);
-          const r = await MAIL_IMAP.withSession(account, async (s) => {
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
             const boxes = await s.listBoxes();
             const inbox = await s.status('INBOX');
             return { boxes, inbox };
-          }, { timeout: 20000 });
+          }, { timeout: 20000 }));
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
           return send(res, 200, cacheSet(MAIL_LIST_CACHE, cacheKey, { ok: true, boxes: r.boxes, inbox: r.inbox }));
         }
@@ -4875,7 +4871,7 @@ const server = http.createServer(async (req, res) => {
           const cacheKey = ['list', key, box, limit, onlyUnread ? 1 : 0, onlyFlagged ? 1 : 0].join(':');
           const cached = cacheGet(MAIL_LIST_CACHE, cacheKey, MAIL_LIST_TTL);
           if (cached) return send(res, 200, cached);
-          const r = await MAIL_IMAP.withSession(account, async (s) => {
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
             await s.select(box);
             const uids = await s.search(onlyUnread ? 'UNSEEN' : (onlyFlagged ? 'FLAGGED' : 'ALL'));
             const st = await s.status(box);
@@ -4902,7 +4898,7 @@ const server = http.createServer(async (req, res) => {
               };
             });
             return { box, total: st.messages, unseen: st.unseen, mails };
-          }, { timeout: 30000 });
+          }, { timeout: 30000 }));
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
           return send(res, 200, cacheSet(MAIL_LIST_CACHE, cacheKey, {
             ok: true, box: r.box, total: r.total, unseen: r.unseen, mails: r.mails,
@@ -4914,7 +4910,7 @@ const server = http.createServer(async (req, res) => {
           const uid = Number(u.searchParams.get('uid'));
           if (!uid) return send(res, 200, { ok: false, error: '缺少 uid' });
           const markRead = u.searchParams.get('markRead') !== '0';
-          const r = await MAIL_IMAP.withSession(account, async (s) => {
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
             await s.select(box);
             const full = await s.fetchFull(uid);
             const msg = MAIL_MIME.parseMessage(full.raw);
@@ -4944,7 +4940,7 @@ const server = http.createServer(async (req, res) => {
               date: msg.date, text: msg.text, html: msg.html,
               attachments: msg.attachments, inline, size: full.raw.length,
             };
-          }, { timeout: 30000 });
+          }, { timeout: 30000 }));
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
           MAIL_LIST_CACHE.clear();          /* 已读状态变了 → 列表缓存作废 ✓ */
           MAIL_STATUS_CACHE.clear();
@@ -4958,7 +4954,7 @@ const server = http.createServer(async (req, res) => {
           const uid = Number(u.searchParams.get('uid'));
           const n = Number(u.searchParams.get('n'));
           if (!uid || !Number.isInteger(n) || n < 0) return send(res, 200, { ok: false, error: '参数不对' });
-          const r = await MAIL_IMAP.withSession(account, async (s) => {
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
             await s.select(box);
             const full = await s.fetchFull(uid);
             const msg = MAIL_MIME.parseMessage(full.raw);
@@ -4966,7 +4962,7 @@ const server = http.createServer(async (req, res) => {
             if (!att) return { missing: true };
             const leaf = msg.parts[att.index];
             return { name: att.name, type: att.type, data: leaf ? leaf.data : Buffer.alloc(0) };
-          }, { timeout: 40000 });
+          }, { timeout: 40000 }));
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
           if (r.missing || !r.data) return send(res, 200, { ok: false, error: '这封邮件里没有这个附件' });
           /* ⚠️ 附件名可能含中文/引号 ✗ —— 用 RFC 5987 的 `filename*=UTF-8''…` ✓，
@@ -4989,7 +4985,7 @@ const server = http.createServer(async (req, res) => {
           const action = String((postBody && postBody.action) || '').trim();
           /* `readall` 是整箱操作，不需要 uid ✓ */
           if (!uid && action !== 'readall') return send(res, 200, { ok: false, error: '缺少 uid' });
-          const r = await MAIL_IMAP.withSession(account, async (s) => {
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
             await s.select(box);
             /* ⚠️ `UID STORE 1:*` 是「全部」的意思 ✓（不是 UID=1）——
                用来做「整个文件夹标为已读」✓。 */
@@ -5002,7 +4998,7 @@ const server = http.createServer(async (req, res) => {
             else if (action === 'unflag') await s.store(uid, 'remove', ['\\Flagged']);
             else throw new Error('不认识的操作：' + action);
             return { uid, action };
-          }, { timeout: 25000 });
+          }, { timeout: 25000 }));
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
           MAIL_LIST_CACHE.clear();
           MAIL_STATUS_CACHE.clear();

@@ -56,8 +56,6 @@
   const KIND_NAME = { code: '代码', doc: '文档', media: '媒体/图', model: '三维模型', other: '其他' };
   const UI = '"SF Mono",SFMono-Regular,Menlo,Consolas,"JetBrains Mono",monospace';
   const MONO = UI;
-  const TINT = { sky: ['#1c1c1a', '#f2e39b'], lilac: ['#1c1c1a', '#f2e39b'], mint: ['#1c1c1a', '#f2e39b'],
-    lemon: ['#1c1c1a', '#f2e39b'], peach: ['#1c1c1a', '#f2e39b'], rose: ['#1c1c1a', '#f2e39b'] };
 
   const CSS = `
   /* 独立面板：铺满顶栏以下的整个主区域 */
@@ -1033,7 +1031,6 @@
     if (d < day * 30) return Math.floor(d / day) + ' 天前';
     return new Date(ms).toISOString().slice(0, 10);
   }
-  function dstr(ms) { return new Date(ms).toISOString().slice(0, 16).replace('T', ' '); }
   function spark(vals, w, h, color) {
     const W = w || 96, H = h || 26, C = color || T.accent;
     const n = Math.max(2, (vals || []).length), max = Math.max(1, ...(vals || [0]));
@@ -1392,12 +1389,6 @@
   function memoDownloadImage(rendered, fileBase) {
     if (!rendered || !rendered.blob) return;
     memoDownload(rendered.blob, (fileBase || 'memo') + '.png');
-  }
-  /* 生成 + 直接下载（一步到位，给需要跳预览的场景用）*/
-  async function memoExportImage(title, bodyHtml, whenText, fileBase) {
-    const rendered = await memoRenderImage(title, bodyHtml, whenText);
-    memoDownloadImage(rendered, fileBase);
-    return { w: rendered.w, h: rendered.h };
   }
 
   function render() {
@@ -4124,7 +4115,6 @@
       .filter((s) => s.length > 1).flatMap(mailSplitLong);
   }
 
-  let MAIL_TR_TIMER = 0;
   async function mailTranslate() {
     const m = MAIL_UI.msg;
     if (!m) return;
@@ -4296,7 +4286,7 @@
     MAIL_UI.boxesLoading = true; MAIL_UI.boxesErr = '';
     renderMailPane('side');
     try {
-      const r = await fetch('/api/life/mail/boxes?key=' + encodeURIComponent(key), { cache: 'no-store' });
+      const r = await fetch('/api/life/mail/boxes?key=' + encodeURIComponent(key) + (force ? '&force=1' : ''), { cache: 'no-store' });
       const d = await r.json();
       if (MAIL_UI.key !== key) return;                 /* 期间切了账号 → 丢弃 ✓ */
       if (d && d.ok) { MAIL_UI.boxes = { boxes: d.boxes || [], inbox: d.inbox || {} }; MAIL_UI.boxesErr = ''; }
@@ -4317,7 +4307,8 @@
       const url = '/api/life/mail/list?key=' + encodeURIComponent(key)
         + '&box=' + encodeURIComponent(box) + '&limit=' + MAIL_UI.limit
         + (MAIL_UI.unreadOnly ? '&unread=1' : '')
-        + (MAIL_UI.importantOnly ? '&flagged=1' : '');
+        + (MAIL_UI.importantOnly ? '&flagged=1' : '')
+        + (force ? '&force=1' : '');
       const r = await fetch(url, { cache: 'no-store' });
       const d = await r.json();
       if (MAIL_UI.key !== key || MAIL_UI.box !== box) return;
@@ -4478,7 +4469,10 @@
         MAIL_UI.boxes = null; MAIL_UI.list = null; MAIL_KICKED = '';
         renderMailPane(['side', 'list']);
         mailLoadStatus(true);
-        ensureMailLoad();
+        /* ★ 显式 force ✓ —— 服务端对「已知连不上」的账号会快速返回上次的错误 ✗，
+           而用户点「重新收信」就是想真的再试一次 ✓（比如刚修好网络 / 改完配置）*/
+        mailLoadBoxes(true);
+        mailLoadList(true);
       };
     });
     qa('[data-muid]').forEach((el) => {

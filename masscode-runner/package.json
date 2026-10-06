@@ -27,7 +27,7 @@
     "prepublish:desktop": "npm run build:assets && npm run verify:office",
     "prepare:gopls": "node scripts/build-bundled-gopls.js",
     "verify:office": "node scripts/verify-office-package.js",
-    "test": "node tests/mime.js && node tests/smoke.js && node tests/platform-sim.js",
+    "test": "node tests/mime.js && node tests/mail-failfast.js && node tests/smoke.js && node tests/platform-sim.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js",
     "test:blockly": "node tests/blockly-ifelse.js",
@@ -38,7 +38,8 @@
     "build:knowledge": "node scripts/build-knowledge.js",
     "test:smoke": "node tests/smoke.js",
     "test:platform": "node tests/platform-sim.js",
-    "test:mime": "node tests/mime.js"
+    "test:mime": "node tests/mime.js",
+    "test:mail": "node tests/mail-failfast.js"
   },
   "engines": {
     "node": ">=18"
