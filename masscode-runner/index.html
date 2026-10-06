@@ -2575,7 +2575,10 @@
   .sym-ref .ln { color:var(--accent); font-size:10px; font-family:var(--mono); white-space:nowrap; }
   .sym-ref .tx { color: var(--dim); min-width:0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family:var(--mono); font-size:11px; }
   .sym-ref.call .tx { color: var(--accent); }
-  #sym-modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; z-index: 100; }
+  /* ⚠️ z-index 必须高过「个人管理面板」那层全屏浮层（.lw-inpanel 是 8800，
+     它自己的右键菜单 .lw-ctx 是 9600）。以前这里是 100 —— 打开个人管理面板后
+     按 ⌘⇧P / ⌘P，命令面板整个被盖住、连关闭按钮都点不到（实测：屏幕上看不见任何东西）✗。 */
+  #sym-modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; z-index: 9700; }
   #sym-modal.open { display: flex; }
   #sym-modal-box { width: 780px; max-width: 94vw; max-height: 78vh; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
   #sym-modal-mode { display:flex; gap:5px; padding:8px 14px 0; }
