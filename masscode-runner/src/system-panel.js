@@ -3558,7 +3558,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   }
 
   /* ================================================================ 环境检测：CodeScope 本地服务卡片
-     直接复用环境检测里 DSH 那张卡片的类名（.env-dsh-card / .env-dsh-actions），
+     直接复用环境检测里 DSH 那张卡片的类名（.env-dsh-card 及其内部的
+     .env-svc-head / .env-svc-meta / .env-svc-acts），
      所以外观和应用原生卡片完全一致，而且**不用改 index.html**（运行时注入）。
      它的价值：改过 server.js 之后，不用再去终端找人肉重启。 */
   const CORE = { injected: false, busy: false, pid: 0, port: 0, restartable: true, blockReason: '', error: '', log: '', lastAt: 0 };
@@ -3581,11 +3582,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     card.className = 'env-dsh-card';
     card.id = 'env-core-card';
     card.innerHTML = `
-      <div>
-        <strong id="env-core-title">CodeScope 本地服务 · 检测中</strong>
-        <p id="env-core-detail">正在读取服务进程信息…</p>
+      <div class="env-svc-head">
+        <span class="env-svc-dot"></span>
+        <b id="env-core-title">CodeScope 本地服务</b>
+        <span class="env-svc-state" id="env-core-state">检测中</span>
       </div>
-      <div class="env-dsh-actions"><button id="btn-env-core-restart" class="primary">重启 CodeScope</button></div>`;
+      <p class="env-svc-meta" id="env-core-detail">正在读取服务进程信息…</p>
+      <p class="env-svc-meta" id="env-core-log"></p>
+      <div class="env-svc-acts"><button id="btn-env-core-restart">重启</button></div>`;
     host.insertAdjacentElement('afterend', card);
     const button = $('btn-env-core-restart');
     if (button) button.onclick = () => restartCore();
@@ -3593,32 +3597,48 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   }
 
   function renderCoreCard() {
+    const card = $('env-core-card');
     const title = $('env-core-title');
+    const state = $('env-core-state');
     const detail = $('env-core-detail');
+    const logLine = $('env-core-log');
     const button = $('btn-env-core-restart');
     if (!title || !detail || !button) return;
+    if (card) card.dataset.state = CORE.busy ? 'busy' : (CORE.error ? 'warn' : 'ok');
     if (CORE.busy) {
-      title.textContent = 'CodeScope 本地服务 · 重启中…';
+      if (state) state.textContent = '重启中';
+      title.textContent = 'CodeScope 本地服务';
       detail.textContent = CORE.status || '正在让服务换一个新进程，请稍候（旧进程退出 → 新进程接管端口）。';
+      detail.title = detail.textContent;
+      if (logLine) logLine.textContent = '';
       button.disabled = true;
       button.textContent = '重启中…';
       return;
     }
     if (CORE.error) {
-      title.textContent = 'CodeScope 本地服务 · ' + (CORE.error === 'noRoute' ? '后端未生效' : '读取失败');
+      if (state) state.textContent = CORE.error === 'noRoute' ? '后端未生效' : '读取失败';
+      title.textContent = 'CodeScope 本地服务';
       detail.textContent = CORE.error === 'noRoute'
-        ? '本机管家的后端接口还没生效：请在启动 CodeScope 的终端里按 Ctrl+C，然后重新执行 node server.js。之后这张卡片上的按钮就能一直用了。'
+        ? '本机管家的后端接口还没生效：请在启动 CodeScope 的终端里按 Ctrl+C，然后重新执行 node server.js。'
         : (CORE.message || '无法读取服务进程信息。');
+      detail.title = detail.textContent;
+      if (logLine) logLine.textContent = '';
       button.disabled = true;
-      button.textContent = '重启 CodeScope';
+      button.textContent = '重启';
       return;
     }
     const seconds = Math.max(0, Math.round(CORE.uptime || 0));
-    title.textContent = 'CodeScope 本地服务 · PID ' + CORE.pid;
-    detail.textContent = '端口 ' + CORE.port + ' · 已运行 ' + fmtDuration(seconds) + ' · Node ' + (CORE.node || '') + ' · 面板前端 v1.0.0'
-      + (CORE.log ? ' · 日志 ' + CORE.log : '');
+    if (state) state.textContent = '运行中';
+    title.textContent = 'CodeScope 本地服务';
+    /* 主要信息一行（单行省略号截断），日志路径单独一行更淡 —— 以前全挤在一行里会折成两行。 */
+    detail.textContent = 'PID ' + CORE.pid + ' · 端口 ' + CORE.port + ' · 已运行 ' + fmtDuration(seconds) + ' · Node ' + (CORE.node || '');
+    detail.title = detail.textContent;
+    if (logLine) {
+      logLine.textContent = CORE.log ? '日志 ' + CORE.log : '';
+      logLine.title = CORE.log || '';
+    }
     button.disabled = !CORE.restartable;
-    button.textContent = CORE.restartable ? '重启 CodeScope' : '重启不可用';
+    button.textContent = CORE.restartable ? '重启' : '重启不可用';
     button.title = CORE.restartable ? '换一个新进程接管当前端口（约 3-10 秒不可用）' : (CORE.blockReason || '当前启动方式不支持自动重启');
   }
 

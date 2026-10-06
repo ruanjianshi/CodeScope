@@ -2369,29 +2369,62 @@
   #env-deploy-state.ok { color:var(--ok); }
   #env-deploy-state.err { color:var(--err); }
   #env-deploy-command { display:block; margin-top:7px; padding:6px 8px; max-height:54px; overflow:auto; border-radius:6px; background:rgba(0,0,0,.24); color:#8592a4; font:10px/1.45 var(--mono); word-break:break-all; white-space:pre-wrap; }
-  .tool-row { display: grid; grid-template-columns: 10px minmax(0,1fr); column-gap: 10px; row-gap: 3px; align-items: center; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; background: var(--panel2); overflow: hidden; }
+  /* 工具行：名称 + 分类标签 + 状态放**同一行**，描述单独一行。
+     以前状态（"支持" / "v26.7.0"）独占第三行，一行能装下的信息撑到 90px，
+     运行基础 + 浏览器能力十几条加起来多出一屏滚动。 */
+  .tool-row { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; column-gap: 9px; row-gap: 2px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 5px; background: var(--panel2); overflow: hidden; }
   .tool-row.optional { border-color:color-mix(in srgb,var(--border) 78%,transparent); }
   .tool-row.optional:not(.available) { opacity:.82; }
-  .tool-row .dot { grid-column:1; grid-row:1 / span 2; width: 10px; height: 10px; border-radius: 50%; align-self:center; }
+  .tool-row .dot { grid-column:1; grid-row:1; width: 10px; height: 10px; border-radius: 50%; align-self:center; }
   .tool-row .dot.ok { background: var(--ok); }
   .tool-row .dot.bad { background: var(--err); }
   .tool-row .dot.idle { background:#8d98a9; box-shadow:0 0 0 3px rgba(141,152,169,.1); }
-  .tool-row .info { grid-column:2; min-width:0; overflow:hidden; }
-  .tool-row .info .nm { display:flex; align-items:center; min-width:0; font-weight:600; white-space:nowrap; }
-  .tool-row .scope { display:inline-block; margin-left:6px; padding:1px 5px; border-radius:8px; color:var(--accent); background:rgba(79,140,255,.1); font-size:9px; font-weight:500; vertical-align:1px; }
+  .tool-row .nm { grid-column:2; grid-row:1; display:flex; align-items:center; min-width:0; font-weight:600; }
+  .tool-row .nm .t { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tool-row .scope { flex:none; margin-left:6px; padding:1px 5px; border-radius:8px; color:var(--accent); background:rgba(79,140,255,.1); font-size:9px; font-weight:500; vertical-align:1px; }
   .tool-row.optional .scope { color:var(--dim); background:rgba(255,255,255,.05); }
-  .tool-row .info .sub { color: var(--dim); font-size: 11px; line-height:1.45; white-space:normal; word-break:normal; overflow-wrap:anywhere; }
-  .tool-row .ver { grid-column:2; min-width:0; max-width:100%; color: var(--accent); font: 10px/1.4 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:.9; }
+  .tool-row .sub { grid-column:2 / -1; grid-row:2; color: var(--dim); font-size: 11px; line-height:1.45; white-space:normal; word-break:normal; overflow-wrap:anywhere; }
+  /* ⚠️ 这里必须是**固定像素**上限，不能用百分比：网格列是 auto（由内容决定），
+     百分比 max-width 会跟列宽互相引用，Chrome 会把它收敛成一个极小的值 ——
+     实测 46% 让「26 个依赖完整」被截成「26 …」、「可用」截成「可」。 */
+  .tool-row .ver { grid-column:3; grid-row:1; max-width:150px; text-align:right; color: var(--accent); font: 10px/1.4 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:.9; }
+  .tool-row .hint { grid-column:2 / -1; }
   .hint { color: var(--err); font-size: 12px; font-family: var(--mono); word-break: break-all; }
   .hint.optional-hint { color:var(--dim); font-family:inherit; line-height:1.5; }
   .hint.optional-hint strong { color:#d9b45b; font-weight:650; }
-  .env-package-note { margin:0 0 12px; padding:10px 11px; border:1px solid rgba(86,211,100,.28); border-radius:9px; background:rgba(86,211,100,.065); color:var(--dim); font-size:11px; line-height:1.55; }
-  .env-package-note strong { color:var(--ok); }
-  .env-dsh-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; margin:0 0 12px; padding:12px; border:1px solid rgba(89,156,255,.3); border-radius:10px; background:linear-gradient(135deg,rgba(55,116,205,.12),rgba(86,211,100,.045)); }
-  .env-dsh-card strong { display:block; color:var(--text); font-size:13px; margin-bottom:4px; }
-  .env-dsh-card p { margin:0; color:var(--dim); font-size:11px; line-height:1.5; }
-  .env-dsh-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-  .env-dsh-actions button.primary { color:#dcecff; border-color:rgba(89,156,255,.55); background:rgba(55,116,205,.2); }
+  .env-package-note { margin:0 0 11px; padding:9px 11px 9px 12px; border:1px solid rgba(86,211,100,.22); border-left:3px solid rgba(86,211,100,.62); border-radius:8px; background:rgba(86,211,100,.05); color:var(--dim); font-size:10.5px; line-height:1.5; }
+  .env-package-note strong { color:var(--ok); font-weight:650; }
+  .env-package-note .env-note-more { display:block; margin-top:3px; color:color-mix(in srgb,var(--dim) 82%,transparent); }
+  /* ── 服务卡（DSH / CodeScope 本地服务共用）──
+     以前两张卡各写各的：标题会折行、元信息一大段、按钮右对齐且数量不一，
+     同一屏里两行卡片长得完全不一样。现在统一成
+     「状态点 + 单行标题 + 单行元信息 + 等宽按钮行」，标题/元信息一律省略号截断并挂 title。 */
+  .env-dsh-card { margin:0 0 10px; padding:11px 12px; border:1px solid rgba(89,156,255,.28); border-radius:10px; background:linear-gradient(135deg,rgba(55,116,205,.1),rgba(86,211,100,.035)); }
+  .env-svc-head { display:flex; align-items:center; gap:7px; min-width:0; }
+  .env-svc-dot { flex:none; width:7px; height:7px; border-radius:50%; background:#8d98a9; box-shadow:0 0 0 3px rgba(141,152,169,.12); }
+  .env-dsh-card[data-state="ok"] .env-svc-dot { background:#56d364; box-shadow:0 0 0 3px rgba(86,211,100,.14),0 0 7px rgba(86,211,100,.55); }
+  .env-dsh-card[data-state="warn"] .env-svc-dot { background:#d9a441; box-shadow:0 0 0 3px rgba(217,164,65,.14); }
+  .env-dsh-card[data-state="busy"] .env-svc-dot { background:#d9a441; animation:env-pulse 1s infinite alternate; }
+  .env-svc-head b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:12.5px; font-weight:650; }
+  .env-svc-state { flex:none; margin-left:auto; padding:1.5px 7px; border-radius:999px; font-size:9.5px; font-weight:600; letter-spacing:.01em; color:var(--dim); background:rgba(255,255,255,.055); border:1px solid color-mix(in srgb,var(--border) 82%,transparent); }
+  .env-dsh-card[data-state="ok"] .env-svc-state { color:var(--ok); border-color:rgba(86,211,100,.3); background:rgba(86,211,100,.1); }
+  .env-dsh-card[data-state="warn"] .env-svc-state { color:#d9b45b; border-color:rgba(217,164,65,.3); background:rgba(217,164,65,.1); }
+  .env-svc-meta { margin:5px 0 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); font:10.5px/1.45 var(--mono); }
+  /* 第二条元信息（日志路径）更淡、更小；为空时不占位 */
+  .env-svc-meta + .env-svc-meta { margin-top:2px; font-size:10px; opacity:.72; }
+  .env-svc-meta:empty { display:none; }
+  .env-svc-acts { display:flex; gap:6px; margin-top:9px; }
+  .env-svc-acts button { flex:1 1 0; min-width:0; padding:0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .env-svc-acts button.primary { color:#dcecff; border-color:rgba(89,156,255,.5); background:rgba(55,116,205,.22); }
+  .env-svc-acts button.primary:hover:not(:disabled) { background:rgba(55,116,205,.32); }
+  .env-svc-acts button:disabled { opacity:.42; cursor:default; }
+  /* 基本信息：以前是 4 行裸文本（连 <br> 拼的），现在改成紧凑的键值网格 */
+  .env-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; margin:0 0 12px; border:1px solid var(--border); border-radius:9px; overflow:hidden; background:var(--border); }
+  .env-fact { display:flex; align-items:baseline; gap:7px; min-width:0; padding:7px 10px; background:var(--panel2); }
+  .env-fact.wide { grid-column:1 / -1; }
+  .env-fact > span { flex:none; color:var(--dim); font-size:10px; }
+  .env-fact > b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:11px; font-weight:600; }
+  .env-fact > b.mono { font-family:var(--mono); font-size:10.5px; font-weight:500; }
   .env-extensions { margin-top:13px; }
   .env-extensions > summary { display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--border); border-radius:8px; background:var(--panel2); color:var(--text); font-size:11px; font-weight:700; cursor:pointer; list-style:none; }
   .env-extensions > summary::-webkit-details-marker { display:none; }
@@ -2404,19 +2437,22 @@
   .env-capability-note { margin:-2px 1px 8px; color:var(--dim); font-size:10.5px; line-height:1.45; }
   /* 云同步面板：只用已存在的主题变量，避免与既有主题冲突 */
   .env-sync-card { margin:0 0 12px; padding:11px 12px; border:1px solid rgba(89,156,255,.26); border-radius:10px; background:rgba(55,116,205,.07); }
-  .env-sync-head { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-  .env-sync-head strong { color:var(--text); font-size:13px; }
-  .env-sync-head .sub { color:var(--dim); font-size:11px; }
+  .env-sync-head { display:flex; align-items:center; gap:7px; }
+  .env-sync-head strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:12.5px; font-weight:650; }
   .env-sync-head .sp { flex:1 1 auto; }
-  .env-sync-head button { font-size:11px; }
+  .env-sync-head button { font-size:11px; flex:none; padding:0 8px; }
+  /* 汇总信息单独一行 —— 原来和标题、三个按钮挤在同一行，窄卡片下会被挤到第二行去 */
+  .env-sync-sub { margin:4px 0 0; color:var(--dim); font-size:10.5px; line-height:1.45; }
+  .env-sync-sub:empty { display:none; }
   .sync-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--dim); margin-right:6px; vertical-align:middle; }
   .sync-dot.on { background:#56d364; box-shadow:0 0 6px rgba(86,211,100,.65); }
   .sync-row { display:flex; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid rgba(128,128,128,.18); font-size:11.5px; color:var(--dim); }
   .sync-row:last-child { border-bottom:0; }
-  .sync-row b { color:var(--text); font-weight:600; }
+  /* 名字不参与收缩（否则会被右边的详情挤成「Git…」），只留一个宽度上限兜底 */
+  .sync-row b { flex:0 0 auto; min-width:0; max-width:44%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-weight:600; }
   .sync-row .grow { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sync-row .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; opacity:.85; }
-  .sync-badge { padding:0 6px; border-radius:999px; font-size:10px; border:1px solid rgba(128,128,128,.4); white-space:nowrap; }
+  .sync-badge { flex:none; padding:0 6px; border-radius:999px; font-size:10px; border:1px solid rgba(128,128,128,.4); white-space:nowrap; }
   .sync-badge.direct { color:#56d364; border-color:rgba(86,211,100,.45); }
   .sync-badge.relay { color:#e3b341; border-color:rgba(227,179,65,.45); }
   .sync-badge.warn { color:#f85149; border-color:rgba(248,81,73,.45); }
@@ -4693,23 +4729,33 @@
       <div class="env-card bad"><b id="env-missing">–</b><span>运行问题</span></div>
       <div class="env-card optional"><b id="env-optional">–</b><span>外部服务未连接</span></div>
     </div>
-    <div class="env-package-note"><strong>CodeScope 已集成基础环境、DeepSeek Harness 与常用代码工具链。</strong><br>启动 CodeScope 时会自动启动 DSH；代码与 Markdown 编辑、PDF/XMind 阅读、Prettier、Python 格式化、Pyright、TypeScript LSP 与 gopls 可离线使用。Office 工作区只使用 ONLYOFFICE Docs，必须连接独立 Document Server。</div>
-    <div class="env-dsh-card">
-      <div><strong id="env-dsh-title">DeepSeek Harness · 检测中</strong><p id="env-dsh-detail">DSH 将随 CodeScope 自动启动，并在退出时安全回收。</p></div>
-      <div class="env-dsh-actions"><button id="btn-env-dsh-open" class="primary">打开 DSH</button><button id="btn-env-dsh-restart">重启</button></div>
+    <div class="env-package-note"><strong>CodeScope 已集成基础环境、DeepSeek Harness 与常用代码工具链。</strong><span class="env-note-more">启动 CodeScope 时会自动启动 DSH；代码与 Markdown 编辑、PDF/XMind 阅读、Prettier、Python 格式化、Pyright、TypeScript LSP 与 gopls 可离线使用。Office 工作区只使用 ONLYOFFICE Docs，必须连接独立 Document Server。</span></div>
+    <div class="env-dsh-card" id="env-dsh-card" data-state="busy">
+      <div class="env-svc-head">
+        <span class="env-svc-dot"></span>
+        <b id="env-dsh-title">DeepSeek Harness</b>
+        <span class="env-svc-state" id="env-dsh-state">检测中</span>
+      </div>
+      <p class="env-svc-meta" id="env-dsh-detail">DSH 将随 CodeScope 自动启动，并在退出时安全回收。</p>
+      <div class="env-svc-acts">
+        <button id="btn-env-dsh-open" class="primary" title="在 CodeScope 内嵌工作区打开 DeepSeek Harness">打开</button>
+        <button id="btn-env-dsh-start" title="启动 DSH 进程（已运行时不可用）">启动</button>
+        <button id="btn-env-dsh-stop" title="停止 DSH 进程（下次启动 CodeScope 时会重新拉起）">关闭</button>
+        <button id="btn-env-dsh-restart" title="重启 DSH 进程">重启</button>
+      </div>
     </div>
-    <div id="env-meta" style="color:var(--dim);font-size:12px;margin-bottom:10px"></div>
+    <div id="env-meta" class="env-facts"></div>
     <div class="env-group-title">☁ 云同步</div>
     <div class="env-capability-note">Tailscale 负责组网（局域网自动直连、跨网打洞），Syncthing 负责多端实时同步，restic 负责可回滚的历史快照。这里只做状态聚合与手动触发，不参与数据正确性；任一工具未安装或未配置都只降级显示。</div>
     <div class="env-sync-card">
       <div class="env-sync-head">
         <strong id="env-sync-summary">云同步 · 读取中…</strong>
-        <span id="env-sync-meta" class="sub"></span>
         <span class="sp"></span>
         <button id="btn-env-sync-refresh" title="重新读取 Tailscale / Syncthing / restic 状态">重新检测</button>
         <button id="btn-env-sync-scan" title="让 Syncthing 立即重新扫描 vault">立即扫描</button>
         <button id="btn-env-sync-snapshot" title="立即用 restic 创建一个快照">立刻快照</button>
       </div>
+      <div id="env-sync-meta" class="env-sync-sub"></div>
       <div id="env-sync-tools"></div>
       <div id="env-sync-peers"></div>
       <div id="env-sync-restic"></div>
@@ -19386,7 +19432,12 @@ function renderEnvironmentRows(hostId,entries){
       :`<div class="hint">⚠ ${escapeHtml(t.label)}：${escapeHtml(t.issue||'运行条件异常')}${action?'<br>'+escapeHtml(action):''}</div>`;
     const status=t.available?(t.version||'可用'):(optional?(t.external?'未连接':(t.installed?'需配置':'未启用')):(t.installed?'需处理':'缺失'));
     row.className='tool-row'+(optional?' optional':'')+(t.available?' available':'');
-    row.innerHTML=`<div class="dot ${state}"></div><div class="info"><div class="nm">${escapeHtml(t.label)}<span class="scope">${scope}</span></div><div class="sub">${escapeHtml(t.group||'')} · ${escapeHtml(t.for||'')}</div>${hint}</div><div class="ver" title="${escapeHtml(t.path||'')}">${escapeHtml(status)}</div>`;
+    /* 名称 / 分类标签 / 状态同一行，描述单独一行（见 .tool-row 的注释） */
+    row.innerHTML=`<div class="dot ${state}"></div>`
+      +`<div class="nm"><span class="t">${escapeHtml(t.label)}</span><span class="scope">${scope}</span></div>`
+      +`<div class="ver" title="${escapeHtml(t.path||'')}">${escapeHtml(status)}</div>`
+      +`<div class="sub">${escapeHtml(t.group||'')} · ${escapeHtml(t.for||'')}</div>`
+      +hint;
     host.appendChild(row);
   }
 }
@@ -19500,14 +19551,42 @@ let VSCODE_PROXY_PORT=4878;
 function renderDshService(service){
   if(!service)return;
   DSH_SERVICE=service;
-  const ready=!!service.available,managed=!!service.managed;
-  $('env-dsh-title').textContent='DeepSeek Harness · '+(ready?(managed?'CodeScope 托管运行':'已连接现有服务'):(service.state==='starting'?'正在启动':'未就绪'));
-  $('env-dsh-detail').textContent=ready
+  const ready=!!service.available,managed=!!service.managed,starting=service.state==='starting';
+  /* 卡片状态：托管运行 / 已连接 → ok；未运行 → warn；启动中 → busy（状态点会脉动） */
+  const card=$('env-dsh-card');
+  if(card)card.dataset.state=starting?'busy':(ready?'ok':'warn');
+  $('env-dsh-state').textContent=starting?'启动中':(ready?(managed?'托管运行':'已连接'):'未运行');
+  const detail=$('env-dsh-detail');
+  detail.textContent=ready
     ?`v${service.version||'未知'} · 端口 ${service.port} · ${managed?'关闭 CodeScope 时自动回收':'现有进程保持独立运行'}`
     :(service.message||'DSH 服务尚未启动');
+  /* 元信息是单行省略号截断的，完整内容挂 title 才看得到 */
+  detail.title=detail.textContent;
+  /* 四个按钮各自的可点条件：打开/关闭要求正在运行；启动要求没在运行；重启只要求不在启动中 */
   $('btn-env-dsh-open').disabled=!ready;
-  $('btn-env-dsh-restart').disabled=service.state==='starting';
+  $('btn-env-dsh-start').disabled=ready||starting;
+  $('btn-env-dsh-stop').disabled=!ready||starting;
+  $('btn-env-dsh-restart').disabled=starting;
   const top=$('btn-dsh');top.classList.toggle('dsh-ready',ready);top.classList.toggle('dsh-bad',!ready);top.title=ready?'打开 DeepSeek Harness':(service.message||'DSH 未就绪，点击尝试启动');
+}
+/* 启动 / 关闭 / 重启共用一个入口：先给即时反馈（状态点变 busy），
+   失败时把服务端的最新状态读回来，避免界面停在「启动中」不动。 */
+async function dshControl(action){
+  const label={start:'启动',stop:'关闭',restart:'重启'}[action]||'处理';
+  const card=$('env-dsh-card'),state=$('env-dsh-state');
+  if(card)card.dataset.state='busy';
+  if(state)state.textContent=label+'中';
+  setStatus('ok','正在'+label+' DSH…');
+  try{
+    const service=await dshAction(action);
+    renderDshService(service);
+    /* 关掉 DSH 之后内嵌工作区就没内容了，顺手收起来 */
+    if(action==='stop'&&document.body.classList.contains('dsh-mode'))closeDshWorkspace();
+    setStatus('ok','DSH '+label+'完成'+(service&&service.available?'（运行中）':'（已停止）'));
+  }catch(error){
+    setStatus('err','DSH '+label+'失败：'+(error.message||error));
+    try{const r=await api('/api/integrations/dsh');renderDshService(r&&r.service);}catch(_){}
+  }
 }
 async function dshAction(action){
   const response=await api('/api/integrations/dsh',{action});
@@ -19695,7 +19774,16 @@ async function loadEnv(refreshNow, quiet) {
   $('env-extension-summary').textContent=d.summary.optionalMissing?d.summary.optionalMissing+' 项项目工具未启用':((d.summary.externalUnavailable||0)?d.summary.externalUnavailable+' 项外部服务未连接':'全部已就绪');
   const pm = d.system && d.system.packageManager ? ' · 包管理器 ' + d.system.packageManager : '';
   const langs = d.project && d.project.languages && d.project.languages.length ? d.project.languages.join(' / ') : '仅文档';
-  $('env-meta').innerHTML = `CodeScope: <strong>v${escapeHtml(d.version||'')}</strong> · ${d.mode==='desktop'?'桌面端':'Web 端'} · Node ${escapeHtml(d.node||'')}<br>Vault: <code style="font-size:11px">${escapeHtml(d.vault)}</code><br>平台: ${escapeHtml(d.platform + pm)}<br>项目语言: ${escapeHtml(langs)}`;
+  /* 基本信息：原来是 4 行裸文本（用 <br> 拼的），没有层次、也没法单独复制。
+     现在改成紧凑的键值网格，长值（Vault 路径）独占一行、单行省略号截断 + title。 */
+  const facts = [
+    ['CodeScope', 'v' + (d.version || '') + ' · ' + (d.mode === 'desktop' ? '桌面端' : 'Web 端'), false],
+    ['Node', String(d.node || '—'), true],
+    ['平台', String(d.platform || '') + pm, false],
+    ['项目语言', langs, false],
+  ];
+  $('env-meta').innerHTML = facts.map(([k, v, mono]) => '<div class="env-fact"><span>' + escapeHtml(k) + '</span><b class="' + (mono ? 'mono' : '') + '" title="' + escapeHtml(v) + '">' + escapeHtml(v) + '</b></div>').join('')
+    + '<div class="env-fact wide"><span>Vault</span><b class="mono" title="' + escapeHtml(d.vault || '') + '">' + escapeHtml(d.vault || '') + '</b></div>';
   $('env-client-meta').textContent='当前 '+clientBrowserLabel()+' · 必需能力 '+clientRequired.filter(item=>item.available).length+'/'+clientRequired.length+' 项就绪。';
   const deploy = d.deployment || {};
   const deployBtn = $('btn-env-deploy');
@@ -19809,7 +19897,9 @@ $('btn-env-deploy').onclick = deployCurrentEnv;
 $('btn-dsh').setAttribute('aria-pressed','false');
 $('btn-dsh').onclick=()=>document.body.classList.contains('dsh-mode')?closeDshWorkspace():openDsh();
 $('btn-env-dsh-open').onclick=openDsh;
-$('btn-env-dsh-restart').onclick=async()=>{try{renderDshService({...((ENV_DATA&&ENV_DATA.env&&ENV_DATA.env.dsh)||{}),state:'starting',message:'正在重启 DSH…'});await dshAction('restart');}catch(error){setStatus('err', 'DSH 重启失败：'+(error.message||error));}};
+$('btn-env-dsh-start').onclick=()=>dshControl('start');
+$('btn-env-dsh-stop').onclick=()=>dshControl('stop');
+$('btn-env-dsh-restart').onclick=()=>dshControl('restart');
 $('btn-dsh-restart').onclick=()=>{if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();else openOpencode();};
 $('dsh-back').onclick=closeDshWorkspace;
 $('dsh-reload').onclick=()=>{const frame=$('dsh-frame');$('dsh-loading').classList.remove('hidden');frame.src=frame.src;};
