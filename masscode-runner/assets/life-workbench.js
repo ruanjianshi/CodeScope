@@ -1538,7 +1538,15 @@
         saveStore();
       };
     });
-    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
+    /* ── 点左栏的文件夹 / 智能项 / 标签 ──
+       ★ 点文件夹**必须同时切回「文件夹视图」** ✓ ——
+         以前只改 `STORE.memoFolder` ✗，而「▦ 全部列表」模式下压根不按文件夹过滤 ✗
+         （见 viewMemo 里 `view === "all" || ...`），
+         于是用户点「测试文件夹」（计数 0）时：左栏高亮了、列表却还是 3 条 ✗，
+         看起来就像「点文件夹没反应」✗（用户截图报的就是这个）。
+         语义上「点某个文件夹」= 「我要看这个文件夹」✓，所以顺带切视图是符合直觉的 ✓；
+         「▦ 全部列表」仍是「跨文件夹总览」，点它就进、点任意文件夹就出 ✓。 */
+    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
     qa("[data-msmart]").forEach((el) => {
       el.onclick = () => {
         flushMemo();
@@ -1569,7 +1577,7 @@
       const n = name.trim().slice(0, 24);
       STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
       if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
-      STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList();
+      STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); renderMemoList();
     };
     /* 右键菜单：文件夹 / 标签 / 备忘录行 */
     const closeCtx = () => { const c = document.getElementById("lw-ctx"); if (c) c.remove(); };
@@ -2768,14 +2776,20 @@
       const when = isToday ? (pad(d.getHours()) + ":" + pad(d.getMinutes())) : (d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate());
       const body = String(m.text || "").split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").replace(/^\s*[-*+]\s*\[[ xX]\]\s*/gm, "").slice(0, 22);
       const td = todoOf(m);
-      const extra = td.total ? ("☑ " + td.done + "/" + td.total) : ((String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : "备忘录");
+      /* `extra` 描述的是**内容形态**（待办进度 / 有没有表格），**不是文件夹名** ✓
+         ⚠️ 以前这里回退成字面量 "备忘录" ✗ —— 和文件夹名撞在一起，
+            行里会出现「Study note ▤ 备忘录」，看起来像「这条属于「备忘录」文件夹」✗
+            （用户截图里就是这句，很容易和左边的文件夹列表搞混 ✗）。
+            改成「笔记」✓，并且给真正的文件夹名加 ▤ 前缀和分隔符 ✓。 */
+      const extra = td.total ? ("☑ " + td.done + "/" + td.total) : ((String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : "笔记");
       /* ⚠️ `▦ 全部列表` 视图下**显示所属文件夹** ✓ ——
          否则"文件夹视图"和"全部列表"看起来一模一样 ✗（用户反馈"这两个按钮没用"✗）。*/
-      const folTag = (view === 'all' && (m.folder || '备忘录')) ? '<span class="bd" style="color:' + T.accent + '">' + esc(m.folder || '备忘录') + '</span>' : '';
+      const folTag = (view === 'all' && (m.folder || '备忘录'))
+        ? '<span class="bd" style="color:' + T.accent + '">▤ ' + esc(m.folder || '备忘录') + '</span> · ' : '';
       return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '" draggable="true" title="拖到左边文件夹可移动归属">'
         + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(String(m.text || "").split("\n")[0].slice(0, 30) || "新备忘录") + '</div>'
         + '<div class="mt"><b>' + when + '</b>' + (body ? "  " + esc(body) : "") + '</div>'
-        + '<div class="sub">' + folTag + (td.total ? (td.open ? "▣ " : "▣ ") : "▤ ") + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
+        + '<div class="sub">' + folTag + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
     };
 
     const listHtml = groups.length

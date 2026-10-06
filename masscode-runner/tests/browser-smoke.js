@@ -803,6 +803,51 @@ print(r.run())
   await page.waitForTimeout(1200);
   const studyAfter = await folderCount('Study note');
   if (studyAfter !== studyBefore + 1) throw new Error('拖拽后文件夹计数没变：' + studyBefore + ' → ' + studyAfter);
+  /* ★★ 点左栏文件夹必须**真的按文件夹过滤** ——
+     用户原话：「我点击测试文件夹没有一个备忘录，怎么左边还是有三个，显示在，没有变」。
+     根因：`▦ 全部列表` 模式下 viewMemo 里 `view === "all" || ...` 直接跳过文件夹过滤 ✗，
+     而点文件夹只改 `STORE.memoFolder`、没切回文件夹视图 ✗ → 左栏高亮了、列表纹丝不动 ✗。
+     现在「点文件夹 = 我要看这个文件夹」→ 顺带切回文件夹视图 ✓。
+     ⚠️ 文件夹名不要写死 ✗（测试环境的 STORE.memoFolders 不一定有哪几个），
+        直接新建一个空文件夹来当靶子 ✓ 最确定。 */
+  page.once('dialog', (d) => d.accept('空文件夹'));
+  await page.locator('#lw-nt-addfol').click();
+  await page.waitForTimeout(900);
+  const emptyFol = '空文件夹';
+  if (await folderCount(emptyFol) !== 0) throw new Error('新建的空文件夹计数应为 0，实际 ' + (await folderCount(emptyFol)));
+  /* 新建后应当自动跳到这个新文件夹（也是文件夹视图） */
+  if ((await page.locator('.lw-nt-list .t1').innerText()).trim() !== emptyFol) throw new Error('新建文件夹后没有跳过去');
+  /* 切到「▦ 全部列表」→ 跨文件夹看到全部 */
+  await page.locator('[data-mview="all"]').click();
+  await page.waitForTimeout(700);
+  const allTitle = await page.locator('.lw-nt-list .t1').innerText();
+  if (!/全部列表/.test(allTitle)) throw new Error('切到全部列表后标题不对：' + allTitle);
+  const allRows = await page.locator('.lw-nt-row').count();
+  if (allRows !== 1) throw new Error('全部列表应显示跨文件夹的全部备忘录（此处应为 1 条），实际 ' + allRows + ' 条');
+  /* 全部列表视图下每行要显示所属文件夹，否则和文件夹视图看不出区别 */
+  if (!/Study note/.test(await page.locator('.lw-nt-row').first().innerText())) {
+    throw new Error('全部列表视图下行里没显示所属文件夹：' + (await page.locator('.lw-nt-row').first().innerText()).replace(/\n/g, ' | '));
+  }
+  /* ★ 就在这个「全部列表」模式下点空文件夹 —— 这正是用户踩的路径：
+     必须切回文件夹视图 + 列表变空，而不是继续显示全部 ✗ */
+  await page.locator('[data-mfolder="' + emptyFol + '"]').click();
+  await page.waitForTimeout(900);
+  const folTitle = (await page.locator('.lw-nt-list .t1').innerText()).trim();
+  if (folTitle !== emptyFol) throw new Error('点文件夹后标题应变成该文件夹名，实际：' + JSON.stringify(folTitle));
+  const folRows = await page.locator('.lw-nt-row').count();
+  if (folRows !== 0) throw new Error('点空文件夹后列表应为空（该文件夹 0 条），实际 ' + folRows + ' 条 —— 说明点文件夹没有真的过滤');
+  if (await page.locator('.lw-nt-empty').count() !== 1) throw new Error('空文件夹没有显示空状态');
+  if (!/on/.test(await page.locator('[data-mview="folder"]').getAttribute('class') || '')) {
+    throw new Error('点文件夹后没有切回「文件夹视图」（▤ 按钮未选中）');
+  }
+  /* 点「iCloud 全部」→ 又能看到全部（1 条） */
+  await page.locator('[data-mfolder=""]').click();
+  await page.waitForTimeout(700);
+  if (await page.locator('.lw-nt-row').count() !== 1) throw new Error('点「iCloud 全部」没有显示全部备忘录');
+  /* 回到拖拽后的文件夹，确认那条还在（点文件夹不该动数据） */
+  await page.locator('[data-mfolder="Study note"]').click();
+  await page.waitForTimeout(700);
+  if (await page.locator('.lw-nt-row').count() !== 1) throw new Error('回到「Study note」看不到那条备忘录');
   /* ★ 三栏之间可以左右拖拽调宽（双击竖条恢复默认） */
   const sideWidth = () => page.evaluate(() => Math.round(document.querySelector('.lw-nt-side').getBoundingClientRect().width));
   const sideBefore = await sideWidth();
