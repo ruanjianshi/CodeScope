@@ -616,7 +616,14 @@
      绝对定位放在左侧留白里：长行折行时数字不会跟着重复 ✓、折行文本也对齐在数字右边 ✓。
      ⚠️ 这段必须放在上面那些 .r-* 规则**之后**：它们各自带 padding-left（标题 10px、
         列表 6px、代码块 11px…），同优先级下写在后面才盖得住 —— 否则行号会被压在文字底下看不见 ✗
-        （实测踩过：标题 / 列表 / 引用行的行号直接消失了）。 */
+        （实测踩过：标题 / 列表 / 引用行的行号直接消失了）。
+
+     ⚠️ **垂直对齐靠 --ln-lh 这个变量**（由 ceAlignLineNumbers() 在渲染后量出来写上去）：
+        行号不能简单用 line-height:inherit ✗ —— 标题/代码块那些行的行高是**无单位**的
+        （比如 1.5），无单位值会按**伪元素自己的 font-size（10px）**重算 ✗ →
+        行号的行盒只有 15px、正文的行盒 27px，基线就对不上（标题行号明显偏高 ✗，实测踩过）。
+        拿「该行的实际行高」在 CSS 里做不到，所以量出来塞进变量、让行号用它撑出等高的盒子，
+        再用 flex 居中 ✓ —— 这样不同语法（标题/代码/引用/列表）都能对齐 ✓。 */
   .lw-ce { counter-reset: ln; }
   .lw-ce > .ln,
   .lw-ce > .ln.r-h1, .lw-ce > .ln.r-h2, .lw-ce > .ln.r-h3,
@@ -625,12 +632,15 @@
   }
   .lw-ce > .ln::before {
     counter-increment: ln; content: counter(ln);
-    position:absolute; left:0; top:0; width:24px; text-align:right;
-    color:${T.faint}; font-family:${MONO}; font-size:10px; line-height:inherit;
+    position:absolute; left:0; top:0; width:24px; height:var(--ln-lh, 23.75px);
+    display:flex; align-items:center; justify-content:flex-end;
+    color:${T.faint}; font-family:${MONO}; font-size:10px; line-height:1;
     user-select:none; -webkit-user-select:none; pointer-events:none;
   }
-  /* 代码块 / 引用自带 padding-top，行号跟着往下挪一点，别贴到框顶 */
-  .lw-ce > .ln.r-code::before, .lw-ce > .ln.r-quote::before { top:6px; }
+  /* 代码块 / 引用自带 padding-top，行号跟着往下挪同样的距离，别贴到框顶
+     （7px / 6px 要和上面 .r-code / .r-quote 的 padding-top 一致，否则会差 1px ✗）*/
+  .lw-ce > .ln.r-code::before { top:7px; }
+  .lw-ce > .ln.r-quote::before { top:6px; }
   /* 备忘录也走同一套「逐行实时渲染」（和日记一致 ✓，不再是左右分栏 ✗）。
      正文空的时候给一句占位提示 —— 只有「唯一一行且是空行」时才显示 ✓。 */
   .lw-memo-ce { padding:2px 18px 20px; }
@@ -1587,6 +1597,7 @@
       memoCeIdx = idx;
       ce.innerHTML = ceHtml(lines.join('\n'), idx, !!STORE.memoSource);
       STORE.memoCurLine = idx;
+      ceAlignLineNumbers(ce);            /* 行号垂直对齐（各语法行高不同）✓ */
       if (!keepFocus) return;
       const all = Array.from(ce.querySelectorAll(':scope > .ln'));
       ceSetCaret(all[idx] || all[all.length - 1], caretOffset);
@@ -2037,6 +2048,7 @@
         ceIdx = idx;
         ce.innerHTML = ceHtml(lines.join('\n'), idx);
         STORE.journalCurLine = idx;
+        ceAlignLineNumbers(ce);          /* 行号垂直对齐（各语法行高不同）✓ */
         if (keepFocus) ceSetCaret(ce.querySelectorAll(':scope > .ln')[idx], caretOffset);
       };
       const renderCe = (keepFocus) => applyCeJ(readAll(), ceIdx, keepFocus);
@@ -2622,6 +2634,21 @@
       probe.setEnd(range.startContainer, range.startOffset);
       return probe.toString().length;
     } catch (_) { return null; }
+  }
+
+  /* 把每行的**实际行高**写成 CSS 变量 --ln-lh，供行号垂直对齐用 ✓。
+     ⚠️ 行号不能靠 CSS 的 line-height:inherit 对齐 —— 标题 / 代码块那些行的行高是**无单位**值
+        （如 1.5），无单位值会按伪元素**自己的** font-size（10px）重算 ✗ →
+        行号行盒 15px、正文行盒 27px，基线对不上（标题行号明显偏高 ✗，实测踩过）。
+        「该行的实际行高」在 CSS 里拿不到，只能渲染后量：getComputedStyle 返回的是**用后值（px）** ✓。
+     每次重建正文后都要调一次（applyCe / applyCeJ 里已经接好了 ✓）。 */
+  function ceAlignLineNumbers(ce) {
+    if (!ce) return;
+    for (const el of ce.querySelectorAll(':scope > .ln')) {
+      const lh = getComputedStyle(el).lineHeight;
+      if (lh && lh !== 'normal') el.style.setProperty('--ln-lh', lh);
+      else el.style.removeProperty('--ln-lh');
+    }
   }
 
   /* ── 行首退格 / 行尾 Delete：**必须自己拦**，不能交给浏览器 ──────────────
