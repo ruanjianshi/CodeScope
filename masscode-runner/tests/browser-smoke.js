@@ -547,6 +547,18 @@ print(r.run())
   await page.locator('#lw-memo-redo').click();
   await page.waitForTimeout(800);
   if(!(await memoState()).编辑区.includes('同步探针'))throw new Error('点重做后内容没回来');
+  /* 导出为图片：必须真的产出一张像样的 PNG（这条路径踩过 foreignObject 污染画布的坑） */
+  const imgDownload=page.waitForEvent('download',{timeout:30000});
+  await page.locator('#lw-memo-image').click();
+  const imgFile=await imgDownload;
+  if(!/\.png$/i.test(imgFile.suggestedFilename()))throw new Error('导出图片的文件名不是 PNG：'+imgFile.suggestedFilename());
+  const imgPath=await imgFile.path();
+  if(!imgPath)throw new Error('导出图片没有落盘');
+  const imgBuf=fs.readFileSync(imgPath);
+  if(imgBuf.slice(1,4).toString('latin1')!=='PNG')throw new Error('导出的不是合法 PNG 文件');
+  const imgW=imgBuf.readUInt32BE(16),imgH=imgBuf.readUInt32BE(20);
+  if(imgBuf.length<3000)throw new Error('导出的 PNG 太小，疑似空白：'+imgBuf.length+' 字节');
+  if(imgW<400||imgH<150)throw new Error('导出的 PNG 尺寸异常：'+imgW+'×'+imgH);
   /* 删除 → ⌘Z 撤销回来 */
   const beforeDel=(await memoState()).行数;
   await page.locator('#lw-memo-del').click();
