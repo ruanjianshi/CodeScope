@@ -583,6 +583,25 @@ print(r.run())
   await page.keyboard.press(process.platform==='darwin'?'Meta+z':'Control+z');
   await page.waitForTimeout(1000);
   if((await memoState()).行数!==beforeDel)throw new Error('⌘Z 没能把删除撤销回来');
+  /* 工作台开着时打开环境检测 —— 右侧抽屉必须浮在工作台之上。
+     （三个抽屉的入口都是**始终可见的顶栏按钮**，面板开着时顶栏还在；
+       抽屉 z-index 若低于工作台的全屏浮层，用户点了按钮什么都看不见 ✗ —— 用户反馈过。） */
+  await page.locator('#btn-env').click();
+  await page.locator('#env-panel.open').waitFor({state:'visible',timeout:10000});
+  await page.waitForTimeout(700);
+  const drawerAbove=await page.evaluate(()=>{
+    const env=document.getElementById('env-panel');
+    const r=env.getBoundingClientRect();
+    const hit=document.elementFromPoint(r.left+r.width/2,r.top+80);
+    const close=document.getElementById('btn-env-close');
+    const cr=close.getBoundingClientRect();
+    const chit=document.elementFromPoint(cr.left+cr.width/2,cr.top+cr.height/2);
+    return {面板内:!!(hit&&env.contains(hit)),命中:hit?(hit.id||hit.className||hit.tagName):null,关闭可点:!!(chit&&chit.id==='btn-env-close')};
+  });
+  if(!drawerAbove.面板内)throw new Error('个人管理面板把环境检测挡住了（面板中心命中 '+drawerAbove.命中+'）');
+  if(!drawerAbove.关闭可点)throw new Error('环境检测的关闭按钮被个人管理面板挡住，点不到');
+  await page.locator('#btn-env-close').click();
+  await page.waitForTimeout(500);
   /* 收尾：把测试备忘录移走。**趁工作台还开着**验证命令面板在最上层 ——
      工作台是全屏浮层（.lw-inpanel 的 z-index 是 8800），命令面板必须高过它，
      否则按 ⌘⇧P 之后屏幕上什么都看不见、连关闭按钮都点不到（实测踩过）。 */
