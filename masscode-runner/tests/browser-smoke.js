@@ -587,7 +587,8 @@ print(r.run())
   await page.locator('#lw-memo-title').fill('浏览器回归 · 备忘录');
   /* 正文是 contenteditable → 用键盘打字，走真实输入路径 ✓ */
   await page.locator('#lw-memo-ce > .ln').first().click();
-  await page.keyboard.type('第一行');
+  /* 首行用标题语法：行高和普通行不同（27px vs 23.75px），正好用来验行号对齐 ✓ */
+  await page.keyboard.type('# 标题行');
   await page.keyboard.press('Enter');
   await page.keyboard.type('同步探针');
   await page.waitForTimeout(800);
@@ -635,6 +636,26 @@ print(r.run())
   /* 行号：CSS 计数器（伪元素，不进 DOM → 不影响读回源码）*/
   const lineNums=await page.evaluate(()=>[...document.querySelectorAll('#lw-memo-ce > .ln')].map((e)=>getComputedStyle(e,'::before').content));
   if(!lineNums.length||lineNums.some((c)=>!/counter|"\d+"/.test(String(c))))throw new Error('备忘录正文没有渲染出行号：'+JSON.stringify(lineNums));
+  /* ★ 行号要和所在行的**首行文字**垂直对齐 —— 不同 markdown 语法行高不同
+     （标题 27px / 代码 21.85px / 普通 23.75px）。以前用 line-height:inherit ✗，
+     无单位行高会按伪元素**自己的** font-size（10px）重算 → 行号行盒 15px、
+     正文行盒 27px，标题行的行号明显偏高 ✗。现在由 ceAlignLineNumbers() 量出来写进 --ln-lh ✓。 */
+  /* 先把光标挪到最后一行 —— 否则标题行会以「当前行=源码」的形态出现，量不到它的渲染样式 ✗ */
+  await page.locator('#lw-memo-ce > .ln').last().click();
+  await page.waitForTimeout(500);
+  const lnOffsets=await page.evaluate(()=>{
+    const out=[];
+    for(const el of document.querySelectorAll('#lw-memo-ce > .ln')){
+      const cs=getComputedStyle(el),ps=getComputedStyle(el,'::before');
+      const padTop=parseFloat(cs.paddingTop)||0,lineH=parseFloat(cs.lineHeight)||0;
+      const top=parseFloat(ps.top)||0,h=parseFloat(ps.height)||0;
+      out.push({cls:el.className,off:Math.abs((top+h/2)-(padTop+lineH/2))});
+    }
+    return out;
+  });
+  const worstLn=lnOffsets.reduce((m,r)=>Math.max(m,r.off),0);
+  if(lnOffsets.length<2||worstLn>1)throw new Error('行号和正文没对齐（最大偏差 '+worstLn.toFixed(1)+'px）：'+JSON.stringify(lnOffsets.map((r)=>[r.cls,Math.round(r.off*10)/10])));
+  if(!lnOffsets.some((r)=>/r-h\d/.test(r.cls)))throw new Error('测试正文里应当有标题行，才能验出「不同语法行高不同」的对齐问题');
   /* ★ 行首退格必须「并入上一行」，**绝不能**把内容删光 ——
      contenteditable 里行首退格会让浏览器去合并上一个 contenteditable=false 的渲染行，
      实测按一次就把 4 行变 0 行、空内容还被存进服务端 ✗（数据丢失）。 */
