@@ -632,6 +632,33 @@ print(r.run())
   if(srcMode.可编辑行数!==srcMode.正文.split('\n').length)throw new Error('源码模式下所有行都应可编辑：'+JSON.stringify(srcMode));
   await page.locator('#lw-nt-live').click();
   await page.waitForTimeout(700);
+  /* 行号：CSS 计数器（伪元素，不进 DOM → 不影响读回源码）*/
+  const lineNums=await page.evaluate(()=>[...document.querySelectorAll('#lw-memo-ce > .ln')].map((e)=>getComputedStyle(e,'::before').content));
+  if(!lineNums.length||lineNums.some((c)=>!/counter|"\d+"/.test(String(c))))throw new Error('备忘录正文没有渲染出行号：'+JSON.stringify(lineNums));
+  /* ★ 行首退格必须「并入上一行」，**绝不能**把内容删光 ——
+     contenteditable 里行首退格会让浏览器去合并上一个 contenteditable=false 的渲染行，
+     实测按一次就把 4 行变 0 行、空内容还被存进服务端 ✗（数据丢失）。 */
+  const beforeBs=await page.evaluate(()=>[...document.querySelectorAll('#lw-memo-ce > .ln')].length);
+  if(beforeBs<2)throw new Error('退格回归需要至少两行正文，实际 '+beforeBs);
+  const textBeforeBs=(await memoState()).正文;
+  /* ⚠️ 光标只能落在「当前行」上；先点最后一行把它变成当前行 ——
+     如果当前行本来就是第一行，行首退格**本来就该什么都不做** ✓（别把这条测成 bug ✗）。 */
+  await page.locator('#lw-memo-ce > .ln').last().click();
+  await page.waitForTimeout(500);
+  await page.evaluate(()=>{
+    const ce=document.getElementById('lw-memo-ce');
+    const el=[...ce.querySelectorAll(':scope > .ln')].find((e)=>e.classList.contains('cur'));
+    el.focus();
+    const r=document.createRange(); r.selectNodeContents(el); r.collapse(true);
+    const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  });
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(800);
+  const afterBs=await page.evaluate(()=>[...document.querySelectorAll('#lw-memo-ce > .ln')].length);
+  if(afterBs===0)throw new Error('行首退格把正文整个清空了（严重数据丢失）');
+  if(afterBs!==beforeBs-1)throw new Error('行首退格应当并入上一行（行数 -1），实际 '+beforeBs+' → '+afterBs);
+  const textAfterBs=(await memoState()).正文;
+  if(textAfterBs.replace(/\s/g,'').length < textBeforeBs.replace(/\s/g,'').length*0.5)throw new Error('行首退格丢了大量内容：'+JSON.stringify(textBeforeBs)+' → '+JSON.stringify(textAfterBs));
   /* 导出为图片：点「图片」**先出分栏预览**，确认后再下载 ✓（不再一点就直接落盘）。
      这条路径踩过 foreignObject 污染画布的坑，所以预览图和下载的 PNG 都要验。 */
   let downloads=0;
