@@ -13944,26 +13944,75 @@ function bpSourceOfNode(n) {
   const lines = String(CURRENT.fragments[CINDEX].code || '').replace(/\r\n/g, '\n').split('\n');
   const from = Math.max(0, (Number(n.line) || 1) - 1);
   if (from >= lines.length) return label;
-  /* 一条语句可能跨行：从起始行往后收，直到出现 `;`（且括号闭合） */
+  /* 一条语句可能跨行：从起始行往后收，直到语句结束。
+     ⚠️ 结束条件有两个，缺一不可：
+       ① 以 `;` 结束且整体配平 —— 普通语句。
+       ② **控制流语句头以 `{` 结束**（`for (...) {` / `if (...) {` / `} else {`）。
+          这一条必须单独判：`{` 会把 depth 抬到 1，只等 depth<=0 的话，
+          `for (...) {` 会一路把**循环体里的行**全吞进来 → 抽出的文本整段错位 →
+          正则匹配不上 → c_for 的三个字段保持**积木默认值**，
+          生成 `for (i = 0; i < 10; i++)`（10 就是积木默认文案，实测踩过）。
+          用「行首是不是控制关键字」来区分它和 `int arr[] = {`（后者要继续收到 `};`）。 */
   let text = '', depth = 0;
+  const CTRL_HEAD = /^\s*\}?\s*(else\b|if\s*\(|for\s*\(|while\s*\(|switch\s*\(|do\b)/;
   for (let i = from; i < Math.min(lines.length, from + 12); i++) {
     const l = lines[i];
     text += (text ? '\n' : '') + l;
     for (const ch of l) { if (ch === '(' || ch === '{' || ch === '[') depth++; else if (ch === ')' || ch === '}' || ch === ']') depth--; }
     if (depth <= 0 && /;\s*(\/\/.*)?$/.test(l)) break;
+    if (CTRL_HEAD.test(l) && /\{\s*(\/\/.*)?$/.test(l)) break;
   }
   const out = text.trim();
   return out || label;
 }
+/* 范围 for（`for (auto &x : v)` / `for (int v : data)`）？
+   c_for 积木是**三段式**（初值/条件/步进），表达不了范围 for ——
+   硬塞会生成 `for (auto &x : v; i < 10; i++)` 这种不能编译的废码
+   （10 是积木默认文案）。必须整块按「原样代码」处理。 */
+function bpIsRangeFor(n) {
+  if (!n || n.kind !== 'loop' || n.kw !== 'for') return false;
+  if (n.range) return true;
+  return /\bfor\s*\([^;)]*:/.test(String(n.label || ''));
+}
+/* 取节点**覆盖到的整段源码**（含体），压成一行 —— 给「原样代码」积木用。
+   和 bpSourceOfNode 的区别：那个只要「语句头」（到 `;` 或 `{` 为止），
+   这个要连体一起取（do-while 要用它整块保住）。 */
+function bpRawSpan(n) {
+  const label = String(n.label || '');
+  if (!CURRENT || !CURRENT.fragments[CINDEX]) return label;
+  const sl = String(CURRENT.fragments[CINDEX].code || '').replace(/\r\n/g, '\n').split('\n');
+  const a = Math.max(0, (Number(n.line) || 1) - 1);
+  const z = Math.min(sl.length, Math.max(a + 1, Number(n.endLine) || a + 1));
+  const raw = sl.slice(a, z).join(' ').replace(/\s+/g, ' ').trim();
+  return raw || label;
+}
 /* 从节点取条件：label 完整就用 label，否则从源码行里抽 */
+/* 取关键字后面那对括号里的内容。
+   ⚠️ 必须用**配对扫描**，不能用正则：正则只能表达固定层数的嵌套，
+   `while (isspace((unsigned char)*str))` 这种两层嵌套就取不到 →
+   退化成「整条 label 当条件」→ 生成 `while (while (isspace(...)))`（实测踩过）。 */
+function bpCondAfter(text, kw) {
+  const at = text.search(new RegExp('\\b' + kw + '\\b'));
+  const open = at < 0 ? -1 : text.indexOf('(', at);
+  if (open < 0) return '';
+  let depth = 0, quote = '';
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = ''; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '(') depth++;
+    else if (ch === ')') { depth--; if (depth === 0) return text.slice(open + 1, i).trim(); }
+  }
+  return text.slice(open + 1).trim();
+}
 function bpConditionOf(n) {
   const label = String(n.label || '');
   const src = (label.indexOf('…') < 0 && label.indexOf('...') < 0) ? label : bpSourceOfNode(n);
   const flat = src.replace(/\s+/g, ' ').trim();
-  const m = /(?:if|while|switch)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/.exec(flat);
-  if (m) return m[1].trim();
-  const f = /for\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/.exec(flat);
-  if (f) return f[1].trim();
+  const kw = (/(?:^|\W)(if|while|switch)\s*\(/.exec(flat) || [])[1];
+  if (kw) { const c = bpCondAfter(flat, kw); if (c) return c; }
+  const fk = (/(?:^|\W)(for)\s*\(/.exec(flat) || [])[1];
+  if (fk) { const c = bpCondAfter(flat, 'for'); if (c) return c; }
   return flat;
 }
 /* ── 按 CFG 建积木（命令式）──
@@ -13984,6 +14033,12 @@ function makeBlockFor(ws, n) {
     const e = mk('c_expr'); e.setFieldValue(bpConditionOf(n), 'EXPR'); e.initSvg(); e.render();
     b.getInput('COND').connection.connect(e.outputConnection);
   } else if (n.kind === 'loop') {
+    if (bpIsRangeFor(n)) {
+      /* 范围 for —— 三段式表达不了，整块用「原样代码」保住（含体和条件）。 */
+      b = mk('c_raw');
+      b.setFieldValue(bpRawSpan(n), 'CODE');
+      return b;
+    }
     if (n.kw === 'for') {
       b = mk('c_for');
       const m = /for\s*\(([\s\S]*)\)\s*\{?\s*$/.exec(flat);
@@ -13993,17 +14048,39 @@ function makeBlockFor(ws, n) {
         if (parts[1]) b.setFieldValue(parts[1].trim(), 'COND');
         if (parts[2]) b.setFieldValue(parts[2].trim(), 'STEP');
       }
+    } else if (n.kw === 'do') {
+      /* ⚠️ 积木模型里**没有 do-while**。以前落到下面的 c_while 分支，
+         会生成 `while (do) { ... }` 外加一个空 while —— 控制流直接被改坏
+         （实测：真实工程文档里 do-while 全部生成错代码）。
+         这里改用已有的「原样代码」积木整块保住原文（含体和 while 条件），
+         保证往返一致、绝不改坏代码。 */
+      b = mk('c_raw');
+      b.setFieldValue(bpRawSpan(n), 'CODE');
+      return b;
     } else {
       b = mk('c_while');
       const e = mk('c_expr'); e.setFieldValue(bpConditionOf(n), 'EXPR'); e.initSvg(); e.render();
       b.getInput('COND').connection.connect(e.outputConnection);
     }
   } else if (n.kind === 'return') {
+    /* ⚠️ CFG 把 break / continue / goto / throw 也归成 'return'
+       （它们都是「终止这条路径」的语句）。只有**真正的 return** 才能建成 return 积木 ——
+       否则 `goto fail;` 会被生成成 `return goto fail;`（实测踩过）。其余原样保留。 */
+    if (!/^return\b/.test(flat)) {
+      b = mk('c_raw');
+      b.setFieldValue(flat, 'CODE');
+      return b;
+    }
     b = mk('c_return');
-    const e = mk('c_expr');
-    e.setFieldValue(flat.replace(/^return\s*/, '').replace(/;\s*$/, '') || '0', 'EXPR');
-    e.initSvg(); e.render();
-    b.getInput('VALUE').connection.connect(e.outputConnection);
+    /* ⚠️ `return;`（无返回值）不要硬塞一个 0 进 VALUE 槽 ——
+       否则 void 函数里的 `return;` 会被生成成 `return 0;`（实测踩过）。 */
+    const retExpr = flat.replace(/^return\s*/, '').replace(/;\s*$/, '').trim();
+    if (retExpr) {
+      const e = mk('c_expr');
+      e.setFieldValue(retExpr, 'EXPR');
+      e.initSvg(); e.render();
+      b.getInput('VALUE').connection.connect(e.outputConnection);
+    }
   } else if (n.kind === 'call') {
     /* ⚠️ CFG 会把「声明并初始化」也判成 call（因为右边有函数调用），
        例如 `led_t *red = led_create(&red_config, NULL);`。
@@ -14018,7 +14095,16 @@ function makeBlockFor(ws, n) {
       return b;
     }
     const m = /^([A-Za-z_]\w*)\s*\(([\s\S]*)\)\s*;?\s*$/.exec(flat);
-    const callee = m ? m[1] : flat.replace(/;\s*$/, '');
+    /* ⚠️ 不是「标识符(参数)」形状的调用 —— `(void)f(x);`（强制转换前缀）、
+       `obj.m(x);`（点号）、`a[i](x);`（下标）—— 不要硬塞进 c_call_any：
+       NAME 会被填成整串，生成时再补一对 `()`，变成 `(void)f(x)()` 这种废码
+       （实测：真实工程文档里这类语句全部生成错）。改用「原样代码」保住原文。 */
+    if (!m) {
+      b = mk('c_raw');
+      b.setFieldValue(flat, 'CODE');
+      return b;
+    }
+    const callee = m[1];
     /* ⚠️ 文档里有这个函数才用「下拉版」，否则用「自由输入版」。
        下拉版只能 setFieldValue 到选项里已有的值，填不进去就**静默丢名字** ——
        生成的代码会变成 `("参数");`，函数名没了（实测被自检抓到）。 */
@@ -14027,7 +14113,7 @@ function makeBlockFor(ws, n) {
     b.setFieldValue(callee, 'NAME');
     /* 这里**不再设 tooltip** —— 积木定义里的 init 已经挂了动态 tooltip
        （悬停时按当前选中的函数名查签名）。在这里设固定字符串会把它覆盖掉。 */
-    if (m && m[2]) {
+    if (m[2]) {
       const t = mk('c_text'); t.setFieldValue(m[2], 'TEXT'); t.initSvg(); t.render();
       b.getInput('ARG').connection.connect(t.outputConnection);
     }
@@ -14055,6 +14141,19 @@ function buildBlocksFromGraph(ws, graph) {
       if (ind < baseIndent) break;
       const b = makeBlockFor(ws, n);
       if (!b) { i++; continue; }
+      /* do-while / 范围 for 特殊：整块已由「原样代码」积木承载（含体），
+         紧随的体（以及 do-while 的 while 测试节点）都别再建积木，直接跳过 ——
+         否则会多出一个空 while，或把体重复输出一遍。 */
+      if ((n.kind === 'loop' && n.kw === 'do') || bpIsRangeFor(n)) {
+        if (prev && prev.nextConnection && b.previousConnection) prev.nextConnection.connect(b.previousConnection);
+        if (!first) first = b;
+        prev = b;
+        let j = i + 1;
+        while (j < list.length && (Number(list[j].indent) || 0) > ind) j++;                 /* 跳过体 */
+        if (n.kw === 'do' && j < list.length && list[j].kind === 'loop' && list[j].kw === 'while') j++;   /* 跳过 while 测试 */
+        i = j;
+        continue;
+      }
       if (n.kind === 'branch' || n.kind === 'loop') {
         /* 紧随其后、缩进更深的一段就是它的体 */
         let j = i + 1;
@@ -14118,7 +14217,13 @@ function emitOne(b, indent) {
       const argCode = arg ? emitChain(arg, 0).trim() : '';
       return pad + f('NAME') + '(' + argCode + ');\n';
     }
-    case 'c_return': return pad + 'return ' + bpValue(b, 'VALUE', '0') + ';\n';
+    /* ⚠️ 这里不能走 bpValue()：它的兜底是 `(fallback || '0')`，
+       传空串也会落到 '0'，于是 `return;` 又变回 `return 0;`。直接取值。 */
+    case 'c_return': {
+      const rt = b.getInputTargetBlock('VALUE');
+      const rv = rt ? emitChain(rt, 0).trim() : '';
+      return pad + (rv ? 'return ' + rv + ';\n' : 'return;\n');
+    }
     case 'c_raw': return pad + f('CODE') + '\n';
     case 'c_fn': return pad + f('NAME') + '(void) {\n' + bpBody(b, 'BODY', indent) + pad + '}\n';
     case 'c_text': return f('TEXT');
@@ -14224,8 +14329,11 @@ function blockJsonToCode() {
   if (!BP_WORKSPACE) return '';
   const tops = BP_WORKSPACE.getTopBlocks(true);
   const body = tops.map((t) => emitChain(t, 0)).join('\n').trim();
-  if (!body) return '';
   const sig = bpFunctionSignature();
+  /* ⚠️ 空函数（体里一块积木都没有）不要返回空串 ——
+     那会让「生成代码」把整个函数**抹掉**（实测：`void selectSort(){}` 生成后啥也不剩）。
+     有签名就至少回一个空壳，保证函数还在。 */
+  if (!body) return sig ? sig + '\n{\n}' : '';
   if (!sig) return body;
   /* 有签名就生成**完整函数**（方便整段替换），体缩进两格 */
   const indented = body.split('\n').map((l) => (l.trim() ? '  ' + l : l)).join('\n');
