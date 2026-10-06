@@ -867,6 +867,12 @@
      只有真的挂上了日记编辑框（`if (ce)`）才会变成真正的实现 ✓ → 不在日记页调用它是安全的 no-op ✓。 */
   let JOURNAL_FLUSH = () => { };
   let FLUSH_HOOKS_ON = false;
+  /* ★ 编辑器**当前正在显示哪一条**备忘录的 id ✓（由 viewMemo() 每次渲染时写下）
+     为什么需要：`curMemo()` 在 `memoSel` 为空时会回落到 `STORE.memos[0]` ✗ ——
+     如果编辑器 DOM 里还停在上一条（筛选后没重建编辑器），一打字就会把
+     **界面上的内容写进另一条备忘录** ✗✗（真数据损坏，不是显示问题）。
+     写盘前比对一下这个 id，不一致就拒绝写 ✓（见 writeMemo / refreshMemoDerived）。 */
+  let MEMO_EDITOR_ID = '';
   /* ── 邮箱收信界面状态（放模块级 ✓ 才能在 render() 之间存活）────────────
      ⚠️ 不能存在函数局部 ✗ —— render() 会重建整个 DOM，
         存局部的话每渲染一次就丢一次（列表/正文全部重新请求，界面一直闪 ✗）。 */
@@ -1331,8 +1337,13 @@
     bind();
   }
 
-  /* ⚠️ 只重建「左栏 + 中栏」—— 筛选类操作（点分组/文件夹/标签/搜索）用它 ✓
-     以前一律走 render() ✗，会把**编辑器也重建一遍** ✗ → 每次点击 ~45ms ✗、光标丢失 ✗。 */
+  /* ⚠️ 只重建「左栏 + 中栏」，**故意不碰编辑器** ✓
+     唯一该用它的地方是 `refreshMemoDerived()` —— 打字时刷列表（200ms 防抖）✓，
+     那时「当前是哪一条」没变，重建编辑器只会把光标/选区弄丢 ✗。
+     ★ 反过来：**凡是会改变「当前是哪一条」的操作**（点文件夹/标签/智能项/切视图/
+       搜索/新建文件夹/右键改归属/删除）都**必须走 `render()`** ✗ ——
+       否则右栏会停留在上一篇上（用户看到「点了没反应」），
+       而且 `memoSel` 被清空后一打字就会写进 `STORE.memos[0]`（**另一条**）✗✗。 */
   function renderMemoList() {
     if (TAB !== 'memo' || !document.getElementById('lifework-view')) { render(); return; }
     const host = document.getElementById('lifework-view');
@@ -1371,6 +1382,8 @@
     if (TAB !== 'memo') return;
     const cur = ((STORE && STORE.memos) || []).find((x) => x.id === (STORE && STORE.memoSel));
     if (!cur) return;
+    /* ★ 和 writeMemo 同一道守卫：编辑器显示的不是这一条就绝不写 ✓（详见 MEMO_EDITOR_ID 注释）*/
+    if (MEMO_EDITOR_ID && MEMO_EDITOR_ID !== cur.id) return;
     /* ⚠️ 必须**先**把编辑器内容写回 cur.text 再刷列表 ——
        cur.text 平时要等 600ms 的 flushMemo 才更新，而列表刷新是 200ms，
        不先写回的话列表读到的是旧数据 ✗（实测：打完字列表摘要少一行）。 */
@@ -1435,7 +1448,7 @@
       <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>`;
   }
 
-  /* 左栏 + 中栏 的交互（筛选类操作用 renderMemoList() 局部刷新 ✓）*/
+  /* 左栏 + 中栏 的交互（筛选类操作用 render() 局部刷新 ✓）*/
   function bindMemoSide() {
     const host = document.getElementById("lifework-view");
     if (!host) return;
@@ -1474,7 +1487,7 @@
       STORE.memoFolders = STORE.memoFolders || [];
       if (!STORE.memoFolders.includes(m2.folder)) STORE.memoFolders.push(m2.folder);
       saveStore();
-      renderMemoList();
+      render();                       /* ★ 整屏重建：移出当前文件夹时编辑器要跟着换 ✓ */
       const s2 = document.getElementById('lw-sub');
       if (s2) s2.textContent = '已移到「' + m2.folder + '」';
     };
@@ -1539,6 +1552,12 @@
       };
     });
     /* ── 点左栏的文件夹 / 智能项 / 标签 ──
+       ★★ 这里全部用 `render()` 而不是 `renderMemoList()` ✓ ——
+       为什么：`renderMemoList()` 只换左栏 + 中栏、**故意不碰编辑器** ✗（那是给打字时刷列表用的 ✓）。
+       而这些动作会**改变「当前是哪一条备忘录」** ✗ → 编辑器必须跟着重建 ✓，
+       否则右栏会停留在上一篇上：用户看到的是「点了文件夹没反应」✗；
+       更糟的是 `memoSel` 已被清空 → 一打字就会写进 `STORE.memos[0]`（**另一条**）✗✗。
+       （写盘那道 MEMO_EDITOR_ID 守卫是兜底，这里的 render() 才是正解 ✓）
        ★ 点文件夹**必须同时切回「文件夹视图」** ✓ ——
          以前只改 `STORE.memoFolder` ✗，而「▦ 全部列表」模式下压根不按文件夹过滤 ✗
          （见 viewMemo 里 `view === "all" || ...`），
@@ -1546,17 +1565,18 @@
          看起来就像「点文件夹没反应」✗（用户截图报的就是这个）。
          语义上「点某个文件夹」= 「我要看这个文件夹」✓，所以顺带切视图是符合直觉的 ✓；
          「▦ 全部列表」仍是「跨文件夹总览」，点它就进、点任意文件夹就出 ✓。 */
-    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
+    qa("[data-mfolder]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoFolder = el.dataset.mfolder || ""; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); render(); }; });
     qa("[data-msmart]").forEach((el) => {
       el.onclick = () => {
         flushMemo();
         STORE.memoSmart = (STORE.memoSmart === el.dataset.msmart) ? "" : el.dataset.msmart;
-        STORE.memoSel = ""; saveStore(); renderMemoList();
+        STORE.memoSel = ""; saveStore(); render();
       };
     });
-    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); renderMemoList(); }; });
+    qa("[data-mtag]").forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoTag = el.dataset.mtag || ""; STORE.memoSmart = ""; STORE.memoSel = ""; saveStore(); render(); }; });
     const mQ = q("#lw-memo-q");
-    if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; renderMemoList(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
+    /* 搜索也要整屏重建（筛掉当前那条时编辑器得换）✓；重建后把焦点和光标还给输入框 ✓ */
+    if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
     /* 「◫ 源码」开关：关（默认）= 逐行实时渲染；开 = 整篇显示源码（方便整段改写 / 复制）。
        —— 原来这里是「左编辑 / 右预览」分栏的开关，分栏已按需求去掉 ✓ */
     const srcBtn = q('#lw-nt-live');
@@ -1567,9 +1587,9 @@
       const s2 = document.getElementById('lw-sub');
       if (s2) s2.textContent = STORE.memoSource ? '已切到源码模式 ✓' : '已切回实时渲染 ✓';
     };
-    /* 视图切换（▤ 文件夹 / ▦ 全部列表）*/
+    /* 视图切换（▤ 文件夹 / ▦ 全部列表）—— 会改变列表范围 → 整屏重建 ✓ */
     const mView = qa("[data-mview]");
-    mView.forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); renderMemoList(); }; });
+    mView.forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); render(); }; });
     const addFol = q("#lw-nt-addfol");
     if (addFol) addFol.onclick = () => {
       const name = prompt("新建文件夹名称：", "新文件夹");
@@ -1577,7 +1597,7 @@
       const n = name.trim().slice(0, 24);
       STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
       if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
-      STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); renderMemoList();
+      STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); render();
     };
     /* 右键菜单：文件夹 / 标签 / 备忘录行 */
     const closeCtx = () => { const c = document.getElementById("lw-ctx"); if (c) c.remove(); };
@@ -1602,13 +1622,13 @@
             const nn = n.trim().slice(0, 24);
             STORE.memoFolders = (STORE.memoFolders || []).map((x) => (x === name ? nn : x));
             (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = nn; });
-            STORE.memoFolder = nn; saveStore(); renderMemoList();
+            STORE.memoFolder = nn; saveStore(); render();
           } },
         { label: "🗑 删除文件夹", danger: true, run: () => {
             if (!confirm("删除文件夹「" + name + "」？\n里面的备忘录会移到「备忘录」。")) return;
             STORE.memoFolders = (STORE.memoFolders || []).filter((x) => x !== name);
             (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = "备忘录"; });
-            STORE.memoFolder = ""; saveStore(); renderMemoList();
+            STORE.memoFolder = ""; saveStore(); render();
           } },
       ]);
     });
@@ -1620,20 +1640,20 @@
             const nn = n.trim().replace(/^#/, "").slice(0, 24);
             (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), "#" + nn); });
             if (STORE.memoTag === tag) STORE.memoTag = nn;
-            saveStore(); renderMemoList();
+            saveStore(); render();
           } },
         { label: "🗑 删除标签（只从正文移除）", danger: true, run: () => {
             if (!confirm("从所有备忘录里移除 #" + tag + " ？")) return;
             (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("\\s*#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), ""); });
             if (STORE.memoTag === tag) STORE.memoTag = "";
-            saveStore(); renderMemoList();
+            saveStore(); render();
           } },
       ]);
     });
     qa("[data-memo]").forEach((el) => {
       const id = el.dataset.memo;
       el.oncontextmenu = (e) => openCtx(e, [
-        { label: "☆ 置顶 / 取消", run: () => { const m = memoById(id); if (m) { m.pin = !m.pin; saveStore(); renderMemoList(); } } },
+        { label: "☆ 置顶 / 取消", run: () => { const m = memoById(id); if (m) { m.pin = !m.pin; saveStore(); render(); } } },
         { label: "📁 移到文件夹…", run: () => {
             const n = prompt("移到哪个文件夹？（现有：" + (STORE.memoFolders || []).join(" / ") + "）", (STORE.memoFolders || [])[0] || "备忘录");
             if (!n || !n.trim()) return;
@@ -1641,10 +1661,10 @@
             m.folder = n.trim().slice(0, 24);
             STORE.memoFolders = STORE.memoFolders || [];
             if (!STORE.memoFolders.includes(m.folder)) STORE.memoFolders.push(m.folder);
-            saveStore(); renderMemoList();
+            saveStore(); render();
           } },
         "-",
-        { label: "🗑 删除", danger: true, run: () => { const m = memoById(id); if (m) { m.trash = true; STORE.memoSel = ""; saveStore(); renderMemoList(); } } },
+        { label: "🗑 删除", danger: true, run: () => { const m = memoById(id); if (m) { m.trash = true; STORE.memoSel = ""; saveStore(); render(); } } },
       ]);
     });
   }
@@ -1652,7 +1672,7 @@
   function bind() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
-    /* 左栏 + 中栏的交互（提出来，方便 renderMemoList() 局部刷新时复用 ✓）*/
+    /* 左栏 + 中栏的交互（提出来，方便 render() 局部刷新时复用 ✓）*/
     bindMemoSide();
     /* ── 卡片：拖「边」改大小 ✓（右边改宽 / 下边改高 / 右下角一起）──
        给每张卡插三条热区 ✓，拖动时实时改宽高 ✓，松手存进 STORE ✓（下次还记得 ✓）。*/
@@ -1871,8 +1891,18 @@
       applyCe(lines.join('\n'), i, true);
       saveMemoText();
     };
-    /* 把界面上的内容写回 cur.text（不落盘、**不删条目**）*/
-    const writeMemo = () => memoWriteFromEditor(curMemo());
+    /* 把界面上的内容写回 cur.text（不落盘、**不删条目**）
+       ★★ 守卫：编辑器显示的那条（MEMO_EDITOR_ID）必须和要写的那条（curMemo()）**是同一条** ✓
+       为什么必须有：`curMemo()` 在 `memoSel` 为空时会回落到 `STORE.memos[0]` ✗ ——
+       一旦编辑器 DOM 还停在上一条（筛选/切换后没重建编辑器），
+       这一写就会把**界面上的内容灌进另一条备忘录** ✗✗（静默的数据损坏，比丢内容更糟）。
+       宁可这次不写（用户下次操作会重建编辑器并重新同步），也绝不写错条目 ✓。 */
+    const writeMemo = () => {
+      const c = curMemo();
+      if (!c) return null;
+      if (MEMO_EDITOR_ID && MEMO_EDITOR_ID !== c.id) return null;
+      return memoWriteFromEditor(c);
+    };
     /* 只写不删的保存：光标操作 / 换行用它。
        ⚠️ 不能直接用 flushMemo —— 它在内容为空时会把整条删掉 ✗，
           那条规则是给「切走」用的，光标动一下就触发就完了。 */
@@ -2753,6 +2783,8 @@
     shown.sort((a, b) => { if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0); return (b.edit || b.at || 0) - (a.edit || a.at || 0); });
     const sel = (STORE && STORE.memoSel) || (shown[0] && shown[0].id) || "";
     const cur = shown.find((x) => x.id === sel) || shown[0] || null;
+    /* ★ 记下「编辑器现在显示的是哪一条」✓ —— 写盘前要比对（见 MEMO_EDITOR_ID 的注释）*/
+    MEMO_EDITOR_ID = cur ? cur.id : '';
 
     /* 时间分组：今天 / 昨天 / M月 / YYYY 年（照 macOS 备忘录的分组方式）*/
     const D = (ms) => new Date(ms || Date.now());

@@ -836,9 +836,18 @@ print(r.run())
   if (folTitle !== emptyFol) throw new Error('点文件夹后标题应变成该文件夹名，实际：' + JSON.stringify(folTitle));
   const folRows = await page.locator('.lw-nt-row').count();
   if (folRows !== 0) throw new Error('点空文件夹后列表应为空（该文件夹 0 条），实际 ' + folRows + ' 条 —— 说明点文件夹没有真的过滤');
-  if (await page.locator('.lw-nt-empty').count() !== 1) throw new Error('空文件夹没有显示空状态');
+  if (await page.locator('.lw-nt-list .lw-nt-empty').count() !== 1) throw new Error('空文件夹没有显示空状态');
   if (!/on/.test(await page.locator('[data-mview="folder"]').getAttribute('class') || '')) {
     throw new Error('点文件夹后没有切回「文件夹视图」（▤ 按钮未选中）');
+  }
+  /* ★★ 右栏编辑器也必须跟着换 ✗ ——
+     以前筛选类操作用 renderMemoList()（只换左栏+中栏、**故意不碰编辑器**），
+     于是点了空文件夹、列表空了，右栏**还停在上一条备忘录**上 ✗：
+       · 用户看到的是「点了文件夹没反应」
+       · 更糟：memoSel 已被清空 → 此时一打字就会写进 STORE.memos[0]（**另一条**）✗✗
+     所以这里断言编辑器被清掉（`#lw-memo-ce` 不再存在），而不是还显示着别条的内容 ✓。 */
+  if (await page.locator('#lw-memo-ce').count() !== 0) {
+    throw new Error('点空文件夹后右栏编辑器还停在上一条备忘录上（应显示空状态）—— 切筛选时必须整屏重建');
   }
   /* 点「iCloud 全部」→ 又能看到全部（1 条） */
   await page.locator('[data-mfolder=""]').click();
