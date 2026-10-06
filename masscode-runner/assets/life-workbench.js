@@ -1379,14 +1379,19 @@
       const m = memoById(id); if (!m) return;
       const target = String(folder || '').trim() || '备忘录';   /* 拖到「iCloud 全部」= 放回默认文件夹 ✓ */
       if ((m.folder || '备忘录') === target) return;
+      /* ★ 先落盘再快照 ✓ —— 正文自动保存是 600ms 防抖 ✗，
+         不 flush 就 snapMemo() 的话，撤销快照里缺最后敲的那几个字 ✗
+         （拖一下再撤销，字就回不来了）。和日记改分类是同一类问题 ✓。 */
+      flushMemo();
       snapMemo('move');                                        /* 可撤销 ✓ */
-      m.folder = target.slice(0, 24);
+      const m2 = memoById(id); if (!m2) return;                /* flush 可能把空备忘录删掉了 ✓ */
+      m2.folder = target.slice(0, 24);
       STORE.memoFolders = STORE.memoFolders || [];
-      if (!STORE.memoFolders.includes(m.folder)) STORE.memoFolders.push(m.folder);
+      if (!STORE.memoFolders.includes(m2.folder)) STORE.memoFolders.push(m2.folder);
       saveStore();
       renderMemoList();
       const s2 = document.getElementById('lw-sub');
-      if (s2) s2.textContent = '已移到「' + m.folder + '」';
+      if (s2) s2.textContent = '已移到「' + m2.folder + '」';
     };
     let DRAG_MEMO = '';
     qa("[data-memo]").forEach((el) => {
