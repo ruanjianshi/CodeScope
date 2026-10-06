@@ -610,6 +610,27 @@
   .lw-ce a { color:${T.accent}; text-decoration:underline; }
   .lw-ce .tag { color:#ffe9a8; background:rgba(242,227,155,.16); padding:1px 5px; }
   .lw-ce .empty { color:${T.faint}; }
+  /* ── 行号 ──────────────────────────────────────────────────────────────
+     用 CSS 计数器做：**不往 DOM 里加任何元素** ✓，
+     所以 readAll() / textContent 读回源码完全不受影响 ✓（伪元素不进 textContent ✓）。
+     绝对定位放在左侧留白里：长行折行时数字不会跟着重复 ✓、折行文本也对齐在数字右边 ✓。
+     ⚠️ 这段必须放在上面那些 .r-* 规则**之后**：它们各自带 padding-left（标题 10px、
+        列表 6px、代码块 11px…），同优先级下写在后面才盖得住 —— 否则行号会被压在文字底下看不见 ✗
+        （实测踩过：标题 / 列表 / 引用行的行号直接消失了）。 */
+  .lw-ce { counter-reset: ln; }
+  .lw-ce > .ln,
+  .lw-ce > .ln.r-h1, .lw-ce > .ln.r-h2, .lw-ce > .ln.r-h3,
+  .lw-ce > .ln.r-li, .lw-ce > .ln.r-quote, .lw-ce > .ln.r-code, .lw-ce > .ln.r-hr {
+    position:relative; padding-left:34px;
+  }
+  .lw-ce > .ln::before {
+    counter-increment: ln; content: counter(ln);
+    position:absolute; left:0; top:0; width:24px; text-align:right;
+    color:${T.faint}; font-family:${MONO}; font-size:10px; line-height:inherit;
+    user-select:none; -webkit-user-select:none; pointer-events:none;
+  }
+  /* 代码块 / 引用自带 padding-top，行号跟着往下挪一点，别贴到框顶 */
+  .lw-ce > .ln.r-code::before, .lw-ce > .ln.r-quote::before { top:6px; }
   /* 备忘录也走同一套「逐行实时渲染」（和日记一致 ✓，不再是左右分栏 ✗）。
      正文空的时候给一句占位提示 —— 只有「唯一一行且是空行」时才显示 ✓。 */
   .lw-memo-ce { padding:2px 18px 20px; }
@@ -1558,7 +1579,7 @@
     /* 用给定的文本重渲染（并可选把光标放回第 idx 行）。
        ⚠️ 不要用 renderMemoCe 来「先改后渲染」—— 它会先 readCe() 把**旧 DOM** 读回来，
           你刚改的东西会被覆盖掉 ✗。要改内容就用这个直接喂文本。 */
-    const applyCe = (text, idx, keepFocus) => {
+    const applyCe = (text, idx, keepFocus, caretOffset) => {
       const ce = memoCeEl(); if (!ce) return;
       const lines = String(text == null ? '' : text).split('\n');
       if (idx >= lines.length) idx = lines.length - 1;
@@ -1568,13 +1589,7 @@
       STORE.memoCurLine = idx;
       if (!keepFocus) return;
       const all = Array.from(ce.querySelectorAll(':scope > .ln'));
-      const el = all[idx] || all[all.length - 1];
-      if (!el) return;
-      el.focus();
-      try {
-        const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
-        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      } catch (_) {}
+      ceSetCaret(all[idx] || all[all.length - 1], caretOffset);
     };
     const renderMemoCe = (keepFocus) => applyCe(readCe() == null ? '' : readCe(), memoCeIdx, keepFocus);
     /* 对「光标所在行」做一次变换（格式按钮 / 插入清单 / 插入表格都用它）*/
@@ -1634,6 +1649,14 @@
          ⚠️ 必须用 applyCe 直接喂新文本 —— 用 renderMemoCe 的话它会**再读一次旧 DOM**，
             刚 splice 出来的新行会被覆盖掉 ✗（实测踩过：按回车没反应、字全挤在一行）。 */
       memoCeNode.onkeydown = (e) => {
+        /* ★ 行首退格 / 行尾 Delete 必须自己处理 —— 交给浏览器会把内容整片删掉 ✗
+           （实测：按一次退格 4 行变 0 行）。详见 ceLineKey 的注释。 */
+        if (ceLineKey(e, {
+          ce: memoCeNode,
+          index: memoCeIdx,
+          readAll: () => (readCe() == null ? '' : readCe()),
+          apply: (text, idx, keepFocus, caret) => { applyCe(text, idx, keepFocus, caret); saveMemoText(); },
+        })) return;
         if (e.key !== 'Enter') return;
         e.preventDefault();
         saveMemoText();
@@ -1988,27 +2011,28 @@
       }).join('\n');
       const persist = () => {
         const txt = readAll().replace(/\s+$/, '');
-        const k = STORE.journalSel;
+        /* ⚠️ journalSel 为空时**不能**写出 date 缺失的条目 ——
+           那会让「最近写过」渲染时 j.date.slice() 抛错、**整页日记崩掉** ✗（实测踩过）。
+           兜底用今天（本地日期，别用 toISOString —— 那是 UTC，跨时区会差一天 ✗）。 */
+        const now = new Date();
+        const k = STORE.journalSel || (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'));
+        STORE.journalSel = k;
         STORE.journal = STORE.journal || [];
         const hit = STORE.journal.find((x) => x.date === k);
         if (hit) { hit.text = txt; hit.at = Date.now(); } else STORE.journal.unshift({ date: k, text: txt, at: Date.now() });
         saveStore();
       };
-      const renderCe = (keepFocus) => {
-        const lines = readAll().split('\n');
-        if (ceIdx >= lines.length) ceIdx = lines.length - 1;
-        if (ceIdx < 0) ceIdx = 0;
-        ce.innerHTML = ceHtml(lines.join('\n'), ceIdx);
-        STORE.journalCurLine = ceIdx;
-        if (keepFocus) {
-          const cur = ce.querySelector(':scope > .ln.cur');
-          if (cur) {
-            cur.focus();
-            try { const r = document.createRange(); r.selectNodeContents(cur); r.collapse(false);
-              const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (_) {}
-          }
-        }
+      /* 用给定文本重渲染（光标可指定字符偏移）。renderCe 是它的「读回 DOM 再渲染」版本 ✓ */
+      const applyCeJ = (text, idx, keepFocus, caretOffset) => {
+        const lines = String(text == null ? '' : text).split('\n');
+        if (idx >= lines.length) idx = lines.length - 1;
+        if (idx < 0) idx = 0;
+        ceIdx = idx;
+        ce.innerHTML = ceHtml(lines.join('\n'), idx);
+        STORE.journalCurLine = idx;
+        if (keepFocus) ceSetCaret(ce.querySelectorAll(':scope > .ln')[idx], caretOffset);
       };
+      const renderCe = (keepFocus) => applyCeJ(readAll(), ceIdx, keepFocus);
       let cebuf = 0;
       /* ⚠️ 打字时**绝不重渲染** ✗ ——
          之前 oninput 里调 renderCe() ✗ → 每次都把光标**重置到行尾** ✗ →
@@ -2033,19 +2057,23 @@
         ceIdx = all.indexOf(ln);
         renderCe(true);
       };
-      /* Enter 换行 / Tab 缩进 */
+      /* Enter 换行 / 行首退格 / 行尾 Delete */
       ce.onkeydown = (e) => {
+        /* ★ 和备忘录同一套：行首退格 / 行尾 Delete 必须自己拦 ✗
+           交给浏览器的话，它会去合并「上一个 contenteditable=false 的渲染行」，
+           实测会把整篇内容删光 ✗（详见 ceLineKey 的注释）。 */
+        if (ceLineKey(e, {
+          ce,
+          index: ceIdx,
+          readAll,
+          apply: (text, idx, keepFocus, caret) => { applyCeJ(text, idx, keepFocus, caret); persist(); },
+        })) return;
         if (e.key === 'Enter') {
           e.preventDefault();
           persist();
           const lines = readAll().split('\n');
           lines.splice(ceIdx + 1, 0, '');
-          ceIdx = ceIdx + 1;
-          ce.innerHTML = ceHtml(lines.join('\n'), ceIdx);
-          STORE.journalCurLine = ceIdx;
-          const cur = ce.querySelector(':scope > .ln.cur');
-          if (cur) { cur.focus(); try { const r = document.createRange(); r.selectNodeContents(cur); r.collapse(false);
-            const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (_) {} }
+          applyCeJ(lines.join('\n'), ceIdx + 1, true);
         }
       };
       /* 初始化：把光标放到当前行 ✓ */
@@ -2546,6 +2574,74 @@
     }).join('');
   }
 
+  /* 把光标放到某个行元素的第 offset 个字符处（不传 offset = 放到行尾）。
+     行内一般是单个文本节点；保险起见按 childNodes 累加找位置 ✓。 */
+  function ceSetCaret(lineEl, offset) {
+    if (!lineEl) return;
+    lineEl.focus();
+    try {
+      const range = document.createRange();
+      if (offset == null) { range.selectNodeContents(lineEl); range.collapse(false); }
+      else {
+        let node = null, left = Math.max(0, offset);
+        for (const child of lineEl.childNodes) {
+          if (child.nodeType === 3) { if (left <= child.nodeValue.length) { node = child; break; } left -= child.nodeValue.length; }
+        }
+        if (node) { range.setStart(node, left); range.collapse(true); }
+        else { range.selectNodeContents(lineEl); range.collapse(false); }
+      }
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    } catch (_) {}
+  }
+
+  /* ── 行首退格 / 行尾 Delete：**必须自己拦**，不能交给浏览器 ──────────────
+     contenteditable 里在行首按退格，浏览器会去「合并上一个块」，
+     而上一块是 contenteditable="false" 的渲染行 → 浏览器的处理是**毁灭性**的 ✗✗：
+     实测在备忘录里按**一次**退格，4 行直接变 0 行，而且空内容还被存进了服务端 ✗（数据丢失）。
+     这里自己实现「和上一行合并 / 把下一行并上来」，并 preventDefault ✓。
+     opts: { ce, index, readAll, apply(text, idx, keepFocus, caretOffset) } */
+  function ceLineKey(event, opts) {
+    if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
+    const ce = opts.ce;
+    const sel = window.getSelection();
+    if (!ce || !sel || !sel.rangeCount) return false;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return false;                       /* 有选区 → 交给浏览器正常删除 ✓ */
+    const all = Array.from(ce.querySelectorAll(':scope > .ln'));
+    const lineEl = all[opts.index];
+    if (!lineEl || !lineEl.contains(range.startContainer)) return false;
+    /* 光标前面有多少字符（用 Range 量，比数字符节点稳 ✓）*/
+    let before = '';
+    try {
+      const probe = range.cloneRange();
+      probe.selectNodeContents(lineEl);
+      probe.setEnd(range.startContainer, range.startOffset);
+      before = probe.toString();
+    } catch (_) { return false; }
+    const lineText = String(lineEl.textContent || '');
+    if (event.key === 'Backspace' && before === '') {
+      event.preventDefault();
+      if (opts.index <= 0) return true;                       /* 首行行首：什么也不做 ✓（绝不能让它删）*/
+      const lines = String(opts.readAll()).split('\n');
+      const at = String(lines[opts.index - 1] || '').length;
+      lines[opts.index - 1] = String(lines[opts.index - 1] || '') + String(lines[opts.index] || '');
+      lines.splice(opts.index, 1);
+      opts.apply(lines.join('\n'), opts.index - 1, true, at);  /* 光标停在合并处 ✓ */
+      return true;
+    }
+    if (event.key === 'Delete' && before === lineText) {
+      event.preventDefault();
+      const lines = String(opts.readAll()).split('\n');
+      if (opts.index >= lines.length - 1) return true;         /* 末行行尾：什么也不做 ✓ */
+      const at = lineText.length;
+      lines[opts.index] = lineText + String(lines[opts.index + 1] || '');
+      lines.splice(opts.index + 1, 1);
+      opts.apply(lines.join('\n'), opts.index, true, at);
+      return true;
+    }
+    return false;
+  }
+
   /* ── 日记：月历 + 选中当天编辑（+ 当天天气）── */
   function viewJournal() {
     const d0 = new Date();
@@ -2616,7 +2712,7 @@
       wxHtml = '<div class="lw-kpi"><div class="row"><div class="ic">' + ic + '</div>'
         + '<div style="flex:1;min-width:0"><div class="num">' + Math.round(WX.temp) + '<small>°C</small></div></div>'
         + '<div style="text-align:right;font-size:11px;color:' + T.dim + ';line-height:1.8">' + esc(nm) + '<br>体感 ' + Math.round(WX.feels) + '° · 湿 ' + WX.hum + '%<br>风 ' + WX.wind + ' km/h</div></div>'
-        + '<div class="cmp" style="margin-top:10px">' + (WX.days || []).slice(0, 3).map((x) => esc(x.date.slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div>';
+        + '<div class="cmp" style="margin-top:10px">' + (WX.days || []).filter((x) => x && x.date).slice(0, 3).map((x) => esc(String(x.date).slice(5)) + " " + wx(x.code)[0] + " " + Math.round(x.min) + "~" + Math.round(x.max) + "°").join("　") + '</div></div>';
     }
 
     /* 布局：左栏多面板（可逐个拖高 ✓）+ 右栏编辑区，整体填满视口 ✓ */
@@ -2642,7 +2738,7 @@
 
       + '<div class="lw-c" data-jpanel="recent" style="height:' + (STORE.jpH3 || 170) + 'px"><h3><span class="code">J-05</span>最近写过<span class="sp"></span><em>' + (catNow ? '筛选中 ' + all.length + ' / 共 ' + total : '共 ' + total) + ' 篇</em></h3>'
       + '<div class="lw-cbd"><div class="lw-tbl">' + (all.length ? all.slice(0, 12).map((j) => '<div class="lw-tr" data-jday="' + esc(j.date) + '">'
-          + '<span class="nm">' + esc(j.date.slice(5)) + (catOf2(j) ? ' <i>#' + esc(catOf2(j)) + '</i>' : '') + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
+          + '<span class="nm">' + esc(String(j.date || '').slice(5)) + (catOf2(j) ? ' <i>#' + esc(catOf2(j)) + '</i>' : '') + '</span><span class="bd">' + String(j.text || "").length + ' 字</span>'
           + '<span class="tm">' + esc(String(j.text || "").replace(/\n/g, ' ').slice(0, 8)) + '</span></div>').join("") : '<div class="lw-empty">还没写过</div>') + '</div></div></div><div class="lw-vgrip" data-vgrip="3"></div>'
 
       + '<div class="lw-c" data-jpanel="cat" style="height:' + (STORE.jpH4 || 200) + 'px"><h3><span class="code">J-06</span>管理分类<span class="sp"></span><em>点选筛选</em></h3>'
