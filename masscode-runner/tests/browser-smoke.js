@@ -12,6 +12,23 @@ const { Document, Packer, Paragraph, HeadingLevel } = require('docx');
 const projectRoot = path.resolve(__dirname, '..');
 // 版本号只有 package.json 一个来源：测试里硬编码 2.5.0 会让每次发版都误报失败。
 const packageVersion = require(path.join(projectRoot, 'package.json')).version;
+/* 本机不一定装了 noVNC，但「远程面板 · VNC 会话保持」这条路要测得到 ——
+   注入一个假的 RFB 模块（构造后立刻触发 connect），把它当真的用。
+   ⚠️ 路由在页面加载**之后**注册也没问题：noVNC 是点「打开 VNC 桌面」时才动态 import 的 ✓。 */
+const FAKE_RFB_SRC = `
+export default class RFB {
+  constructor(target, url, opts) {
+    this.target = target; this.url = url; this.opts = opts; this._h = {};
+    window.__lastRfb = this;
+    setTimeout(() => this.fire('connect', {}), 30);
+  }
+  addEventListener(t, fn) { (this._h[t] = this._h[t] || []).push(fn); }
+  removeEventListener(t, fn) { this._h[t] = (this._h[t] || []).filter((x) => x !== fn); }
+  disconnect() { this.disconnected = true; }
+  sendCredentials() {}
+  fire(t, detail) { (this._h[t] || []).forEach((fn) => fn({ detail })); }
+}
+`;
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-browser-'));
 const vault = path.join(tempRoot, 'vault');
 let server, browser;
@@ -504,6 +521,59 @@ print(r.run())
   if(!/vault/.test(await page.locator('#env-sync-note').innerText()))throw new Error('云同步未显示 vault 统计');
   if((await page.locator('#btn-env-sync-refresh').count())!==1||(await page.locator('#btn-env-sync-scan').count())!==1||(await page.locator('#btn-env-sync-snapshot').count())!==1)throw new Error('云同步三个操作按钮不完整');
   await page.locator('#btn-env-close').click();
+  /* ---- 远程面板：记住上次标签页 + VNC 会话在「收起」后保持 ----
+     用户反馈：连上 VNC → 回代码工作区 → 再点「远程」必须重新连 ✗。
+     现在「收起」只隐藏画面、不断开；顶栏「远程」直接回到画面 ✓。 */
+  await page.route('**/novnc/core/rfb.js',(route)=>route.fulfill({contentType:'application/javascript',body:FAKE_RFB_SRC}));
+  await page.route('**/novnc/core/input/keysymdef.js',(route)=>route.fulfill({contentType:'application/javascript',body:'export default {};'}));
+  const remoteState=()=>page.evaluate(()=>({
+    面板开:document.getElementById('remote-panel').classList.contains('open'),
+    画面开:document.getElementById('vnc-workspace').classList.contains('open'),
+    标签:['ssh','files','vnc'].find((k)=>document.getElementById('remote-tab-'+k).classList.contains('on')),
+    顶栏亮:document.getElementById('btn-remote').classList.contains('remote-on'),
+    连接文案:document.getElementById('vnc-connect').textContent,
+    VNC状态:document.getElementById('vnc-state').textContent,
+    断开:!!(window.__lastRfb&&window.__lastRfb.disconnected),
+  }));
+  await page.locator('#btn-remote').click();
+  await page.locator('#remote-panel.open').waitFor({state:'visible',timeout:10000});
+  await page.locator('#remote-tab-vnc').click();
+  await page.waitForTimeout(400);
+  await page.locator('#btn-remote-close').click();
+  await page.waitForTimeout(400);
+  await page.locator('#btn-remote').click();
+  await page.waitForTimeout(900);
+  let rs=await remoteState();
+  if(rs.标签!=='vnc')throw new Error('远程面板没记住上次的标签页，重开回到了：'+rs.标签);
+  /* 连接（假 RFB 会立刻触发 connect）*/
+  await page.locator('#vnc-host').fill('127.0.0.1');
+  await page.locator('#vnc-connect').click();
+  await page.waitForTimeout(1300);
+  rs=await remoteState();
+  if(!rs.画面开||rs.VNC状态!=='已连接')throw new Error('VNC 连接后没进入画面：'+JSON.stringify(rs));
+  /* ★ 核心一：「收起」只隐藏画面，**不能断开连接** */
+  await page.locator('#vnc-close').click();
+  await page.waitForTimeout(700);
+  rs=await remoteState();
+  if(rs.画面开)throw new Error('「收起」没把 VNC 画面藏起来');
+  if(rs.断开||!rs.顶栏亮)throw new Error('「收起」把 VNC 连接断开了（应当保持）：'+JSON.stringify(rs));
+  /* ★ 核心二：再点顶栏「远程」直接回画面，不重连 */
+  await page.locator('#btn-remote').click();
+  await page.waitForTimeout(900);
+  rs=await remoteState();
+  if(!rs.画面开||rs.面板开||rs.VNC状态!=='已连接')throw new Error('再点「远程」没直接回到 VNC 画面：'+JSON.stringify(rs));
+  /* 画面里的「远程面板」入口 + 按钮变「回到桌面」；最后用「断开」收尾 */
+  await page.locator('#vnc-panel').click();
+  await page.waitForTimeout(800);
+  rs=await remoteState();
+  if(!rs.面板开||rs.标签!=='vnc')throw new Error('画面里的「远程面板」没停在 VNC 页：'+JSON.stringify(rs));
+  if(rs.连接文案!=='回到桌面')throw new Error('已连接时按钮应显示「回到桌面」，实际：'+rs.连接文案);
+  await page.locator('#vnc-disconnect').click();
+  await page.waitForTimeout(1100);
+  rs=await remoteState();
+  if(!rs.断开)throw new Error('面板里的「断开」没有真正断开 VNC');
+  await page.locator('#btn-remote-close').click();
+  await page.waitForTimeout(400);
   /* ---- 个人管理面板 · 备忘录：逐行实时渲染 + 撤销 + 图片导出 ----
      测试跑在临时 CODESCOPE_DATA_HOME 上，不碰真实数据 ✓
      正文现在和日记一样是「整篇一个 contenteditable、每行一个 div」：
