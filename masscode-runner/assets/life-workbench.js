@@ -77,7 +77,12 @@
     transition:background .12s,color .12s; }
   .lw-btn:hover { background:${T.accent}; color:${T.accentInk}; }
   /* 天气胶囊 */
-  .lw-wx { display:flex; align-items:center; gap:11px; padding:4px 13px 4px 10px; border:2px solid ${T.line}; flex:none; }
+  /* ★ 天气和邮箱两个胶囊**必须一样高** ✗ ——
+     天气那边是两行（地区 + 体感/湿度），邮箱那边原来只有一行，
+     并排时一个 38.6px、一个 28px，看着就是「没对齐」✗（用户截图报的）。
+     统一给固定高度 + 垂直居中 ✓；高度取 40（天气的内容实高约 27 + 内边距 8 + 边框 4）✓。 */
+  .lw-wx, .lw-mb { height:40px; box-sizing:border-box; align-items:center; }
+  .lw-wx { display:flex; gap:11px; padding:0 13px 0 10px; border:2px solid ${T.line}; flex:none; }
   .lw-wx .wi { font-size:19px; line-height:1; }
   .lw-wx .wt { font-size:16px; font-weight:700; color:${T.accent}; }
   .lw-wx .wc { font-size:9.5px; color:${T.dim}; line-height:1.4; letter-spacing:.4px; }
@@ -782,8 +787,8 @@
   .lw-mail-send input:focus, .lw-mail-send textarea:focus { border-color:${T.accent}; }
   #btn-lifework.on { background:${T.accent} !important; color:${T.accentInk} !important; }
 
-  /* ── 邮箱：顶栏状态胶囊 ──────────────────────────────────────────── */
-  .lw-mb { display:flex; align-items:center; gap:9px; padding:4px 12px; border:2px solid ${T.line}; flex:none;
+  /* ── 邮箱：顶栏状态胶囊（和天气胶囊等高 ✓，见 .lw-wx 的注释）── */
+  .lw-mb { display:flex; gap:9px; padding:0 12px; border:2px solid ${T.line}; flex:none;
     cursor:pointer; transition:background .12s; }
   .lw-mb:hover { background:${T.card2}; }
   .lw-mb .ic { font-size:15px; line-height:1; }
@@ -793,6 +798,32 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lw-mb.bad { border-color:color-mix(in srgb,${T.red} 46%,transparent); }
   .lw-mb.bad .t { color:${T.red}; }
+  /* 收到新邮件时胶囊闪一下 ✓（只闪几秒，不一直动 ✓）*/
+  .lw-mb.fresh { animation:lw-mail-flash 1s ease-in-out 3; }
+  @keyframes lw-mail-flash {
+    0%,100% { background:transparent; border-color:${T.line}; }
+    50% { background:${T.accent}; border-color:${T.accent}; }
+  }
+  @media (prefers-reduced-motion: reduce) { .lw-mb.fresh { animation:none; background:${T.card2}; } }
+
+  /* ── 新邮件提醒的浮层 ✓ ──────────────────────────────────────────────
+     放在 body 上（**不放在面板里** ✗）—— 面板关着的时候也要能提醒 ✓。
+     z-index 9500：高于面板 8800 和右侧抽屉 8900，低于命令面板 9700 ✓。 */
+  .lw-toast { position:fixed; right:22px; bottom:22px; z-index:9500; width:330px;
+    display:flex; gap:11px; padding:12px 13px; background:${T.card}; border:2px solid ${T.accent};
+    font-family:${UI}; color:${T.text}; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.45);
+    animation:lw-toast-in .18s ease-out; }
+  @keyframes lw-toast-in { from { transform:translateY(10px); opacity:0; } to { transform:none; opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { .lw-toast { animation:none; } }
+  .lw-toast .ic { font-size:17px; line-height:1.1; color:${T.accent}; flex:none; }
+  .lw-toast .bd { flex:1; min-width:0; }
+  .lw-toast .t1 { font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:${T.accent}; }
+  .lw-toast .t2 { font-size:11.5px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-toast .t3 { font-size:11px; color:${T.dim}; margin-top:2px; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .lw-toast .x { flex:none; width:20px; height:20px; border:0; background:transparent; color:${T.faint};
+    cursor:pointer; font-size:12px; padding:0; line-height:1; }
+  .lw-toast .x:hover { color:${T.text}; }
 
   /* ── 邮箱：三栏 ─────────────────────────────────────────────────── */
   .lw-ml { display:flex; flex:1; min-height:0; }
@@ -911,6 +942,23 @@
   let MAIL_STATUS = null;          /* 顶栏用：{ total, accounts:[…] } */
   let MAIL_STATUS_BUSY = false;
   let MAIL_STATUS_TIMER = 0;
+
+  /* ★★ 邮箱的其余状态**必须声明在这里（模块顶部）** ✗ ——
+     `mount()` 是在模块**最顶上**就被调用的（`document.readyState` 那几行），
+     它会一路走到 `bootstrapMailNotify()` ✓；如果这些 `let` / `const` 还写在文件后面，
+     那时它们还在**暂时性死区（TDZ）**里 ✗ → 抛
+     `Cannot access 'MAIL_BOOTSTRAPPED' before initialization` ✗，
+     整个自举静默失败（提醒功能完全不生效 ✗，实测踩过）。
+     **凡是 `mount()` 调用链上碰得到的模块状态，都要放在这里。** */
+  /* 开机自举拿到的账号/开关放**独立变量**里，**不能塞进 STORE** ✗ ——
+     `saveStore()` 是把整个 STORE POST 上去的，STORE 里只放了一部分字段的话
+     一次保存就把用户的备忘录/日记全冲掉 ✗✗（这类覆盖事故之前踩过一次）。 */
+  const MAIL_BOOT = { acc: null, notify: undefined };
+  let MAIL_BOOTSTRAPPED = false;
+  let MAIL_SEEN_TOTAL = null;
+  let MAIL_TOAST_TIMER = 0;
+  let MAIL_FRESH_TIMER = 0;
+  let MAIL_VIS_HOOK = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1041,7 +1089,14 @@
     const tryMount = () => {
       const bar = document.getElementById('header-center');
       if (!bar) return false;
-      if (document.getElementById('btn-lifework')) { clearInterval(MOUNT_TIMER); MOUNT_TIMER = 0; return true; }
+      if (document.getElementById('btn-lifework')) {
+        clearInterval(MOUNT_TIMER); MOUNT_TIMER = 0;
+        /* ★ 自举放在**这里**而不是 mount() 的调用处 ✗ ——
+           按钮经常是稍后由定时器 / MutationObserver 挂上的（首次进来时 #header-center 还没出来），
+           放在调用处的话那条路径不会触发 → 提醒功能整个不生效 ✗（实测踩过）。 */
+        bootstrapMailNotify();
+        return true;
+      }
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.id = 'btn-lifework';
@@ -1057,6 +1112,7 @@
         else openInPanel();
       });
       clearInterval(MOUNT_TIMER); MOUNT_TIMER = 0;
+      bootstrapMailNotify();
       return true;
     };
     if (tryMount()) return;
@@ -2599,8 +2655,26 @@
         put('host', g.host); put('port', g.port); put('imapHost', g.imapHost); put('imapPort', g.imapPort);
       };
     });
-    qa('[data-mailsave]').forEach((btn) => {
-      btn.onclick = async () => {
+    /* 🔔 新邮件提醒开关 —— 打开时才申请系统通知权限 ✓（不自动弹，那很打扰 ✗）*/
+    const mNotify = q('#lw-mail-notify');
+    if (mNotify) mNotify.onchange = () => {
+      STORE.mailNotify = mNotify.checked;
+      saveStore();
+      const s = document.getElementById('lw-sub');
+      if (mNotify.checked) {
+        try {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
+        } catch (_) { }
+        /* 刚打开时基线可能还没有 → 补拉一次，这样下一条新邮件就能提醒 ✓ */
+        if (MAIL_SEEN_TOTAL === null) mailLoadStatus(false);
+        ensureMailStatusTimer();
+        if (s) s.textContent = '已开启新邮件提醒 ✓';
+      } else {
+        mailHideToast();
+        if (s) s.textContent = '已关闭新邮件提醒';
+      }
+    };
+    qa('[data-mailsave]').forEach((btn) => {      btn.onclick = async () => {
         const k = btn.dataset.mailsave;
         const acc = Object.assign({}, STORE.mailAcc || {});
         const cur = Object.assign({}, acc[k] || {});
@@ -3688,7 +3762,7 @@
 
   /* ── 顶栏邮箱胶囊 ──────────────────────────────────────────────────────── */
   function mailConfiguredKeys() {
-    const acc = (STORE && STORE.mailAcc) || {};
+    const acc = (STORE && STORE.mailAcc) || MAIL_BOOT.acc || {};
     return Object.keys(MAIL_PRESET).filter((k) => acc[k] && String(acc[k].user || '').trim());
   }
   function mailBadgeHtml() {
@@ -3734,6 +3808,89 @@
     const next = document.getElementById('lw-mb');
     if (next) next.onclick = () => { TAB = 'mail'; render(); ensureMailLoad(); };
   }
+  /* ── 新邮件提醒 ──────────────────────────────────────────────────────────
+     轮询未读数 → 比上次**多**了就提醒 ✓。三条必须守的：
+       ① **首次拿到只当基线** ✗ —— 否则一打开面板就报「有新邮件」✗（未读本来就是 97 封）。
+       ② **后台标签页不轮询** ✗ —— 一直连邮箱没必要，还会把连接池占着 ✗；
+          切回前台立刻补查一次 ✓。
+       ③ 提醒要能在**面板关着**时出现 ✓ —— 所以浮层挂 body、不挂面板 ✓。 */
+  function mailNotifyEnabled() {
+    if (STORE && STORE.mailNotify !== undefined) return STORE.mailNotify !== false;
+    if (MAIL_BOOT.notify !== undefined) return MAIL_BOOT.notify !== false;
+    return true;                                   /* 默认开 ✓ */
+  }
+
+  function mailHideToast() {
+    clearTimeout(MAIL_TOAST_TIMER);
+    const el = document.getElementById('lw-toast');
+    if (el) el.remove();
+  }
+
+  function mailShowToast(delta, latest) {
+    mailHideToast();
+    const el = document.createElement('div');
+    el.className = 'lw-toast';
+    el.id = 'lw-toast';
+    el.title = '点这里打开邮箱';
+    el.innerHTML = '<div class="ic">✉</div><div class="bd">'
+      + '<div class="t1">新邮件 · ' + delta + ' 封</div>'
+      + '<div class="t2">' + esc(String((latest && latest.from) || '（未知发件人）').slice(0, 60)) + '</div>'
+      + '<div class="t3">' + esc(String((latest && latest.subject) || '').slice(0, 70)) + '</div>'
+      + '</div><button class="x" title="关闭">✕</button>';
+    el.onclick = (ev) => {
+      if (ev.target && ev.target.classList && ev.target.classList.contains('x')) { mailHideToast(); return; }
+      mailHideToast();
+      /* 点提醒 → 打开面板并跳到邮箱页 ✓ */
+      if (!document.getElementById('lifework-view')) openInPanel();
+      TAB = 'mail';
+      if (latest && latest.uid) { MAIL_UI.box = 'INBOX'; }
+      render();
+      loadMailAccounts(true);
+      ensureMailLoad();
+    };
+    document.body.appendChild(el);
+    /* 自动消失 ✓ —— 但鼠标停在上面就别收（正在看呢 ✗）*/
+    const arm = () => { MAIL_TOAST_TIMER = setTimeout(() => { if (!el.matches(':hover')) mailHideToast(); else arm(); }, 12000); };
+    arm();
+  }
+
+  /* 系统通知（桌面弹窗）✓ —— **只在用户已经授权过时用** ✗
+     绝不自动弹权限申请 ✗（那很打扰）；想开的人在「账号配置」里点开关时才申请 ✓。 */
+  function mailNotifySystem(delta, latest) {
+    try {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      const n = new Notification('新邮件 · ' + delta + ' 封', {
+        body: String((latest && latest.from) || '') + '\n' + String((latest && latest.subject) || ''),
+        tag: 'codescope-mail',          /* 同 tag 会替换上一条，不会堆一屏 ✓ */
+      });
+      n.onclick = () => { try { window.focus(); } catch (_) { } mailHideToast(); };
+      setTimeout(() => { try { n.close(); } catch (_) { } }, 15000);
+    } catch (_) { }
+  }
+
+  /* 和上次比：变多了就是新邮件 ✓ */
+  function mailCheckNew(next) {
+    const total = Number(next && next.total) || 0;
+    if (MAIL_SEEN_TOTAL === null) { MAIL_SEEN_TOTAL = total; return; }   /* ① 基线 */
+    if (total <= MAIL_SEEN_TOTAL) { MAIL_SEEN_TOTAL = total; return; }
+    const delta = total - MAIL_SEEN_TOTAL;
+    MAIL_SEEN_TOTAL = total;
+    /* 顶栏胶囊闪一下 ✓（无论开关是否打开 —— 那是状态不是打扰 ✓）*/
+    const badge = document.getElementById('lw-mb');
+    if (badge) {
+      badge.classList.remove('fresh');
+      void badge.offsetWidth;                  /* 强制重排，动画才会重播 ✓ */
+      badge.classList.add('fresh');
+      clearTimeout(MAIL_FRESH_TIMER);
+      MAIL_FRESH_TIMER = setTimeout(() => badge.classList.remove('fresh'), 4000);
+    }
+    if (!mailNotifyEnabled()) return;
+    const latest = (next.accounts || []).map((a) => a.latest).filter(Boolean)
+      .sort((a, b) => (b.date || 0) - (a.date || 0))[0] || null;
+    mailShowToast(delta, latest);
+    mailNotifySystem(delta, latest);
+  }
+
   /* 拉未读数（顶栏用）。静默失败 ✓ —— 网络抖一下不该弹错 ✓ */
   async function mailLoadStatus(force) {
     if (MAIL_STATUS_BUSY) return;
@@ -3742,14 +3899,52 @@
     try {
       const r = await fetch('/api/life/mail/status' + (force ? '?force=1' : ''), { cache: 'no-store' });
       const d = await r.json();
-      if (d && d.accounts) { MAIL_STATUS = d; paintMailBadge(); }
+      if (d && d.accounts) {
+        MAIL_STATUS = d;
+        paintMailBadge();
+        mailCheckNew(d);
+      }
     } catch (_) { } finally { MAIL_STATUS_BUSY = false; }
   }
-  /* 面板打开时启动轮询 ✓（120 秒一次，够用又不折腾邮箱服务器 ✓）*/
+  /* 面板打开时启动轮询 ✓（75 秒一次 —— 服务端 status 缓存是 60 秒，
+     轮询间隔比它略长，每次都能拿到新数据 ✓，又不会把邮箱服务器打爆 ✓）*/
   function ensureMailStatusTimer() {
     if (MAIL_STATUS_TIMER) return;
     if (!mailConfiguredKeys().length) return;
-    MAIL_STATUS_TIMER = setInterval(() => { if (document.getElementById('lw-mb')) mailLoadStatus(false); }, 120000);
+    MAIL_STATUS_TIMER = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;      /* ② 后台不轮询 */
+      if (!mailConfiguredKeys().length) return;
+      mailLoadStatus(false);
+    }, 75000);
+    if (!MAIL_VIS_HOOK) {
+      MAIL_VIS_HOOK = true;
+      /* 切回前台立刻补查一次 ✓（后台那段时间可能来了新邮件 ✓）*/
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && mailConfiguredKeys().length) mailLoadStatus(false);
+      });
+    }
+  }
+
+  /* ── 开机自举：让「新邮件提醒」在**面板没打开**时也能工作 ✓ ──────────────
+     否则用户不点开面板就永远收不到提醒 ✗（那就不是提醒了 ✗）。
+     只拉一次 store（很小）拿到「账号 + 提醒开关」，然后启动轮询 ✓。
+     ⚠️ 拿到的账号/开关只放进 `MAIL_BOOT`，**不放进 STORE** ✗（见它的注释）。 */
+  async function bootstrapMailNotify() {
+    if (MAIL_BOOTSTRAPPED) return;
+    MAIL_BOOTSTRAPPED = true;
+    try {
+      const r = await fetch('/api/life/store', { cache: 'no-store' });
+      const d = await r.json();
+      const s = (d && d.data) || null;
+      if (s) {
+        if (!MAIL_BOOT.acc) MAIL_BOOT.acc = s.mailAcc || {};
+        if (MAIL_BOOT.notify === undefined) MAIL_BOOT.notify = s.mailNotify;
+      }
+    } catch (_) { }
+    if (!mailConfiguredKeys().length) return;
+    if (!mailNotifyEnabled()) return;
+    mailLoadStatus(false);
+    ensureMailStatusTimer();
   }
 
   /* ── 账号是否具备收信条件 ──────────────────────────────────────────────── */
@@ -4144,6 +4339,9 @@
     MAIL_STATUS.total = Math.max(0, (MAIL_STATUS.total || 0) + delta);
     const a = (MAIL_STATUS.accounts || []).find((x) => x.key === MAIL_UI.key);
     if (a) a.unseen = Math.max(0, (a.unseen || 0) + delta);
+    /* ⚠️ 基线也要跟着动 ✓ —— 不然本地减了 1、基线还是旧值，
+       下一轮轮询会误判成「变多了」→ 弹一个假的新邮件提醒 ✗。 */
+    if (MAIL_SEEN_TOTAL !== null) MAIL_SEEN_TOTAL = MAIL_STATUS.total;
     paintMailBadge();
   }
 
@@ -4406,6 +4604,12 @@
           配置只存本机（<code>life-mail.json</code>），不上传；密码不回传明文，只记「有没有存过」。<br>
           「密码」要填<b style="color:${T.accent}">授权码</b>，不是登录密码：QQ 在「设置 → 账户 → POP3/SMTP 服务」生成，网易类似，Gmail 要「应用专用密码」。<br>
           填好后回左边的「收件箱」就能直接收信、读信、下载附件 ✓。服务商那侧还要确认<b style="color:${T.accent}">已开启 IMAP 服务</b>。
+          <label style="display:flex;align-items:flex-start;gap:9px;margin-top:12px;padding-top:11px;border-top:1px dashed ${T.lineDim};cursor:pointer">
+            <input type="checkbox" id="lw-mail-notify"${mailNotifyEnabled() ? ' checked' : ''} style="accent-color:${T.accent};margin-top:2px"/>
+            <span>🔔 <b style="color:${T.accent}">新邮件提醒</b> —— 每 75 秒查一次（页面在后台时不查，切回来自动补查），
+            发现未读数变多就在右下角弹提醒、顶栏胶囊闪一下，点提醒直接跳到那封邮件。<br>
+            <span style="color:${T.faint}">打开这个开关时才会向浏览器申请系统通知权限（不会自动弹）。</span></span>
+          </label>
         </div>
       </div>
       ${cards}

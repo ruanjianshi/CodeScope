@@ -615,7 +615,8 @@ print(r.run())
   });
   const MAIL_STUB = {
     accounts: { qq: { host: 'smtp.qq.com', port: '465', user: 'tester@qq.com', hasPass: true, imapHost: 'imap.qq.com', imapPort: '993' } },
-    status: { ok: true, total: MAIL_UNREAD, accounts: [{ key: 'qq', user: 'tester@qq.com', ok: true, unseen: MAIL_UNREAD, messages: MAIL_TOTAL, latest: { uid: MAIL_TOTAL, subject: '桩主题未读', from: '张三 <z@qq.com>', date: Date.now() } }] },
+    /* `total` 可变 ✓ —— 测试里改它来模拟「来新邮件」，验提醒功能 ✓ */
+    total: MAIL_UNREAD,
     /* 故意全用**英文系统名** ✓ —— 用来验前端的中文化映射 ✓ */
     boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: 'Drafts', selectable: true }, { name: 'Deleted Messages', selectable: true }, { name: 'Junk', selectable: true }, { name: '未识别的文件夹', selectable: true }], inbox: { messages: MAIL_TOTAL, unseen: MAIL_UNREAD } },
     read: { ok: true, uid: MAIL_TOTAL, box: 'INBOX', seen: true, flagged: false, subject: '桩主题未读', from: '张三 <z@qq.com>',
@@ -653,7 +654,9 @@ print(r.run())
       } catch (_) {}
       return json({ ok: true, accounts: Object.assign({}, realAccounts, MAIL_STUB.accounts) });
     }
-    if (p === '/api/life/mail/status') return json(MAIL_STUB.status);
+    if (p === '/api/life/mail/status') {
+      return json({ ok: true, total: MAIL_STUB.total, accounts: [{ key: 'qq', user: 'tester@qq.com', ok: true, unseen: MAIL_STUB.total, messages: MAIL_TOTAL, latest: { uid: MAIL_TOTAL, subject: '桩新邮件主题', from: '桩发件人 <new@qq.com>', date: Date.now() } }] });
+    }
     if (p === '/api/life/mail/boxes') return json(MAIL_STUB.boxes);
     if (p === '/api/life/mail/list') {
       /* ★ 按 limit 截断 ✓（和真实服务端一致）—— 这样才能验「加载更多」真的多拿了 ✓ */
@@ -1191,6 +1194,46 @@ print(r.run())
   if (unreadAfter !== unreadBefore - 1) {
     throw new Error('打开一封未读邮件后顶栏未读数应减 1（' + unreadBefore + ' → ' + unreadAfter + '）');
   }
+  /* ★★ 天气胶囊和邮箱胶囊必须**等高** ✗ ——
+     用户原话：「这个天气和邮箱的框，怎么高度不一致」。
+     根因：天气那边是两行（地区 + 体感/湿度）自然撑到 38.6px，
+     邮箱那边只有一行只有 28px，并排时高低不齐 ✗。
+     现在两个都固定 height:40px + 垂直居中 ✓。 */
+  const boxOf = async (sel) => page.locator(sel).boundingBox();
+  const bWx = await boxOf('.lw-wx');
+  const bMb = await boxOf('#lw-mb');
+  if (!bWx || !bMb) throw new Error('顶栏找不到天气或邮箱胶囊');
+  if (Math.abs(bWx.height - bMb.height) > 0.5) {
+    throw new Error('天气胶囊和邮箱胶囊不等高：' + bWx.height.toFixed(1) + 'px vs ' + bMb.height.toFixed(1) + 'px');
+  }
+  if (Math.abs(bWx.y - bMb.y) > 0.5) {
+    throw new Error('天气胶囊和邮箱胶囊顶边没对齐：' + bWx.y.toFixed(1) + ' vs ' + bMb.y.toFixed(1));
+  }
+  /* ★ 新邮件提醒 —— 未读数**变多**时右下角弹提醒 ✓
+     三条都要验：① 首次只当基线不弹 ✗ ② 变多才弹 ✓ ③ 点 ✕ 能关 ✓ */
+  if (await page.locator('#lw-toast').count() !== 0) throw new Error('还没来新邮件就弹了提醒（首次应只当基线）');
+  /* ⚠️ 基线要**按当前值算** ✗ —— 上面打开过一封邮件，未读数已经从 3 降到 2，
+     写死 5 的话提醒里会显示「3 封」而不是「2 封」✗（实测踩过）。 */
+  const curBadge = await badgeNum();
+  MAIL_STUB.total = curBadge + 2;                       /* 模拟来 2 封 */
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.locator('#lw-toast').waitFor({ state: 'visible', timeout: 15000 });
+  const toastText = await page.locator('#lw-toast').innerText();
+  if (!/新邮件 · 2 封/.test(toastText)) throw new Error('提醒里没写对新增封数（应 2 封）：' + toastText.replace(/\n/g, ' | '));
+  if (!/桩发件人/.test(toastText)) throw new Error('提醒里没写发件人：' + toastText.replace(/\n/g, ' | '));
+  if (!/桩新邮件主题/.test(toastText)) throw new Error('提醒里没写主题：' + toastText.replace(/\n/g, ' | '));
+  /* ★ 提醒浮层挂在 body 上 ✓ —— 面板关着的时候也要能提醒 ✓ */
+  if (await page.locator('body > .lw-toast').count() !== 1) throw new Error('提醒浮层不在 body 上（面板关着就收不到提醒）');
+  /* 顶栏胶囊要闪一下 ✓ */
+  if (!/fresh/.test(await page.locator('#lw-mb').getAttribute('class') || '')) throw new Error('新邮件时顶栏胶囊没有闪动提示');
+  await page.locator('#lw-toast .x').click();
+  await page.waitForTimeout(300);
+  if (await page.locator('#lw-toast').count() !== 0) throw new Error('点 ✕ 关不掉提醒');
+  /* 未读数**没变多**时不该弹 ✓ */
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(1500);
+  if (await page.locator('#lw-toast').count() !== 0) throw new Error('未读数没变多也弹了提醒');
+  MAIL_STUB.total = MAIL_UNREAD;
   /* 回到备忘录页，后面的收尾流程还要用 */
   await page.locator('[data-tab="memo"]').click();
   await page.waitForTimeout(1500);
