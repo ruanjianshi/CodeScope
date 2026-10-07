@@ -43,12 +43,13 @@ const WORKFLOW = require('./lib/workflow');
 const HOT = require('./lib/hot');
 const EN_TEXT = require('./lib/en-text.js');   /* 外刊精读：抽正文 / 分句 / 取词（纯逻辑 ✓） */
 const SRS = require('./lib/srs.js');           /* 外刊精读：遗忘曲线复习调度（纯逻辑 ✓） */
+const EN_SOURCES = require('./lib/en-sources.js');   /* 外刊精读：推荐外刊源（RSS ✓ 实测过的 ✓） */
 const FLOW_SCHED = require('./lib/flow-schedule.js');   /* 工作流定时排期（纯逻辑 ✓） */
 /* ★ 只把**这几个**纯逻辑模块暴露给浏览器 ✓（**白名单** ✓，不是把整个 lib/ 敞开 ✗）。
    它们都是「双栖」的 ✓：Node 里 require 拿到 ✓、浏览器里挂 window.LW_xxx ✓ ——
    目的是让**前后端用同一份逻辑** ✗：分句规则、复习间隔这种东西抄两遍必然走偏 ✗，
    而且走偏了用户根本查不出来 ✗（只会觉得「这软件不准」✗）。 */
-const SHARED_LIB_FILES = ['en-text.js', 'srs.js', 'expr.js', 'flow-schedule.js'];
+const SHARED_LIB_FILES = ['en-text.js', 'srs.js', 'expr.js', 'flow-schedule.js', 'en-sources.js'];
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
@@ -142,6 +143,44 @@ function writeFlowSched(st) {
 }
 function readLifeStore() {
   try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-workbench.json'), 'utf8')); } catch (_) { return {}; }
+}
+/* ★★ 外刊源的 feed 走「curl 优先、fetch 兜底」✗✗ —— 为什么 ✗：
+   本机实测（同一台机器、同一个地址、同一时间）：
+     · `feeds.npr.org/1004/rss.xml` —— Node 的 fetch **7~30 秒，而且经常直接超时** ✗；
+       `curl` 同一个地址 **0.9 秒** ✓（加 `--noproxy '*'` 也是 1.6 秒 ✓，所以不是代理的事 ✗）。
+     · 其余 22 个源 fetch 都正常 ✓（0.4~4.3 秒 ✓）—— 就 NPR 这一家这样 ✗。
+   而 NPR 正好是**列表里第一个源** ✗（打开面板会自动拉它 ✗）→ 一超时就是
+   「点了没反应」✗，用户根本不知道是这家的 feed 慢 ✗。
+   → 和上面天气那条同一个思路 ✓（那边是 fetch 失败用 curl 兜底 ✓），
+     这里干脆**把 curl 放前面** ✓：它更快也更稳 ✓，fetch 只在没有 curl 的环境兜底 ✓。
+   ⚠️ 这段**只能待在 server.js** ✗ —— lib/en-sources.js 是**双栖**的 ✓
+      （浏览器里也加载 ✓），不能 require child_process ✗。
+      所以那边只负责「解析 + 缓存 + 报错」✓，IO 策略留在这一层 ✓。
+   ⚠️ 用 execFile（不走 shell ✓）—— URL 里的 & 之类不会被当命令执行 ✓。 */
+const FEED_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
+async function feedFetch(url, opt) {
+  const want = {
+    'User-Agent': FEED_UA,
+    'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+  /* ① curl（首选 ✓） */
+  try {
+    const out = await new Promise((resolve, reject) => {
+      require('child_process').execFile(
+        'curl',
+        ['-sS', '-m', '25', '-L', '-A', want['User-Agent'], '-H', 'Accept: ' + want.Accept, url],
+        { maxBuffer: 8e6, timeout: 30000 },
+        (err, stdout) => (err ? reject(err) : resolve(String(stdout)))
+      );
+    });
+    if (out && out.length > 40) return { ok: true, status: 200, text: async () => out };
+    throw new Error('curl 返回空');
+  } catch (_) { /* 落到 fetch ✓ */ }
+  /* ② fetch 兜底 ✓（没有 curl 的环境 / curl 被限制时 ✓） */
+  const r = await fetch(url, Object.assign({}, opt, { headers: want }));
+  const t = await r.text();
+  return { ok: r.ok, status: r.status, text: async () => t };
 }
 /* 每个节点输出截断 ✓ —— outbox 是要给前端看的 ✓，塞几十 MB 进去会把面板卡住 ✗ */
 function trimFlowOut(v) {
@@ -4952,7 +4991,7 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag' ||
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
         u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf' ||
-        u.pathname === '/api/life/en/fetch' ||
+        u.pathname === '/api/life/en/fetch' || u.pathname === '/api/life/en/sources' ||
         u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
@@ -5151,6 +5190,36 @@ const server = http.createServer(async (req, res) => {
               ✗ BBC / Guardian / VOA Learning English / The Conversation **连不通** ✗
               → 所以**别做「一键订阅外刊」** ✗，让用户自己贴链接 / 贴正文 ✓
                 （贴正文这条路**一定可用** ✓，永远留着 ✓）。 */
+        /* ── 外刊精读：推荐外刊源 ✓ ────────────────────────────────────────
+           ★ 为什么要有这个 ✗：用户原话「自行帮我抓取热门的，和别人开源的外刊资源等等」✓ ——
+             外刊精读**一进来是空的** ✗（要用户自己找链接、自己贴 ✗），
+             等于「功能做完了但用不起来」✗。
+           ⚠️ 只做**只读**拉取 ✗：不登录 ✓、不带用户 Cookie ✓、不写任何东西 ✓。
+           ⚠️ 源是**实测过的** ✓（feed 通 ✓ **并且**文章正文抽得出来 ✓ ——
+              只测 feed 不够 ✗，Phys.org / Ars Technica / Knowable 就是 feed 正常但文章 403/405 ✗）。
+           ⚠️ 每源有 TTL 缓存 ✓（15~60 分钟 ✓）—— 不然用户点几下就把人家打一遍 ✗。
+           ⚠️ **一次只拉用户点的那一个源** ✓（不像热榜那样一次全拉 ✗）——
+              20 多个源并发会把首屏拖到十几秒 ✗，而用户一次只看一个 ✓。 */
+        if (u.pathname === '/api/life/en/sources') {
+          const srcParam = String(u.searchParams.get('sources') || '').trim();
+          const keys = srcParam ? srcParam.split(',').map((x) => x.trim()).filter(Boolean) : null;
+          if (keys && keys.length > 8) return send(res, 200, { ok: false, error: '一次最多拉 8 个源' });
+          /* 不带 sources → 只回目录 ✓（前端自己也有这份 ✓，但留一个服务端口子方便排查 ✓） */
+          if (!keys) {
+            return send(res, 200, {
+              ok: true, at: Date.now(),
+              sources: EN_SOURCES.catalog(), groups: EN_SOURCES.GROUPS,
+              osResources: EN_SOURCES.OS_RESOURCES, results: [],
+            });
+          }
+          try {
+            const r = await EN_SOURCES.fetchMany(keys, { fetch: feedFetch, timeoutMs: 25000, force: u.searchParams.get('force') === '1' });
+            return send(res, 200, r);
+          } catch (error) {
+            return send(res, 200, { ok: false, error: String((error && error.message) || error) });
+          }
+        }
+
         if (u.pathname === '/api/life/en/fetch') {
           const url = String((postBody && postBody.url) || '').trim();
           if (!/^https?:\/\//i.test(url)) return send(res, 200, { ok: false, error: '链接要 http:// 或 https:// 开头' });

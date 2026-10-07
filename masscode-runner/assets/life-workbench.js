@@ -1333,6 +1333,13 @@
   .lw-rd-tools input:focus { border-color:${T.accent}; }
   .lw-rd-tools button { height:26px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
     color:${T.dim}; font:10px ${UI}; cursor:pointer; letter-spacing:.5px; flex:none; }
+  /* ★ 「挑一篇」要**看得出来是主入口** ✓ —— 用户一进来是空的时候，
+     满屏灰按钮里必须有一个亮的 ✓（不然他不知道从哪开始 ✓）。 */
+  .lw-rd-tools button.pri { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rd-tools button.pri:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-ep-big { height:32px; padding:0 18px; border:2px solid ${T.accent}; background:transparent;
+    color:${T.accent}; font:11.5px ${UI}; cursor:pointer; }
+  .lw-ep-big:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-rd-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-bk { display:flex; gap:11px; padding:11px 13px; border-bottom:1px solid #1c1c1a; cursor:pointer; }
   .lw-bk:hover { background:${T.card2}; }
@@ -1432,6 +1439,73 @@
   .lw-imp .st.ok { color:${T.ok}; }
   .lw-imp .st.err { color:${T.red}; }
   .lw-imp .st2 { font-size:10px; color:${T.faint}; line-height:1.9; margin-top:4px; }
+
+  /* ── 推荐外刊源浮层 ✓ ───────────────────────────────────────────────────
+     ★ 用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓。
+     ⚠️ 左栏固定宽 + 右栏 flex:1 各**自己滚** ✗ —— 用整块滚的话，
+        源一多（7 个分组 20 多个源 ✗）就得先滚到底才看得到文章列表 ✗。
+     ⚠️ 两个滚动容器都要 min-height:0 ✗（flex 子项默认 min-height:auto ✗，
+        内容一长就不滚、把父级撑破 ✗ —— 这个坑在这个项目里踩过好几次 ✗）。 */
+  .lw-epsrc-tabs { display:flex; gap:0; margin-left:14px; }
+  .lw-epsrc-tabs button { height:24px; padding:0 11px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-epsrc-tabs button + button { border-left:0; }
+  .lw-epsrc-tabs button:hover { color:${T.text}; }
+  .lw-epsrc-tabs button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-epsrc { display:flex; height:min(70vh,640px); }
+  .lw-epsrc-side { width:250px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto;
+    min-height:0; padding:8px 0; background:${T.bg}; }
+  .lw-epsrc-main { flex:1; min-width:0; min-height:0; overflow:auto; background:${T.bg}; }
+  .lw-epsrc-one { height:min(70vh,640px); overflow:auto; min-height:0; padding:12px 16px; background:${T.bg}; }
+  .lw-epsrc-g { font-size:9px; letter-spacing:1.4px; color:${T.faint}; text-transform:uppercase;
+    padding:10px 13px 4px; }
+  .lw-epsrc-s { display:flex; align-items:center; gap:8px; padding:6px 13px; cursor:pointer; }
+  .lw-epsrc-s:hover { background:${T.card2}; }
+  .lw-epsrc-s.on { background:${T.card2}; box-shadow:inset 3px 0 0 ${T.accent}; }
+  .lw-epsrc-s .em { flex:none; font-size:12px; line-height:1; }
+  .lw-epsrc-s .tx { flex:1; min-width:0; display:flex; align-items:baseline; gap:6px; }
+  .lw-epsrc-s .tx b { font-size:11.5px; font-weight:400; color:${T.text}; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .lw-epsrc-s.on .tx b { color:${T.accent}; }
+  .lw-epsrc-s .tx i { font-style:normal; flex:none; font-size:9px; color:${T.faint}; }
+  .lw-epsrc-hd { display:flex; align-items:center; gap:9px; padding:11px 16px; position:sticky; top:0;
+    background:${T.bg}; border-bottom:1px solid ${T.lineDim}; z-index:2; }
+  .lw-epsrc-hd b { font-size:12px; }
+  .lw-epsrc-hd .lv { font-size:9px; color:${T.accent}; border:1px solid ${T.lineDim}; padding:1px 5px; }
+  .lw-epsrc-hd .n { font-size:10px; color:${T.faint}; }
+  .lw-epsrc-hd button { margin-left:auto; height:22px; padding:0 9px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:10px ${UI}; cursor:pointer; }
+  .lw-epsrc-hd button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-epsrc-hd a { font-size:10px; color:${T.dim}; text-decoration:none; }
+  .lw-epsrc-hd a:hover { color:${T.accent}; }
+  .lw-epsrc-list { padding:0 0 10px; }
+  .lw-epsrc-it { padding:10px 16px; border-bottom:1px solid #1c1c1a; cursor:pointer; }
+  .lw-epsrc-it:hover { background:${T.card2}; }
+  .lw-epsrc-it.busy { opacity:.6; cursor:progress; }
+  .lw-epsrc-it .ti { font-size:12.5px; line-height:1.55; color:${T.text}; }
+  .lw-epsrc-it .de { font-size:10.5px; line-height:1.75; color:${T.dim}; margin-top:3px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .lw-epsrc-it .mt { display:flex; align-items:center; gap:9px; margin-top:5px; font-size:9.5px; color:${T.faint}; }
+  .lw-epsrc-it .mt .go { color:${T.faint}; }
+  .lw-epsrc-it:hover .mt .go { color:${T.accent}; }
+  .lw-epsrc-it .mt .op { margin-left:auto; color:${T.faint}; text-decoration:none; }
+  .lw-epsrc-it .mt .op:hover { color:${T.accent}; }
+  .lw-epsrc-tip { padding:22px 18px; font-size:11.5px; line-height:2; color:${T.dim}; }
+  .lw-os-tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .lw-os-tags button { height:24px; padding:0 10px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-os-tags button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-os-tags button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  .lw-os { border:1px solid ${T.lineDim}; background:${T.card}; padding:11px 13px; margin-bottom:9px; }
+  .lw-os .hd { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .lw-os .hd b { font-size:12.5px; color:${T.text}; }
+  .lw-os .hd .by { font-size:10px; color:${T.faint}; }
+  .lw-os .hd .st { font-size:10px; color:${T.accent}; }
+  .lw-os .hd .tg { font-size:9px; color:${T.dim}; border:1px solid ${T.lineDim}; padding:1px 5px; }
+  .lw-os .hd .lv { font-size:9px; color:${T.faint}; }
+  .lw-os .hd .op { margin-left:auto; font-size:10.5px; color:${T.accent}; text-decoration:none; }
+  .lw-os .de { font-size:11px; line-height:1.85; color:${T.dim}; margin-top:6px; }
+  .lw-os .wn { font-size:10.5px; line-height:1.8; color:${T.warn}; margin-top:5px; }
 
   /* ══════════════════════════════════════════════════════════════════════
      外刊精读 / 生词本 ✓（阅读模块的两个子模式 ✓）
@@ -1909,15 +1983,30 @@
     wordQ: '', wordFilter: 'all', wordSel: '', wordNew: '', wordPh: '', wordDef: '', wordEg: '',
     revOpen: false, revQ: [], revI: 0, revShown: false, revDone: 0, revOK: 0,
     artNote: '',
+    /* ★ 推荐外刊源 ✓（用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓）——
+       ⚠️ 面板一进来是**空的** ✗ 是最劝退的 ✗（要自己找链接、自己贴 ✗），
+          所以给一个「挑一篇」的入口 ✓，并且**一打开就自动拉第一个源** ✓（省一次点击 ✓）。 */
+    srcOpen: false, srcTab: 'web',   /* 'web' = 在线外刊源 ✓ / 'os' = 开源资源 ✓ */
+    srcKey: '', srcBusy: false, srcErr: '', srcItems: null, srcMeta: null,
+    srcImporting: '',                /* 正在导入哪一条（按 url 记 ✓，好让那一行转圈 ✓）*/
+    osTag: '全部',                   /* 开源资源按分类筛 ✓ */
   };
   /* 朗读 ✓（Web Speech API ✓）—— 只放内存 ✗，语速 / 音色落 STORE ✓ */
   const SPK = { voices: [], loaded: false, listening: false, seq: 0, speaking: false };
+  /* ★ 全局键盘闸门 ✓ —— 见下面 Escape 那条 ✗。
+     ⚠️ 必须声明在**模块顶部** ✗ —— `bindEnglish()` 在 `render()` 的调用链上就会跑到 ✓，
+        而 `render()` 可能在模块求值期间就被调用 ✗（见顶部那条 TDZ 铁律 ✗）。 */
+  const EP_KEYS = { esc: false };
   /* ★★ 共享的纯逻辑模块 ✓（双栖的 ✓，见 lib/en-text.js 和 lib/srs.js 末尾 ✓）——
      它们由 index.html 在 life-workbench.js **之前**加载 ✓（都是 defer ✓，按顺序执行 ✓）。
      ⚠️ 万一没加载上（缓存 / 404 ✗），**不能整个模块崩掉** ✗ ——
         下面所有用到的地方都要判空 ✓，并给一句「说明为什么用不了」✓。 */
   const EN = (typeof window !== 'undefined' && window.LW_EN_TEXT) || null;
   const SRS = (typeof window !== 'undefined' && window.LW_SRS) || null;
+  /* 外刊源目录 ✓ —— 也是双栖的 ✓（lib/en-sources.js ✓）。
+     ⚠️ 它**不是**外刊精读能不能用的前提 ✗ —— 没加载上就少一个「挑一篇」的入口 ✓，
+        其余功能照旧 ✓（所以这里判空兜底 ✓，不写进 epNoLib() 那条硬依赖里 ✓）。 */
+  const ENSRC = (typeof window !== 'undefined' && window.LW_EN_SOURCES) || null;
   /* 定时排期的「人话描述」也共用一份 ✓ —— 前端自己再写一套必然走偏 ✗
      （「每 1 小时」和「每小时」两种说法并存，用户会以为哪里不对 ✗）。 */
   const FLOW_SCHED = (typeof window !== 'undefined' && window.LW_FLOW_SCHED) || null;
@@ -7619,6 +7708,7 @@
       + (RD_UI.connOpen ? rdWrConnHtml() : '')
       + (EP_UI.impOpen ? epImportHtml() : '')
       + (EP_UI.revOpen ? epReviewHtml() : '')
+      + (EP_UI.srcOpen ? epSrcHtml() : '')
       + '</div>';
   }
   /* 导入浮层 ✓（先预览再导入 ✓）*/
@@ -8209,7 +8299,12 @@
     const words = arts.reduce((n, a) => n + (Number(a.words) || 0), 0);
     const flt = (k, label, n) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epflt="' + k + '">'
       + '<span class="em">▣</span>' + label + '<span class="n">' + n + '</span></div>';
-    return '<div class="lw-rd-hd">精读统计</div>'
+    return '<div class="lw-rd-hd">找文章</div>'
+      + '<div class="lw-rd-row" data-epsrcopen="web" title="20 多个免费英文源，都是实测能抓正文的">'
+      + '<span class="em">🌐</span>推荐外刊源<span class="n">' + (ENSRC ? epSrcGroups().length : 0) + ' 组</span></div>'
+      + '<div class="lw-rd-row" data-epsrcopen="os" title="别人维护的公开仓库：杂志归档 / 教材 / 资源清单 / 背单词">'
+      + '<span class="em">📦</span>开源资源<span class="n">' + ((ENSRC && ENSRC.OS_RESOURCES) ? ENSRC.OS_RESOURCES.length : 0) + ' 个</span></div>'
+      + '<div class="lw-rd-hd">精读统计</div>'
       + '<div class="lw-rd-stat">'
       + '<div><b>' + arts.length + '</b><span>篇文章</span></div>'
       + '<div><b>' + doneN + '</b><span>已精读</span></div>'
@@ -8226,7 +8321,7 @@
       + epSpkHtml()
       + '<div class="lw-rd-hd">怎么用</div>'
       + '<div class="lw-ep-tip">'
-      + '① 上面「＋ 导入文章」贴链接或正文<br>'
+      + '① 点上面「🌐 推荐外刊源」挑一篇（或「＋ 导入」自己贴）<br>'
       + '② 中间点一句话 → 右边出现这句<br>'
       + '③ 用鼠标「划」一个词 → 右边自动填上 → 回车加进生词本<br>'
       + '④ 切到「生词本」按遗忘曲线复习<br>'
@@ -8263,13 +8358,20 @@
       if (q && (String(a.title || '') + ' ' + String(a.site || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
     }).sort((a, b) => (Number(b.edit) || 0) - (Number(a.edit) || 0));
+    /* ★ 「挑一篇」放在**最前面** ✓ —— 用户原话：「自行帮我抓取热门的」✓。
+       ⚠️ 不放在「＋ 导入」后面 ✗ —— 那个要用户先有链接 ✗，
+          而多数人**一开始就是没有链接** ✗（这才是这个功能的真正入口 ✓）。 */
     const tools = '<div class="lw-rd-tools">'
       + '<input id="lw-ep-q" placeholder="搜索标题 / 来源…" value="' + esc(EP_UI.q) + '"/>'
-      + '<button id="lw-ep-imp" title="贴链接或正文，导入一篇外刊">＋ 导入文章</button>'
+      + '<button class="pri" id="lw-ep-src" title="从免费外刊源里挑一篇（公开 RSS，都是实测能抓正文的）">🌐 挑一篇</button>'
+      + '<button id="lw-ep-imp" title="贴链接或正文，导入一篇外刊">＋ 导入</button>'
       + '</div>';
     if (!list.length) {
       return tools + '<div class="lw-rd-empty">还没有文章<br>'
-        + '<span style="color:' + T.faint + '">点「＋ 导入文章」贴个链接，或直接贴正文</span></div>';
+        + '<span style="color:' + T.faint + '">点上面「🌐 挑一篇」从推荐外刊源里选 ✓<br>'
+        + '也可以「＋ 导入」贴个链接或直接贴正文</span>'
+        + '<div style="margin-top:14px"><button class="lw-ep-big" id="lw-ep-src2">🌐 看看有什么好文章</button></div>'
+        + '</div>';
     }
     return tools + list.map((a) => {
       const p = epArtProg(a);
@@ -8287,8 +8389,19 @@
   }
   function epReadHtml(a) {
     if (!a) {
-      return '<div class="lw-rd-empty" style="margin:auto">← 从中间选一篇文章<br>'
-        + '<span style="color:' + T.faint + '">还没有就点「＋ 导入文章」</span></div>';
+      /* ⚠️ 空态是**第一印象** ✗ —— 只说「点「＋ 导入文章」」等于让用户自己去找文章 ✗，
+         所以这里给一个**真的能点的主按钮** ✓（点开就是挑文章 ✓）。 */
+      const none = !epArts().length;
+      return '<div class="lw-rd-empty" style="margin:auto;max-width:440px">'
+        + (none ? '还没有精读过的文章<br>' : '← 从中间选一篇文章<br>')
+        + '<span style="color:' + T.faint + '">' + (none
+          ? '从推荐外刊源里挑一篇最快 ✓（免费公开源，正文自动抓下来）'
+          : '或者再挑一篇新的') + '</span>'
+        + '<div style="margin-top:16px"><button class="lw-ep-big" id="lw-ep-src3">🌐 挑一篇外刊</button></div>'
+        + '<div class="lw-ep-tip" style="margin-top:12px;text-align:left">'
+        + '也可以「＋ 导入」自己贴链接 / 正文 ✓<br>'
+        + '或者左边「📦 开源资源」看看别人整理的杂志归档 / 教材 / 资源清单 ✓'
+        + '</div></div>';
     }
     const sents = epSents(a);
     const s = EP_UI.sel >= 0 && sents[EP_UI.sel] ? sents[EP_UI.sel] : null;
@@ -8488,6 +8601,60 @@
   }
 
   /* ══ 复习浮层 ✓（遗忘曲线要**看得见** ✓）══════════════════════════════════ */
+  /* ★ 推荐外刊源：打开 / 拉取 / 导入 ✓ ────────────────────────────────────
+     ⚠️ 打开面板时**自动拉第一个源** ✗ —— 不自动拉的话用户看到的是「← 左边点一个源」✗，
+        还要再点一下才有内容 ✗（多一步就多一批人卡在这儿 ✗）。
+     ⚠️ 拉取**一次只拉一个源** ✗ —— 20 多个一起并发会把首屏拖到十几秒 ✗，
+        而用户一次只看一个 ✓（服务端也有 15~60 分钟的缓存 ✓，点回去是秒开 ✓）。 */
+  function epSrcOpen(tab) {
+    EP_UI.srcOpen = true;
+    EP_UI.srcTab = tab || EP_UI.srcTab || 'web';
+    render();
+    if (EP_UI.srcTab === 'web' && !EP_UI.srcItems && !EP_UI.srcBusy) {
+      const first = epSrcGroups()[0];
+      if (first && first.list[0]) epSrcLoad(first.list[0].key);
+    }
+  }
+  function epSrcLoad(key, force) {
+    if (!ENSRC || EP_UI.srcBusy) return;
+    EP_UI.srcKey = key;
+    EP_UI.srcBusy = true; EP_UI.srcErr = ''; EP_UI.srcItems = null; EP_UI.srcMeta = null;
+    render();
+    fetch('/api/life/en/sources?sources=' + encodeURIComponent(key) + (force ? '&force=1' : ''), { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        EP_UI.srcBusy = false;
+        const one = (d && d.results && d.results[0]) || null;
+        if (!one || !one.ok) EP_UI.srcErr = (one && one.error) || (d && d.error) || '拉不到这个源';
+        else { EP_UI.srcItems = one.items || []; EP_UI.srcMeta = one; }
+        render();
+      })
+      .catch((e) => { EP_UI.srcBusy = false; EP_UI.srcErr = String((e && e.message) || e); render(); });
+  }
+  function epSrcImport(it) {
+    if (EP_UI.srcImporting || !it || !it.url) return;
+    EP_UI.srcImporting = it.url; EP_UI.srcErr = '';
+    render();
+    fetch('/api/life/en/fetch', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: it.url }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        EP_UI.srcImporting = '';
+        if (!d || !d.ok) { EP_UI.srcErr = (d && d.error) || '抓不到这一篇'; render(); return; }
+        const a = epArtAdd({
+          title: d.title || it.title, site: d.site || (EP_UI.srcMeta && EP_UI.srcMeta.name) || '',
+          url: it.url, text: d.text, level: d.level,
+        });
+        if (!a) { EP_UI.srcErr = '这一篇正文太短（可能被墙 / 是视频页），换一篇吧'; render(); return; }
+        /* ⚠️ 导入成功就**关掉浮层** ✗ —— 留着的话用户以为没成功，会再点一次 ✗ */
+        EP_UI.srcOpen = false;
+        epSetMode('ex');
+        rdToast('导入好了：《' + a.title + '》· ' + a.words + ' 词 ✓');
+      })
+      .catch((e) => { EP_UI.srcImporting = ''; EP_UI.srcErr = String((e && e.message) || e); render(); });
+  }
   function epStartReview() {
     if (!SRS) return;
     const due = SRS.dueCards(epWords(), Date.now(), 50);
@@ -8598,6 +8765,114 @@
       + '<button class="pri" id="lw-epimp-do"' + (t.trim().length > 20 ? '' : ' disabled') + '>导入这篇</button>'
       + '<button id="lw-epimp-cancel">取消</button>'
       + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">只抓你给的那一个链接 ✓ 不做爬虫 ✗</span>'
+      + '</div></div></div>';
+  }
+
+  /* ══ 推荐外刊源 ✓ ══════════════════════════════════════════════════════
+     ★ 用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓。
+     ⚠️ 没有这个入口的话，外刊精读**一进来就是空的** ✗（要用户自己找链接、自己贴 ✗）——
+        等于「功能做完了但用不起来」✗。
+     ⚠️ 只**只读**拉公开 RSS ✓：不登录 ✓、不带 Cookie ✓、不写东西 ✓；
+        而且**一次只拉用户点的那一个源** ✓（20 多个一起拉会把首屏拖到十几秒 ✗）。
+     ⚠️ 列表里的每个源都是**实测过**的 ✓（feed 通 ✓ 并且正文抽得出来 ✓）——
+        只测 feed 不够 ✗：Phys.org / Ars Technica / Knowable 就是 feed 正常、
+        文章页 403/405 ✗（见 lib/en-sources.js 顶部那份排除清单 ✓）。 */
+  function epSrcGroups() {
+    const cat = ENSRC ? ENSRC.catalog() : [];
+    const out = [];
+    (ENSRC ? ENSRC.GROUPS : []).forEach((g) => {
+      const inG = cat.filter((x) => x.group === g);
+      if (inG.length) out.push({ g, list: inG });
+    });
+    return out;
+  }
+  function epSrcSideHtml() {
+    const groups = epSrcGroups();
+    if (!groups.length) {
+      return '<div class="lw-epsrc-tip">推荐源目录没加载上 ✗<br>'
+        + '<span style="color:' + T.faint + '">（/lib/en-sources.js）—— 硬刷新一下（⌘⇧R）试试。</span></div>';
+    }
+    return groups.map(({ g, list }) => '<div class="lw-epsrc-g">' + esc(g) + '</div>'
+      + list.map((s) => '<div class="lw-epsrc-s' + (EP_UI.srcKey === s.key ? ' on' : '') + '" data-epsrc="' + esc(s.key) + '"'
+        + ' title="' + esc(s.d || '') + '">'
+        + '<span class="em">' + (s.icon || '•') + '</span>'
+        + '<span class="tx"><b>' + esc(s.name) + '</b><i>' + esc(s.lv || '') + '</i></span></div>').join('')).join('');
+  }
+  function epSrcMainHtml() {
+    if (EP_UI.srcBusy) {
+      return '<div class="lw-epsrc-tip">正在拉这个源的最新文章…<br>'
+        + '<span style="color:' + T.faint + '">（第一次要 1~3 秒 ✓；之后 15~60 分钟内走缓存 ✓）</span></div>';
+    }
+    if (EP_UI.srcErr) {
+      return '<div class="lw-epsrc-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.srcErr) + '<br>'
+        + '<span style="color:' + T.faint + '">换个源试试 ✓；或者用「＋ 导入文章」直接贴链接 / 正文 ✓。</span></div>';
+    }
+    const items = EP_UI.srcItems;
+    if (!items) return '<div class="lw-epsrc-tip">← 左边点一个源</div>';
+    if (!items.length) return '<div class="lw-epsrc-tip">这个源这会儿没有文章</div>';
+    const meta = EP_UI.srcMeta || {};
+    const head = '<div class="lw-epsrc-hd">'
+      + '<b>' + (meta.icon || '') + ' ' + esc(meta.name || '') + '</b>'
+      + (meta.lv ? '<span class="lv">' + esc(meta.lv) + '</span>' : '')
+      + '<span class="n">' + items.length + ' 篇</span>'
+      + '<button id="lw-epsrc-force" title="不走缓存，重新拉一次">↻ 刷新</button>'
+      + (meta.home ? '<a href="' + esc(meta.home) + '" target="_blank" rel="noopener">↗ 站点</a>' : '')
+      + '</div>';
+    return head + '<div class="lw-epsrc-list">' + items.map((x) => {
+      const busy = EP_UI.srcImporting === x.url;
+      const day = x.ts ? new Date(x.ts).toISOString().slice(0, 10) : '';
+      return '<div class="lw-epsrc-it' + (busy ? ' busy' : '') + '" data-epsrcit="' + esc(x.url) + '">'
+        + '<div class="ti">' + esc(x.title || '(无标题)') + '</div>'
+        + (x.desc ? '<div class="de">' + esc(x.desc) + '</div>' : '')
+        + '<div class="mt">' + (day ? '<span>' + day + '</span>' : '')
+        + '<span class="go">' + (busy ? '正在抓正文…' : '点一下 → 导入精读') + '</span>'
+        + '<a class="op" href="' + esc(x.url) + '" target="_blank" rel="noopener" title="先看看原文">↗</a>'
+        + '</div></div>';
+    }).join('') + '</div>';
+  }
+  function epOsHtml() {
+    const all = (ENSRC && ENSRC.OS_RESOURCES) || [];
+    if (!all.length) {
+      return '<div class="lw-epsrc-tip">开源资源清单没加载上 ✗<br>'
+        + '<span style="color:' + T.faint + '">（/lib/en-sources.js）—— 硬刷新一下（⌘⇧R）试试。</span></div>';
+    }
+    const tags = ['全部', ...Array.from(new Set(all.map((x) => x.tag)))];
+    const list = EP_UI.osTag === '全部' ? all : all.filter((x) => x.tag === EP_UI.osTag);
+    return '<div class="lw-os-tags">' + tags.map((t) => '<button class="' + (EP_UI.osTag === t ? 'on' : '')
+        + '" data-epostag="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>'
+      + '<div class="lw-epsrc-list">' + list.map((x) => '<div class="lw-os">'
+        + '<div class="hd"><b>' + esc(x.n) + '</b>'
+        + '<span class="by">' + esc(x.by) + '</span>'
+        + '<span class="st">★ ' + (x.stars >= 1000 ? (x.stars / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : x.stars) + '</span>'
+        + '<span class="tg">' + esc(x.tag) + '</span>'
+        + '<span class="lv">' + esc(x.lv || '') + '</span>'
+        + '<a class="op" href="' + esc(x.url) + '" target="_blank" rel="noopener">在 GitHub 打开 ↗</a></div>'
+        + '<div class="de">' + esc(x.what) + '</div>'
+        + (x.warn ? '<div class="wn">⚠️ ' + esc(x.warn) + '</div>' : '')
+        + '</div>').join('') + '</div>';
+  }
+  function epSrcHtml() {
+    const isWeb = EP_UI.srcTab !== 'os';
+    return '<div class="lw-imp" id="lw-epsrc"><div class="box" style="width:min(1080px,94vw)">'
+      + '<div class="hd"><b>🌐 挑一篇外刊</b>'
+      + '<span class="lw-epsrc-tabs">'
+      + '<button class="' + (isWeb ? 'on' : '') + '" data-epsrctab="web">在线外刊源</button>'
+      + '<button class="' + (isWeb ? '' : 'on') + '" data-epsrctab="os">开源资源</button>'
+      + '</span>'
+      + '<span class="x" id="lw-epsrc-x">✕</span></div>'
+      + '<div class="bd" style="padding:0">'
+      + (isWeb
+        ? '<div class="lw-epsrc"><div class="lw-epsrc-side">' + epSrcSideHtml() + '</div>'
+          + '<div class="lw-epsrc-main">' + epSrcMainHtml() + '</div></div>'
+        : '<div class="lw-epsrc-one">' + epOsHtml() + '</div>')
+      + '</div>'
+      + '<div class="ft">'
+      + '<span style="font-size:10px;color:' + T.faint + '">'
+      + (isWeb
+        ? '点一条 → 服务端把正文抽出来 → 直接进精读 ✓ ｜ 只读公开 RSS ✓ 不登录 ✓ 不写你的账号 ✓'
+        : '这些都是**别人维护的公开仓库** ✓ 我只放链接 ✗ —— 不抓取、不镜像、不代下 ✓ ｜ 版权各归各的 ✓')
+      + '</span>'
+      + '<button id="lw-epsrc-imp" style="margin-left:auto">＋ 自己贴链接 / 正文</button>'
       + '</div></div></div>';
   }
 
@@ -8720,7 +8995,51 @@
     qa('[data-rdmode]').forEach((el) => { el.onclick = () => epSetMode(el.dataset.rdmode); });
 
     /* ── 外刊精读 ── */
+    /* ★★ Escape 关浮层 ✓ —— ⚠️⚠️ 必须挂在 **document** 上 ✗✗，不能只挂 `#lifework-view` ✗：
+       下面那个 `host.onkeydown` **只有当焦点在面板里面**时才会触发 ✗，
+       而用户刚打开浮层时焦点往往还在 body 上（他还没点过任何东西 ✗）→
+       按 Escape **毫无反应** ✗（实测：探针里按 Escape 浮层不关 ✗，我以为写好了 ✗）。
+       ⚠️ 而且**只能挂一次** ✗✗ —— `bindEnglish()` 每次 `render()` 都会跑 ✓，
+          每跑一次挂一个 → 十几个监听叠着 ✗（这个坑项目里踩过 ✗）。
+       → 用 `EP_KEYS.esc` 当闸门 ✓；用 `capture` ✓ 抢在别的处理之前 ✓。 */
+    if (!EP_KEYS.esc && typeof document !== 'undefined') {
+      EP_KEYS.esc = true;
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape') return;
+        if (EP_UI.srcOpen) { ev.preventDefault(); EP_UI.srcOpen = false; EP_UI.srcErr = ''; render(); return; }
+        /* 导入浮层也一起管 ✓ —— 同样是「盖住整屏」的模态 ✓，Escape 关不掉很反直觉 ✗ */
+        if (EP_UI.impOpen) { ev.preventDefault(); EP_UI.impOpen = false; EP_UI.impMsg = ''; render(); }
+      }, true);
+    }
     const ai = q('#lw-ep-imp'); if (ai) ai.onclick = () => { EP_UI.impOpen = true; EP_UI.impMsg = ''; render(); };
+    /* ★ 推荐外刊源 ✓ —— 三个入口（中栏「挑一篇」✓ / 中栏空态的大按钮 ✓ /
+       右栏空态的大按钮 ✓）+ 左栏两行 ✓，都走同一个 open ✓。 */
+    qa('#lw-ep-src, #lw-ep-src2, #lw-ep-src3').forEach((el) => { el.onclick = () => epSrcOpen('web'); });
+    qa('[data-epsrcopen]').forEach((el) => { el.onclick = () => epSrcOpen(el.dataset.epsrcopen); });
+    const scx = q('#lw-epsrc-x'); if (scx) scx.onclick = () => { EP_UI.srcOpen = false; EP_UI.srcErr = ''; render(); };
+    qa('[data-epsrctab]').forEach((el) => {
+      el.onclick = () => {
+        EP_UI.srcTab = el.dataset.epsrctab; render();
+        /* ⚠️ 切到「在线外刊源」而还没拉过 → 顺手拉第一个 ✓（不拉的话是空白面板 ✗） */
+        if (EP_UI.srcTab === 'web' && !EP_UI.srcItems && !EP_UI.srcBusy) {
+          const g = epSrcGroups()[0];
+          if (g && g.list[0]) epSrcLoad(g.list[0].key);
+        }
+      };
+    });
+    qa('[data-epsrc]').forEach((el) => { el.onclick = () => epSrcLoad(el.dataset.epsrc); });
+    const sf = q('#lw-epsrc-force'); if (sf) sf.onclick = () => epSrcLoad(EP_UI.srcKey, true);
+    qa('[data-epsrcit]').forEach((el) => {
+      const it = (EP_UI.srcItems || []).find((x) => x.url === el.dataset.epsrcit);
+      el.onclick = (ev) => {
+        /* ⚠️ 点「↗ 先看看原文」不能触发导入 ✗ —— 那是另一个意图 ✓ */
+        if (ev.target && ev.target.closest && ev.target.closest('a')) return;
+        epSrcImport(it);
+      };
+    });
+    qa('[data-epostag]').forEach((el) => { el.onclick = () => { EP_UI.osTag = el.dataset.epostag; render(); }; });
+    const si = q('#lw-epsrc-imp');
+    if (si) si.onclick = () => { EP_UI.srcOpen = false; EP_UI.impOpen = true; EP_UI.impMsg = ''; render(); };
     const aq = q('#lw-ep-q');
     if (aq) aq.oninput = () => { EP_UI.q = aq.value; const host2 = document.getElementById('lifework-view'); /* 只过滤 ✓ */ };
     qa('[data-epart]').forEach((el) => { el.onclick = () => epPickArt(el.dataset.epart); });
@@ -8893,6 +9212,9 @@
 
     /* ── 键盘：复习时空格翻面，1~4 直接评分 ✓ ── */
     host.onkeydown = (ev) => {
+      /* ⚠️ 推荐源浮层的 Escape **不在这里** ✗ —— 它挂在 document 上 ✓（见 bindEnglish 开头 ✓）：
+         这个处理器只有焦点在面板里才触发 ✗，而浮层刚打开时焦点不在 ✗。
+         （「同一件事写两处」就是这个项目反复栽的坑 ✓，所以这里只留一条路径 ✓。） */
       if (!EP_UI.revOpen) return;
       if (ev.key === ' ' || ev.key === 'Enter') {
         if (!EP_UI.revShown) { ev.preventDefault(); EP_UI.revShown = true; render(); }

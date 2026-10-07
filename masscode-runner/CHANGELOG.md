@@ -2,6 +2,106 @@
 
 ## 未发布 — 2026-10-07
 
+### ★★★ 外刊精读：内置 24 个免费外刊源 + 11 个开源资源（不再是空面板）
+
+用户原话：「外刊精读，自行帮我抓取热门的，和别人开源的外刊资源等等」。
+
+**问题**：外刊精读**一进来是空的** ✗ —— 要用户自己找链接、自己贴 ✗，
+等于「功能做完了但用不起来」✗。
+
+**做法：新增 `lib/en-sources.js`（纯逻辑 + 双栖）+ 服务端一条路由 + 一个挑文章的浮层**
+
+`lib/en-sources.js` 照 `lib/hot.js` 的老规矩 ✓：注入 fetch ✓、每源 TTL 缓存 ✓、
+单源失败不影响别的 ✓。里面两份数据：
+
+- **24 个在线外刊源**（分 7 组：新闻 / 科学 / 思想 / 技术 / 纪实 / 文化 / 环境）——
+  NPR World · US News · ScienceDaily · Nature · Quanta · Nautilus · Eos · Undark ·
+  Our World in Data · Aeon · Psyche · Arts & Letters Daily · 3 Quarks Daily ·
+  The Marginalian · Farnam Street · Astral Codex Ten · The American Scholar ·
+  MIT Technology Review · WIRED · Longreads · Literary Hub · Narratively ·
+  Smithsonian · Grist。每个都标了难度（B1~C1+）和一句「这是什么 / 适合谁」✓。
+- **11 个开源资源**（静态数据 ✓，不联网 ✓）：`hehonghui/awesome-english-ebooks`（★37.6k）·
+  `nailperry-zd/The-Economist` · `iChochy/NCE`（新概念英语）· `yvoronoy/awesome-english` ·
+  `knowledgefxg/learning-english` · `RealKai42/qwerty-learner` · `CapeAga/bai-it` ·
+  `xiaolai/a-new-english-reading-handbook` · `shah0150/awesome-IELTS` ·
+  `mcxiaoxiao/openIELTS` · `interaminense/learning-english`，按「杂志归档 / 教材 /
+  资源清单 / 背单词 / 阅读辅助 / 阅读方法 / 考试」分类可筛 ✓。
+  ⚠️ 我只**放链接** ✗ —— 不抓取、不镜像、不代下 ✓；归档类**如实标注版权归原刊** ✓
+  （不装作没这回事 ✓，但也不替用户决定用不用 ✓）。
+
+**★★ 每一个源都是实测过的 —— 而且「实测」要测两遍**
+
+规矩：**feed 拿得到条目** ✓ **并且**「点进去正文抽得出来」✓，两条都过才算。
+⚠️ 只测 feed **远远不够** ✗：Phys.org / Ars Technica / Knowable 的 feed 完全正常 ✓，
+但文章页 **403 / 405 反爬** ✗ —— 用户点进去只会看到「抓不到」✗。
+⚠️ 而且「本机连不上」的一大片，**一个都没塞** ✗（Guardian / BBC / NYT / 大西洋月刊 /
+纽约客 / The Conversation / MIT News / NASA / The Economist / VOA / Al Jazeera /
+DW / CBC / PBS / Time / Vox / Axios / Nikkei … 共 40 个 ✗）——
+不是它们不好 ✗，是这台机器 DNS 被污染 / 连接超时 ✗，塞进来就是「点了没反应」✗。
+
+**★★★ 踩到一个真坑：Atom 的 feed 顶上那个 `<link>` 是**站点首页****
+
+第一版 `parseFeed` 写的是「在整份 XML 里找第一个 `<link>`」✗ ——
+而 Atom 的 `<feed>` 顶上就有个 `rel="alternate"` 指向**首页** ✗ →
+于是「最新文章」全是站点首页 ✗（Aeon / WIRED / Quanta / MIT TR / OWID /
+American Scholar 抓回来的标题统统是站名 ✗），
+而且首页文字多 ✗ → 正文抽取还「成功」了 ✗ → **假通过** ✗✗，非常难发现 ✗。
+→ 改成先切 `<item>` / `<entry>` ✓，再在**条目内部**找链接 ✓。
+这条现在有正面断言守着 ✓（`tests/en-sources.js` ③ 段专门造了一份带首页 link 的 Atom 样本 ✓）。
+
+**★★ 第二个坑：NPR 的 feed 用 Node 的 fetch 要 7~30 秒**
+
+实测（同一台机器、同一时刻）：`feeds.npr.org/1004/rss.xml`
+用 Node 的 `fetch` 要 **7~30 秒，还经常直接超时** ✗；`curl` 同一个地址 **0.9 秒** ✓
+（加 `--noproxy '*'` 也是 1.6 秒 ✓，所以不是代理的事 ✗）。
+而 NPR 正好是**列表里第一个源** ✗（打开面板会自动拉它 ✗）→ 一超时就是
+「点了没反应」✗，用户根本不会知道是这家的 feed 慢 ✗。
+→ 和天气那条同一个思路 ✓（那边是 fetch 失败用 curl 兜底 ✓），这里把 **curl 放前面** ✓：
+`feedFetch` 先试 curl ✓，没有 curl 的环境再退回 fetch ✓。
+⚠️ 这段**只能待在 server.js** ✗ —— `lib/en-sources.js` 是**双栖**的 ✓（浏览器也加载 ✓），
+不能 require `child_process` ✗。IO 策略留在一层 ✓，那边只管解析 / 缓存 / 报错 ✓。
+**效果：24/24 全部可用 ✓，NPR 从 20 秒超时 → 1.4 秒 ✓，中位 2.0 秒 ✓。**
+
+**UI**
+
+- 中栏加了「🌐 挑一篇」（主按钮 ✓）、空态里加了两个**真能点的大按钮** ✓
+  （原来只写一句「点「＋ 导入文章」」✗ —— 等于让用户自己去找文章 ✗）；
+  左栏加了「推荐外刊源 / 开源资源」两行 ✓。
+- 浮层：左栏分组列源 ✓，右栏列该源最新文章 ✓（标题 + 摘要 + 日期 + 「点一下 → 导入精读」✓）。
+  **打开就自动拉第一个源** ✓ —— 不自动拉的话用户看到的是「← 左边点一个源」✗，还要再点一下 ✗。
+- **一次只拉用户点的那一个源** ✓（不像热榜那样一次全拉 ✗）—— 20 多个并发会把首屏拖到十几秒 ✗。
+  服务端有 15~60 分钟缓存 ✓，**关掉再开是秒开** ✓（实测 43ms ✓）。
+
+**★★ Escape 关不掉浮层（真 bug）**
+
+浮层的 Escape 我挂在 `#lifework-view` 上 ✗ —— 而那个处理器**只有当焦点在面板里面**
+才会触发 ✗，用户刚打开浮层时焦点往往还在 `body` 上 ✗ → 按 Escape **毫无反应** ✗
+（实测：探针里按 Escape 浮层不关 ✗）。
+→ 改成挂 **document** ✓（`capture` 抢在别的处理之前 ✓），
+⚠️ 用 `EP_KEYS.esc` 当闸门**只挂一次** ✗（`bindEnglish()` 每次 `render()` 都跑 ✗，
+不闸住会叠十几个监听 ✗）。顺手把「导入浮层」也一起管了 ✓。
+⚠️ 顺便把 `host.onkeydown` 里那份**删掉**了 ✗ —— 「同一件事写两处」正是这个项目反复栽的坑 ✓。
+
+**测试**
+
+- `tests/en-sources.js`（**53 项** ✓，进 `npm test` ✓）：目录结构完整性 ✓、
+  RSS 2.0 解析 ✓、**Atom 首页陷阱** ✓、栏目/标签/作者页过滤 ✓、去重 ✓、
+  脏输入不炸 ✓、开源清单字段自洽（url 必须由 repo 拼出来 ✓，防手抖写串 ✓）、
+  **归档类必须带版权提示** ✓、不认识的源要明确报错（不是静默空 ✓）、缓存与 force ✓、
+  ★ **用户可见文案里不能有 markdown 粗体** ✓（见下）。
+- `tests/life-en-src.js`（端到端探针，**39 项** ✓）：24 个源全在 ✓、一打开就自动拉好 ✓、
+  **列的是真文章标题不是站名** ✓、换源 ✓、点一条真的导进精读（252 词 / B2 / 来源 / 链接 ✓）、
+  开源资源页签 + 版权提示 + 分类筛选 ✓、Escape / ✕ 都能关 ✓、再开是秒开 ✓。
+  ⚠️ 它会真的导入一篇文章 ✗ —— `finally` 里**按 id 删掉自己加的那篇** ✓
+  （不能按名字删 ✗：用户可能自己也有同名文章 ✗）。
+- ⚠️ 顺带抓到我自己犯的一条铁律 ✗：**面板不渲染 markdown** ✗，
+  而我文案里写了「**版权归原刊**」→ 截图上原样显示成 `**版权归原刊**` ✗。
+  这条项目里早就写过 ✓，但一直没有强制 ✗ → 补了断言 ✓，一次修掉 5 处 ✓。
+- ⚠️ `tests/syntax.js` 的外链清单原来是**写死的文件名** ✗ ——
+  我加了 `lib/en-sources.js` 之后它**根本没被校验** ✗。
+  → 改成自动扫 `lib/*.js` ✓（31 个文件全覆盖 ✓），以后新增不用记着改 ✓。
+- `npm test` 全绿 ✓。
+
 ### ★★★ 热榜（以及所有「全高页签」）：修掉底下一大片空白
 
 用户原话：「修复，下面存在大量空白」（附截图 —— 是**热榜**那一页）。
