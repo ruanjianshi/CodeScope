@@ -17,6 +17,9 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
   const dialogs = [];
   p.on('dialog', async (d) => { const v = dialogs.length ? dialogs.shift() : ''; await d.accept(v); });
   const txt = async (s) => { const l = p.locator(s); return (await l.count()) ? (await l.first().innerText()).replace(/\n/g, ' ').trim() : '(没有)'; };
+  /* ⚠️ 「✨ 示例」建出来的工作流**名字里没有 MARK** ✗（那是给用户看的名字 ✓），
+     所以收尾那条「按名字过滤」抓不到它 ✗ → 这里记下它的 id ✓，收尾按 id 删 ✓。 */
+  const madeIds = [];
 
   /* ⚠️ 先把上次跑崩残留的同名工作流清掉 ✗ ——
      不清的话 `find(name.includes(MARK))` 会拿到**旧的那个**（0 个节点 ✗）→ 断言假失败 ✗
@@ -168,6 +171,57 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('★ 真的写进备忘录了', made.length === 1, '备忘录 ' + memoBefore + ' → ' + memoAfter.length);
     ck('★ 文件夹也对', made[0] && made[0].folder === MARK + '文件夹', made[0] && made[0].folder);
 
+    console.log('\n── ⑪ 说明面板 + 示例（用户要的「每个节点的作用 / 提示怎么用」）──');
+    ck('工具栏有「📖 说明」', await p.locator('#lw-fl-help').count() === 1);
+    ck('工具栏有「✨ 示例」', await p.locator('#lw-fl-example').count() === 1);
+    /* ★ 节点库每一项都得有**第二行说明** ✓ —— 用户不想点开才知道是干什么的 ✗ */
+    const palSub = await p.evaluate(() => {
+      const it = Array.from(document.querySelectorAll('[data-fladd]'));
+      return {
+        n: it.length,
+        withSub: it.filter((e) => { const i = e.querySelector('.tx i'); return i && i.textContent.trim().length > 4; }).length,
+      };
+    });
+    ck('★ 节点库 14 项全都带「这节点干什么」说明', palSub.n === 14 && palSub.withSub === 14, JSON.stringify(palSub));
+    /* 点开说明 */
+    await p.click('#lw-fl-help'); await p.waitForTimeout(800);
+    ck('★ 说明面板出来了', await p.locator('.lw-fl-help').count() === 1);
+    ck('★ 说明和画布**互斥**（不叠在一起）', await p.locator('.lw-fl-cv').count() === 0);
+    const hn = await p.locator('.lw-fl-hn').count();
+    ck('★ 说明里 14 个节点逐个讲了作用', hn === 14, String(hn));
+    const htxt = await txt('.lw-fl-helpin');
+    for (const k of ['一分钟上手', '变量怎么传', '每个节点是干什么的', '常见问题', '照着搭一个']) ck('  说明里有「' + k + '」', htxt.includes(k));
+    ck('★ 说明讲了 {{}} 怎么引用', htxt.includes('{{n3}}') && htxt.includes('{{input}}'));
+    /* ⚠️ 面板**不渲染 markdown** ✗ —— 说明里写了星号就会原样显示 ✗（我前面已经踩过一次 ✗）。 */
+    ck('★ 说明里没有漏出来的 markdown 星号', !/\*\*/.test(htxt), (htxt.match(/\*\*[^*]{0,24}\*\*/) || [''])[0]);
+    await p.click('#lw-fl-help'); await p.waitForTimeout(800);
+    ck('再点一下收起来，画布回来', await p.locator('.lw-fl-cv').count() === 1 && await p.locator('.lw-fl-help').count() === 0);
+
+    console.log('\n── ⑫ 选中节点：属性栏要说清「我是谁 / 干什么 / 输出什么」──');
+    await p.locator('.lw-fl-node').first().click(); await p.waitForTimeout(700);
+    ck('★ 画布节点右上角标了 id（写 {{}} 要用）', await p.locator('.lw-fl-node .hd .fid').count() >= 1);
+    ck('★ 属性栏显示节点 id', await p.locator('.lw-fl-cfg .fd .fid').count() === 1, await txt('.lw-fl-cfg .fd'));
+    ck('★ 属性栏有「这个节点是干什么的」', (await txt('.lw-fl-cfg .fd')).length > 8, (await txt('.lw-fl-cfg .fd')).slice(0, 60));
+    ck('★ 属性栏有「输出什么」（下游引用要用）', (await txt('.lw-fl-cfg .fout')).includes('输出'), (await txt('.lw-fl-cfg .fout')).slice(0, 60));
+
+    console.log('\n── ⑬ ✨ 示例：一键搭一张真能跑的图 ──');
+    const beforeIds = ((await store()).flows || []).map((x) => x.id);
+    await p.click('#lw-fl-example'); await p.waitForTimeout(1400);
+    const fresh = ((await store()).flows || []).filter((x) => !beforeIds.includes(x.id));
+    madeIds.push(...fresh.map((x) => x.id));
+    ck('★ 示例建出了一个新工作流', fresh.length === 1, JSON.stringify(fresh.map((x) => x.name)));
+    ck('★ 示例有 6 个节点 5 条线', !!fresh[0] && fresh[0].nodes.length === 6 && fresh[0].edges.length === 5,
+      fresh[0] ? (fresh[0].nodes.length + ' 节点 / ' + fresh[0].edges.length + ' 线') : '');
+    ck('★ 示例真画到画布上了', await p.locator('.lw-fl-node').count() === 6, String(await p.locator('.lw-fl-node').count()));
+    const aiN = fresh[0] && fresh[0].nodes.find((n) => n.type === 'ai.chat');
+    const memoN = fresh[0] && fresh[0].nodes.find((n) => n.type === 'out.memo');
+    ck('★ 示例里「AI 的结果」被下游正确引用（{{id.text}}）',
+      !!(aiN && memoN && String(memoN.cfg.text).includes('{{' + aiN.id + '.text}}')), memoN && memoN.cfg.text);
+    const httpN = fresh[0] && fresh[0].nodes.find((n) => n.type === 'http.request');
+    const jsonN = fresh[0] && fresh[0].nodes.find((n) => n.type === 'data.json');
+    ck('★ 示例的 JSON 路径直接从 data 开始（不用写 json.data）', !!(jsonN && String(jsonN.cfg.path) === 'data.list'), jsonN && jsonN.cfg.path);
+    ck('示例的 HTTP URL 是真的', !!(httpN && /^https:\/\//.test(httpN.cfg.url)), httpN && httpN.cfg.url);
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
   } catch (e) {
     console.log('✗ 异常: ' + e.message); fails.push('异常:' + e.message);
@@ -175,7 +229,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     try {
       const d = await store();
       const before = { flows: (d.flows || []).length, memos: (d.memos || []).length };
-      d.flows = (d.flows || []).filter((x) => !String(x.name).includes(MARK));
+      d.flows = (d.flows || []).filter((x) => !String(x.name).includes(MARK) && !madeIds.includes(x.id));
       d.memos = (d.memos || []).filter((m) => !String(m.text).includes(MARK));
       d.memoFolders = (d.memoFolders || []).filter((f) => !String(f).includes(MARK));
       delete d.flowSel;

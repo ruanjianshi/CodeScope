@@ -1093,12 +1093,66 @@
   .lw-fl-field input:focus, .lw-fl-field select:focus, .lw-fl-field textarea:focus { border-color:${T.accent}; }
   .lw-fl-field .tip { font-size:9.5px; color:${T.faint}; margin-top:5px; line-height:1.7; }
   .lw-fl-log { padding:8px 14px 0; font-size:10.5px; line-height:1.8; }
-  .lw-fl-log div { display:flex; gap:7px; padding:3px 0; border-bottom:1px solid #1c1c1a; }
+  .lw-fl-log div { display:flex; gap:7px; padding:3px 0; border-bottom:1px solid ${T.lineDim}; }
   .lw-fl-log .dot { flex:none; }
   .lw-fl-log .nm { color:${T.dim}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lw-fl-log .ok { color:${T.ok}; }
   .lw-fl-log .error { color:${T.red}; }
   .lw-fl-log .skipped { color:${T.faint}; }
+
+  /* ★★ 节点库改成**两行** ✓ —— 第一行名字 ✓，第二行「这节点是干什么的」✓。
+     用户原话：「你得告诉我怎么样，每个节点的作用」——
+     让他**不用点、不用查**，扫一眼节点库就知道该拖哪个 ✓。
+     ⚠️ 改成 flex-start ✗（两行时 emoji 要贴第一行 ✓，居中会飘到两行中间 ✗）。 */
+  .lw-fl-pal { align-items:flex-start; }
+  .lw-fl-pal .em { margin-top:1px; }
+  .lw-fl-pal .tx { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .lw-fl-pal .tx b { font-weight:400; font-size:11px; }
+  .lw-fl-pal .tx i { font-style:normal; font-size:9.5px; color:${T.faint};
+    line-height:1.55; white-space:normal; }
+  .lw-fl-pal:hover .tx i { color:${T.dim}; }
+
+  /* 画布节点右上角显示**节点 id** ✓ —— 写 {{引用}} 时要用它 ✗，不给就只能瞎猜 ✗。 */
+  .lw-fl-node .hd .fid { margin-left:auto; letter-spacing:0; text-transform:none;
+    color:${T.dim}; font-size:9px; }
+  /* 属性栏标题下的「这个节点是干什么的」✓ */
+  .lw-fl-cfg .fd { padding:0 14px 4px; font-size:10.5px; color:${T.dim}; line-height:1.8; }
+  .lw-fl-cfg .fd .fid { display:inline-block; border:1px solid ${T.lineDim}; padding:0 5px;
+    margin-right:6px; color:${T.accent}; font-size:9.5px; }
+  .lw-fl-cfg .fhow { padding:6px 14px 0; font-size:9.5px; color:${T.faint}; line-height:1.85; }
+  .lw-fl-cfg .fout { padding:6px 14px 0; font-size:9.5px; color:${T.faint}; line-height:1.85; }
+  .lw-fl-cfg .fout b { color:${T.ok}; font-weight:400; }
+
+  /* ── 「📖 说明」面板 ✓（用户要的「每个节点的作用 + 提示怎么用」✓）────────── */
+  .lw-fl-help { flex:1; min-width:0; overflow:auto; background:${T.bg2}; padding:20px 26px 40px; }
+  .lw-fl-helpin { max-width:820px; margin:0 auto; font-size:11.5px; line-height:1.95; color:${T.dim}; }
+  .lw-fl-help h3 { font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:${T.accent};
+    margin:26px 0 10px; padding-bottom:6px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-fl-help h3:first-child { margin-top:0; }
+  .lw-fl-help p { margin:0 0 9px; }
+  .lw-fl-help ol, .lw-fl-help ul { margin:0 0 10px; padding-left:20px; }
+  .lw-fl-help li { margin-bottom:4px; }
+  .lw-fl-help b { color:${T.text}; font-weight:600; }
+  .lw-fl-help code { background:${T.card2}; border:1px solid ${T.lineDim}; padding:0 4px;
+    color:${T.accent}; font-size:10.5px; }
+  .lw-fl-help .warn { color:${T.warn}; }
+  .lw-fl-hn { border:1px solid ${T.lineDim}; background:${T.card}; padding:9px 12px; margin-bottom:7px; }
+  .lw-fl-hn .t { display:flex; align-items:center; gap:7px; font-size:11.5px; color:${T.text}; }
+  .lw-fl-hn .t .em { font-size:13px; line-height:1; }
+  .lw-fl-hn .t .io { margin-left:auto; font-size:9px; color:${T.faint}; }
+  .lw-fl-hn .d { margin-top:5px; font-size:11px; color:${T.dim}; line-height:1.8; }
+  .lw-fl-hn .h { margin-top:4px; font-size:10px; color:${T.faint}; line-height:1.85; }
+  .lw-fl-hn .o { margin-top:4px; font-size:10px; color:${T.faint}; line-height:1.85; }
+  .lw-fl-hn .o b { color:${T.ok}; font-weight:400; }
+  .lw-fl-hn .c { margin-top:4px; font-size:10px; color:${T.faint}; }
+  .lw-fl-hd2 { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:${T.faint};
+    margin:16px 0 7px; }
+  .lw-fl-help table { width:100%; border-collapse:collapse; font-size:10.5px; }
+  .lw-fl-help th, .lw-fl-help td { text-align:left; vertical-align:top; padding:6px 8px;
+    border-bottom:1px solid ${T.lineDim}; line-height:1.8; }
+  .lw-fl-help th { color:${T.faint}; font-weight:400; font-size:9.5px; letter-spacing:.8px;
+    text-transform:uppercase; }
+  .lw-fl-help td.k { color:${T.text}; white-space:nowrap; }
 
   /* ══════════════════════════════════════════════════════════════════════
      热榜模块（多源聚合 + AI 日报）✓
@@ -1330,25 +1384,121 @@
      节点目录（参考 n8n 的节点模型 ✓）：in = 入端口数，out = 出端口数，
      cfg = 配置字段 [key, 标签, 类型, 默认值, 提示]。
      ★ 输出类节点**不在这里落地** ✗ —— 引擎只回 effects ✓，由前端应用 ✓。 */
+  /* ★★ 每个节点都要**自己说清自己是干什么的** ✗ —— 用户原话：
+     「你得告诉我怎么样，每个节点的作用，提示怎么用等等」。
+     → 每个节点补三个字段 ✓：
+       `d`   一句话「作用」  ✓（节点库第二行 / 属性栏标题下 / 说明面板 ✓ 三处都显示 ✓）
+       `how` 「怎么用 / 要注意什么」✓（说明面板 + 悬停提示 ✓）
+       `o`   「输出什么」✓ —— **下游 {{...}} 要引用的字段名** ✓（这个不写清就只能瞎猜 ✗）
+     ⚠️ 这三段是**直接塞进 HTML** 的 ✗（不 esc ✗），所以里面只能写 `&lt;b&gt;` 这类标签 ✓，
+        不能写 markdown 星号 ✗（面板不渲染 markdown ✗，会原样显示星号 ✗）。 */
   const FLOW_NODES = {
-    'trigger.manual': { e: '▶', n: '手动触发', g: '触发', in: 0, out: 1, cfg: [] },
-    'trigger.timer': { e: '⏰', n: '定时触发', g: '触发', in: 0, out: 1, cfg: [['every', '间隔（分钟）', 'number', 60, '到点自动跑（先把图搭好，定时在服务端排期）']] },
-    'trigger.webhook': { e: '🔗', n: 'Webhook', g: '触发', in: 0, out: 1, cfg: [['path', '路径', 'text', '', '外部调用 /api/life/flow/hook/你的路径 就能触发']] },
-    'http.request': { e: '🌐', n: 'HTTP 请求', g: '数据', in: 1, out: 1, cfg: [['url', 'URL', 'text', '', '支持 {{变量}} 插值；响应体自动解析成 JSON'], ['method', '方法', 'select', 'GET', 'GET / POST / PUT / DELETE'], ['body', '请求体', 'area', '', '仅 POST / PUT 时发送']] },
-    'data.template': { e: '✎', n: '文本模板', g: '数据', in: 1, out: 1, cfg: [['text', '模板', 'area', '', '用 {{节点id}} / {{节点id.字段}} / {{input}} 引用']] },
-    'data.json': { e: '{ }', n: 'JSON 取值', g: '数据', in: 1, out: 1, cfg: [['path', '路径', 'text', '', '如 data.list[0].title；留空则返回整个对象']] },
-    'logic.if': { e: '⑂', n: '条件分支', g: '逻辑', in: 1, out: 2, cfg: [['left', '左值', 'text', '', ''], ['op', '比较', 'select', '包含', '包含 / 等于 / 不等于 / 大于 / 小于 / 为空 / 非空 / 正则匹配'], ['right', '右值', 'text', '', '']] },
-    'logic.merge': { e: '⋈', n: '合并', g: '逻辑', in: 2, out: 1, cfg: [] },
-    'ai.chat': { e: '🤖', n: 'AI 对话', g: 'AI', in: 1, out: 1, cfg: [['system', '系统提示', 'area', '', ''], ['prompt', '用户提示', 'area', '', '复用 CodeScope 里配好的大模型 ✓']] },
-    'util.delay': { e: '⏳', n: '等待', g: '工具', in: 1, out: 1, cfg: [['ms', '毫秒', 'number', 1000, '上限 30 秒']] },
-    'out.memo': { e: '📝', n: '写入备忘录', g: '输出', in: 1, out: 1, cfg: [['folder', '文件夹', 'text', '工作流', ''], ['title', '标题', 'text', '工作流产出', ''], ['text', '正文', 'area', '', '']] },
-    'out.journal': { e: '◈', n: '追加日记', g: '输出', in: 1, out: 1, cfg: [['text', '内容', 'area', '', '追加到今天的日记末尾 ✓']] },
-    'out.notify': { e: '🔔', n: '通知', g: '输出', in: 1, out: 1, cfg: [['text', '内容', 'area', '', '显示在面板顶栏状态条 ✓']] },
-    'out.mail': { e: '✉', n: '发邮件', g: '输出', in: 1, out: 1, cfg: [['to', '收件人', 'text', '', '用第一个已配置的邮箱账号发 ✓'], ['subject', '主题', 'text', '', ''], ['body', '正文', 'area', '', '']] },
+    /* ── 触发：每个工作流必须从**恰好一个**触发节点开始 ✓ ── */
+    'trigger.manual': {
+      e: '▶', n: '手动触发', g: '触发', in: 0, out: 1, cfg: [],
+      d: '工作流的起点 —— 你点「▶ 运行」时才跑。',
+      how: '调试阶段用这个。它自己不干活，只负责「把流程点着」。',
+      o: 'at、fired —— 它只负责「把流程点着」，一般用不到',
+    },
+    'trigger.timer': {
+      e: '⏰', n: '定时触发', g: '触发', in: 0, out: 1,
+      cfg: [['every', '间隔（分钟）', 'number', 60, '到点自动跑（先把图搭好，定时在服务端排期）']],
+      d: '每隔 N 分钟自动跑一次。',
+      how: '<b>目前只存了配置，服务端还没真正排期</b> —— 现在仍然要点「▶ 运行」才跑。先把图搭好，等排期做出来它就直接生效。',
+      o: 'at、fired —— 它只负责「把流程点着」，一般用不到',
+    },
+    'trigger.webhook': {
+      e: '🔗', n: 'Webhook', g: '触发', in: 0, out: 1,
+      cfg: [['path', '路径', 'text', '', '外部调用 /api/life/flow/hook/你的路径 就能触发']],
+      d: '外部系统发一条 HTTP 请求就能把它点着。',
+      how: '填个短路径（例如 daily），之后任何东西只要 POST /api/life/flow/hook/daily 就触发。',
+      o: 'at、fired —— 它只负责「把流程点着」，一般用不到',
+    },
+    /* ── 数据：拿数据 / 拼文字 / 取值 ✓ ── */
+    'http.request': {
+      e: '🌐', n: 'HTTP 请求', g: '数据', in: 1, out: 1,
+      cfg: [['url', 'URL', 'text', '', '支持 {{变量}} 插值；响应体自动解析成 JSON'], ['method', '方法', 'select', 'GET', 'GET / POST / PUT / DELETE'], ['body', '请求体', 'area', '', '仅 POST / PUT 时发送']],
+      d: '去网上要一份数据回来。',
+      how: 'URL 里可以插变量（例如 ...?q={{n1}}）。响应体会<b>自动试着</b>解析成 JSON —— 解析不了也不算失败，纯文本接口照样能用。',
+      o: 'status、ok、body、json —— 比如取第一条标题写 {{id.json.data.list[0].title}}',
+    },
+    'data.template': {
+      e: '✎', n: '文本模板', g: '数据', in: 1, out: 1,
+      cfg: [['text', '模板', 'area', '', '用 {{节点id}} / {{节点id.字段}} / {{input}} 引用']],
+      d: '把上游的结果拼成一段文字。',
+      how: '写死的文字 + {{引用}} 混着写。想把几个节点结果拼成一封邮件正文，就用它。',
+      o: '拼好的那段文字 —— 下游直接写 {{id}} 就能用',
+    },
+    'data.json': {
+      e: '{ }', n: 'JSON 取值', g: '数据', in: 1, out: 1,
+      cfg: [['path', '路径', 'text', '', '如 data.list[0].title；留空则返回整个对象']],
+      d: '从上游的 JSON 里按路径挖出一个字段。',
+      how: '前面接 HTTP 时，路径<b>直接从 data 开始写</b>（不用写 json.data）；想整段丢给 AI 就留空。',
+      o: '挖出来的那个值 —— 下游直接写 {{id}} 就能用',
+    },
+    /* ── 逻辑：分叉与合流 ✓ ── */
+    'logic.if': {
+      e: '⑂', n: '条件分支', g: '逻辑', in: 1, out: 2,
+      cfg: [['left', '左值', 'text', '', ''], ['op', '比较', 'select', '包含', '包含 / 等于 / 不等于 / 大于 / 小于 / 为空 / 非空 / 正则匹配'], ['right', '右值', 'text', '', '']],
+      d: '判断一下，然后走「成立」或「不成立」两条路中的一条。',
+      how: '它右边有<b>两个</b>圆点：上面＝成立，下面＝不成立。没走的那条路，下游节点会显示「跳过」（灰掉是正常的，不是坏了）。',
+      o: 'ok、left、right —— 它只负责分岔，一般用不到',
+    },
+    'logic.merge': {
+      e: '⋈', n: '合并', g: '逻辑', in: 2, out: 1, cfg: [],
+      d: '把分开的两条路重新并回一条。',
+      how: '接在条件分支的两条路后面。不管哪条走通了，都从这里继续往下 —— 省得后面的事写两遍。',
+      o: '上游传进来的东西，原样透传',
+    },
+    /* ── AI：复用 CodeScope 里配好的模型 ✓ ── */
+    'ai.chat': {
+      e: '🤖', n: 'AI 对话', g: 'AI', in: 1, out: 1,
+      cfg: [['system', '系统提示', 'area', '', '定角色 / 定语气 / 定输出格式；留空则只有用户提示'], ['prompt', '用户提示', 'area', '', '把数据塞进去，例如「总结下面内容：{{n3}}」']],
+      d: '把上游的内容交给大模型，换回一段回答。',
+      how: '复用 CodeScope 里已经配好的模型（不用在这里再填一遍 key）。<b>系统提示</b>写「你是谁、怎么输出」，<b>用户提示</b>里用 {{}} 把数据塞进去。',
+      o: 'text（模型的回答）—— 引用要写 {{id.text}}',
+    },
+    /* ── 工具 ── */
+    'util.delay': {
+      e: '⏳', n: '等待', g: '工具', in: 1, out: 1,
+      cfg: [['ms', '毫秒', 'number', 1000, '上限 30 秒']],
+      d: '停一会儿再往下走。',
+      how: '单位是毫秒，最多 30 秒。用来给接口留反应时间，或者别把人家 API 打太频。',
+      o: 'waited（等了多久）—— 一般用不到',
+    },
+    /* ── 输出：引擎只排队 ✓，跑完由前端真正落地 ✓ ── */
+    'out.memo': {
+      e: '📝', n: '写入备忘录', g: '输出', in: 1, out: 1,
+      cfg: [['folder', '文件夹', 'text', '工作流', '不存在会自动建 ✓'], ['title', '标题', 'text', '工作流产出', ''], ['text', '正文', 'area', '', '']],
+      d: '在备忘录里新建一条。',
+      how: '文件夹不存在会自动建。标题和正文都支持 {{}}。⚠️ <b>跑一次加一条</b>，跑三次就是三条（不覆盖）。',
+      o: 'queued（只表示「已经排队去写了」，一般用不到）',
+    },
+    'out.journal': {
+      e: '◈', n: '追加日记', g: '输出', in: 1, out: 1,
+      cfg: [['text', '内容', 'area', '', '追加到今天的日记末尾 ✓']],
+      d: '把内容追加到<b>今天</b>的日记末尾。',
+      how: '今天已经有日记就接着写，没有就新建今天的。适合「每天自动记一笔」。',
+      o: 'queued（只表示「已经排队去写了」，一般用不到）',
+    },
+    'out.notify': {
+      e: '🔔', n: '通知', g: '输出', in: 1, out: 1,
+      cfg: [['text', '内容', 'area', '', '显示在面板顶栏状态条 ✓']],
+      d: '在面板顶栏弹一条提示。',
+      how: '跑完不留痕。适合「跑完了」「有新东西了」这种即时提醒；要留档就用备忘录 / 日记。',
+      o: 'queued（只表示「已经排队去写了」，一般用不到）',
+    },
+    'out.mail': {
+      e: '✉', n: '发邮件', g: '输出', in: 1, out: 1,
+      cfg: [['to', '收件人', 'text', '', '用第一个已配置的邮箱账号发 ✓'], ['subject', '主题', 'text', '', '支持 {{}} ✓'], ['body', '正文', 'area', '', '支持 {{}} ✓']],
+      d: '用你已经配好的邮箱，把内容发出去。',
+      how: '用<b>第一个</b>已配置的邮箱账号发。没配邮箱时会明确报错（不会静默失败）。',
+      o: 'queued（只表示「已经排队去发了」，一般用不到）',
+    },
   };
   const FLOW_GROUPS = ['触发', '数据', '逻辑', 'AI', '工具', '输出'];
   const FLOW_W = 170, FLOW_H = 56;
-  const FLOW_UI = { sel: '', node: '', arm: '', steps: null, err: '', busy: false };
+  const FLOW_UI = { sel: '', node: '', arm: '', steps: null, err: '', busy: false, help: false };
 
   /* ── 热榜模块的状态 ✓（同样必须放顶部区 ✗）────────────────────────────
      源目录来自服务端 ✓（`/api/life/trends` 会带回来 ✓），这里只放界面状态 ✓。 */
@@ -5559,6 +5709,12 @@
   const flowSel = () => FLOW_UI.sel || (STORE && STORE.flowSel) || '';
   const flowCurrent = () => flowList().find((f) => f.id === flowSel()) || null;
   const flowNodeById = (f, id) => ((f && f.nodes) || []).find((n) => n && n.id === id) || null;
+  /* 节点说明里允许写 <b> 这类标签 ✓（面板不渲染 markdown ✗），
+     但放进 title="" 这种**属性**里就得先把标签剥掉 ✓，否则会原样显示 ✗。
+     ⚠️ 必须写成 function 声明 ✓ —— 不要用 const 箭头 ✗：
+        箭头有 TDZ ✗，而 mount() 可能在模块求值期间就 render 到工作流页签 ✗
+        （见顶部那条铁律 ✓）。函数声明会提升 ✓，没这个问题 ✓。 */
+  function flowPlain(s) { return String(s == null ? '' : s).replace(/<[^>]*>/g, ''); }
   function flowNew() {
     const name = prompt('工作流名字：', '新工作流');
     if (!name || !name.trim()) return;
@@ -5628,10 +5784,10 @@
         outs.push('<div class="lw-fl-port out' + (i === 1 ? ' p1' : '') + (FLOW_UI.arm === n.id && i === 0 ? ' armed' : '')
           + '" data-flout="' + n.id + '" data-flport="' + i + '" title="点这里，再点目标节点的左圆点就连上了"></div>');
       }
-      return '<div class="' + cls + '" data-flnode="' + n.id + '" style="left:' + n.x + 'px;top:' + n.y + 'px">'
+      return '<div class="' + cls + '" data-flnode="' + n.id + '" style="left:' + n.x + 'px;top:' + n.y + 'px" title="' + esc(flowPlain(meta.d || '')) + '">'
         + ((meta.in || 0) > 0 ? '<div class="lw-fl-port in" data-flin="' + n.id + '"></div>' : '')
         + outs.join('')
-        + '<div class="hd">' + esc(meta.g || '') + '</div>'
+        + '<div class="hd">' + esc(meta.g || '') + '<span class="fid">' + esc(n.id) + '</span></div>'
         + '<div class="bd"><span class="em">' + meta.e + '</span>' + esc(meta.n) + '</div>'
         + (st ? '<div class="st">' + (st.status === 'ok' ? '✓' + (st.ms || 0) + 'ms' : st.status === 'error' ? '✗' : '跳过') + '</div>' : '')
         + '</div>';
@@ -5650,7 +5806,13 @@
       inner = '<div class="lw-rd-empty" style="padding:26px 16px">点画布上的节点<br>就能在这里改它的设置</div>';
     } else {
       const meta = FLOW_NODES[n.type] || { n: n.type, cfg: [] };
+      /* ★ 属性栏第一眼就要回答三件事 ✓：**它是谁**（id ✓，写 {{引用}} 要用 ✓）、
+         **它是干什么的**（d ✓）、**怎么用 / 要注意什么**（how ✓）。
+         用户原话：「你得告诉我怎么样，每个节点的作用，提示怎么用等等」。 */
       inner = '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 8px">' + esc(meta.n) + '</div>'
+        + '<div class="fd"><span class="fid" title="下游要引用它，就写 {{' + esc(n.id) + '}}">' + esc(n.id) + '</span>'
+        + (meta.d || '') + '</div>'
+        + (meta.how ? '<div class="fhow">' + meta.how + '</div>' : '')
         + (meta.cfg || []).map((c) => {
           const [k, label, type, def, tip] = c;
           const v = n.cfg && n.cfg[k] != null ? n.cfg[k] : (def == null ? '' : def);
@@ -5669,6 +5831,7 @@
             + '<input data-flcfg="' + esc(k) + '" type="' + (type === 'number' ? 'number' : 'text') + '" value="' + esc(v) + '"/>'
             + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '') + '</div>';
         }).join('')
+        + (meta.o ? '<div class="fout">输出 <b>' + meta.o + '</b></div>' : '')
         + '<div class="lw-fl-field"><button class="lw-rd-chip" data-act="del" id="lw-fl-nodedel" style="border-color:' + T.lineDim + ';padding:5px 10px">🗑 删掉这个节点</button></div>';
     }
     const steps = FLOW_UI.steps;
@@ -5684,13 +5847,131 @@
       : '';
     return inner + log;
   }
+  /* ══════════════════════════════════════════════════════════════════════
+     「📖 说明」面板 ✓ + 「✨ 示例」一键搭图 ✓
+     用户原话：「这个工作流，你得告诉我怎么样，每个节点的作用，提示怎么用等等」。
+     ⚠️ 这里是**给用户看的文档** ✗，不是代码注释 ✗ —— 所以写成正常人话 ✓，
+        内部那套「✓ / ✗」的记号**别出现在这里** ✗（那是我自己备忘用的 ✗，用户看着累 ✗）。
+     ⚠️ 允许直接塞 <b> / <code> 这类标签 ✓，但**绝对不能有反引号** ✗✗
+        （这段在一个 JS 模板字符串里 ✗ —— 见文件顶部那条铁律 ✗）。
+     ══════════════════════════════════════════════════════════════════════ */
+  function flowHelpHtml() {
+    /* 节点全表 ✓ —— 直接由 FLOW_NODES 生成 ✓，加节点不用回来改文档 ✓（不会忘 ✓）。 */
+    const nodeRows = FLOW_GROUPS.map((g) => '<div class="lw-fl-hd2">' + g + '</div>'
+      + Object.keys(FLOW_NODES).filter((k) => FLOW_NODES[k].g === g).map((k) => {
+        const m = FLOW_NODES[k];
+        return '<div class="lw-fl-hn">'
+          + '<div class="t"><span class="em">' + m.e + '</span>' + esc(m.n)
+          + '<span class="io">' + (m.in || 0) + ' 进 · ' + (m.out || 1) + ' 出</span></div>'
+          + '<div class="d">' + (m.d || '') + '</div>'
+          + (m.how ? '<div class="h">' + m.how + '</div>' : '')
+          + ((m.cfg || []).length ? '<div class="c">要填：' + m.cfg.map((c) => esc(c[1])).join(' · ') + '</div>' : '')
+          + (m.o ? '<div class="o">输出 <b>' + m.o + '</b></div>' : '')
+          + '</div>';
+      }).join('')).join('');
+    const faq = [
+      ['点了「运行」没反应', '画布是空的，或者缺一个「触发」节点。每张图都要有一个触发当起点。'],
+      ['报「图里有环」', '连线绕回自己了。工作流不能走回头路，把绕回去的那条线点掉。'],
+      ['AI 节点报「没配 AI」', '先去 CodeScope 的 AI 面板配一次模型。工作流会自动复用它，不用在这里再填一遍 key。'],
+      ['条件分支的另一条路上，节点是灰的', '正常，那叫「跳过」。没走的那条路不会执行，不是坏了。'],
+      ['「定时触发」到点了没自己跑', '服务端排期还没做，现在仍然要点「运行」。先把图搭好，等做出来就直接生效。'],
+      ['「写入备忘录」跑一次多一条', '它只负责「新建」，不覆盖。想每天累积就用它；只想留最新的一份，改用「追加日记」。'],
+      ['Webhook 怎么触发', '往 /api/life/flow/hook/ 后面接你填的那个路径发一条 POST 就行。'],
+      ['HTTP 请求拿到的数据怎么接着用', '后面接一个「JSON 取值」。路径直接从 data 开始写，不用写 json.data。'],
+      ['{{}} 写出来是空的', '多半是节点 id 写错了。取不到只会变成空字符串，不会报错。点一下那个节点，看右栏标题下面的 id。'],
+    ].map((r) => '<tr><td class="k">' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
+    return '<div class="lw-fl-help"><div class="lw-fl-helpin">'
+
+      + '<h3>① 一分钟上手</h3>'
+      + '<p>工作流就是「把几件事按顺序串起来，点一下全做完」。界面分三块：左边挑节点、中间画图、右边改设置。</p>'
+      + '<ol>'
+      + '<li>点左上角 <b>＋ 新建</b>，起个名字。</li>'
+      + '<li>在左边<b>节点库</b>里点一下，节点就落到画布上。顺序永远是：先放一个<b>触发</b>，中间放要干的事，最后接<b>输出</b>。</li>'
+      + '<li>连线：先点某个节点<b>右边的圆点</b>，再点目标节点<b>左边的圆点</b>。连错了就点那条线本身，删掉。</li>'
+      + '<li>点 <b>▶ 运行</b>。右栏会出现运行日志（每一步成功还是失败、各花多久），画布上的节点也会亮状态。</li>'
+      + '</ol>'
+      + '<p class="warn">不想从零搭，就点 <b>✨ 示例</b> —— 它会直接搭一张能跑的图出来，照着改最快。</p>'
+
+      + '<h3>② 变量怎么传（这节最关键）</h3>'
+      + '<p>每个节点跑完，结果都存在它自己的<b>节点 id</b> 名下 —— 就是画布上节点右上角那个小字，比如 n3。下游想用它，写两层花括号：</p>'
+      + '<table>'
+      + '<tr><th>写法</th><th>意思</th></tr>'
+      + '<tr><td class="k"><code>{{n3}}</code></td><td>把 n3 的整个输出塞进来。是对象或数组就自动转成 JSON 文本</td></tr>'
+      + '<tr><td class="k"><code>{{n3.text}}</code></td><td>只取 n3 输出里的 text 字段 —— 比如 AI 节点的回答就这么取</td></tr>'
+      + '<tr><td class="k"><code>{{n3.json.data.list[0].title}}</code></td><td>一层层往下挖，数组用方括号</td></tr>'
+      + '<tr><td class="k"><code>{{input}}</code></td><td>所有上游输出的合并。只有一个上游时，它就等于那个上游</td></tr>'
+      + '</table>'
+      + '<p>凡是提示里写了「支持变量」的输入框都能这么写：HTTP 的 URL 和请求体、文本模板、AI 提示、邮件的主题和正文、输出节点的标题和正文。</p>'
+      + '<p>取不到只会变成<b>空字符串，不会报错</b>。所以看到结果是空的，先回去检查 id 有没有写错。</p>'
+
+      + '<h3>③ 每个节点是干什么的</h3>'
+      + '<p>「几进几出」指的是它左右两边的圆点数量。左边是入口，右边是出口 —— 出口超过一个的（比如条件分支），每条出口通向不同的路。</p>'
+      + nodeRows
+
+      + '<h3>④ 常见问题</h3>'
+      + '<table><tr><th>现象</th><th>怎么回事</th></tr>' + faq + '</table>'
+
+      + '<h3>⑤ 照着搭一个：B 站热门 AI 摘要</h3>'
+      + '<p>目标：抓 B 站当前热门 → 让 AI 挑 5 条 → 写进备忘录，顺手弹个提醒。</p>'
+      + '<table>'
+      + '<tr><th>节点</th><th>怎么填</th></tr>'
+      + '<tr><td class="k">▶ 手动触发</td><td>不用填</td></tr>'
+      + '<tr><td class="k">🌐 HTTP 请求</td><td>URL 填 <code>https://api.bilibili.com/x/web-interface/popular?ps=20&amp;pn=1</code>，方法 GET</td></tr>'
+      + '<tr><td class="k">{ } JSON 取值</td><td>路径填 <code>data.list</code>（直接写 data，不用写 json.data）</td></tr>'
+      + '<tr><td class="k">🤖 AI 对话</td><td>系统提示写「你是资讯编辑，只输出中文」；用户提示写「下面是 B 站热门 JSON，挑 5 条最值得看的，每条一行：序号 + 标题 + 一句话理由」，末尾用 <code>{{上一步的id}}</code> 把数据塞进去</td></tr>'
+      + '<tr><td class="k">📝 写入备忘录</td><td>文件夹「工作流」，正文写 <code>{{AI节点的id.text}}</code></td></tr>'
+      + '<tr><td class="k">🔔 通知</td><td>内容随便写一句「今日热门已更新」</td></tr>'
+      + '</table>'
+      + '<p>连线顺序：手动触发 → HTTP 请求 → JSON 取值 → AI 对话 →（分两路）→ 写入备忘录、通知。'
+      + '点 <b>✨ 示例</b> 就是把这个图直接搭好。</p>'
+
+      + '</div></div>';
+  }
+  /* 「✨ 示例」：一键搭一张**真能跑**的图 ✓ —— 教人最快的办法就是给个能改的成品 ✓。 */
+  function flowExample() {
+    const f = { id: 'w' + Date.now(), name: '示例：B站热门 AI 摘要', nodes: [], edges: [], at: Date.now() };
+    const mk = (type, x, y, over) => {
+      const meta = FLOW_NODES[type];
+      const cfg = {};
+      (meta.cfg || []).forEach((c) => { cfg[c[0]] = c[3]; });
+      Object.assign(cfg, over || {});
+      const id = 'n' + (f.nodes.length + 1);
+      f.nodes.push({ id, type, x, y, cfg });
+      return id;
+    };
+    const a = mk('trigger.manual', 40, 70);
+    const b = mk('http.request', 260, 70, { url: 'https://api.bilibili.com/x/web-interface/popular?ps=20&pn=1', method: 'GET' });
+    const c = mk('data.json', 480, 70, { path: 'data.list' });
+    const d = mk('ai.chat', 700, 70, {
+      system: '你是资讯编辑。只输出中文，不要客套话，不要解释你在做什么。',
+      prompt: '下面是 B 站当前热门视频的 JSON。请挑 5 条最值得看的，每条一行：序号 + 标题 + 一句话理由。\n\n' + '{{' + c + '}}',
+    });
+    const e1 = mk('out.memo', 920, 30, { folder: '工作流', title: 'B站热门精选', text: '{{' + d + '.text}}' });
+    const e2 = mk('out.notify', 920, 150, { text: '今日 B 站热门已写入备忘录' });
+    f.edges = [
+      { from: a, port: 0, to: b },
+      { from: b, port: 0, to: c },
+      { from: c, port: 0, to: d },
+      { from: d, port: 0, to: e1 },
+      { from: d, port: 0, to: e2 },
+    ];
+    STORE.flows = flowList().concat([f]);
+    FLOW_UI.sel = f.id; STORE.flowSel = f.id;
+    FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.steps = null; FLOW_UI.help = false;
+    saveStore(); render();
+    setStatus(esc('✓ 示例搭好了 —— 点「▶ 运行」试试（AI 节点要先在 CodeScope 里配好模型）'), 12000);
+  }
   function viewFlow() {
     const list = flowList();
     const f = flowCurrent();
+    /* ★ 节点库：**两行** ✓（名字 + 这个节点是干什么的 ✓）——
+       用户不用点、不用查，扫一眼就知道该拖哪个 ✓。 */
     const pal = FLOW_GROUPS.map((g) => '<div class="lw-rd-hd">' + g + '</div>'
       + Object.keys(FLOW_NODES).filter((k) => FLOW_NODES[k].g === g).map((k) => {
         const m = FLOW_NODES[k];
-        return '<div class="lw-fl-pal" data-fladd="' + k + '" title="点一下加到画布"><span class="em">' + m.e + '</span>' + m.n + '</div>';
+        return '<div class="lw-fl-pal" data-fladd="' + k + '" title="点一下加到画布：' + esc(flowPlain(m.d || m.n)) + '">'
+          + '<span class="em">' + m.e + '</span>'
+          + '<span class="tx"><b>' + esc(m.n) + '</b><i>' + (m.d || '') + '</i></span></div>';
       }).join('')).join('');
     const rows = list.map((x) => '<div class="lw-fl-row' + (flowSel() === x.id ? ' on' : '') + '" data-flsel="' + esc(x.id) + '">'
       + '<span class="em">⚙</span>' + esc(x.name) + '<span class="n">' + (x.nodes || []).length + '</span></div>').join('');
@@ -5698,15 +5979,19 @@
       + '<button id="lw-fl-new">＋ 新建</button>'
       + '<button id="lw-fl-save">💾 保存</button>'
       + '<button class="pri" id="lw-fl-run"' + (f && (f.nodes || []).length ? '' : ' disabled') + '>▶ 运行</button>'
+      + '<button id="lw-fl-example" title="一键搭一个能跑的示例（B站热门 → AI 挑 5 条 → 写进备忘录）">✨ 示例</button>'
+      + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">📖 说明</button>'
       + '<button id="lw-fl-clear">清空画布</button>'
       + '<button id="lw-fl-del">🗑 删工作流</button>'
-      + '<span class="hint">' + (FLOW_UI.busy ? '正在跑…' : '点节点改设置 · 点右圆点再点左圆点就连线 · 点连线删掉') + '</span>'
+      + '<span class="hint">' + (FLOW_UI.busy ? '正在跑…'
+        : FLOW_UI.help ? '看完点「📖 说明」收起来' : '点节点改设置 · 点右圆点再点左圆点就连线 · 点连线删掉') + '</span>'
       + '</div>';
     return '<div class="lw-fl">'
       + '<div class="lw-fl-side"' + paneW('flowSideW', 150) + '><div class="lw-rd-hd">我的工作流</div>' + (rows || '<div class="lw-fl-row" style="color:' + T.faint + '">还没有，点「＋ 新建」</div>')
       + '<div class="lw-rd-hd">节点库</div>' + pal + '</div>' + paneGrip('side')
       + '<div style="flex:1;min-width:0;display:flex;flex-direction:column">' + tools
-      + (f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
+      + (FLOW_UI.help ? flowHelpHtml()
+        : f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
       + '</div>' + paneGrip('cfg')
       + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>' + flowCfgInnerHtml(f) + '</div></div>';
   }
@@ -5796,6 +6081,9 @@
     const dl = q('#lw-fl-del'); if (dl) dl.onclick = () => flowDel();
     const sv = q('#lw-fl-save'); if (sv) sv.onclick = () => { const f = flowCurrent(); if (f) { f.at = Date.now(); saveStore(); } setStatus(esc('✓ 工作流已保存'), 4000); };
     const rn = q('#lw-fl-run'); if (rn) rn.onclick = () => flowRun();
+    const ex = q('#lw-fl-example'); if (ex) ex.onclick = () => flowExample();
+    const hp = q('#lw-fl-help');
+    if (hp) hp.onclick = () => { FLOW_UI.help = !FLOW_UI.help; render(); };
     const cl = q('#lw-fl-clear');
     if (cl) cl.onclick = () => {
       const f = flowCurrent(); if (!f) return;
@@ -5845,7 +6133,7 @@
         ev.stopPropagation();
         const f = flowCurrent(); if (!f) return;
         const from = FLOW_UI.arm, to = el.dataset.flin;
-        if (!from) { setStatus(esc('先点左边节点的**右**圆点 ✓'), 4000); return; }
+        if (!from) { setStatus(esc('先点左边节点的「右」圆点 ✓'), 4000); return; }
         if (from === to) { setStatus(esc('不能连到自己 ✓'), 4000); return; }
         const port = Number(FLOW_UI.armPort) || 0;
         if ((f.edges || []).some((e) => e.from === from && Number(e.port) === port && e.to === to)) { FLOW_UI.arm = ''; render(); return; }
@@ -6103,7 +6391,7 @@
       + (canFrame(x.url)
         ? '<iframe id="lw-hl-frame" sandbox="allow-same-origin" src="' + esc(x.url) + '" title="原文预览"></iframe>'
           + '<div style="font-size:10px;color:' + T.faint + ';margin-top:8px;line-height:1.8">'
-          + '上面是**沙箱预览**（不带脚本 ✓，防追踪 ✓）；排版可能和原站有出入 ✓</div>'
+          + '上面是<b>沙箱预览</b>（不带脚本 ✓，防追踪 ✓）；排版可能和原站有出入 ✓</div>'
         : '<div class="lw-hl-noframe">'
           + '<div class="ic">🚫</div>'
           + '<div class="ti">' + esc(hostOf(x.url)) + ' 不允许被内嵌</div>'
