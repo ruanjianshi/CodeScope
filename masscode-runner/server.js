@@ -50,7 +50,7 @@ const FLOW_SCHED = require('./lib/flow-schedule.js');   /* 工作流定时排期
    它们都是「双栖」的 ✓：Node 里 require 拿到 ✓、浏览器里挂 window.LW_xxx ✓ ——
    目的是让**前后端用同一份逻辑** ✗：分句规则、复习间隔这种东西抄两遍必然走偏 ✗，
    而且走偏了用户根本查不出来 ✗（只会觉得「这软件不准」✗）。 */
-const SHARED_LIB_FILES = ['en-text.js', 'srs.js', 'expr.js', 'flow-schedule.js', 'en-sources.js'];
+const SHARED_LIB_FILES = ['en-text.js', 'srs.js', 'expr.js', 'flow-schedule.js', 'en-sources.js', 'roots.js'];
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。

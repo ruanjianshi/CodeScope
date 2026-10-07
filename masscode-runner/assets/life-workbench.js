@@ -1572,6 +1572,91 @@
   .lw-rd-modes .sp { flex:1; }
   .lw-rd-modes .tip { font-size:9.5px; color:${T.faint}; }
 
+  /* ══ 词根词缀：思维导图 ✓ ═══════════════════════════════════════════════
+     ★ 用户原话：「大致做成思维导图的样式…强化可视化和巧记，图形化等等」✓。
+     ⚠️ 画法沿用工作流画布那套 ✓：**HTML 节点 + SVG 连线** ✓ ——
+        比纯 SVG 好写（文字自动换行 / 好点 / 好挂 hover ✓），
+        比纯 HTML 好画（曲线连接得靠 SVG ✓）。 */
+  .lw-rm-row { display:flex; align-items:center; gap:8px; padding:8px 13px; cursor:pointer;
+    border-bottom:1px solid ${T.lineDim}; border-left:2px solid transparent; }
+  .lw-rm-row:hover { background:${T.card2}; }
+  .lw-rm-row.on { background:${T.card2}; border-left-color:${T.accent}; }
+  .lw-rm-row .fm { font-size:13px; color:${T.text}; letter-spacing:.4px; min-width:62px; }
+  .lw-rm-row.on .fm { color:${T.accent}; }
+  .lw-rm-row .mn { flex:1; font-size:10.5px; color:${T.dim}; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .lw-rm-row .n { font-size:9px; color:${T.faint}; }
+  .lw-rm-row .b { font-size:10px; }
+  .lw-rm-row .b.star { color:${T.accent}; }
+  .lw-rm-row .b.done { color:${T.ok}; }
+
+  .lw-rm-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; flex-wrap:wrap; flex:none;
+    border-bottom:1px solid ${T.lineDim}; background:${T.card}; }
+  .lw-rm-bar .fm { font-size:14px; letter-spacing:.5px; }
+  .lw-rm-bar .tp { font-size:9.5px; color:${T.faint}; border:1px solid ${T.lineDim}; padding:1px 6px; }
+  .lw-rm-bar .sp { flex:1; }
+  .lw-rm-bar button { height:24px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-rm-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rm-bar button.on { border-color:${T.accent}; color:${T.accent}; }
+
+  /* ★ 画布 ✓ —— ⚠️ 必须 overflow:hidden + min-height:0 ✗：
+     flex 子项默认 min-height:auto ✓，不写的话画布会把面板撑破 ✗（这个坑踩过 ✓）。 */
+  .lw-rm-stage { flex:1; min-height:0; position:relative; overflow:hidden;
+    background:radial-gradient(circle at 1px 1px, ${T.lineDim} 1px, transparent 0) 0 0/22px 22px; }
+  .lw-rm-plane { position:absolute; left:0; top:0; transform-origin:0 0; }
+  .lw-rm-svg { position:absolute; left:0; top:0; pointer-events:none; }
+  .lw-rm-hint { position:absolute; left:10px; bottom:8px; font-size:9.5px; color:${T.faint};
+    pointer-events:none; }
+  .lw-rm-n { position:absolute; display:flex; flex-direction:column; justify-content:center;
+    padding:0 10px; box-sizing:border-box; border:1px solid ${T.lineDim}; background:${T.bg};
+    cursor:pointer; overflow:hidden; transition:box-shadow .12s, transform .12s; }
+  .lw-rm-n:hover { box-shadow:0 0 0 2px ${T.lineDim}; z-index:3; }
+  .lw-rm-n .t { font-size:11.5px; color:${T.text}; line-height:1.35; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .lw-rm-n .t.wrap { white-space:normal; font-size:11px; line-height:1.45;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .lw-rm-n .s { font-size:9px; color:${T.faint}; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; }
+  .lw-rm-n .f { position:absolute; right:5px; top:50%; transform:translateY(-50%);
+    font-size:9px; color:${T.faint}; }
+  .lw-rm-n.k-root { justify-content:center; font-weight:600; }
+  .lw-rm-n.k-root .t { font-size:16px; color:${T.accentInk}; }
+  .lw-rm-n.k-root .s { color:${T.accentInk}; opacity:.75; }
+  .lw-rm-n.k-dim { background:${T.card2}; }
+  .lw-rm-n.k-dim .t { font-size:11px; }
+  .lw-rm-n.k-item { background:${T.card}; border-style:dashed; }
+  .lw-rm-n.k-item .t { color:${T.dim}; }
+  .lw-rm-n.fold { border-style:dotted; opacity:.75; }
+
+  /* ★ 整词拆解那张卡 ✓（查询一个词 → 先看怎么拆 → 点部件跳到词根 ✓）*/
+  .lw-rm-card { margin:10px 12px 0; border:1px solid ${T.lineDim}; background:${T.card}; flex:none; }
+  .lw-rm-card .hd { display:flex; align-items:center; padding:7px 10px; font-size:11px;
+    color:${T.dim}; border-bottom:1px solid ${T.lineDim}; }
+  .lw-rm-card .hd .x { margin-left:auto; cursor:pointer; color:${T.faint}; }
+  .lw-rm-card .hd .x:hover { color:${T.red}; }
+  .lw-rm-split { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px; }
+  .lw-rm-chip { display:flex; flex-direction:column; gap:1px; padding:5px 9px; border:1px solid ${T.lineDim};
+    font-size:12.5px; color:${T.text}; }
+  .lw-rm-chip i { font-style:normal; font-size:9px; color:${T.faint}; }
+  .lw-rm-chip.go { cursor:pointer; }
+  .lw-rm-chip.go:hover { background:${T.card2}; }
+  .lw-rm-split .plus { color:${T.faint}; font-size:12px; }
+
+  /* 随机自测 ✓ */
+  .lw-rm-quiz { flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; padding:24px; text-align:center; }
+  .lw-rm-quiz .q { font-size:13px; color:${T.dim}; }
+  .lw-rm-quiz .q b { display:block; margin-top:10px; font-size:30px; color:${T.accent};
+    letter-spacing:1px; font-weight:600; }
+  .lw-rm-quiz .a { font-size:18px; color:${T.text}; }
+  .lw-rm-quiz .btns { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .lw-rm-quiz .btns button { height:30px; padding:0 14px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:11px ${UI}; cursor:pointer; }
+  .lw-rm-quiz .btns button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rm-quiz .btns button.pri { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-rm-quiz .tip { font-size:10px; color:${T.faint}; }
+
   /* ── 文章列表 ── */
   .lw-ep-art { padding:11px 13px; border-bottom:1px solid ${T.lineDim}; cursor:pointer;
     border-left:2px solid transparent; }
@@ -2121,6 +2206,28 @@
     srcImporting: '',                /* 正在导入哪一条（按 url 记 ✓，好让那一行转圈 ✓）*/
     osTag: '全部',                   /* 开源资源按分类筛 ✓ */
   };
+  /* ══ 词根词缀（思维导图）✓ ═════════════════════════════════════════════════
+     ★ 用户原话：「帮我新增词根词缀，方便我查询和记忆相关，大致做成思维导图的样式，
+       参考现有的阅读模块的我的英语里面的词根词缀设计，进行合理化设计，
+       强化可视化和巧记，图形化等等」✓。
+
+     ⚠️ 这里只放**内存态** ✗ —— 导图的平移 / 缩放 / 折叠 / 自测进度，
+        刷新就该重置 ✓（留着反而怪 ✓）。
+     ★ 真正要留下来的只有「⭐ 收藏 / ✓ 已掌握」✓ —— 那个落 STORE ✓
+        （`STORE.roots` ✓，小数据 ✓，和生词本的 `STORE.words` 分开 ✗ ——
+         词根和单词是两回事 ✓，混在一起复习口径会乱 ✗）。 */
+  const ROOT_UI = {
+    q: '',                       /* 搜索词 ✓（形 / 含义 / 例词 / **整词** ✓）*/
+    type: 'all',                 /* 'all' / 'pre' / 'root' / 'suf' ✓ */
+    only: 'all',                 /* 'all' / 'star' / 'done' / 'todo' ✓ */
+    sel: '',                     /* 当前条目（**规范形** ✓）*/
+    x: 0, y: 0, z: 1,            /* 导图的平移 / 缩放 ✓ */
+    fold: {},                    /* 哪几支折叠了 ✓（按维度 key ✓）*/
+    quiz: null,                  /* 自测：{ key, shown, n, right } ✓ */
+    ai: null,                    /* AI 补的拆解：{ word, busy, err, data } ✓ */
+    fitFor: '',                  /* 上次「适应屏幕」是给哪个条目做的 ✓（换了要重 fit ✓）*/
+    detail: false,               /* 详情浮层开着吗 ✓ */
+  };
   /* 朗读 ✓（Web Speech API ✓）—— 只放内存 ✗，语速 / 音色落 STORE ✓ */
   const SPK = { voices: [], loaded: false, listening: false, seq: 0, speaking: false };
   /* ★ 全局键盘闸门 ✓ —— 见下面 Escape 那条 ✗。
@@ -2137,6 +2244,11 @@
      ⚠️ 它**不是**外刊精读能不能用的前提 ✗ —— 没加载上就少一个「挑一篇」的入口 ✓，
         其余功能照旧 ✓（所以这里判空兜底 ✓，不写进 epNoLib() 那条硬依赖里 ✓）。 */
   const ENSRC = (typeof window !== 'undefined' && window.LW_EN_SOURCES) || null;
+  /* ★ 词根词缀库 ✓ —— 双栖的 ✓（lib/roots.js ✓）。
+     ⚠️ **离线内置** ✓，不联网、不问 AI ✓（查词根不该每次都等模型 ✗，
+        而且模型给的词源**会编** ✗ —— 错了用户查不出来 ✓）。
+     没加载上就整块给一句说明 ✓（这个模块没它就真没内容 ✓）。 */
+  const ROOTS = (typeof window !== 'undefined' && window.LW_ROOTS) || null;
   /* 定时排期的「人话描述」也共用一份 ✓ —— 前端自己再写一套必然走偏 ✗
      （「每 1 小时」和「每小时」两种说法并存，用户会以为哪里不对 ✗）。 */
   const FLOW_SCHED = (typeof window !== 'undefined' && window.LW_FLOW_SCHED) || null;
@@ -8262,6 +8374,402 @@
     if (!TR_UI.busy && (!TR_UI.data || Date.now() - TR_UI.at > 10 * 60 * 1000)) trLoad(false);
   }
 
+  /* ══ 词根词缀：思维导图 ✓ ═════════════════════════════════════════════════
+     ★ 用户原话：「…大致做成思维导图的样式，参考现有的阅读模块的我的英语里面的
+       词根词缀设计，进行合理化设计，强化可视化和巧记，图形化等等」✓。
+
+     ★ 参考图那张「六维简图」是**中心 + 六个分支** ✓（译解 / 词根 / 前缀 / 后缀 / 联想 ✓），
+       我按**同构**设计 ✓ —— 中心是要查的词根，六支是：
+         含义 · 例词 · 搭配 · 同义 · 巧记 · 词源 ✓
+       （为什么是这六支 ✗：前三支是「这个词根**能拼出什么**」✓，
+         后三支是「**怎么记住它**」✓ —— 正好对上「查询」和「记忆」两件事 ✓。）
+
+     ⚠️ 为什么**自己画**而不是引一个导图库 ✗：
+       vendor 里只有 d3 / markmap / mermaid ✓ —— markmap 是「markdown → 树」✗，
+       样式定死 ✓；d3 要自己写布局 ✓（那和自己画也差不多了 ✓）。
+       而项目里**已经有**一套「HTML 节点 + SVG 连线」的做法 ✓（工作流画布 ✓），
+       照它来最省事 ✓、配色 / 交互 / 缩放都能自己说了算 ✓。 */
+  const RM_DIM = [
+    { k: 'mean', n: '含义', e: '🎯', c: '#f2e39b' },
+    { k: 'eg', n: '例词', e: '📚', c: '#7ec8e3' },
+    { k: 'combo', n: '搭配', e: '🧩', c: '#9bd67a' },
+    { k: 'syn', n: '同义', e: '🔁', c: '#f0a35e' },
+    { k: 'mnem', n: '巧记', e: '💡', c: '#d7a3f0' },
+    { k: 'from', n: '词源', e: '🏛', c: '#e2725b' },
+  ];
+  /* 三列的 x ✓、一行的高度 ✓ —— 参考图就是「中心在左、分支往右扇开」✓。
+     ⚠️⚠️ 这三个数是**量出来的** ✗，不是拍脑袋定的 ✓：
+       第一版用 `[0,232,452]` + 行高 40 + 节点最宽 320 ✓ →
+       整张图 **772 × 880** ✓，而画布只有 **540 × 480** ✗ →
+       「适应屏幕」只能缩到 **0.48** ✗ → 11px 的字缩成 5px ✗，完全没法看 ✓
+       （截图里就是一团糊 ✓）。
+       → 列距压到 180/366 ✓、行高压到 32 ✓、节点最宽 250 ✓ →
+         图变成 **616 × 544** ✓ → 能缩到 **0.82** ✓（字还有 9~10px ✓，能读 ✓）。 */
+  const RM_COL = [0, 180, 366];
+  const RM_ROW = 32;
+  const RM_H = 28;      /* 单行节点 ✓ */
+  const RM_H2 = 34;     /* 带副标题的（例词：英文 + 中文）✓ */
+  const RM_HW = 50;     /* 要换行的（巧记 / 词源那种长句）✓ */
+  const RM_HR = 40;     /* 中心节点 —— 要**一眼看出这是主角** ✓ */
+
+  function rootMarks() { return (STORE && STORE.roots) || {}; }
+  function rootMark(form) { return rootMarks()[form] || null; }
+  function rootSetMark(form, k) {
+    if (!STORE) return;
+    const m = Object.assign({}, rootMarks());
+    const cur = Object.assign({ star: 0, done: 0 }, m[form] || {});
+    cur[k] = cur[k] ? 0 : 1;
+    cur.at = Date.now();
+    m[form] = cur;
+    STORE.roots = m;
+    epSave();
+    render();
+  }
+  /* ⚠️ 宽度的估算 ✗ —— 中文和英文的每字宽度差一倍 ✓，
+     一律按「字数 × 7」算的话中文节点会挤成一团 ✗。 */
+  function rmTextW(s, fs) {
+    let n = 0;
+    String(s == null ? '' : s).split('').forEach((ch) => {
+      n += /[\u2e80-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch) ? fs : fs * 0.56;
+    });
+    return n;
+  }
+  function rmW(text, fs, max) { return Math.max(64, Math.min(max || 250, Math.ceil(rmTextW(text, fs)) + 24)); }
+
+  function rootEntries() {
+    if (!ROOTS) return [];
+    let list = ROOT_UI.type === 'all' ? ROOTS.all() : ROOTS.byType(ROOT_UI.type);
+    const marks = rootMarks();
+    if (ROOT_UI.only === 'star') list = list.filter((e) => marks[e.k] && marks[e.k].star);
+    else if (ROOT_UI.only === 'done') list = list.filter((e) => marks[e.k] && marks[e.k].done);
+    else if (ROOT_UI.only === 'todo') list = list.filter((e) => !(marks[e.k] && marks[e.k].done));
+    const q = ROOT_UI.q.trim();
+    if (q) {
+      const hit = ROOTS.search(q, 400);
+      const keep = new Set(hit.map((e) => e.k));
+      list = list.filter((e) => keep.has(e.k)).sort((a, b) => hit.indexOf(a) - hit.indexOf(b));
+    } else {
+      /* ⚠️ 词库本身是按「形**长的在前**」排的 ✗（拆词时贪心吃最长那个要用 ✓）——
+         直接拿来当列表顺序的话 ✓，用户打开看到的第一屏是 `trans` / `sembl` 这种长形 ✗，
+         完全不像一本能翻的词典 ✗。→ 列表**按字母排** ✓（搜索时仍按相关度 ✓）。 */
+      list = list.slice().sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
+    }
+    return list;
+  }
+  function rootCur() {
+    if (!ROOTS || !ROOT_UI.sel) return null;
+    return ROOTS.byKey(ROOT_UI.sel);
+  }
+  /* ★ 「同义」那一支 ✓ —— 含义里**有共同汉字**的其它条目 ✓
+     （`spec`（看）↔ `vid`（看）↔ `opt`（选择；看）✓ ——
+      用户真正想知道的是「还有哪些词根也是这个意思」✓）。 */
+  function rootSyn(e) {
+    if (!e) return [];
+    const mine = String(e.m).split('').filter((ch) => /[\u4e00-\u9fa5]/.test(ch));
+    if (!mine.length) return [];
+    return ROOTS.all().filter((o) => o !== e && String(o.m).split('').some((ch) => mine.indexOf(ch) >= 0)).slice(0, 6);
+  }
+  /* ★ 「搭配」那一支 ✓ —— 把它自己的例词**拆一遍** ✓，
+     看这些词里还出现了哪些词缀 ✓（`spect` 的例词里有 `in-` / `re-` / `pro-` / `sus-` ✓）。
+     ⚠️ 这是**算出来的** ✗，不是手写的 ✓ —— 手写的话 167 个词根要写 167 组 ✓，
+        而且改一个例词就得同步改一处 ✗（「同一件事写两处」必然漂移 ✓）。 */
+  function rootCombo(e) {
+    if (!e) return [];
+    const hit = new Map();
+    e.eg.forEach((x) => {
+      const s = ROOTS.split(x.w);
+      if (!s) return;
+      const push = (o, form, role) => {
+        if (!o || o === e) return;
+        const cur = hit.get(o.k) || { e: o, form, role, n: 0 };
+        cur.n++;
+        hit.set(o.k, cur);
+      };
+      if (s.pre) push(s.pre, s.preForm, 'pre');
+      (s.suf || []).forEach((q) => push(q.e, q.form, 'suf'));
+      s.roots.forEach((r) => push(r.e, r.form, 'root'));
+    });
+    return Array.from(hit.values()).sort((a, b) => b.n - a.n).slice(0, 7);
+  }
+  /* 六支的内容 ✓（`fold` 只影响**画不画** ✗，不影响数据 ✓） */
+  function rootDims(e) {
+    const combo = rootCombo(e);
+    return RM_DIM.map((d) => {
+      let items = [];
+      if (d.k === 'mean') items = [{ text: e.m, strong: true }];
+      else if (d.k === 'eg') items = e.eg.slice(0, 5).map((x) => ({ text: x.w, sub: x.zh, word: x.w }));
+      else if (d.k === 'combo') items = combo.slice(0, 5).map((x) => ({ text: ROOTS.show(x.e, x.form), sub: x.e.m, go: x.e.k }));
+      else if (d.k === 'syn') items = rootSyn(e).slice(0, 4).map((o) => ({ text: ROOTS.show(o), sub: o.m, go: o.k }));
+      else if (d.k === 'mnem') items = [{ text: e.mnem, wrap: true }];
+      else if (d.k === 'from') items = [{ text: e.from, wrap: true }];
+      return Object.assign({}, d, { items });
+    });
+  }
+  /* ── 布局 ✓（tidy tree：叶子按顺序占行，父节点居中于子节点 ✓）──────────
+     ⚠️⚠️ 行高**不能统一** ✗✗ —— 节点有三种高度 ✓（单行 28 / 带副标题 34 /
+        要换行的长句 46 ✓）。一律按 32 排的话 ✓，那个 46 的会**压到邻居身上** ✗
+        （截图里「巧记」那行长句正好盖住了下面一格 ✓）。
+     → 按**每行自己的高度**累加 ✓，支与支之间再留白 ✓。 */
+  function rootMap(e) {
+    const dims = rootDims(e);
+    const GAP = 7, BRANCH_GAP = 16;
+    let cursor = 0;
+    const placed = dims.map((d) => {
+      const folded = !!ROOT_UI.fold[d.k];
+      const shown = folded ? [] : d.items;
+      const hs = shown.map((it) => (it.wrap ? RM_HW : (it.sub ? RM_H2 : RM_H)));
+      const h = hs.length ? hs.reduce((a, b) => a + b, 0) + GAP * (hs.length - 1) : RM_H;
+      const top = cursor;
+      cursor += h + BRANCH_GAP;
+      return { d, shown, folded, hs, top, h };
+    });
+    const totalH = Math.max(RM_H, cursor - BRANCH_GAP);
+    const nodes = [];
+    const rootW = rmW(e.k, 19, 220);
+    nodes.push({
+      id: 'root', x: RM_COL[0], y: totalH / 2 - RM_HR / 2, w: rootW, h: RM_HR,
+      text: ROOTS.show(e), sub: e.m, kind: 'root', c: T.accent, big: true,
+    });
+    placed.forEach((p) => {
+      const dn = {
+        id: 'd:' + p.d.k, x: RM_COL[1], y: p.top + p.h / 2 - RM_H / 2, w: 104, h: RM_H,
+        text: p.d.e + ' ' + p.d.n, sub: p.folded ? String(p.d.items.length) + ' 项' : '',
+        kind: 'dim', c: p.d.c, foldKey: p.d.k, folded: p.folded,
+      };
+      nodes.push(dn);
+      let y = p.top;
+      p.shown.forEach((it, i) => {
+        const h = p.hs[i];
+        const w = it.wrap ? rmW(it.text, 11, 340) : rmW(it.text + (it.sub ? '  ' + it.sub : ''), 11.5, 250);
+        nodes.push({
+          id: 'i:' + p.d.k + ':' + i, x: RM_COL[2], y: y + h / 2 - h / 2, w, h,
+          text: it.text, sub: it.sub || '', kind: 'item', c: p.d.c,
+          word: it.word || '', go: it.go || '', strong: !!it.strong, wrap: !!it.wrap,
+        });
+        y += h + GAP;
+      });
+    });
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const edges = [];
+    const link = (a, b) => {
+      if (!a || !b) return;
+      edges.push({ x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2, c: b.c });
+    };
+    placed.forEach((p) => {
+      const dn = byId.get('d:' + p.d.k);
+      link(byId.get('root'), dn);
+      p.shown.forEach((it, i) => link(dn, byId.get('i:' + p.d.k + ':' + i)));
+    });
+    const maxX = nodes.reduce((m, n) => Math.max(m, n.x + n.w), 0) + 36;
+    return { nodes, edges, w: Math.max(520, maxX), h: Math.max(240, totalH + 36) };
+  }
+  function rootMapHtml(e) {
+    const g = rootMap(e);
+    /* ⚠️ 连线画在**节点下面** ✓（和工作流画布同一条经验 ✓）——
+       画在上面的话会压在文字上 ✗。 */
+    const svg = '<svg class="lw-rm-svg" width="' + g.w + '" height="' + g.h + '">'
+      + g.edges.map((ed) => {
+        const mx = (ed.x1 + ed.x2) / 2;
+        return '<path d="M' + ed.x1 + ' ' + ed.y1 + ' C' + mx + ' ' + ed.y1 + ' ' + mx + ' ' + ed.y2 + ' ' + ed.x2 + ' ' + ed.y2 + '"'
+          + ' fill="none" stroke="' + ed.c + '" stroke-opacity=".45" stroke-width="1.6"/>';
+      }).join('')
+      + '</svg>';
+    const body = g.nodes.map((n) => {
+      const cls = 'lw-rm-n k-' + n.kind + (n.folded ? ' fold' : '');
+      const style = 'left:' + n.x + 'px;top:' + n.y + 'px;width:' + n.w + 'px;height:' + n.h + 'px;border-color:' + n.c + (n.kind === 'root' ? ';background:' + n.c + ';color:' + T.accentInk : '');
+      const attrs = 'data-rmnode="' + esc(n.id) + '"'
+        + (n.foldKey ? ' data-rmfold="' + esc(n.foldKey) + '"' : '')
+        + (n.word ? ' data-rmword="' + esc(n.word) + '"' : '')
+        + (n.go ? ' data-rmgo="' + esc(n.go) + '"' : '');
+      return '<div class="' + cls + '" style="' + style + '" ' + attrs + '>'
+        + '<span class="t' + (n.wrap ? ' wrap' : '') + '" title="' + esc(n.text) + (n.sub ? ' · ' + esc(n.sub) : '') + '">' + esc(n.text) + '</span>'
+        + (n.sub ? '<span class="s">' + esc(n.sub) + '</span>' : '')
+        + (n.foldKey ? '<span class="f">' + (n.folded ? '▸' : '▾') + '</span>' : '')
+        + '</div>';
+    }).join('');
+    return '<div class="lw-rm-plane" id="lw-rm-plane" style="width:' + g.w + 'px;height:' + g.h + 'px;'
+      + 'transform:translate(' + Math.round(ROOT_UI.x) + 'px,' + Math.round(ROOT_UI.y) + 'px) scale(' + ROOT_UI.z + ')">'
+      + svg + body + '</div>';
+  }
+
+  /* ── 左栏 ✓ ───────────────────────────────────────────────────────────── */
+  function rootSideHtml() {
+    const marks = rootMarks();
+    const nStar = Object.keys(marks).filter((k) => marks[k].star).length;
+    const nDone = Object.keys(marks).filter((k) => marks[k].done).length;
+    const st = ROOTS.stats();
+    const row = (k, em, label, n, on) => '<div class="lw-rd-row' + (on ? ' on' : '') + '" data-rmtype="' + k + '">'
+      + '<span class="em">' + em + '</span>' + label + '<span class="n">' + n + '</span></div>';
+    const only = (k, em, label, n, on) => '<div class="lw-rd-row' + (on ? ' on' : '') + '" data-rmonly="' + k + '">'
+      + '<span class="em">' + em + '</span>' + label + '<span class="n">' + n + '</span></div>';
+    return '<div class="lw-rd-hd">词根词缀</div>'
+      + row('all', '🧬', '全部', st.total, ROOT_UI.type === 'all')
+      + row('root', '🌱', '词根', st.root, ROOT_UI.type === 'root')
+      + row('pre', '◀', '前缀', st.pre, ROOT_UI.type === 'pre')
+      + row('suf', '▶', '后缀', st.suf, ROOT_UI.type === 'suf')
+      + '<div class="lw-rd-hd">我的</div>'
+      + only('all', '▣', '全部', st.total, ROOT_UI.only === 'all')
+      + only('star', '⭐', '收藏', nStar, ROOT_UI.only === 'star')
+      + only('todo', '○', '还没记', st.total - nDone, ROOT_UI.only === 'todo')
+      + only('done', '✓', '已掌握', nDone, ROOT_UI.only === 'done')
+      + '<div class="lw-rd-hd">怎么用</div>'
+      + '<div class="lw-ep-tip" style="padding:6px 13px 10px;line-height:1.7">'
+      + '· 搜**词根**（spect）✓ 搜**中文**（看）✓ 也能直接**贴一个单词**（inspect）✓<br>'
+      + '· 右边那张图就是这个词根的**六维导图** ✓<br>'
+      + '· 「🧠 随机自测」遮住含义考自己 ✓'
+      + '</div>';
+  }
+
+  /* ── 中栏 ✓ ───────────────────────────────────────────────────────────── */
+  /* ⚠️ 列表**单独抽出来** ✗ —— 搜索框每敲一个字要换的是**这一段** ✓，
+     不是整屏重绘 ✓（整屏重绘会让输入框失焦 ✗，这个坑项目里踩过好几次 ✓）。 */
+  function rootListBodyHtml() {
+    const list = rootEntries();
+    const marks = rootMarks();
+    if (!list.length) {
+      return '<div class="lw-rd-empty">没有符合条件的词根<br>'
+        + '<span style="color:' + T.faint + '">换个词试试：spect / 看 / transport</span></div>';
+    }
+    return list.slice(0, 400).map((e) => {
+      const m = marks[e.k] || {};
+      return '<div class="lw-rm-row' + (ROOT_UI.sel === e.k ? ' on' : '') + '" data-rmpick="' + esc(e.k) + '">'
+        + '<span class="fm">' + esc(ROOTS.show(e)) + '</span>'
+        + '<span class="mn">' + esc(e.m) + '</span>'
+        + '<span class="n">' + e.eg.length + '</span>'
+        + (m.star ? '<span class="b star">⭐</span>' : '')
+        + (m.done ? '<span class="b done">✓</span>' : '')
+        + '</div>';
+    }).join('');
+  }
+  function rootListHtml() {
+    const tools = '<div class="lw-rd-tools">'
+      + '<input id="lw-rm-q" placeholder="词根 / 中文 / 一个单词…" value="' + esc(ROOT_UI.q) + '"/>'
+      + '<button class="pri" id="lw-rm-quiz" title="随机抽一个词根，遮住含义考自己">🧠 自测</button>'
+      + '</div>';
+    return tools + '<div id="lw-rm-body">' + rootListBodyHtml() + '</div>';
+  }
+
+  /* ── 右栏 ✓ ───────────────────────────────────────────────────────────── */
+  /* ★ 「整词拆解」那张卡 ✓ —— 用户贴一个单词进来，先看它**怎么拆** ✓，
+     点某个部件就跳到对应的词根导图 ✓（这就是「查询」那条路 ✓）。 */
+  /* ⚠️ 什么时候算「贴了一个整词」✗：得是**纯字母**、而且**不是词库里已有的形** ✓
+     （不然查 `spect` 的时候会冒出一张「spect 怎么拆」的卡 ✓，纯属添乱 ✗）。 */
+  function rmSplitWord() {
+    const s = ROOT_UI.q.trim();
+    if (!/^[a-z]{3,}$/i.test(s)) return '';
+    if (ROOTS.byKey(s)) return '';
+    return s.toLowerCase();
+  }
+  function rootSplitHtml(word) {
+    if (!word) return '';
+    const s = ROOTS.split(word);
+    const ai = ROOT_UI.ai && ROOT_UI.ai.word === word ? ROOT_UI.ai : null;
+    const chip = (txt, sub, go, c) => '<span class="lw-rm-chip' + (go ? ' go' : '') + '"'
+      + (go ? ' data-rmgo="' + esc(go) + '"' : '') + ' style="border-color:' + c + '">'
+      + esc(txt) + (sub ? '<i>' + esc(sub) + '</i>' : '') + '</span>';
+    const blocks = [];
+    if (s) {
+      const parts = [];
+      if (s.pre) parts.push(chip(ROOTS.show(s.pre, s.preForm), s.pre.m, s.pre.k, '#9bd67a'));
+      s.roots.forEach((r) => parts.push(chip(ROOTS.show(r.e, r.form), r.e.m, r.e.k, '#7ec8e3')));
+      if (s.stem) parts.push(chip(s.stem, '词干（不是词根）', '', T.faint));
+      (s.suf || []).forEach((q) => parts.push(chip(ROOTS.show(q.e, q.form), q.e.m, q.e.k, '#f0a35e')));
+      const note = s.confidence === 'full' ? ''
+        : s.confidence === 'part' ? '<span style="color:' + T.warn + '">（有 ' + s.rest.length + ' 个字母没对上 —— 这个拆法只是参考）</span>'
+          : '<span style="color:' + T.warn + '">（只拆出了词缀，中间那块是词干 —— 英语本来就不是拼积木）</span>';
+      /* ⚠️ 只拆出词缀的时候（`stem` ✓）也给一个 AI 入口 ✗ ——
+         这种结果**不算错**但很弱 ✓，用户多半想知道得更细一点 ✓。 */
+      blocks.push('<div class="lw-rm-split">' + parts.join('<span class="plus">+</span>') + '</div>'
+        + '<div class="lw-ep-tip" style="padding:2px 0 0">' + note
+        + (s.confidence === 'stem' ? ' <button id="lw-rm-ai">🪄 让 AI 再拆细一点</button>' : '')
+        + '</div>');
+    }
+    /* ⚠️⚠️ AI 那段**不能塞在 `else` 里** ✗✗ —— 我第一版就是 `if (s) … else if (ai) …` ✓，
+       于是**本地能拆出一点东西的时候，AI 的结果被整个吞掉** ✗
+       （探针里「AI 拆的结果没显示」就是这么挂的 ✓）。
+       → 两段**并列** ✓：本地拆解 + AI 拆解，用户自己对照 ✓（本地是核对过的 ✓，AI 是参考 ✓）。 */
+    if (ai && ai.busy) blocks.push('<div class="lw-ep-tip">正在让 AI 拆…</div>');
+    else if (ai && ai.data) {
+      blocks.push('<div class="lw-rm-split" style="border-top:1px dashed ' + T.lineDim + ';padding-top:8px">'
+        + esc(ai.data.split || '') + '</div>'
+        + '<div class="lw-ep-tip" style="padding:0 10px 10px;color:' + T.warn + '">⚠️ 上面这条是 **AI 拆的**，没人工核对过 —— 当参考，别当标准答案</div>'
+        + (ai.data.note ? '<div class="lw-ep-tip" style="padding:0 10px 10px">' + esc(ai.data.note) + '</div>' : ''));
+    } else if (!s) {
+      blocks.push('<div class="lw-ep-tip" style="padding:10px">库里没有能拆《' + esc(word) + '》的词根 '
+        + '<span style="color:' + T.faint + '">（英语本来就不是拼积木，很多词就是没有词根）</span><br>'
+        + (ai && ai.err ? '<span style="color:' + T.red + '">✗ ' + esc(ai.err) + '</span><br>' : '')
+        + '<button id="lw-rm-ai">🪄 让 AI 拆一下（会标出来是 AI 说的）</button></div>');
+    }
+    return '<div class="lw-rm-card"><div class="hd">🔍 《' + esc(word) + '》怎么拆'
+      + '<span class="x" id="lw-rm-splitx">✕</span></div>' + blocks.join('') + '</div>';
+  }
+  function rootReadHtml() {
+    const e = rootCur();
+    const word = rmSplitWord();
+    const split = '<div id="lw-rm-splitbox">' + rootSplitHtml(word) + '</div>';
+    if (!e) {
+      return '<div class="lw-rd-read">'
+        + '<div class="lw-rd-empty">← 从中间挑一个词根 / 词缀<br>'
+        + '<span style="color:' + T.faint + '">或者直接把一个英文单词贴到搜索框里（如 transport）</span></div>'
+        + '</div>';
+    }
+    const marks = rootMark(e.k) || {};
+    const quiz = ROOT_UI.quiz && ROOT_UI.quiz.key === e.k ? ROOT_UI.quiz : null;
+    const bar = '<div class="lw-rm-bar">'
+      + '<span class="fm" style="color:' + T.accent + '">' + esc(ROOTS.showAll(e)) + '</span>'
+      + '<span class="tp">' + esc(ROOTS.typeName(e.t)) + '</span>'
+      + '<span class="sp"></span>'
+      + '<button class="' + (marks.star ? 'on' : '') + '" id="lw-rm-star" title="收藏">⭐</button>'
+      + '<button class="' + (marks.done ? 'on' : '') + '" id="lw-rm-done" title="标记已掌握">✓</button>'
+      + '<button id="lw-rm-unfold">展开全部</button>'
+      + '<button id="lw-rm-fold">折叠</button>'
+      + '<button id="lw-rm-fit" title="缩放平移到正好装下">⤢ 适应屏幕</button>'
+      + '<button class="pri" id="lw-rm-quiz2">🧠 随机自测</button>'
+      + '</div>';
+    const stage = quiz
+      ? '<div class="lw-rm-quiz">'
+        + '<div class="q">这个词根是什么意思？<b>' + esc(ROOTS.show(e)) + '</b></div>'
+        + (quiz.shown
+          ? '<div class="a">' + esc(e.m) + '</div>'
+            + '<div class="btns">'
+            + '<button id="lw-rm-qok">✓ 记住了</button>'
+            + '<button id="lw-rm-qno">✗ 再来</button>'
+            + '<button id="lw-rm-qnext">下一个 →</button>'
+            + '</div>'
+          : '<div class="btns"><button class="pri" id="lw-rm-qshow">显示答案</button></div>')
+        + '<div class="tip">这一轮：答对 ' + quiz.right + ' / ' + quiz.n + ' 个</div>'
+        + '</div>'
+      : '<div class="lw-rm-stage" id="lw-rm-stage">'
+        + rootMapHtml(e)
+        + '<div class="lw-rm-hint">拖动平移 · 滚轮缩放 · 点分支可折叠 · 点例词能加进生词本</div>'
+        + '</div>';
+    return '<div class="lw-rd-read">' + bar + split + stage + '</div>';
+  }
+  function viewRoots() {
+    if (!ROOTS) {
+      return '<div class="lw-rd"><div class="lw-rd-empty" style="margin:auto;max-width:440px">'
+        + '词根词缀库没加载上 ✗<br><span style="color:' + T.faint + '">'
+        + '（/lib/roots.js）—— 硬刷新一下（⌘⇧R）试试；还不行说明服务端没重启过。</span></div></div>';
+    }
+    /* ★ 一进来就**自动选中一条** ✓ —— 右栏空着是最劝退的 ✗
+       （用户点进来看到一张导图，才知道这页是干什么的 ✓）。
+       ⚠️ 但**不能挑列表第一条** ✗ —— 按字母排的话第一条是 `a-` ✓，
+          那是全表里最难讲清的一条 ✗（「不 / 在…上 / 加强」三个意思混着 ✓），
+          拿它当门面等于劝退 ✗。
+       → 固定用 `spect`（看）✓ 当门面：例词最多 ✓、巧记最顺 ✓、搭配最全 ✓。 */
+    if (!ROOT_UI.sel) {
+      const list = rootEntries();
+      const show = ROOTS.byKey('spect');
+      if (show) ROOT_UI.sel = show.k;
+      else if (list.length) ROOT_UI.sel = list[0].k;
+    }
+    return '<div class="lw-rd">'
+      + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + rootSideHtml() + '</div>' + paneGrip('side')
+      + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + rootListHtml() + '</div>' + paneGrip('list')
+      + rootReadHtml()
+      + '</div>';
+  }
+
   function viewEnglish() {
     return '<div class="lw-rd">'
       + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + epSideHtml() + '</div>' + paneGrip('side')
@@ -8275,10 +8783,11 @@
       + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + rdSideInnerHtml() + '</div>' + paneGrip('side')
       + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + rdListHtml() + '</div>' + paneGrip('list')
       + rdReadHtml() + '</div>';
-    /* ⚠️ 三个模式**复用同一套三栏类名** ✗（.lw-rd-side / .lw-rd-list / .lw-rd-read ✓）——
+    /* ⚠️ 四个模式**复用同一套三栏类名** ✗（.lw-rd-side / .lw-rd-list / .lw-rd-read ✓）——
        于是拖拽调宽那份 spec 一个字都不用改 ✓（新做一套等于重踩一遍 ✗）。 */
     const inner = mode === 'ex' ? (EN ? viewEnglish() : '<div class="lw-rd">' + epNoLib() + '</div>')
-      : mode === 'word' ? viewWordbook() : shelf;
+      : mode === 'word' ? viewWordbook()
+        : mode === 'root' ? viewRoots() : shelf;
     return '<div class="lw-rd-wrap">' + epModeBar() + inner
       + (RD_UI.impOpen ? rdImportHtml() : '')
       + (RD_UI.connOpen ? rdWrConnHtml() : '')
@@ -8911,11 +9420,12 @@
   function epSave() { saveStore(); }
   function epMode() {
     const m = EP_UI.mode || String((STORE && STORE.readMode) || '') || 'shelf';
-    return (m === 'ex' || m === 'word') ? m : 'shelf';
+    return (m === 'ex' || m === 'word' || m === 'root') ? m : 'shelf';
   }
   function epSetMode(m) {
     EP_UI.mode = m; if (STORE) STORE.readMode = m;
     EP_UI.sel = -1; EP_UI.pick = '';
+    /* ⚠️ 切走要把朗读**停掉** ✗（不然切到别的页签还在念英文 ✗，很吓人 ✗）*/
     spkStop(); epSave(); render();
   }
   /* 分句结果缓存 ✓ —— 每次渲染都重切一遍纯属浪费 ✗。
@@ -9084,17 +9594,20 @@
     const m = epMode();
     if (m === 'ex') return '点句子选中 · 选中后划词就能加生词 · 右键？不，用「🔊」听';
     if (m === 'word') return '按遗忘曲线排期 · 到期的先复习';
+    if (m === 'root') return '搜词根 / 中文 / 直接贴一个单词 · 右边是六维导图';
     return '手动加书 / 导入微信读书笔记 / 同步微信读书书架';
   }
   function epModeBar() {
     const nArt = epArts().length, nWord = epWords().length;
     const due = SRS ? SRS.dueCards(epWords(), Date.now()).length : 0;
+    const nRoot = ROOTS ? ROOTS.stats().total : 0;
     const seg = (k, label, n, tail) => '<span class="seg' + (epMode() === k ? ' on' : '') + '" data-rdmode="' + k + '">'
       + label + (n ? ' <i>' + n + '</i>' : '') + (tail || '') + '</span>';
     return '<div class="lw-rd-modes">'
       + seg('shelf', '📚 书架', 0)
       + seg('ex', '📰 外刊精读', nArt)
       + seg('word', '🔤 生词本', nWord, due ? ' <i style="color:' + T.warn + '">' + due + ' 待复习</i>' : '')
+      + seg('root', '🧬 词根词缀', nRoot)
       + '<span class="sp"></span>'
       + '<span class="tip">' + esc(epModeTip()) + '</span>'
       + '</div>';
@@ -10100,12 +10613,227 @@
   }
 
   /* ══ 绑定 ✓ ════════════════════════════════════════════════════════════ */
+  /* ══ 词根词缀：交互 ✓ ═════════════════════════════════════════════════════ */
+  /* 把 `ROOT_UI` 的平移 / 缩放**直接写到 DOM** ✓ —— ⚠️ 不走整屏 `render()` ✗：
+     拖动时每帧重绘整块面板会卡 ✓，而且会把正在拖的那个元素换掉 ✗。 */
+  function rmApplyView() {
+    const pl = document.getElementById('lw-rm-plane');
+    if (!pl) return;
+    pl.style.transform = 'translate(' + Math.round(ROOT_UI.x) + 'px,' + Math.round(ROOT_UI.y) + 'px) scale(' + ROOT_UI.z + ')';
+  }
+  function rmFit() {
+    const stage = document.getElementById('lw-rm-stage');
+    const pl = document.getElementById('lw-rm-plane');
+    if (!stage || !pl) return;
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const pw = parseFloat(pl.style.width) || pl.offsetWidth || 1;
+    const ph = parseFloat(pl.style.height) || pl.offsetHeight || 1;
+    const z = Math.max(0.35, Math.min(1.3, Math.min((sw - 36) / pw, (sh - 36) / ph)));
+    ROOT_UI.z = z;
+    ROOT_UI.x = Math.max(18, (sw - pw * z) / 2);
+    ROOT_UI.y = Math.max(18, (sh - ph * z) / 2);
+    rmApplyView();
+  }
+  function rmPick(key) {
+    ROOT_UI.sel = key; ROOT_UI.quiz = null; ROOT_UI.ai = null;
+    ROOT_UI.x = 0; ROOT_UI.y = 0; ROOT_UI.z = 1; ROOT_UI.fitFor = '';
+    render();
+  }
+  /* ★ 随机自测 ✓ —— 用户原话里有「方便我查询和**记忆**」✓，
+     光看图记不住 ✗，得能自己考自己 ✓（参考图那个「🎲 随机自测」就是这个 ✓）。 */
+  function rmQuizStart() {
+    const list = rootEntries().length ? rootEntries() : ROOTS.all();
+    if (!list.length) return;
+    const pick = list[Math.floor(Math.random() * list.length)];
+    const q = (ROOT_UI.quiz && ROOT_UI.quiz.key === pick.k) ? ROOT_UI.quiz : null;
+    ROOT_UI.sel = pick.k;
+    ROOT_UI.quiz = { key: pick.k, shown: false, n: q ? q.n : 0, right: q ? q.right : 0 };
+    ROOT_UI.x = 0; ROOT_UI.y = 0; ROOT_UI.z = 1;
+    render();
+  }
+  function rmQuizAnswer(ok) {
+    const q = ROOT_UI.quiz;
+    if (!q) return;
+    q.n++; if (ok) q.right++;
+    /* ★ 答对就顺手标「已掌握」✓、答错就取消 ✓ —— 自测和「我的进度」是同一件事 ✓，
+       分两套的话用户要手动维护两次 ✗。 */
+    if (STORE) {
+      const m = Object.assign({}, rootMarks());
+      const cur = Object.assign({ star: 0, done: 0 }, m[q.key] || {});
+      cur.done = ok ? 1 : 0; cur.at = Date.now();
+      m[q.key] = cur; STORE.roots = m; epSave();
+    }
+    ROOT_UI.quiz = null;
+    rmQuizStart();
+  }
+  /* ★ AI 拆一个库里没有的词 ✓ —— ⚠️ 必须**明说是 AI 说的** ✗✗：
+     模型给的词源看着特别确定 ✓，错了用户根本查不出来 ✗
+     （和「音标背错」是同一类事故 ✓）。 */
+  async function rmAiSplit(word) {
+    const cfg = mailAiCfg();
+    ROOT_UI.ai = { word, busy: true, err: '', data: null };
+    if (!cfg) {
+      ROOT_UI.ai = { word, busy: false, err: '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key', data: null };
+      render();
+      return;
+    }
+    render();
+    try {
+      const r = await fetch('/api/ai/chat', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 60000,
+          messages: [
+            {
+              role: 'system',
+              content: '你是英语词源老师。用户给你一个英文单词，请拆解它的前缀 / 词根 / 后缀。'
+                + '**只输出一个 JSON 对象**，不要 markdown 代码块、不要任何解释。字段：'
+                + '{"split":"用「 + 」连起来的中文拆解，如 in-（向内）+ spect（看）",'
+                + '"note":"一句话说明，比如哪些部分不确定、或者它其实不是词根词缀构成的"}',
+            },
+            { role: 'user', content: '单词：' + word },
+          ],
+        }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || 'AI 请求失败');
+      const o = epJsonFrom(d.content);
+      if (!o || !o.split) throw new Error('模型没按要求返回 JSON');
+      ROOT_UI.ai = { word, busy: false, err: '', data: { split: String(o.split).slice(0, 200), note: String(o.note || '').slice(0, 200) } };
+    } catch (e) {
+      ROOT_UI.ai = { word, busy: false, err: String((e && e.message) || e), data: null };
+    }
+    render();
+  }
+
+  function bindRoots(host, q, qa) {
+    if (epMode() !== 'root' || !ROOTS) return;
+    /* ★ 拆解卡是**单独重绘**的 ✗（跟着搜索框走 ✓，见 `qi.oninput` ✓）→
+       它的绑定也得能**单独重绑** ✓，不能只在 `bindRoots` 里绑一次 ✗
+       （重绘之后按钮就死了 ✓ —— 「点了没反应」的经典成因 ✓）。 */
+    const box = q('#lw-rm-splitbox');
+    function rmBindSplit() {
+      if (!box) return;
+      lwQA(box, '[data-rmgo]').forEach((el) => {
+        el.onclick = (ev) => { ev.stopPropagation(); rmPick(el.dataset.rmgo); };
+      });
+      const sx = lwQ(box, '#lw-rm-splitx');
+      if (sx) sx.onclick = () => { ROOT_UI.q = ''; ROOT_UI.ai = null; render(); };
+      const ai = lwQ(box, '#lw-rm-ai');
+      if (ai) ai.onclick = () => { const w = rmSplitWord(); if (w) rmAiSplit(w); };
+    }
+    rmBindSplit();
+    qa('[data-rmtype]').forEach((el) => {
+      el.onclick = () => { ROOT_UI.type = el.dataset.rmtype; ROOT_UI.sel = ''; ROOT_UI.quiz = null; render(); };
+    });
+    qa('[data-rmonly]').forEach((el) => {
+      el.onclick = () => { ROOT_UI.only = el.dataset.rmonly; render(); };
+    });
+    qa('[data-rmpick]').forEach((el) => {
+      el.onclick = () => rmPick(el.dataset.rmpick);
+    });
+    qa('[data-rmgo]').forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); rmPick(el.dataset.rmgo); };
+    });
+    /* ★ 点导图里的例词 → 一键加进**生词本** ✓（复用外刊精读那套 ✓）——
+       看到「inspect」想记下来，不用再切到生词本手打一遍 ✓。 */
+    qa('[data-rmword]').forEach((el) => {
+      el.onclick = () => { const w = el.dataset.rmword; if (w) { epWordAdd(w); } };
+    });
+    qa('[data-rmfold]').forEach((el) => {
+      el.onclick = () => { const k = el.dataset.rmfold; ROOT_UI.fold[k] = !ROOT_UI.fold[k]; render(); };
+    });
+    const sb = q('#lw-rm-star'); if (sb) sb.onclick = () => rootSetMark(ROOT_UI.sel, 'star');
+    const db = q('#lw-rm-done'); if (db) db.onclick = () => rootSetMark(ROOT_UI.sel, 'done');
+    const uf = q('#lw-rm-unfold'); if (uf) uf.onclick = () => { ROOT_UI.fold = {}; render(); };
+    const fd = q('#lw-rm-fold'); if (fd) fd.onclick = () => {
+      const e = rootCur();
+      const f = {};
+      if (e) rootDims(e).forEach((d) => { f[d.k] = true; });
+      ROOT_UI.fold = f; render();
+    };
+    const ft = q('#lw-rm-fit'); if (ft) ft.onclick = () => rmFit();
+    const qz = q('#lw-rm-quiz'); if (qz) qz.onclick = () => rmQuizStart();
+    const qz2 = q('#lw-rm-quiz2'); if (qz2) qz2.onclick = () => rmQuizStart();
+    const qs = q('#lw-rm-qshow'); if (qs) qs.onclick = () => { if (ROOT_UI.quiz) { ROOT_UI.quiz.shown = true; render(); } };
+    const qk = q('#lw-rm-qok'); if (qk) qk.onclick = () => rmQuizAnswer(true);
+    const qn = q('#lw-rm-qno'); if (qn) qn.onclick = () => rmQuizAnswer(false);
+    const qx = q('#lw-rm-qnext'); if (qx) qx.onclick = () => { const o = ROOT_UI.quiz; ROOT_UI.quiz = null; rmQuizStart(); if (o) ROOT_UI.quiz.n = o.n; ROOT_UI.quiz.right = o.right; };
+    /* ⚠️ 拆解卡里的那几个控件（跳转 chip / 关掉 / 让 AI 拆 ✓）由 `rmBindSplit()` 管 ✓ ——
+       它们会被**单独重绘** ✗（跟着搜索框走 ✓），在这儿再绑一次只会互相覆盖 ✓，
+       所以这里不再重复绑 ✗。 */
+    /* ⚠️ 搜索框**不能每敲一个字就整屏 render** ✗（会失焦 ✗，这个坑踩过 ✓）——
+       只换中栏那段列表 ✓ + 右栏的拆解卡 ✓。 */
+    const qi = q('#lw-rm-q');
+    if (qi) {
+      qi.oninput = () => {
+        ROOT_UI.q = qi.value;
+        ROOT_UI.ai = null;
+        /* ⚠️⚠️ 右栏那张拆解卡**也必须跟着换** ✗✗ —— 我第一版只换了中栏 ✓
+           （怕失焦 ✓），结果贴一个整词**什么都没发生** ✗
+           （探针里就是这条挂的 ✓：卡片根本不出现 ✓）。
+           → 给卡片一个自己的容器 ✓，只换它 ✓（不整屏重绘 ✓，焦点还在 ✓）。 */
+        const body = document.getElementById('lw-rm-body');
+        if (body) body.innerHTML = rootListBodyHtml();
+        const box = document.getElementById('lw-rm-splitbox');
+        if (box) box.innerHTML = rootSplitHtml(rmSplitWord());
+        rmBindSplit();
+      };
+      qi.onkeydown = (ev) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        /* 回车 = 「查这个词」✓ —— 是整词就先看拆解 ✓，是词根就直接跳过去 ✓ */
+        const s = ROOT_UI.q.trim().toLowerCase();
+        const hit = ROOTS.byKey(s) || ROOTS.search(s, 1)[0];
+        if (hit) rmPick(hit.k);
+      };
+    }
+    /* ── 画布：拖动平移 + 滚轮缩放 ✓ ──
+       ⚠️ 用 `lwGrab` ✓ —— 它专门处理了「松手落在窗口外 → move 一直挂着」那个坑 ✗
+          （项目里踩过 ✓，别自己再写一套 ✓）。 */
+    const stage = q('#lw-rm-stage');
+    const plane = q('#lw-rm-plane');
+    if (stage && plane) {
+      lwGrab(stage, {
+        down: (ev) => {
+          if (ev.target && ev.target.closest && ev.target.closest('.lw-rm-n')) return null;   /* 点节点不算拖 ✓ */
+          stage.classList.add('dragging');
+          return { x0: ev.clientX, y0: ev.clientY, px: ROOT_UI.x, py: ROOT_UI.y };
+        },
+        move: (ev, s) => {
+          if (!s) return;
+          ROOT_UI.x = s.px + (ev.clientX - s.x0);
+          ROOT_UI.y = s.py + (ev.clientY - s.y0);
+          rmApplyView();
+        },
+        up: () => { stage.classList.remove('dragging'); },
+      });
+      stage.onwheel = (ev) => {
+        ev.preventDefault();
+        const r = stage.getBoundingClientRect();
+        const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+        const old = ROOT_UI.z;
+        const z = Math.max(0.3, Math.min(2.2, old * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+        /* ⚠️ 缩放要**围着鼠标那一点** ✗ —— 直接乘缩放的话内容会往左上角跑 ✓，
+           鼠标指着的东西瞬间跑没影 ✗（导图最劝退的手感 ✗）。 */
+        ROOT_UI.x = mx - (mx - ROOT_UI.x) * (z / old);
+        ROOT_UI.y = my - (my - ROOT_UI.y) * (z / old);
+        ROOT_UI.z = z;
+        rmApplyView();
+      };
+      /* 换了条目 → 自动「适应屏幕」一次 ✓（不然新图可能整个在视口外 ✓） */
+      if (ROOT_UI.fitFor !== ROOT_UI.sel) { ROOT_UI.fitFor = ROOT_UI.sel; rmFit(); }
+    }
+  }
+
   function bindEnglish() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'reading') return;
     const q = (s) => lwQ(host, s);
     const qa = (s) => lwQA(host, s);
     qa('[data-rdmode]').forEach((el) => { el.onclick = () => epSetMode(el.dataset.rdmode); });
+    /* ★ 词根词缀模式 ✓ —— 单独一个绑定函数 ✓（它和精读 / 生词本几乎不共用东西 ✓） */
+    bindRoots(host, q, qa);
 
     /* ── 外刊精读 ── */
     /* ★★ Escape 关浮层 ✓ —— ⚠️⚠️ 必须挂在 **document** 上 ✗✗，不能只挂 `#lifework-view` ✗：
