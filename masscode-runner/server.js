@@ -5245,6 +5245,28 @@ const server = http.createServer(async (req, res) => {
             if (typeof content !== 'string') throw new Error('AI 响应里没有 choices[0].message.content');
             return content;
           };
+          /* ★★ 流式返回 ✓（`?stream=1`）—— 用户原话：「执行，也没有执行到哪的显示」✓。
+             一次跑十几秒（AI 节点 30 秒 ✗）而界面一动不动 ✗，用户只能干等 ✗。
+             → 边跑边用 **NDJSON**（一行一个 JSON ✓）往前推 ✓：
+                 {"t":"start","id":"n3"}      轮到哪个节点了 ✓
+                 {"t":"step","step":{…}}      这个节点跑完了（成功/失败/跳过 ✓）
+                 {"t":"done","ok":true,…}     整张图跑完了 ✓
+             为什么不用 SSE ✗：`EventSource` 只能发 GET ✗，而图是 POST 上来的 ✓；
+             `fetch` + `ReadableStream` 读 NDJSON 一样简单 ✓，还不用多开一个接口 ✓。 */
+          const wantStream = String(u.searchParams.get('stream') || '') === '1';
+          let streamed = false;
+          const writeLine = wantStream ? (o) => {
+            if (!streamed) {
+              streamed = true;
+              res.writeHead(200, {
+                'content-type': 'application/x-ndjson; charset=utf-8',
+                'cache-control': 'no-cache',
+                'connection': 'keep-alive',
+                'x-accel-buffering': 'no',     /* ⚠️ 有反向代理时**必须**加这个 ✗，不然会被攒着不发 ✗ */
+              });
+            }
+            try { res.write(JSON.stringify(o) + '\n'); } catch (_) {}
+          } : null;
           try {
             const r = await WORKFLOW.runFlow(graph, {
               ai: aiCfg, aiChat, fetch: fetch, now: Date.now(),
@@ -5253,31 +5275,31 @@ const server = http.createServer(async (req, res) => {
               workflowName: String((postBody && postBody.flowName) || '').slice(0, 120),
               workflowId: String((postBody && postBody.flowId) || '').slice(0, 60),
               executionId: 'e' + Date.now().toString(36),
+              onNodeStart: writeLine ? ((node) => writeLine({ t: 'start', id: node.id, type: node.type })) : null,
+              /* ⚠️ 每一步的输出也要截断 ✗ —— 推流里塞几十 MB 会把前端卡死 ✗ */
+              onStep: writeLine ? ((st) => writeLine({ t: 'step', step: Object.assign({}, st, { out: trimFlowOut(st.out) }) })) : null,
             });
             /* ⚠️ `vars` 可能是几十 MB ✗（比如 HTTP 抓了一大坨 ✓）——
                全塞回前端会把面板卡住 ✗。这里按**每个节点**截断 ✓，
                够前端显示「这一步输出长什么样」就行 ✓。 */
-            const trim = (v) => {
-              try {
-                const s = JSON.stringify(v);
-                if (s && s.length > 20000) return JSON.parse(JSON.stringify({ _truncated: true, _size: s.length, preview: s.slice(0, 4000) }));
-              } catch (_) { return String(v).slice(0, 2000); }
-              return v;
-            };
             const vars = {};
-            Object.keys(r.vars || {}).forEach((k) => { vars[k] = trim(r.vars[k]); });
-            return send(res, 200, {
+            Object.keys(r.vars || {}).forEach((k) => { vars[k] = trimFlowOut(r.vars[k]); });
+            const payload = {
               ok: true, steps: r.steps, effects: r.effects, vars,
               ms: r.ms, startedAt: r.startedAt, finishedAt: r.finishedAt,
-            });
+            };
+            if (writeLine) { writeLine(Object.assign({ t: 'done' }, payload)); return res.end(); }
+            return send(res, 200, payload);
           } catch (error) {
-            return send(res, 200, {
+            const fail = {
               ok: false,
               error: String((error && error.message) || error),
               nodeId: (error && error.nodeId) || '',
               steps: (error && error.steps) || [],
               effects: [],
-            });
+            };
+            if (writeLine) { writeLine(Object.assign({ t: 'done' }, fail)); return res.end(); }
+            return send(res, 200, fail);
           }
         }
 

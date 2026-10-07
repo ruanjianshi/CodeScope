@@ -415,6 +415,16 @@ async function runFlow(graph, options) {
     ai: opts.ai || null,
     aiChat: opts.aiChat || null,
   };
+  /* ★ 进度回调 ✓ —— 用户原话：「执行，也没有执行到哪的显示」✓。
+     一次跑十几秒（AI 节点 30 秒 ✗）而界面**一动不动** ✗，用户只能干等 ✗。
+     有了这两个回调，服务端就能**边跑边往前端推** ✓（NDJSON 流 ✓），
+     画布上的节点会一个个亮起来 ✓ —— 和 n8n 一样 ✓。
+     ⚠️ 回调里**不许抛** ✗ —— 推流断了不该把工作流也带崩 ✗，
+        所以下面都是 `try { … } catch (_) {}` ✓。 */
+  const onStart = typeof opts.onNodeStart === 'function' ? opts.onNodeStart : null;
+  const onStep = typeof opts.onStep === 'function' ? opts.onStep : null;
+  const emitStart = (node) => { if (onStart) { try { onStart(node); } catch (_) {} } };
+  const emitStep = (step) => { if (onStep) { try { onStep(step); } catch (_) {} } };
   if (!ctx.fetch) throw new Error('这个运行环境没有 fetch ✗');
   const nodes = Array.isArray(graph && graph.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph && graph.edges) ? graph.edges : [];
@@ -453,7 +463,8 @@ async function runFlow(graph, options) {
     /* 入边**全都**是死的 → 这个节点也走不到 ✓（没有入边的触发器不在此列 ✓）*/
     if (ins.length && ins.every((e) => deadEdge.has(edgeKey(e)))) {
       killOut(id);
-      steps.push({ id, type: node.type, name: node.name || '', status: 'skipped' });
+      const sk = { id, type: node.type, name: node.name || '', status: 'skipped' };
+      steps.push(sk); emitStep(sk);
       continue;
     }
     let input = {};
@@ -485,7 +496,8 @@ async function runFlow(graph, options) {
           后面整条链全不跑了 ✗，用户只是想临时绕开它 ✗。 */
     if (node.disabled) {
       vars[id] = input;
-      steps.push({ id, type: node.type, name: node.name || '', status: 'disabled', ms: 0, out: input });
+      const dis = { id, type: node.type, name: node.name || '', status: 'disabled', ms: 0, out: input };
+      steps.push(dis); emitStep(dis);
       continue;
     }
 
@@ -497,6 +509,8 @@ async function runFlow(graph, options) {
     let r = null;
     let lastErr = null;
     let attempt = 0;
+    /* ★ 告诉前端「现在轮到它了」✓ —— 画布上这个节点会亮起来 ✓（n8n 也是这样 ✓）。 */
+    emitStart(node);
     for (attempt = 1; attempt <= tries; attempt++) {
       try { r = await execNode(node, vars, input, ctx, scope); lastErr = null; break; }
       catch (error) {
@@ -517,16 +531,19 @@ async function runFlow(graph, options) {
          ⚠️ 不能「出错就当成功」✗ —— 那会把失败藏起来 ✗。 */
       if (String(node.onError || 'stop') === 'continue') {
         vars[id] = { error: msg, failed: true };
-        steps.push({ id, type: node.type, name: node.name || '', status: 'error', error: msg, ms, attempts: used, continued: true, out: vars[id] });
+        const errStep = { id, type: node.type, name: node.name || '', status: 'error', error: msg, ms, attempts: used, continued: true, out: vars[id] };
+        steps.push(errStep); emitStep(errStep);
         continue;
       }
-      steps.push({ id, type: node.type, name: node.name || '', status: 'error', error: msg, ms, attempts: used });
+      const errStep = { id, type: node.type, name: node.name || '', status: 'error', error: msg, ms, attempts: used };
+      steps.push(errStep); emitStep(errStep);
       throw Object.assign(new Error(msg), { steps, vars, nodeId: id });
     }
 
     vars[id] = r.out;
     if (r.effect) effects.push(Object.assign({ nodeId: id, nodeName: node.name || '' }, r.effect));
-    steps.push({ id, type: node.type, name: node.name || '', status: 'ok', out: r.out, port: r.port, ms, attempts: used });
+    const okStep = { id, type: node.type, name: node.name || '', status: 'ok', out: r.out, port: r.port, ms, attempts: used };
+    steps.push(okStep); emitStep(okStep);
     /* 分支节点：没走的那些口 → 对应的边全死掉 ✓ */
     const ports = OUT_PORTS[node.type];
     if (ports) {

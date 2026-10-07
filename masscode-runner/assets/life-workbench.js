@@ -1066,10 +1066,24 @@
   .lw-fl-node .bd { display:flex; align-items:center; gap:6px; padding:2px 8px 0; font-size:11.5px;
     color:${T.text}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lw-fl-node .bd .em { font-size:13px; line-height:1; flex:none; }
-  .lw-fl-node .st { position:absolute; right:5px; bottom:3px; font-size:9px; color:${T.faint}; }
+  .lw-fl-node .st { position:absolute; right:-2px; bottom:-9px; padding:1px 6px;
+    font-size:9.5px; line-height:1.5; background:${T.bg}; border:1px solid ${T.lineDim};
+    color:${T.dim}; white-space:nowrap; }
+  /* ★★ 运行状态要**看得见** ✗✗ —— 用户原话：「执行，也没有执行到哪的显示」✓。
+     原来那个「✓0ms」是 9px 的淡灰字 ✗、缩在节点右下角 ✗，等于没显示 ✗。
+     → 改成**带边框的小徽章** ✓ + 整圈颜色跟着状态走 ✓。 */
   .lw-fl-node.s-ok { border-color:${T.ok}; }
+  .lw-fl-node.s-ok .st { color:${T.ok}; border-color:${T.ok}; }
   .lw-fl-node.s-error { border-color:${T.red}; }
+  .lw-fl-node.s-error .st { color:${T.red}; border-color:${T.red}; }
   .lw-fl-node.s-skipped { opacity:.45; }
+  .lw-fl-node.s-disabled .st { color:${T.warn}; border-color:${T.warn}; }
+  /* ★ 正在跑的那个：亮边 + 呼吸 ✓ —— 一眼看出「跑到哪了」✓（n8n 也是这个感觉 ✓）。 */
+  .lw-fl-node.running { border-color:${T.accent};
+    box-shadow:0 0 0 2px color-mix(in srgb, ${T.accent} 45%, transparent);
+    animation:lw-fl-run 1.1s ease-in-out infinite; }
+  .lw-fl-node.running .st { color:${T.accent}; border-color:${T.accent}; }
+  @keyframes lw-fl-run { 0%,100% { opacity:1 } 50% { opacity:.5 } }
   /* ★ 多选 / 禁用 / 便签 / 框选 ✓（对齐 n8n 的画布 ✓） */
   .lw-fl-node.picked { border-color:${T.ok}; box-shadow:0 0 0 2px color-mix(in srgb, ${T.ok} 35%, transparent); }
   .lw-fl-node.off { opacity:.5; border-style:dashed; }
@@ -1810,6 +1824,8 @@
     runs: [], runOpen: false, runSel: -1, stepSel: -1, keysBound: false,
     /* ★ 定时排期 ✓（服务端算 ✓，这里只显示 + 收产出 ✓） */
     sched: [], schedAt: 0, schedOpen: false, schedTimer: 0, schedBusy: false,
+    /* ★ 正在跑哪个节点 ✓（服务端边跑边推 ✓，画布上那个会亮起来 ✓） */
+    running: '',
     /* ★ 剪贴板 ✓（复制粘贴节点 ✓） */
     clip: null,
   };
@@ -6311,14 +6327,28 @@
     const stepMap = {};
     (FLOW_UI.steps || []).forEach((st) => { stepMap[st.id] = st; });
     /* 连线画在节点**下面** ✓ —— 便签那种大块要垫在最底下 ✓ */
+    /* ★ 箭头 ✗ —— 没有箭头根本读不出方向 ✓（用户原话：「怎么连线，没有箭头」✓）。
+       ⚠️ 只有**可见那条**画箭头 ✗ —— 那条 14px 宽的透明命中区要是也画 ✗，
+          会叠出一个巨大的透明箭头 ✗（看不见但会挡住下面的元素 ✗）。
+       ⚠️ 线要**提前 11px 收尾** ✗ —— 端口圆点是有 z-index 的 ✓，
+          线画到端口中心的话箭头尖会被圆点盖住 ✗，等于没画 ✗。 */
+    const EDGE_GAP = 11;
     const svg = '<svg class="lw-fl-svg" width="' + planeW + '" height="' + planeH + '">'
+      + '<defs>'
+      + '<marker id="lw-fl-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+      + '<path d="M0.5 1L8 5L0.5 9" fill="none" stroke="' + T.lineDim + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>'
+      + '<marker id="lw-fl-ah-hot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+      + '<path d="M0.5 1L8 5L0.5 9" fill="none" stroke="' + T.accent + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>'
+      + '</defs>'
       + edges.map((e, i) => {
         const a = flowNodeById(f, e.from), b = flowNodeById(f, e.to);
         if (!a || !b) return '';
         const hot = FLOW_UI.node === e.from || FLOW_UI.node === e.to;
-        const d = flowEdgeD(flowPortXY(a, 'out', e.port, flowOutCount(a)), flowPortXY(b, 'in', 0, 1));
+        const p1 = flowPortXY(a, 'out', e.port, flowOutCount(a));
+        const p2 = flowPortXY(b, 'in', 0, 1);
+        const d = flowEdgeD(p1, { x: p2.x - EDGE_GAP, y: p2.y });
         return '<g data-flowedge="' + i + '" title="点一下删掉这条连线"><path class="hit" d="' + d + '"/>'
-          + '<path class="' + (hot ? 'hot' : '') + '" d="' + d + '"/></g>';
+          + '<path class="' + (hot ? 'hot' : '') + '" marker-end="url(#lw-fl-ah' + (hot ? '-hot' : '') + ')" d="' + d + '"/></g>';
       }).join('') + '</svg>';
     const body = nodes.map((n) => {
       const meta = flowMetaOf(n);
@@ -6329,6 +6359,7 @@
         + (picked ? ' picked' : '')
         + (meta.sticky ? ' sticky' : '')
         + (n.disabled ? ' off' : '')
+        + (FLOW_UI.running === n.id ? ' running' : '')
         + (st ? ' s-' + st.status : '');
       const style = 'left:' + n.x + 'px;top:' + n.y + 'px'
         + (meta.sticky ? ';width:' + FLOW_STICKY_W + 'px;height:' + FLOW_STICKY_H + 'px' : '');
@@ -6357,9 +6388,10 @@
         + outs.join('')
         + '<div class="hd">' + esc(meta.g || '') + '<span class="fid">' + esc(n.id) + '</span></div>'
         + '<div class="bd"><span class="em">' + meta.e + '</span>' + esc(meta.n) + '</div>'
-        + (n.disabled ? '<div class="st">已禁用</div>'
-          : st ? '<div class="st">' + (st.status === 'ok' ? '✓' + (st.ms || 0) + 'ms'
-            : st.status === 'error' ? (st.continued ? '✗ 已跳过' : '✗') : st.status === 'disabled' ? '已禁用' : '跳过') + '</div>' : '')
+        + (FLOW_UI.running === n.id ? '<div class="st">运行中…</div>'
+          : n.disabled ? '<div class="st">已禁用</div>'
+            : st ? '<div class="st">' + (st.status === 'ok' ? '✓ ' + (st.ms || 0) + 'ms'
+              : st.status === 'error' ? (st.continued ? '✗ 已跳过' : '✗ 失败') : st.status === 'disabled' ? '已禁用' : '○ 跳过') + '</div>' : '')
         + '</div>';
     }).join('');
     return '<div class="lw-fl-cv" id="lw-fl-cv"><div class="lw-fl-plane" id="lw-fl-plane" style="width:' + planeW + 'px;height:' + planeH + 'px">'
@@ -6789,7 +6821,9 @@
       + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">📖 说明</button>'
       + '<button id="lw-fl-clear">清空画布</button>'
       + '<button id="lw-fl-del">🗑 删工作流</button>'
-      + '<span class="hint">' + (FLOW_UI.busy ? '正在跑…'
+      + '<span class="hint">' + (FLOW_UI.busy
+        ? ('正在跑… ' + (FLOW_UI.steps || []).length + ' / ' + (f ? (f.nodes || []).filter((n) => !flowMetaOf(n).sticky).length : 0) + ' 步'
+          + (FLOW_UI.running ? '（' + esc(flowMetaOf(flowNodeById(f, FLOW_UI.running)).n) + '）' : ''))
         : FLOW_UI.help ? '看完点「📖 说明」收起来'
           : nPicked > 1 ? ('选中了 ' + nPicked + ' 个节点 · ⌘C 复制 · Delete 删')
             : 'Shift 点选 / 空白处拖框选 · ⌘Z 撤销 · 点节点改设置') + '</span>'
@@ -6809,15 +6843,26 @@
   function flowAiCfg() {
     try { return JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) { return {}; }
   }
+  /* ★ 跑的时候**只重画、不丢滚动位置** ✗ ——
+     整屏 render 会把画布滚回左上角 ✗，图一大就根本看不到正在跑的那个节点 ✗。 */
+  function flowRenderLive() {
+    const cv = document.getElementById('lw-fl-cv');
+    const sx = cv ? cv.scrollLeft : 0;
+    const sy = cv ? cv.scrollTop : 0;
+    render();
+    const cv2 = document.getElementById('lw-fl-cv');
+    if (cv2) { cv2.scrollLeft = sx; cv2.scrollTop = sy; }
+  }
   async function flowRun() {
     const f = flowCurrent(); if (!f || FLOW_UI.busy) return;
     if (!(f.nodes || []).length) { setStatus(esc('画布是空的 ✓ 先加几个节点'), 5000); return; }
-    FLOW_UI.busy = true; FLOW_UI.steps = null; FLOW_UI.err = ''; FLOW_UI.stepSel = -1;
+    FLOW_UI.busy = true; FLOW_UI.steps = null; FLOW_UI.err = ''; FLOW_UI.stepSel = -1; FLOW_UI.running = '';
     render();
     const at = Date.now();
+    let d = null;
     try {
       const ai = flowAiCfg();
-      const r = await fetch('/api/life/flow/run', {
+      const r = await fetch('/api/life/flow/run?stream=1', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           graph: { nodes: f.nodes, edges: f.edges },
@@ -6826,22 +6871,46 @@
           flowName: f.name || '', flowId: f.id || '',
         }),
       });
-      const d = await r.json();
-      FLOW_UI.steps = (d && d.steps) || [];
-      FLOW_UI.err = (d && d.ok) ? '' : ((d && d.error) || '运行失败');
-      if (d && d.ok) {
-        /* ★ 走 Deep 版 ✓ —— 它会顺手把「调用子工作流」那些 effect 也跑掉 ✓
-           （带深度上限 ✓，见 flowApplyEffectsDeep ✓）。 */
+      /* ★★ 流式读进度 ✓ —— 用户原话：「执行，也没有执行到哪的显示」✓。
+         服务端一行一个 JSON（NDJSON ✓）：start = 轮到谁了 ✓、step = 它跑完了 ✓、
+         done = 整张图完了 ✓。**每来一条就重画一次** ✓，节点一个个亮起来 ✓。 */
+      if (r.body && r.body.getReader) {
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          buf += dec.decode(chunk.value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i);
+            buf = buf.slice(i + 1);
+            if (!line.trim()) continue;
+            let msg = null;
+            try { msg = JSON.parse(line); } catch (_) { continue; }
+            if (msg.t === 'start') { FLOW_UI.running = msg.id; flowRenderLive(); }
+            else if (msg.t === 'step') {
+              FLOW_UI.steps = (FLOW_UI.steps || []).concat([msg.step]);
+              FLOW_UI.running = '';
+              flowRenderLive();
+            } else if (msg.t === 'done') { d = msg; }
+          }
+        }
+      } else {
+        d = await r.json();            /* 老浏览器没有 ReadableStream → 退回整包 ✓ */
+      }
+      if (!d) throw new Error('服务端没有返回结果（连接断了？）');
+      FLOW_UI.steps = d.steps || [];
+      FLOW_UI.err = d.ok ? '' : (d.error || '运行失败');
+      if (d.ok) {
         const msg = await flowApplyEffectsDeep(d.effects || [], 0);
         setStatus(esc('✓ 跑完了' + (msg ? ' · ' + msg : '')), 8000);
       } else {
         setStatus(esc('✗ ' + FLOW_UI.err), 12000);
       }
-      /* ★ 记一条执行历史 ✓（n8n 的 Executions ✓）——
-         存的是**摘要** ✓（每步的状态/耗时/输出截断 ✓），不是全量 ✗，
-         不然跑几十次 STORE 就胖得没法看了 ✗。 */
       flowPushRun(f, {
-        at, ok: !!(d && d.ok), err: FLOW_UI.err, ms: (d && d.ms) || (Date.now() - at),
+        at, ok: !!d.ok, err: FLOW_UI.err, ms: d.ms || (Date.now() - at),
         steps: FLOW_UI.steps.map((st) => ({
           id: st.id, type: st.type, status: st.status, ms: st.ms || 0,
           attempts: st.attempts || 1, error: st.error || '',
@@ -6854,6 +6923,7 @@
       flowPushRun(f, { at, ok: false, err: e.message, ms: Date.now() - at, steps: [] });
     }
     FLOW_UI.busy = false;
+    FLOW_UI.running = '';
     render();
   }
   /* 每一步的输出截断 ✓ —— 一条历史最多留 20 条 ✓，每条每步 2KB ✓，够看了 ✓ */

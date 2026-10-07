@@ -435,6 +435,99 @@ const run = (nodes, edges, extra) => W.runFlow({ nodes, edges }, Object.assign({
     ok('★ 引擎自己**不执行**子流程（由前端递归，带深度上限）', r.effects[0].kind === 'flow');
   }
 
+  console.log('\n── ⑰ 进度回调（前端「跑到哪了」全靠它）──');
+  {
+    /* ★ 用户原话：「执行，也没有执行到哪的显示」✓。
+       服务端靠 onNodeStart / onStep 往前端推 NDJSON ✓，所以这里要守住三件事：
+       ① 顺序：start 一定在它自己的 step 之前 ✓
+       ② 每个**终态**都要有 step ✓（成功 / 失败 / 跳过 / 禁用 一个都不能漏 ✗）
+       ③ 回调抛异常**不能**把工作流带崩 ✗（回调是「旁观者」✓） */
+    const ev = [];
+    const r = await run([
+      node('a', 'trigger.manual'),
+      node('b', 'data.set', { assign: 'x = 1' }),
+      node('c', 'data.crypto', { op: 'base64', value: 'hi' }),
+    ], [edge('a', 0, 'b'), edge('b', 0, 'c')], {
+      onNodeStart: (n) => ev.push('start:' + n.id),
+      onStep: (st) => ev.push('step:' + st.id + ':' + st.status),
+    });
+    eq('★ 顺序 start→step 严格交替', ev, [
+      'start:a', 'step:a:ok',
+      'start:b', 'step:b:ok',
+      'start:c', 'step:c:ok',
+    ]);
+    ok('  返回值没被回调影响', r.ok === true && r.steps.length === 3);
+  }
+  {
+    /* 失败也要推 ✓ —— 不然前端那个节点会一直转圈 ✗（用户以为卡死了 ✗） */
+    const ev = [];
+    let threw = false;
+    try {
+      await run([
+        node('a', 'trigger.manual'),
+        node('b', 'list.limit', { count: '1' }),   /* 上游不是数组 → 必然报错 ✓ */
+      ], [edge('a', 0, 'b')], {
+        onNodeStart: (n) => ev.push('start:' + n.id),
+        onStep: (st) => ev.push('step:' + st.id + ':' + st.status),
+      });
+    } catch (_) { threw = true; }
+    ok('★ 出错时也推了 step（不是静默）', threw && ev.indexOf('step:b:error') >= 0, JSON.stringify(ev));
+  }
+  {
+    /* 回调自己炸了 ✗ 不能影响执行 ✓ —— 前端渲染出错不该让用户的流白跑 ✗ */
+    const r = await run([
+      node('a', 'trigger.manual'),
+      node('b', 'data.set', { assign: 'x = 1' }),
+    ], [edge('a', 0, 'b')], {
+      onNodeStart: () => { throw new Error('前端炸了'); },
+      onStep: () => { throw new Error('前端又炸了'); },
+    });
+    ok('★ 回调抛异常被吞掉，工作流照跑', r.ok === true && r.vars.b.x === 1, JSON.stringify(r.vars.b));
+  }
+  {
+    /* 跳过 / 禁用的节点也要推 step ✓（否则画布上它们永远没有状态 ✗）。
+       ⚠️ 分支要写成**必真** ✓（`1 等于 1` ✓）—— 空值和空值比在这个引擎里是 **false** ✗，
+          写 `'' 等于 ''` 会走到另一条分支上 ✗（我第一版就踩了 ✓）。 */
+    const ev = [];
+    await run([
+      node('a', 'trigger.manual'),
+      node('d', 'logic.if', { left: '1', op: '等于', right: '1' }),
+      node('t', 'data.set', { assign: 'x = 1' }),
+      node('f', 'data.set', { assign: 'y = 2' }),
+      { id: 'z', type: 'data.set', x: 0, y: 0, disabled: true, cfg: { assign: 'w = 3' } },
+    ], [edge('a', 0, 'd'), edge('d', 0, 't'), edge('d', 1, 'f'), edge('t', 0, 'z')], {
+      onNodeStart: (n) => ev.push('start:' + n.id),
+      onStep: (st) => ev.push('step:' + st.id + ':' + st.status),
+    });
+    ok('★ 没走到的分支推 skipped', ev.indexOf('step:f:skipped') >= 0, JSON.stringify(ev));
+    ok('★ 被禁用的节点推 disabled（上游活着）', ev.indexOf('step:z:disabled') >= 0, JSON.stringify(ev));
+    ok('  走到的那个分支照常 ok', ev.indexOf('step:t:ok') >= 0);
+  }
+  {
+    /* ⚠️ 上游被跳过 → 下游先判 skipped ✓，**不**判 disabled ✗ ——
+       这顺序是对的 ✓（「走都走不到」比「我禁用了」更根本 ✓），
+       但要有断言守着 ✓，免得以后有人把两段调换位置 ✗。 */
+    const ev = [];
+    await run([
+      node('a', 'trigger.manual'),
+      node('d', 'logic.if', { left: '1', op: '等于', right: '2' }),
+      node('t', 'data.set', { assign: 'x = 1' }),
+      { id: 'z', type: 'data.set', x: 0, y: 0, disabled: true, cfg: { assign: 'w = 3' } },
+    ], [edge('a', 0, 'd'), edge('d', 0, 't'), edge('t', 0, 'z')], {
+      onNodeStart: (n) => ev.push('start:' + n.id),
+      onStep: (st) => ev.push('step:' + st.id + ':' + st.status),
+    });
+    ok('★ 上游死了 → 下游判 skipped（不是 disabled）', ev.indexOf('step:z:skipped') >= 0, JSON.stringify(ev));
+  }
+  {
+    /* 不传回调 → 一个都不许调 ✓（老调用方零改动 ✓） */
+    const r = await run([
+      node('a', 'trigger.manual'),
+      node('b', 'data.set', { assign: 'x = 1' }),
+    ], [edge('a', 0, 'b')]);
+    ok('★ 不传回调时不炸（向后兼容）', r.ok === true && r.vars.b.x === 1, JSON.stringify(r.vars.b));
+  }
+
   console.log('\n' + (failed ? '失败 ' + failed + ' 项 / 共 ' + (passed + failed) : '工作流引擎：' + passed + ' 项通过 ✓'));
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.log('✗ 异常: ' + e.message); process.exit(1); });

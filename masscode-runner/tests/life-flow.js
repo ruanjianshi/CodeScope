@@ -344,11 +344,104 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('历史浮层能关掉', await p.locator('#lw-fl-runbox').count() === 0);
 
     /* ══════════════════════════════════════════════════════════════════
-       ⑲ 定时触发（服务端排期 + 前端收产出）
+       ⑲ 连线箭头 + 实时执行进度
+       ★ 用户原话：「怎么连线，没有箭头，执行，也没有执行到哪的显示」✓。
+         两件事都要守住：
+         ① 每条连线**有箭头** ✓（没箭头读不出方向 ✗）—— 而且只能画在**可见那条**上 ✗，
+            画在那根 14px 宽的透明命中区上会叠出一个看不见但挡事的巨大箭头 ✗。
+         ② 跑的时候**画布上看得见进度** ✓（哪个节点正在跑 ✓、跑到第几步 ✓）。
+            ⚠️ 要放一个「等待 3 秒」节点 ✗ —— 否则 3 个节点 5 毫秒就跑完 ✗，
+               DOM 采样根本采不到「正在跑」那个瞬间 ✗（实测：不 waiting 的话 60 次采样全是 0 ✗）。
+       ══════════════════════════════════════════════════════════════════ */
+    console.log('\n── ⑲ 连线箭头 + 实时执行进度 ──');
+    dialogs.push(MARK + '箭头');
+    await p.click('#lw-fl-new'); await p.waitForTimeout(900);
+    await p.locator('[data-fladd="trigger.manual"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-fladd="data.template"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-fladd="out.notify"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-fladd="util.delay"]').click(); await p.waitForTimeout(600);
+    let aWf = ((await store()).flows || []).filter((x) => String(x.name).includes(MARK + '箭头')).pop();
+    ck('  建好了 4 个节点（含「等待」）', !!aWf && aWf.nodes.length === 4, aWf ? String(aWf.nodes.length) : 'null');
+    const aTrig = aWf.nodes.find((n) => n.type === 'trigger.manual');
+    const aTpl = aWf.nodes.find((n) => n.type === 'data.template');
+    const aDly = aWf.nodes.find((n) => n.type === 'util.delay');
+    const aNtf = aWf.nodes.find((n) => n.type === 'out.notify');
+    /* 把「等待」配成 3 秒（默认 1000ms 太短，采不到 ✗） */
+    await p.locator('[data-flnode="' + aDly.id + '"]').click(); await p.waitForTimeout(600);
+    await p.locator('[data-flcfg="ms"]').fill('3000'); await p.waitForTimeout(600);
+    /* 连成 trigger → template → delay → notify */
+    await p.locator('[data-flout="' + aTrig.id + '"][data-flport="0"]').click(); await p.waitForTimeout(250);
+    await p.locator('[data-flin="' + aTpl.id + '"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-flout="' + aTpl.id + '"][data-flport="0"]').click(); await p.waitForTimeout(250);
+    await p.locator('[data-flin="' + aDly.id + '"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-flout="' + aDly.id + '"][data-flport="0"]').click(); await p.waitForTimeout(250);
+    await p.locator('[data-flin="' + aNtf.id + '"]').click(); await p.waitForTimeout(700);
+    aWf = ((await store()).flows || []).filter((x) => String(x.name).includes(MARK + '箭头')).pop();
+    ck('★ 三条连线落盘', aWf.edges.length === 3, JSON.stringify(aWf.edges.map((e) => e.from + '→' + e.to)));
+
+    /* ── 箭头 ── */
+    ck('★ SVG 里有箭头（marker）定义', await p.locator('.lw-fl-svg defs marker').count() >= 1);
+    const arrowState = await p.evaluate(() => {
+      const ps = Array.from(document.querySelectorAll('.lw-fl-svg g[data-flowedge] path'));
+      return {
+        total: ps.length,
+        hitWithArrow: ps.filter((x) => x.classList.contains('hit') && x.getAttribute('marker-end')).length,
+        visWithArrow: ps.filter((x) => !x.classList.contains('hit') && x.getAttribute('marker-end')).length,
+      };
+    });
+    console.log('    path 统计: ' + JSON.stringify(arrowState));
+    ck('★ 每条连线都画了箭头', arrowState.visWithArrow === 3, JSON.stringify(arrowState));
+    ck('★ 箭头**只**画在可见线上（透明命中区不画，否则会叠出巨大的隐形箭头）',
+      arrowState.hitWithArrow === 0 && arrowState.total === 6, JSON.stringify(arrowState));
+    /* ⚠️ 线要**提前 11px 收尾** ✗ —— 端口圆点在上面压着 ✓，
+       线画到端口中心的话箭头尖会被盖住 ✗，等于没画 ✗。 */
+    const byId = {}; aWf.nodes.forEach((n) => { byId[n.id] = n; });
+    const geo = await p.evaluate(() => Array.from(document.querySelectorAll('.lw-fl-svg g[data-flowedge]'))
+      .map((g) => { const m = /([\d.]+),([\d.]+)$/.exec(g.querySelector('path:not(.hit)').getAttribute('d')); return m ? Number(m[1]) : null; }));
+    const wantEnd = aWf.edges.map((e) => byId[e.to].x - 11);
+    ck('★ 可见线提前 11px 收尾（箭头尖不被端口圆点盖住）',
+      geo.length === wantEnd.length && geo.every((x, i) => Math.abs(x - wantEnd[i]) < 0.6), JSON.stringify(geo) + ' vs ' + JSON.stringify(wantEnd));
+
+    /* ── 实时进度：一边跑一边采 DOM ── */
+    const seen = { running: 0, okSeq: [], hints: [] };
+    let stopSample = false;
+    const sampler = (async () => {
+      while (!stopSample) {
+        const s = await p.evaluate(() => ({
+          running: document.querySelectorAll('.lw-fl-node.running').length,
+          ok: document.querySelectorAll('.lw-fl-node.s-ok').length,
+          hint: (document.querySelector('.lw-fl-tools .hint') || {}).textContent || '',
+        })).catch(() => null);
+        if (s) {
+          if (s.running) seen.running++;
+          seen.okSeq.push(s.ok);
+          if (s.hint.trim() && seen.hints.indexOf(s.hint.trim()) < 0) seen.hints.push(s.hint.trim());
+        }
+        await p.waitForTimeout(100);
+      }
+    })();
+    await p.click('#lw-fl-run');
+    await p.waitForTimeout(6500);      /* 3 秒等待 + 余量 ✓ */
+    stopSample = true;
+    await sampler;
+    await p.waitForTimeout(1200);
+    console.log('    采样（出现过 .running 的次数）: ' + seen.running);
+    console.log('    工具栏提示: ' + JSON.stringify(seen.hints.filter((h) => /正在跑/.test(h)).slice(0, 2)));
+    ck('★★ 执行过程中画布上出现过「正在跑」的节点', seen.running > 0, 'running 采样 ' + seen.running);
+    ck('★ 工具栏写着「正在跑… N / M 步（节点名）」',
+      seen.hints.some((h) => /正在跑/.test(h) && /\d+ \/ \d+ 步/.test(h)), JSON.stringify(seen.hints.slice(0, 3)));
+    ck('★ 提示里点了名（一眼看出卡在哪个节点）', seen.hints.some((h) => /正在跑/.test(h) && /（.+）/.test(h)), JSON.stringify(seen.hints.slice(0, 3)));
+    ck('★ 状态是**逐步**亮起来的（不是一次全亮）', new Set(seen.okSeq).size > 1, JSON.stringify([...new Set(seen.okSeq)]));
+    ck('★ 跑完 4 个节点都带 ✓', await p.locator('.lw-fl-node.s-ok').count() === 4, String(await p.locator('.lw-fl-node.s-ok').count()));
+    ck('★ 「等待」节点真的等了 3 秒（说明确实是流式，不是一口气跑完）',
+      /等待[\s\S]{0,20}300\dms/.test(await txt('.lw-fl-log')), (await txt('.lw-fl-log')).slice(0, 120));
+
+    /* ══════════════════════════════════════════════════════════════════
+       ⑳ 定时触发（服务端排期 + 前端收产出）
        ⚠️ 这一段要**真等一次调度**（服务端 30 秒一个 tick ✗，
           「每隔 1 分钟」最快也得等 ~90 秒 ✗）—— 所以它比别的段慢很多 ✓。
        ══════════════════════════════════════════════════════════════════ */
-    console.log('\n── ⑲ 定时触发：服务端排期 ──');
+    console.log('\n── ⑳ 定时触发：服务端排期 ──');
     dialogs.push(MARK + '定时流');
     await p.click('#lw-fl-new'); await p.waitForTimeout(900);
     await p.locator('[data-fladd="trigger.timer"]').click(); await p.waitForTimeout(500);
