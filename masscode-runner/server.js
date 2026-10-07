@@ -3347,6 +3347,7 @@ function cleanStudyConfig(value) {
       url:String(item && item.url || '').trim().slice(0, 2048),
       color:/^#[0-9a-f]{6}$/i.test(String(item && item.color || '')) ? item.color : '#4f8cff',
       category:studySafeName(item && item.category, '') || (['bilibili','github','arxiv','mdn'].includes(id) ? 'featured' : 'custom'),
+      openMode:item && item.openMode === 'external' ? 'external' : 'internal',
     };
   }).filter((item) => /^https?:\/\//i.test(item.url)) : fallback.bookmarks;
   const categoryIds = new Set();
@@ -5081,8 +5082,30 @@ const server = http.createServer(async (req, res) => {
             return content;
           };
           try {
-            const r = await WORKFLOW.runFlow(graph, { ai: aiCfg, aiChat, fetch: fetch, now: Date.now() });
-            return send(res, 200, { ok: true, steps: r.steps, effects: r.effects, vars: r.vars });
+            const r = await WORKFLOW.runFlow(graph, {
+              ai: aiCfg, aiChat, fetch: fetch, now: Date.now(),
+              /* ★ 表达式里要用到这几个 ✓（`$workflow.name` / `$execution.id` ✓）——
+                 不传的话用户写 `{{ $workflow.name }}` 会得到空串 ✗。 */
+              workflowName: String((postBody && postBody.flowName) || '').slice(0, 120),
+              workflowId: String((postBody && postBody.flowId) || '').slice(0, 60),
+              executionId: 'e' + Date.now().toString(36),
+            });
+            /* ⚠️ `vars` 可能是几十 MB ✗（比如 HTTP 抓了一大坨 ✓）——
+               全塞回前端会把面板卡住 ✗。这里按**每个节点**截断 ✓，
+               够前端显示「这一步输出长什么样」就行 ✓。 */
+            const trim = (v) => {
+              try {
+                const s = JSON.stringify(v);
+                if (s && s.length > 20000) return JSON.parse(JSON.stringify({ _truncated: true, _size: s.length, preview: s.slice(0, 4000) }));
+              } catch (_) { return String(v).slice(0, 2000); }
+              return v;
+            };
+            const vars = {};
+            Object.keys(r.vars || {}).forEach((k) => { vars[k] = trim(r.vars[k]); });
+            return send(res, 200, {
+              ok: true, steps: r.steps, effects: r.effects, vars,
+              ms: r.ms, startedAt: r.startedAt, finishedAt: r.finishedAt,
+            });
           } catch (error) {
             return send(res, 200, {
               ok: false,

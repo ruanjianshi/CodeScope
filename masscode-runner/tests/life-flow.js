@@ -44,7 +44,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('左栏（工作流 + 节点库）', await p.locator('.lw-fl-side').count() === 1);
     ck('画布', await p.locator('.lw-fl-cv').count() === 1);
     ck('右栏（属性）', await p.locator('.lw-fl-cfg').count() === 1);
-    ck('节点库有 14 种节点', await p.locator('[data-fladd]').count() === 14, String(await p.locator('[data-fladd]').count()));
+    ck('节点库有 28 种节点', await p.locator('[data-fladd]').count() === 28, String(await p.locator('[data-fladd]').count()));
     const fill = await p.evaluate(() => {
       const m = document.querySelector('.lw-main'), cs = getComputedStyle(m), mb = m.getBoundingClientRect();
       const fl = document.querySelector('.lw-fl').getBoundingClientRect();
@@ -182,16 +182,16 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
         withSub: it.filter((e) => { const i = e.querySelector('.tx i'); return i && i.textContent.trim().length > 4; }).length,
       };
     });
-    ck('★ 节点库 14 项全都带「这节点干什么」说明', palSub.n === 14 && palSub.withSub === 14, JSON.stringify(palSub));
+    ck('★ 节点库 28 项全都带「这节点干什么」说明', palSub.n === 28 && palSub.withSub === 28, JSON.stringify(palSub));
     /* 点开说明 */
     await p.click('#lw-fl-help'); await p.waitForTimeout(800);
     ck('★ 说明面板出来了', await p.locator('.lw-fl-help').count() === 1);
     ck('★ 说明和画布**互斥**（不叠在一起）', await p.locator('.lw-fl-cv').count() === 0);
     const hn = await p.locator('.lw-fl-hn').count();
-    ck('★ 说明里 14 个节点逐个讲了作用', hn === 14, String(hn));
+    ck('★ 说明里 28 个节点逐个讲了作用', hn === 28, String(hn));
     const htxt = await txt('.lw-fl-helpin');
     for (const k of ['一分钟上手', '变量怎么传', '每个节点是干什么的', '常见问题', '照着搭一个']) ck('  说明里有「' + k + '」', htxt.includes(k));
-    ck('★ 说明讲了 {{}} 怎么引用', htxt.includes('{{n3}}') && htxt.includes('{{input}}'));
+    ck('★ 说明讲了 {{}} 怎么引用（新表达式写法）', htxt.includes('{{ $json.title }}') && htxt.includes('$node['), htxt.slice(0,60));
     /* ⚠️ 面板**不渲染 markdown** ✗ —— 说明里写了星号就会原样显示 ✗（我前面已经踩过一次 ✗）。 */
     ck('★ 说明里没有漏出来的 markdown 星号', !/\*\*/.test(htxt), (htxt.match(/\*\*[^*]{0,24}\*\*/) || [''])[0]);
     await p.click('#lw-fl-help'); await p.waitForTimeout(800);
@@ -221,6 +221,127 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     const jsonN = fresh[0] && fresh[0].nodes.find((n) => n.type === 'data.json');
     ck('★ 示例的 JSON 路径直接从 data 开始（不用写 json.data）', !!(jsonN && String(jsonN.cfg.path) === 'data.list'), jsonN && jsonN.cfg.path);
     ck('示例的 HTTP URL 是真的', !!(httpN && /^https:\/\//.test(httpN.cfg.url)), httpN && httpN.cfg.url);
+
+    /* ══════════════════════════════════════════════════════════════════
+       ⑭~⑰：对齐 n8n 的那批新东西 ✓
+       用户原话：「工作流的功能太少，参考 N8N 的完整设计」✓
+       ══════════════════════════════════════════════════════════════════ */
+    console.log('\n── ⑭ 节点库扩充 ──');
+    const nAdd = await p.locator('[data-fladd]').count();
+    ck('★ 节点数 = 28（原来 14）', nAdd === 28, String(nAdd));
+    const grpNames = await p.locator('.lw-fl-side .lw-rd-hd').allInnerTexts();
+    ck('★ 多了「列表」这一组', grpNames.indexOf('列表') >= 0, JSON.stringify(grpNames));
+    for (const k of ['logic.switch', 'list.filter', 'list.sort', 'list.limit', 'list.unique',
+      'list.aggregate', 'list.split', 'list.merge', 'data.set', 'data.code', 'data.date',
+      'data.crypto', 'note.sticky', 'out.flow']) {
+      ck('  有节点 ' + k, await p.locator('[data-fladd="' + k + '"]').count() === 1);
+    }
+
+    console.log('\n── ⑮ 画布：多路分支 4 个出口 / 便签 ──');
+    /* ⚠️ 「＋ 新建」会弹一个 prompt 问名字 ✗ —— 不往 dialogs 里排队的话，
+       会被空字符串 accept 掉 ✗ → flowNew 直接 return ✗ → **根本没建出工作流** ✗，
+       后面「按 MARK 找这个流」就全是 null ✗（实测踩过 ✗）。 */
+    dialogs.push(MARK + '工作流');
+    await p.click('#lw-fl-new'); await p.waitForTimeout(900);
+    await p.locator('[data-fladd="trigger.manual"]').click(); await p.waitForTimeout(400);
+    await p.locator('[data-fladd="logic.switch"]').click(); await p.waitForTimeout(400);
+    await p.locator('[data-fladd="note.sticky"]').click(); await p.waitForTimeout(400);
+    const swInfo = await p.evaluate(() => {
+      for (const el of document.querySelectorAll('.lw-fl-node')) {
+        const bd = el.querySelector('.bd');
+        if (bd && bd.innerText.indexOf('多路分支') >= 0) {
+          const outs = Array.from(el.querySelectorAll('.lw-fl-port.out'));
+          return { n: outs.length, tops: outs.map((x) => x.style.top) };
+        }
+      }
+      return null;
+    });
+    ck('★ 多路分支有 4 个出口（原来最多 2 个）', !!swInfo && swInfo.n === 4, JSON.stringify(swInfo));
+    ck('★ 4 个出口按数量均分、不重叠', !!swInfo && new Set(swInfo.tops).size === 4, JSON.stringify(swInfo && swInfo.tops));
+    ck('★ 便签单独渲染（不参与执行）', await p.locator('.lw-fl-node.sticky').count() === 1);
+    await p.locator('.lw-fl-node.sticky').click(); await p.waitForTimeout(600);
+    await p.locator('[data-flcfg="text"]').fill('这里是说明文字'); await p.waitForTimeout(600);
+    ck('★ 便签写文字立刻反映到画布',
+      (await p.locator('.lw-fl-node.sticky .sticky-bd').first().innerText()).indexOf('这里是说明文字') >= 0,
+      await p.locator('.lw-fl-node.sticky .sticky-bd').first().innerText());
+
+    console.log('\n── ⑯ 画布交互：多选 / 复制粘贴 / 撤销重做 / 框选 / 整理 ──');
+    /* ⚠️ 快捷键之前要先把焦点**从输入框挪开** ✗ ——
+       上一步刚在便签的文本框里填过字 ✓，焦点还在里面 ✓；
+       而快捷键处理器**故意**在输入框里不接管 ⌘A/⌘C/⌘V ✗
+       （不然用户想全选输入框里的文字会被抢走 ✗）。
+       → 点一下画布空白处再按 ✓。 */
+    const cvBox0 = await p.locator('#lw-fl-cv').boundingBox();
+    await p.mouse.click(cvBox0.x + cvBox0.width - 30, cvBox0.y + cvBox0.height - 30);
+    await p.evaluate(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); });
+    await p.waitForTimeout(400);
+    const n0 = await p.locator('.lw-fl-node').count();
+    await p.keyboard.press('Meta+a'); await p.waitForTimeout(500);
+    ck('⌘A 全选', await p.locator('.lw-fl-node.picked').count() === n0, String(await p.locator('.lw-fl-node.picked').count()));
+    await p.keyboard.press('Meta+c'); await p.waitForTimeout(400);
+    await p.keyboard.press('Meta+v'); await p.waitForTimeout(800);
+    ck('★ ⌘C / ⌘V 粘贴（节点翻倍）', await p.locator('.lw-fl-node').count() === n0 * 2, n0 + ' → ' + await p.locator('.lw-fl-node').count());
+    await p.keyboard.press('Meta+z'); await p.waitForTimeout(800);
+    ck('★ ⌘Z 撤销', await p.locator('.lw-fl-node').count() === n0, String(await p.locator('.lw-fl-node').count()));
+    await p.keyboard.press('Meta+Shift+z'); await p.waitForTimeout(800);
+    ck('★ ⌘⇧Z 重做', await p.locator('.lw-fl-node').count() === n0 * 2, String(await p.locator('.lw-fl-node').count()));
+    await p.keyboard.press('Meta+z'); await p.waitForTimeout(800);
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    const cvBox = await p.locator('#lw-fl-cv').boundingBox();
+    await p.mouse.move(cvBox.x + 20, cvBox.y + 20); await p.mouse.down();
+    await p.mouse.move(cvBox.x + 760, cvBox.y + 460, { steps: 10 });
+    ck('★ 拖拽时出现选框', await p.evaluate(() => {
+      const m = document.getElementById('lw-fl-marquee');
+      return !!m && getComputedStyle(m).display !== 'none';
+    }));
+    await p.mouse.up(); await p.waitForTimeout(700);
+    ck('★ 框选能选中多个节点', await p.locator('.lw-fl-node.picked').count() >= 2, String(await p.locator('.lw-fl-node.picked').count()));
+    const posBefore = await p.evaluate(() => Array.from(document.querySelectorAll('.lw-fl-node')).map((e) => e.style.left + ',' + e.style.top).join('|'));
+    await p.click('#lw-fl-tidy'); await p.waitForTimeout(800);
+    const posAfter = await p.evaluate(() => Array.from(document.querySelectorAll('.lw-fl-node')).map((e) => e.style.left + ',' + e.style.top).join('|'));
+    ck('★ ▦ 整理真的重排了', posBefore !== posAfter);
+
+    console.log('\n── ⑰ 节点高级设置（重试 / 出错继续 / 禁用 / 备注）──');
+    await p.locator('.lw-fl-node').first().click(); await p.waitForTimeout(600);
+    /* 从**右栏**读 id ✓（比从 DOM class 猜稳 ✗ —— 点节点可能正好点在端口上 ✗） */
+    const editedId = await p.evaluate(() => {
+      const el = document.querySelector('.lw-fl-cfg .fd .fid');
+      return el ? el.textContent.trim() : '';
+    });
+    ck('  点节点后右栏认出了它的 id', !!editedId, editedId);
+    ck('★ 右栏有「高级」那一栏', (await txt('.lw-fl-cfg')).indexOf('高级') >= 0, (await txt('.lw-fl-cfg')).slice(0, 60));
+    ck('★ 四个设置项都在（出错时/重试/间隔/备注）', await p.locator('[data-flopt]').count() === 4, String(await p.locator('[data-flopt]').count()));
+    await p.locator('[data-flopt="retry"]').fill('3'); await p.waitForTimeout(400);
+    await p.locator('[data-flopt="onError"]').selectOption('continue'); await p.waitForTimeout(400);
+    await p.locator('[data-flopt="note"]').fill('探针备注'); await p.waitForTimeout(500);
+    /* ⚠️ 要**重新读一次 store** ✗ —— 之前拿的那个是快照 ✗，改了之后它不会变 ✗。 */
+    const findNode = async () => {
+      const d = await store();
+      const fl = (d.flows || []).filter((x) => String(x.name).indexOf(MARK) >= 0).pop();
+      return (fl && (fl.nodes || []).find((n) => n.id === editedId)) || null;
+    };
+    const savedNode = await findNode();
+    ck('★ 重试次数落盘', !!(savedNode && Number(savedNode.retry) === 3), JSON.stringify(savedNode && savedNode.retry));
+    ck('★ 出错继续落盘', !!(savedNode && savedNode.onError === 'continue'), String(savedNode && savedNode.onError));
+    ck('★ 备注落盘', !!(savedNode && savedNode.note === '探针备注'), String(savedNode && savedNode.note));
+    ck('有 禁用 / 复制 / 执行到此 三个按钮',
+      await p.locator('#lw-fl-nodedis').count() === 1 && await p.locator('#lw-fl-nodecopy').count() === 1 && await p.locator('#lw-fl-noderun').count() === 1);
+    await p.click('#lw-fl-nodedis'); await p.waitForTimeout(700);
+    ck('★ 禁用后画布上变灰', await p.locator('.lw-fl-node.off').count() >= 1, String(await p.locator('.lw-fl-node.off').count()));
+    ck('★ 禁用状态落盘', !!(await findNode() || {}).disabled, JSON.stringify((await findNode() || {}).disabled));
+    await p.click('#lw-fl-nodedis'); await p.waitForTimeout(600);
+    ck('  再点能启用回来', !(await findNode() || {}).disabled);
+
+    console.log('\n── ⑱ 执行历史 ──');
+    await p.click('#lw-fl-run'); await p.waitForTimeout(4000);
+    await p.click('#lw-fl-runs'); await p.waitForTimeout(900);
+    ck('★ 历史浮层打开（id 没和工具栏按钮撞）', await p.locator('#lw-fl-runbox').count() === 1);
+    ck('★ 记下了一条执行', await p.locator('[data-flrun]').count() >= 1, String(await p.locator('[data-flrun]').count()));
+    await p.locator('[data-flrun]').first().click(); await p.waitForTimeout(700);
+    const runTxt = await txt('#lw-fl-runbox');
+    ck('★ 点开能看到每一步 + 输出', /手动触发/.test(runTxt), runTxt.replace(/\n/g, ' ').slice(0, 80));
+    await p.click('#lw-fl-runbox-x'); await p.waitForTimeout(600);
+    ck('历史浮层能关掉', await p.locator('#lw-fl-runbox').count() === 0);
 
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
   } catch (e) {

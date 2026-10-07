@@ -27,7 +27,7 @@
     "prepublish:desktop": "npm run build:assets && npm run verify:office",
     "prepare:gopls": "node scripts/build-bundled-gopls.js",
     "verify:office": "node scripts/verify-office-package.js",
-    "test": "node tests/mime.js && node tests/imap-search.js && node tests/mail-list.js && node tests/workflow.js && node tests/hot.js && node tests/en-text.js && node tests/srs.js && node tests/mail-failfast.js && node tests/file-atlas-core.js && node tests/file-atlas-catalog.js && node tests/smoke.js && node tests/platform-sim.js",
+    "test": "node tests/mime.js && node tests/imap-search.js && node tests/mail-list.js && node tests/workflow.js && node tests/expr.js && node tests/hot.js && node tests/en-text.js && node tests/srs.js && node tests/mail-failfast.js && node tests/file-atlas-core.js && node tests/file-atlas-catalog.js && node tests/smoke.js && node tests/platform-sim.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:run": "node tests/run.js",
     "test:blockly": "node tests/blockly-ifelse.js",
@@ -48,7 +48,8 @@
     "test:srs": "node tests/srs.js",
     "test:atlas": "node tests/file-atlas-view.js",
     "test:atlas-core": "node tests/file-atlas-core.js",
-    "test:atlas-catalog": "node tests/file-atlas-catalog.js"
+    "test:atlas-catalog": "node tests/file-atlas-catalog.js",
+    "test:expr": "node tests/expr.js"
   },
   "engines": {
     "node": ">=18"

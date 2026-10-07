@@ -1070,6 +1070,21 @@
   .lw-fl-node.s-ok { border-color:${T.ok}; }
   .lw-fl-node.s-error { border-color:${T.red}; }
   .lw-fl-node.s-skipped { opacity:.45; }
+  /* ★ 多选 / 禁用 / 便签 / 框选 ✓（对齐 n8n 的画布 ✓） */
+  .lw-fl-node.picked { border-color:${T.ok}; box-shadow:0 0 0 2px color-mix(in srgb, ${T.ok} 35%, transparent); }
+  .lw-fl-node.off { opacity:.5; border-style:dashed; }
+  .lw-fl-node.sticky { border:2px solid ${T.warn}; background:color-mix(in srgb, ${T.warn} 12%, ${T.card});
+    cursor:move; z-index:0; }
+  .lw-fl-node.sticky .sticky-hd { display:flex; align-items:center; gap:6px; padding:6px 9px 0;
+    font-size:10px; letter-spacing:.8px; color:${T.warn}; }
+  .lw-fl-node.sticky .sticky-hd .fid { margin-left:auto; color:${T.faint}; letter-spacing:0; }
+  .lw-fl-node.sticky .sticky-bd { padding:6px 9px 0; font-size:11px; line-height:1.75; color:${T.dim};
+    white-space:pre-wrap; overflow:hidden; }
+  .lw-fl-marquee { position:absolute; border:1px dashed ${T.accent};
+    background:color-mix(in srgb, ${T.accent} 12%, transparent); pointer-events:none; z-index:9; }
+  /* 画布上的浮层工具条 ✓（撤销 / 复制 / 整理 都在这一条上 ✓） */
+  .lw-fl-bar { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  .lw-fl-bar .sep { width:1px; height:16px; background:${T.lineDim}; margin:0 3px; }
   .lw-fl-port { position:absolute; width:12px; height:12px; border:2px solid ${T.line};
     background:${T.bg}; border-radius:50%; top:22px; cursor:crosshair; z-index:3; }
   .lw-fl-port:hover { background:${T.accent}; border-color:${T.accent}; }
@@ -1598,6 +1613,94 @@
       how: '前面接 HTTP 时，路径<b>直接从 data 开始写</b>（不用写 json.data）；想整段丢给 AI 就留空。',
       o: '挖出来的那个值 —— 下游直接写 {{id}} 就能用',
     },
+    /* ── 新增的数据节点（对齐 n8n ✓）────────────────────────────────────── */
+    'data.set': {
+      e: '✎', n: '编辑字段', g: '数据', in: 1, out: 1,
+      cfg: [['assign', '赋值', 'area', '', '一行一句「名字 = 表达式」；下一行能引用上一行刚赋的值 ✓'], ['remove', '删掉字段', 'text', '', '逗号分隔，如 at,fired']],
+      d: '改上游的字段：加新的、算新的、删不要的。',
+      how: 'n8n 里叫 Set / Edit Fields。赋值那栏一行一句，左边是字段名，右边是表达式（<b>不用写花括号</b>，直接写 <b>$json.标题</b>）。'
+        + '上游是<b>数组</b>时会逐条改 ✓。',
+      o: '改完的对象（或数组）—— 下游写 {{ $json.字段名 }} 取',
+    },
+    'data.code': {
+      e: '⌨', n: '代码', g: '数据', in: 1, out: 1,
+      cfg: [['code', '代码', 'area', '', '一行一句「名字 = 表达式」；# 开头是注释']],
+      d: '写几行小计算，把结果拼成一个对象。',
+      how: 'n8n 的 Code 节点的<b>安全版</b>：一行一句「名字 = 表达式」，用的是同一套表达式引擎，'
+        + '<b>不执行任意 JS</b>（工作流是存在磁盘上的文本，能跑任意代码等于把门打开）。'
+        + '够用的：算术、字符串处理、取字段、Math、条件判断。',
+      o: '所有赋值组成的对象 —— 下游写 {{ $json.名字 }} 取',
+    },
+    'data.date': {
+      e: '🕐', n: '日期时间', g: '数据', in: 1, out: 1,
+      cfg: [['mode', '做什么', 'select', 'format', 'format / add / sub / diff'], ['value', '时间', 'text', '', '留空＝现在；也可写 2026-10-07T12:00 或表达式'], ['amount', '数量 / 另一个时间', 'text', '', 'add/sub 时是天数等；diff 时是另一个时间戳'], ['unit', '单位', 'select', 'day', 'day / hour / minute / week'], ['format', '格式', 'text', 'YYYY-MM-DD HH:mm:ss', 'YYYY MM DD HH mm ss SSS']],
+      d: '算日期：格式化、加减、求差。',
+      how: '「时间」留空就是<b>现在</b>。格式化支持 YYYY/MM/DD/HH/mm/ss/SSS。'
+        + '加减用「数量」+「单位」，求差给两个时间。',
+      o: 'at（毫秒戳）、text（格式化后的文字）、iso',
+    },
+    'data.crypto': {
+      e: '🔐', n: '哈希 / 编码', g: '数据', in: 1, out: 1,
+      cfg: [['op', '做什么', 'select', 'sha256', 'md5 / sha1 / sha256 / sha512 / base64 / base64decode / uuid / random'], ['value', '内容', 'text', '', '要处理的东西（支持表达式）'], ['amount', '随机长度', 'text', '16', '只在 random 时用']],
+      d: '算哈希、转 Base64、生成 UUID / 随机串。',
+      how: '「内容」里写表达式就能算上游数据的哈希（比如给内容做指纹去重）。',
+      o: 'text（结果字符串）',
+    },
+
+    /* ══ 列表 ✓（n8n 的 items 思路）══════════════════════════════════════
+       这一组是这次新加的 ✗ —— 「上游给一个数组，逐条处理」是 n8n 最核心的东西 ✓，
+       没有它就只能拿整段 JSON 硬拼字符串 ✗。 */
+    'list.filter': {
+      e: '▽', n: '过滤', g: '列表', in: 1, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组；也可写表达式'], ['left', '左值', 'text', '', '对**每一条**求值，如 {{ $json.热度 }}'], ['op', '比较', 'select', '包含', '包含 / 等于 / 不等于 / 大于 / 小于 / 为空 / 非空 / 正则匹配'], ['right', '右值', 'text', '', '']],
+      d: '只留下符合条件的那些条。',
+      how: '左右两栏是对<b>每一条</b>求值的表达式 ✓ —— 里面用 <b>$json</b> 就代表「当前这一条」，'
+        + '还能用 <b>$index</b> 拿到它是第几条 ✓。',
+      o: '过滤后的数组',
+    },
+    'list.sort': {
+      e: '⇅', n: '排序', g: '列表', in: 1, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组'], ['by', '按什么排', 'text', '', '对每一条求值，如 {{ $json.时间 }}；留空＝整个值比大小'], ['dir', '方向', 'select', 'asc', 'asc / desc']],
+      d: '把数组排个序。',
+      how: '「按什么排」里用 $json 代表当前这一条。数字会按数字比 ✓，别的按文字比 ✓。',
+      o: '排好序的数组',
+    },
+    'list.limit': {
+      e: '✂', n: '取前 N', g: '列表', in: 1, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组'], ['skip', '跳过前几条', 'text', '0', ''], ['n', '取几条', 'text', '10', '留空＝全都取']],
+      d: '只取数组里的一段（像 SQL 的 limit / offset）。',
+      how: '「跳过」+「取几条」配合用就是翻页 ✓。',
+      o: '截出来的那一段数组',
+    },
+    'list.unique': {
+      e: '⧉', n: '去重', g: '列表', in: 1, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组'], ['by', '按什么判重', 'text', '', '对每一条求值；留空＝整条比']],
+      d: '去掉重复的，保留第一次出现的那条。',
+      how: '比如按「标题」去重，同一篇文章出现两次就只留一条 ✓。',
+      o: '去重后的数组',
+    },
+    'list.aggregate': {
+      e: 'Σ', n: '聚合', g: '列表', in: 1, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组'], ['op', '算什么', 'select', '计数', '计数 / 求和 / 平均 / 最大 / 最小 / 拼接'], ['field', '取哪个字段', 'text', '', '对每一条求值，如 {{ $json.金额 }}；计数时不用填'], ['sep', '拼接用什么连', 'text', '', '只在「拼接」时用']],
+      d: '把一整个数组算成一个值：几条、合计多少、最大是谁…',
+      how: '算完给的是一个对象 <b>{ value, count, text }</b> —— 想让 AI 看就直接 {{ $json.text }} ✓。',
+      o: 'value（算出来的值）、count（条数）、text（文字版）',
+    },
+    'list.split': {
+      e: '⑃', n: '拆分', g: '列表', in: 1, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组'], ['size', '每批几条', 'text', '10', '']],
+      d: '把一个长数组切成一批一批的。',
+      how: '比如 100 条评论每次只喂 10 条给 AI，就用它切成 10 批 ✓。',
+      o: '数组的数组（[[…10条…], […10条…]]）',
+    },
+    'list.merge': {
+      e: '⋈', n: '合并列表', g: '列表', in: 2, out: 1,
+      cfg: [['from', '来自', 'text', '', '留空＝把两个入口的数组接起来']],
+      d: '把两个（或多个）数组接成一个。',
+      how: '两个入口都接上数组就行 ✓；也可以用「来自」写一个「数组的数组」✓。',
+      o: '接起来的大数组',
+    },
+
     /* ── 逻辑：分叉与合流 ✓ ── */
     'logic.if': {
       e: '⑂', n: '条件分支', g: '逻辑', in: 1, out: 2,
@@ -1605,6 +1708,13 @@
       d: '判断一下，然后走「成立」或「不成立」两条路中的一条。',
       how: '它右边有<b>两个</b>圆点：上面＝成立，下面＝不成立。没走的那条路，下游节点会显示「跳过」（灰掉是正常的，不是坏了）。',
       o: 'ok、left、right —— 它只负责分岔，一般用不到',
+    },
+    'logic.switch': {
+      e: '⑃', n: '多路分支', g: '逻辑', in: 1, out: 4,
+      cfg: [['value', '看什么值', 'text', '', '如 {{ $json.分类 }}'], ['case1', '第 1 种', 'text', '', '等于它就走上端口'], ['case2', '第 2 种', 'text', '', ''], ['case3', '第 3 种', 'text', '', '']],
+      d: '一个值对三种情况，分别走不同的路；都不中就走最下面那条。',
+      how: 'n8n 的 Switch。右边<b>四个</b>圆点：上三个是 case1/2/3，最下面那个是「都没中」✓。',
+      o: 'value、matched、port',
     },
     'logic.merge': {
       e: '⋈', n: '合并', g: '逻辑', in: 2, out: 1, cfg: [],
@@ -1627,6 +1737,15 @@
       d: '停一会儿再往下走。',
       how: '单位是毫秒，最多 30 秒。用来给接口留反应时间，或者别把人家 API 打太频。',
       o: 'waited（等了多久）—— 一般用不到',
+    },
+    /* 便签 ✓（n8n 的 Sticky Note ✓）—— **不参与执行** ✗，只是画布上的一块说明 ✓ */
+    'note.sticky': {
+      e: '🗒', n: '便签', g: '工具', in: 0, out: 0, sticky: true,
+      cfg: [['text', '写点什么', 'area', '', '这块只是给图做注释，不会被执行 ✓']],
+      d: '在画布上贴一块说明（不参与执行）。',
+      how: 'n8n 的 Sticky Note。图搭大了以后，用它写「这段在干嘛」很有用 ✓。'
+        + '<b>不会被执行</b> ✓，也不会影响数据流 ✓。',
+      o: '（没有输出 —— 它不参与执行）',
     },
     /* ── 输出：引擎只排队 ✓，跑完由前端真正落地 ✓ ── */
     'out.memo': {
@@ -1657,10 +1776,31 @@
       how: '用<b>第一个</b>已配置的邮箱账号发。没配邮箱时会明确报错（不会静默失败）。',
       o: 'queued（只表示「已经排队去发了」，一般用不到）',
     },
+    /* 子工作流 ✓（n8n 的 Execute Workflow ✓）—— 搭智能体的关键 ✓ */
+    'out.flow': {
+      e: '⛓', n: '调用子工作流', g: '输出', in: 1, out: 1,
+      cfg: [['flow', '哪个工作流', 'text', '', '填工作流的**名字**（左侧列表里那个）'], ['input', '传给它什么', 'text', '', '留空＝把上游原样传过去；也可写表达式']],
+      d: '把另一个工作流当子流程跑一遍。',
+      how: 'n8n 的 Execute Workflow。用它可以把大流程拆成小块、或者让好几个流程共用一个「公共步骤」✓。'
+        + '<b>不能互相调用</b> ✗（会一直转下去），引擎会拦住并报错 ✓。',
+      o: 'queued（子流程的输出由前端接着往下带 ✓）',
+    },
   };
-  const FLOW_GROUPS = ['触发', '数据', '逻辑', 'AI', '工具', '输出'];
+  const FLOW_GROUPS = ['触发', '数据', '列表', '逻辑', 'AI', '工具', '输出'];
   const FLOW_W = 170, FLOW_H = 56;
-  const FLOW_UI = { sel: '', node: '', arm: '', steps: null, err: '', busy: false, help: false };
+  const FLOW_UI = {
+    sel: '', node: '', arm: '', armPort: 0, steps: null, err: '', busy: false, help: false,
+    /* ★ 多选 ✓（Shift 点选 + 空白处拖框选 ✓）—— 存节点 id 数组 ✓ */
+    picked: [],
+    /* ★ 撤销 / 重做 ✓ —— 存**整张图的快照** ✓（和备忘录那个思路一样 ✓：
+       给每种操作写逆操作太容易漏 ✗，快照最稳 ✓）。 */
+    undo: [], redo: [],
+    /* ★ 执行历史 ✓（每次运行的摘要 + 每步输出 ✓，最多 20 条 ✓） */
+    runs: [], runOpen: false, runSel: -1, stepSel: -1, keysBound: false,
+    /* ★ 剪贴板 ✓（复制粘贴节点 ✓） */
+    clip: null,
+  };
+  const FLOW_UNDO_MAX = 60, FLOW_RUN_MAX = 20;
 
   /* ── 热榜模块的状态 ✓（同样必须放顶部区 ✗）────────────────────────────
      源目录来自服务端 ✓（`/api/life/trends` 会带回来 ✓），这里只放界面状态 ✓。 */
@@ -5931,6 +6071,157 @@
         箭头有 TDZ ✗，而 mount() 可能在模块求值期间就 render 到工作流页签 ✗
         （见顶部那条铁律 ✓）。函数声明会提升 ✓，没这个问题 ✓。 */
   function flowPlain(s) { return String(s == null ? '' : s).replace(/<[^>]*>/g, ''); }
+
+  /* ══ 撤销 / 重做 ✓（n8n 画布上那个 ⌘Z ✓）══════════════════════════════
+     ★ 用「**整张图的快照栈**」✗ —— 不给每种操作写逆操作 ✓。
+       理由和备忘录那套一样 ✓：逆操作太容易漏 ✗（加节点/删节点/连线/改配置/
+       拖动/粘贴…六七种 ✗），漏一种就是「撤销之后图坏了」✗，而快照最稳 ✓。
+     ⚠️ 快照只存 nodes/edges（图结构 ✓），不存运行步骤 / 历史 ✗。 */
+  function flowSnap(f) { return f ? JSON.stringify({ nodes: f.nodes || [], edges: f.edges || [] }) : ''; }
+  function flowPushUndo(f) {
+    if (!f) return;
+    const s = flowSnap(f);
+    const top = FLOW_UI.undo[FLOW_UI.undo.length - 1];
+    if (top && top.flow === f.id && top.snap === s) return;    /* 没变就不压 ✓ */
+    FLOW_UI.undo.push({ flow: f.id, snap: s });
+    if (FLOW_UI.undo.length > FLOW_UNDO_MAX) FLOW_UI.undo.shift();
+    FLOW_UI.redo = [];                                          /* 有新动作 → 重做栈作废 ✓ */
+  }
+  function flowApplySnap(f, snap) {
+    if (!f || !snap) return;
+    const o = JSON.parse(snap);
+    f.nodes = o.nodes || []; f.edges = o.edges || []; f.at = Date.now();
+    FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.picked = []; FLOW_UI.steps = null;
+  }
+  function flowUndo() {
+    const f = flowCurrent(); if (!f) return;
+    const cur = flowSnap(f);
+    let it = null;
+    while (FLOW_UI.undo.length) { const x = FLOW_UI.undo.pop(); if (x.flow === f.id) { it = x; break; } }
+    if (!it) { rdToast('没有可撤销的了'); return; }
+    FLOW_UI.redo.push({ flow: f.id, snap: cur });
+    flowApplySnap(f, it.snap);
+    saveStore(); render();
+    rdToast('↶ 撤销了');
+  }
+  function flowRedo() {
+    const f = flowCurrent(); if (!f) return;
+    const cur = flowSnap(f);
+    let it = null;
+    while (FLOW_UI.redo.length) { const x = FLOW_UI.redo.pop(); if (x.flow === f.id) { it = x; break; } }
+    if (!it) { rdToast('没有可重做的了'); return; }
+    FLOW_UI.undo.push({ flow: f.id, snap: cur });
+    flowApplySnap(f, it.snap);
+    saveStore(); render();
+    rdToast('↷ 重做了');
+  }
+
+  /* ══ 复制 / 粘贴 ✓（n8n 的 ⌘C / ⌘V ✓）═════════════════════════════════ */
+  function flowPickedIds() {
+    if (FLOW_UI.picked.length) return FLOW_UI.picked.slice();
+    return FLOW_UI.node ? [FLOW_UI.node] : [];
+  }
+  function flowCopy() {
+    const f = flowCurrent(); if (!f) return;
+    const ids = flowPickedIds();
+    if (!ids.length) { rdToast('先选一个（或几个）节点 ✓（Shift 点选 / 空白处拖框选）'); return; }
+    const nodes = (f.nodes || []).filter((n) => ids.indexOf(n.id) >= 0);
+    const edges = (f.edges || []).filter((e) => ids.indexOf(e.from) >= 0 && ids.indexOf(e.to) >= 0);
+    FLOW_UI.clip = JSON.parse(JSON.stringify({ nodes, edges }));
+    rdToast('⧉ 复制了 ' + nodes.length + ' 个节点（⌘V 粘贴）');
+  }
+  function flowPaste() {
+    const f = flowCurrent(); const clip = FLOW_UI.clip;
+    if (!f) { rdToast('先选一个工作流'); return; }
+    if (!clip || !clip.nodes.length) { rdToast('剪贴板是空的'); return; }
+    flowPushUndo(f);
+    const map = {};
+    const add = clip.nodes.map((n) => {
+      const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      map[n.id] = id;
+      return Object.assign({}, n, {
+        id,
+        /* ⚠️ 偏移量要够大 ✗ —— 节点是 170x56 ✓，只偏 26 的话粘出来的会**压在原件上** ✗，
+           用户第一眼以为「粘贴没反应」✗（实测：探针点节点时点到了底下的那个 ✗）。 */
+        x: (Number(n.x) || 0) + 40, y: (Number(n.y) || 0) + 70,
+        cfg: JSON.parse(JSON.stringify(n.cfg || {})),
+      });
+    });
+    f.nodes = (f.nodes || []).concat(add);
+    /* ⚠️ 只连「两个端点都在选中集合里」的边 ✗ —— 不然粘出来的节点
+       会莫名其妙接到原来的图上 ✗（那是最容易让人懵的行为 ✗）。 */
+    f.edges = (f.edges || []).concat(clip.edges
+      .map((e) => ({ from: map[e.from], port: e.port, to: map[e.to] }))
+      .filter((e) => e.from && e.to));
+    FLOW_UI.picked = add.map((n) => n.id);
+    FLOW_UI.node = add.length === 1 ? add[0].id : '';
+    f.at = Date.now(); saveStore(); render();
+    rdToast('粘了 ' + add.length + ' 个节点 ✓');
+  }
+  /* 删除选中 ✓（Delete 键 / 按钮 ✓） */
+  function flowDelPicked() {
+    const f = flowCurrent(); if (!f) return;
+    const ids = flowPickedIds();
+    if (!ids.length) { rdToast('先选一个节点'); return; }
+    flowPushUndo(f);
+    f.nodes = (f.nodes || []).filter((n) => ids.indexOf(n.id) < 0);
+    f.edges = (f.edges || []).filter((e) => ids.indexOf(e.from) < 0 && ids.indexOf(e.to) < 0);
+    FLOW_UI.picked = []; FLOW_UI.node = ''; FLOW_UI.arm = '';
+    f.at = Date.now(); saveStore(); render();
+    rdToast('删了 ' + ids.length + ' 个节点 ✓（⌘Z 能撤销）');
+  }
+  /* ★ 自动整理 ✓（n8n 的 Tidy Up ✓）——
+     按**连线分层**排 ✗，比「按数组顺序铺」强得多 ✓
+     （后者连出来的线会横七竖八 ✗，等于没整理 ✗）。 */
+  function flowTidy() {
+    const f = flowCurrent(); if (!f || !(f.nodes || []).length) return;
+    flowPushUndo(f);
+    const nodes = f.nodes || []; const edges = f.edges || [];
+    const layer = {};
+    nodes.forEach((n) => { layer[n.id] = 0; });
+    /* 松弛 |V| 轮 ✓ —— 有环也不会死循环 ✓（最多跑满就停 ✓） */
+    for (let k = 0; k < nodes.length; k++) {
+      let changed = false;
+      edges.forEach((e) => {
+        if (layer[e.from] === undefined || layer[e.to] === undefined) return;
+        if (layer[e.to] < layer[e.from] + 1) { layer[e.to] = layer[e.from] + 1; changed = true; }
+      });
+      if (!changed) break;
+    }
+    const byLayer = {};
+    nodes.forEach((n) => { const L = layer[n.id] || 0; (byLayer[L] = byLayer[L] || []).push(n); });
+    /* 便签不参与分层 ✓ —— 单独放到最左边一列 ✓ */
+    Object.keys(byLayer).forEach((L) => {
+      byLayer[L].forEach((n, i) => {
+        if (flowMetaOf(n).sticky) { n.x = 10; n.y = 10 + i * (FLOW_STICKY_H + 20); return; }
+        n.x = 60 + Number(L) * 230;
+        n.y = 40 + i * 100;
+      });
+    });
+    f.at = Date.now(); saveStore(); render();
+    rdToast('✓ 整理好了（按连线分了层）');
+  }
+  /* 执行到某个节点为止 ✓（n8n 的 Execute Node ✓）——
+     做法：临时把「它的下游」全禁用 ✓，跑完再恢复 ✓（引擎不用改 ✓）。 */
+  async function flowRunTo(nodeId) {
+    const f = flowCurrent(); if (!f) return;
+    const keep = new Set([nodeId]);
+    /* 从目标节点往下游广度优先 ✓ */
+    let frontier = [nodeId];
+    while (frontier.length) {
+      const next = [];
+      frontier.forEach((id) => {
+        (f.edges || []).filter((e) => e.from === id).forEach((e) => {
+          if (!keep.has(e.to)) { keep.add(e.to); next.push(e.to); }
+        });
+      });
+      frontier = next;
+    }
+    const saved = (f.nodes || []).map((n) => ({ n, d: n.disabled }));
+    (f.nodes || []).forEach((n) => { if (!keep.has(n.id)) n.disabled = true; });
+    try { await flowRun(); } finally { saved.forEach((x) => { x.n.disabled = x.d; }); saveStore(); render(); }
+  }
+
   function flowNew() {
     const name = prompt('工作流名字：', '新工作流');
     if (!name || !name.trim()) return;
@@ -5949,69 +6240,122 @@
   function flowAddNode(type) {
     const f = flowCurrent(); if (!f) { setStatus(esc('先新建一个工作流 ✓'), 5000); return; }
     const meta = FLOW_NODES[type]; if (!meta) return;
+    flowPushUndo(f);
+    /* ⚠️ 便签要**铺大一点**的格子 ✗（它 240x140 ✓，按普通节点的间距会叠在一起 ✗） */
+    const isSticky = !!meta.sticky;
+    const stepX = isSticky ? 270 : 200, stepY = isSticky ? 170 : 100;
+    const perRow = 4;
     const n = (f.nodes || []).length;
     const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const cfg = {};
     (meta.cfg || []).forEach((c) => { cfg[c[0]] = c[3]; });
-    f.nodes = (f.nodes || []).concat([{ id, type, x: 40 + (n % 4) * 200, y: 40 + Math.floor(n / 4) * 100, cfg }]);
+    f.nodes = (f.nodes || []).concat([{
+      id, type,
+      x: 40 + (n % perRow) * stepX, y: 40 + Math.floor(n / perRow) * stepY, cfg,
+    }]);
     f.at = Date.now();
-    FLOW_UI.node = id; FLOW_UI.sel = f.id; STORE.flowSel = f.id;
+    FLOW_UI.node = id; FLOW_UI.picked = [id]; FLOW_UI.sel = f.id; STORE.flowSel = f.id;
     saveStore(); render();
   }
   function flowDelNode(id) {
     const f = flowCurrent(); if (!f) return;
+    flowPushUndo(f);
     f.nodes = (f.nodes || []).filter((n) => n.id !== id);
     f.edges = (f.edges || []).filter((e) => e.from !== id && e.to !== id);
     if (FLOW_UI.node === id) FLOW_UI.node = '';
     if (FLOW_UI.arm === id) FLOW_UI.arm = '';
+    FLOW_UI.picked = FLOW_UI.picked.filter((x) => x !== id);
     f.at = Date.now(); saveStore(); render();
   }
-  /* 端口中心坐标 ✓（节点尺寸固定 170x56 ✓，直接算就行 ✓，不用量 DOM ✓）*/
-  function flowPortXY(n, side, port) {
-    const y = n.y + (Number(port) === 1 ? 42 : 28);
-    return { x: side === 'out' ? n.x + FLOW_W : n.x, y };
+  /* 端口几何 ✓ —— 节点尺寸固定 170x56 ✓，直接算就行 ✓，不用量 DOM ✓。
+     ★ 这次改成**按出口数均分** ✗（原来只认 1 或 2 个 ✗）——
+       多路分支有 4 个出口 ✓，写死的话后两个会叠在一起 ✗。 */
+  const FLOW_PORT = 12, FLOW_STICKY_W = 240, FLOW_STICKY_H = 140;
+  const flowMetaOf = (n) => FLOW_NODES[(n && n.type) || ''] || { e: '?', n: (n && n.type) || '?', in: 1, out: 1 };
+  const flowOutCount = (n) => Math.max(0, Number(flowMetaOf(n).out) || 0);
+  function flowPortCenterY(n, i, cnt) {
+    const c = Math.max(1, cnt || 1);
+    return n.y + Math.round(FLOW_H * (Number(i) + 1) / (c + 1));
+  }
+  function flowPortTop(n, i, cnt) { return flowPortCenterY(n, i, cnt) - n.y - FLOW_PORT / 2; }
+  function flowPortXY(n, side, port, cnt) {
+    return { x: side === 'out' ? n.x + FLOW_W : n.x, y: flowPortCenterY(n, port, cnt) };
   }
   function flowEdgeD(a, b) {
     const dx = Math.max(36, Math.abs(b.x - a.x) * 0.5);
     return 'M' + a.x + ',' + a.y + ' C' + (a.x + dx) + ',' + a.y + ' ' + (b.x - dx) + ',' + b.y + ' ' + b.x + ',' + b.y;
   }
+  const flowNodeW = (n) => (flowMetaOf(n).sticky ? FLOW_STICKY_W : FLOW_W);
+  const flowNodeH = (n) => (flowMetaOf(n).sticky ? FLOW_STICKY_H : FLOW_H);
   function flowCanvasHtml(f) {
     const nodes = (f.nodes || []);
     const edges = (f.edges || []);
-    const planeW = Math.max(880, ...nodes.map((n) => n.x + FLOW_W + 260));
-    const planeH = Math.max(520, ...nodes.map((n) => n.y + FLOW_H + 200));
+    const planeW = Math.max(880, ...nodes.map((n) => n.x + flowNodeW(n) + 260));
+    const planeH = Math.max(520, ...nodes.map((n) => n.y + flowNodeH(n) + 200));
     const stepMap = {};
     (FLOW_UI.steps || []).forEach((st) => { stepMap[st.id] = st; });
+    /* 连线画在节点**下面** ✓ —— 便签那种大块要垫在最底下 ✓ */
     const svg = '<svg class="lw-fl-svg" width="' + planeW + '" height="' + planeH + '">'
       + edges.map((e, i) => {
         const a = flowNodeById(f, e.from), b = flowNodeById(f, e.to);
         if (!a || !b) return '';
         const hot = FLOW_UI.node === e.from || FLOW_UI.node === e.to;
-        return '<g data-flowedge="' + i + '" title="点一下删掉这条连线"><path class="hit" d="'
-          + flowEdgeD(flowPortXY(a, 'out', e.port), flowPortXY(b, 'in', 0)) + '"/>'
-          + '<path class="' + (hot ? 'hot' : '') + '" d="' + flowEdgeD(flowPortXY(a, 'out', e.port), flowPortXY(b, 'in', 0)) + '"/></g>';
+        const d = flowEdgeD(flowPortXY(a, 'out', e.port, flowOutCount(a)), flowPortXY(b, 'in', 0, 1));
+        return '<g data-flowedge="' + i + '" title="点一下删掉这条连线"><path class="hit" d="' + d + '"/>'
+          + '<path class="' + (hot ? 'hot' : '') + '" d="' + d + '"/></g>';
       }).join('') + '</svg>';
     const body = nodes.map((n) => {
-      const meta = FLOW_NODES[n.type] || { e: '?', n: n.type, in: 1, out: 1 };
+      const meta = flowMetaOf(n);
       const st = stepMap[n.id];
-      const cls = 'lw-fl-node' + (FLOW_UI.node === n.id ? ' on' : '') + (st ? ' s-' + st.status : '');
-      const outs = [];
-      for (let i = 0; i < (meta.out || 1); i++) {
-        outs.push('<div class="lw-fl-port out' + (i === 1 ? ' p1' : '') + (FLOW_UI.arm === n.id && i === 0 ? ' armed' : '')
-          + '" data-flout="' + n.id + '" data-flport="' + i + '" title="点这里，再点目标节点的左圆点就连上了"></div>');
+      const picked = FLOW_UI.picked.indexOf(n.id) >= 0;
+      const cls = 'lw-fl-node'
+        + (FLOW_UI.node === n.id ? ' on' : '')
+        + (picked ? ' picked' : '')
+        + (meta.sticky ? ' sticky' : '')
+        + (n.disabled ? ' off' : '')
+        + (st ? ' s-' + st.status : '');
+      const style = 'left:' + n.x + 'px;top:' + n.y + 'px'
+        + (meta.sticky ? ';width:' + FLOW_STICKY_W + 'px;height:' + FLOW_STICKY_H + 'px' : '');
+      const title = meta.sticky
+        ? '便签：不参与执行 ✓'
+        : esc(flowPlain(meta.d || '')) + (n.note ? ' ｜ 备注：' + esc(n.note) : '') + (n.disabled ? ' ｜ 已禁用' : '');
+      /* 便签：没有端口 ✓，就是一块文字 ✓ */
+      if (meta.sticky) {
+        return '<div class="' + cls + '" data-flnode="' + n.id + '" style="' + style + '" title="' + title + '">'
+          + '<div class="sticky-hd">🗒 便签<span class="fid">' + esc(n.id) + '</span></div>'
+          + '<div class="sticky-bd">' + (String((n.cfg || {}).text || '').trim()
+            ? esc(String((n.cfg || {}).text).slice(0, 400)) : '<span style="color:' + T.faint + '">（空便签 —— 点它，在右栏写点什么）</span>') + '</div>'
+          + '</div>';
       }
-      return '<div class="' + cls + '" data-flnode="' + n.id + '" style="left:' + n.x + 'px;top:' + n.y + 'px" title="' + esc(flowPlain(meta.d || '')) + '">'
+      const outs = [];
+      const cnt = flowOutCount(n);
+      for (let i = 0; i < cnt; i++) {
+        const armed = FLOW_UI.arm === n.id && Number(FLOW_UI.armPort || 0) === i;
+        outs.push('<div class="lw-fl-port out' + (armed ? ' armed' : '') + '"'
+          + ' style="top:' + flowPortTop(n, i, cnt) + 'px"'
+          + ' data-flout="' + n.id + '" data-flport="' + i + '"'
+          + ' title="' + esc(flowOutLabel(n.type, i)) + '"></div>');
+      }
+      return '<div class="' + cls + '" data-flnode="' + n.id + '" style="' + style + '" title="' + title + '">'
         + ((meta.in || 0) > 0 ? '<div class="lw-fl-port in" data-flin="' + n.id + '"></div>' : '')
         + outs.join('')
         + '<div class="hd">' + esc(meta.g || '') + '<span class="fid">' + esc(n.id) + '</span></div>'
         + '<div class="bd"><span class="em">' + meta.e + '</span>' + esc(meta.n) + '</div>'
-        + (st ? '<div class="st">' + (st.status === 'ok' ? '✓' + (st.ms || 0) + 'ms' : st.status === 'error' ? '✗' : '跳过') + '</div>' : '')
+        + (n.disabled ? '<div class="st">已禁用</div>'
+          : st ? '<div class="st">' + (st.status === 'ok' ? '✓' + (st.ms || 0) + 'ms'
+            : st.status === 'error' ? (st.continued ? '✗ 已跳过' : '✗') : st.status === 'disabled' ? '已禁用' : '跳过') + '</div>' : '')
         + '</div>';
     }).join('');
     return '<div class="lw-fl-cv" id="lw-fl-cv"><div class="lw-fl-plane" id="lw-fl-plane" style="width:' + planeW + 'px;height:' + planeH + 'px">'
       + svg + body
       + (nodes.length ? '' : '<div class="lw-fl-empty">左边点一个节点就能加进来 ✓<br><span style="color:' + T.faint + '">先加「手动触发」，再加要干的事，最后接「输出」</span></div>')
-      + '</div></div>';
+      + '</div><div class="lw-fl-marquee" id="lw-fl-marquee" style="display:none"></div></div>';
+  }
+  /* 多口节点的每个口是干什么的 ✓ —— 悬停时说得清 ✓（不然 4 个圆点全靠猜 ✗） */
+  function flowOutLabel(type, i) {
+    if (type === 'logic.if') return i === 0 ? '成立时走这条' : '不成立时走这条';
+    if (type === 'logic.switch') return i < 3 ? ('第 ' + (i + 1) + ' 种情况走这条') : '都没中时走这条';
+    return '点这里，再点目标节点的左圆点就连上了';
   }
   const flowCfgHtml = (f) => '<div class="lw-fl-cfg">' + flowCfgInnerHtml(f) + '</div>';
   function flowCfgInnerHtml(f) {
@@ -6048,17 +6392,48 @@
             + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '') + '</div>';
         }).join('')
         + (meta.o ? '<div class="fout">输出 <b>' + meta.o + '</b></div>' : '')
+        /* ★★ 高级设置 ✓（对齐 n8n 的节点设置 ✓）—— 原来**一个都没有** ✗。
+           用户原话：「工作流的功能太少，参考 N8N 的完整设计」✓。 */
+        + '<div class="lw-rd-sec" style="margin:16px 14px 0;padding:10px 0 6px">高级</div>'
+        + '<div class="lw-fl-field"><label>出错时怎么办</label><select data-flopt="onError">'
+        + '<option value="stop"' + (String(n.onError || 'stop') === 'stop' ? ' selected' : '') + '>停下来（默认）</option>'
+        + '<option value="continue"' + (String(n.onError) === 'continue' ? ' selected' : '') + '>继续往下跑</option>'
+        + '</select><div class="tip">选「继续」时，这个节点的输出会变成 '
+        + '<b>{ failed: true, error: "原因" }</b> ✓ —— 下游接个「条件分支」判断 $json.failed 就能走补救路径 ✓</div></div>'
+        + '<div class="lw-fl-field"><label>失败重试</label>'
+        + '<div style="display:flex;gap:6px">'
+        + '<input data-flopt="retry" type="number" min="0" max="5" value="' + (Number(n.retry) || 0) + '"/>'
+        + '<input data-flopt="retryDelay" type="number" min="0" max="30000" step="100" value="'
+        + (n.retryDelay == null ? 1000 : Number(n.retryDelay)) + '"/>'
+        + '</div><div class="tip">左＝重试几次（0~5），右＝每次隔多少毫秒。网络抖动那种用得上 ✓</div></div>'
+        + '<div class="lw-fl-field"><label>备注</label>'
+        + '<input data-flopt="note" value="' + esc(n.note || '') + '" placeholder="给这个节点写一句话（鼠标悬停能看到）"/></div>'
+        + '<div class="lw-fl-field" style="display:flex;gap:6px;flex-wrap:wrap">'
+        + '<button class="lw-rd-chip" id="lw-fl-nodedis" style="padding:5px 10px'
+        + (n.disabled ? ';border-color:' + T.warn + ';color:' + T.warn : '') + '">'
+        + (n.disabled ? '▶ 启用它' : '⏸ 禁用它') + '</button>'
+        + '<button class="lw-rd-chip" id="lw-fl-nodecopy" style="padding:5px 10px">⧉ 复制</button>'
+        + '<button class="lw-rd-chip" id="lw-fl-noderun" style="padding:5px 10px">▶ 执行到此</button>'
+        + '</div>'
         + '<div class="lw-fl-field"><button class="lw-rd-chip" data-act="del" id="lw-fl-nodedel" style="border-color:' + T.lineDim + ';padding:5px 10px">🗑 删掉这个节点</button></div>';
     }
     const steps = FLOW_UI.steps;
     const log = steps && steps.length
-      ? '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 8px">运行日志</div><div class="lw-fl-log">'
-        + steps.map((st) => {
+      ? '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 8px">运行日志'
+      + '<span style="float:right;font-size:9.5px;color:' + T.faint + ';letter-spacing:0">点一行看它的输出</span></div>'
+      + '<div class="lw-fl-log">'
+        + steps.map((st, i) => {
           const meta = FLOW_NODES[st.type] || { e: '?', n: st.type };
-          return '<div><span class="dot ' + st.status + '">' + (st.status === 'ok' ? '✓' : st.status === 'error' ? '✗' : '○') + '</span>'
+          const tag = st.status === 'ok' ? ('✓ ' + (st.ms || 0) + 'ms' + (st.attempts > 1 ? ' · 试了 ' + st.attempts + ' 次' : ''))
+            : st.status === 'error' ? (st.continued ? '✗ 失败（已跳过）' : '✗ 失败')
+              : st.status === 'disabled' ? '已禁用' : '跳过';
+          return '<div data-flstep="' + i + '" style="cursor:pointer' + (FLOW_UI.stepSel === i ? ';background:' + T.card2 : '') + '">'
+            + '<span class="dot ' + st.status + '">' + (st.status === 'ok' ? '✓' : st.status === 'error' ? '✗' : '○') + '</span>'
             + '<span class="nm">' + meta.e + ' ' + esc(meta.n) + '</span>'
-            + '<span class="' + st.status + '" style="margin-left:auto">' + (st.status === 'ok' ? (st.ms || 0) + 'ms' : st.status === 'skipped' ? '跳过' : '失败') + '</span></div>'
-            + (st.error ? '<div style="color:' + T.red + ';font-size:9.5px;padding:0 0 4px 16px;word-break:break-all">' + esc(st.error) + '</div>' : '');
+            + '<span class="' + st.status + '" style="margin-left:auto">' + esc(tag) + '</span></div>'
+            + (st.error ? '<div style="color:' + T.red + ';font-size:9.5px;padding:0 0 4px 16px;word-break:break-all">' + esc(st.error) + '</div>' : '')
+            + (FLOW_UI.stepSel === i ? '<div style="font-size:10px;color:' + T.dim + ';padding:2px 0 6px 16px;word-break:break-all;white-space:pre-wrap;max-height:180px;overflow:auto">'
+              + esc(st.out === undefined ? '(这步没有输出)' : JSON.stringify(st.out, null, 2).slice(0, 1200)) + '</div>' : '');
         }).join('') + '</div>'
       : '';
     return inner + log;
@@ -6071,6 +6446,47 @@
      ⚠️ 允许直接塞 <b> / <code> 这类标签 ✓，但**绝对不能有反引号** ✗✗
         （这段在一个 JS 模板字符串里 ✗ —— 见文件顶部那条铁律 ✗）。
      ══════════════════════════════════════════════════════════════════════ */
+  /* ★ 执行历史浮层 ✓（n8n 的 Executions 列表 ✓）——
+     每次跑完记一条 ✓：什么时候、成没成、花了多久、每一步什么状态 ✓。
+     点开一条能看到每一步的**输出** ✓（调试时最有用的就是这个 ✓）。 */
+  function flowRunsHtml() {
+    const runs = FLOW_UI.runs || [];
+    const sel = runs[FLOW_UI.runSel] || null;
+    const rows = runs.map((r, i) => {
+      const bad = (r.steps || []).filter((s) => s.status === 'error').length;
+      return '<div class="lw-fl-row' + (FLOW_UI.runSel === i ? ' on' : '') + '" data-flrun="' + i + '">'
+        + '<span class="em">' + (r.ok ? '✅' : '❌') + '</span>'
+        + new Date(r.at).toLocaleString('zh-CN', { hour12: false })
+        + (bad ? '<span class="n" style="color:' + T.red + '">' + bad + ' 处失败</span>' : '')
+        + '<span class="n">' + (r.ms || 0) + 'ms</span></div>';
+    }).join('');
+    const detail = sel ? '<div class="lw-fl-log" style="padding:12px 16px">'
+      + (sel.err ? '<div style="color:' + T.red + ';font-size:11px;line-height:1.9;padding-bottom:8px">' + esc(sel.err) + '</div>' : '')
+      + (sel.steps || []).map((st) => {
+        const meta = FLOW_NODES[st.type] || { e: '?', n: st.type };
+        return '<div><span class="dot ' + st.status + '">' + (st.status === 'ok' ? '✓' : st.status === 'error' ? '✗' : '○') + '</span>'
+          + '<span class="nm">' + meta.e + ' ' + esc(meta.n) + '</span>'
+          + '<span class="' + st.status + '" style="margin-left:auto">' + (st.ms || 0) + 'ms'
+          + (st.attempts > 1 ? ' · 试了 ' + st.attempts + ' 次' : '') + '</span></div>'
+          + (st.error ? '<div style="color:' + T.red + ';font-size:9.5px;padding:0 0 4px 16px;word-break:break-all">' + esc(st.error) + '</div>' : '')
+          + (st.out === undefined ? '' : '<div style="font-size:10px;color:' + T.dim + ';padding:2px 0 6px 16px;word-break:break-all;white-space:pre-wrap;max-height:160px;overflow:auto">'
+            + esc(JSON.stringify(st.out, null, 2).slice(0, 1000)) + '</div>');
+      }).join('') + '</div>' : '<div class="lw-rd-empty" style="padding:30px 16px">← 点左边一条，看它每一步的输出</div>';
+    /* ⚠️ 浮层的 id 不能和工具栏那个按钮**重名** ✗✗ ——
+       两个都叫 lw-fl-runs 的话，`querySelector('#lw-fl-runs')` 会先命中按钮 ✗，
+       关不掉、也点不开详情 ✗（实测：探针直接报 strict mode violation ✗）。 */
+    return '<div class="lw-imp" id="lw-fl-runbox"><div class="box" style="width:min(920px,94vw)">'
+      + '<div class="hd"><b>🕘 执行历史</b><span class="x" id="lw-fl-runbox-x">✕</span></div>'
+      + '<div class="bd" style="display:flex;gap:0;padding:0;min-height:380px">'
+      + '<div style="width:270px;flex:none;border-right:2px solid ' + T.lineDim + ';overflow:auto">'
+      + (runs.length ? rows : '<div class="lw-rd-empty" style="padding:30px 14px">还没跑过<br><span style="color:' + T.faint + '">点「▶ 运行」之后这里就有记录了</span></div>')
+      + '</div><div style="flex:1;min-width:0;overflow:auto">' + detail + '</div>'
+      + '</div>'
+      + '<div class="ft"><button class="pri" id="lw-fl-runs-close">关闭</button>'
+      + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">'
+      + '每个工作流最多留 ' + FLOW_RUN_MAX + ' 条 ✓（再多会自动丢掉最旧的 ✓）</span></div>'
+      + '</div></div>';
+  }
   function flowHelpHtml() {
     /* 节点全表 ✓ —— 直接由 FLOW_NODES 生成 ✓，加节点不用回来改文档 ✓（不会忘 ✓）。 */
     const nodeRows = FLOW_GROUPS.map((g) => '<div class="lw-fl-hd2">' + g + '</div>'
@@ -6094,7 +6510,15 @@
       ['「写入备忘录」跑一次多一条', '它只负责「新建」，不覆盖。想每天累积就用它；只想留最新的一份，改用「追加日记」。'],
       ['Webhook 怎么触发', '往 /api/life/flow/hook/ 后面接你填的那个路径发一条 POST 就行。'],
       ['HTTP 请求拿到的数据怎么接着用', '后面接一个「JSON 取值」。路径直接从 data 开始写，不用写 json.data。'],
-      ['{{}} 写出来是空的', '多半是节点 id 写错了。取不到只会变成空字符串，不会报错。点一下那个节点，看右栏标题下面的 id。'],
+      ['{{}} 写出来是空的', '多半是名字写错了。取不到只会变成空字符串，不会报错。点一下那个节点，看右栏标题下面的 id。'],
+      ['想对一批数据一条条处理', '用「列表」那一组节点（过滤 / 排序 / 取前 N / 去重 / 聚合 / 拆分 / 合并）。它们对<b>数组</b>逐条跑表达式，表达式里 $json 代表「当前这一条」，$index 是第几条。'],
+      ['上游不是数组，列表节点报错', '先接一个「JSON 取值」把数组取出来；或者在列表节点的「来自」里写表达式直接指定。'],
+      ['四个圆点的节点是干嘛的', '那是「多路分支」：上三个是三种情况，最下面那个是「都没中」。鼠标悬停在圆点上会写清楚。'],
+      ['想让某一步失败也别停', '选中那个节点 → 右栏「高级」→ 出错时选「继续往下跑」。它的输出会带 failed 和 error。'],
+      ['只想跑到某一步看看', '选中那个节点 → 右栏「▶ 执行到此」。它下游会临时禁用，跑完自动恢复。'],
+      ['「代码」节点能跑任意 JS 吗', '不能 —— 只能一行一句「名字 = 表达式」。工作流是存在磁盘上的文本，能跑任意代码等于把门打开。'],
+      ['工作流能互相调用吗', '能（「调用子工作流」，填对方的名字）。但<b>不能互相调</b>，会绕圈；引擎最多套 3 层，超了会明确报错。'],
+      ['「定时触发」到点了没自己跑', '服务端排期还没做，现在仍然要点「运行」。先把图搭好，等做出来就直接生效。'],
     ].map((r) => '<tr><td class="k">' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
     return '<div class="lw-fl-help"><div class="lw-fl-helpin">'
 
@@ -6109,16 +6533,25 @@
       + '<p class="warn">不想从零搭，就点 <b>✨ 示例</b> —— 它会直接搭一张能跑的图出来，照着改最快。</p>'
 
       + '<h3>② 变量怎么传（这节最关键）</h3>'
-      + '<p>每个节点跑完，结果都存在它自己的<b>节点 id</b> 名下 —— 就是画布上节点右上角那个小字，比如 n3。下游想用它，写两层花括号：</p>'
+      + '<p>每个节点跑完，结果都存在它自己的<b>节点 id</b> 名下 —— 就是画布上节点右上角那个小字，比如 n3。'
+      + '下游写两层花括号就能用，里面是<b>表达式</b>：</p>'
       + '<table>'
       + '<tr><th>写法</th><th>意思</th></tr>'
-      + '<tr><td class="k"><code>{{n3}}</code></td><td>把 n3 的整个输出塞进来。是对象或数组就自动转成 JSON 文本</td></tr>'
-      + '<tr><td class="k"><code>{{n3.text}}</code></td><td>只取 n3 输出里的 text 字段 —— 比如 AI 节点的回答就这么取</td></tr>'
-      + '<tr><td class="k"><code>{{n3.json.data.list[0].title}}</code></td><td>一层层往下挖，数组用方括号</td></tr>'
-      + '<tr><td class="k"><code>{{input}}</code></td><td>所有上游输出的合并。只有一个上游时，它就等于那个上游</td></tr>'
+      + '<tr><td class="k"><code>{{ $json }}</code></td><td>上游的输出本身</td></tr>'
+      + '<tr><td class="k"><code>{{ $json.title }}</code></td><td>取字段；数组用方括号 <code>$json.list[0].t</code></td></tr>'
+      + '<tr><td class="k"><code>{{ $node["问 AI"].text }}</code></td><td>取<b>任意</b>节点的输出（写它的名字或 id）</td></tr>'
+      + '<tr><td class="k"><code>{{ $json.count + 1 }}</code></td><td>算术：<code>+ - * / %</code></td></tr>'
+      + '<tr><td class="k"><code>{{ $json.title.toUpperCase() }}</code></td><td>方法：大小写、trim、slice、split、join、replace、includes…</td></tr>'
+      + '<tr><td class="k"><code>{{ $json.n > 3 ? "多" : "少" }}</code></td><td>条件：<code>&gt; &lt; == != &amp;&amp; || !</code> 和三元 <code>? :</code></td></tr>'
+      + '<tr><td class="k"><code>{{ Math.round($json.price) }}</code></td><td>函数：Math / Number / String / JSON.stringify / len / upper…</td></tr>'
+      + '<tr><td class="k"><code>{{ $now }}</code> <code>{{ $today }}</code></td><td>现在的时间戳 / 今天 0 点</td></tr>'
+      + '<tr><td class="k"><code>{{ $workflow.name }}</code></td><td>当前工作流的名字</td></tr>'
+      + '<tr><td class="k"><code>{{ n3.text }}</code></td><td>老写法也还能用（按节点 id 取）</td></tr>'
       + '</table>'
-      + '<p>凡是提示里写了「支持变量」的输入框都能这么写：HTTP 的 URL 和请求体、文本模板、AI 提示、邮件的主题和正文、输出节点的标题和正文。</p>'
-      + '<p>取不到只会变成<b>空字符串，不会报错</b>。所以看到结果是空的，先回去检查 id 有没有写错。</p>'
+      + '<p class="warn">⚠️ 这是<b>自己写的安全求值器</b>，不是 eval —— 所以 <code>process</code>、<code>require</code>、'
+      + '<code>constructor</code> 这类一律调不到。方法只放行常用那一批。</p>'
+      + '<p>取不到只会变成<b>空字符串，不会报错</b>；但<b>表达式本身写错</b>（括号没闭、调了白名单外的方法）会明确报错 —— '
+      + '不然一个错别字查半天。</p>'
 
       + '<h3>③ 每个节点是干什么的</h3>'
       + '<p>「几进几出」指的是它左右两边的圆点数量。左边是入口，右边是出口 —— 出口超过一个的（比如条件分支），每条出口通向不同的路。</p>'
@@ -6140,6 +6573,31 @@
       + '</table>'
       + '<p>连线顺序：手动触发 → HTTP 请求 → JSON 取值 → AI 对话 →（分两路）→ 写入备忘录、通知。'
       + '点 <b>✨ 示例</b> 就是把这个图直接搭好。</p>'
+
+      + '<h3>⑥ 画布上能干什么（照着 n8n 来的）</h3>'
+      + '<table>'
+      + '<tr><th>想干什么</th><th>怎么做</th></tr>'
+      + '<tr><td class="k">选中一个节点</td><td>点它</td></tr>'
+      + '<tr><td class="k">选好几个</td><td><b>Shift 点选</b>，或者<b>在空白处按住拖一个框</b></td></tr>'
+      + '<tr><td class="k">一次挪好几个</td><td>选好之后拖其中任意一个，整群一起动</td></tr>'
+      + '<tr><td class="k">撤销 / 重做</td><td><code>⌘Z</code> / <code>⌘⇧Z</code>（工具栏上也有按钮）</td></tr>'
+      + '<tr><td class="k">复制 / 粘贴</td><td><code>⌘C</code> / <code>⌘V</code> —— 只连「两头都在选中集合里」的线，不会莫名其妙接到原图上</td></tr>'
+      + '<tr><td class="k">全选 / 删除</td><td><code>⌘A</code> / <code>Delete</code></td></tr>'
+      + '<tr><td class="k">取消当前操作</td><td><code>Esc</code></td></tr>'
+      + '<tr><td class="k">排版乱了自己排</td><td>点 <b>▦ 整理</b> —— 按连线分层重排，不是按顺序瞎铺</td></tr>'
+      + '<tr><td class="k">贴块说明</td><td>节点库里拖一个 <b>🗒 便签</b>，写什么都行，不参与执行</td></tr>'
+      + '<tr><td class="k">只看某一步的结果</td><td>选中节点 → 右栏 <b>▶ 执行到此</b>（它下游会临时禁用，跑完自动恢复）</td></tr>'
+      + '<tr><td class="k">看以前跑过的</td><td>点工具栏 <b>🕘 历史</b> —— 每次运行都留着，点开能看到每一步的输出</td></tr>'
+      + '</table>'
+
+      + '<h3>⑦ 节点设置（右栏「高级」那一栏）</h3>'
+      + '<table>'
+      + '<tr><th>设置</th><th>作用</th></tr>'
+      + '<tr><td class="k">出错时怎么办</td><td>默认<b>停下来</b>。改成「继续往下跑」时，这个节点的输出会变成 <code>{ failed: true, error: "原因" }</code> —— 后面接个条件分支判断 <code>$json.failed</code> 就能走补救路径</td></tr>'
+      + '<tr><td class="k">失败重试</td><td>左＝重试几次（0~5），右＝每次隔多少毫秒。网络抖动那种用得上</td></tr>'
+      + '<tr><td class="k">禁用节点</td><td>临时绕开它 —— <b>数据会直通</b>，下游照常跑（不是把后面整条链断掉）</td></tr>'
+      + '<tr><td class="k">备注</td><td>给这个节点写一句话，鼠标悬停在画布上能看到</td></tr>'
+      + '</table>'
 
       + '</div></div>';
   }
@@ -6191,16 +6649,27 @@
       }).join('')).join('');
     const rows = list.map((x) => '<div class="lw-fl-row' + (flowSel() === x.id ? ' on' : '') + '" data-flsel="' + esc(x.id) + '">'
       + '<span class="em">⚙</span>' + esc(x.name) + '<span class="n">' + (x.nodes || []).length + '</span></div>').join('');
+    const nPicked = FLOW_UI.picked.length;
     const tools = '<div class="lw-fl-tools">'
       + '<button id="lw-fl-new">＋ 新建</button>'
-      + '<button id="lw-fl-save">💾 保存</button>'
       + '<button class="pri" id="lw-fl-run"' + (f && (f.nodes || []).length ? '' : ' disabled') + '>▶ 运行</button>'
+      + '<span class="sep"></span>'
+      + '<button id="lw-fl-undo" title="撤销（⌘Z）"' + (FLOW_UI.undo.length ? '' : ' disabled') + '>↶ 撤销</button>'
+      + '<button id="lw-fl-redo" title="重做（⌘⇧Z）"' + (FLOW_UI.redo.length ? '' : ' disabled') + '>↷ 重做</button>'
+      + '<span class="sep"></span>'
+      + '<button id="lw-fl-copy" title="复制选中的节点（⌘C）">⧉ 复制</button>'
+      + '<button id="lw-fl-paste" title="粘贴（⌘V）"' + (FLOW_UI.clip && FLOW_UI.clip.nodes.length ? '' : ' disabled') + '>📋 粘贴</button>'
+      + '<button id="lw-fl-tidy" title="按连线分层重新排列（Tidy Up）">▦ 整理</button>'
+      + '<button id="lw-fl-runs" title="看以前每次跑的结果">🕘 历史' + (FLOW_UI.runs.length ? ' ' + FLOW_UI.runs.length : '') + '</button>'
+      + '<span class="sep"></span>'
       + '<button id="lw-fl-example" title="一键搭一个能跑的示例（B站热门 → AI 挑 5 条 → 写进备忘录）">✨ 示例</button>'
       + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">📖 说明</button>'
       + '<button id="lw-fl-clear">清空画布</button>'
       + '<button id="lw-fl-del">🗑 删工作流</button>'
       + '<span class="hint">' + (FLOW_UI.busy ? '正在跑…'
-        : FLOW_UI.help ? '看完点「📖 说明」收起来' : '点节点改设置 · 点右圆点再点左圆点就连线 · 点连线删掉') + '</span>'
+        : FLOW_UI.help ? '看完点「📖 说明」收起来'
+          : nPicked > 1 ? ('选中了 ' + nPicked + ' 个节点 · ⌘C 复制 · Delete 删')
+            : 'Shift 点选 / 空白处拖框选 · ⌘Z 撤销 · 点节点改设置') + '</span>'
       + '</div>';
     return '<div class="lw-fl">'
       + '<div class="lw-fl-side"' + paneW('flowSideW', 150) + '><div class="lw-rd-hd">我的工作流</div>' + (rows || '<div class="lw-fl-row" style="color:' + T.faint + '">还没有，点「＋ 新建」</div>')
@@ -6209,7 +6678,8 @@
       + (FLOW_UI.help ? flowHelpHtml()
         : f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
       + '</div>' + paneGrip('cfg')
-      + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>' + flowCfgInnerHtml(f) + '</div></div>';
+      + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>' + flowCfgInnerHtml(f) + '</div></div>'
+      + (FLOW_UI.runOpen ? flowRunsHtml() : '');
   }
   /* ── 运行 ✓ ────────────────────────────────────────────────────────────── */
   function flowAiCfg() {
@@ -6218,29 +6688,70 @@
   async function flowRun() {
     const f = flowCurrent(); if (!f || FLOW_UI.busy) return;
     if (!(f.nodes || []).length) { setStatus(esc('画布是空的 ✓ 先加几个节点'), 5000); return; }
-    FLOW_UI.busy = true; FLOW_UI.steps = null; FLOW_UI.err = '';
+    FLOW_UI.busy = true; FLOW_UI.steps = null; FLOW_UI.err = ''; FLOW_UI.stepSel = -1;
     render();
+    const at = Date.now();
     try {
       const ai = flowAiCfg();
       const r = await fetch('/api/life/flow/run', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ graph: { nodes: f.nodes, edges: f.edges }, ai: { url: ai.url || '', key: ai.key || '', model: ai.model || '' } }),
+        body: JSON.stringify({
+          graph: { nodes: f.nodes, edges: f.edges },
+          ai: { url: ai.url || '', key: ai.key || '', model: ai.model || '' },
+          /* ★ 表达式里 `$workflow.name` / `$execution.id` 要用 ✓ */
+          flowName: f.name || '', flowId: f.id || '',
+        }),
       });
       const d = await r.json();
       FLOW_UI.steps = (d && d.steps) || [];
       FLOW_UI.err = (d && d.ok) ? '' : ((d && d.error) || '运行失败');
       if (d && d.ok) {
-        const msg = await flowApplyEffects(d.effects || []);
+        /* ★ 走 Deep 版 ✓ —— 它会顺手把「调用子工作流」那些 effect 也跑掉 ✓
+           （带深度上限 ✓，见 flowApplyEffectsDeep ✓）。 */
+        const msg = await flowApplyEffectsDeep(d.effects || [], 0);
         setStatus(esc('✓ 跑完了' + (msg ? ' · ' + msg : '')), 8000);
       } else {
         setStatus(esc('✗ ' + FLOW_UI.err), 12000);
       }
+      /* ★ 记一条执行历史 ✓（n8n 的 Executions ✓）——
+         存的是**摘要** ✓（每步的状态/耗时/输出截断 ✓），不是全量 ✗，
+         不然跑几十次 STORE 就胖得没法看了 ✗。 */
+      flowPushRun(f, {
+        at, ok: !!(d && d.ok), err: FLOW_UI.err, ms: (d && d.ms) || (Date.now() - at),
+        steps: FLOW_UI.steps.map((st) => ({
+          id: st.id, type: st.type, status: st.status, ms: st.ms || 0,
+          attempts: st.attempts || 1, error: st.error || '',
+          out: flowTrimOut(st.out),
+        })),
+      });
     } catch (e) {
       FLOW_UI.err = e.message;
       setStatus(esc('✗ 运行失败：' + e.message), 12000);
+      flowPushRun(f, { at, ok: false, err: e.message, ms: Date.now() - at, steps: [] });
     }
     FLOW_UI.busy = false;
     render();
+  }
+  /* 每一步的输出截断 ✓ —— 一条历史最多留 20 条 ✓，每条每步 2KB ✓，够看了 ✓ */
+  function flowTrimOut(v) {
+    if (v === undefined) return undefined;
+    try {
+      const s = JSON.stringify(v);
+      if (s && s.length > 2000) return { _truncated: true, preview: s.slice(0, 900) };
+    } catch (_) { return String(v).slice(0, 900); }
+    return v;
+  }
+  function flowPushRun(f, run) {
+    const all = (STORE && STORE.flowRuns) || {};
+    const list = (all[f.id] || []).concat([run]).slice(-FLOW_RUN_MAX);
+    STORE.flowRuns = Object.assign({}, all, { [f.id]: list });
+    FLOW_UI.runs = list.slice().reverse();
+    saveStore();
+  }
+  /* 切工作流时把历史也换过来 ✓ */
+  function flowLoadRuns(f) {
+    const all = (STORE && STORE.flowRuns) || {};
+    FLOW_UI.runs = (f && all[f.id] ? all[f.id] : []).slice().reverse();
   }
   /* ★ 输出类节点在这里**才**落地 ✗ —— 引擎只回 effects ✓，STORE 归前端管 ✓ */
   async function flowApplyEffects(effects) {
@@ -6277,43 +6788,155 @@
           const d = await r.json();
           parts.push(d && d.ok ? '发了 1 封邮件' : ('✗ 邮件失败：' + ((d && d.error) || '')));
         } catch (err) { parts.push('✗ 邮件失败：' + err.message); }
+      } else if (e.kind === 'flow') {
+        /* ⚠️ 这里**故意什么都不做** ✗ —— 子流程要带**深度**才能跑 ✓，
+           而本函数拿不到深度 ✗。它由 flowApplyEffectsDeep 统一处理 ✓
+           （见下面 ✓）。放在这里会绕过深度上限 ✗，A↔B 互调就转不完了 ✗。 */
+        continue;
       }
     }
     if (wrote) { saveStore(); }
     return parts.join(' · ');
   }
+  /* 子工作流 ✓ —— 按**名字**找（左侧列表里那个 ✓），跑一遍，把它的 effects 也应用掉 ✓ */
+  async function flowRunSub(name, input, depth) {
+    const MAX = 3;
+    if (depth >= MAX) return { ok: false, error: '子流程套得太深了（最多 ' + MAX + ' 层）—— 是不是互相调用了？' };
+    const want = String(name || '').trim();
+    if (!want) return { ok: false, error: '没填工作流名字' };
+    const sub = flowList().find((x) => x && (x.name === want || x.id === want));
+    if (!sub) return { ok: false, error: '找不到叫「' + want + '」的工作流（要填左侧列表里那个名字）' };
+    if (!(sub.nodes || []).length) return { ok: false, error: '子流程「' + want + '」是空的' };
+    try {
+      const ai = flowAiCfg();
+      const r = await fetch('/api/life/flow/run', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          graph: { nodes: sub.nodes, edges: sub.edges },
+          ai: { url: ai.url || '', key: ai.key || '', model: ai.model || '' },
+          flowName: sub.name || '', flowId: sub.id || '',
+        }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) return { ok: false, error: (d && d.error) || '子流程跑失败' };
+      /* 递归应用它的 effects ✓（里面可能还有子流程 ✓，靠 depth 兜住 ✓） */
+      const msg = await flowApplyEffectsDeep(d.effects || [], depth + 1);
+      return { ok: true, msg, steps: d.steps || [] };
+    } catch (err) { return { ok: false, error: err.message }; }
+  }
+  async function flowApplyEffectsDeep(effects, depth) {
+    if (depth >= 3) return '（子流程太深，剩下的没再往下跑）';
+    const parts = [];
+    for (const e of effects) {
+      if (e.kind === 'flow') {
+        const sub = await flowRunSub(e.flow, e.input, depth);
+        parts.push(sub.ok ? ('子流程「' + e.flow + '」✓') : ('✗ 子流程：' + sub.error));
+      } else {
+        parts.push(await flowApplyEffects([e]));
+      }
+    }
+    return parts.filter(Boolean).join(' · ');
+  }
+  /* ★ 键盘快捷键 ✓（n8n 画布上那一套 ✓）——
+     ⚠️ 挂在 **document** 上、只挂**一次** ✗ —— bindFlow 每次渲染都会跑 ✗，
+        每次挂一个监听就是内存泄漏 ✗（而且会触发 N 次 ✗）。 */
+  function flowOnKey(ev) {
+    if (TAB !== 'flow') return;
+    const t = ev.target || {};
+    const typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable;
+    const meta = ev.metaKey || ev.ctrlKey;
+    const k = String(ev.key || '').toLowerCase();
+    if (meta && k === 'z') { if (typing) return; ev.preventDefault(); if (ev.shiftKey) flowRedo(); else flowUndo(); return; }
+    if (meta && k === 'c') { if (typing) return; ev.preventDefault(); flowCopy(); return; }
+    if (meta && k === 'v') { if (typing) return; ev.preventDefault(); flowPaste(); return; }
+    if (meta && k === 'a') { if (typing) return; ev.preventDefault(); const f = flowCurrent(); if (f) { FLOW_UI.picked = (f.nodes || []).map((n) => n.id); render(); } return; }
+    if (meta && k === 's') { if (typing) return; ev.preventDefault(); const f = flowCurrent(); if (f) { f.at = Date.now(); saveStore(); setStatus(esc('✓ 已保存'), 3000); } return; }
+    if (ev.key === 'Delete' || ev.key === 'Backspace') { if (typing) return; ev.preventDefault(); flowDelPicked(); return; }
+    if (ev.key === 'Escape') {
+      FLOW_UI.arm = ''; FLOW_UI.picked = []; FLOW_UI.runOpen = false; FLOW_UI.help = false;
+      render();
+    }
+  }
   function bindFlow() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'flow') return;
+    if (!FLOW_UI.keysBound) {
+      FLOW_UI.keysBound = true;
+      document.addEventListener('keydown', flowOnKey, true);
+    }
     bindPaneGrips(host, [
       { which: 'side', target: '.lw-fl-side', min: 150, max: 420, key: 'flowSideW' },
       { which: 'cfg', target: '.lw-fl-cfg', min: 220, max: 560, key: 'flowCfgW' },
     ]);
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
-    qa('[data-flsel]').forEach((el) => { el.onclick = () => { FLOW_UI.sel = el.dataset.flsel; STORE.flowSel = el.dataset.flsel; FLOW_UI.node = ''; FLOW_UI.steps = null; render(); }; });
+    qa('[data-flsel]').forEach((el) => {
+      el.onclick = () => {
+        FLOW_UI.sel = el.dataset.flsel; STORE.flowSel = el.dataset.flsel;
+        FLOW_UI.node = ''; FLOW_UI.steps = null; FLOW_UI.picked = [];
+        flowLoadRuns(flowCurrent());       /* 历史也跟着换 ✓ */
+        render();
+      };
+    });
     qa('[data-fladd]').forEach((el) => { el.onclick = () => flowAddNode(el.dataset.fladd); });
     const nw = q('#lw-fl-new'); if (nw) nw.onclick = () => flowNew();
     const dl = q('#lw-fl-del'); if (dl) dl.onclick = () => flowDel();
-    const sv = q('#lw-fl-save'); if (sv) sv.onclick = () => { const f = flowCurrent(); if (f) { f.at = Date.now(); saveStore(); } setStatus(esc('✓ 工作流已保存'), 4000); };
     const rn = q('#lw-fl-run'); if (rn) rn.onclick = () => flowRun();
     const ex = q('#lw-fl-example'); if (ex) ex.onclick = () => flowExample();
     const hp = q('#lw-fl-help');
     if (hp) hp.onclick = () => { FLOW_UI.help = !FLOW_UI.help; render(); };
+    /* ── 新加的工具栏按钮 ✓ ── */
+    const un = q('#lw-fl-undo'); if (un) un.onclick = () => flowUndo();
+    const re = q('#lw-fl-redo'); if (re) re.onclick = () => flowRedo();
+    const cp = q('#lw-fl-copy'); if (cp) cp.onclick = () => flowCopy();
+    const ps = q('#lw-fl-paste'); if (ps) ps.onclick = () => flowPaste();
+    const td = q('#lw-fl-tidy'); if (td) td.onclick = () => flowTidy();
+    const rs = q('#lw-fl-runs');
+    if (rs) rs.onclick = () => { flowLoadRuns(flowCurrent()); FLOW_UI.runOpen = true; FLOW_UI.runSel = -1; render(); };
+    const rx = q('#lw-fl-runbox-x'); if (rx) rx.onclick = () => { FLOW_UI.runOpen = false; render(); };
+    const rc = q('#lw-fl-runs-close'); if (rc) rc.onclick = () => { FLOW_UI.runOpen = false; render(); };
+    qa('[data-flrun]').forEach((el) => { el.onclick = () => { FLOW_UI.runSel = Number(el.dataset.flrun); render(); }; });
     const cl = q('#lw-fl-clear');
     if (cl) cl.onclick = () => {
       const f = flowCurrent(); if (!f) return;
       if (!confirm('清空画布上的所有节点和连线？（工作流本身还在）')) return;
+      flowPushUndo(f);
       f.nodes = []; f.edges = []; f.at = Date.now();
-      FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.steps = null;
+      FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.steps = null; FLOW_UI.picked = [];
       saveStore(); render();
     };
     const nd = q('#lw-fl-nodedel'); if (nd) nd.onclick = () => flowDelNode(FLOW_UI.node);
-    /* 节点：点选 / 拖动 ✓ */
+    const ndis = q('#lw-fl-nodedis');
+    if (ndis) ndis.onclick = () => {
+      const f = flowCurrent(); const n = flowNodeById(f, FLOW_UI.node); if (!n) return;
+      flowPushUndo(f);
+      n.disabled = !n.disabled;
+      f.at = Date.now(); saveStore(); render();
+      rdToast(n.disabled ? '⏸ 禁用了 —— 运行时会**直通**（下游照样跑）' : '▶ 启用了');
+    };
+    const ncp = q('#lw-fl-nodecopy');
+    if (ncp) ncp.onclick = () => { FLOW_UI.picked = FLOW_UI.node ? [FLOW_UI.node] : []; flowCopy(); };
+    const nrn = q('#lw-fl-noderun');
+    if (nrn) nrn.onclick = () => flowRunTo(FLOW_UI.node);
+    qa('[data-flstep]').forEach((el) => {
+      el.onclick = () => { const i = Number(el.dataset.flstep); FLOW_UI.stepSel = FLOW_UI.stepSel === i ? -1 : i; render(); };
+    });
+
+    /* ★ 节点：点选 / Shift 多选 / 拖动（选中的整群一起动 ✓） */
     qa('[data-flnode]').forEach((el) => {
       el.onclick = (ev) => {
         if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
-        FLOW_UI.node = el.dataset.flnode; FLOW_UI.arm = ''; render();
+        const id = el.dataset.flnode;
+        if (ev.shiftKey) {
+          /* Shift 点选：加/减一个 ✓ */
+          FLOW_UI.picked = FLOW_UI.picked.indexOf(id) >= 0
+            ? FLOW_UI.picked.filter((x) => x !== id)
+            : FLOW_UI.picked.concat([id]);
+        } else {
+          FLOW_UI.picked = [id];
+        }
+        FLOW_UI.node = id; FLOW_UI.arm = ''; FLOW_UI.stepSel = -1;
+        render();
       };
       lwGrab(el, {
         down: (ev) => {
@@ -6321,26 +6944,74 @@
           if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return null;
           const f = flowCurrent(); if (!f) return null;
           const n = flowNodeById(f, el.dataset.flnode); if (!n) return null;
-          return { f, n, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false };
+          /* 拖的如果是「已选中的一群」→ 整群一起动 ✓（n8n 也是这个行为 ✓） */
+          const group = (FLOW_UI.picked.indexOf(n.id) >= 0 && FLOW_UI.picked.length > 1)
+            ? (f.nodes || []).filter((x) => FLOW_UI.picked.indexOf(x.id) >= 0).map((x) => ({ n: x, ox: x.x, oy: x.y }))
+            : [{ n, ox: n.x, oy: n.y }];
+          return { f, n, group, sx: ev.clientX, sy: ev.clientY, moved: false };
         },
         move: (e2, sess) => {
           const dx = e2.clientX - sess.sx, dy = e2.clientY - sess.sy;
           if (!sess.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
-          sess.moved = true;
-          sess.n.x = Math.max(0, sess.ox + dx); sess.n.y = Math.max(0, sess.oy + dy);
-          el.style.left = sess.n.x + 'px'; el.style.top = sess.n.y + 'px';
+          /* ★ 整个拖动**只压一次**快照 ✓（放在改坐标之前 ✓）——
+             每帧压一次的话撤销栈会被拖拽塞满 ✗，按一下 ⌘Z 只退一个像素 ✗。 */
+          if (!sess.moved) { sess.moved = true; flowPushUndo(sess.f); }
+          sess.group.forEach((g) => {
+            g.n.x = Math.max(0, g.ox + dx); g.n.y = Math.max(0, g.oy + dy);
+            const nodeEl = host.querySelector('[data-flnode="' + g.n.id + '"]');
+            if (nodeEl) { nodeEl.style.left = g.n.x + 'px'; nodeEl.style.top = g.n.y + 'px'; }
+          });
           const svgEl = q('.lw-fl-svg');
           if (svgEl) svgEl.outerHTML = ''; /* 拖动时先清掉线 ✓，松手重画 ✓（省得每帧重算 ✓）*/
         },
         up: (e2, sess) => { if (sess.moved) { sess.f.at = Date.now(); saveStore(); render(); } },
       });
     });
+
+    /* ★ 空白处拖拽 = 框选 ✓（n8n 也有 ✓）——
+       ⚠️ 要挂在与滚动容器同一层 ✓，坐标还得把 scrollLeft/Top 算进去 ✗，
+          不然画布滚过之后框选的位置是错的 ✗。 */
+    const cv = q('#lw-fl-cv'); const plane = q('#lw-fl-plane'); const mq = q('#lw-fl-marquee');
+    if (cv && plane && mq) {
+      lwGrab(cv, {
+        down: (ev) => {
+          if (ev.target.closest && ev.target.closest('.lw-fl-node')) return null;   /* 点在节点上不框选 ✓ */
+          const r = cv.getBoundingClientRect();
+          return { r, sx: ev.clientX, sy: ev.clientY, sl: cv.scrollLeft, st: cv.scrollTop, moved: false, box: null };
+        },
+        move: (ev, s) => {
+          const x1 = s.sx - s.r.left + s.sl, y1 = s.sy - s.r.top + s.st;
+          const x2 = ev.clientX - s.r.left + s.sl, y2 = ev.clientY - s.r.top + s.st;
+          if (!s.moved && Math.abs(x2 - x1) + Math.abs(y2 - y1) < 5) return;
+          s.moved = true;
+          s.box = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+          mq.style.display = 'block';
+          mq.style.left = s.box.x + 'px'; mq.style.top = s.box.y + 'px';
+          mq.style.width = s.box.w + 'px'; mq.style.height = s.box.h + 'px';
+        },
+        up: (ev, s) => {
+          mq.style.display = 'none';
+          if (!s.moved || !s.box) return;
+          const f = flowCurrent(); if (!f) return;
+          const hit = (f.nodes || []).filter((n) => {
+            const w = flowNodeW(n), h = flowNodeH(n);
+            return !(n.x + w < s.box.x || n.x > s.box.x + s.box.w || n.y + h < s.box.y || n.y > s.box.y + s.box.h);
+          }).map((n) => n.id);
+          FLOW_UI.picked = hit;
+          FLOW_UI.node = hit.length === 1 ? hit[0] : '';
+          render();
+          if (hit.length) rdToast('选中了 ' + hit.length + ' 个节点 ✓（⌘C 复制 · Delete 删）');
+        },
+      });
+    }
+
     /* 连线：先点出端口（arm ✓），再点目标节点的入端口 ✓ */
     qa('[data-flout]').forEach((el) => {
       el.onclick = (ev) => {
         ev.stopPropagation();
-        FLOW_UI.arm = (FLOW_UI.arm === el.dataset.flout && FLOW_UI.armPort === el.dataset.flport) ? '' : el.dataset.flout;
-        FLOW_UI.armPort = el.dataset.flport;
+        const same = FLOW_UI.arm === el.dataset.flout && String(FLOW_UI.armPort) === String(el.dataset.flport);
+        FLOW_UI.arm = same ? '' : el.dataset.flout;
+        FLOW_UI.armPort = Number(el.dataset.flport) || 0;
         render();
       };
     });
@@ -6353,6 +7024,7 @@
         if (from === to) { setStatus(esc('不能连到自己 ✓'), 4000); return; }
         const port = Number(FLOW_UI.armPort) || 0;
         if ((f.edges || []).some((e) => e.from === from && Number(e.port) === port && e.to === to)) { FLOW_UI.arm = ''; render(); return; }
+        flowPushUndo(f);
         f.edges = (f.edges || []).concat([{ from, port, to }]);
         f.at = Date.now();
         FLOW_UI.arm = '';
@@ -6363,6 +7035,7 @@
       el.onclick = (ev) => {
         ev.stopPropagation();
         const f = flowCurrent(); if (!f) return;
+        flowPushUndo(f);
         const i = Number(el.dataset.flowedge);
         f.edges = (f.edges || []).filter((_e, k) => k !== i);
         f.at = Date.now(); saveStore(); render();
@@ -6377,6 +7050,28 @@
         n.cfg[el.dataset.flcfg] = el.value;
         f.at = Date.now();
         saveStore();
+        /* 便签改文字要**立刻**反映到画布上 ✓（它是块说明，改完看不见等于没改 ✗）。
+           ⚠️ 只重画便签那一块 ✗ —— 整屏 render 会让输入框失焦 ✗。 */
+        if (FLOW_NODES[n.type] && FLOW_NODES[n.type].sticky && el.dataset.flcfg === 'text') {
+          const bd = host.querySelector('[data-flnode="' + n.id + '"] .sticky-bd');
+          if (bd) bd.textContent = String(el.value || '').slice(0, 400) || '（空便签）';
+        }
+      };
+      el.oninput = on;
+      el.onchange = on;
+    });
+    /* ★ 高级设置 ✓（重试 / 出错怎么办 / 备注）—— 存到**节点上** ✗，不是 cfg 里 ✗
+       （cfg 是节点自己的参数 ✓，这几个是引擎的调度设置 ✓，混在一起会乱 ✗）。 */
+    qa('[data-flopt]').forEach((el) => {
+      const on = () => {
+        const f = flowCurrent(); if (!f) return;
+        const n = flowNodeById(f, FLOW_UI.node); if (!n) return;
+        const k = el.dataset.flopt;
+        if (k === 'retry') n.retry = Math.max(0, Math.min(5, Number(el.value) || 0));
+        else if (k === 'retryDelay') n.retryDelay = Math.max(0, Math.min(30000, Number(el.value) || 0));
+        else if (k === 'onError') n.onError = el.value === 'continue' ? 'continue' : 'stop';
+        else n[k] = el.value;
+        f.at = Date.now(); saveStore();
       };
       el.oninput = on;
       el.onchange = on;
