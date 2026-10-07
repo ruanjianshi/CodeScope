@@ -4766,7 +4766,7 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/list' || u.pathname === '/api/life/mail/read' ||
         u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag' ||
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
-        u.pathname === '/api/life/mail/delbox') {
+        u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
       };
@@ -4795,7 +4795,8 @@ const server = http.createServer(async (req, res) => {
          所以先把 body 读出来，key / box 都允许从 body 覆盖 ✓。 */
       let postBody = null;
       if (u.pathname === '/api/life/mail/flag' || u.pathname === '/api/life/mail/move'
-        || u.pathname === '/api/life/mail/newbox' || u.pathname === '/api/life/mail/delbox') {
+        || u.pathname === '/api/life/mail/newbox' || u.pathname === '/api/life/mail/delbox'
+        || u.pathname === '/api/life/weread/shelf') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
         try { postBody = await readBody(req, 1e5); } catch (_) { postBody = {}; }
       }
@@ -4864,6 +4865,64 @@ const server = http.createServer(async (req, res) => {
 
         /* 后面几条都要指定账号 ✓ */
         const key = needKey() || String((postBody && postBody.key) || '').trim();
+    /* ★ 微信读书同步**不需要邮箱账号** ✗ —— 必须放在账号解析**之前** ✓，
+       否则会被那句「没有这个邮箱账号」直接挡掉 ✗（实测踩过 ✗）。 */
+        if (u.pathname === '/api/life/weread/shelf') {
+          if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          const cookie = String((postBody && postBody.cookie) || '').trim();
+          if (!cookie) return send(res, 200, { ok: false, error: '没有填 Cookie' });
+          if (cookie.length > 8000) return send(res, 200, { ok: false, error: 'Cookie 太长，不像是真的' });
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 12000);
+            let up;
+            try {
+              up = await fetch('https://i.weread.qq.com/shelf/sync?synckey=0&lectureSynckey=0&teenmode=0&album=1&onlyBookid=0', {
+                headers: {
+                  'Cookie': cookie,
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
+                  'Accept': 'application/json, text/plain, */*',
+                  'Referer': 'https://weread.qq.com/',
+                },
+                signal: ctrl.signal,
+              });
+            } finally { clearTimeout(timer); }
+            const text = await up.text();
+            let data = null;
+            try { data = JSON.parse(text); } catch (_) { data = null; }
+            if (!up.ok || !data) {
+              return send(res, 200, { ok: false, error: '微信读书接口返回异常（HTTP ' + up.status + '）：' + String(text).slice(0, 160) });
+            }
+            /* 它的错误形状不固定 ✗ —— 认得出就翻译，认不出就把原文回给前端 ✓ */
+            const msg = String(data.errmsg || data.msg || data.error || '');
+            const books = Array.isArray(data.books) ? data.books : null;
+            if (!books) {
+              return send(res, 200, { ok: false, error: '没拿到书架（多半是 Cookie 过期 / 失效）' + (msg ? '：' + msg : '') });
+            }
+            /* 进度：bookProgress 里是 0~1 的小数 ✓ */
+            const prog = new Map();
+            (Array.isArray(data.bookProgress) ? data.bookProgress : []).forEach((x) => {
+              if (x && x.bookId) prog.set(String(x.bookId), Math.round((Number(x.progress) || 0) * 100));
+            });
+            const out = books.map((b) => {
+              if (!b) return null;
+              const title = String(b.title || '').trim();
+              if (!title) return null;
+              const cover = Array.isArray(b.cover) ? String(b.cover[b.cover.length - 1] || '') : String(b.cover || '');
+              return {
+                title,
+                author: String(b.author || '').trim(),
+                cover: /^https:\/\//.test(cover) ? cover : '',
+                prog: prog.get(String(b.bookId)) || 0,
+              };
+            }).filter(Boolean);
+            return send(res, 200, { ok: true, count: out.length, books: out });
+          } catch (error) {
+            const why = String((error && error.message) || error);
+            return send(res, 200, { ok: false, error: /abort/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) });
+          }
+        }
+
         const account = key ? accountOf(key) : null;
         if (!account) return send(res, 200, { ok: false, error: '没有这个邮箱账号（先去「配置」里保存一个）' });
         if (!account.imapHost) return send(res, 200, { ok: false, error: '这个账号没填 IMAP 服务器，收信需要它' });
@@ -5143,6 +5202,7 @@ const server = http.createServer(async (req, res) => {
           MAIL_LIST_CACHE.clear();
           return send(res, 200, r);
         }
+
       } catch (error) {
         return send(res, 200, { ok: false, error: String((error && error.message) || error) });
       }

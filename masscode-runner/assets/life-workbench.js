@@ -177,6 +177,7 @@
   .lw-main.fill { display:flex; flex-direction:column; }
   /* 邮箱 / 日记：面板就是 .lw-main 的直接子元素 ✓ */
   .lw-main.fill > .lw-ml,
+  .lw-main.fill > .lw-rd,
   .lw-main.fill > .lw-jr { flex:1; min-height:0; }
   /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
      —— 得把这条链也一起撑开 ✓ */
@@ -1001,6 +1002,124 @@
     border-bottom:1px solid ${T.lineDim}; font-size:10px; letter-spacing:1.2px; text-transform:uppercase;
     color:${T.faint}; }
   .lw-ml-trbar .sp { flex:1; }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     阅读模块（个人阅读管理）✓
+     ⚠️ 注释里不能出现反引号 ✗ —— 这段整个在 JS 模板字符串里 ✗。
+     ⚠️ 三栏高度由 .lw-main.fill 那条链撑满 ✓（见上面全高面板的注释 ✓）。
+     ══════════════════════════════════════════════════════════════════════ */
+  .lw-rd { display:flex; min-height:320px; border:2px solid ${T.lineDim}; background:${T.bg}; }
+  .lw-rd-side { width:206px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto; padding:12px 0; background:${T.bg}; }
+  .lw-rd-list { width:330px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; background:${T.card}; }
+  .lw-rd-read { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+  .lw-rd-hd { font-size:9px; letter-spacing:1.8px; color:${T.faint}; text-transform:uppercase;
+    padding:10px 13px 5px; }
+  .lw-rd-row { display:flex; align-items:center; gap:8px; padding:6px 13px; font-size:11px;
+    cursor:pointer; color:${T.dim}; border-left:2px solid transparent; }
+  .lw-rd-row:hover { background:${T.card2}; color:${T.text}; }
+  .lw-rd-row.on { background:${T.card2}; color:${T.text}; border-left-color:${T.accent}; }
+  .lw-rd-row .n { margin-left:auto; font-size:9.5px; color:${T.faint}; font-variant-numeric:tabular-nums; }
+  .lw-rd-row .em { font-size:13px; line-height:1; }
+  /* 左栏统计 */
+  .lw-rd-stat { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:${T.lineDim};
+    margin:0 13px 12px; border:1px solid ${T.lineDim}; }
+  .lw-rd-stat div { background:${T.card}; padding:8px 9px; }
+  .lw-rd-stat b { display:block; font-size:18px; font-weight:700; color:${T.accent};
+    font-variant-numeric:tabular-nums; line-height:1.1; }
+  .lw-rd-stat span { font-size:9px; color:${T.faint}; letter-spacing:.6px; }
+  /* 中栏：工具条 + 书卡 */
+  .lw-rd-tools { display:flex; gap:6px; align-items:center; padding:9px 11px;
+    border-bottom:2px solid ${T.line}; position:sticky; top:0; background:${T.card}; z-index:2; flex-wrap:wrap; }
+  .lw-rd-tools input { flex:1; min-width:80px; height:26px; padding:0 9px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:11px ${UI}; outline:none; }
+  .lw-rd-tools input:focus { border-color:${T.accent}; }
+  .lw-rd-tools button { height:26px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10px ${UI}; cursor:pointer; letter-spacing:.5px; flex:none; }
+  .lw-rd-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-bk { display:flex; gap:11px; padding:11px 13px; border-bottom:1px solid #1c1c1a; cursor:pointer; }
+  .lw-bk:hover { background:${T.card2}; }
+  .lw-bk.on { background:${T.card2}; box-shadow:inset 3px 0 0 ${T.accent}; }
+  .lw-bk .cv { width:42px; height:58px; flex:none; border:1px solid ${T.lineDim}; background:${T.bg2};
+    display:flex; align-items:center; justify-content:center; font-size:19px; overflow:hidden; }
+  .lw-bk .cv img { width:100%; height:100%; object-fit:cover; }
+  .lw-bk .mn { flex:1; min-width:0; }
+  .lw-bk .ti { font-size:12.5px; font-weight:600; color:${T.text}; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .lw-bk .au { font-size:10px; color:${T.dim}; margin-top:3px; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .lw-bk .mt { display:flex; align-items:center; gap:6px; margin-top:7px; font-size:9px; color:${T.faint}; }
+  .lw-bk .mt .tag { border:1px solid ${T.lineDim}; padding:1px 5px; letter-spacing:.4px; }
+  .lw-bar { flex:1; height:3px; background:${T.lineDim}; position:relative; min-width:24px; }
+  .lw-bar i { position:absolute; left:0; top:0; bottom:0; background:${T.accent}; }
+  /* 右栏 */
+  .lw-rd-rhd { flex:none; padding:14px 18px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-rd-rhd h2 { font-size:17px; font-weight:700; letter-spacing:.4px; line-height:1.3; }
+  .lw-rd-rhd .meta { font-size:10.5px; color:${T.dim}; margin-top:6px; letter-spacing:.4px; }
+  .lw-rd-rhd .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .lw-rd-chip { border:1px solid ${T.lineDim}; padding:3px 8px; font-size:9.5px; color:${T.dim};
+    cursor:pointer; letter-spacing:.4px; }
+  .lw-rd-chip:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rd-chip.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-rd-chip[data-act="del"]:hover { border-color:${T.red}; color:${T.red}; }
+  .lw-rd-body { flex:1; min-height:0; overflow:auto; padding:0 18px 20px; }
+  .lw-rd-sec { font-size:9px; letter-spacing:1.8px; color:${T.faint}; text-transform:uppercase;
+    padding:16px 0 8px; border-bottom:1px solid ${T.lineDim}; margin-bottom:10px; }
+  /* 进度条（可点）*/
+  .lw-rd-prog { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .lw-rd-prog .track { flex:1; height:8px; background:${T.lineDim}; position:relative; cursor:pointer; }
+  .lw-rd-prog .track i { position:absolute; left:0; top:0; bottom:0; background:${T.accent}; }
+  .lw-rd-prog .pct { font-size:12px; font-weight:700; color:${T.accent}; width:44px; text-align:right;
+    font-variant-numeric:tabular-nums; }
+  .lw-rd-quick { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .lw-rd-quick button { height:26px; padding:0 10px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10px ${UI}; cursor:pointer; }
+  .lw-rd-quick button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rd-quick input { width:62px; height:26px; padding:0 8px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:11px ${UI}; outline:none; }
+  /* 笔记 */
+  .lw-note { border-left:2px solid ${T.lineDim}; padding:9px 0 9px 12px; margin-bottom:10px; position:relative; }
+  .lw-note.k-idea { border-left-color:${T.warn}; }
+  .lw-note.k-quote { border-left-color:${T.accent}; }
+  .lw-note .tx { font-size:12px; line-height:1.85; white-space:pre-wrap; word-break:break-word; }
+  .lw-note.k-quote .tx { color:${T.text}; }
+  .lw-note.k-idea .tx { color:${T.dim}; }
+  .lw-note .ft { display:flex; align-items:center; gap:9px; margin-top:7px; font-size:9px; color:${T.faint}; }
+  .lw-note .ft .x { cursor:pointer; }
+  .lw-note .ft .x:hover { color:${T.red}; }
+  .lw-rd-empty { padding:40px 20px; text-align:center; color:${T.faint}; font-size:11.5px; line-height:2; }
+  /* 近 14 天柱状 */
+  .lw-rd-chart { display:flex; align-items:flex-end; gap:4px; height:66px; padding-top:6px; }
+  .lw-rd-chart div { flex:1; background:${T.lineDim}; position:relative; min-height:2px; }
+  .lw-rd-chart div.has { background:${T.accent}; }
+  .lw-rd-chart div:hover::after { content:attr(data-tip); position:absolute; bottom:100%; left:50%;
+    transform:translateX(-50%); background:${T.card2}; border:1px solid ${T.line}; color:${T.text};
+    font-size:9px; padding:3px 6px; white-space:nowrap; z-index:5; }
+  .lw-rd-axis { display:flex; gap:4px; margin-top:5px; font-size:8.5px; color:${T.faint}; }
+  .lw-rd-axis span { flex:1; text-align:center; }
+  /* 导入浮层 */
+  .lw-imp { position:fixed; inset:0; background:rgba(0,0,0,.66); z-index:8800; display:flex;
+    align-items:center; justify-content:center; }
+  .lw-imp .box { width:min(760px,92vw); max-height:86vh; background:${T.bg}; border:2px solid ${T.line};
+    display:flex; flex-direction:column; }
+  .lw-imp .hd { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:2px solid ${T.line}; }
+  .lw-imp .hd b { font-size:12px; letter-spacing:1px; }
+  .lw-imp .hd .x { margin-left:auto; cursor:pointer; color:${T.dim}; }
+  .lw-imp .hd .x:hover { color:${T.red}; }
+  .lw-imp .bd { flex:1; min-height:0; overflow:auto; padding:14px 16px; }
+  .lw-imp textarea { width:100%; height:210px; resize:vertical; border:1px solid ${T.lineDim};
+    background:${T.card}; color:${T.text}; font:11.5px/1.7 ${UI}; padding:10px; outline:none; }
+  .lw-imp textarea:focus { border-color:${T.accent}; }
+  .lw-imp .tip { font-size:10.5px; color:${T.dim}; line-height:1.9; margin-bottom:10px; }
+  .lw-imp .tip code { background:${T.card2}; border:1px solid ${T.lineDim}; padding:1px 5px; }
+  .lw-imp .ft { display:flex; gap:8px; align-items:center; padding:12px 16px; border-top:2px solid ${T.line}; }
+  .lw-imp .ft button { height:30px; padding:0 14px; border:2px solid ${T.line}; background:transparent;
+    color:${T.text}; font:600 10.5px ${UI}; letter-spacing:1px; cursor:pointer; }
+  .lw-imp .ft button.pri { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-imp .ft button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-imp .ft button.pri:hover { background:transparent; color:${T.accent}; }
+  .lw-imp .pv { font-size:10.5px; color:${T.dim}; line-height:1.9; }
+  .lw-imp .pv b { color:${T.accent}; }
+
   .lw-ml-tr { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; }
   .lw-ml-tr .pane { min-width:0; min-height:0; }
   .lw-ml-tr .pane.origin { border-right:1px solid ${T.lineDim}; display:flex; overflow:hidden; }
@@ -1020,6 +1139,7 @@
     { id: 'quote', icon: '❝', label: '书签', grp: '面板', key: 'B-01' },
     { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
     { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
+    { id: 'reading', icon: '📖', label: '阅读', grp: '外部', key: 'R-01' },
     { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
@@ -1027,7 +1147,19 @@
      —— 见 CSS 里 `.lw-main.fill` 那一段的注释 ✓。
      ⚠️ 只有这三个 ✗ —— 今日 / 书签 / 研究方向 / 文件是长列表 ✓，
         给它们加 flex:1 反而会把内容裁掉 ✗。 */
-  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1 };
+  /* 阅读模块的状态 ✓ —— 同样必须放这里 ✗（`mount()` 在模块最顶上就被调用了 ✓）。 */
+  const RD_SRC = {
+    weread: { e: '📗', n: '微信读书' }, paper: { e: '📖', n: '纸质书' },
+    kindle: { e: '📕', n: 'Kindle' }, other: { e: '📚', n: '其他' },
+  };
+  const RD_ST = {
+    want: { e: '🌱', n: '想读' }, reading: { e: '📖', n: '在读' },
+    done: { e: '✅', n: '读完' }, paused: { e: '⏸', n: '搁置' },
+  };
+  const RD_ST_ORDER = ['reading', 'want', 'done', 'paused'];
+  const RD_UI = { status: 'all', src: 'all', tag: '', q: '', sel: '', impOpen: false, impText: '', impPv: null, noteKind: 'quote', noteText: '' };
+
+  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1 };
 
   /* ── 顶栏状态条：时钟 / 问候 / 心情 / 每日格言 ✓ ─────────────────────────
      ⚠️ 这些**必须声明在模块顶部** ✗ —— `headHtml()` 在 `mount()` 的调用链上就会碰到 ✓
@@ -1578,7 +1710,7 @@
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
-    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail }[TAB] || viewToday;
+    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading }[TAB] || viewToday;
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
@@ -3050,6 +3182,8 @@
     };
     qa('[data-mailsend]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailsend, false); });
     qa('[data-mailself]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailself, true); });
+    /* 阅读模块 ✓（bindReading 自己会判 TAB ✓，不在这页就直接返回 ✓）*/
+    bindReading();
     /* 顶栏状态条（秒针 / 心情 / 换一句）✓ —— 放最后 ✓，
        它是**每一页**都要绑的 ✓，不跟着某个页签的绑定走 ✓。 */
     bindHead();
@@ -4733,6 +4867,508 @@
   /* ── 组装整个邮箱页 ──────────────────────────────────────────────────────
      ★ 三栏都能**左右拖动调宽** ✓（用户报「怎么没有左右自由拖动功能」✗）——
      和备忘录那套完全一致：同一份 grip 样式 ✓、宽度存 STORE ✓、双击恢复默认 ✓。 */
+  /* ══════════════════════════════════════════════════════════════════════
+     阅读模块（个人阅读管理）✓
+     ══════════════════════════════════════════════════════════════════════
+     数据全在 STORE 里 ✓（服务端存本地 JSON ✓，不联网 ✓）：
+       STORE.books     = [{ id, title, author, cover, src, status, prog, rating, tags, pages, startAt, doneAt, at, edit }]
+       STORE.bookNotes = [{ id, bookId, kind: 'quote' | 'idea', text, loc, at }]
+       STORE.readLog   = [{ id, date: 'YYYY-MM-DD', bookId, min, pages, at }]
+
+     ★ 关于「接入微信读书」✗：微信读书**没有对外的公开 API** ✗。
+       所以这里做的是**两条都能用**的路 ✓：
+         ① 「📥 导入笔记」—— 把微信读书 App 里「导出笔记」的文本粘进来 ✓
+            （这条路**一定可用** ✓，而且导入的是用户自己真正划过的东西 ✓）
+         ② 「🔄 同步书架」—— 走服务端的**非官方接口代理** ✓，
+            需要用户自己填 Cookie ✓，**明确标注「非官方、可能随时失效」** ✓，
+            失败时给清楚的提示 ✓，绝不假装成功 ✗。
+     ══════════════════════════════════════════════════════════════════════ */
+
+  const bookById = (id) => ((STORE && STORE.books) || []).find((b) => b && b.id === id) || null;
+  /* ★ 当前选中的书 ✗ —— RD_UI.sel 只在内存里 ✓，刷新就没了 ✗，
+     所以要以 STORE.bookSel（落过盘的 ✓）兜底 ✓。
+     实测踩过：只读 RD_UI.sel 的话，刷新后面板右栏永远是「← 从中间选一本书」✗。 */
+  const rdSel = () => RD_UI.sel || (STORE && STORE.bookSel) || '';
+  const rdCurrent = () => bookById(rdSel());
+  const bookNotesOf = (id) => ((STORE && STORE.bookNotes) || []).filter((n) => n && n.bookId === id);
+  const rdTagList = () => {
+    const m = new Map();
+    ((STORE && STORE.books) || []).forEach((b) => (b.tags || []).forEach((t) => m.set(t, (m.get(t) || 0) + 1)));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  };
+  function rdBooks() {
+    const q = String(RD_UI.q || '').trim().toLowerCase();
+    return ((STORE && STORE.books) || []).filter((b) => {
+      if (!b) return false;
+      if (RD_UI.status !== 'all' && b.status !== RD_UI.status) return false;
+      if (RD_UI.src !== 'all' && b.src !== RD_UI.src) return false;
+      if (RD_UI.tag && !(b.tags || []).includes(RD_UI.tag)) return false;
+      if (q && (String(b.title || '') + ' ' + String(b.author || '')).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort((a, b) => {
+      /* 在读优先 ✓ → 再看最近动过的 ✓ */
+      const ra = a.status === 'reading' ? 0 : 1, rb = b.status === 'reading' ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      return (b.edit || b.at || 0) - (a.edit || a.at || 0);
+    });
+  }
+  /* 阅读统计 ✓ */
+  function rdStats() {
+    const books = ((STORE && STORE.books) || []).filter(Boolean);
+    const notes = ((STORE && STORE.bookNotes) || []).filter(Boolean);
+    const log = ((STORE && STORE.readLog) || []).filter(Boolean);
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const dd = new Date(); dd.setDate(dd.getDate() - i);
+      const k = dayKey(dd);
+      const min = log.filter((x) => x.date === k).reduce((a, x) => a + (Number(x.min) || 0), 0);
+      days.push({ date: k, min, label: (dd.getMonth() + 1) + '/' + dd.getDate() });
+    }
+    let streak = 0;
+    for (let i = 0; i < 400; i++) {
+      const dd = new Date(); dd.setDate(dd.getDate() - i);
+      if (log.some((x) => x.date === dayKey(dd))) streak++;
+      else if (i > 0) break;
+    }
+    return {
+      reading: books.filter((b) => b.status === 'reading').length,
+      done: books.filter((b) => b.status === 'done').length,
+      total: books.length,
+      notes: notes.length,
+      streak,
+      days,
+      maxMin: Math.max(1, ...days.map((d) => d.min)),
+      todayMin: days.length ? days[days.length - 1].min : 0,
+    };
+  }
+  /* 进度条（可点）✓ */
+  function rdBar(pct, cls) {
+    const p = Math.max(0, Math.min(100, Number(pct) || 0));
+    return '<div class="' + (cls || 'lw-bar') + '"><i style="width:' + p + '%"></i></div>';
+  }
+  function rdStars(rating) {
+    const r = Math.round(Number(rating) || 0);
+    return '★★★★★'.slice(0, r) + '☆☆☆☆☆'.slice(0, 5 - r);
+  }
+  /* ── 微信读书笔记解析 ✓ ──────────────────────────────────────────────────
+     宽容解析 ✗：不假设只有一种导出格式 ✓。能认出来的都认 ✓：
+       · 《书名》 或 单独一行 + 下一行是「作者：」→ 新书 ✓
+       · 「作者：X」→ 作者 ✓
+       · 单独一行「划线 / 原文 / 摘录」→ 下一条是**划线** ✓
+       · 单独一行「想法 / 笔记 / 点评」→ 下一条是**想法** ✓
+       · 日期行（2024-01-01 / 2024年1月1日 …）→ 只当分隔，不当内容 ✓
+       · Markdown 风：# 书名 / > 划线 / - 想法 ✓
+       · 其它非空行 → 按当前类型收（默认划线 ✓）
+     ⚠️ 导入前**一定先给预览** ✓ —— 解析结果摆出来让用户确认 ✓，
+        不搞「一键导入然后发现全乱了」✗。 */
+  function parseWeread(raw) {
+    const lines = String(raw || '').replace(/\r/g, '').split('\n').map((l) => l.trim());
+    const books = [];
+    let cur = null, mode = '', chap = '';
+    const DATE = /^\d{4}\s*[-/年]\s*\d{1,2}\s*[-/月]\s*\d{1,2}\s*日?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/;
+    const MARK = /^(划线|原文|摘录|引用|quote)$/i;
+    const IDEA = /^(想法|笔记|点评|感想|idea)$/i;
+    /* ★ 章节标题要**认出来** ✗ —— 微信读书导出的笔记里章节名是单独一行 ✓，
+       不认的话会被当成一条「划线」✗（实测：3 条笔记被解析成 4 条 ✗）。
+       只在**明确的章节写法**上认 ✓，不靠「短行」猜 ✗（短行也可能真是条划线 ✗）。 */
+    const CHAP = /^(第[一二三四五六七八九十百零两\d]+[章节卷篇部讲回]|序言?|自序|前言|后记|尾声|附录|导读|楔子|引言|结语)/;
+    const mk = (title, author) => { const b = { title: String(title || '').trim(), author: String(author || '').trim(), notes: [] }; books.push(b); return b; };
+    for (const l of lines) {
+      if (!l) { mode = ''; continue; }
+      if (/^[-=—]{3,}$/.test(l)) { mode = ''; continue; }
+      let m = /^#\s+(.+)$/.exec(l);
+      if (m) {
+        const t = m[1].split(/[—–\-|]/);
+        cur = mk(t[0], t[1]);
+        mode = '';
+        continue;
+      }
+      m = /^《(.+)》$/.exec(l);
+      if (!m && !cur && !/^作者[：:]/.test(l) && l.length <= 60) {
+        /* 第一行通常是书名 ✓（后面跟着「作者：」更确定 ✓）*/
+        m = [null, l];
+      }
+      if (m) { cur = mk(m[1]); mode = ''; chap = ''; continue; }
+      m = /^作者[：:]\s*(.+)$/.exec(l);
+      if (m) { if (!cur) cur = mk('未命名书籍'); cur.author = m[1].trim(); continue; }
+      if (MARK.test(l)) { mode = 'quote'; continue; }
+      if (IDEA.test(l)) { mode = 'idea'; continue; }
+      if (DATE.test(l)) { mode = ''; continue; }
+      if (CHAP.test(l) && l.length <= 40) { chap = l; mode = ''; continue; }
+      m = /^>\s*(.+)$/.exec(l);
+      if (m) { if (!cur) cur = mk('未命名书籍'); cur.notes.push({ kind: 'quote', text: m[1].trim(), loc: chap }); continue; }
+      m = /^[-*+]\s+(.+)$/.exec(l);
+      if (m) { if (!cur) cur = mk('未命名书籍'); cur.notes.push({ kind: 'idea', text: m[1].trim(), loc: chap }); continue; }
+      if (!cur) cur = mk('未命名书籍');
+      cur.notes.push({ kind: mode || 'quote', text: l, loc: chap });
+      mode = '';
+    }
+    return books.filter((b) => b.title && b.notes.length);
+  }
+  /* ── 阅读：视图 ────────────────────────────────────────────────────────── */
+  function rdSideHtml() {
+    const st = rdStats();
+    const tags = rdTagList();
+    const cnt = (fn) => ((STORE && STORE.books) || []).filter(fn).length;
+    const stRows = RD_ST_ORDER.map((k) => '<div class="lw-rd-row' + (RD_UI.status === k ? ' on' : '') + '" data-rdst="' + k + '">'
+      + '<span class="em">' + RD_ST[k].e + '</span>' + RD_ST[k].n + '<span class="n">' + cnt((b) => b && b.status === k) + '</span></div>').join('');
+    const srcRows = Object.keys(RD_SRC).map((k) => '<div class="lw-rd-row' + (RD_UI.src === k ? ' on' : '') + '" data-rdsrc="' + k + '">'
+      + '<span class="em">' + RD_SRC[k].e + '</span>' + RD_SRC[k].n + '<span class="n">' + cnt((b) => b && b.src === k) + '</span></div>').join('');
+    return '<div class="lw-rd-side">'
+      + '<div class="lw-rd-hd">阅读统计</div>'
+      + '<div class="lw-rd-stat">'
+      + '<div><b>' + st.reading + '</b><span>在读</span></div>'
+      + '<div><b>' + st.done + '</b><span>读完</span></div>'
+      + '<div><b>' + st.notes + '</b><span>条笔记</span></div>'
+      + '<div><b>' + st.streak + '</b><span>连续天数</span></div>'
+      + '</div>'
+      + '<div class="lw-rd-hd">状态</div>'
+      + '<div class="lw-rd-row' + (RD_UI.status === 'all' ? ' on' : '') + '" data-rdst="all"><span class="em">▣</span>全部<span class="n">' + st.total + '</span></div>'
+      + stRows
+      + '<div class="lw-rd-hd">来源</div>'
+      + '<div class="lw-rd-row' + (RD_UI.src === 'all' ? ' on' : '') + '" data-rdsrc="all"><span class="em">▣</span>全部</div>'
+      + srcRows
+      + (tags.length ? '<div class="lw-rd-hd">标签</div>'
+        + '<div class="lw-rd-row' + (RD_UI.tag === '' ? ' on' : '') + '" data-rdtag=""><span class="em">#</span>全部</div>'
+        + tags.map(([t, n]) => '<div class="lw-rd-row' + (RD_UI.tag === t ? ' on' : '') + '" data-rdtag="' + esc(t) + '"><span class="em">#</span>' + esc(t) + '<span class="n">' + n + '</span></div>').join('') : '')
+      + '</div>';
+  }
+  function rdBookCard(b) {
+    const st = RD_ST[b.status] || RD_ST.want;
+    const src = RD_SRC[b.src] || RD_SRC.other;
+    const n = bookNotesOf(b.id).length;
+    const cover = b.cover
+      ? '<div class="cv"><img src="' + esc(b.cover) + '" alt="" onerror="this.style.display=\'none\'"/></div>'
+      : '<div class="cv">' + src.e + '</div>';
+    return '<div class="lw-bk' + (rdSel() === b.id ? ' on' : '') + '" data-rdbk="' + esc(b.id) + '">'
+      + cover
+      + '<div class="mn"><div class="ti">' + esc(b.title || '未命名') + '</div>'
+      + '<div class="au">' + esc(b.author || '—') + '</div>'
+      + '<div class="mt">' + rdBar(b.prog, 'lw-bar') + '<span>' + (Number(b.prog) || 0) + '%</span></div>'
+      + '<div class="mt"><span class="tag">' + st.e + ' ' + st.n + '</span>'
+      + (b.rating ? '<span>' + rdStars(b.rating) + '</span>' : '')
+      + (n ? '<span>' + n + ' 条笔记</span>' : '')
+      + '<span>' + src.n + '</span></div>'
+      + '</div></div>';
+  }
+  function rdListHtml() {
+    const list = rdBooks();
+    const tools = '<div class="lw-rd-tools">'
+      + '<input id="lw-rd-q" placeholder="搜索书名 / 作者…" value="' + esc(RD_UI.q) + '"/>'
+      + '<button id="lw-rd-add" title="手动添加一本书">＋ 加书</button>'
+      + '<button id="lw-rd-imp" title="把微信读书 App 导出的笔记粘进来">📥 导入笔记</button>'
+      + '<button id="lw-rd-sync" title="走非官方接口拉微信读书书架（需要 Cookie）">🔄 同步</button>'
+      + '</div>';
+    if (!list.length) {
+      const empty = ((STORE && STORE.books) || []).length ? '没有符合条件的书' : '书架还是空的<br><span style="color:' + T.faint + '">点「＋ 加书」或「📥 导入笔记」开始</span>';
+      return tools + '<div class="lw-rd-empty">' + empty + '</div>';
+    }
+    return tools + list.map(rdBookCard).join('');
+  }
+  function rdNoteHtml(n) {
+    const isIdea = n.kind === 'idea';
+    return '<div class="lw-note k-' + (isIdea ? 'idea' : 'quote') + '">'
+      + '<div class="tx">' + esc(n.text) + '</div>'
+      + '<div class="ft"><span>' + (isIdea ? '💭 想法' : '✏️ 划线') + '</span>'
+      + (n.loc ? '<span>' + esc(n.loc) + '</span>' : '')
+      + '<span>' + (n.at ? new Date(n.at).toLocaleDateString('zh-CN') : '') + '</span>'
+      + '<span class="x" data-rdnotedel="' + esc(n.id) + '" title="删除这条笔记">✕</span></div></div>';
+  }
+  function rdReadHtml() {
+    const b = rdCurrent();
+    if (!b) {
+      return '<div class="lw-rd-read"><div class="lw-rd-empty">← 从中间选一本书<br><span style="color:' + T.faint + '">或者先「＋ 加书」/「📥 导入笔记」</span></div></div>';
+    }
+    const st = rdStats();
+    const notes = bookNotesOf(b.id).slice().sort((a, c) => (c.at || 0) - (a.at || 0));
+    const chips = RD_ST_ORDER.map((k) => '<span class="lw-rd-chip' + (b.status === k ? ' on' : '') + '" data-rdset="' + k + '">' + RD_ST[k].e + ' ' + RD_ST[k].n + '</span>').join('')
+      + Object.keys(RD_SRC).map((k) => '<span class="lw-rd-chip' + (b.src === k ? ' on' : '') + '" data-rdsrcset="' + k + '">' + RD_SRC[k].e + ' ' + RD_SRC[k].n + '</span>').join('')
+      + [1, 2, 3, 4, 5].map((r) => '<span class="lw-rd-chip' + (Number(b.rating) === r ? ' on' : '') + '" data-rdrate="' + r + '" title="打 ' + r + ' 星">' + '★'.repeat(r) + '</span>').join('')
+      + '<span class="lw-rd-chip" data-act="del" id="lw-rd-del" title="删掉这本书和它的笔记">🗑 删除</span>';
+    const log = ((STORE && STORE.readLog) || []).filter((x) => x && x.bookId === b.id);
+    const totalMin = log.reduce((a, x) => a + (Number(x.min) || 0), 0);
+    const totalPg = log.reduce((a, x) => a + (Number(x.pages) || 0), 0);
+    const bars = st.days.map((d) => '<div class="' + (d.min ? 'has' : '') + '" style="height:' + Math.max(2, Math.round((d.min / st.maxMin) * 100)) + '%"'
+      + ' data-tip="' + esc(d.date) + ' · ' + d.min + ' 分钟"></div>').join('');
+    return '<div class="lw-rd-read">'
+      + '<div class="lw-rd-rhd"><h2>' + esc(b.title || '未命名') + '</h2>'
+      + '<div class="meta">' + esc(b.author || '—')
+      + ' · ' + (RD_SRC[b.src] || RD_SRC.other).n
+      + ' · ' + (RD_ST[b.status] || RD_ST.want).n
+      + (b.pages ? ' · 共 ' + b.pages + ' 页' : '')
+      + (b.startAt ? ' · 开始 ' + esc(String(b.startAt).slice(0, 10)) : '')
+      + (b.doneAt ? ' · 读完 ' + esc(String(b.doneAt).slice(0, 10)) : '')
+      + '</div><div class="chips">' + chips + '</div></div>'
+      + '<div class="lw-rd-body">'
+      /* 进度 */
+      + '<div class="lw-rd-sec">阅读进度</div>'
+      + '<div class="lw-rd-prog"><div class="track" id="lw-rd-track" title="点一下直接设进度"><i style="width:' + Math.max(0, Math.min(100, Number(b.prog) || 0)) + '%"></i></div>'
+      + '<div class="pct">' + (Number(b.prog) || 0) + '%</div></div>'
+      + '<div class="lw-rd-quick">'
+      + '<button data-rdprog="5">+5%</button><button data-rdprog="10">+10%</button>'
+      + '<button data-rdprog="100">标记读完</button><button data-rdprog="0">归零</button>'
+      + '<input id="lw-rd-progset" type="number" min="0" max="100" placeholder="%"/><button id="lw-rd-progok">设为</button>'
+      + '</div>'
+      /* 记录阅读 */
+      + '<div class="lw-rd-sec">记录这次阅读' + (totalMin ? '（累计 ' + totalMin + ' 分钟' + (totalPg ? ' · ' + totalPg + ' 页' : '') + '）' : '') + '</div>'
+      + '<div class="lw-rd-quick">'
+      + '<input id="lw-rd-min" type="number" min="1" max="1440" placeholder="分钟"/>'
+      + '<input id="lw-rd-pg" type="number" min="0" max="9999" placeholder="页数"/>'
+      + '<button id="lw-rd-log">✓ 记一笔</button>'
+      + '<button id="lw-rd-logdel" title="删掉今天的记录">撤销今天</button>'
+      + '</div>'
+      /* 笔记 */
+      + '<div class="lw-rd-sec">笔记 · ' + notes.length + ' 条</div>'
+      + '<div class="lw-rd-quick">'
+      + '<textarea id="lw-rd-notetx" placeholder="粘贴划线或写下想法…" style="flex:1;min-width:180px;height:64px;resize:vertical;border:1px solid ' + T.lineDim + ';background:' + T.card + ';color:' + T.text + ';font:11.5px/1.7 ' + UI + ';padding:8px;outline:none"></textarea>'
+      + '</div>'
+      + '<div class="lw-rd-quick">'
+      + '<button id="lw-rd-notequote">✏️ 存为划线</button><button id="lw-rd-noteidea">💭 存为想法</button>'
+      + '<span style="font-size:9.5px;color:' + T.faint + '">按 ⌘/Ctrl+Enter 存为划线</span>'
+      + '</div>'
+      + (notes.length ? notes.map(rdNoteHtml).join('') : '<div class="lw-rd-empty" style="padding:22px">还没有笔记</div>')
+      /* 图表 */
+      + '<div class="lw-rd-sec">近 14 天阅读时长</div>'
+      + '<div class="lw-rd-chart">' + bars + '</div>'
+      + '<div class="lw-rd-axis">' + st.days.map((d, i) => '<span>' + (i % 3 === 0 ? d.label : '') + '</span>').join('') + '</div>'
+      + '</div></div>';
+  }
+  function viewReading() {
+    return '<div class="lw-rd">' + rdSideHtml() + '<div class="lw-rd-list">' + rdListHtml() + '</div>' + rdReadHtml() + '</div>'
+      + (RD_UI.impOpen ? rdImportHtml() : '');
+  }
+  /* 导入浮层 ✓（先预览再导入 ✓）*/
+  function rdImportHtml() {
+    const pv = RD_UI.impPv;
+    let preview = '';
+    if (pv) {
+      preview = pv.length
+        ? '<div class="pv"><b>解析出 ' + pv.length + ' 本书：</b><br>'
+          + pv.map((b) => '· 《' + esc(b.title) + '》' + (b.author ? ' — ' + esc(b.author) : '') + ' · ' + b.notes.length + ' 条笔记').join('<br>')
+          + '</div>'
+        : '<div class="pv" style="color:' + T.warn + '">没解析出内容 ✗ —— 确认粘的是「书名 + 划线/想法」那种导出文本</div>';
+    }
+    return '<div class="lw-imp" id="lw-imp"><div class="box">'
+      + '<div class="hd"><b>📥 导入阅读笔记</b><span class="x" id="lw-imp-x">✕</span></div>'
+      + '<div class="bd">'
+      + '<div class="tip">把 <b>微信读书 App</b> 里的笔记导出文本粘到下面 ✓ ——'
+      + '路径：<code>打开书 → 右上角 ··· → 笔记 → 导出/复制全文</code>。<br>'
+      + '认得的写法：<code>《书名》</code>、<code>作者：xxx</code>、'
+      + '单独一行的 <code>划线</code> / <code>想法</code>、日期行（只当分隔）、'
+      + '以及 Markdown 风的 <code># 书名</code> / <code>&gt; 划线</code> / <code>- 想法</code> ✓。<br>'
+      + '别的阅读器（Kindle / Apple Books / 豆瓣）导出成类似结构也一样能进 ✓。</div>'
+      + '<textarea id="lw-imp-tx" placeholder="《置身事内：中国政府与经济发展》&#10;作者：兰小欢&#10;&#10;第一章 地方政府的权力与事务&#10;划线&#10;2023-01-01 12:00:00&#10;原文内容……&#10;想法&#10;我的想法……">' + esc(RD_UI.impText) + '</textarea>'
+      + '<div style="margin-top:12px" id="lw-imp-pv">' + preview + '</div>'
+      + '</div>'
+      + '<div class="ft">'
+      + '<button id="lw-imp-preview">解析预览</button>'
+      + '<button class="pri" id="lw-imp-do"' + (pv && pv.length ? '' : ' disabled') + '>导入 ' + (pv && pv.length ? pv.reduce((a, b) => a + b.notes.length, 0) + ' 条笔记' : '') + '</button>'
+      + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">同名书会自动合并 ✓ 不会重复建 ✗</span>'
+      + '</div></div></div>';
+  }
+  /* ── 阅读：交互 ────────────────────────────────────────────────────────── */
+  function rdSave() { saveStore(); }
+  function rdPickBook(id) { RD_UI.sel = id; STORE.bookSel = id; render(); }
+  function rdAddBook() {
+    const title = prompt('书名：', '');
+    if (!title || !title.trim()) return;
+    const author = prompt('作者（可留空）：', '') || '';
+    const id = 'b' + Date.now();
+    STORE.books = ((STORE && STORE.books) || []).concat([{
+      id, title: title.trim(), author: author.trim(), cover: '', src: 'paper',
+      status: 'want', prog: 0, rating: 0, tags: [], pages: 0, at: Date.now(), edit: Date.now(),
+    }]);
+    RD_UI.sel = id; STORE.bookSel = id;
+    rdSave(); render();
+  }
+  function rdSetProg(p) {
+    const b = rdCurrent(); if (!b) return;
+    const v = Math.max(0, Math.min(100, Math.round(Number(p) || 0)));
+    b.prog = v; b.edit = Date.now();
+    if (v >= 100 && b.status !== 'done') { b.status = 'done'; b.doneAt = dayKey(new Date()); }
+    else if (v > 0 && v < 100 && b.status === 'want') { b.status = 'reading'; b.startAt = b.startAt || dayKey(new Date()); }
+    else if (v === 0 && b.status === 'done') { b.status = 'reading'; b.doneAt = ''; }
+    rdSave(); render();
+  }
+  function rdSetStatus(k) {
+    const b = rdCurrent(); if (!b) return;
+    b.status = k; b.edit = Date.now();
+    if (k === 'reading' && !b.startAt) b.startAt = dayKey(new Date());
+    if (k === 'done') { b.doneAt = dayKey(new Date()); b.prog = 100; }
+    rdSave(); render();
+  }
+  function rdSetSrc(k) { const b = rdCurrent(); if (!b) return; b.src = k; b.edit = Date.now(); rdSave(); render(); }
+  function rdSetRating(r) { const b = rdCurrent(); if (!b) return; b.rating = (Number(b.rating) === r ? 0 : r); b.edit = Date.now(); rdSave(); render(); }
+  function rdDelBook() {
+    const b = rdCurrent(); if (!b) return;
+    if (!confirm('删掉《' + b.title + '》？它的 ' + bookNotesOf(b.id).length + ' 条笔记也会一起删掉，不能撤销。')) return;
+    STORE.books = ((STORE && STORE.books) || []).filter((x) => x.id !== b.id);
+    STORE.bookNotes = ((STORE && STORE.bookNotes) || []).filter((x) => x.bookId !== b.id);
+    RD_UI.sel = ''; STORE.bookSel = '';
+    rdSave(); render();
+  }
+  function rdAddNote(kind) {
+    const b = rdCurrent(); if (!b) return;
+    const ta = document.getElementById('lw-rd-notetx');
+    const text = String((ta && ta.value) || '').trim();
+    if (!text) { rdToast('先写点什么再存 ✓'); return; }
+    STORE.bookNotes = ((STORE && STORE.bookNotes) || []).concat([{
+      id: 'n' + Date.now(), bookId: b.id, kind: kind === 'idea' ? 'idea' : 'quote', text, loc: '', at: Date.now(),
+    }]);
+    b.edit = Date.now();
+    rdSave(); render();
+  }
+  function rdDelNote(id) {
+    STORE.bookNotes = ((STORE && STORE.bookNotes) || []).filter((x) => x.id !== id);
+    rdSave(); render();
+  }
+  function rdLog(min, pages) {
+    const b = rdCurrent(); if (!b) return;
+    const m = Math.max(1, Math.min(1440, Math.round(Number(min) || 0)));
+    if (!m) { rdToast('先填分钟数 ✓'); return; }
+    const p = Math.max(0, Math.min(9999, Math.round(Number(pages) || 0)));
+    STORE.readLog = ((STORE && STORE.readLog) || []).concat([{
+      id: 'r' + Date.now(), date: dayKey(new Date()), bookId: b.id, min: m, pages: p, at: Date.now(),
+    }]);
+    b.edit = Date.now();
+    rdSave(); render();
+    rdToast('记下了：' + m + ' 分钟' + (p ? ' · ' + p + ' 页' : '') + ' ✓');
+  }
+  function rdUndoTodayLog() {
+    const b = rdCurrent(); if (!b) return;
+    const k = dayKey(new Date());
+    const before = ((STORE && STORE.readLog) || []).length;
+    STORE.readLog = ((STORE && STORE.readLog) || []).filter((x) => !(x.bookId === b.id && x.date === k));
+    if (((STORE.readLog || []).length) === before) { rdToast('今天还没记过 ✓'); return; }
+    rdSave(); render();
+    rdToast('已撤掉今天的记录 ✓');
+  }
+  function rdToast(msg) {
+    /* 复用顶栏状态栏 ✓（它会自己过期 ✓，整屏 render 也不会把它冲掉 ✓）*/
+    setStatus(esc(msg), 5000);
+  }
+  function rdDoImport() {
+    const pv = RD_UI.impPv;
+    if (!pv || !pv.length) return;
+    let added = 0, merged = 0, notes = 0;
+    pv.forEach((nb) => {
+      let b = ((STORE && STORE.books) || []).find((x) => x && x.title === nb.title);
+      if (b) merged++;
+      else {
+        b = { id: 'b' + Date.now() + Math.random().toString(36).slice(2, 6), title: nb.title, author: nb.author, cover: '', src: 'weread', status: 'reading', prog: 0, rating: 0, tags: [], pages: 0, startAt: dayKey(new Date()), at: Date.now(), edit: Date.now() };
+        STORE.books = ((STORE && STORE.books) || []).concat([b]);
+        added++;
+      }
+      if (nb.author && !b.author) b.author = nb.author;
+      b.edit = Date.now();
+      const exist = new Set(bookNotesOf(b.id).map((n) => String(n.text)));
+      nb.notes.forEach((n) => {
+        if (!n.text || exist.has(n.text)) return;      /* 同一条划线不重复导入 ✓ */
+        exist.add(n.text);
+        STORE.bookNotes = ((STORE && STORE.bookNotes) || []).concat([{
+          id: 'n' + Date.now() + Math.random().toString(36).slice(2, 6), bookId: b.id, kind: n.kind, text: n.text, loc: n.loc || '', at: Date.now(),
+        }]);
+        notes++;
+      });
+      RD_UI.sel = b.id; STORE.bookSel = b.id;
+    });
+    RD_UI.impOpen = false; RD_UI.impText = ''; RD_UI.impPv = null;
+    rdSave(); render();
+    rdToast('导入完成：新增 ' + added + ' 本' + (merged ? ' · 合并 ' + merged + ' 本' : '') + ' · ' + notes + ' 条笔记 ✓');
+  }
+  /* 微信读书「非官方接口」同步 ✓ —— 明确标注、失败说清楚 ✓ */
+  async function rdSyncWeread() {
+    const cookie = prompt(
+      '同步微信读书书架（非官方接口，可能随时失效）\n\n'
+      + '需要你在浏览器里登录 weread.qq.com 之后，从开发者工具里复制 Cookie（含 wr_vid / wr_skey）粘到这里。\n'
+      + '留空则取消。\n\n'
+      + '⚠️ Cookie 只会存在本机 life-mail.json 同目录的 life-workbench.json 里，不会外传。', '');
+    if (cookie === null) return;
+    if (!String(cookie).trim()) return;
+    rdToast('正在同步微信读书…');
+    try {
+      const r = await fetch('/api/life/weread/shelf', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cookie: String(cookie).trim() }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) { rdToast('✗ 同步失败：' + ((d && d.error) || '未知错误')); return; }
+      let added = 0;
+      (d.books || []).forEach((nb) => {
+        if (!nb || !nb.title) return;
+        if (((STORE && STORE.books) || []).some((x) => x && x.title === nb.title)) return;
+        STORE.books = ((STORE && STORE.books) || []).concat([{
+          id: 'b' + Date.now() + Math.random().toString(36).slice(2, 6), title: nb.title, author: nb.author || '',
+          cover: nb.cover || '', src: 'weread', status: 'reading', prog: Number(nb.prog) || 0,
+          rating: 0, tags: [], pages: 0, startAt: dayKey(new Date()), at: Date.now(), edit: Date.now(),
+        }]);
+        added++;
+      });
+      STORE.wereadCookie = String(cookie).trim();
+      rdSave(); render();
+      rdToast('同步完成：' + added + ' 本新书 ✓');
+    } catch (e) { rdToast('✗ 同步失败：' + e.message); }
+  }
+  function bindReading() {
+    const host = document.getElementById('lifework-view');
+    if (!host || TAB !== 'reading') return;
+    const q = (s) => host.querySelector(s);
+    const qa = (s) => Array.from(host.querySelectorAll(s));
+    qa('[data-rdst]').forEach((el) => { el.onclick = () => { RD_UI.status = el.dataset.rdst; render(); }; });
+    qa('[data-rdsrc]').forEach((el) => { el.onclick = () => { RD_UI.src = el.dataset.rdsrc; render(); }; });
+    qa('[data-rdtag]').forEach((el) => { el.onclick = () => { RD_UI.tag = el.dataset.rdtag; render(); }; });
+    qa('[data-rdbk]').forEach((el) => { el.onclick = () => rdPickBook(el.dataset.rdbk); });
+    qa('[data-rdset]').forEach((el) => { el.onclick = () => rdSetStatus(el.dataset.rdset); });
+    qa('[data-rdsrcset]').forEach((el) => { el.onclick = () => rdSetSrc(el.dataset.rdsrcset); });
+    qa('[data-rdrate]').forEach((el) => { el.onclick = () => rdSetRating(Number(el.dataset.rdrate)); });
+    qa('[data-rdprog]').forEach((el) => {
+      el.onclick = () => { const b = rdCurrent(); if (!b) return; rdSetProg(Number(el.dataset.rdprog) === 0 ? 0 : (Number(b.prog) || 0) + Number(el.dataset.rdprog)); };
+    });
+    const set = q('#lw-rd-progok');
+    if (set) set.onclick = () => { const i = q('#lw-rd-progset'); rdSetProg(i ? i.value : 0); };
+    const track = q('#lw-rd-track');
+    if (track) track.onclick = (ev) => {
+      const r = track.getBoundingClientRect();
+      rdSetProg(Math.round(((ev.clientX - r.left) / Math.max(1, r.width)) * 100));
+    };
+    const log = q('#lw-rd-log');
+    if (log) log.onclick = () => { const m = q('#lw-rd-min'), p = q('#lw-rd-pg'); rdLog(m ? m.value : 0, p ? p.value : 0); };
+    const ldel = q('#lw-rd-logdel');
+    if (ldel) ldel.onclick = () => rdUndoTodayLog();
+    const nq = q('#lw-rd-notequote'); if (nq) nq.onclick = () => rdAddNote('quote');
+    const ni = q('#lw-rd-noteidea'); if (ni) ni.onclick = () => rdAddNote('idea');
+    const ntx = q('#lw-rd-notetx');
+    if (ntx) ntx.onkeydown = (ev) => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); rdAddNote('quote'); } };
+    qa('[data-rdnotedel]').forEach((el) => { el.onclick = (ev) => { ev.stopPropagation(); rdDelNote(el.dataset.rdnotedel); }; });
+    const del = q('#lw-rd-del'); if (del) del.onclick = () => rdDelBook();
+    const add = q('#lw-rd-add'); if (add) add.onclick = () => rdAddBook();
+    const sync = q('#lw-rd-sync'); if (sync) sync.onclick = () => rdSyncWeread();
+    const imp = q('#lw-rd-imp'); if (imp) imp.onclick = () => { RD_UI.impOpen = true; RD_UI.impPv = null; render(); };
+    const qq = q('#lw-rd-q');
+    if (qq) qq.oninput = () => {
+      /* 只改列表显隐 ✓，不整屏重绘 ✗（否则每敲一个字输入框就失焦 ✗）*/
+      RD_UI.q = qq.value;
+      const needle = qq.value.trim().toLowerCase();
+      qa('.lw-bk').forEach((el) => {
+        const b = bookById(el.dataset.rdbk);
+        const hay = b ? (String(b.title || '') + ' ' + String(b.author || '')).toLowerCase() : '';
+        el.style.display = (!needle || hay.indexOf(needle) >= 0) ? '' : 'none';
+      });
+    };
+    /* 导入浮层 ✓ */
+    const ix = q('#lw-imp-x'); if (ix) ix.onclick = () => { RD_UI.impOpen = false; render(); };
+    const itx = q('#lw-imp-tx');
+    if (itx) itx.oninput = () => { RD_UI.impText = itx.value; };
+    const ipv = q('#lw-imp-preview');
+    if (ipv) ipv.onclick = () => {
+      const ta = q('#lw-imp-tx');
+      RD_UI.impText = ta ? ta.value : RD_UI.impText;
+      RD_UI.impPv = parseWeread(RD_UI.impText);
+      render();
+    };
+    const ido = q('#lw-imp-do'); if (ido) ido.onclick = () => rdDoImport();
+  }
+
   function viewMail() {
     /* 宽度每次渲染都从 STORE 现读 ✓（拖完立刻重绘也能拿到新值 ✓）；
        0 / 没设 = 不写 inline style → 用 CSS 里的默认宽度 ✓ */
