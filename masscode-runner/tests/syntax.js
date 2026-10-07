@@ -91,6 +91,43 @@ for (const rel of externals) {
   }
 }
 
+/* ★★★ 专项检查：CSS 模板里**混进反引号** ✗✗ ——
+   这段 CSS 整个装在一个 JS 模板字符串里（`const CSS = \`…\``）✓，
+   所以注释里写一个反引号（比如「用 `.q` 占满」✗）就会**把字符串提前截断** ✗ ——
+   ⚠️ 而且**语法闸门查不出来** ✗✗：剩下的部分恰好是合法 JS ✗
+      （`"…css…" .q is not a function` ✓），vm.Script 照样通过 ✓，
+      结果就是**整个面板白屏** ✗（实测踩过 4 次 ✗）。
+   → 这里专门守一条：CSS 模板的**第一个收尾反引号后面必须紧跟分号** ✓。
+      提前截断的话，后面跟的是 `.` 或别的字符 ✗，立刻报错 ✓。 */
+const cssGuardFailed = [];
+for (const rel of externals) {
+  const abs = path.join(__dirname, '..', rel);
+  if (!fs.existsSync(abs)) continue;
+  const src = fs.readFileSync(abs, 'utf8');
+  const m = /const CSS = `/.exec(src);
+  if (!m) continue;                                   /* 没这段就跳过 ✓ */
+  const from = m.index + m[0].length;
+  const close = src.indexOf('`', from);
+  if (close < 0) continue;                            /* 没收尾 → 上面的语法闸门已经会报 ✓ */
+  const after = src.slice(close + 1).replace(/^\s*/, '').charAt(0);
+  if (after !== ';') {
+    const line = src.slice(0, close).split('\n').length;
+    const text = src.slice(0, close).split('\n').pop();
+    cssGuardFailed.push({ rel, line, text: String(text).trim().slice(0, 110) });
+  }
+}
+if (cssGuardFailed.length) {
+  for (const x of cssGuardFailed) {
+    console.error('✗ CSS 模板被**提前截断** → ' + x.rel + ' 第 ' + x.line + ' 行');
+    console.error('   ' + x.text);
+  }
+  console.error('CSS 模板闸门：注释里**不能出现反引号** ✗ —— 这段 CSS 装在 JS 模板字符串里，');
+  console.error('  一个反引号就会把字符串截断，而语法闸门**查不出来**（剩下的恰好是合法 JS），');
+  console.error('  结果是整个面板白屏。写 CSS 注释时用 .lw-xx 这种写法，别加反引号。');
+  process.exit(1);
+}
+console.log('CSS 模板闸门：✓ 没有混进反引号');
+
 if (extFailed) {
   console.error('外链脚本语法闸门：' + extFailed + ' 个文件有语法错误 —— 面板会整块白屏，先修这个');
   process.exit(1);

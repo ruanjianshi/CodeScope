@@ -117,16 +117,28 @@
   .lw-moodpick div.on { background:${T.accent}; color:${T.accentInk}; }
   .lw-moodpick div i { font-size:19px; font-style:normal; line-height:1; }
   /* ── 顶栏第二行：今日格言 + 今日状态 ✓ ─────────────────────────────────── */
-  .lw-strip { display:flex; align-items:center; gap:12px; padding:7px 18px; flex:none;
+  /* ★★ 要让格言**真居中**，光靠 flex 不行 ✗✗ ——
+     .q { flex:1 } 拿到的是「右边状态块**之外**的剩余空间」✗，
+     所以它的中心会**偏左** ✗（实测 1500 宽下偏了 123px ✗，用户一眼就看出来 ✗）。
+     正解：三列网格 ✓ —— 左右各一个 1fr ✓、中间 auto ✓，
+     两个 1fr 一样宽 ✓ → 中间那列的中心**就是整行的中心** ✓，**不用任何魔数** ✓。
+     ⚠️ 窄屏把右边的状态隐藏时 ✓，右列变空 ✓，但两个 1fr 仍然相等 ✓ → 依旧居中 ✓。 */
+  .lw-strip { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; column-gap:12px;
+    padding:7px 18px; flex:none;
     border-bottom:2px solid ${T.line}; background:${T.card}; font-size:10.5px; color:${T.dim}; }
-  .lw-strip .q { flex:1; min-width:0; display:flex; align-items:center; gap:8px; }
+  /* ★ 格言**居中** ✓（用户要求：往中间放，中间还有位置 ✓）。
+     .q 占满剩余空间 ✓，内容用 justify-content:center 居中 ✓。 */
+  .lw-strip .q { grid-column:2; min-width:0; max-width:100%; display:flex; align-items:center;
+    justify-content:center; gap:8px; }
   .lw-strip .q .ic { flex:none; color:${T.accent}; display:flex; }
   .lw-strip .q .tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${T.text}; }
   .lw-strip .q .from { color:${T.faint}; white-space:nowrap; }
-  .lw-strip .sh { flex:none; border:1px solid ${T.lineDim}; background:transparent; color:${T.dim};
-    font:9.5px ${MONO}; padding:2px 7px; cursor:pointer; letter-spacing:.4px; }
-  .lw-strip .sh:hover { border-color:${T.accent}; color:${T.accent}; }
-  .lw-strip .st { flex:none; display:flex; align-items:center; gap:11px; }
+  /* ★ 自动切换时**淡入**一下 ✓ —— 不然每 20 秒文字「啪」地换掉，很跳 ✗。
+     ⚠️ 只动 .tx ✓，不给整行加动画 ✗（整行动会把右边的状态块也带着抖 ✗）。 */
+  @keyframes lw-quote-in { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+  .lw-strip .q.swap .tx { animation:lw-quote-in .45s ease; }
+  @media (prefers-reduced-motion: reduce) { .lw-strip .q.swap .tx { animation:none; } }
+  .lw-strip .st { grid-column:3; justify-self:end; display:flex; align-items:center; gap:11px; }
   .lw-strip .st > span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
   .lw-strip .st .ic { color:${T.dim}; display:flex; }
   .lw-strip .st b { color:${T.text}; font-weight:600; }
@@ -1328,6 +1340,17 @@
   const TR_UI = { src: '', q: '', only: 'all', sel: '', busy: false, ai: '', aiBusy: false, data: null, err: '', at: 0 };
   const TR_GROUPS = ['视频', '社交', '搜索', '技术', '开源', '学术', '资讯'];
 
+  /* ── 顶栏格言：**固定间隔自动切换** ✓ ────────────────────────────────────
+     用户原话：「不需要加一个换一句按钮，让他隔固定时间，自动切换」。
+     ★ 序号只放**内存** ✗（`QUOTE_IDX` ✓）—— 自动轮播**不落盘** ✗：
+       落盘的话每次切换都写一次 STORE ✗（20 秒一次，纯浪费 ✗），
+       而且会盖掉「当天种子」✗。
+     ★ 起点的「当天种子」还是从 `STORE.dailyQuote` 读 ✓ ——
+       同一天第一次打开是同一句 ✓，不同天起点不同 ✓。 */
+  let QUOTE_TIMER = 0;
+  let QUOTE_IDX = null;
+  const QUOTE_EVERY_MS = 20000;
+
   /* 阅读模块的状态 ✓ —— 同样必须放这里 ✗（`mount()` 在模块最顶上就被调用了 ✓）。 */
   const RD_SRC = {
     weread: { e: '📗', n: '微信读书' }, paper: { e: '📖', n: '纸质书' },
@@ -1645,6 +1668,7 @@
     /* 秒针也要停 ✗ —— 面板都没了，还每秒空转一个定时器没意义 ✗
        （`tick` 里也有「元素没了就自己停」的兜底 ✓，这里显式停更干净 ✓）。 */
     if (CLOCK_TIMER) { clearInterval(CLOCK_TIMER); CLOCK_TIMER = 0; }
+    if (QUOTE_TIMER) { clearInterval(QUOTE_TIMER); QUOTE_TIMER = 0; }
     if (MOOD_AWAY) { document.removeEventListener('mousedown', MOOD_AWAY, true); MOOD_AWAY = null; }
     MOOD_OPEN = false;
     stopWatchAway();
@@ -2164,11 +2188,35 @@
   function dailyQuoteOf() {
     const mine = ((STORE && STORE.quotes) || []).filter((q) => q && String(q.text || '').trim());
     const pool = mine.length ? mine : QUOTE_POOL;
-    const day = dayKey(new Date());
-    const dq = (STORE && STORE.dailyQuote) || null;
-    const idx = (dq && dq.day === day && Number.isFinite(dq.idx)) ? dq.idx : 0;
+    /* 起点：当天的种子 ✓（同一天首次打开是同一句 ✓）—— 之后由定时器往前推 ✓。 */
+    if (QUOTE_IDX == null) {
+      const day = dayKey(new Date());
+      const dq = (STORE && STORE.dailyQuote) || null;
+      QUOTE_IDX = (dq && dq.day === day && Number.isFinite(dq.idx)) ? dq.idx : 0;
+    }
+    const idx = QUOTE_IDX;
     const q = pool[((idx % pool.length) + pool.length) % pool.length] || pool[0];
     return { text: String(q.text || ''), from: String(q.from || ''), mine: mine.length > 0, idx };
+  }
+  /* 格言那一块的内容 ✓（首次渲染和自动切换**共用同一份** ✓，不会两处写法不一致 ✗）*/
+  function quoteInnerHtml() {
+    const q = dailyQuoteOf();
+    return svgIcon('quote', 14)
+      + '<span class="tx">' + esc(q.text) + '</span>'
+      + (q.from ? '<span class="from">— ' + esc(q.from) + '</span>' : '')
+      + (q.mine ? '' : '<span class="from">（内置）</span>');
+  }
+  /* ★ 自动切换时**只改这一个元素** ✗✗ —— 不能整屏 render ✗
+     （20 秒重绘一次整个面板，输入框会失焦、iframe 会重载 ✗）。 */
+  function paintQuote() {
+    const el = document.getElementById('lw-quote');
+    if (!el) return;
+    el.innerHTML = quoteInnerHtml();
+    el.title = dailyQuoteOf().text;
+    /* 重播淡入动画 ✓（先摘类 + 强制重排 ✓，不然同名类不会重播 ✗）*/
+    el.classList.remove('swap');
+    void el.offsetWidth;
+    el.classList.add('swap');
   }
   /* 日记连续记录天数 ✓ —— 口径和「今日」页一致 ✓（今天没写也不断，从昨天往前数 ✓）*/
   function journalStreak() {
@@ -2232,11 +2280,8 @@
     const streak = journalStreak();
     const wrote = todayWroteJournal();
     return '<div class="lw-strip">'
-      + '<div class="q" title="' + esc(q.text) + '">' + svgIcon('quote', 14)
-      + '<span class="tx">' + esc(q.text) + '</span>'
-      + (q.from ? '<span class="from">— ' + esc(q.from) + '</span>' : '')
-      + (q.mine ? '' : '<span class="from">（内置）</span>') + '</div>'
-      + '<button class="sh" id="lw-quote-next" title="换一句">↻ 换一句</button>'
+      /* ⚠️ 这里用 `quoteInnerHtml()` ✓ —— 和自动切换走**同一份**写法 ✓（见 paintQuote ✓）。 */
+      + '<div class="q" id="lw-quote" title="' + esc(q.text) + '">' + quoteInnerHtml() + '</div>'
       + '<div class="st">'
       + '<span title="备忘录里的未完成待办">' + svgIcon('list', 13) + '待办 <b class="' + (todo ? 'hot' : '') + '">' + todo + '</b></span>'
       + '<span title="日记连续记录天数">' + svgIcon('fire', 13) + '连续 <b class="' + (streak ? 'hot' : '') + '">' + streak + '</b> 天</span>'
@@ -3558,16 +3603,18 @@
       document.addEventListener('mousedown', MOOD_AWAY, true);
     }
 
-    /* ③ 换一句 ✓ */
-    const qn = document.getElementById('lw-quote-next');
-    if (qn) {
-      qn.onclick = () => {
-        const q = dailyQuoteOf();
-        STORE.dailyQuote = { day: dayKey(new Date()), idx: q.idx + 1 };
-        saveStore();
-        render();
-      };
-    }
+    /* ③ 格言：**固定间隔自动切换** ✓ —— 用户要求去掉「换一句」按钮，改成自动 ✓。
+       ⚠️ 定时器必须**单例** ✗ —— `bindHead()` 每次 `render()` 都会跑一遍 ✓
+          （切页签、开浮层、存盘都会 render ✗），不清旧的就会越挂越多 ✗
+          （和秒针那个坑一模一样 ✗）。
+       ⚠️ 只改格言那一个元素 ✗，**不整屏 render** ✗。 */
+    if (QUOTE_TIMER) { clearInterval(QUOTE_TIMER); QUOTE_TIMER = 0; }
+    QUOTE_TIMER = setInterval(() => {
+      const el = document.getElementById('lw-quote');
+      if (!el) { clearInterval(QUOTE_TIMER); QUOTE_TIMER = 0; return; }   /* 面板关了 → 自己停 ✓ */
+      QUOTE_IDX = (QUOTE_IDX == null ? 0 : QUOTE_IDX) + 1;
+      paintQuote();
+    }, QUOTE_EVERY_MS);
   }
 
 
