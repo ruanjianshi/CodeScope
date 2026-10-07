@@ -366,9 +366,12 @@
   .lw-nt-side { width:172px; flex:none; background:#0c0c0b; border-right:1px solid ${T.lineDim};
     padding:10px 8px; overflow:auto; }
   /* 三栏之间可拖拽的竖条（左右自由调宽 ✓，双击恢复默认 ✓） */
-  .lw-nt-grip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
-  .lw-nt-grip::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
-  .lw-nt-grip:hover::after, .lw-nt-grip.on::after { background:${T.accent}; width:2px; left:2px; }
+  /* ★ 拖拽调宽的竖条 —— 备忘录和邮箱共用同一套样式 ✓
+     （用户报「邮箱怎么没有左右自由拖动功能」✗，现在两个模块一致 ✓）*/
+  .lw-nt-grip, .lw-ml-grip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
+  .lw-nt-grip::after, .lw-ml-grip::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
+  .lw-nt-grip:hover::after, .lw-nt-grip.on::after,
+  .lw-ml-grip:hover::after, .lw-ml-grip.on::after { background:${T.accent}; width:2px; left:2px; }
   /* 拖拽把备忘录移到文件夹时的落点高亮 */
   .lw-nt-side .it.drop { background:color-mix(in srgb,${T.ok} 18%,transparent); border-color:${T.ok}; color:${T.text}; }
   .lw-nt-row.dragging { opacity:.45; }
@@ -4298,15 +4301,24 @@
     return head + bodyHtml + atts;
   }
 
-  /* ── 组装整个邮箱页 ────────────────────────────────────────────────────── */
+  /* ── 组装整个邮箱页 ──────────────────────────────────────────────────────
+     ★ 三栏都能**左右拖动调宽** ✓（用户报「怎么没有左右自由拖动功能」✗）——
+     和备忘录那套完全一致：同一份 grip 样式 ✓、宽度存 STORE ✓、双击恢复默认 ✓。 */
   function viewMail() {
+    /* 宽度每次渲染都从 STORE 现读 ✓（拖完立刻重绘也能拿到新值 ✓）；
+       0 / 没设 = 不写 inline style → 用 CSS 里的默认宽度 ✓ */
+    const sideW = Number(STORE && STORE.mailSideW) || 0;
+    const listW = Number(STORE && STORE.mailListW) || 0;
+    const wStyle = (w, min) => (w >= min ? ' style="width:' + Math.round(w) + 'px"' : '');
+    const grip = (which) => '<div class="lw-ml-grip" data-mlgrip="' + which + '" title="左右拖动调整宽度；双击恢复默认"></div>';
+    const sideEl = '<div class="lw-ml-side"' + wStyle(sideW, 140) + '>' + mailSideHtml() + '</div>';
     if (MAIL_UI.cfgOpen) {
-      return '<div class="lw-ml"><div class="lw-ml-side">' + mailSideHtml() + '</div>'
+      return '<div class="lw-ml">' + sideEl + grip('side')
         + '<div style="flex:1;min-width:0;overflow:auto">' + mailConfigHtml() + '</div></div>';
     }
     return '<div class="lw-ml">'
-      + '<div class="lw-ml-side">' + mailSideHtml() + '</div>'
-      + '<div class="lw-ml-list">' + mailListHtml() + '</div>'
+      + sideEl + grip('side')
+      + '<div class="lw-ml-list"' + wStyle(listW, 200) + '>' + mailListHtml() + '</div>' + grip('list')
       + '<div class="lw-ml-read">' + mailReaderHtml() + '</div></div>';
   }
 
@@ -4493,6 +4505,52 @@
     const host = document.getElementById('lifework-view');
     if (!host) return;
     const qa = (s) => Array.from(host.querySelectorAll(s));
+    /* ★ 三栏**左右拖动调宽** ✓ —— 和备忘录那套逻辑完全一致：
+       拖动时改宽度（带上下限 ✓）、松手写进 STORE ✓、双击恢复默认 ✓。
+       绑在这里是因为 `renderMailPane()` 会重绘 pane ✓，而 grip 是它们的**兄弟节点** ✓，
+       重绘不影响它，重复绑定也是幂等的（用 `.onmousedown =` 而不是 addEventListener ✓）。 */
+    qa('[data-mlgrip]').forEach((gripEl) => {
+      const which = gripEl.dataset.mlgrip;
+      gripEl.onmousedown = (event) => {
+        /* ★★ 目标必须**在按下的这一刻**才查 ✗✗ ——
+           以前是在绑定时 `host.querySelector(...)` 捕获的 ✗，
+           而中间只要发生过一次**整屏 render()**，那个元素就已经被移除 ✗ →
+           拖动时改的是**已脱离文档的旧元素** ✗ → 鼠标按下了、事件也到了，
+           **界面就是纹丝不动** ✗（实测：命中计数 1、inline 宽度却是空 ✗）。
+           拖拽条是 pane 的兄弟节点、重绘时不会跟着换 ✓，所以它身上的旧引用会一直留着 ✗。 */
+        const root = document.getElementById('lifework-view') || document;
+        const target = which === 'side' ? root.querySelector('.lw-ml-side') : root.querySelector('.lw-ml-list');
+        if (!target) return;
+        event.preventDefault();
+        gripEl.classList.add('on');
+        const startX = event.clientX;
+        const startW = target.getBoundingClientRect().width;
+        const min = which === 'side' ? 140 : 200;
+        const max = which === 'side' ? 460 : 760;
+        const move = (event2) => {
+          const w = Math.max(min, Math.min(max, startW + (event2.clientX - startX)));
+          target.style.width = Math.round(w) + 'px';
+          target.style.flex = 'none';
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+          gripEl.classList.remove('on');
+          const w = Math.round(target.getBoundingClientRect().width);
+          if (which === 'side') STORE.mailSideW = w; else STORE.mailListW = w;
+          saveStore();
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+      };
+      gripEl.ondblclick = () => {
+        const root = document.getElementById('lifework-view') || document;
+        const target = which === 'side' ? root.querySelector('.lw-ml-side') : root.querySelector('.lw-ml-list');
+        if (target) target.style.width = '';
+        if (which === 'side') STORE.mailSideW = 0; else STORE.mailListW = 0;
+        saveStore();
+      };
+    });
     qa('[data-mkey]').forEach((el) => {
       el.onclick = () => {
         const k = el.dataset.mkey;

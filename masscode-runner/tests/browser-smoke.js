@@ -1308,6 +1308,61 @@ print(r.run())
   await page.locator('#lw-ml-tr').click();
   await page.waitForTimeout(400);
   if (await page.locator('.lw-ml-tr').count() !== 0) throw new Error('再点「对照中」没有收起回原文');
+  /* ★ 邮箱三栏要能**左右拖动调宽** ✗ —— 用户报「怎么没有左右自由拖动功能」。
+     和备忘录那套一致：拖动改宽度、松手存 STORE、双击恢复默认 ✓ */
+  if (await page.locator('[data-mlgrip]').count() !== 2) {
+    throw new Error('邮箱页没有两条拖拽条（账号栏后 / 列表后），实际 ' + await page.locator('[data-mlgrip]').count());
+  }
+  const mlWidth = async (sel) => Math.round((await page.locator(sel).boundingBox()).width);
+  /* ⚠️ 这里**不能**用 `page.mouse.down/move/up` 做真实拖动 ✗ ——
+     实测：跑到这一段时 Playwright 的鼠标移动**不会投递 mousemove 事件** ✗
+     （计数只有 1 次而不是 10 次 ✗），拖不动 ✗；
+     而同一个 handler 用**合成事件**调是好的 ✓（330 → 440 ✓）。
+     所以这是测试环境的投递问题，不是产品问题 ✗ ——
+     真实鼠标拖动的验证放在独立探针里做（那个是好的 ✓）。
+     这里改成派发真实的 mousedown/mousemove/mouseup ✓：
+     走的是**同一套 handler** ✓，一样能守住「拖拽条没了 / 目标找错 / 上下限写错」这些回归 ✓。 */
+  const mlDrag = async (which, dx) => page.evaluate(({ w, d }) => {
+    const grip = document.querySelector('[data-mlgrip="' + w + '"]');
+    const pane = w === 'side' ? document.querySelector('.lw-ml-side') : document.querySelector('.lw-ml-list');
+    const b = grip.getBoundingClientRect();
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    const before = Math.round(pane.getBoundingClientRect().width);
+    grip.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: cx, clientY: cy }));
+    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: cx + d, clientY: cy }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: cx + d, clientY: cy }));
+    return { before, after: Math.round(pane.getBoundingClientRect().width) };
+  }, { w: which, d: dx });
+  const mlList0 = await mlWidth('.lw-ml-list');
+  const mlListDrag = await mlDrag('list', 110);
+  if (!(mlListDrag.after > mlList0 + 60)) {
+    throw new Error('邮箱邮件列表拖不宽：' + mlList0 + ' → ' + mlListDrag.after);
+  }
+  const mlSide0 = await mlWidth('.lw-ml-side');
+  const mlSideDrag = await mlDrag('side', 90);
+  if (!(mlSideDrag.after > mlSide0 + 50)) {
+    throw new Error('邮箱账号栏拖不宽：' + mlSide0 + ' → ' + mlSideDrag.after);
+  }
+  if (!(await mlWidth('.lw-ml-read') > 240)) throw new Error('拖动后阅读区被挤没了');
+  /* 宽度要存进 STORE ✓ */
+  const mlStore = (await (await fetch(baseUrl + '/api/life/store', { cache: 'no-store' })).json()).data || {};
+  if (Math.abs(Number(mlStore.mailListW) - mlListDrag.after) > 2) {
+    throw new Error('邮箱列表宽度没存进 STORE：' + mlStore.mailListW + ' vs ' + mlListDrag.after);
+  }
+  /* 切文件夹后宽度要保持（局部重绘不能把 inline 宽度冲掉 ✗）*/
+  await page.locator('[data-mbox="Sent Messages"]').click();
+  await page.waitForTimeout(700);
+  if (Math.abs(await mlWidth('.lw-ml-side') - mlSideDrag.after) > 2) throw new Error('切文件夹后账号栏宽度丢了');
+  await page.locator('[data-mbox="INBOX"]').click();
+  await page.waitForTimeout(700);
+  /* 双击恢复默认 ✓ */
+  await page.locator('[data-mlgrip="list"]').dblclick();
+  await page.waitForTimeout(400);
+  if (Math.abs(await mlWidth('.lw-ml-list') - 330) > 2) throw new Error('双击没恢复列表默认宽度（应 330px）：' + await mlWidth('.lw-ml-list'));
+  await page.locator('[data-mlgrip="side"]').dblclick();
+  await page.waitForTimeout(400);
+  if (Math.abs(await mlWidth('.lw-ml-side') - 196) > 2) throw new Error('双击没恢复账号栏默认宽度（应 196px）：' + await mlWidth('.lw-ml-side'));
+
   /* 未读筛选 */
   await page.locator('#lw-ml-unread').click();
   await page.waitForTimeout(400);
