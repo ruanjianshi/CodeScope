@@ -164,6 +164,43 @@ if (cssGuardFailed.length) {
 }
 console.log('CSS 模板闸门：✓ 没有混进反引号');
 
+/* ── ★★ UI 文案闸门：**别在界面文案里写 markdown 粗体** ✗✗ ──────────────────
+   ★ 为什么要有这条 ✗：`assets/life-workbench.js` 里的界面文案是**直接塞进 HTML** 的 ✓，
+     **不经过任何 markdown 渲染** ✗ —— 写 `**重要**` 的话，用户看到的就是
+     **两个星号** ✓（「左边那份日报里的**序号可以点**」✓ 实测就是这样漏出去的 ✓）。
+   ⚠️ 但**提示词**里写 `**强调**` 是**对的** ✓（那是给模型看的 ✓，模型吃这一套 ✓）——
+      所以不能「见到 `**` 就报」✗，得只盯**用户看得见的地方** ✓。
+   判据：这一行里有 `**` ✓，而且它**同时**是在拼 HTML / 弹提示 ✓
+     （含标签 ✓、或调 `rdToast` / `setStatus` ✓、或写 `title=` / `placeholder=` ✓）。
+   ⚠️ 这网不是密的 ✗（跨行拼接的漏得掉 ✓），但**能挡住九成** ✓，
+      而且报错信息里直接告诉你怎么改 ✓。 */
+{
+  const uiBad = [];
+  for (const rel of externals) {
+    const abs = path.join(__dirname, '..', rel);
+    if (!fs.existsSync(abs)) continue;
+    const lines = fs.readFileSync(abs, 'utf8').split('\n');
+    lines.forEach((L, i) => {
+      /* ⚠️ 必须是**字符串字面量里**的 `**` ✗ —— 注释里写 `**强调**` 完全没问题 ✓
+         （注释是给维护者看的 ✓，不进界面 ✓）。第一版没加这条 ✓，
+         结果把一大堆注释全报出来了 ✗（16 条误报里 15 条是注释 ✓）。 */
+      const strs = L.match(/'(?:[^'\\]|\\.)*'/g) || [];
+      if (!strs.some((s) => /\*\*[^*]+\*\*/.test(s))) return;
+      const looksUi = /<\w+[\s/>]/.test(L) || /rdToast\(|setStatus\(|title="|placeholder="/.test(L);
+      if (looksUi) uiBad.push({ rel, n: i + 1, t: L.trim().slice(0, 120) });
+    });
+  }
+  if (uiBad.length) {
+    console.error('✗ 界面文案里混进了 markdown 粗体（`**…**`）→ ' + uiBad.length + ' 行：');
+    for (const x of uiBad) console.error('   ' + x.rel + ':' + x.n + '  ' + x.t);
+    console.error('UI 文案闸门：这个文件**不渲染 markdown** ✗ —— 星号会**原样显示**给用户 ✓。');
+    console.error('  想强调就直接写 ✓，或者用「」括起来 ✓；别写 `**粗体**` ✗。');
+    console.error('  ⚠️ 注意：**提示词**（发给模型的那几段）里写 `**` 是**对的** ✓，不用改 ✓。');
+    process.exit(1);
+  }
+  console.log('UI 文案闸门：✓ 界面文案里没有 markdown 粗体');
+}
+
 if (extFailed) {
   console.error('外链脚本语法闸门：' + extFailed + ' 个文件有语法错误 —— 面板会整块白屏，先修这个');
   process.exit(1);

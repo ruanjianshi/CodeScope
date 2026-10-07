@@ -1234,7 +1234,12 @@
   .lw-hl-side { width:200px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto;
     padding:10px 0; background:${T.bg}; }
   .lw-hl-list { width:392px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; background:${T.card}; }
-  .lw-hl-read { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+  /* ★★ 右栏改成**左右布局** ✓ —— 用户原话：「把上下布局，改成左右布局」✓。
+     原来是 AI 日报在上、文章预览在下（列向 flex ✓）——
+     可 AI 日报一旦写长 ✓，下面的预览就被挤到看不见 ✓（而且它还有个 max-height:220px ✗，
+     内容一多就在自己里面滚 ✓，等于两个滚动条套着 ✓）。
+     → 改成**并排** ✓：AI 日报一列（宽度可拖 ✓）、文章预览一列 ✓。 */
+  .lw-hl-read { flex:1; min-width:0; display:flex; flex-direction:row; overflow:hidden; }
   .lw-hl-tools { display:flex; gap:6px; align-items:center; padding:9px 11px;
     border-bottom:2px solid ${T.line}; position:sticky; top:0; background:${T.card}; z-index:2; flex-wrap:wrap; }
   .lw-hl-tools input { flex:1; min-width:80px; height:26px; padding:0 9px; border:1px solid ${T.lineDim};
@@ -1260,16 +1265,55 @@
   .lw-hl-it .mt .badge { border:1px solid ${T.lineDim}; padding:1px 5px; }
   .lw-hl-it .mt .hot { color:${T.accent}; }
   .lw-hl-it .st { color:${T.warn}; }
-  .lw-hl-ai { flex:none; border-bottom:2px solid ${T.lineDim}; padding:12px 18px; background:${T.bg}; }
-  .lw-hl-ai .hd { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+  /* ★★ AI 日报：**左边一列** ✓（宽度能拖 ✓，见 「paneGrip('ai')」 ✓）——
+     用户原话：「这个 AI 日报这里，窗口无法自由拖动」✓。
+     ⚠️ min-height:0 必须写 ✗ —— flex 子项默认 min-height:auto ✓，
+        不写的话这一列会被内容撑破 ✓（这个坑项目里踩过好几次 ✓）。 */
+  .lw-hl-ai { flex:none; width:300px; min-width:0; min-height:0; overflow:auto;
+    border-right:2px solid ${T.lineDim}; padding:12px 14px 22px; background:${T.bg}; }
+  .lw-hl-ai .hd { display:flex; align-items:center; gap:7px; margin-bottom:10px; flex-wrap:wrap; }
   .lw-hl-ai .hd b { font-size:11px; letter-spacing:1.2px; }
-  .lw-hl-ai .hd button { margin-left:auto; height:26px; padding:0 11px; border:1px solid ${T.accent};
+  .lw-hl-ai .hd .sp { flex:1; }
+  .lw-hl-ai .hd button { height:26px; padding:0 10px; border:1px solid ${T.accent};
     background:transparent; color:${T.accent}; font:10px ${UI}; cursor:pointer; letter-spacing:.5px; }
   .lw-hl-ai .hd button:hover { background:${T.accent}; color:${T.accentInk}; }
-  .lw-hl-ai .bd { font-size:12px; line-height:1.9; color:${T.text}; white-space:pre-wrap;
-    max-height:220px; overflow:auto; }
-  .lw-hl-ai .bd:empty::before { content:'点右边「🤖 生成 AI 日报」—— 把当前榜单交给模型，出一份带重点的简报 ✓';
+  .lw-hl-ai .hd button.ghost { border-color:${T.lineDim}; color:${T.dim}; }
+  .lw-hl-ai .hd button.ghost:hover { background:transparent; color:${T.accent}; border-color:${T.accent}; }
+  .lw-hl-ai .bd { font-size:12px; line-height:1.9; color:${T.text}; white-space:pre-wrap; }
+  /* ⚠️ 卡片模式下要**关掉 「pre-wrap」** ✗ —— 不然 HTML 里的换行 / 缩进会变成一片空白 ✓
+     （pre-wrap 对纯文本是对的 ✓，对卡片是灾难 ✓）。 */
+  .lw-hl-ai .bd.cards { white-space:normal; line-height:1.6; }
+  .lw-hl-ai .bd:empty::before { content:'点上面「生成 AI 日报」—— 把当前榜单交给模型，出一份能直接读的简报 ✓';
     color:${T.faint}; font-size:11px; }
+
+  /* ── AI 日报的卡片 ✓（不再是「一段文字」✗）─────────────────────────────
+     ★ 用户原话：「AI 日报过于简单了，我需要你来总结热点的内容和重点，等等，
+       帮助我快速理解和阅读好热点信息，而不是简单概括」✓。
+     → 每条拆成：序号徽章（**可点，跳回中栏那条** ✓）/ 标题 / 是什么 / 为什么值得看 /
+       要点 / 关键词 ✓ —— 一眼扫完就知道「要不要去读原文」✓。 */
+  .lw-hl-ai .ov { border:1px solid ${T.lineDim}; border-left:2px solid ${T.accent};
+    background:${T.card}; padding:9px 11px; margin-bottom:10px; }
+  .lw-hl-ai .ov .hl { font-size:12.5px; line-height:1.75; color:${T.text}; }
+  .lw-hl-ai .ov .th { display:flex; gap:5px; flex-wrap:wrap; margin-top:7px; }
+  .lw-hl-ai .ov .th span { font-size:9.5px; color:${T.accent}; border:1px solid ${T.accent};
+    padding:1px 6px; }
+  .lw-hl-ai .cd { border:1px solid ${T.lineDim}; background:${T.card}; margin-bottom:9px; padding:9px 11px; }
+  .lw-hl-ai .cd:hover { border-color:${T.dim}; }
+  .lw-hl-ai .cd .ti { display:flex; gap:7px; align-items:flex-start; }
+  .lw-hl-ai .cd .no { flex:none; min-width:20px; height:20px; display:flex; align-items:center;
+    justify-content:center; border:1px solid ${T.accent}; color:${T.accent}; font-size:10px;
+    cursor:pointer; font-variant-numeric:tabular-nums; }
+  .lw-hl-ai .cd .no:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-hl-ai .cd .tt { flex:1; min-width:0; font-size:12px; line-height:1.6; color:${T.text}; font-weight:600; }
+  .lw-hl-ai .cd .what { font-size:11.5px; line-height:1.8; color:${T.dim}; margin-top:7px; }
+  .lw-hl-ai .cd .why { font-size:11.5px; line-height:1.8; color:${T.text}; margin-top:6px;
+    border-left:2px solid ${T.accent}; padding-left:8px; }
+  .lw-hl-ai .cd .pts { margin-top:7px; padding-left:2px; }
+  .lw-hl-ai .cd .pts div { font-size:11px; line-height:1.75; color:${T.dim}; }
+  .lw-hl-ai .cd .pts div::before { content:'· '; color:${T.faint}; }
+  .lw-hl-ai .cd .tg { display:flex; gap:5px; flex-wrap:wrap; margin-top:7px; }
+  .lw-hl-ai .cd .tg span { font-size:9px; color:${T.faint}; border:1px solid ${T.lineDim}; padding:1px 5px; }
+  .lw-hl-ai .skip { font-size:10.5px; color:${T.faint}; line-height:1.8; margin-top:4px; }
   /* ⚠️ 正文栏必须是**列向 flex** ✗ —— 不然预览只能写死高度 ✗：
      以前是 iframe 写死 height:340px ✗，而右栏是**整屏高** ✓，
      于是预览下面**永远空一大片** ✗（用户截图里那块空白就是它 ✗）。
@@ -1986,7 +2030,7 @@
        没有它就只能拿整段 JSON 硬拼字符串 ✗。 */
     'list.filter': {
       e: '▽', n: '过滤', g: '列表', in: 1, out: 1,
-      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组；也可写表达式'], ['left', '左值', 'text', '', '对**每一条**求值，如 {{ $json.热度 }}'], ['op', '比较', 'select', '包含', '包含 / 等于 / 不等于 / 大于 / 小于 / 为空 / 非空 / 正则匹配'], ['right', '右值', 'text', '', '']],
+      cfg: [['from', '来自', 'text', '', '留空＝用上游那个数组；也可写表达式'], ['left', '左值', 'text', '', '对每一条求值，如 {{ $json.热度 }}'], ['op', '比较', 'select', '包含', '包含 / 等于 / 不等于 / 大于 / 小于 / 为空 / 非空 / 正则匹配'], ['right', '右值', 'text', '', '']],
       d: '只留下符合条件的那些条。',
       how: '左右两栏是对<b>每一条</b>求值的表达式 ✓ —— 里面用 <b>$json</b> 就代表「当前这一条」，'
         + '还能用 <b>$index</b> 拿到它是第几条 ✓。',
@@ -2113,7 +2157,7 @@
     /* 子工作流 ✓（n8n 的 Execute Workflow ✓）—— 搭智能体的关键 ✓ */
     'out.flow': {
       e: '⛓', n: '调用子工作流', g: '输出', in: 1, out: 1,
-      cfg: [['flow', '哪个工作流', 'text', '', '填工作流的**名字**（左侧列表里那个）'], ['input', '传给它什么', 'text', '', '留空＝把上游原样传过去；也可写表达式']],
+      cfg: [['flow', '哪个工作流', 'text', '', '填工作流的名字（左侧列表里那个）'], ['input', '传给它什么', 'text', '', '留空＝把上游原样传过去；也可写表达式']],
       d: '把另一个工作流当子流程跑一遍。',
       how: 'n8n 的 Execute Workflow。用它可以把大流程拆成小块、或者让好几个流程共用一个「公共步骤」✓。'
         + '<b>不能互相调用</b> ✗（会一直转下去），引擎会拦住并报错 ✓。',
@@ -2142,7 +2186,7 @@
 
   /* ── 热榜模块的状态 ✓（同样必须放顶部区 ✗）────────────────────────────
      源目录来自服务端 ✓（`/api/life/trends` 会带回来 ✓），这里只放界面状态 ✓。 */
-  const TR_UI = { src: '', q: '', only: 'all', sel: '', busy: false, ai: '', aiBusy: false, data: null, err: '', at: 0 };
+  const TR_UI = { src: '', q: '', only: 'all', sel: '', busy: false, ai: '', aiBusy: false, aiData: null, data: null, err: '', at: 0 };
   const TR_GROUPS = ['视频', '社交', '搜索', '技术', '开源', '学术', '资讯'];
 
   /* ── 顶栏格言：**固定间隔自动切换** ✓ ────────────────────────────────────
@@ -3099,9 +3143,18 @@
       const el = root.querySelector('[data-pgrip="' + sp.which + '"]');
       const target = root.querySelector(sp.target);
       if (!el || !target) return;
-      /* 恢复上次的宽度 ✓（存在 STORE 里 ✓，切页签/重开都不丢 ✓）*/
+      /* 恢复上次的宽度 ✓（存在 STORE 里 ✓，切页签/重开都不丢 ✓）
+         ⚠️⚠️ 恢复时**必须按上下限夹一下** ✗✗ —— 实测踩到（2026-10-08 ✓）：
+            窗口变窄之后 ✓，上次存的宽度可能**比现在整栏还宽** ✗ →
+            右边那一栏被挤成 **39px** ✗ → 文字折成十几行 ✓、
+            预览也撑不起来 ✓（看着像「布局坏了」✗，其实是宽度没夹 ✓）。
+            夹一下就好 ✓，而且这是**通用**的 ✗ —— 每个用这个 helper 的栏目都受益 ✓。 */
       const saved = Number((STORE && STORE[sp.key]) || 0);
-      if (saved >= sp.min) { target.style.width = saved + 'px'; target.style.flex = 'none'; }
+      if (saved >= sp.min) {
+        const w = Math.max(sp.min, Math.min(sp.max, saved));
+        target.style.width = w + 'px';
+        target.style.flex = 'none';
+      }
       lwGrab(el, {
         down: (ev) => {
           el.classList.add('on');
@@ -7963,7 +8016,7 @@
       flowPushUndo(f);
       n.disabled = !n.disabled;
       f.at = Date.now(); saveStore(); render();
-      rdToast(n.disabled ? '⏸ 禁用了 —— 运行时会**直通**（下游照样跑）' : '▶ 启用了');
+      rdToast(n.disabled ? '⏸ 禁用了 —— 运行时会直通（下游照样跑）' : '▶ 启用了');
     };
     const ncp = q('#lw-fl-nodecopy');
     if (ncp) ncp.onclick = () => { FLOW_UI.picked = FLOW_UI.node ? [FLOW_UI.node] : []; flowCopy(); };
@@ -8209,7 +8262,60 @@
     trFiltered().forEach((x) => { st.seen[x.id] = now; });
     saveStore(); render();
   }
-  /* ── AI 日报 ✓ ─────────────────────────────────────────────────────────── */
+  /* ── AI 日报 ✓ ───────────────────────────────────────────────────────────
+     ★★★ 用户原话（2026-10-08）：「AI 日报过于简单了，我需要你来总结热点的内容和重点，
+     等等，帮助我快速理解和阅读好热点信息，而不是简单概括」✓。
+
+     ⚠️⚠️ 老版为什么「简单」✗：提示词要的是「每条一行 + 为什么值得看（**一句话**）」✓ ——
+        模型只能给出「有直接参考价值」「值得跟踪」这种**没信息量的判断** ✗
+        （用户截图里那 5 条全是这个味 ✓）。
+     → 改成**结构化输出** ✓：每条要求「**它到底是什么事**（补上没看原文就不知道的信息：
+        谁做的 / 做了什么 / 什么量级 ✓）+ **为什么值得你看** + 2~4 条**具体要点**（要带数字和名词 ✓）」✓，
+        再给一句今日总览 + 2~4 条主线 ✓。
+     ⚠️ 为什么要 JSON 而不是 markdown ✗：要**渲染成卡片** ✓ ——
+        序号要能点（跳回中栏那条 ✓）、要点要能列 ✓、标签要能挂 ✓，
+        靠解析 markdown 迟早被模型的格式漂移搞崩 ✗（这个项目的老教训 ✓）。
+     ⚠️ 但要**留一条退路** ✗：模型偶尔不守格式 ✓ → 解析失败就把原文**照原样显示** ✓，
+        总比白屏强 ✓（绝不假装成功 ✗）。 */
+  /* 把 AI 返回的 JSON 抠出来 ✓ —— 复用外刊精读那套 `epJsonFrom` ✓（剥 ```json 围栏 + 前后废话 ✓）*/
+  function trAiParse(text) {
+    const o = epJsonFrom(text);
+    if (!o || !Array.isArray(o.items) || !o.items.length) return null;
+    const items = o.items.map((it) => ({
+      n: Number(it && it.n) || 0,
+      title: String((it && it.title) || '').trim().slice(0, 120),
+      what: String((it && it.what) || '').trim().slice(0, 600),
+      why: String((it && it.why) || '').trim().slice(0, 400),
+      points: (Array.isArray(it && it.points) ? it.points : []).map((p) => String(p).trim().slice(0, 200)).filter(Boolean).slice(0, 5),
+      tags: (Array.isArray(it && it.tags) ? it.tags : []).map((p) => String(p).trim().slice(0, 20)).filter(Boolean).slice(0, 4),
+    })).filter((it) => it.title || it.what);
+    if (!items.length) return null;
+    return {
+      headline: String(o.headline || '').trim().slice(0, 200),
+      themes: (Array.isArray(o.themes) ? o.themes : []).map((p) => String(p).trim().slice(0, 24)).filter(Boolean).slice(0, 5),
+      items,
+      skip: String(o.skip || '').trim().slice(0, 300),
+    };
+  }
+  /* 日报 → 一段**能存进备忘录 / 复制走**的纯文本 ✓（卡片是给人看的 ✓，文本是给存档的 ✓）*/
+  function trAiPlainText() {
+    const d = TR_UI.aiData;
+    if (!d) return String(TR_UI.ai || '');
+    const out = [];
+    if (d.headline) out.push('【今日一句话】' + d.headline);
+    if (d.themes.length) out.push('【主线】' + d.themes.join(' · '));
+    out.push('');
+    d.items.forEach((it, i) => {
+      out.push('【' + (i + 1) + '】' + it.title + (it.n ? '（榜单第 ' + it.n + ' 条）' : ''));
+      if (it.what) out.push('  是什么：' + it.what);
+      if (it.why) out.push('  为什么看：' + it.why);
+      it.points.forEach((p) => out.push('  · ' + p));
+      if (it.tags.length) out.push('  关键词：' + it.tags.join('、'));
+      out.push('');
+    });
+    if (d.skip) out.push('【可以略过】' + d.skip);
+    return out.join('\n');
+  }
   async function trAiDaily() {
     if (TR_UI.aiBusy) return;
     const list = trFiltered().slice(0, 60);
@@ -8217,34 +8323,70 @@
     let cfg = {}; try { cfg = JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) {}
     if (!cfg.url || !cfg.key || !cfg.model) {
       TR_UI.ai = '✗ 还没配大模型 —— 去 CodeScope 的 AI 面板配一次 ✓（这里会自动复用 ✓）';
+      TR_UI.aiData = null;
       render(); return;
     }
-    TR_UI.aiBusy = true; TR_UI.ai = '正在让模型读这 ' + list.length + ' 条…'; render();
+    TR_UI.aiBusy = true; TR_UI.ai = '正在让模型读这 ' + list.length + ' 条…'; TR_UI.aiData = null; render();
     const body = list.map((x, i) => '[' + (i + 1) + ']（' + x.srcName + '）' + x.title + (x.extra ? ' —— ' + x.extra : '')).join('\n');
     try {
       const r = await fetch('/api/ai/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: cfg.url, key: cfg.key, model: cfg.model,
+          url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 180000,
           messages: [
-            { role: 'system', content: '你是信息筛选助手。读者是做机器人与 AI 研究的工程师。用中文输出，克制、具体、不要空话。' },
-            { role: 'user', content: '下面是今天各平台的热榜 + 最新论文，共 ' + list.length + ' 条。\n\n' + body + '\n\n请输出一份简报：\n1. 【值得看的 5 条】每条一行，写清**为什么值得看**（一句话），并带上序号；\n2. 【前沿动态】把和机器人 / AI / 具身智能相关的单独拎出来讲；\n3. 【可以忽略的】一句话带过。\n不要复述全部条目，不要写客套话。' },
+            {
+              role: 'system',
+              content: '你是资深科技情报编辑，服务对象是做**机器人 / 具身智能 / AI 工程**的工程师。\n'
+                + '你的任务**不是「概括」** ✗ —— 而是让他**三分钟搞懂今天发生了什么、为什么值得看** ✓。\n'
+                + '要求：中文；克制、具体、有信息量；**不要空话**（「有参考价值」「值得关注」这类等于没说 ✗）；\n'
+                + '**不许编造** —— 列表里没有的信息不要写，不确定的宁可不写 ✗。',
+            },
+            {
+              role: 'user',
+              content: '下面是今天各平台的热榜 + 最新论文，共 ' + list.length + ' 条，每条形如：\n'
+                + '`[序号]（来源）标题 —— 摘要`\n\n' + body + '\n\n'
+                + '请挑 **5~8 条**最值得看的（按重要性排，宁缺毋滥，不够格的不写），'
+                + '输出**一个 JSON 对象**（不要 markdown 围栏、不要任何解释文字）：\n'
+                + '{\n'
+                + '  "headline": "一句话说清今天最值得注意的是什么（≤40 字，要有具体对象，别写「多个动态」这种）",\n'
+                + '  "themes": ["今天反复出现的 2~4 条主线，每条 4~8 字，如「端侧自动化」"],\n'
+                + '  "items": [{\n'
+                + '    "n": 上面列表里的序号（整数，必须真实存在）,\n'
+                + '    "title": "一句话标题（≤30 字，保留原意）",\n'
+                + '    "what": "**它到底是什么事**：2~3 句。把没看原文就不知道的信息补上 —— 谁做的、做了什么、什么量级、什么时间",\n'
+                + '    "why": "**为什么值得你看**：1~2 句，落到他的方向（机器人 / 具身智能 / AI 工程实践）上，说清和他有什么关系",\n'
+                + '    "points": ["2~4 条要点，每条一句话，**要具体到数字、名词、做法**（比如「开源、Apache-2.0、支持 X」）"],\n'
+                + '    "tags": ["2~3 个关键词"]\n'
+                + '  }],\n'
+                + '  "skip": "一句话说明哪些可以直接略过"\n'
+                + '}\n'
+                + '注意：`what` 和 `why` 是最重要的两个字段，**别糊弄** —— 读者就是靠这两句决定要不要点开原文。',
+            },
           ],
-          timeoutMs: 180000,
         }),
       });
       const d = await r.json();
-      TR_UI.ai = (d && d.ok) ? d.content : ('✗ ' + ((d && d.error) || 'AI 调用失败'));
-    } catch (e) { TR_UI.ai = '✗ AI 调用失败：' + e.message; }
+      if (!d || !d.ok) throw new Error((d && d.error) || 'AI 调用失败');
+      const raw = String(d.content || '');
+      const parsed = trAiParse(raw);
+      TR_UI.ai = raw;
+      TR_UI.aiData = parsed;
+      if (!parsed) {
+        /* ⚠️ 模型没守格式 → **照原样显示** ✓，并说清「这次没按卡片格式来」✗（不假装成功 ✗）*/
+        TR_UI.ai = '（这次模型没按卡片格式返回，下面是原文）\n\n' + raw;
+      }
+    } catch (e) { TR_UI.ai = '✗ AI 调用失败：' + e.message; TR_UI.aiData = null; }
     TR_UI.aiBusy = false;
     render();
   }
   function trSaveAiToMemo() {
     const text = String(TR_UI.ai || '').trim();
     if (!text || text.startsWith('✗')) { setStatus(esc('先成功生成一份日报 ✓'), 5000); return; }
+    /* ★ 存进去的是**格式化过的文本** ✓（卡片是给人看的 ✓，备忘录里要能读能搜 ✓）*/
+    const body = TR_UI.aiData ? trAiPlainText() : text;
     const id = 'm' + Date.now();
     STORE.memos = ((STORE && STORE.memos) || []).concat([{
-      id, text: '今日热榜 AI 日报 · ' + dayKey(new Date()) + '\n' + text,
+      id, text: '今日热榜 AI 日报 · ' + dayKey(new Date()) + '\n' + body,
       folder: '热榜', pin: false, at: Date.now(), edit: Date.now(),
     }]);
     if (!((STORE.memoFolders || []).includes('热榜'))) STORE.memoFolders = ((STORE && STORE.memoFolders) || []).concat(['热榜']);
@@ -8331,14 +8473,53 @@
     });
     return tools + html;
   }
+  /* ★ AI 日报渲染成**卡片** ✓（见上面 `trAiDaily` 那段注释 ✓）——
+     每条：序号（**可点，跳回中栏那条** ✓）/ 标题 / 是什么 / 为什么看 / 要点 / 关键词 ✓。
+     ⚠️ 模型没守格式时 `TR_UI.aiData` 是 null ✓ → 退回**纯文本照原样显示** ✓（不白屏 ✓）。 */
+  function trAiCardsHtml(d) {
+    const out = [];
+    if (d.headline || d.themes.length) {
+      out.push('<div class="ov">'
+        + (d.headline ? '<div class="hl">' + esc(d.headline) + '</div>' : '')
+        + (d.themes.length ? '<div class="th">' + d.themes.map((t) => '<span>' + esc(t) + '</span>').join('') + '</div>' : '')
+        + '</div>');
+    }
+    d.items.forEach((it) => {
+      out.push('<div class="cd">'
+        + '<div class="ti">'
+        + (it.n ? '<span class="no" data-trn="' + it.n + '" title="跳到中栏第 ' + it.n + ' 条">' + it.n + '</span>' : '')
+        + '<span class="tt">' + esc(it.title) + '</span>'
+        + '</div>'
+        + (it.what ? '<div class="what">' + esc(it.what) + '</div>' : '')
+        + (it.why ? '<div class="why">' + esc(it.why) + '</div>' : '')
+        + (it.points.length ? '<div class="pts">' + it.points.map((p) => '<div>' + esc(p) + '</div>').join('') + '</div>' : '')
+        + (it.tags.length ? '<div class="tg">' + it.tags.map((t) => '<span>' + esc(t) + '</span>').join('') + '</div>' : '')
+        + '</div>');
+    });
+    if (d.skip) out.push('<div class="skip">可以略过：' + esc(d.skip) + '</div>');
+    return out.join('');
+  }
+  function trAiHtml() {
+    const d = TR_UI.aiData;
+    const head = '<div class="hd"><b>✳ AI 日报</b><span class="sp"></span>'
+      + '<button id="lw-hl-ai">' + (TR_UI.aiBusy ? '生成中…' : (d ? '↻ 重新生成' : '生成 AI 日报')) + '</button>'
+      + (TR_UI.ai && !TR_UI.aiBusy ? '<button class="ghost" id="lw-hl-aimemo" title="把这份日报存进备忘录（文件夹「热榜」）">存进备忘录</button>' : '')
+      + '</div>';
+    /* ★ 宽度可拖 ✓ —— 用户原话：「这个 AI 日报这里，窗口无法自由拖动」✓。
+       `paneW('trendAiW', 240)` 恢复上次的宽度 ✓，`paneGrip('ai')` 是那根拖拽条 ✓
+       （双击恢复默认 ✓，都在 `bindPaneGrips` 里 ✓）。 */
+    return '<div class="lw-hl-ai"' + paneW('trendAiW', 240) + '>' + head
+      + '<div class="bd' + (d ? ' cards' : '') + '">' + (d ? trAiCardsHtml(d) : esc(TR_UI.ai)) + '</div>'
+      + '</div>' + paneGrip('ai');
+  }
   function trReadHtml() {
     const x = trById(TR_UI.sel);
-    const ai = '<div class="lw-hl-ai"><div class="hd"><b>🤖 AI 日报</b>'
-      + '<button id="lw-hl-ai">' + (TR_UI.aiBusy ? '生成中…' : '生成 AI 日报') + '</button>'
-      + '<button id="lw-hl-aimemo" style="border-color:' + T.lineDim + ';color:' + T.dim + '">存进备忘录</button></div>'
-      + '<div class="bd">' + esc(TR_UI.ai) + '</div></div>';
+    const ai = trAiHtml();
     if (!x) {
-      return '<div class="lw-hl-read">' + ai + '<div class="lw-rd-empty">← 从中间点一条看看<br><span style="color:' + T.faint + '">或者直接点右上「生成 AI 日报」，让它先帮你筛一遍 ✓</span></div></div>';
+      return '<div class="lw-hl-read">' + ai + '<div class="lw-hl-body">'
+        + '<div class="lw-rd-empty" style="margin:auto">← 从中间点一条看看<br>'
+        + '<span style="color:' + T.faint + '">左边那份日报里的「序号」可以点 ✓ —— 点一下就跳到中栏对应那条 ✓</span></div>'
+        + '</div></div>';
     }
     return '<div class="lw-hl-read">' + ai + '<div class="lw-hl-body">'
       + '<h2>' + esc(x.title) + '</h2>'
@@ -8372,9 +8553,16 @@
   function bindTrends() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'trends') return;
+    /* ★ AI 日报那一列也能拖 ✓ —— 用户原话：「这个 AI 日报这里，窗口无法自由拖动」✓。
+       ⚠️ 上限**不能写死** ✗ —— 右栏本身才 650px 左右 ✓，写死 760 的话
+          能把正文挤成一条缝 ✗（实测就是这么把预览搞崩的 ✓）。
+       → 按**读栏的百分比**算上限 ✓（每次 `bindTrends` 都重算 ✓，
+          所以拖窗口大小也跟着变 ✓）。 */
+    const readW = (host.querySelector('.lw-hl-read') || {}).clientWidth || 900;
     bindPaneGrips(host, [
       { which: 'side', target: '.lw-hl-side', min: 150, max: 420, key: 'trendSideW' },
       { which: 'list', target: '.lw-hl-list', min: 260, max: 760, key: 'trendListW' },
+      { which: 'ai', target: '.lw-hl-ai', min: 220, max: Math.max(300, Math.round(readW * 0.58)), key: 'trendAiW' },
     ]);
     /* ★ 统一走防御层 ✓（`lwQ` / `lwQA` ✓）—— 坏选择器只坏它自己 ✗，不再让整个 bind 函数躺平 ✗ */
     const q = (sel) => lwQ(host, sel);
@@ -8385,6 +8573,26 @@
       el.onclick = () => { TR_UI.sel = el.dataset.trit; trSeen(el.dataset.trit); render(); };
     });
     const rl = q('#lw-hl-reload'); if (rl) rl.onclick = () => trLoad(true);
+    /* ★★ 点日报里的**序号** → 跳到中栏对应那条 ✓ —— 用户原话：
+       「帮助我快速理解和阅读好热点信息」✓。这是「读完简报就去读原文」那一步的关键 ✓，
+       没有它的话用户看到「[2] 自托管密码管理」还得自己在中栏翻 ✓。 */
+    qa('[data-trn]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        const n = Number(el.dataset.trn) || 0;
+        const list = trFiltered().slice(0, 60);
+        const hit = list[n - 1];
+        if (!hit) { setStatus(esc('这条不在当前榜单里了 ✗（榜单刷新过 / 被筛选掉了）'), 6000); return; }
+        TR_UI.sel = hit.id;
+        render();
+        /* ⚠️ 等 DOM 建好再滚 ✗（`render()` 同步 ✓，但滚动要等布局 ✓）*/
+        setTimeout(() => {
+          const box = document.getElementById('lifework-view');
+          const row = box && box.querySelector('[data-trit="' + hit.id + '"]');
+          if (row && row.scrollIntoView) { try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }
+        }, 60);
+      };
+    });
     const sa = q('#lw-hl-seenall'); if (sa) sa.onclick = () => trMarkAllSeen();
     const ai = q('#lw-hl-ai'); if (ai) ai.onclick = () => trAiDaily();
     const aim = q('#lw-hl-aimemo'); if (aim) aim.onclick = () => trSaveAiToMemo();
@@ -8652,8 +8860,8 @@
       + only('done', '✓', '已掌握', nDone, ROOT_UI.only === 'done')
       + '<div class="lw-rd-hd">怎么用</div>'
       + '<div class="lw-ep-tip" style="padding:6px 13px 10px;line-height:1.7">'
-      + '· 搜**词根**（spect）✓ 搜**中文**（看）✓ 也能直接**贴一个单词**（inspect）✓<br>'
-      + '· 右边那张图就是这个词根的**六维导图** ✓<br>'
+      + '· 搜词根（spect）✓ 搜中文（看）✓ 也能直接贴一个单词（inspect）✓<br>'
+      + '· 右边那张图就是这个词根的六维导图 ✓<br>'
       + '· 「🧠 随机自测」遮住含义考自己 ✓'
       + '</div>';
   }
@@ -8730,7 +8938,7 @@
     else if (ai && ai.data) {
       blocks.push('<div class="lw-rm-split" style="border-top:1px dashed ' + T.lineDim + ';padding-top:8px">'
         + esc(ai.data.split || '') + '</div>'
-        + '<div class="lw-ep-tip" style="padding:0 10px 10px;color:' + T.warn + '">⚠️ 上面这条是 **AI 拆的**，没人工核对过 —— 当参考，别当标准答案</div>'
+        + '<div class="lw-ep-tip" style="padding:0 10px 10px;color:' + T.warn + '">⚠️ 上面这条是 AI 拆的，没人工核对过 —— 当参考，别当标准答案</div>'
         + (ai.data.note ? '<div class="lw-ep-tip" style="padding:0 10px 10px">' + esc(ai.data.note) + '</div>' : ''));
     } else if (!s) {
       blocks.push('<div class="lw-ep-tip" style="padding:10px">库里没有能拆《' + esc(word) + '》的词根 '
@@ -9907,7 +10115,7 @@
       + '</div>'
       + '<div class="lw-ep-tip" id="lw-ep-newtip">' + (EP_UI.pick
         ? '划中的是「' + esc(EP_UI.pick) + '」✓ 回车直接加'
-        : '用鼠标在正文里（或**上面这句**里）划一个词，这里会自动填上 ✓') + '</div>'
+        : '用鼠标在正文里（或上面这句里）划一个词，这里会自动填上 ✓') + '</div>'
       /* ★★ 词卡 ✓ —— 用户原话：「还有下面这种音标和词义，不应该需要我来填写，去掉。
          应该和查词一样，显示给我」✓。
          → 两个手填输入框**删掉** ✗，改成这一块：划中 / 点中的词，
@@ -9938,7 +10146,7 @@
     if (!w) {
       return '<div class="lw-ep-peek">'
         + '<div class="hd"><b>' + esc(q) + '</b><span class="ph">还没查</span></div>'
-        + '<div class="df" style="color:' + T.faint + '">加进生词本就会**自动查好**音标 / 释义 / 例句 / 巧记 ✓</div>'
+        + '<div class="df" style="color:' + T.faint + '">加进生词本就会自动查好音标 / 释义 / 例句 / 巧记 ✓</div>'
         + '<div class="lw-ep-act" style="padding:8px 0 0">'
         + '<button class="pri" id="lw-ep-peekadd">＋ 加进生词本</button>'
         + '<button id="lw-ep-peeksay">🔊 先听一下</button>'
@@ -10420,7 +10628,7 @@
       + '<span style="font-size:10px;color:' + T.faint + '">'
       + (isWeb
         ? '点一条 → 服务端把正文抽出来 → 直接进精读 ✓ ｜ 只读公开 RSS ✓ 不登录 ✓ 不写你的账号 ✓'
-        : '这些都是**别人维护的公开仓库** ✓ 我只放链接 ✗ —— 不抓取、不镜像、不代下 ✓ ｜ 版权各归各的 ✓')
+        : '这些都是别人维护的公开仓库 ✓ 我只放链接 ✗ —— 不抓取、不镜像、不代下 ✓ ｜ 版权各归各的 ✓')
       + '</span>'
       + '<button id="lw-epsrc-imp" style="margin-left:auto">＋ 自己贴链接 / 正文</button>'
       + '</div></div></div>';
