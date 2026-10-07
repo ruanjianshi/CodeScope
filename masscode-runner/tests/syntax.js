@@ -66,7 +66,7 @@ console.log('内联脚本语法闸门：' + checked + ' 个脚本全部通过');
  * **注释里混进一个反引号就会截断模板串** —— 实测踩过 4 次。
  * 那种错误 `node --check` 一眼就能抓，但没人会记得手动跑。
  */
-const externals = [
+const externals = Array.from(new Set([
   /* ★ 面板主文件放**第一个** ✓ —— 它最常出问题（那段 CSS 模板 ✗），先看到它 ✓。 */
   'assets/life-workbench.js',
   /* ★ server.js 也要过一遍 ✓ —— 它是**唯一一个坏掉就全站不可用**的文件 ✗
@@ -83,7 +83,20 @@ const externals = [
     .filter((f) => /\.js$/.test(f))
     .sort()
     .map((f) => 'lib/' + f),
-];
+  /* ★★ `assets/` 也要**自动扫** ✗✗ —— 原来是**写死一个** `assets/life-workbench.js` ✓，
+     于是 `assets/system-panel.js` / `assets/study-workspace.js` / 后来新增的
+     `assets/code-guide.js` **全都没被校验过** ✗（加完才发现 ✓）。
+     这就是文件上面自己警告过的那个毛病 ✓：「写死的清单必然过期」✓。
+     ⚠️ 只跳过**第三方压缩包** ✓（几万行 ✓，扫它没意义还慢 ✓）——
+        自己写的**一个都不许跳** ✗（否则又变回写死清单 ✓）。 */
+  ...fs.readdirSync(path.join(__dirname, '..', 'assets'))
+    .filter((f) => /\.js$/.test(f))
+    .filter((f) => ['highlight.min.js', 'xterm.js'].indexOf(f) < 0)
+    .sort()
+    .map((f) => 'assets/' + f),
+]));
+/* ⚠️ `Set` 是为了**去重** ✗ —— `assets/life-workbench.js` 既在开头写死了一份（要它排第一 ✓），
+   又被 `assets/*.js` 扫到一次 ✓，不去重的话它会**校验两遍** ✓（白跑 + 输出里出现两行 ✓）。 */
 let extFailed = 0;
 
 for (const rel of externals) {
