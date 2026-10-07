@@ -178,6 +178,7 @@
   /* 邮箱 / 日记：面板就是 .lw-main 的直接子元素 ✓ */
   .lw-main.fill > .lw-ml,
   .lw-main.fill > .lw-rd,
+  .lw-main.fill > .lw-fl,
   .lw-main.fill > .lw-jr { flex:1; min-height:0; }
   /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
      —— 得把这条链也一起撑开 ✓ */
@@ -1004,6 +1005,85 @@
   .lw-ml-trbar .sp { flex:1; }
 
   /* ══════════════════════════════════════════════════════════════════════
+     工作流模块（参考 n8n 的节点图）✓
+     ⚠️ 注释里不能出现反引号 ✗（这段在 JS 模板字符串里 ✗）。
+     ══════════════════════════════════════════════════════════════════════ */
+  .lw-fl { display:flex; min-height:320px; border:2px solid ${T.lineDim}; background:${T.bg}; }
+  .lw-fl-side { width:212px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto;
+    padding:10px 0; background:${T.bg}; }
+  .lw-fl-cv { flex:1; min-width:0; position:relative; overflow:auto;
+    background:${T.bg2}; background-image:radial-gradient(${T.lineDim} 1px, transparent 1px);
+    background-size:18px 18px; }
+  .lw-fl-cfg { width:302px; flex:none; border-left:2px solid ${T.lineDim}; overflow:auto;
+    background:${T.card}; padding:0 0 16px; }
+  .lw-fl-row { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:11px;
+    cursor:pointer; color:${T.dim}; border-left:2px solid transparent; }
+  .lw-fl-row:hover { background:${T.card2}; color:${T.text}; }
+  .lw-fl-row.on { background:${T.card2}; color:${T.text}; border-left-color:${T.accent}; }
+  .lw-fl-row .em { font-size:13px; line-height:1; }
+  .lw-fl-row .n { margin-left:auto; font-size:9.5px; color:${T.faint}; }
+  .lw-fl-pal { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:11px;
+    cursor:grab; color:${T.dim}; }
+  .lw-fl-pal:hover { background:${T.card2}; color:${T.accent}; }
+  .lw-fl-pal .em { font-size:13px; line-height:1; }
+  .lw-fl-tools { position:sticky; top:0; left:0; z-index:5; display:flex; gap:6px;
+    align-items:center; padding:8px 10px; background:${T.card}; border-bottom:2px solid ${T.line};
+    flex-wrap:wrap; }
+  .lw-fl-tools button { height:26px; padding:0 10px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:10px ${UI}; cursor:pointer; letter-spacing:.4px; }
+  .lw-fl-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-fl-tools button.pri { border-color:${T.accent}; color:${T.accent}; }
+  .lw-fl-tools button.pri:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-fl-tools .hint { font-size:9.5px; color:${T.faint}; margin-left:auto; }
+  .lw-fl-plane { position:relative; }
+  .lw-fl-node { position:absolute; width:170px; height:56px; box-sizing:border-box;
+    border:2px solid ${T.line}; background:${T.card}; cursor:move; user-select:none; }
+  .lw-fl-node:hover { border-color:${T.accent}; }
+  .lw-fl-node.on { border-color:${T.accent}; box-shadow:0 0 0 2px color-mix(in srgb, ${T.accent} 30%, transparent); }
+  .lw-fl-node .hd { display:flex; align-items:center; gap:6px; padding:5px 8px 0; font-size:9px;
+    letter-spacing:.8px; color:${T.faint}; text-transform:uppercase; }
+  .lw-fl-node .bd { display:flex; align-items:center; gap:6px; padding:2px 8px 0; font-size:11.5px;
+    color:${T.text}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-fl-node .bd .em { font-size:13px; line-height:1; flex:none; }
+  .lw-fl-node .st { position:absolute; right:5px; bottom:3px; font-size:9px; color:${T.faint}; }
+  .lw-fl-node.s-ok { border-color:${T.ok}; }
+  .lw-fl-node.s-error { border-color:${T.red}; }
+  .lw-fl-node.s-skipped { opacity:.45; }
+  .lw-fl-port { position:absolute; width:12px; height:12px; border:2px solid ${T.line};
+    background:${T.bg}; border-radius:50%; top:22px; cursor:crosshair; z-index:3; }
+  .lw-fl-port:hover { background:${T.accent}; border-color:${T.accent}; }
+  .lw-fl-port.in { left:-8px; }
+  .lw-fl-port.out { right:-8px; }
+  .lw-fl-port.out.p1 { top:36px; }
+  .lw-fl-port.armed { background:${T.warn}; border-color:${T.warn}; }
+  .lw-fl-svg { position:absolute; left:0; top:0; pointer-events:none; z-index:1; }
+  .lw-fl-svg path { fill:none; stroke:${T.lineDim}; stroke-width:2; }
+  .lw-fl-svg path.hot { stroke:${T.accent}; }
+  /* ★ 连线只有 2px 粗 ✗，直接点很难点中 ✗ —— 再叠一条 14px 宽的**透明**路径当命中区 ✓。
+     ⚠️ 必须用 **class** ✗，不能用 SVG 的 stroke / stroke-width **属性** ✗ ——
+        属性优先级**低于** CSS ✗，会被上面那条 .lw-fl-svg path { stroke-width:2 } 覆盖掉 ✗
+        （实测：属性写了 14 也没用 ✗，线还是 2px 粗、点不中 ✗）。 */
+  .lw-fl-svg path.hit { stroke:transparent; stroke-width:14; }
+  .lw-fl-svg g { pointer-events:all; cursor:pointer; }
+  .lw-fl-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:${T.faint}; font-size:11.5px; text-align:center; line-height:2; }
+  .lw-fl-field { padding:9px 14px 0; }
+  .lw-fl-field label { display:block; font-size:9.5px; color:${T.faint}; letter-spacing:.8px;
+    text-transform:uppercase; margin-bottom:5px; }
+  .lw-fl-field input, .lw-fl-field select, .lw-fl-field textarea { width:100%; box-sizing:border-box;
+    border:1px solid ${T.lineDim}; background:${T.bg2}; color:${T.text}; font:11.5px/1.7 ${UI};
+    padding:6px 8px; outline:none; resize:vertical; }
+  .lw-fl-field input:focus, .lw-fl-field select:focus, .lw-fl-field textarea:focus { border-color:${T.accent}; }
+  .lw-fl-field .tip { font-size:9.5px; color:${T.faint}; margin-top:5px; line-height:1.7; }
+  .lw-fl-log { padding:8px 14px 0; font-size:10.5px; line-height:1.8; }
+  .lw-fl-log div { display:flex; gap:7px; padding:3px 0; border-bottom:1px solid #1c1c1a; }
+  .lw-fl-log .dot { flex:none; }
+  .lw-fl-log .nm { color:${T.dim}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-fl-log .ok { color:${T.ok}; }
+  .lw-fl-log .error { color:${T.red}; }
+  .lw-fl-log .skipped { color:${T.faint}; }
+
+  /* ══════════════════════════════════════════════════════════════════════
      阅读模块（个人阅读管理）✓
      ⚠️ 注释里不能出现反引号 ✗ —— 这段整个在 JS 模板字符串里 ✗。
      ⚠️ 三栏高度由 .lw-main.fill 那条链撑满 ✓（见上面全高面板的注释 ✓）。
@@ -1140,6 +1220,7 @@
     { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
     { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
     { id: 'reading', icon: '📖', label: '阅读', grp: '外部', key: 'R-01' },
+    { id: 'flow', icon: '⚙', label: '工作流', grp: '自动化', key: 'W-01' },
     { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
@@ -1147,6 +1228,30 @@
      —— 见 CSS 里 `.lw-main.fill` 那一段的注释 ✓。
      ⚠️ 只有这三个 ✗ —— 今日 / 书签 / 研究方向 / 文件是长列表 ✓，
         给它们加 flex:1 反而会把内容裁掉 ✗。 */
+  /* ── 工作流模块 ✓ ────────────────────────────────────────────────────────
+     节点目录（参考 n8n 的节点模型 ✓）：in = 入端口数，out = 出端口数，
+     cfg = 配置字段 [key, 标签, 类型, 默认值, 提示]。
+     ★ 输出类节点**不在这里落地** ✗ —— 引擎只回 effects ✓，由前端应用 ✓。 */
+  const FLOW_NODES = {
+    'trigger.manual': { e: '▶', n: '手动触发', g: '触发', in: 0, out: 1, cfg: [] },
+    'trigger.timer': { e: '⏰', n: '定时触发', g: '触发', in: 0, out: 1, cfg: [['every', '间隔（分钟）', 'number', 60, '到点自动跑（先把图搭好，定时在服务端排期）']] },
+    'trigger.webhook': { e: '🔗', n: 'Webhook', g: '触发', in: 0, out: 1, cfg: [['path', '路径', 'text', '', '外部调用 /api/life/flow/hook/你的路径 就能触发']] },
+    'http.request': { e: '🌐', n: 'HTTP 请求', g: '数据', in: 1, out: 1, cfg: [['url', 'URL', 'text', '', '支持 {{变量}} 插值；响应体自动解析成 JSON'], ['method', '方法', 'select', 'GET', 'GET / POST / PUT / DELETE'], ['body', '请求体', 'area', '', '仅 POST / PUT 时发送']] },
+    'data.template': { e: '✎', n: '文本模板', g: '数据', in: 1, out: 1, cfg: [['text', '模板', 'area', '', '用 {{节点id}} / {{节点id.字段}} / {{input}} 引用']] },
+    'data.json': { e: '{ }', n: 'JSON 取值', g: '数据', in: 1, out: 1, cfg: [['path', '路径', 'text', '', '如 data.list[0].title；留空则返回整个对象']] },
+    'logic.if': { e: '⑂', n: '条件分支', g: '逻辑', in: 1, out: 2, cfg: [['left', '左值', 'text', '', ''], ['op', '比较', 'select', '包含', '包含 / 等于 / 不等于 / 大于 / 小于 / 为空 / 非空 / 正则匹配'], ['right', '右值', 'text', '', '']] },
+    'logic.merge': { e: '⋈', n: '合并', g: '逻辑', in: 2, out: 1, cfg: [] },
+    'ai.chat': { e: '🤖', n: 'AI 对话', g: 'AI', in: 1, out: 1, cfg: [['system', '系统提示', 'area', '', ''], ['prompt', '用户提示', 'area', '', '复用 CodeScope 里配好的大模型 ✓']] },
+    'util.delay': { e: '⏳', n: '等待', g: '工具', in: 1, out: 1, cfg: [['ms', '毫秒', 'number', 1000, '上限 30 秒']] },
+    'out.memo': { e: '📝', n: '写入备忘录', g: '输出', in: 1, out: 1, cfg: [['folder', '文件夹', 'text', '工作流', ''], ['title', '标题', 'text', '工作流产出', ''], ['text', '正文', 'area', '', '']] },
+    'out.journal': { e: '◈', n: '追加日记', g: '输出', in: 1, out: 1, cfg: [['text', '内容', 'area', '', '追加到今天的日记末尾 ✓']] },
+    'out.notify': { e: '🔔', n: '通知', g: '输出', in: 1, out: 1, cfg: [['text', '内容', 'area', '', '显示在面板顶栏状态条 ✓']] },
+    'out.mail': { e: '✉', n: '发邮件', g: '输出', in: 1, out: 1, cfg: [['to', '收件人', 'text', '', '用第一个已配置的邮箱账号发 ✓'], ['subject', '主题', 'text', '', ''], ['body', '正文', 'area', '', '']] },
+  };
+  const FLOW_GROUPS = ['触发', '数据', '逻辑', 'AI', '工具', '输出'];
+  const FLOW_W = 170, FLOW_H = 56;
+  const FLOW_UI = { sel: '', node: '', arm: '', steps: null, err: '', busy: false };
+
   /* 阅读模块的状态 ✓ —— 同样必须放这里 ✗（`mount()` 在模块最顶上就被调用了 ✓）。 */
   const RD_SRC = {
     weread: { e: '📗', n: '微信读书' }, paper: { e: '📖', n: '纸质书' },
@@ -1159,7 +1264,7 @@
   const RD_ST_ORDER = ['reading', 'want', 'done', 'paused'];
   const RD_UI = { status: 'all', src: 'all', tag: '', q: '', sel: '', impOpen: false, impText: '', impPv: null, noteKind: 'quote', noteText: '' };
 
-  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1 };
+  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1, flow: 1 };
 
   /* ── 顶栏状态条：时钟 / 问候 / 心情 / 每日格言 ✓ ─────────────────────────
      ⚠️ 这些**必须声明在模块顶部** ✗ —— `headHtml()` 在 `mount()` 的调用链上就会碰到 ✓
@@ -1710,7 +1815,7 @@
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
-    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading }[TAB] || viewToday;
+    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading, flow: viewFlow }[TAB] || viewToday;
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
@@ -3182,8 +3287,9 @@
     };
     qa('[data-mailsend]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailsend, false); });
     qa('[data-mailself]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailself, true); });
-    /* 阅读模块 ✓（bindReading 自己会判 TAB ✓，不在这页就直接返回 ✓）*/
+    /* 阅读 / 工作流模块 ✓（各自会判 TAB ✓，不在这页就直接返回 ✓）*/
     bindReading();
+    bindFlow();
     /* 顶栏状态条（秒针 / 心情 / 换一句）✓ —— 放最后 ✓，
        它是**每一页**都要绑的 ✓，不跟着某个页签的绑定走 ✓。 */
     bindHead();
@@ -5133,6 +5239,333 @@
       + '<div class="lw-rd-axis">' + st.days.map((d, i) => '<span>' + (i % 3 === 0 ? d.label : '') + '</span>').join('') + '</div>'
       + '</div></div>';
   }
+  /* ══════════════════════════════════════════════════════════════════════
+     工作流模块 ✓（参考 n8n：节点 + 连线 + 执行日志）
+     数据：STORE.flows = [{ id, name, nodes:[{id,type,x,y,cfg}], edges:[{from,port,to}], at }]
+     ══════════════════════════════════════════════════════════════════════ */
+  const flowList = () => ((STORE && STORE.flows) || []).filter(Boolean);
+  const flowSel = () => FLOW_UI.sel || (STORE && STORE.flowSel) || '';
+  const flowCurrent = () => flowList().find((f) => f.id === flowSel()) || null;
+  const flowNodeById = (f, id) => ((f && f.nodes) || []).find((n) => n && n.id === id) || null;
+  function flowNew() {
+    const name = prompt('工作流名字：', '新工作流');
+    if (!name || !name.trim()) return;
+    const id = 'w' + Date.now();
+    STORE.flows = flowList().concat([{ id, name: name.trim(), nodes: [], edges: [], at: Date.now() }]);
+    FLOW_UI.sel = id; STORE.flowSel = id; FLOW_UI.steps = null; FLOW_UI.err = '';
+    saveStore(); render();
+  }
+  function flowDel() {
+    const f = flowCurrent(); if (!f) return;
+    if (!confirm('删掉工作流「' + f.name + '」？')) return;
+    STORE.flows = flowList().filter((x) => x.id !== f.id);
+    FLOW_UI.sel = ''; STORE.flowSel = '';
+    saveStore(); render();
+  }
+  function flowAddNode(type) {
+    const f = flowCurrent(); if (!f) { setStatus(esc('先新建一个工作流 ✓'), 5000); return; }
+    const meta = FLOW_NODES[type]; if (!meta) return;
+    const n = (f.nodes || []).length;
+    const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const cfg = {};
+    (meta.cfg || []).forEach((c) => { cfg[c[0]] = c[3]; });
+    f.nodes = (f.nodes || []).concat([{ id, type, x: 40 + (n % 4) * 200, y: 40 + Math.floor(n / 4) * 100, cfg }]);
+    f.at = Date.now();
+    FLOW_UI.node = id; FLOW_UI.sel = f.id; STORE.flowSel = f.id;
+    saveStore(); render();
+  }
+  function flowDelNode(id) {
+    const f = flowCurrent(); if (!f) return;
+    f.nodes = (f.nodes || []).filter((n) => n.id !== id);
+    f.edges = (f.edges || []).filter((e) => e.from !== id && e.to !== id);
+    if (FLOW_UI.node === id) FLOW_UI.node = '';
+    if (FLOW_UI.arm === id) FLOW_UI.arm = '';
+    f.at = Date.now(); saveStore(); render();
+  }
+  /* 端口中心坐标 ✓（节点尺寸固定 170x56 ✓，直接算就行 ✓，不用量 DOM ✓）*/
+  function flowPortXY(n, side, port) {
+    const y = n.y + (Number(port) === 1 ? 42 : 28);
+    return { x: side === 'out' ? n.x + FLOW_W : n.x, y };
+  }
+  function flowEdgeD(a, b) {
+    const dx = Math.max(36, Math.abs(b.x - a.x) * 0.5);
+    return 'M' + a.x + ',' + a.y + ' C' + (a.x + dx) + ',' + a.y + ' ' + (b.x - dx) + ',' + b.y + ' ' + b.x + ',' + b.y;
+  }
+  function flowCanvasHtml(f) {
+    const nodes = (f.nodes || []);
+    const edges = (f.edges || []);
+    const planeW = Math.max(880, ...nodes.map((n) => n.x + FLOW_W + 260));
+    const planeH = Math.max(520, ...nodes.map((n) => n.y + FLOW_H + 200));
+    const stepMap = {};
+    (FLOW_UI.steps || []).forEach((st) => { stepMap[st.id] = st; });
+    const svg = '<svg class="lw-fl-svg" width="' + planeW + '" height="' + planeH + '">'
+      + edges.map((e, i) => {
+        const a = flowNodeById(f, e.from), b = flowNodeById(f, e.to);
+        if (!a || !b) return '';
+        const hot = FLOW_UI.node === e.from || FLOW_UI.node === e.to;
+        return '<g data-flowedge="' + i + '" title="点一下删掉这条连线"><path class="hit" d="'
+          + flowEdgeD(flowPortXY(a, 'out', e.port), flowPortXY(b, 'in', 0)) + '"/>'
+          + '<path class="' + (hot ? 'hot' : '') + '" d="' + flowEdgeD(flowPortXY(a, 'out', e.port), flowPortXY(b, 'in', 0)) + '"/></g>';
+      }).join('') + '</svg>';
+    const body = nodes.map((n) => {
+      const meta = FLOW_NODES[n.type] || { e: '?', n: n.type, in: 1, out: 1 };
+      const st = stepMap[n.id];
+      const cls = 'lw-fl-node' + (FLOW_UI.node === n.id ? ' on' : '') + (st ? ' s-' + st.status : '');
+      const outs = [];
+      for (let i = 0; i < (meta.out || 1); i++) {
+        outs.push('<div class="lw-fl-port out' + (i === 1 ? ' p1' : '') + (FLOW_UI.arm === n.id && i === 0 ? ' armed' : '')
+          + '" data-flout="' + n.id + '" data-flport="' + i + '" title="点这里，再点目标节点的左圆点就连上了"></div>');
+      }
+      return '<div class="' + cls + '" data-flnode="' + n.id + '" style="left:' + n.x + 'px;top:' + n.y + 'px">'
+        + ((meta.in || 0) > 0 ? '<div class="lw-fl-port in" data-flin="' + n.id + '"></div>' : '')
+        + outs.join('')
+        + '<div class="hd">' + esc(meta.g || '') + '</div>'
+        + '<div class="bd"><span class="em">' + meta.e + '</span>' + esc(meta.n) + '</div>'
+        + (st ? '<div class="st">' + (st.status === 'ok' ? '✓' + (st.ms || 0) + 'ms' : st.status === 'error' ? '✗' : '跳过') + '</div>' : '')
+        + '</div>';
+    }).join('');
+    return '<div class="lw-fl-cv" id="lw-fl-cv"><div class="lw-fl-plane" id="lw-fl-plane" style="width:' + planeW + 'px;height:' + planeH + 'px">'
+      + svg + body
+      + (nodes.length ? '' : '<div class="lw-fl-empty">左边点一个节点就能加进来 ✓<br><span style="color:' + T.faint + '">先加「手动触发」，再加要干的事，最后接「输出」</span></div>')
+      + '</div></div>';
+  }
+  function flowCfgHtml(f) {
+    if (!f) return '<div class="lw-fl-cfg"><div class="lw-rd-empty">← 先新建 / 选一个工作流</div></div>';
+    const n = flowNodeById(f, FLOW_UI.node);
+    let inner = '';
+    if (!n) {
+      inner = '<div class="lw-rd-empty" style="padding:26px 16px">点画布上的节点<br>就能在这里改它的设置</div>';
+    } else {
+      const meta = FLOW_NODES[n.type] || { n: n.type, cfg: [] };
+      inner = '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 8px">' + esc(meta.n) + '</div>'
+        + (meta.cfg || []).map((c) => {
+          const [k, label, type, def, tip] = c;
+          const v = n.cfg && n.cfg[k] != null ? n.cfg[k] : (def == null ? '' : def);
+          if (type === 'area') {
+            return '<div class="lw-fl-field"><label>' + esc(label) + '</label>'
+              + '<textarea rows="4" data-flcfg="' + esc(k) + '">' + esc(v) + '</textarea>'
+              + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '') + '</div>';
+          }
+          if (type === 'select') {
+            const opts = String(tip || '').split('/').map((x) => x.trim()).filter(Boolean);
+            return '<div class="lw-fl-field"><label>' + esc(label) + '</label><select data-flcfg="' + esc(k) + '">'
+              + opts.map((o) => '<option' + (String(v) === o ? ' selected' : '') + '>' + esc(o) + '</option>').join('')
+              + '</select></div>';
+          }
+          return '<div class="lw-fl-field"><label>' + esc(label) + '</label>'
+            + '<input data-flcfg="' + esc(k) + '" type="' + (type === 'number' ? 'number' : 'text') + '" value="' + esc(v) + '"/>'
+            + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '') + '</div>';
+        }).join('')
+        + '<div class="lw-fl-field"><button class="lw-rd-chip" data-act="del" id="lw-fl-nodedel" style="border-color:' + T.lineDim + ';padding:5px 10px">🗑 删掉这个节点</button></div>';
+    }
+    const steps = FLOW_UI.steps;
+    const log = steps && steps.length
+      ? '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 8px">运行日志</div><div class="lw-fl-log">'
+        + steps.map((st) => {
+          const meta = FLOW_NODES[st.type] || { e: '?', n: st.type };
+          return '<div><span class="dot ' + st.status + '">' + (st.status === 'ok' ? '✓' : st.status === 'error' ? '✗' : '○') + '</span>'
+            + '<span class="nm">' + meta.e + ' ' + esc(meta.n) + '</span>'
+            + '<span class="' + st.status + '" style="margin-left:auto">' + (st.status === 'ok' ? (st.ms || 0) + 'ms' : st.status === 'skipped' ? '跳过' : '失败') + '</span></div>'
+            + (st.error ? '<div style="color:' + T.red + ';font-size:9.5px;padding:0 0 4px 16px;word-break:break-all">' + esc(st.error) + '</div>' : '');
+        }).join('') + '</div>'
+      : '';
+    return '<div class="lw-fl-cfg">' + inner + log + '</div>';
+  }
+  function viewFlow() {
+    const list = flowList();
+    const f = flowCurrent();
+    const pal = FLOW_GROUPS.map((g) => '<div class="lw-rd-hd">' + g + '</div>'
+      + Object.keys(FLOW_NODES).filter((k) => FLOW_NODES[k].g === g).map((k) => {
+        const m = FLOW_NODES[k];
+        return '<div class="lw-fl-pal" data-fladd="' + k + '" title="点一下加到画布"><span class="em">' + m.e + '</span>' + m.n + '</div>';
+      }).join('')).join('');
+    const rows = list.map((x) => '<div class="lw-fl-row' + (flowSel() === x.id ? ' on' : '') + '" data-flsel="' + esc(x.id) + '">'
+      + '<span class="em">⚙</span>' + esc(x.name) + '<span class="n">' + (x.nodes || []).length + '</span></div>').join('');
+    const tools = '<div class="lw-fl-tools">'
+      + '<button id="lw-fl-new">＋ 新建</button>'
+      + '<button id="lw-fl-save">💾 保存</button>'
+      + '<button class="pri" id="lw-fl-run"' + (f && (f.nodes || []).length ? '' : ' disabled') + '>▶ 运行</button>'
+      + '<button id="lw-fl-clear">清空画布</button>'
+      + '<button id="lw-fl-del">🗑 删工作流</button>'
+      + '<span class="hint">' + (FLOW_UI.busy ? '正在跑…' : '点节点改设置 · 点右圆点再点左圆点就连线 · 点连线删掉') + '</span>'
+      + '</div>';
+    return '<div class="lw-fl">'
+      + '<div class="lw-fl-side"><div class="lw-rd-hd">我的工作流</div>' + (rows || '<div class="lw-fl-row" style="color:' + T.faint + '">还没有，点「＋ 新建」</div>')
+      + '<div class="lw-rd-hd">节点库</div>' + pal + '</div>'
+      + '<div style="flex:1;min-width:0;display:flex;flex-direction:column">' + tools
+      + (f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
+      + '</div>'
+      + flowCfgHtml(f) + '</div>';
+  }
+  /* ── 运行 ✓ ────────────────────────────────────────────────────────────── */
+  function flowAiCfg() {
+    try { return JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) { return {}; }
+  }
+  async function flowRun() {
+    const f = flowCurrent(); if (!f || FLOW_UI.busy) return;
+    if (!(f.nodes || []).length) { setStatus(esc('画布是空的 ✓ 先加几个节点'), 5000); return; }
+    FLOW_UI.busy = true; FLOW_UI.steps = null; FLOW_UI.err = '';
+    render();
+    try {
+      const ai = flowAiCfg();
+      const r = await fetch('/api/life/flow/run', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ graph: { nodes: f.nodes, edges: f.edges }, ai: { url: ai.url || '', key: ai.key || '', model: ai.model || '' } }),
+      });
+      const d = await r.json();
+      FLOW_UI.steps = (d && d.steps) || [];
+      FLOW_UI.err = (d && d.ok) ? '' : ((d && d.error) || '运行失败');
+      if (d && d.ok) {
+        const msg = await flowApplyEffects(d.effects || []);
+        setStatus(esc('✓ 跑完了' + (msg ? ' · ' + msg : '')), 8000);
+      } else {
+        setStatus(esc('✗ ' + FLOW_UI.err), 12000);
+      }
+    } catch (e) {
+      FLOW_UI.err = e.message;
+      setStatus(esc('✗ 运行失败：' + e.message), 12000);
+    }
+    FLOW_UI.busy = false;
+    render();
+  }
+  /* ★ 输出类节点在这里**才**落地 ✗ —— 引擎只回 effects ✓，STORE 归前端管 ✓ */
+  async function flowApplyEffects(effects) {
+    if (!effects.length) return '';
+    const parts = [];
+    let wrote = 0;
+    for (const e of effects) {
+      if (e.kind === 'memo') {
+        const id = 'm' + Date.now() + Math.random().toString(36).slice(2, 5);
+        STORE.memos = ((STORE && STORE.memos) || []).concat([{
+          id, text: String(e.title || '工作流产出') + '\n' + String(e.text || ''),
+          folder: String(e.folder || '工作流'), pin: false, at: Date.now(), edit: Date.now(),
+        }]);
+        if (!(STORE.memoFolders || []).includes(String(e.folder || '工作流'))) {
+          STORE.memoFolders = ((STORE && STORE.memoFolders) || []).concat([String(e.folder || '工作流')]);
+        }
+        wrote++; parts.push('写了 1 条备忘录');
+      } else if (e.kind === 'journal') {
+        const k = dayKey(new Date());
+        let j = ((STORE && STORE.journal) || []).find((x) => x && x.date === k);
+        if (!j) { j = { date: k, text: '', cat: '', at: Date.now() }; STORE.journal = ((STORE && STORE.journal) || []).concat([j]); }
+        j.text = String(j.text || '') + (j.text ? '\n' : '') + String(e.text || '');
+        j.at = Date.now(); wrote++; parts.push('追加了今天的日记');
+      } else if (e.kind === 'notify') {
+        setStatus(esc('🔔 ' + String(e.text || '').slice(0, 120)), 10000);
+      } else if (e.kind === 'mail') {
+        try {
+          const key = (mailConfiguredKeys() || [])[0];
+          if (!key) { parts.push('✗ 没配邮箱，邮件没发出去'); continue; }
+          const r = await fetch('/api/life/mail/send', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ key, account: {}, to: e.to, subject: e.subject, body: e.body }),
+          });
+          const d = await r.json();
+          parts.push(d && d.ok ? '发了 1 封邮件' : ('✗ 邮件失败：' + ((d && d.error) || '')));
+        } catch (err) { parts.push('✗ 邮件失败：' + err.message); }
+      }
+    }
+    if (wrote) { saveStore(); }
+    return parts.join(' · ');
+  }
+  function bindFlow() {
+    const host = document.getElementById('lifework-view');
+    if (!host || TAB !== 'flow') return;
+    const q = (sel) => host.querySelector(sel);
+    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    qa('[data-flsel]').forEach((el) => { el.onclick = () => { FLOW_UI.sel = el.dataset.flsel; STORE.flowSel = el.dataset.flsel; FLOW_UI.node = ''; FLOW_UI.steps = null; render(); }; });
+    qa('[data-fladd]').forEach((el) => { el.onclick = () => flowAddNode(el.dataset.fladd); });
+    const nw = q('#lw-fl-new'); if (nw) nw.onclick = () => flowNew();
+    const dl = q('#lw-fl-del'); if (dl) dl.onclick = () => flowDel();
+    const sv = q('#lw-fl-save'); if (sv) sv.onclick = () => { const f = flowCurrent(); if (f) { f.at = Date.now(); saveStore(); } setStatus(esc('✓ 工作流已保存'), 4000); };
+    const rn = q('#lw-fl-run'); if (rn) rn.onclick = () => flowRun();
+    const cl = q('#lw-fl-clear');
+    if (cl) cl.onclick = () => {
+      const f = flowCurrent(); if (!f) return;
+      if (!confirm('清空画布上的所有节点和连线？（工作流本身还在）')) return;
+      f.nodes = []; f.edges = []; f.at = Date.now();
+      FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.steps = null;
+      saveStore(); render();
+    };
+    const nd = q('#lw-fl-nodedel'); if (nd) nd.onclick = () => flowDelNode(FLOW_UI.node);
+    /* 节点：点选 / 拖动 ✓ */
+    qa('[data-flnode]').forEach((el) => {
+      el.onclick = (ev) => {
+        if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
+        FLOW_UI.node = el.dataset.flnode; FLOW_UI.arm = ''; render();
+      };
+      el.onmousedown = (ev) => {
+        if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
+        const f = flowCurrent(); if (!f) return;
+        const n = flowNodeById(f, el.dataset.flnode); if (!n) return;
+        const sx = ev.clientX, sy = ev.clientY, ox = n.x, oy = n.y;
+        let moved = false;
+        const mv = (e2) => {
+          const dx = e2.clientX - sx, dy = e2.clientY - sy;
+          if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+          moved = true;
+          n.x = Math.max(0, ox + dx); n.y = Math.max(0, oy + dy);
+          el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+          const svgEl = q('.lw-fl-svg');
+          if (svgEl) svgEl.outerHTML = ''; /* 拖动时先清掉线 ✓，松手重画 ✓（省得每帧重算 ✓）*/
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', mv);
+          document.removeEventListener('mouseup', up);
+          if (moved) { f.at = Date.now(); saveStore(); render(); }
+        };
+        document.addEventListener('mousemove', mv);
+        document.addEventListener('mouseup', up);
+      };
+    });
+    /* 连线：先点出端口（arm ✓），再点目标节点的入端口 ✓ */
+    qa('[data-flout]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        FLOW_UI.arm = (FLOW_UI.arm === el.dataset.flout && FLOW_UI.armPort === el.dataset.flport) ? '' : el.dataset.flout;
+        FLOW_UI.armPort = el.dataset.flport;
+        render();
+      };
+    });
+    qa('[data-flin]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        const f = flowCurrent(); if (!f) return;
+        const from = FLOW_UI.arm, to = el.dataset.flin;
+        if (!from) { setStatus(esc('先点左边节点的**右**圆点 ✓'), 4000); return; }
+        if (from === to) { setStatus(esc('不能连到自己 ✓'), 4000); return; }
+        const port = Number(FLOW_UI.armPort) || 0;
+        if ((f.edges || []).some((e) => e.from === from && Number(e.port) === port && e.to === to)) { FLOW_UI.arm = ''; render(); return; }
+        f.edges = (f.edges || []).concat([{ from, port, to }]);
+        f.at = Date.now();
+        FLOW_UI.arm = '';
+        saveStore(); render();
+      };
+    });
+    qa('[data-flowedge]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        const f = flowCurrent(); if (!f) return;
+        const i = Number(el.dataset.flowedge);
+        f.edges = (f.edges || []).filter((_e, k) => k !== i);
+        f.at = Date.now(); saveStore(); render();
+      };
+    });
+    /* 配置字段：改完就存 ✓（不整屏重绘 ✗，否则每敲一个字输入框就失焦 ✗）*/
+    qa('[data-flcfg]').forEach((el) => {
+      const on = () => {
+        const f = flowCurrent(); if (!f) return;
+        const n = flowNodeById(f, FLOW_UI.node); if (!n) return;
+        n.cfg = n.cfg || {};
+        n.cfg[el.dataset.flcfg] = el.value;
+        f.at = Date.now();
+        saveStore();
+      };
+      el.oninput = on;
+      el.onchange = on;
+    });
+  }
+
   function viewReading() {
     return '<div class="lw-rd">' + rdSideHtml() + '<div class="lw-rd-list">' + rdListHtml() + '</div>' + rdReadHtml() + '</div>'
       + (RD_UI.impOpen ? rdImportHtml() : '');

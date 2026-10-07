@@ -39,6 +39,7 @@ const MAIL_CLIENT = require('./lib/mail-client');
 const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
 const MAIL_LIST = require('./lib/mail-list');
+const WORKFLOW = require('./lib/workflow');
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
@@ -4766,7 +4767,8 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/list' || u.pathname === '/api/life/mail/read' ||
         u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag' ||
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
-        u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf') {
+        u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf' ||
+        u.pathname === '/api/life/flow/run') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
       };
@@ -4796,7 +4798,7 @@ const server = http.createServer(async (req, res) => {
       let postBody = null;
       if (u.pathname === '/api/life/mail/flag' || u.pathname === '/api/life/mail/move'
         || u.pathname === '/api/life/mail/newbox' || u.pathname === '/api/life/mail/delbox'
-        || u.pathname === '/api/life/weread/shelf') {
+        || u.pathname === '/api/life/weread/shelf' || u.pathname === '/api/life/flow/run') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
         try { postBody = await readBody(req, 1e5); } catch (_) { postBody = {}; }
       }
@@ -4920,6 +4922,54 @@ const server = http.createServer(async (req, res) => {
           } catch (error) {
             const why = String((error && error.message) || error);
             return send(res, 200, { ok: false, error: /abort/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) });
+          }
+        }
+
+        /* ── 工作流执行 ✓（参考 n8n 的节点图）──────────────────────────────
+           ⚠️ **输出类节点不在这里落地** ✗ —— 引擎只回 `effects` ✓，
+              由前端去写 STORE ✓（STORE 归前端管 ✓）。这样引擎是纯的 ✓，
+              可单测 ✓，也不会偷偷改用户数据 ✗。
+           ⚠️ AI 节点的配置由**前端随请求带上来** ✓（和 /api/ai/chat 一样 ✓），
+              服务端不存 Key ✓、不打日志 ✓。
+           ⚠️ 节点数 / 单次运行时长都要有上限 ✗ —— 不然一张大图能把服务挂住 ✗。 */
+        if (u.pathname === '/api/life/flow/run') {
+          if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          const graph = (postBody && postBody.graph) || null;
+          const ai = (postBody && postBody.ai) || null;
+          if (!graph || !Array.isArray(graph.nodes)) return send(res, 200, { ok: false, error: '没有拿到工作流图' });
+          if (graph.nodes.length > 200) return send(res, 200, { ok: false, error: '节点太多（上限 200 个）' });
+          if (Array.isArray(graph.edges) && graph.edges.length > 600) return send(res, 200, { ok: false, error: '连线太多（上限 600 条）' });
+          const aiCfg = ai && ai.url && ai.model ? {
+            url: String(ai.url).trim().slice(0, 2048),
+            key: String(ai.key || '').slice(0, 10000),
+            model: String(ai.model).trim().slice(0, 200),
+          } : null;
+          const aiChat = async (cfg, messages) => {
+            const resp = await fetch(cfg.url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(cfg.key ? { Authorization: 'Bearer ' + cfg.key } : {}) },
+              body: JSON.stringify({ model: cfg.model, messages, stream: false, temperature: 0.3 }),
+              signal: AbortSignal.timeout(120000),
+            });
+            const text = await resp.text();
+            if (!resp.ok) throw new Error('AI 返回 ' + resp.status + '：' + text.slice(0, 240));
+            let data = null;
+            try { data = JSON.parse(text); } catch (_) { throw new Error('AI 返回的不是 JSON'); }
+            const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            if (typeof content !== 'string') throw new Error('AI 响应里没有 choices[0].message.content');
+            return content;
+          };
+          try {
+            const r = await WORKFLOW.runFlow(graph, { ai: aiCfg, aiChat, fetch: fetch, now: Date.now() });
+            return send(res, 200, { ok: true, steps: r.steps, effects: r.effects, vars: r.vars });
+          } catch (error) {
+            return send(res, 200, {
+              ok: false,
+              error: String((error && error.message) || error),
+              nodeId: (error && error.nodeId) || '',
+              steps: (error && error.steps) || [],
+              effects: [],
+            });
           }
         }
 
