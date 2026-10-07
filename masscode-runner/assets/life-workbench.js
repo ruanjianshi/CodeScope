@@ -1632,6 +1632,8 @@
     loadMailAccounts();
     /* 页脚要显示「面板资源」的构建时间：拿到后补渲染一次 ✓（只发生一次）*/
     if (!BUILD_STAMP) ensureBuildStamp().then((stamp) => { if (stamp) render(); });
+    /* ★ 打开之后要**盯着别人**：别的「工作区」一开，本面板就让位 ✓（见 watchAway 的注释 ✓）*/
+    watchAway();
   }
 
   /* 关闭：撤掉视图，顶部标签恢复 */
@@ -1645,10 +1647,61 @@
     if (CLOCK_TIMER) { clearInterval(CLOCK_TIMER); CLOCK_TIMER = 0; }
     if (MOOD_AWAY) { document.removeEventListener('mousedown', MOOD_AWAY, true); MOOD_AWAY = null; }
     MOOD_OPEN = false;
+    stopWatchAway();
     const view = document.getElementById('lifework-view');
     if (view) view.remove();
     const btn = document.getElementById('btn-lifework');
     if (btn) { btn.setAttribute('aria-pressed', 'false'); btn.classList.remove('on'); }
+  }
+
+  /* ★★★ 打开别的「工作区」时，个人管理面板要**自动让位** ✗✗ ——
+     用户原话：「打开个人管理面板，我点击其他例如 harness，打开 DSH，
+     会被个人管理面板覆盖，切换不过去」。
+
+     **根因**：本面板是**独立的全屏浮层** ✗（`#lifework-view.lw-inpanel`，z-index 8800 ✗），
+     而应用里其它工作区是靠 `body` 上的 `xxx-mode` class **互相让位**的 ✓
+     （`openDsh` 会先 `remove('study-mode','office-mode',…)` 再 `add('dsh-mode')` ✓，
+      `openVSCode` / `openOpencode` / `openKnowledgeWorkspace` 同理 ✓）——
+     **本面板没参加这套** ✗ → 它一直盖在最上面 ✗ → DSH 明明开了却看不见 ✗。
+
+     → 不去改 index.html 里那一堆 open 函数 ✗（改不全 ✗、以后新加工作区还会漏 ✗），
+       改成**盯住 `body` 的 class** ✓：只要冒出一个**新的** `*-mode` ✓ 就自己让位 ✓。
+       一处收口，以后新加的工作区**自动兼容** ✓。
+
+     ⚠️ 「新的」很重要 ✗ —— 打开面板时如果**已经在**某个工作区里 ✓（比如先开了 DSH ✓），
+        那个 class 是**旧**的 ✓，不能再触发一次让位 ✗，
+        否则面板刚开就被自己关掉 ✗。所以先快照一份 ✓，只认「新出现的」✗。
+
+     另加一条：**点顶栏上别的按钮也让位** ✓ ——
+     有些入口（下拉菜单之类 ✗）不一定加 mode class ✗，光盯 class 会漏 ✗。 */
+  let LW_AWAY_OBS = null, LW_AWAY_CLICK = null, LW_AWAY_SEEN = null;
+  function lwModeSet() {
+    const m = String(document.body.className || '').match(/(?:^|\s)([\w-]+-mode)(?=\s|$)/g) || [];
+    return new Set(m.map((x) => x.trim()));
+  }
+  function watchAway() {
+    stopWatchAway();
+    LW_AWAY_SEEN = lwModeSet();                 /* 打开那一刻已经有的 → 不算「新开」✓ */
+    try {
+      LW_AWAY_OBS = new MutationObserver(() => {
+        const now = lwModeSet();
+        for (const m of now) if (!LW_AWAY_SEEN.has(m)) { hidePanelView(); return; }
+      });
+      LW_AWAY_OBS.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    } catch (_) { }
+    LW_AWAY_CLICK = (ev) => {
+      const t = ev.target;
+      if (!t || !t.closest) return;
+      if (t.closest('#btn-lifework')) return;    /* 本面板自己的开关 → 交给它 ✓ */
+      if (t.closest('#lifework-view')) return;   /* 面板内部 → 不管 ✓ */
+      if (t.closest('#header-center') || t.closest('.header-action')) hidePanelView();
+    };
+    document.addEventListener('click', LW_AWAY_CLICK, true);
+  }
+  function stopWatchAway() {
+    if (LW_AWAY_OBS) { try { LW_AWAY_OBS.disconnect(); } catch (_) { } LW_AWAY_OBS = null; }
+    if (LW_AWAY_CLICK) { document.removeEventListener('click', LW_AWAY_CLICK, true); LW_AWAY_CLICK = null; }
+    LW_AWAY_SEEN = null;
   }
 
   async function load(force) {
