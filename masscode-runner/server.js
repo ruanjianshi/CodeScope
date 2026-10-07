@@ -66,6 +66,28 @@ function applicationDataRoot() {
   if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData/Roaming'), 'CodeScope');
   return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'CodeScope');
 }
+/* ── 工作台数据的轮转备份 ✓ ────────────────────────────────────────────────
+   为什么需要：备忘录曾经被写串过（bug 已修），而当时**没有任何历史版本可恢复** ✗ ——
+   用户的备忘录内容就这么没了 ✗。留一层安全网：写盘前轮转快照 ✓。
+   · 最多 5 分钟一份（打字时每 300ms 就写一次，不设间隔会把备份全冲掉 ✗）
+   · 保留 6 份 ≈ 半小时窗口 ✓
+   · 只存本机同目录，不上传 ✓ */
+const STORE_BAK_MAX = 6;
+const STORE_BAK_MIN_GAP = 5 * 60e3;
+function rotateStoreBackup(file) {
+  if (!fs.existsSync(file)) return;
+  const dir = path.dirname(file);
+  const bakOf = (i) => path.join(dir, 'life-workbench.bak.' + i + '.json');
+  let newest = 0;
+  for (let i = 0; i < STORE_BAK_MAX; i++) {
+    try { newest = Math.max(newest, fs.statSync(bakOf(i)).mtimeMs); } catch (_) { }
+  }
+  if (newest && Date.now() - newest < STORE_BAK_MIN_GAP) return;
+  for (let i = STORE_BAK_MAX - 1; i > 0; i--) {
+    try { fs.renameSync(bakOf(i - 1), bakOf(i)); } catch (_) { }
+  }
+  fs.copyFileSync(file, bakOf(0));
+}
 const ONLYOFFICE_CONNECTION_FILE = path.join(applicationDataRoot(), 'office-connection.json');
 /* 「个人管理面板」的缓存：本机扫描贵（1~3s）✗、天气要出外网（2~5s）✗，
    都不需要每次刷新 —— 加缓存后二次打开是**瞬间** ✓。 */
@@ -4574,6 +4596,12 @@ const server = http.createServer(async (req, res) => {
           const body = await readBody(req, 4 * 1024 * 1024);
           const next = body && typeof body === 'object' ? body : {};
           try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
+          /* ★★ 写盘前先轮转一份快照 ✓ ——
+             教训：备忘录内容被写串（bug 已修）时，**一个历史版本都没有** ✗，
+             只能眼睁睁看着用户数据丢 ✗。所以留一层安全网：
+             最多 5 分钟一份、保留 6 份（≈ 半小时窗口）✓，
+             只存本机同目录（life-workbench.bak.0..5.json）✓，不外传 ✓。 */
+          try { rotateStoreBackup(file); } catch (_) {}
           fs.writeFileSync(file, JSON.stringify(next, null, 2));
           return send(res, 200, { ok: true });
         } catch (error) {
