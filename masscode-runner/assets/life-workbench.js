@@ -102,6 +102,27 @@
   .lw-nav .foot b { color:${T.ok}; font-weight:600; }
   .lw-main { flex:1; min-width:0; overflow:auto; padding:16px 18px 28px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a2a26; }
+  /* ★★★ 「全高面板」必须**真正填满内容区** ✗✗ ——
+     用户原话：「窗口无法拖拽，下面一大半都是空白」。
+     根因：.lw-ml（邮箱）只写了 flex:1 ✗，而它的父级 .lw-main 是
+     **display:block** ✗ → flex:1 完全不起作用 ✗ → 面板高度由**内容**决定 ✗
+     （邮箱实测只有 545px，而内容区有 846px ✗）→ 底下留 **301px 空白** ✗，
+     视口越高越明显 ✗。而且**两条拖拽条也只有 545px 高** ✗ →
+     用户在空白那一大段里抓不到它 ✗，看着就像「拖不动」✗（其实是没东西可抓 ✗）。
+     备忘录 / 日记则是另一套毛病：用 calc(100vh - 250px) 这种**魔数** ✗，
+     同样对不齐（实测差 46~61px ✗），而且窗口一变就可能更歪 ✗。
+     → 统一改成「父级变 flex 列 + 面板 flex:1」✓，**一个魔数都不用** ✓。
+     ⚠️ 只给这三个页签加 fill ✗ —— 今日 / 书签 / 研究方向 / 文件是**长列表** ✓，
+        它们本来就该撑高页面让 .lw-main 自己滚 ✓，加了 flex:1 反而会把内容裁掉 ✗。 */
+  .lw-main.fill { display:flex; flex-direction:column; }
+  /* 邮箱 / 日记：面板就是 .lw-main 的直接子元素 ✓ */
+  .lw-main.fill > .lw-ml,
+  .lw-main.fill > .lw-jr { flex:1; min-height:0; }
+  /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
+     —— 得把这条链也一起撑开 ✓ */
+  .lw-main.fill > .lw-g12 { flex:1; min-height:0; align-items:stretch; }
+  .lw-main.fill > .lw-g12 > .lw-c { display:flex; flex-direction:column; min-height:0; }
+  .lw-main.fill > .lw-g12 > .lw-c > .lw-nt { flex:1; min-height:0; height:auto; }
   .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
   /* ★ 卡片：**拖「边」改大小** ✓（右边改宽 ✓ / 下边改高 ✓ / 右下角一起改 ✓）
      原生 resize 只能拖右下角 ✗ —— 所以改成手写三条热区 ✓。
@@ -361,7 +382,11 @@
   .lw-mo-empty { padding:40px 12px; text-align:center; color:${T.faint}; font-size:12px; }
   .lw-mo-empty .big { font-size:26px; display:block; margin-bottom:9px; opacity:.5; }
   /* ── macOS 备忘录三栏 ── */
-  .lw-nt { display:flex; height:calc(100vh - 250px); min-height:440px; border:2px solid ${T.lineDim}; }
+  /* ⚠️ 高度**故意不写** ✗ —— 以前是 calc(100vh - 250px) 这种**魔数** ✗，
+     对不齐内容区（实测差 61px ✗），而且窗口一变就更歪 ✗。
+     现在由 .lw-main.fill > .lw-g12 > .lw-c > .lw-nt { flex:1 } 撑满 ✓
+     （见 .lw-main 那一段的注释 ✓）。min-height 只作**矮窗口时的下限** ✓。 */
+  .lw-nt { display:flex; min-height:320px; border:2px solid ${T.lineDim}; }
   /* 左：文件夹 + 标签 */
   .lw-nt-side { width:172px; flex:none; background:#0c0c0b; border-right:1px solid ${T.lineDim};
     padding:10px 8px; overflow:auto; }
@@ -551,7 +576,8 @@
   .lw-bk-day { padding:5px 2px 0; font-size:10.5px; color:${T.faint}; letter-spacing:1.2px; }
   /* ── 日记：月历 + 当天编辑 ── */
   /* ── 日记：可拖拽的左右分栏（填满高度，自适应窗口 ✓）── */
-  .lw-jr { display:flex; height:calc(100vh - 200px); min-height:400px; }
+  /* ⚠️ 高度同 ：**不写魔数** ✗，由 .lw-main.fill > .lw-jr { flex:1 } 撑满 ✓ */
+  .lw-jr { display:flex; min-height:320px; }
   .lw-jr-l { flex:none; display:flex; flex-direction:column; min-width:220px; overflow:auto; padding-right:2px; }
   .lw-jr-r { flex:1; min-width:280px; display:flex; flex-direction:column; overflow:hidden; }
   /* 拖拽条（左右拉）*/
@@ -827,7 +853,8 @@
   .lw-toast .x:hover { color:${T.text}; }
 
   /* ── 邮箱：三栏 ─────────────────────────────────────────────────── */
-  .lw-ml { display:flex; flex:1; min-height:0; }
+  /* ⚠️ 高度由 .lw-main.fill > .lw-ml { flex:1 } 给 ✓（以前这里写 flex:1 是**无效**的 ✗ —— 父级是 block ✗）*/
+  .lw-ml { display:flex; min-height:280px; }
   .lw-ml-side { width:196px; flex:none; border-right:2px solid ${T.line}; overflow:auto; padding:10px 0; }
   .lw-ml-list { width:330px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; }
   .lw-ml-read { flex:1; min-width:0; display:flex; flex-direction:column; }
@@ -935,6 +962,12 @@
     { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
     { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
+
+  /* ★★★ 哪些页签是「全高面板」（要真正填满内容区 ✓），哪些是「长列表」（撑高页面让它滚 ✓）
+     —— 见 CSS 里 `.lw-main.fill` 那一段的注释 ✓。
+     ⚠️ 只有这三个 ✗ —— 今日 / 书签 / 研究方向 / 文件是长列表 ✓，
+        给它们加 flex:1 反而会把内容裁掉 ✗。 */
+  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1 };
 
   let DATA = null, STORE = null, WX = null, TAB = 'today', LOADING = false, MOUNT_TIMER = 0, CITY = '广州';
   /* ★ 日记「未落盘内容」的提交钩子（模块级，跨 render 存在 ✓）
@@ -1439,7 +1472,7 @@
       (n.badge && openTodo ? `<span class="badge">${openTodo}</span>` : `<span class="badge">${n.key || ''}</span>`) + `</button>`).join('')).join('');
     host.innerHTML = headHtml() + `<div class="lw-body2">
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
-      <div class="lw-main">${main()}</div></div>`;
+      <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>`;
     bind();
     /* ★ `#lw-sub` 刚被重建 ✗ —— 把还没过期的状态消息（如「已移到… ↩ 撤销」）重画上去 ✓，
        否则会被默认的「日期 · 项目数」盖掉 ✗（天气异步回来就会触发一次 render ✗）。 */
@@ -3730,7 +3763,18 @@
         /* ★ 只有账号**真的变了**才整屏重渲染 ✓ —— 否则又成乒乓 ✓ */
         const changed = before !== JSON.stringify(STORE.mailAcc);
         if (changed && TAB === 'mail' && document.getElementById('lifework-view')) { render(); ensureMailLoad(); }
-        else mailLoadStatus(false);
+        /* ★★★ 已经有未读数了就**别再拉一次** ✗✗ ——
+           用户原话：「窗口无法拖拽，下面一大半都是空白」（这次是在自检时顺带发现的 ✗）。
+           现象：打开一封未读邮件（顶栏 3 → 2 ✓），
+           只要**再点一下「邮箱」页签**（或从别的页签切回邮箱 ✗），顶栏未读数就**跳回 3** ✗✗，
+           要等 60 秒服务端缓存过期才自然校正 ✗。
+           根因链：切页签 → `loadMailAccounts(true)`（强制 ✗）→ 账号没变 → 走到这里
+           → `mailLoadStatus(false)` 重新拉 → 服务端**缓存还是旧的 60 秒内的值** ✗
+           → `MAIL_STATUS = d` 把**本地刚减掉的数冲回去** ✗。
+           → 所以只在「**一次都还没拿到**未读数」时才顺手拉 ✓；
+             之后的刷新交给 75 秒轮询 / 切回前台补查 ✓（那两条是**设计好**的刷新点 ✓），
+             它们拿到的也才是真正过期后的新值 ✓。 */
+        else if (!MAIL_STATUS) mailLoadStatus(false);
       }
     } catch (_) {} finally { MAIL_LOADING = false; }
   }

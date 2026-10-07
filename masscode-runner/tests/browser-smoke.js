@@ -1306,6 +1306,22 @@ print(r.run())
   if (unreadBefore !== 3) throw new Error('顶栏未读数应为桩里的 3，实际 ' + unreadBefore);
   await page.locator('.lw-ml-item').first().click();
   await page.locator('.lw-ml-rhd .subj').waitFor({ state: 'visible', timeout: 15000 });
+  /* ★ 立刻验一次 ✗ —— 别拖到几百行之后再验 ✗（那样会被后面的步骤干扰，查不清是谁弄的 ✗）*/
+  if (await badgeNum() !== unreadBefore - 1) {
+    throw new Error('打开一封未读邮件后顶栏未读数应立刻减 1（' + unreadBefore + ' → ' + await badgeNum() + '）');
+  }
+  /* ★★★ 再点一下「邮箱」页签**不能**把它冲回去 ✗✗ ——
+     用户原话：「窗口无法拖拽，下面一大半都是空白」（这个是自检时顺带抓出来的 ✗）。
+     根因链：切页签 → `loadMailAccounts(true)`（强制）→ 账号没变 →
+     `else mailLoadStatus(false)` 重新拉 → 服务端**缓存还是 60 秒内的旧值** ✗
+     → `MAIL_STATUS = d` 把**本地刚减掉的数冲回去** ✗。
+     修法：只有「一次都还没拿到未读数」时才顺手拉 ✓。
+     ⚠️ 页签按钮要限定在 `.lw-nav` 里 ✗（主程序那边也有 [data-tab] ✗）。 */
+  await page.locator('.lw-nav [data-tab="mail"]').dispatchEvent('click');
+  await page.waitForTimeout(2500);
+  if (await badgeNum() !== unreadBefore - 1) {
+    throw new Error('★ 再点一次「邮箱」页签后未读数被冲回去了（应还是 ' + (unreadBefore - 1) + '，实际 ' + await badgeNum() + '）');
+  }
   if (!(await page.locator('.lw-ml-rhd .subj').innerText()).includes('桩主题未读')) throw new Error('阅读区主题不对');
   if (!(await page.locator('.lw-ml-rhd .meta').innerText()).includes('tester@qq.com')) throw new Error('阅读区没显示收件人');
   if (await page.locator('.lw-ml-att').count() !== 1) throw new Error('附件清单没显示');
@@ -1408,6 +1424,86 @@ print(r.run())
     throw new Error('邮箱账号栏拖不宽：' + mlSide0 + ' → ' + mlSideDrag.after);
   }
   if (!(await mlWidth('.lw-ml-read') > 240)) throw new Error('拖动后阅读区被挤没了');
+  /* ═══ ★★★ 「全高面板」必须真正填满内容区 ═══════════════════════════════
+     用户原话：「窗口无法拖拽，下面一大半都是空白」。
+     根因：邮箱面板 `.lw-ml` 只写了 `flex:1` ✗，而它的父级 `.lw-main` 是
+     **display:block** ✗ → `flex:1` 完全不起作用 ✗ → 面板高度由**内容**决定 ✗
+     （实测只有 545px，而内容区 846px ✗）→ 底下留 **301px 空白** ✗，
+     窗口越高越夸张 ✗（1600×1200 时是 **501px** ✗）。
+     而且**两条拖拽条也只有 545px 高** ✗ → 用户在空白那一段里抓不到它 ✗，
+     看着就像「拖不动」✗（其实是那儿根本没东西可抓 ✗）。
+     备忘录 / 日记是另一套毛病：`calc(100vh - 250px)` 这种**魔数** ✗，差 46~61px ✗。
+     ⚠️ 量的时候**必须减掉 `.lw-main` 的上下 padding** ✗ ——
+        那是**有意的留白** ✓（16 + 28），不减的话会误报 ✗（第一版就误报了一次 ✗）。 */
+  const fillGap = async (tab, paneSel) => {
+    /* ⚠️ 要限定在**工作台的左栏**里 ✗ —— 主程序那边也有 [data-tab] ✗，
+       不加限定可能点到别的元素上 ✗（实测 [data-tab] 能匹配到 11 个 ✗）。 */
+    await page.locator('.lw-nav [data-tab="' + tab + '"]').dispatchEvent('click');
+    await page.waitForTimeout(1200);
+    return page.evaluate((sel) => {
+      const mainEl = document.querySelector('.lw-main');
+      if (!mainEl) return { err: '没有 .lw-main' };
+      const cs = getComputedStyle(mainEl);
+      const mb = mainEl.getBoundingClientRect();
+      const contentH = mb.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      const contentBottom = mb.bottom - parseFloat(cs.paddingBottom);
+      const pane = document.querySelector(sel);
+      if (!pane) return { err: '找不到面板 ' + sel };
+      const pb = pane.getBoundingClientRect();
+      return {
+        fill: mainEl.className.split(/\s+/).includes('fill'),
+        面板高: Math.round(pb.height),
+        底部空白: Math.round(contentBottom - pb.bottom),
+      };
+    }, paneSel);
+  };
+  /* ⚠️⚠️ 量之前必须先把窗口**撑高** ✗✗ ——
+     桩里的文件夹（11 个）和邮件（18 封）比真机多 ✗，
+     窗口只有 900 高时，**面板内容本身就超过容器** ✗ → 根本没有留白 ✗ →
+     回退修复也照样过 ✗（这条断言会变成废的 ✗，实测踩过一次 ✗）。
+     撑到 1600 高，容器一定比内容高 ✓，「底部留白」才暴露得出来 ✓。 */
+  const VP_ORIG = { width: 1440, height: 900 };
+  await page.setViewportSize({ width: 1440, height: 1600 });
+  await page.waitForTimeout(600);
+  const mlFill = await fillGap('mail', '.lw-ml');
+  if (mlFill.err) throw new Error('邮箱高度检查失败：' + mlFill.err);
+  if (!mlFill.fill) throw new Error('邮箱页的 .lw-main 没加 fill（面板又会被内容撑高）');
+  if (mlFill.底部空白 > 2) {
+    throw new Error('★ 邮箱面板没填满内容区，底部留了 ' + mlFill.底部空白 + 'px 空白（面板只有 '
+      + mlFill.面板高 + 'px）—— 拖拽条也只有那么高，用户在空白区抓不到它');
+  }
+  /* 拖拽条要跟面板一样高 ✓（不然空白那一段「拖不动」✗）*/
+  const gripVsPane = await page.evaluate(() => {
+    const g = document.querySelector('[data-mlgrip="side"]');
+    const ml = document.querySelector('.lw-ml');
+    return g && ml ? { grip: Math.round(g.getBoundingClientRect().height), ml: Math.round(ml.getBoundingClientRect().height) } : null;
+  });
+  if (!gripVsPane) throw new Error('找不到邮箱拖拽条');
+  if (Math.abs(gripVsPane.grip - gripVsPane.ml) > 2) {
+    throw new Error('★ 拖拽条没跟面板等高（' + gripVsPane.grip + ' vs ' + gripVsPane.ml + '）—— 空白区抓不到它');
+  }
+  const memoFill = await fillGap('memo', '.lw-nt');
+  if (memoFill.err) throw new Error('备忘录高度检查失败：' + memoFill.err);
+  if (memoFill.底部空白 > 2) {
+    throw new Error('★ 备忘录面板底部留了 ' + memoFill.底部空白 + 'px 空白（面板高 ' + memoFill.面板高 + '）');
+  }
+  const jrFill = await fillGap('journal', '.lw-jr');
+  if (jrFill.err) throw new Error('日记高度检查失败：' + jrFill.err);
+  if (jrFill.底部空白 > 2) {
+    throw new Error('★ 日记面板底部留了 ' + jrFill.底部空白 + 'px 空白（面板高 ' + jrFill.面板高 + '）');
+  }
+  await page.setViewportSize(VP_ORIG);
+  await page.waitForTimeout(500);
+  /* ★ 反过来：**长列表**页签**不能**加 fill ✗ ——
+     给它们 flex:1 会把内容裁掉 ✗（它们本来就该撑高页面让 .lw-main 自己滚 ✓）。 */
+  await page.locator('.lw-nav [data-tab="files"]').dispatchEvent('click');
+  await page.waitForTimeout(1200);
+  const filesFill = await page.evaluate(() => (document.querySelector('.lw-main') || { className: '' }).className);
+  if (filesFill.split(/\s+/).includes('fill')) throw new Error('长列表页签（文件）不该加 fill —— 会把内容裁掉');
+  /* 回到邮箱页，后面的用例还要用 */
+  await page.locator('.lw-nav [data-tab="mail"]').dispatchEvent('click');
+  await page.waitForSelector('.lw-ml-item', { timeout: 20000 });
+  await page.waitForTimeout(800);
   /* 宽度要存进 STORE ✓ */
   const mlStore = (await (await fetch(baseUrl + '/api/life/store', { cache: 'no-store' })).json()).data || {};
   if (Math.abs(Number(mlStore.mailListW) - mlListDrag.after) > 2) {
