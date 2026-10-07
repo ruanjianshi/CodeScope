@@ -2,6 +2,59 @@
 
 ## 未发布 — 2026-10-07
 
+### ★★ 热榜原文：有些站「拒绝连接」—— 现在会说清楚是谁不让嵌
+
+用户原话：「怎么有些打不开，拒绝连接」。
+
+**根因**：热榜详情页里那个原文预览是个 **`<iframe>`** ✓，
+但**有些站自己不允许被别人嵌** ✗ —— 它们发的响应头里有：
+
+```
+X-Frame-Options: deny | SAMEORIGIN
+Content-Security-Policy: frame-ancestors 'none'
+```
+
+浏览器看到就直接**拦掉** ✗，`iframe` 里只剩一句
+「**github.com 拒绝了我们的连接请求**」✗。
+看着像**这边坏了** ✗，其实是**对方不让** ✓。
+
+**关键：这份名单是「实测」出来的 ✓，不是猜的 ✓** ——
+一开始想用运行时探测（读 `iframe.contentDocument` ✓）**测不准** ✗：
+「被拒」和「还没加载完」长得**一模一样** ✗（都是空文档 ✗）。
+所以改成**逐个 curl 看响应头** ✓：
+
+| | 站 | 响应头 |
+|---|---|---|
+| ✗ 不能嵌 | `github.com` | `X-Frame-Options: deny` + CSP `frame-ancestors 'none'` |
+| ✗ 不能嵌 | `arxiv.org` | `SAMEORIGIN` + CSP `none` |
+| ✗ 不能嵌 | `openalex.org` | `SAMEORIGIN` |
+| ✗ 不能嵌 | `openai.com` | `SAMEORIGIN` |
+| ✓ 能嵌 | B站 / 掘金 / 少数派 / 微博 / 百度 / 抖音 / Hacker News | 无限制 |
+
+**改法**：
+
+- 新增 `NO_FRAME_HOSTS` ✓ / `canFrame(url)` ✓ / `hostOf(url)` ✓。
+  名单里另外补了几个**众所周知的**反内嵌站 ✓（知乎 / 微信公众号 / X / Google / YouTube / Facebook / Instagram / LinkedIn ✓）。
+- `trReadHtml()` 分两条路 ✓：
+  - **能嵌** → 照旧 `<iframe sandbox="allow-same-origin">` ✓（沙箱 ✓、不带脚本 ✓、防追踪 ✓）；
+  - **不能嵌** → 换成一张 `.lw-hl-noframe` **说明卡** ✓：
+    🚫 + 「`github.com` 不允许被内嵌」✓ +
+    「它自己设了 **X-Frame-Options** / **CSP frame-ancestors**（防点击劫持）✗，
+    任何网站都嵌不了它 ✗ —— **不是这边坏了** ✓，只能在新标签页打开 ✓」✓ +
+    一个**大按钮**「↗ 在浏览器里打开原文」✓ + 原文 URL ✓。
+- 新增 `#lw-hl-openbig` 的点击绑定 ✓（和右上角那个「↗ 用浏览器打开原文」同一个动作 ✓）。
+
+**测试**：`tests/life-trends.js` 加第 ⑨ 节 ✓，实测三种站 ✓：
+
+```
+GitHub → {iframe:0, card:1, bigBtn:1, txt:"🚫 github.com 不允许被内嵌 …"}   ✅ 不塞 iframe ✓
+B站    → {iframe:1, card:0, bigBtn:0}                                      ✅ 照旧内嵌 ✓
+arXiv  → {iframe:0, card:1, bigBtn:1}                                      ✅ 也走卡片 ✓
+```
+
+**反向验证** ✓：把 `canFrame()` 临时改回 `return true` ✗，
+三条断言**立刻挂** ✓，并**复现出用户看到的那句 CSP 报错** ✓ —— 说明测的是真东西 ✓，不是空跑 ✓。
+
 ### ★★ 阅读 / 工作流 / 热榜 补上「三栏左右拖动调宽」
 
 用户原话：「窗口无法自由拖动，纯在空白」。
@@ -27,8 +80,6 @@
 ⚠️ 顺带发现 store 里有一个 **「测试工作流」**（2 个节点 ✗）——
 **不是我建的** ✗（我的探针名字都带标记 ✓，收尾会清 ✓），所以**没动它** ✗，
 万一是你自己建的 ✗。
-
-### 顶栏格言：往中间放 + 去掉「换一句」按钮，改成定时自动切换
 
 ### 顶栏格言：往中间放 + 去掉「换一句」按钮，改成定时自动切换
 

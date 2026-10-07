@@ -120,6 +120,35 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     console.log('    AI 面板: ' + JSON.stringify(ai.slice(0, 90)));
     ck('★ AI 面板有结果（配了就出简报 / 没配就给明确提示）', ai.length > 4, ai.slice(0, 60));
 
+    console.log('\n── ⑨ ★ 不允许被内嵌的站，要说清楚（不是显示「拒绝连接」）──');
+    /* 用户原话：「怎么有些打不开，拒绝连接」✗ —— 那是 GitHub 发的
+       X-Frame-Options: deny ✗，浏览器就只显示一句「github.com 拒绝了我们的连接请求」✗。
+       实测：✗ 不能嵌 = github / arxiv / openalex / openai.com；
+             ✓ 能嵌  = B站 / 掘金 / 少数派 / 微博 / 百度 / 抖音 / HN ✓。 */
+    const frameCheck = async (srcKey) => {
+      await p.locator('[data-trsrc="' + srcKey + '"]').click();
+      await p.waitForTimeout(3000);
+      await p.locator('[data-trit]').first().click();
+      await p.waitForTimeout(2500);
+      return p.evaluate(() => ({
+        iframe: document.querySelectorAll('#lw-hl-frame').length,
+        card: document.querySelectorAll('.lw-hl-noframe').length,
+        bigBtn: document.querySelectorAll('#lw-hl-openbig').length,
+        txt: (document.querySelector('.lw-hl-noframe') || {}).innerText ? document.querySelector('.lw-hl-noframe').innerText.replace(/\n/g, ' ').slice(0, 70) : '',
+      }));
+    };
+    const gh = await frameCheck('github');
+    console.log('    GitHub → ' + JSON.stringify(gh));
+    ck('★ GitHub 不塞 iframe（改出卡片）', gh.iframe === 0 && gh.card === 1, JSON.stringify(gh));
+    ck('★ 卡片说清了「是对方不允许，不是这边坏了」', /不允许被内嵌/.test(gh.txt), gh.txt);
+    ck('★ 卡片上有个大按钮能打开原文', gh.bigBtn === 1, String(gh.bigBtn));
+    const bl = await frameCheck('bili');
+    console.log('    B站 → ' + JSON.stringify(bl));
+    ck('★ B站 照旧内嵌（它允许 ✓）', bl.iframe === 1 && bl.card === 0, JSON.stringify(bl));
+    const ar = await frameCheck('arxiv');
+    console.log('    arXiv → ' + JSON.stringify(ar));
+    ck('★ arXiv 也走卡片（实测 SAMEORIGIN + CSP none ✗）', ar.iframe === 0 && ar.card === 1, JSON.stringify(ar));
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
   } catch (e) {
     console.log('✗ 异常: ' + e.message); fails.push('异常:' + e.message);

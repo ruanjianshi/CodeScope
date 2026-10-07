@@ -1167,6 +1167,17 @@
   .lw-hl-body .acts button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-hl-body .acts button.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
   .lw-hl-body iframe { width:100%; height:340px; border:1px solid ${T.lineDim}; background:#fff; }
+  /* ★ 有些站**不允许被内嵌** ✗（实测 GitHub / arXiv / OpenAlex / openai.com ✗）——
+     硬塞 iframe 的话浏览器只会显示一句「xxx 拒绝了我们的连接请求」✗，
+     用户看着像坏了 ✗。所以改成一张**说清楚的卡片** ✓ + 一个大按钮 ✓。 */
+  .lw-hl-noframe { border:1px dashed ${T.lineDim}; padding:26px 22px; text-align:center; background:${T.bg2}; }
+  .lw-hl-noframe .ic { font-size:26px; line-height:1; margin-bottom:12px; }
+  .lw-hl-noframe .ti { font-size:13px; font-weight:700; color:${T.text}; margin-bottom:8px; }
+  .lw-hl-noframe .why { font-size:11px; color:${T.dim}; line-height:1.9; margin-bottom:16px; }
+  .lw-hl-noframe button { height:32px; padding:0 16px; border:2px solid ${T.accent}; background:transparent;
+    color:${T.accent}; font:600 11px ${UI}; letter-spacing:.8px; cursor:pointer; }
+  .lw-hl-noframe button:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-hl-noframe .url { font-size:10px; color:${T.faint}; margin-top:14px; word-break:break-all; line-height:1.7; }
   .lw-hl-err { font-size:10.5px; color:${T.red}; line-height:1.8; padding:8px 13px; }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -5873,6 +5884,24 @@
      数据：STORE.trends = { star: { id: at }, seen: { id: at } }
      源目录与内容都来自服务端 `/api/life/trends` ✓（lib/hot.js ✓，11 个源都实测过 ✓）。
      ══════════════════════════════════════════════════════════════════════ */
+  /* ★★ 哪些站**不允许被 iframe 内嵌** ✗✗ —— 这份名单是**实测出来的** ✓，不是猜的 ✓：
+     逐个 curl 看响应头 ✓，凡是带 `X-Frame-Options: deny|SAMEORIGIN` 或
+     `Content-Security-Policy: frame-ancestors 'none'` 的 ✗，浏览器就会直接显示
+     「xxx 拒绝了我们的连接请求」✗（用户截图里 GitHub 那条就是这个 ✗）。
+     实测结果 ✓：
+       ✗ 不能嵌：github.com（deny + CSP none）/ arxiv.org（SAMEORIGIN + CSP none）/
+                 openalex.org（SAMEORIGIN）/ openai.com（SAMEORIGIN）
+       ✓ 能嵌：  B站 / 掘金 / 少数派 / 微博 / 百度 / 抖音 / Hacker News
+     名单里另外补了几个**众所周知的**反内嵌站 ✓（知乎 / 微信公众号 / X / Google … ✓）。
+     ⚠️ 光靠运行时探测**测不准** ✗ —— 试过读 `iframe.contentDocument` ✗，
+        被拒和「还没加载完」长得一模一样 ✗（都是空文档 ✗）。
+        所以宁可**按名单判断** ✓：能嵌就嵌 ✓，不能嵌就**说清楚** ✓。 */
+  const NO_FRAME_HOSTS = /(^|\.)(github\.com|githubusercontent\.com|arxiv\.org|openalex\.org|openai\.com|zhihu\.com|mp\.weixin\.qq\.com|x\.com|twitter\.com|google\.com|youtube\.com|facebook\.com|instagram\.com|linkedin\.com)$/i;
+  function canFrame(url) {
+    try { return !NO_FRAME_HOSTS.test(new URL(String(url || '')).hostname); } catch (_) { return false; }
+  }
+  const hostOf = (url) => { try { return new URL(String(url || '')).hostname; } catch (_) { return ''; } };
+
   const trStore = () => (STORE.trends = STORE.trends || { star: {}, seen: {} });
   const trIsStar = (id) => !!(trStore().star || {})[id];
   const trIsSeen = (id) => !!(trStore().seen || {})[id];
@@ -6071,9 +6100,17 @@
       + '<button id="lw-hl-notify">🔔 推送这条</button>'
       + '<button id="lw-hl-copy">⧉ 复制标题</button>'
       + '</div>'
-      + '<iframe id="lw-hl-frame" sandbox="allow-same-origin" src="' + esc(x.url) + '" title="原文预览"></iframe>'
-      + '<div style="font-size:10px;color:' + T.faint + ';margin-top:8px;line-height:1.8">'
-      + '上面是**沙箱预览**（不带脚本 ✓，防追踪 ✓）；打不开的站点点「↗ 用浏览器打开原文」✓</div>'
+      + (canFrame(x.url)
+        ? '<iframe id="lw-hl-frame" sandbox="allow-same-origin" src="' + esc(x.url) + '" title="原文预览"></iframe>'
+          + '<div style="font-size:10px;color:' + T.faint + ';margin-top:8px;line-height:1.8">'
+          + '上面是**沙箱预览**（不带脚本 ✓，防追踪 ✓）；排版可能和原站有出入 ✓</div>'
+        : '<div class="lw-hl-noframe">'
+          + '<div class="ic">🚫</div>'
+          + '<div class="ti">' + esc(hostOf(x.url)) + ' 不允许被内嵌</div>'
+          + '<div class="why">它自己设了 <b>X-Frame-Options</b> / <b>CSP frame-ancestors</b>（防点击劫持）✗，'
+          + '任何网站都嵌不了它 ✗ —— 不是这边坏了 ✓，只能在新标签页打开 ✓。</div>'
+          + '<button id="lw-hl-openbig">↗ 在浏览器里打开原文</button>'
+          + '<div class="url">' + esc(x.url) + '</div></div>')
       + '</div></div>';
   }
   function viewTrends() {
@@ -6106,6 +6143,8 @@
     if (cp) cp.onclick = () => { const x = trById(TR_UI.sel); if (!x) return; try { navigator.clipboard.writeText(x.title + '\n' + x.url); setStatus(esc('✓ 已复制 ✓'), 4000); } catch (_) {} };
     const op = q('#lw-hl-open');
     if (op) op.onclick = () => { const x = trById(TR_UI.sel); if (x) window.open(x.url, '_blank', 'noopener'); };
+    const opb = q('#lw-hl-openbig');
+    if (opb) opb.onclick = () => { const x = trById(TR_UI.sel); if (x) window.open(x.url, '_blank', 'noopener'); };
     const qi = q('#lw-hl-q');
     if (qi) qi.oninput = () => {
       /* 只改显隐 ✓，不整屏重绘 ✗（否则每敲一个字输入框就失焦 ✗）*/
