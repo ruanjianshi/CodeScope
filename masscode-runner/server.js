@@ -182,6 +182,236 @@ async function feedFetch(url, opt) {
   const t = await r.text();
   return { ok: r.ok, status: r.status, text: async () => t };
 }
+/* ── 微信读书：**官方 Agent API** ✓（比扒 Cookie 靠谱得多 ✓）──────────────────
+   ★ 用户给了官方 Key 之后才接上的 ✓（原来只有「扒网页 Cookie」一条路 ✗）。
+   官方文档：https://github.com/Tencent/WeChatReading（`skills/SKILL.md` ✓）。
+     · 统一入口：`POST https://i.weread.qq.com/api/agent/gateway`
+     · 鉴权：`Authorization: Bearer wrk-xxxx` ✓（绑定用户身份 ✓，不用再传 vid ✓）
+     · Body：`{ api_name, skill_version, ...业务参数**平铺在顶层** }`
+       ⚠️⚠️ **不能包在 `params` 里** ✗✗ —— 包了的话参数**不会被转发** ✗，
+          后端按默认值返回第一页 ✗ → 看起来像「分页失效」✗（官方文档专门点名了这个 ✗）。
+     · 回包：**顶层直接是业务字段** ✓（没有 `data` 包裹 ✓），`errcode` 非 0 即错误 ✓。
+   ⚠️ 每次请求都要带 `skill_version` ✗ —— 它是**官方用来提示升级**的 ✓。
+      回包里出现 `upgrade_info` 时按官方要求应当**暂停并升级** ✓；
+      我们是个长期在跑的服务 ✗，没法自动装 skill ✗ →
+      **把它透传给前端提示用户** ✓（比静默忽略强 ✓，也比假装没事强 ✓）。
+   ⚠️ 和 Cookie 那条路的**区别**（实测）：
+      · Key 路径：稳定 ✓、字段全 ✓（deepLink / category / finishReading / albums ✓）
+      · Cookie 路径：网页版一登出就失效 ✗（用户这次就是撞上这个 ✗）
+      → 所以**Key 优先** ✓，Cookie 留着当兜底 ✓。 */
+const WEREAD_GATEWAY = 'https://i.weread.qq.com/api/agent/gateway';
+const WEREAD_SKILL_VERSION = '1.0.4';   /* ⚠️ 官方 skill 升级后这个值要跟着改 ✗（见上面 upgrade_info ✓） */
+async function wereadGateway(key, apiName, params) {
+  const body = Object.assign({ api_name: apiName, skill_version: WEREAD_SKILL_VERSION }, params || {});
+  const r = await fetch(WEREAD_GATEWAY, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  const text = await r.text();
+  let j = null;
+  try { j = JSON.parse(text); } catch (_) {}
+  if (!j) throw new Error('微信读书官方接口返回的不是 JSON（HTTP ' + r.status + '）：' + String(text).slice(0, 120));
+  return j;
+}
+/* ⚠️ `progress` 的口径**踩过一次** ✗：官方文档写明是 **0~100 的整数** ✓，
+   而且专门点了一句「**1 表示 1%，不是 100%**」✓ ——
+   而网页版 Cookie 那条路（`shelf/sync` 的 `bookProgress`）给的是 **0~1 的小数** ✗。
+   两条路**口径不一样** ✗，所以归一化必须**分开写** ✗（统一 `*100` 会把 1% 变成 100% ✗，
+   也就是「刚翻了两页的书」显示成「已读完」✗ —— 用户一眼就看出来了 ✗）。 */
+const wereadPct = (v, isWebApi) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round(isWebApi ? n * 100 : n)));
+};
+/* 官方回包里出现 `upgrade_info` 就说明 skill 版本旧了 ✓ ——
+   官方要求「暂停并升级」✗，但我们是个常驻服务 ✗、装不了 skill ✗ →
+   至少**别装作没看见** ✓：透传给前端提示一句 ✓。 */
+function wereadUpgradeNote(j) {
+  const u = j && j.upgrade_info;
+  if (!u) return '';
+  const m = String(u.message || u.msg || u.version || '').replace(/\s+/g, ' ').trim();
+  return '官方 skill 提示要升级' + (m ? '：' + m.slice(0, 200) : '') + '（当前上报版本 ' + WEREAD_SKILL_VERSION + '）';
+}
+/* 进度要**逐本**问 ✓ —— `/shelf/sync` 不返回进度 ✗（网页版那条路才带 `bookProgress` ✗）。
+   ⚠️ 但**不能无上限** ✗✗：书架 200 本 = 200 个请求 ✗，会把同步拖到几十秒 ✗，
+      用户以为卡死了 ✗。→ 封顶 40 本 + 并发 6 ✓；
+      ⚠️ 单本失败**不影响整次同步** ✓（当它没进度 ✓，不抛 ✗）。 */
+async function wereadProgressMap(apiKey, books) {
+  const map = new Map();
+  const ids = (books || []).map((b) => String((b && b.bookId) || '')).filter(Boolean).slice(0, 40);
+  const CONC = 6;
+  for (let i = 0; i < ids.length; i += CONC) {
+    const got = await Promise.all(ids.slice(i, i + CONC).map((id) => wereadGateway(apiKey, '/book/getprogress', { bookId: id })
+      .then((r) => ({ id, p: Number((r && r.book && r.book.progress)) }))
+      .catch(() => null)));
+    got.forEach((x) => { if (x && Number.isFinite(x.p)) map.set(x.id, wereadPct(x.p, false)); });
+  }
+  return map;
+}
+/* ★ 官方 Key 通道 ✓（**优先** ✓） */
+async function wereadByKey(apiKey) {
+  if (!/^wrk-/.test(apiKey)) {
+    return { ok: false, error: 'API Key 应该以 wrk- 开头 —— 去官方「快速配置」页把整串复制过来（别只复制一半）' };
+  }
+  if (apiKey.length > 200) return { ok: false, error: 'API Key 太长（不该超过 200 个字符）' };
+  try {
+    const j = await wereadGateway(apiKey, '/shelf/sync');
+    const code = Number(j.errcode || 0);
+    if (code) {
+      const msg = String(j.errmsg || j.errMsg || '');
+      let why = '';
+      /* ★★ 错误码是**实测**出来的 ✗（不是猜的 ✓）：
+         `-2013 鉴权失败` = Key 无效 / 过期 ✓（用假 Key 打出来的 ✓）；
+         `-2010 用户不存在` = **压根没带** Key ✓（空 Authorization 打出来的 ✓）；
+         `-2003 参数格式错误` = 多半 `skill_version` 和官方对不上 ✓。
+         ⚠️ 而且**每条都要带「下一步做什么」** ✗✗ ——
+            只说「鉴权失败」的话用户根本不知道是「Key 错了」还是「微信读书挂了」✗
+            （实测：探针里假 Key 只回一句「鉴权失败」，用户看了等于没说 ✗）。 */
+      if (code === -2013 || /鉴权失败/.test(msg)) {
+        why = '这个 API Key 无效或已过期 —— 去官方「快速配置」页重新复制一串 ✓'
+          + '（如果那一页显示「已使用过」，点「重置 Key」再复制新的 ✓）';
+      } else if (code === -2010 || /用户不存在/.test(msg)) {
+        why = '官方接口说「用户不存在」—— 多半是 Key 没带上（复制的时候少了一截？）✓ 重新复制一次试试';
+      } else if (code === -2003) {
+        why = '官方接口说参数不对（errcode -2003）—— 多半是官方 skill 升级了，'
+          + '去 github.com/Tencent/WeChatReading 看看有没有新版本（当前上报 ' + WEREAD_SKILL_VERSION + '）';
+      } else if (/过期|expire/i.test(msg)) {
+        why = '这个 API Key 过期了 —— 去官方页重新生成一串 ✓';
+      } else {
+        why = '微信读书返回：' + (msg || ('errcode ' + code))
+          + '（errlog ' + String(j.errlog || '-') + '）—— 复制错误码去官方仓库问问，'
+          + '或者换回 Cookie 那条路试试 ✓';
+      }
+      return { ok: false, error: why };
+    }
+    const rawBooks = Array.isArray(j.books) ? j.books : [];
+    const rawAlbums = Array.isArray(j.albums) ? j.albums : [];
+    if (!rawBooks.length && !rawAlbums.length && !j.mp) {
+      return { ok: false, error: '连上了，但书架是空的 —— 确认一下这个 Key 对应的账号里有没有书' };
+    }
+    const prog = await wereadProgressMap(apiKey, rawBooks);
+    const out = rawBooks.map((b) => {
+      if (!b) return null;
+      const title = String(b.title || '').trim();
+      if (!title) return null;
+      return {
+        title,
+        author: String(b.author || '').trim(),
+        cover: /^https:\/\//.test(String(b.cover || '')) ? String(b.cover) : '',
+        prog: prog.get(String(b.bookId)) || 0,
+        /* ★ 官方多给了这些 ✓ —— 顺手带上 ✓（前端能显示「最近读过」「分类」「跳转原文」✓） */
+        deepLink: String(b.deepLink || ''),
+        category: String(b.category || ''),
+        done: Number(b.finishReading) === 1,
+        at: Number(b.readUpdateTime || 0) * 1000,
+        bookId: String(b.bookId || ''),
+      };
+    }).filter(Boolean);
+    /* 专辑 = 有声书 ✓（官方文档专门强调：它和 `books` **完全独立** ✗，
+       算「书架里有多少本」时必须一起算 ✓，否则用户会觉得「少了好几本」✗）。 */
+    const albums = rawAlbums.map((a) => {
+      const info = (a && a.albumInfo) || {};
+      const name = String(info.name || '').trim();
+      if (!name) return null;
+      return {
+        title: name,
+        author: String(info.authorName || '').trim(),
+        cover: /^https:\/\//.test(String(info.cover || '')) ? String(info.cover) : '',
+        prog: 0, kind: 'album',
+        note: String(info.trackCount ? info.trackCount + ' 集' : '') + (Number(info.finish) === 1 ? ' · 已完结' : ''),
+        category: '有声书',
+        bookId: String(info.albumId || ''),
+      };
+    }).filter(Boolean);
+    return {
+      ok: true, via: 'key',
+      /* ⚠️ 「书架有多少本」的口径按官方文档来 ✗：
+         `books + albums + (mp 非空 ? 1 : 0)` ✓ —— 少算 mp 会差一个「文章收藏」✓。 */
+      count: out.length + albums.length + (j.mp ? 1 : 0),
+      books: out, albums,
+      hasMp: !!j.mp,
+      warning: wereadUpgradeNote(j),
+    };
+  } catch (error) {
+    const why = String((error && error.message) || error);
+    return { ok: false, error: /abort|timeout/i.test(why) ? '连微信读书官方接口超时（网络不通？）' : ('连不上微信读书官方接口：' + why) };
+  }
+}
+/* Cookie 通道 ✓（**兜底** ✓ —— 网页版一登出就失效 ✗，但有些账号可能没申请 Key ✓）*/
+async function wereadByCookie(cookie) {
+  /* ⚠️ 微信读书的网页登录态靠 wr_vid + wr_skey ✓，少了这两个**一定**失败 ✗，
+     而它只会回一句含糊的「用户不存在」✗。
+     ★ 但**不能在这里直接拦掉** ✗ —— 万一它以后改了名字 ✗，
+       我们就白白挡住了本来能用的 Cookie ✗。
+       所以只**记下来** ✓，等真失败了再拿这句话去点破 ✓。 */
+  const missing = [];
+  if (!/(^|;\s*)wr_vid=/.test(cookie)) missing.push('wr_vid');
+  if (!/(^|;\s*)wr_skey=/.test(cookie)) missing.push('wr_skey');
+  const hint = missing.length
+    ? '（这段 Cookie 里没有 ' + missing.join(' / ') + ' —— 多半是网页版还没登录，或者没复制全）'
+    : '';
+  try {
+    const up = await fetch('https://i.weread.qq.com/shelf/sync?synckey=0&lectureSynckey=0&teenmode=0&album=1&onlyBookid=0', {
+      headers: {
+        'Cookie': cookie,
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://weread.qq.com/',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+    const text = await up.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) { data = null; }
+    /* ⚠️⚠️ 微信读书把错误也塞在 body 里、状态码却是 **401** ✗ ——
+       所以**不能**先判 `!up.ok` 就把原始 JSON 甩给用户 ✗
+       （第一版就是这么写的 ✗，实测用户会看到
+         `接口返回异常（HTTP 401）：{"errcode":-2010,...}` ✗，等于没说 ✗）。
+       正解：**先解析 body** ✓，认得出 errcode 就翻译成人话 ✓。 */
+    if (!data) {
+      return { ok: false, error: '微信读书接口返回异常（HTTP ' + up.status + '）：' + String(text).slice(0, 160) };
+    }
+    /* 它的错误形状不固定 ✗ —— 大小写两种字段名都试 ✓（i.weread 用 errmsg，web 用 errMsg ✗） */
+    const code = Number(data.errCode != null ? data.errCode : data.errcode);
+    const msg = String(data.errMsg || data.errmsg || data.msg || data.error || '');
+    const books = Array.isArray(data.books) ? data.books : null;
+    if (!books) {
+      let why = '没拿到书架';
+      /* ★ -2010 / 「用户不存在」= **最常见**的失败 ✗（Cookie 没带上登录态 ✓），
+         必须翻译成人话 ✓，而且**要指路** ✓：
+         用户这次就是撞上这个 ✗ —— 最省事的解法是改用官方 Key ✓。 */
+      if (code === -2010 || /用户不存在/.test(msg)) {
+        why = '微信读书说「用户不存在」—— 这段 Cookie 没带上登录身份（网页版登录已过期，或者没复制全）。'
+          + '**更省事的办法：改用官方 API Key** —— 它不会因为网页登出而失效';
+      } else if (msg) why = '微信读书返回：' + msg;
+      return { ok: false, error: why + hint };
+    }
+    /* ⚠️ 网页版这条路给的是 **0~1 的小数** ✗（和官方那条 0~100 不一样 ✗，见 wereadPct ✓） */
+    const prog = new Map();
+    (Array.isArray(data.bookProgress) ? data.bookProgress : []).forEach((x) => {
+      if (x && x.bookId) prog.set(String(x.bookId), wereadPct(x.progress, true));
+    });
+    const out = books.map((b) => {
+      if (!b) return null;
+      const title = String(b.title || '').trim();
+      if (!title) return null;
+      const cover = Array.isArray(b.cover) ? String(b.cover[b.cover.length - 1] || '') : String(b.cover || '');
+      return {
+        title,
+        author: String(b.author || '').trim(),
+        cover: /^https:\/\//.test(cover) ? cover : '',
+        prog: prog.get(String(b.bookId)) || 0,
+        bookId: String(b.bookId || ''),
+      };
+    }).filter(Boolean);
+    return { ok: true, via: 'cookie', count: out.length, books: out, albums: [] };
+  } catch (error) {
+    const why = String((error && error.message) || error);
+    return { ok: false, error: /abort|timeout/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) };
+  }
+}
 /* 每个节点输出截断 ✓ —— outbox 是要给前端看的 ✓，塞几十 MB 进去会把面板卡住 ✗ */
 function trimFlowOut(v) {
   if (v === undefined) return undefined;
@@ -5096,6 +5326,16 @@ const server = http.createServer(async (req, res) => {
        否则会被那句「没有这个邮箱账号」直接挡掉 ✗（实测踩过 ✗）。 */
         if (u.pathname === '/api/life/weread/shelf') {
           if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          /* ⚠️ 变量名**不能叫 key** ✗✗ —— 外面那个 `key` 是**邮箱账号**的 key ✗
+             （见上面 `const key = needKey() || …` ✗），
+             重名会把「邮箱」和「微信读书」两条路搅在一起 ✗。 */
+          const apiKey = String((postBody && postBody.key) || '')
+            .replace(/^\s*authorization\s*[:：]\s*/i, '')
+            .replace(/^\s*bearer\s+/i, '')
+            .replace(/[\r\n\t]+/g, '')
+            .replace(/^\s*["'`]+|["'`]+\s*$/g, '')
+            .replace(/\s+/g, '')
+            .trim();
           /* ★ 用户十有八九会把 DevTools 里那一整行「Cookie: xxx」原样粘进来 ✓ ——
              那就**替他把前缀剥掉** ✓，别直接甩一句「格式不对」✗（那是我们该干的活 ✗）。 */
           const cookie = String((postBody && postBody.cookie) || '')
@@ -5103,81 +5343,16 @@ const server = http.createServer(async (req, res) => {
             .replace(/[\r\n]+/g, ' ')
             .replace(/^\s*["']+|["']+\s*$/g, '')
             .trim();
-          if (!cookie) return send(res, 200, { ok: false, error: '没有填 Cookie' });
+          /* ★★ 官方 Key **优先** ✓ —— 它稳定 ✓、字段全 ✓、
+             而且**不会因为网页版登出而失效** ✗（用户这次就是撞上网页登录过期 ✗，
+             拿 Cookie 这条路怎么重试都没用 ✗）。Cookie 留着当兜底 ✓。 */
+          if (apiKey) return send(res, 200, await wereadByKey(apiKey));
+          if (!cookie) {
+            return send(res, 200, { ok: false, error: '没有填 API Key（也没有 Cookie）—— 推荐用官方 API Key ✓' });
+          }
           if (cookie.length > 8000) return send(res, 200, { ok: false, error: 'Cookie 太长（超过 8000 字符）—— 只要「Cookie:」那一行' });
           if (cookie.indexOf('=') < 0) return send(res, 200, { ok: false, error: '看起来不是 Cookie（里面没有 = ）—— 应该像 wr_vid=123; wr_skey=abc' });
-          /* ⚠️ 微信读书的网页登录态靠 wr_vid + wr_skey ✓，少了这两个**一定**失败 ✗，
-             而它只会回一句含糊的「用户不存在」✗。
-             ★ 但**不能在这里直接拦掉** ✗ —— 万一它以后改了名字 ✗，
-               我们就白白挡住了本来能用的 Cookie ✗。
-               所以只**记下来** ✓，等真失败了再拿这句话去点破 ✓。 */
-          const missing = [];
-          if (!/(^|;\s*)wr_vid=/.test(cookie)) missing.push('wr_vid');
-          if (!/(^|;\s*)wr_skey=/.test(cookie)) missing.push('wr_skey');
-          const hint = missing.length
-            ? '（这段 Cookie 里没有 ' + missing.join(' / ') + ' —— 多半是网页版还没登录，或者没复制全）'
-            : '';
-          try {
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 12000);
-            let up;
-            try {
-              up = await fetch('https://i.weread.qq.com/shelf/sync?synckey=0&lectureSynckey=0&teenmode=0&album=1&onlyBookid=0', {
-                headers: {
-                  'Cookie': cookie,
-                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
-                  'Accept': 'application/json, text/plain, */*',
-                  'Referer': 'https://weread.qq.com/',
-                },
-                signal: ctrl.signal,
-              });
-            } finally { clearTimeout(timer); }
-            const text = await up.text();
-            let data = null;
-            try { data = JSON.parse(text); } catch (_) { data = null; }
-            /* ⚠️⚠️ 微信读书把错误也塞在 body 里、状态码却是 **401** ✗ ——
-               所以**不能**先判 `!up.ok` 就把原始 JSON 甩给用户 ✗
-               （第一版就是这么写的 ✗，实测用户会看到
-                 `接口返回异常（HTTP 401）：{"errcode":-2010,...}` ✗，等于没说 ✗）。
-               正解：**先解析 body** ✓，认得出 errcode 就翻译成人话 ✓。 */
-            if (!data) {
-              return send(res, 200, { ok: false, error: '微信读书接口返回异常（HTTP ' + up.status + '）：' + String(text).slice(0, 160) });
-            }
-            /* 它的错误形状不固定 ✗ —— 大小写两种字段名都试 ✓（i.weread 用 errmsg，web 用 errMsg ✗） */
-            const code = Number(data.errCode != null ? data.errCode : data.errcode);
-            const msg = String(data.errMsg || data.errmsg || data.msg || data.error || '');
-            const books = Array.isArray(data.books) ? data.books : null;
-            if (!books) {
-              let why = '没拿到书架';
-              /* ★ -2010 / 「用户不存在」= **最常见**的失败 ✗（Cookie 没带上登录态 ✓），
-                 必须翻译成人话 ✓，不然用户根本不知道该干嘛 ✗。 */
-              if (code === -2010 || /用户不存在/.test(msg)) {
-                why = '微信读书说「用户不存在」—— 这段 Cookie 没带上登录身份';
-              } else if (msg) why = '微信读书返回：' + msg;
-              return send(res, 200, { ok: false, error: why + hint });
-            }
-            /* 进度：bookProgress 里是 0~1 的小数 ✓ */
-            const prog = new Map();
-            (Array.isArray(data.bookProgress) ? data.bookProgress : []).forEach((x) => {
-              if (x && x.bookId) prog.set(String(x.bookId), Math.round((Number(x.progress) || 0) * 100));
-            });
-            const out = books.map((b) => {
-              if (!b) return null;
-              const title = String(b.title || '').trim();
-              if (!title) return null;
-              const cover = Array.isArray(b.cover) ? String(b.cover[b.cover.length - 1] || '') : String(b.cover || '');
-              return {
-                title,
-                author: String(b.author || '').trim(),
-                cover: /^https:\/\//.test(cover) ? cover : '',
-                prog: prog.get(String(b.bookId)) || 0,
-              };
-            }).filter(Boolean);
-            return send(res, 200, { ok: true, count: out.length, books: out });
-          } catch (error) {
-            const why = String((error && error.message) || error);
-            return send(res, 200, { ok: false, error: /abort/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) });
-          }
+          return send(res, 200, await wereadByCookie(cookie));
         }
 
         /* ── 外刊精读：从链接抽正文 ✓ ─────────────────────────────────────────

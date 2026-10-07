@@ -66,19 +66,24 @@ console.log('内联脚本语法闸门：' + checked + ' 个脚本全部通过');
  * **注释里混进一个反引号就会截断模板串** —— 实测踩过 4 次。
  * 那种错误 `node --check` 一眼就能抓，但没人会记得手动跑。
  */
-const externals = ['assets/life-workbench.js'].concat(
-  /* ★★ 这里**不再手写 lib 清单** ✗✗ —— 原来是一串写死的文件名 ✓，
-     于是加了 lib/en-sources.js 之后它**根本没被校验** ✗
-     （我加完文件才发现清单里没有它 ✗）。
+const externals = [
+  /* ★ 面板主文件放**第一个** ✓ —— 它最常出问题（那段 CSS 模板 ✗），先看到它 ✓。 */
+  'assets/life-workbench.js',
+  /* ★ server.js 也要过一遍 ✓ —— 它是**唯一一个坏掉就全站不可用**的文件 ✗
+     （改了它不 `node --check` 的话，只有重启那一刻才发现 ✗，
+      而重启脚本本来就是为了「让改动生效」跑的 ✗，出错的时机很尴尬 ✗）。 */
+  'server.js',
+  /* ★★ lib 清单**不写死** ✗✗ —— 原来是一串写死的文件名 ✓，
+     于是加了 lib/en-sources.js 之后它**根本没被校验** ✗（加完文件才发现 ✗）。
      这就是「同一件事写了两处」的老毛病 ✓：写死的清单**必然过期** ✗。
      → 直接扫 lib/*.js ✓，以后新增文件**自动**被覆盖 ✓，不用记着改这里 ✓。
      ⚠️ 不读 server.js 的 SHARED_LIB_FILES ✗ —— 那是「浏览器能拿哪几个」的白名单 ✓，
         和「哪些文件该过语法」不是一回事 ✓（不过白名单的也该全过 ✓，全扫更保险 ✓）。 */
-  fs.readdirSync(path.join(__dirname, '..', 'lib'))
+  ...fs.readdirSync(path.join(__dirname, '..', 'lib'))
     .filter((f) => /\.js$/.test(f))
     .sort()
-    .map((f) => 'lib/' + f)
-);
+    .map((f) => 'lib/' + f),
+];
 let extFailed = 0;
 
 for (const rel of externals) {

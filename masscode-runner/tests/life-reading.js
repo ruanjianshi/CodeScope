@@ -33,18 +33,26 @@ const WEREAD_SAMPLE = [
   p.on('dialog', async (d) => { const v = dialogs.length ? dialogs.shift() : ''; await d.accept(v); });
   const txt = async (s) => { const l = p.locator(s); return (await l.count()) ? (await l.first().innerText()).replace(/\n/g, ' ').trim() : '(没有)'; };
 
-  /* ⚠️⚠️ 用户的**真实**微信读书 Cookie 绝不能被探针清掉 ✗✗ ——
+  /* ⚠️⚠️ 用户的**真实**微信读书凭据（API Key / Cookie）绝不能被探针清掉 ✗✗ ——
      第 ⑨ 节要验「未连接」的样子 ✓，所以得先把它摘掉 ✓，
      那就必须**先备份、跑完原样放回去** ✓。
-     （以前的收尾里直接 `delete d.wereadCookie` ✗ —— 那是**删用户数据** ✗，改掉 ✓。） */
+     （以前的收尾里直接 `delete d.wereadCookie` ✗ —— 那是**删用户数据** ✗，改掉 ✓。）
+     ⚠️ 后来加了官方 API Key ✗ —— 只备份 Cookie 不够了 ✗：
+        用户现在是**用 Key 连的** ✓，只摘 Cookie 的话 `rdWrOn()` 还是 true ✗ →
+        第 ⑨ 节「未连接」的断言全都会假失败 ✗（实测就是这样挂的 ✓）。
+        → `wereadKey / wereadVia` 一起备份还原 ✓。 */
   let wrBackup = null;
   try {
     const d0 = await store();
-    wrBackup = { cookie: d0.wereadCookie || '', at: d0.wereadSyncAt || 0, n: d0.wereadCount || 0 };
-    if (wrBackup.cookie || wrBackup.at || wrBackup.n) {
-      delete d0.wereadCookie; delete d0.wereadSyncAt; delete d0.wereadCount;
+    wrBackup = {
+      cookie: d0.wereadCookie || '', at: d0.wereadSyncAt || 0, n: d0.wereadCount || 0,
+      key: d0.wereadKey || '', via: d0.wereadVia || '',
+    };
+    if (wrBackup.cookie || wrBackup.key || wrBackup.at || wrBackup.n) {
+      delete d0.wereadCookie; delete d0.wereadKey; delete d0.wereadVia;
+      delete d0.wereadSyncAt; delete d0.wereadCount;
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d0) });
-      console.log('（探针临时摘掉了已连接的微信读书 Cookie —— 跑完会原样放回去 ✓）');
+      console.log('（探针临时摘掉了已连接的微信读书凭据 —— 跑完会原样放回去 ✓）');
     }
   } catch (_) {}
 
@@ -156,14 +164,33 @@ const WEREAD_SAMPLE = [
     console.log('\n── ⑨ ★ 微信读书连接（用户要的「读取微信读书里面的书」）──');
     ck('工具栏有微信读书按钮', await p.locator('#lw-rd-sync').count() === 1, await txt('#lw-rd-sync'));
     ck('★ 未连接时写着「微信读书」（不是假装已同步）', (await txt('#lw-rd-sync')).includes('微信读书'), await txt('#lw-rd-sync'));
+    /* ★★ 左栏那个**常驻**入口 ✓ —— 这是个原来就有的 bug ✗：
+       中栏按钮连上之后会变成「📗 同步」✗，于是**面板再也打不开** ✗ →
+       换不了 Key、也**断不开连接** ✗✗。 */
+    ck('★★ 左栏有常驻的「连接设置」入口（连上之后也进得去）',
+      await p.locator('[data-wrcset]').count() === 1, await txt('.lw-rd-side'));
     /* ★ 点它应该弹**正经面板** ✓，不是 `prompt()` ✗ ——
        用户就是卡在 prompt 那个空白框上 ✗（他截图来问的就是这个 ✗）。 */
     await p.click('#lw-rd-sync'); await p.waitForTimeout(900);
     ck('★ 弹的是正经连接面板（不是 prompt）', await p.locator('#lw-wrc').count() === 1);
+    /* ★★ 改成两页签之后 ✓：**默认停在官方 API Key 那一页** ✓
+       （它是推荐的那条路 ✓，而且不会因为网页登出就失效 ✗）。 */
+    ck('★ 有两个页签（API Key / Cookie）',
+      await p.locator('[data-wrtab="key"]').count() === 1 && await p.locator('[data-wrtab="cookie"]').count() === 1);
+    ck('★ 默认停在「API Key」（推荐那条）', await p.locator('[data-wrtab="key"].on').count() === 1);
+    const wk = await txt('#lw-wrc');
+    ck('★ Key 页说清了这是**官方**接口', /官方/.test(wk), wk.slice(0, 90));
+    ck('★ Key 页有「怎么拿」的分步指引', /怎么拿/.test(wk) && /wrk-/.test(wk));
+    ck('★ Key 页说清了「只存在本机 / 只发给 i.weread.qq.com」', /只存在/.test(wk) && /i\.weread\.qq\.com/.test(wk));
+    ck('★ Key 页有输入框 + 「连接并同步」', await p.locator('#lw-wrc-key').count() === 1 && await p.locator('#lw-wrc-go').count() === 1);
+    /* 切到 Cookie 那一页 ✓ —— 老教程要**还在**（只是降级成兜底 ✓），
+       而且必须**明确警告它会失效** ✗（用户这次撞上的就是这个 ✗）。 */
+    await p.locator('[data-wrtab="cookie"]').click(); await p.waitForTimeout(700);
     const wc = await txt('#lw-wrc');
-    ck('★ 面板里有「怎么拿 Cookie」的分步指引', /怎么拿/.test(wc) && /F12/.test(wc) && /标头|Headers/.test(wc), wc.slice(0, 80));
-    ck('★ 说清了「只存在本机 / 只发给 weread.qq.com」', /只存在/.test(wc) && /weread\.qq\.com/.test(wc));
+    ck('★ Cookie 页还留着「怎么拿 Cookie」的分步指引', /怎么拿/.test(wc) && /F12/.test(wc) && /标头|Headers/.test(wc), wc.slice(0, 80));
+    ck('★ Cookie 页说清了「只存在本机 / 只发给 weread.qq.com」', /只存在/.test(wc) && /weread\.qq\.com/.test(wc));
     ck('★ 明确标了「非官方接口」', /非官方/.test(wc));
+    ck('★★ 而且明确警告「网页版一登出就失效」（用户撞上的就是它）', /登出/.test(wc) && /失效/.test(wc), wc.slice(0, 150));
     ck('有粘贴框 + 「连接并同步」', await p.locator('#lw-wrc-tx').count() === 1 && await p.locator('#lw-wrc-go').count() === 1);
     ck('没连接时不显示「断开连接」', await p.locator('#lw-wrc-off').count() === 0);
 
@@ -201,11 +228,19 @@ const WEREAD_SAMPLE = [
       d.bookNotes = (d.bookNotes || []).filter((n) => !ids.includes(n.bookId));
       d.readLog = (d.readLog || []).filter((r) => !ids.includes(r.bookId));
       delete d.bookSel;
-      /* ★ 把用户的**真实** Cookie 原样放回去 ✓（探针只该动自己造的东西 ✗） */
-      if (wrBackup && wrBackup.cookie) {
-        d.wereadCookie = wrBackup.cookie; d.wereadSyncAt = wrBackup.at; d.wereadCount = wrBackup.n;
-        console.log('\n（已把用户的微信读书 Cookie 原样放回 ✓）');
-      } else { delete d.wereadCookie; delete d.wereadSyncAt; delete d.wereadCount; }
+      /* ★ 把用户的**真实**凭据原样放回去 ✓（探针只该动自己造的东西 ✗）——
+         ⚠️ Key / Cookie / via **三个都要还原** ✗：只还原 Cookie 的话，
+            用 Key 连的用户跑完探针就「掉线」了 ✗（`wereadKey` 被删掉了 ✗）。 */
+      if (wrBackup && (wrBackup.cookie || wrBackup.key)) {
+        if (wrBackup.cookie) d.wereadCookie = wrBackup.cookie; else delete d.wereadCookie;
+        if (wrBackup.key) d.wereadKey = wrBackup.key; else delete d.wereadKey;
+        if (wrBackup.via) d.wereadVia = wrBackup.via; else delete d.wereadVia;
+        d.wereadSyncAt = wrBackup.at; d.wereadCount = wrBackup.n;
+        console.log('\n（已把用户的微信读书凭据原样放回 ✓）');
+      } else {
+        delete d.wereadCookie; delete d.wereadKey; delete d.wereadVia;
+        delete d.wereadSyncAt; delete d.wereadCount;
+      }
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
       const a = await store();
       console.log('\n收尾：书 ' + before.books + '→' + (a.books || []).length + ' · 笔记 ' + before.notes + '→' + (a.bookNotes || []).length + ' · 记录 ' + before.log + '→' + (a.readLog || []).length
