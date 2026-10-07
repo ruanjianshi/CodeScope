@@ -33,6 +33,21 @@ const WEREAD_SAMPLE = [
   p.on('dialog', async (d) => { const v = dialogs.length ? dialogs.shift() : ''; await d.accept(v); });
   const txt = async (s) => { const l = p.locator(s); return (await l.count()) ? (await l.first().innerText()).replace(/\n/g, ' ').trim() : '(没有)'; };
 
+  /* ⚠️⚠️ 用户的**真实**微信读书 Cookie 绝不能被探针清掉 ✗✗ ——
+     第 ⑨ 节要验「未连接」的样子 ✓，所以得先把它摘掉 ✓，
+     那就必须**先备份、跑完原样放回去** ✓。
+     （以前的收尾里直接 `delete d.wereadCookie` ✗ —— 那是**删用户数据** ✗，改掉 ✓。） */
+  let wrBackup = null;
+  try {
+    const d0 = await store();
+    wrBackup = { cookie: d0.wereadCookie || '', at: d0.wereadSyncAt || 0, n: d0.wereadCount || 0 };
+    if (wrBackup.cookie || wrBackup.at || wrBackup.n) {
+      delete d0.wereadCookie; delete d0.wereadSyncAt; delete d0.wereadCount;
+      await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d0) });
+      console.log('（探针临时摘掉了已连接的微信读书 Cookie —— 跑完会原样放回去 ✓）');
+    }
+  } catch (_) {}
+
   try {
     await p.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
     await p.waitForSelector('#btn-lifework', { timeout: 20000 });
@@ -48,7 +63,7 @@ const WEREAD_SAMPLE = [
     ck('中栏在', await p.locator('.lw-rd-list').count() === 1);
     ck('右栏在', await p.locator('.lw-rd-read').count() === 1);
     ck('左栏有统计四格', await p.locator('.lw-rd-stat div').count() === 4);
-    ck('有「＋ 加书」「📥 导入笔记」「🔄 同步」', await p.locator('#lw-rd-add').count() === 1 && await p.locator('#lw-rd-imp').count() === 1 && await p.locator('#lw-rd-sync').count() === 1);
+    ck('有「＋ 加书」「📥 导入笔记」「微信读书」三个按钮', await p.locator('#lw-rd-add').count() === 1 && await p.locator('#lw-rd-imp').count() === 1 && await p.locator('#lw-rd-sync').count() === 1);
     /* 面板要填满内容区（和邮箱同一条规则 ✓）*/
     const fill = await p.evaluate(() => {
       const mainEl = document.querySelector('.lw-main'); const cs = getComputedStyle(mainEl); const mb = mainEl.getBoundingClientRect();
@@ -134,6 +149,41 @@ const WEREAD_SAMPLE = [
     const vis = await p.locator('.lw-bk').evaluateAll((els) => els.filter((e) => e.style.display !== 'none').length);
     ck('搜索「置身」只剩 1 本', vis === 1, String(vis));
 
+    console.log('\n── ⑨ ★ 微信读书连接（用户要的「读取微信读书里面的书」）──');
+    ck('工具栏有微信读书按钮', await p.locator('#lw-rd-sync').count() === 1, await txt('#lw-rd-sync'));
+    ck('★ 未连接时写着「微信读书」（不是假装已同步）', (await txt('#lw-rd-sync')).includes('微信读书'), await txt('#lw-rd-sync'));
+    /* ★ 点它应该弹**正经面板** ✓，不是 `prompt()` ✗ ——
+       用户就是卡在 prompt 那个空白框上 ✗（他截图来问的就是这个 ✗）。 */
+    await p.click('#lw-rd-sync'); await p.waitForTimeout(900);
+    ck('★ 弹的是正经连接面板（不是 prompt）', await p.locator('#lw-wrc').count() === 1);
+    const wc = await txt('#lw-wrc');
+    ck('★ 面板里有「怎么拿 Cookie」的分步指引', /怎么拿/.test(wc) && /F12/.test(wc) && /标头|Headers/.test(wc), wc.slice(0, 80));
+    ck('★ 说清了「只存在本机 / 只发给 weread.qq.com」', /只存在/.test(wc) && /weread\.qq\.com/.test(wc));
+    ck('★ 明确标了「非官方接口」', /非官方/.test(wc));
+    ck('有粘贴框 + 「连接并同步」', await p.locator('#lw-wrc-tx').count() === 1 && await p.locator('#lw-wrc-go').count() === 1);
+    ck('没连接时不显示「断开连接」', await p.locator('#lw-wrc-off').count() === 0);
+
+    console.log('   ① 本地先判一道（不像 Cookie 的不白跑网络）');
+    await p.locator('#lw-wrc-tx').fill('随便粘的一段话');
+    await p.click('#lw-wrc-go'); await p.waitForTimeout(900);
+    const m1 = await txt('#lw-wrc-st');
+    ck('★ 不像 Cookie 的当场拦下，并告诉用户正确形状', /看起来不是 Cookie/.test(m1) && /wr_vid=/.test(m1), m1);
+
+    console.log('   ② 真打一次微信读书（这条是**真链路** ✓）');
+    await p.locator('#lw-wrc-tx').fill('Cookie: wr_rt=abc; wr_localvid=def');
+    await p.click('#lw-wrc-go');
+    await p.waitForTimeout(8000);
+    const m2 = await txt('#lw-wrc-st');
+    ck('★ 无效 Cookie → 翻译成人话（不是甩原始 JSON）', /用户不存在/.test(m2) && !/HTTP 401/.test(m2), m2);
+    ck('★ 并点破了「缺 wr_vid / wr_skey」', /wr_vid/.test(m2), m2);
+    ck('★ 失败后按钮回到可点状态（能重试）', await p.locator('#lw-wrc-go:not([disabled])').count() === 1);
+    const stWr = await store();
+    ck('★ 失败时**没有**把 Cookie 落盘', !String(stWr.wereadCookie || ''), String(stWr.wereadCookie || '(空)'));
+
+    await p.click('#lw-wrc-x'); await p.waitForTimeout(700);
+    ck('面板能关掉', await p.locator('#lw-wrc').count() === 0);
+    ck('★ 关掉后按钮仍写「微信读书」（没假装连上）', (await txt('#lw-rd-sync')).includes('微信读书'), await txt('#lw-rd-sync'));
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
   } catch (e) {
     console.log('✗ 异常: ' + e.message); fails.push('异常:' + e.message);
@@ -146,7 +196,12 @@ const WEREAD_SAMPLE = [
       d.books = (d.books || []).filter((x) => !String(x.title).includes(MARK));
       d.bookNotes = (d.bookNotes || []).filter((n) => !ids.includes(n.bookId));
       d.readLog = (d.readLog || []).filter((r) => !ids.includes(r.bookId));
-      delete d.bookSel; delete d.wereadCookie;
+      delete d.bookSel;
+      /* ★ 把用户的**真实** Cookie 原样放回去 ✓（探针只该动自己造的东西 ✗） */
+      if (wrBackup && wrBackup.cookie) {
+        d.wereadCookie = wrBackup.cookie; d.wereadSyncAt = wrBackup.at; d.wereadCount = wrBackup.n;
+        console.log('\n（已把用户的微信读书 Cookie 原样放回 ✓）');
+      } else { delete d.wereadCookie; delete d.wereadSyncAt; delete d.wereadCount; }
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
       const a = await store();
       console.log('\n收尾：书 ' + before.books + '→' + (a.books || []).length + ' · 笔记 ' + before.notes + '→' + (a.bookNotes || []).length + ' · 记录 ' + before.log + '→' + (a.readLog || []).length

@@ -1350,6 +1350,21 @@
   .lw-imp .ft button.pri:hover { background:transparent; color:${T.accent}; }
   .lw-imp .pv { font-size:10.5px; color:${T.dim}; line-height:1.9; }
   .lw-imp .pv b { color:${T.accent}; }
+  /* ★ 微信读书「连接」面板的补充样式 ✓ —— 复用 .lw-imp 那套浮层 ✓（别再造一个 ✗）。
+     「怎么拿 Cookie」那四步是**这个功能的成败关键** ✗ ——
+     用户就是卡在这一步 ✗，所以给它一个显眼的盒子 ✓，别混在灰字里 ✗。 */
+  .lw-imp .steps { border:1px solid ${T.lineDim}; background:${T.card}; padding:11px 14px; margin:10px 0 12px; }
+  .lw-imp .steps .h { font-size:10px; letter-spacing:1.2px; text-transform:uppercase;
+    color:${T.accent}; margin-bottom:8px; }
+  .lw-imp .steps ol { margin:0; padding-left:18px; font-size:10.5px; color:${T.dim}; line-height:1.95; }
+  .lw-imp .steps li { margin-bottom:3px; }
+  .lw-imp .steps code { background:${T.card2}; border:1px solid ${T.lineDim}; padding:1px 5px; color:${T.text}; }
+  .lw-imp .steps .n { margin-top:8px; font-size:10px; color:${T.warn}; line-height:1.85; }
+  .lw-imp .st { font-size:10.5px; line-height:1.9; margin-top:10px; min-height:18px;
+    color:${T.dim}; word-break:break-all; }
+  .lw-imp .st.ok { color:${T.ok}; }
+  .lw-imp .st.err { color:${T.red}; }
+  .lw-imp .st2 { font-size:10px; color:${T.faint}; line-height:1.9; margin-top:4px; }
 
   .lw-ml-tr { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; }
   .lw-ml-tr .pane { min-width:0; min-height:0; }
@@ -1526,7 +1541,16 @@
     done: { e: '✅', n: '读完' }, paused: { e: '⏸', n: '搁置' },
   };
   const RD_ST_ORDER = ['reading', 'want', 'done', 'paused'];
-  const RD_UI = { status: 'all', src: 'all', tag: '', q: '', sel: '', impOpen: false, impText: '', impPv: null, noteKind: 'quote', noteText: '' };
+  const RD_UI = {
+    status: 'all', src: 'all', tag: '', q: '', sel: '',
+    impOpen: false, impText: '', impPv: null, noteKind: 'quote', noteText: '',
+    /* ★ 微信读书「连接」面板的状态 ✓ —— 用户原话：
+       「这个没有接入微信读书，可以实现读取微信读书里面的书」。
+       ⚠️ 这些都只放**内存** ✗ —— Cookie 本身落盘（STORE.wereadCookie ✓），
+          但「面板开没开 / 正在连 / 上一句提示」刷新就重置 ✓（不该留 ✓）。 */
+    connOpen: false, connText: '', connBusy: false, connMsg: '', connOk: false,
+    autoAt: 0,
+  };
 
   const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1, flow: 1, trends: 1 };
 
@@ -5444,13 +5468,23 @@
        STORE.bookNotes = [{ id, bookId, kind: 'quote' | 'idea', text, loc, at }]
        STORE.readLog   = [{ id, date: 'YYYY-MM-DD', bookId, min, pages, at }]
 
-     ★ 关于「接入微信读书」✗：微信读书**没有对外的公开 API** ✗。
+     ★ 关于「接入微信读书」✓：微信读书**没有对外的公开 API** ✗。
+       实测过（这台机器上）：
+         ✗ `weread.qq.com/web/login/getuid` → **404** ✗ —— 老的「扫码登录」接口已经没了 ✗，
+            所以**做不了**「点一下扫码就登录」✗（试过，别再来试 ✗）。
+         ✓ `weread.qq.com/web/shelf/sync` 和 `i.weread.qq.com/shelf/sync` **都通** ✓，
+            不带 Cookie 时明确回 `{"errCode":-2010,"errMsg":"用户不存在"}` ✓
+            —— 说明**接口是活的 ✓，只差一个登录身份** ✓。
+       结论：**唯一可行的路是借用用户浏览器里的 Cookie** ✓。
+
        所以这里做的是**两条都能用**的路 ✓：
          ① 「📥 导入笔记」—— 把微信读书 App 里「导出笔记」的文本粘进来 ✓
             （这条路**一定可用** ✓，而且导入的是用户自己真正划过的东西 ✓）
-         ② 「🔄 同步书架」—— 走服务端的**非官方接口代理** ✓，
-            需要用户自己填 Cookie ✓，**明确标注「非官方、可能随时失效」** ✓，
-            失败时给清楚的提示 ✓，绝不假装成功 ✗。
+         ② 「🔗 微信读书」—— 服务端的**非官方接口代理** ✓，
+            用一个**正经的连接面板**（不是 prompt ✗）引导用户把 Cookie 粘进来 ✓，
+            **明确标注「非官方、可能随时失效」** ✓，
+            失败时给**能照着修**的提示 ✓（少了 wr_vid？粘错了行？✗），
+            绝不假装成功 ✗。
      ══════════════════════════════════════════════════════════════════════ */
 
   const bookById = (id) => ((STORE && STORE.books) || []).find((b) => b && b.id === id) || null;
@@ -5625,7 +5659,8 @@
       + '<input id="lw-rd-q" placeholder="搜索书名 / 作者…" value="' + esc(RD_UI.q) + '"/>'
       + '<button id="lw-rd-add" title="手动添加一本书">＋ 加书</button>'
       + '<button id="lw-rd-imp" title="把微信读书 App 导出的笔记粘进来">📥 导入笔记</button>'
-      + '<button id="lw-rd-sync" title="走非官方接口拉微信读书书架（需要 Cookie）">🔄 同步</button>'
+      + '<button id="lw-rd-sync" title="' + (rdWrOn() ? '同步微信读书书架（已连接，点一下直接拉）' : '连接微信读书，把你的书架读进来') + '">'
+      + (rdWrOn() ? '📗 同步' : '🔗 微信读书') + '</button>'
       + '</div>';
     if (!list.length) {
       const empty = ((STORE && STORE.books) || []).length ? '没有符合条件的书' : '书架还是空的<br><span style="color:' + T.faint + '">点「＋ 加书」或「📥 导入笔记」开始</span>';
@@ -6454,7 +6489,8 @@
       + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + rdSideInnerHtml() + '</div>' + paneGrip('side')
       + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + rdListHtml() + '</div>' + paneGrip('list')
       + rdReadHtml() + '</div>'
-      + (RD_UI.impOpen ? rdImportHtml() : '');
+      + (RD_UI.impOpen ? rdImportHtml() : '')
+      + (RD_UI.connOpen ? rdWrConnHtml() : '');
   }
   /* 导入浮层 ✓（先预览再导入 ✓）*/
   function rdImportHtml() {
@@ -6595,38 +6631,150 @@
     rdSave(); render();
     rdToast('导入完成：新增 ' + added + ' 本' + (merged ? ' · 合并 ' + merged + ' 本' : '') + ' · ' + notes + ' 条笔记 ✓');
   }
-  /* 微信读书「非官方接口」同步 ✓ —— 明确标注、失败说清楚 ✓ */
-  async function rdSyncWeread() {
-    const cookie = prompt(
-      '同步微信读书书架（非官方接口，可能随时失效）\n\n'
-      + '需要你在浏览器里登录 weread.qq.com 之后，从开发者工具里复制 Cookie（含 wr_vid / wr_skey）粘到这里。\n'
-      + '留空则取消。\n\n'
-      + '⚠️ Cookie 只会存在本机 life-mail.json 同目录的 life-workbench.json 里，不会外传。', '');
-    if (cookie === null) return;
-    if (!String(cookie).trim()) return;
-    rdToast('正在同步微信读书…');
+  /* ══════════════════════════════════════════════════════════════════════
+     微信读书「连接」✓ —— 用户原话：
+     「这个没有接入微信读书，可以实现读取微信读书里面的书」
+     ⚠️ 以前是一个 `prompt()` ✗ —— 那个连「怎么拿 Cookie」都写不下 ✗，
+        用户只会一脸茫然 ✗（他截图来问的就是这个 ✗）。改成正经面板 ✓。
+     ⚠️ 实测过（这台机器上 ✓）：`weread.qq.com/web/shelf/sync` 是**活的** ✓，
+        不带 Cookie 会明确回 `{"errCode":-2010,"errMsg":"用户不存在"}` ✓ ——
+        所以**唯一缺的就是一个登录身份** ✓，别的都是通的 ✓。
+     ══════════════════════════════════════════════════════════════════════ */
+  const rdWrOn = () => !!String((STORE && STORE.wereadCookie) || '').trim();
+  /* ★ 用户十有八九会把「Cookie: 」这个前缀一起复制进来 ✗（从 DevTools 整行复制的 ✓）——
+     那就**帮他剥掉** ✓，别让他自己猜哪儿多复制了 ✗。顺带收拾换行 / 首尾引号 ✓。 */
+  function rdWrClean(t) {
+    return String(t == null ? '' : t)
+      .replace(/^\s*cookie\s*[:：]\s*/i, '')
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/^\s*["']+|["']+\s*$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+  /* 本地先判一道 ✓ —— 明显不是 Cookie 的别白跑一趟网络 ✓（省时间，提示也更准 ✓）。 */
+  function rdWrLocalCheck(t) {
+    if (!t) return '还没粘 Cookie';
+    if (t.length > 8000) return '太长了 —— 多半把整个请求头都复制进来了，只要 Cookie 那一行';
+    if (t.indexOf('=') < 0) return '看起来不是 Cookie。它应该长这样：wr_vid=1234567; wr_skey=abcdefg';
+    return '';
+  }
+  function rdWrConnOpen() {
+    RD_UI.connOpen = true; RD_UI.connMsg = ''; RD_UI.connOk = false;
+    RD_UI.connText = RD_UI.connText || String((STORE && STORE.wereadCookie) || '');
+    render();
+  }
+  /* silent = 进页面时的**自动**同步 ✓ —— 不弹面板、不打扰 ✓，只在顶栏说一声 ✓。 */
+  async function rdSyncWeread(silent) {
+    if (RD_UI.connBusy) return;
+    const cookie = rdWrClean(RD_UI.connText || (STORE && STORE.wereadCookie) || '');
+    if (!cookie) {
+      if (!silent) { RD_UI.connOpen = true; RD_UI.connMsg = '还没连接微信读书 —— 先按下面四步把 Cookie 粘进来'; RD_UI.connOk = false; render(); }
+      return;
+    }
+    const bad = rdWrLocalCheck(cookie);
+    if (bad) { RD_UI.connOpen = true; RD_UI.connMsg = bad; RD_UI.connOk = false; render(); return; }
+    RD_UI.connBusy = true;
+    if (!silent) { RD_UI.connMsg = '正在连微信读书…'; RD_UI.connOk = false; render(); }
     try {
       const r = await fetch('/api/life/weread/shelf', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ cookie: String(cookie).trim() }),
+        body: JSON.stringify({ cookie }),
       });
       const d = await r.json();
-      if (!d || !d.ok) { rdToast('✗ 同步失败：' + ((d && d.error) || '未知错误')); return; }
-      let added = 0;
+      if (!d || !d.ok) {
+        RD_UI.connBusy = false;
+        const msg = (d && d.error) || '未知错误';
+        if (silent) rdToast('✗ 微信读书自动同步失败：' + msg);
+        else { RD_UI.connMsg = '✗ ' + msg; RD_UI.connOk = false; render(); }
+        return;
+      }
+      /* ★★ 合并策略：同名书**更新**进度 / 作者 / 封面 ✓，不是跳过 ✗ ——
+         同步的意义就在「把阅读进度带回来」✗；跳过的话等于白同步 ✗
+         （第一版就是跳过的 ✗，用户同步完发现进度没变 ✗）。 */
+      let added = 0, updated = 0;
       (d.books || []).forEach((nb) => {
         if (!nb || !nb.title) return;
-        if (((STORE && STORE.books) || []).some((x) => x && x.title === nb.title)) return;
+        const t = String(nb.title).trim();
+        const p = Math.max(0, Math.min(100, Number(nb.prog) || 0));
+        const hit = ((STORE && STORE.books) || []).find((x) => x && String(x.title).trim() === t);
+        if (hit) {
+          let ch = false;
+          if (nb.author && hit.author !== nb.author) { hit.author = nb.author; ch = true; }
+          if (nb.cover && hit.cover !== nb.cover) { hit.cover = nb.cover; ch = true; }
+          if (hit.src !== 'weread') { hit.src = 'weread'; ch = true; }
+          if (p > 0 && Number(hit.prog) !== p) { hit.prog = p; ch = true; }
+          if (p >= 100 && hit.status !== 'done') { hit.status = 'done'; hit.doneAt = hit.doneAt || dayKey(new Date()); ch = true; }
+          else if (p > 0 && p < 100 && hit.status === 'want') { hit.status = 'reading'; hit.startAt = hit.startAt || dayKey(new Date()); ch = true; }
+          hit.wereadAt = Date.now();
+          if (ch) { hit.edit = Date.now(); updated++; }
+          return;
+        }
         STORE.books = ((STORE && STORE.books) || []).concat([{
-          id: 'b' + Date.now() + Math.random().toString(36).slice(2, 6), title: nb.title, author: nb.author || '',
-          cover: nb.cover || '', src: 'weread', status: 'reading', prog: Number(nb.prog) || 0,
+          id: 'b' + Date.now() + Math.random().toString(36).slice(2, 6), title: t, author: nb.author || '',
+          cover: nb.cover || '', src: 'weread', status: p >= 100 ? 'done' : 'reading', prog: p,
           rating: 0, tags: [], pages: 0, startAt: dayKey(new Date()), at: Date.now(), edit: Date.now(),
+          wereadAt: Date.now(),
         }]);
         added++;
       });
-      STORE.wereadCookie = String(cookie).trim();
+      STORE.wereadCookie = cookie;
+      STORE.wereadSyncAt = Date.now();
+      STORE.wereadCount = (d.books || []).length;
+      RD_UI.connBusy = false;
       rdSave(); render();
-      rdToast('同步完成：' + added + ' 本新书 ✓');
-    } catch (e) { rdToast('✗ 同步失败：' + e.message); }
+      const msg = '✓ 同步成功：书架 ' + (d.books || []).length + ' 本 · 新增 ' + added + ' 本'
+        + (updated ? ' · 更新 ' + updated + ' 本' : '');
+      if (silent) rdToast(msg);
+      else { RD_UI.connMsg = msg; RD_UI.connOk = true; render(); }
+    } catch (e) {
+      RD_UI.connBusy = false;
+      const msg = /Failed to fetch|NetworkError/i.test(String(e.message)) ? '连不上本机服务（CodeScope 还开着吗？）' : e.message;
+      if (silent) rdToast('✗ 微信读书自动同步失败：' + msg);
+      else { RD_UI.connMsg = '✗ ' + msg; RD_UI.connOk = false; render(); }
+    }
+  }
+  function rdWrConnHtml() {
+    const on = rdWrOn();
+    const at = Number((STORE && STORE.wereadSyncAt) || 0);
+    const n = Number((STORE && STORE.wereadCount) || 0);
+    const status = on
+      ? '<b style="color:' + T.ok + '">已连接</b>'
+        + (at ? ' · 上次同步 ' + esc(new Date(at).toLocaleString('zh-CN', { hour12: false })) : ' · 还没同步过')
+        + (n ? ' · 上次拿到 ' + n + ' 本' : '')
+      : '<b style="color:' + T.faint + '">还没连接</b>';
+    const msgCls = RD_UI.connMsg ? (RD_UI.connOk ? ' ok' : (/^✓/.test(RD_UI.connMsg) ? ' ok' : ' err')) : '';
+    return '<div class="lw-imp" id="lw-wrc"><div class="box">'
+      + '<div class="hd"><b>📗 微信读书</b><span class="x" id="lw-wrc-x">✕</span></div>'
+      + '<div class="bd">'
+      + '<div class="tip">'
+      + '微信读书<b>没有对外的公开接口</b>，所以只能借用你浏览器里的登录身份（Cookie）。<br>'
+      + '它只存在<b>你自己这台机器</b>上，也<b>只会发给 weread.qq.com</b> —— 不会去别的地方。<br>'
+      + '<span style="color:' + T.faint + '">（实测：它的书架接口是活的，不带 Cookie 时会明确回「用户不存在」，'
+      + '所以缺的就是这个登录身份，别的都通。）</span>'
+      + '</div>'
+      + '<div class="steps">'
+      + '<div class="h">怎么拿 —— 约 30 秒</div>'
+      + '<ol>'
+      + '<li>浏览器打开 <code>weread.qq.com</code>，确认<b>已经登录</b>（右上角是你的头像）</li>'
+      + '<li>按 <code>F12</code> 打开开发者工具，切到「<b>网络 / Network</b>」</li>'
+      + '<li>刷新一下页面，点左边任意一条 <code>weread.qq.com</code> 的请求</li>'
+      + '<li>在「<b>标头 / Headers</b>」里找到「请求标头」下的 <code>Cookie:</code> 那一行，'
+      + '把<b>冒号后面整行</b>复制下来（<b>越长越好</b>，别只挑一两个）</li>'
+      + '</ol>'
+      + '<div class="n">⚠️ 整行复制没关系 —— 前面的 <code>Cookie:</code> 我们会自动去掉。<br>'
+      + '⚠️ 如果复制出来的里面<b>没有</b> <code>wr_vid</code> / <code>wr_skey</code>，'
+      + '说明网页版还没登录，先登录再复制。</div>'
+      + '</div>'
+      + '<textarea id="lw-wrc-tx" spellcheck="false" placeholder="wr_vid=1234567; wr_skey=AbCdEfGh...; wr_rt=...; wr_localvid=...">' + esc(RD_UI.connText) + '</textarea>'
+      + '<div class="st' + msgCls + '" id="lw-wrc-st">' + (RD_UI.connMsg ? esc(RD_UI.connMsg) : '') + '</div>'
+      + '<div class="st2">状态：' + status + '</div>'
+      + '</div>'
+      + '<div class="ft">'
+      + '<button class="pri" id="lw-wrc-go"' + (RD_UI.connBusy ? ' disabled' : '') + '>'
+      + (RD_UI.connBusy ? '正在连…' : (on ? '🔄 重新同步' : '🔗 连接并同步')) + '</button>'
+      + (on ? '<button id="lw-wrc-off">断开连接</button>' : '')
+      + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">非官方接口 ✓ 可能随时失效 ✗</span>'
+      + '</div></div></div>';
   }
   function bindReading() {
     const host = document.getElementById('lifework-view');
@@ -6665,7 +6813,9 @@
     qa('[data-rdnotedel]').forEach((el) => { el.onclick = (ev) => { ev.stopPropagation(); rdDelNote(el.dataset.rdnotedel); }; });
     const del = q('#lw-rd-del'); if (del) del.onclick = () => rdDelBook();
     const add = q('#lw-rd-add'); if (add) add.onclick = () => rdAddBook();
-    const sync = q('#lw-rd-sync'); if (sync) sync.onclick = () => rdSyncWeread();
+    /* 🔗 还没连接 → 打开连接面板 ✓；📗 已连接 → 直接同步 ✓（点一下就用 ✓） */
+    const sync = q('#lw-rd-sync');
+    if (sync) sync.onclick = () => { if (rdWrOn()) rdSyncWeread(false); else rdWrConnOpen(); };
     const imp = q('#lw-rd-imp'); if (imp) imp.onclick = () => { RD_UI.impOpen = true; RD_UI.impPv = null; render(); };
     const qq = q('#lw-rd-q');
     if (qq) qq.oninput = () => {
@@ -6690,6 +6840,29 @@
       render();
     };
     const ido = q('#lw-imp-do'); if (ido) ido.onclick = () => rdDoImport();
+    /* ── 微信读书「连接」浮层 ✓ ───────────────────────────────────────────── */
+    const wx = q('#lw-wrc-x'); if (wx) wx.onclick = () => { RD_UI.connOpen = false; render(); };
+    const wtx = q('#lw-wrc-tx'); if (wtx) wtx.oninput = () => { RD_UI.connText = wtx.value; };
+    const wgo = q('#lw-wrc-go'); if (wgo) wgo.onclick = () => rdSyncWeread(false);
+    const woff = q('#lw-wrc-off');
+    if (woff) woff.onclick = () => {
+      if (!confirm('断开微信读书？\n\n已经同步进来的书会保留，只是以后不再自动更新。')) return;
+      STORE.wereadCookie = ''; STORE.wereadSyncAt = 0; STORE.wereadCount = 0;
+      RD_UI.connText = ''; RD_UI.connMsg = '已断开 ✓'; RD_UI.connOk = true;
+      rdSave(); render();
+    };
+    /* ★ 进页面时**静默**补一次 ✓ —— 已连接 + 上次同步超过 6 小时才拉 ✓。
+       ⚠️ 必须有两道闸 ✗✗（少一道就会出问题 ✗，`bindReading()` 每次 render 都跑 ✗）：
+          ① `connBusy` 防重入 ✓；
+          ② `autoAt` 十分钟冷却 ✓ —— **不能只看 wereadSyncAt** ✗：
+             同步**失败**时不写 wereadSyncAt ✗，只看它的话会**每次 render 都重试** ✗
+             （实测会疯狂打微信读书 ✗）。 */
+    if (rdWrOn() && !RD_UI.connBusy
+        && Date.now() - (RD_UI.autoAt || 0) > 10 * 60 * 1000
+        && Date.now() - (Number(STORE.wereadSyncAt) || 0) > 6 * 3600 * 1000) {
+      RD_UI.autoAt = Date.now();
+      rdSyncWeread(true);
+    }
   }
 
   function viewMail() {

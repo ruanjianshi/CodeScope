@@ -4872,9 +4872,27 @@ const server = http.createServer(async (req, res) => {
        否则会被那句「没有这个邮箱账号」直接挡掉 ✗（实测踩过 ✗）。 */
         if (u.pathname === '/api/life/weread/shelf') {
           if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
-          const cookie = String((postBody && postBody.cookie) || '').trim();
+          /* ★ 用户十有八九会把 DevTools 里那一整行「Cookie: xxx」原样粘进来 ✓ ——
+             那就**替他把前缀剥掉** ✓，别直接甩一句「格式不对」✗（那是我们该干的活 ✗）。 */
+          const cookie = String((postBody && postBody.cookie) || '')
+            .replace(/^\s*cookie\s*[:：]\s*/i, '')
+            .replace(/[\r\n]+/g, ' ')
+            .replace(/^\s*["']+|["']+\s*$/g, '')
+            .trim();
           if (!cookie) return send(res, 200, { ok: false, error: '没有填 Cookie' });
-          if (cookie.length > 8000) return send(res, 200, { ok: false, error: 'Cookie 太长，不像是真的' });
+          if (cookie.length > 8000) return send(res, 200, { ok: false, error: 'Cookie 太长（超过 8000 字符）—— 只要「Cookie:」那一行' });
+          if (cookie.indexOf('=') < 0) return send(res, 200, { ok: false, error: '看起来不是 Cookie（里面没有 = ）—— 应该像 wr_vid=123; wr_skey=abc' });
+          /* ⚠️ 微信读书的网页登录态靠 wr_vid + wr_skey ✓，少了这两个**一定**失败 ✗，
+             而它只会回一句含糊的「用户不存在」✗。
+             ★ 但**不能在这里直接拦掉** ✗ —— 万一它以后改了名字 ✗，
+               我们就白白挡住了本来能用的 Cookie ✗。
+               所以只**记下来** ✓，等真失败了再拿这句话去点破 ✓。 */
+          const missing = [];
+          if (!/(^|;\s*)wr_vid=/.test(cookie)) missing.push('wr_vid');
+          if (!/(^|;\s*)wr_skey=/.test(cookie)) missing.push('wr_skey');
+          const hint = missing.length
+            ? '（这段 Cookie 里没有 ' + missing.join(' / ') + ' —— 多半是网页版还没登录，或者没复制全）'
+            : '';
           try {
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -4893,14 +4911,26 @@ const server = http.createServer(async (req, res) => {
             const text = await up.text();
             let data = null;
             try { data = JSON.parse(text); } catch (_) { data = null; }
-            if (!up.ok || !data) {
+            /* ⚠️⚠️ 微信读书把错误也塞在 body 里、状态码却是 **401** ✗ ——
+               所以**不能**先判 `!up.ok` 就把原始 JSON 甩给用户 ✗
+               （第一版就是这么写的 ✗，实测用户会看到
+                 `接口返回异常（HTTP 401）：{"errcode":-2010,...}` ✗，等于没说 ✗）。
+               正解：**先解析 body** ✓，认得出 errcode 就翻译成人话 ✓。 */
+            if (!data) {
               return send(res, 200, { ok: false, error: '微信读书接口返回异常（HTTP ' + up.status + '）：' + String(text).slice(0, 160) });
             }
-            /* 它的错误形状不固定 ✗ —— 认得出就翻译，认不出就把原文回给前端 ✓ */
-            const msg = String(data.errmsg || data.msg || data.error || '');
+            /* 它的错误形状不固定 ✗ —— 大小写两种字段名都试 ✓（i.weread 用 errmsg，web 用 errMsg ✗） */
+            const code = Number(data.errCode != null ? data.errCode : data.errcode);
+            const msg = String(data.errMsg || data.errmsg || data.msg || data.error || '');
             const books = Array.isArray(data.books) ? data.books : null;
             if (!books) {
-              return send(res, 200, { ok: false, error: '没拿到书架（多半是 Cookie 过期 / 失效）' + (msg ? '：' + msg : '') });
+              let why = '没拿到书架';
+              /* ★ -2010 / 「用户不存在」= **最常见**的失败 ✗（Cookie 没带上登录态 ✓），
+                 必须翻译成人话 ✓，不然用户根本不知道该干嘛 ✗。 */
+              if (code === -2010 || /用户不存在/.test(msg)) {
+                why = '微信读书说「用户不存在」—— 这段 Cookie 没带上登录身份';
+              } else if (msg) why = '微信读书返回：' + msg;
+              return send(res, 200, { ok: false, error: why + hint });
             }
             /* 进度：bookProgress 里是 0~1 的小数 ✓ */
             const prog = new Map();
