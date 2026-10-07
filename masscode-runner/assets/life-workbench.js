@@ -1107,8 +1107,20 @@
   .lw-fl-port.out.p1 { top:36px; }
   .lw-fl-port.armed { background:${T.warn}; border-color:${T.warn}; }
   .lw-fl-svg { position:absolute; left:0; top:0; pointer-events:none; z-index:1; }
-  .lw-fl-svg path { fill:none; stroke:${T.lineDim}; stroke-width:2; }
+  /* ⚠️ 颜色用 faint ✗ 不用 lineDim ✗ —— lineDim(#3a382f) 压在底色(#0b0b0b)上
+     对比度只有 **1.67:1** ✗（WCAG 非文本最低要 3:1 ✗），连线基本看不见 ✗
+     —— 这正是用户说「怎么连线」的根因之一 ✓。faint(#5c5a50) 约 2.8:1 ✓，看得见又不抢镜 ✓。 */
+  .lw-fl-svg path { fill:none; stroke:${T.faint}; stroke-width:2; }
   .lw-fl-svg path.hot { stroke:${T.accent}; }
+  /* ★★ 箭头的颜色要**单独写** ✗✗ —— 上面那条「.lw-fl-svg path」会**连带命中
+     <defs> 里的 marker** ✓（marker 也是 .lw-fl-svg 的子孙 ✓），
+     而 CSS **优先级高于** SVG 的 stroke 属性 ✗ →
+     实测：高亮态的箭头写 stroke="accent" 也没用 ✗，被覆盖成 faint ✗，
+     **选中节点时线变黄、箭头却不变** ✗（连线看着像断了一截 ✗）。
+     → 用**更具体的选择器**按状态分别指定 ✓（「.lw-fl-svg defs marker path」比
+       「.lw-fl-svg path」多两个元素，一定赢 ✓）。 */
+  .lw-fl-svg defs marker path { stroke:${T.faint}; }
+  .lw-fl-svg defs marker#lw-fl-ah-hot path { stroke:${T.accent}; }
   /* ★ 连线只有 2px 粗 ✗，直接点很难点中 ✗ —— 再叠一条 14px 宽的**透明**路径当命中区 ✓。
      ⚠️ 必须用 **class** ✗，不能用 SVG 的 stroke / stroke-width **属性** ✗ ——
         属性优先级**低于** CSS ✗，会被上面那条 .lw-fl-svg path { stroke-width:2 } 覆盖掉 ✗
@@ -6333,12 +6345,16 @@
        ⚠️ 线要**提前 11px 收尾** ✗ —— 端口圆点是有 z-index 的 ✓，
           线画到端口中心的话箭头尖会被圆点盖住 ✗，等于没画 ✗。 */
     const EDGE_GAP = 11;
+    /* ⚠️ 箭头**不写** stroke 属性 ✗ —— CSS 优先级高于 SVG 属性 ✗，
+       写了也会被 `.lw-fl-svg path` 覆盖掉 ✗（颜色见上面的 CSS 注释 ✓）。
+       这里只留形状 ✓：`orient="auto-start-reverse"` 让箭头**自己跟着线的方向转** ✓，
+       所以从右往左连的边也不会画反 ✓。 */
     const svg = '<svg class="lw-fl-svg" width="' + planeW + '" height="' + planeH + '">'
       + '<defs>'
       + '<marker id="lw-fl-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
-      + '<path d="M0.5 1L8 5L0.5 9" fill="none" stroke="' + T.lineDim + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>'
+      + '<path d="M0.5 1L8 5L0.5 9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></marker>'
       + '<marker id="lw-fl-ah-hot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
-      + '<path d="M0.5 1L8 5L0.5 9" fill="none" stroke="' + T.accent + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>'
+      + '<path d="M0.5 1L8 5L0.5 9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></marker>'
       + '</defs>'
       + edges.map((e, i) => {
         const a = flowNodeById(f, e.from), b = flowNodeById(f, e.to);

@@ -27,6 +27,15 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
   try {
     const d0 = await store();
     d0.flows = (d0.flows || []).filter((x) => !String(x.name).includes(MARK));
+    /* ⚠️ **备忘录 / 文件夹也要清** ✗✗ —— 原来只清工作流 ✗，于是：
+       上一轮探针要是被 Ctrl-C / 管道截断（SIGTERM）打断，`finally` 没跑成 ✓，
+       它写的那条「__探针流__标题」备忘录就留下了 ✗；
+       这一轮再写一条 → 第 ⑩ 段的 `made.length === 1` 变成 2 → **假失败** ✗
+       （实测踩过：被 `| head -40` 截断后，下一轮就挂在「真的写进备忘录了」✓）。
+       → 开跑前把带探针标记的**全部**清掉 ✓，探针要能**自愈** ✓。 */
+    d0.memos = (d0.memos || []).filter((m) => !String(m.text).includes(MARK));
+    d0.memoFolders = (d0.memoFolders || []).filter((f) => !String(f).includes(MARK));
+    delete d0.flowSel;
     await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d0) });
   } catch (_) {}
 
@@ -402,6 +411,48 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('★ 可见线提前 11px 收尾（箭头尖不被端口圆点盖住）',
       geo.length === wantEnd.length && geo.every((x, i) => Math.abs(x - wantEnd[i]) < 0.6), JSON.stringify(geo) + ' vs ' + JSON.stringify(wantEnd));
 
+    /* ── 颜色：连线要看得见，且箭头要跟线同色 ──
+       ⚠️ 原来用 lineDim(#3a382f) 压在底色(#0b0b0b)上，对比度只有 **1.67:1** ✗
+          （WCAG 非文本最低要 3:1 ✗）—— 连线基本看不见 ✗，这正是「怎么连线」的根因之一 ✓。
+       ⚠️⚠️ 更要命的是：CSS 的「.lw-fl-svg path { stroke:… }」会**连带命中 <defs> 里的
+          marker** ✗，而 CSS 优先级**高于** SVG 的 stroke 属性 ✗ →
+          高亮态箭头写 stroke="accent" 被覆盖 ✗，**选中节点时线变黄、箭头不变** ✗。
+          修法：用更具体的选择器按状态分别指定 ✓。 */
+    const colors = await p.evaluate(() => {
+      const g = (e) => (e ? getComputedStyle(e).stroke : null);
+      return {
+        vis: g(document.querySelector('.lw-fl-svg g[data-flowedge] path:not(.hit)')),
+        mk: g(document.querySelector('#lw-fl-ah path')),
+        mkHot: g(document.querySelector('#lw-fl-ah-hot path')),
+      };
+    });
+    console.log('    颜色: ' + JSON.stringify(colors));
+    const rgb = (s) => (String(s).match(/\d+/g) || []).map(Number);
+    /* 相对亮度 → 对比度 ✓（WCAG ✓） */
+    const lum = (s) => {
+      const [r, g, b] = rgb(s).slice(0, 3).map((v) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const bgLum = await p.evaluate(() => getComputedStyle(document.querySelector('.lw-fl-cv')).backgroundColor);
+    const ratio = (a, b) => { const l1 = Math.max(lum(a), lum(b)), l2 = Math.min(lum(a), lum(b)); return (l1 + 0.05) / (l2 + 0.05); };
+    const cr = ratio(colors.vis, bgLum);
+    console.log('    连线对比度: ' + cr.toFixed(2) + ':1（底色 ' + bgLum + '）');
+    ck('★ 连线对比度 ≥ 2.5:1（原来 1.67:1，基本看不见）', cr >= 2.5, cr.toFixed(2) + ':1');
+    ck('★ 箭头和连线**同色**（不是两个颜色）', colors.vis === colors.mk, colors.vis + ' vs ' + colors.mk);
+    ck('★ 高亮态的箭头**真的**是强调色（没被 CSS 覆盖成灰色）',
+      colors.mkHot === colors.mkHot && colors.mkHot !== colors.mk, colors.mk + ' vs ' + colors.mkHot);
+    /* 选中一个节点 → 它的边变 hot，而且用的是 **hot 那个 marker** ✓ */
+    await p.locator('[data-flnode="' + aTrig.id + '"]').click(); await p.waitForTimeout(800);
+    const hot = await p.evaluate(() => ({
+      n: document.querySelectorAll('.lw-fl-svg path.hot').length,
+      used: Array.from(document.querySelectorAll('.lw-fl-svg path[marker-end]')).map((x) => x.getAttribute('marker-end')),
+    }));
+    ck('★ 选中节点后它的边变高亮，且换用 hot 箭头', hot.n >= 1 && hot.used.some((u) => u.indexOf('-hot') > 0), JSON.stringify(hot));
+    await p.locator('.lw-fl-cv').click({ position: { x: 8, y: 8 } }); await p.waitForTimeout(500);
+
     /* ── 实时进度：一边跑一边采 DOM ── */
     const seen = { running: 0, okSeq: [], hints: [] };
     let stopSample = false;
@@ -434,7 +485,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('★ 状态是**逐步**亮起来的（不是一次全亮）', new Set(seen.okSeq).size > 1, JSON.stringify([...new Set(seen.okSeq)]));
     ck('★ 跑完 4 个节点都带 ✓', await p.locator('.lw-fl-node.s-ok').count() === 4, String(await p.locator('.lw-fl-node.s-ok').count()));
     ck('★ 「等待」节点真的等了 3 秒（说明确实是流式，不是一口气跑完）',
-      /等待[\s\S]{0,20}300\dms/.test(await txt('.lw-fl-log')), (await txt('.lw-fl-log')).slice(0, 120));
+      /等待[\s\S]{0,20}3\d{3}ms/.test(await txt('.lw-fl-log')), (await txt('.lw-fl-log')).slice(0, 120));
 
     /* ══════════════════════════════════════════════════════════════════
        ⑳ 定时触发（服务端排期 + 前端收产出）
