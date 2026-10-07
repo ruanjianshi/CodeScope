@@ -165,5 +165,70 @@ console.log('\n── ⑤ TXT：编码 ──');
   ck('★ 空文件 → 明说「是空的」', /是空的/.test(empty()), empty());
 }
 
+/* ── ⑥ 古登堡样板 ★★★ ─────────────────────────────────────────────────────
+   ⚠️⚠️ 这一整节都是**拿真实电子书试出来的** ✗ —— 上面那些现造样本
+      永远测不到 ✓（`tests/ebook.js` 第一版就是只有现造样本 ✓）。
+   做法：从 gutenberg.org 下 16 本公版书 ✓（EPUB ✓）逐本跑一遍 ✓，看输出哪里不对 ✓。
+   实测撞出来的三件事，每一件都**推翻了我原本的直觉** ✗：
+     ① 样板**不是一小段** —— **1.8 万 ~ 3 万字** ✗（比很多书正文都长 ✓）
+        → 「短就丢」是**错的** ✗
+     ② 目录页每一行都是「CHAPTER N」→ 被切成**一长串 0 字的空章** ✗
+        （白鲸 241 章里 **135 个是空的** ✗）
+     ③ 署名 `Produced by …` 在 **START 标记之后** ✗ → 按标记切**切不掉** ✗
+        （中文那几本的首章第一行全是英文署名 ✗） */
+console.log('\n── ⑥ 古登堡样板（真实电子书才试得出来）──');
+{
+  const BOOK = '書名';
+  const START = '*** START OF THE PROJECT GUTENBERG EBOOK ' + BOOK + ' ***';
+  const END = '*** END OF THE PROJECT GUTENBERG EBOOK ' + BOOK + ' ***';
+  const LICENSE = 'This eBook is for the use of anyone anywhere in the United States and most other parts of '
+    + 'the world at no cost and with almost no restrictions whatsoever.\n\n'
+    + 'Updated editions will replace the previous one—the old editions will be renamed.\n\n'
+    + 'Most people start at our website which has the main PG search facility: www.gutenberg.org\n\n'
+    + '1.E.1. The following sentence, with active links to, or other immediate access to, the full Project '
+    + 'Gutenberg™ License must appear prominently whenever any copy of a Project Gutenberg™ work is accessed.\n\n';
+  /* 样板比正文长 —— 故意造得夸张一点，防止有人以后又拿长度当判据 ✗ */
+  const NOISE = LICENSE.repeat(40);
+
+  ck('★ 样板本身够长（故意造得比正文长，防止有人用「短就丢」）', NOISE.length > 8000, String(NOISE.length));
+  const s1 = E.stripPg(NOISE + START + '\nProduced by 某某\n\n' + '正文内容。'.repeat(200) + '\n\n' + END + '\n' + LICENSE);
+  ck('★★ 只留 START / END 之间（前后都切掉）', s1.indexOf('gutenberg.org') < 0 && /正文内容/.test(s1), JSON.stringify(s1.slice(0, 40)));
+  ck('★★ 连 START 后面那行「Produced by …」署名也剥掉', s1.indexOf('Produced by') < 0, JSON.stringify(s1.slice(0, 40)));
+  ck('  剥完是从正文开始的', s1.indexOf('正文内容') === 0, JSON.stringify(s1.slice(0, 30)));
+  ck('★ 纯样板页剥完变成空（调用方据此丢掉它）', E.stripPg(NOISE + START + '\n' + LICENSE) === '', JSON.stringify(E.stripPg(NOISE + START + '\n' + LICENSE).slice(0, 30)));
+  ck('★ 结尾那行页脚也剥（`End of Project Gutenberg\'s …`）',
+    E.stripPg('正文。\n\nEnd of Project Gutenberg\'s 書名, by 作者') === '正文。',
+    JSON.stringify(E.stripPg('正文。\n\nEnd of Project Gutenberg\'s 書名, by 作者')));
+  /* ⚠️ 没有标记的老书 → 保守兜底：只在「这一段基本就是样板」时才丢 ✗ */
+  ck('★ 没标记 + 整段是样板 → 丢掉', E.stripPg(NOISE) === '', String(E.stripPg(NOISE).length));
+  ck('★★ 没标记 + 正文里**提了一句** Gutenberg → **不丢**（不能误伤正文）',
+    /这是正文/.test(E.stripPg('这是正文。\n\n' + '他写了很多字。'.repeat(60) + '\n\n参见 www.gutenberg.org 上的说明。\n\n又写了很多字。'.repeat(20))),
+    '');
+  /* ⚠️ 样板 `<title>` 不能当章名 ✗（不然整本书每章都同名 ✗） */
+  ck('★ 样板 `<title>` 不当章名（不然 26 章全同名）',
+    E.firstHeading('<html><head><title>The Project Gutenberg eBook of 三國志演義</title></head><body></body></html>') === '',
+    JSON.stringify(E.firstHeading('<html><head><title>The Project Gutenberg eBook of 三國志演義</title></head><body></body></html>')));
+  ck('  正常 `<title>` 照样能用', E.firstHeading('<head><title>一本书</title></head>') === '一本书');
+
+  /* ★★ 目录页：每一行都是「CHAPTER N」→ **绝不能切成 135 个空章** ✗✗ */
+  const toc = [];
+  for (let i = 1; i <= 60; i++) toc.push('CHAPTER ' + i + '. 标题' + i + '.');
+  const tocBook = E.chapterize(toc.join('\n'), '书');
+  ck('  目录页本身确实会被切成 60 个「章」（这就是那个坑的成因）', tocBook.length === 60, String(tocBook.length));
+  ck('★★ 但它们**全是空章** → 一个都不该留下', E.refineChapters([{ title: '正文', text: toc.join('\n') }]).length === 1,
+    String(E.refineChapters([{ title: '正文', text: toc.join('\n') }]).length));
+
+  /* ★ 一章里塞了 5 回 → 要切开 ✓ */
+  const wu = [];
+  for (let i = 1; i <= 5; i++) wu.push('第' + i + '回 标题' + i, '这一回的正文。'.repeat(30));
+  const split = E.refineChapters([{ title: '卷之一', text: wu.join('\n\n') }]);
+  eq('★★ 一章塞 5 回 → 切成 5 章', split.length, 5);
+  ck('  切出来的章名是回目', /^第1回/.test(split[0].title), split[0].title);
+  ck('  而且**没丢内容**（每回都有正文）', split.every((c) => /这一回的正文/.test(c.text)), '');
+  /* ⚠️ 只提一句「第二章」**不能**切 ✗（门槛 ≥3 就是为这个） */
+  eq('★★ 正文里只顺口提一句「第二章」→ 不切（门槛 ≥3 挡住误伤）',
+    E.refineChapters([{ title: '一章', text: '正文。\n\n详见第二章。\n\n又一段正文。' }]).length, 1);
+}
+
 console.log('\n电子书解析：' + pass + ' 项通过' + (fails.length ? '，' + fails.length + ' 项失败 ✗' : ' ✓'));
 if (fails.length) { console.log('失败清单：\n  - ' + fails.join('\n  - ')); process.exit(1); }
