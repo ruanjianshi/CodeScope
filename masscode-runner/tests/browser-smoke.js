@@ -740,6 +740,81 @@ print(r.run())
      光标行 = 源码（可编辑），其余行 = 渲染结果（contenteditable=false + data-src）。 */
   await page.locator('#btn-lifework').click();
   await page.locator('#lifework-view').waitFor({state:'visible',timeout:20000});
+
+  /* ═══ 顶栏状态条（时钟 / 问候 / 心情 / 每日格言 / 今日状态）══════════════
+     用户原话：「这上面，给我丰富一下状态显示，例如心情啊，格言啊，一些时间，好看的图标啊」。
+     ⚠️ 这几条**放在最前面** ✗ —— 顶栏是每一页都有的 ✓，
+        而临时库里一开始「没有格言 / 没有日记 / 没有待办」✓，
+        正好能验「内置格言兜底」和「0 待办 / 0 连续 / 未写日记」这些**空态** ✓。 */
+  if (await page.locator('#lw-clock').count() !== 1) throw new Error('顶栏没有时钟');
+  const ck1 = await page.locator('#lw-clock').innerText();
+  if (!/^\d\d:\d\d:\d\d$/.test(ck1.trim())) throw new Error('时钟格式不对：' + ck1);
+  if (await page.locator('.lw-greet').count() !== 1) throw new Error('顶栏没有问候语');
+  if (await page.locator('#lw-mood').count() !== 1) throw new Error('顶栏没有心情胶囊');
+  if (await page.locator('.lw-strip').count() !== 1) throw new Error('顶栏没有第二行（格言条）');
+  if (await page.locator('.lw-strip .q .tx').count() !== 1) throw new Error('格言条里没有格言');
+  const builtinQuote = (await page.locator('.lw-strip .q .tx').innerText()).trim();
+  if (!builtinQuote) throw new Error('格言是空的');
+  if (!/（内置）/.test(await page.locator('.lw-strip .q').innerText())) {
+    throw new Error('临时库里没有「好词好句」，应回退到**内置格言池**并标出来');
+  }
+  /* ★ 秒针**只有一个** ✗✗ —— `bindHead()` 每次 render 都会跑 ✓，
+     定时器不先清就挂的话会越挂越多 ✗（一分钟后就有一堆在改同一个元素 ✗）。
+     来回切几次页签把 render 跑够，再数「一秒内时钟被改了几次」✓。 */
+  for (let i = 0; i < 5; i++) {
+    await page.locator('.lw-nav [data-tab="' + (i % 2 ? 'memo' : 'today') + '"]').dispatchEvent('click');
+    await page.waitForTimeout(180);
+  }
+  await page.locator('.lw-nav [data-tab="today"]').dispatchEvent('click');
+  await page.waitForTimeout(400);
+  const tickCount = await page.evaluate(() => new Promise((res) => {
+    let n = 0;
+    const el = document.getElementById('lw-clock');
+    if (!el) return res(-1);
+    const ob = new MutationObserver(() => { n++; });
+    ob.observe(el, { childList: true, characterData: true, subtree: true });
+    setTimeout(() => { ob.disconnect(); res(n); }, 2600);
+  }));
+  if (tickCount < 2 || tickCount > 4) {
+    throw new Error('★ 秒针数量不对（2.6 秒里时钟被改了 ' + tickCount + ' 次，应约 2~3 次 —— 定时器叠加了？）');
+  }
+  /* ★ 心情：点开浮层 → 选一个 → 胶囊变 + **存进 STORE** ✓ */
+  await page.locator('#lw-mood').click();
+  await page.waitForTimeout(400);
+  if (await page.locator('#lw-moodpick').count() !== 1) throw new Error('点心情胶囊没弹出选择浮层');
+  if (await page.locator('#lw-moodpick [data-mood]').count() < 12) throw new Error('心情选项太少');
+  await page.locator('#lw-moodpick [data-mood="🔥"]').click();
+  await page.waitForTimeout(800);
+  if (!/专注/.test(await page.locator('#lw-mood').innerText())) {
+    throw new Error('选了「专注」但胶囊没变：' + (await page.locator('#lw-mood').innerText()).replace(/\n/g, ' '));
+  }
+  if (await page.locator('#lw-moodpick').count() !== 0) throw new Error('选完心情后浮层没收起');
+  const moodStored = ((await (await fetch(baseUrl + '/api/life/store', { cache: 'no-store' })).json()).data || {}).mood;
+  if (!moodStored || moodStored.e !== '🔥') throw new Error('心情没存进 STORE（刷新就丢）：' + JSON.stringify(moodStored));
+  /* ★ 格言「换一句」能换，而且**切页签回来还是同一句** ✓
+     （同一天内必须稳定 ✗ —— 每次 render 都换一句的话眼睛都花了 ✗）*/
+  const q0 = (await page.locator('.lw-strip .q .tx').innerText()).trim();
+  await page.locator('#lw-quote-next').click();
+  await page.waitForTimeout(800);
+  const q1 = (await page.locator('.lw-strip .q .tx').innerText()).trim();
+  if (q0 === q1) throw new Error('点了「换一句」格言没变');
+  await page.locator('.lw-nav [data-tab="memo"]').dispatchEvent('click');
+  await page.waitForTimeout(600);
+  await page.locator('.lw-nav [data-tab="today"]').dispatchEvent('click');
+  await page.waitForTimeout(800);
+  const q2 = (await page.locator('.lw-strip .q .tx').innerText()).trim();
+  if (q2 !== q1) throw new Error('★ 切页签回来格言变了（同一天内必须稳定）：' + q2.slice(0, 20) + ' ≠ ' + q1.slice(0, 20));
+  /* ★ 今日状态三项 ✓（临时库是空的 → 0 待办 / 0 连续 / 未写日记 ✓）*/
+  const stripSt = (await page.locator('.lw-strip .st').innerText()).replace(/\n/g, ' ');
+  if (!/待办/.test(stripSt) || !/连续/.test(stripSt) || !/今日日记/.test(stripSt)) {
+    throw new Error('格言条右侧缺「待办 / 连续 / 今日日记」：' + stripSt);
+  }
+  /* ★ 顶栏**不能换行** ✗ —— 1440 宽下所有胶囊是一行 ✓（换行说明胶囊太多挤了 ✗）*/
+  const headH = await page.locator('.lw-head').evaluate((e) => Math.round(e.getBoundingClientRect().height));
+  if (headH > 72) throw new Error('★ 1440 宽下顶栏换行了（高 ' + headH + 'px，单行应约 64px）');
+  const headOverflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  if (headOverflow > 1) throw new Error('顶栏把页面撑出横向滚动条了：+' + headOverflow + 'px');
+
   await page.locator('[data-tab="memo"]').click();
   /* ⚠️ 临时库里一条备忘录都没有 → 先进的是空态。必须先点「新建」把编辑器叫出来。 */
   await page.locator('#lw-memo-new').click();

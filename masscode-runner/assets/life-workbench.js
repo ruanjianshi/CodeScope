@@ -62,8 +62,10 @@
   .lw-inpanel { position:fixed; left:0; right:0; bottom:0; top:44px; z-index:8800; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden;
     font-family:${UI}; color:${T.text}; font-size:12.5px; letter-spacing:.2px; }
   /* 顶栏 */
-  .lw-head { display:flex; align-items:center; gap:16px; padding:12px 18px; flex:none;
-    border-bottom:2px solid ${T.line}; background:${T.bg}; }
+  /* ⚠️ 加了时钟 / 问候 / 心情三个胶囊之后，窄一点的窗口会挤 ✗ ——
+     给 row-gap 并允许换行 ✓（换行也比挤成一坨好 ✓）。 */
+  .lw-head { display:flex; align-items:center; gap:12px; row-gap:9px; padding:11px 18px; flex:none;
+    border-bottom:2px solid ${T.line}; background:${T.bg}; flex-wrap:wrap; }
   .lw-logo { width:32px; height:32px; flex:none; border:2px solid ${T.line}; display:flex; align-items:center;
     justify-content:center; font-size:16px; }
   .lw-h1 { font-size:13px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; line-height:1.15; }
@@ -84,6 +86,64 @@
   .lw-wx .wi { font-size:19px; line-height:1; }
   .lw-wx .wt { font-size:16px; font-weight:700; color:${T.accent}; }
   .lw-wx .wc { font-size:9.5px; color:${T.dim}; line-height:1.4; letter-spacing:.4px; }
+  /* ── 顶栏：状态胶囊（时钟 / 心情）✓ ──────────────────────────────────────
+     ⚠️ 必须和天气 / 邮箱胶囊**统一 40px 等高** ✗（不然并排高低不齐 ✗，之前踩过一次 ✓）。
+     ⚠️ 注释里不能出现反引号 ✗ —— 这段 CSS 整个在 JS 模板字符串里 ✗。 */
+  .lw-stat { display:flex; align-items:center; gap:9px; height:40px; box-sizing:border-box;
+    padding:0 12px; border:2px solid ${T.line}; flex:none; position:relative; }
+  .lw-stat .ic { flex:none; color:${T.accent}; display:flex; }
+  .lw-stat .big { font-size:15px; font-weight:700; color:${T.accent}; font-family:${MONO};
+    line-height:1; letter-spacing:.6px; font-variant-numeric:tabular-nums; }
+  .lw-stat .cap { font-size:9.5px; color:${T.dim}; line-height:1.35; letter-spacing:.4px; white-space:nowrap; }
+  .lw-stat .mid { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .lw-stat.click { cursor:pointer; }
+  .lw-stat.click:hover { background:${T.card2}; }
+  .lw-stat .em { font-size:20px; line-height:1; }
+  /* 今日进度：一条极细的条，贴在时钟胶囊下沿 ✓ */
+  .lw-daybar { position:absolute; left:0; right:0; bottom:-2px; height:2px; background:${T.lineDim}; }
+  .lw-daybar i { display:block; height:100%; background:${T.accent}; transition:width .6s linear; }
+  /* 问候语 */
+  .lw-greet { flex:none; display:flex; flex-direction:column; gap:3px; padding:0 2px; }
+  .lw-greet b { font-size:13px; font-weight:700; letter-spacing:.8px; color:${T.text}; }
+  .lw-greet b em { font-style:normal; color:${T.accent}; }
+  .lw-greet span { font-size:9.5px; color:${T.dim}; letter-spacing:.4px; white-space:nowrap; }
+  /* 心情选择浮层 ✓ */
+  .lw-moodpick { position:absolute; top:46px; left:0; z-index:60; background:${T.card};
+    border:2px solid ${T.line}; padding:8px; display:grid; grid-template-columns:repeat(4,1fr); gap:4px;
+    box-shadow:0 10px 30px rgba(0,0,0,.55); }
+  .lw-moodpick div { display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 9px;
+    cursor:pointer; font-size:9px; color:${T.dim}; white-space:nowrap; }
+  .lw-moodpick div:hover { background:${T.card2}; color:${T.text}; }
+  .lw-moodpick div.on { background:${T.accent}; color:${T.accentInk}; }
+  .lw-moodpick div i { font-size:19px; font-style:normal; line-height:1; }
+  /* ── 顶栏第二行：今日格言 + 今日状态 ✓ ─────────────────────────────────── */
+  .lw-strip { display:flex; align-items:center; gap:12px; padding:7px 18px; flex:none;
+    border-bottom:2px solid ${T.line}; background:${T.card}; font-size:10.5px; color:${T.dim}; }
+  .lw-strip .q { flex:1; min-width:0; display:flex; align-items:center; gap:8px; }
+  .lw-strip .q .ic { flex:none; color:${T.accent}; display:flex; }
+  .lw-strip .q .tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${T.text}; }
+  .lw-strip .q .from { color:${T.faint}; white-space:nowrap; }
+  .lw-strip .sh { flex:none; border:1px solid ${T.lineDim}; background:transparent; color:${T.dim};
+    font:9.5px ${MONO}; padding:2px 7px; cursor:pointer; letter-spacing:.4px; }
+  .lw-strip .sh:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-strip .st { flex:none; display:flex; align-items:center; gap:11px; }
+  .lw-strip .st > span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+  .lw-strip .st .ic { color:${T.dim}; display:flex; }
+  .lw-strip .st b { color:${T.text}; font-weight:600; }
+  .lw-strip .st .hot { color:${T.accent}; }
+  .lw-strip .st .ok { color:${T.ok}; }
+  /* 窄屏**逐级**收掉，别把顶栏挤成两行 ✗ ——
+     ⚠️ 阈值是**算出来的** ✗：每个胶囊都是 flex:none（不可压缩 ✗），
+        只有 .lw-sub2 能缩到 0 ✓（flex:1 + overflow:hidden ✓）。
+        所以「基准总宽 = 所有固定项之和 + 间距 + 内边距」一旦超过窗口宽，
+        整行就会换行 ✗（不管 sub2 还剩多少 ✗）。
+        1440 时基准约 1183 → 收掉问候 → 1048 → 收掉时钟 → 907 → 收掉天气 → 697 ✓。
+     ⚠️ 收掉的是**装饰性**的，天气 / 邮箱 / 刷新一个都不能收 ✗（那是功能 ✓）。 */
+  @media (max-width: 1320px) { .lw-strip .st { display:none; } }
+  @media (max-width: 1240px) { .lw-sub2 { display:none; } }
+  @media (max-width: 1200px) { .lw-greet { display:none; } }
+  @media (max-width: 1080px) { .lw-stat.clock { display:none; } }
+  @media (max-width: 940px) { .lw-wx { display:none; } }
   /* 主体 */
   .lw-body2 { flex:1; display:flex; min-height:0; }
   .lw-nav { width:196px; flex:none; padding:14px 12px; border-right:2px solid ${T.line}; background:${T.bg};
@@ -969,6 +1029,56 @@
         给它们加 flex:1 反而会把内容裁掉 ✗。 */
   const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1 };
 
+  /* ── 顶栏状态条：时钟 / 问候 / 心情 / 每日格言 ✓ ─────────────────────────
+     ⚠️ 这些**必须声明在模块顶部** ✗ —— `headHtml()` 在 `mount()` 的调用链上就会碰到 ✓
+        （见上面那段 TDZ 的说明 ✗）。 */
+  let CLOCK_TIMER = 0;          /* 秒针定时器（**单例** ✗ —— 每次 bind 前先清 ✓，不然会越挂越多 ✗）*/
+  let MOOD_OPEN = false;        /* 心情浮层开着吗 ✓ */
+  let MOOD_AWAY = null;         /* 浮层「点别处关掉」的监听器 ✓（重绑前必须摘掉 ✗，不然会叠加 ✗）*/
+  /* 心情备选 —— 12 个，4 列 3 行 ✓（emoji 直接用系统字体，不引外部资源 ✓）*/
+  const MOODS = [
+    { e: '😄', n: '很好' }, { e: '🙂', n: '还行' }, { e: '😌', n: '平静' }, { e: '🤩', n: '兴奋' },
+    { e: '🔥', n: '专注' }, { e: '🌱', n: '慢慢来' }, { e: '🎯', n: '有目标' }, { e: '☕', n: '放空' },
+    { e: '😐', n: '一般' }, { e: '🥱', n: '有点累' }, { e: '😔', n: '低落' }, { e: '😤', n: '有点烦' },
+  ];
+  /* 格言的兜底池 ✓ —— 用户自己的「好词好句」为空时才用它 ✓（优先用他自己的 ✓，那才最贴 ✓）*/
+  const QUOTE_POOL = [
+    { text: '一个人只有用心去看，才能看到真实。', from: '《小王子》' },
+    { text: '我们所有的昨天，不过是个序幕。', from: '《麦克白》' },
+    { text: '慢慢来，比较快。', from: '民谚' },
+    { text: '怕什么真理无穷，进一寸有一寸的欢喜。', from: '胡适' },
+    { text: '生活是种律动，须有光有影，有左有右，有晴有雨。', from: '老舍' },
+    { text: '重要的东西用眼睛是看不见的。', from: '《小王子》' },
+    { text: '凡是过往，皆为序章。', from: '莎士比亚' },
+    { text: '你只需努力，剩下的交给时间。', from: '佚名' },
+    { text: '知不可乎骤得，托遗响于悲风。', from: '苏轼《赤壁赋》' },
+    { text: '不积跬步，无以至千里。', from: '《荀子》' },
+    { text: '人生如逆旅，我亦是行人。', from: '苏轼' },
+    { text: '把每一件小事做好，就是了不起。', from: '佚名' },
+    { text: '心安即是归处。', from: '苏轼' },
+    { text: '所有的坚持，都是因为热爱。', from: '佚名' },
+  ];
+  /* 线性图标 ✓ —— 统一 16 视窗、stroke 描边、currentColor 跟随主题色 ✓。
+     比 emoji 稳 ✗（emoji 在各平台字形差异大、大小不一、还不跟随主题色 ✗）。 */
+  const ICON = {
+    clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.3 1.5"/>',
+    mood: '<circle cx="8" cy="8" r="6.2"/><path d="M5.7 9.5c.6.8 1.4 1.2 2.3 1.2s1.7-.4 2.3-1.2"/><path d="M6.1 6.4h.02M9.9 6.4h.02"/>',
+    quote: '<path d="M3.4 4.6h3.8v3.8H5.4c0 1.5-.6 2.4-1.9 3"/><path d="M8.8 4.6h3.8v3.8h-1.8c0 1.5-.6 2.4-1.9 3"/>',
+    check: '<path d="M3.2 8.4l3.1 3.1L12.8 5"/>',
+    fire: '<path d="M8 2.6c2.3 2.3 3.5 3.9 3.5 5.4a3.5 3.5 0 1 1-7 0c0-1.5 1.2-3.1 3.5-5.4z"/>',
+    cal: '<rect x="2.6" y="3.8" width="10.8" height="9.6" rx="1.2"/><path d="M2.6 6.8h10.8M5.8 2.6v2.4M10.2 2.6v2.4"/>',
+    list: '<path d="M5.8 4.4h7.6M5.8 8h7.6M5.8 11.6h7.6"/><path d="M2.8 4.4h.02M2.8 8h.02M2.8 11.6h.02"/>',
+    chart: '<path d="M2.6 13.2V9.8M6.2 13.2V6.4M9.8 13.2V8.2M13.4 13.2V3.6"/>',
+  };
+  function svgIcon(name, size) {
+    const p = ICON[name];
+    if (!p) return '';
+    const s = size || 15;
+    return '<svg class="ic" viewBox="0 0 16 16" width="' + s + '" height="' + s + '" fill="none"'
+      + ' stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"'
+      + ' aria-hidden="true">' + p + '</svg>';
+  }
+
   let DATA = null, STORE = null, WX = null, TAB = 'today', LOADING = false, MOUNT_TIMER = 0, CITY = '广州';
   /* ★ 日记「未落盘内容」的提交钩子（模块级，跨 render 存在 ✓）
      为什么放模块级而不是 bind() 里：面板关闭 / 页面隐藏时 bind() 的闭包已经拿不到 DOM 了 ✗，
@@ -1217,6 +1327,11 @@
        （用户报的"改分类丢内容"是同一类问题：render 重建 DOM 把未落盘的字冲掉 ✗）
        → 先提交，再删 ✓ */
     try { JOURNAL_FLUSH(); } catch (_) { }
+    /* 秒针也要停 ✗ —— 面板都没了，还每秒空转一个定时器没意义 ✗
+       （`tick` 里也有「元素没了就自己停」的兜底 ✓，这里显式停更干净 ✓）。 */
+    if (CLOCK_TIMER) { clearInterval(CLOCK_TIMER); CLOCK_TIMER = 0; }
+    if (MOOD_AWAY) { document.removeEventListener('mousedown', MOOD_AWAY, true); MOOD_AWAY = null; }
+    MOOD_OPEN = false;
     const view = document.getElementById('lifework-view');
     if (view) view.remove();
     const btn = document.getElementById('btn-lifework');
@@ -1575,10 +1690,123 @@
     return cur;
   }
 
+  /* ── 顶栏状态条：小工具 ✓ ─────────────────────────────────────────────── */
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const dayKey = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  const hhmmss = (d) => pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  const WD = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  /* 问候语：按小时分段 ✓ */
+  function greetOf(d) {
+    const h = d.getHours();
+    if (h < 5) return { hi: '夜深了', tip: '该休息了，明天才有精神' };
+    if (h < 9) return { hi: '早上好', tip: '先做最重要的一件事' };
+    if (h < 12) return { hi: '上午好', tip: '趁状态好，把硬骨头啃掉' };
+    if (h < 14) return { hi: '中午好', tip: '吃口饭，歇一会儿' };
+    if (h < 18) return { hi: '下午好', tip: '收个尾，别把线头留到明天' };
+    if (h < 22) return { hi: '晚上好', tip: '回顾一下今天，写两句日记' };
+    return { hi: '夜深了', tip: '该收工了' };
+  }
+  /* 今天过了多少 % ✓（00:00 → 0，24:00 → 100 ✓）*/
+  function dayPct(d) {
+    return Math.min(100, Math.round(((d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) / 86400) * 100));
+  }
+  /* 现在的心情 ✓（STORE.mood = { e, n, at } ✓）*/
+  function moodNow() {
+    const m = STORE && STORE.mood;
+    if (!m || !m.e) return null;
+    return { e: String(m.e), n: String(m.n || '') };
+  }
+  /* 今日格言 ✓ —— **优先用用户自己的「好词好句」** ✓（那才最贴 ✓，也不用联网 ✗）。
+     ⚠️ 同一天内必须**稳定** ✗ —— 存在 STORE.dailyQuote = { day, idx } ✓，
+        点「换一句」才 +1 ✓。不然每次 render 都换一句，眼睛都花了 ✗。 */
+  function dailyQuoteOf() {
+    const mine = ((STORE && STORE.quotes) || []).filter((q) => q && String(q.text || '').trim());
+    const pool = mine.length ? mine : QUOTE_POOL;
+    const day = dayKey(new Date());
+    const dq = (STORE && STORE.dailyQuote) || null;
+    const idx = (dq && dq.day === day && Number.isFinite(dq.idx)) ? dq.idx : 0;
+    const q = pool[((idx % pool.length) + pool.length) % pool.length] || pool[0];
+    return { text: String(q.text || ''), from: String(q.from || ''), mine: mine.length > 0, idx };
+  }
+  /* 日记连续记录天数 ✓ —— 口径和「今日」页一致 ✓（今天没写也不断，从昨天往前数 ✓）*/
+  function journalStreak() {
+    const js = ((STORE && STORE.journal) || []);
+    let n = 0;
+    for (let i = 0; i < 400; i++) {
+      const dd = new Date(); dd.setDate(dd.getDate() - i);
+      if (js.some((x) => x && x.date === dayKey(dd))) n++;
+      else if (i > 0) break;
+    }
+    return n;
+  }
+  /* 未完成待办数 ✓ —— 和「今日」页同一个口径 ✓（备忘录正文里的 - [ ] xxx / ☐ xxx）*/
+  function openTodoCount() {
+    let n = 0;
+    ((STORE && STORE.memos) || []).forEach((m) => {
+      String((m && m.text) || '').split('\n').forEach((l) => {
+        const a = /^\s*[-*+]\s*\[([ xX])\]\s*\S/.exec(l);
+        const b = /^\s*([☐☑])\s*\S/.exec(l);
+        if ((a && a[1].toLowerCase() !== 'x') || (b && b[1] === '☐')) n++;
+      });
+    });
+    return n;
+  }
+  function todayWroteJournal() {
+    const k = dayKey(new Date());
+    return ((STORE && STORE.journal) || []).some((j) => j && j.date === k);
+  }
+  /* 时钟胶囊 ✓（含一条「今天已过 xx%」的细进度条 ✓）*/
+  function clockHtml(d) {
+    const pct = dayPct(d);
+    return '<div class="lw-stat clock" title="本机时间 · 今天已过 ' + pct + '%">' + svgIcon('clock')
+      + '<div class="mid"><div class="big" id="lw-clock">' + hhmmss(d) + '</div>'
+      + '<div class="cap">' + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + WD[d.getDay()] + '</div></div>'
+      + '<div class="lw-daybar"><i id="lw-daybar" style="width:' + pct + '%"></i></div></div>';
+  }
+  function greetHtml(d) {
+    const g = greetOf(d);
+    return '<div class="lw-greet"><b>' + esc(g.hi) + ' <em>' + dayPct(d) + '%</em></b>'
+      + '<span>' + esc(g.tip) + '</span></div>';
+  }
+  function moodPickHtml() {
+    const cur = moodNow();
+    return '<div class="lw-moodpick" id="lw-moodpick">'
+      + MOODS.map((m) => '<div data-mood="' + esc(m.e) + '"' + (cur && cur.e === m.e ? ' class="on"' : '') + '>'
+        + '<i>' + m.e + '</i>' + esc(m.n) + '</div>').join('')
+      + '<div data-mood=""><i>✕</i>不设</div></div>';
+  }
+  function moodHtml() {
+    const m = moodNow();
+    return '<div class="lw-stat click mood" id="lw-mood" title="点一下记录今天的心情">'
+      + svgIcon('mood') + '<span class="em">' + (m ? m.e : '🙂') + '</span>'
+      + '<div class="mid"><div class="big" style="font-size:12px;letter-spacing:.5px">' + esc(m ? (m.n || '心情') : '记一笔') + '</div>'
+      + '<div class="cap">' + (m ? '今天心情' : '点一下记录') + '</div></div>'
+      + (MOOD_OPEN ? moodPickHtml() : '') + '</div>';
+  }
+  /* 第二行：今日格言 + 今日状态 ✓ */
+  function stripHtml() {
+    const q = dailyQuoteOf();
+    const todo = openTodoCount();
+    const streak = journalStreak();
+    const wrote = todayWroteJournal();
+    return '<div class="lw-strip">'
+      + '<div class="q" title="' + esc(q.text) + '">' + svgIcon('quote', 14)
+      + '<span class="tx">' + esc(q.text) + '</span>'
+      + (q.from ? '<span class="from">— ' + esc(q.from) + '</span>' : '')
+      + (q.mine ? '' : '<span class="from">（内置）</span>') + '</div>'
+      + '<button class="sh" id="lw-quote-next" title="换一句">↻ 换一句</button>'
+      + '<div class="st">'
+      + '<span title="备忘录里的未完成待办">' + svgIcon('list', 13) + '待办 <b class="' + (todo ? 'hot' : '') + '">' + todo + '</b></span>'
+      + '<span title="日记连续记录天数">' + svgIcon('fire', 13) + '连续 <b class="' + (streak ? 'hot' : '') + '">' + streak + '</b> 天</span>'
+      + '<span title="今天的日记写了没有">' + svgIcon('cal', 13) + '今日日记 <b class="' + (wrote ? 'ok' : '') + '">' + (wrote ? '已写' : '未写') + '</b></span>'
+      + '</div></div>';
+  }
+
   function headHtml() {
     const d = new Date();
-    const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
-    const sub = DATA ? `${d.getMonth() + 1}月${d.getDate()}日 ${wd} · ${DATA.totals.projects} 项目 · ${DATA.totals.files} 文件 · ${DATA.totals.sizeText}` : '正在扫描本机…';
+    const sub = DATA
+      ? (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + WD[d.getDay()] + ' · ' + DATA.totals.projects + ' 项目 · ' + DATA.totals.files + ' 文件 · ' + DATA.totals.sizeText
+      : '正在扫描本机…';
     let wxHtml = '';
     if (WX && WX.ok) {
       const [ic, name] = wx(WX.code);
@@ -1592,10 +1820,13 @@
     return `<div class="lw-head">
       <div class="lw-logo">🎯</div>
       <div class="lw-h1">个人管理面板<small>Personal Console</small></div>
+      ${clockHtml(d)}
+      ${greetHtml(d)}
+      ${moodHtml()}
       <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
       ${wxHtml}
       <div id="lw-mbslot">${mailBadgeHtml()}</div>
-      <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>`;
+      <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>${stripHtml()}`;
   }
 
   /* 左栏 + 中栏 的交互（筛选类操作用 render() 局部刷新 ✓）*/
@@ -2819,6 +3050,80 @@
     };
     qa('[data-mailsend]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailsend, false); });
     qa('[data-mailself]').forEach((btn) => { btn.onclick = () => mailSend(btn.dataset.mailself, true); });
+    /* 顶栏状态条（秒针 / 心情 / 换一句）✓ —— 放最后 ✓，
+       它是**每一页**都要绑的 ✓，不跟着某个页签的绑定走 ✓。 */
+    bindHead();
+  }
+
+  /* ── 顶栏状态条：交互 ✓ ─────────────────────────────────────────────────
+     ⚠️ 这个函数**每次 render 都会跑一遍** ✗（render → bind → bindHead ✓）——
+        所以：定时器必须先清再挂 ✗（不然越挂越多 ✗），
+        全局监听器必须先摘再挂 ✗（同上 ✗）。 */
+  function bindHead() {
+    /* ① 秒针 ✓ —— 只改时钟那一个元素 ✓，**不整屏 render** ✗（每秒重渲染整个面板会卡死 ✗）*/
+    if (CLOCK_TIMER) { clearInterval(CLOCK_TIMER); CLOCK_TIMER = 0; }
+    const tick = () => {
+      const el = document.getElementById('lw-clock');
+      const bar = document.getElementById('lw-daybar');
+      if (!el) { clearInterval(CLOCK_TIMER); CLOCK_TIMER = 0; return; }   /* 面板被关掉 → 自己停 ✓ */
+      const d = new Date();
+      el.textContent = hhmmss(d);
+      if (bar) bar.style.width = dayPct(d) + '%';
+    };
+    tick();
+    CLOCK_TIMER = setInterval(tick, 1000);
+
+    /* ② 心情：点胶囊开关浮层 ✓ */
+    const mood = document.getElementById('lw-mood');
+    if (mood) {
+      mood.onclick = (ev) => {
+        const pick = document.getElementById('lw-moodpick');
+        if (pick && pick.contains(ev.target)) return;    /* 点浮层里的项 → 交给下面那组绑定 ✓ */
+        MOOD_OPEN = !MOOD_OPEN;
+        render();
+      };
+    }
+    const pick = document.getElementById('lw-moodpick');
+    if (pick) {
+      pick.querySelectorAll('[data-mood]').forEach((el) => {
+        el.onclick = (ev) => {
+          ev.stopPropagation();
+          const e = el.dataset.mood || '';
+          if (!e) delete STORE.mood;                      /* 选「不设」→ 清掉 ✓ */
+          else {
+            const hit = MOODS.find((x) => x.e === e);
+            STORE.mood = { e, n: hit ? hit.n : '', at: Date.now() };
+          }
+          MOOD_OPEN = false;
+          saveStore();
+          render();
+        };
+      });
+    }
+    /* 点别处关掉浮层 ✓（capture 阶段，先于别处的 onclick ✓）*/
+    if (MOOD_AWAY) { document.removeEventListener('mousedown', MOOD_AWAY, true); MOOD_AWAY = null; }
+    if (MOOD_OPEN) {
+      MOOD_AWAY = (ev) => {
+        const m = document.getElementById('lw-mood');
+        if (m && m.contains(ev.target)) return;           /* 点在胶囊（含浮层）里 → 不算「别处」✓ */
+        document.removeEventListener('mousedown', MOOD_AWAY, true);
+        MOOD_AWAY = null;
+        MOOD_OPEN = false;
+        render();
+      };
+      document.addEventListener('mousedown', MOOD_AWAY, true);
+    }
+
+    /* ③ 换一句 ✓ */
+    const qn = document.getElementById('lw-quote-next');
+    if (qn) {
+      qn.onclick = () => {
+        const q = dailyQuoteOf();
+        STORE.dailyQuote = { day: dayKey(new Date()), idx: q.idx + 1 };
+        saveStore();
+        render();
+      };
+    }
   }
 
 
