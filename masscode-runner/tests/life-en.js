@@ -77,7 +77,7 @@ function stripMine(d) {
 
     console.log('\n── ② 模式条（书架 / 外刊精读 / 生词本）──');
     ck('模式条在', await p.locator('.lw-rd-modes').count() === 1);
-    ck('三个模式都在', await p.locator('[data-rdmode]').count() === 3, String(await p.locator('[data-rdmode]').count()));
+    ck('四个模式都在（书架 / 外刊精读 / 生词本 / 词根词缀）', await p.locator('[data-rdmode]').count() === 4, String(await p.locator('[data-rdmode]').count()));
     ck('书架按钮原样还在', await p.locator('#lw-rd-add').count() === 1 && await p.locator('#lw-rd-imp').count() === 1);
 
     console.log('\n── ③ 切到外刊精读：三栏复用同一套类名 ✓ ──');
@@ -227,7 +227,7 @@ function stripMine(d) {
     ck('★ 书架三个按钮都在', await p.locator('#lw-rd-add').count() === 1
       && await p.locator('#lw-rd-imp').count() === 1 && await p.locator('#lw-rd-sync').count() === 1);
     ck('书架三栏在', await p.locator('.lw-rd-side').count() === 1 && await p.locator('.lw-rd-list').count() === 1 && await p.locator('.lw-rd-read').count() === 1);
-    ck('模式条还在（能切回去）', await p.locator('[data-rdmode]').count() === 3);
+    ck('模式条还在（能切回去）', await p.locator('[data-rdmode]').count() === 4, String(await p.locator('[data-rdmode]').count()));
     /* ★ 切出去再切回来，正文要**还在** ✗ ——
        不兜底的话正文区永远是「← 从中间选一篇文章」✗，用户以为文章没了 ✗。 */
     await p.locator('[data-rdmode="ex"]').click(); await p.waitForTimeout(900);

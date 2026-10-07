@@ -525,9 +525,18 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('★ 服务端认出了这个定时触发器', mine.length === 1, JSON.stringify(mine.map((x) => x.flowName)));
     /* ⚠️ 「从没跑过的间隔任务」按设计是**立刻到期**的 ✓（见 lib/flow-schedule.js 那段注释 ✓），
        所以这里**不能**断言「下次在未来」✗ —— 第一版就是这么写的 ✓，
-       结果它把「立刻到期」误判成失败 ✗（而那恰恰是修好的那个 bug 的行为 ✓）。 */
-    ck('★ 算出了下次运行时间（从没跑过 → 立刻到期）', !!mine[0] && typeof mine[0].nextAt === 'number' && mine[0].nextAt <= sch0.now,
-      mine[0] ? new Date(mine[0].nextAt).toISOString() + ' vs now' : 'null');
+       结果它把「立刻到期」误判成失败 ✗（而那恰恰是修好的那个 bug 的行为 ✓）。
+       ⚠️⚠️ 但也**不能**断言「一定 ≤ now」✗✗ —— 实测踩到（2026-10-08 ✓）：
+          这是个**真的 1 分钟定时器** ✓，而服务端每 30 秒 tick 一次 ✓ ——
+          探针建完它之后还要跑好几步 ✓，**服务端很可能已经把它跑了一次** ✗ →
+          `lastAt` 被写上 ✓ → `nextAt = lastAt + 1 分钟` ✓ → 落在**未来** ✓ →
+          断言假失败 ✗（看着像「排期算错了」✗，其实排期完全正常 ✓）。
+       → 判据改成「**要么立刻到期 ✓，要么落在下一个间隔之内** ✓」——
+          两种都是**对的** ✓，只有「超出间隔」才是真错 ✗。 */
+    const gap0 = mine[0] ? (mine[0].nextAt - sch0.now) : NaN;
+    ck('★ 算出了下次运行时间（没跑过 → 立刻到期；跑过了 → 落在下个间隔内）',
+      !!mine[0] && typeof mine[0].nextAt === 'number' && gap0 <= 61000,
+      mine[0] ? new Date(mine[0].nextAt).toISOString() + ' vs now（差 ' + Math.round(gap0 / 1000) + 's）' : 'null');
     /* ⚠️ 这一条是**关键** ✗ —— 上面两条就算 `every` 还是默认的 60 分钟也照样通过 ✗，
        于是「调度器没跑」会被误判成「调度器坏了」✗（实测踩过 ✗）。
        必须直接断言「间隔是 1 分钟、下次在 90 秒内」✓。 */

@@ -1713,18 +1713,47 @@
   .lw-ep-s.on { background:color-mix(in srgb, ${T.accent} 16%, transparent); border-bottom-color:${T.accent}; }
   .lw-ep-s.hl { background:color-mix(in srgb, ${T.ok} 22%, transparent); }
   .lw-ep-s.done { color:${T.faint}; }
-  .lw-ep-s .wk { border-bottom:1px dotted ${T.dim}; }
+  /* ★★ 正文里**已加进生词本**的词 ✓ —— 用户原话：
+     「这种划词的单词，需要在原文中标记…方便后期我记单词」✓。
+     ⚠️ 只是**下划线**还不够 ✗（读到第 30 句早忘了哪个标过 ✓）——
+        所以给它一点底色 ✓，扫一眼就能看出「这句里有我记过的词」✓。
+     ⚠️ 别用太重的样式 ✗：正文是用来读的 ✓，花哨了反而读不下去 ✓。
+     ⚠️ 原来的 .lw-ep-s .wk / .lw-ep-sent .sp.have 两条规则**从来没接上线** ✗
+        （类名对不上 ✓，属于死代码 ✓）—— 顺手删掉 ✓，换成下面这套真正在用的 ✓。 */
+  .lw-ep-w { border-bottom:1px dotted ${T.accent}; cursor:pointer; font-weight:600;
+    background:color-mix(in srgb, ${T.accent} 11%, transparent); }
+  .lw-ep-w:hover { background:color-mix(in srgb, ${T.accent} 24%, transparent); }
 
   /* ── 右栏：句子详情 ── */
   .lw-ep-sent { font-size:13px; line-height:1.95; color:${T.text}; padding:12px 14px;
     border-left:2px solid ${T.accent}; background:${T.card}; margin:10px 0 4px; }
-  .lw-ep-sent .sp { display:inline-block; margin:0 2px; }
-  .lw-ep-sent .sp.have { color:${T.accent}; border-bottom:1px dotted ${T.accent}; cursor:pointer; }
+  /* ★ 这句里的已加生词 ✓ —— 和正文里**同一套**高亮 ✓（点一下也能看词卡 ✓）*/
+  .lw-ep-sent .lw-ep-w { border-bottom:1px dotted ${T.accent}; cursor:pointer; font-weight:600;
+    background:color-mix(in srgb, ${T.accent} 11%, transparent); }
+  /* 这句的译文 ✓（单句翻译 / 整篇翻译都显示在这儿 ✓）*/
+  .lw-ep-senttr { font-size:12.5px; line-height:1.9; color:${T.dim}; padding:2px 14px 0;
+    border-left:2px solid ${T.lineDim}; margin-left:14px; }
   .lw-ep-act { display:flex; gap:6px; flex-wrap:wrap; padding:8px 14px 0; }
   .lw-ep-act button, .lw-ep-act .btn { height:24px; padding:0 9px; border:1px solid ${T.lineDim};
     background:transparent; color:${T.dim}; font:9.5px ${UI}; cursor:pointer; }
   .lw-ep-act button:hover, .lw-ep-act .btn:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-ep-add { display:flex; gap:6px; padding:8px 14px 0; }
+  /* ★★ 词卡 ✓ —— 用户原话：「还有下面这种音标和词义，不应该需要我来填写，去掉。
+     应该和查词一样，显示给我」✓。
+     → 原来那两个**手填输入框**已经删了 ✗，换成这一块自动显示 ✓。 */
+  .lw-ep-peek { margin:8px 14px 0; padding:10px 12px; border:1px solid ${T.lineDim};
+    background:${T.card}; border-left:2px solid ${T.accent}; }
+  .lw-ep-peek .hd { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
+  .lw-ep-peek .hd b { font-size:15px; color:${T.text}; letter-spacing:.4px; }
+  .lw-ep-peek .ph { font-size:11.5px; color:${T.accent}; font-family:${UI}; }
+  .lw-ep-peek .ph.warn { color:${T.warn}; }
+  .lw-ep-peek .pos { font-size:10px; color:${T.dim}; border:1px solid ${T.lineDim}; padding:0 5px; }
+  .lw-ep-peek .df { font-size:12.5px; color:${T.text}; margin-top:6px; line-height:1.7; }
+  .lw-ep-peek .df.warn { color:${T.warn}; }
+  .lw-ep-peek .eg { font-size:11.5px; color:${T.dim}; margin-top:7px; line-height:1.7;
+    border-left:2px solid ${T.lineDim}; padding-left:8px; }
+  .lw-ep-peek .egzh { font-size:11px; color:${T.faint}; margin-top:2px; padding-left:10px; }
+  .lw-ep-peek .mnem { font-size:11.5px; color:${T.dim}; margin-top:7px; line-height:1.7; }
   .lw-ep-add input { flex:1; min-width:0; height:26px; padding:0 8px; border:1px solid ${T.lineDim};
     background:${T.bg2}; color:${T.text}; font:11.5px ${UI}; outline:none; }
   .lw-ep-add input:focus { border-color:${T.accent}; }
@@ -2181,7 +2210,12 @@
     art: '',                     /* 当前文章 id ✓ */
     q: '',                       /* 文章搜索 ✓ */
     sel: -1,                     /* 当前选中的**句子序号** ✓ */
-    pick: '',                    /* 划词划中的那个词 ✓ */
+    pick: '',                    /* 划词划中的那个词 ✓（还没加进生词本 ✓）*/
+    /* ★ 「这个词现在显示在下面」✓ —— 用户原话：划中的词 / 点原文里高亮的词，
+       都要能在下方**直接看到音标释义** ✓（原来要自己手填 ✗）。
+       ⚠️ 存的是**词形**（小写 ✓）不是 id ✗ —— 因为划中的词**可能还没进生词本** ✓，
+         一个字段同时覆盖「已加的词」和「刚划的词」两种情况 ✓。 */
+    peek: '',
     impOpen: false, impTab: 'url', impUrl: '', impBusy: false, impMsg: '',
     impTitle: '', impSite: '', impText: '', impLevel: '',
     wordQ: '', wordFilter: 'all', wordSel: '', wordNew: '', wordPh: '', wordDef: '', wordEg: '',
@@ -2192,6 +2226,10 @@
           这样删文章时一起没 ✓、换文章 / 刷新都还在 ✓、也不用重问模型 ✓。
           这里只放「显示 / 进度 / 报错」这些**内存态** ✓（刷新就重置才对 ✓）。 */
     trOn: false, trBusy: false, trDone: 0, trTotal: 0, trErr: '',
+    /* ★ 「正在单独译哪一句」✓ —— 用户原话：「我选中的句子进行翻译」✓。
+       ⚠️ 单独译一句和整篇翻译**共用同一个闸门** ✗（都打同一个接口 ✓，
+          同时跑两份只会互相抢 ✓、还浪费 token ✓）。 */
+    trOne: 0,
     /* ★ 生词「AI 补全 / 配图」的**进行中**状态 ✓（用户原话：
        「加入的单词，得自动解析好音标，词义和例句，以及巧记手段…最好还有对应图片场景理解」✓）。
        ⚠️ 只放**内存** ✗ —— 补全出来的内容（音标 / 释义 / 例句 / 巧记 / 图片 ✓）
@@ -9416,6 +9454,48 @@
     spkStop(); epSave(); render();
   }
   function epWordOf(w) { return epWords().find((x) => x && x.w === w) || null; }  function epWordById(id) { return epWords().find((x) => x && x.id === id) || null; }
+  /* ══ 正文里把「已加进生词本」的词标出来 ✓ ═════════════════════════════════
+     ★ 用户原话：「这种划词的单词，需要在原文中标记…方便后期我记单词，
+       可以定位到原文位置等」✓。
+
+     ⚠️ 两条实现上的坑 ✗：
+     ① **不能先 esc 再匹配** ✗✗ —— `esc()` 会把 `&` 变成 `&amp;` ✓，
+        而 `amp` 是个合法单词 ✓ → 会被当生词标出来 ✗ → **把 HTML 实体劈开** ✗
+        （页面上直接漏出 `&amp;` 这种乱码 ✓）。→ 在**原文**上匹配 ✓，逐段 esc ✓。
+     ② **正则要编译一次复用** ✗ —— 54 句话 × 上百个生词，每句都重新拼一遍正则 ✓
+        会明显卡 ✓（而且 `render()` 是高频路径 ✓）。→ 按词表内容当 key 缓存 ✓。 */
+  let EP_WORD_RE = null;
+  function epWordRe() {
+    const ws = epWords().map((w) => String((w && w.w) || '')).filter((x) => x.length >= 2);
+    if (!ws.length) return null;
+    ws.sort((a, b) => b.length - a.length);                 /* 长的先匹配 ✓（`in` 别抢了 `individual` ✓）*/
+    const key = ws.join('|');
+    if (EP_WORD_RE && EP_WORD_RE.key === key) return EP_WORD_RE.re;
+    const re = new RegExp('(?<![A-Za-z])(' + ws.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z])', 'gi');
+    EP_WORD_RE = { key, re };
+    return re;
+  }
+  /* 把一句话渲染成 HTML ✓ —— 已加的词包一层 `<b class="lw-ep-w">` ✓ */
+  function epMarkWords(text) {
+    const t = String(text == null ? '' : text);
+    const re = epWordRe();
+    if (!re) return esc(t);
+    const by = new Map();
+    epWords().forEach((w) => { if (w && w.w) by.set(String(w.w).toLowerCase(), w); });
+    let out = '', last = 0, m;
+    re.lastIndex = 0;
+    while ((m = re.exec(t))) {
+      if (!m[0].length) { re.lastIndex++; continue; }       /* 防死循环 ✓ */
+      const w = by.get(m[0].toLowerCase());
+      out += esc(t.slice(last, m.index));
+      out += w
+        ? '<b class="lw-ep-w" data-epw="' + esc(w.id) + '" title="' + esc(w.w + (w.def ? ' · ' + w.def : '') + '（点一下看详情）') + '">' + esc(m[0]) + '</b>'
+        : esc(m[0]);
+      last = m.index + m[0].length;
+    }
+    out += esc(t.slice(last));
+    return out;
+  }
   function epNotesOf(id) { return ((STORE && STORE.artNotes) || []).filter((n) => n && n.artId === id); }
   function epSave() { saveStore(); }
   function epMode() {
@@ -9745,7 +9825,7 @@
     sents.forEach((x, i) => {
       if (x.para !== cur) { if (cur >= 0) body += '</p>'; body += '<p class="lw-ep-p">'; cur = x.para; }
       body += '<span class="lw-ep-s' + (EP_UI.sel === i ? ' on' : '') + (done[i] ? ' done' : '')
-        + '" data-epsent="' + i + '">' + esc(x.text) + '</span> ';
+        + '" data-epsent="' + i + '">' + epMarkWords(x.text) + '</span> ';
       if (trOn) {
         const dst = tr && tr[i] && tr[i].dst ? tr[i].dst : '';
         body += '<span class="lw-ep-tr' + (dst ? '' : ' pending') + '" data-eptr="' + i + '">'
@@ -9797,15 +9877,29 @@
     }
     const words = EN ? EN.tokenizeWords(s.text, { minLen: 1 }) : [];
     const lv = EN ? EN.levelOf(s.text) : '';
+    const tr = epTransOf(a);
+    const dst = tr && tr[idx] && tr[idx].dst ? tr[idx].dst : '';
+    const trOne = EP_UI.trOne === idx;
     return head
-      + '<div class="lw-ep-sent">' + esc(s.text) + '</div>'
+      /* ★ 这句**也要能划词** ✗ —— 用户原话：「划词不单单只有原文可以划词，
+         选中的句子显示在下面的，也应该支持划词」✓。
+         → 用和正文**同一个** `epMarkWords()` ✓（已加的词同样标出来 ✓），
+           并在 `bindEnglish` 里挂上同一个 `mouseup` 抓选区 ✓。 */
+      + '<div class="lw-ep-sent" id="lw-ep-sent">' + epMarkWords(s.text) + '</div>'
       + '<div class="lw-ep-act">'
       + '<button id="lw-ep-say" title="朗读这一句">🔊 读这句</button>'
       + '<button id="lw-ep-say-slow" title="慢速朗读（0.6 倍）">🐢 慢速</button>'
+      + '<button id="lw-ep-trone" title="只把这一句译成中文（不用等整篇）">'
+      + (trOne ? '翻译中…' : (dst ? '⇄ 重译这句' : '⇄ 译这句')) + '</button>'
       + '<button id="lw-ep-ok" title="标成已懂 / 取消">' + ((a.done || {})[idx] ? '↺ 取消已懂' : '✓ 已懂') + '</button>'
       + '<button id="lw-ep-copy" title="复制这一句">⧉ 复制</button>'
       + '</div>'
-      + '<div class="lw-ep-tip">' + words.length + ' 个词' + (lv ? ' · 难度 ' + lv + '（估算）' : '') + '</div>'
+      + (dst ? '<div class="lw-ep-senttr">' + esc(dst) + '</div>' : '')
+      /* ⚠️ 报错要显示在**面板里** ✗，不能只弹个 toast ✓ ——
+         toast 几秒就没了 ✓，而用户正是要看「为什么没译出来」✓。 */
+      + (EP_UI.trErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.trErr) + '</div>' : '')
+      + '<div class="lw-ep-tip">' + words.length + ' 个词' + (lv ? ' · 难度 ' + lv + '（估算）' : '')
+      + ' · 这句里也能划词 ✓</div>'
       + '<div class="lw-rd-hd">加生词</div>'
       + '<div class="lw-ep-add">'
       + '<input id="lw-ep-new" placeholder="划一个词，或手打…" value="' + esc(EP_UI.pick) + '"/>'
@@ -9813,11 +9907,13 @@
       + '</div>'
       + '<div class="lw-ep-tip" id="lw-ep-newtip">' + (EP_UI.pick
         ? '划中的是「' + esc(EP_UI.pick) + '」✓ 回车直接加'
-        : '用鼠标在正文里「划」一个词，这里会自动填上 ✓') + '</div>'
-      + '<div class="lw-ep-add">'
-      + '<input id="lw-ep-ph" placeholder="音标（选填）"/>'
-      + '<input id="lw-ep-def" placeholder="释义（选填）"/>'
-      + '</div>'
+        : '用鼠标在正文里（或**上面这句**里）划一个词，这里会自动填上 ✓') + '</div>'
+      /* ★★ 词卡 ✓ —— 用户原话：「还有下面这种音标和词义，不应该需要我来填写，去掉。
+         应该和查词一样，显示给我」✓。
+         → 两个手填输入框**删掉** ✗，改成这一块：划中 / 点中的词，
+           音标 / 词性 / 释义 / 例句 / 巧记 **自动查好显示出来** ✓
+           （没配 AI 就说实话 ✓，加了词就自动补全 ✓）。 */
+      + '<div id="lw-ep-peek">' + epWordPeekHtml() + '</div>'
       + (have.length ? '<div class="lw-rd-hd">这句里的生词</div>'
         + have.map((w) => '<div class="lw-rd-row" data-epword="' + esc(w.id) + '">'
           + '<span class="em">' + (SRS ? ({ fresh: '○', learning: '◐', young: '●', mature: '◉' }[SRS.stageOf(w)] || '○') : '○') + '</span>'
@@ -9826,6 +9922,74 @@
       + notes.map((n) => '<div class="lw-note k-quote"><div class="tx">' + esc(n.text) + '</div>'
         + '<div class="ft"><span class="x" data-epnotedel="' + esc(n.id) + '">✕</span></div></div>').join('')
       + '<div class="lw-ep-add"><input id="lw-ep-note" placeholder="给这句写点笔记…"/><button id="lw-ep-notebtn">＋</button></div>';
+  }
+  /* ★★ 词卡 ✓ —— 「划中的词 / 点中的词」现在长什么样，就靠它 ✓。
+     ⚠️ 分两种情况 ✗（一个字段 `EP_UI.peek` 同时覆盖 ✓）：
+       · 已经在生词本里 → 直接把音标 / 词性 / 释义 / 例句 / 巧记**显示出来** ✓；
+       · 还没加 → 告诉他会**自动查好** ✓，给一个「＋ 加进生词本」✓
+         （加完 `epWordEnrich()` 自动补全 ✓，用户一个字都不用填 ✓）。 */
+  function epWordPeekHtml() {
+    const q = String(EP_UI.peek || '').trim().toLowerCase();
+    if (!q) {
+      return '<div class="lw-ep-tip" style="padding:8px 14px 0;color:' + T.faint + '">'
+        + '划中的词会在这里显示音标 / 释义 / 例句 ✓（不用你填 ✓）</div>';
+    }
+    const w = epWordOf(q);
+    if (!w) {
+      return '<div class="lw-ep-peek">'
+        + '<div class="hd"><b>' + esc(q) + '</b><span class="ph">还没查</span></div>'
+        + '<div class="df" style="color:' + T.faint + '">加进生词本就会**自动查好**音标 / 释义 / 例句 / 巧记 ✓</div>'
+        + '<div class="lw-ep-act" style="padding:8px 0 0">'
+        + '<button class="pri" id="lw-ep-peekadd">＋ 加进生词本</button>'
+        + '<button id="lw-ep-peeksay">🔊 先听一下</button>'
+        + '</div></div>';
+    }
+    const busy = EP_UI.enBusy === w.id;
+    return '<div class="lw-ep-peek">'
+      + '<div class="hd"><b>' + esc(w.w) + '</b>'
+      + (w.ph ? '<span class="ph">' + esc(w.ph) + '</span>'
+        : (busy ? '<span class="ph">查音标中…</span>' : '<span class="ph warn">缺音标</span>'))
+      + (w.pos ? '<span class="pos">' + esc(w.pos) + '</span>' : '')
+      + '</div>'
+      + (w.def ? '<div class="df">' + esc(w.def) + '</div>'
+        : (busy ? '<div class="df" style="color:' + T.accent + '">正在查释义…</div>'
+          : '<div class="df warn">还没释义 —— 点「🪄 补全」</div>'))
+      + (w.eg ? '<div class="eg">' + esc(w.eg) + '</div>' : '')
+      + (w.egZh ? '<div class="egzh">' + esc(w.egZh) + '</div>' : '')
+      + (w.mnem ? '<div class="mnem">💡 ' + esc(w.mnem) + '</div>' : '')
+      + '<div class="lw-ep-act" style="padding:8px 0 0">'
+      + '<button id="lw-ep-peeksay">🔊 读</button>'
+      + '<button id="lw-ep-peekenrich">' + (busy ? '补全中…' : (w.enAt ? '🪄 重新补全' : '🪄 补全')) + '</button>'
+      + (w.artId ? '<button id="lw-ep-peekgo" title="回到它出现的那篇文章 / 那一句">📍 回到原文</button>' : '')
+      + '<button id="lw-ep-peekopen" title="切到生词本看完整卡片">📕 去生词本</button>'
+      + '</div></div>';
+  }
+  /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓。
+     从生词本点回来，要**精确落在那一句上** ✓（不是只把文章打开 ✓）。
+     ⚠️ 优先用记下来的 `sentIdx` ✓；老数据没有这个字段 ✗ →
+        拿存下来的那句原文**逐句比一次** ✓（比丢了强 ✓）。 */
+  function epGotoWordSource(w) {
+    if (!w || !w.artId) { rdToast('这个词没记下来自哪篇文章'); return; }
+    const a = epArts().find((x) => x && x.id === w.artId);
+    if (!a) { rdToast('那篇文章已经删了 ✗（生词留着 ✓）'); return; }
+    let idx = Number.isFinite(Number(w.sentIdx)) && w.sentIdx !== null && w.sentIdx !== '' ? Number(w.sentIdx) : -1;
+    const sents = epSents(a);
+    if (!(idx >= 0 && sents[idx])) {
+      idx = w.sent ? sents.findIndex((s) => String(s.text).trim() === String(w.sent).trim()) : -1;
+    }
+    EP_UI.art = a.id; STORE.epArt = a.id;
+    EP_UI.mode = 'ex'; STORE.readMode = 'ex';
+    EP_UI.sel = idx >= 0 ? idx : -1;
+    EP_UI.pick = w.w; EP_UI.peek = w.w;
+    EP_UI.trOn = !!epTransOf(a);          /* 有译文就展开 ✓（回去看原文多半想对着看 ✓）*/
+    epSave(); render();
+    if (idx >= 0) {
+      /* ⚠️ 等 DOM 建好再滚 ✗（`render()` 是同步的 ✓，但滚动得等布局 ✓）*/
+      setTimeout(() => spkHighlight(idx), 60);
+      rdToast('已定位到第 ' + (idx + 1) + ' 句 ✓（就是你划「' + w.w + '」那句）');
+    } else {
+      rdToast('文章找到了 ✓ 但这句对不上（可能重新导入过）');
+    }
   }
 
   /* ══ 生词本 ✓ ══════════════════════════════════════════════════════════ */
@@ -9941,6 +10105,9 @@
       + '<button id="lw-wd-say" title="朗读这个单词">🔊 读单词</button>'
       + '<button id="lw-wd-say-slow" title="慢速朗读">🐢 慢速</button>'
       + (w.eg ? '<button id="lw-wd-say-eg" title="朗读例句">🔊 读例句</button>' : '')
+      /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓。
+         只在**真的记下了来源**时才出现 ✓（手动加的词没有来源 ✓，别给一个点了没反应的按钮 ✗）。 */
+      + (w.artId ? '<button id="lw-wd-src" title="回到它出现的那篇文章 / 那一句">📍 回到原文</button>' : '')
       /* ★ 「🪄 补全」是**常驻**的 ✓ —— 补全失败 / 想重来 / 补完还想再问一次 ✓，都靠它 ✓。 */
       + '<button class="' + (busy ? 'on' : '') + '" id="lw-wd-enrich" title="用 AI 补全音标 / 词性 / 释义 / 例句 / 巧记 / 场景">'
       + (busy ? '补全中…' : (w.enAt ? '🪄 重新补全' : '🪄 AI 补全')) + '</button>'
@@ -10413,14 +10580,17 @@
     if (hit) { EP_UI.wordSel = hit.id; rdToast('「' + w + '」已经在生词本里了 ✓'); render(); return hit; }
     const a = epCurArt();
     /* ★ 记下「它出现在哪句话」✓ —— 给 AI 补全当上下文 ✓（同一个词在不同句子里意思不同 ✓），
-       顺带在词卡上显示「来自哪句」✓。 */
+       顺带在词卡上显示「来自哪句」✓。
+       ★★ 还要记**句号**（`sentIdx` ✓）—— 用户原话：「可以定位到原文位置等」✓。
+          ⚠️ 只存句子原文是**不够**的 ✗：重新导入 / 编辑过正文就对不上了 ✓，
+             有下标才能**精确跳回去** ✓（没下标时再退回按原文比对 ✓）。 */
     const sents = a ? epSents(a) : [];
     const sent = (EP_UI.sel >= 0 && sents[EP_UI.sel]) ? String(sents[EP_UI.sel].text || '') : '';
     const card = Object.assign({
       id: 'w' + Date.now() + Math.random().toString(36).slice(2, 6),
       w, ph: String((extra && extra.ph) || ''), def: String((extra && extra.def) || ''),
       eg: String((extra && extra.eg) || ''),
-      sent,
+      sent, sentIdx: (EP_UI.sel >= 0 ? EP_UI.sel : -1),
       artId: a ? a.id : '', artTitle: a ? a.title : '',
       at: Date.now(), edit: Date.now(),
     }, SRS ? SRS.newSrs(Date.now()) : {});
@@ -10491,6 +10661,131 @@
      ⚠️ 上限 120 句 ✗（有的文章 300+ 句 ✗，全丢给模型又慢又贵 ✗）。
      ⚠️ **已经译过的跳过** ✗ —— 中途失败 / 中断后再点，不用从头再来 ✓。 */
   const EP_TR_MAX = 120;
+  /* ★ 把英文报错翻成**人话** ✓ —— 用户截图里那句「✗ 翻译失败: Failed to fetch」
+     就是这条 ✓：`Failed to fetch` 是浏览器给的**原文** ✗，
+     用户看了完全不知道该怎么办 ✗（是网断了？Key 错了？还是我点错了？✓）。
+     ⚠️ `Failed to fetch` 最常见的原因是**服务刚重启过** ✗ ——
+        重启会掐断正在跑的请求 ✓（开发 / 自动更新时经常发生 ✓），
+        等一秒再点一次就好了 ✓ —— 这句话得直接告诉用户 ✓。 */
+  function epAiErrText(msg) {
+    const s = String(msg || '');
+    if (/Failed to fetch|NetworkError|Load failed|fetch failed|网络/i.test(s)) {
+      return '连不上本机服务 —— 多半是 CodeScope 刚重启过（重启会掐断正在跑的请求）。等一下再点一次就好 ✓';
+    }
+    if (/timeout|超时|abort|等太久/i.test(s)) return '等太久了（模型没在时限内回）—— 句子多的时候先点「⇄ 译这句」试试 ✓';
+    if (/401|403|Unauthorized|invalid.*key|Incorrect API key/i.test(s)) return 'API Key 不对或没权限 —— 去「本机管家 → AI」检查一下 ✓';
+    if (/404/.test(s)) return 'API 地址不对（404）—— 去「本机管家 → AI」检查一下 ✓';
+    if (/429|rate.?limit/i.test(s)) return '被限流了（请求太频繁）—— 缓一会儿再试 ✓';
+    if (/quota|insufficient|余额|额度/i.test(s)) return '额度不够了 —— 去模型服务商那边看看 ✓';
+    return s;
+  }
+  /* ★★ 问模型要译文 ✓ —— **整篇翻译和「译这句」共用这一份** ✗✗：
+     抄两遍的话，「模型不守编号时怎么办」这种细节迟早走偏 ✓
+     （这个项目的核心教训：同一件事写两处必然漂移 ✓）。
+     ★ 顺带**自动重试一次** ✓ —— 网络层失败（`Failed to fetch`）多半是瞬时的 ✓，
+       隔一秒再来一次基本就好了 ✓，不用让用户自己去点第二遍 ✓。 */
+  async function epTransAsk(cfg, part) {
+    const numbered = part.map((s, j) => '[' + (j + 1) + '] ' + s.text).join('\n');
+    let lastErr = '';
+    for (let k = 0; k < 2; k++) {
+      try {
+        const r = await fetch('/api/ai/chat', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 180000,
+            messages: [
+              {
+                role: 'system',
+                content: '你是专业的英译中译者，正在帮人做英文精读。把用户给的每一句英文翻译成自然、通顺的简体中文。'
+                  + '必须保留句子编号，输出格式为每行 `[序号]译文`，序号与输入完全一致。'
+                  + '只输出译文，不要原文、不要解释、不要合并句子、不要加任何标题或前言。'
+                  + '专有名词（人名、地名、机构、物种学名）保留英文原样，不要硬译。',
+              },
+              { role: 'user', content: numbered },
+            ],
+          }),
+        });
+        const d = await r.json();
+        if (!d || !d.ok) throw new Error(epAiErrText((d && d.error) || 'AI 请求失败'));
+        const body = String(d.content || '');
+        /* ① 优先按 `[n]` 编号对齐 ✓ */
+        const got = {};
+        body.split('\n').forEach((line) => {
+          const mm = /^\s*\[(\d+)\]\s*(.*)$/.exec(line);
+          if (mm) got[Number(mm[1])] = mm[2].trim();
+        });
+        /* ② 模型没守编号 → 退而求其次按行顺序对齐 ✓（总比整块空白强 ✓） */
+        if (!Object.keys(got).length) {
+          body.split('\n').map((x) => x.trim()).filter(Boolean).forEach((x, j) => { got[j + 1] = x; });
+        }
+        if (!Object.keys(got).length) throw new Error('模型这次没返回能用的译文（再点一次试试）');
+        return got;
+      } catch (e) {
+        /* ⚠️⚠️ 这里**必须过一遍 `epAiErrText`** ✗✗ —— 我第一版只在 `d.error` 上过了 ✓，
+           而**浏览器抛的**（`TypeError: Failed to fetch` ✓）是直接 `e.message` ✗ →
+           用户看到的还是那句英文原文 ✗（探针里就是这么挂的 ✓）。
+           浏览器抛的这条**恰恰是最常见的那种**（服务重启 / 连接被掐 ✓）。 */
+        lastErr = epAiErrText(String((e && e.message) || e));
+        if (k === 0) await new Promise((z) => setTimeout(z, 1200));   /* ★ 重试前喘口气 ✓ */
+      }
+    }
+    throw new Error(lastErr);
+  }
+  /* ★★ 「⇄ 译这句」✓ —— 用户原话：「原文对照翻译，加载下面，**我选中的句子进行翻译**等等」✓。
+     ⚠️ 为什么值得单独做一条 ✗：整篇 54 句一次问下去 ✓，
+        模型慢 / 失败一次就**全篇空白** ✗（用户截图里 54 句全是「还没译到这句」✓）。
+        只译当前这一句 → 秒回 ✓、失败了也只影响这一句 ✓、
+        而且**用户本来也只看这一句** ✓。 */
+  async function epTransOne(i, force) {
+    const a = epCurArt();
+    if (!a) return;
+    const sents = epSents(a);
+    if (!sents[i]) return;
+    if (i >= EP_TR_MAX) { rdToast('这篇太长，只译前 ' + EP_TR_MAX + ' 句'); return; }
+    const cfg = mailAiCfg();
+    if (!cfg) {
+      EP_UI.trErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key 就能翻了';
+      render();
+      return;
+    }
+    if (EP_UI.trBusy || EP_UI.trOne) return;                 /* 一次只跑一个 ✓ */
+    if (!a.tr || !Array.isArray(a.tr.pairs)) a.tr = { pairs: [], at: Date.now() };
+    for (let k = a.tr.pairs.length; k < sents.length; k++) a.tr.pairs.push({ src: sents[k].text, dst: '' });
+    if (!force && a.tr.pairs[i] && a.tr.pairs[i].dst) return;  /* 已经译过 ✓ */
+    EP_UI.trOne = i + 1; EP_UI.trErr = ''; EP_UI.trOn = true;
+    /* ⚠️⚠️ 这里**不能 `render()`** ✗✗ —— 整屏重绘会把正文滚回顶部 ✗，
+       而用户正读到这一句呢 ✓（「点原文自动跳到开头」那个老 bug 就是这么来的 ✓）。
+       → 只重画**下面那块面板** ✓（按钮文案跟着变 ✓，正文一动都不动 ✓）。 */
+    epRenderPanel();
+    try {
+      const got = await epTransAsk(cfg, [sents[i]]);
+      const dst = got[1];
+      if (dst) a.tr.pairs[i].dst = dst;
+      epSave();
+    } catch (e) {
+      EP_UI.trErr = String((e && e.message) || e);
+      rdToast('✗ 译这句失败：' + EP_UI.trErr);
+    } finally {
+      EP_UI.trOne = 0;
+      epRenderPanel();
+      epRenderTrans();
+    }
+  }
+  /* ★ 选中一句就**顺手译它** ✓ —— 用户原话：「我选中的句子进行翻译」✓。
+     ⚠️ 三道闸 ✗（少一道就会变成「点一下发一堆请求」✗）：
+       ① 得是**译文模式开着** ✓（没开说明用户现在不想看译文 ✓）；
+       ② 这句**还没译文** ✓；
+       ③ 现在**没有别的翻译在跑** ✓（`epTransOne` 自己也有一道 ✓，这里先挡掉省一次重绘 ✓）。 */
+  function epAutoTransOne() {
+    if (!EP_UI.trOn || EP_UI.trBusy || EP_UI.trOne) return;
+    const a = epCurArt();
+    if (!a || EP_UI.sel < 0) return;
+    const tr = epTransOf(a);
+    if (tr && tr[EP_UI.sel] && tr[EP_UI.sel].dst) return;
+    if (EP_UI.sel >= EP_TR_MAX) return;
+    if (!mailAiCfg()) return;                                /* 没配 AI 就别白点一下 ✓ */
+    epTransOne(EP_UI.sel, false);
+  }
   async function epTransGo(force) {
     const a = epCurArt();
     if (!a || EP_UI.trBusy) return;
@@ -10522,36 +10817,7 @@
         const part = use.slice(i, i + CHUNK);
         /* 这一段已经全译过 → 跳过 ✓（中断续译 / 展开已译文章都走这里 ✓） */
         if (!force && part.every((s, j) => a.tr.pairs[i + j] && a.tr.pairs[i + j].dst)) continue;
-        const numbered = part.map((s, j) => '[' + (j + 1) + '] ' + s.text).join('\n');
-        const r = await fetch('/api/ai/chat', {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 180000,
-            messages: [
-              {
-                role: 'system',
-                content: '你是专业的英译中译者，正在帮人做英文精读。把用户给的每一句英文翻译成自然、通顺的简体中文。'
-                  + '必须保留句子编号，输出格式为每行 `[序号]译文`，序号与输入完全一致。'
-                  + '只输出译文，不要原文、不要解释、不要合并句子、不要加任何标题或前言。'
-                  + '专有名词（人名、地名、机构、物种学名）保留英文原样，不要硬译。',
-              },
-              { role: 'user', content: numbered },
-            ],
-          }),
-        });
-        const d = await r.json();
-        if (!d || !d.ok) throw new Error((d && d.error) || 'AI 请求失败');
-        const body = String(d.content || '');
-        /* ① 优先按 `[n]` 编号对齐 ✓ */
-        const got = {};
-        body.split('\n').forEach((line) => {
-          const mm = /^\s*\[(\d+)\]\s*(.*)$/.exec(line);
-          if (mm) got[Number(mm[1])] = mm[2].trim();
-        });
-        /* ② 模型没守编号 → 退而求其次按行顺序对齐 ✓（总比整块空白强 ✓） */
-        if (!Object.keys(got).length) {
-          body.split('\n').map((x) => x.trim()).filter(Boolean).forEach((x, j) => { got[j + 1] = x; });
-        }
+        const got = await epTransAsk(cfg, part);
         part.forEach((s, j) => {
           const dst = got[j + 1];
           if (dst && a.tr.pairs[i + j]) a.tr.pairs[i + j].dst = dst;
@@ -10603,11 +10869,33 @@
       if (!w || w.length > 40 || !/[a-z]/i.test(w)) return false;
       if (w === EP_UI.pick) return false;
       EP_UI.pick = w;
+      EP_UI.peek = w;                                    /* ★ 下面那张词卡跟着换 ✓ */
       const host = document.getElementById('lifework-view');
       const el = host && host.querySelector('#lw-ep-new');
       if (el) { el.value = w; el.focus(); }              /* 只改输入框 ✓ 不整屏 render ✗ */
       const tip = host && host.querySelector('#lw-ep-newtip');
       if (tip) tip.innerHTML = '划中的是「' + esc(w) + '」✓ 回车直接加';
+      /* ⚠️ 词卡也要**跟着换** ✗，而且**不能整屏 render** ✗（输入框会失焦 ✓）——
+         只换那一个容器 ✓，然后**立刻把它的按钮重新绑上** ✓
+         （`innerHTML` 一换，里面按钮的 onclick 就全没了 ✓ —— 这个坑这个项目踩过好几次 ✗）。 */
+      const peek = host && host.querySelector('#lw-ep-peek');
+      if (peek) {
+        peek.innerHTML = epWordPeekHtml();
+        const pkAdd = peek.querySelector('#lw-ep-peekadd');
+        if (pkAdd) pkAdd.onclick = () => { const x = EP_UI.peek; if (x) { epWordAdd(x); EP_UI.pick = ''; } };
+        const pkSay = peek.querySelector('#lw-ep-peeksay');
+        if (pkSay) pkSay.onclick = () => { const x = epWordOf(EP_UI.peek); spkSay(x ? x.w : EP_UI.peek); };
+        const pkEn = peek.querySelector('#lw-ep-peekenrich');
+        if (pkEn) pkEn.onclick = () => { const x = epWordOf(EP_UI.peek); if (x) epWordEnrich(x, true); };
+        const pkGo = peek.querySelector('#lw-ep-peekgo');
+        if (pkGo) pkGo.onclick = () => epGotoWordSource(epWordOf(EP_UI.peek));
+        const pkOpen = peek.querySelector('#lw-ep-peekopen');
+        if (pkOpen) pkOpen.onclick = () => {
+          const x = epWordOf(EP_UI.peek);
+          if (x) EP_UI.wordSel = x.id;
+          epSetMode('word');
+        };
+      }
       return true;
     } catch (_) { return false; }
   }
@@ -10904,7 +11192,19 @@
       trb.onclick = () => {
         const a = epCurArt(); if (!a) return;
         if (EP_UI.trOn && !EP_UI.trBusy) { EP_UI.trOn = false; EP_UI.trErr = ''; render(); return; }
-        if (epTransOf(a) && !EP_UI.trBusy) { EP_UI.trOn = true; EP_UI.trErr = ''; render(); return; }
+        /* ★★★ 判据是「**译完了吗**」✗✗，不是「有没有译文」✗✗ ——
+           实测踩到（而且很可能就是用户截图那个现象的根因 ✓）：
+           老代码只看「`a.tr` 在不在」✓ —— 只要**有一句**译文就算「已经译过」✓ →
+           点「对照翻译」**只展开、不继续译** ✗ →
+           用户看到一整屏「（还没译到这句）」✗，还以为翻译功能坏了 ✗。
+           （触发很容易：先点过一次「⇄ 译这句」✓、或者上次整篇译到一半断了 ✓。）
+           → 数一下**实际译好了几句** ✓：没译完就继续译 ✓，译完了才是纯展开 ✓。 */
+        const need = epSents(a).slice(0, EP_TR_MAX);
+        const tr = epTransOf(a);
+        const done = need.filter((s, i) => tr && tr[i] && tr[i].dst).length;
+        if (need.length && done >= need.length && !EP_UI.trBusy) {
+          EP_UI.trOn = true; EP_UI.trErr = ''; render(); return;
+        }
         epTransGo(false);
       };
     }
@@ -10919,15 +11219,19 @@
     };
     /* 正文：点句子 / 划词 */
     qa('[data-epsent]').forEach((el) => {
-      el.onclick = () => {
+      el.onclick = (ev) => {
         const i = Number(el.dataset.epsent);
-        if (EP_UI.sel === i) return;
-        EP_UI.sel = i; EP_UI.pick = '';
+        /* ★ 点的是**已加过的生词**（正文里那个高亮 ✓）→ 下面直接显示它的词卡 ✓
+           （用户原话：「这种划词的单词，需要在原文中标记…」✓ —— 标出来还得能点开看 ✓）。 */
+        const wb = ev.target && ev.target.closest ? ev.target.closest('[data-epw]') : null;
+        if (EP_UI.sel !== i) { EP_UI.sel = i; EP_UI.pick = ''; }
+        if (wb) { const w = epWordById(wb.dataset.epw); if (w) EP_UI.peek = w.w; }
         /* ⚠️⚠️ 这里**绝对不能**用 `render()` ✗✗ —— 用户两个抱怨是同一个根因 ✓：
            整屏重建会把 ① 正文的滚动位置归零 ✗（「点击原文会自动跳到开头去」✓）
            ② 鼠标刚划出的**选区销毁** ✗（「划词怎么没有用」✓）。
            → 只重画下半部分 ✓（见 epRenderPanel 的注释 ✓）。 */
         epRenderPanel();
+        epAutoTransOne();
       };
       /* ⚠️⚠️ 选区要在 **mouseup 这一刻同步抓下来** ✗✗，不能等到定时器里再抓 ✗：
            紧跟着的 `click` 会重画面板 ✓（就算现在只重画下半部分 ✓，
@@ -10937,6 +11241,18 @@
         const t = String((window.getSelection && window.getSelection().toString()) || '');
         setTimeout(() => epGrabPick(t), 0);   /* 等浏览器把选区定下来 ✓ */
       };
+    });
+    /* ★★ 下面那句「选中的句子」**也要能划词** ✗ —— 用户原话：
+       「划词不单单只有原文可以划词，选中的句子显示在下面的，也应该支持划词」✓。
+       译文那行也一起 ✓（对着中文想划一下英文原文的时候很自然 ✓）。
+       ⚠️ 和正文**用同一个** `epGrabPick` ✓，不另写一套 ✗。 */
+    ['.lw-ep-sent', '.lw-ep-senttr', '[data-eptr]'].forEach((sel) => {
+      qa(sel).forEach((el) => {
+        el.onmouseup = () => {
+          const t = String((window.getSelection && window.getSelection().toString()) || '');
+          setTimeout(() => epGrabPick(t), 0);
+        };
+      });
     });
     const say = q('#lw-ep-say');
     if (say) say.onclick = () => {
@@ -10976,11 +11292,39 @@
       const el = q('#lw-ep-new');
       const raw = el ? String(el.value || '').trim() : '';
       if (!raw) { rdToast('先划一个词，或者手打一个'); return; }
-      const ph = q('#lw-ep-ph'), def = q('#lw-ep-def');
-      epWordAdd(raw, { ph: ph ? ph.value : '', def: def ? def.value : '' });
+      /* ⚠️ 这里**不再**读「音标 / 释义」两个手填框 ✗ —— 用户原话：
+         「还有下面这种音标和词义，不应该需要我来填写，去掉。
+          应该和查词一样，显示给我」✓。
+         → 加进去之后 `epWordEnrich()` **自动**查好音标 / 词性 / 释义 / 例句 / 巧记 ✓，
+           下面那张词卡会一边补一边显示 ✓，用户一个字都不用填 ✓。 */
+      epWordAdd(raw);
       EP_UI.pick = '';
+      EP_UI.peek = EN ? EN.cleanWord(raw) : String(raw).trim().toLowerCase();
     };
     if (addbtn) addbtn.onclick = doAdd;
+    /* ★ 词卡上的几个按钮 ✓（用户原话：「应该和查词一样，显示给我」✓）*/
+    const peekAdd = q('#lw-ep-peekadd');
+    if (peekAdd) peekAdd.onclick = () => { const w = EP_UI.peek; if (w) { epWordAdd(w); EP_UI.pick = ''; } };
+    const peekSay = q('#lw-ep-peeksay');
+    if (peekSay) peekSay.onclick = () => { const w = epWordOf(EP_UI.peek); spkSay(w ? w.w : EP_UI.peek); };
+    const peekEnrich = q('#lw-ep-peekenrich');
+    if (peekEnrich) peekEnrich.onclick = () => { const w = epWordOf(EP_UI.peek); if (w) epWordEnrich(w, true); };
+    const peekGo = q('#lw-ep-peekgo');
+    if (peekGo) peekGo.onclick = () => epGotoWordSource(epWordOf(EP_UI.peek));
+    const peekOpen = q('#lw-ep-peekopen');
+    if (peekOpen) peekOpen.onclick = () => {
+      const w = epWordOf(EP_UI.peek);
+      if (w) EP_UI.wordSel = w.id;
+      epSetMode('word');                       /* 去生词本看完整卡片 ✓ */
+    };
+    /* ★ 「⇄ 译这句」✓ —— 用户原话：「我选中的句子进行翻译」✓ */
+    const trone = q('#lw-ep-trone');
+    if (trone) trone.onclick = () => {
+      const a = epCurArt();
+      const tr = epTransOf(a);
+      const has = tr && tr[EP_UI.sel] && tr[EP_UI.sel].dst;
+      epTransOne(EP_UI.sel, !!has);            /* 已经有译文 → 点它是「重译」✓ */
+    };
     const newEl = q('#lw-ep-new');
     if (newEl) {
       newEl.oninput = () => { EP_UI.pick = newEl.value; };
@@ -11037,6 +11381,9 @@
     const ws1 = q('#lw-wd-say'); if (ws1) ws1.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
     const ws2 = q('#lw-wd-say-slow'); if (ws2) ws2.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w, { rate: 0.6 }); };
     const ws3 = q('#lw-wd-say-eg'); if (ws3) ws3.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w && w.eg) spkSay(w.eg); };
+    /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓ */
+    const wsrc = q('#lw-wd-src');
+    if (wsrc) wsrc.onclick = () => epGotoWordSource(epWordById(EP_UI.wordSel));
 
     /* ── 复习浮层 ── */
     const rx = q('#lw-rev-x'); if (rx) rx.onclick = () => { EP_UI.revOpen = false; render(); };
