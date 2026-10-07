@@ -468,10 +468,14 @@
   /* 三栏之间可拖拽的竖条（左右自由调宽 ✓，双击恢复默认 ✓） */
   /* ★ 拖拽调宽的竖条 —— 备忘录和邮箱共用同一套样式 ✓
      （用户报「邮箱怎么没有左右自由拖动功能」✗，现在两个模块一致 ✓）*/
-  .lw-nt-grip, .lw-ml-grip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
-  .lw-nt-grip::after, .lw-ml-grip::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
+  /* ★ 通用三栏拖拽条 .lw-pgrip ✓ —— 阅读 / 工作流 / 热榜 共用 ✓。
+     （用户先在邮箱那儿要过一次拖拽 ✗，又在热榜这儿要了一次 ✗ ——
+       说明「三栏可拖」是**每个模块的默认预期** ✓ → 做成通用的 ✓，以后加模块直接复用 ✓。） */
+  .lw-nt-grip, .lw-ml-grip, .lw-pgrip { flex:none; width:7px; cursor:col-resize; position:relative; background:#131312; }
+  .lw-nt-grip::after, .lw-ml-grip::after, .lw-pgrip::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:${T.lineDim}; }
   .lw-nt-grip:hover::after, .lw-nt-grip.on::after,
-  .lw-ml-grip:hover::after, .lw-ml-grip.on::after { background:${T.accent}; width:2px; left:2px; }
+  .lw-nt-grip:hover::after, .lw-ml-grip:hover::after, .lw-nt-grip.on::after, .lw-ml-grip.on::after,
+  .lw-pgrip:hover::after, .lw-pgrip.on::after, .lw-pgrip.dragging::after { background:${T.accent}; width:2px; left:2px; }
   /* 拖拽把备忘录移到文件夹时的落点高亮 */
   .lw-nt-side .it.drop { background:color-mix(in srgb,${T.ok} 18%,transparent); border-color:${T.ok}; color:${T.text}; }
   .lw-nt-row.dragging { opacity:.45; }
@@ -2110,6 +2114,53 @@
        down(ev) → 返回一个「会话对象」（想拖就给对象 ✓，不拖就 return null ✓）
        move(ev, sess) / up(ev, sess, cancelled) ✓
      up 里不用自己摘监听 ✓ —— 助手会摘 ✓（而且**一定会**调 up ✓，cancelled 只是告诉你原因 ✓）。 */
+  /* ── 三栏宽度：读上次存的 ✓（没存 / 太小 → 交给 CSS 默认 ✓）── */
+  function paneW(key, min) {
+    const w = Number((STORE && STORE[key]) || 0);
+    return (w >= min) ? ' style="width:' + w + 'px;flex:none"' : '';
+  }
+  /* 一条拖拽条的 HTML ✓ */
+  function paneGrip(which) {
+    return '<div class="lw-pgrip" data-pgrip="' + esc(which) + '" title="左右拖动调整宽度；双击恢复默认"></div>';
+  }
+  /* ★★ 给一个三栏布局挂上拖拽调宽 ✓✗ —— 阅读 / 工作流 / 热榜 共用 ✓。
+     spec: [{ which, target(选择器), min, max, key(STORE 字段) }, …] ✓
+     ⚠️ 走 `lwGrab` ✗（不是自己挂 mousemove ✗）—— 那套有三道保险 ✓，
+        能防「松手没收干净 → 之后鼠标经过就自己拖」✗。 */
+  function bindPaneGrips(root, specs) {
+    if (!root) return;
+    specs.forEach((sp) => {
+      const el = root.querySelector('[data-pgrip="' + sp.which + '"]');
+      const target = root.querySelector(sp.target);
+      if (!el || !target) return;
+      /* 恢复上次的宽度 ✓（存在 STORE 里 ✓，切页签/重开都不丢 ✓）*/
+      const saved = Number((STORE && STORE[sp.key]) || 0);
+      if (saved >= sp.min) { target.style.width = saved + 'px'; target.style.flex = 'none'; }
+      lwGrab(el, {
+        down: (ev) => {
+          el.classList.add('on');
+          return { x: ev.clientX, w: target.getBoundingClientRect().width };
+        },
+        move: (ev, sess) => {
+          const w = Math.max(sp.min, Math.min(sp.max, sess.w + (ev.clientX - sess.x)));
+          target.style.width = Math.round(w) + 'px';
+          target.style.flex = 'none';
+        },
+        up: () => {
+          el.classList.remove('on');
+          STORE[sp.key] = Math.round(target.getBoundingClientRect().width);
+          saveStore();
+        },
+      });
+      el.ondblclick = () => {
+        target.style.width = '';
+        target.style.flex = '';
+        STORE[sp.key] = 0;
+        saveStore();
+      };
+    });
+  }
+
   function lwGrab(el, handlers) {
     if (!el) return;
     let sess = null;
@@ -5371,8 +5422,7 @@
       + '<span class="em">' + RD_ST[k].e + '</span>' + RD_ST[k].n + '<span class="n">' + cnt((b) => b && b.status === k) + '</span></div>').join('');
     const srcRows = Object.keys(RD_SRC).map((k) => '<div class="lw-rd-row' + (RD_UI.src === k ? ' on' : '') + '" data-rdsrc="' + k + '">'
       + '<span class="em">' + RD_SRC[k].e + '</span>' + RD_SRC[k].n + '<span class="n">' + cnt((b) => b && b.src === k) + '</span></div>').join('');
-    return '<div class="lw-rd-side">'
-      + '<div class="lw-rd-hd">阅读统计</div>'
+    return '<div class="lw-rd-hd">阅读统计</div>'
       + '<div class="lw-rd-stat">'
       + '<div><b>' + st.reading + '</b><span>在读</span></div>'
       + '<div><b>' + st.done + '</b><span>读完</span></div>'
@@ -5387,9 +5437,9 @@
       + srcRows
       + (tags.length ? '<div class="lw-rd-hd">标签</div>'
         + '<div class="lw-rd-row' + (RD_UI.tag === '' ? ' on' : '') + '" data-rdtag=""><span class="em">#</span>全部</div>'
-        + tags.map(([t, n]) => '<div class="lw-rd-row' + (RD_UI.tag === t ? ' on' : '') + '" data-rdtag="' + esc(t) + '"><span class="em">#</span>' + esc(t) + '<span class="n">' + n + '</span></div>').join('') : '')
-      + '</div>';
+        + tags.map(([t, n]) => '<div class="lw-rd-row' + (RD_UI.tag === t ? ' on' : '') + '" data-rdtag="' + esc(t) + '"><span class="em">#</span>' + esc(t) + '<span class="n">' + n + '</span></div>').join('') : '');
   }
+  const rdSideInnerHtml = rdSideHtml;
   function rdBookCard(b) {
     const st = RD_ST[b.status] || RD_ST.want;
     const src = RD_SRC[b.src] || RD_SRC.other;
@@ -5580,8 +5630,9 @@
       + (nodes.length ? '' : '<div class="lw-fl-empty">左边点一个节点就能加进来 ✓<br><span style="color:' + T.faint + '">先加「手动触发」，再加要干的事，最后接「输出」</span></div>')
       + '</div></div>';
   }
-  function flowCfgHtml(f) {
-    if (!f) return '<div class="lw-fl-cfg"><div class="lw-rd-empty">← 先新建 / 选一个工作流</div></div>';
+  const flowCfgHtml = (f) => '<div class="lw-fl-cfg">' + flowCfgInnerHtml(f) + '</div>';
+  function flowCfgInnerHtml(f) {
+    if (!f) return '<div class="lw-rd-empty">← 先新建 / 选一个工作流</div>';
     const n = flowNodeById(f, FLOW_UI.node);
     let inner = '';
     if (!n) {
@@ -5620,7 +5671,7 @@
             + (st.error ? '<div style="color:' + T.red + ';font-size:9.5px;padding:0 0 4px 16px;word-break:break-all">' + esc(st.error) + '</div>' : '');
         }).join('') + '</div>'
       : '';
-    return '<div class="lw-fl-cfg">' + inner + log + '</div>';
+    return inner + log;
   }
   function viewFlow() {
     const list = flowList();
@@ -5641,12 +5692,12 @@
       + '<span class="hint">' + (FLOW_UI.busy ? '正在跑…' : '点节点改设置 · 点右圆点再点左圆点就连线 · 点连线删掉') + '</span>'
       + '</div>';
     return '<div class="lw-fl">'
-      + '<div class="lw-fl-side"><div class="lw-rd-hd">我的工作流</div>' + (rows || '<div class="lw-fl-row" style="color:' + T.faint + '">还没有，点「＋ 新建」</div>')
-      + '<div class="lw-rd-hd">节点库</div>' + pal + '</div>'
+      + '<div class="lw-fl-side"' + paneW('flowSideW', 150) + '><div class="lw-rd-hd">我的工作流</div>' + (rows || '<div class="lw-fl-row" style="color:' + T.faint + '">还没有，点「＋ 新建」</div>')
+      + '<div class="lw-rd-hd">节点库</div>' + pal + '</div>' + paneGrip('side')
       + '<div style="flex:1;min-width:0;display:flex;flex-direction:column">' + tools
       + (f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
-      + '</div>'
-      + flowCfgHtml(f) + '</div>';
+      + '</div>' + paneGrip('cfg')
+      + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>' + flowCfgInnerHtml(f) + '</div></div>';
   }
   /* ── 运行 ✓ ────────────────────────────────────────────────────────────── */
   function flowAiCfg() {
@@ -5722,6 +5773,10 @@
   function bindFlow() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'flow') return;
+    bindPaneGrips(host, [
+      { which: 'side', target: '.lw-fl-side', min: 150, max: 420, key: 'flowSideW' },
+      { which: 'cfg', target: '.lw-fl-cfg', min: 220, max: 560, key: 'flowCfgW' },
+    ]);
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
     qa('[data-flsel]').forEach((el) => { el.onclick = () => { FLOW_UI.sel = el.dataset.flsel; STORE.flowSel = el.dataset.flsel; FLOW_UI.node = ''; FLOW_UI.steps = null; render(); }; });
@@ -5956,16 +6011,15 @@
           + '<span class="n" style="color:' + (bad ? T.red : T.faint) + '">' + (TR_UI.busy ? '…' : (bad ? '✗' : n)) + '</span></div>';
       }).join('');
     }).join('');
-    return '<div class="lw-hl-side">'
-      + '<div class="lw-rd-hd">筛选</div>'
+    return '<div class="lw-rd-hd">筛选</div>'
       + '<div class="lw-rd-row' + (TR_UI.only === 'all' ? ' on' : '') + '" data-tronly="all"><span class="em">▣</span>全部<span class="n">' + all.length + '</span></div>'
       + '<div class="lw-rd-row' + (TR_UI.only === 'new' ? ' on' : '') + '" data-tronly="new"><span class="em">✨</span>未读<span class="n">' + newCount + '</span></div>'
       + '<div class="lw-rd-row' + (TR_UI.only === 'star' ? ' on' : '') + '" data-tronly="star"><span class="em">⭐</span>收藏<span class="n">' + starCount + '</span></div>'
       + '<div class="lw-rd-hd">来源</div>'
       + '<div class="lw-rd-row' + (TR_UI.src === '' ? ' on' : '') + '" data-trsrc=""><span class="em">▣</span>全部来源</div>'
-      + (rows || '<div class="lw-rd-row" style="color:' + T.faint + '">还没拉过 —— 点右边「↻ 刷新」</div>')
-      + '</div>';
+      + (rows || '<div class="lw-rd-row" style="color:' + T.faint + '">还没拉过 —— 点右边「↻ 刷新」</div>');
   }
+  const trSideInnerHtml = trSideHtml;
   function trItemHtml(x) {
     const star = trIsStar(x.id), seen = trIsSeen(x.id);
     return '<div class="lw-hl-it' + (TR_UI.sel === x.id ? ' on' : '') + (seen ? ' seen' : '') + '" data-trit="' + esc(x.id) + '">'
@@ -6023,11 +6077,18 @@
       + '</div></div>';
   }
   function viewTrends() {
-    return '<div class="lw-hl">' + trSideHtml() + '<div class="lw-hl-list">' + trListHtml() + '</div>' + trReadHtml() + '</div>';
+    return '<div class="lw-hl">'
+      + '<div class="lw-hl-side"' + paneW('trendSideW', 150) + '>' + trSideInnerHtml() + '</div>' + paneGrip('side')
+      + '<div class="lw-hl-list"' + paneW('trendListW', 260) + '>' + trListHtml() + '</div>' + paneGrip('list')
+      + trReadHtml() + '</div>';
   }
   function bindTrends() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'trends') return;
+    bindPaneGrips(host, [
+      { which: 'side', target: '.lw-hl-side', min: 150, max: 420, key: 'trendSideW' },
+      { which: 'list', target: '.lw-hl-list', min: 260, max: 760, key: 'trendListW' },
+    ]);
     const q = (sel) => host.querySelector(sel);
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
     qa('[data-trsrc]').forEach((el) => { el.onclick = () => { TR_UI.src = el.dataset.trsrc; TR_UI.sel = ''; render(); }; });
@@ -6062,7 +6123,10 @@
   }
 
   function viewReading() {
-    return '<div class="lw-rd">' + rdSideHtml() + '<div class="lw-rd-list">' + rdListHtml() + '</div>' + rdReadHtml() + '</div>'
+    return '<div class="lw-rd">'
+      + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + rdSideInnerHtml() + '</div>' + paneGrip('side')
+      + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + rdListHtml() + '</div>' + paneGrip('list')
+      + rdReadHtml() + '</div>'
       + (RD_UI.impOpen ? rdImportHtml() : '');
   }
   /* 导入浮层 ✓（先预览再导入 ✓）*/
@@ -6240,6 +6304,10 @@
   function bindReading() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'reading') return;
+    bindPaneGrips(host, [
+      { which: 'side', target: '.lw-rd-side', min: 150, max: 420, key: 'bookSideW' },
+      { which: 'list', target: '.lw-rd-list', min: 260, max: 760, key: 'bookListW' },
+    ]);
     const q = (s) => host.querySelector(s);
     const qa = (s) => Array.from(host.querySelectorAll(s));
     qa('[data-rdst]').forEach((el) => { el.onclick = () => { RD_UI.status = el.dataset.rdst; render(); }; });

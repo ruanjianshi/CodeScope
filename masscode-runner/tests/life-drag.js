@@ -136,6 +136,29 @@ const INSTALL = () => {
       ck('工作流·节点：能建出节点来测', false, '一个节点都没有');
     }
 
+    console.log('\n── ③b 阅读 / 工作流 / 热榜 的三栏拖拽条 ──');
+    /* ★ 这三个模块**原来根本没有拖拽条** ✗ —— 用户先在邮箱要过一次 ✗，
+       又在热榜要了一次 ✗（原话：「窗口无法自由拖动，纯在空白」✗）。
+       现在统一走通用拖拽条 `.lw-pgrip` ✓，这里逐个验一遍 ✓。 */
+    for (const [tab, list, wait] of [
+      ['reading', [['[data-pgrip="side"]', '.lw-rd-side'], ['[data-pgrip="list"]', '.lw-rd-list']], 2000],
+      ['flow', [['[data-pgrip="side"]', '.lw-fl-side'], ['[data-pgrip="cfg"]', '.lw-fl-cfg']], 1800],
+      ['trends', [['[data-pgrip="side"]', '.lw-hl-side'], ['[data-pgrip="list"]', '.lw-hl-list']], 4000],
+    ]) {
+      await p.locator('.lw-nav [data-tab="' + tab + '"]').dispatchEvent('click');
+      await p.waitForTimeout(wait);
+      for (const [g, pane] of list) {
+        const r = await grab(g, pane, 'x');
+        if (r.err) { ck(tab + ' ' + pane + '：找得到', false, r.err); continue; }
+        console.log('    ' + tab + ' ' + pane + ' → ' + JSON.stringify(r));
+        ck(tab + ' ' + pane + '：能拖动', r.afterDrag !== r.before, JSON.stringify(r));
+        ck(tab + ' ' + pane + '：★ 丢 up 之后乱移**不再拖**', r.afterStray === r.afterRelease, r.afterRelease + ' → ' + r.afterStray);
+      }
+    }
+    /* 双击恢复默认 ✓ */
+    await p.locator('[data-pgrip="side"]').first().dblclick().catch(() => {});
+    await p.waitForTimeout(500);
+
     console.log('\n── ④ 正常路径（有 up）不能被误伤 ──');
     await p.locator('.lw-nav [data-tab="mail"]').dispatchEvent('click');
     await p.waitForSelector('.lw-ml-item', { timeout: 60000 });
@@ -188,6 +211,8 @@ const INSTALL = () => {
       const d = await store();
       delete d.mailSideW; delete d.mailListW; delete d.memoSideW; delete d.memoListW;
       delete d.journalLeftW; delete d.journalEditH; delete d.flowSel;
+      delete d.bookSideW; delete d.bookListW; delete d.flowSideW; delete d.flowCfgW;
+      delete d.trendSideW; delete d.trendListW;
       d.flows = (d.flows || []).filter((x) => !String(x.name).includes('__拖动探针__'));
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
       const a = await store();
