@@ -2003,6 +2003,82 @@
     return cur;
   }
 
+
+  /* ★★★ 统一的「按住拖」会话 ✗✗ —— 这一版修的是用户报的那个 bug：
+     「我鼠标点击后拖动，后续重新鼠标移动到这，自动莫名的拖动了，
+      没有点击去要拖动，他还是拖动了」。
+
+     **根因**：拖动会话是「按下时往 document 挂 mousemove / mouseup」✗，
+     而**松手如果没落在 document 上**（在窗口外松的 ✗、拖到浏览器边框上松的 ✗、
+     拖到系统菜单上松的 ✗、右键/弹窗打断的 ✗），`mouseup` 就**永远到不了** ✗
+     → `move` 一直挂在 document 上 ✗ → 之后**只要鼠标经过就在拖动** ✗✗
+     —— 用户看到的「没点也拖」✗。
+
+     三道保险，缺一不可 ✓：
+       ① **Pointer Events + `setPointerCapture`** ✓ —— 指针被捕获后，
+          `pointerup` **一定会**派发回捕获元素 ✓（哪怕在窗口外松手 ✓）；
+       ② `move` 里查 `ev.buttons` ✗✗ —— 只要发现**一个键都没按** ✓，
+          立刻结束会话 ✓。这是**最后一道兜底** ✓：
+          任何原因漏掉的 up（切窗口 / 弹窗 / 系统手势 ✗）都会被它收掉 ✓；
+       ③ `pointercancel` / `blur` / `visibilitychange` 也一并收尾 ✓。
+
+     ⚠️ 这个 bug 在**全部 7 处拖动**里都存在 ✗ ——
+        邮箱两条、备忘录两条、卡片缩放三条、日记两条、工作流节点一条 ✗，
+        只是用户先在邮箱那儿撞上 ✗。所以**全部统一走这里** ✓，以后再修只修一处 ✓。
+
+     ⚠️ `pointerdown` 只认**左键** ✗（`button !== 0` 直接不管 ✓）——
+        以前右键点一下也会开一个拖动会话 ✗，右键菜单一弹，up 就丢了 ✗。
+
+     handlers：
+       down(ev) → 返回一个「会话对象」（想拖就给对象 ✓，不拖就 return null ✓）
+       move(ev, sess) / up(ev, sess, cancelled) ✓
+     up 里不用自己摘监听 ✓ —— 助手会摘 ✓（而且**一定会**调 up ✓，cancelled 只是告诉你原因 ✓）。 */
+  function lwGrab(el, handlers) {
+    if (!el) return;
+    let sess = null;
+    const onMove = (ev) => {
+      if (!sess) return;
+      /* ② 一个键都没按 → 这个会话其实早就该结束了 ✗ → 立刻收尾 ✓ */
+      if (ev.buttons === 0) { end(ev, true); return; }
+      try { handlers.move && handlers.move(ev, sess); } catch (_) { }
+    };
+    const onUp = (ev) => end(ev, false);
+    const onCancel = (ev) => end(ev, true);
+    const onBlur = () => end(null, true);
+    const onVis = () => { if (document.visibilityState !== 'visible') end(null, true); };
+    function end(ev, cancelled) {
+      if (!sess) return;
+      const s = sess;
+      sess = null;
+      try { if (s.pid != null && el.releasePointerCapture) el.releasePointerCapture(s.pid); } catch (_) { }
+      el.classList.remove('dragging');
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVis);
+      try { handlers.up && handlers.up(ev, s, !!cancelled); } catch (_) { }
+    }
+    el.onpointerdown = (ev) => {
+      if (ev.button !== 0) return;               /* 只认左键 ✓ */
+      if (ev.target && ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
+      end(null, true);                            /* 上一次没收干净 → 先收掉 ✓ */
+      let sess2 = null;
+      try { sess2 = handlers.down ? handlers.down(ev) : {}; } catch (_) { sess2 = null; }
+      if (!sess2) return;
+      sess2.pid = ev.pointerId;
+      sess = sess2;
+      try { el.setPointerCapture(ev.pointerId); } catch (_) { }
+      el.classList.add('dragging');
+      ev.preventDefault();
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onCancel);
+      window.addEventListener('blur', onBlur);
+      document.addEventListener('visibilitychange', onVis);
+    };
+  }
+
   /* ── 顶栏状态条：小工具 ✓ ─────────────────────────────────────────────── */
   const pad2 = (n) => String(n).padStart(2, '0');
   const dayKey = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
@@ -2230,29 +2306,26 @@
       const which = grip.dataset.mgrip;
       const target = which === 'side' ? q('.lw-nt-side') : q('.lw-nt-list');
       if (!target) return;
-      grip.onmousedown = (event) => {
-        event.preventDefault();
-        grip.classList.add('on');
-        const startX = event.clientX;
-        const startW = target.getBoundingClientRect().width;
-        const min = which === 'side' ? 120 : 180;
-        const max = which === 'side' ? 420 : 640;
-        const move = (event2) => {
-          const w = Math.max(min, Math.min(max, startW + (event2.clientX - startX)));
+      lwGrab(grip, {
+        down: (event) => {
+          grip.classList.add('on');
+          return {
+            startX: event.clientX, startW: target.getBoundingClientRect().width,
+            min: which === 'side' ? 120 : 180, max: which === 'side' ? 420 : 640,
+          };
+        },
+        move: (e2, sess) => {
+          const w = Math.max(sess.min, Math.min(sess.max, sess.startW + (e2.clientX - sess.startX)));
           target.style.width = Math.round(w) + 'px';
           target.style.flex = 'none';
-        };
-        const up = () => {
-          document.removeEventListener('mousemove', move);
-          document.removeEventListener('mouseup', up);
+        },
+        up: (e2, sess) => {
           grip.classList.remove('on');
           const w = Math.round(target.getBoundingClientRect().width);
           if (which === 'side') STORE.memoSideW = w; else STORE.memoListW = w;
           saveStore();
-        };
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
-      };
+        },
+      });
       grip.ondblclick = () => {
         target.style.width = '';
         if (which === 'side') STORE.memoSideW = 0; else STORE.memoListW = 0;
@@ -2404,14 +2477,17 @@
             const h = document.createElement('div');
             h.className = 'lw-rs lw-rs-' + dir;
             card.appendChild(h);
-            h.addEventListener('mousedown', (e) => {
-              e.preventDefault(); e.stopPropagation();
-              h.classList.add('on');
-              const x0 = e.clientX, y0 = e.clientY, w0 = card.offsetWidth, h0 = card.offsetHeight;
+            lwGrab(h, {
+              down: (e) => {
+                h.classList.add('on');
+                const x0 = e.clientX, y0 = e.clientY, w0 = card.offsetWidth, h0 = card.offsetHeight;
               /* 用元素索引当持久化 key ✓（卡片顺序稳定 ✓）*/
-              const idx = Array.from(host.querySelectorAll('.lw-c')).indexOf(card);
-              const key = 'rsz_' + TAB + '_' + idx;
-              const move = (ev) => {
+                const idx = Array.from(host.querySelectorAll('.lw-c')).indexOf(card);
+                const key = 'rsz_' + TAB + '_' + idx;
+                return { x0, y0, w0, h0, key };
+              },
+              move: (ev, sess) => {
+                const x0 = sess.x0, y0 = sess.y0, w0 = sess.w0, h0 = sess.h0;
                 if (dir !== 's') card.style.width = Math.max(240, w0 + (ev.clientX - x0)) + 'px';
                 if (dir !== 'e') card.style.height = Math.max(120, h0 + (ev.clientY - y0)) + 'px';
                 /* 卡片在网格里要跟着改 span ✓，否则宽度会被 grid 拉回去 ✗ */
@@ -2421,14 +2497,12 @@
                   const span = Math.max(1, Math.min(12, Math.round((card.offsetWidth + 16) / (colW + 16))));
                   card.style.gridColumn = 'span ' + span;
                 }
-              };
-              const up = () => {
-                document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+              },
+              up: (ev, sess) => {
                 h.classList.remove('on');
-                STORE[key] = { w: card.offsetWidth, h: card.offsetHeight, span: card.style.gridColumn };
+                STORE[sess.key] = { w: card.offsetWidth, h: card.offsetHeight, span: card.style.gridColumn };
                 saveStore();
-              };
-              document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+              },
             });
           });
         });
@@ -2946,20 +3020,22 @@
     /* ── 左栏：每个面板单独拖高（记住到 STORE ✓）── */
     const PANEL_KEY = { cal: 'jpH1', stat: 'jpH2', recent: 'jpH3', cat: 'jpH4', wx: 'jpH5' };
     qa('[data-vgrip]').forEach((g, idx) => {
-      g.onmousedown = (e) => {
-        e.preventDefault(); g.classList.add('on');
-        const panel = qa('[data-jpanel]')[idx];
-        if (!panel) return;
-        const startY = e.clientY, startH = panel.offsetHeight;
-        const move = (ev) => { panel.style.height = Math.max(90, Math.min(700, startH + (ev.clientY - startY))) + 'px'; };
-        const up = () => {
-          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+      lwGrab(g, {
+        down: (e) => {
+          const panel = qa('[data-jpanel]')[idx];
+          if (!panel) return null;
+          g.classList.add('on');
+          return { panel, startY: e.clientY, startH: panel.offsetHeight };
+        },
+        move: (ev, sess) => {
+          sess.panel.style.height = Math.max(90, Math.min(700, sess.startH + (ev.clientY - sess.startY))) + 'px';
+        },
+        up: (ev, sess) => {
           g.classList.remove('on');
-          const key = PANEL_KEY[panel.dataset.jpanel];
-          if (key) { STORE[key] = panel.offsetHeight; saveStore(); }
-        };
-        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-      };
+          const key = PANEL_KEY[sess.panel.dataset.jpanel];
+          if (key) { STORE[key] = sess.panel.offsetHeight; saveStore(); }
+        },
+      });
     });
     /* ── 分类：筛选 / 新增 / 删除 / 给日记设分类 ── */
     qa('[data-jcat]').forEach((el) => {
@@ -3013,40 +3089,38 @@
     const grip = q('#lw-jr-grip'), hgrip = q('#lw-jr-hgrip');
     const jrL = q('#lw-jr-l'), jrE = q('#lw-jr-edit'), jrR = q('.lw-jr-r');
     if (grip && jrL && jrR) {
-      grip.onmousedown = (e) => {
-        e.preventDefault(); grip.classList.add('on');
-        const startX = e.clientX, startW = jrL.offsetWidth;
-        const totalW = (jrL.parentElement || {}).clientWidth || window.innerWidth;
-        const move = (ev) => {
-          const w = Math.max(220, Math.min(totalW - 300, startW + (ev.clientX - startX)));
+      lwGrab(grip, {
+        down: (e) => {
+          grip.classList.add('on');
+          return {
+            startX: e.clientX, startW: jrL.offsetWidth,
+            totalW: (jrL.parentElement || {}).clientWidth || window.innerWidth,
+          };
+        },
+        move: (ev, sess) => {
+          const w = Math.max(220, Math.min(sess.totalW - 300, sess.startW + (ev.clientX - sess.startX)));
           jrL.style.width = w + 'px';
-        };
-        const up = () => {
-          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
-          grip.classList.remove('on');
-          STORE.journalLeftW = jrL.offsetWidth; saveStore();
-        };
-        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-      };
+        },
+        up: () => { grip.classList.remove('on'); STORE.journalLeftW = jrL.offsetWidth; saveStore(); },
+      });
     }
     if (hgrip && jrE) {
-      hgrip.onmousedown = (e) => {
-        e.preventDefault(); hgrip.classList.add('on');
-        const startY = e.clientY, startH = jrE.offsetHeight;
-        const wrapH = (jrE.parentElement || {}).clientHeight || window.innerHeight;
-        const move = (ev) => {
-          const h = Math.max(160, Math.min(wrapH - 120, startH + (ev.clientY - startY)));
+      lwGrab(hgrip, {
+        down: (e) => {
+          hgrip.classList.add('on');
+          return {
+            startY: e.clientY, startH: jrE.offsetHeight,
+            wrapH: (jrE.parentElement || {}).clientHeight || window.innerHeight,
+          };
+        },
+        move: (ev, sess) => {
+          const h = Math.max(160, Math.min(sess.wrapH - 120, sess.startH + (ev.clientY - sess.startY)));
           jrE.style.height = h + 'px';
           const bd = document.getElementById('lw-j-bd'), ta = document.getElementById('lw-j-text');
           if (bd && ta) { const h2 = Math.max(80, h - 170); ta.style.height = h2 + 'px'; bd.style.height = h2 + 'px'; }
-        };
-        const up = () => {
-          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
-          hgrip.classList.remove('on');
-          STORE.journalEditH = jrE.offsetHeight; saveStore();
-        };
-        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-      };
+        },
+        up: () => { hgrip.classList.remove('on'); STORE.journalEditH = jrE.offsetHeight; saveStore(); },
+      });
     }
     /* ── contenteditable 实时渲染 ──
        规则：**光标所在行 = 源码 ✓，其他行 = 渲染 ✓**（Obsidian 的做法 ✓）*/
@@ -5571,29 +5645,25 @@
         if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
         FLOW_UI.node = el.dataset.flnode; FLOW_UI.arm = ''; render();
       };
-      el.onmousedown = (ev) => {
-        if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
-        const f = flowCurrent(); if (!f) return;
-        const n = flowNodeById(f, el.dataset.flnode); if (!n) return;
-        const sx = ev.clientX, sy = ev.clientY, ox = n.x, oy = n.y;
-        let moved = false;
-        const mv = (e2) => {
-          const dx = e2.clientX - sx, dy = e2.clientY - sy;
-          if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
-          moved = true;
-          n.x = Math.max(0, ox + dx); n.y = Math.max(0, oy + dy);
-          el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+      lwGrab(el, {
+        down: (ev) => {
+          /* 端口上按下 = 连线，不是拖节点 ✓（lwGrab 里也挡了一道 ✓）*/
+          if (ev.target.classList && ev.target.classList.contains('lw-fl-port')) return null;
+          const f = flowCurrent(); if (!f) return null;
+          const n = flowNodeById(f, el.dataset.flnode); if (!n) return null;
+          return { f, n, sx: ev.clientX, sy: ev.clientY, ox: n.x, oy: n.y, moved: false };
+        },
+        move: (e2, sess) => {
+          const dx = e2.clientX - sess.sx, dy = e2.clientY - sess.sy;
+          if (!sess.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+          sess.moved = true;
+          sess.n.x = Math.max(0, sess.ox + dx); sess.n.y = Math.max(0, sess.oy + dy);
+          el.style.left = sess.n.x + 'px'; el.style.top = sess.n.y + 'px';
           const svgEl = q('.lw-fl-svg');
           if (svgEl) svgEl.outerHTML = ''; /* 拖动时先清掉线 ✓，松手重画 ✓（省得每帧重算 ✓）*/
-        };
-        const up = () => {
-          document.removeEventListener('mousemove', mv);
-          document.removeEventListener('mouseup', up);
-          if (moved) { f.at = Date.now(); saveStore(); render(); }
-        };
-        document.addEventListener('mousemove', mv);
-        document.addEventListener('mouseup', up);
-      };
+        },
+        up: (e2, sess) => { if (sess.moved) { sess.f.at = Date.now(); saveStore(); render(); } },
+      });
     });
     /* 连线：先点出端口（arm ✓），再点目标节点的入端口 ✓ */
     qa('[data-flout]').forEach((el) => {
@@ -6479,38 +6549,35 @@
        重绘不影响它，重复绑定也是幂等的（用 `.onmousedown =` 而不是 addEventListener ✓）。 */
     qa('[data-mlgrip]').forEach((gripEl) => {
       const which = gripEl.dataset.mlgrip;
-      gripEl.onmousedown = (event) => {
-        /* ★★ 目标必须**在按下的这一刻**才查 ✗✗ ——
-           以前是在绑定时 `host.querySelector(...)` 捕获的 ✗，
-           而中间只要发生过一次**整屏 render()**，那个元素就已经被移除 ✗ →
-           拖动时改的是**已脱离文档的旧元素** ✗ → 鼠标按下了、事件也到了，
-           **界面就是纹丝不动** ✗（实测：命中计数 1、inline 宽度却是空 ✗）。
-           拖拽条是 pane 的兄弟节点、重绘时不会跟着换 ✓，所以它身上的旧引用会一直留着 ✗。 */
-        const root = document.getElementById('lifework-view') || document;
-        const target = which === 'side' ? root.querySelector('.lw-ml-side') : root.querySelector('.lw-ml-list');
-        if (!target) return;
-        event.preventDefault();
-        gripEl.classList.add('on');
-        const startX = event.clientX;
-        const startW = target.getBoundingClientRect().width;
-        const min = which === 'side' ? 140 : 200;
-        const max = which === 'side' ? 460 : 760;
-        const move = (event2) => {
-          const w = Math.max(min, Math.min(max, startW + (event2.clientX - startX)));
-          target.style.width = Math.round(w) + 'px';
-          target.style.flex = 'none';
-        };
-        const up = () => {
-          document.removeEventListener('mousemove', move);
-          document.removeEventListener('mouseup', up);
+      lwGrab(gripEl, {
+        down: (event) => {
+          /* ★★ 目标必须**在按下的这一刻**才查 ✗✗ ——
+             以前是在绑定时 `host.querySelector(...)` 捕获的 ✗，
+             而中间只要发生过一次**整屏 render()**，那个元素就已经被移除 ✗ →
+             拖动时改的是**已脱离文档的旧元素** ✗ → 鼠标按下了、事件也到了，
+             **界面就是纹丝不动** ✗（实测：命中计数 1、inline 宽度却是空 ✗）。
+             拖拽条是 pane 的兄弟节点、重绘时不会跟着换 ✓，所以它身上的旧引用会一直留着 ✗。 */
+          const root = document.getElementById('lifework-view') || document;
+          const target = which === 'side' ? root.querySelector('.lw-ml-side') : root.querySelector('.lw-ml-list');
+          if (!target) return null;
+          gripEl.classList.add('on');
+          return {
+            target, startX: event.clientX, startW: target.getBoundingClientRect().width,
+            min: which === 'side' ? 140 : 200, max: which === 'side' ? 460 : 760,
+          };
+        },
+        move: (e2, sess) => {
+          const w = Math.max(sess.min, Math.min(sess.max, sess.startW + (e2.clientX - sess.startX)));
+          sess.target.style.width = Math.round(w) + 'px';
+          sess.target.style.flex = 'none';
+        },
+        up: (e2, sess) => {
           gripEl.classList.remove('on');
-          const w = Math.round(target.getBoundingClientRect().width);
+          const w = Math.round(sess.target.getBoundingClientRect().width);
           if (which === 'side') STORE.mailSideW = w; else STORE.mailListW = w;
           saveStore();
-        };
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
-      };
+        },
+      });
       gripEl.ondblclick = () => {
         const root = document.getElementById('lifework-view') || document;
         const target = which === 'side' ? root.querySelector('.lw-ml-side') : root.querySelector('.lw-ml-list');

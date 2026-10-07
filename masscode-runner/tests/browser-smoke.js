@@ -1483,9 +1483,16 @@ print(r.run())
     const b = grip.getBoundingClientRect();
     const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
     const before = Math.round(pane.getBoundingClientRect().width);
-    grip.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: cx, clientY: cy }));
-    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: cx + d, clientY: cy }));
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: cx + d, clientY: cy }));
+    /* ⚠️ 必须用 **PointerEvent** ✗ —— 拖拽会话已经改成 Pointer Events + setPointerCapture ✓
+       （为的是修「在窗口外松手 → up 丢了 → 之后鼠标经过就自己拖」✗），
+       还派 MouseEvent 的话**根本不会开始拖动** ✗，会误报「拖不宽」✗。 */
+    const mk = (type, x, buttons) => new PointerEvent(type, {
+      bubbles: true, cancelable: true, clientX: x, clientY: cy, buttons,
+      pointerId: 1, pointerType: 'mouse', isPrimary: true, button: type === 'pointerdown' ? 0 : -1,
+    });
+    grip.dispatchEvent(mk('pointerdown', cx, 1));
+    document.dispatchEvent(mk('pointermove', cx + d, 1));
+    document.dispatchEvent(mk('pointerup', cx + d, 0));
     return { before, after: Math.round(pane.getBoundingClientRect().width) };
   }, { w: which, d: dx });
   const mlList0 = await mlWidth('.lw-ml-list');
@@ -1497,6 +1504,45 @@ print(r.run())
   const mlSideDrag = await mlDrag('side', 90);
   if (!(mlSideDrag.after > mlSide0 + 50)) {
     throw new Error('邮箱账号栏拖不宽：' + mlSide0 + ' → ' + mlSideDrag.after);
+  }
+  /* ★★★ 「松手没收干净 → 之后鼠标经过就自己拖」的回归 ✗✗ ——
+     用户原话：「我鼠标点击后拖动，后续重新鼠标移动到这，自动莫名的拖动了，
+     没有点击去要拖动，他还是拖动了」。
+     根因：拖动会话靠 `document` 上的 `mouseup` 收尾 ✗，
+     而**在窗口外松手**（或拖到浏览器边框 / 系统菜单上松手）时那个 up 永远到不了 ✗
+     → `move` 一直挂在 document 上 ✗ → 之后鼠标**经过**就在拖 ✗✗。
+     修法：① PointerEvent + `setPointerCapture` ✓ ② `move` 里查 `ev.buttons === 0` ✓ 兜底
+          （任何原因漏掉的 up，都会被下一个 move 收掉 ✓）。
+     这里就复现那条路径 ✓：**故意不派 pointerup** ✗，改派一个 `buttons:0` 的 move ✓
+     （真实鼠标松手之后，下一个 move 必然是这个 ✗）。 */
+  const mlStuck = await page.evaluate(() => {
+    const grip = document.querySelector('[data-mlgrip="side"]');
+    const pane = document.querySelector('.lw-ml-side');
+    const w = () => Math.round(pane.getBoundingClientRect().width);
+    const b = grip.getBoundingClientRect();
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    const mk = (type, x, buttons) => new PointerEvent(type, {
+      bubbles: true, cancelable: true, clientX: x, clientY: cy, buttons,
+      pointerId: 9, pointerType: 'mouse', isPrimary: true, button: type === 'pointerdown' ? 0 : -1,
+    });
+    const out = { before: w() };
+    grip.dispatchEvent(mk('pointerdown', cx, 1));
+    document.dispatchEvent(mk('pointermove', cx + 40, 1));
+    out.afterDrag = w();
+    document.dispatchEvent(mk('pointermove', cx + 40, 0));      /* ★ 模拟「在窗口外松手」：只有 move，没有 up */
+    out.afterRelease = w();
+    document.dispatchEvent(mk('pointermove', cx + 220, 0));     /* 之后再经过 → 必须纹丝不动 ✗ */
+    document.dispatchEvent(mk('pointermove', cx + 360, 0));
+    out.afterStray = w();
+    document.dispatchEvent(mk('pointerup', cx, 0));
+    return out;
+  });
+  if (mlStuck.afterDrag === mlStuck.before) {
+    throw new Error('拖拽条没开始拖（PointerEvent 没生效？）：' + JSON.stringify(mlStuck));
+  }
+  if (mlStuck.afterStray !== mlStuck.afterRelease) {
+    throw new Error('★ 松手没收干净：之后鼠标经过又把它拖动了（' + mlStuck.afterRelease + ' → ' + mlStuck.afterStray
+      + '）—— 用户报的「没点也拖」就是这个');
   }
   if (!(await mlWidth('.lw-ml-read') > 240)) throw new Error('拖动后阅读区被挤没了');
   /* ═══ ★★★ 「全高面板」必须真正填满内容区 ═══════════════════════════════
