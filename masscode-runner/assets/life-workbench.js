@@ -179,6 +179,7 @@
   .lw-main.fill > .lw-ml,
   .lw-main.fill > .lw-rd,
   .lw-main.fill > .lw-fl,
+  .lw-main.fill > .lw-tr,
   .lw-main.fill > .lw-jr { flex:1; min-height:0; }
   /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
      —— 得把这条链也一起撑开 ✓ */
@@ -1084,6 +1085,75 @@
   .lw-fl-log .skipped { color:${T.faint}; }
 
   /* ══════════════════════════════════════════════════════════════════════
+     热榜模块（多源聚合 + AI 日报）✓
+     ⚠️ 注释里不能出现反引号 ✗（这段在 JS 模板字符串里 ✗）。
+     ══════════════════════════════════════════════════════════════════════ */
+  /* ★★★ flex 子项默认 min-height:auto ✗✗ —— 意思是「**不能比内容更矮**」✗，
+     于是内容一长，三栏里的那一栏就会**撑到内容那么高** ✗、
+     整个容器被撑破、**根本不会滚动** ✗✗。
+     实测：热榜列表拉到 365 条时，那一栏变成 **24628px 高** ✗、位置跑到 y=-11742 ✗、
+     点都点不到 ✗（Playwright 报「element is outside of the viewport」✗）。
+     ⚠️ 这个问题在**所有**三栏布局里都潜伏着 ✗ ——
+        邮箱 / 阅读 / 工作流只是**内容刚好没超过容器**才没露出来 ✗。
+     → 凡是「自己 overflow:auto 的 flex 子项」，都要显式写 min-height:0 ✓。 */
+  .lw-ml-side, .lw-ml-list, .lw-ml-read,
+  .lw-rd-side, .lw-rd-list, .lw-rd-read,
+  .lw-fl-side, .lw-fl-cfg,
+  .lw-hl-side, .lw-hl-list, .lw-hl-read,
+  .lw-nt-side, .lw-nt-list, .lw-nt-edit,
+  .lw-jr-l, .lw-jr-r { min-height:0; }
+  .lw-hl { display:flex; min-height:320px; border:2px solid ${T.lineDim}; background:${T.bg}; }
+  .lw-hl-side { width:200px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto;
+    padding:10px 0; background:${T.bg}; }
+  .lw-hl-list { width:392px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; background:${T.card}; }
+  .lw-hl-read { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+  .lw-hl-tools { display:flex; gap:6px; align-items:center; padding:9px 11px;
+    border-bottom:2px solid ${T.line}; position:sticky; top:0; background:${T.card}; z-index:2; flex-wrap:wrap; }
+  .lw-hl-tools input { flex:1; min-width:80px; height:26px; padding:0 9px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.text}; font:11px ${UI}; outline:none; }
+  .lw-hl-tools input:focus { border-color:${T.accent}; }
+  .lw-hl-tools button { height:26px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10px ${UI}; cursor:pointer; letter-spacing:.4px; flex:none; }
+  .lw-hl-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-hl-tools button.pri { border-color:${T.accent}; color:${T.accent}; }
+  .lw-hl-tools button.pri:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-hl-src { font-size:9px; letter-spacing:1.4px; color:${T.faint}; text-transform:uppercase;
+    padding:11px 13px 5px; border-bottom:1px solid #1c1c1a; background:${T.bg}; }
+  .lw-hl-it { display:flex; gap:9px; padding:9px 13px; border-bottom:1px solid #1c1c1a; cursor:pointer; }
+  .lw-hl-it:hover { background:${T.card2}; }
+  .lw-hl-it.on { background:${T.card2}; box-shadow:inset 3px 0 0 ${T.accent}; }
+  .lw-hl-it .rk { flex:none; width:19px; text-align:right; font-size:10.5px; color:${T.faint};
+    font-variant-numeric:tabular-nums; line-height:1.5; }
+  .lw-hl-it .rk.top { color:${T.red}; font-weight:700; }
+  .lw-hl-it .mn { flex:1; min-width:0; }
+  .lw-hl-it .ti { font-size:12px; line-height:1.55; color:${T.text}; word-break:break-word; }
+  .lw-hl-it.seen .ti { color:${T.dim}; }
+  .lw-hl-it .mt { display:flex; align-items:center; gap:8px; margin-top:4px; font-size:9px; color:${T.faint}; }
+  .lw-hl-it .mt .badge { border:1px solid ${T.lineDim}; padding:1px 5px; }
+  .lw-hl-it .mt .hot { color:${T.accent}; }
+  .lw-hl-it .st { color:${T.warn}; }
+  .lw-hl-ai { flex:none; border-bottom:2px solid ${T.lineDim}; padding:12px 18px; background:${T.bg}; }
+  .lw-hl-ai .hd { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+  .lw-hl-ai .hd b { font-size:11px; letter-spacing:1.2px; }
+  .lw-hl-ai .hd button { margin-left:auto; height:26px; padding:0 11px; border:1px solid ${T.accent};
+    background:transparent; color:${T.accent}; font:10px ${UI}; cursor:pointer; letter-spacing:.5px; }
+  .lw-hl-ai .hd button:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-hl-ai .bd { font-size:12px; line-height:1.9; color:${T.text}; white-space:pre-wrap;
+    max-height:220px; overflow:auto; }
+  .lw-hl-ai .bd:empty::before { content:'点右边「🤖 生成 AI 日报」—— 把当前榜单交给模型，出一份带重点的简报 ✓';
+    color:${T.faint}; font-size:11px; }
+  .lw-hl-body { flex:1; min-height:0; overflow:auto; padding:14px 18px 20px; }
+  .lw-hl-body h2 { font-size:15px; line-height:1.5; margin-bottom:8px; }
+  .lw-hl-body .meta { font-size:10px; color:${T.faint}; margin-bottom:12px; }
+  .lw-hl-body .acts { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .lw-hl-body .acts button { height:26px; padding:0 10px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10px ${UI}; cursor:pointer; }
+  .lw-hl-body .acts button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-hl-body .acts button.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-hl-body iframe { width:100%; height:340px; border:1px solid ${T.lineDim}; background:#fff; }
+  .lw-hl-err { font-size:10.5px; color:${T.red}; line-height:1.8; padding:8px 13px; }
+
+  /* ══════════════════════════════════════════════════════════════════════
      阅读模块（个人阅读管理）✓
      ⚠️ 注释里不能出现反引号 ✗ —— 这段整个在 JS 模板字符串里 ✗。
      ⚠️ 三栏高度由 .lw-main.fill 那条链撑满 ✓（见上面全高面板的注释 ✓）。
@@ -1221,6 +1291,7 @@
     { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
     { id: 'reading', icon: '📖', label: '阅读', grp: '外部', key: 'R-01' },
     { id: 'flow', icon: '⚙', label: '工作流', grp: '自动化', key: 'W-01' },
+    { id: 'trends', icon: '🔥', label: '热榜', grp: '外部', key: 'H-01' },
     { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
@@ -1252,6 +1323,11 @@
   const FLOW_W = 170, FLOW_H = 56;
   const FLOW_UI = { sel: '', node: '', arm: '', steps: null, err: '', busy: false };
 
+  /* ── 热榜模块的状态 ✓（同样必须放顶部区 ✗）────────────────────────────
+     源目录来自服务端 ✓（`/api/life/trends` 会带回来 ✓），这里只放界面状态 ✓。 */
+  const TR_UI = { src: '', q: '', only: 'all', sel: '', busy: false, ai: '', aiBusy: false, data: null, err: '', at: 0 };
+  const TR_GROUPS = ['视频', '社交', '搜索', '技术', '开源', '学术', '资讯'];
+
   /* 阅读模块的状态 ✓ —— 同样必须放这里 ✗（`mount()` 在模块最顶上就被调用了 ✓）。 */
   const RD_SRC = {
     weread: { e: '📗', n: '微信读书' }, paper: { e: '📖', n: '纸质书' },
@@ -1264,7 +1340,7 @@
   const RD_ST_ORDER = ['reading', 'want', 'done', 'paused'];
   const RD_UI = { status: 'all', src: 'all', tag: '', q: '', sel: '', impOpen: false, impText: '', impPv: null, noteKind: 'quote', noteText: '' };
 
-  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1, flow: 1 };
+  const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1, flow: 1, trends: 1 };
 
   /* ── 顶栏状态条：时钟 / 问候 / 心情 / 每日格言 ✓ ─────────────────────────
      ⚠️ 这些**必须声明在模块顶部** ✗ —— `headHtml()` 在 `mount()` 的调用链上就会碰到 ✓
@@ -1815,7 +1891,7 @@
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
-    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading, flow: viewFlow }[TAB] || viewToday;
+    const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading, flow: viewFlow, trends: viewTrends }[TAB] || viewToday;
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
@@ -3290,6 +3366,7 @@
     /* 阅读 / 工作流模块 ✓（各自会判 TAB ✓，不在这页就直接返回 ✓）*/
     bindReading();
     bindFlow();
+    bindTrends();
     /* 顶栏状态条（秒针 / 心情 / 换一句）✓ —— 放最后 ✓，
        它是**每一页**都要绑的 ✓，不跟着某个页签的绑定走 ✓。 */
     bindHead();
@@ -5564,6 +5641,254 @@
       el.oninput = on;
       el.onchange = on;
     });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     热榜模块（多源聚合 + AI 日报）✓
+     数据：STORE.trends = { star: { id: at }, seen: { id: at } }
+     源目录与内容都来自服务端 `/api/life/trends` ✓（lib/hot.js ✓，11 个源都实测过 ✓）。
+     ══════════════════════════════════════════════════════════════════════ */
+  const trStore = () => (STORE.trends = STORE.trends || { star: {}, seen: {} });
+  const trIsStar = (id) => !!(trStore().star || {})[id];
+  const trIsSeen = (id) => !!(trStore().seen || {})[id];
+  const trCatalog = () => ((TR_UI.data && TR_UI.data.sources) || []);
+  const trResults = () => ((TR_UI.data && TR_UI.data.results) || []);
+  function trFlat() {
+    const out = [];
+    trResults().forEach((r) => {
+      if (!r || !r.items) return;
+      r.items.forEach((it, i) => out.push(Object.assign({}, it, { srcKey: r.key, srcName: r.name, srcIcon: r.icon, srcGroup: r.group, rank: i + 1 })));
+    });
+    return out;
+  }
+  function trFiltered() {
+    const q = String(TR_UI.q || '').trim().toLowerCase();
+    return trFlat().filter((x) => {
+      if (TR_UI.src && x.srcKey !== TR_UI.src) return false;
+      if (TR_UI.only === 'star' && !trIsStar(x.id)) return false;
+      if (TR_UI.only === 'new' && trIsSeen(x.id)) return false;
+      if (q && (String(x.title) + ' ' + String(x.extra)).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+  const trById = (id) => trFlat().find((x) => x.id === id) || null;
+  /* 拉数据 ✓ —— 单源失败**不影响别的源** ✓（服务端已经逐个兜底了 ✓）*/
+  async function trLoad(force) {
+    if (TR_UI.busy) return;
+    TR_UI.busy = true; TR_UI.err = '';
+    render();
+    try {
+      const r = await fetch('/api/life/trends' + (force ? '?force=1' : ''), { cache: 'no-store' });
+      const d = await r.json();
+      if (d && d.ok) { TR_UI.data = d; TR_UI.at = Date.now(); }
+      else TR_UI.err = (d && d.error) || '拉取失败';
+    } catch (e) { TR_UI.err = '拉取失败：' + e.message; }
+    TR_UI.busy = false;
+    render();
+  }
+  function trStar(id) {
+    const st = trStore();
+    st.star = st.star || {};
+    if (st.star[id]) delete st.star[id]; else st.star[id] = Date.now();
+    saveStore(); render();
+  }
+  function trSeen(id) {
+    const st = trStore();
+    st.seen = st.seen || {};
+    st.seen[id] = Date.now();
+    saveStore();
+  }
+  function trMarkAllSeen() {
+    const st = trStore();
+    st.seen = st.seen || {};
+    const now = Date.now();
+    trFiltered().forEach((x) => { st.seen[x.id] = now; });
+    saveStore(); render();
+  }
+  /* ── AI 日报 ✓ ─────────────────────────────────────────────────────────── */
+  async function trAiDaily() {
+    if (TR_UI.aiBusy) return;
+    const list = trFiltered().slice(0, 60);
+    if (!list.length) { setStatus(esc('先拉一次榜单 ✓'), 5000); return; }
+    let cfg = {}; try { cfg = JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) {}
+    if (!cfg.url || !cfg.key || !cfg.model) {
+      TR_UI.ai = '✗ 还没配大模型 —— 去 CodeScope 的 AI 面板配一次 ✓（这里会自动复用 ✓）';
+      render(); return;
+    }
+    TR_UI.aiBusy = true; TR_UI.ai = '正在让模型读这 ' + list.length + ' 条…'; render();
+    const body = list.map((x, i) => '[' + (i + 1) + ']（' + x.srcName + '）' + x.title + (x.extra ? ' —— ' + x.extra : '')).join('\n');
+    try {
+      const r = await fetch('/api/ai/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: cfg.url, key: cfg.key, model: cfg.model,
+          messages: [
+            { role: 'system', content: '你是信息筛选助手。读者是做机器人与 AI 研究的工程师。用中文输出，克制、具体、不要空话。' },
+            { role: 'user', content: '下面是今天各平台的热榜 + 最新论文，共 ' + list.length + ' 条。\n\n' + body + '\n\n请输出一份简报：\n1. 【值得看的 5 条】每条一行，写清**为什么值得看**（一句话），并带上序号；\n2. 【前沿动态】把和机器人 / AI / 具身智能相关的单独拎出来讲；\n3. 【可以忽略的】一句话带过。\n不要复述全部条目，不要写客套话。' },
+          ],
+          timeoutMs: 180000,
+        }),
+      });
+      const d = await r.json();
+      TR_UI.ai = (d && d.ok) ? d.content : ('✗ ' + ((d && d.error) || 'AI 调用失败'));
+    } catch (e) { TR_UI.ai = '✗ AI 调用失败：' + e.message; }
+    TR_UI.aiBusy = false;
+    render();
+  }
+  function trSaveAiToMemo() {
+    const text = String(TR_UI.ai || '').trim();
+    if (!text || text.startsWith('✗')) { setStatus(esc('先成功生成一份日报 ✓'), 5000); return; }
+    const id = 'm' + Date.now();
+    STORE.memos = ((STORE && STORE.memos) || []).concat([{
+      id, text: '今日热榜 AI 日报 · ' + dayKey(new Date()) + '\n' + text,
+      folder: '热榜', pin: false, at: Date.now(), edit: Date.now(),
+    }]);
+    if (!((STORE.memoFolders || []).includes('热榜'))) STORE.memoFolders = ((STORE && STORE.memoFolders) || []).concat(['热榜']);
+    saveStore();
+    setStatus(esc('✓ 已存进备忘录（文件夹「热榜」）'), 6000);
+  }
+  /* 系统通知 ✓ —— 只用于「用户主动点」✗（不自动弹权限 ✗）*/
+  function trNotify() {
+    const list = trFiltered().filter((x) => !trIsSeen(x.id)).slice(0, 5);
+    if (!list.length) { setStatus(esc('没有新条目 ✓'), 4000); return; }
+    if (typeof Notification === 'undefined') { setStatus(esc('这个环境不支持系统通知 ✗'), 5000); return; }
+    if (Notification.permission !== 'granted') {
+      Notification.requestPermission().then((perm) => {
+        setStatus(esc(perm === 'granted' ? '✓ 已开启通知，再点一次就会弹 ✓' : '✗ 你拒绝了通知权限'), 7000);
+      });
+      return;
+    }
+    try {
+      const n = new Notification('今日热榜 · ' + list.length + ' 条新', {
+        body: list.map((x) => '· ' + x.title.slice(0, 30)).join('\n'), tag: 'codescope-trends',
+      });
+      setTimeout(() => { try { n.close(); } catch (_) {} }, 15000);
+      setStatus(esc('✓ 已推送 ' + list.length + ' 条 ✓'), 5000);
+    } catch (e) { setStatus(esc('✗ 推送失败：' + e.message), 6000); }
+  }
+  /* ── 视图 ─────────────────────────────────────────────────────────────── */
+  function trSideHtml() {
+    const cat = trCatalog();
+    const results = trResults();
+    const byKey = {}; results.forEach((r) => { byKey[r.key] = r; });
+    const all = trFlat();
+    const newCount = all.filter((x) => !trIsSeen(x.id)).length;
+    const starCount = all.filter((x) => trIsStar(x.id)).length;
+    const rows = TR_GROUPS.map((g) => {
+      const inG = cat.filter((c) => c.group === g);
+      if (!inG.length) return '';
+      return '<div class="lw-rd-hd">' + g + '</div>' + inG.map((c) => {
+        const r = byKey[c.key];
+        const n = r && r.items ? r.items.length : 0;
+        const bad = r && !r.ok;
+        return '<div class="lw-rd-row' + (TR_UI.src === c.key ? ' on' : '') + '" data-trsrc="' + esc(c.key) + '" title="' + esc(bad ? (r.error || '') : (n + ' 条')) + '">'
+          + '<span class="em">' + c.icon + '</span>' + esc(c.name)
+          + '<span class="n" style="color:' + (bad ? T.red : T.faint) + '">' + (TR_UI.busy ? '…' : (bad ? '✗' : n)) + '</span></div>';
+      }).join('');
+    }).join('');
+    return '<div class="lw-hl-side">'
+      + '<div class="lw-rd-hd">筛选</div>'
+      + '<div class="lw-rd-row' + (TR_UI.only === 'all' ? ' on' : '') + '" data-tronly="all"><span class="em">▣</span>全部<span class="n">' + all.length + '</span></div>'
+      + '<div class="lw-rd-row' + (TR_UI.only === 'new' ? ' on' : '') + '" data-tronly="new"><span class="em">✨</span>未读<span class="n">' + newCount + '</span></div>'
+      + '<div class="lw-rd-row' + (TR_UI.only === 'star' ? ' on' : '') + '" data-tronly="star"><span class="em">⭐</span>收藏<span class="n">' + starCount + '</span></div>'
+      + '<div class="lw-rd-hd">来源</div>'
+      + '<div class="lw-rd-row' + (TR_UI.src === '' ? ' on' : '') + '" data-trsrc=""><span class="em">▣</span>全部来源</div>'
+      + (rows || '<div class="lw-rd-row" style="color:' + T.faint + '">还没拉过 —— 点右边「↻ 刷新」</div>')
+      + '</div>';
+  }
+  function trItemHtml(x) {
+    const star = trIsStar(x.id), seen = trIsSeen(x.id);
+    return '<div class="lw-hl-it' + (TR_UI.sel === x.id ? ' on' : '') + (seen ? ' seen' : '') + '" data-trit="' + esc(x.id) + '">'
+      + '<div class="rk' + (x.rank <= 3 ? ' top' : '') + '">' + x.rank + '</div>'
+      + '<div class="mn"><div class="ti">' + esc(x.title) + '</div>'
+      + '<div class="mt"><span class="badge">' + x.srcIcon + ' ' + esc(x.srcName) + '</span>'
+      + (x.hotText ? '<span class="hot">' + esc(x.hotText) + '</span>' : '')
+      + (x.extra ? '<span>' + esc(String(x.extra).slice(0, 24)) + '</span>' : '')
+      + (star ? '<span class="st">⭐</span>' : '')
+      + '</div></div></div>';
+  }
+  function trListHtml() {
+    const tools = '<div class="lw-hl-tools">'
+      + '<input id="lw-hl-q" placeholder="筛选标题…" value="' + esc(TR_UI.q) + '"/>'
+      + '<button class="pri" id="lw-hl-reload">' + (TR_UI.busy ? '拉取中…' : '↻ 刷新') + '</button>'
+      + '<button id="lw-hl-seenall">全部标为已读</button>'
+      + '</div>';
+    if (TR_UI.err) return tools + '<div class="lw-hl-err">✗ ' + esc(TR_UI.err) + '</div>';
+    if (!TR_UI.data) return tools + '<div class="lw-rd-empty">还没拉过<br><span style="color:' + T.faint + '">点「↻ 刷新」拉一次（11 个源，几秒钟）</span></div>';
+    const list = trFiltered();
+    if (!list.length) return tools + '<div class="lw-rd-empty">没有符合条件的条目</div>';
+    /* 选了单个源 → 直接列 ✓；「全部」→ 按源分组 ✓（读起来清楚得多 ✓）*/
+    if (TR_UI.src) return tools + list.map(trItemHtml).join('');
+    const bySrc = new Map();
+    list.forEach((x) => { if (!bySrc.has(x.srcKey)) bySrc.set(x.srcKey, []); bySrc.get(x.srcKey).push(x); });
+    let html = '';
+    bySrc.forEach((arr, k) => {
+      const r = trResults().find((z) => z.key === k) || {};
+      html += '<div class="lw-hl-src">' + (r.icon || '') + ' ' + esc(r.name || k) + ' · ' + arr.length + ' 条</div>' + arr.map(trItemHtml).join('');
+    });
+    return tools + html;
+  }
+  function trReadHtml() {
+    const x = trById(TR_UI.sel);
+    const ai = '<div class="lw-hl-ai"><div class="hd"><b>🤖 AI 日报</b>'
+      + '<button id="lw-hl-ai">' + (TR_UI.aiBusy ? '生成中…' : '生成 AI 日报') + '</button>'
+      + '<button id="lw-hl-aimemo" style="border-color:' + T.lineDim + ';color:' + T.dim + '">存进备忘录</button></div>'
+      + '<div class="bd">' + esc(TR_UI.ai) + '</div></div>';
+    if (!x) {
+      return '<div class="lw-hl-read">' + ai + '<div class="lw-rd-empty">← 从中间点一条看看<br><span style="color:' + T.faint + '">或者直接点右上「生成 AI 日报」，让它先帮你筛一遍 ✓</span></div></div>';
+    }
+    return '<div class="lw-hl-read">' + ai + '<div class="lw-hl-body">'
+      + '<h2>' + esc(x.title) + '</h2>'
+      + '<div class="meta">' + x.srcIcon + ' ' + esc(x.srcName) + ' · 第 ' + x.rank + ' 位'
+      + (x.hotText ? ' · ' + esc(x.hotText) : '') + (x.extra ? ' · ' + esc(x.extra) : '') + '</div>'
+      + '<div class="acts">'
+      + '<button id="lw-hl-open">↗ 用浏览器打开原文</button>'
+      + '<button id="lw-hl-star" class="' + (trIsStar(x.id) ? 'on' : '') + '">' + (trIsStar(x.id) ? '⭐ 已收藏' : '☆ 收藏') + '</button>'
+      + '<button id="lw-hl-notify">🔔 推送这条</button>'
+      + '<button id="lw-hl-copy">⧉ 复制标题</button>'
+      + '</div>'
+      + '<iframe id="lw-hl-frame" sandbox="allow-same-origin" src="' + esc(x.url) + '" title="原文预览"></iframe>'
+      + '<div style="font-size:10px;color:' + T.faint + ';margin-top:8px;line-height:1.8">'
+      + '上面是**沙箱预览**（不带脚本 ✓，防追踪 ✓）；打不开的站点点「↗ 用浏览器打开原文」✓</div>'
+      + '</div></div>';
+  }
+  function viewTrends() {
+    return '<div class="lw-hl">' + trSideHtml() + '<div class="lw-hl-list">' + trListHtml() + '</div>' + trReadHtml() + '</div>';
+  }
+  function bindTrends() {
+    const host = document.getElementById('lifework-view');
+    if (!host || TAB !== 'trends') return;
+    const q = (sel) => host.querySelector(sel);
+    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    qa('[data-trsrc]').forEach((el) => { el.onclick = () => { TR_UI.src = el.dataset.trsrc; TR_UI.sel = ''; render(); }; });
+    qa('[data-tronly]').forEach((el) => { el.onclick = () => { TR_UI.only = el.dataset.tronly; render(); }; });
+    qa('[data-trit]').forEach((el) => {
+      el.onclick = () => { TR_UI.sel = el.dataset.trit; trSeen(el.dataset.trit); render(); };
+    });
+    const rl = q('#lw-hl-reload'); if (rl) rl.onclick = () => trLoad(true);
+    const sa = q('#lw-hl-seenall'); if (sa) sa.onclick = () => trMarkAllSeen();
+    const ai = q('#lw-hl-ai'); if (ai) ai.onclick = () => trAiDaily();
+    const aim = q('#lw-hl-aimemo'); if (aim) aim.onclick = () => trSaveAiToMemo();
+    const st = q('#lw-hl-star'); if (st) st.onclick = () => trStar(TR_UI.sel);
+    const nf = q('#lw-hl-notify'); if (nf) nf.onclick = () => trNotify();
+    const cp = q('#lw-hl-copy');
+    if (cp) cp.onclick = () => { const x = trById(TR_UI.sel); if (!x) return; try { navigator.clipboard.writeText(x.title + '\n' + x.url); setStatus(esc('✓ 已复制 ✓'), 4000); } catch (_) {} };
+    const op = q('#lw-hl-open');
+    if (op) op.onclick = () => { const x = trById(TR_UI.sel); if (x) window.open(x.url, '_blank', 'noopener'); };
+    const qi = q('#lw-hl-q');
+    if (qi) qi.oninput = () => {
+      /* 只改显隐 ✓，不整屏重绘 ✗（否则每敲一个字输入框就失焦 ✗）*/
+      TR_UI.q = qi.value;
+      const needle = qi.value.trim().toLowerCase();
+      qa('[data-trit]').forEach((el) => {
+        const x = trById(el.dataset.trit);
+        const hay = x ? (String(x.title) + ' ' + String(x.extra)).toLowerCase() : '';
+        el.style.display = (!needle || hay.indexOf(needle) >= 0) ? '' : 'none';
+      });
+    };
+    /* ★ 进这一页如果数据太旧就**自动拉一次** ✓ —— 这就是「每天自动更新」的落点之一 ✓
+       （另一个落点是服务端的定时/自动化 ✓）。⚠️ 别每次 render 都拉 ✗（会打爆上游 ✗）。 */
+    if (!TR_UI.busy && (!TR_UI.data || Date.now() - TR_UI.at > 10 * 60 * 1000)) trLoad(false);
   }
 
   function viewReading() {

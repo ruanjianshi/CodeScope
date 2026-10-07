@@ -40,6 +40,7 @@ const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
 const MAIL_LIST = require('./lib/mail-list');
 const WORKFLOW = require('./lib/workflow');
+const HOT = require('./lib/hot');
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
@@ -4768,7 +4769,7 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag' ||
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
         u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf' ||
-        u.pathname === '/api/life/flow/run') {
+        u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
       };
@@ -4922,6 +4923,28 @@ const server = http.createServer(async (req, res) => {
           } catch (error) {
             const why = String((error && error.message) || error);
             return send(res, 200, { ok: false, error: /abort/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) });
+          }
+        }
+
+        /* ── 热榜聚合 ✓（参考 TrendRadar 那类开源项目的思路）────────────────
+           ⚠️ 只做**只读**拉取 ✗：不登录 ✓、不带用户 Cookie ✓、不写任何东西 ✓。
+           ⚠️ 下面每个源都在本机**逐个实测过** ✓（见 lib/hot.js 顶部注释 ✓）——
+              拿不到的（知乎 403 / V2EX、vvhan 连不通 / 36氪 500 ✗）**一个都没塞进来** ✗。
+           ⚠️ 单源失败**不影响别的源** ✓（前端会逐源显示错误 ✓）。
+           ⚠️ 有 TTL 缓存 ✓（各源 10~30 分钟不等 ✓）—— 不然每次刷新都把人家打一遍 ✗。 */
+        /* ⚠️ 路径**不能叫 /api/life/hot** ✗ —— 那个已经被「研究方向」页的
+           科研热点搜索占了 ✗（HN Algolia 按关键词搜 ✓）。撞名的话我这条永远进不来 ✗
+           （实测：返回了老接口的 `{ok:true,count:…}` ✗，白折腾一轮 ✗）。 */
+        if (u.pathname === '/api/life/trends') {
+          const srcParam = String(u.searchParams.get('sources') || '').trim();
+          const keys = srcParam ? srcParam.split(',').map((x) => x.trim()).filter(Boolean) : null;
+          const force = u.searchParams.get('force') === '1';
+          if (keys && keys.length > 30) return send(res, 200, { ok: false, error: '源太多' });
+          try {
+            const r = await HOT.fetchMany(keys, { fetch, force, timeoutMs: 20000 });
+            return send(res, 200, r);
+          } catch (error) {
+            return send(res, 200, { ok: false, error: String((error && error.message) || error) });
           }
         }
 
