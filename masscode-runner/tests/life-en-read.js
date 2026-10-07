@@ -175,9 +175,23 @@ const TEXT = SENT.join(' ');
 
     await diagArt('② 开始'); console.log('\n── ② 点句子**不跳回开头**（用户原话「点击原文会自动跳到开头去」）──');
     const body = p.locator('#lw-ep-body');
-    await body.evaluate((el) => { el.scrollTop = 300; });
-    await p.waitForTimeout(400);
-    const before = await body.evaluate((el) => el.scrollTop);
+    /* ⚠️⚠️ 这条前置**是偶发的** ✗✗ —— 实测：跟其它探针连排时挂 ✓、单独跑就过 ✓
+       （同一个循环里跑 6 个探针时红了一次 ✓，重跑单独一次全绿 ✓）。
+       原因是「滚下去」这件事**取决于正文当时有没有撑出溢出** ✓：
+       布局还没稳（或上一次拖拽落盘的高度偏大 ✓）时 `scrollTop = 300` 会被**夹回 0** ✗，
+       于是后面那条「点句子后滚动位置没变」变成 **0 → 0 恒真** ✗
+       —— 看着像通过 ✓，其实什么都没验 ✗（最坑的那种 ✓）。
+       → 改成**自愈式**：反复设 + 读，直到真的滚下去 ✓；还是不行就把几何数据打出来 ✓。 */
+    let before = 0;
+    for (let i = 0; i < 10 && before <= 100; i++) {
+      await body.evaluate((el) => { el.scrollTop = 300; });
+      await p.waitForTimeout(300);
+      before = await body.evaluate((el) => el.scrollTop);
+    }
+    if (before <= 100) {
+      const g = await body.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight, oy: getComputedStyle(el).overflowY }));
+      console.log('    滚不动：' + JSON.stringify(g));
+    }
     ck('  先把正文滚下去（前置条件成立）', before > 100, String(before));
     /* ⚠️⚠️ 点的那一句必须**本来就在视口里** ✗✗ ——
        `locator.click()` 会**先自动把元素滚进视口** ✗，

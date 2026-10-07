@@ -1835,6 +1835,82 @@
   .lw-wd-hist i.hard { background:${T.warn}; border-color:${T.warn}; }
   .lw-wd-next { font-size:10.5px; color:${T.dim}; padding:8px 14px 0; line-height:1.9; }
   .lw-wd-next b { color:${T.accent}; font-weight:400; }
+  /* ══ 词详情：**词典式**排版 ✓ ══════════════════════════════════════════
+     ★ 用户原话：「这个词的详情，一般不需要我去修改，所以不用是这种输入框，
+       大概设计和字典那样就行，美化，优化一下布局和设计，
+       让人可以直观的学习和理解这个单词」✓。
+     ⚠️ 默认**一个输入框都没有** ✗ —— 全是「读」的排版 ✓；
+        想改才点「✏️ 编辑」✓（能力没砍 ✗，只是不挡路 ✓）。 */
+  /* ⚠️⚠️ 词卡**自己得能滚** ✗✗ —— 父级 .lw-rd-read 是 overflow:hidden ✓，
+     而词卡改成词典式之后**明显变高** ✓（分条释义 + 例句高亮 + 巧记 / 场景框 ✓）：
+     实测内容 1014px / 可视区 769px ✓ → 底部的「🪄 AI 补全 / 🖼 换一张 / 🗑 删除」
+     **鼠标滚轮滚不到** ✗（只有脚本能滚 ✓ —— 所以端到端探针**照样全绿** ✗，
+     是「探针点得到、用户够不着」✗ 这种最阴的 ✓；靠「scrollHeight 大于 clientHeight」才量出来 ✓）。
+     → 抄外刊精读正文面板那套 ✓（.lw-ep-body 就是 flex:1 + min-height:0 + overflow:auto ✓）。
+     ⚠️ 别去动 .lw-rd-read ✗ —— 那个类名被**四个模式共用** ✓
+        （电子书 / 外刊 / 词根 / 生词本 ✓），动它等于一次改四处 ✗。 */
+  .lw-wd-detail { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; padding:0 0 20px; }
+  .lw-wd-top { padding:16px 16px 13px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-wd-title { display:flex; align-items:center; gap:6px; }
+  .lw-wd-title .w { font-size:26px; line-height:1.3; color:${T.text}; font-weight:600;
+    letter-spacing:.4px; cursor:pointer; word-break:break-word; }
+  .lw-wd-title .w:hover { color:${T.accent}; }
+  .lw-wd-title .spk { flex:none; width:28px; height:28px; border:1px solid ${T.lineDim};
+    border-radius:50%; background:transparent; color:${T.dim}; font-size:12px; cursor:pointer; }
+  .lw-wd-title .spk:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-wd-title .sp { flex:1; }
+  .lw-wd-title .ed { flex:none; height:26px; padding:0 10px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.faint}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-wd-title .ed:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-wd-title .ed.on { border-color:${T.accent}; color:${T.accent}; }
+  .lw-wd-sub { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .lw-wd-sub .ph { font-size:15px; color:${T.accent}; letter-spacing:.3px; }
+  .lw-wd-sub .ph.miss { font-size:11px; color:${T.warn}; }
+  .lw-wd-sub .pos { font-size:11px; color:${T.dim}; border:1px solid ${T.lineDim}; padding:0 6px; }
+  .lw-wd-sub .tag { font-size:10px; color:${T.faint}; border:1px solid ${T.lineDim}; padding:0 6px; }
+  .lw-wd-sub .tag.warn { color:${T.warn}; border-color:${T.warn}; }
+  .lw-wd-sec { padding:14px 16px 0; }
+  .lw-wd-sec .hd { display:flex; align-items:center; gap:5px; margin-bottom:7px;
+    font-size:10px; letter-spacing:1.6px; color:${T.faint}; }
+  .lw-wd-sec .hd .ic { font-size:12px; letter-spacing:0; }
+  /* 释义：**主角** ✓ —— 字号最大 ✓，多义项编号 ✓（词典就是这么排的 ✓）*/
+  .lw-wd-defs { margin:0; padding:0; list-style:none; }
+  .lw-wd-defs li { position:relative; padding-left:21px; margin-bottom:3px;
+    font-size:15px; line-height:1.85; color:${T.text}; }
+  .lw-wd-defs li i { position:absolute; left:0; top:0; font-style:normal; font-size:11px;
+    color:${T.faint}; line-height:2.5; }
+  .lw-wd-defs.one { font-size:15px; line-height:1.85; color:${T.text}; }
+  .lw-wd-miss { font-size:12px; color:${T.faint}; line-height:1.8; }
+  /* 例句：英文 + 中文对照 ✓，**本词高亮** ✓ */
+  .lw-wd-eg-en { font-size:13.5px; line-height:1.85; color:${T.text}; padding-left:10px;
+    border-left:2px solid ${T.accent}; }
+  .lw-wd-eg-zh { font-size:12px; line-height:1.8; color:${T.dim}; margin-top:5px; padding-left:12px; }
+  .lw-wd-hit { color:${T.accent}; font-weight:600; border-bottom:1px solid ${T.accent}; }
+  .lw-wd-secact { display:flex; gap:6px; margin-top:8px; }
+  .lw-wd-secact button, .lw-wd-src button { height:24px; padding:0 9px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:10px ${UI}; cursor:pointer; }
+  .lw-wd-secact button:hover, .lw-wd-src button:hover { border-color:${T.accent}; color:${T.accent}; }
+  /* 巧记 / 场景：高亮框 ✓（一眼看到 ✓，不用在表单里找 ✓）*/
+  .lw-wd-tipbox { font-size:12.5px; line-height:1.9; color:${T.text}; padding:10px 12px; }
+  .lw-wd-tipbox.mnem { background:color-mix(in srgb, ${T.accent} 10%, transparent);
+    border-left:3px solid ${T.accent}; }
+  .lw-wd-tipbox.scene { background:color-mix(in srgb, ${T.ok} 9%, transparent);
+    border-left:3px solid ${T.ok}; }
+  .lw-wd-src { font-size:12px; color:${T.dim}; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .lw-wd-pv { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; font-size:10.5px; color:${T.faint}; }
+  .lw-wd-pv b { color:${T.dim}; font-weight:400; }
+  .lw-wd-ef { font-size:10.5px; color:${T.faint}; padding:7px 14px 0; }
+  .lw-wd-ef b { color:${T.dim}; font-weight:400; }
+  /* 底部动作条 ✓ —— 常驻 ✓，不跟内容一起滚走 ✗（想补全时不用往上翻 ✓）*/
+  .lw-wd-foot { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    margin:16px 16px 0; padding-top:13px; border-top:1px solid ${T.lineDim}; }
+  .lw-wd-foot .sp { flex:1; }
+  .lw-wd-foot button { height:28px; padding:0 11px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-wd-foot button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-wd-foot button.on { border-color:${T.accent}; color:${T.accent}; }
+  .lw-wd-foot button.danger { border-color:${T.lineDim}; color:${T.faint}; }
+  .lw-wd-foot button.danger:hover { border-color:${T.red}; color:${T.red}; }
   /* ── 生词卡片：一行「标签 + 控件」✓（音标 / 词性 / 释义 / 例句 / 巧记 / 场景 共用 ✓）──
      ⚠️⚠️ 类名**不能叫 .lw-wd-row** ✗✗ —— 那个**已经被生词列表项占了** ✗
         （「epWordRowHtml」 里的 「<div class="lw-wd-row">」 ✓）。
@@ -1852,7 +1928,14 @@
   .lw-wd-f input::placeholder, .lw-wd-f textarea::placeholder { color:${T.faint}; }
   /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
   .lw-wd-imgwrap { margin:10px 14px 0; border:1px solid ${T.lineDim}; background:${T.bg2}; }
-  .lw-wd-img { display:block; width:100%; max-height:210px; object-fit:cover; }
+  /* ⚠️ 用 contain ✗ **不用 cover** ✗ ——
+     配图的用途是「图片场景理解」✓，cover 会把一张 16:9 的图**裁掉近一半**✗
+     （700 宽下自然高 394 ✓ → 硬压到 210 ✓ → 竖着砍 46% ✗），
+     主体（人 / 物）十有八九正好在裁掉的那半里 ✗。
+     宁可留点边（底色就是 .lw-wd-imgwrap 的 bg2 ✓，看着像相框 ✓），也要让人**看全** ✓。
+     ⚠️ 上面这几行**绝对不能出现反引号** ✗ —— 这段 CSS 装在 JS 模板字符串里 ✓，
+        一个反引号就把字符串截断 ✓ → 整个面板白屏 ✗（本会话已经栽过 3 次 ✗）。 */
+  .lw-wd-img { display:block; width:100%; max-height:260px; object-fit:contain; }
   /* ⚠️ 图挂了要**收起来** ✗（破图标很难看 ✗）—— 「onerror」 加 .bad ✓ */
   .lw-wd-imgwrap.bad { display:none; }
   .lw-wd-imgwrap .cap { font-size:9.5px; color:${T.faint}; padding:4px 8px; border-top:1px solid ${T.lineDim}; }
@@ -2280,6 +2363,10 @@
           是**数据** ✓，落在词卡上（`w.ph / w.def / w.eg / w.mnem / w.img` ✓）；
           「正在补哪个词 / 上一句报错」刷新就该重置 ✓（不该留 ✓）。 */
     enBusy: '', enErr: '', imgBusy: '', imgErr: '',
+    /* ★ 词详情**默认是词典态** ✓（不是编辑态 ✗）—— 用户原话：
+       「这个词的详情，一般不需要我去修改，所以不用是这种输入框」✓。
+       点「✏️ 编辑」才切输入框 ✓。 */
+    wdEdit: false,
     /* ★ 推荐外刊源 ✓（用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓）——
        ⚠️ 面板一进来是**空的** ✗ 是最劝退的 ✗（要自己找链接、自己贴 ✗），
           所以给一个「挑一篇」的入口 ✓，并且**一打开就自动拉第一个源** ✓（省一次点击 ✓）。 */
@@ -10293,69 +10380,154 @@
     const pv = SRS ? SRS.gradePreviews(w, now) : [];
     const busy = EP_UI.enBusy === w.id;
     const imgBusy = EP_UI.imgBusy === w.id;
-    /* ★ 一行「标签 + 输入」✓ —— 补全出来的字段和手填的字段**用同一套控件** ✓：
-       用户既能直接看到补全结果 ✓，也能随手改 ✓（改完失焦自动存 ✓）。 */
+    /* ★★ 词详情：**默认是「词典」** ✓，不是一张表单 ✗ ——
+       用户原话：「这个词的详情，一般不需要我去修改，所以不用是这种输入框，
+                  大概设计和字典那样就行，美化，优化一下布局和设计，
+                  让人可以直观的学习和理解这个单词」✓。
+
+       ⚠️ 原来 7 个字段全是**输入框** ✗（音标 / 词性 / 释义 / 例句 / 例句中文 / 巧记 / 场景 ✓）——
+          看着像「后台表单」✗，不像词典 ✓；而且**每个框都在暗示「这里要你填」** ✗，
+          其实 99% 是 AI 补全出来的 ✓。
+       → 两条路 ✓：
+         · **默认**：词典式排版 ✓（音标大字、释义分条、例句英中对照、巧记 / 场景高亮框 ✓）
+         · 点「✏️ 编辑」才切成输入框 ✓ —— ⚠️ **id 保持原样** ✗（`lw-wd-ph` 那一套 ✓），
+           因为 `epWordSave()` 和失焦绑定都是按 id 找的 ✓，换 id 等于把「自动存」弄哑 ✗。 */
+    const now2 = Date.now();
+    const stName = ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '');
+    const edit = !!EP_UI.wdEdit;
+    /* 释义按「；」拆条 ✓ —— 词典就是这么排的 ✓（`微生物；细菌` → 两条 ✓）。
+       ⚠️ 只在**有多个**义项时才编号 ✗（单个义项编号很傻 ✓）。 */
+    const defs = String(w.def || '').split(/[;；]/).map((x) => x.trim()).filter(Boolean);
+    const defHtml = defs.length
+      ? (defs.length > 1
+        ? '<ol class="lw-wd-defs">' + defs.map((d, i) => '<li><i>' + (i + 1) + '</i>' + esc(d) + '</li>').join('') + '</ol>'
+        : '<div class="lw-wd-defs one">' + esc(defs[0]) + '</div>')
+      : '<div class="lw-wd-miss">还没释义 —— 点下面的「🪄 AI 补全」自动填 ✓</div>';
+    /* 例句里把**本词**标出来 ✓ —— 一眼看到它在句子里长什么样 ✓（学词最需要这个 ✓）*/
+    const egHtml = w.eg
+      ? '<div class="lw-wd-eg-en">' + epHiWord(w.eg, w.w) + '</div>'
+        + (w.egZh ? '<div class="lw-wd-eg-zh">' + esc(w.egZh) + '</div>' : '')
+      : '<div class="lw-wd-miss">还没有例句 —— 点「🪄 AI 补全」✓</div>';
+    /* ⚠️ 空字段**不显示空框** ✗，显示一行淡淡的「还没…」✓ ——
+       一排空框看着像「坏了 / 要你填」✗，一行提示看着像「可以补」✓。 */
+    const sec = (icon, name, inner) => '<div class="lw-wd-sec"><div class="hd">'
+      + '<span class="ic">' + icon + '</span>' + name + '</div>' + inner + '</div>';
+    /* 编辑态：老的那套输入框 ✓（id 一个都不改 ✓） */
     const row = (label, id, val, ph, area) => '<div class="lw-wd-f">'
       + '<label>' + label + '</label>'
       + (area
         ? '<textarea id="' + id + '" rows="' + area + '" placeholder="' + esc(ph) + '">' + esc(val || '') + '</textarea>'
         : '<input id="' + id + '" placeholder="' + esc(ph) + '" value="' + esc(val || '') + '"/>')
       + '</div>';
-    return '<div class="lw-rd-rhd"><h2>' + esc(w.w) + '</h2>'
-      + '<div class="meta">'
-      + '<span>' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '</span>'
-      + (w.pos ? '<span>' + esc(w.pos) + '</span>' : '')
-      + (Number(w.reps) ? '<span>答对 ' + w.reps + ' 次</span>' : '')
-      + (Number(w.lapses) ? '<span>忘过 ' + w.lapses + ' 次</span>' : '')
-      + '<span>难度因子 ' + (Number(w.ef) || 0).toFixed(2) + '</span>'
+    const editPane = edit
+      ? '<div class="lw-rd-hd">编辑（改完离开输入框自动存 ✓）</div>'
+        + row('音标', 'lw-wd-ph', w.ph, '如 /həˈmɪs.fɪə/')
+        + row('词性', 'lw-wd-pos', w.pos, '如 n. / v. / adj.')
+        + row('释义', 'lw-wd-def', w.def, '中文释义（多个义项用；隔开）', 2)
+        + row('例句', 'lw-wd-eg', w.eg, '英文例句（会一起朗读）', 3)
+        + row('例句中文', 'lw-wd-egzh', w.egZh, '上面那句的翻译', 2)
+        + row('巧记', 'lw-wd-mnem', w.mnem, '词根词缀 / 联想 / 谐音', 3)
+        + row('场景', 'lw-wd-scene', w.scene, '一句能帮你想起来的画面', 2)
+      : '';
+    /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
+    const imgBlock = w.img ? '<div class="lw-wd-imgwrap">'
+      + '<img class="lw-wd-img" src="' + esc(w.img) + '" alt="' + esc(w.w) + '" referrerpolicy="no-referrer" loading="lazy"'
+      + ' onerror="this.parentNode.classList.add(\'bad\')"/>'
+      + '<div class="cap">配图 · 百度图片'
+      + (w.imgs && w.imgs.length > 1 ? '（共 ' + w.imgs.length + ' 张，点「🖼 换一张」换）' : '')
+      + '</div></div>' : '';
+    /* ⚠️⚠️ 编辑态**不能**把表单插在最底下 ✗✗ ——
+       第一版就是这么写的 ✗：点「✏️ 编辑」页面**纹丝不动** ✓
+       （表单在「复习 / 来自」**下面** ✓，得往下滚才看得见 ✗）→
+       用户只会觉得「按钮坏了」✗（实测截图确认 ✓）。
+       → 编辑态**整个换掉只读区** ✓ —— 只读区和表单本来就是同一份内容 ✓，
+         并排堆着等于同一份释义显示两遍 ✗。
+       ⚠️ 配图 / 复习 / 来自**留着** ✗（它们不是表单字段 ✓：配图靠底部「🖼 换一张」改 ✓，
+          复习是遗忘曲线的状态 ✓，来自是「回到原文」的入口 ✓）。 */
+    const body = edit
+      ? editPane + imgBlock
+      : sec('📖', '释义', defHtml)
+        + imgBlock
+        + sec('💬', '例句', egHtml
+          + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">🔊 读这句</button></div>' : ''))
+        + (w.mnem ? sec('💡', '巧记', '<div class="lw-wd-tipbox mnem">' + esc(w.mnem) + '</div>') : '')
+        + (w.scene ? sec('🎬', '场景', '<div class="lw-wd-tipbox scene">' + esc(w.scene) + '</div>') : '');
+    return '<div class="lw-wd-detail' + (edit ? ' editing' : '') + '">'
+      /* ── 头部：单词 + 音标 + 词性 + 状态 ✓ ── */
+      + '<div class="lw-wd-top">'
+      + '<div class="lw-wd-title">'
+      + '<span class="w" id="lw-wd-titleword" title="点一下听发音">' + esc(w.w) + '</span>'
+      + '<button class="spk" id="lw-wd-say" title="读这个单词">🔊</button>'
+      + '<button class="spk" id="lw-wd-say-slow" title="慢速读">🐢</button>'
+      + '<span class="sp"></span>'
+      + '<button class="ed' + (edit ? ' on' : '') + '" id="lw-wd-edit" title="'
+      + (edit ? '收起编辑框' : '想改的话再点这里（一般不用改 ✓）') + '">' + (edit ? '✓ 收起' : '✏️ 编辑') + '</button>'
+      + '</div>'
+      + '<div class="lw-wd-sub">'
+      + (w.ph ? '<span class="ph">' + esc(w.ph) + '</span>' : '<span class="ph miss">缺音标</span>')
+      + (w.pos ? '<span class="pos">' + esc(w.pos) + '</span>' : '')
+      + '<span class="tag">' + stName + '</span>'
+      + (Number(w.reps) ? '<span class="tag">答对 ' + w.reps + ' 次</span>' : '')
+      + (Number(w.lapses) ? '<span class="tag warn">忘过 ' + w.lapses + ' 次</span>' : '')
       + '</div></div>'
-      + '<div class="lw-ep-act">'
-      + '<button id="lw-wd-say" title="朗读这个单词">🔊 读单词</button>'
-      + '<button id="lw-wd-say-slow" title="慢速朗读">🐢 慢速</button>'
-      + (w.eg ? '<button id="lw-wd-say-eg" title="朗读例句">🔊 读例句</button>' : '')
-      /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓。
-         只在**真的记下了来源**时才出现 ✓（手动加的词没有来源 ✓，别给一个点了没反应的按钮 ✗）。 */
-      + (w.artId ? '<button id="lw-wd-src" title="回到它出现的那篇文章 / 那一句">📍 回到原文</button>' : '')
-      /* ★ 「🪄 补全」是**常驻**的 ✓ —— 补全失败 / 想重来 / 补完还想再问一次 ✓，都靠它 ✓。 */
+      /* ── 正文：词典态 = 只读区 ✓ / 编辑态 = 表单 ✓（见上面 body ✓）── */
+      + body
+      /* ── 复习 ✓（遗忘曲线要看得见 ✓）── */
+      + sec('⏰', '复习',
+        '<div class="lw-wd-next">下次复习：<b>'
+        + (due <= now2 ? '现在（已到期）' : (SRS ? SRS.fmtGap(due - now2) + '后' : '—')) + '</b>'
+        + (w.ivl ? ' · 当前间隔 ' + w.ivl + ' 天' : '') + '</div>'
+        + (hist.length ? '<div class="lw-wd-hist" title="最近 ' + hist.length + ' 次（绿=记得 橙=模糊 红=忘了）">'
+          + hist.slice(-20).map((h) => '<i class="'
+            + (Number(h.q) >= 4 ? 'ok' : Number(h.q) >= 3 ? 'hard' : 'bad') + '" title="'
+            + new Date(Number(h.at) || 0).toLocaleString('zh-CN', { hour12: false }) + ' · '
+            + (Number(h.q) >= 4 ? '记得' : Number(h.q) >= 3 ? '模糊' : '忘了') + '"></i>').join('') + '</div>' : '')
+        + (pv.length ? '<div class="lw-wd-pv">现在复习会排到：'
+          + pv.map((g) => '<span>' + esc(g.label) + ' → <b>' + esc(g.next) + '</b></span>').join('') + '</div>' : '')
+        /* ⚠️ 「难度因子」**不能丢** ✗ —— 旧版词详情里有 ✓，重写成词典式时漏了 ✗
+           （`tests/life-en.js` ⑦ 那条断言当场抓住 ✓）。
+           但**光甩一个数字**等于没说 ✗（`2.36` 谁知道是高还是低 ✓）→ 带一句人话 ✓。 */
+        + '<div class="lw-wd-ef">难度因子 <b>' + (Number(w.ef) || 0).toFixed(2) + '</b>'
+        + '<span>（1.3 ~ 2.8，越低说明这个词越难记）</span></div>')
+      /* ── 来源 ✓ ── */
+      + (w.artTitle ? sec('📍', '来自', '<div class="lw-wd-src">《' + esc(w.artTitle) + '》'
+        + (w.artId ? ' <button id="lw-wd-src">回到原文</button>' : '') + '</div>'
+        + (w.sent ? '<div class="lw-wd-sent">' + epHiWord(w.sent, w.w) + '</div>' : '')) : '')
+      /* ── 编辑区 ✓（编辑态已经在上面 body 里了 ✓，这里不再重复插 ✗）── */
+      /* ── 底部动作 ✓ ── */
+      + '<div class="lw-wd-foot">'
       + '<button class="' + (busy ? 'on' : '') + '" id="lw-wd-enrich" title="用 AI 补全音标 / 词性 / 释义 / 例句 / 巧记 / 场景">'
       + (busy ? '补全中…' : (w.enAt ? '🪄 重新补全' : '🪄 AI 补全')) + '</button>'
       + (w.img || w.imgs ? '<button class="' + (imgBusy ? 'on' : '') + '" id="lw-wd-img" title="换一张配图">'
         + (imgBusy ? '找图中…' : '🖼 换一张') + '</button>' : '')
-      + '<button data-act="del" id="lw-wd-del" style="border-color:' + T.lineDim + '" title="从生词本删掉">🗑 删除</button>'
+      + '<span class="sp"></span>'
+      + '<button data-act="del" id="lw-wd-del" class="danger" title="从生词本删掉">🗑 删除</button>'
       + '</div>'
       /* ⚠️ 补全 / 找图的状态要**说清楚** ✗ —— 转圈十秒没提示的话用户以为卡死了 ✗ */
       + (busy ? '<div class="lw-ep-tip" style="color:' + T.accent + '">正在问 AI 补全…（一般 3~10 秒）</div>' : '')
       + (EP_UI.enErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.enErr) + '</div>' : '')
       + (EP_UI.imgErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 配图：' + esc(EP_UI.imgErr) + '</div>' : '')
-      /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
-      + (w.img ? '<div class="lw-wd-imgwrap">'
-        + '<img class="lw-wd-img" src="' + esc(w.img) + '" alt="' + esc(w.w) + '" referrerpolicy="no-referrer" loading="lazy"'
-        + ' onerror="this.parentNode.classList.add(\'bad\')"/>'
-        + '<div class="cap">配图 · 来自百度图片搜索'
-        + (w.imgs && w.imgs.length > 1 ? '（共 ' + w.imgs.length + ' 张，点「🖼 换一张」换）' : '')
-        + '</div></div>' : '')
-      /* ── 字段 ✓ ── */
-      + '<div class="lw-rd-hd">卡片</div>'
-      + row('音标', 'lw-wd-ph', w.ph, '如 /həˈmɪs.fɪə/')
-      + row('词性', 'lw-wd-pos', w.pos, '如 n. / v. / adj.')
-      + row('释义', 'lw-wd-def', w.def, '中文释义（多个义项用；隔开）', 2)
-      + row('例句', 'lw-wd-eg', w.eg, '英文例句（会一起朗读）', 3)
-      + row('例句中文', 'lw-wd-egzh', w.egZh, '上面那句的翻译', 2)
-      + row('巧记', 'lw-wd-mnem', w.mnem, '词根词缀 / 联想 / 谐音 —— 点「🪄 AI 补全」自动填', 3)
-      + row('场景', 'lw-wd-scene', w.scene, '一句能帮你想起来的画面 —— 点「🪄 AI 补全」自动填', 2)
-      + '<div class="lw-ep-tip">改完离开输入框就自动存 ✓（失焦即保存 ✓）</div>'
-      /* ── 遗忘曲线 ✓ ── */
-      + '<div class="lw-wd-next">下次复习：<b>' + (due <= now ? '现在（已到期）' : (SRS ? SRS.fmtGap(due - now) + '后' : '—')) + '</b>'
-      + (w.ivl ? ' · 当前间隔 ' + w.ivl + ' 天' : '') + '</div>'
-      + (hist.length ? '<div class="lw-rd-hd">最近 ' + hist.length + ' 次</div>'
-        + '<div class="lw-wd-hist">' + hist.slice(-14).map((h) => '<i class="'
-          + (Number(h.q) >= 4 ? 'ok' : Number(h.q) >= 3 ? 'hard' : 'bad') + '" title="'
-          + new Date(Number(h.at) || 0).toLocaleString('zh-CN', { hour12: false }) + ' · '
-          + (Number(h.q) >= 4 ? '记得' : Number(h.q) >= 3 ? '模糊' : '忘了') + '"></i>').join('') + '</div>' : '')
-      + (pv.length ? '<div class="lw-rd-hd">现在复习会排到</div>'
-        + '<div class="lw-ep-tip">' + pv.map((g) => g.label + ' → <b>' + g.next + '</b>').join('　') + '</div>' : '')
-      + (w.artTitle ? '<div class="lw-rd-hd">来自</div><div class="lw-ep-tip">《' + esc(w.artTitle) + '》</div>' : '')
-      + (w.sent ? '<div class="lw-wd-sent">' + esc(w.sent) + '</div>' : '');
+      + '</div>';
+  }
+  /* 例句里把**本词**标出来 ✓ —— 学一个词最需要的就是「看它在真句子里长什么样」✓。
+     ⚠️ 要容忍**变形** ✗（`microbes` 里是 `microbe` ✓、`studies` / `studied` ✓）——
+        只匹配原形的话「例句里根本没这个词」✗，反而更困惑 ✓。
+        → 词尾允许多 3 个字母 ✓（s / es / ed / ing 都在里面 ✓）。 */
+  function epHiWord(text, w) {
+    const t = String(text == null ? '' : text);
+    const q = String(w || '').trim();
+    if (!q) return esc(t);
+    let re;
+    try { re = new RegExp('(?<![A-Za-z])(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[a-z]{0,3})(?![A-Za-z])', 'gi'); }
+    catch (_) { return esc(t); }
+    let out = '', last = 0, m;
+    re.lastIndex = 0;
+    while ((m = re.exec(t))) {
+      if (!m[0].length) { re.lastIndex++; continue; }
+      out += esc(t.slice(last, m.index)) + '<b class="lw-wd-hit">' + esc(m[0]) + '</b>';
+      last = m.index + m[0].length;
+    }
+    return out + esc(t.slice(last));
   }
 
   /* ══ 复习浮层 ✓（遗忘曲线要**看得见** ✓）══════════════════════════════════ */
@@ -11589,6 +11761,13 @@
     const ws1 = q('#lw-wd-say'); if (ws1) ws1.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
     const ws2 = q('#lw-wd-say-slow'); if (ws2) ws2.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w, { rate: 0.6 }); };
     const ws3 = q('#lw-wd-say-eg'); if (ws3) ws3.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w && w.eg) spkSay(w.eg); };
+    /* ★ 词典态：点单词本身就能听 ✓（不用去找那个小喇叭 ✓）*/
+    const wtitle = q('#lw-wd-titleword');
+    if (wtitle) wtitle.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
+    /* ★ 「✏️ 编辑」开关 ✓ —— 用户原话：「一般不需要我去修改，所以不用是这种输入框」✓。
+       默认**收起** ✓，想改的人才点开 ✓（能力没砍 ✗，只是不挡路 ✓）。 */
+    const wedit = q('#lw-wd-edit');
+    if (wedit) wedit.onclick = () => { EP_UI.wdEdit = !EP_UI.wdEdit; render(); };
     /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓ */
     const wsrc = q('#lw-wd-src');
     if (wsrc) wsrc.onclick = () => epGotoWordSource(epWordById(EP_UI.wordSel));
