@@ -1543,14 +1543,41 @@
   .lw-ep-body .hd .mt { font-size:10.5px; color:${T.faint}; display:flex; gap:10px; flex-wrap:wrap; }
   .lw-ep-body .hd .mt b { color:${T.dim}; font-weight:400; }
   .lw-ep-body .bd { max-width:760px; margin:0 auto; }
-  /* 正文在上、句子面板在下 ✓ —— 面板给固定比例 + 自己滚 ✓（不定高的话正文会被挤没 ✗）。 */
+  /* 正文在上、句子面板在下 ✓ —— 面板高度**可拖** ✓（见 .lw-ep-grip ✓）。
+     ⚠️ 以前是写死的「flex:0 0 44%」✗ —— 用户原话「上下窗口无法自由拖动」✗。
+        写死比例的毛病：文章短的时候面板太大 ✓、句子长的时候又太小 ✓，
+        而且用户**没有任何办法**调整 ✗。
+     ⚠️ 没拖过时用 44% ✓（flex:0 0 44% ✓），拖过之后由 JS 写 height ✓
+        （写了 height 就同时要 flex:none ✗，不然 flex-basis 会打架 ✗）。 */
   .lw-ep-panel { flex:0 0 44%; min-height:0; overflow:auto; border-top:2px solid ${T.lineDim};
     background:${T.card}; padding-bottom:14px; }
+  /* ★ 上下拖拽条 ✓ —— 和左右那条（.lw-pgrip）一个思路 ✓，只是方向转了 90° ✓。
+     ⚠️ 热区给 8px 高 ✗（看着只有 2px ✗）—— 太细抓不住 ✗，
+        而它平时是**看不见**的 ✓，hover / 拖动时才亮 ✓。 */
+  .lw-ep-grip { flex:none; height:8px; margin:-5px 0 -3px; cursor:row-resize; position:relative; z-index:3; }
+  .lw-ep-grip::after { content:''; position:absolute; left:0; right:0; top:3px; height:2px;
+    background:transparent; transition:background .12s; }
+  .lw-ep-grip:hover::after, .lw-ep-grip.on::after { background:${T.accent}; }
+  /* ── 双语对照 ✓（译文就挂在**每句下面** ✓ —— 精读要一句一句对着看 ✓）── */
+  .lw-ep-tr { display:block; font-size:13px; line-height:1.95; color:${T.dim};
+    margin:2px 0 10px; padding-left:10px; border-left:2px solid ${T.lineDim};
+    max-width:760px; }
+  .lw-ep-tr.pending { color:${T.faint}; font-style:italic; }
+  .lw-ep-tr.err { color:${T.red}; }
+  /* ⚠️ 对照开着的时候句子**别再用 line-height:2.05** ✗ ——
+     原文和译文叠一起会拉得特别高 ✗，一屏看不了几句 ✗。 */
+  .lw-ep-body.tr .lw-ep-s { line-height:1.75; }
+  .lw-ep-body.tr .lw-ep-p { margin-bottom:8px; }
   .lw-ep-p { margin:0 0 15px; }
   /* 句子 = 一个 span ✓ —— 点它选中 ✓，朗读时高亮 ✓，标记「已懂」变淡 ✓。
-     行高给到 2.05 ✗：精读要**慢**，挤在一起没法看 ✗。 */
+     行高给到 2.05 ✗：精读要**慢**，挤在一起没法看 ✗。
+     ⚠️ padding 改成「4px 0」（原来是 1px ✗）—— inline 元素的**纵向 padding 不占布局** ✓
+        （行高一点不变 ✓），但它**算进点击热区** ✓ →
+        正好把行距撑出来的那条「**点不中的缝**」填掉一大半 ✓。
+        （实测：line-height 2.05 下每行上下各约 7px 是死区 ✗，
+          在缝里点句子**毫无反应** ✗ —— 用户会以为「点了没反应」✗。） */
   .lw-ep-s { font-size:15px; line-height:2.05; color:${T.text}; cursor:pointer;
-    border-bottom:1px solid transparent; padding:1px 0; }
+    border-bottom:1px solid transparent; padding:4px 0; }
   .lw-ep-s:hover { background:${T.card2}; }
   .lw-ep-s.on { background:color-mix(in srgb, ${T.accent} 16%, transparent); border-bottom-color:${T.accent}; }
   .lw-ep-s.hl { background:color-mix(in srgb, ${T.ok} 22%, transparent); }
@@ -1987,6 +2014,11 @@
     wordQ: '', wordFilter: 'all', wordSel: '', wordNew: '', wordPh: '', wordDef: '', wordEg: '',
     revOpen: false, revQ: [], revI: 0, revShown: false, revDone: 0, revOK: 0,
     artNote: '',
+    /* ★ 双语对照翻译 ✓（用户原话：「怎么没有双语对应翻译」✓）——
+       ⚠️ 译文本身**不在这里** ✗ —— 它挂在文章对象上（`a.tr` ✓），
+          这样删文章时一起没 ✓、换文章 / 刷新都还在 ✓、也不用重问模型 ✓。
+          这里只放「显示 / 进度 / 报错」这些**内存态** ✓（刷新就重置才对 ✓）。 */
+    trOn: false, trBusy: false, trDone: 0, trTotal: 0, trErr: '',
     /* ★ 推荐外刊源 ✓（用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓）——
        ⚠️ 面板一进来是**空的** ✗ 是最劝退的 ✗（要自己找链接、自己贴 ✗），
           所以给一个「挑一篇」的入口 ✓，并且**一打开就自动拉第一个源** ✓（省一次点击 ✓）。 */
@@ -2821,8 +2853,50 @@
     });
   }
 
-  function lwGrab(el, handlers) {
-    if (!el) return;
+  /* ★ 上下拖拽 ✓ —— `bindPaneGrips` 的**纵向版** ✓（那个拖的是**宽** ✓，这个拖的是**高** ✓）。
+     ⚠️ 为什么不直接复用 bindPaneGrips ✗：它写死了 `clientX` + `style.width` ✗，
+        纵向要 `clientY` + `style.height` ✗ —— 硬塞进去要加一堆 if ✗，
+        而这段一共二十来行 ✓，写清楚比塞参数好读 ✓。
+     ⚠️ **上限按父容器算比例** ✗，不写死像素 ✗ —— 窗口一变，写死的上限就不对了 ✗
+        （这个项目里「别写死尺寸」踩过好几次 ✓）。
+     ⚠️ 拖过之后必须同时设 `flex:none` ✗ —— 只设 height 的话 flex-basis 还在打架 ✗，
+        表现是「拖了没反应」或「松手弹回去」✗。 */
+  function bindRowGrip(root, gripSel, targetSel, opts) {
+    const el = root && root.querySelector(gripSel);
+    const target = root && root.querySelector(targetSel);
+    if (!el || !target) return;
+    const min = opts.min || 100;
+    const key = opts.key;
+    const maxFrac = opts.maxFrac || 0.85;
+    const saved = Number((STORE && STORE[key]) || 0);
+    if (saved >= min) { target.style.height = saved + 'px'; target.style.flex = 'none'; }
+    const cap = () => {
+      const box = target.parentElement;
+      const h = box ? box.getBoundingClientRect().height : 800;
+      return Math.max(min, Math.round(h * maxFrac));
+    };
+    lwGrab(el, {
+      down: (ev) => { el.classList.add('on'); return { y: ev.clientY, h: target.getBoundingClientRect().height }; },
+      /* ⚠️ 方向：**往上拖 = 面板变高** ✗（因为面板在下面 ✓）→ 是 `h - (dy)` ✓，
+         不是 `h + dy` ✗（写反了手感就完全颠倒 ✗）。 */
+      move: (ev, sess) => {
+        const h = Math.max(min, Math.min(cap(), sess.h - (ev.clientY - sess.y)));
+        target.style.height = Math.round(h) + 'px';
+        target.style.flex = 'none';
+      },
+      up: () => {
+        el.classList.remove('on');
+        STORE[key] = Math.round(target.getBoundingClientRect().height);
+        saveStore();
+      },
+    });
+    el.ondblclick = () => {
+      target.style.height = ''; target.style.flex = '';
+      STORE[key] = 0; saveStore();
+    };
+  }
+
+  function lwGrab(el, handlers) {    if (!el) return;
     let sess = null;
     const onMove = (ev) => {
       if (!sess) return;
@@ -8259,8 +8333,7 @@
     EP_UI.sel = -1; EP_UI.pick = '';
     spkStop(); epSave(); render();
   }
-  function epWordOf(w) { return epWords().find((x) => x && x.w === w) || null; }
-  function epWordById(id) { return epWords().find((x) => x && x.id === id) || null; }
+  function epWordOf(w) { return epWords().find((x) => x && x.w === w) || null; }  function epWordById(id) { return epWords().find((x) => x && x.id === id) || null; }
   function epNotesOf(id) { return ((STORE && STORE.artNotes) || []).filter((n) => n && n.artId === id); }
   function epSave() { saveStore(); }
   function epMode() {
@@ -8287,6 +8360,47 @@
     return list;
   }
   function epDoneOf(a) { return Object.keys((a && a.done) || {}).length; }
+  /* ★ 这篇的译文 ✓ —— 存在文章对象上（`a.tr.pairs` ✓），按**句序号**对齐 ✓。
+     返回「句序号 → {src,dst}」的数组 ✓（和 epSents 一一对应 ✓）。 */
+  function epTransOf(a) {
+    const t = a && a.tr;
+    if (!t || !Array.isArray(t.pairs) || !t.pairs.length) return null;
+    return t.pairs;
+  }
+  /* ★★ 只重画**下半部分**（句子面板）✓✗ —— 这是个**关键**修复 ✗✗：
+     点句子原来是 `render()` 整屏重建 ✗，一下子坏两件事：
+       ① 正文容器的滚动位置**归零** ✗ → 用户原话「点击原文会自动跳到开头去」✓
+       ② 鼠标刚划出来的**选区被销毁** ✗ → 定时器里 `getSelection()` 已经是空的 ✗
+          → 划词**永远不生效** ✗ → 用户原话「划词怎么没有用」✓
+     两个症状、一个根因 ✓。做法和 `renderMemoList()` / `flowRenderLive()` 一样 ✓：
+     只换需要变的那一块 ✓，别整屏重建 ✗。 */
+  function epRenderPanel() {
+    const host = document.getElementById('lifework-view');
+    if (!host) { render(); return; }
+    const a = epCurArt();
+    const old = host.querySelector('#lw-ep-panel');
+    if (!old || !a) { render(); return; }
+    const sents = epSents(a);
+    const s = EP_UI.sel >= 0 && sents[EP_UI.sel] ? sents[EP_UI.sel] : null;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = '<div class="lw-ep-panel" id="lw-ep-panel">' + epSentPanelHtml(a, s) + '</div>';
+    const next = tmp.firstElementChild;
+    /* ⚠️ 面板**自己也会滚** ✗ —— 换内容时把滚动位置也带上 ✓，
+       不然选下面那些句子时面板会跳回顶部 ✗。 */
+    next.scrollTop = old.scrollTop;
+    old.replaceWith(next);
+    /* 句子上的「选中」高亮 ✓ —— 只改 class ✓，一个节点都不重建 ✓（选区才活得下来 ✓） */
+    host.querySelectorAll('[data-epsent]').forEach((el) => {
+      const i = Number(el.dataset.epsent);
+      if (EP_UI.sel === i) el.classList.add('on'); else el.classList.remove('on');
+    });
+    /* ★ 重新绑一遍 ✓ —— **故意调用整个 bindEnglish()** ✗，不抽一个「只绑面板」的子集 ✗：
+       这个项目踩过「重构时丢绑定」的坑 ✓（见 skill 里那条 ✗），
+       而 `bindEnglish()` 里全部是 `el.onclick = …` 赋值 ✓ / 带闸门的单例 ✓
+       （`EP_KEYS.esc` ✓、`spkInit` 的 `SPK.listening` ✓、`lwGrab` 只在拖动期间挂监听 ✓）
+       → **重跑是幂等的** ✓，也不会叠监听 ✓。少写一份绑定，就少一处会忘的地方 ✓。 */
+    bindEnglish();
+  }
   function epArtProg(a) {
     const n = epSents(a).length;
     return n ? Math.round((epDoneOf(a) / n) * 100) : 0;
@@ -8535,15 +8649,25 @@
     const sents = epSents(a);
     const s = EP_UI.sel >= 0 && sents[EP_UI.sel] ? sents[EP_UI.sel] : null;
     const done = a.done || {};
+    /* ★ 双语对照 ✓ —— 用户原话「怎么没有双语对应翻译」✓。
+       译文**存在文章对象上** ✓（`a.tr` ✓）—— 这样删文章时译文一起没了 ✓，
+       而且换文章 / 刷新都还在 ✓（不用重新问一遍模型 ✓）。 */
+    const tr = epTransOf(a);
+    const trOn = !!EP_UI.trOn;
     let body = '';
     let cur = -1;
     sents.forEach((x, i) => {
       if (x.para !== cur) { if (cur >= 0) body += '</p>'; body += '<p class="lw-ep-p">'; cur = x.para; }
       body += '<span class="lw-ep-s' + (EP_UI.sel === i ? ' on' : '') + (done[i] ? ' done' : '')
         + '" data-epsent="' + i + '">' + esc(x.text) + '</span> ';
+      if (trOn) {
+        const dst = tr && tr[i] && tr[i].dst ? tr[i].dst : '';
+        body += '<span class="lw-ep-tr' + (dst ? '' : ' pending') + '" data-eptr="' + i + '">'
+          + (dst ? esc(dst) : (EP_UI.trBusy ? '翻译中…' : '（还没译到这句）')) + '</span>';
+      }
     });
     if (cur >= 0) body += '</p>';
-    return '<div class="lw-ep-body" id="lw-ep-body">'
+    return '<div class="lw-ep-body' + (trOn ? ' tr' : '') + '" id="lw-ep-body">'
       + '<div class="hd"><h2>' + esc(a.title || '未命名') + '</h2>'
       + '<div class="mt">'
       + (a.site ? '<span>' + esc(a.site) + '</span>' : '')
@@ -8557,13 +8681,22 @@
       + '<div class="lw-ep-act" style="padding:10px 0 0">'
       + '<button id="lw-ep-play" title="从第一句开始逐句朗读整篇">🔊 朗读全文</button>'
       + '<button id="lw-ep-stop" title="停止朗读">■ 停</button>'
+      + '<button class="' + (trOn ? 'on' : '') + '" id="lw-ep-tr" title="'
+      + (trOn ? '收起译文' : (tr ? '已经译过了 ✓ 点一下展开' : '用 AI 逐句译成中文，对照着读')) + '">'
+      + (EP_UI.trBusy ? '翻译中… ' + (EP_UI.trDone || 0) + '/' + (EP_UI.trTotal || 0) : (trOn ? '⇄ 收起译文' : '⇄ 对照翻译'))
+      + '</button>'
+      + (trOn && tr ? '<button id="lw-ep-tredel" title="清掉这篇的译文，下次重新译">↺ 重译</button>' : '')
       + '<button id="lw-ep-allok" title="把所有句子标成已懂">✓ 全标已懂</button>'
       + '<button id="lw-ep-reset" title="清掉这篇的已懂标记">↺ 重置进度</button>'
       + '<button id="lw-ep-delart" title="删掉这篇文章（生词保留）">🗑 删文章</button>'
-      + '</div></div>'
+      + '</div>'
+      + (EP_UI.trErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 翻译失败：' + esc(EP_UI.trErr) + '</div>' : '')
+      + '</div>'
       + '<div class="bd">' + (sents.length ? body
         : '<div class="lw-rd-empty" style="position:static">这篇没抽出正文 ✗</div>') + '</div>'
       + '</div>'
+      /* ★ 上下拖拽条 ✓ —— 放在正文和面板**中间** ✓（见 CSS 里 .lw-ep-grip ✓）。 */
+      + '<div class="lw-ep-grip" data-epgrip="1" title="上下拖动调整高度；双击恢复默认"></div>'
       + '<div class="lw-ep-panel" id="lw-ep-panel">' + epSentPanelHtml(a, s) + '</div>';
   }
   function epSentPanelHtml(a, s) {
@@ -9098,10 +9231,126 @@
     }]);
     epSave(); render();
   }
-  /* 划词 ✓ —— 只在**正文里**取选区 ✓，别把别处的选中也当成生词 ✗ */
-  function epGrabPick() {
+  /* ══ 双语对照翻译 ✓ ════════════════════════════════════════════════════
+     ★ 用户原话：「怎么没有双语对应翻译」✓。
+     ★ 复用**已有的 AI 入口** ✓（和「邮箱 · 对照翻译」「逻辑图 · AI 解读」同一个
+       `/api/ai/chat` ✓），配置也复用同一份（`localStorage['mc-ai-cfg']` ✓）——
+       **不另起一套** ✗（用户不该为了看译文再配一遍模型 ✗）。
+     ★ 和邮箱那套的**区别** ✗：这里的单位是**句子** ✓（精读本来就是一句一句读 ✓），
+       不是段落 ✓ —— 所以直接拿 `epSents(a)` 的结果 ✓，不用再切一遍 ✓。
+     ⚠️ 译文挂在**文章对象**上（`a.tr` ✓）—— 换文章 / 刷新都还在 ✓、
+        删文章一起没 ✓、也不会把 STORE 撑爆 ✓（一篇译文也就几 KB ✓）。
+     ⚠️ 上限 120 句 ✗（有的文章 300+ 句 ✗，全丢给模型又慢又贵 ✗）。
+     ⚠️ **已经译过的跳过** ✗ —— 中途失败 / 中断后再点，不用从头再来 ✓。 */
+  const EP_TR_MAX = 120;
+  async function epTransGo(force) {
+    const a = epCurArt();
+    if (!a || EP_UI.trBusy) return;
+    const sents = epSents(a);
+    if (!sents.length) { rdToast('这篇没正文，翻不了'); return; }
+    const cfg = mailAiCfg();
+    if (!cfg) {
+      EP_UI.trOn = true;
+      EP_UI.trErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key 就能翻了';
+      render();
+      return;
+    }
+    const use = sents.slice(0, EP_TR_MAX);
+    if (force || !epTransOf(a)) {
+      a.tr = { pairs: use.map((s) => ({ src: s.text, dst: '' })), at: Date.now() };
+    } else {
+      /* ⚠️ 文章变长了（重新导入过 ✗）→ 补齐到当前句数 ✓，别让译文和原文错位 ✗ */
+      const pairs = a.tr.pairs;
+      for (let i = pairs.length; i < use.length; i++) pairs.push({ src: use[i].text, dst: '' });
+    }
+    EP_UI.trOn = true; EP_UI.trErr = '';
+    EP_UI.trBusy = true;
+    EP_UI.trTotal = use.length;
+    EP_UI.trDone = a.tr.pairs.filter((p) => p && p.dst).length;
+    render();
     try {
-      const sel = String(window.getSelection && window.getSelection().toString() || '');
+      const CHUNK = 10;
+      for (let i = 0; i < use.length; i += CHUNK) {
+        const part = use.slice(i, i + CHUNK);
+        /* 这一段已经全译过 → 跳过 ✓（中断续译 / 展开已译文章都走这里 ✓） */
+        if (!force && part.every((s, j) => a.tr.pairs[i + j] && a.tr.pairs[i + j].dst)) continue;
+        const numbered = part.map((s, j) => '[' + (j + 1) + '] ' + s.text).join('\n');
+        const r = await fetch('/api/ai/chat', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 180000,
+            messages: [
+              {
+                role: 'system',
+                content: '你是专业的英译中译者，正在帮人做英文精读。把用户给的每一句英文翻译成自然、通顺的简体中文。'
+                  + '必须保留句子编号，输出格式为每行 `[序号]译文`，序号与输入完全一致。'
+                  + '只输出译文，不要原文、不要解释、不要合并句子、不要加任何标题或前言。'
+                  + '专有名词（人名、地名、机构、物种学名）保留英文原样，不要硬译。',
+              },
+              { role: 'user', content: numbered },
+            ],
+          }),
+        });
+        const d = await r.json();
+        if (!d || !d.ok) throw new Error((d && d.error) || 'AI 请求失败');
+        const body = String(d.content || '');
+        /* ① 优先按 `[n]` 编号对齐 ✓ */
+        const got = {};
+        body.split('\n').forEach((line) => {
+          const mm = /^\s*\[(\d+)\]\s*(.*)$/.exec(line);
+          if (mm) got[Number(mm[1])] = mm[2].trim();
+        });
+        /* ② 模型没守编号 → 退而求其次按行顺序对齐 ✓（总比整块空白强 ✓） */
+        if (!Object.keys(got).length) {
+          body.split('\n').map((x) => x.trim()).filter(Boolean).forEach((x, j) => { got[j + 1] = x; });
+        }
+        part.forEach((s, j) => {
+          const dst = got[j + 1];
+          if (dst && a.tr.pairs[i + j]) a.tr.pairs[i + j].dst = dst;
+        });
+        EP_UI.trDone = Math.min(use.length, i + CHUNK);
+        /* ⚠️ 只改译文那几行 ✗ —— 整屏 render 会把正文滚回顶部 ✗，
+           而用户正读到一半呢 ✗（同类坑这个项目踩过好几次 ✓）。 */
+        epRenderTrans();
+      }
+      epSave();
+    } catch (e) {
+      EP_UI.trErr = String((e && e.message) || e);
+    } finally {
+      EP_UI.trBusy = false;
+      epSave();
+      /* ⚠️ 收尾要整屏 render 一次 ✗ —— 按钮的文案 / 「重译」按钮的有无都要跟着变 ✓；
+         这一次是**用户预期的**（他刚点完翻译 ✓），跳一下可以接受 ✓。 */
+      render();
+    }
+  }
+  /* ⚠️ 翻译过程中**只改译文那几行 + 按钮文案** ✗ —— 见上面那条注释 ✓ */
+  function epRenderTrans() {
+    const host = document.getElementById('lifework-view');
+    if (!host) return;
+    const a = epCurArt();
+    const tr = epTransOf(a);
+    host.querySelectorAll('[data-eptr]').forEach((el) => {
+      const i = Number(el.dataset.eptr);
+      const dst = tr && tr[i] && tr[i].dst ? tr[i].dst : '';
+      el.textContent = dst || (EP_UI.trBusy ? '翻译中…' : '（还没译到这句）');
+      if (dst) el.classList.remove('pending'); else el.classList.add('pending');
+    });
+    const btn = host.querySelector('#lw-ep-tr');
+    if (btn) {
+      btn.textContent = EP_UI.trBusy
+        ? ('翻译中… ' + EP_UI.trDone + '/' + EP_UI.trTotal)
+        : (EP_UI.trOn ? '⇄ 收起译文' : '⇄ 对照翻译');
+    }
+  }
+  /* 划词 ✓ —— 只在**正文里**取选区 ✓，别把别处的选中也当成生词 ✗
+     ⚠️ `pre` = 调用方在 **mouseup 那一刻**已经抓好的选区文本 ✗ ——
+        传了就用它 ✓（那时候选区一定还在 ✓）；没传才现抓 ✓（兜底 ✓）。 */
+  function epGrabPick(pre) {
+    try {
+      const sel = pre === undefined
+        ? String((window.getSelection && window.getSelection().toString()) || '')
+        : String(pre || '');
       const w = EN ? EN.cleanWord(sel) : sel.trim().toLowerCase();
       if (!w || w.length > 40 || !/[a-z]/i.test(w)) return false;
       if (w === EP_UI.pick) return false;
@@ -9182,15 +9431,46 @@
         epSave(); render();
       };
     });
+    /* ★ 上下拖拽 ✓ —— 用户原话「上下窗口无法自由拖动」✓（原来是写死的 44% ✗）。 */
+    bindRowGrip(host, '[data-epgrip]', '#lw-ep-panel', { key: 'epPanelH', min: 110, maxFrac: 0.84 });
+    /* ★ 双语对照 ✓ —— 用户原话「怎么没有双语对应翻译」✓。
+       ⚠️ 按钮是**两态**的 ✗：没译过 / 译过但收起了 → 点开（必要时先译 ✓）；
+          已经展开 → 点一下收起 ✓（**不重新请求** ✓，译文还在文章上 ✓）。 */
+    const trb = q('#lw-ep-tr');
+    if (trb) {
+      trb.onclick = () => {
+        const a = epCurArt(); if (!a) return;
+        if (EP_UI.trOn && !EP_UI.trBusy) { EP_UI.trOn = false; EP_UI.trErr = ''; render(); return; }
+        if (epTransOf(a) && !EP_UI.trBusy) { EP_UI.trOn = true; EP_UI.trErr = ''; render(); return; }
+        epTransGo(false);
+      };
+    }
+    const trd = q('#lw-ep-tredel');
+    if (trd) trd.onclick = () => {
+      const a = epCurArt(); if (!a) return;
+      if (!confirm('重新翻译这篇？\n\n（已经译好的会全部丢掉，重新问一遍模型）')) return;
+      epTransGo(true);
+    };
     /* 正文：点句子 / 划词 */
     qa('[data-epsent]').forEach((el) => {
       el.onclick = () => {
         const i = Number(el.dataset.epsent);
         if (EP_UI.sel === i) return;
         EP_UI.sel = i; EP_UI.pick = '';
-        render();
+        /* ⚠️⚠️ 这里**绝对不能**用 `render()` ✗✗ —— 用户两个抱怨是同一个根因 ✓：
+           整屏重建会把 ① 正文的滚动位置归零 ✗（「点击原文会自动跳到开头去」✓）
+           ② 鼠标刚划出的**选区销毁** ✗（「划词怎么没有用」✓）。
+           → 只重画下半部分 ✓（见 epRenderPanel 的注释 ✓）。 */
+        epRenderPanel();
       };
-      el.onmouseup = () => { setTimeout(epGrabPick, 0); };   /* 等浏览器把选区定下来 ✓ */
+      /* ⚠️⚠️ 选区要在 **mouseup 这一刻同步抓下来** ✗✗，不能等到定时器里再抓 ✗：
+           紧跟着的 `click` 会重画面板 ✓（就算现在只重画下半部分 ✓，
+           也难保以后不会有人改回整屏 ✗）—— 同步抓一份最保险 ✓。
+           （原来就是只在定时器里抓 ✗，配合整屏 render ✗ → 划词 100% 失效 ✗。） */
+      el.onmouseup = () => {
+        const t = String((window.getSelection && window.getSelection().toString()) || '');
+        setTimeout(() => epGrabPick(t), 0);   /* 等浏览器把选区定下来 ✓ */
+      };
     });
     const say = q('#lw-ep-say');
     if (say) say.onclick = () => {
