@@ -184,22 +184,30 @@
      备忘录 / 日记则是另一套毛病：用 calc(100vh - 250px) 这种**魔数** ✗，
      同样对不齐（实测差 46~61px ✗），而且窗口一变就可能更歪 ✗。
      → 统一改成「父级变 flex 列 + 面板 flex:1」✓，**一个魔数都不用** ✓。
-     ⚠️ 只给这三个页签加 fill ✗ —— 今日 / 书签 / 研究方向 / 文件是**长列表** ✓，
-        它们本来就该撑高页面让 .lw-main 自己滚 ✓，加了 flex:1 反而会把内容裁掉 ✗。 */
+     ⚠️ 「哪些页签该 fill」**只在 LW_FILL_TAB 里决定一次** ✓（见下面那张表 ✓）——
+        今日 / 书签 / 研究方向 / 文件是**长列表** ✓，
+        它们本来就该撑高页面让 .lw-main 自己滚 ✓，加了 flex:1 反而会把内容裁掉 ✗。
+     ⚠️ 这里**不再列视图根元素的类名** ✗ —— 那份清单是会悄悄过期的副本 ✗（见下面那条注释 ✓）。 */
   .lw-main.fill { display:flex; flex-direction:column; }
-  /* 邮箱 / 日记：面板就是 .lw-main 的直接子元素 ✓ */
-  .lw-main.fill > .lw-ml,
-  .lw-main.fill > .lw-rd,
-  .lw-main.fill > .lw-fl,
-  .lw-main.fill > .lw-tr,
-  .lw-main.fill > .lw-jr { flex:1; min-height:0; }
-  /* ★ 阅读模块外面套了一层 .lw-rd-wrap ✗（顶上多了「书架 / 外刊精读 / 生词本」那条 ✓）——
-     所以**撑满那一条要挂到 wrap 上** ✗，不然 wrap 不撑高、里面三栏就塌了 ✗
-     （实测踩过：底部留一大片空白 ✗）。 */
-  .lw-main.fill > .lw-rd-wrap { flex:1; min-height:0; }
+  /* ★★★ 这里**故意不逐个列类名** ✗✗ —— 列一次踩一次坑 ✓，第三次终于栽了 ✗：
+     原来是「.lw-main.fill > .lw-ml, > .lw-rd, > .lw-fl, > .lw-tr, > .lw-jr { flex:1 }」✓，
+     ① 加了「阅读外面套 .lw-rd-wrap」→ 补一条 ✓；
+     ② 加「热榜」时写的是 .lw-tr ✗✗ —— 而 **.lw-tr 早就被表格行占了** ✗
+        （见下面 .lw-tr { display:flex; … min-height:42px } ✓），
+        于是热榜的根 .lw-hl **一个都没匹配上** ✗ →
+        只能吃 .lw-hl { min-height:320px } ✗ → 实测**底部空 497px** ✗✗
+        （用户截图就是这一张 ✓：「下面存在大量空白」✓）。
+     → 改成**结构性规则** ✓：「哪些页签是全高」这个决定**只留在 LW_FILL_TAB 一个地方** ✓，
+       CSS 只管「.lw-main.fill 的直接子元素撑满」✓ ——
+       以后**再加 / 改名视图的根元素，这里一个字都不用动** ✓。
+       （这才是不会再犯的写法 ✓：类名清单 = 一份会悄悄过期的副本 ✗。）
+     ⚠️ 前提：全高页签的视图**只返回一个根元素** ✓（6 个页签实测都是 1 个 ✓）；
+        浮层（.lw-imp）是 position:fixed ✓，脱离文档流 ✓，不受影响 ✓。
+        这条前提由 tests/life-trends.js 的「每个全高页签底部不留白」断言守着 ✓。 */
+  .lw-main.fill > * { flex:1; min-height:0; }
   /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
      —— 得把这条链也一起撑开 ✓ */
-  .lw-main.fill > .lw-g12 { flex:1; min-height:0; align-items:stretch; }
+  .lw-main.fill > .lw-g12 { align-items:stretch; }
   .lw-main.fill > .lw-g12 > .lw-c { display:flex; flex-direction:column; min-height:0; }
   .lw-main.fill > .lw-g12 > .lw-c > .lw-nt { flex:1; min-height:0; height:auto; }
   .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
@@ -1917,6 +1925,15 @@
      ⚠️ 不落盘 ✗：正文一变（重新导入 ✓）长度就变了 ✓，key 自动失效 ✓。 */
   const EP_SENTS = new Map();
 
+  /* ★★ 「哪些页签是**全高面板**」—— **唯一的真相在这张表里** ✓✗。
+     CSS 那边只写 `.lw-main.fill > * { flex:1 }` ✓（**不列类名** ✗）——
+     因为「列一份类名清单」就是「同一件事存在两个地方」✗，
+     加一个视图 / 改一次根元素类名，清单必然过期 ✗
+     （热榜就是这么漏的：清单里写的是 `.lw-tr` ✗，那是**表格行**的类名 ✗，
+       热榜真正的根 `.lw-hl` 没在名单里 ✗ → 底部空 497px ✗✗）。
+     ⚠️ 只给这 6 个加 fill ✗ —— 今日 / 书签 / 研究方向 / 文件是**长列表** ✓，
+        它们本来就该撑高页面、让 `.lw-main` 自己滚 ✓，
+        加了 flex:1 反而会把内容裁掉 ✗。 */
   const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1, flow: 1, trends: 1 };
 
   /* ── 顶栏状态条：时钟 / 问候 / 心情 / 每日格言 ✓ ─────────────────────────

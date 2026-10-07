@@ -172,6 +172,68 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     console.log('    arXiv → ' + JSON.stringify(ar));
     ck('★ arXiv 也走卡片（实测 SAMEORIGIN + CSP none ✗）', ar.iframe === 0 && ar.card === 1, JSON.stringify(ar));
 
+    /* ══════════════════════════════════════════════════════════════════
+       ⑨ 所有「全高页签」都不许在底部留白
+       ★ 用户原话：「下面存在大量空白，修复」✓（附的截图就是**热榜**这一页 ✓）。
+       根因不是热榜独有的 ✗：CSS 里那条「撑满」规则是**逐个列类名**的 ✗，
+       加「热榜」时写成了 `.lw-tr` ✗✗ —— 而 **.lw-tr 早就被表格行占了** ✗
+       （见 life-workbench.js 的 .lw-tr { min-height:42px } ✓），
+       于是热榜的根 .lw-hl **一个都没匹配上** ✗ → 只能吃 min-height:320px ✗
+       → 实测**底部空 497px** ✗✗。
+       → 已改成结构性规则（.lw-main.fill > * ✓），那份会过期的类名清单整个删了 ✓。
+       ⚠️ 断言要**遍历所有全高页签** ✗，不能只查热榜 ✗ ——
+          原来上面那条「热榜面板填满内容区」只查热榜 ✓，
+          而它就是在**加完热榜之后**写的 ✗，等于把「刚修好的那个」又验一遍 ✗，
+          别的页签没人管 ✗ —— 所以这次把六个全查一遍 ✓。
+       ⚠️ 放在**最后**跑 ✗ —— 中间切页签会打断热榜的状态机 ✓（还会顺带触发收信 ✗）。
+       ══════════════════════════════════════════════════════════════════ */
+    console.log('\n── ⑨ 所有全高页签都不许留白（.lw-main.fill > *）──');
+    /* ★ 这张表要和 life-workbench.js 里的 LW_FILL_TAB 一致 ✓ ——
+       ⚠️ 故意**写死在这里** ✗（不去读源码 ✗）：读源码的话，两边一起改错就永远测不出来 ✗。 */
+    const FILL_TABS = ['memo', 'journal', 'mail', 'reading', 'flow', 'trends'];
+    const LONG_TABS = ['today', 'quote', 'tracks', 'files'];
+    const measure = () => p.evaluate(() => {
+      const m = document.querySelector('.lw-main');
+      if (!m) return null;
+      const cs = getComputedStyle(m), mb = m.getBoundingClientRect();
+      const kids = Array.from(m.children).map((e) => {
+        const b = e.getBoundingClientRect();
+        return { cls: (e.className || '').split(' ')[0], bottom: Math.round(b.bottom) };
+      });
+      return {
+        fill: cs.display === 'flex',
+        limit: Math.round(mb.bottom - parseFloat(cs.paddingBottom)),
+        n: kids.length, kids,
+      };
+    });
+    const goto = async (tab) => {
+      await p.evaluate((t) => {
+        const el = document.querySelector('.lw-nav button[data-tab="' + t + '"]');
+        if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }, tab);
+      await p.waitForTimeout(1300);
+    };
+    for (const t of FILL_TABS) {
+      await goto(t);
+      const r = await measure();
+      if (!r) { ck('  ' + t + ' 有 .lw-main', false); continue; }
+      const gap = r.n ? r.limit - Math.max(...r.kids.map((k) => k.bottom)) : 0;
+      console.log('    ' + t.padEnd(8) + 'fill=' + r.fill + ' · 子元素 ' + r.n + ' 个 → '
+        + r.kids.map((k) => k.cls).join(' ') + ' · 底部空 ' + gap + 'px');
+      ck('★ ' + t + ' 是全高页签且**底部不留白**', r.fill && gap <= 2, '空 ' + gap + 'px');
+      /* ⚠️ 结构性规则的前提：**只返回一个根元素** ✗ ——
+         多一个的话它也会被 flex:1 撑开 ✗（浮层是 position:fixed ✓，不算 ✓）。 */
+      ck('   ' + t + ' 只有一个根元素（> * 的前提）', r.n === 1, '有 ' + r.n + ' 个：' + r.kids.map((k) => k.cls).join(' '));
+    }
+    /* ★ 长列表页签**反过来**要守住：不许被撑满 ✗（撑满会把内容裁掉 ✗） */
+    for (const t of LONG_TABS) {
+      await goto(t);
+      const r = await measure();
+      if (!r) continue;
+      ck('   长列表 ' + t + ' 没被 flex 撑满（撑满会裁内容）', !r.fill, 'fill=' + r.fill);
+    }
+    await goto('trends');      /* 切回热榜 ✓（留个和进来时一致的状态 ✓） */
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
   } catch (e) {
     console.log('✗ 异常: ' + e.message); fails.push('异常:' + e.message);

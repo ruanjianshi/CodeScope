@@ -98,7 +98,10 @@ for (const rel of externals) {
       （`"…css…" .q is not a function` ✓），vm.Script 照样通过 ✓，
       结果就是**整个面板白屏** ✗（实测踩过 4 次 ✗）。
    → 这里专门守一条：CSS 模板的**第一个收尾反引号后面必须紧跟分号** ✓。
-      提前截断的话，后面跟的是 `.` 或别的字符 ✗，立刻报错 ✓。 */
+      提前截断的话，后面跟的是 `.` 或别的字符 ✗，立刻报错 ✓。
+   ⚠️ 而且要把**所有**中招的行一次列全 ✗ —— 原来只报第一个 ✓，
+      于是一段注释里有 8 个反引号就要来回改 8 次 ✗（实测：改一次、跑一次、再改 ✗，
+      白跑了三轮 ✗）。一次列全，一轮改完 ✓。 */
 const cssGuardFailed = [];
 for (const rel of externals) {
   const abs = path.join(__dirname, '..', rel);
@@ -111,19 +114,35 @@ for (const rel of externals) {
   if (close < 0) continue;                            /* 没收尾 → 上面的语法闸门已经会报 ✓ */
   const after = src.slice(close + 1).replace(/^\s*/, '').charAt(0);
   if (after !== ';') {
+    /* ★ 把 CSS 模板「真正的那一行结尾」（单独一行只有反引号+分号 ✓）当终点 ✓，
+       然后把这区间里**每一行**的反引号都列出来 ✓ —— 一次看全 ✓。 */
+    const lines = src.split('\n');
+    const startLine = src.slice(0, m.index).split('\n').length;      /* 1-based */
+    let endLine = lines.length;
+    for (let i = startLine; i < lines.length; i++) {
+      if (/^\s*`\s*;/.test(lines[i])) { endLine = i + 1; break; }
+    }
+    const offenders = [];
+    for (let i = startLine; i < endLine; i++) {                       /* 1-based → 0-based */
+      if (lines[i - 1] && lines[i - 1].includes('`')) offenders.push({ n: i, t: lines[i - 1].trim().slice(0, 110) });
+    }
     const line = src.slice(0, close).split('\n').length;
     const text = src.slice(0, close).split('\n').pop();
-    cssGuardFailed.push({ rel, line, text: String(text).trim().slice(0, 110) });
+    cssGuardFailed.push({ rel, line, text: String(text).trim().slice(0, 110), offenders });
   }
 }
 if (cssGuardFailed.length) {
   for (const x of cssGuardFailed) {
     console.error('✗ CSS 模板被**提前截断** → ' + x.rel + ' 第 ' + x.line + ' 行');
     console.error('   ' + x.text);
+    if (x.offenders.length > 1) {
+      console.error('   这一段 CSS 里**一共 ' + x.offenders.length + ' 行**混进了反引号，一次改完：');
+      for (const o of x.offenders) console.error('     ' + o.n + ': ' + o.t);
+    }
   }
   console.error('CSS 模板闸门：注释里**不能出现反引号** ✗ —— 这段 CSS 装在 JS 模板字符串里，');
   console.error('  一个反引号就会把字符串截断，而语法闸门**查不出来**（剩下的恰好是合法 JS），');
-  console.error('  结果是整个面板白屏。写 CSS 注释时用 .lw-xx 这种写法，别加反引号。');
+  console.error('  结果是整个面板白屏。写 CSS 注释时用「」或 .lw-xx 这种写法，别加反引号。');
   process.exit(1);
 }
 console.log('CSS 模板闸门：✓ 没有混进反引号');
