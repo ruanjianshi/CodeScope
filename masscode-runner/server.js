@@ -38,6 +38,7 @@ const { createKnowledgeBase } = require('./lib/knowledge-base');
 const MAIL_CLIENT = require('./lib/mail-client');
 const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
+const MAIL_LIST = require('./lib/mail-list');
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
@@ -4923,22 +4924,13 @@ const server = http.createServer(async (req, res) => {
                不过实测瓶颈是服务端**每封**的处理成本（INBOX ~10ms/封、Sent ~53ms/封 ✗），
                所以真正的解法是前端分批取（见 MAIL_UI.limit）✓。 */
             const heads = await s.fetchHeaders(pick, ['FROM', 'SUBJECT', 'DATE']);
-            const byUid = new Map(heads.map((h) => [h.uid, h]));
-            const mails = pick.map((uid) => {
-              const h = byUid.get(uid);
-              const H = h ? MAIL_MIME.parseHeaders(h.headerRaw) : {};
-              const from = MAIL_MIME.parseAddress(MAIL_MIME.decodeHeader(H.from));
-              return {
-                uid,
-                subject: MAIL_MIME.decodeHeader(H.subject) || '(无主题)',
-                fromName: from.name || from.address,
-                fromAddress: from.address,
-                date: MAIL_MIME.parseMessage(h ? h.headerRaw : Buffer.alloc(0)).date || 0,
-                size: h ? h.size : 0,
-                seen: !!(h && h.flags.includes('\\Seen')),
-                flagged: !!(h && h.flags.includes('\\Flagged')),
-              };
-            });
+            /* ⚠️ 区间检索（`1:*`）会把**已经删掉的旧 UID** 也带回来 ✗ ——
+               实测 2925：`UID SEARCH 1:*` 回 **85** 个，而 `STATUS` 说只有 **71** 封 ✗。
+               这些 UID 去 FETCH 是**没有响应**的 ✓，以前会给它们各生成一行
+               「(无主题)」的空邮件 ✗，列表里看着像坏掉了 ✗。
+               组装逻辑（含「不能无条件丢」那条）抽到 `lib/mail-list.js` 了 ✓ ——
+               留在路由里根本单测不到 ✗。 */
+            const mails = MAIL_LIST.buildMailRows(pick, heads, MAIL_MIME);
             return { box, total: st.messages, unseen: st.unseen, mails };
           }, { timeout: 30000 }));
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
@@ -5133,8 +5125,20 @@ const server = http.createServer(async (req, res) => {
             return { name };
           }, { timeout: 25000 }));
           if (!r.ok) {
-            const hint = /not empty|NONEXISTENT|no such/i.test(String(r.error)) ? '（文件夹里还有邮件，先清空再删）' : '';
-            return send(res, 200, { ok: false, error: r.error + hint });
+            const msg = String(r.error || '');
+            let hint = '';
+            if (/not empty|NONEXISTENT|no such/i.test(msg)) hint = '（文件夹里还有邮件，先清空再删）';
+            /* ★ 有些服务商**根本不支持用 IMAP 删文件夹** ✗✗ ——
+               实测 2925（无限邮）：`DELETE` 永远回 `NO Server Error` ✗，
+               连**刚建好的空文件夹**也删不掉 ✗（`RENAME` 同样失败 ✗，
+               换引号 / 换编码 / 先 SELECT 别的箱 / 不带 UID 全试过 ✗）。
+               原来的报错只有一句「IMAP DELETE 失败：a3 NO Server Error」✗，
+               用户完全不知道该怎么办 ✗（会以为是本工具坏了 ✗）。 */
+            else if (/server error|not support|not implement|unknown command|\bBAD\b/i.test(msg)) {
+              hint = '（这个邮箱服务商可能不支持用 IMAP 删文件夹 —— 实测 2925/无限邮就是这样 ✗，'
+                + '请到它的**网页版**里删）';
+            }
+            return send(res, 200, { ok: false, error: msg + hint });
           }
           MAIL_LIST_CACHE.clear();
           return send(res, 200, r);

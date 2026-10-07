@@ -210,6 +210,7 @@ class ImapSession {
     }
 
     const session = new ImapSession(sock, timeout);
+    session.host = host;
     const greeting = await nextUnit(session.reader, Date.now() + timeout);
     if (greeting.type !== 'line' || !/^\*\s+(OK|PREAUTH)/i.test(greeting.text)) {
       sock.destroy();
@@ -318,12 +319,80 @@ class ImapSession {
   }
 
   /* 返回 UID 数组 ✓（UID SEARCH，不是序号 SEARCH ✓ —— 序号会随删除变动 ✗） */
+  /* 只取一批邮件的**标记**（一次 FETCH，一条往返 ✓）——
+     给「服务器不认检索键」的兜底路径用 ✓（见 search 的注释）。 */
+  async fetchFlags(uids) {
+    if (!uids.length) return [];
+    const res = await this.command(`UID FETCH ${uids.join(',')} (UID FLAGS)`, { timeout: this.timeout * 2 });
+    return this.fetchMeta(res.units).map((e) => ({ seq: e.seq, uid: e.uid, flags: e.flags }));
+  }
+
+  /* ── 检索 ────────────────────────────────────────────────────────────────
+     ★★ 有服务器**不实现检索键**（ALL / UNSEEN / FLAGGED），而且**静默回空集** ✗✗ ——
+     实测 2925（无限邮）收件箱 STATUS 说 71 封、未读 3 封，而：
+       `UID SEARCH ALL`     → `* SEARCH` + `OK`（**0 封** ✗）
+       `UID SEARCH UNSEEN`  → `* SEARCH` + `OK`（**0 封** ✗）
+       `UID SEARCH FLAGGED` → `* SEARCH` + `OK`（**0 封** ✗）
+       `UID SEARCH 1:*`     → **85 个 UID** ✓
+       `SEARCH ALL`（不带 UID）→ `BAD Command 'SEARCH' not recognized` ✗
+     「回空集 + 回 OK」是最难查的一种失败 ✗ —— 界面只会显示「这个文件夹是空的」✗，
+     而左边未读数明明是 3 ✗，用户完全不知道问题在哪 ✗（用户原话：
+     「无限邮已经配置好了，怎么没有信显示」）。
+
+     兜底：**用 UID 区间 `1:*` 把全集拿回来，标记类条件在客户端自己筛** ✓ ——
+     `1:*` 是**区间**不是检索键 ✓，实现门槛低得多 ✓。
+     ⚠️ 不能无脑回退 ✗ —— `UID SEARCH UNSEEN` 回空集**很可能本来就是真的** ✓
+        （全都读过了 ✓），无脑回退会在**正常服务器**上把整个信箱的标记都拉一遍 ✗
+        （几千封的 FETCH 很重 ✗）。
+     所以先**探一次**：`ALL` 为空 而 `1:*` 非空 = 这台服务器不认检索键 ✓，证据确凿 ✓。
+     探测结果**按主机名缓存** ✓（一次进程内只探一次 ✓，换主机/换端口都不影响 ✓）。 */
   async search(criteria, box) {
     if (box) await this.select(box);
-    const res = await this.command('UID SEARCH ' + (criteria || 'ALL'));
-    const line = this.lines(res.units).find((l) => /^\*\s+SEARCH\b/i.test(l));
-    if (!line) return [];
-    return line.replace(/^\*\s+SEARCH\s*/i, '').trim().split(/\s+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n));
+    const key = String(criteria || 'ALL').trim() || 'ALL';
+    const host = String(this.host || '');
+    const run = async (k) => {
+      const res = await this.command('UID SEARCH ' + k);
+      const line = this.lines(res.units).find((l) => /^\*\s+SEARCH\b/i.test(l));
+      if (!line) return [];
+      return line.replace(/^\*\s+SEARCH\s*/i, '').trim().split(/\s+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n));
+    };
+    /* ① 每台主机只探一次 ✓
+       两种「不认检索键」都要认出来 ✓：
+         ㈠ 静默回空集（实测 2925 ✗）
+         ㈡ 直接报 `BAD Command not recognized` ✗
+       所以 `ALL` 报错也算证据 ✓（`all === null` ✓），
+       但**必须 `1:*` 能探到东西**才敢下结论 ✓ —— 两个都失败就什么都不记 ✓，
+       让正常路径把真错误原样抛出去 ✓（总比静默返回空列表好 ✗）。 */
+    if (host && !SEARCH_PROBE.has(host)) {
+      let all = null, range = null;
+      try { all = await run('ALL'); } catch (_) { all = null; }
+      try { range = await run('1:*'); } catch (_) { range = null; }
+      if (range) {
+        SEARCH_PROBE.add(host);
+        if ((all === null || !all.length) && range.length) SEARCH_KEY_BROKEN.add(host);
+      }
+    }
+    const broken = host && SEARCH_KEY_BROKEN.has(host);
+    const ids = broken ? await run('1:*') : await run(key);
+    if (!broken) return ids;
+    return this.filterByKey(ids, key);
+  }
+
+  /* 把「服务器不认的检索键」在客户端补上 ✓ —— 认不出的条件**原样返回** ✗
+     （宁可多给几封，也不能自己乱筛把邮件藏掉 ✗）。 */
+  async filterByKey(uids, key) {
+    const k = String(key || 'ALL').trim().toUpperCase();
+    if (k === 'ALL' || /^[\d:*,]+$/.test(k)) return uids;      /* 全集 / 区间 → 不用筛 ✓ */
+    const want = { UNSEEN: 'unseen', SEEN: 'seen', FLAGGED: 'flagged', DELETED: 'deleted' }[k];
+    if (!want) return uids;
+    const rows = await this.fetchFlags(uids);
+    const has = (f, flag) => (f || []).includes(flag);
+    return rows.filter((r) => {
+      if (want === 'unseen') return !has(r.flags, '\\Seen');
+      if (want === 'seen') return has(r.flags, '\\Seen');
+      if (want === 'flagged') return has(r.flags, '\\Flagged');
+      return has(r.flags, '\\Deleted');
+    }).map((r) => r.uid);
   }
 
   /* ── 解析 FETCH 响应 ────────────────────────────────────────────────
@@ -511,6 +580,14 @@ const POOL = new Map();            /* poolKey -> { session, idleTimer } */
 const QUEUE = new Map();           /* poolKey -> Promise（串行队列的队尾）*/
 const POOL_IDLE_MS = 45000;
 const POOL_MAX = 6;
+
+/* ── 「服务器不认检索键」的探测结果（按主机名）✓ ─────────────────────────
+   有些服务器对 `UID SEARCH ALL / UNSEEN / FLAGGED` **静默回空集** ✗（实测 2925），
+   只有 `UID SEARCH 1:*` 好用 ✓ —— 详见 `search()` 的注释。
+   `SEARCH_PROBE` = 已经探过的主机（一次进程内只探一次 ✓）；
+   `SEARCH_KEY_BROKEN` = 确认不认检索键的主机 ✓。 */
+const SEARCH_PROBE = new Set();
+const SEARCH_KEY_BROKEN = new Set();
 
 function poolKeyOf(account) {
   return [String(account.imapHost || ''), String(account.imapPort || ''), String(account.user || '')].join('|');
