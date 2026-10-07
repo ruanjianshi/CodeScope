@@ -63,6 +63,25 @@ const RULES = [
   { seg: '.git', title: 'Git 版本库元数据', what: '提交历史、分支、远端配置。', advice: '删掉会丢失全部历史；要清理请用 git 命令而不是删目录。', safe: 'never' },
 
   // ── macOS 系统本体 ──
+  /* ★ 下面四条是**跟着扫描根一起补的** ✗ —— 老根表根本没扫这几个位置 ✓，
+     所以词条里也没有 ✓，界面上就落到「普通文件 —— 这个位置属于系统或你的个人内容」
+     那句**毫无信息量的兜底** ✗（用户看着等于没说 ✗）。
+
+     ⚠️⚠️ 这四条必须排在 `/System` **前面** ✗✗ —— 前缀匹配是**先到先得** ✓，
+       而 macOS 上 /opt、/usr/local、/Library 都可能是 firmlink ✓，
+       扫描器有时会把真实路径报成 `/System/Volumes/Data/opt/homebrew/…` ✓ ——
+       那也会命中 `/System` ✗，于是 Homebrew 的 6.9 GB 安装包被判成「不可动」✗
+       （**安全**但**没用** ✗：用户明明可以 `brew cleanup` 掉它 ✗）。
+     同理 `/usr/local` 要排在 `/usr` 前 ✓、`/Library/Developer` 要排在 `/Library` 前 ✓。 */
+  { seg: 'homebrew', platform: ['darwin'], title: 'Homebrew 装的软件', what: '用 Homebrew 装的命令行工具与图形应用（Apple 芯片在 /opt/homebrew，Intel 在 /usr/local），里面常留着几百 MB 到几 GB 的旧版本与安装包。', advice: '不要手删；清理用 brew cleanup --prune=all，卸载用 brew uninstall。', safe: 'ask' },
+  /* ⚠️ `platform: ['darwin']` 不能省 ✗ —— 不然 Linux 的 `/opt` 会被这条抢走 ✗，
+     而 Linux 上 /opt 是「第三方应用，用包管理器卸载」（下面那条）✓，说的是两回事 ✓。
+     ⚠️ `/opt` 本身也要写进来 ✗：词条里的路径是**根目录本身** ✓（`/opt` ✓），
+        只写 `/opt/homebrew` 的话，`/opt` 这一行会落到兜底 ✗（实测漏过一次 ✗）。 */
+  { prefix: ['/opt', '/usr/local', '/System/Volumes/Data/opt', '/System/Volumes/Data/usr/local'], platform: ['darwin'], title: 'Homebrew / 手动安装的软件', what: 'Homebrew 的安装位置（Apple 芯片在 /opt，Intel 在 /usr/local），也常混着手动 make install 进来的东西。', advice: '不要手删；清理用 brew cleanup，卸载用 brew uninstall。', safe: 'ask' },
+  { prefix: ['/private/var/folders', '/System/Volumes/Data/private/var/folders'], title: 'macOS 临时与缓存区', what: '每个用户一个随机名目录（C 是缓存、T 是临时文件），系统和应用把中间产物都堆在这儿。实测这台机器占 55 GB，常常是全盘最大的一块。', advice: '系统自己会管，重启会清掉一部分；想立刻回收空间，别手删目录（有正在运行的程序在用），先重启再看。', safe: 'yes' },
+  { prefix: ['/Library/Developer', '/System/Volumes/Data/Library/Developer'], title: 'Xcode 共享缓存与模拟器', what: '命令行工具、模拟器运行时、设备支持文件，全机器共用。', advice: '可以清，但要用 xcrun / simctl 这类工具清，手删之后得重装。', safe: 'yes' },
+
   { prefix: ['/System'], title: 'macOS 系统本体', what: '操作系统自身的文件，受系统完整性保护（SIP）。', advice: '只读；改不动也不该动。', safe: 'never' },
   { prefix: ['/Library'], title: '系统级资源库', what: '全机器共享的字体、偏好、启动项、框架。', advice: '除非在卸载某个软件，否则不要动。', safe: 'never' },
   { prefix: ['/usr', '/bin', '/sbin'], title: 'Unix 系统命令', what: '系统自带的可执行程序与库。', advice: '只读；删任何一个都可能让系统无法启动。', safe: 'never' },

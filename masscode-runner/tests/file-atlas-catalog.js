@@ -76,6 +76,33 @@ for (const [p, hint] of askCases) {
 check('应用数据的解释明确写了"不是缓存"', /不是缓存/.test(ex('/Users/demo/Library/Application Support/Notion/x.db').what));
 check('废纸篓的解释提示"永久删除"', /永久删除/.test(ex('/Users/demo/.Trash/a').advice));
 
+/* ★ 这一节是跟着**扫描根一起补的** ✗ —— 补了根目录却不补词条的话，
+   界面上这几行会落到「普通文件 —— 这个位置属于系统或你的个人内容」那句兜底 ✗，
+   用户看着等于没说 ✗（实测截图里就是这样 ✗）。
+   ⚠️ 顺序断言也要有 ✗：前缀匹配先到先得 ✓，
+      这四条一旦被挪到 /System、/usr、/Library 后面，就会被它们抢走 ✗。 */
+console.log('【4b】补的扫描根要有像样的解释（不能落到兜底）');
+const NEWROOTS = [
+  ['/private/var/folders/xx/C/com.apple.foo', 'macOS 临时与缓存区', 'yes'],
+  ['/opt/homebrew/lib/node_modules/pnpm/x', 'Homebrew 装的软件', 'ask'],
+  ['/usr/local/texlive/2026/x', 'Homebrew / 手动安装的软件', 'ask'],
+  ['/Library/Developer/CommandLineTools/x', 'Xcode 共享缓存与模拟器', 'yes'],
+];
+for (const [p, title, safe] of NEWROOTS) {
+  const v = ex(p, MAC);
+  check(`新根有真解释(${title}) ← ${p}`, v.matched === true && v.title === title && v.safe === safe, `matched=${v.matched} title=${v.title} safe=${v.safe}`);
+}
+/* firmlink 形态：扫描器有时把真实路径报成 /System/Volumes/Data/… —— 那也会命中 /System ✗ */
+check('★ firmlink 形态不被 /System 抢走（Homebrew）', ex('/System/Volumes/Data/opt/homebrew/Caskroom/x/mactex.pkg', MAC).title === 'Homebrew 装的软件',
+  ex('/System/Volumes/Data/opt/homebrew/Caskroom/x/mactex.pkg', MAC).title);
+check('★ firmlink 形态不被 /System 抢走（usr/local）', ex('/System/Volumes/Data/usr/local/x', MAC).title === 'Homebrew / 手动安装的软件',
+  ex('/System/Volumes/Data/usr/local/x', MAC).title);
+/* 补了新的**不能**把老的抢掉 */
+check('老规则没被抢：/System/Library/Fonts 还是「系统本体」', ex('/System/Library/Fonts/x', MAC).title === 'macOS 系统本体', ex('/System/Library/Fonts/x', MAC).title);
+check('老规则没被抢：/usr/bin/ls 还是「Unix 系统命令」', ex('/usr/bin/ls', MAC).title === 'Unix 系统命令', ex('/usr/bin/ls', MAC).title);
+check('老规则没被抢：/Library/Fonts 还是「系统级资源库」', ex('/Library/Fonts/x', MAC).title === '系统级资源库', ex('/Library/Fonts/x', MAC).title);
+check('老的 Linux /opt 规则还在（darwin 的新规则不该跨平台命中）', ex('/opt/app/bin/x', LINUX).safe === 'ask' && ex('/opt/app/bin/x', LINUX).title !== 'Homebrew 装的软件', ex('/opt/app/bin/x', LINUX).title);
+
 console.log('【5】跨平台');
 check('Windows：C:\\Windows\\System32 → never', ex('C:\\Windows\\System32\\cmd.exe', WIN).safe === 'never');
 check('Windows：Program Files → ask', ex('C:/Program Files/App/a.dll', WIN).safe === 'ask');
