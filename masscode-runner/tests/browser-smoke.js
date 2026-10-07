@@ -621,8 +621,20 @@ print(r.run())
     boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: 'Drafts', selectable: true }, { name: 'Deleted Messages', selectable: true }, { name: 'Junk', selectable: true }, { name: '未识别的文件夹', selectable: true }], inbox: { messages: MAIL_TOTAL, unseen: MAIL_UNREAD } },
     read: { ok: true, uid: MAIL_TOTAL, box: 'INBOX', seen: true, flagged: false, subject: '桩主题未读', from: '张三 <z@qq.com>',
       to: 'tester@qq.com', cc: '', date: Date.now(), size: 2048,
-      text: '桩第一段正文。这里是第一段，写够四十个非空白字符才会走纯文本这条路，否则会退回去剥 HTML。\n\n桩第二段正文。这里是第二段，同样要够长。',
-      html: '<p>桩 HTML 正文 <b>加粗</b></p><script>window.__mailPwned = 1;<\/script><img src="https://tracker.invalid/px.gif">',
+      /* ★ 桩的纯文本故意做成「**空格排版**」✗ —— 这正是真实邮件的情况 ✓
+         （实测一封 987 字的纯文本里有 623 个空格、占 63% ✗）。
+         它应当被判为**不可用** ✓，从而回退到 HTML 分支 ✓
+         —— 也就是同时验到「判据有效」和「HTML 切段正确」两件事 ✓。 */
+      text: ' '.repeat(200) + '桩纯文本·空格排版·不该被采用。' + ' '.repeat(200),
+      /* 这份 HTML 专门覆盖三段「容易切错」的情况 ✓：
+         ① 数字实体 `&#19987;`（=「专」）—— 不解码就会把 `&#19987;` 原样喂给模型 ✗
+         ② 表格：同一行的 `<td>` 应连成一行 ✓（以前每格单独成段 ✗，一封邮件切出 44 段 ✗）
+         ③ `<br>` 分行：应各自成段 ✓（以前被合并成一大段 ✗） */
+      html: '<p>&#19987;&#19994;测试 &amp; 转义</p>'
+        + '<table><tr><td>期刊名字</td><td>最新IF</td><td>链接</td></tr>'
+        + '<tr><td>ROBOTICA</td><td>2.900</td><td>查看</td></tr></table>'
+        + '<div>第一行<br>第二行<br>第三行</div>'
+        + '<script>window.__mailPwned = 1;<\/script><img src="https://tracker.invalid/px.gif">',
       attachments: [{ n: 0, index: 2, name: '报告.pdf', type: 'application/pdf', size: 1234 }], inline: [] },
     flagCalls: [],
   };
@@ -683,6 +695,8 @@ print(r.run())
     try { body = JSON.parse(route.request().postData() || '{}'); } catch (_) {}
     const user = (body.messages || []).filter((m) => m.role === 'user').map((m) => m.content).join('\n');
     const n = (user.match(/^\[\d+\]/gm) || []).length;
+    /* 把「发给模型的原文」记到页面上 ✓ —— 断言切段质量要用它 ✓ */
+    page.evaluate((u) => { window.__lastAiUser = u; }, user).catch(() => {});
     const content = Array.from({ length: n }, (_, i) => '[' + (i + 1) + ']桩译文第' + (i + 1) + '段').join('\n');
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, content }) });
   });
@@ -1242,7 +1256,7 @@ print(r.run())
   if (/<script/i.test(String(mailDoc))) throw new Error('正文里的 <script> 没有被剥掉');
   if (/img-src[^;]*https?:/i.test(String(mailDoc))) throw new Error('默认没有屏蔽远程图片（追踪像素会回传）');
   const mailBodyText = await page.frameLocator('iframe.lw-ml-frame').locator('body').innerText();
-  if (!mailBodyText.includes('桩 HTML 正文')) throw new Error('iframe 里没渲染出正文');
+  if (!mailBodyText.includes('专业测试')) throw new Error('iframe 里没渲染出正文：' + JSON.stringify(mailBodyText.slice(0, 80)));
   /* 桩里的 script 若真跑了会留下全局标记 ✓（双保险） */
   if (await page.evaluate(() => window.__mailPwned === 1)) throw new Error('邮件里的脚本真的执行了');
   if (await page.locator('[data-mimg]').count() !== 1) throw new Error('没有「显示图片」按钮');
@@ -1255,16 +1269,41 @@ print(r.run())
   });
   if (await page.locator('#lw-ml-tr').count() !== 1) throw new Error('阅读区没有「对照翻译」按钮');
   await page.locator('#lw-ml-tr').click();
-  await page.locator('.lw-ml-tr .row').first().waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('.lw-ml-tr .pane.trans .p').first().waitFor({ state: 'visible', timeout: 20000 });
   await page.waitForTimeout(500);
-  const trRows = await page.locator('.lw-ml-tr .row').count();
-  if (trRows < 2) throw new Error('对照翻译没有按段落切开（桩正文有 2 段，实际 ' + trRows + ' 段）');
-  const trFirst = await page.locator('.lw-ml-tr .row').first().evaluate((e) => ({
-    src: e.querySelector('.src').innerText, dst: e.querySelector('.dst').innerText,
-  }));
-  if (!/桩第一段正文/.test(trFirst.src)) throw new Error('对照视图左列不是原文：' + trFirst.src);
-  if (!/桩译文第1段/.test(trFirst.dst)) throw new Error('对照视图右列不是译文：' + trFirst.dst);
-  if (await page.locator('.lw-ml-tr .dst .pending').count() !== 0) throw new Error('还有段落没译完（占位省略号还在）');
+  /* ★ 左边必须**保持邮件原本的样子** ✗ —— 用户原话「应该保持原本邮箱的样子」。
+     以前左列是把正文剥成纯文本再逐段列出来 ✗（等于重新排版，标题/表格全没了、
+     行还会被粘在一起 ✗）。现在左边直接原样渲染整封邮件 ✓，右边才是译文 ✓。 */
+  if (await page.locator('.lw-ml-tr .pane.origin iframe').count() !== 1) {
+    throw new Error('对照视图左边不是「原样渲染的邮件」（应该是 sandbox iframe）');
+  }
+  const srcSandbox = await page.locator('.lw-ml-tr .pane.origin iframe').getAttribute('sandbox');
+  if (srcSandbox === null || /allow-scripts/.test(srcSandbox)) throw new Error('原文 iframe 的 sandbox 不安全：' + srcSandbox);
+  const trRows = await page.locator('.lw-ml-tr .pane.trans .p').count();
+  if (trRows < 2) throw new Error('译文没有按段落切开（桩正文有 2 段，实际 ' + trRows + ' 段）');
+  const trFirst = await page.locator('.lw-ml-tr .pane.trans .p').first().innerText();
+  if (!/桩译文第1段/.test(trFirst)) throw new Error('译文列内容不对：' + trFirst);
+  if (await page.locator('.lw-ml-tr .pane.trans .pending').count() !== 0) throw new Error('还有段落没译完（占位省略号还在）');
+  /* ★ 切段质量也要验 ✗ —— 这三条都是实测踩过的坑 ✓。
+     模型收到的 user 消息就是切好的原文 ✓，AI 桩把它回显到 window.__lastAiUser 上 ✓ */
+  const sentUser = await page.evaluate(() => window.__lastAiUser || '');
+  if (/&#\d+;|&#x[0-9a-fA-F]+;/i.test(sentUser)) {
+    throw new Error('★ 发给模型的原文里还有**未解码的 HTML 实体**：' + sentUser.slice(0, 120));
+  }
+  if (!/专业测试/.test(sentUser)) throw new Error('★ 数字实体没解码成中文：' + sentUser.slice(0, 120));
+  if (/桩纯文本/.test(sentUser)) {
+    throw new Error('★ 采用了「空格排版的纯文本」✗（应判定不可用、回退到 HTML）：' + sentUser.slice(0, 120));
+  }
+  if (!/ROBOTICA \| 2\.900 \| 查看/.test(sentUser)) {
+    throw new Error('★ 表格没按行合并（应「ROBOTICA | 2.900 | 查看」一行）：' + sentUser.slice(0, 200));
+  }
+  if (!/期刊名字 \| 最新IF \| 链接/.test(sentUser)) {
+    throw new Error('★ 表头没合并成一行：' + sentUser.slice(0, 200));
+  }
+  const brParas = (sentUser.match(/^\[\d+\]\s*(第一行|第二行|第三行)\s*$/gm) || []).length;
+  if (brParas < 3) throw new Error('★ `<br>` 分行的内容没各自成段（只找到 ' + brParas + ' 段）：' + sentUser.slice(0, 200));
+  /* ★ 左边不能是「被重新排版的纯文本段落」✗ —— 那是以前的问题 */
+  if (await page.locator('.lw-ml-tr .row').count() !== 0) throw new Error('对照视图里还有旧的「逐段纯文本」结构（应该已改成左边原样渲染）');
   /* 再点一次收起 → 回到原文 ✓（缓存，不重新请求 ✓）*/
   await page.locator('#lw-ml-tr').click();
   await page.waitForTimeout(400);

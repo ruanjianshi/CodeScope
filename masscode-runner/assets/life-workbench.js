@@ -881,19 +881,20 @@
     border-top:1px dashed ${T.lineDim}; letter-spacing:.6px; }
   .lw-ml-more:hover { background:${T.card2}; }
   .lw-ml-item .star { color:${T.accent}; font-size:10px; flex:none; }
-  /* 对照翻译：原文 / 译文 左右并排，段落一一对应 */
+  /* 对照翻译：左边**原样渲染整封邮件** ✓，右边列译文 ✓（见 mailReaderHtml 的注释）*/
   .lw-ml-trbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 18px;
     border-bottom:1px solid ${T.lineDim}; font-size:10px; letter-spacing:1.2px; text-transform:uppercase;
     color:${T.faint}; }
   .lw-ml-trbar .sp { flex:1; }
-  .lw-ml-tr { flex:1; min-height:0; overflow:auto; padding:4px 18px 16px; }
-  .lw-ml-tr .row { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:11px 0;
-    border-bottom:1px solid ${T.lineDim}; }
-  .lw-ml-tr .row:last-child { border-bottom:0; }
-  .lw-ml-tr .src { color:${T.dim}; font-size:12px; line-height:1.75; white-space:pre-wrap; word-break:break-word; }
-  .lw-ml-tr .dst { color:${T.text}; font-size:12.5px; line-height:1.85; white-space:pre-wrap; word-break:break-word;
-    border-left:2px solid color-mix(in srgb,${T.accent} 40%,transparent); padding-left:12px; }
-  .lw-ml-tr .dst .pending { color:${T.faint}; }
+  .lw-ml-tr { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; }
+  .lw-ml-tr .pane { min-width:0; min-height:0; }
+  .lw-ml-tr .pane.origin { border-right:1px solid ${T.lineDim}; display:flex; overflow:hidden; }
+  .lw-ml-tr .pane.origin iframe { flex:1; width:100%; border:0; background:#fff; }
+  .lw-ml-tr .pane.trans { overflow:auto; padding:4px 16px 16px; }
+  .lw-ml-tr .pane.trans .p { padding:9px 0; border-bottom:1px solid ${T.lineDim}; color:${T.text};
+    font-size:12.5px; line-height:1.85; white-space:pre-wrap; word-break:break-word; }
+  .lw-ml-tr .pane.trans .p:last-child { border-bottom:0; }
+  .lw-ml-tr .pane.trans .pending { color:${T.faint}; }
   .lw-btn.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
   `;
 
@@ -4112,23 +4113,51 @@
     return out;
   }
 
-  /* 把邮件正文切成段落 ✓ —— 纯文本优先；HTML 就剥标签后按块级标签切 ✓ */
+  /* 纯文本部分**能不能用** ✗ ——
+     ★★ 很多营销邮件的 `text/plain` 是**用空格排版的**（一行几百个空格做居中/对齐 ✗），
+     实测一封 987 字的纯文本里有 **623 个空格（63%）** ✗：
+     拿它切段会把整封信粘成**一大坨** ✗，用户看到的「原文排序是乱的」就是这个 ✗✗。
+     而同一封的 HTML 分支能切出 8 段干净的结果 ✓。
+     判据：① 有实质内容（非空白 > 40 字）✓ ② 空格占比 ≤ 25%（否则说明是「空格排版」✗）✓ */
+  function mailTextUsable(text) {
+    const s = String(text || '');
+    if (s.replace(/\s/g, '').length <= 40) return false;
+    const spaces = (s.match(/[ \t\u00a0]/g) || []).length;
+    return spaces / s.length <= 0.25;
+  }
+
+  /* 把邮件正文切成段落 ✓ —— 纯文本优先（但必须是**能用的**纯文本 ✗）；否则剥 HTML ✓ */
   function mailParagraphs(msg) {
     const text = String((msg && msg.text) || '');
-    /* 纯文本要有**实质内容**才用 ✓ —— 很多营销邮件的 text/plain 只有一片空白 ✗ */
-    if (text.replace(/\s/g, '').length > 40) {
+    if (mailTextUsable(text)) {
       return text.split(/\n{2,}/).map((s) => s.trim()).filter((s) => s.length > 1).flatMap(mailSplitLong);
     }
     let h = String((msg && msg.html) || '');
     h = h.replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, '');
-    /* ⚠️ 块级标签必须**列全** ✗ —— 营销邮件大量用 `<table><tr><td>` 排版，
-       漏了 td/th 的话整封信的正文会被粘成一段 ✗（实测：一封 28KB 的邮件只切出 1 段 ✗）。 */
-    h = h.replace(/<\/(p|div|tr|td|th|li|h[1-6]|table|tbody|blockquote|section|article|header|footer|dd|dt|pre|figcaption|center)>/gi, '\n\n');
-    h = h.replace(/<br\s*\/?>/gi, '\n');
+    /* ★ 表格：**单元格用 ` | ` 连成一行、行之间才断段** ✓ ——
+       ⚠️ 以前把 `</td>` 也当段落分隔 ✗ → 一封期刊列表邮件被切出 **44 个碎片** ✗
+       （「期刊名字」「最新IF」「数量」「链接」各占一段 ✗，完全没法读也没法对照 ✗）。
+       现在同一行的单元格并成一行 ✓：「ROBOTICA | 2.900 | 2条 | 查看」✓。 */
+    h = h.replace(/<\/t[dh]>/gi, ' | ');
+    h = h.replace(/<\/tr>/gi, '\n\n');
+    /* 其余块级标签：正常断段 ✓（`</td>`/`</tr>` 已经在上面处理过，这里不再列 ✓）*/
+    h = h.replace(/<\/(p|div|li|h[1-6]|table|tbody|blockquote|section|article|header|footer|dd|dt|pre|figcaption|center)>/gi, '\n\n');
+    /* ★ `<br>` 要当**段落分隔** ✗ —— 邮件里 `Dear Valued User:` / `Thank you for…` /
+       `Your subscription is valid for 1 Month.` 这些是**用 `<br>` 分行**的 ✓，
+       以前只当普通换行、后面又被「行内换行折成空格」合并掉 ✗ →
+       整段 229 字挤成一个翻译单元 ✗（实测）。改成断段后：6 段 → **9 段、最长 109 字** ✓，
+       其它邮件只是 0~1 段的差别（不会切碎 ✗）。 */
+    h = h.replace(/<br\s*\/?>/gi, '\n\n');
     h = h.replace(/<[^>]+>/g, '');
+    /* ★ 实体要**解全** ✗ —— 以前只解了 `&nbsp;` 这几个具名的 ✗，
+       而很多邮件用的是**数字实体**（`&#19987;` = 「专」✗）→ 原文里留着一堆 `&#xxxx;` ✗，
+       喂给模型的就是乱码 ✗（实测：一封邮件里全是 `&#19987;&#19994;` ✗）。 */
+    h = h.replace(/&#x([0-9a-fA-F]+);/g, (m, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)); } catch (_) { return m; } });
+    h = h.replace(/&#(\d+);/g, (m, dec) => { try { return String.fromCodePoint(Number(dec)); } catch (_) { return m; } });
     h = h.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
     return h.split(/\n{2,}/).map((s) => s.replace(/[ \t\u00a0]+/g, ' ').replace(/\s*\n\s*/g, ' ').trim())
+      .map((s) => s.replace(/(\s*\|\s*)+$/, '').trim())          /* 去掉行尾多出来的 ` | ` ✓ */
       .filter((s) => s.length > 1).flatMap(mailSplitLong);
   }
 
@@ -4236,17 +4265,26 @@
 
     let bodyHtml;
     if (tr && tr.pairs.length) {
-      /* ── 对照视图 ✓ 原文 / 译文 左右并排，段落一一对应 ✓ ── */
-      const rows = tr.pairs.map((p) => '<div class="row">'
-        + '<div class="src">' + esc(p.src) + '</div>'
-        + '<div class="dst">' + (p.dst ? esc(p.dst) : '<span class="pending">…</span>') + '</div></div>').join('');
+      /* ── 对照视图 ✓ ────────────────────────────────────────────────────
+         ★★ 左边**保持邮件原本的样子** ✗ —— 用户原话：「应该保持原本邮箱的样子」。
+         以前左边是把正文剥成纯文本再逐段列出来 ✗，等于把邮件**重新排版**了一遍：
+         标题、表格、加粗全没了，行与行还会被粘在一起 ✗（用户说的「原文排序是乱的」✗）。
+         现在左边直接**原样渲染整封邮件**（还是那个 sandbox iframe ✓），
+         右边列出译文 ✓ —— 原文一个像素都不动，对照也依然成立 ✓。 */
+      const srcPane = hasHtml
+        ? '<iframe class="lw-ml-frame" sandbox="" referrerpolicy="no-referrer" srcdoc="' + esc(mailFrameDoc(m, MAIL_UI.showImages)) + '"></iframe>'
+        : '<div class="lw-ml-body">' + (String(m.text || '').trim() ? mailTextHtml(m.text) : '<span style="color:' + T.faint + '">这封邮件没有可显示的正文</span>') + '</div>';
+      const dstList = tr.pairs.map((p) => '<div class="p">' + (p.dst ? esc(p.dst) : '<span class="pending">…</span>') + '</div>').join('');
       const bar = '<div class="lw-ml-trbar">'
-        + '<span>原文 / 译文 对照</span>'
+        + '<span>左：原文原样　·　右：译文</span>'
         + '<span class="sp"></span>'
         + (tr.err ? '<span style="color:' + T.red + '">✗ ' + esc(tr.err) + '</span>' : '')
         + (MAIL_UI.trBusy ? '<span>翻译中 ' + tr.done + '/' + tr.total + '</span>' : '<span>' + tr.total + ' 段</span>')
         + '</div>';
-      bodyHtml = bar + '<div class="lw-ml-tr">' + rows + '</div>';
+      bodyHtml = bar + '<div class="lw-ml-tr">'
+        + '<div class="pane origin">' + srcPane + '</div>'
+        + '<div class="pane trans">' + dstList + '</div>'
+        + '</div>';
     } else if (hasHtml) {
       /* ★ 邮件 HTML 走 sandbox iframe ✓（详见 mailFrameDoc 的注释）*/
       bodyHtml = '<iframe class="lw-ml-frame" sandbox="" referrerpolicy="no-referrer"'
