@@ -169,6 +169,11 @@
   .lw-nav .ic { width:18px; text-align:center; font-size:13px; }
   .lw-nav .badge { margin-left:auto; font-size:9.5px; letter-spacing:1.2px; color:${T.dim}; }
   .lw-nav button.on .badge { color:${T.accentInk}; opacity:.65; }
+  /* ★ 「该复习了 N」的角标要**跳出来** ✗ —— 和别的编码角标长得一样就等于没有 ✗。
+     用 warn 色 + 一圈淡底 ✓：扫一眼就能看出「这儿有事要做」✓。 */
+  .lw-nav .badge.hot { color:${T.warn}; border:1px solid ${T.warn}; padding:0 5px;
+    background:color-mix(in srgb, ${T.warn} 14%, transparent); }
+  .lw-nav button.on .badge.hot { color:${T.accentInk}; border-color:transparent; }
   .lw-nav .foot { margin-top:auto; padding-top:14px; border-top:1px solid ${T.lineDim};
     font-size:9.5px; letter-spacing:1.4px; color:${T.faint}; text-transform:uppercase; line-height:1.9; }
   .lw-nav .foot b { color:${T.ok}; font-weight:600; }
@@ -1610,6 +1615,8 @@
   .lw-wd-row .w { font-size:12.5px; color:${T.text}; min-width:0; overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap; }
   .lw-wd-row .df { font-size:10px; color:${T.faint}; margin-left:auto; flex:none; }
+  /* 列表里的小缩略图 ✓ —— 36px 见方 ✓，不占地方但扫一眼就能想起来 ✓ */
+  .lw-wd-thumb { width:34px; height:34px; flex:none; object-fit:cover; border:1px solid ${T.lineDim}; }
   .lw-wd-dot { width:7px; height:7px; border-radius:50%; flex:none; background:${T.faint}; }
   .lw-wd-dot.fresh { background:${T.dim}; }
   .lw-wd-dot.learning { background:${T.warn}; }
@@ -1629,6 +1636,32 @@
   .lw-wd-hist i.hard { background:${T.warn}; border-color:${T.warn}; }
   .lw-wd-next { font-size:10.5px; color:${T.dim}; padding:8px 14px 0; line-height:1.9; }
   .lw-wd-next b { color:${T.accent}; font-weight:400; }
+  /* ── 生词卡片：一行「标签 + 控件」✓（音标 / 词性 / 释义 / 例句 / 巧记 / 场景 共用 ✓）──
+     ⚠️⚠️ 类名**不能叫 .lw-wd-row** ✗✗ —— 那个**已经被生词列表项占了** ✗
+        （「epWordRowHtml」 里的 「<div class="lw-wd-row">」 ✓）。
+        我第一版就叫了这个名 ✗ → 两套规则叠在一起 ✓ →
+        列表项会继承 「align-items:flex-start」 ✓、面板里的行会继承 「align-items:center」 ✓，
+        **两边一起坏** ✗，而且 CSS 里两条同名规则谁赢只看先后 ✗，极难查 ✗。
+        （这个项目在 「.lw-tr」 上栽过一模一样的跟头 ✓，见 skill 里那条 ✓。）
+        → 改成 「.lw-wd-f」（field ✓），和列表项彻底分开 ✓。
+     ⚠️ 标签**固定宽** ✗ —— 不固定的话每个输入框的左边参差不齐 ✗，一眼就乱 ✗。 */
+  .lw-wd-f { display:flex; gap:9px; align-items:flex-start; padding:7px 14px 0; }
+  .lw-wd-f label { flex:none; width:56px; padding-top:5px; font-size:10.5px; color:${T.faint}; }
+  .lw-wd-f input, .lw-wd-f textarea { flex:1; min-width:0; border:1px solid ${T.lineDim};
+    background:${T.bg2}; color:${T.text}; font:11.5px/1.75 ${UI}; padding:5px 8px; outline:none; resize:vertical; }
+  .lw-wd-f input:focus, .lw-wd-f textarea:focus { border-color:${T.accent}; }
+  .lw-wd-f input::placeholder, .lw-wd-f textarea::placeholder { color:${T.faint}; }
+  /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
+  .lw-wd-imgwrap { margin:10px 14px 0; border:1px solid ${T.lineDim}; background:${T.bg2}; }
+  .lw-wd-img { display:block; width:100%; max-height:210px; object-fit:cover; }
+  /* ⚠️ 图挂了要**收起来** ✗（破图标很难看 ✗）—— 「onerror」 加 .bad ✓ */
+  .lw-wd-imgwrap.bad { display:none; }
+  .lw-wd-imgwrap .cap { font-size:9.5px; color:${T.faint}; padding:4px 8px; border-top:1px solid ${T.lineDim}; }
+  /* 「来自哪句话」✓ —— 给这个词一个上下文 ✓（也方便回忆是在哪儿遇到的 ✓） */
+  .lw-wd-sent { font-size:11px; line-height:1.85; color:${T.dim}; margin:8px 14px 14px;
+    padding-left:9px; border-left:2px solid ${T.lineDim}; }
+  /* ⚠️ 正在跑 / 已开启的按钮要**看得出来** ✗（补全中 / 找图中 ✓） */
+  .lw-ep-act button.on { border-color:${T.accent}; color:${T.accent}; }
 
   /* ── 复习浮层（遗忘曲线要**看得见** ✓）── */
   .lw-rev-card { min-height:220px; display:flex; flex-direction:column; align-items:center;
@@ -1991,6 +2024,10 @@
     connOpen: false, connTab: 'key', connText: '', connCookie: '',
     connBusy: false, connMsg: '', connOk: false,
     autoAt: 0,
+    /* ★ 「该复习了」提醒的冷却 ✓（内存 ✓，30 分钟 ✓）——
+       ⚠️ 必须放这儿 ✗：`bindReading()` 每次 render 都跑 ✓，
+          没有冷却就会「每渲染一次弹一次」✗。 */
+    dueTipAt: 0,
   };
 
   /* ── 外刊精读 / 生词本的状态 ✓（阅读模块的两个子模式 ✓）──────────────────
@@ -2019,6 +2056,12 @@
           这样删文章时一起没 ✓、换文章 / 刷新都还在 ✓、也不用重问模型 ✓。
           这里只放「显示 / 进度 / 报错」这些**内存态** ✓（刷新就重置才对 ✓）。 */
     trOn: false, trBusy: false, trDone: 0, trTotal: 0, trErr: '',
+    /* ★ 生词「AI 补全 / 配图」的**进行中**状态 ✓（用户原话：
+       「加入的单词，得自动解析好音标，词义和例句，以及巧记手段…最好还有对应图片场景理解」✓）。
+       ⚠️ 只放**内存** ✗ —— 补全出来的内容（音标 / 释义 / 例句 / 巧记 / 图片 ✓）
+          是**数据** ✓，落在词卡上（`w.ph / w.def / w.eg / w.mnem / w.img` ✓）；
+          「正在补哪个词 / 上一句报错」刷新就该重置 ✓（不该留 ✓）。 */
+    enBusy: '', enErr: '', imgBusy: '', imgErr: '',
     /* ★ 推荐外刊源 ✓（用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓）——
        ⚠️ 面板一进来是**空的** ✗ 是最劝退的 ✗（要自己找链接、自己贴 ✗），
           所以给一个「挑一篇」的入口 ✓，并且**一打开就自动拉第一个源** ✓（省一次点击 ✓）。 */
@@ -2165,6 +2208,8 @@
      `render()` 末尾要调 `paintStatus()` ✓，而 `render()` 有可能在模块求值期间被碰到 ✓。
      消息记在模块作用域 → 整屏 render() 之后能重画 ✓（`#lw-sub` 每次 render 都会被重建 ✗）。 */
   let STATUS_HTML = '', STATUS_UNTIL = 0, STATUS_UNDO = null;
+  /* ⚠️ 到期复位的定时器要**单例** ✗（每次 setStatus 先 clear ✓） */
+  let STATUS_TIMER = 0;
   let MAIL_MOVE_BUSY = '';      /* 同一个移动在途时去重 ✓（拖放监听器曾重复挂载 ✗） */
 
   function esc(s) {
@@ -2668,9 +2713,17 @@
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
     const grps = [];
     NAV.forEach((n) => { if (!grps.includes(n.grp)) grps.push(n.grp); });
-    const navHtml = grps.map((g) => `<div class="grp">${g}</div>` + NAV.filter((n) => n.grp === g).map((n) =>
-      `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span><span>${n.label}</span>` +
-      (n.badge && openTodo ? `<span class="badge">${openTodo}</span>` : `<span class="badge">${n.key || ''}</span>`) + `</button>`).join('')).join('');
+    const navHtml = grps.map((g) => `<div class="grp">${g}</div>` + NAV.filter((n) => n.grp === g).map((n) => {
+      /* ★ 「阅读」那一格优先显示**该复习的生词数** ✓ ——
+         比原来那个「R-01」编码有用得多 ✓（用户原话：「去制定记忆和提醒」✓）。
+         ⚠️ 只在**真的有到期**时才盖掉 ✓ —— 没有到期就照旧显示编码 ✓，
+            不然那一格永远挂个 0 ✗，反而看不出「现在到底要不要复习」✗。 */
+      const dueW = n.id === 'reading' ? dueWordCount() : 0;
+      const badge = dueW
+        ? `<span class="badge hot" title="有 ${dueW} 个生词该复习了">${dueW}</span>`
+        : (n.badge && openTodo ? `<span class="badge">${openTodo}</span>` : `<span class="badge">${n.key || ''}</span>`);
+      return `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span><span>${n.label}</span>` + badge + `</button>`;
+    }).join('')).join('');
     host.innerHTML = headHtml() + `<div class="lw-body2">
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
       <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>`;
@@ -3026,6 +3079,16 @@
     });
     return n;
   }
+  /* ★ 该复习的生词数 ✓ —— 用户原话：「记忆的单词还需要有遗忘曲线，去制定记忆和提醒」✓。
+     遗忘曲线的**调度**本来就有 ✓（`lib/srs.js` ✓ + 复习浮层 ✓）；
+     缺的是「到点了**主动说一声**」✗ —— 词背完就沉在生词本里没人管 ✗。
+     ⚠️ 口径必须和生词本里的「⏰ 该复习了」**完全一致** ✗ ——
+        两处显示的数字不一样，比不显示更糟 ✗（用户会以为哪边坏了 ✗）。
+        所以直接调 `SRS.stats()` ✓，不自己数一遍 ✓。 */
+  function dueWordCount() {
+    if (!SRS || !STORE) return 0;
+    try { return Number(SRS.stats(((STORE && STORE.words) || []).filter(Boolean), Date.now()).due) || 0; } catch (_) { return 0; }
+  }
   function todayWroteJournal() {
     const k = dayKey(new Date());
     return ((STORE && STORE.journal) || []).some((j) => j && j.date === k);
@@ -3074,11 +3137,17 @@
       + '</div></div>';
   }
 
-  function headHtml() {
+  /* ★ 顶栏那句「日期 · 项目数」的默认文案 ✓ —— 抽出来是因为 `paintStatus()`
+     过期后**要把它写回去** ✗（见下面那条注释 ✓）。 */
+  function subDefault() {
     const d = new Date();
-    const sub = DATA
+    return DATA
       ? (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + WD[d.getDay()] + ' · ' + DATA.totals.projects + ' 项目 · ' + DATA.totals.files + ' 文件 · ' + DATA.totals.sizeText
       : '正在扫描本机…';
+  }
+  function headHtml() {
+    const d = new Date();
+    const sub = subDefault();
     let wxHtml = '';
     if (WX && WX.ok) {
       const [ic, name] = wx(WX.code);
@@ -8190,6 +8259,19 @@
     const host = document.getElementById('lifework-view');
     /* ⚠️ 离开阅读页签要把朗读**停掉** ✗ —— 不然切到邮箱还在念英文 ✗，很吓人 ✗。 */
     if (!host || TAB !== 'reading') { spkStop(); return; }
+    /* ★ 到点了**主动说一声** ✓ —— 用户原话：「记忆的单词还需要有遗忘曲线，去制定记忆和提醒」✓。
+       ⚠️ 必须**有冷却** ✗✗ —— `bindReading()` 每次 `render()` 都跑 ✓，
+          不闸住的话每渲染一次弹一次 ✗（切个页签弹三次 ✗，用户会烦到关掉整个面板 ✗）。
+          冷却存在**内存**里 ✓（`RD_UI` ✓）：刷新页面才重新提醒一次 ✓，
+          这正是想要的粒度 ✓（同一个会话里不啰嗦 ✓）。
+       ⚠️ 也**别在复习浮层开着的时候弹** ✗ —— 他正在复习呢 ✗。 */
+    if (!EP_UI.revOpen && Date.now() - (RD_UI.dueTipAt || 0) > 30 * 60 * 1000) {
+      const n = dueWordCount();
+      if (n > 0) {
+        RD_UI.dueTipAt = Date.now();
+        rdToast('⏰ 有 ' + n + ' 个生词该复习了 —— 去「外刊精读 → 生词本」点「复习」');
+      }
+    }
     bindPaneGrips(host, [
       { which: 'side', target: '.lw-rd-side', min: 150, max: 420, key: 'bookSideW' },
       { which: 'list', target: '.lw-rd-list', min: 260, max: 760, key: 'bookListW' },
@@ -8760,11 +8842,17 @@
     const due = Number(w.due || 0);
     const now = Date.now();
     const when = !SRS ? '' : (due <= now ? '该复习' : SRS.fmtGap(due - now) + '后');
+    const busy = EP_UI.enBusy === w.id;
     return '<div class="lw-wd-row' + (EP_UI.wordSel === w.id ? ' on' : '') + '" data-epword="' + esc(w.id) + '">'
       + '<span class="lw-wd-dot ' + st + '" title="' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '"></span>'
+      /* ★ 缩略图 ✓ —— 列表里扫一眼就能想起这个词是什么 ✓（配图的意义就在这儿 ✓）。
+         ⚠️ 图挂了要**收起来** ✗（破图标很难看 ✗）→ `onerror` 把父级隐藏 ✓。 */
+      + (w.img ? '<img class="lw-wd-thumb" src="' + esc(w.img) + '" alt="" referrerpolicy="no-referrer" loading="lazy"'
+        + ' onerror="this.style.display=\'none\'"/>' : '')
       + '<span class="w">' + esc(w.w) + '</span>'
-      + (w.def ? '<span class="df">' + esc(String(w.def).slice(0, 14)) + '</span>'
-        : '<span class="df" style="color:' + T.warn + '">缺释义</span>')
+      + (busy ? '<span class="df" style="color:' + T.accent + '">补全中…</span>'
+        : (w.def ? '<span class="df">' + esc(String(w.def).slice(0, 14)) + '</span>'
+          : '<span class="df" style="color:' + T.warn + '">缺释义</span>'))
       + '<span class="df" style="color:' + (due <= now ? T.warn : T.faint) + '">' + esc(when) + '</span>'
       + '</div>';
   }
@@ -8827,9 +8915,20 @@
     const due = Number(w.due || 0);
     const hist = Array.isArray(w.hist) ? w.hist : [];
     const pv = SRS ? SRS.gradePreviews(w, now) : [];
+    const busy = EP_UI.enBusy === w.id;
+    const imgBusy = EP_UI.imgBusy === w.id;
+    /* ★ 一行「标签 + 输入」✓ —— 补全出来的字段和手填的字段**用同一套控件** ✓：
+       用户既能直接看到补全结果 ✓，也能随手改 ✓（改完失焦自动存 ✓）。 */
+    const row = (label, id, val, ph, area) => '<div class="lw-wd-f">'
+      + '<label>' + label + '</label>'
+      + (area
+        ? '<textarea id="' + id + '" rows="' + area + '" placeholder="' + esc(ph) + '">' + esc(val || '') + '</textarea>'
+        : '<input id="' + id + '" placeholder="' + esc(ph) + '" value="' + esc(val || '') + '"/>')
+      + '</div>';
     return '<div class="lw-rd-rhd"><h2>' + esc(w.w) + '</h2>'
       + '<div class="meta">'
       + '<span>' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '</span>'
+      + (w.pos ? '<span>' + esc(w.pos) + '</span>' : '')
       + (Number(w.reps) ? '<span>答对 ' + w.reps + ' 次</span>' : '')
       + (Number(w.lapses) ? '<span>忘过 ' + w.lapses + ' 次</span>' : '')
       + '<span>难度因子 ' + (Number(w.ef) || 0).toFixed(2) + '</span>'
@@ -8838,8 +8937,35 @@
       + '<button id="lw-wd-say" title="朗读这个单词">🔊 读单词</button>'
       + '<button id="lw-wd-say-slow" title="慢速朗读">🐢 慢速</button>'
       + (w.eg ? '<button id="lw-wd-say-eg" title="朗读例句">🔊 读例句</button>' : '')
+      /* ★ 「🪄 补全」是**常驻**的 ✓ —— 补全失败 / 想重来 / 补完还想再问一次 ✓，都靠它 ✓。 */
+      + '<button class="' + (busy ? 'on' : '') + '" id="lw-wd-enrich" title="用 AI 补全音标 / 词性 / 释义 / 例句 / 巧记 / 场景">'
+      + (busy ? '补全中…' : (w.enAt ? '🪄 重新补全' : '🪄 AI 补全')) + '</button>'
+      + (w.img || w.imgs ? '<button class="' + (imgBusy ? 'on' : '') + '" id="lw-wd-img" title="换一张配图">'
+        + (imgBusy ? '找图中…' : '🖼 换一张') + '</button>' : '')
       + '<button data-act="del" id="lw-wd-del" style="border-color:' + T.lineDim + '" title="从生词本删掉">🗑 删除</button>'
       + '</div>'
+      /* ⚠️ 补全 / 找图的状态要**说清楚** ✗ —— 转圈十秒没提示的话用户以为卡死了 ✗ */
+      + (busy ? '<div class="lw-ep-tip" style="color:' + T.accent + '">正在问 AI 补全…（一般 3~10 秒）</div>' : '')
+      + (EP_UI.enErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.enErr) + '</div>' : '')
+      + (EP_UI.imgErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 配图：' + esc(EP_UI.imgErr) + '</div>' : '')
+      /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
+      + (w.img ? '<div class="lw-wd-imgwrap">'
+        + '<img class="lw-wd-img" src="' + esc(w.img) + '" alt="' + esc(w.w) + '" referrerpolicy="no-referrer" loading="lazy"'
+        + ' onerror="this.parentNode.classList.add(\'bad\')"/>'
+        + '<div class="cap">配图 · 来自百度图片搜索'
+        + (w.imgs && w.imgs.length > 1 ? '（共 ' + w.imgs.length + ' 张，点「🖼 换一张」换）' : '')
+        + '</div></div>' : '')
+      /* ── 字段 ✓ ── */
+      + '<div class="lw-rd-hd">卡片</div>'
+      + row('音标', 'lw-wd-ph', w.ph, '如 /həˈmɪs.fɪə/')
+      + row('词性', 'lw-wd-pos', w.pos, '如 n. / v. / adj.')
+      + row('释义', 'lw-wd-def', w.def, '中文释义（多个义项用；隔开）', 2)
+      + row('例句', 'lw-wd-eg', w.eg, '英文例句（会一起朗读）', 3)
+      + row('例句中文', 'lw-wd-egzh', w.egZh, '上面那句的翻译', 2)
+      + row('巧记', 'lw-wd-mnem', w.mnem, '词根词缀 / 联想 / 谐音 —— 点「🪄 AI 补全」自动填', 3)
+      + row('场景', 'lw-wd-scene', w.scene, '一句能帮你想起来的画面 —— 点「🪄 AI 补全」自动填', 2)
+      + '<div class="lw-ep-tip">改完离开输入框就自动存 ✓（失焦即保存 ✓）</div>'
+      /* ── 遗忘曲线 ✓ ── */
       + '<div class="lw-wd-next">下次复习：<b>' + (due <= now ? '现在（已到期）' : (SRS ? SRS.fmtGap(due - now) + '后' : '—')) + '</b>'
       + (w.ivl ? ' · 当前间隔 ' + w.ivl + ' 天' : '') + '</div>'
       + (hist.length ? '<div class="lw-rd-hd">最近 ' + hist.length + ' 次</div>'
@@ -8849,17 +8975,8 @@
           + (Number(h.q) >= 4 ? '记得' : Number(h.q) >= 3 ? '模糊' : '忘了') + '"></i>').join('') + '</div>' : '')
       + (pv.length ? '<div class="lw-rd-hd">现在复习会排到</div>'
         + '<div class="lw-ep-tip">' + pv.map((g) => g.label + ' → <b>' + g.next + '</b>').join('　') + '</div>' : '')
-      + '<div class="lw-rd-hd">释义</div>'
-      + '<div class="lw-ep-add" style="padding:0 14px">'
-      + '<input id="lw-wd-ph" placeholder="音标 如 /həˈmɪs.fɪə/" value="' + esc(w.ph || '') + '"/></div>'
-      + '<div class="lw-ep-add" style="padding:6px 14px 0">'
-      + '<input id="lw-wd-def" placeholder="中文释义 / 英文解释" value="' + esc(w.def || '') + '"/></div>'
-      + '<div class="lw-ep-add" style="padding:6px 14px 0">'
-      + '<textarea id="lw-wd-eg" rows="2" placeholder="例句（会一起朗读）" style="flex:1;min-width:0;border:1px solid ' + T.lineDim
-      + ';background:' + T.bg2 + ';color:' + T.text + ';font:11.5px/1.7 ' + UI + ';padding:6px 8px;outline:none;resize:vertical">'
-      + esc(w.eg || '') + '</textarea></div>'
-      + '<div class="lw-ep-tip">改完离开输入框就自动存 ✓（失焦即保存 ✓）</div>'
-      + (w.artTitle ? '<div class="lw-rd-hd">来自</div><div class="lw-ep-tip">《' + esc(w.artTitle) + '》</div>' : '');
+      + (w.artTitle ? '<div class="lw-rd-hd">来自</div><div class="lw-ep-tip">《' + esc(w.artTitle) + '》</div>' : '')
+      + (w.sent ? '<div class="lw-wd-sent">' + esc(w.sent) + '</div>' : '');
   }
 
   /* ══ 复习浮层 ✓（遗忘曲线要**看得见** ✓）══════════════════════════════════ */
@@ -9182,23 +9299,131 @@
     a.edit = Date.now();
     epSave(); render();
   }
+  /* ══ 生词 AI 补全 ✓ ════════════════════════════════════════════════════
+     ★ 用户原话：「加入的单词，得自动解析好音标，词义和例句，以及巧记手段，等，
+       最好还有对应图片场景理解」✓。
+     ★ 复用**已有的 AI 入口** ✓（同一个 `/api/ai/chat` ✓）+ **同一份配置** ✓
+       （`mailAiCfg()` 读的就是「本机管家 → AI」那份 ✓）—— **不另起一套** ✗。
+     ⚠️ 要**严格 JSON** ✗ —— 模型爱加 ```json 围栏 ✗、爱加「好的，这是…」前言 ✗，
+        所以：① prompt 里明说只输出 JSON ✓ ② 解析时剥包装 ✓
+        ③ **还解析不出来就报错** ✗ —— 别猜 ✓（猜出来的音标 / 释义是**错的** ✗，
+          比空着更糟 ✗：用户会背错 ✓）。
+     ⚠️ 一次只补一个词 ✗（不是批量 ✓）—— 用户就是一个一个加的 ✓，
+        而且这样某个词失败也不牵连别的 ✓。 */
+  function epJsonFrom(text) {
+    let s = String(text || '').trim();
+    /* ① 剥 ```json 围栏 ✓ */
+    s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    /* ② 前后有废话就取最外层那对花括号 ✓ */
+    const a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    try { return JSON.parse(s.slice(a, b + 1)); } catch (_) { return null; }
+  }
+  async function epWordEnrich(w, force) {
+    if (!w || EP_UI.enBusy) return;
+    const cfg = mailAiCfg();
+    if (!cfg) {
+      EP_UI.enErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key，就能自动补全音标 / 释义 / 例句 / 巧记';
+      render();
+      return;
+    }
+    EP_UI.enBusy = w.id; EP_UI.enErr = ''; render();
+    try {
+      const sent = String(w.sent || '');
+      const r = await fetch('/api/ai/chat', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 120000,
+          messages: [
+            {
+              role: 'system',
+              content: '你是英语词典编辑，帮中国学习者做单词卡片。'
+                + '用户给你一个英文单词，以及它出现的那句话（可能为空）。'
+                + '**只输出一个 JSON 对象**，不要 markdown 代码块、不要任何解释或前后缀。字段：'
+                + '{"ph":"英式音标，带斜杠，如 /ˈæp.əl/",'
+                + '"pos":"词性缩写，如 n. / v. / adj. / adv.",'
+                + '"def":"简体中文释义；有多个义项用「；」隔开，最多 3 个，写这个单词在这句话里的意思优先",'
+                + '"eg":"一个地道的英文例句（如果用户给的那句话合适，就用它，别改写）",'
+                + '"egZh":"上面那句例句的简体中文翻译",'
+                + '"mnem":"巧记：优先拆词根词缀；没有词根就用具体可操作的联想或谐音。一到两句话，不要空话",'
+                + '"scene":"一句话描述一个能帮人记住这个词的具体画面（要可视化、有细节，用来配图理解）"}',
+            },
+            { role: 'user', content: '单词：' + w.w + (sent ? ('\n它出现的句子：' + sent) : '') },
+          ],
+        }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || 'AI 请求失败');
+      const o = epJsonFrom(d.content);
+      if (!o) throw new Error('模型没按要求返回 JSON（点了「🪄 补全」再试一次）');
+      /* ⚠️ 逐字段**判空再写** ✗ —— 模型偶尔漏字段 ✓，
+         漏了就别把原来填好的冲掉 ✗（用户可能自己改过 ✓）。 */
+      const put = (k, v, max) => { const t = String(v == null ? '' : v).trim(); if (t) { w[k] = t.slice(0, max); return true; } return false; };
+      put('ph', o.ph, 60); put('pos', o.pos, 24); put('def', o.def, 240);
+      put('eg', o.eg, 400); put('egZh', o.egZh, 400); put('mnem', o.mnem, 400); put('scene', o.scene, 300);
+      w.enAt = Date.now(); w.edit = Date.now();
+      epSave();
+    } catch (e) {
+      EP_UI.enErr = String((e && e.message) || e);
+    } finally {
+      EP_UI.enBusy = '';
+      render();
+    }
+    /* ★ 补完音标 / 释义就**顺手配张图** ✓ —— 用户要的是「图片场景理解」✓，
+       分两步是因为搜图不依赖模型 ✓（模型挂了图还能配 ✓）。 */
+    if (!EP_UI.enErr && !w.img) epWordImg(w, 'search');
+  }
+  /* ⚠️ `mode` 分两种 ✗：
+     · `'search'` —— 真去搜一次（拿一批候选 ✓）
+     · `'cycle'`  —— **只换下标** ✓，用已有候选换一张 ✓（不重新搜 ✓，秒换 ✓） */
+  async function epWordImg(w, mode) {
+    if (!w || EP_UI.imgBusy) return;
+    if (mode === 'cycle' && Array.isArray(w.imgs) && w.imgs.length > 1) {
+      const cur = w.imgs.indexOf(w.img);
+      w.img = w.imgs[(cur + 1) % w.imgs.length];
+      w.edit = Date.now(); epSave(); render();
+      return;
+    }
+    EP_UI.imgBusy = w.id; EP_UI.imgErr = ''; render();
+    try {
+      const r = await fetch('/api/life/en/wordimg?q=' + encodeURIComponent(w.w) + '&n=8', { cache: 'no-store' });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || '搜不到配图');
+      w.imgs = (d.list || []).slice(0, 8);
+      w.img = w.imgs[0] || '';
+      w.edit = Date.now(); epSave();
+    } catch (e) {
+      EP_UI.imgErr = String((e && e.message) || e);
+    } finally {
+      EP_UI.imgBusy = '';
+      render();
+    }
+  }
   function epWordAdd(raw, extra) {
     const w = EN ? EN.cleanWord(raw) : String(raw || '').trim().toLowerCase();
     if (!w || w.length < 1) { rdToast('没识别出单词 ✓ 手动打一个'); return null; }
     const hit = epWordOf(w);
     if (hit) { EP_UI.wordSel = hit.id; rdToast('「' + w + '」已经在生词本里了 ✓'); render(); return hit; }
     const a = epCurArt();
+    /* ★ 记下「它出现在哪句话」✓ —— 给 AI 补全当上下文 ✓（同一个词在不同句子里意思不同 ✓），
+       顺带在词卡上显示「来自哪句」✓。 */
+    const sents = a ? epSents(a) : [];
+    const sent = (EP_UI.sel >= 0 && sents[EP_UI.sel]) ? String(sents[EP_UI.sel].text || '') : '';
     const card = Object.assign({
       id: 'w' + Date.now() + Math.random().toString(36).slice(2, 6),
       w, ph: String((extra && extra.ph) || ''), def: String((extra && extra.def) || ''),
       eg: String((extra && extra.eg) || ''),
+      sent,
       artId: a ? a.id : '', artTitle: a ? a.title : '',
       at: Date.now(), edit: Date.now(),
     }, SRS ? SRS.newSrs(Date.now()) : {});
     STORE.words = epWords().concat([card]);
     EP_UI.wordSel = card.id;
     epSave(); render();
-    rdToast('已加入生词本：「' + w + '」✓ 10 分钟后再见它');
+    rdToast('已加入生词本：「' + w + '」✓ 正在自动补全…');
+    /* ★★ 加入就**自动补全** ✓ —— 用户原话「加入的单词，得自动解析好音标，词义和例句…」✓。
+       ⚠️ **不 await** ✗（用户不用等着 ✓）：词卡立刻出现 ✓，字段一边补一边填 ✓。 */
+    epWordEnrich(card);
     return card;
   }
   function epWordDel() {
@@ -9212,11 +9437,18 @@
     const w = epWordById(EP_UI.wordSel); if (!w) return;
     const host = document.getElementById('lifework-view'); if (!host) return;
     const g = (id) => { const el = host.querySelector(id); return el ? String(el.value || '').trim() : null; };
-    const ph = g('#lw-wd-ph'), def = g('#lw-wd-def'), eg = g('#lw-wd-eg');
+    /* ⚠️ 新加的字段**必须一起存** ✗ —— 漏一个的话「改完失焦自动存」就变成
+       「改了但没存」✗，而用户看到输入框里还有内容 ✓ 会以为存上了 ✓（最坑的那种 ✗）。 */
+    const map = [
+      ['#lw-wd-ph', 'ph'], ['#lw-wd-pos', 'pos'], ['#lw-wd-def', 'def'],
+      ['#lw-wd-eg', 'eg'], ['#lw-wd-egzh', 'egZh'],
+      ['#lw-wd-mnem', 'mnem'], ['#lw-wd-scene', 'scene'],
+    ];
     let ch = false;
-    if (ph !== null && ph !== String(w.ph || '')) { w.ph = ph; ch = true; }
-    if (def !== null && def !== String(w.def || '')) { w.def = def; ch = true; }
-    if (eg !== null && eg !== String(w.eg || '')) { w.eg = eg; ch = true; }
+    map.forEach(([sel, key]) => {
+      const v = g(sel);
+      if (v !== null && v !== String(w[key] || '')) { w[key] = v; ch = true; }
+    });
     if (ch) { w.edit = Date.now(); epSave(); }
   }
   function epNoteAdd() {
@@ -9545,10 +9777,20 @@
       if (String(raw).trim()) epWordAdd(raw, { def });
     };
     const wdel = q('#lw-wd-del'); if (wdel) wdel.onclick = () => epWordDel();
-    ['#lw-wd-ph', '#lw-wd-def', '#lw-wd-eg'].forEach((sel) => {
-      const el = q(sel);
-      if (el) el.onblur = () => epWordSave();
-    });
+    /* ⚠️ 这里必须和 `epWordSave()` 里那张表**一一对应** ✗ ——
+       漏一个就是「输入框里改了、看着像存了、其实没存」✗（最坑的那种 ✗）。
+       （两张表分居两处 ✗ 确实是隐患 ✓ —— 但探针里有一条「改完刷新还在」的断言守着 ✓。） */
+    ['#lw-wd-ph', '#lw-wd-pos', '#lw-wd-def', '#lw-wd-eg', '#lw-wd-egzh', '#lw-wd-mnem', '#lw-wd-scene']
+      .forEach((sel) => {
+        const el = q(sel);
+        if (el) el.onblur = () => epWordSave();
+      });
+    /* ★ AI 补全 / 配图 ✓ —— 用户原话：「加入的单词，得自动解析好音标，词义和例句，
+       以及巧记手段…最好还有对应图片场景理解」✓。 */
+    const wen = q('#lw-wd-enrich');
+    if (wen) wen.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) epWordEnrich(w, true); };
+    const wim = q('#lw-wd-img');
+    if (wim) wim.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) epWordImg(w, 'cycle'); };
     const ws1 = q('#lw-wd-say'); if (ws1) ws1.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
     const ws2 = q('#lw-wd-say-slow'); if (ws2) ws2.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w, { rate: 0.6 }); };
     const ws3 = q('#lw-wd-say-eg'); if (ws3) ws3.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w && w.eg) spkSay(w.eg); };
@@ -9829,14 +10071,26 @@
     STATUS_HTML = String(html == null ? '' : html);
     STATUS_UNTIL = ttl ? Date.now() + ttl : 0;
     STATUS_UNDO = undo || null;
+    /* ★★ 到期后要**自己把默认文案换回来** ✗✗ —— 原来没有这一步 ✗：
+       `paintStatus()` 只在「有消息」时写 DOM ✓，过期了就 `return` ✗ →
+       上一条提示会**一直挂在顶栏** ✓，直到下一次整屏 render 才消失 ✗
+       （实测：探针等了 5.6 秒，那条「该复习了」还在 ✗）。
+       ⚠️ 定时器必须**单例** ✗：每次先清上一个 ✓，
+          不然连点几下会叠一堆 ✓（这个项目里踩过 ✗）。 */
+    clearTimeout(STATUS_TIMER);
+    if (STATUS_UNTIL) STATUS_TIMER = setTimeout(() => paintStatus(), ttl + 60);
     paintStatus();
   }
   function paintStatus() {
     const s = document.getElementById('lw-sub');
     if (!s) return;
     if (STATUS_UNTIL && Date.now() > STATUS_UNTIL) { STATUS_HTML = ''; STATUS_UNDO = null; STATUS_UNTIL = 0; }
-    if (!STATUS_HTML) return;                  /* 没消息 / 过期 → 保留默认文案（日期 · 项目数）✓ */
-    s.innerHTML = STATUS_HTML;
+    /* ⚠️ 这里**不能**用「没消息就 return」✗ ——
+       `render()` 重建完 DOM 之后 DOM 里本来就是默认文案 ✓，return 没问题 ✓；
+       但**定时器**调过来的时候 DOM 里还是上一条提示 ✗，
+       return 就等于「让它一直挂着」✗（这就是上面那个 bug 的成因 ✗）。
+       → 一律写成「有消息写消息 ✓，没消息写默认 ✓」，两条路都对 ✓。 */
+    s.innerHTML = STATUS_HTML || esc(subDefault());
     const u = document.getElementById('lw-ml-undo');
     if (u && STATUS_UNDO) u.onclick = STATUS_UNDO;
   }

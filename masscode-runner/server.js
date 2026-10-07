@@ -412,6 +412,41 @@ async function wereadByCookie(cookie) {
     return { ok: false, error: /abort|timeout/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) };
   }
 }
+/* 生词配图的缓存 ✓（按查询词 ✓，30 分钟 ✓）—— 用户点几次「换一张」不该把人家打几遍 ✗ */
+const WORDIMG_CACHE = new Map();
+/* ★★ 百度图片的 acjson **偶尔吐不合法 JSON** ✗✗ —— 实测两种坏法：
+   ① 搜「apple」→ 挂在 position 35525：`"… inside apple\'s global war …"` ✗
+      —— **JSON 里根本没有 `\'` 这个转义** ✗（合法只有 `\" \\ \/ \b \f \n \r \t \uXXXX` ✗）。
+   ② 搜「photosynthesis」→ 挂在 position 27900：`"n*% \f炁┑"` 里那个 `\f`
+      是**真的 0x0C 控制字符**（不是转义 ✗）—— 字符串里出现裸控制字符同样非法 ✗。
+   → 两种情况都会让 `JSON.parse` 整包挂掉 ✗ → 接口报「返回的不是预期结构」✗
+     （而同一个接口搜别的词完全正常 ✓ → 表现为「有的词能搜、有的搜不了」✗，很费解 ✗）。
+   → 修法（两步 ✓，而且**先试原样解析** ✗，能解析就别动它 ✓）：
+     ① 把**字符串字面量内部**的裸控制字符转义掉 ✓
+        ⚠️ 必须走状态机 ✗ —— 字符串**外面**的换行/制表是排版空白 ✓，
+           一起转义会把整个 JSON 结构搞坏 ✗（`\u000a` 出现在 token 之间是非法的 ✗）。
+     ② 去掉**非法转义**前的反斜杠 ✓（`\'` → `'` ✓）
+        ⚠️ 用负向先行保住合法转义 ✗（不然 `\"` `\\` `\n` 会被改坏 ✗）。 */
+function looseJson(text) {
+  const s = String(text);
+  try { JSON.parse(s); return s; } catch (_) { /* 继续修 ✓ */ }
+  let out = '';
+  let inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    const code = s.charCodeAt(i);
+    if (inStr) {
+      if (esc) { esc = false; out += c; continue; }
+      if (c === '\\') { esc = true; out += c; continue; }
+      if (c === '"') { inStr = false; out += c; continue; }
+      if (code < 0x20) { out += '\\u' + code.toString(16).padStart(4, '0'); continue; }
+      out += c; continue;
+    }
+    if (c === '"') { inStr = true; }
+    out += c;
+  }
+  return out.replace(/\\(?!["\\/bfnrtu])/g, '').replace(/\\u(?![0-9a-fA-F]{4})/g, '');
+}
 /* 每个节点输出截断 ✓ —— outbox 是要给前端看的 ✓，塞几十 MB 进去会把面板卡住 ✗ */
 function trimFlowOut(v) {
   if (v === undefined) return undefined;
@@ -5222,6 +5257,7 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
         u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf' ||
         u.pathname === '/api/life/en/fetch' || u.pathname === '/api/life/en/sources' ||
+        u.pathname === '/api/life/en/wordimg' ||
         u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
@@ -5392,6 +5428,76 @@ const server = http.createServer(async (req, res) => {
             return send(res, 200, r);
           } catch (error) {
             return send(res, 200, { ok: false, error: String((error && error.message) || error) });
+          }
+        }
+
+        /* ── 生词配图 ✓（用户原话：「最好还有对应图片场景理解」）────────────────
+           ★ 为什么要过服务端 ✗：图片搜索接口**没有 CORS** ✗，浏览器直接调会被挡 ✗。
+             ⚠️ 但**图片本身**不用过服务端 ✓ —— 实测百度图片的直链
+                **不带 Referer 也能取** ✓（200 / image/jpeg ✓）→
+                前端直接 `<img src="https://img2.baidu.com/...">` 就行 ✓，
+                不用在这儿转一道字节流 ✓（省一次搬运 ✓）。
+           ⚠️ 实测过（这台机器上 ✓）：
+              ✓ 百度图片 `image.baidu.com/search/acjson` 通 ✓（757ms ✓，直链能取 ✓）
+              ✓ Bing 图片 async 通 ✓（但要扒 HTML ✗，不如百度省事 ✗）
+              ✓ 360 图片通 ✓（JSONP ✓，备选 ✓）
+              ✗ 搜狗图片 → `{"status":1,"info":"forbid"}` ✗
+              ✗ Wikimedia / Openverse / Wikipedia / LoremFlickr **全连不通** ✗
+              ✗ Pixabay / Pexels 要 key ✗
+           ⚠️ 有 TTL 缓存 ✓ —— 一个词点几次「换一张」不该把人家打几遍 ✗。 */
+        if (u.pathname === '/api/life/en/wordimg') {
+          const q = String(u.searchParams.get('q') || '').trim().slice(0, 60);
+          if (!q) return send(res, 200, { ok: false, error: '没有给查询词' });
+          const want = Math.max(1, Math.min(12, Number(u.searchParams.get('n')) || 8));
+          const hit = WORDIMG_CACHE.get(q);
+          if (hit && !u.searchParams.get('force') && Date.now() - hit.at < 30 * 60 * 1000) {
+            return send(res, 200, { ok: true, q, list: hit.list, cached: true });
+          }
+          try {
+            const api = 'https://image.baidu.com/search/acjson?tn=resultjson_com&ipn=rj&word='
+              + encodeURIComponent(q) + '&pn=0&rn=' + (want + 6);
+            const r = await fetch(api, {
+              headers: {
+                'User-Agent': FEED_UA,
+                'Referer': 'https://image.baidu.com/',
+                'Accept': 'application/json, text/plain, */*',
+              },
+              signal: AbortSignal.timeout(12000),
+            });
+            const txt = await r.text();
+            let j = null;
+            /* ⚠️ 先按原样解析 ✓，失败了再用**宽松修复**试一次 ✓ ——
+               百度那边只是**偶尔**吐 `\'` ✗（取决于标题里有没有撇号 ✓），
+               所以别一上来就改字符串 ✗（能原样解析就别动它 ✓）。 */
+            try { j = JSON.parse(txt); } catch (_) {
+              try { j = JSON.parse(looseJson(txt)); } catch (_) { j = null; }
+            }
+            if (!j || !Array.isArray(j.data)) {
+              return send(res, 200, { ok: false, error: '图片搜索返回的不是预期结构（HTTP ' + r.status + '）' });
+            }
+            const seen = new Set();
+            const list = [];
+            j.data.forEach((x) => {
+              if (!x) return;
+              /* ⚠️ `thumbURL` 是**缩略图**（够小够快 ✓），`middleURL` 是中等图 ✓ ——
+                 两个都试 ✓，优先 middleURL ✓（面板里看得清 ✓）。 */
+              const url = String(x.middleURL || x.thumbURL || '').trim();
+              if (!/^https:\/\//.test(url)) return;
+              if (seen.has(url)) return;
+              seen.add(url);
+              list.push(url);
+            });
+            const out = list.slice(0, want);
+            if (!out.length) return send(res, 200, { ok: false, error: '这个词没搜到图片' });
+            WORDIMG_CACHE.set(q, { at: Date.now(), list: out });
+            if (WORDIMG_CACHE.size > 120) WORDIMG_CACHE.delete(WORDIMG_CACHE.keys().next().value);
+            return send(res, 200, { ok: true, q, list: out, cached: false });
+          } catch (error) {
+            const why = String((error && error.message) || error);
+            return send(res, 200, {
+              ok: false,
+              error: /abort|timeout/i.test(why) ? '搜图超时（网络不通？）' : ('搜图失败：' + why),
+            });
           }
         }
 
