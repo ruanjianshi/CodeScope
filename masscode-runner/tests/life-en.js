@@ -5,6 +5,9 @@
    运行：node tests/life-en.js */
 const fs = require('fs');
 const { chromium } = require('playwright-core');
+/* ★ 共享的 SRS 模块 ✓（双栖 ✓）—— 用来把「界面上点一下」的结果和
+   「纯逻辑模块算出来的」**逐字段对齐** ✓（比「step 0→1」这种硬编码强得多 ✓）。 */
+const SRS = require('../lib/srs.js');
 const exe = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((f) => fs.existsSync(f));
 const BASE = 'http://127.0.0.1:4877';
 const MARK = '__探针外刊__';
@@ -158,6 +161,28 @@ function stripMine(d) {
     await p.locator('#lw-wd-rev').click(); await p.waitForTimeout(900);
     ck('★ 复习浮层开了', await p.locator('#lw-rev').count() === 1);
     ck('★ 卡片正面只有单词（不剧透释义）', await p.locator('.lw-rev-card .df').count() === 0, await txt('.lw-rev-card'));
+    /* ⚠️⚠️ 别假设「第一张卡就是我刚加的那个词」✗✗ —— 实测栽过 ✓，而且**被骗过一轮** ✓：
+       队列是 `SRS.dueCards()` 按 **due 升序** 排的 ✓（见 `lib/srs.js` ✓），
+       用户自己那些**已经到期**的词 due 更早 ✓ → **排在新词前面** ✗ →
+       点评级改的是**用户的词** ✓，而断言查的是自己那个词 ✓ →
+       「step 0→1」/「下次时间推后」/「记了一条历史」**三条一起假失败** ✗
+       （看起来像「点评级不生效」✗，其实产品好得很 ✓）。
+       ⚠️ 更坏的是它**看时间** ✗：用户那两个词一到点 ✓ 探针就开始红 ✓ ——
+          同一份代码，隔十分钟跑结果不一样 ✗。
+          （我拿 `git stash` 对照过 ✓，结果被这个时间差**骗了** ✓ ——
+            差点去改好代码 ✗。**教训**：对照实验前先确认「输入真的没变」✗。）
+       → 改成**读卡片上真正显示的那个词** ✓，断言落在**它**身上 ✓；
+         再拿共享的 `lib/srs.js` 算一遍期望值 ✓ **逐字段对齐** ✓。 */
+    /* ⚠️ 取词要用 `.lw-rev-card .w` ✗，**不能**拿整个卡片的 innerText ✓ ——
+       卡片正面还带一句提示 ✓（「先在心里说出意思，再点下面」✓），
+       整个 innerText 拿到的是「单词 + 提示」✗ → 按词去 store 里找**永远找不到** ✗
+       （实测：`"zzzdbgdue 先在心里说出意思，再点下面"` ✓，白跑一轮 ✓）。 */
+    const cardWord = (await p.locator('.lw-rev-card .w').first().innerText()).trim().toLowerCase();
+    console.log('    队列第一张卡上是: ' + JSON.stringify(cardWord));
+    const pickByWord = async () => ((await store()).words || []).find((x) => String(x.w || '').toLowerCase() === cardWord);
+    const before = await pickByWord();
+    ck('  认出了卡片上是哪个词（好把断言落对它身上）', !!before, JSON.stringify(cardWord));
+    const bHist = (before && Array.isArray(before.hist)) ? before.hist.length : 0;
     await p.click('#lw-rev-show'); await p.waitForTimeout(700);
     ck('★ 翻面后出现四个评级按钮', await p.locator('[data-epgrade]').count() === 4, String(await p.locator('[data-epgrade]').count()));
     const labels = await p.locator('[data-epgrade]').allInnerTexts();
@@ -165,12 +190,21 @@ function stripMine(d) {
     ck('★ 四档文案是忘了/模糊/记得/太简单',
       labels.map((t) => t.replace(/\s+/g, '')).join('|').includes('忘了')
       && labels.join('|').includes('太简单'), JSON.stringify(labels));
-    const before = ((await store()).words || []).find((x) => x.id === W.id);
     await p.locator('[data-epgrade="4"]').click(); await p.waitForTimeout(900);
-    const after = ((await store()).words || []).find((x) => x.id === W.id);
-    ck('★ 点评级真的改写了复习状态（step 0→1）', after && after.step === 1, JSON.stringify({ s: after && after.step }));
-    ck('★ 下次时间被推后了（不再是「立刻到期」）', after && Number(after.due) > Number(before.due), JSON.stringify({ b: Number(before.due) > 0, a: Number(after.due) > 0 }));
-    ck('★ 记了一条复习历史', after && (after.hist || []).length === 1, JSON.stringify(after && after.hist));
+    const after = await pickByWord();
+    /* ★★ 最硬的一条 ✓：界面点出来的结果，必须和**共享纯逻辑模块**算的**一模一样** ✓
+       （界面上写的是 15 天 ✓，实际排到的也得是 15 天 ✗ ——
+        对不上的话用户只会觉得「这软件不准」✗，而且根本查不出来 ✗）。 */
+    const expect = before ? SRS.review(before, 4, Number(after && after.at) || Date.now()) : null;
+    ck('★★ 点评级的结果和共享 SRS 模块算的**逐字段一致**',
+      !!(after && expect) && after.step === expect.step && after.ivl === expect.ivl
+      && Math.abs(Number(after.ef) - Number(expect.ef)) < 1e-9,
+      JSON.stringify({ got: after && { s: after.step, i: after.ivl, e: after.ef }, want: expect && { s: expect.step, i: expect.ivl, e: expect.ef } }));
+    ck('★ 下次时间被推后了（不再是「立刻到期」）',
+      !!(after && before) && Number(after.due) > Number(before.due) && Number(after.due) > Date.now(),
+      JSON.stringify({ b: before && before.due, a: after && after.due }));
+    ck('★ 记了一条复习历史', !!(after && Array.isArray(after.hist)) && after.hist.length === bHist + 1,
+      JSON.stringify({ b: bHist, a: after && (after.hist || []).length }));
     /* 收掉浮层 ✓（不收的话它会挡住后面的点击 ✗，实测被挡过 ✗） */
     const closeBtn = (await p.locator('#lw-rev-close').count()) ? '#lw-rev-close' : '#lw-rev-x';
     await p.click(closeBtn); await p.waitForTimeout(700);

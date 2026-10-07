@@ -1315,6 +1315,32 @@
   .lw-rd-side { width:206px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto; padding:12px 0; background:${T.bg}; }
   .lw-rd-list { width:330px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; background:${T.card}; }
   .lw-rd-read { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+  /* ── 本地电子书阅读器 ✓（用户原话：「我需要的是可以实现阅读」✓）────────────
+     ⚠️ 正文的**最大宽度**是关键 ✗ —— 一行铺满 1400px 的话，
+        读完一行要往回找下一行 ✗，眼睛很累 ✓。700px 左右正好 ✓。 */
+  .lw-eb { position:relative; }
+  .lw-eb-bar { display:flex; align-items:center; gap:6px; padding:8px 12px; flex-wrap:wrap; flex:none;
+    border-bottom:1px solid ${T.lineDim}; background:${T.card}; }
+  .lw-eb-bar button { height:24px; min-width:26px; padding:0 8px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:11px ${UI}; cursor:pointer; }
+  .lw-eb-bar button:hover:not(:disabled) { border-color:${T.accent}; color:${T.accent}; }
+  .lw-eb-bar button:disabled { opacity:.3; cursor:default; }
+  .lw-eb-bar button.on { border-color:${T.accent}; color:${T.accent}; }
+  .lw-eb-bar select { flex:1; min-width:110px; max-width:420px; height:24px; border:1px solid ${T.lineDim};
+    background:${T.bg2}; color:${T.text}; font:11px ${UI}; outline:none; }
+  .lw-eb-bar .sp { flex:1; }
+  .lw-eb-bar .n { font-size:10px; color:${T.faint}; white-space:nowrap; }
+  .lw-eb-body { flex:1; min-height:0; overflow:auto; padding:26px 32px 90px; background:${T.bg}; }
+  .lw-eb-body > p, .lw-eb-body > h3 { max-width:700px; margin:0 auto 1.15em; line-height:2.05; }
+  .lw-eb-body.wide > p, .lw-eb-body.wide > h3 { max-width:min(1120px, 100%); }
+  /* ★ 中文书**首行缩进两格** ✓、英文书不缩进 ✗ ——
+     两种排版习惯不一样 ✓，一律缩进的话英文段落看着很怪 ✗。 */
+  .lw-eb-body.cjk > p { text-indent:2em; }
+  .lw-eb-t { font-size:1.12em; font-weight:600; color:${T.text}; margin:0 auto 1.5em !important; }
+  /* 划词后浮出来的「＋ 加生词」✓ —— 用 mousedown 触发 ✗（click 会先把选区清掉 ✗） */
+  .lw-eb-pick { position:absolute; z-index:20; padding:5px 10px; border:1px solid ${T.accent};
+    background:${T.bg}; color:${T.accent}; font:11px ${UI}; cursor:pointer; white-space:nowrap; }
+  .lw-eb-pick:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-rd-hd { font-size:9px; letter-spacing:1.8px; color:${T.faint}; text-transform:uppercase;
     padding:10px 13px 5px; }
   .lw-rd-row { display:flex; align-items:center; gap:8px; padding:6px 13px; font-size:11px;
@@ -2018,8 +2044,8 @@
 
   /* 阅读模块的状态 ✓ —— 同样必须放这里 ✗（`mount()` 在模块最顶上就被调用了 ✓）。 */
   const RD_SRC = {
-    weread: { e: '📗', n: '微信读书' }, paper: { e: '📖', n: '纸质书' },
-    kindle: { e: '📕', n: 'Kindle' }, other: { e: '📚', n: '其他' },
+    weread: { e: '📗', n: '微信读书' }, ebook: { e: '📕', n: '本地电子书' },
+    paper: { e: '📖', n: '纸质书' }, kindle: { e: '📗', n: 'Kindle' }, other: { e: '📚', n: '其他' },
   };
   const RD_ST = {
     want: { e: '🌱', n: '想读' }, reading: { e: '📖', n: '在读' },
@@ -2038,6 +2064,16 @@
           Cookie 降级成兜底 ✓，所以默认停在 Key 那一页 ✓。 */
     connOpen: false, connTab: 'key', connText: '', connCookie: '',
     connBusy: false, connMsg: '', connOk: false,
+    /* ★ 本地电子书**阅读器**的状态 ✓ —— 用户原话：
+       「我需要的是可以实现阅读，目前这样的设计，我无法进行相关书籍的阅读」✓。
+       ⚠️ 正文**只放内存** ✗（`rdText` ✓）—— 一章可能几万字 ✓，
+          塞进 STORE 就是每次保存都序列化一遍 ✗（面板会卡死 ✗）。
+          「读到第几章」是**小数据** ✓，落盘在书上（`b.rdCh` ✓）。 */
+    rdCh: 0, rdText: '', rdTitle: '', rdBusy: false, rdErr: '', rdFont: 0, rdWide: false,
+    /* ⚠️ 书的**目录**（章节名 / 字数 ✓）只放内存 ✗ ——
+       200 章的书光目录就 8KB ✓，塞进 STORE 是「每次保存都带上」✗（没必要 ✗）。
+       书上只留一个 `ebookId` ✓，目录按需从服务端取 ✓（本机 ✓，快 ✓）。 */
+    ebMeta: null, ebBusy: false, ebErr: '',
     autoAt: 0,
     /* ★ 「该复习了」提醒的冷却 ✓（内存 ✓，30 分钟 ✓）——
        ⚠️ 必须放这儿 ✗：`bindReading()` 每次 render 都跑 ✓，
@@ -2230,6 +2266,26 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+  /* ★★ 选择器**别把整段绑定带崩** ✗✗ —— 这是实测踩到的 ✗：
+     我给字号按钮起了个 `id="lw-eb-font+"` ✓，然后 `q('#lw-eb-font+')` ✗ ——
+     而 `+` 在 CSS 里是**相邻兄弟选择器** ✗ → `querySelector` **直接抛错** ✗ →
+     整个 `bindReading()` 从那一行**后面全都不绑了** ✗
+     （表现是「一大片点了没反应」✓，而控制台只有一条错误 ✓，极难定位 ✗）。
+     → 包一层 try/catch ✓：坏选择器**只坏它自己** ✓，并**打一条日志** ✓
+       （⚠️ 不能静默 ✗ —— 静默的话这个 bug 就永远查不出来了 ✓）。
+     ⚠️ 顺带记住：**别用 `+` / `.` / `>` / `#` 这些字符当 id** ✗。 */
+  const lwQ = (root, s) => {
+    try { return root.querySelector(s); } catch (e) {
+      console.warn('[codescope] 选择器写错了：' + s + ' —— ' + String((e && e.message) || e));
+      return null;
+    }
+  };
+  const lwQA = (root, s) => {
+    try { return Array.from(root.querySelectorAll(s)); } catch (e) {
+      console.warn('[codescope] 选择器写错了：' + s + ' —— ' + String((e && e.message) || e));
+      return [];
+    }
+  };
   function fmtBytes(n) {
     const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0, v = Number(n) || 0;
     while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
@@ -3340,8 +3396,9 @@
   function bindMemoSide() {
     const host = document.getElementById("lifework-view");
     if (!host) return;
-    const q = (sel) => host.querySelector(sel);
-    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    /* ★ 统一走防御层 ✓（`lwQ` / `lwQA` ✓）—— 坏选择器只坏它自己 ✗，不再让整个 bind 函数躺平 ✗ */
+    const q = (sel) => lwQ(host, sel);
+    const qa = (sel) => lwQA(host, sel);
     const memoById = (id) => (STORE.memos || []).find((x) => x.id === id);
     const flushMemo = () => {
       /* ★ 走唯一入口 ✓（以前这里是无守卫的 memoWriteFromEditor ✗，就是写串数据的元凶）*/
@@ -3633,8 +3690,8 @@
     if (bind._rsInstall) bind._rsInstall();
     /* ── 网上热点 + AI 助手（研究方向视图 ✓）── */
     const viewEl = document.getElementById('lifework-view');
-    const qv = (sel) => (viewEl ? viewEl.querySelector(sel) : null);
-    const qav = (sel) => (viewEl ? Array.from(viewEl.querySelectorAll(sel)) : []);
+    const qv = (sel) => (viewEl ? lwQ(viewEl, sel) : null);
+    const qav = (sel) => (viewEl ? lwQA(viewEl, sel) : []);
     /* 热点 */
     const doHot = async (kw) => {
       const inp = qv('#lw-hot-q');
@@ -3740,8 +3797,9 @@
     if (view0) view0.querySelectorAll('[data-todo-go]').forEach((el) => {
       el.onclick = () => { STORE.memoSel = el.dataset.todoGo; STORE.memoSmart = ''; STORE.memoTag = ''; saveStore(); TAB = 'memo'; render(); };
     });
-    const q = (sel) => host.querySelector(sel);
-    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    /* ★ 统一走防御层 ✓（`lwQ` / `lwQA` ✓）—— 坏选择器只坏它自己 ✗，不再让整个 bind 函数躺平 ✗ */
+    const q = (sel) => lwQ(host, sel);
+    const qa = (sel) => lwQA(host, sel);
     qa('.lw-nav button').forEach((b) => {
       b.onclick = () => {
         JOURNAL_FLUSH();
@@ -6490,13 +6548,15 @@
     const list = rdBooks();
     const tools = '<div class="lw-rd-tools">'
       + '<input id="lw-rd-q" placeholder="搜索书名 / 作者…" value="' + esc(RD_UI.q) + '"/>'
-      + '<button id="lw-rd-add" title="手动添加一本书">＋ 加书</button>'
+      + '<button class="pri" id="lw-rd-ebook" title="导入 EPUB / TXT / PDF，在这里直接读全文">📚 导入电子书</button>'
+      + '<button id="lw-rd-add" title="手动添加一本书（没有电子书文件时用）">＋ 加书</button>'
       + '<button id="lw-rd-imp" title="把微信读书 App 导出的笔记粘进来">📥 导入笔记</button>'
       + '<button id="lw-rd-sync" title="' + (rdWrOn() ? '同步微信读书书架（已连接，点一下直接拉）' : '连接微信读书，把你的书架读进来') + '">'
       + (rdWrOn() ? '📗 同步' : '🔗 微信读书') + '</button>'
       + '</div>';
     if (!list.length) {
-      const empty = ((STORE && STORE.books) || []).length ? '没有符合条件的书' : '书架还是空的<br><span style="color:' + T.faint + '">点「＋ 加书」或「📥 导入笔记」开始</span>';
+      const empty = ((STORE && STORE.books) || []).length ? '没有符合条件的书'
+        : '书架还是空的<br><span style="color:' + T.faint + '">想直接读书 → 点「📚 导入电子书」（EPUB / TXT / PDF ✓）<br>只有纸质书 / 微信读书 → 点「＋ 加书」或「📥 导入笔记」</span>';
       return tools + '<div class="lw-rd-empty">' + empty + '</div>';
     }
     return tools + list.map(rdBookCard).join('');
@@ -6510,11 +6570,157 @@
       + '<span>' + (n.at ? new Date(n.at).toLocaleDateString('zh-CN') : '') + '</span>'
       + '<span class="x" data-rdnotedel="' + esc(n.id) + '" title="删除这条笔记">✕</span></div></div>';
   }
+  /* ══ 本地电子书阅读器 ✓ ════════════════════════════════════════════════
+     ★ 用户原话：「我需要的是可以实现阅读，目前这样的设计，我无法进行相关书籍的阅读」✓。
+     ★ 为什么是「本地文件」✗：微信读书那条路**实测走不通** ✓ ——
+       它的 17 个接口里**没有一个能取正文** ✗，网页 Cookie 又是 SameSite=Lax ✗
+       → 跨域 iframe 收不到 Cookie ✗（实测阅读器一直转圈 ✓）。
+     ⚠️ 正文**只放内存** ✗（`RD_UI.rdText` ✓）：一章几万字 ✓，
+        进 STORE 就是每次保存都序列化一遍 ✗（面板会卡死 ✗）。
+        只有「读到第几章」落盘 ✓（`b.rdCh` ✓，小数据 ✓）。
+     ⚠️ 取章是**异步**的 ✗ → 要有 busy / err 状态 ✓（不然用户以为点了没反应 ✗）。 */
+  async function rdEbookLoad(b, i) {
+    if (!b || !b.ebookId || RD_UI.rdBusy) return;
+    RD_UI.rdBusy = true; RD_UI.rdErr = ''; render();
+    try {
+      const r = await fetch('/api/life/ebook/chapter?id=' + encodeURIComponent(b.ebookId) + '&i=' + (Number(i) || 0), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || '取不到这一章');
+      RD_UI.rdCh = Number(d.index) || 0;
+      RD_UI.rdText = String(d.text || '');
+      RD_UI.rdTitle = String(d.title || '');
+      /* ★ 进度回写到书上 ✓ —— 书架列表 / 「继续读」都靠它 ✓（小数据 ✓，可以落盘 ✓） */
+      b.rdCh = RD_UI.rdCh;
+      b.prog = d.total > 1 ? Math.round((RD_UI.rdCh / (d.total - 1)) * 100) : (RD_UI.rdCh ? 100 : 0);
+      if (b.status === 'want') b.status = 'reading';
+      if (!b.startAt) b.startAt = dayKey(new Date());
+      b.edit = Date.now();
+      rdSave();
+    } catch (e) {
+      RD_UI.rdErr = String((e && e.message) || e);
+      RD_UI.rdText = ''; RD_UI.rdTitle = '';
+    } finally {
+      RD_UI.rdBusy = false;
+      render();
+      /* ⚠️ 换章后要把正文**滚回顶部** ✗ —— 不然还停在上次读的位置 ✓，看着像没换章 ✗ */
+      const box = document.getElementById('lw-eb-body');
+      if (box) box.scrollTop = 0;
+    }
+  }
+  /* 打开一本电子书 ✓ —— 先确保目录拿到了 ✓，再取当前那一章 ✓ */
+  async function rdEbookOpen(b) {
+    if (!b || !b.ebookId) return;
+    if (!(RD_UI.ebMeta && RD_UI.ebMeta.id === b.ebookId)) {
+      RD_UI.ebBusy = true; RD_UI.ebErr = ''; render();
+      try {
+        const d = await (await fetch('/api/life/ebook/meta?id=' + encodeURIComponent(b.ebookId), { cache: 'no-store' })).json();
+        if (!d || !d.ok) throw new Error((d && d.error) || '取不到目录');
+        RD_UI.ebMeta = d.book;
+      } catch (e) {
+        RD_UI.ebErr = String((e && e.message) || e);
+        RD_UI.ebBusy = false;
+        render();
+        return;
+      }
+      RD_UI.ebBusy = false;
+    }
+    /* ⚠️ 从**上次读到的那一章**继续 ✓（`b.rdCh` ✓）—— 不是从头开始 ✗ */
+    await rdEbookLoad(b, Number(b.rdCh) || 0);
+  }
+  /* ★ 导入本地电子书 ✓ —— 用户原话「我需要的是可以实现阅读」✓。
+     ⚠️ 用**隐藏的 file input** ✓ —— 绝不用原生弹窗 ✗
+        （用户刚说过「不要用这种网页的弹出输入去输入内容」✓）。
+     ⚠️ 文件**直接当 body 流上去** ✗，不 base64 ✗（一本 epub 几十 MB ✓，
+        base64 会胖 33% ✓）；文件名走请求头 ✓。 */
+  function rdImportEbook() {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.epub,.txt,.pdf,application/epub+zip,text/plain,application/pdf';
+    inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      try { inp.remove(); } catch (_) {}
+      if (!f) return;
+      setStatus(esc('正在导入《' + f.name + '》…（大文件要等几秒）'), 0);
+      try {
+        const meta = btoa(String.fromCharCode.apply(null, Array.from(new TextEncoder().encode(JSON.stringify({ name: f.name })))));
+        const r = await fetch('/api/life/ebook/import', {
+          method: 'POST',
+          headers: { 'content-type': 'application/octet-stream', 'x-codescope-ebook': meta },
+          body: f,
+        });
+        const d = await r.json();
+        if (!d || !d.ok) { setStatus(esc('✗ 导入失败：' + ((d && d.error) || '未知错误')), 12000); return; }
+        const nb = {
+          id: 'b' + Date.now() + Math.random().toString(36).slice(2, 6),
+          title: d.book.title, author: d.book.author || '', cover: '',
+          src: 'ebook', status: 'reading', prog: 0, rating: 0, tags: [], pages: 0,
+          startAt: dayKey(new Date()), at: Date.now(), edit: Date.now(),
+          ebookId: d.book.id, rdCh: 0,
+        };
+        STORE.books = ((STORE && STORE.books) || []).concat([nb]);
+        RD_UI.sel = nb.id; STORE.bookSel = nb.id;
+        RD_UI.ebMeta = d.book;
+        RD_UI.rdCh = 0;
+        rdSave(); render();
+        setStatus(esc('✓ 导入好了：《' + nb.title + '》共 ' + d.book.chapters.length + ' 章 · '
+          + Math.round((d.book.total || 0) / 1000) + 'k 字'), 9000);
+        rdEbookLoad(nb, 0);
+      } catch (e) {
+        setStatus(esc('✗ 导入失败：' + String((e && e.message) || e)), 12000);
+      }
+    };
+    inp.click();
+  }
+  /* 正文按段落渲染 ✓ —— 空行分段 ✓，段内单换行用 `<br>` ✓（诗 / 对白靠它 ✓） */
+  function rdEbookText(text) {
+    const t = String(text || '');
+    if (!t.trim()) return '<div class="lw-rd-empty" style="position:static">这一章是空的</div>';
+    return t.split(/\n{2,}/).map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+  }
+  function rdEbookHtml(b) {
+    const meta = (RD_UI.ebMeta && RD_UI.ebMeta.id === b.ebookId) ? RD_UI.ebMeta : null;
+    const total = meta && meta.chapters ? meta.chapters.length : 0;
+    const ch = Number(RD_UI.rdCh) || 0;
+    const font = Number(RD_UI.rdFont) || 0;           /* -2 ~ +6 ✓，0 = 默认 15px ✓ */
+    const bar = '<div class="lw-eb-bar">'
+      + '<button id="lw-eb-prev"' + (ch <= 0 ? ' disabled' : '') + ' title="上一章">◀</button>'
+      + '<select id="lw-eb-jump" title="跳到某一章">'
+      + (total ? meta.chapters.map((c, i) => '<option value="' + i + '"' + (i === ch ? ' selected' : '') + '>'
+        + esc(String(i + 1) + '. ' + String(c.title || '')) + '</option>').join('') : '<option>（没有目录）</option>')
+      + '</select>'
+      + '<button id="lw-eb-next"' + (total && ch >= total - 1 ? ' disabled' : '') + ' title="下一章">▶</button>'
+      + '<span class="sp"></span>'
+      + '<button id="lw-eb-fminus" title="字小一点">A−</button>'
+      + '<button id="lw-eb-fplus" title="字大一点">A+</button>'
+      + '<button class="' + (RD_UI.rdWide ? 'on' : '') + '" id="lw-eb-wide" title="正文宽一点 / 窄一点">↔</button>'
+      + '<span class="n">' + (total ? ('第 ' + (ch + 1) + ' / ' + total + ' 章 · 全书 ' + (Number(b.prog) || 0) + '%') : '') + '</span>'
+      + '</div>';
+    const body = RD_UI.rdBusy
+      ? '<div class="lw-rd-empty" style="position:static">正在取这一章…</div>'
+      : (RD_UI.rdErr
+        ? '<div class="lw-rd-empty" style="position:static;color:' + T.red + '">✗ ' + esc(RD_UI.rdErr) + '</div>'
+        : '<h3 class="lw-eb-t">' + esc(RD_UI.rdTitle || '') + '</h3>' + rdEbookText(RD_UI.rdText));
+    /* ⚠️ 中文书要**首行缩进** ✓、英文书不要 ✗ —— 判据用汉字占比 ✓（>15% 就算中文书 ✓） */
+    const cjk = ((String(RD_UI.rdText || '').match(/[\u4e00-\u9fa5]/g) || []).length) > String(RD_UI.rdText || '').length * 0.15;
+    return '<div class="lw-rd-read lw-eb">' + bar
+      + '<div class="lw-eb-body' + (RD_UI.rdWide ? ' wide' : '') + (cjk ? ' cjk' : '') + '" id="lw-eb-body"'
+      + ' style="font-size:' + (15 + font) + 'px">' + body + '</div>'
+      /* ★ 划词加生词 ✓ —— 复用**外刊精读那套生词本** ✓（同一个 STORE.words ✓、
+         同一套遗忘曲线 ✓）—— 读书时遇到的词和读外刊遇到的词，本来就该在一起复习 ✓。 */
+      + '<div class="lw-eb-pick" id="lw-eb-pick" style="display:none"></div>'
+      + '</div>';
+  }
   function rdReadHtml() {
     const b = rdCurrent();
     if (!b) {
-      return '<div class="lw-rd-read"><div class="lw-rd-empty">← 从中间选一本书<br><span style="color:' + T.faint + '">或者先「＋ 加书」/「📥 导入笔记」</span></div></div>';
+      return '<div class="lw-rd-read"><div class="lw-rd-empty">← 从中间选一本书<br><span style="color:' + T.faint + '">或者先「＋ 加书」/「📚 导入电子书」/「📥 导入笔记」</span></div></div>';
     }
+    /* ★★ 本地电子书 → 直接给**阅读器** ✓✗ ——
+       不是那套「状态 / 评分 / 笔记」面板 ✗（那是给纸质书 / 微信读书用的 ✓）。
+       ⚠️ 用户要的就是「能读」✗ —— 所以这里**优先**给正文 ✓，别的都靠边 ✓。 */
+    if (b.ebookId) return rdEbookHtml(b);
     const st = rdStats();
     const notes = bookNotesOf(b.id).slice().sort((a, c) => (c.at || 0) - (a.at || 0));
     const chips = RD_ST_ORDER.map((k) => '<span class="lw-rd-chip' + (b.status === k ? ' on' : '') + '" data-rdset="' + k + '">' + RD_ST[k].e + ' ' + RD_ST[k].n + '</span>').join('')
@@ -7549,8 +7755,9 @@
       { which: 'side', target: '.lw-fl-side', min: 150, max: 420, key: 'flowSideW' },
       { which: 'cfg', target: '.lw-fl-cfg', min: 220, max: 560, key: 'flowCfgW' },
     ]);
-    const q = (sel) => host.querySelector(sel);
-    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    /* ★ 统一走防御层 ✓（`lwQ` / `lwQA` ✓）—— 坏选择器只坏它自己 ✗，不再让整个 bind 函数躺平 ✗ */
+    const q = (sel) => lwQ(host, sel);
+    const qa = (sel) => lwQA(host, sel);
     qa('[data-flsel]').forEach((el) => {
       el.onclick = () => {
         FLOW_UI.sel = el.dataset.flsel; STORE.flowSel = el.dataset.flsel;
@@ -8019,8 +8226,9 @@
       { which: 'side', target: '.lw-hl-side', min: 150, max: 420, key: 'trendSideW' },
       { which: 'list', target: '.lw-hl-list', min: 260, max: 760, key: 'trendListW' },
     ]);
-    const q = (sel) => host.querySelector(sel);
-    const qa = (sel) => Array.from(host.querySelectorAll(sel));
+    /* ★ 统一走防御层 ✓（`lwQ` / `lwQA` ✓）—— 坏选择器只坏它自己 ✗，不再让整个 bind 函数躺平 ✗ */
+    const q = (sel) => lwQ(host, sel);
+    const qa = (sel) => lwQA(host, sel);
     qa('[data-trsrc]').forEach((el) => { el.onclick = () => { TR_UI.src = el.dataset.trsrc; TR_UI.sel = ''; render(); }; });
     qa('[data-tronly]').forEach((el) => { el.onclick = () => { TR_UI.only = el.dataset.tronly; render(); }; });
     qa('[data-trit]').forEach((el) => {
@@ -8110,7 +8318,20 @@
   }
   /* ── 阅读：交互 ────────────────────────────────────────────────────────── */
   function rdSave() { saveStore(); }
-  function rdPickBook(id) { RD_UI.sel = id; STORE.bookSel = id; render(); }
+  function rdPickBook(id) {
+    RD_UI.sel = id; STORE.bookSel = id;
+    /* ★ 电子书 → 顺手把**正文**取回来 ✓ —— 用户点一本书就是想读它 ✓，
+       不是想看「状态 / 评分」那一堆 ✓（那套留给纸质书 / 微信读书 ✓）。 */
+    const b = bookById(id);
+    if (b && b.ebookId) {
+      RD_UI.rdCh = Number(b.rdCh) || 0;
+      RD_UI.rdText = ''; RD_UI.rdTitle = ''; RD_UI.rdErr = '';
+      render();
+      rdEbookOpen(b);
+      return;
+    }
+    render();
+  }
   async function rdAddBook() {
     const title = await lwAsk({ title: '加一本书', label: '书名', ph: '如 置身事内', ok: '下一步' });
     if (title === null) return;
@@ -8492,8 +8713,8 @@
       { which: 'side', target: '.lw-rd-side', min: 150, max: 420, key: 'bookSideW' },
       { which: 'list', target: '.lw-rd-list', min: 260, max: 760, key: 'bookListW' },
     ]);
-    const q = (s) => host.querySelector(s);
-    const qa = (s) => Array.from(host.querySelectorAll(s));
+    const q = (s) => lwQ(host, s);
+    const qa = (s) => lwQA(host, s);
     qa('[data-rdst]').forEach((el) => { el.onclick = () => { RD_UI.status = el.dataset.rdst; render(); }; });
     qa('[data-rdsrc]').forEach((el) => { el.onclick = () => { RD_UI.src = el.dataset.rdsrc; render(); }; });
     qa('[data-rdtag]').forEach((el) => { el.onclick = () => { RD_UI.tag = el.dataset.rdtag; render(); }; });
@@ -8529,6 +8750,57 @@
        只能靠它进设置（换 Key / 断开 ✓）。 */
     qa('[data-wrcset]').forEach((el) => { el.onclick = () => rdWrConnOpen(); });
     const imp = q('#lw-rd-imp'); if (imp) imp.onclick = () => { RD_UI.impOpen = true; RD_UI.impPv = null; render(); };
+    /* ── 本地电子书阅读器 ✓ ──────────────────────────────────────────────
+       ★ 用户原话：「我需要的是可以实现阅读」✓。 */
+    const ebi = q('#lw-rd-ebook');
+    if (ebi) ebi.onclick = () => rdImportEbook();
+    {
+      const eb = rdCurrent();
+      if (eb && eb.ebookId) {
+        const prev = q('#lw-eb-prev'); if (prev) prev.onclick = () => rdEbookLoad(eb, (Number(RD_UI.rdCh) || 0) - 1);
+        const next = q('#lw-eb-next'); if (next) next.onclick = () => rdEbookLoad(eb, (Number(RD_UI.rdCh) || 0) + 1);
+        const jump = q('#lw-eb-jump');
+        if (jump) jump.onchange = () => rdEbookLoad(eb, Number(jump.value) || 0);
+        const f1 = q('#lw-eb-fminus');
+        if (f1) f1.onclick = () => { RD_UI.rdFont = Math.max(-3, (Number(RD_UI.rdFont) || 0) - 1); render(); };
+        const f2 = q('#lw-eb-fplus');
+        if (f2) f2.onclick = () => { RD_UI.rdFont = Math.min(10, (Number(RD_UI.rdFont) || 0) + 1); render(); };
+        const wd = q('#lw-eb-wide');
+        if (wd) wd.onclick = () => { RD_UI.rdWide = !RD_UI.rdWide; render(); };
+        /* ★ 划词加生词 ✓ —— 和**外刊精读共用同一个生词本** ✓（同一套遗忘曲线 ✓）——
+           读书时遇到的词、读外刊时遇到的词，本来就该在一起复习 ✓。 */
+        const body = q('#lw-eb-body'), pick = q('#lw-eb-pick');
+        if (body && pick) {
+          body.onmouseup = () => {
+            setTimeout(() => {
+              const sel = String((window.getSelection && window.getSelection().toString()) || '');
+              const w = EN ? EN.cleanWord(sel) : sel.trim().toLowerCase();
+              if (!w || w.length > 40 || !/[a-z]/i.test(w)) { pick.style.display = 'none'; return; }
+              let r = null;
+              try { r = window.getSelection().getRangeAt(0).getBoundingClientRect(); } catch (_) {}
+              if (!r || !r.width) { pick.style.display = 'none'; return; }
+              const wrap = pick.parentElement.getBoundingClientRect();
+              pick.textContent = '＋ 加生词「' + w + '」';
+              pick.dataset.w = w;
+              pick.style.display = 'block';
+              pick.style.left = Math.max(4, Math.min(Math.max(0, wrap.width - 170), r.left - wrap.left)) + 'px';
+              pick.style.top = Math.max(0, r.top - wrap.top - 36) + 'px';
+            }, 0);
+          };
+          /* ⚠️ 用 mousedown + preventDefault ✗ —— 用 click 的话，
+             按下去的瞬间**选区就没了** ✓，而我们要先拿到那个词 ✓。 */
+          pick.onmousedown = (ev) => {
+            ev.preventDefault();
+            const w = pick.dataset.w;
+            pick.style.display = 'none';
+            if (!w) return;
+            try { window.getSelection().removeAllRanges(); } catch (_) {}
+            epWordAdd(w);      /* 复用外刊精读那套 ✓：加完自动补全音标 / 释义 / 巧记 + 配图 ✓ */
+          };
+          body.onscroll = () => { pick.style.display = 'none'; };
+        }
+      }
+    }
     const qq = q('#lw-rd-q');
     if (qq) qq.oninput = () => {
       /* 只改列表显隐 ✓，不整屏重绘 ✗（否则每敲一个字输入框就失焦 ✗）*/
@@ -9642,7 +9914,13 @@
     STORE.words = epWords().concat([card]);
     EP_UI.wordSel = card.id;
     epSave(); render();
-    rdToast('已加入生词本：「' + w + '」✓ 正在自动补全…');
+    /* ⚠️ 别**假承诺** ✗ —— 没配 AI 的时候还喊「正在自动补全…」✓，
+       用户在阅读器里等半天也不会有音标 ✗（`epWordEnrich()` 在门口就 return 了 ✓，
+       而且它把原因写在**生词本**的 `EP_UI.enErr` 上 ✓ —— 正在读书的人**根本看不到** ✗）。
+       → 没配 AI 就**说实话** ✓，并告诉他去哪儿配 ✓。 */
+    rdToast(mailAiCfg()
+      ? ('已加入生词本：「' + w + '」✓ 正在自动补全…')
+      : ('已加入生词本：「' + w + '」✓ 想自动补音标 / 释义 / 巧记 → 去「本机管家 → AI」填一下模型和 Key'));
     /* ★★ 加入就**自动补全** ✓ —— 用户原话「加入的单词，得自动解析好音标，词义和例句…」✓。
        ⚠️ **不 await** ✗（用户不用等着 ✓）：词卡立刻出现 ✓，字段一边补一边填 ✓。 */
     epWordEnrich(card);
@@ -9825,8 +10103,8 @@
   function bindEnglish() {
     const host = document.getElementById('lifework-view');
     if (!host || TAB !== 'reading') return;
-    const q = (s) => host.querySelector(s);
-    const qa = (s) => Array.from(host.querySelectorAll(s));
+    const q = (s) => lwQ(host, s);
+    const qa = (s) => lwQA(host, s);
     qa('[data-rdmode]').forEach((el) => { el.onclick = () => epSetMode(el.dataset.rdmode); });
 
     /* ── 外刊精读 ── */
@@ -10481,7 +10759,7 @@
   function bindMail() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
-    const qa = (s) => Array.from(host.querySelectorAll(s));
+    const qa = (s) => lwQA(host, s);
     /* ★ 三栏**左右拖动调宽** ✓ —— 和备忘录那套逻辑完全一致：
        拖动时改宽度（带上下限 ✓）、松手写进 STORE ✓、双击恢复默认 ✓。
        绑在这里是因为 `renderMailPane()` 会重绘 pane ✓，而 grip 是它们的**兄弟节点** ✓，

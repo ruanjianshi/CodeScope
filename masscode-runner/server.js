@@ -44,6 +44,7 @@ const HOT = require('./lib/hot');
 const EN_TEXT = require('./lib/en-text.js');   /* 外刊精读：抽正文 / 分句 / 取词（纯逻辑 ✓） */
 const SRS = require('./lib/srs.js');           /* 外刊精读：遗忘曲线复习调度（纯逻辑 ✓） */
 const EN_SOURCES = require('./lib/en-sources.js');   /* 外刊精读：推荐外刊源（RSS ✓ 实测过的 ✓） */
+const EBOOK = require('./lib/ebook.js');             /* 本地电子书：EPUB / TXT 解析（纯逻辑 ✓） */
 const FLOW_SCHED = require('./lib/flow-schedule.js');   /* 工作流定时排期（纯逻辑 ✓） */
 /* ★ 只把**这几个**纯逻辑模块暴露给浏览器 ✓（**白名单** ✓，不是把整个 lib/ 敞开 ✗）。
    它们都是「双栖」的 ✓：Node 里 require 拿到 ✓、浏览器里挂 window.LW_xxx ✓ ——
@@ -446,6 +447,26 @@ function looseJson(text) {
     out += c;
   }
   return out.replace(/\\(?!["\\/bfnrtu])/g, '').replace(/\\u(?![0-9a-fA-F]{4})/g, '');
+}
+/* ── 本地电子书 ✓（用户原话：「我需要的是可以实现阅读」）────────────────────
+   ★ 为什么走本地文件 ✗：微信读书那条路**实测走不通** ✓ ——
+     它的 17 个接口里**没有一个能取正文** ✗（`/book/chapterinfo` 只给目录 ✓、
+     `/book/underlines` 只给位置区间 + 划线人数 ✗），
+     而它的网页 Cookie 是 **SameSite=Lax** ✗ → 跨域 iframe **根本收不到** ✗
+     （实测：阅读器一直转圈、右上角显示「登录」✗）。
+     → 所以「在这里读书」只能靠**用户自己的电子书文件** ✓。
+
+   ⚠️⚠️ **书的正文绝不能进 `life-workbench.json`** ✗✗ ——
+      那个文件是**整份读写**的 ✓（前端一存就是整份覆盖 ✗），
+      一本小说塞进去 = 几 MB 的 JSON ✓ → 每次保存都要序列化一遍 ✓
+      → 面板卡死 ✓，而且和「谁的数据谁写」那条冲突 ✓。
+      → 书放在**自己的目录**里 ✓（`<应用数据>/life-books/<id>/` ✓），
+        一章一个文件 ✓；前端只按需取**当前那一章** ✓。 */
+const EBOOK_DIR = () => path.join(applicationDataRoot(), 'life-books');
+const EBOOK_ID_RE = /^eb[a-z0-9]{4,40}$/;
+function readEbookMeta(id) {
+  if (!EBOOK_ID_RE.test(String(id || ''))) return null;
+  try { return JSON.parse(fs.readFileSync(path.join(EBOOK_DIR(), id, 'meta.json'), 'utf8')); } catch (_) { return null; }
 }
 /* 每个节点输出截断 ✓ —— outbox 是要给前端看的 ✓，塞几十 MB 进去会把面板卡住 ✗ */
 function trimFlowOut(v) {
@@ -5257,7 +5278,9 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
         u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf' ||
         u.pathname === '/api/life/en/fetch' || u.pathname === '/api/life/en/sources' ||
-        u.pathname === '/api/life/en/wordimg' ||
+        u.pathname === '/api/life/en/wordimg' || u.pathname === '/api/life/ebook/import' ||
+        u.pathname === '/api/life/ebook/chapter' || u.pathname === '/api/life/ebook/meta' ||
+        u.pathname === '/api/life/ebook' ||
         u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
@@ -5499,6 +5522,90 @@ const server = http.createServer(async (req, res) => {
               error: /abort|timeout/i.test(why) ? '搜图超时（网络不通？）' : ('搜图失败：' + why),
             });
           }
+        }
+
+        /* ── 本地电子书：导入 / 取章 / 元信息 / 删除 ✓ ──────────────────────
+           ⚠️ 上传走**流式**（`officeStreamToFile` ✓，和 Office 上传同一套 ✓）——
+              一本 epub 可能几十 MB ✗，全塞内存会把服务顶住 ✗。
+           ⚠️ 文件名走**请求头**（base64 JSON ✓）—— 和 `/api/readings/upload-stream`
+              同一个套路 ✓（body 要留给文件本身 ✓）。 */
+        if (u.pathname === '/api/life/ebook/import') {
+          if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          let info = null;
+          try { info = JSON.parse(Buffer.from(String(req.headers['x-codescope-ebook'] || ''), 'base64').toString('utf8')); } catch (_) {}
+          const name = path.basename(String((info && info.name) || '').trim()).slice(0, 200);
+          const ext = path.extname(name).toLowerCase();
+          if (!name) return send(res, 200, { ok: false, error: '没拿到文件名' });
+          if (['.epub', '.txt', '.pdf'].indexOf(ext) < 0) {
+            return send(res, 200, { ok: false, error: '只支持 EPUB / TXT / PDF 三种（.mobi / .azw3 是亚马逊的私有格式，得先转换）' });
+          }
+          fs.mkdirSync(EBOOK_DIR(), { recursive: true });
+          const tmp = path.join(EBOOK_DIR(), '.' + crypto.randomUUID() + '.upload');
+          try {
+            await officeStreamToFile(req, tmp, 150 * 1024 * 1024);
+            /* ① 解析 ✓（纯逻辑在 lib/ebook.js ✓） */
+            let book = null;
+            if (ext === '.epub') book = EBOOK.parseEpub(fs.readFileSync(tmp));
+            else if (ext === '.txt') book = EBOOK.parseTxt(fs.readFileSync(tmp), name);
+            else {
+              /* PDF 走**已有的**抽取 ✓（worker 优先 ✓，见 parsePdfPages ✓）—— 别在这儿再抄一遍 ✗ */
+              const r = await parsePdfPages(tmp);
+              const pages = (r.pages || []).filter((t) => t && t.trim());
+              if (!pages.length) {
+                throw new Error('这个 PDF 里没抽出文字 —— 多半是**扫描件**（图片 PDF）✓，那得先 OCR，这个还没做');
+              }
+              book = { title: name.replace(/\.pdf$/i, ''), author: '', chapters: pages.map((t, i) => ({ title: '第 ' + (i + 1) + ' 页', text: t })) };
+            }
+            if (!book || !book.chapters || !book.chapters.length) throw new Error('这本书里没抽出正文');
+            /* ② 落盘 ✓（一章一个文件 ✓） */
+            const id = 'eb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            const dir = path.join(EBOOK_DIR(), id);
+            fs.mkdirSync(dir, { recursive: true });
+            const chapters = book.chapters.map((c, i) => {
+              const text = String((c && c.text) || '');
+              fs.writeFileSync(path.join(dir, 'c' + i + '.txt'), text, 'utf8');
+              return { title: String((c && c.title) || ('第 ' + (i + 1) + ' 节')).slice(0, 80), chars: text.length };
+            });
+            const total = chapters.reduce((n, c) => n + c.chars, 0);
+            const meta = {
+              id, title: String(book.title || '').trim().slice(0, 120) || name,
+              author: String(book.author || '').trim().slice(0, 80),
+              from: name, at: Date.now(), total, chapters,
+            };
+            fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+            return send(res, 200, { ok: true, book: meta });
+          } catch (error) {
+            const why = String((error && error.message) || error);
+            return send(res, 200, { ok: false, error: /超过|413/.test(why) ? '文件太大了（上限 150 MB）' : why });
+          } finally {
+            try { fs.unlinkSync(tmp); } catch (_) {}
+          }
+        }
+        if (u.pathname === '/api/life/ebook/chapter') {
+          const id = String(u.searchParams.get('id') || '').trim();
+          const meta = readEbookMeta(id);
+          if (!meta) return send(res, 200, { ok: false, error: '找不到这本书（是不是已经删了？）' });
+          const want = Number(u.searchParams.get('i')) || 0;
+          const n = Math.max(0, Math.min((meta.chapters || []).length - 1, want));
+          let text = '';
+          try { text = fs.readFileSync(path.join(EBOOK_DIR(), id, 'c' + n + '.txt'), 'utf8'); } catch (_) {}
+          return send(res, 200, {
+            ok: true, index: n, total: (meta.chapters || []).length,
+            title: (meta.chapters[n] && meta.chapters[n].title) || '',
+            text,
+          });
+        }
+        if (u.pathname === '/api/life/ebook/meta') {
+          const meta = readEbookMeta(String(u.searchParams.get('id') || '').trim());
+          if (!meta) return send(res, 200, { ok: false, error: '找不到这本书' });
+          return send(res, 200, { ok: true, book: meta });
+        }
+        if (u.pathname === '/api/life/ebook') {
+          if (req.method !== 'DELETE') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          const id = String(u.searchParams.get('id') || '').trim();
+          if (!EBOOK_ID_RE.test(id)) return send(res, 200, { ok: false, error: '书 id 不对' });
+          try { fs.rmSync(path.join(EBOOK_DIR(), id), { recursive: true, force: true }); } catch (_) {}
+          return send(res, 200, { ok: true });
         }
 
         if (u.pathname === '/api/life/en/fetch') {

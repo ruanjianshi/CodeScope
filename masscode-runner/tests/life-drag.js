@@ -101,8 +101,19 @@ const INSTALL = () => {
     await p.locator('.lw-nav [data-tab="flow"]').dispatchEvent('click');
     await p.waitForTimeout(1500);
     if (!(await p.locator('.lw-fl-node').count())) {
-      p.once('dialog', (d) => d.accept('__拖动探针__'));
+      /* ⚠️⚠️ 这里原来靠 `p.once('dialog', …)` 应答**原生 prompt** ✗✗ ——
+         原生弹窗**早换成应用内浮层了** ✓（`lwAsk` ✓，见 CHANGELOG ✓）→
+         那个 `dialog` 事件**永远不触发** ✗ → 名字压根没输进去 ✓ →
+         工作流建不出来 ✓ → 节点也就没有 ✓ → 「能建出节点来测」**一直红着** ✗
+         （实测：和当时改的功能**无关** ✗ —— 拿 HEAD 版本跑一样红 ✓，
+          是**换弹窗那次漏改了这个探针** ✓）。
+         → 改成「点按钮 → 等 `#lw-dlg-in` → 填值 → 回车」✓（和 `life-flow.js` 一致 ✓）。 */
       await p.locator('#lw-fl-new').click().catch(() => {});
+      await p.waitForSelector('#lw-dlg-in', { timeout: 10000 }).catch(() => {});
+      if (await p.locator('#lw-dlg-in').count()) {
+        await p.locator('#lw-dlg-in').fill('__拖动探针__');
+        await p.keyboard.press('Enter');
+      }
       await p.waitForTimeout(1500);
       await p.locator('[data-fladd="trigger.manual"]').click().catch(() => {});
       await p.waitForTimeout(1500);
