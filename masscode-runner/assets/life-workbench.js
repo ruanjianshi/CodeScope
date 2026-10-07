@@ -1579,9 +1579,20 @@
     },
     'trigger.timer': {
       e: '⏰', n: '定时触发', g: '触发', in: 0, out: 1,
-      cfg: [['every', '间隔（分钟）', 'number', 60, '到点自动跑（先把图搭好，定时在服务端排期）']],
-      d: '每隔 N 分钟自动跑一次。',
-      how: '<b>目前只存了配置，服务端还没真正排期</b> —— 现在仍然要点「▶ 运行」才跑。先把图搭好，等排期做出来它就直接生效。',
+      cfg: [
+        ['mode', '怎么跑', 'select', '每隔一段', '每隔一段 / 每天定时'],
+        ['every', '间隔（分钟）', 'number', 60, '只在「每隔一段」时用；0 或不填＝60 分钟'],
+        ['at', '每天几点', 'text', '09:00', '只在「每天定时」时用，写成 09:00 这样'],
+      ],
+      d: '到点了自动跑一次（服务端排期 ✓，面板关着也会跑 ✓）。',
+      how: '两种用法：<b>每隔一段</b>（比如每 60 分钟 ✓）或<b>每天定时</b>（比如每天 09:00 ✓）。'
+        + '<b>排期在服务端</b> ✓ —— 面板关着、浏览器关了都会跑 ✓。'
+        + '「每隔一段」的<b>第一次会立刻跑一下</b> ✓（让你马上知道它通了 ✓），之后才按间隔来 ✓；'
+        + '「每天定时」则等下一个到点 ✓。'
+        + '跑出来的东西（备忘录 / 日记 / 邮件）会先攒着 ✓，'
+        + '你下次打开面板时自动落进去 ✓（所以不会因为「面板没开」丢产出 ✓）。'
+        + '⚠️ 错过的班次<b>不补跑</b> ✗（机器睡了三天回来只跑一次 ✓，不会突然冒出三条 ✗）。'
+        + '⚠️ AI 节点需要你在 CodeScope 里配过模型 ✓（面板打开时会自动把配置同步给服务端 ✓）。',
       o: 'at、fired —— 它只负责「把流程点着」，一般用不到',
     },
     'trigger.webhook': {
@@ -1797,6 +1808,8 @@
     undo: [], redo: [],
     /* ★ 执行历史 ✓（每次运行的摘要 + 每步输出 ✓，最多 20 条 ✓） */
     runs: [], runOpen: false, runSel: -1, stepSel: -1, keysBound: false,
+    /* ★ 定时排期 ✓（服务端算 ✓，这里只显示 + 收产出 ✓） */
+    sched: [], schedAt: 0, schedOpen: false, schedTimer: 0, schedBusy: false,
     /* ★ 剪贴板 ✓（复制粘贴节点 ✓） */
     clip: null,
   };
@@ -1869,6 +1882,9 @@
         下面所有用到的地方都要判空 ✓，并给一句「说明为什么用不了」✓。 */
   const EN = (typeof window !== 'undefined' && window.LW_EN_TEXT) || null;
   const SRS = (typeof window !== 'undefined' && window.LW_SRS) || null;
+  /* 定时排期的「人话描述」也共用一份 ✓ —— 前端自己再写一套必然走偏 ✗
+     （「每 1 小时」和「每小时」两种说法并存，用户会以为哪里不对 ✗）。 */
+  const FLOW_SCHED = (typeof window !== 'undefined' && window.LW_FLOW_SCHED) || null;
   /* 分句结果缓存 ✓（按文章 id + 正文长度当 key ✓）—— 每次渲染都重切一遍纯属浪费 ✗。
      ⚠️ 不落盘 ✗：正文一变（重新导入 ✓）长度就变了 ✓，key 自动失效 ✓。 */
   const EP_SENTS = new Map();
@@ -6446,8 +6462,112 @@
      ⚠️ 允许直接塞 <b> / <code> 这类标签 ✓，但**绝对不能有反引号** ✗✗
         （这段在一个 JS 模板字符串里 ✗ —— 见文件顶部那条铁律 ✗）。
      ══════════════════════════════════════════════════════════════════════ */
-  /* ★ 执行历史浮层 ✓（n8n 的 Executions 列表 ✓）——
-     每次跑完记一条 ✓：什么时候、成没成、花了多久、每一步什么状态 ✓。
+  /* ══════════════════════════════════════════════════════════════════════
+     定时触发 ✓（服务端排期 + 前端收产出）
+     ══════════════════════════════════════════════════════════════════════
+     ★ 为什么产出要「攒着」让前端来取 ✗（服务端直接写 store 不行吗 ✗）
+       不行 ✗。前端保存是**整份覆盖**的 ✓（`saveStore()` 直接 POST 整个 STORE ✓）——
+       服务端要是也往那个文件里写 ✗，两边会互相盖 ✗：
+       09:00 定时跑完写了一条备忘录 ✓，09:01 用户点了下收藏 → 整份旧数据覆盖回去 ✗，
+       那条备忘录就**无声无息没了** ✗✗。
+       → 服务端只写自己的文件 ✓，把产出放 **outbox** ✓；
+         前端来取 ✓、应用 ✓、回执清掉 ✓。**谁的数据谁写** ✗。
+
+     ⚠️ 轮询定时器**必须是单例** ✗ —— `bindFlow()` 每次 render 都跑 ✗，
+        不设闸的话开一会儿就能挂上几十个 60 秒定时器 ✗（和秒针那个坑一样 ✗）。 */
+  async function flowPollSchedule() {
+    if (FLOW_UI.schedBusy) return;
+    FLOW_UI.schedBusy = true;
+    try {
+      const r = await fetch('/api/life/flow/schedule', { cache: 'no-store' });
+      const d = await r.json();
+      if (!d || !d.ok) return;
+      FLOW_UI.sched = d.items || [];
+      FLOW_UI.schedAt = d.now || Date.now();
+      /* ★ 顺手把 AI 配置推给服务端 ✓ ——
+         它存在浏览器的 localStorage 里 ✗，服务端读不到 ✗，
+         而定时跑的时候要用 ✓（不然定时跑 AI 节点必失败 ✗）。 */
+      const ai = flowAiCfg();
+      const body = {};
+      if (ai && ai.url && ai.model) body.ai = { url: ai.url, key: ai.key || '', model: ai.model };
+      /* ★ 有产出 → 应用 → 回执 ✓ */
+      const box = d.outbox || [];
+      if (box.length) {
+        const upTo = Math.max.apply(null, box.map((x) => Number(x.seq) || 0));
+        const parts = [];
+        for (const run of box) {
+          const msg = await flowApplyEffectsDeep(run.effects || [], 0);
+          parts.push('「' + (run.flowName || '工作流') + '」' + (run.ok ? '✓' : '✗ ' + run.err));
+          /* 也记进本地的执行历史 ✓（和手动运行长一个样 ✓） */
+          flowPushRunRaw(run.flowId, {
+            at: run.at, ok: run.ok, err: run.err, ms: run.ms,
+            steps: (run.steps || []).map((st) => Object.assign({}, st, { out: undefined })),
+          });
+          if (msg) parts.push(msg);
+        }
+        body.ackUpTo = upTo;
+        setStatus(esc('⏰ 定时任务跑了：' + parts.join(' · ').slice(0, 120)), 12000);
+      }
+      if (Object.keys(body).length) {
+        await fetch('/api/life/flow/schedule', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+        });
+      }
+      if (TAB === 'flow') render();     /* 让「下次几点跑」跟着更新 ✓ */
+    } catch (_) { /* 服务没起来就下次再说 ✓ */ }
+    finally { FLOW_UI.schedBusy = false; }
+  }
+  /* 按 flowId 记一条历史 ✓（定时跑的产出要落到对应那个工作流名下 ✓） */
+  function flowPushRunRaw(flowId, run) {
+    if (!flowId) return;
+    const all = (STORE && STORE.flowRuns) || {};
+    const list = (all[flowId] || []).concat([run]).slice(-FLOW_RUN_MAX);
+    STORE.flowRuns = Object.assign({}, all, { [flowId]: list });
+    if (flowSel() === flowId) FLOW_UI.runs = list.slice().reverse();
+    saveStore();
+  }
+  /* ⏰ 定时面板 ✓ —— 一眼看到「哪几个会自动跑、下次几点、上次成没成」✓ */
+  function flowSchedHtml() {
+    const items = FLOW_UI.sched || [];
+    const now = FLOW_UI.schedAt || Date.now();
+    const rows = items.length ? items.map((x) => {
+      const secs = x.nextAt ? Math.round((x.nextAt - now) / 1000) : 0;
+      const until = x.nextAt ? (secs <= 0 ? '马上' : (secs < 60 ? secs + ' 秒后' : (secs < 3600 ? Math.round(secs / 60) + ' 分钟后' : Math.round(secs / 3600) + ' 小时后'))) : '—';
+      const tone = x.bad ? T.red : (x.nextAt && x.nextAt - now < 60000 ? T.ok : T.dim);
+      return '<div class="lw-fl-row" style="cursor:default">'
+        + '<span class="em">⏰</span>'
+        + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(x.flowName || x.flowId) + '</span>'
+        + '<span class="n" style="color:' + tone + '">' + esc(x.bad || until) + '</span></div>'
+        + '<div style="font-size:9.5px;color:' + T.faint + ';padding:0 0 6px 30px;line-height:1.8">'
+        + esc(flowSchedDescribe(x.cfg)) + ' · 上次 ' + (x.lastAt ? new Date(x.lastAt).toLocaleString('zh-CN', { hour12: false }) : '还没跑过')
+        + (x.nextAt ? ' · 下次 ' + new Date(x.nextAt).toLocaleString('zh-CN', { hour12: false }) : '')
+        + '</div>';
+    }).join('') : '<div class="lw-rd-empty" style="padding:30px 14px">还没有定时任务<br><span style="color:' + T.faint + '">在节点库里加一个「⏰ 定时触发」就行</span></div>';
+    return '<div class="lw-imp" id="lw-fl-schedbox"><div class="box" style="width:min(680px,92vw)">'
+      + '<div class="hd"><b>⏰ 定时任务</b><span class="x" id="lw-fl-schedbox-x">✕</span></div>'
+      + '<div class="bd">'
+      + '<div class="tip">排期跑在<b>服务端</b> ✓ —— 面板关着、浏览器关了都会跑 ✓。'
+      + '每 ' + Math.round((30000) / 1000) + ' 秒检查一次 ✓。'
+      + '跑出来的东西会先攒着 ✓，你下次打开面板时自动落进备忘录 / 日记 ✓。</div>'
+      + '<div class="steps"><div class="h">两条容易踩的</div>'
+      + '<div class="n">⚠️ <b>错过的班次不补跑</b> ✗ —— 机器睡了三天回来只跑一次 ✓，'
+      + '不会突然冒出三条备忘录 ✗。<br>'
+      + '⚠️ 定时跑 <b>AI 节点</b>需要你配过模型 ✓（面板打开时会自动同步给服务端 ✓）。</div></div>'
+      + rows
+      + '</div>'
+      + '<div class="ft"><button class="pri" id="lw-fl-schedbox-close">知道了</button>'
+      + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">检查于 '
+      + esc(new Date(now).toLocaleTimeString('zh-CN', { hour12: false })) + '</span></div>'
+      + '</div></div>';
+  }
+  /* 描述用**同一套**逻辑 ✓ —— 前端再抄一遍必然走偏 ✗（见 lib/flow-schedule.js ✓） */
+  function flowSchedDescribe(cfg) {
+    const c = cfg || {};
+    if (FLOW_SCHED && FLOW_SCHED.describe) return FLOW_SCHED.describe(c);
+    if (String(c.mode || '') === '每天定时') return '每天 ' + (c.at || '?');
+    return '每 ' + (Number(c.every) || 60) + ' 分钟';
+  }
+  /* ★ 执行历史浮层 ✓（n8n 的 Executions 列表 ✓）——     每次跑完记一条 ✓：什么时候、成没成、花了多久、每一步什么状态 ✓。
      点开一条能看到每一步的**输出** ✓（调试时最有用的就是这个 ✓）。 */
   function flowRunsHtml() {
     const runs = FLOW_UI.runs || [];
@@ -6661,6 +6781,9 @@
       + '<button id="lw-fl-paste" title="粘贴（⌘V）"' + (FLOW_UI.clip && FLOW_UI.clip.nodes.length ? '' : ' disabled') + '>📋 粘贴</button>'
       + '<button id="lw-fl-tidy" title="按连线分层重新排列（Tidy Up）">▦ 整理</button>'
       + '<button id="lw-fl-runs" title="看以前每次跑的结果">🕘 历史' + (FLOW_UI.runs.length ? ' ' + FLOW_UI.runs.length : '') + '</button>'
+      + '<button id="lw-fl-sched" title="哪些工作流会自动跑、下次几点"'
+      + (FLOW_UI.sched.length ? ' style="border-color:' + T.accent + ';color:' + T.accent + '"' : '') + '>⏰ 定时'
+      + (FLOW_UI.sched.length ? ' ' + FLOW_UI.sched.length : '') + '</button>'
       + '<span class="sep"></span>'
       + '<button id="lw-fl-example" title="一键搭一个能跑的示例（B站热门 → AI 挑 5 条 → 写进备忘录）">✨ 示例</button>'
       + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">📖 说明</button>'
@@ -6679,7 +6802,8 @@
         : f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
       + '</div>' + paneGrip('cfg')
       + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>' + flowCfgInnerHtml(f) + '</div></div>'
-      + (FLOW_UI.runOpen ? flowRunsHtml() : '');
+      + (FLOW_UI.runOpen ? flowRunsHtml() : '')
+      + (FLOW_UI.schedOpen ? flowSchedHtml() : '');
   }
   /* ── 运行 ✓ ────────────────────────────────────────────────────────────── */
   function flowAiCfg() {
@@ -6893,6 +7017,16 @@
     const td = q('#lw-fl-tidy'); if (td) td.onclick = () => flowTidy();
     const rs = q('#lw-fl-runs');
     if (rs) rs.onclick = () => { flowLoadRuns(flowCurrent()); FLOW_UI.runOpen = true; FLOW_UI.runSel = -1; render(); };
+    const sc = q('#lw-fl-sched');
+    if (sc) sc.onclick = () => { FLOW_UI.schedOpen = true; flowPollSchedule(); render(); };
+    const scx = q('#lw-fl-schedbox-x'); if (scx) scx.onclick = () => { FLOW_UI.schedOpen = false; render(); };
+    const scc = q('#lw-fl-schedbox-close'); if (scc) scc.onclick = () => { FLOW_UI.schedOpen = false; render(); };
+    /* ★ 轮询排期 ✓ —— 定时器**单例** ✗（bindFlow 每次 render 都跑 ✗，
+       不设闸的话开一会儿就挂上几十个 60 秒定时器 ✗）。 */
+    if (!FLOW_UI.schedTimer) {
+      FLOW_UI.schedTimer = setInterval(flowPollSchedule, 60000);
+      flowPollSchedule();               /* 进页面先拉一次 ✓（上次的产出马上落进来 ✓） */
+    }
     const rx = q('#lw-fl-runbox-x'); if (rx) rx.onclick = () => { FLOW_UI.runOpen = false; render(); };
     const rc = q('#lw-fl-runs-close'); if (rc) rc.onclick = () => { FLOW_UI.runOpen = false; render(); };
     qa('[data-flrun]').forEach((el) => { el.onclick = () => { FLOW_UI.runSel = Number(el.dataset.flrun); render(); }; });

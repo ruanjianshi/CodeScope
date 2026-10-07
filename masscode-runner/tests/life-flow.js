@@ -343,6 +343,85 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     await p.click('#lw-fl-runbox-x'); await p.waitForTimeout(600);
     ck('历史浮层能关掉', await p.locator('#lw-fl-runbox').count() === 0);
 
+    /* ══════════════════════════════════════════════════════════════════
+       ⑲ 定时触发（服务端排期 + 前端收产出）
+       ⚠️ 这一段要**真等一次调度**（服务端 30 秒一个 tick ✗，
+          「每隔 1 分钟」最快也得等 ~90 秒 ✗）—— 所以它比别的段慢很多 ✓。
+       ══════════════════════════════════════════════════════════════════ */
+    console.log('\n── ⑲ 定时触发：服务端排期 ──');
+    dialogs.push(MARK + '定时流');
+    await p.click('#lw-fl-new'); await p.waitForTimeout(900);
+    await p.locator('[data-fladd="trigger.timer"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-fladd="out.memo"]').click(); await p.waitForTimeout(500);
+    /* 配成「每隔 1 分钟」+ 备忘录 */
+    await p.locator('.lw-fl-node').first().click(); await p.waitForTimeout(600);
+    await p.locator('[data-flcfg="every"]').fill('1'); await p.waitForTimeout(500);
+    await p.locator('.lw-fl-node').last().click(); await p.waitForTimeout(600);
+    await p.locator('[data-flcfg="title"]').fill(MARK + '定时产出');
+    await p.locator('[data-flcfg="text"]').fill('定时跑出来的'); await p.waitForTimeout(500);
+    /* 连线 */
+    const tNodes = ((await store()).flows || []).filter((x) => String(x.name) === MARK + '定时流').pop();
+    ck('  定时工作流建好了（2 个节点）', !!tNodes && tNodes.nodes.length === 2, tNodes ? String(tNodes.nodes.length) : 'null');
+    await p.locator('[data-flout="' + tNodes.nodes[0].id + '"][data-flport="0"]').click(); await p.waitForTimeout(400);
+    await p.locator('[data-flin="' + tNodes.nodes[1].id + '"]').click(); await p.waitForTimeout(700);
+
+    const sch0 = await (await fetch(BASE + '/api/life/flow/schedule')).json();
+    const mine = (sch0.items || []).filter((x) => x.flowId === tNodes.id);
+    ck('★ 服务端认出了这个定时触发器', mine.length === 1, JSON.stringify(mine.map((x) => x.flowName)));
+    /* ⚠️ 「从没跑过的间隔任务」按设计是**立刻到期**的 ✓（见 lib/flow-schedule.js 那段注释 ✓），
+       所以这里**不能**断言「下次在未来」✗ —— 第一版就是这么写的 ✓，
+       结果它把「立刻到期」误判成失败 ✗（而那恰恰是修好的那个 bug 的行为 ✓）。 */
+    ck('★ 算出了下次运行时间（从没跑过 → 立刻到期）', !!mine[0] && typeof mine[0].nextAt === 'number' && mine[0].nextAt <= sch0.now,
+      mine[0] ? new Date(mine[0].nextAt).toISOString() + ' vs now' : 'null');
+    /* ⚠️ 这一条是**关键** ✗ —— 上面两条就算 `every` 还是默认的 60 分钟也照样通过 ✗，
+       于是「调度器没跑」会被误判成「调度器坏了」✗（实测踩过 ✗）。
+       必须直接断言「间隔是 1 分钟、下次在 90 秒内」✓。 */
+    console.log('    排期详情: ' + JSON.stringify(mine.map((x) => ({ every: x.cfg.every, mode: x.cfg.mode, 还有秒: Math.round((x.nextAt - sch0.now) / 1000) }))));
+    ck('★ 间隔配成了 1 分钟（不是默认的 60）', !!mine[0] && String(mine[0].cfg.every) === '1', mine[0] ? String(mine[0].cfg.every) : 'null');
+    ck('★ 下次在 90 秒内（所以等一下就能看到它自己跑）', !!mine[0] && (mine[0].nextAt - sch0.now) <= 90000, mine[0] ? Math.round((mine[0].nextAt - sch0.now) / 1000) + 's' : 'null');
+
+    console.log('    ⏰ 打开定时面板');
+    await p.click('#lw-fl-sched'); await p.waitForTimeout(1200);
+    ck('★ 定时浮层开了', await p.locator('#lw-fl-schedbox').count() === 1);
+    const stTxt = await txt('#lw-fl-schedbox');
+    ck('★ 说清了「排期在服务端、面板关着也会跑」', /服务端/.test(stTxt) && /关了都会跑/.test(stTxt), stTxt.slice(0, 70));
+    ck('★ 说清了「错过的班次不补跑」', /不补跑/.test(stTxt));
+    ck('★ 列出了这个定时任务和它的下次时间', /下次/.test(stTxt) && stTxt.indexOf(MARK + '定时流') >= 0, stTxt.replace(/\n/g, ' ').slice(0, 140));
+    await p.click('#lw-fl-schedbox-close'); await p.waitForTimeout(600);
+    ck('  能关掉', await p.locator('#lw-fl-schedbox').count() === 0);
+
+    console.log('    ⏳ 等调度器真的跑一次（最多 100 秒 —— 服务端 30 秒一个 tick，「每隔 1 分钟」最快也要 ~90 秒）');
+    const memosBefore2 = ((await store()).memos || []).filter((m) => String(m.text).indexOf(MARK + '定时产出') >= 0).length;
+    let fired = false;
+    for (let i = 0; i < 20; i++) {
+      await p.waitForTimeout(5000);
+      const sch = await (await fetch(BASE + '/api/life/flow/schedule')).json();
+      const it = (sch.items || []).filter((x) => x.flowId === tNodes.id)[0];
+      const box = (sch.outbox || []).filter((x) => x.flowId === tNodes.id);
+      const memoNow = ((await store()).memos || []).filter((m) => String(m.text).indexOf(MARK + '定时产出') >= 0).length;
+      /* ★ 每一步都打出来 ✗ —— 不然「没跑」到底是「没到期」「tick 没转」「跑了但被前端收走了」
+         三种情况**长得一模一样** ✗（实测就是靠这行才看出来的 ✗）。 */
+      console.log('      +' + ((i + 1) * 5) + 's 还有 ' + (it && it.nextAt ? Math.round((it.nextAt - sch.now) / 1000) : '?') + 's'
+        + ' · outbox ' + box.length + ' · 备忘录 ' + memoNow + ' · 上次 ' + (it && it.lastAt ? new Date(it.lastAt).toLocaleTimeString('zh-CN', { hour12: false }) : '无'));
+      if (box.length) { fired = true; console.log('      → 调度器跑了（ok=' + box[0].ok + '）'); break; }
+      /* ⚠️ 也可能「跑了、而且已经被前端收走并落地了」✗ ——
+         那 outbox 就是空的 ✓，但备忘录已经多了一条 ✓。这也算成功 ✓。 */
+      if (memoNow > memosBefore2) { fired = true; console.log('      → 产出已经落地（被前端收走了）'); break; }
+    }
+    ck('★★ 调度器真的自动跑了（没人点运行）', fired);
+    if (fired) {
+      /* 产出要等前端下一次轮询才会落地 ✓（最多 60 秒 ✓） */
+      let landed = false;
+      for (let i = 0; i < 14; i++) {
+        await p.waitForTimeout(5000);
+        const now = ((await store()).memos || []).filter((m) => String(m.text).indexOf(MARK + '定时产出') >= 0).length;
+        if (now > memosBefore2) { landed = true; console.log('      → 第 ' + ((i + 1) * 5) + ' 秒：产出落进备忘录了'); break; }
+      }
+      ck('★★ 定时产出落进了备忘录（前端收 outbox）', landed, memosBefore2 + ' → ' + ((await store()).memos || []).filter((m) => String(m.text).indexOf(MARK + '定时产出') >= 0).length);
+      const sch2 = await (await fetch(BASE + '/api/life/flow/schedule')).json();
+      ck('★ outbox 被回执清空（不会重复落地）', (sch2.outbox || []).filter((x) => x.flowId === tNodes.id).length === 0);
+    }
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
   } catch (e) {
     console.log('✗ 异常: ' + e.message); fails.push('异常:' + e.message);

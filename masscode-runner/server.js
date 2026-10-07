@@ -43,11 +43,12 @@ const WORKFLOW = require('./lib/workflow');
 const HOT = require('./lib/hot');
 const EN_TEXT = require('./lib/en-text.js');   /* 外刊精读：抽正文 / 分句 / 取词（纯逻辑 ✓） */
 const SRS = require('./lib/srs.js');           /* 外刊精读：遗忘曲线复习调度（纯逻辑 ✓） */
+const FLOW_SCHED = require('./lib/flow-schedule.js');   /* 工作流定时排期（纯逻辑 ✓） */
 /* ★ 只把**这几个**纯逻辑模块暴露给浏览器 ✓（**白名单** ✓，不是把整个 lib/ 敞开 ✗）。
    它们都是「双栖」的 ✓：Node 里 require 拿到 ✓、浏览器里挂 window.LW_xxx ✓ ——
    目的是让**前后端用同一份逻辑** ✗：分句规则、复习间隔这种东西抄两遍必然走偏 ✗，
    而且走偏了用户根本查不出来 ✗（只会觉得「这软件不准」✗）。 */
-const SHARED_LIB_FILES = ['en-text.js', 'srs.js'];
+const SHARED_LIB_FILES = ['en-text.js', 'srs.js', 'expr.js', 'flow-schedule.js'];
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
@@ -99,6 +100,131 @@ function rotateStoreBackup(file) {
   fs.copyFileSync(file, bakOf(0));
 }
 const ONLYOFFICE_CONNECTION_FILE = path.join(applicationDataRoot(), 'office-connection.json');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   工作流「定时触发」的服务端排期 ✓
+   ══════════════════════════════════════════════════════════════════════════
+   ★ 为什么单独一个文件存状态 ✗（不写进 life-workbench.json ✗）
+     前端保存是**整份覆盖**的（`saveStore()` 直接 POST 整个 STORE ✓）——
+     服务端要是也往那个文件里写 ✗，两边会互相盖 ✗：
+     09:00 定时跑了、写了一条备忘录 ✓，09:01 用户点了下收藏 → 整份旧数据覆盖回去 ✗，
+     那条备忘录就**无声无息没了** ✗✗。
+   → 所以服务端**只写自己的文件** ✓，跑完把「产出」放进 **outbox** ✓；
+     前端下次打开面板（或每 60 秒）来取 ✓、应用 ✓、回执清掉 ✓。
+     **谁的数据谁写** ✗ —— 这条比「省一次网络往返」重要得多 ✓。
+
+   ⚠️ 另一个刻意的取舍：**同一时刻只跑一个** ✗（`FLOW_TICK_BUSY` ✓）——
+      定时工作流要是很慢（比如 AI 要 30 秒 ✓），30 秒的 tick 会叠上去 ✗，
+      越叠越多最后把机器拖死 ✗。
+   ══════════════════════════════════════════════════════════════════════════ */
+const FLOW_SCHED_FILE = path.join(applicationDataRoot(), 'life-flow-schedule.json');
+const FLOW_TICK_MS = 30000;
+const FLOW_OUTBOX_MAX = 50;
+let FLOW_TICK_BUSY = false;
+let FLOW_TICK_TIMER = null;
+
+function readFlowSched() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(FLOW_SCHED_FILE, 'utf8'));
+    return {
+      last: (raw && raw.last) || {},
+      ai: (raw && raw.ai) || null,
+      seq: Number(raw && raw.seq) || 0,
+      outbox: Array.isArray(raw && raw.outbox) ? raw.outbox : [],
+    };
+  } catch (_) { return { last: {}, ai: null, seq: 0, outbox: [] }; }
+}
+function writeFlowSched(st) {
+  try {
+    fs.mkdirSync(path.dirname(FLOW_SCHED_FILE), { recursive: true });
+    fs.writeFileSync(FLOW_SCHED_FILE, JSON.stringify(st, null, 2));
+  } catch (error) { console.log('[flow-sched] 写状态失败：' + String((error && error.message) || error)); }
+}
+function readLifeStore() {
+  try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-workbench.json'), 'utf8')); } catch (_) { return {}; }
+}
+/* 每个节点输出截断 ✓ —— outbox 是要给前端看的 ✓，塞几十 MB 进去会把面板卡住 ✗ */
+function trimFlowOut(v) {
+  if (v === undefined) return undefined;
+  try {
+    const s = JSON.stringify(v);
+    if (s && s.length > 20000) return { _truncated: true, _size: s.length, preview: s.slice(0, 4000) };
+  } catch (_) { return String(v).slice(0, 2000); }
+  return v;
+}
+async function flowScheduleTick() {
+  if (FLOW_TICK_BUSY) return;                 /* ★ 上一轮还没跑完就跳过 ✓（别叠 ✗） */
+  FLOW_TICK_BUSY = true;
+  try {
+    const store = readLifeStore();
+    const flows = Array.isArray(store.flows) ? store.flows : [];
+    if (!flows.length) return;
+    const st = readFlowSched();
+    const now = Date.now();
+    const due = FLOW_SCHED.dueList(flows, st.last, now);
+    if (!due.length) return;
+    for (const d of due) {
+      /* ★ 先记时间**再跑** ✗ —— 反过来的话，这一轮跑失败（或超时被 kill ✗）时
+         时间没更新 ✓ → 30 秒后又来一次 ✗ → 一直重试 ✗（实测那种会刷屏 ✗）。 */
+      st.last[d.key] = now;
+      const flow = flows.find((f) => f && f.id === d.flowId);
+      if (!flow) continue;
+      const at = Date.now();
+      let run = null;
+      let err = '';
+      try {
+        run = await WORKFLOW.runFlow({ nodes: flow.nodes, edges: flow.edges }, {
+          fetch: fetch, now: at,
+          workflowName: flow.name || '', workflowId: flow.id || '',
+          executionId: 's' + at.toString(36),
+          ai: st.ai && st.ai.url && st.ai.model ? st.ai : null,
+          aiChat: st.ai && st.ai.url && st.ai.model ? makeAiChat(st.ai) : null,
+        });
+      } catch (error) { err = String((error && error.message) || error); }
+      st.seq += 1;
+      st.outbox.push({
+        id: 'r' + st.seq,
+        seq: st.seq,
+        flowId: flow.id,
+        flowName: flow.name || '',
+        at,
+        ok: !err,
+        err,
+        ms: (run && run.ms) || (Date.now() - at),
+        steps: ((run && run.steps) || []).map((s) => ({
+          id: s.id, type: s.type, name: s.name || '', status: s.status,
+          ms: s.ms || 0, attempts: s.attempts || 1, error: s.error || '',
+        })),
+        effects: (run && run.effects) || [],
+      });
+      if (st.outbox.length > FLOW_OUTBOX_MAX) st.outbox = st.outbox.slice(-FLOW_OUTBOX_MAX);
+      console.log('[flow-sched] 跑了「' + (flow.name || flow.id) + '」' + (err ? '失败：' + err : '成功') + '（' + d.key + '）');
+    }
+    writeFlowSched(st);
+  } catch (error) {
+    console.log('[flow-sched] 出错：' + String((error && error.message) || error));
+  } finally { FLOW_TICK_BUSY = false; }
+}
+/* 前端推过来的 AI 配置 ✓ —— 它存在浏览器 localStorage 里 ✗，服务端读不到 ✗，
+   所以让前端顺手推一份过来 ✓（定时跑的时候要用 ✓）。 */
+function makeAiChat(cfg) {
+  return async (c, messages) => {
+    const resp = await fetch(c.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(c.key ? { Authorization: 'Bearer ' + c.key } : {}) },
+      body: JSON.stringify({ model: c.model, messages, stream: false, temperature: 0.3 }),
+      signal: AbortSignal.timeout(120000),
+    });
+    const text = await resp.text();
+    if (!resp.ok) throw new Error('AI 返回 ' + resp.status + '：' + text.slice(0, 240));
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) { throw new Error('AI 返回的不是 JSON'); }
+    const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (typeof content !== 'string') throw new Error('AI 响应里没有 choices[0].message.content');
+    return content;
+  };
+}
+
 /* 「个人管理面板」的缓存：本机扫描贵（1~3s）✗、天气要出外网（2~5s）✗，
    都不需要每次刷新 —— 加缓存后二次打开是**瞬间** ✓。 */
 let LIFE_INDEX_CACHE = null;          /* { at, depth, data } */
@@ -4608,6 +4734,44 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: false, error: '天气读取失败：' + String((error && error.message) || error) });
       }
     }
+    /* ── 工作流定时排期 ✓ ────────────────────────────────────────────────
+       GET  → 每个定时触发器什么时候跑 + 有没有「已经跑完、等前端来取」的产出 ✓
+       POST → 前端推 AI 配置过来 ✓ / 取完产出回执（清 outbox ✓）
+       ⚠️ 这两个接口**不碰** life-workbench.json ✗ —— 见上面那段注释 ✓。 */
+    if (u.pathname === '/api/life/flow/schedule') {
+      if (req.method === 'GET') {
+        const store = readLifeStore();
+        const st = readFlowSched();
+        const now = Date.now();
+        return send(res, 200, {
+          ok: true,
+          now,
+          items: FLOW_SCHED.scan(Array.isArray(store.flows) ? store.flows : [], st.last, now),
+          outbox: st.outbox,
+          seq: st.seq,
+          aiReady: !!(st.ai && st.ai.url && st.ai.model),
+          tickMs: FLOW_TICK_MS,
+        });
+      }
+      if (req.method === 'POST') {
+        try {
+          const body = await readBody(req, 1e6);
+          const st = readFlowSched();
+          if (body && body.ai && typeof body.ai === 'object') {
+            st.ai = { url: String(body.ai.url || '').slice(0, 2048), key: String(body.ai.key || '').slice(0, 10000), model: String(body.ai.model || '').slice(0, 200) };
+          }
+          if (body && body.ackUpTo != null) {
+            const upTo = Number(body.ackUpTo) || 0;
+            st.outbox = st.outbox.filter((x) => Number(x.seq) > upTo);
+          }
+          writeFlowSched(st);
+          return send(res, 200, { ok: true, left: st.outbox.length });
+        } catch (error) {
+          return send(res, 400, { ok: false, error: String((error && error.message) || error) });
+        }
+      }
+      return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+    }
     /* 工作台本地数据（待办 / 笔记 / 设置）—— 存 JSON 文件，纯本地 */
     if (u.pathname === '/api/life/store') {
       const file = path.join(applicationDataRoot(), 'life-workbench.json');
@@ -7443,6 +7607,18 @@ VNC_WSS.on('connection', (ws, _req, target) => {
 
 server.listen(PORT, HOST, () => {
   console.log('码境 CodeScope 已启动 [' + APP_MODE + ']: http://' + HOST + ':' + PORT);
+  /* ★ 工作流定时排期：启动后**等 20 秒**再开始 tick ✓ ——
+     刚起来那会儿磁盘 / CPU 都在忙（扫索引、建知识库 ✗），
+     这时候插一个可能跑 30 秒的工作流进去，会让启动更慢 ✗。
+     ⚠️ `unref()` ✗：定时器不该阻止进程正常退出 ✓。 */
+  if (!FLOW_TICK_TIMER) {
+    FLOW_TICK_TIMER = setTimeout(() => {
+      flowScheduleTick();
+      FLOW_TICK_TIMER = setInterval(flowScheduleTick, FLOW_TICK_MS);
+      if (FLOW_TICK_TIMER && FLOW_TICK_TIMER.unref) FLOW_TICK_TIMER.unref();
+    }, 20000);
+    if (FLOW_TICK_TIMER && FLOW_TICK_TIMER.unref) FLOW_TICK_TIMER.unref();
+  }
   if (HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
     const addresses = [];
     for (const rows of Object.values(os.networkInterfaces())) for (const row of (rows || [])) {
