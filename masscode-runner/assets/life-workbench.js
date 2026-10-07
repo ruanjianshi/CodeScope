@@ -884,6 +884,31 @@
     border-top:1px dashed ${T.lineDim}; letter-spacing:.6px; }
   .lw-ml-more:hover { background:${T.card2}; }
   .lw-ml-item .star { color:${T.accent}; font-size:10px; flex:none; }
+  /* ── 分类管理：文件夹行的「新建 / 删除 / 放置目标」+ 移动浮层 ── */
+  .lw-ml-box .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-ml-box .del { flex:none; margin-left:5px; padding:0 3px; color:${T.faint}; font-size:10px; visibility:hidden; }
+  .lw-ml-box:hover .del { visibility:visible; }
+  .lw-ml-box .del:hover { color:${T.red}; }
+  .lw-ml-box.add { color:${T.faint}; }
+  .lw-ml-box.add:hover { color:${T.accent}; }
+  /* 拖邮件经过时的放置高亮 ✓（和备忘录一致 ✓）*/
+  .lw-ml-box.drop { background:color-mix(in srgb,${T.ok} 18%,transparent); color:${T.text}; }
+  .lw-ml-item.dragging { opacity:.45; }
+  .lw-undo { color:${T.accent}; cursor:pointer; text-decoration:underline; margin-left:8px; }
+  .lw-ml-pickwrap { position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,.45);
+    display:flex; align-items:center; justify-content:center; }
+  .lw-ml-pick { width:320px; max-height:70vh; overflow:auto; background:${T.card};
+    border:2px solid ${T.accent}; font-family:${UI}; color:${T.text}; }
+  .lw-ml-pick .hd { display:flex; align-items:center; padding:11px 13px; border-bottom:1px solid ${T.lineDim};
+    font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:${T.accent}; }
+  .lw-ml-pick .hd .x { margin-left:auto; cursor:pointer; color:${T.faint}; }
+  .lw-ml-pick .hd .x:hover { color:${T.text}; }
+  .lw-ml-pick .it { padding:9px 13px; font-size:12px; cursor:pointer; border-bottom:1px solid ${T.lineDim};
+    display:flex; align-items:center; gap:8px; }
+  .lw-ml-pick .it:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-ml-pick .it.cur { color:${T.faint}; cursor:default; }
+  .lw-ml-pick .it.cur:hover { background:transparent; color:${T.faint}; }
+  .lw-ml-pick .it .tag { margin-left:auto; font-size:9.5px; }
   /* 对照翻译：左边**原样渲染整封邮件** ✓，右边列译文 ✓（见 mailReaderHtml 的注释）*/
   .lw-ml-trbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 18px;
     border-bottom:1px solid ${T.lineDim}; font-size:10px; letter-spacing:1.2px; text-transform:uppercase;
@@ -961,6 +986,11 @@
   let MAIL_TOAST_TIMER = 0;
   let MAIL_FRESH_TIMER = 0;
   let MAIL_VIS_HOOK = false;
+  /* ★ 顶部状态栏（`#lw-sub`）的状态 —— 必须放这里 ✗（见上面的 TDZ 说明）：
+     `render()` 末尾要调 `paintStatus()` ✓，而 `render()` 有可能在模块求值期间被碰到 ✓。
+     消息记在模块作用域 → 整屏 render() 之后能重画 ✓（`#lw-sub` 每次 render 都会被重建 ✗）。 */
+  let STATUS_HTML = '', STATUS_UNTIL = 0, STATUS_UNDO = null;
+  let MAIL_MOVE_BUSY = '';      /* 同一个移动在途时去重 ✓（拖放监听器曾重复挂载 ✗） */
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1411,6 +1441,9 @@
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
       <div class="lw-main">${main()}</div></div>`;
     bind();
+    /* ★ `#lw-sub` 刚被重建 ✗ —— 把还没过期的状态消息（如「已移到… ↩ 撤销」）重画上去 ✓，
+       否则会被默认的「日期 · 项目数」盖掉 ✗（天气异步回来就会触发一次 render ✗）。 */
+    paintStatus();
   }
 
   /* ⚠️ 只重建「左栏 + 中栏」，**故意不碰编辑器** ✓
@@ -3977,20 +4010,48 @@
      所以按**常见叫法**做匹配，认不出的**原样显示** ✓（别写死成只有 QQ 那四个 ✗）。
      原文保留在 `title` 里，鼠标悬停能看见 ✓。 */
   const MAIL_BOX_CN = [
-    [/^(inbox|收件箱)$/i, '收件箱'],
-    [/^(sent|sent\s*messages|sent\s*items|sent\s*mail|已发送|已发送邮件|已发送的邮件)$/i, '已发送'],
-    [/^(drafts?|草稿|草稿箱)$/i, '草稿箱'],
-    [/^(deleted\s*messages|deleted\s*items|trash|bin|已删除|已删除邮件|垃圾箱|废纸篓)$/i, '已删除'],
-    [/^(junk|junk\s*e-?mail|spam|bulk\s*mail|垃圾邮件|垃圾箱|广告邮件|不明邮件)$/i, '垃圾邮件'],
-    [/^(archive|archives|all\s*mail|归档|存档|所有邮件)$/i, '归档'],
-    [/^(notes?|笔记)$/i, '笔记'],
-    [/^(outbox|发件箱|待发送)$/i, '发件箱'],
+    [/^(inbox)$/i, '收件箱'],
+    [/^(sent|sent\s*messages|sent\s*items|sent\s*mail)$/i, '已发送'],
+    [/^(drafts?)$/i, '草稿箱'],
+    [/^(deleted\s*messages|deleted\s*items|trash|bin|废纸篓)$/i, '已删除'],
+    [/^(junk|junk\s*e-?mail|spam|bulk\s*mail)$/i, '垃圾邮件'],
+    [/^(ad\s*mails?|ads?)$/i, '广告邮件'],
+    [/^(virus|virus\s*folder)$/i, '病毒文件夹'],
+    [/^(archive|archives|all\s*mail)$/i, '归档'],
+    [/^(notes?)$/i, '笔记'],
+    [/^(outbox)$/i, '发件箱'],
   ];
   function mailBoxCN(name) {
     const n = String(name || '').trim();
     if (!n) return '';
+    /* ★★ 本来就是中文名的**原样保留** ✓ —— 中文→中文的「翻译」没有信息量 ✗，
+       反而会制造**撞名** ✗：实测 2925 同时有「垃圾箱」和「已删除」两个文件夹，
+       都被规范成「已删除」→ 左栏出现**两行同名** ✗，用户根本分不清点哪个 ✗
+       （163 的「垃圾邮件 / 广告邮件」同理 ✓）。只翻译**外文**名字 ✓。 */
+    if (/[\u3400-\u9fff]/.test(n)) return n;
     for (const [re, cn] of MAIL_BOX_CN) if (re.test(n)) return cn;
     return n;                                  /* 认不出 → 原样 ✓ */
+  }
+  /* 系统文件夹：**不给删** ✗（删了收件箱/已发送就麻烦了 ✗）。
+     认不出的（用户自己建的分类 ✓）才允许删 ✓。
+
+     ★★ 必须**同时认中英文** ✓ —— 上一版只列了英文名 ✗，
+     而 163 返回的是「草稿箱 / 已发送 / 已删除 / 垃圾邮件 / 病毒文件夹 / 广告邮件」✗，
+     2925 返回「垃圾箱 / 已发送 / 已删除 / 草稿箱」✗ → 界面上给系统文件夹也画了 ✕ ✗。
+     所以这里**复用 MAIL_BOX_CN 的规范化结果** ✓：认出来 = 系统文件夹 ✓。
+     中文名现在原样返回，所以这份名单要**把中文叫法也列全** ✓。
+     （INBOX 单独判 —— 它可能大小写不一：QQ/163 是 INBOX、2925 是 Inbox ✗） */
+  const MAIL_SYS_CN = new Set([
+    '收件箱', '已发送', '已发送邮件', '已发送的邮件', '草稿箱', '草稿',
+    '已删除', '已删除邮件', '垃圾箱', '废纸篓',
+    '垃圾邮件', '不明邮件', '广告邮件', '病毒文件夹', '病毒邮件',
+    '归档', '存档', '所有邮件', '笔记', '发件箱', '待发送',
+  ]);
+  function mailIsSysBox(name) {
+    const n = String(name || '').trim();
+    if (!n) return false;
+    if (/^inbox$/i.test(n)) return true;          /* 协议保留名 ✓ */
+    return MAIL_SYS_CN.has(mailBoxCN(n));
   }
 
   /* ── 左栏：账号 + 文件夹 + 配置入口 ────────────────────────────────────── */
@@ -4022,15 +4083,32 @@
       else if (MAIL_UI.boxes) {
         const inbox = MAIL_UI.boxes.inbox || {};
         /* ★ 文件夹名中文化 ✓（原文放 title，认不出的原样显示 ✓）*/
+        /* ⚠️ 排除收件箱要**不分大小写** ✗ —— QQ/163 是 `INBOX`，2925 是 `Inbox` ✗，
+           只比 `!== 'INBOX'` 会让 2925 的收件箱**出现两次** ✗。 */
         const list = [{ name: 'INBOX', label: '收件箱', raw: 'INBOX', n: inbox.unseen }].concat(
-          MAIL_UI.boxes.boxes.filter((b) => b.selectable && b.name !== 'INBOX')
+          MAIL_UI.boxes.boxes.filter((b) => b.selectable && !/^inbox$/i.test(b.name))
             .map((b) => ({ name: b.name, label: mailBoxCN(b.name), raw: b.name, n: 0 })));
+        /* ★★ 中文化后**撞名要消歧** ✗ —— 实测 2925 同时有「垃圾箱」和「已删除」两个文件夹，
+           都规范成「已删除」→ 左栏出现**两行同名** ✗，用户根本分不清点哪个 ✗
+           （163 的「垃圾邮件 / 广告邮件」同理 ✓）。
+           规范名相同的，第二个起把**原文**缀上 ✓。 */
+        const used = new Set();
         boxesHtml = list.map((b) => {
-          const rawTitle = b.label === b.raw ? b.raw : (b.label + '（' + b.raw + '）');
+          let label = b.label;
+          if (used.has(label)) label = b.label + '（' + b.raw + '）';
+          used.add(b.label);
+          const rawTitle = label === b.raw ? b.raw : (label + '（' + b.raw + '）');
+          /* ★ 分类管理：系统文件夹不能删 ✗（收件箱/已发送/草稿/已删除/垃圾邮件/广告邮件/病毒文件夹/发件箱/归档 ✓），
+             其它的悬停时给一个 ✕ ✓。拖动邮件时这些行是**放置目标** ✓。 */
+          const del = mailIsSysBox(b.name) ? '' : '<span class="del" data-mboxdel="' + esc(b.name) + '" title="删除这个文件夹（只能删空的）">✕</span>';
           return '<div class="lw-ml-box' + (MAIL_UI.box === b.name ? ' on' : '') + '" data-mbox="' + esc(b.name) + '"'
-            + ' title="' + esc(rawTitle) + '">'
-            + '<span>' + esc(b.label) + '</span>' + (b.n ? '<span class="n" style="color:' + T.accent + '">' + b.n + '</span>' : '') + '</div>';
+            + ' title="' + esc(rawTitle + '　（可把邮件拖到这里）') + '">'
+            + '<span class="nm">' + esc(label) + '</span>'
+            + (b.n ? '<span class="n" style="color:' + T.accent + '">' + b.n + '</span>' : '')
+            + del + '</div>';
         }).join('');
+        /* ＋ 新建分类 ✓ */
+        boxesHtml += '<div class="lw-ml-box add" id="lw-ml-newbox"><span>＋ 新建文件夹</span></div>';
       }
     }
 
@@ -4257,6 +4335,8 @@
       + '<div class="acts">'
       + '<button class="lw-btn" data-mact="' + (m.flagged ? 'unflag' : 'flag') + '" data-muid="' + m.uid + '"'
       + ' title="重要（IMAP \\Flagged，其它邮件客户端也能看到）">' + (m.flagged ? '★ 已标重要' : '☆ 标为重要') + '</button>'
+      /* ★ 分类管理：把邮件移到别的文件夹 ✓（也可以直接把列表里的邮件拖到左栏文件夹 ✓）*/
+      + '<button class="lw-btn" id="lw-ml-move" data-muid="' + m.uid + '" title="移到别的文件夹（也可以直接把左边列表里的邮件拖到文件夹上）">📁 移到…</button>'
       + '<button class="lw-btn' + (tr ? ' on' : '') + '" id="lw-ml-tr">'
       + (MAIL_UI.trBusy ? '翻译中…' : (tr ? '⇄ 对照中' : '⇄ 对照翻译')) + '</button>'
       + '<button class="lw-btn" data-mact="' + (m.seen ? 'unread' : 'read') + '" data-muid="' + m.uid + '">'
@@ -4481,6 +4561,151 @@
     }
   }
 
+  /* ── 分类管理：移动邮件 / 新建文件夹 / 删文件夹 ──────────────────────────
+     移动走 IMAP 的 **UID MOVE**（原子 ✓），而且**可撤销** ✓ ——
+     移完在状态栏给一个「撤销」，15 秒内有效 ✓（撤销就是再移回去 ✓）。 */
+  let MAIL_UNDO_TIMER = 0;
+  /* ── 顶部状态栏（`#lw-sub`）────────────────────────────────────────────
+     ⚠️ `#lw-sub` 是 `headHtml()` 里渲染的 ✓ —— **每次整屏 `render()` 都会被重建** ✗。
+     而面板打开时天气是**异步补渲染**的（`load()` 里 `weather.then(() => render())` ✓），
+     于是「已移到… ↩ 撤销」刚显示就被日期串盖掉 ✗
+     （实测：拖完 7 秒后状态栏是「10月7日 周三 · 59 项目…」✗，撤销按钮也没了 ✗）。
+     所以状态消息记在**模块作用域**（`STATUS_HTML` 等，声明在顶部状态区 ✓），
+     `render()` 末尾重画一遍 ✓（撤销按钮的 onclick 也要重挂 ✓ —— 元素换掉了，旧绑定一起没 ✗）。 */
+  function setStatus(html, ttl, undo) {
+    STATUS_HTML = String(html == null ? '' : html);
+    STATUS_UNTIL = ttl ? Date.now() + ttl : 0;
+    STATUS_UNDO = undo || null;
+    paintStatus();
+  }
+  function paintStatus() {
+    const s = document.getElementById('lw-sub');
+    if (!s) return;
+    if (STATUS_UNTIL && Date.now() > STATUS_UNTIL) { STATUS_HTML = ''; STATUS_UNDO = null; STATUS_UNTIL = 0; }
+    if (!STATUS_HTML) return;                  /* 没消息 / 过期 → 保留默认文案（日期 · 项目数）✓ */
+    s.innerHTML = STATUS_HTML;
+    const u = document.getElementById('lw-ml-undo');
+    if (u && STATUS_UNDO) u.onclick = STATUS_UNDO;
+  }
+  function mailSetStatus(html, ttl, undo) { setStatus(html, ttl, undo); }
+  async function mailMove(uid, to, quiet, fromOverride) {
+    /* ★★ 源文件夹必须能**显式传入** ✗✗ —— 不能一律取 `MAIL_UI.box`：
+       「撤销」是把邮件从**分类**搬回**收件箱** ✓，而此时界面正停在收件箱 ✗
+       → `MAIL_UI.box` 就是收件箱 → 撞上下面的 `to === from` 守卫 → **直接 return** ✗
+       （实测：点「↩ 撤销」界面毫无反应、也不发请求 ✗）。
+       撤销那条路用 `fromOverride` 把「邮件现在到底在哪个文件夹」说清楚 ✓。 */
+    const from = fromOverride || MAIL_UI.box;
+    if (!uid || !to || to === from) return;
+    /* ★★ 同一个移动**在途时去重** ✗✗ —— 见 `bindMail` 里那段注释：
+       拖放的 drop 监听器曾被重复挂载 ✗，一次拖放发出 3 个相同请求 ✗，
+       第一个拿到 newUid ✓、后两个是空操作（newUid=0 ✗）→ 前端用最后一个响应 ✗
+       → 「↩ 撤销」时有时无 ✗。绑定已经改成幂等的 `onXXX =` ✓，
+       这里再加一道闸门 ✓（双击 / 连点 / 未来新增入口都挡得住 ✓）。 */
+    const ticket = from + '|' + uid + '|' + to;
+    if (MAIL_MOVE_BUSY === ticket) return;
+    MAIL_MOVE_BUSY = ticket;
+    try {
+      const r = await fetch('/api/life/mail/move', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: MAIL_UI.key, box: from, uid, to }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) { mailSetStatus('✗ ' + esc((d && d.error) || '移动失败')); return; }
+      /* ★★ 撤销要用**目标文件夹里的新 UID** ✗✗ —— UID 是**按文件夹分配**的 ✓，
+         移过去之后原 UID 就失效了 ✗（拿它去移回会报「Mails not exist」✗）。
+         服务端会算好 newUid 一起返回 ✓（QQ 不回 COPYUID ✗，它用 UID 快照比对算 ✓）。 */
+      const backUid = Number(d.newUid) || 0;
+      /* 本地列表里去掉它 ✓（不用重新收信 ✗，快得多 ✓）*/
+      MAIL_UI.list = (MAIL_UI.list || []).filter((x) => x.uid !== uid);
+      if (MAIL_UI.uid === uid) { MAIL_UI.uid = 0; MAIL_UI.msg = null; }
+      renderMailPane(['list', 'read']);
+      if (!quiet) {
+        const undoable = backUid ? '　<span class="lw-undo" id="lw-ml-undo">↩ 撤销</span>' : '';
+        clearTimeout(MAIL_UNDO_TIMER);
+        /* ★ 撤销的 onclick 交给 `setStatus` 重挂 ✓ —— 整屏 render() 会把 `#lw-sub`
+           整个换掉 ✗，旧元素上的绑定跟着消失 ✗（天气回来就会触发一次 render ✗）。 */
+        mailSetStatus('已移到「' + esc(mailBoxCN(to)) + '」' + undoable, backUid ? 15000 : 8000,
+          backUid ? () => mailMove(backUid, from, true, to) : null);
+        MAIL_UNDO_TIMER = setTimeout(() => { setStatus(''); }, backUid ? 15000 : 8000);
+      } else {
+        clearTimeout(MAIL_UNDO_TIMER);
+        /* ⚠️ 这里要报**目的地**（`to`）✗，不是 `from` ——
+           `from` 是「邮件原来待的地方」（= 分类 ✗），
+           写它会显示成「已移回「测试分类」」，方向完全反了 ✗（实测）。 */
+        mailSetStatus('已移回「' + esc(mailBoxCN(to)) + '」', 6000);
+      }
+      /* 文件夹计数会变 → 重新拉一次 ✓（服务端缓存已经清掉了 ✓）*/
+      MAIL_UI.boxes = null;
+      mailLoadBoxes(true);
+      /* ★★ 移到的正是**当前在看的文件夹**时，本地列表里没有它 ✗ ——
+         它是那个文件夹里的**新 UID** ✗，本地删/筛都凑不出来 ✗。
+         典型场景就是「撤销」：界面停在收件箱、邮件从分类搬回收件箱 ✓，
+         不重新拉的话邮件**凭空消失** ✗，要手动点「↻ 重新收信」才回来 ✗（实测踩过）。
+         反过来（从当前文件夹移走）本地删掉就够 ✓，不用重新收信 ✓。 */
+      if (to === MAIL_UI.box) { MAIL_UI.list = null; MAIL_KICKED = ''; mailLoadList(true); }
+    } catch (e) { mailSetStatus('✗ ' + esc(e.message), 8000); }
+    finally { if (MAIL_MOVE_BUSY === ticket) MAIL_MOVE_BUSY = ''; }
+  }
+
+  /* 文件夹选择浮层 ✓ —— 阅读区「📁 移到…」用它 ✓ */
+  function mailHidePicker() { const e = document.getElementById('lw-ml-pick'); if (e) e.remove(); }
+  function mailShowPicker(uid) {
+    mailHidePicker();
+    const all = ((MAIL_UI.boxes && MAIL_UI.boxes.boxes) || []).filter((b) => b.selectable);
+    const cur = MAIL_UI.box;
+    const wrap = document.createElement('div');
+    wrap.className = 'lw-ml-pickwrap';
+    wrap.id = 'lw-ml-pick';
+    wrap.innerHTML = '<div class="lw-ml-pick"><div class="hd">把邮件移到…<span class="x" id="lw-ml-pick-x">✕</span></div>'
+      + (all.length
+        ? all.map((b) => '<div class="it' + (b.name === cur ? ' cur' : '') + '" data-pick="' + esc(b.name) + '">'
+            + esc(mailBoxCN(b.name)) + (b.name === cur ? '<span class="tag">当前</span>' : '') + '</div>').join('')
+        : '<div class="it" style="color:' + T.faint + '">还没读到文件夹列表，点左栏「↻ 重新收信」</div>')
+      + '</div>';
+    document.body.appendChild(wrap);
+    const close = () => mailHidePicker();
+    wrap.onclick = (ev) => { if (ev.target === wrap) close(); };
+    const x = document.getElementById('lw-ml-pick-x');
+    if (x) x.onclick = close;
+    wrap.querySelectorAll('[data-pick]').forEach((el) => {
+      el.onclick = () => { const to = el.dataset.pick; close(); mailMove(uid, to); };
+    });
+  }
+
+  /* 新建 / 删除文件夹（分类）✓ */
+  async function mailNewBox() {
+    const name = prompt('新建文件夹（分类）名称：', '');
+    if (!name || !name.trim()) return;
+    try {
+      const r = await fetch('/api/life/mail/newbox', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: MAIL_UI.key, name: name.trim() }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) { mailSetStatus('✗ ' + esc((d && d.error) || '新建失败'), 10000); return; }
+      mailSetStatus('已新建文件夹「' + esc(name.trim()) + '」', 8000);
+      MAIL_UI.boxes = null;
+      mailLoadBoxes(true);
+    } catch (e) { mailSetStatus('✗ ' + esc(e.message), 10000); }
+  }
+  async function mailDelBox(name) {
+    if (!name) return;
+    if (!confirm('删除文件夹「' + mailBoxCN(name) + '」？\n（IMAP 只允许删**空的**文件夹，里面有邮件会被拒绝）')) return;
+    try {
+      const r = await fetch('/api/life/mail/delbox', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: MAIL_UI.key, name }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) { mailSetStatus('✗ ' + esc((d && d.error) || '删除失败'), 10000); return; }
+      mailSetStatus('已删除文件夹「' + esc(mailBoxCN(name)) + '」', 8000);
+      if (MAIL_UI.box === name) { MAIL_UI.box = 'INBOX'; MAIL_UI.list = null; MAIL_KICKED = ''; }
+      MAIL_UI.boxes = null;
+      mailLoadBoxes(true);
+      ensureMailLoad();
+    } catch (e) { mailSetStatus('✗ ' + esc(e.message), 10000); }
+  }
+
   /* 进邮箱页时按需拉一次 ✓
      ★★ 判据用**独立的 stamp**，不能用「`MAIL_UI.list` 非空」✗ ——
         请求进行中它就是 null ✗，于是同一个请求被反复重新发起 ✗
@@ -4577,6 +4802,49 @@
       };
     });
     qa('[data-mcfg]').forEach((el) => { el.onclick = () => { MAIL_UI.cfgOpen = !MAIL_UI.cfgOpen; render(); }; });
+    /* ★ 分类管理：新建文件夹 / 删文件夹 ✓ */
+    const newBox = host.querySelector('#lw-ml-newbox');
+    if (newBox) newBox.onclick = () => mailNewBox();
+    qa('[data-mboxdel]').forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); mailDelBox(el.dataset.mboxdel); };
+    });
+    /* ★ 分类管理：把**列表里的邮件拖到左栏文件夹** ✓ —— 和备忘录完全一致的交互 ✓
+       ⚠️⚠️ 必须用 `onXXX =` 赋值，**不能用 addEventListener** ✗✗ ——
+       `bindMail()` 在**每次局部重绘**后都会跑一遍（`renderMailPane` 里 ✓），
+       而左栏 DOM **未必**被替换 ✗ → `addEventListener` 会**叠加** ✗ →
+       实测**一次拖放发出 3 个相同的 move 请求** ✗：
+       第一个成功（拿到 newUid ✓），后两个是空操作（邮件已不在源文件夹 →
+       服务端算出的 newUid = 0 ✗），而前端用的是**最后一个响应** ✗ →
+       「↩ 撤销」时有时无 ✗。`onXXX =` 是**覆盖**语义 ✓，天然幂等 ✓。 */
+    let DRAG_MAIL = 0;
+    qa('.lw-ml-item').forEach((el) => {
+      el.draggable = true;
+      el.ondragstart = (ev) => {
+        DRAG_MAIL = Number(el.dataset.muid) || 0;
+        el.classList.add('dragging');
+        try { ev.dataTransfer.setData('text/plain', String(DRAG_MAIL)); ev.dataTransfer.effectAllowed = 'move'; } catch (_) { }
+      };
+      el.ondragend = () => { DRAG_MAIL = 0; el.classList.remove('dragging'); };
+    });
+    qa('[data-mbox]').forEach((el) => {
+      el.ondragover = (ev) => {
+        if (!DRAG_MAIL) return;
+        ev.preventDefault();
+        try { ev.dataTransfer.dropEffect = 'move'; } catch (_) { }
+        el.classList.add('drop');
+      };
+      el.ondragleave = () => el.classList.remove('drop');
+      el.ondrop = (ev) => {
+        ev.preventDefault();
+        el.classList.remove('drop');
+        const uid = DRAG_MAIL || Number(ev.dataTransfer.getData('text/plain')) || 0;
+        DRAG_MAIL = 0;
+        if (uid) mailMove(uid, el.dataset.mbox);
+      };
+    });
+    /* 阅读区「📁 移到…」→ 文件夹选择浮层 ✓ */
+    const moveBtn = host.querySelector('#lw-ml-move');
+    if (moveBtn) moveBtn.onclick = () => mailShowPicker(Number(moveBtn.dataset.muid));
     qa('[data-mrefresh]').forEach((el) => {
       el.onclick = () => {
         MAIL_UI.boxes = null; MAIL_UI.list = null; MAIL_KICKED = '';

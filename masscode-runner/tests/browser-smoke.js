@@ -617,8 +617,15 @@ print(r.run())
     accounts: { qq: { host: 'smtp.qq.com', port: '465', user: 'tester@qq.com', hasPass: true, imapHost: 'imap.qq.com', imapPort: '993' } },
     /* `total` 可变 ✓ —— 测试里改它来模拟「来新邮件」，验提醒功能 ✓ */
     total: MAIL_UNREAD,
-    /* 故意全用**英文系统名** ✓ —— 用来验前端的中文化映射 ✓ */
-    boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: 'Drafts', selectable: true }, { name: 'Deleted Messages', selectable: true }, { name: 'Junk', selectable: true }, { name: '未识别的文件夹', selectable: true }], inbox: { messages: MAIL_TOTAL, unseen: MAIL_UNREAD } },
+    /* 故意**中英文系统名都放** ✓ —— 用来验前端的中文化映射 + 「系统文件夹不给删」✓
+       ★ 中文那几个是真实账号返回的名字 ✓（163：草稿箱/已发送/已删除/垃圾邮件/病毒文件夹/广告邮件；
+         2925：垃圾箱/已发送/已删除/草稿箱）—— 只放英文名的话，中文名的 bug 测不出来 ✗ */
+    boxes: { ok: true, boxes: [{ name: 'INBOX', selectable: true }, { name: 'Sent Messages', selectable: true }, { name: 'Drafts', selectable: true }, { name: 'Deleted Messages', selectable: true }, { name: 'Junk', selectable: true }, { name: '草稿箱', selectable: true }, { name: '已发送', selectable: true }, { name: '已删除', selectable: true }, { name: '病毒文件夹', selectable: true }, { name: '广告邮件', selectable: true }, { name: '未识别的文件夹', selectable: true }], inbox: { messages: MAIL_TOTAL, unseen: MAIL_UNREAD } },
+    /* ★ 分类管理的桩 ✓ —— 记下每次 move / newbox / delbox 的请求体 ✓
+       「一次拖放只发一个 move 请求」这条断言靠它守（曾经发 3 个 ✗，见 bindMail 的注释）✓ */
+    moves: [], newboxes: [], delboxes: [],
+    /* move 之后「撤销」要用**目标文件夹里的新 UID** ✓（真实服务端会算 ✓）*/
+    nextUid: 90000,
     read: { ok: true, uid: MAIL_TOTAL, box: 'INBOX', seen: true, flagged: false, subject: '桩主题未读', from: '张三 <z@qq.com>',
       to: 'tester@qq.com', cc: '', date: Date.now(), size: 2048,
       /* ★ 桩的纯文本故意做成「**空格排版**」✗ —— 这正是真实邮件的情况 ✓
@@ -685,6 +692,33 @@ print(r.run())
     if (p === '/api/life/mail/flag') {
       try { MAIL_STUB.flagCalls.push(JSON.parse(req.postData() || '{}')); } catch (_) {}
       return json({ ok: true });
+    }
+    /* ★ 分类管理（移动 / 新建 / 删文件夹）—— 请求体都记下来，供断言用 ✓ */
+    if (p === '/api/life/mail/move') {
+      let b = {};
+      try { b = JSON.parse(req.postData() || '{}'); } catch (_) {}
+      /* 真实服务端会算「目标文件夹里的新 UID」✓（撤销要用它 ✗）—— 桩直接发一个 ✓
+         ⚠️ 要把 newUid **记进请求记录**里 ✓ —— 断言「撤销用的是新 UID」需要它 ✗
+            （只记请求体的话，newUid 是**响应**里的，断言拿不到 ✗）。 */
+      const newUid = (MAIL_STUB.nextUid += 2);
+      MAIL_STUB.moves.push(Object.assign({}, b, { newUid }));
+      return json({ ok: true, uid: b.uid, from: b.box, to: b.to, newUid, subject: '桩主题' });
+    }
+    if (p === '/api/life/mail/newbox') {
+      let b = {};
+      try { b = JSON.parse(req.postData() || '{}'); } catch (_) {}
+      MAIL_STUB.newboxes.push(b);
+      if (b.name && !MAIL_STUB.boxes.boxes.some((x) => x.name === b.name)) {
+        MAIL_STUB.boxes.boxes.push({ name: b.name, selectable: true });
+      }
+      return json({ ok: true, name: b.name });
+    }
+    if (p === '/api/life/mail/delbox') {
+      let b = {};
+      try { b = JSON.parse(req.postData() || '{}'); } catch (_) {}
+      MAIL_STUB.delboxes.push(b);
+      MAIL_STUB.boxes.boxes = MAIL_STUB.boxes.boxes.filter((x) => x.name !== b.name);
+      return json({ ok: true, name: b.name });
     }
     return json({ ok: false, error: '测试里没打桩的邮件接口：' + p });
   });
@@ -1211,6 +1245,36 @@ print(r.run())
   if (!boxLabels.some((b) => b.label.startsWith('未识别的文件夹'))) throw new Error('认不出的文件夹名不该被改写（应原样显示）');
   const sentBox = boxLabels.find((b) => b.label.startsWith('已发送'));
   if (!/Sent Messages/.test(sentBox.title)) throw new Error('中文名上应保留原文（title）：' + sentBox.title);
+  /* ★★★ 分类管理：系统文件夹**不给删** ✗，自建的才给 ✕ ✓
+     —— 上一版只认**英文**系统名 ✗，而真实账号（163 / 2925）返回的是中文 ✗
+        （草稿箱 / 已发送 / 已删除 / 垃圾邮件 / 病毒文件夹 / 广告邮件 / 垃圾箱）✗
+        → 系统文件夹上也被画了 ✕ ✗（用户报的「系统文件夹不给删」没生效）✗
+     桩里中英文都放了 ✓，所以两种名字都必须判成系统文件夹 ✓。 */
+  for (const n of ['Sent Messages', 'Drafts', 'Deleted Messages', 'Junk', '草稿箱', '已发送', '已删除', '病毒文件夹', '广告邮件']) {
+    if (await page.locator('[data-mbox="' + n + '"]').count() !== 1) throw new Error('文件夹没显示出来：' + n);
+    if (await page.locator('[data-mbox="' + n + '"] [data-mboxdel]').count() !== 0) {
+      throw new Error('系统文件夹不该有删除 ✕：' + n);
+    }
+  }
+  if (await page.locator('[data-mbox="INBOX"] [data-mboxdel]').count() !== 0) throw new Error('收件箱不该有删除 ✕');
+  /* ★ 同名不能撞 ✗ —— 163 同时有「垃圾邮件」和「广告邮件」，
+     都映射成「垃圾邮件」的话左栏会出现**两行同名** ✗，用户分不清哪个是哪个 ✗。 */
+  const advLabel = (await page.locator('[data-mbox="广告邮件"] .nm').innerText()).trim();
+  if (advLabel !== '广告邮件') throw new Error('广告邮件被映射成了别的名字（和垃圾邮件撞名）：' + advLabel);
+  const junkRows = await page.locator('.lw-ml-box[data-mbox] .nm').evaluateAll((els) => els.map((e) => e.innerText.trim()).filter((t) => t === '垃圾邮件').length);
+  if (junkRows !== 1) throw new Error('左栏出现 ' + junkRows + ' 行「垃圾邮件」（应只有 1 行）');
+  /* 用户自己建的分类**可以**删 ✓（否则「分类管理」根本没法用 ✗）*/
+  if (await page.locator('[data-mboxdel="未识别的文件夹"]').count() !== 1) throw new Error('自建文件夹应该有删除 ✕');
+  /* ＋ 新建文件夹入口 ✓ */
+  if (await page.locator('#lw-ml-newbox').count() !== 1) throw new Error('左栏没有「＋ 新建文件夹」入口');
+  /* 文件夹行要能当**拖放目标** ✓（提示里写明「可把邮件拖到这里」）*/
+  if (!/拖/.test((await page.locator('[data-mbox="INBOX"]').getAttribute('title')) || '')) {
+    throw new Error('文件夹行没有提示「可把邮件拖到这里」');
+  }
+  /* 邮件行要能拖 ✓（拖到文件夹 = 移动分类）*/
+  if (!(await page.locator('.lw-ml-item').first().evaluate((el) => el.draggable === true))) {
+    throw new Error('邮件行不可拖动（分类管理的主路径）');
+  }
   /* ★ 「加载更多」—— 18 封，首屏 15，点一次应到 18 ✓ */
   if (await page.locator('#lw-ml-more').count() !== 1) throw new Error('没有「加载更多」');
   await page.locator('#lw-ml-more').click();
@@ -1420,6 +1484,101 @@ print(r.run())
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForTimeout(1500);
   if (await page.locator('#lw-toast').count() !== 0) throw new Error('未读数没变多也弹了提醒');
+
+  /* ═══════════ 邮箱 · 分类管理（新建 / 拖入 / 撤销 / 删除）═══════════════
+     ★★ 拖放用**派发合成 DragEvent** ✓，不用 page.mouse / dragTo ✗ ——
+     这个环境里 Playwright 的鼠标拖动有时**不投递 mousemove/dragover** ✗
+     （备忘录分栏拖拽那条用例也踩过，最后同样改成合成事件 ✓）。 */
+  await page.locator('[data-mbox="INBOX"]').click();
+  await page.waitForTimeout(900);
+  MAIL_STUB.moves.length = 0; MAIL_STUB.newboxes.length = 0; MAIL_STUB.delboxes.length = 0;
+  /* ① 新建分类（走真实 prompt ✓）*/
+  page.once('dialog', (d) => d.accept('桩分类'));
+  await page.locator('#lw-ml-newbox').click();
+  await page.waitForTimeout(1000);
+  if (MAIL_STUB.newboxes.length !== 1) throw new Error('「＋ 新建文件夹」没发 newbox 请求（发了 ' + MAIL_STUB.newboxes.length + ' 个）');
+  if (MAIL_STUB.newboxes[0].name !== '桩分类') throw new Error('新建的文件夹名不对：' + MAIL_STUB.newboxes[0].name);
+  if (await page.locator('[data-mbox="桩分类"]').count() !== 1) throw new Error('新建的分类没出现在左栏');
+  if (await page.locator('[data-mboxdel="桩分类"]').count() !== 1) throw new Error('自建分类没有删除 ✕');
+  /* ★★ 必须先**复现「监听器叠加」的触发条件** ✗✗ ——
+     光进一次邮箱页是测不出来的（实测：那样只有 1 个监听器，回退修复也照样过 ✗）。
+     条件就是「`bindMail()` 又跑了一遍，但左栏 `[data-mbox]` 元素**没被重建**」✗ ——
+     `bindMail()` 在**每次局部重绘**后都会跑（`renderMailPane` 里 ✓），
+     而左栏只有 `renderMailPane('side')` 才会重建 ✗。
+     切「未读」筛选走的是 `renderMailPane('list')` ✓ → 左栏原样保留 ✓ → 正好制造这个场景 ✓
+     （切两次 = 偶数次，筛选状态回到原样 ✓）。
+     实测真实环境里这么一来，拖一次会发出 **3 个相同请求** ✗。 */
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#lw-ml-unread').click();
+    await page.waitForTimeout(450);
+  }
+  /* ② 拖一封邮件到分类 —— ★★ 一次拖放**只能发一个** move 请求 ✗✗
+        `bindMail()` 每次局部重绘都会跑一遍（renderMailPane 里 ✓），
+        而左栏 DOM **未必**被替换 ✗ → `addEventListener` 会**叠加** ✗ →
+        实测**一次拖放发 3 个相同请求** ✗：第一个成功（拿到 newUid ✓），
+        后两个是空操作（邮件已不在源文件夹 → newUid = 0 ✗），
+        前端用**最后一个响应** → 「↩ 撤销」时有时无 ✗。 */
+  const dragRes = await page.evaluate(() => {
+    const item = document.querySelector('.lw-ml-item');
+    const box = document.querySelector('[data-mbox="桩分类"]');
+    if (!item || !box) return { err: '找不到邮件行或分类行' };
+    const dt = new DataTransfer();
+    const fire = (el, type) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+    fire(item, 'dragstart'); fire(box, 'dragover'); fire(box, 'drop'); fire(item, 'dragend');
+    return { uid: Number(item.dataset.muid) };
+  });
+  if (dragRes.err) throw new Error(dragRes.err);
+  await page.waitForTimeout(1400);
+  if (MAIL_STUB.moves.length !== 1) {
+    throw new Error('一次拖放应只发 1 个 move 请求，实际 ' + MAIL_STUB.moves.length + ' 个（drop 监听器叠加了？）');
+  }
+  const mvReq = MAIL_STUB.moves[0];
+  if (mvReq.box !== 'INBOX' || mvReq.to !== '桩分类' || mvReq.uid !== dragRes.uid) {
+    throw new Error('move 请求参数不对：' + JSON.stringify(mvReq));
+  }
+  /* ③ 状态栏要有「已移到 … ↩ 撤销」*/
+  if (!/已移到/.test(await page.locator('#lw-sub').innerText())) {
+    throw new Error('状态栏没提示「已移到」：' + await page.locator('#lw-sub').innerText());
+  }
+  if (await page.locator('#lw-ml-undo').count() !== 1) throw new Error('状态栏没有「↩ 撤销」');
+  /* ④ ★★ 整屏 render() 之后撤销必须**还在** ✗✗ ——
+        `#lw-sub` 是 `headHtml()` 渲染的，**每次 render 都会被重建** ✗；
+        而面板打开时天气是**异步补渲染**的（`weather.then(() => render())` ✓）→
+        「已移到… ↩ 撤销」刚显示就被「日期 · 项目数」盖掉 ✗（实测拖完 7 秒就没了 ✗）。
+        切页签能触发一次真正的整屏 render() ✓。 */
+  await page.locator('[data-tab="today"]').click();
+  await page.waitForTimeout(500);
+  await page.locator('[data-tab="mail"]').click();
+  await page.locator('.lw-ml-item').first().waitFor({ state: 'visible', timeout: 15000 });
+  await page.waitForTimeout(700);
+  if (!/已移到/.test(await page.locator('#lw-sub').innerText())) {
+    throw new Error('整屏 render() 之后状态栏被默认文案盖掉了：' + await page.locator('#lw-sub').innerText());
+  }
+  if (await page.locator('#lw-ml-undo').count() !== 1) throw new Error('整屏 render() 之后「↩ 撤销」没了');
+  /* ⑤ 点撤销 → 必须**真的移回去** ✓
+        （曾经被 `to === from` 守卫挡住 ✗：界面停在收件箱、`MAIL_UI.box` 就是收件箱，
+          而撤销的目标也是收件箱 → 直接 return、连请求都不发 ✗，点了毫无反应 ✗）*/
+  await page.locator('#lw-ml-undo').click();
+  await page.waitForTimeout(1800);
+  const undoReq = MAIL_STUB.moves[1];
+  if (!undoReq) throw new Error('点「撤销」没发 move 请求（被 to===from 守卫挡住了？）');
+  if (undoReq.uid !== mvReq.newUid) {
+    throw new Error('撤销没有用**目标文件夹里的新 UID**（用旧 UID 会报 Mails not exist）：' + JSON.stringify(undoReq));
+  }
+  if (undoReq.box !== '桩分类' || undoReq.to !== 'INBOX') {
+    throw new Error('撤销方向不对（应从分类搬回收件箱）：' + JSON.stringify(undoReq));
+  }
+  if (!/已移回/.test(await page.locator('#lw-sub').innerText())) {
+    throw new Error('撤销后状态栏没提示「已移回」：' + await page.locator('#lw-sub').innerText());
+  }
+  /* ⑥ 删掉这个空分类 ✓ */
+  page.once('dialog', (d) => d.accept());
+  await page.locator('[data-mboxdel="桩分类"]').click({ force: true });
+  await page.waitForTimeout(1000);
+  if (MAIL_STUB.delboxes.length !== 1 || MAIL_STUB.delboxes[0].name !== '桩分类') {
+    throw new Error('删文件夹请求不对：' + JSON.stringify(MAIL_STUB.delboxes));
+  }
+  if (await page.locator('[data-mbox="桩分类"]').count() !== 0) throw new Error('分类删了还留在左栏');
   MAIL_STUB.total = MAIL_UNREAD;
   /* 回到备忘录页，后面的收尾流程还要用 */
   await page.locator('[data-tab="memo"]').click();

@@ -410,6 +410,55 @@ class ImapSession {
     return out;
   }
 
+  /* ── 分类管理：移动 / 新建文件夹 / 删文件夹 ──────────────────────────────
+     ★ 移动用 **UID MOVE**（RFC 6851）✓ —— 它是**原子操作** ✗：
+       不会出现「COPY 成功、DELETE 失败」导致邮件**重复两份** ✗
+       （那种情况在真实邮箱里非常难收拾 ✗）。实测 QQ 声明了 MOVE ✓。
+     ★ 文件夹名必须 **modified UTF-7** ✗ —— 直接传 UTF-8 会被服务器拒 ✗
+       （实测 `CREATE "中文名"` → `NO Invalid folder name` ✗，
+        而 `CREATE "&XfJT0ZAB-"` → OK ✓）。 */
+  async move(uid, box) {
+    const set = (typeof uid === 'number' && Number.isFinite(uid)) ? String(uid) : String(uid == null ? '' : uid).trim();
+    if (!set) throw new ImapError('UID MOVE 缺少 UID', 'move');
+    const to = String(box || '').trim();
+    if (!to) throw new ImapError('UID MOVE 缺少目标文件夹', 'move');
+    const target = q(encodeModifiedUtf7(to));
+    try {
+      return await this.command(`UID MOVE ${set} ${target}`);
+    } catch (e) {
+      /* ★★ 不是所有服务器都实现 MOVE（RFC 6851）✗✗ ——
+         实测 **163 直接回 `BAD COMMAND NOT SUPPORT`** ✗（QQ 支持 ✓），
+         而 163 正好是用户默认在用的账号 ✗ → 「拖到分类」在它上面**完全不工作** ✗。
+         降级走 RFC 6851 §3.3 指定的那条路 ✓：COPY → STORE \Deleted → UID EXPUNGE ✓。
+         ⚠️ 这条路径**不是原子的** ✗ —— 万一 EXPUNGE 失败会留下重复副本 ✗，
+            所以只在「MOVE 明确不被支持」时才走 ✓，其它错误（认证/网络/文件夹不存在）
+            一律原样抛出 ✓，别把真错误伪装成「已移动」✗。 */
+      const msg = String((e && e.message) || '') + ' ' + String((e && e.text) || '');
+      if (!/BAD|NOT SUPPORT|NOT IMPLEMENT|UNKNOWN COMMAND|SYNTAX/i.test(msg)) throw e;
+      await this.command(`UID COPY ${set} ${target}`);
+      await this.command(`UID STORE ${set} +FLAGS (\\Deleted)`);
+      /* 优先 `UID EXPUNGE`（只清这一封 ✓，不会误删别的标了 \Deleted 的邮件 ✓），
+         服务器不认就退回整箱 EXPUNGE ✓ */
+      try { await this.command(`UID EXPUNGE ${set}`); }
+      catch (_) { await this.command('EXPUNGE', { allowFail: true }).catch(() => { }); }
+      return { text: 'OK COPY+EXPUNGE fallback', fallback: true };
+    }
+  }
+
+  async createBox(name) {
+    const n = String(name || '').trim();
+    if (!n) throw new ImapError('CREATE 缺少文件夹名', 'create');
+    return this.command(`CREATE ${q(encodeModifiedUtf7(n))}`);
+  }
+
+  /* 删文件夹 ✓ —— 只删**空文件夹**（IMAP 的 DELETE 不会连带删里面的邮件 ✓，
+     非空时服务器会拒绝 ✓ —— 这个行为正好，避免误删 ✗）*/
+  async deleteBox(name) {
+    const n = String(name || '').trim();
+    if (!n) throw new ImapError('DELETE 缺少文件夹名', 'delete');
+    return this.command(`DELETE ${q(encodeModifiedUtf7(n))}`);
+  }
+
   /* 改标记：action = 'add' | 'remove'，flags 如 ['\\Seen'] ✓
      ★★ uid 可以是**单个 UID，也可以是范围**（`1:*` = 整个文件夹）✗ ——
      以前一律 `Number(uid)` ✗，而 `Number('1:*')` 是 **NaN** ✗ →

@@ -4763,7 +4763,9 @@ const server = http.createServer(async (req, res) => {
        顶栏那个未读数还会定时轮询 ✗ —— 不缓存会把邮箱服务器打爆 ✗。 */
     if (u.pathname === '/api/life/mail/status' || u.pathname === '/api/life/mail/boxes' ||
         u.pathname === '/api/life/mail/list' || u.pathname === '/api/life/mail/read' ||
-        u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag') {
+        u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag' ||
+        u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
+        u.pathname === '/api/life/mail/delbox') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
       };
@@ -4791,7 +4793,8 @@ const server = http.createServer(async (req, res) => {
          以前只从 query 取 → 永远取不到 key → 报「没有这个邮箱账号」✗（实测踩过）。
          所以先把 body 读出来，key / box 都允许从 body 覆盖 ✓。 */
       let postBody = null;
-      if (u.pathname === '/api/life/mail/flag') {
+      if (u.pathname === '/api/life/mail/flag' || u.pathname === '/api/life/mail/move'
+        || u.pathname === '/api/life/mail/newbox' || u.pathname === '/api/life/mail/delbox') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
         try { postBody = await readBody(req, 1e5); } catch (_) { postBody = {}; }
       }
@@ -4839,8 +4842,12 @@ const server = http.createServer(async (req, res) => {
               }
               return { unseen: st.unseen, messages: st.messages, latest };
             }, { timeout: 10000 });
+            /* 同上：只有连接级失败才记 ✗（status 里失败基本都是连接问题 ✓，
+               但也可能是命令级，所以一样要判一下 ✓）*/
             if (r.ok) MAIL_FAIL_CACHE.delete(k);
-            else MAIL_FAIL_CACHE.set(k, { at: Date.now(), error: r.error || '连接失败' });
+            else if (/^(connect|socket|timeout|auth|greeting|starttls)$/.test(String(r.step || ''))) {
+              MAIL_FAIL_CACHE.set(k, { at: Date.now(), error: r.error || '连接失败' });
+            }
             return {
               key: k, user: account.user,
               ok: !!r.ok,
@@ -4870,10 +4877,17 @@ const server = http.createServer(async (req, res) => {
         if (!wantForce && knownBad && Date.now() - knownBad.at < MAIL_FAIL_TTL) {
           return send(res, 200, { ok: false, error: knownBad.error, cached: true });
         }
-        /* 统一记录成功/失败 ✓（成功就清掉负缓存，用户修好网络后立刻恢复 ✓）*/
+        /* ★★ 只有**连接 / 认证**级别的失败才记进负缓存 ✗✗ ——
+           命令级失败（「文件夹不存在」「邮件不存在」「文件夹非空」…）是**正常的业务错误** ✓，
+           记进去会让整个账号在 5 分钟内**所有**请求都返回那句陈旧错误 ✗✗
+           （实测踩过：删一个不存在的文件夹之后，后面建文件夹、移邮件、删文件夹
+            全都报「IMAP DELETE 失败：Folder not exist」✗，看起来像整个邮箱坏了 ✗）。
+           成功就清掉负缓存 ✓（用户修好网络后立刻恢复 ✓）。 */
+        const CONN_STEP = /^(connect|socket|timeout|auth|greeting|starttls)$/;
         const markFail = (r) => {
-          if (r && r.ok) MAIL_FAIL_CACHE.delete(key);
-          else if (r) MAIL_FAIL_CACHE.set(key, { at: Date.now(), error: r.error || '连接失败' });
+          if (!r) return r;
+          if (r.ok) { MAIL_FAIL_CACHE.delete(key); return r; }
+          if (CONN_STEP.test(String(r.step || ''))) MAIL_FAIL_CACHE.set(key, { at: Date.now(), error: r.error || '连接失败' });
           return r;
         };
 
@@ -5030,6 +5044,99 @@ const server = http.createServer(async (req, res) => {
           if (!r.ok) return send(res, 200, { ok: false, error: r.error });
           MAIL_LIST_CACHE.clear();
           MAIL_STATUS_CACHE.clear();
+          return send(res, 200, r);
+        }
+
+        /* ── 分类管理：把邮件移到另一个文件夹 ✓ ──────────────────────────
+           用 **UID MOVE**（原子 ✓）—— 不会出现「复制成功、删除失败」导致邮件重复 ✗。
+           移动是**可撤销**的 ✓（移回去就行 ✓），前端会记住原文件夹 ✓。 */
+        if (u.pathname === '/api/life/mail/move') {
+          const uid = Number(postBody && postBody.uid);
+          const to = String((postBody && postBody.to) || '').trim();
+          if (!uid) return send(res, 200, { ok: false, error: '缺少 uid' });
+          if (!to) return send(res, 200, { ok: false, error: '没有指定目标文件夹' });
+          if (to === box) return send(res, 200, { ok: false, error: '已经在这个文件夹里了' });
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
+            await s.select(box);
+            /* ★ 移动后邮件在**目标文件夹里是一个新 UID** ✗（UID 是按文件夹分配的 ✓），
+               而「撤销」要用新 UID 才能移回来 ✗。
+               RFC 6851 说服务器应当回 `[COPYUID ...]` 给出新 UID，
+               但**实测 QQ 不回** ✗（只回 `OK MOVE Done` ✗）→
+               退而求其次：先记下 Message-ID，移完到目标文件夹里按它回查 ✓
+               （`UID SEARCH HEADER Message-ID` ✓ 精确可靠 ✓）。 */
+            /* 先记下源邮件的主题（兜底匹配用 ✓）和**目标文件夹的 UID 快照** ✓ */
+            const heads = await s.fetchHeaders([uid], ['SUBJECT', 'MESSAGE-ID']).catch(() => []);
+            const H = heads.length ? MAIL_MIME.parseHeaders(heads[0].headerRaw) : {};
+            const subj = MAIL_MIME.decodeHeader(H.subject) || '';
+            let before = [];
+            try { await s.select(to); before = await s.search('ALL'); } catch (_) { }
+            await s.select(box);
+            const res2 = await s.move(uid, to);
+            /* ① 服务器给了 COPYUID 就直接用 ✓（RFC 6851 ✓，最省事）*/
+            const m = /\[COPYUID\s+\d+\s+[\d,:]+\s+([\d,:]+)\]/i.exec(String(res2 && res2.text || ''));
+            let newUid = m ? Number(String(m[1]).split(',')[0]) : 0;
+            /* ② ★ 实测 QQ **不回 COPYUID** ✗，而且**不支持 `HEADER` 搜索** ✗
+                  （对一封确实存在的邮件 `UID SEARCH HEADER Message-ID "..."` 返回空 ✗）。
+                  所以改用**快照比对** ✓：移动前后目标文件夹的 UID 差集，
+                  就是这封邮件的新 UID ✓ —— 确定可靠 ✓。
+                  （「撤销」必须用它 ✗，因为 UID 是**按文件夹分配**的：
+                    移过去之后原 UID 就失效了 ✗）*/
+            if (!newUid) {
+              try {
+                await s.select(to);
+                const after = await s.search('ALL');
+                const seen = new Set(before);
+                let added = after.filter((x) => !seen.has(x));
+                if (added.length > 1 && subj) {
+                  /* 极少数：期间又来了新邮件 ✗ → 按主题挑 ✓ */
+                  const hs = await s.fetchHeaders(added, ['SUBJECT']).catch(() => []);
+                  const hit = hs.find((h) => (MAIL_MIME.decodeHeader(MAIL_MIME.parseHeaders(h.headerRaw).subject) || '') === subj);
+                  added = hit ? [hit.uid] : added.slice(-1);
+                }
+                if (added.length === 1) newUid = added[0];
+              } catch (_) { }
+            }
+            return { uid, from: box, to, newUid, subject: subj };
+          }, { timeout: 30000 }));
+          if (!r.ok) return send(res, 200, { ok: false, error: r.error });
+          MAIL_LIST_CACHE.clear();
+          MAIL_STATUS_CACHE.clear();
+          return send(res, 200, r);
+        }
+
+        /* ── 新建文件夹（分类）✓ ────────────────────────────────────────
+           ⚠️ 名字要走 modified UTF-7 ✗ —— 直接传 UTF-8 会被 QQ 拒 ✗
+           （实测 `CREATE "中文名"` → `NO Invalid folder name` ✗）。 */
+        if (u.pathname === '/api/life/mail/newbox') {
+          const name = String((postBody && postBody.name) || '').trim().slice(0, 40);
+          if (!name) return send(res, 200, { ok: false, error: '文件夹名不能为空' });
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
+            await s.createBox(name);
+            return { name };
+          }, { timeout: 25000 }));
+          if (!r.ok) {
+            const hint = /already exists/i.test(String(r.error)) ? '（已经有同名的了）' : '';
+            return send(res, 200, { ok: false, error: r.error + hint });
+          }
+          MAIL_LIST_CACHE.clear();
+          return send(res, 200, r);
+        }
+
+        /* ── 删除文件夹 ✓ ──────────────────────────────────────────────
+           IMAP 的 DELETE 只删**空文件夹** ✓，非空时服务器会拒绝 ✓
+           —— 这个行为正好，能挡住误删 ✗。 */
+        if (u.pathname === '/api/life/mail/delbox') {
+          const name = String((postBody && postBody.name) || '').trim();
+          if (!name) return send(res, 200, { ok: false, error: '缺少文件夹名' });
+          const r = markFail(await MAIL_IMAP.withSession(account, async (s) => {
+            await s.deleteBox(name);
+            return { name };
+          }, { timeout: 25000 }));
+          if (!r.ok) {
+            const hint = /not empty|NONEXISTENT|no such/i.test(String(r.error)) ? '（文件夹里还有邮件，先清空再删）' : '';
+            return send(res, 200, { ok: false, error: r.error + hint });
+          }
+          MAIL_LIST_CACHE.clear();
           return send(res, 200, r);
         }
       } catch (error) {
