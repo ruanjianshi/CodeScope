@@ -410,10 +410,19 @@ class ImapSession {
     return out;
   }
 
-  /* 改标记：action = 'add' | 'remove'，flags 如 ['\\Seen'] ✓ */
+  /* 改标记：action = 'add' | 'remove'，flags 如 ['\\Seen'] ✓
+     ★★ uid 可以是**单个 UID，也可以是范围**（`1:*` = 整个文件夹）✗ ——
+     以前一律 `Number(uid)` ✗，而 `Number('1:*')` 是 **NaN** ✗ →
+     拼出 `UID STORE NaN +FLAGS (\Seen)`，服务器**不报错、也不做事** ✗✗
+     （「本箱全部标为已读」就是这么失效的：界面提示成功、实际一封没标 ✗，实测踩过）。
+     所以：是有限数字才转字符串，其它一律原样透传 ✓（并挡掉空值 ✓）。 */
   async store(uid, action, flags) {
     const op = action === 'remove' ? '-FLAGS' : '+FLAGS';
-    return this.command(`UID STORE ${Number(uid)} ${op} (${flags.join(' ')})`);
+    const set = (typeof uid === 'number' && Number.isFinite(uid))
+      ? String(uid)
+      : String(uid == null ? '' : uid).trim();
+    if (!set) throw new ImapError('UID STORE 缺少 UID / 范围', 'store');
+    return this.command(`UID STORE ${set} ${op} (${flags.join(' ')})`);
   }
 
   /* 删除：先打 \Deleted，再 EXPUNGE ✓（有些服务器要 SELECT 后才能 EXPUNGE ✓）*/

@@ -1452,10 +1452,9 @@
   let LIVE_BUF = 0;
   function refreshMemoDerived() {
     if (TAB !== 'memo') return;
-    const cur = ((STORE && STORE.memos) || []).find((x) => x.id === (STORE && STORE.memoSel));
+    /* ★ 走唯一入口 ✓ —— 写盘目标只能是「编辑器正在显示的那一条」✗（见 memoWriteTarget 注释）*/
+    const cur = memoWriteTarget();
     if (!cur) return;
-    /* ★ 和 writeMemo 同一道守卫：编辑器显示的不是这一条就绝不写 ✓（详见 MEMO_EDITOR_ID 注释）*/
-    if (MEMO_EDITOR_ID && MEMO_EDITOR_ID !== cur.id) return;
     /* ⚠️ 必须**先**把编辑器内容写回 cur.text 再刷列表 ——
        cur.text 平时要等 600ms 的 flushMemo 才更新，而列表刷新是 200ms，
        不先写回的话列表读到的是旧数据 ✗（实测：打完字列表摘要少一行）。 */
@@ -1492,7 +1491,16 @@
     if (title == null && body == null) return null;
     const old = String(cur.text || '').split('\n');
     const bodyNext = body == null ? old.slice(1).join('\n') : body;
-    cur.text = (title == null ? old[0] : title) + (bodyNext ? '\n' + bodyNext : '');
+    const next = (title == null ? old[0] : title) + (bodyNext ? '\n' + bodyNext : '');
+    /* ★★ 内容**没变**就绝不能动 `edit` ✗✗ ——
+       列表是按 `edit` 倒序排的（新的在上 ✓），而「点开一条看一眼」也会走到这里
+       （切走前要 flush ✓）。以前无条件 `cur.edit = Date.now()` ✗ →
+       **光是打开一条就会把它顶到列表最上面** ✗
+       （用户原话：「是否会自动按照最新打开的放到最上面排序，不需要这个」）。
+       现在只有内容真的变了才更新时间戳 ✓ —— 打开不再改变顺序，
+       真正编辑过的才会浮上来（这也是笔记类应用的通行行为 ✓）。 */
+    if (next === String(cur.text || '')) return cur;
+    cur.text = next;
     cur.edit = Date.now();
     return cur;
   }
@@ -1521,6 +1529,19 @@
   }
 
   /* 左栏 + 中栏 的交互（筛选类操作用 render() 局部刷新 ✓）*/
+  /* ★★ 写盘的**唯一**目标：编辑器**正在显示**的那一条 ✓
+     为什么必须是它、且**不能有回落** ✗：
+       以前两条 flush 路径都写成 `memoById(STORE.memoSel) || memos.filter(!trash)[0]` ✗ ——
+       而 `memoSel` 为空时（比如刚打开备忘录页、还没点过任何一条）它会回落到**列表第一条** ✗，
+       此时编辑器显示的可能完全是另一条 → **把 A 的正文写成 C 的** ✗✗。
+       实测：只要「依次点开三条备忘录」，第一条的内容就被第三条覆盖了 ✗
+       （用户真实数据就是这么被改坏的 —— 静默、无报错、看起来一切正常 ✗✗）。
+       现在：**编辑器显示谁，就只能写谁** ✓；没有编辑器（空态）就什么都不写 ✓。 */
+  function memoWriteTarget() {
+    if (!MEMO_EDITOR_ID) return null;
+    return ((STORE && STORE.memos) || []).find((m) => m.id === MEMO_EDITOR_ID) || null;
+  }
+
   function bindMemoSide() {
     const host = document.getElementById("lifework-view");
     if (!host) return;
@@ -1528,7 +1549,8 @@
     const qa = (sel) => Array.from(host.querySelectorAll(sel));
     const memoById = (id) => (STORE.memos || []).find((x) => x.id === id);
     const flushMemo = () => {
-      const cur = memoById(STORE.memoSel) || (STORE.memos || []).filter((m) => !m.trash)[0];
+      /* ★ 走唯一入口 ✓（以前这里是无守卫的 memoWriteFromEditor ✗，就是写串数据的元凶）*/
+      const cur = memoWriteTarget();
       if (!cur) return;
       memoWriteFromEditor(cur);
       if (!cur.text.trim() || cur.text.trim() === "新备忘录") {
@@ -1980,12 +2002,7 @@
        一旦编辑器 DOM 还停在上一条（筛选/切换后没重建编辑器），
        这一写就会把**界面上的内容灌进另一条备忘录** ✗✗（静默的数据损坏，比丢内容更糟）。
        宁可这次不写（用户下次操作会重建编辑器并重新同步），也绝不写错条目 ✓。 */
-    const writeMemo = () => {
-      const c = curMemo();
-      if (!c) return null;
-      if (MEMO_EDITOR_ID && MEMO_EDITOR_ID !== c.id) return null;
-      return memoWriteFromEditor(c);
-    };
+    const writeMemo = () => memoWriteFromEditor(memoWriteTarget());
     /* 只写不删的保存：光标操作 / 换行用它。
        ⚠️ 不能直接用 flushMemo —— 它在内容为空时会把整条删掉 ✗，
           那条规则是给「切走」用的，光标动一下就触发就完了。 */

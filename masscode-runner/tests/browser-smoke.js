@@ -845,6 +845,99 @@ print(r.run())
   await page.waitForTimeout(1200);
   const studyAfter = await folderCount('Study note');
   if (studyAfter !== studyBefore + 1) throw new Error('拖拽后文件夹计数没变：' + studyBefore + ' → ' + studyAfter);
+  /* ★★★ 备忘录「依次点开」绝不能写串数据 —— 这条是**数据损坏**级，必须守死 ✗✗
+     根因：两条 flush 路径都写成 `memoById(memoSel) || memos.filter(!trash)[0]` ✗ ——
+     `memoSel` 为空时（刚进备忘录页、还没点过任何一条）会回落到**列表第一条** ✗，
+     而编辑器显示的是另一条 → 把 A 的正文写成 C 的 ✗。
+     实测：只要「依次点开三条」，第一条就被第三条覆盖 ✗（用户真实数据就是这么坏的 ✗）。
+     现在写盘目标收敛成 memoWriteTarget()：**编辑器显示谁就只能写谁** ✓。
+     顺带：**只「打开」不再刷新 edit 时间戳** ✓ → 列表顺序不会因为点一下就变 ✗。 */
+  const memoTexts = () => page.evaluate(() => {
+    const out = {};
+    document.querySelectorAll('.lw-nt-row').forEach((el) => { out[el.dataset.memo] = el.querySelector('.tt').innerText.trim(); });
+    return out;
+  });
+  const listOrder = () => page.locator('.lw-nt-row').evaluateAll((es) => es.map((e) => e.dataset.memo));
+  /* ⚠️ 原有 id 要在**创建之前**记 ✗ ——
+     创建之后再取的话，`beforeOrder` 里已经有新的三条了，
+     `newIds` 会算成空数组 → 清理什么都没删掉 ✗（实测踩过）。 */
+  const originalIds = await listOrder();
+  /* 造三条内容各不相同的备忘录（用「新建 + 打字」的真实路径 ✓）*/
+  const mk = async (text) => {
+    await page.locator('#lw-memo-new').click();
+    await page.waitForTimeout(900);
+    await page.locator('#lw-memo-title').fill(text);
+    await page.waitForTimeout(1400);
+  };
+  await mk('甲甲甲');
+  await mk('乙乙乙');
+  await mk('丙丙丙');
+  await page.waitForTimeout(1500);
+  /* ★★★ 关键前置：把 `memoSel` 清空再重新加载 ✗ ——
+     写串数据的 bug **只在 memoSel 为空时触发**（那时写盘目标会回落到列表第一条 ✗），
+     也就是「刚打开备忘录页、还没点过任何一条」的状态 ✓。
+     不造这个前置条件的话，断言会**假通过** ✗（第一版就是这样，回退修复也照样过 ✗，实测踩过）。 */
+  await page.evaluate(async (origIds) => {
+    const d = (await (await fetch('/api/life/store', { cache: 'no-store' })).json()).data || {};
+    d.memoSel = '';
+    /* ★★ 还必须让「**插入顺序**的第一条」和「按时间排序的第一条」**不是同一条** ✗✗ ——
+       写串的 bug 只在两者不一致时才暴露：
+       一致时「回落到 memos[0]」歪打正着正好是对的那条 → 测不出来 ✗
+       （我第一版就是这么**假通过**的，回退修复也照样过 ✗，实测踩过）。
+       做法：把**原有那条**（插入顺序里的老条目）的 edit 顶到最新 ✓，
+       它就排到了列表最上面，而 memos[0] 仍是新建的那条 ✗ → 两者不一致 ✓。 */
+    const first = (d.memos || []).find((m) => origIds.includes(m.id));
+    if (first) first.edit = Date.now() + 1000;
+    await fetch('/api/life/store', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(d) });
+  }, originalIds);
+  await page.click('#lw-refresh');
+  await page.waitForTimeout(2500);
+  await page.click('[data-tab="memo"]');
+  await page.waitForTimeout(1500);
+
+  const beforeTexts = await memoTexts();
+  const beforeOrder = await listOrder();
+  if (Object.keys(beforeTexts).length !== 4) {
+    throw new Error('备忘录条数不对（原有 1 条 + 新建 3 条 = 4），实际 ' + Object.keys(beforeTexts).length);
+  }
+  /* 依次点开每一条（只打开、不改内容）→ 内容和顺序都必须**完全不变** ✗ */
+  for (let i = 0; i < 4; i++) {
+    await page.locator('.lw-nt-row').nth(i).click();
+    await page.waitForSelector('#lw-memo-ce', { timeout: 15000 });
+    await page.waitForTimeout(900);
+  }
+  await page.waitForTimeout(1500);
+  const afterTexts = await memoTexts();
+  for (const id of Object.keys(beforeTexts)) {
+    if (afterTexts[id] !== beforeTexts[id]) {
+      throw new Error('★ 依次点开备忘录时内容被写串了：' + id + ' 从 ' + JSON.stringify(beforeTexts[id]) + ' 变成 ' + JSON.stringify(afterTexts[id]));
+    }
+  }
+  const afterOrder = await listOrder();
+  if (JSON.stringify(afterOrder) !== JSON.stringify(beforeOrder)) {
+    throw new Error('★ 只是「打开」备忘录就改变了列表顺序（不该按最新打开排序）');
+  }
+  /* 清理：把**新建的**三条去掉，回到原有 1 条 ✓
+     ⚠️ 判据别写反 ✗ —— `originalIds` 里的是**原有**的，要删的是**不在**里面的 ✓。
+     ⚠️ 也**别在 UI 上点右键删** ✗ —— 菜单项选择器、时机都要对，太脆（试了两版都没删掉 ✗）。
+        测试环境是隔离的 ✓，**直接改 store + 点「↻ 刷新」强制重读**最确定 ✓。
+     ⚠️ 关掉再打开面板**不会**重读（openInPanel 里有 `if (!DATA) load(false)` ✗），
+        必须走 `#lw-refresh`（`load(true)`）✓。 */
+  const newIds = Object.keys(beforeTexts).filter((id) => !originalIds.includes(id));
+  await page.evaluate(async (ids) => {
+    const r = await fetch('/api/life/store', { cache: 'no-store' });
+    const d = (await r.json()).data || {};
+    d.memos = (d.memos || []).filter((m) => !ids.includes(m.id));
+    await fetch('/api/life/store', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(d) });
+  }, newIds);
+  await page.click('#lw-refresh');
+  await page.waitForTimeout(2500);
+  await page.click('[data-tab="memo"]');
+  await page.waitForTimeout(1500);
+  if (Object.keys(await memoTexts()).length !== 1) {
+    throw new Error('清理失败：测试结束后应只剩原有的 1 条，实际 ' + Object.keys(await memoTexts()).length);
+  }
+
   /* ★★ 点左栏文件夹必须**真的按文件夹过滤** ——
      用户原话：「我点击测试文件夹没有一个备忘录，怎么左边还是有三个，显示在，没有变」。
      根因：`▦ 全部列表` 模式下 viewMemo 里 `view === "all" || ...` 直接跳过文件夹过滤 ✗，
