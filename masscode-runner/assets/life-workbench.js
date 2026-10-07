@@ -1445,6 +1445,21 @@
   .lw-imp .st.err { color:${T.red}; }
   .lw-imp .st2 { font-size:10px; color:${T.faint}; line-height:1.9; margin-top:4px; }
 
+  /* ── 应用内对话框 ✓（替掉原生 prompt / confirm ✓）────────────────────────
+     ★ 用户原话：「不要用这种网页的弹出输入去输入内容」✓。
+     ⚠️ 它复用 「.lw-imp」 那套浮层 ✓ —— 同一套遮罩 / 边框 / 按钮 ✓，
+        不要另起一套 ✗（那就会出现两种长得不一样的浮层 ✗）。 */
+  .lw-dlg-lb { font-size:11px; color:${T.dim}; margin-bottom:7px; }
+  #lw-dlg input { width:100%; height:34px; padding:0 11px; border:2px solid ${T.lineDim};
+    background:${T.bg2}; color:${T.text}; font:13px ${UI}; outline:none; }
+  #lw-dlg input:focus { border-color:${T.accent}; }
+  #lw-dlg input::placeholder { color:${T.faint}; }
+  .lw-dlg-text { font-size:12px; line-height:1.95; color:${T.text}; white-space:pre-wrap; }
+  .lw-dlg-hint { font-size:10.5px; line-height:1.85; color:${T.faint}; margin-top:8px; }
+  /* ⚠️ 空值不让过时**抖一下** ✗ —— 不然用户点了「确定」没反应，会以为按钮坏了 ✗。 */
+  @keyframes lw-dlg-shake { 0%,100% { transform:translateX(0) } 20%,60% { transform:translateX(-5px) } 40%,80% { transform:translateX(5px) } }
+  #lw-dlg input.shake { animation:lw-dlg-shake .36s ease-in-out; border-color:${T.red}; }
+
   /* ── 推荐外刊源浮层 ✓ ───────────────────────────────────────────────────
      ★ 用户原话：「自行帮我抓取热门的，和别人开源的外刊资源等等」✓。
      ⚠️ 左栏固定宽 + 右栏 flex:1 各**自己滚** ✗ —— 用整块滚的话，
@@ -2726,7 +2741,7 @@
     }).join('')).join('');
     host.innerHTML = headHtml() + `<div class="lw-body2">
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
-      <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>`;
+      <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>` + dlgHtml();
     bind();
     /* ★ `#lw-sub` 刚被重建 ✗ —— 把还没过期的状态消息（如「已移到… ↩ 撤销」）重画上去 ✓，
        否则会被默认的「日期 · 项目数」盖掉 ✗（天气异步回来就会触发一次 render ✗）。 */
@@ -2904,6 +2919,144 @@
         saveStore();
       };
     });
+  }
+
+  /* ══ 应用内对话框 ✓（替掉浏览器原生的 prompt / confirm）══════════════════
+     ★ 用户原话：「把这种弹出这种窗口的写入，等都修改掉，不要用这种网页的弹出输入去输入内容」✓。
+     ⚠️ 原生弹窗的毛病 ✗：① 长得和整个面板**完全不搭** ✓（灰底白框，像上世纪的 ✓）
+        ② **阻塞**主线程 ✗ ③ 不能写多行提示 / 不能校验 / 不能给默认选中 ✓
+        ④ 浏览器还能弹「不再显示此对话框」✗ —— 用户一点，这功能就**永久失效**了 ✗✗。
+     ★ 做成 Promise ✓，调用处写起来和原生几乎一样 ✓：
+         const name = await lwAsk({ title:'加一个单词', label:'单词', ph:'如 ubiquitous' });
+         if (name === null) return;            // 取消 → null ✓（原生 prompt 取消也是 null ✓）
+         if (!(await lwConfirm({ title:'删掉？', text:'…', danger:true }))) return;
+     ⚠️ **一次只允许一个** ✗（`LW_DLG` 单例 ✓）—— 叠两个的话前一个的 Promise
+        永远不 resolve ✗ → 那个 `await` 就**永久挂住** ✗（很难查 ✗）。
+        所以开新的之前先把旧的**取消掉** ✓。
+     ⚠️ 对话框**活在 render 里** ✓：状态放 `LW_DLG` ✓，每次 render 由 `dlgHtml()` 画出来 ✓ ——
+        这样别的地方重绘（天气回来了 ✓）不会把它弄丢 ✓。
+     ⚠️ 输入框**不能每敲一个字就 render** ✗（会失焦 ✗）—— 值存 DOM 里 ✓，
+        只在 `input` 时**悄悄抄一份**到 `LW_DLG.value` ✓（万一被重绘也能恢复 ✓），
+        真正读值只发生在按「确定」那一下 ✓。 */
+  let LW_DLG = null;
+  function lwAsk(opts) {
+    const o = opts || {};
+    return new Promise((resolve) => {
+      if (LW_DLG) { const old = LW_DLG; LW_DLG = null; try { old.resolve(null); } catch (_) {} }
+      LW_DLG = {
+        kind: 'ask', title: String(o.title || ''), label: String(o.label || ''),
+        ph: String(o.ph || ''), value: String(o.value == null ? '' : o.value),
+        hint: String(o.hint || ''), ok: String(o.ok || '确定'), cancel: String(o.cancel || '取消'),
+        /* ⚠️ 有些字段**本来就允许留空** ✗（比如「作者（可留空）」✓）——
+           一律拒绝空值的话，那些地方就永远填不过去 ✗。 */
+        optional: !!o.optional,
+        resolve,
+      };
+      render();
+      /* ★ 弹出来就能直接打字 ✓ —— 原生 prompt 也是这样 ✓，少了这步用户会以为要自己点一下 ✗。 */
+      setTimeout(() => {
+        const el = document.getElementById('lw-dlg-in');
+        if (el) { try { el.focus(); el.select(); } catch (_) {} }
+      }, 0);
+    });
+  }
+  function lwConfirm(opts) {
+    const o = opts || {};
+    return new Promise((resolve) => {
+      if (LW_DLG) { const old = LW_DLG; LW_DLG = null; try { old.resolve(null); } catch (_) {} }
+      LW_DLG = {
+        kind: 'confirm', title: String(o.title || '确定吗？'), text: String(o.text || ''),
+        ok: String(o.ok || '确定'), cancel: String(o.cancel || '取消'), danger: !!o.danger,
+        resolve,
+      };
+      render();
+      setTimeout(() => { const el = document.getElementById('lw-dlg-ok'); if (el) { try { el.focus(); } catch (_) {} } }, 0);
+    });
+  }
+  /* ★ 三选一 / 多选一 ✓ —— 有些地方原生 `confirm` 硬塞成两选一 ✗，
+     于是「取消」被赋予了**不是取消**的含义 ✗（最典型的是日记模板那句：
+     确定 = 替换、取消 = 追加 ✗ —— 用户点「取消」结果是「追加」✗，
+     他以为只是「不替换」✗）。→ 给个能表达多选的 ✓。 */
+  function lwChoose(opts) {
+    const o = opts || {};
+    return new Promise((resolve) => {
+      if (LW_DLG) { const old = LW_DLG; LW_DLG = null; try { old.resolve(null); } catch (_) {} }
+      LW_DLG = {
+        kind: 'choose', title: String(o.title || '怎么处理？'), text: String(o.text || ''),
+        options: (Array.isArray(o.options) ? o.options : []).map((x) => ({
+          label: String((x && x.label) || ''), value: x && 'value' in x ? x.value : (x && x.label),
+          danger: !!(x && x.danger),
+        })),
+        cancel: String(o.cancel || '取消'),
+        resolve,
+      };
+      render();
+      setTimeout(() => { const el = document.getElementById('lw-dlg-o0'); if (el) { try { el.focus(); } catch (_) {} } }, 0);
+    });
+  }
+  /* 收尾 ✓ —— 先清状态再 render ✓（render 里会按状态重画 ✓，不清就关不掉 ✗） */
+  function lwDlgDone(val) {
+    const d = LW_DLG;
+    LW_DLG = null;
+    render();
+    if (d) { try { d.resolve(val); } catch (_) {} }
+  }
+  function dlgHtml() {
+    const d = LW_DLG;
+    if (!d) return '';
+    const isAsk = d.kind === 'ask';
+    const isChoose = d.kind === 'choose';
+    const ft = isChoose
+      /* 多选一：每个选项一个按钮 ✓（第一个是「主」✓），取消单独放右边 ✓ */
+      ? d.options.map((o, i) => '<button class="' + (i === 0 ? 'pri' : '') + '" id="lw-dlg-o' + i + '"'
+          + (o.danger ? ' style="border-color:' + T.red + ';color:' + T.red + '"' : '') + '>' + esc(o.label) + '</button>').join('')
+        + '<button id="lw-dlg-no" style="margin-left:auto">' + esc(d.cancel) + '</button>'
+      : '<button class="pri" id="lw-dlg-ok"' + (d.danger ? ' style="border-color:' + T.red + ';color:' + T.red + '"' : '') + '>'
+        + esc(d.ok) + '</button>'
+        + '<button id="lw-dlg-no">' + esc(d.cancel) + '</button>'
+        + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">'
+        + (isAsk ? '回车 = 确定 · Esc = 取消' : 'Esc = 取消') + '</span>';
+    return '<div class="lw-imp" id="lw-dlg"><div class="box" style="width:min(460px,92vw)">'
+      + '<div class="hd"><b>' + esc(d.title) + '</b><span class="x" id="lw-dlg-x">✕</span></div>'
+      + '<div class="bd">'
+      + (isAsk
+        ? (d.label ? '<div class="lw-dlg-lb">' + esc(d.label) + '</div>' : '')
+          + '<input id="lw-dlg-in" type="text" spellcheck="false" autocomplete="off" placeholder="' + esc(d.ph) + '" value="' + esc(d.value) + '"/>'
+          + (d.hint ? '<div class="lw-dlg-hint">' + d.hint + '</div>' : '')
+        : '<div class="lw-dlg-text">' + esc(d.text) + '</div>')
+      + '</div>'
+      + '<div class="ft">' + ft + '</div></div></div>';
+  }
+  function bindDlg(root) {
+    const d = LW_DLG;
+    if (!d || !root) return;
+    const q = (s) => root.querySelector(s);
+    const ok = q('#lw-dlg-ok'), no = q('#lw-dlg-no'), x = q('#lw-dlg-x'), inp = q('#lw-dlg-in');
+    const cancelVal = () => (d.kind === 'ask' ? null : false);
+    const submit = () => {
+      if (d.kind === 'ask') {
+        /* ⚠️ 空值**不给过** ✗ —— 原生 prompt 允许空 ✓，但这里每一处都要求非空 ✓，
+           放过去只会让调用处白跑一趟 ✓（而且用户看到「点了没反应」✗）。 */
+        const v = inp ? String(inp.value || '').trim() : '';
+        if (!v && !d.optional) { if (inp) { inp.focus(); inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 400); } return; }
+        lwDlgDone(v);
+      } else lwDlgDone(true);
+    };
+    if (ok) ok.onclick = submit;
+    if (no) no.onclick = () => lwDlgDone(cancelVal());
+    if (x) x.onclick = () => lwDlgDone(cancelVal());
+    if (inp) inp.oninput = () => { d.value = inp.value; };   /* 只抄一份 ✓，不 render ✗ */
+    if (d.kind === 'choose') {
+      d.options.forEach((o, i) => { const el = q('#lw-dlg-o' + i); if (el) el.onclick = () => lwDlgDone(o.value); });
+    }
+    /* ⚠️ 键盘挂在整个浮层上 ✓ —— 焦点在输入框里 ✓ / 在按钮上 ✓ 都能收到 ✓。 */
+    const box = q('#lw-dlg');
+    if (box) {
+      box.onkeydown = (ev) => {
+        if (ev.key === 'Enter' && d.kind !== 'choose') { ev.preventDefault(); submit(); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); lwDlgDone(cancelVal()); }
+      };
+    }
   }
 
   /* ★ 上下拖拽 ✓ —— `bindPaneGrips` 的**纵向版** ✓（那个拖的是**宽** ✓，这个拖的是**高** ✓）。
@@ -3324,10 +3477,10 @@
     const mView = qa("[data-mview]");
     mView.forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); render(); }; });
     const addFol = q("#lw-nt-addfol");
-    if (addFol) addFol.onclick = () => {
-      const name = prompt("新建文件夹名称：", "新文件夹");
-      if (!name || !name.trim()) return;
-      const n = name.trim().slice(0, 24);
+    if (addFol) addFol.onclick = async () => {
+      const name = await lwAsk({ title: "新建文件夹", label: "文件夹名称", value: "新文件夹", ok: "创建" });
+      if (name === null) return;
+      const n = name.slice(0, 24);
       STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
       if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
       STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); render();
@@ -3350,15 +3503,19 @@
     qa("[data-mfolder]").forEach((el) => {
       const name = el.dataset.mfolder; if (!name) return;
       el.oncontextmenu = (e) => openCtx(e, [
-        { label: "✎ 重命名", run: () => {
-            const n = prompt("重命名文件夹：", name); if (!n || !n.trim() || n.trim() === name) return;
-            const nn = n.trim().slice(0, 24);
+        { label: "✎ 重命名", run: async () => {
+            const n = await lwAsk({ title: "重命名文件夹", label: "新名字", value: name, ok: "改名" });
+            if (n === null || n === name) return;
+            const nn = n.slice(0, 24);
             STORE.memoFolders = (STORE.memoFolders || []).map((x) => (x === name ? nn : x));
             (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = nn; });
             STORE.memoFolder = nn; saveStore(); render();
           } },
-        { label: "🗑 删除文件夹", danger: true, run: () => {
-            if (!confirm("删除文件夹「" + name + "」？\n里面的备忘录会移到「备忘录」。")) return;
+        { label: "🗑 删除文件夹", danger: true, run: async () => {
+            if (!(await lwConfirm({
+              title: "删除文件夹？", danger: true, ok: "删除",
+              text: "「" + name + "」\n\n里面的备忘录不会删，会移到「备忘录」。",
+            }))) return;
             STORE.memoFolders = (STORE.memoFolders || []).filter((x) => x !== name);
             (STORE.memos || []).forEach((m) => { if ((m.folder || "备忘录") === name) m.folder = "备忘录"; });
             STORE.memoFolder = ""; saveStore(); render();
@@ -3368,15 +3525,19 @@
     qa("[data-mtag]").forEach((el) => {
       const tag = el.dataset.mtag; if (!tag) return;
       el.oncontextmenu = (e) => openCtx(e, [
-        { label: "✎ 重命名标签", run: () => {
-            const n = prompt("把 #" + tag + " 改成：", tag); if (!n || !n.trim() || n.trim() === tag) return;
-            const nn = n.trim().replace(/^#/, "").slice(0, 24);
+        { label: "✎ 重命名标签", run: async () => {
+            const n = await lwAsk({ title: "重命名标签", label: "把 #" + tag + " 改成", value: tag, ok: "改名" });
+            if (n === null || n === tag) return;
+            const nn = n.replace(/^#/, "").slice(0, 24);
             (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), "#" + nn); });
             if (STORE.memoTag === tag) STORE.memoTag = nn;
             saveStore(); render();
           } },
-        { label: "🗑 删除标签（只从正文移除）", danger: true, run: () => {
-            if (!confirm("从所有备忘录里移除 #" + tag + " ？")) return;
+        { label: "🗑 删除标签（只从正文移除）", danger: true, run: async () => {
+            if (!(await lwConfirm({
+              title: "移除标签？", danger: true, ok: "移除",
+              text: "从所有备忘录正文里移除 #" + tag + " ？\n\n（备忘录本身不会删）",
+            }))) return;
             (STORE.memos || []).forEach((m) => { m.text = String(m.text || "").replace(new RegExp("\\s*#" + tag + "(?![\\u4e00-\\u9fa5\\w-])", "g"), ""); });
             if (STORE.memoTag === tag) STORE.memoTag = "";
             saveStore(); render();
@@ -3387,11 +3548,16 @@
       const id = el.dataset.memo;
       el.oncontextmenu = (e) => openCtx(e, [
         { label: "☆ 置顶 / 取消", run: () => { const m = memoById(id); if (m) { m.pin = !m.pin; saveStore(); render(); } } },
-        { label: "📁 移到文件夹…", run: () => {
-            const n = prompt("移到哪个文件夹？（现有：" + (STORE.memoFolders || []).join(" / ") + "）", (STORE.memoFolders || [])[0] || "备忘录");
-            if (!n || !n.trim()) return;
+        { label: "📁 移到文件夹…", run: async () => {
+            const n = await lwAsk({
+              title: "移到文件夹", ok: "移过去",
+              label: "现有的：" + ((STORE.memoFolders || []).join(" / ") || "（还没有）"),
+              ph: "填一个名字，不存在就新建",
+              value: (STORE.memoFolders || [])[0] || "备忘录",
+            });
+            if (n === null) return;
             const m = memoById(id); if (!m) return;
-            m.folder = n.trim().slice(0, 24);
+            m.folder = n.slice(0, 24);
             STORE.memoFolders = STORE.memoFolders || [];
             if (!STORE.memoFolders.includes(m.folder)) STORE.memoFolders.push(m.folder);
             saveStore(); render();
@@ -3405,6 +3571,9 @@
   function bind() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
+    /* ★ 对话框要**每次 render 都重绑** ✗ —— 它跟着 render 一起重建 ✓，
+       所以绑在 `bind()` 里最稳 ✓（不用另外记着在哪重绑 ✓）。 */
+    bindDlg(host);
     /* 左栏 + 中栏的交互（提出来，方便 render() 局部刷新时复用 ✓）*/
     bindMemoSide();
     /* ── 卡片：拖「边」改大小 ✓（右边改宽 / 下边改高 / 右下角一起）──
@@ -3872,7 +4041,13 @@
     qa("[data-mrestore]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mrestore); if (m) { snapMemo("restore"); m.trash = false; saveStore(); render(); } }; });
     qa("[data-mkill]").forEach((el) => { el.onclick = () => { snapMemo("kill"); STORE.memos = (STORE.memos || []).filter((x) => x.id !== el.dataset.mkill); saveStore(); render(); }; });
     const tEmpty = q("#lw-trash-empty");
-    if (tEmpty) tEmpty.onclick = () => { if (!confirm("清空回收站？无法恢复。")) return; snapMemo("empty-trash"); STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render(); };
+    if (tEmpty) tEmpty.onclick = async () => {
+      if (!(await lwConfirm({
+        title: "清空回收站？", danger: true, ok: "清空",
+        text: "回收站里的备忘录会被永久删除，不能撤销。",
+      }))) return;
+      snapMemo("empty-trash"); STORE.memos = (STORE.memos || []).filter((x) => !x.trash); saveStore(); render();
+    };
     /* 快捷键 */
     if (!bind._keys) {
       bind._keys = (e) => {
@@ -3938,9 +4113,14 @@
     if (wxEl) {
       wxEl.style.cursor = "pointer";
       wxEl.title = "点击切换地区";
-      wxEl.onclick = () => {
-        const c = prompt("输入城市（中文或英文）：", CITY);
-        if (c && c.trim()) { CITY = c.trim(); STORE.city = CITY; saveStore(true); load(true); }
+      wxEl.onclick = async () => {
+        const c = await lwAsk({
+          title: "切换地区", ok: "切换",
+          label: "城市（中文或英文都行）", ph: "如 广州 / Tokyo",
+          value: CITY,
+        });
+        if (c === null) return;
+        CITY = c; STORE.city = CITY; saveStore(true); load(true);
       };
     }
 
@@ -3962,9 +4142,13 @@
       el.onclick = () => { JOURNAL_FLUSH(); STORE.journalSel = el.dataset.jday; STORE.journalMonth = el.dataset.jday.slice(0, 7); saveStore(); render(); };
     });
     const jDel = q('#lw-j-del');
-    if (jDel) jDel.onclick = () => {
+    if (jDel) jDel.onclick = async () => {
       const k = STORE.journalSel;
-      if (!k || !confirm('删除 ' + k + ' 的日记？')) return;
+      if (!k) return;
+      if (!(await lwConfirm({
+        title: '删除这天的日记？', danger: true, ok: '删除',
+        text: k + '\n\n删掉就没了，不能撤销。',
+      }))) return;
       JOURNAL_FLUSH();
       STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
       saveStore(); render();
@@ -3998,10 +4182,13 @@
       };
     });
     qa('[data-jcatdel]').forEach((el) => {
-      el.onclick = (ev) => {
+      el.onclick = async (ev) => {
         ev.stopPropagation();
         const c = el.dataset.jcatdel;
-        if (!confirm('删除分类「' + c + '」？\n日记不会被删，只是取消这个分类。')) return;
+        if (!(await lwConfirm({
+          title: '删除分类？', danger: true, ok: '删除',
+          text: '「' + c + '」\n\n日记不会被删，只是取消这个分类。',
+        }))) return;
         JOURNAL_FLUSH();
         STORE.journalCats = (STORE.journalCats || []).filter((x) => x !== c);
         (STORE.journal || []).forEach((j) => { if (j.cat === c) j.cat = ''; });
@@ -4202,13 +4389,29 @@
       JOURNAL_FLUSH();
     };
     qa('[data-jtpl]').forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
         const c2 = document.getElementById('lw-j-ce'); if (!c2) return;
         const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
         const curTxt = lines.join('\n').trim();
         let next = tpl.text;
-        if (curTxt && !confirm('当前已有内容。\n\n确定 = 替换成模板　取消 = 追加到末尾')) next = curTxt.replace(/\s*$/, '') + '\n\n' + tpl.text;
+        if (curTxt) {
+          /* ★★ 这里原来是 `confirm`：**确定 = 替换、取消 = 追加** ✗✗ ——
+             两个按钮都**不是「取消」的意思** ✗：用户点「取消」的结果是「追加」✗，
+             而他以为只是「不替换」✗（实测这种设计最容易点错 ✓）。
+             → 换成**三个说得清的按钮** ✓：替换 / 追加到末尾 / 真·取消 ✓。 */
+          const how = await lwChoose({
+            title: '「' + tpl.name + '」模板',
+            text: '这一天的正文里已经有内容了，模板怎么放？',
+            options: [
+              { label: '追加到末尾', value: 'append' },
+              { label: '替换掉现在的内容', value: 'replace', danger: true },
+            ],
+            cancel: '算了，不插了',
+          });
+          if (how === null) return;
+          if (how === 'append') next = curTxt.replace(/\s*$/, '') + '\n\n' + tpl.text;
+        }
         c2.innerHTML = ceHtml(next, 0);
         ceAlignLineNumbers(c2);
         STORE.journalCurLine = 0;
@@ -6531,17 +6734,20 @@
     try { await flowRun(); } finally { saved.forEach((x) => { x.n.disabled = x.d; }); saveStore(); render(); }
   }
 
-  function flowNew() {
-    const name = prompt('工作流名字：', '新工作流');
-    if (!name || !name.trim()) return;
+  async function flowNew() {
+    const name = await lwAsk({ title: '新建工作流', label: '工作流名字', value: '新工作流', ok: '创建' });
+    if (name === null) return;
     const id = 'w' + Date.now();
-    STORE.flows = flowList().concat([{ id, name: name.trim(), nodes: [], edges: [], at: Date.now() }]);
+    STORE.flows = flowList().concat([{ id, name, nodes: [], edges: [], at: Date.now() }]);
     FLOW_UI.sel = id; STORE.flowSel = id; FLOW_UI.steps = null; FLOW_UI.err = '';
     saveStore(); render();
   }
-  function flowDel() {
+  async function flowDel() {
     const f = flowCurrent(); if (!f) return;
-    if (!confirm('删掉工作流「' + f.name + '」？')) return;
+    if (!(await lwConfirm({
+      title: '删掉这个工作流？', danger: true, ok: '删除',
+      text: '「' + f.name + '」\n\n它的节点、连线和执行历史都会一起没。',
+    }))) return;
     STORE.flows = flowList().filter((x) => x.id !== f.id);
     FLOW_UI.sel = ''; STORE.flowSel = '';
     saveStore(); render();
@@ -7382,9 +7588,12 @@
     const rc = q('#lw-fl-runs-close'); if (rc) rc.onclick = () => { FLOW_UI.runOpen = false; render(); };
     qa('[data-flrun]').forEach((el) => { el.onclick = () => { FLOW_UI.runSel = Number(el.dataset.flrun); render(); }; });
     const cl = q('#lw-fl-clear');
-    if (cl) cl.onclick = () => {
+    if (cl) cl.onclick = async () => {
       const f = flowCurrent(); if (!f) return;
-      if (!confirm('清空画布上的所有节点和连线？（工作流本身还在）')) return;
+      if (!(await lwConfirm({
+        title: '清空画布？', danger: true, ok: '清空',
+        text: '画布上的所有节点和连线都会被清掉。\n\n（工作流本身还在，而且可以 ⌘Z 撤销）',
+      }))) return;
       flowPushUndo(f);
       f.nodes = []; f.edges = []; f.at = Date.now();
       FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.steps = null; FLOW_UI.picked = [];
@@ -7902,10 +8111,11 @@
   /* ── 阅读：交互 ────────────────────────────────────────────────────────── */
   function rdSave() { saveStore(); }
   function rdPickBook(id) { RD_UI.sel = id; STORE.bookSel = id; render(); }
-  function rdAddBook() {
-    const title = prompt('书名：', '');
-    if (!title || !title.trim()) return;
-    const author = prompt('作者（可留空）：', '') || '';
+  async function rdAddBook() {
+    const title = await lwAsk({ title: '加一本书', label: '书名', ph: '如 置身事内', ok: '下一步' });
+    if (title === null) return;
+    const author = await lwAsk({ title: '加一本书', label: '作者（可留空）', ph: '如 兰小欢', ok: '加进书架', optional: true });
+    if (author === null) return;
     const id = 'b' + Date.now();
     STORE.books = ((STORE && STORE.books) || []).concat([{
       id, title: title.trim(), author: author.trim(), cover: '', src: 'paper',
@@ -7932,9 +8142,15 @@
   }
   function rdSetSrc(k) { const b = rdCurrent(); if (!b) return; b.src = k; b.edit = Date.now(); rdSave(); render(); }
   function rdSetRating(r) { const b = rdCurrent(); if (!b) return; b.rating = (Number(b.rating) === r ? 0 : r); b.edit = Date.now(); rdSave(); render(); }
-  function rdDelBook() {
+  async function rdDelBook() {
     const b = rdCurrent(); if (!b) return;
-    if (!confirm('删掉《' + b.title + '》？它的 ' + bookNotesOf(b.id).length + ' 条笔记也会一起删掉，不能撤销。')) return;
+    const nn = bookNotesOf(b.id).length;
+    if (!(await lwConfirm({
+      title: '删掉这本书？', danger: true, ok: '删除',
+      text: '《' + b.title + '》'
+        + (nn ? '\n\n它的 ' + nn + ' 条笔记也会一起删掉。' : '')
+        + '\n\n不能撤销。',
+    }))) return;
     STORE.books = ((STORE && STORE.books) || []).filter((x) => x.id !== b.id);
     STORE.bookNotes = ((STORE && STORE.bookNotes) || []).filter((x) => x.bookId !== b.id);
     RD_UI.sel = ''; STORE.bookSel = '';
@@ -8347,8 +8563,11 @@
     });
     const wgo = q('#lw-wrc-go'); if (wgo) wgo.onclick = () => rdSyncWeread(false);
     const woff = q('#lw-wrc-off');
-    if (woff) woff.onclick = () => {
-      if (!confirm('断开微信读书？\n\n已经同步进来的书会保留，只是以后不再自动更新。')) return;
+    if (woff) woff.onclick = async () => {
+      if (!(await lwConfirm({
+        title: '断开微信读书？', danger: true, ok: '断开',
+        text: '已经同步进来的书会保留。\n\n只是以后不再自动更新，API Key / Cookie 也会一起清掉。',
+      }))) return;
       /* ⚠️ 两条路都要清 ✗ —— 只清 Cookie 的话，用 Key 连的人点「断开」会发现
          「怎么还连着」✗（因为 `rdWrOn()` 还看到 Key ✓）。 */
       STORE.wereadKey = ''; STORE.wereadCookie = ''; STORE.wereadVia = '';
@@ -9276,9 +9495,12 @@
     epSave(); render();
     return a;
   }
-  function epArtDel() {
+  async function epArtDel() {
     const a = epCurArt(); if (!a) return;
-    if (!confirm('删掉《' + a.title + '》？\n\n（它带进来的生词会保留，复习记录不受影响）')) return;
+    if (!(await lwConfirm({
+      title: '删掉这篇文章？', danger: true, ok: '删除',
+      text: '《' + a.title + '》\n\n它带进来的生词会保留，复习记录不受影响。',
+    }))) return;
     STORE.articles = epArts().filter((x) => x.id !== a.id);
     STORE.artNotes = ((STORE && STORE.artNotes) || []).filter((n) => n.artId !== a.id);
     EP_SENTS.delete(a.id);
@@ -9426,9 +9648,12 @@
     epWordEnrich(card);
     return card;
   }
-  function epWordDel() {
+  async function epWordDel() {
     const w = epWordById(EP_UI.wordSel); if (!w) return;
-    if (!confirm('把「' + w.w + '」从生词本删掉？\n\n（复习记录也一起没了）')) return;
+    if (!(await lwConfirm({
+      title: '从生词本删掉？', danger: true, ok: '删除',
+      text: '「' + w.w + '」\n\n复习记录也一起没了。',
+    }))) return;
     STORE.words = epWords().filter((x) => x.id !== w.id);
     EP_UI.wordSel = '';
     epSave(); render();
@@ -9678,9 +9903,12 @@
       };
     }
     const trd = q('#lw-ep-tredel');
-    if (trd) trd.onclick = () => {
+    if (trd) trd.onclick = async () => {
       const a = epCurArt(); if (!a) return;
-      if (!confirm('重新翻译这篇？\n\n（已经译好的会全部丢掉，重新问一遍模型）')) return;
+      if (!(await lwConfirm({
+        title: '重新翻译这篇？', danger: true, ok: '重译',
+        text: '已经译好的会全部丢掉，重新问一遍模型。\n\n（要花点时间，也可能花 token）',
+      }))) return;
       epTransGo(true);
     };
     /* 正文：点句子 / 划词 */
@@ -9770,11 +9998,20 @@
     if (wq) wq.oninput = () => { EP_UI.wordQ = wq.value; render(); };
     const rev = q('#lw-wd-rev'); if (rev) rev.onclick = () => epStartReview();
     const wa = q('#lw-wd-add');
-    if (wa) wa.onclick = () => {
-      const raw = prompt('加一个单词：', '');
+    if (wa) wa.onclick = async () => {
+      const raw = await lwAsk({
+        title: '加一个单词', label: '单词', ph: '如 ubiquitous', ok: '下一步',
+        hint: '加进去会自动补全音标 / 词性 / 释义 / 例句 / 巧记，并配一张图 ✓',
+      });
       if (raw === null) return;
-      const def = prompt('释义（可留空）：', '') || '';
-      if (String(raw).trim()) epWordAdd(raw, { def });
+      /* ⚠️ 释义**可留空** ✗（反正马上会被 AI 补全 ✓）——
+         不允许留空的话，这一步会变成用户必须自己填的负担 ✗。 */
+      const def = await lwAsk({
+        title: '加一个单词', label: '释义（可留空）', value: '', ok: '加进生词本', optional: true,
+        hint: '留空也没关系 —— 会自动补全 ✓',
+      });
+      if (def === null) return;
+      epWordAdd(raw, { def });
     };
     const wdel = q('#lw-wd-del'); if (wdel) wdel.onclick = () => epWordDel();
     /* ⚠️ 这里必须和 `epWordSave()` 里那张表**一一对应** ✗ ——
@@ -10181,12 +10418,15 @@
 
   /* 新建 / 删除文件夹（分类）✓ */
   async function mailNewBox() {
-    const name = prompt('新建文件夹（分类）名称：', '');
-    if (!name || !name.trim()) return;
+    const name = await lwAsk({
+      title: '新建文件夹', label: '文件夹（分类）名称', ph: '如 重要客户 / 账单', ok: '新建',
+      hint: '会真的在邮箱服务器上建一个 IMAP 文件夹 ✓（不是只存在本机 ✓）',
+    });
+    if (name === null) return;
     try {
       const r = await fetch('/api/life/mail/newbox', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key: MAIL_UI.key, name: name.trim() }),
+        body: JSON.stringify({ key: MAIL_UI.key, name }),
       });
       const d = await r.json();
       if (!d || !d.ok) { mailSetStatus('✗ ' + esc((d && d.error) || '新建失败'), 10000); return; }
@@ -10197,7 +10437,12 @@
   }
   async function mailDelBox(name) {
     if (!name) return;
-    if (!confirm('删除文件夹「' + mailBoxCN(name) + '」？\n（IMAP 只允许删**空的**文件夹，里面有邮件会被拒绝）')) return;
+    if (!(await lwConfirm({
+      title: '删除文件夹？', danger: true, ok: '删除',
+      text: '「' + mailBoxCN(name) + '」\n\n'
+        + '⚠️ IMAP 只允许删空的文件夹 —— 里面还有邮件的话服务器会拒绝。\n'
+        + '（拒绝是好事：那说明它没让你误删邮件）',
+    }))) return;
     try {
       const r = await fetch('/api/life/mail/delbox', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -10398,10 +10643,15 @@
       renderMailPane('list'); ensureMailLoad(); mailLoadStatus(true);
     };
     qa('[data-mact]').forEach((el) => {
-      el.onclick = (ev) => {
+      el.onclick = async (ev) => {
         ev.stopPropagation();
         const action = el.dataset.mact, uid = Number(el.dataset.muid);
-        if (action === 'delete' && !confirm('删除这封邮件？（服务器上会真的删掉）')) return;
+        if (action === 'delete') {
+          if (!(await lwConfirm({
+            title: '删除这封邮件？', danger: true, ok: '删除',
+            text: '服务器上会真的删掉，不是只在本机隐藏。',
+          }))) return;
+        }
         mailFlag(uid, action);
       };
     });
@@ -10420,8 +10670,11 @@
     };
     /* 「全部标为已读」 */
     const ra = host.querySelector('#lw-ml-readall');
-    if (ra) ra.onclick = () => {
-      if (!confirm('把「' + MAIL_UI.box + '」里所有邮件标为已读？')) return;
+    if (ra) ra.onclick = async () => {
+      if (!(await lwConfirm({
+        title: '全部标为已读？', ok: '全部已读',
+        text: '把「' + MAIL_UI.box + '」里的所有邮件标成已读。\n\n（只是标记，不会删邮件）',
+      }))) return;
       mailFlag(0, 'readall');
     };
   }

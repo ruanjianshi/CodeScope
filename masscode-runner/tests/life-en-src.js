@@ -51,8 +51,17 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('中栏有「🌐 挑一篇」按钮', await p.locator('#lw-ep-src').count() === 1);
     ck('左栏有「推荐外刊源」入口', await p.locator('[data-epsrcopen="web"]').count() === 1);
     ck('左栏有「开源资源」入口', await p.locator('[data-epsrcopen="os"]').count() === 1);
-    ck('★ 空态里有个**能点的大按钮**（不是只写一句「点上面」）',
-      await p.locator('#lw-ep-src2').count() === 1 || await p.locator('#lw-ep-src3').count() === 1);
+    /* ⚠️⚠️ 空态**只在真的空的时候才渲染** ✗✗ —— 第一版直接断言「有个大按钮」✓，
+       而用户书架里**有文章** ✓ → 空态根本不出现 ✗ → 假失败 ✗（实测踩过 ✓）。
+       ⚠️ 不去为了测试把用户文章删掉 ✗（那是删数据 ✗）→ 改成**先看状态再断言** ✓：
+          空 → 必须有大按钮 ✓；不空 → 本来就不该有 ✓（这本身就是对的 ✓）。 */
+    const noArt = await p.locator('.lw-ep-art').count() === 0;
+    const bigBtn = (await p.locator('#lw-ep-src2').count()) + (await p.locator('#lw-ep-src3').count());
+    if (noArt) {
+      ck('★ 空态里有个**能点的大按钮**（不是只写一句「点上面」）', bigBtn >= 1, '大按钮 ' + bigBtn + ' 个');
+    } else {
+      ck('  书架非空 → 不显示空态（这才是对的 ✓）', bigBtn === 0, '大按钮 ' + bigBtn + ' 个');
+    }
     const sideTxt = await txt('.lw-rd-side');
     ck('左栏写着「推荐外刊源」', /推荐外刊源/.test(sideTxt), sideTxt.slice(0, 60));
     ck('左栏写着「开源资源」', /开源资源/.test(sideTxt));

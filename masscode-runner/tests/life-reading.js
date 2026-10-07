@@ -31,6 +31,16 @@ const WEREAD_SAMPLE = [
   p.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   const dialogs = [];
   p.on('dialog', async (d) => { const v = dialogs.length ? dialogs.shift() : ''; await d.accept(v); });
+  /* ★★ 「＋ 加书」不再是原生 prompt 了 ✗✗ —— 换成页内浮层（`lwAsk` ✓，
+     用户原话：「不要用这种网页的弹出输入去输入内容」✓）。
+     ⚠️ 它问**两次**（书名 ✓ 然后作者（可留空）✓）→ 所以要能**连续填两次** ✓，
+        不能写成「点按钮 + 填一次」✗（第二次就没有按钮可点了 ✗）。 */
+  const lwAskType = async (val) => {
+    await p.waitForSelector('#lw-dlg-in', { timeout: 10000 });
+    await p.locator('#lw-dlg-in').fill(val);
+    await p.keyboard.press('Enter');
+    await p.waitForTimeout(700);
+  };
   const txt = async (s) => { const l = p.locator(s); return (await l.count()) ? (await l.first().innerText()).replace(/\n/g, ' ').trim() : '(没有)'; };
 
   /* ⚠️⚠️ 用户的**真实**微信读书凭据（API Key / Cookie）绝不能被探针清掉 ✗✗ ——
@@ -85,8 +95,9 @@ const WEREAD_SAMPLE = [
     ck('★ 阅读面板填满内容区（底部不留空白）', fill <= 2, '空 ' + fill + 'px');
 
     console.log('\n── ② 手动加书 ──');
-    dialogs.push(MARK + '测试书', '探针作者');
     await p.click('#lw-rd-add');
+    await lwAskType(MARK + '测试书');
+    await lwAskType('探针作者');
     await p.waitForTimeout(900);
     ck('书出现在中栏', await p.locator('.lw-bk').count() >= 1);
     ck('右栏显示书名', /' + MARK + '|测试书/.test(await txt('.lw-rd-rhd h2')) || (await txt('.lw-rd-rhd h2')).includes('测试书'), await txt('.lw-rd-rhd h2'));

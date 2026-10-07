@@ -46,10 +46,17 @@ const FAKE_JSON = {
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   const errs = []; p.on('pageerror', (e) => errs.push('pageerror: ' + e.message));
   p.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
-  /* ⚠️ 「＋ 加词」走的是 `prompt()` ✗（两次：单词 + 释义 ✓）——
-     探针得**按顺序应答** ✓，不然会卡在对话框上超时 ✗。 */
-  const dialogs = [WORD, ''];
+  /* ⚠️ 「＋ 加词」**不再是原生 prompt** ✗ —— 换成页内浮层了 ✓
+     （用户原话：「不要用这种网页的弹出输入去输入内容」✓）。
+     它问**两次**：单词 ✓ 然后释义（可留空）✓ → 所以是「点一次 + 连填两次」✓。 */
+  const dialogs = [];
   p.on('dialog', async (d) => { await d.accept(dialogs.length ? dialogs.shift() : ''); });
+  const lwAskType = async (val) => {
+    await p.waitForSelector('#lw-dlg-in', { timeout: 10000 });
+    await p.locator('#lw-dlg-in').fill(val);
+    await p.keyboard.press('Enter');
+    await p.waitForTimeout(700);
+  };
   let aiCalls = 0;
   await p.route('**/api/ai/chat', async (route) => {
     aiCalls++;
@@ -101,6 +108,8 @@ const FAKE_JSON = {
     console.log('\n── ① 加一个词：应该**自动**去补全 ──');
     ck('  有「＋ 加词」按钮', await p.locator('#lw-wd-add').count() === 1);
     await p.click('#lw-wd-add');
+    await lwAskType(WORD);      /* 第一步：单词 ✓ */
+    await lwAskType('');        /* 第二步：释义（可留空）✓ 直接回车 ✓ */
     await p.waitForTimeout(2500);
     const st1 = await store();
     const w1 = (st1.words || []).filter((w) => w && !idsBefore.has(w.id));

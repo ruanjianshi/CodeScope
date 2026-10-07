@@ -14,6 +14,21 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
   const errs = []; p.on('pageerror', (e) => errs.push('pageerror: ' + e.message));
   p.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
+  /* ★★ 「新建」那类按钮**不再是原生 prompt 了** ✗✗ ——
+     已经换成页内浮层（`lwAsk` ✓，用户原话：「不要用这种网页的弹出输入去输入内容」✓）。
+     → 探针也得跟着改：**点按钮 → 等浮层 → 填名字 → 回车** ✓。
+     ⚠️ 这个助手是**必须的** ✗：不改的话 `dialogs.push(...)` 就成了往一个
+        永远不会被消费的队列里塞东西 ✓，而 `click` 之后浮层一直开着 ✓ →
+        后面所有断言全崩 ✗（实测就是这么挂的 ✓）。
+     ⚠️ 保留 `p.on('dialog')` 那个监听 ✓ —— 它现在是**哨兵** ✓：
+        万一哪儿还漏了原生弹窗 ✓，会在这儿被 accept 掉 ✓（不至于卡死 ✓）。 */
+  const lwAskFill = async (clickSel, val) => {
+    await p.click(clickSel);
+    await p.waitForSelector('#lw-dlg-in', { timeout: 10000 });
+    await p.locator('#lw-dlg-in').fill(val);
+    await p.keyboard.press('Enter');
+    await p.waitForTimeout(700);
+  };
   const dialogs = [];
   p.on('dialog', async (d) => { const v = dialogs.length ? dialogs.shift() : ''; await d.accept(v); });
   const txt = async (s) => { const l = p.locator(s); return (await l.count()) ? (await l.first().innerText()).replace(/\n/g, ' ').trim() : '(没有)'; };
@@ -62,8 +77,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('★ 工作流面板填满内容区', fill <= 2, '空 ' + fill + 'px');
 
     console.log('\n── ② 新建工作流 ──');
-    dialogs.push(MARK + '演示');
-    await p.click('#lw-fl-new'); await p.waitForTimeout(800);
+    await lwAskFill('#lw-fl-new', MARK + '演示');
     ck('出现在左栏', (await txt('.lw-fl-side')).includes(MARK), await txt('.lw-fl-side'));
     ck('画布空态提示在', await p.locator('.lw-fl-empty').count() === 1);
 
@@ -250,8 +264,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     /* ⚠️ 「＋ 新建」会弹一个 prompt 问名字 ✗ —— 不往 dialogs 里排队的话，
        会被空字符串 accept 掉 ✗ → flowNew 直接 return ✗ → **根本没建出工作流** ✗，
        后面「按 MARK 找这个流」就全是 null ✗（实测踩过 ✗）。 */
-    dialogs.push(MARK + '工作流');
-    await p.click('#lw-fl-new'); await p.waitForTimeout(900);
+    await lwAskFill('#lw-fl-new', MARK + '工作流');
     await p.locator('[data-fladd="trigger.manual"]').click(); await p.waitForTimeout(400);
     await p.locator('[data-fladd="logic.switch"]').click(); await p.waitForTimeout(400);
     await p.locator('[data-fladd="note.sticky"]').click(); await p.waitForTimeout(400);
@@ -363,8 +376,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
                DOM 采样根本采不到「正在跑」那个瞬间 ✗（实测：不 waiting 的话 60 次采样全是 0 ✗）。
        ══════════════════════════════════════════════════════════════════ */
     console.log('\n── ⑲ 连线箭头 + 实时执行进度 ──');
-    dialogs.push(MARK + '箭头');
-    await p.click('#lw-fl-new'); await p.waitForTimeout(900);
+    await lwAskFill('#lw-fl-new', MARK + '箭头');
     await p.locator('[data-fladd="trigger.manual"]').click(); await p.waitForTimeout(500);
     await p.locator('[data-fladd="data.template"]').click(); await p.waitForTimeout(500);
     await p.locator('[data-fladd="out.notify"]').click(); await p.waitForTimeout(500);
@@ -493,8 +505,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
           「每隔 1 分钟」最快也得等 ~90 秒 ✗）—— 所以它比别的段慢很多 ✓。
        ══════════════════════════════════════════════════════════════════ */
     console.log('\n── ⑳ 定时触发：服务端排期 ──');
-    dialogs.push(MARK + '定时流');
-    await p.click('#lw-fl-new'); await p.waitForTimeout(900);
+    await lwAskFill('#lw-fl-new', MARK + '定时流');
     await p.locator('[data-fladd="trigger.timer"]').click(); await p.waitForTimeout(500);
     await p.locator('[data-fladd="out.memo"]').click(); await p.waitForTimeout(500);
     /* 配成「每隔 1 分钟」+ 备忘录 */
