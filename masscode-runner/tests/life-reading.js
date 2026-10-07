@@ -57,6 +57,10 @@ const WEREAD_SAMPLE = [
     await p.locator('.lw-nav [data-tab="reading"]').dispatchEvent('click');
     await p.waitForSelector('.lw-rd', { timeout: 20000 });
     await p.waitForTimeout(900);
+    /* ⚠️ 阅读模块现在有「书架 / 外刊精读 / 生词本」三个模式 ✓，
+       而**模式是落盘的** ✗ —— 上一轮停在哪个模式就还在哪个模式 ✗。
+       不先点回书架的话，下面所有书架断言全是**假失败** ✗（实测踩过 ✗）。 */
+    await p.locator('[data-rdmode="shelf"]').click(); await p.waitForTimeout(700);
 
     console.log('\n── ① 三栏渲染 ──');
     ck('左栏在', await p.locator('.lw-rd-side').count() === 1);

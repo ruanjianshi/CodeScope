@@ -66,7 +66,7 @@ console.log('内联脚本语法闸门：' + checked + ' 个脚本全部通过');
  * **注释里混进一个反引号就会截断模板串** —— 实测踩过 4 次。
  * 那种错误 `node --check` 一眼就能抓，但没人会记得手动跑。
  */
-const externals = ['assets/life-workbench.js'];
+const externals = ['assets/life-workbench.js', 'lib/en-text.js', 'lib/srs.js'];
 let extFailed = 0;
 
 for (const rel of externals) {

@@ -31,6 +31,16 @@
 <script src="/assets/system-panel.js" defer></script>
 <!-- 我的工作台：个人管理系统（今日/研究方向/论文/文件/时间）。
      和 system-panel.js 一样自建 UI + 样式，不动主界面。 -->
+<!-- 共享的纯逻辑模块（双栖 ✓：Node 里 require、浏览器里挂 window.LW_xxx）。
+     外刊精读要用它们分句 / 洗词 / 排复习间隔 —— 前后端必须是**同一份**逻辑，
+     所以在前端再抄一遍是不行的。
+     ⚠️ 必须用 type="module" 加载（不是普通 defer）：经典脚本的顶层 const 共享同一个
+        全局词法作用域，两个文件里同名的 const 会让第二个脚本**整个不执行**
+        （实测踩过：报 Identifier 'API' has already been declared，srs 变 undefined）。
+        模块有自己的作用域，MIN / DAY / clamp 这种常见名字也不会和别的脚本撞。
+     模块默认就是延迟执行的，按文档顺序在 life-workbench.js 之前跑。 -->
+<script type="module" src="/lib/en-text.js"></script>
+<script type="module" src="/lib/srs.js"></script>
 <script src="/assets/life-workbench.js" defer></script>
 <style>
   :root {

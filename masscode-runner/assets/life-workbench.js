@@ -193,6 +193,10 @@
   .lw-main.fill > .lw-fl,
   .lw-main.fill > .lw-tr,
   .lw-main.fill > .lw-jr { flex:1; min-height:0; }
+  /* ★ 阅读模块外面套了一层 .lw-rd-wrap ✗（顶上多了「书架 / 外刊精读 / 生词本」那条 ✓）——
+     所以**撑满那一条要挂到 wrap 上** ✗，不然 wrap 不撑高、里面三栏就塌了 ✗
+     （实测踩过：底部留一大片空白 ✗）。 */
+  .lw-main.fill > .lw-rd-wrap { flex:1; min-height:0; }
   /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
      —— 得把这条链也一起撑开 ✓ */
   .lw-main.fill > .lw-g12 { flex:1; min-height:0; align-items:stretch; }
@@ -1366,6 +1370,135 @@
   .lw-imp .st.err { color:${T.red}; }
   .lw-imp .st2 { font-size:10px; color:${T.faint}; line-height:1.9; margin-top:4px; }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     外刊精读 / 生词本 ✓（阅读模块的两个子模式 ✓）
+     ⚠️ 注释里不能出现反引号 ✗（这段在 JS 模板字符串里 ✗）。
+     ⚠️ 三栏**复用** .lw-rd-side / .lw-rd-list / .lw-rd-read 这套类名 ✓ ——
+        这样 bindPaneGrips 那份 spec **一个字都不用改** ✓，
+        拖拽调宽 / 双击复位 / 宽度落盘全都自动有了 ✓（新做一套就等于重踩一遍 ✗）。
+     ══════════════════════════════════════════════════════════════════════ */
+  .lw-rd-wrap { display:flex; flex-direction:column; min-height:0; }
+  .lw-rd-wrap > .lw-rd { flex:1; min-height:0; }
+  .lw-rd-modes { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:8px 11px; background:${T.card}; border:2px solid ${T.lineDim}; border-bottom:none; }
+  .lw-rd-modes .seg { display:flex; align-items:center; gap:6px; height:26px; padding:0 11px;
+    border:1px solid ${T.lineDim}; color:${T.dim}; font:10.5px ${UI}; cursor:pointer; letter-spacing:.5px; }
+  .lw-rd-modes .seg:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rd-modes .seg.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+  .lw-rd-modes .seg i { font-style:normal; font-size:9px; opacity:.7; }
+  .lw-rd-modes .sp { flex:1; }
+  .lw-rd-modes .tip { font-size:9.5px; color:${T.faint}; }
+
+  /* ── 文章列表 ── */
+  .lw-ep-art { padding:11px 13px; border-bottom:1px solid ${T.lineDim}; cursor:pointer;
+    border-left:2px solid transparent; }
+  .lw-ep-art:hover { background:${T.card2}; }
+  .lw-ep-art.on { background:${T.card2}; border-left-color:${T.accent}; }
+  .lw-ep-art .ti { font-size:12px; color:${T.text}; line-height:1.5; margin-bottom:5px; }
+  .lw-ep-art .mt { display:flex; gap:8px; flex-wrap:wrap; font-size:9.5px; color:${T.faint}; }
+  .lw-ep-art .mt .lv { color:${T.accent}; }
+  .lw-ep-art .mt .done { color:${T.ok}; }
+
+  /* ── 正文（逐句）── */
+  .lw-ep-body { flex:1; min-height:0; overflow:auto; padding:22px 30px 60px; background:${T.bg}; }
+  .lw-ep-body .hd { max-width:760px; margin:0 auto 18px; }
+  .lw-ep-body .hd h2 { font-size:19px; line-height:1.45; color:${T.text}; font-weight:400; margin:0 0 8px; }
+  .lw-ep-body .hd .mt { font-size:10.5px; color:${T.faint}; display:flex; gap:10px; flex-wrap:wrap; }
+  .lw-ep-body .hd .mt b { color:${T.dim}; font-weight:400; }
+  .lw-ep-body .bd { max-width:760px; margin:0 auto; }
+  /* 正文在上、句子面板在下 ✓ —— 面板给固定比例 + 自己滚 ✓（不定高的话正文会被挤没 ✗）。 */
+  .lw-ep-panel { flex:0 0 44%; min-height:0; overflow:auto; border-top:2px solid ${T.lineDim};
+    background:${T.card}; padding-bottom:14px; }
+  .lw-ep-p { margin:0 0 15px; }
+  /* 句子 = 一个 span ✓ —— 点它选中 ✓，朗读时高亮 ✓，标记「已懂」变淡 ✓。
+     行高给到 2.05 ✗：精读要**慢**，挤在一起没法看 ✗。 */
+  .lw-ep-s { font-size:15px; line-height:2.05; color:${T.text}; cursor:pointer;
+    border-bottom:1px solid transparent; padding:1px 0; }
+  .lw-ep-s:hover { background:${T.card2}; }
+  .lw-ep-s.on { background:color-mix(in srgb, ${T.accent} 16%, transparent); border-bottom-color:${T.accent}; }
+  .lw-ep-s.hl { background:color-mix(in srgb, ${T.ok} 22%, transparent); }
+  .lw-ep-s.done { color:${T.faint}; }
+  .lw-ep-s .wk { border-bottom:1px dotted ${T.dim}; }
+
+  /* ── 右栏：句子详情 ── */
+  .lw-ep-sent { font-size:13px; line-height:1.95; color:${T.text}; padding:12px 14px;
+    border-left:2px solid ${T.accent}; background:${T.card}; margin:10px 0 4px; }
+  .lw-ep-sent .sp { display:inline-block; margin:0 2px; }
+  .lw-ep-sent .sp.have { color:${T.accent}; border-bottom:1px dotted ${T.accent}; cursor:pointer; }
+  .lw-ep-act { display:flex; gap:6px; flex-wrap:wrap; padding:8px 14px 0; }
+  .lw-ep-act button, .lw-ep-act .btn { height:24px; padding:0 9px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:9.5px ${UI}; cursor:pointer; }
+  .lw-ep-act button:hover, .lw-ep-act .btn:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-ep-add { display:flex; gap:6px; padding:8px 14px 0; }
+  .lw-ep-add input { flex:1; min-width:0; height:26px; padding:0 8px; border:1px solid ${T.lineDim};
+    background:${T.bg2}; color:${T.text}; font:11.5px ${UI}; outline:none; }
+  .lw-ep-add input:focus { border-color:${T.accent}; }
+  .lw-ep-add button { height:26px; padding:0 10px; border:1px solid ${T.accent}; background:transparent;
+    color:${T.accent}; font:10px ${UI}; cursor:pointer; }
+  .lw-ep-add button:hover { background:${T.accent}; color:${T.accentInk}; }
+  .lw-ep-tip { padding:6px 14px 0; font-size:9.5px; color:${T.faint}; line-height:1.85; }
+
+  /* ── 生词本 ── */
+  .lw-wd-row { display:flex; align-items:center; gap:8px; padding:8px 13px;
+    border-bottom:1px solid ${T.lineDim}; cursor:pointer; border-left:2px solid transparent; }
+  .lw-wd-row:hover { background:${T.card2}; }
+  .lw-wd-row.on { background:${T.card2}; border-left-color:${T.accent}; }
+  .lw-wd-row .w { font-size:12.5px; color:${T.text}; min-width:0; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .lw-wd-row .df { font-size:10px; color:${T.faint}; margin-left:auto; flex:none; }
+  .lw-wd-dot { width:7px; height:7px; border-radius:50%; flex:none; background:${T.faint}; }
+  .lw-wd-dot.fresh { background:${T.dim}; }
+  .lw-wd-dot.learning { background:${T.warn}; }
+  .lw-wd-dot.young { background:${T.accent}; }
+  .lw-wd-dot.mature { background:${T.ok}; }
+  .lw-wd-hd { font-size:11px; letter-spacing:1.3px; text-transform:uppercase; color:${T.faint};
+    padding:12px 13px 6px; }
+  .lw-wd-big { font-size:22px; color:${T.text}; padding:14px 14px 0; line-height:1.3; }
+  .lw-wd-ph { font-size:11.5px; color:${T.dim}; padding:4px 14px 0; }
+  .lw-wd-def { font-size:12.5px; color:${T.text}; padding:10px 14px 0; line-height:1.9; }
+  .lw-wd-eg { font-size:11px; color:${T.dim}; padding:8px 14px 0; line-height:1.9;
+    border-left:2px solid ${T.lineDim}; margin:8px 14px 0; }
+  .lw-wd-hist { display:flex; gap:3px; flex-wrap:wrap; padding:8px 14px 0; }
+  .lw-wd-hist i { width:11px; height:11px; display:block; border:1px solid ${T.lineDim}; }
+  .lw-wd-hist i.ok { background:${T.ok}; border-color:${T.ok}; }
+  .lw-wd-hist i.bad { background:${T.red}; border-color:${T.red}; }
+  .lw-wd-hist i.hard { background:${T.warn}; border-color:${T.warn}; }
+  .lw-wd-next { font-size:10.5px; color:${T.dim}; padding:8px 14px 0; line-height:1.9; }
+  .lw-wd-next b { color:${T.accent}; font-weight:400; }
+
+  /* ── 复习浮层（遗忘曲线要**看得见** ✓）── */
+  .lw-rev-card { min-height:220px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; border:1px solid ${T.lineDim}; background:${T.card}; padding:26px 20px; }
+  .lw-rev-card .w { font-size:30px; color:${T.text}; line-height:1.3; text-align:center; word-break:break-word; }
+  .lw-rev-card .ph { font-size:13px; color:${T.dim}; margin-top:8px; }
+  .lw-rev-card .df { font-size:14px; color:${T.text}; margin-top:16px; line-height:1.9; text-align:center; max-width:560px; }
+  .lw-rev-card .eg { font-size:12px; color:${T.dim}; margin-top:12px; line-height:1.9; text-align:center; max-width:560px; }
+  .lw-rev-card .src { font-size:10px; color:${T.faint}; margin-top:14px; }
+  .lw-rev-card .ask { font-size:11.5px; color:${T.faint}; }
+  .lw-rev-bar { display:flex; gap:6px; align-items:center; padding:12px 0 0; flex-wrap:wrap; }
+  .lw-rev-bar button { flex:1; min-width:110px; height:44px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.dim}; font:11px ${UI}; cursor:pointer; line-height:1.5; }
+  .lw-rev-bar button b { display:block; font-size:9.5px; color:${T.faint}; font-weight:400; }
+  .lw-rev-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-rev-bar button:hover b { color:${T.accent}; }
+  .lw-rev-bar button.g1:hover { border-color:${T.red}; color:${T.red}; }
+  .lw-rev-bar button.g1:hover b { color:${T.red}; }
+  .lw-rev-bar button.g5:hover { border-color:${T.ok}; color:${T.ok}; }
+  .lw-rev-bar button.g5:hover b { color:${T.ok}; }
+  .lw-rev-prog { font-size:10.5px; color:${T.faint}; display:flex; gap:10px; align-items:center; }
+  .lw-rev-prog .bar { flex:1; height:4px; background:${T.card2}; }
+  .lw-rev-prog .bar i { display:block; height:100%; background:${T.accent}; }
+  .lw-rev-done { text-align:center; padding:30px 10px; }
+  .lw-rev-done .big { font-size:26px; color:${T.ok}; }
+  .lw-rev-done .sub { font-size:12px; color:${T.dim}; margin-top:10px; line-height:2; }
+
+  /* ── 朗读条 ── */
+  .lw-spk { display:flex; align-items:center; gap:8px; padding:8px 14px 0; flex-wrap:wrap; }
+  .lw-spk .lb { font-size:9.5px; color:${T.faint}; }
+  .lw-spk select, .lw-spk input { height:24px; border:1px solid ${T.lineDim}; background:${T.bg2};
+    color:${T.text}; font:10px ${UI}; padding:0 6px; outline:none; max-width:150px; }
+  .lw-spk select:focus, .lw-spk input:focus { border-color:${T.accent}; }
+
   .lw-ml-tr { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; }
   .lw-ml-tr .pane { min-width:0; min-height:0; }
   .lw-ml-tr .pane.origin { border-right:1px solid ${T.lineDim}; display:flex; overflow:hidden; }
@@ -1551,6 +1684,40 @@
     connOpen: false, connText: '', connBusy: false, connMsg: '', connOk: false,
     autoAt: 0,
   };
+
+  /* ── 外刊精读 / 生词本的状态 ✓（阅读模块的两个子模式 ✓）──────────────────
+     用户原话：「还需要加入外刊精读，用于阅读和学习英语，你来设计，
+     该有的单词记忆，管理等等，都需要有，可以参考网上成熟的体系，
+     包括什么遗忘曲线等等，记得加入语音读法等」。
+
+     ⚠️ 这些**必须**声明在模块顶部 ✗（`mount()` 在模块最顶上就被调用了 ✓）。
+     ⚠️ 只放**界面状态** ✓ —— 文章 / 生词本身落 STORE ✓（`STORE.articles` / `STORE.words` ✓）。 */
+  const EP_LEVELS = ['A2', 'B1', 'B2', 'C1'];
+  const EP_PRESET = ['The Economist', 'The Guardian', 'BBC', 'NPR', 'The New York Times',
+    'The Atlantic', 'The Conversation', 'Aeon', 'Science', '其他'];
+  const EP_UI = {
+    mode: '',                    /* '' = 书架 ✓ / 'ex' = 外刊精读 ✓ / 'word' = 生词本 ✓ */
+    art: '',                     /* 当前文章 id ✓ */
+    q: '',                       /* 文章搜索 ✓ */
+    sel: -1,                     /* 当前选中的**句子序号** ✓ */
+    pick: '',                    /* 划词划中的那个词 ✓ */
+    impOpen: false, impTab: 'url', impUrl: '', impBusy: false, impMsg: '',
+    impTitle: '', impSite: '', impText: '', impLevel: '',
+    wordQ: '', wordFilter: 'all', wordSel: '', wordNew: '', wordPh: '', wordDef: '', wordEg: '',
+    revOpen: false, revQ: [], revI: 0, revShown: false, revDone: 0, revOK: 0,
+    artNote: '',
+  };
+  /* 朗读 ✓（Web Speech API ✓）—— 只放内存 ✗，语速 / 音色落 STORE ✓ */
+  const SPK = { voices: [], loaded: false, listening: false, seq: 0, speaking: false };
+  /* ★★ 共享的纯逻辑模块 ✓（双栖的 ✓，见 lib/en-text.js 和 lib/srs.js 末尾 ✓）——
+     它们由 index.html 在 life-workbench.js **之前**加载 ✓（都是 defer ✓，按顺序执行 ✓）。
+     ⚠️ 万一没加载上（缓存 / 404 ✗），**不能整个模块崩掉** ✗ ——
+        下面所有用到的地方都要判空 ✓，并给一句「说明为什么用不了」✓。 */
+  const EN = (typeof window !== 'undefined' && window.LW_EN_TEXT) || null;
+  const SRS = (typeof window !== 'undefined' && window.LW_SRS) || null;
+  /* 分句结果缓存 ✓（按文章 id + 正文长度当 key ✓）—— 每次渲染都重切一遍纯属浪费 ✗。
+     ⚠️ 不落盘 ✗：正文一变（重新导入 ✓）长度就变了 ✓，key 自动失效 ✓。 */
+  const EP_SENTS = new Map();
 
   const LW_FILL_TAB = { memo: 1, journal: 1, mail: 1, reading: 1, flow: 1, trends: 1 };
 
@@ -6484,13 +6651,29 @@
     if (!TR_UI.busy && (!TR_UI.data || Date.now() - TR_UI.at > 10 * 60 * 1000)) trLoad(false);
   }
 
-  function viewReading() {
+  function viewEnglish() {
     return '<div class="lw-rd">'
+      + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + epSideHtml() + '</div>' + paneGrip('side')
+      + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + epArtListHtml() + '</div>' + paneGrip('list')
+      + '<div class="lw-rd-read">' + epReadHtml(epCurArt()) + '</div>'
+      + '</div>';
+  }
+  function viewReading() {
+    const mode = epMode();
+    const shelf = '<div class="lw-rd">'
       + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + rdSideInnerHtml() + '</div>' + paneGrip('side')
       + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + rdListHtml() + '</div>' + paneGrip('list')
-      + rdReadHtml() + '</div>'
+      + rdReadHtml() + '</div>';
+    /* ⚠️ 三个模式**复用同一套三栏类名** ✗（.lw-rd-side / .lw-rd-list / .lw-rd-read ✓）——
+       于是拖拽调宽那份 spec 一个字都不用改 ✓（新做一套等于重踩一遍 ✗）。 */
+    const inner = mode === 'ex' ? (EN ? viewEnglish() : '<div class="lw-rd">' + epNoLib() + '</div>')
+      : mode === 'word' ? viewWordbook() : shelf;
+    return '<div class="lw-rd-wrap">' + epModeBar() + inner
       + (RD_UI.impOpen ? rdImportHtml() : '')
-      + (RD_UI.connOpen ? rdWrConnHtml() : '');
+      + (RD_UI.connOpen ? rdWrConnHtml() : '')
+      + (EP_UI.impOpen ? epImportHtml() : '')
+      + (EP_UI.revOpen ? epReviewHtml() : '')
+      + '</div>';
   }
   /* 导入浮层 ✓（先预览再导入 ✓）*/
   function rdImportHtml() {
@@ -6778,7 +6961,8 @@
   }
   function bindReading() {
     const host = document.getElementById('lifework-view');
-    if (!host || TAB !== 'reading') return;
+    /* ⚠️ 离开阅读页签要把朗读**停掉** ✗ —— 不然切到邮箱还在念英文 ✗，很吓人 ✗。 */
+    if (!host || TAB !== 'reading') { spkStop(); return; }
     bindPaneGrips(host, [
       { which: 'side', target: '.lw-rd-side', min: 150, max: 420, key: 'bookSideW' },
       { which: 'list', target: '.lw-rd-list', min: 260, max: 760, key: 'bookListW' },
@@ -6863,6 +7047,917 @@
       RD_UI.autoAt = Date.now();
       rdSyncWeread(true);
     }
+    /* 外刊精读 / 生词本的交互 ✓（它自己判模式 ✓，不在那两个模式里就直接返回 ✓） */
+    bindEnglish();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     外刊精读 + 生词本 ✓（阅读模块的两个子模式 ✓）
+     用户原话：「还需要加入外刊精读，用于阅读和学习英语，你来设计，该有的单词记忆，
+     管理等等，都需要有，可以参考网上成熟的体系，包括什么遗忘曲线等等，
+     记得加入语音读法等」。
+
+     ★ 设计（照成熟体系来 ✓，不自己发明 ✗）
+       ① **精读的最小单位是句子** ✓ —— 逐句朗读 ✓、逐句划词 ✓、逐句标「已懂」✓。
+          这是所有精读教材的做法 ✓（整篇灌下去记不住 ✗）。
+       ② 生词**自动进记忆系统** ✓：艾宾浩斯遗忘曲线 → 简化 SM-2 ✓
+          （算法在 lib/srs.js ✓ 纯函数 ✓，单测里把时间推着走 ✓）。
+       ③ 复习时四个按钮上**直接写下次间隔** ✓（「忘了 · 10 分钟」「记得 · 15 天」✓）——
+          遗忘曲线本身是看不见的 ✗，但这么一写，用户一眼就懂这套系统在干嘛 ✓。
+       ④ 语音用浏览器**自带的** Web Speech API ✓ —— 零依赖 ✓、零流量 ✓、零 key ✓。
+       ⑤ 文章两条来源 ✓：贴链接（服务端抽正文 ✓）/ 贴正文（一定可用 ✓）。
+
+     ⚠️ 纯逻辑**绝不在前端重抄** ✗ —— 分句 / 洗词走 lib/en-text.js ✓、
+        复习间隔走 lib/srs.js ✓（两个都是**双栖**模块 ✓，见它们末尾 ✓）。
+        抄两遍必然走偏 ✗，而且走偏了用户查不出来 ✗。
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* ── 数据 ✓ ─────────────────────────────────────────────────────────────
+     STORE.articles = [{ id, title, site, url, text, level, at, edit, done: { 句子序号: 1 } }]
+     STORE.words    = [{ id, w, ph, def, eg, artId, artTitle, at, edit, ef, step, reps, lapses, ivl, due, hist }]
+     STORE.artNotes = [{ id, artId, sent, text, at }]
+     ⚠️ 全用 **function 声明** ✗（不用 const 箭头 ✗）：箭头有 TDZ ✗，
+        而 render 可能在模块求值期间就跑到阅读页签 ✗（见顶部那条铁律 ✓）。 */
+  function epArts() { return ((STORE && STORE.articles) || []).filter(Boolean); }
+  function epWords() { return ((STORE && STORE.words) || []).filter(Boolean); }
+  function epArtById(id) { return epArts().find((a) => a && a.id === id) || null; }
+  /* ★ 当前文章：`EP_UI.art`（内存 ✓）→ `STORE.epArt`（落盘 ✓）→ **最近编辑的那篇**（兜底 ✓）。
+     最后那层兜底很关键 ✗：不兜的话，切出去再回来 / 刷新一下，
+     正文区永远是「← 从中间选一篇文章」✗，用户会以为文章没了 ✗。 */
+  function epCurArt() {
+    const hit = epArtById(EP_UI.art || String((STORE && STORE.epArt) || ''));
+    if (hit) return hit;
+    return epArts().slice().sort((a, b) => (Number(b.edit) || 0) - (Number(a.edit) || 0))[0] || null;
+  }
+  function epPickArt(id) {
+    EP_UI.art = id; if (STORE) STORE.epArt = id;
+    EP_UI.sel = -1; EP_UI.pick = '';
+    spkStop(); epSave(); render();
+  }
+  function epWordOf(w) { return epWords().find((x) => x && x.w === w) || null; }
+  function epWordById(id) { return epWords().find((x) => x && x.id === id) || null; }
+  function epNotesOf(id) { return ((STORE && STORE.artNotes) || []).filter((n) => n && n.artId === id); }
+  function epSave() { saveStore(); }
+  function epMode() {
+    const m = EP_UI.mode || String((STORE && STORE.readMode) || '') || 'shelf';
+    return (m === 'ex' || m === 'word') ? m : 'shelf';
+  }
+  function epSetMode(m) {
+    EP_UI.mode = m; if (STORE) STORE.readMode = m;
+    EP_UI.sel = -1; EP_UI.pick = '';
+    spkStop(); epSave(); render();
+  }
+  /* 分句结果缓存 ✓ —— 每次渲染都重切一遍纯属浪费 ✗。
+     ⚠️ key 里带上**正文长度** ✗：正文一改（重新导入 ✓）key 就变了 ✓，自动失效 ✓。
+     ⚠️ 只放内存 ✗（落盘会让 STORE 白胖一圈 ✗）。 */
+  function epSents(a) {
+    if (!a || !EN) return [];
+    const key = String(a.text || '');
+    const hit = EP_SENTS.get(a.id);
+    if (hit && hit.key === key) return hit.list;
+    const list = EN.splitSentences(key);
+    EP_SENTS.set(a.id, { key, list });
+    /* ⚠️ 缓存别无限长 ✗（Map 留 30 篇够了 ✓，超了丢最早那个 ✓） */
+    if (EP_SENTS.size > 30) EP_SENTS.delete(EP_SENTS.keys().next().value);
+    return list;
+  }
+  function epDoneOf(a) { return Object.keys((a && a.done) || {}).length; }
+  function epArtProg(a) {
+    const n = epSents(a).length;
+    return n ? Math.round((epDoneOf(a) / n) * 100) : 0;
+  }
+  function epWordsOfArt(id) { return epWords().filter((w) => w && w.artId === id); }
+
+  /* ══ 朗读 ✓（浏览器自带的 Web Speech API ✓）══════════════════════════════
+     ⚠️⚠️ 两个必踩的坑 ✗✗：
+       ① `getVoices()` **第一次经常返回空数组** ✗ —— 得等 `voiceschanged` ✓。
+          不处理的话用户看到的是一个**空的音色下拉框** ✗，以为功能坏了 ✗。
+       ② 长文本一次性丢给 `speak()` 在 Chrome 上**会被截断** ✗ ——
+          所以按句子切成小块排队 ✓（正好我们本来就有句子 ✓）。
+     ⚠️ 朗读必须**能在离开页签时停掉** ✗ —— 不然切到邮箱还在念 ✗，很吓人 ✗。 */
+  function spkOK() {
+    return typeof window !== 'undefined' && !!window.speechSynthesis
+      && typeof window.SpeechSynthesisUtterance === 'function';
+  }
+  function spkLoadVoices() {
+    if (!spkOK()) return [];
+    let all = [];
+    try { all = window.speechSynthesis.getVoices() || []; } catch (_) { all = []; }
+    const en = all.filter((v) => /^en([-_]|$)/i.test(String(v.lang || '')));
+    SPK.voices = en.length ? en : all;      /* 一个英文音色都没有时，别的也先列出来 ✓ */
+    if (SPK.voices.length) SPK.loaded = true;
+    return SPK.voices;
+  }
+  function spkInit() {
+    if (!spkOK() || SPK.loaded || SPK.listening) return;
+    spkLoadVoices();
+    if (SPK.voices.length) return;
+    /* ⚠️⚠️ 这个监听**只能挂一次** ✗✗ —— `spkInit()` 每次渲染都会被调到 ✓，
+       而回调里又要 `render()` ✓ → 不设闸的话就是**渲染 → 挂监听 → 事件 → 渲染**的死循环 ✗，
+       实测直接把浏览器跑崩 ✗（报 `Target page … has been closed` ✗，特别难查 ✗）。 */
+    SPK.listening = true;
+    try {
+      window.speechSynthesis.addEventListener('voiceschanged', () => {
+        if (spkLoadVoices().length && TAB === 'reading') render();   /* 音色到位了重画一次 ✓ */
+      });
+    } catch (_) { SPK.listening = false; }
+  }
+  function spkPick() {
+    if (!SPK.voices.length) spkLoadVoices();
+    const want = String((STORE && STORE.epVoice) || '');
+    if (want) {
+      const h = SPK.voices.find((v) => v.voiceURI === want || v.name === want);
+      if (h) return h;
+    }
+    /* 优先美音 ✓ → 英音 ✓ → 任意英文 ✓ —— 学英语默认美音更常见 ✓ */
+    return SPK.voices.find((v) => /^en[-_]US/i.test(v.lang))
+      || SPK.voices.find((v) => /^en[-_]GB/i.test(v.lang))
+      || SPK.voices.find((v) => /^en/i.test(v.lang))
+      || SPK.voices[0] || null;
+  }
+  function spkRate() {
+    const r = Number((STORE && STORE.epRate) || 1);
+    return r >= 0.5 && r <= 1.5 ? r : 1;
+  }
+  function spkStop() {
+    try { if (spkOK()) window.speechSynthesis.cancel(); } catch (_) {}
+    SPK.seq++; SPK.speaking = false;
+    const host = document.getElementById('lifework-view');
+    if (host) host.querySelectorAll('.lw-ep-s.hl').forEach((el) => el.classList.remove('hl'));
+  }
+  /* parts 可以是一段（读单词 ✓）或多段（读整篇 ✓）—— 多段就是排队逐句念 ✓ */
+  function spkSay(parts, opts) {
+    const list = (Array.isArray(parts) ? parts : [parts])
+      .map((x) => String(x == null ? '' : x).trim()).filter(Boolean);
+    if (!list.length) return false;
+    if (!spkOK()) {
+      rdToast('这个浏览器没有语音合成 —— 换 Chrome / Edge / Safari 再试');
+      return false;
+    }
+    spkStop();
+    const my = SPK.seq;
+    const v = spkPick();
+    const rate = Math.max(0.5, Math.min(1.5, Number((opts && opts.rate) || spkRate()) || 1));
+    SPK.speaking = true;
+    list.forEach((txt, i) => {
+      let u;
+      try { u = new window.SpeechSynthesisUtterance(txt); } catch (_) { return; }
+      u.lang = (v && v.lang) || 'en-US';
+      if (v) { try { u.voice = v; } catch (_) {} }
+      u.rate = rate;
+      u.onstart = () => { if (SPK.seq === my && opts && opts.onPart) opts.onPart(i); };
+      u.onerror = () => { if (SPK.seq === my) SPK.speaking = false; };
+      if (i === list.length - 1) {
+        u.onend = () => { if (SPK.seq === my) { SPK.speaking = false; if (opts && opts.onEnd) opts.onEnd(); } };
+      }
+      try { window.speechSynthesis.speak(u); } catch (_) {}
+    });
+    return true;
+  }
+  /* 朗读时**只改那一个 class** ✓ —— 不整屏 render ✗（重绘会把滚动位置丢掉 ✗，
+     读到第 40 句时视图跳回顶部 ✗，根本没法跟读 ✗）。 */
+  function spkHighlight(i) {
+    const host = document.getElementById('lifework-view');
+    if (!host) return;
+    host.querySelectorAll('.lw-ep-s.hl').forEach((el) => el.classList.remove('hl'));
+    const el = host.querySelector('[data-epsent="' + i + '"]');
+    if (el) {
+      el.classList.add('hl');
+      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    }
+  }
+
+  /* ══ 模式条 ✓（书架 / 外刊精读 / 生词本）════════════════════════════════ */
+  function epModeTip() {
+    const m = epMode();
+    if (m === 'ex') return '点句子选中 · 选中后划词就能加生词 · 右键？不，用「🔊」听';
+    if (m === 'word') return '按遗忘曲线排期 · 到期的先复习';
+    return '手动加书 / 导入微信读书笔记 / 同步微信读书书架';
+  }
+  function epModeBar() {
+    const nArt = epArts().length, nWord = epWords().length;
+    const due = SRS ? SRS.dueCards(epWords(), Date.now()).length : 0;
+    const seg = (k, label, n, tail) => '<span class="seg' + (epMode() === k ? ' on' : '') + '" data-rdmode="' + k + '">'
+      + label + (n ? ' <i>' + n + '</i>' : '') + (tail || '') + '</span>';
+    return '<div class="lw-rd-modes">'
+      + seg('shelf', '📚 书架', 0)
+      + seg('ex', '📰 外刊精读', nArt)
+      + seg('word', '🔤 生词本', nWord, due ? ' <i style="color:' + T.warn + '">' + due + ' 待复习</i>' : '')
+      + '<span class="sp"></span>'
+      + '<span class="tip">' + esc(epModeTip()) + '</span>'
+      + '</div>';
+  }
+  /* 共享模块没加载上时的兜底 ✓ —— 宁可说清「为什么用不了」✗，也不要整块白屏 ✗ */
+  function epNoLib() {
+    return '<div class="lw-rd-empty" style="margin:auto;max-width:420px">'
+      + '外刊精读要用到的共享模块没加载上 ✗<br>'
+      + '<span style="color:' + T.faint + '">（/lib/en-text.js 和 /lib/srs.js）—— '
+      + '硬刷新一下（⌘⇧R）试试；还不行说明服务端没重启过。</span></div>';
+  }
+
+  /* ══ 外刊精读：三栏 ✓ ══════════════════════════════════════════════════ */
+  function epSideHtml() {
+    const arts = epArts(), ws = epWords();
+    const st = SRS ? SRS.stats(ws, Date.now()) : { total: ws.length, due: 0, fresh: 0, learning: 0, young: 0, mature: 0, retention: 0, retentionN: 0 };
+    const doneN = arts.filter((a) => epArtProg(a) >= 100).length;
+    const words = arts.reduce((n, a) => n + (Number(a.words) || 0), 0);
+    const flt = (k, label, n) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epflt="' + k + '">'
+      + '<span class="em">▣</span>' + label + '<span class="n">' + n + '</span></div>';
+    return '<div class="lw-rd-hd">精读统计</div>'
+      + '<div class="lw-rd-stat">'
+      + '<div><b>' + arts.length + '</b><span>篇文章</span></div>'
+      + '<div><b>' + doneN + '</b><span>已精读</span></div>'
+      + '<div><b>' + words + '</b><span>总词数</span></div>'
+      + '<div><b>' + st.total + '</b><span>生词</span></div>'
+      + '</div>'
+      + '<div class="lw-rd-hd">生词状态</div>'
+      + flt('all', '全部', st.total)
+      + flt('due', '⏰ 该复习了', st.due)
+      + flt('fresh', '新词', st.fresh)
+      + flt('learning', '学习中', st.learning)
+      + flt('mature', '已掌握', st.mature)
+      + '<div class="lw-rd-hd">朗读</div>'
+      + epSpkHtml()
+      + '<div class="lw-rd-hd">怎么用</div>'
+      + '<div class="lw-ep-tip">'
+      + '① 上面「＋ 导入文章」贴链接或正文<br>'
+      + '② 中间点一句话 → 右边出现这句<br>'
+      + '③ 用鼠标「划」一个词 → 右边自动填上 → 回车加进生词本<br>'
+      + '④ 切到「生词本」按遗忘曲线复习<br>'
+      + '<span style="color:' + T.faint + '">（划词：按住鼠标左键拖过单词再松手）</span>'
+      + '</div>';
+  }
+  function epSpkHtml() {
+    if (!spkOK()) {
+      return '<div class="lw-ep-tip">这个浏览器没有语音合成 ✗<br>'
+        + '<span style="color:' + T.faint + '">换 Chrome / Edge / Safari 就有朗读了</span></div>';
+    }
+    spkInit();
+    const cur = String((STORE && STORE.epVoice) || '');
+    const rate = spkRate();
+    const opts = SPK.voices.map((v) => '<option value="' + esc(v.voiceURI || v.name) + '"'
+      + ((cur ? cur === (v.voiceURI || v.name) : false) ? ' selected' : '') + '>'
+      + esc(String(v.name || '') + ' · ' + String(v.lang || '')) + '</option>').join('');
+    return '<div class="lw-spk" style="padding:0 14px">'
+      + '<span class="lb">音色</span>'
+      + '<select id="lw-ep-voice" style="flex:1">'
+      + (opts || '<option value="">（还没检测到音色）</option>')
+      + '</select></div>'
+      + '<div class="lw-spk" style="padding:6px 14px 0">'
+      + '<span class="lb">语速</span>'
+      + '<input id="lw-ep-rate" type="range" min="0.5" max="1.5" step="0.1" value="' + rate + '" style="flex:1;padding:0;border:0;background:transparent;height:20px"/>'
+      + '<span class="lb" id="lw-ep-ratev">' + rate.toFixed(1) + '×</span></div>'
+      + '<div class="lw-ep-tip">' + (SPK.voices.length
+        ? SPK.voices.length + ' 个可用音色'
+        : '还没检测到音色 —— 点一下页面任意处再看（浏览器是异步给的）') + '</div>';
+  }
+  function epArtListHtml() {
+    const q = String(EP_UI.q || '').trim().toLowerCase();
+    const list = epArts().filter((a) => {
+      if (q && (String(a.title || '') + ' ' + String(a.site || '')).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort((a, b) => (Number(b.edit) || 0) - (Number(a.edit) || 0));
+    const tools = '<div class="lw-rd-tools">'
+      + '<input id="lw-ep-q" placeholder="搜索标题 / 来源…" value="' + esc(EP_UI.q) + '"/>'
+      + '<button id="lw-ep-imp" title="贴链接或正文，导入一篇外刊">＋ 导入文章</button>'
+      + '</div>';
+    if (!list.length) {
+      return tools + '<div class="lw-rd-empty">还没有文章<br>'
+        + '<span style="color:' + T.faint + '">点「＋ 导入文章」贴个链接，或直接贴正文</span></div>';
+    }
+    return tools + list.map((a) => {
+      const p = epArtProg(a);
+      const nw = epWordsOfArt(a.id).length;
+      return '<div class="lw-ep-art' + (epCurArt() && epCurArt().id === a.id ? ' on' : '') + '" data-epart="' + esc(a.id) + '">'
+        + '<div class="ti">' + esc(a.title || '未命名') + '</div>'
+        + '<div class="mt">'
+        + (a.site ? '<span>' + esc(a.site) + '</span>' : '')
+        + '<span>' + (Number(a.words) || 0) + ' 词</span>'
+        + (a.level ? '<span class="lv">' + esc(a.level) + '</span>' : '')
+        + (nw ? '<span>' + nw + ' 生词</span>' : '')
+        + (p >= 100 ? '<span class="done">✓ 已精读</span>' : (p > 0 ? '<span>' + p + '%</span>' : ''))
+        + '</div></div>';
+    }).join('');
+  }
+  function epReadHtml(a) {
+    if (!a) {
+      return '<div class="lw-rd-empty" style="margin:auto">← 从中间选一篇文章<br>'
+        + '<span style="color:' + T.faint + '">还没有就点「＋ 导入文章」</span></div>';
+    }
+    const sents = epSents(a);
+    const s = EP_UI.sel >= 0 && sents[EP_UI.sel] ? sents[EP_UI.sel] : null;
+    const done = a.done || {};
+    let body = '';
+    let cur = -1;
+    sents.forEach((x, i) => {
+      if (x.para !== cur) { if (cur >= 0) body += '</p>'; body += '<p class="lw-ep-p">'; cur = x.para; }
+      body += '<span class="lw-ep-s' + (EP_UI.sel === i ? ' on' : '') + (done[i] ? ' done' : '')
+        + '" data-epsent="' + i + '">' + esc(x.text) + '</span> ';
+    });
+    if (cur >= 0) body += '</p>';
+    return '<div class="lw-ep-body" id="lw-ep-body">'
+      + '<div class="hd"><h2>' + esc(a.title || '未命名') + '</h2>'
+      + '<div class="mt">'
+      + (a.site ? '<span>' + esc(a.site) + '</span>' : '')
+      + (a.url ? '<span><a href="' + esc(a.url) + '" target="_blank" rel="noopener" style="color:inherit">原文 ↗</a></span>' : '')
+      + '<span><b>' + (Number(a.words) || 0) + '</b> 词</span>'
+      + '<span>约 <b>' + (Number(a.minutes) || 1) + '</b> 分钟</span>'
+      + (a.level ? '<span>难度 <b>' + esc(a.level) + '</b>（估算）</span>' : '')
+      + '<span>' + sents.length + ' 句</span>'
+      + '<span>精读 <b>' + epArtProg(a) + '%</b></span>'
+      + '</div>'
+      + '<div class="lw-ep-act" style="padding:10px 0 0">'
+      + '<button id="lw-ep-play" title="从第一句开始逐句朗读整篇">🔊 朗读全文</button>'
+      + '<button id="lw-ep-stop" title="停止朗读">■ 停</button>'
+      + '<button id="lw-ep-allok" title="把所有句子标成已懂">✓ 全标已懂</button>'
+      + '<button id="lw-ep-reset" title="清掉这篇的已懂标记">↺ 重置进度</button>'
+      + '<button id="lw-ep-delart" title="删掉这篇文章（生词保留）">🗑 删文章</button>'
+      + '</div></div>'
+      + '<div class="bd">' + (sents.length ? body
+        : '<div class="lw-rd-empty" style="position:static">这篇没抽出正文 ✗</div>') + '</div>'
+      + '</div>'
+      + '<div class="lw-ep-panel" id="lw-ep-panel">' + epSentPanelHtml(a, s) + '</div>';
+  }
+  function epSentPanelHtml(a, s) {
+    const idx = EP_UI.sel;
+    const notes = epNotesOf(a.id).filter((n) => Number(n.sent) === idx);
+    const have = s ? epWords().filter((w) => new RegExp('(^|[^A-Za-z])' + w.w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(s.text)) : [];
+    const head = '<div class="lw-rd-hd">第 ' + (idx + 1) + ' 句 / 共 ' + epSents(a).length + ' 句</div>';
+    if (!s) {
+      return '<div class="lw-rd-hd">句子</div>'
+        + '<div class="lw-rd-empty" style="position:static;padding:30px 14px">'
+        + '点中间任意一句话<br><span style="color:' + T.faint + '">选中后就能朗读、划词、加生词</span></div>';
+    }
+    const words = EN ? EN.tokenizeWords(s.text, { minLen: 1 }) : [];
+    const lv = EN ? EN.levelOf(s.text) : '';
+    return head
+      + '<div class="lw-ep-sent">' + esc(s.text) + '</div>'
+      + '<div class="lw-ep-act">'
+      + '<button id="lw-ep-say" title="朗读这一句">🔊 读这句</button>'
+      + '<button id="lw-ep-say-slow" title="慢速朗读（0.6 倍）">🐢 慢速</button>'
+      + '<button id="lw-ep-ok" title="标成已懂 / 取消">' + ((a.done || {})[idx] ? '↺ 取消已懂' : '✓ 已懂') + '</button>'
+      + '<button id="lw-ep-copy" title="复制这一句">⧉ 复制</button>'
+      + '</div>'
+      + '<div class="lw-ep-tip">' + words.length + ' 个词' + (lv ? ' · 难度 ' + lv + '（估算）' : '') + '</div>'
+      + '<div class="lw-rd-hd">加生词</div>'
+      + '<div class="lw-ep-add">'
+      + '<input id="lw-ep-new" placeholder="划一个词，或手打…" value="' + esc(EP_UI.pick) + '"/>'
+      + '<button id="lw-ep-addbtn" title="加进生词本（回车也行）">＋ 加</button>'
+      + '</div>'
+      + '<div class="lw-ep-tip" id="lw-ep-newtip">' + (EP_UI.pick
+        ? '划中的是「' + esc(EP_UI.pick) + '」✓ 回车直接加'
+        : '用鼠标在正文里「划」一个词，这里会自动填上 ✓') + '</div>'
+      + '<div class="lw-ep-add">'
+      + '<input id="lw-ep-ph" placeholder="音标（选填）"/>'
+      + '<input id="lw-ep-def" placeholder="释义（选填）"/>'
+      + '</div>'
+      + (have.length ? '<div class="lw-rd-hd">这句里的生词</div>'
+        + have.map((w) => '<div class="lw-rd-row" data-epword="' + esc(w.id) + '">'
+          + '<span class="em">' + (SRS ? ({ fresh: '○', learning: '◐', young: '●', mature: '◉' }[SRS.stageOf(w)] || '○') : '○') + '</span>'
+          + esc(w.w) + '<span class="n">' + (w.def ? esc(String(w.def).slice(0, 8)) : '') + '</span></div>').join('') : '')
+      + '<div class="lw-rd-hd">这句的笔记</div>'
+      + notes.map((n) => '<div class="lw-note k-quote"><div class="tx">' + esc(n.text) + '</div>'
+        + '<div class="ft"><span class="x" data-epnotedel="' + esc(n.id) + '">✕</span></div></div>').join('')
+      + '<div class="lw-ep-add"><input id="lw-ep-note" placeholder="给这句写点笔记…"/><button id="lw-ep-notebtn">＋</button></div>';
+  }
+
+  /* ══ 生词本 ✓ ══════════════════════════════════════════════════════════ */
+  function epFilteredWords() {
+    const q = String(EP_UI.wordQ || '').trim().toLowerCase();
+    const f = EP_UI.wordFilter || 'all';
+    const now = Date.now();
+    return epWords().filter((w) => {
+      if (q && (String(w.w || '') + ' ' + String(w.def || '')).toLowerCase().indexOf(q) < 0) return false;
+      if (f === 'all') return true;
+      if (f === 'due') return Number(w.due || 0) <= now;
+      if (SRS) return SRS.stageOf(w) === f;
+      return true;
+    }).sort((a, b) => (Number(a.due) || 0) - (Number(b.due) || 0));
+  }
+  function epWordRowHtml(w) {
+    const st = SRS ? SRS.stageOf(w) : 'fresh';
+    const due = Number(w.due || 0);
+    const now = Date.now();
+    const when = !SRS ? '' : (due <= now ? '该复习' : SRS.fmtGap(due - now) + '后');
+    return '<div class="lw-wd-row' + (EP_UI.wordSel === w.id ? ' on' : '') + '" data-epword="' + esc(w.id) + '">'
+      + '<span class="lw-wd-dot ' + st + '" title="' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '"></span>'
+      + '<span class="w">' + esc(w.w) + '</span>'
+      + (w.def ? '<span class="df">' + esc(String(w.def).slice(0, 14)) + '</span>'
+        : '<span class="df" style="color:' + T.warn + '">缺释义</span>')
+      + '<span class="df" style="color:' + (due <= now ? T.warn : T.faint) + '">' + esc(when) + '</span>'
+      + '</div>';
+  }
+  function viewWordbook() {
+    if (!SRS) return '<div class="lw-rd">' + epNoLib() + '</div>';
+    const list = epFilteredWords();
+    const now = Date.now();
+    const st = SRS.stats(epWords(), now);
+    const due = SRS.dueCards(epWords(), now).length;
+    const tools = '<div class="lw-rd-tools">'
+      + '<input id="lw-wd-q" placeholder="搜索单词 / 释义…" value="' + esc(EP_UI.wordQ) + '"/>'
+      + '<button class="pri" id="lw-wd-rev" style="' + (due ? 'border-color:' + T.accent + ';color:' + T.accent : '') + '"'
+      + (due ? '' : ' disabled') + '>▶ 复习 ' + (due ? due : '') + '</button>'
+      + '<button id="lw-wd-add">＋ 加词</button>'
+      + '</div>';
+    return '<div class="lw-rd">'
+      + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + epWordSideHtml(st) + '</div>' + paneGrip('side')
+      + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + tools
+      + (list.length ? list.map(epWordRowHtml).join('')
+        : '<div class="lw-rd-empty">没有符合条件的词<br><span style="color:' + T.faint + '">去「外刊精读」里划几个词</span></div>')
+      + '</div>' + paneGrip('list')
+      + '<div class="lw-rd-read">' + epWordDetailHtml() + '</div>'
+      + '</div>';
+  }
+  function epWordSideHtml(st) {
+    const flt = (k, label, n) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epwflt="' + k + '">'
+      + '<span class="em">▣</span>' + label + '<span class="n">' + n + '</span></div>';
+    return '<div class="lw-rd-hd">记忆统计</div>'
+      + '<div class="lw-rd-stat">'
+      + '<div><b>' + st.total + '</b><span>总词数</span></div>'
+      + '<div><b style="color:' + (st.due ? T.warn : T.faint) + '">' + st.due + '</b><span>待复习</span></div>'
+      + '<div><b>' + st.mature + '</b><span>已掌握</span></div>'
+      + '<div><b>' + (st.retentionN ? st.retention + '%' : '—') + '</b><span>记住率</span></div>'
+      + '</div>'
+      + '<div class="lw-rd-hd">按阶段</div>'
+      + flt('all', '全部', st.total)
+      + flt('due', '⏰ 该复习了', st.due)
+      + flt('fresh', '○ 新词', st.fresh)
+      + flt('learning', '◐ 学习中', st.learning)
+      + flt('young', '● 年轻', st.young)
+      + flt('mature', '◉ 已掌握', st.mature)
+      + '<div class="lw-rd-hd">遗忘曲线怎么走</div>'
+      + '<div class="lw-ep-tip">'
+      + '答对 → <b>10 分钟</b>后再见<br>'
+      + '再答对 → <b>1 天</b>后<br>'
+      + '再答对 → <b>6 天 → 15 天 → 38 天…</b><br>'
+      + '答「太简单」→ 新词直接跳到 <b>4 天</b>后<br>'
+      + '答错 → 打回 <b>10 分钟</b>，难度因子扣一点<br>'
+      + '<span style="color:' + T.faint + '">（艾宾浩斯曲线 → 简化 SM-2 ✓ 算法在 lib/srs.js）</span>'
+      + '</div>';
+  }
+  function epWordDetailHtml() {
+    const w = epWordById(EP_UI.wordSel);
+    if (!w) {
+      return '<div class="lw-rd-empty" style="margin:auto">← 从中间选一个词<br>'
+        + '<span style="color:' + T.faint + '">选好就能改释义、听发音、看复习历史</span></div>';
+    }
+    const st = SRS ? SRS.stageOf(w) : 'fresh';
+    const now = Date.now();
+    const due = Number(w.due || 0);
+    const hist = Array.isArray(w.hist) ? w.hist : [];
+    const pv = SRS ? SRS.gradePreviews(w, now) : [];
+    return '<div class="lw-rd-rhd"><h2>' + esc(w.w) + '</h2>'
+      + '<div class="meta">'
+      + '<span>' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '</span>'
+      + (Number(w.reps) ? '<span>答对 ' + w.reps + ' 次</span>' : '')
+      + (Number(w.lapses) ? '<span>忘过 ' + w.lapses + ' 次</span>' : '')
+      + '<span>难度因子 ' + (Number(w.ef) || 0).toFixed(2) + '</span>'
+      + '</div></div>'
+      + '<div class="lw-ep-act">'
+      + '<button id="lw-wd-say" title="朗读这个单词">🔊 读单词</button>'
+      + '<button id="lw-wd-say-slow" title="慢速朗读">🐢 慢速</button>'
+      + (w.eg ? '<button id="lw-wd-say-eg" title="朗读例句">🔊 读例句</button>' : '')
+      + '<button data-act="del" id="lw-wd-del" style="border-color:' + T.lineDim + '" title="从生词本删掉">🗑 删除</button>'
+      + '</div>'
+      + '<div class="lw-wd-next">下次复习：<b>' + (due <= now ? '现在（已到期）' : (SRS ? SRS.fmtGap(due - now) + '后' : '—')) + '</b>'
+      + (w.ivl ? ' · 当前间隔 ' + w.ivl + ' 天' : '') + '</div>'
+      + (hist.length ? '<div class="lw-rd-hd">最近 ' + hist.length + ' 次</div>'
+        + '<div class="lw-wd-hist">' + hist.slice(-14).map((h) => '<i class="'
+          + (Number(h.q) >= 4 ? 'ok' : Number(h.q) >= 3 ? 'hard' : 'bad') + '" title="'
+          + new Date(Number(h.at) || 0).toLocaleString('zh-CN', { hour12: false }) + ' · '
+          + (Number(h.q) >= 4 ? '记得' : Number(h.q) >= 3 ? '模糊' : '忘了') + '"></i>').join('') + '</div>' : '')
+      + (pv.length ? '<div class="lw-rd-hd">现在复习会排到</div>'
+        + '<div class="lw-ep-tip">' + pv.map((g) => g.label + ' → <b>' + g.next + '</b>').join('　') + '</div>' : '')
+      + '<div class="lw-rd-hd">释义</div>'
+      + '<div class="lw-ep-add" style="padding:0 14px">'
+      + '<input id="lw-wd-ph" placeholder="音标 如 /həˈmɪs.fɪə/" value="' + esc(w.ph || '') + '"/></div>'
+      + '<div class="lw-ep-add" style="padding:6px 14px 0">'
+      + '<input id="lw-wd-def" placeholder="中文释义 / 英文解释" value="' + esc(w.def || '') + '"/></div>'
+      + '<div class="lw-ep-add" style="padding:6px 14px 0">'
+      + '<textarea id="lw-wd-eg" rows="2" placeholder="例句（会一起朗读）" style="flex:1;min-width:0;border:1px solid ' + T.lineDim
+      + ';background:' + T.bg2 + ';color:' + T.text + ';font:11.5px/1.7 ' + UI + ';padding:6px 8px;outline:none;resize:vertical">'
+      + esc(w.eg || '') + '</textarea></div>'
+      + '<div class="lw-ep-tip">改完离开输入框就自动存 ✓（失焦即保存 ✓）</div>'
+      + (w.artTitle ? '<div class="lw-rd-hd">来自</div><div class="lw-ep-tip">《' + esc(w.artTitle) + '》</div>' : '');
+  }
+
+  /* ══ 复习浮层 ✓（遗忘曲线要**看得见** ✓）══════════════════════════════════ */
+  function epStartReview() {
+    if (!SRS) return;
+    const due = SRS.dueCards(epWords(), Date.now(), 50);
+    if (!due.length) { rdToast('现在没有到期的词 ✓ 明天再来'); return; }
+    EP_UI.revQ = due.map((c) => c.id);
+    EP_UI.revI = 0; EP_UI.revShown = false; EP_UI.revDone = 0; EP_UI.revOK = 0;
+    EP_UI.revOpen = true;
+    render();
+  }
+  function epRevCur() { return epWordById(EP_UI.revQ[EP_UI.revI]); }
+  function epGrade(q) {
+    const w = epRevCur();
+    if (!w || !SRS) return;
+    const next = SRS.review(w, q, Date.now());
+    Object.assign(w, next); w.edit = Date.now();
+    EP_UI.revDone++;
+    if (q >= 3) EP_UI.revOK++;
+    EP_UI.revI++;
+    EP_UI.revShown = false;
+    epSave(); render();
+  }
+  function epReviewHtml() {
+    if (!SRS) return '';
+    const total = EP_UI.revQ.length;
+    const w = epRevCur();
+    const head = '<div class="hd"><b>🧠 复习</b>'
+      + '<span class="lw-rev-prog" style="margin-left:12px"><span>' + Math.min(EP_UI.revI + (w ? 1 : 0), total) + ' / ' + total + '</span>'
+      + '<span class="bar" style="width:120px"><i style="width:' + (total ? Math.round((EP_UI.revI / total) * 100) : 0) + '%"></i></span></span>'
+      + '<span class="x" id="lw-rev-x">✕</span></div>';
+    if (!w) {
+      const rate = EP_UI.revDone ? Math.round((EP_UI.revOK / EP_UI.revDone) * 100) : 0;
+      return '<div class="lw-imp" id="lw-rev"><div class="box">' + head
+        + '<div class="bd"><div class="lw-rev-done">'
+        + '<div class="big">✓ 这一轮完了</div>'
+        + '<div class="sub">复习了 <b>' + EP_UI.revDone + '</b> 张 · 记住 <b>' + EP_UI.revOK + '</b> 张'
+        + (EP_UI.revDone ? ' · 这一轮记住率 ' + rate + '%' : '') + '<br>'
+        + '答错的词已经排到 <b>10 分钟后</b>，过会儿回来还有一轮<br>'
+        + '<span style="color:' + T.faint + '">（这就是遗忘曲线在干活）</span></div>'
+        + '</div></div>'
+        + '<div class="ft"><button class="pri" id="lw-rev-close">完成</button></div>'
+        + '</div></div>';
+    }
+    const st = SRS.stageOf(w);
+    const body = '<div class="lw-rev-card">'
+      + '<div class="w">' + esc(w.w) + '</div>'
+      + (EP_UI.revShown
+        ? (w.ph ? '<div class="ph">' + esc(w.ph) + '</div>' : '')
+          + '<div class="df">' + (w.def ? esc(w.def) : '<span style="color:' + T.warn + '">还没填释义 —— 去生词本补一下</span>') + '</div>'
+          + (w.eg ? '<div class="eg">' + esc(w.eg) + '</div>' : '')
+          + (w.artTitle ? '<div class="src">来自《' + esc(w.artTitle) + '》</div>' : '')
+        : '<div class="ask">先在心里说出意思，再点下面</div>')
+      + '</div>'
+      + '<div class="lw-ep-act" style="justify-content:center;padding:12px 0 0">'
+      + '<button id="lw-rev-say">🔊 听发音</button>'
+      + (EP_UI.revShown ? '' : '<button class="pri" id="lw-rev-show" style="border-color:' + T.accent + ';color:' + T.accent + '">显示答案</button>')
+      + '</div>';
+    /* ★ 四个按钮上**直接写下次间隔** ✓ —— 这就是把「遗忘曲线」摆到台面上 ✓ */
+    const bar = EP_UI.revShown
+      ? '<div class="lw-rev-bar">' + SRS.gradePreviews(w, Date.now()).map((g, i) =>
+        '<button class="g' + g.q + '" data-epgrade="' + g.q + '">' + g.label + '<b>' + g.next + '</b></button>').join('') + '</div>'
+      : '<div class="lw-rev-bar"><button id="lw-rev-show2">显示答案（空格）</button></div>';
+    return '<div class="lw-imp" id="lw-rev"><div class="box">' + head
+      + '<div class="bd">' + body + '</div>'
+      + '<div class="ft" style="display:block">' + bar
+      + '<div class="lw-ep-tip" style="padding:8px 0 0">'
+      + '阶段：' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') 
+      + ' · 难度因子 ' + (Number(w.ef) || 0).toFixed(2)
+      + (Number(w.lapses) ? ' · 忘过 ' + w.lapses + ' 次' : '') + '</div>'
+      + '</div></div></div>';
+  }
+
+  /* ══ 导入文章 ✓ ════════════════════════════════════════════════════════ */
+  function epImportHtml() {
+    const t = String(EP_UI.impText || '');
+    const stat = (t && EN)
+      ? (() => {
+        const n = EN.countWords(t);
+        return n + ' 词 · 约 ' + EN.readingMinutes(n) + ' 分钟 · 难度 ' + (EN.levelOf(t) || '—') + '（估算）';
+      })()
+      : '';
+    const lvOpts = ['', ...EP_LEVELS].map((x) => '<option value="' + x + '"'
+      + (String(EP_UI.impLevel) === x ? ' selected' : '') + '>' + (x || '自动（估算）') + '</option>').join('');
+    const siteOpts = EP_PRESET.map((x) => '<option value="' + esc(x) + '"></option>').join('');
+    return '<div class="lw-imp" id="lw-epimp"><div class="box">'
+      + '<div class="hd"><b>📰 导入外刊文章</b><span class="x" id="lw-epimp-x">✕</span></div>'
+      + '<div class="bd">'
+      + '<div class="tip">两条路 ✓：<b>贴链接</b>（服务端帮你把正文抽出来 ✓）/ <b>贴正文</b>（一定可用 ✓）。<br>'
+      + '⚠️ 实测过：NPR / Aeon 这类站抓得到 ✓；要登录或付费墙的抓不到 ✗ —— 那就直接复制正文粘进来 ✓。</div>'
+      + '<div class="lw-fl-field"><label>链接（选填）</label>'
+      + '<div style="display:flex;gap:6px">'
+      + '<input id="lw-epimp-url" type="text" placeholder="https://www.npr.org/…" value="' + esc(EP_UI.impUrl) + '"/>'
+      + '<button id="lw-epimp-go" style="flex:none;height:auto;padding:0 12px;border:1px solid ' + T.lineDim
+      + ';background:transparent;color:' + T.dim + ';font:10.5px ' + UI + ';cursor:pointer"'
+      + (EP_UI.impBusy ? ' disabled' : '') + '>' + (EP_UI.impBusy ? '抓取中…' : '⬇ 抓正文') + '</button>'
+      + '</div></div>'
+      + '<div class="lw-fl-field"><label>标题</label>'
+      + '<input id="lw-epimp-title" type="text" placeholder="留空就用抓到的 / 正文第一行" value="' + esc(EP_UI.impTitle) + '"/></div>'
+      + '<div class="lw-fl-field"><label>来源</label>'
+      + '<input id="lw-epimp-site" type="text" list="lw-ep-preset" placeholder="如 The Economist / NPR" value="' + esc(EP_UI.impSite) + '"/>'
+      + '<datalist id="lw-ep-preset">' + siteOpts + '</datalist></div>'
+      + '<div class="lw-fl-field"><label>难度</label><select id="lw-epimp-level">' + lvOpts + '</select></div>'
+      + '<div class="lw-fl-field"><label>正文</label>'
+      + '<textarea id="lw-epimp-text" rows="12" placeholder="把英文原文粘到这里…">' + esc(t) + '</textarea>'
+      + '<div class="tip" id="lw-epimp-stat">' + esc(stat || '粘上正文后这里会显示词数 / 时长 / 难度') + '</div></div>'
+      + (EP_UI.impMsg ? '<div class="st ' + (/^✓/.test(EP_UI.impMsg) ? 'ok' : 'err') + '">' + esc(EP_UI.impMsg) + '</div>' : '')
+      + '</div>'
+      + '<div class="ft">'
+      + '<button class="pri" id="lw-epimp-do"' + (t.trim().length > 20 ? '' : ' disabled') + '>导入这篇</button>'
+      + '<button id="lw-epimp-cancel">取消</button>'
+      + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">只抓你给的那一个链接 ✓ 不做爬虫 ✗</span>'
+      + '</div></div></div>';
+  }
+
+  /* ══ 动作 ✓ ════════════════════════════════════════════════════════════ */
+  function epArtAdd(o) {
+    const text = String((o && o.text) || '').trim();
+    if (text.length < 20) { rdToast('正文太短了，先粘完整一点'); return null; }
+    const words = EN ? EN.countWords(text) : 0;
+    const a = {
+      id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
+      title: String((o && o.title) || '').trim() || (EN ? EN.splitSentences(text)[0] : '').slice(0, 60) || '未命名文章',
+      site: String((o && o.site) || '').trim(),
+      url: String((o && o.url) || '').trim(),
+      text,
+      level: String((o && o.level) || '').trim() || (EN ? EN.levelOf(text) : ''),
+      words, minutes: EN ? EN.readingMinutes(words) : 0,
+      done: {}, at: Date.now(), edit: Date.now(),
+    };
+    STORE.articles = epArts().concat([a]);
+    EP_UI.art = a.id; if (STORE) STORE.epArt = a.id;
+    EP_UI.sel = -1; EP_UI.pick = '';
+    epSave(); render();
+    return a;
+  }
+  function epArtDel() {
+    const a = epCurArt(); if (!a) return;
+    if (!confirm('删掉《' + a.title + '》？\n\n（它带进来的生词会保留，复习记录不受影响）')) return;
+    STORE.articles = epArts().filter((x) => x.id !== a.id);
+    STORE.artNotes = ((STORE && STORE.artNotes) || []).filter((n) => n.artId !== a.id);
+    EP_SENTS.delete(a.id);
+    EP_UI.art = ''; EP_UI.sel = -1; if (STORE) STORE.epArt = '';
+    epSave(); render();
+  }
+  function epSentMark(on) {
+    const a = epCurArt(); if (!a || EP_UI.sel < 0) return;
+    a.done = a.done || {};
+    if (on) a.done[EP_UI.sel] = 1; else delete a.done[EP_UI.sel];
+    a.edit = Date.now();
+    epSave(); render();
+  }
+  function epArtMarkAll(on) {
+    const a = epCurArt(); if (!a) return;
+    a.done = {};
+    if (on) epSents(a).forEach((_s, i) => { a.done[i] = 1; });
+    a.edit = Date.now();
+    epSave(); render();
+  }
+  function epWordAdd(raw, extra) {
+    const w = EN ? EN.cleanWord(raw) : String(raw || '').trim().toLowerCase();
+    if (!w || w.length < 1) { rdToast('没识别出单词 ✓ 手动打一个'); return null; }
+    const hit = epWordOf(w);
+    if (hit) { EP_UI.wordSel = hit.id; rdToast('「' + w + '」已经在生词本里了 ✓'); render(); return hit; }
+    const a = epCurArt();
+    const card = Object.assign({
+      id: 'w' + Date.now() + Math.random().toString(36).slice(2, 6),
+      w, ph: String((extra && extra.ph) || ''), def: String((extra && extra.def) || ''),
+      eg: String((extra && extra.eg) || ''),
+      artId: a ? a.id : '', artTitle: a ? a.title : '',
+      at: Date.now(), edit: Date.now(),
+    }, SRS ? SRS.newSrs(Date.now()) : {});
+    STORE.words = epWords().concat([card]);
+    EP_UI.wordSel = card.id;
+    epSave(); render();
+    rdToast('已加入生词本：「' + w + '」✓ 10 分钟后再见它');
+    return card;
+  }
+  function epWordDel() {
+    const w = epWordById(EP_UI.wordSel); if (!w) return;
+    if (!confirm('把「' + w.w + '」从生词本删掉？\n\n（复习记录也一起没了）')) return;
+    STORE.words = epWords().filter((x) => x.id !== w.id);
+    EP_UI.wordSel = '';
+    epSave(); render();
+  }
+  function epWordSave() {
+    const w = epWordById(EP_UI.wordSel); if (!w) return;
+    const host = document.getElementById('lifework-view'); if (!host) return;
+    const g = (id) => { const el = host.querySelector(id); return el ? String(el.value || '').trim() : null; };
+    const ph = g('#lw-wd-ph'), def = g('#lw-wd-def'), eg = g('#lw-wd-eg');
+    let ch = false;
+    if (ph !== null && ph !== String(w.ph || '')) { w.ph = ph; ch = true; }
+    if (def !== null && def !== String(w.def || '')) { w.def = def; ch = true; }
+    if (eg !== null && eg !== String(w.eg || '')) { w.eg = eg; ch = true; }
+    if (ch) { w.edit = Date.now(); epSave(); }
+  }
+  function epNoteAdd() {
+    const a = epCurArt(); if (!a || EP_UI.sel < 0) return;
+    const host = document.getElementById('lifework-view');
+    const el = host && host.querySelector('#lw-ep-note');
+    const t = el ? String(el.value || '').trim() : '';
+    if (!t) return;
+    STORE.artNotes = ((STORE && STORE.artNotes) || []).concat([{
+      id: 'an' + Date.now() + Math.random().toString(36).slice(2, 5),
+      artId: a.id, sent: EP_UI.sel, text: t, at: Date.now(),
+    }]);
+    epSave(); render();
+  }
+  /* 划词 ✓ —— 只在**正文里**取选区 ✓，别把别处的选中也当成生词 ✗ */
+  function epGrabPick() {
+    try {
+      const sel = String(window.getSelection && window.getSelection().toString() || '');
+      const w = EN ? EN.cleanWord(sel) : sel.trim().toLowerCase();
+      if (!w || w.length > 40 || !/[a-z]/i.test(w)) return false;
+      if (w === EP_UI.pick) return false;
+      EP_UI.pick = w;
+      const host = document.getElementById('lifework-view');
+      const el = host && host.querySelector('#lw-ep-new');
+      if (el) { el.value = w; el.focus(); }              /* 只改输入框 ✓ 不整屏 render ✗ */
+      const tip = host && host.querySelector('#lw-ep-newtip');
+      if (tip) tip.innerHTML = '划中的是「' + esc(w) + '」✓ 回车直接加';
+      return true;
+    } catch (_) { return false; }
+  }
+
+  /* ══ 绑定 ✓ ════════════════════════════════════════════════════════════ */
+  function bindEnglish() {
+    const host = document.getElementById('lifework-view');
+    if (!host || TAB !== 'reading') return;
+    const q = (s) => host.querySelector(s);
+    const qa = (s) => Array.from(host.querySelectorAll(s));
+    qa('[data-rdmode]').forEach((el) => { el.onclick = () => epSetMode(el.dataset.rdmode); });
+
+    /* ── 外刊精读 ── */
+    const ai = q('#lw-ep-imp'); if (ai) ai.onclick = () => { EP_UI.impOpen = true; EP_UI.impMsg = ''; render(); };
+    const aq = q('#lw-ep-q');
+    if (aq) aq.oninput = () => { EP_UI.q = aq.value; const host2 = document.getElementById('lifework-view'); /* 只过滤 ✓ */ };
+    qa('[data-epart]').forEach((el) => { el.onclick = () => epPickArt(el.dataset.epart); });
+    qa('[data-epflt]').forEach((el) => { el.onclick = () => { EP_UI.wordFilter = el.dataset.epflt; epSetMode('word'); }; });
+    qa('[data-epwflt]').forEach((el) => { el.onclick = () => { EP_UI.wordFilter = el.dataset.epwflt; render(); }; });
+    qa('[data-epword]').forEach((el) => { el.onclick = () => { EP_UI.wordSel = el.dataset.epword; epSetMode('word'); }; });
+    qa('[data-epnotedel]').forEach((el) => {
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        STORE.artNotes = ((STORE && STORE.artNotes) || []).filter((n) => n.id !== el.dataset.epnotedel);
+        epSave(); render();
+      };
+    });
+    /* 正文：点句子 / 划词 */
+    qa('[data-epsent]').forEach((el) => {
+      el.onclick = () => {
+        const i = Number(el.dataset.epsent);
+        if (EP_UI.sel === i) return;
+        EP_UI.sel = i; EP_UI.pick = '';
+        render();
+      };
+      el.onmouseup = () => { setTimeout(epGrabPick, 0); };   /* 等浏览器把选区定下来 ✓ */
+    });
+    const say = q('#lw-ep-say');
+    if (say) say.onclick = () => {
+      const a = epCurArt(); const sents = epSents(a);
+      if (!sents[EP_UI.sel]) return;
+      spkSay(sents[EP_UI.sel].text, { onPart: () => spkHighlight(EP_UI.sel) });
+    };
+    const saySlow = q('#lw-ep-say-slow');
+    if (saySlow) saySlow.onclick = () => {
+      const a = epCurArt(); const sents = epSents(a);
+      if (!sents[EP_UI.sel]) return;
+      spkSay(sents[EP_UI.sel].text, { rate: 0.6, onPart: () => spkHighlight(EP_UI.sel) });
+    };
+    const play = q('#lw-ep-play');
+    if (play) play.onclick = () => {
+      const a = epCurArt(); if (!a) return;
+      const sents = epSents(a).map((s) => s.text);
+      if (!sents.length) return;
+      const from = EP_UI.sel >= 0 ? EP_UI.sel : 0;
+      /* 从选中的那句开始念 ✓（读到哪点哪 ✓），念到底再停 ✓ */
+      spkSay(sents.slice(from), { onPart: (i) => spkHighlight(from + i) });
+      rdToast('从第 ' + (from + 1) + ' 句开始朗读 ✓（切页签会自动停）');
+    };
+    const stop = q('#lw-ep-stop'); if (stop) stop.onclick = () => { spkStop(); rdToast('停了'); };
+    const okb = q('#lw-ep-ok'); if (okb) okb.onclick = () => { const a = epCurArt(); epSentMark(!((a && a.done || {})[EP_UI.sel])); };
+    const allok = q('#lw-ep-allok'); if (allok) allok.onclick = () => epArtMarkAll(true);
+    const reset = q('#lw-ep-reset'); if (reset) reset.onclick = () => epArtMarkAll(false);
+    const delart = q('#lw-ep-delart'); if (delart) delart.onclick = () => epArtDel();
+    const copy = q('#lw-ep-copy');
+    if (copy) copy.onclick = () => {
+      const s = epSents(epCurArt())[EP_UI.sel];
+      if (!s) return;
+      try { navigator.clipboard.writeText(s.text); rdToast('✓ 已复制这句'); } catch (_) {}
+    };
+    const addbtn = q('#lw-ep-addbtn');
+    const doAdd = () => {
+      const el = q('#lw-ep-new');
+      const raw = el ? String(el.value || '').trim() : '';
+      if (!raw) { rdToast('先划一个词，或者手打一个'); return; }
+      const ph = q('#lw-ep-ph'), def = q('#lw-ep-def');
+      epWordAdd(raw, { ph: ph ? ph.value : '', def: def ? def.value : '' });
+      EP_UI.pick = '';
+    };
+    if (addbtn) addbtn.onclick = doAdd;
+    const newEl = q('#lw-ep-new');
+    if (newEl) {
+      newEl.oninput = () => { EP_UI.pick = newEl.value; };
+      newEl.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doAdd(); } };
+    }
+    const nb = q('#lw-ep-notebtn'); if (nb) nb.onclick = () => epNoteAdd();
+    const nt = q('#lw-ep-note');
+    if (nt) nt.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); epNoteAdd(); } };
+
+    /* ── 朗读设置 ── */
+    const vs = q('#lw-ep-voice');
+    if (vs) vs.onchange = () => { if (STORE) STORE.epVoice = vs.value; epSave(); spkStop(); };
+    const rt = q('#lw-ep-rate');
+    if (rt) {
+      rt.oninput = () => { const v = q('#lw-ep-ratev'); if (v) v.textContent = Number(rt.value).toFixed(1) + '×'; };
+      rt.onchange = () => { if (STORE) STORE.epRate = Number(rt.value) || 1; epSave(); };
+    }
+
+    /* ── 生词本 ── */
+    const wq = q('#lw-wd-q');
+    if (wq) wq.oninput = () => { EP_UI.wordQ = wq.value; render(); };
+    const rev = q('#lw-wd-rev'); if (rev) rev.onclick = () => epStartReview();
+    const wa = q('#lw-wd-add');
+    if (wa) wa.onclick = () => {
+      const raw = prompt('加一个单词：', '');
+      if (raw === null) return;
+      const def = prompt('释义（可留空）：', '') || '';
+      if (String(raw).trim()) epWordAdd(raw, { def });
+    };
+    const wdel = q('#lw-wd-del'); if (wdel) wdel.onclick = () => epWordDel();
+    ['#lw-wd-ph', '#lw-wd-def', '#lw-wd-eg'].forEach((sel) => {
+      const el = q(sel);
+      if (el) el.onblur = () => epWordSave();
+    });
+    const ws1 = q('#lw-wd-say'); if (ws1) ws1.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
+    const ws2 = q('#lw-wd-say-slow'); if (ws2) ws2.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w, { rate: 0.6 }); };
+    const ws3 = q('#lw-wd-say-eg'); if (ws3) ws3.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w && w.eg) spkSay(w.eg); };
+
+    /* ── 复习浮层 ── */
+    const rx = q('#lw-rev-x'); if (rx) rx.onclick = () => { EP_UI.revOpen = false; render(); };
+    const rc = q('#lw-rev-close'); if (rc) rc.onclick = () => { EP_UI.revOpen = false; render(); };
+    const rsh = q('#lw-rev-show'); if (rsh) rsh.onclick = () => { EP_UI.revShown = true; render(); };
+    const rsh2 = q('#lw-rev-show2'); if (rsh2) rsh2.onclick = () => { EP_UI.revShown = true; render(); };
+    const rsay = q('#lw-rev-say');
+    if (rsay) rsay.onclick = () => { const w = epRevCur(); if (w) spkSay(w.w); };
+    qa('[data-epgrade]').forEach((el) => { el.onclick = () => epGrade(Number(el.dataset.epgrade)); });
+
+    /* ── 导入浮层 ── */
+    const ix = q('#lw-epimp-x'); if (ix) ix.onclick = () => { EP_UI.impOpen = false; render(); };
+    const ic = q('#lw-epimp-cancel'); if (ic) ic.onclick = () => { EP_UI.impOpen = false; render(); };
+    const iu = q('#lw-epimp-url'); if (iu) iu.oninput = () => { EP_UI.impUrl = iu.value; };
+    const it = q('#lw-epimp-title'); if (it) it.oninput = () => { EP_UI.impTitle = it.value; };
+    const is = q('#lw-epimp-site'); if (is) is.oninput = () => { EP_UI.impSite = is.value; };
+    const il = q('#lw-epimp-level'); if (il) il.onchange = () => { EP_UI.impLevel = il.value; };
+    const itx = q('#lw-epimp-text');
+    if (itx) itx.oninput = () => {
+      EP_UI.impText = itx.value;
+      const st = q('#lw-epimp-stat');
+      const n = EN ? EN.countWords(itx.value) : 0;
+      if (st) st.textContent = itx.value.trim().length > 20
+        ? (n + ' 词 · 约 ' + (EN ? EN.readingMinutes(n) : 0) + ' 分钟 · 难度 ' + (EN ? (EN.levelOf(itx.value) || '—') : '—') + '（估算）')
+        : '粘上正文后这里会显示词数 / 时长 / 难度';
+      const go = q('#lw-epimp-do');
+      if (go) { if (itx.value.trim().length > 20) go.removeAttribute('disabled'); else go.setAttribute('disabled', ''); }
+    };
+    const igo = q('#lw-epimp-go');
+    if (igo) igo.onclick = async () => {
+      const url = String(EP_UI.impUrl || '').trim();
+      if (!/^https?:\/\//i.test(url)) { EP_UI.impMsg = '链接要 http:// 或 https:// 开头'; render(); return; }
+      EP_UI.impBusy = true; EP_UI.impMsg = '正在抓这一页…'; render();
+      try {
+        const r = await fetch('/api/life/en/fetch', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const d = await r.json();
+        EP_UI.impBusy = false;
+        if (!d || !d.ok) { EP_UI.impMsg = '✗ ' + ((d && d.error) || '抓取失败'); render(); return; }
+        EP_UI.impText = d.text || '';
+        EP_UI.impTitle = EP_UI.impTitle || d.title || '';
+        EP_UI.impSite = EP_UI.impSite || d.site || '';
+        EP_UI.impLevel = EP_UI.impLevel || d.level || '';
+        EP_UI.impMsg = '✓ 抓到了：' + d.paras + ' 段 · ' + d.words + ' 词 · 难度 ' + (d.level || '—')
+          + '（用的规则：' + (d.via || '—') + '）';
+        render();
+      } catch (e) {
+        EP_UI.impBusy = false;
+        EP_UI.impMsg = '✗ 抓取失败：' + e.message;
+        render();
+      }
+    };
+    const ido2 = q('#lw-epimp-do');
+    if (ido2) ido2.onclick = () => {
+      const a = epArtAdd({
+        title: EP_UI.impTitle, site: EP_UI.impSite, url: EP_UI.impUrl,
+        text: EP_UI.impText, level: EP_UI.impLevel,
+      });
+      if (!a) return;
+      EP_UI.impOpen = false;
+      EP_UI.impText = ''; EP_UI.impTitle = ''; EP_UI.impSite = ''; EP_UI.impLevel = ''; EP_UI.impMsg = '';
+      epSetMode('ex');
+      rdToast('导入好了：《' + a.title + '》· ' + a.words + ' 词 ✓');
+    };
+
+    /* ── 键盘：复习时空格翻面，1~4 直接评分 ✓ ── */
+    host.onkeydown = (ev) => {
+      if (!EP_UI.revOpen) return;
+      if (ev.key === ' ' || ev.key === 'Enter') {
+        if (!EP_UI.revShown) { ev.preventDefault(); EP_UI.revShown = true; render(); }
+        return;
+      }
+      const n = Number(ev.key);
+      if (EP_UI.revShown && n >= 1 && n <= 4) {
+        ev.preventDefault();
+        epGrade((SRS ? SRS.GRADES : [])[n - 1] ? SRS.GRADES[n - 1].q : 4);
+      }
+    };
   }
 
   function viewMail() {

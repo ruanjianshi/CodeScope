@@ -41,6 +41,13 @@ const MAIL_MIME = require('./lib/mime');
 const MAIL_LIST = require('./lib/mail-list');
 const WORKFLOW = require('./lib/workflow');
 const HOT = require('./lib/hot');
+const EN_TEXT = require('./lib/en-text.js');   /* 外刊精读：抽正文 / 分句 / 取词（纯逻辑 ✓） */
+const SRS = require('./lib/srs.js');           /* 外刊精读：遗忘曲线复习调度（纯逻辑 ✓） */
+/* ★ 只把**这几个**纯逻辑模块暴露给浏览器 ✓（**白名单** ✓，不是把整个 lib/ 敞开 ✗）。
+   它们都是「双栖」的 ✓：Node 里 require 拿到 ✓、浏览器里挂 window.LW_xxx ✓ ——
+   目的是让**前后端用同一份逻辑** ✗：分句规则、复习间隔这种东西抄两遍必然走偏 ✗，
+   而且走偏了用户根本查不出来 ✗（只会觉得「这软件不准」✗）。 */
+const SHARED_LIB_FILES = ['en-text.js', 'srs.js'];
 /* 收信的缓存 ✓ —— 每次请求都新建一条 TLS 连接要 1~3 秒 ✗，
    而顶栏的未读数还会定时轮询 ✗，不缓存等于反复重连邮箱服务器 ✗。
    `status` 缓存久一点（未读数不需要秒级实时 ✓），`list` 短一点（用户在看列表时要新鲜 ✓）。
@@ -4455,6 +4462,17 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/assets/'.length);
       return streamStatic(req, res, assetsRoot, rel, { cacheControl:'no-cache' });
     }
+    /* ★ 把**共享的纯逻辑**暴露给浏览器 ✓ —— 只开白名单里那几个文件 ✗（不是把整个 lib/ 敞开 ✗）。
+       它们是**双栖**的 ✓（Node 里 require ✓ / 浏览器里挂 window.LW_xxx ✓），
+       于是「服务端抽正文」和「前端逐句渲染」用的是**同一份**分句器 ✓、
+       「按钮上写的下次间隔」和「实际排到的间隔」用的是**同一份**算法 ✓。
+       ⚠️ 前端再抄一遍是不行的 ✗ —— 抄两遍必然走偏 ✗，
+          会出现「服务端说 15 句、前端画出 17 句」这种没法查的鬼问题 ✗。 */
+    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/lib/')) {
+      const rel = decodeURIComponent(u.pathname.slice('/lib/'.length));
+      if (SHARED_LIB_FILES.indexOf(rel) < 0) return send(res, 404, { ok: false, error: 'not found' });
+      return streamStatic(req, res, path.join(__dirname, 'lib'), rel, { cacheControl:'no-cache' });
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/images/')) {
       const imagesRoot = path.join(KNOWLEDGE.sourceDir(), 'public', 'images');
       const rel = decodeURIComponent(u.pathname.slice('/images/'.length));
@@ -4769,6 +4787,7 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/mail/part' || u.pathname === '/api/life/mail/flag' ||
         u.pathname === '/api/life/mail/move' || u.pathname === '/api/life/mail/newbox' ||
         u.pathname === '/api/life/mail/delbox' || u.pathname === '/api/life/weread/shelf' ||
+        u.pathname === '/api/life/en/fetch' ||
         u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
@@ -4799,7 +4818,8 @@ const server = http.createServer(async (req, res) => {
       let postBody = null;
       if (u.pathname === '/api/life/mail/flag' || u.pathname === '/api/life/mail/move'
         || u.pathname === '/api/life/mail/newbox' || u.pathname === '/api/life/mail/delbox'
-        || u.pathname === '/api/life/weread/shelf' || u.pathname === '/api/life/flow/run') {
+        || u.pathname === '/api/life/weread/shelf' || u.pathname === '/api/life/en/fetch'
+        || u.pathname === '/api/life/flow/run') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
         try { postBody = await readBody(req, 1e5); } catch (_) { postBody = {}; }
       }
@@ -4953,6 +4973,54 @@ const server = http.createServer(async (req, res) => {
           } catch (error) {
             const why = String((error && error.message) || error);
             return send(res, 200, { ok: false, error: /abort/i.test(why) ? '连微信读书超时（网络不通？）' : ('连不上微信读书：' + why) });
+          }
+        }
+
+        /* ── 外刊精读：从链接抽正文 ✓ ─────────────────────────────────────────
+           ⚠️ 只抓**用户自己给的那一个 URL** ✗ —— 不做爬虫 ✗、不批量抓 ✗、不落盘 ✗。
+           ⚠️ 「抽正文」是**纯函数** ✓（`lib/en-text.js` 的 extractArticle ✓）——
+              所以它能拿**真实网页**当样本单测 ✓（`tests/en-text.js` ✓），
+              也能在这里只当个薄薄的 IO 壳 ✓。
+           ⚠️ 实测过（这台机器上 ✓）：
+              ✓ NPR / Aeon 抓得到、而且抽得干净 ✓
+              ✗ BBC / Guardian / VOA Learning English / The Conversation **连不通** ✗
+              → 所以**别做「一键订阅外刊」** ✗，让用户自己贴链接 / 贴正文 ✓
+                （贴正文这条路**一定可用** ✓，永远留着 ✓）。 */
+        if (u.pathname === '/api/life/en/fetch') {
+          const url = String((postBody && postBody.url) || '').trim();
+          if (!/^https?:\/\//i.test(url)) return send(res, 200, { ok: false, error: '链接要 http:// 或 https:// 开头' });
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 15000);
+            let up;
+            try {
+              up = await fetch(url, {
+                redirect: 'follow',
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
+                  'Accept': 'text/html,application/xhtml+xml',
+                  'Accept-Language': 'en-US,en;q=0.9',
+                },
+                signal: ctrl.signal,
+              });
+            } finally { clearTimeout(timer); }
+            if (!up.ok) {
+              return send(res, 200, {
+                ok: false,
+                error: '这一页抓不动（HTTP ' + up.status + '）—— 可能要登录、或者有付费墙。直接复制正文粘进来更快 ✓',
+              });
+            }
+            /* 限一下大小 ✓ —— 有些页面是整站渲染的几 MB ✗，白读一遍没意义 ✗ */
+            const html = (await up.text()).slice(0, 2e6);
+            return send(res, 200, EN_TEXT.extractArticle(html, url));
+          } catch (error) {
+            const why = String((error && error.message) || error);
+            if (/abort/i.test(why)) return send(res, 200, { ok: false, error: '抓这一页超时（网络不通？）' });
+            /* ⚠️ 裸的「fetch failed」对用户毫无信息量 ✗ —— 翻译一句人话 ✓ */
+            if (/fetch failed|ENOTFOUND|ECONNREFUSED|EAI_AGAIN|socket hang up|certificate|self.signed/i.test(why)) {
+              return send(res, 200, { ok: false, error: '连不上这个站（网络不通，或者它挡了本机）—— 直接复制正文粘进来更快 ✓' });
+            }
+            return send(res, 200, { ok: false, error: '抓不到这一页：' + why });
           }
         }
 
