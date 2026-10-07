@@ -271,6 +271,7 @@
   const { createSyncView } = require('./system-sync-view.js');
   const { createSoftwareView } = require('./system-software-view.js');
   const { createFilesView } = require('./system-files-view.js');
+  const { createAtlasView } = require('./file-atlas-view.js');
 
   const CSS = `
 #system-workspace{display:none;position:absolute;inset:0;z-index:76;min-height:0;overflow:hidden;background:var(--bg);
@@ -1474,6 +1475,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     { id: 'monitor', group: '查看', label: '性能', icon: '◈', note: '谁在吃 CPU 和内存，按占用从高到低排', views: [['processes', '进程']] },
     { id: 'files', group: '查看', label: '文件', icon: '▤', note: '浏览、搜索、整理你的文件；以及哪些目录受保护', views: [['files', '文件浏览'], ['files-organize', '整理归类'], ['files-trash', '回收站'], ['safety', '安全管理']] },
     { id: 'storage', group: '查看', label: '存储', icon: '◍', note: '磁盘容量、空间被什么占了、能清出多少', views: [['storage', '磁盘与清理'], ['files-usage', '空间分析'], ['scan', '全盘扫描']] },
+    { id: 'atlas', group: '查看', label: '文件全景', icon: '⌗', note: '整机文件按"能不能动"分五级：系统级只读、缓存可清、用户内容只归类', views: [['atlas', '分级总览']] },
     { id: 'runtime', group: '管理', label: '系统', icon: '⚙', note: '后台服务、开机启动项、端口、容器、开发环境', views: [['services', '服务与端口'], ['docker', '容器'], ['dev', '开发环境'], ['env', '环境与更新'], ['sync', '远程同步'] ] },
     { id: 'software', group: '管理', label: '软件', icon: '⤓', note: '装了哪些应用、哪些包可以升级', views: [['apps', '已安装'], ['software', '更新与安装']] },
     { id: 'settings', group: '管理', label: '设置', icon: '⌥', note: '面板自己的行为与安全选项', views: [['settings', '设置']] },
@@ -1754,6 +1756,19 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       startTask: (request) => startTask(request),
     });
     return ENV_VIEW;
+  }
+
+  let ATLAS_VIEW = null;
+
+  /* 文件全景：只读视图 —— 分级汇总 + 大文件 + 清理预演，绝不删除任何文件。 */
+  function atlasView() {
+    if (ATLAS_VIEW) return ATLAS_VIEW;
+    ATLAS_VIEW = createAtlasView({
+      api: (path, body) => api(path, body),
+      el: (tag, className, text) => el(tag, className, text),
+      esc, fmtBytes, fmtTime, relTime, toast,
+    });
+    return ATLAS_VIEW;
   }
 
   let SYNC_VIEW = null;
@@ -2352,6 +2367,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         if (state.mountedKey !== state.tab) { SCAN_VIEW.mount(body, state.tab); state.mountedKey = state.tab; }
       } else if (envView().isEnvView(state.tab)) {
         if (state.mountedKey !== state.tab) { ENV_VIEW.mount(body); state.mountedKey = state.tab; }
+      } else if (atlasView().isAtlasView(state.tab)) {
+        if (state.mountedKey !== state.tab) { ATLAS_VIEW.mount(body); state.mountedKey = state.tab; }
       } else if (syncView().isSyncView(state.tab)) {
         if (state.mountedKey !== state.tab) { SYNC_VIEW.mount(body); state.mountedKey = state.tab; }
       }

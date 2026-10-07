@@ -2095,6 +2095,66 @@ function createSystemPanel(options = {}) {
     const method = req.method || 'GET';
         if (await FILES.handle(req, res, u, rest)) return true;
     if (await SOFTWARE.handle(req, res, u, rest)) return true;
+
+    // 文件全景（只读）：GET /api/system-panel/atlas[?mode=fast|deep][&refresh=1]
+    //   分级汇总 + 大文件 Top + 目录下钻 + 清理预演。
+    // 只读、有界（maxEntries/maxDepth/deadlineMs 硬上限），绝不删除或移动任何文件。
+    if (rest === '/atlas' || rest === '/atlas/scan') {
+      if (method !== 'GET') return sendJson(res, 405, { ok: false, error: '文件全景只提供只读 GET' });
+      const mode = u.searchParams.get('mode') === 'deep' ? 'deep' : 'fast';
+      const force = u.searchParams.get('refresh') === '1';
+      /* ★ 落盘缓存 ✓ —— 「扫得慢」的正解是**别重复扫** ✗，不是把参数调小 ✗。
+         fast 10 分钟（够快，也够新 ✓）、deep 6 小时（它要 25 秒 ✗，用户不会想重跑 ✓）。
+         内存缓存挡不住重启，所以放**磁盘** ✓（重启后第一次打开还是秒开 ✓）。 */
+      const TTL = { fast: 10 * 60 * 1000, deep: 6 * 60 * 60 * 1000 };
+      const cacheFile = path.join(dataRoot, 'file-atlas-cache-' + mode + '.json');
+      const readCache = () => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+          if (!raw || !raw.data || !raw.at) return null;
+          if (Date.now() - raw.at > TTL[mode]) return null;
+          return raw;
+        } catch (_) { return null; }
+      };
+      const hit = force ? null : readCache();
+      if (hit) return sendJson(res, 200, Object.assign({}, hit.data, { cached: true, cacheAgeMs: Date.now() - hit.at }));
+      /* 扫描跑在**子进程**里：目录枚举用的是同步 fs，跑在主进程会把面板整个卡住
+         （实测 ~/Library/Containers 的单次 readdirSync 无限阻塞，45 秒都不返回）。
+         子进程带硬超时；**超时绝不回退到进程内扫描**，否则面板会再被卡死一次 —— 只如实报错。
+         ⚠️ 超时必须按模式给 ✗：深扫实测 24.6 秒 ✓，还按 30 秒卡的话一抖动就被杀掉 ✗。 */
+      const childProcess = require('child_process');
+      const scriptPath = require('path').join(__dirname, '..', 'scripts', 'file-atlas-scan.js');
+      const timeoutMs = mode === 'deep' ? 90000 : 30000;
+      const scanned = await new Promise((resolve) => {
+        childProcess.execFile(process.execPath, [scriptPath, '--mode=' + mode], { timeout: timeoutMs, maxBuffer: 128 * 1024 * 1024, killSignal: 'SIGKILL' }, (error, stdout) => {
+          if (error) return resolve({ ok: false, code: error.code || null, killed: !!error.killed, error: String(error.message || error) });
+          try { resolve(JSON.parse(String(stdout))); } catch (parseError) { resolve({ ok: false, error: '扫描结果解析失败：' + parseError.message }); }
+        });
+      });
+      if (scanned && scanned.ok) {
+        try { fs.writeFileSync(cacheFile, JSON.stringify({ at: Date.now(), data: scanned })); } catch (_) {}
+        return sendJson(res, 200, scanned);
+      }
+      /* ★★ 这里**故意不再有**「进程内兜底扫描」✗✗ ——
+         原来脚本缺失时会退回主进程里同步遍历 ✗，而那正是本文件上面刚警告过的
+         「会把面板整个卡死」✗（实测 ~/Library/Containers 的 readdirSync 45 秒不返回 ✗）。
+         为了一份降级数据把整个面板冻住，不划算 ✗；脚本就在仓库里 ✓，缺了说明装坏了 ✓，
+         如实报错、让用户去修，比假装有数据更诚实 ✓。
+         ⚠️ 顺带删掉了那 130 行内联兜底 ✓ —— 它是 scripts/file-atlas-scan.js 的**副本** ✗，
+            而且预算硬编码成 4000/3/320 ✗，早就和脚本里的不一致了 ✗（两份必然走偏 ✗）。 */
+      if (scanned && scanned.code === 'ENOENT') {
+        return sendJson(res, 500, {
+          ok: false,
+          error: '扫描脚本不存在：' + scriptPath + '（安装不完整？没有回退到进程内扫描 —— 那会把面板卡死）',
+        });
+      }
+      return sendJson(res, 504, {
+        ok: false,
+        error: '扫描未完成：' + String((scanned && scanned.error) || '无输出') +
+          (scanned && scanned.killed ? '（超过 ' + Math.round(timeoutMs / 1000) + ' 秒硬超时，已终止子进程）' : ''),
+      });
+    }
+
     try {
       if (rest === '/ping') {
         return sendJson(res, 200, {
