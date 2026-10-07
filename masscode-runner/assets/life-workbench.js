@@ -1216,7 +1216,15 @@
     max-height:220px; overflow:auto; }
   .lw-hl-ai .bd:empty::before { content:'点右边「🤖 生成 AI 日报」—— 把当前榜单交给模型，出一份带重点的简报 ✓';
     color:${T.faint}; font-size:11px; }
-  .lw-hl-body { flex:1; min-height:0; overflow:auto; padding:14px 18px 20px; }
+  /* ⚠️ 正文栏必须是**列向 flex** ✗ —— 不然预览只能写死高度 ✗：
+     以前是 iframe 写死 height:340px ✗，而右栏是**整屏高** ✓，
+     于是预览下面**永远空一大片** ✗（用户截图里那块空白就是它 ✗）。
+     → 父级列向 flex ✓ + 预览 flex:1 撑满剩下的高度 ✓。 */
+  .lw-hl-body { flex:1; min-height:0; overflow:auto; padding:14px 18px 20px;
+    display:flex; flex-direction:column; }
+  /* 标题 / 元信息 / 按钮行**不许被压扁** ✗（列向 flex 里它们默认可收缩 ✗，
+     窗口一矮就会被挤成一条线 ✗）。 */
+  .lw-hl-body > h2, .lw-hl-body > .meta, .lw-hl-body > .acts { flex:none; }
   .lw-hl-body h2 { font-size:15px; line-height:1.5; margin-bottom:8px; }
   .lw-hl-body .meta { font-size:10px; color:${T.faint}; margin-bottom:12px; }
   .lw-hl-body .acts { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
@@ -1224,11 +1232,17 @@
     color:${T.dim}; font:10px ${UI}; cursor:pointer; }
   .lw-hl-body .acts button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-hl-body .acts button.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
-  .lw-hl-body iframe { width:100%; height:340px; border:1px solid ${T.lineDim}; background:#fff; }
+  /* ★ 预览撑满剩下的高度 ✓ —— min-height:340px 是**保底** ✗：
+     窗口很矮时至少还有 340px ✓，再矮就交给父级滚动 ✓（不会挤成一条线 ✗）。 */
+  .lw-hl-body iframe { width:100%; flex:1; min-height:340px; border:1px solid ${T.lineDim}; background:#fff; }
+  .lw-hl-hint { flex:none; font-size:10px; color:${T.faint}; margin-top:8px; line-height:1.8; }
   /* ★ 有些站**不允许被内嵌** ✗（实测 GitHub / arXiv / OpenAlex / openai.com ✗）——
      硬塞 iframe 的话浏览器只会显示一句「xxx 拒绝了我们的连接请求」✗，
      用户看着像坏了 ✗。所以改成一张**说清楚的卡片** ✓ + 一个大按钮 ✓。 */
-  .lw-hl-noframe { border:1px dashed ${T.lineDim}; padding:26px 22px; text-align:center; background:${T.bg2}; }
+  /* ⚠️ 卡片也要撑满 ✗ —— 不然它下面同样是一大片空白 ✗（和 iframe 那个毛病一样 ✗）。
+     内容居中 ✓，看着像「故意这样排的」✓，而不是「没画完」✗。 */
+  .lw-hl-noframe { flex:1; min-height:200px; display:flex; flex-direction:column; justify-content:center;
+    border:1px dashed ${T.lineDim}; padding:26px 22px; text-align:center; background:${T.bg2}; }
   .lw-hl-noframe .ic { font-size:26px; line-height:1; margin-bottom:12px; }
   .lw-hl-noframe .ti { font-size:13px; font-weight:700; color:${T.text}; margin-bottom:8px; }
   .lw-hl-noframe .why { font-size:11px; color:${T.dim}; line-height:1.9; margin-bottom:16px; }
@@ -6592,7 +6606,7 @@
       + '</div>'
       + (canFrame(x.url)
         ? '<iframe id="lw-hl-frame" sandbox="allow-same-origin" src="' + esc(x.url) + '" title="原文预览"></iframe>'
-          + '<div style="font-size:10px;color:' + T.faint + ';margin-top:8px;line-height:1.8">'
+          + '<div class="lw-hl-hint">'
           + '上面是<b>沙箱预览</b>（不带脚本 ✓，防追踪 ✓）；排版可能和原站有出入 ✓</div>'
         : '<div class="lw-hl-noframe">'
           + '<div class="ic">🚫</div>'

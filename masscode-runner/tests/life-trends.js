@@ -130,21 +130,44 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
       await p.waitForTimeout(3000);
       await p.locator('[data-trit]').first().click();
       await p.waitForTimeout(2500);
-      return p.evaluate(() => ({
-        iframe: document.querySelectorAll('#lw-hl-frame').length,
-        card: document.querySelectorAll('.lw-hl-noframe').length,
-        bigBtn: document.querySelectorAll('#lw-hl-openbig').length,
-        txt: (document.querySelector('.lw-hl-noframe') || {}).innerText ? document.querySelector('.lw-hl-noframe').innerText.replace(/\n/g, ' ').slice(0, 70) : '',
-      }));
+      return p.evaluate(() => {
+        const body = document.querySelector('.lw-hl-body');
+        const frame = document.getElementById('lw-hl-frame');
+        const card = document.querySelector('.lw-hl-noframe');
+        const cs = body ? getComputedStyle(body) : null;
+        const bb = body ? body.getBoundingClientRect() : null;
+        const last = body && body.lastElementChild ? body.lastElementChild.getBoundingClientRect() : null;
+        return {
+          iframe: document.querySelectorAll('#lw-hl-frame').length,
+          card: document.querySelectorAll('.lw-hl-noframe').length,
+          bigBtn: document.querySelectorAll('#lw-hl-openbig').length,
+          txt: card ? card.innerText.replace(/\n/g, ' ').slice(0, 70) : '',
+          /* ★ 新增：预览到底有没有**撑满** ✗ —— 以前 iframe 写死 340px ✗，
+             而右栏是整屏高 ✓，于是下面永远空一大片 ✗（用户截图里那块空白 ✗）。
+             这两项就是那个 bug 的探针 ✓。 */
+          frameH: frame ? Math.round(frame.getBoundingClientRect().height) : 0,
+          cardH: card ? Math.round(card.getBoundingClientRect().height) : 0,
+          bodyH: bb ? Math.round(bb.height) : 0,
+          bottomGap: (bb && last) ? Math.round(bb.bottom - parseFloat(cs.paddingBottom) - last.bottom) : -1,
+        };
+      });
     };
     const gh = await frameCheck('github');
     console.log('    GitHub → ' + JSON.stringify(gh));
     ck('★ GitHub 不塞 iframe（改出卡片）', gh.iframe === 0 && gh.card === 1, JSON.stringify(gh));
     ck('★ 卡片说清了「是对方不允许，不是这边坏了」', /不允许被内嵌/.test(gh.txt), gh.txt);
     ck('★ 卡片上有个大按钮能打开原文', gh.bigBtn === 1, String(gh.bigBtn));
+    /* 那张「不允许内嵌」的卡片也要撑满 —— 不然它下面同样是一大片空白 ✗。 */
+    ck('★ 卡片也撑满了（不是浮在顶上）', gh.cardH > 150, '卡片 ' + gh.cardH + ' · 栏高 ' + gh.bodyH);
+    ck('★ 卡片下面也不留空白', gh.bottomGap <= 2, '还剩 ' + gh.bottomGap + 'px');
     const bl = await frameCheck('bili');
     console.log('    B站 → ' + JSON.stringify(bl));
     ck('★ B站 照旧内嵌（它允许 ✓）', bl.iframe === 1 && bl.card === 0, JSON.stringify(bl));
+    /* ★★ 预览要**撑满**右栏，不能写死高度 ✗ ——
+       用户原话：「怎么有一段这么大的空白，修复」。
+       根因：`iframe { height:340px }` 写死 ✗，而右栏是整屏高 ✗ → 下面永远空一大片 ✗。 */
+    ck('★ 预览撑满右栏（不是写死的 340px）', bl.frameH > 400, '栏高 ' + bl.bodyH + ' · 预览 ' + bl.frameH);
+    ck('★ 预览下面**不留空白**', bl.bottomGap <= 2, '还剩 ' + bl.bottomGap + 'px');
     const ar = await frameCheck('arxiv');
     console.log('    arXiv → ' + JSON.stringify(ar));
     ck('★ arXiv 也走卡片（实测 SAMEORIGIN + CSP none ✗）', ar.iframe === 0 && ar.card === 1, JSON.stringify(ar));
