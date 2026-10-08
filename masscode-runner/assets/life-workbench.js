@@ -2867,21 +2867,35 @@
   }
 
   /* ⚠️ 存盘要**合并**：以前每次操作都发一次 POST ✗，连打字都会连发 ✗。
-     现在 300ms 防抖 + 只发最后一次 ✓（本地写文件，不怕丢 ✓）。 */
+     现在 300ms 防抖 + 只发最后一次 ✓（本地写文件，不怕丢 ✓）。
+     ★★ `__drop`：整份存盘时**显式声明「这几个字段是我主动要删的」** ✗ ——
+        服务端默认会**保住**凭据类字段 ✓（`GUARDED_STORE_KEYS`，见 server.js 那段注释 ✓），
+        不声明的话「断开微信读书」会删不掉 ✓。
+        ⚠️ 只有**真的**要删时才带上它 ✗ —— 否则下次存盘又会把凭据删掉 ✗。
+        ⚠️ 发**成功之后**才清掉这个标记 ✗ —— 发失败还清掉的话，
+           「断开」就变成「界面上断了、磁盘上还连着」✗（刷新一下又回来了 ✓）。 */
   let SAVE_TIMER = 0, SAVE_PENDING = false;
+  function storePayload() {
+    const b = Object.assign({}, STORE || {});
+    const drop = (STORE && Array.isArray(STORE.__drop)) ? STORE.__drop : null;
+    if (drop && drop.length) b.__drop = drop.slice();
+    return JSON.stringify(b);
+  }
   function saveStore(now) {
+    const post = () => {
+      fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: storePayload() })
+        .then((r) => { if (r && r.ok && STORE) delete STORE.__drop; })
+        .catch(() => { });
+    };
     if (now) {
       clearTimeout(SAVE_TIMER);
       SAVE_PENDING = false;
-      fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(STORE || {}) }).catch(() => {});
+      post();
       return;
     }
     SAVE_PENDING = true;
     clearTimeout(SAVE_TIMER);
-    SAVE_TIMER = setTimeout(() => {
-      SAVE_PENDING = false;
-      fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(STORE || {}) }).catch(() => {});
-    }, 300);
+    SAVE_TIMER = setTimeout(() => { SAVE_PENDING = false; post(); }, 300);
   }
 
   /* ── 撤销 / 重做（备忘录）──────────────────────────────────────────────
@@ -9721,11 +9735,17 @@
         text: '已经同步进来的书会保留。\n\n只是以后不再自动更新，API Key / Cookie 也会一起清掉。',
       }))) return;
       /* ⚠️ 两条路都要清 ✗ —— 只清 Cookie 的话，用 Key 连的人点「断开」会发现
-         「怎么还连着」✗（因为 `rdWrOn()` 还看到 Key ✓）。 */
+         「怎么还连着」✗（因为 `rdWrOn()` 还看到 Key ✓）。
+         ★★ 还必须**显式声明** `__drop` ✗ —— 服务端默认会保住凭据类字段 ✓
+            （防止「拿着旧副本的客户端整份覆盖」把 Key 抹掉 ✓，
+             实测就是那么丢过一次 ✓，见 server.js 的 GUARDED_STORE_KEYS ✓）。 */
+      STORE.__drop = ['wereadKey', 'wereadCookie', 'wereadVia', 'wereadSyncAt', 'wereadCount'];
       STORE.wereadKey = ''; STORE.wereadCookie = ''; STORE.wereadVia = '';
       STORE.wereadSyncAt = 0; STORE.wereadCount = 0;
       RD_UI.connText = ''; RD_UI.connCookie = ''; RD_UI.connMsg = '已断开 ✓'; RD_UI.connOk = true;
-      rdSave(); render();
+      /* ⚠️ 用**立即存盘** ✗（不是 300ms 防抖那次 ✓）——
+         防抖窗口里用户一刷新，「断开」就白点了 ✓（本地已经清掉、磁盘上还在 ✓）。 */
+      rdSave(); saveStore(true); render();
     };
     /* ★ 进页面时**静默**补一次 ✓ —— 已连接 + 上次同步超过 6 小时才拉 ✓。
        ⚠️ 必须有两道闸 ✗✗（少一道就会出问题 ✗，`bindReading()` 每次 render 都跑 ✗）：

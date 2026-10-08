@@ -103,6 +103,54 @@ function rotateStoreBackup(file) {
 }
 const ONLYOFFICE_CONNECTION_FILE = path.join(applicationDataRoot(), 'office-connection.json');
 
+/* ── 再加一层「按天」快照 ✓ ─────────────────────────────────────────────────
+   ⚠️ 上面那 6 份轮转备份**只覆盖约半小时** ✗（每 5 分钟一份 ✓）——
+      实测教训（2026-10-08）：微信读书的 API Key 在 00:06 之后被某次整份覆盖抹掉 ✓，
+      到中午 12:15 发现时 ✗，6 份备份**全都只剩最近半小时** ✗ →
+      **一个能恢复的版本都没有** ✗，只能让用户去官方页面重新申请一次 ✓。
+   → 每天第一份快照留一份 ✓，保留 7 天 ✓（同目录、不上传 ✓，和上面同一套规矩 ✓）。
+   ⚠️ 只在「当天还没有」时写 ✗ —— 每 5 分钟写一份的话 7 天就是两千份 ✗。
+   ⚠️ 快照取的是**改动前**的状态 ✓（在写盘之前调用 ✓）。 */
+const STORE_DAY_KEEP = 7;
+const STORE_DAY_RE = /^life-workbench\.day\.\d{4}-\d{2}-\d{2}\.json$/;
+function dailyStoreBackup(file) {
+  if (!fs.existsSync(file)) return;
+  const dir = path.dirname(file);
+  const d = new Date();
+  const day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    + '-' + String(d.getDate()).padStart(2, '0');
+  const cur = path.join(dir, 'life-workbench.day.' + day + '.json');
+  try { if (fs.existsSync(cur)) return; } catch (_) { return; }
+  try { fs.copyFileSync(file, cur); } catch (_) { return; }
+  try {
+    const all = fs.readdirSync(dir).filter((n) => STORE_DAY_RE.test(n)).sort();
+    all.slice(0, Math.max(0, all.length - STORE_DAY_KEEP))
+      .forEach((n) => { try { fs.unlinkSync(path.join(dir, n)); } catch (_) { } });
+  } catch (_) { }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ 凭据字段防覆盖 ✓（`POST /api/life/store` 用）
+   ══════════════════════════════════════════════════════════════════════════
+   ⚠️ 前端的存盘是**整份覆盖** ✗（`saveStore()` 直接 POST 整个 STORE ✓）——
+      所以**任何拿着旧副本的客户端**（另一个标签页 / 探针 / 脚本 ✓）
+      一写就会把「它不认识 / 它手上没有」的字段抹掉 ✗。
+
+   实测事故（2026-10-08）：微信读书的 API Key 就是这么丢的 ✗ ——
+   · 最后一次成功同步 00:06 ✓，中午发现时 `wereadKey` 已经空了 ✓
+   · 轮转备份只覆盖最近半小时 ✗ → **一个能恢复的版本都没有** ✗
+   · 用户看到的就是「之前能连上，现在怎么断开了」✓
+
+   → 规矩：**这几把钥匙不许被「没带它们的整份覆盖」抹掉** ✓。
+      真要删（用户点「断开微信读书」✓）就**显式声明**：
+      请求体里带 `__drop: ['wereadKey', ...]` ✓（见下面的处理 ✓）。
+
+   ⚠️ 为什么只护这几个字段 ✗，不干脆「整份合并」✗：
+      合并会让**合法的删除**全部失效 ✓（删一条备忘录、清空筛选、删一本书 ✓），
+      那是个大得多的坑 ✗。这里只护「丢了就得用户重新去官方页面申请一次」的东西 ✓。
+   ══════════════════════════════════════════════════════════════════════════ */
+const GUARDED_STORE_KEYS = ['wereadKey', 'wereadCookie', 'wereadVia', 'wereadSyncAt', 'wereadCount'];
+
 /* ══════════════════════════════════════════════════════════════════════════
    工作流「定时触发」的服务端排期 ✓
    ══════════════════════════════════════════════════════════════════════════
@@ -5106,6 +5154,22 @@ const server = http.createServer(async (req, res) => {
         try {
           const body = await readBody(req, 4 * 1024 * 1024);
           const next = body && typeof body === 'object' ? body : {};
+          /* ★★ 凭据防覆盖 ✓ —— 见 GUARDED_STORE_KEYS 上面那段注释 ✓。
+             ⚠️ 要删就显式带 `__drop: [...]` ✗ —— 不然「断开连接」也删不掉 ✓。
+             ⚠️ 判据是「**incoming 里没有**」✗，不是「incoming 里是空串」✗：
+                客户端主动清空时也会发空串 ✓，那种情况同样算「想删」✓，
+                但**没带这个字段**（旧副本 / 探针 ✓）就必须保住 ✓。 */
+          try {
+            const cur = read();
+            const drop = Array.isArray(next.__drop) ? next.__drop.map(String) : [];
+            GUARDED_STORE_KEYS.forEach((k) => {
+              if (drop.indexOf(k) >= 0) return;
+              if (Object.prototype.hasOwnProperty.call(next, k)) return;   /* 带了 → 尊重它 ✓ */
+              const old = cur[k];
+              if (old !== undefined && old !== null && old !== '') next[k] = old;
+            });
+          } catch (_) { }
+          delete next.__drop;      /* 这个标记只用于本次请求 ✗，不许落盘 ✗ */
           try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
           /* ★★ 写盘前先轮转一份快照 ✓ ——
              教训：备忘录内容被写串（bug 已修）时，**一个历史版本都没有** ✗，
@@ -5113,6 +5177,7 @@ const server = http.createServer(async (req, res) => {
              最多 5 分钟一份、保留 6 份（≈ 半小时窗口）✓，
              只存本机同目录（life-workbench.bak.0..5.json）✓，不外传 ✓。 */
           try { rotateStoreBackup(file); } catch (_) {}
+          try { dailyStoreBackup(file); } catch (_) {}
           fs.writeFileSync(file, JSON.stringify(next, null, 2));
           return send(res, 200, { ok: true });
         } catch (error) {

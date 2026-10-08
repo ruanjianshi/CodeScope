@@ -40,6 +40,10 @@ const put = async (d) => fetch(BASE + '/api/life/store', { method: 'POST', heade
      `waitForSelector('#lw-wrc')` 会白等 15 秒然后超时 ✗（实测踩过 ✗）。 */
   const resetConn = async () => {
     const d = await store();
+    /* ⚠️ 这里是**显式置空**（不是 `delete`）✗ —— 服务端会保住「整份覆盖里没带的」
+       凭据字段 ✓（`GUARDED_STORE_KEYS`，见 server.js ✓）；
+       `delete` 会被当成「这个客户端不知道有它」✗ → 原样保住 ✗ → 探针假失败 ✓。
+       带字段 + 空串 = 「我就是要清掉」✓，服务端认这个 ✓。 */
     d.wereadKey = ''; d.wereadCookie = ''; d.wereadVia = '';
     await put(d);
   };

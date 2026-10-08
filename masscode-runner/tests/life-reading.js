@@ -59,10 +59,24 @@ const WEREAD_SAMPLE = [
       key: d0.wereadKey || '', via: d0.wereadVia || '',
     };
     if (wrBackup.cookie || wrBackup.key || wrBackup.at || wrBackup.n) {
+      /* ⚠️⚠️ 必须带 `__drop` ✗✗ —— 服务端现在会**保住**凭据类字段 ✓
+         （防止「拿着旧副本的客户端整份覆盖」把它们抹掉 ✓，实测就是这么丢过一次 ✓，
+          见 server.js 的 GUARDED_STORE_KEYS ✓）。
+         **光 `delete` 字段是不够的** ✗ —— 那样服务端会当成「这个客户端不知道有它」✓
+         然后原样保住 ✗ → 第 ⑨ 节「未连接」的断言全都会假失败 ✗。
+         ⚠️ 要删就得**显式声明**：`__drop: [...]` ✓。 */
+      d0.__drop = ['wereadCookie', 'wereadKey', 'wereadVia', 'wereadSyncAt', 'wereadCount'];
       delete d0.wereadCookie; delete d0.wereadKey; delete d0.wereadVia;
       delete d0.wereadSyncAt; delete d0.wereadCount;
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d0) });
-      console.log('（探针临时摘掉了已连接的微信读书凭据 —— 跑完会原样放回去 ✓）');
+      /* ⚠️ 摘掉之后**立刻核一遍** ✗ —— 没摘干净的话，第 ⑨ 节会挂在一堆
+         看不懂的断言上 ✓（真实原因是「凭据还在」✓）。这里先点破 ✓。 */
+      const chk0 = await store();
+      if (String(chk0.wereadKey || '') || String(chk0.wereadCookie || '')) {
+        console.log('⚠️ 凭据没摘干净（key=' + JSON.stringify(chk0.wereadKey || '') + '）—— 第 ⑨ 节会因此假失败');
+      } else {
+        console.log('（探针临时摘掉了已连接的微信读书凭据 —— 跑完会原样放回去 ✓）');
+      }
     }
   } catch (_) {}
 
@@ -254,6 +268,22 @@ const WEREAD_SAMPLE = [
       }
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
       const a = await store();
+      /* ⚠️⚠️ 放回去之后**必须核一遍** ✗✗ —— 这条是 2026-10-08 那次事故的直接产物：
+         凭据被抹掉后**没有任何提示** ✓，用户到中午才发现「怎么断开了」✓，
+         而那时备份窗口已经滚过去了 ✗ → **根本恢复不了** ✗。
+         → 一旦没放回去，这里**立刻炸出来** ✓（比事后排查强一万倍 ✓）。 */
+      if (wrBackup && (wrBackup.cookie || wrBackup.key)) {
+        const okKey = String(a.wereadKey || '') === String(wrBackup.key || '');
+        const okCk = String(a.wereadCookie || '') === String(wrBackup.cookie || '');
+        if (!okKey || !okCk) {
+          console.log('❌❌ 凭据**没能放回去**！key ' + JSON.stringify(a.wereadKey || '') + ' / cookie '
+            + (a.wereadCookie ? '有' : '空') + ' —— 磁盘上今天的按天快照里还有一份，'
+            + '路径：~/Library/Application Support/CodeScope/life-workbench.day.<日期>.json');
+          fails.push('凭据没能放回去');
+        } else {
+          console.log('（凭据已核验放回 ✓）');
+        }
+      }
       console.log('\n收尾：书 ' + before.books + '→' + (a.books || []).length + ' · 笔记 ' + before.notes + '→' + (a.bookNotes || []).length + ' · 记录 ' + before.log + '→' + (a.readLog || []).length
         + ' | 剩下没清掉的探针书: ' + (a.books || []).filter((x) => String(x.title).includes(MARK)).length);
     } catch (e) { console.log('\n收尾失败（需手工检查）: ' + e.message); }
