@@ -696,11 +696,12 @@ function makeBookmarkButton(item, className) {
   const node = document.createElement('button');
   node.type = 'button'; node.className = className;
   node.style.setProperty('--site-color', item.color || '#4f8cff');
-  node.title = `在学习工作台打开 ${item.url}`;
+  node.title = `在学习工作台打开 ${item.url}（右键可改打开方式）`;
   const dot = document.createElement('i');
   const label = document.createElement('span'); label.textContent = item.label;
   node.append(dot, label);
-  node.onclick = () => openStudySite(item);
+  /* ★ 点一下直接打开 ✓、右键改打开方式 ✓（见 bindBookmarkOpen 那段注释 ✓）*/
+  bindBookmarkOpen(node, item);
   return node;
 }
 
@@ -709,6 +710,123 @@ function isBiliHome(item) {
     const url = new URL(item?.url || '');
     return (item?.id === 'bilibili' || /(^|\.)bilibili\.com$/i.test(url.hostname)) && !/^\/video\//i.test(url.pathname);
   } catch (_) { return item?.id === 'bilibili'; }
+}
+
+function bookmarkIndexOf(item) {
+  const key = normalizedUrl(item?.url || '');
+  return savedBookmarks().findIndex((entry) => normalizedUrl(entry.url) === key);
+}
+
+function setOpenMode(item, mode) {
+  const next = mode === 'external' ? 'external' : 'internal';
+  const entries = savedBookmarks();
+  const index = bookmarkIndexOf(item);
+  if (index >= 0) {
+    entries[index] = { ...entries[index], openMode: next };
+    appConfig.bookmarks = entries;
+  } else {
+    upsertBookmark({ ...item, openMode: next });
+  }
+  scheduleSave();
+  renderBookmarks();
+  return next;
+}
+
+/* ★★ 「这个网址该用哪种方式打开」✓ —— 记下来的优先 ✓，没记过给默认值 ✓。
+   ⚠️ 没记过时默认 **internal** ✗，交给 `openStudySite()` 自己判断 ✓ ——
+      它对 **B站首页**会开一个**可登录的一方窗口** ✓（面板里登不了 ✓），
+      别的走面板内的阅读视图 ✓。在这儿写死 external 的话 B站 那个窗口就没了 ✗。 */
+function openModeOf(item) {
+  const savedEntry = savedBookmarks().find((entry) => normalizedUrl(entry.url) === normalizedUrl(item?.url || ''));
+  const raw = savedEntry?.openMode || item?.openMode;
+  return raw === 'external' ? 'external' : 'internal';
+}
+
+/* ══ ★★★★ 点一下 = **直接打开** ✗✗，**右键**才出「打开方式」菜单 ✓ ═════════
+   ⚠️⚠️ 为什么不能「点一下就弹菜单」✗✗：那样**每一次**点都要先选一次 ✓ ——
+      而绝大多数时候用户就是想打开它 ✓（打开方式早就记下来了 ✓）。
+      实测：`tests/browser-smoke.js` 里「点 B站 → 应该弹出可登录的一方窗口」那条
+      就是被这个挡住的 ✗（点了只弹菜单 ✓，窗口一个都没开 ✗，看着像「B站打不开了」✗）。
+   ⚠️ 菜单仍然留着 ✓（**右键**打开 ✓）—— 想改打开方式的时候用 ✓；
+      而且选完会**记住** ✓（`setOpenMode` ✓），下次点一下就直接按它来 ✓。
+   ⚠️ ⌘ / Ctrl + 点击 = 直接外部打开 ✓（不想记进偏好的临时用法 ✓）。 */
+function bindBookmarkOpen(node, item) {
+  node.onclick = (event) => {
+    if (event.metaKey || event.ctrlKey) { externalOpen(item.url); return; }
+    if (openModeOf(item) === 'external') { externalOpen(item.url); return; }
+    openStudySite(item);
+  };
+  node.oncontextmenu = (event) => { event.preventDefault(); showOpenModeMenu(item, event); };
+}
+
+function openModeMenuKey(event) { if (event.key === 'Escape') closeOpenModeMenu(); }
+
+function openModeMenuOutside(event) { if (!event.target?.closest?.('.cs-open-mode-menu')) closeOpenModeMenu(); }
+
+function closeOpenModeMenu() {
+  for (const node of document.querySelectorAll('.cs-open-mode-menu')) node.remove();
+  document.removeEventListener('keydown', openModeMenuKey, true);
+  document.removeEventListener('pointerdown', openModeMenuOutside, true);
+}
+
+// 常用网址点击：让用户明确选择「内部打开（面板内）」还是「外部打开（系统浏览器）」
+function showOpenModeMenu(item, event) {
+  closeOpenModeMenu();
+  const savedEntry = savedBookmarks().find((entry) => normalizedUrl(entry.url) === normalizedUrl(item?.url || ''));
+  const current = (savedEntry?.openMode || item?.openMode) === 'external' ? 'external' : 'internal';
+  const menu = document.createElement('div');
+  menu.className = 'cs-open-mode-menu';
+  menu.setAttribute('role', 'menu');
+  menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:196px;padding:6px;border-radius:12px;'
+    + 'background:rgba(20,24,34,.97);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 48px rgba(0,0,0,.45);'
+    + 'font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#e8ecf4;backdrop-filter:blur(10px);'
+    + 'text-align:left;';
+  const title = document.createElement('div');
+  title.textContent = item?.label || '打开方式';
+  title.style.cssText = 'padding:4px 10px 6px;font-size:11px;letter-spacing:.04em;color:#93a0b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;';
+  menu.append(title);
+  const rows = [
+    ['internal', '◆ 内部打开', '在 CodeScope 面板里查看', () => openStudySite(item)],
+    ['external', '↗ 外部打开', '用系统默认浏览器新标签页打开', () => externalOpen(item.url)],
+  ];
+  for (const [mode, text, hint, run] of rows) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.setAttribute('role', 'menuitem');
+    row.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:8px;cursor:pointer;'
+      + (mode === current ? 'background:rgba(79,140,255,.18);color:#fff;' : 'background:transparent;color:#dbe3f0;');
+    const strong = document.createElement('span');
+    strong.textContent = text + (mode === current ? '（上次选择）' : '');
+    strong.style.cssText = 'display:block;font-weight:600;';
+    const small = document.createElement('small');
+    small.textContent = hint;
+    small.style.cssText = 'display:block;margin-top:2px;font-size:11px;color:#8e9ab0;';
+    row.append(strong, small);
+    row.onmouseenter = () => { row.style.background = 'rgba(255,255,255,.08)'; };
+    row.onmouseleave = () => { row.style.background = mode === current ? 'rgba(79,140,255,.18)' : 'transparent'; };
+    row.onclick = (clickEvent) => {
+      clickEvent.stopPropagation();
+      closeOpenModeMenu();
+      setOpenMode(item, mode);
+      run();
+    };
+    menu.append(row);
+  }
+  const hintRow = document.createElement('div');
+  hintRow.textContent = '选一次就记住了 —— 以后点一下直接按它打开（右键随时改）';
+  hintRow.style.cssText = 'padding:6px 10px 2px;font-size:11px;color:#7f8ba1;border-top:1px solid rgba(255,255,255,.08);margin-top:4px;';
+  menu.append(hintRow);
+  document.body.append(menu);
+  const rect = event?.currentTarget?.getBoundingClientRect?.() || { left: event?.clientX || 0, bottom: (event?.clientY || 0) + 4 };
+  const width = menu.offsetWidth || 200, height = menu.offsetHeight || 120;
+  const left = Math.max(8, Math.min((rect.left || 0) + 0, window.innerWidth - width - 8));
+  const top = Math.max(8, Math.min((rect.bottom || 0) + 6, window.innerHeight - height - 8));
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  setTimeout(() => {
+    document.addEventListener('keydown', openModeMenuKey, true);
+    document.addEventListener('pointerdown', openModeMenuOutside, true);
+  }, 0);
 }
 
 function openStudySite(item) {
@@ -741,6 +859,7 @@ function upsertBookmark(item, category) {
     url:cleanUrl(item.url),
     color:item.color || existing?.color || '#4f8cff',
     category:category || item.category || existing?.category || 'custom',
+    openMode:item.openMode || existing?.openMode || 'internal',
   };
   appConfig.bookmarks = [...savedBookmarks().filter((entry) => normalizedUrl(entry.url) !== key), record];
   appConfig.hiddenSites = (appConfig.hiddenSites || []).filter((url) => normalizedUrl(url) !== key);
@@ -794,7 +913,7 @@ function renderSiteMenu() {
   for (const item of visible) {
     const node = document.createElement('div'); node.className = 'quick-site'; node.setAttribute('role', 'button'); node.tabIndex = 0;
     node.style.setProperty('--site-color', item.color || item.categoryColor || active.color || '#4f8cff');
-    node.title = `在学习工作台打开 ${item.url}`;
+    node.title = `在学习工作台打开 ${item.url}（右键可改打开方式）`;
     const dot = document.createElement('i');
     const copy = document.createElement('span'); copy.className = 'quick-site-copy';
     const title = document.createElement('strong'); title.textContent = item.label;
@@ -804,7 +923,8 @@ function renderSiteMenu() {
     const manage = document.createElement('button'); manage.type = 'button'; manage.className = 'quick-site-manage'; manage.textContent = '⋯'; manage.title = `编辑或移动“${item.label}”`;
     manage.onclick = (event) => { event.stopPropagation(); openBookmarkDialog(item); };
     node.append(dot, copy, manage);
-    node.onclick = () => openStudySite(item);
+    /* ★ 同上：点一下直接打开 ✓、右键改打开方式 ✓（那个 `⋯` 是编辑网址 ✓，两回事 ✓）*/
+    bindBookmarkOpen(node, item);
     node.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudySite(item); } };
     node.draggable = true;
     node.ondragstart = (event) => { draggingSite = item; node.classList.add('dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.url); };

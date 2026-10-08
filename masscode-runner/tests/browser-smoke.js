@@ -268,6 +268,28 @@ print(r.run())
   browser=await chromium.launch({headless:true,executablePath,args:['--disable-gpu']});
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(String(error.message||error)));
+  /* ══ ★★★★ 页内浮层版「提问 / 确认」✗✗ ═══════════════════════════════════
+     ⚠️⚠️ 这个项目**禁用原生弹窗** ✗✗ ——
+        `window.prompt / confirm / alert` 在应用里**一个都没有** ✓（实测 grep 为 0 ✓），
+        全换成了页内浮层 `lwAsk` / `lwConfirm` ✓（id：`#lw-dlg-in` / `#lw-dlg-ok` ✓）。
+     → 探针**不能再等 `page.on('dialog')`** ✗✗（那个事件永远不触发 ✓）→
+        点击变成**空操作** ✓ → 后面的断言报「新建的文件夹没出现」✓，
+        看着像**功能坏了** ✗，其实是探针过期了 ✓。
+     ⚠️ 实测：这个文件里原来有 **3 处**还在等原生弹窗 ✓，全都过期了 ✗
+        （`#lw-nt-addfol` / `#lw-ml-newbox` / `[data-mboxdel]` ✓）。
+     ⚠️ 而且它们一直**没被发现** ✗ —— 因为这条链**前面**早就断了 ✓
+        （`.study-browser` 那条 ✗），根本走不到这儿 ✓。 */
+  const lwAskType=async(value)=>{
+    await page.waitForSelector('#lw-dlg-in',{timeout:10000});
+    await page.locator('#lw-dlg-in').fill(value);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(900);
+  };
+  const lwConfirmOk=async()=>{
+    await page.waitForSelector('#lw-dlg-ok',{timeout:10000});
+    await page.locator('#lw-dlg-ok').click();
+    await page.waitForTimeout(900);
+  };
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
   await page.route('**/api/study/readable?*',route=>{const requestUrl=new URL(route.request().url()),target=requestUrl.searchParams.get('url')||'';const chapter=target.includes('chapter-2');route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:chapter?'https://docs.example.test/chapter-2.html':'https://docs.example.test/start.html',title:chapter?'第二章':'学习网页',html:chapter?'<main><h1>第二章内容</h1><p>阅读视图内导航成功。</p></main>':'<main><h1>学习网页正文</h1><p>公网网址已通过站内阅读视图载入。</p></main>',navigationHtml:'<ol><li><a href="start.html">首页</a></li><li><a href="chapter-2.html">第二章</a></li></ol>',navigationUrl:'https://docs.example.test/toc.html'})});});
   // 注意：传给 waitForFunction 的函数会被序列化到页面里执行，外部变量必须用参数传入。
@@ -791,19 +813,22 @@ print(r.run())
   if (await page.locator('#lw-moodpick').count() !== 0) throw new Error('选完心情后浮层没收起');
   const moodStored = ((await (await fetch(baseUrl + '/api/life/store', { cache: 'no-store' })).json()).data || {}).mood;
   if (!moodStored || moodStored.e !== '🔥') throw new Error('心情没存进 STORE（刷新就丢）：' + JSON.stringify(moodStored));
-  /* ★ 格言「换一句」能换，而且**切页签回来还是同一句** ✓
-     （同一天内必须稳定 ✗ —— 每次 render 都换一句的话眼睛都花了 ✗）*/
+  /* ★ 格言**同一天内必须稳定** ✓ —— 切页签回来还是同一句 ✓
+     （每次 render 都换一句的话眼睛都花了 ✗）。
+     ⚠️⚠️ 原来这里还先点过一个 `#lw-quote-next`（「换一句」按钮 ✗）——
+        那个按钮**早就删掉了** ✗（改成每 20 秒自动轮换 ✓，见 `QUOTE_EVERY_MS` ✓），
+        而这条断言一直卡在它前面（`.study-browser` ✗）→ **没人发现它已经过期** ✗。
+        → 只留「稳定性」这一条 ✓（那才是真正要守的不变量 ✓）。
+     ⚠️ 自动轮换是 **20 秒**一次 ✓，而这里来回切页签只花 ~1.5 秒 ✓ →
+        不会撞上 ✓（真撞上说明机器卡了 20 秒以上，那本来也该红 ✓）。 */
   const q0 = (await page.locator('.lw-strip .q .tx').innerText()).trim();
-  await page.locator('#lw-quote-next').click();
-  await page.waitForTimeout(800);
-  const q1 = (await page.locator('.lw-strip .q .tx').innerText()).trim();
-  if (q0 === q1) throw new Error('点了「换一句」格言没变');
+  if (!q0) throw new Error('格言条没渲染出格言');
   await page.locator('.lw-nav [data-tab="memo"]').dispatchEvent('click');
   await page.waitForTimeout(600);
   await page.locator('.lw-nav [data-tab="today"]').dispatchEvent('click');
   await page.waitForTimeout(800);
   const q2 = (await page.locator('.lw-strip .q .tx').innerText()).trim();
-  if (q2 !== q1) throw new Error('★ 切页签回来格言变了（同一天内必须稳定）：' + q2.slice(0, 20) + ' ≠ ' + q1.slice(0, 20));
+  if (q2 !== q0) throw new Error('★ 切页签回来格言变了（同一天内必须稳定）：' + q0.slice(0, 20) + ' ≠ ' + q2.slice(0, 20));
   /* ★ 今日状态三项 ✓（临时库是空的 → 0 待办 / 0 连续 / 未写日记 ✓）*/
   const stripSt = (await page.locator('.lw-strip .st').innerText()).replace(/\n/g, ' ');
   if (!/待办/.test(stripSt) || !/连续/.test(stripSt) || !/今日日记/.test(stripSt)) {
@@ -1068,9 +1093,9 @@ print(r.run())
      现在「点文件夹 = 我要看这个文件夹」→ 顺带切回文件夹视图 ✓。
      ⚠️ 文件夹名不要写死 ✗（测试环境的 STORE.memoFolders 不一定有哪几个），
         直接新建一个空文件夹来当靶子 ✓ 最确定。 */
-  page.once('dialog', (d) => d.accept('空文件夹'));
+  /* ⚠️ 走**页内浮层** ✗，不是原生 prompt ✗（见文件上面那段注释 ✓）*/
   await page.locator('#lw-nt-addfol').click();
-  await page.waitForTimeout(900);
+  await lwAskType('空文件夹');
   const emptyFol = '空文件夹';
   if (await folderCount(emptyFol) !== 0) throw new Error('新建的空文件夹计数应为 0，实际 ' + (await folderCount(emptyFol)));
   /* 新建后应当自动跳到这个新文件夹（也是文件夹视图） */
@@ -1174,9 +1199,15 @@ print(r.run())
   await page.keyboard.press(process.platform==='darwin'?'Meta+z':'Control+z');
   await page.waitForTimeout(1000);
   if((await memoState()).行数!==beforeDel)throw new Error('⌘Z 没能把删除撤销回来');
-  /* 工作台开着时打开环境检测 —— 右侧抽屉必须浮在工作台之上。
-     （三个抽屉的入口都是**始终可见的顶栏按钮**，面板开着时顶栏还在；
-       抽屉 z-index 若低于工作台的全屏浮层，用户点了按钮什么都看不见 ✗ —— 用户反馈过。） */
+  /* 打开环境检测（右侧抽屉）——
+     ⚠️⚠️ 这里原来写着「工作台开着时打开环境检测，抽屉必须浮在工作台之上」✗，
+        那个前提**已经不成立**了 ✗：个人管理面板有一条「走开」逻辑 ✓
+        （`LW_AWAY_CLICK` ✓：点顶栏的 `#header-center` / `.header-action` 就 `hidePanelView()` ✓），
+        而 `#btn-env` 正是顶栏按钮 ✓ → **点它就把工作台收起来了** ✓。
+     ⚠️ 所以下面两条断言现在实际测的是「环境检测自己能不能打开」✓，
+        **不再是**「浮在工作台之上」✗ —— 工作台已经不在了 ✓。
+        这是个「看着还在测、其实已经测不到」的**恒真断言** ✗，记在这儿别再照老注释理解 ✓。
+     ⚠️ 而**后面**（邮箱那一段）要接着用工作台 ✗ → 得**重新打开** ✓（见下面 ✓）。 */
   await page.locator('#btn-env').click();
   await page.locator('#env-panel.open').waitFor({state:'visible',timeout:10000});
   await page.waitForTimeout(700);
@@ -1202,6 +1233,15 @@ print(r.run())
     body: JSON.stringify({ accounts: { gmail: { user: 'browser-test@gmail.com', host: 'smtp.gmail.com', port: '465', imapHost: 'imap.gmail.com', imapPort: '993', pass: 'app-password' } } }),
   });
   if (!mailSeed.ok) throw new Error('准备邮箱测试配置失败：HTTP ' + mailSeed.status);
+  /* ⚠️⚠️ 工作台在上面那次「点顶栏按钮」时被**自动收起来**了 ✗（见那一段的注释 ✓）→
+     这里要**重新打开** ✓，不然 `[data-tab="mail"]` 根本不在页面上 ✗
+     （实测：诊断打印 `lifework:false` ✓，然后等 30 秒超时 ✓，
+      看着像「邮箱页签没了」✗，其实是**工作台关着** ✓）。 */
+  if (!await page.locator('#lifework-view').count()) {
+    await page.locator('#btn-lifework').click();
+    await page.locator('#lifework-view').waitFor({state:'visible',timeout:20000});
+    await page.waitForTimeout(600);
+  }
   await page.locator('[data-tab="mail"]').click();
   await page.waitForTimeout(2000);
   /* ⚠️ 邮箱页现在默认是**收件箱** ✓，配置字段收在可折叠的「⚙ 账号配置」里 ✓ ——
@@ -1709,10 +1749,9 @@ print(r.run())
   await page.locator('[data-mbox="INBOX"]').click();
   await page.waitForTimeout(900);
   MAIL_STUB.moves.length = 0; MAIL_STUB.newboxes.length = 0; MAIL_STUB.delboxes.length = 0;
-  /* ① 新建分类（走真实 prompt ✓）*/
-  page.once('dialog', (d) => d.accept('桩分类'));
+  /* ① 新建分类（走**页内浮层** ✓，不是原生 prompt ✗）*/
   await page.locator('#lw-ml-newbox').click();
-  await page.waitForTimeout(1000);
+  await lwAskType('桩分类');
   if (MAIL_STUB.newboxes.length !== 1) throw new Error('「＋ 新建文件夹」没发 newbox 请求（发了 ' + MAIL_STUB.newboxes.length + ' 个）');
   if (MAIL_STUB.newboxes[0].name !== '桩分类') throw new Error('新建的文件夹名不对：' + MAIL_STUB.newboxes[0].name);
   if (await page.locator('[data-mbox="桩分类"]').count() !== 1) throw new Error('新建的分类没出现在左栏');
@@ -1788,10 +1827,9 @@ print(r.run())
   if (!/已移回/.test(await page.locator('#lw-sub').innerText())) {
     throw new Error('撤销后状态栏没提示「已移回」：' + await page.locator('#lw-sub').innerText());
   }
-  /* ⑥ 删掉这个空分类 ✓ */
-  page.once('dialog', (d) => d.accept());
+  /* ⑥ 删掉这个空分类 ✓（同样是**页内浮层** ✓，不是原生 confirm ✗）*/
   await page.locator('[data-mboxdel="桩分类"]').click({ force: true });
-  await page.waitForTimeout(1000);
+  await lwConfirmOk();
   if (MAIL_STUB.delboxes.length !== 1 || MAIL_STUB.delboxes[0].name !== '桩分类') {
     throw new Error('删文件夹请求不对：' + JSON.stringify(MAIL_STUB.delboxes));
   }
