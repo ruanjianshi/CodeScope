@@ -1724,22 +1724,26 @@
         而且用户**没有任何办法**调整 ✗。
      ⚠️ 没拖过时用 44% ✓（flex:0 0 44% ✓），拖过之后由 JS 写 height ✓
         （写了 height 就同时要 flex:none ✗，不然 flex-basis 会打架 ✗）。 */
-  .lw-ep-panel { flex:0 0 44%; min-height:0; overflow:hidden; border-top:2px solid ${T.lineDim};
-    background:${T.card}; display:flex; }
-  /* ★★ 下半部分**分成左右两栏** ✗ —— 用户原话：
-     「单词查询和记忆的、该原文加入加单词本的，给我放到右边，类似，左边原文，
-       右边所查询和加入单词本的单词」✓。
-     → **左栏 = 原文**（句子 / 操作 / 译文 / 拆解 / 笔记 ✓）
-       **右栏 = 查词**（加生词 / 词卡 / 这句里的生词 ✓）。
-     ⚠️ 两栏**各自滚** ✗（不是整块一起滚 ✓）——
-        左栏长（拆解 + 笔记）的时候，右栏的词卡**还得在视野里** ✓，
-        整块滚的话词卡会被顶出去 ✗（那用户又得来回滚 ✗）。
-     ⚠️ 所以 .lw-ep-panel 从 overflow:auto 改成 overflow:hidden ✗ ——
-        滚动交给两栏自己 ✓（外面再套一层滚动的话，两栏高度就跟着最长那栏走了 ✗）。 */
-  .lw-ep-col { flex:1 1 0; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; padding-bottom:14px; }
-  /* 左栏稍宽一点 ✓ —— 句子 + 译文 + 拆解都要横向空间 ✓；右栏（词卡）窄点够用 ✓ */
-  .lw-ep-col-a { flex:1.25 1 0; }
-  .lw-ep-col-b { flex:1 1 0; min-width:230px; border-left:1px solid ${T.lineDim}; }
+  /* ★★ 上半部分**左右两栏**（左正文 / 右查词）+ 下半部分**通栏**（句子详情）✗✗ ——
+     用户原话：「上面两栏，下面一栏」✓，配合前一句
+     「左边原文，右边所查询和加入单词本的单词」✓。
+
+     ⚠️ 我第一版搞反了 ✗ —— 把查词放在了**句子面板**的右边 ✓
+        （＝上面一栏、下面两栏 ✓），用户否掉了 ✓。
+        正确的读法是：**查词要挨着正文** ✓ —— 一边读一边看词卡 ✓，
+        不用先往下滚到句子面板再找 ✓。
+
+     结构（⚠️ 这里不许用代码围栏 ✗ —— CSS 装在 JS 模板串里 ✓，围栏那三个反引号会把串截断 ✓）：
+       .lw-ep-top    上：flex 行
+         .lw-ep-body   左：正文（flex:1 ✓ 自带 overflow:auto ✓）
+         .lw-ep-side   右：查词 / 加生词 / 词卡 / 本篇生词（固定宽 ✓ 可拖 ✓）
+       .lw-ep-grip   上下拖拽条
+       .lw-ep-panel  下：句子详情（通栏 ✓） */
+  .lw-ep-top { flex:1; min-height:0; display:flex; }
+  .lw-ep-side { flex:none; width:260px; min-height:0; overflow-y:auto; overflow-x:hidden;
+    border-left:1px solid ${T.lineDim}; background:${T.card}; padding-bottom:14px; }
+  .lw-ep-panel { flex:0 0 44%; min-height:0; overflow:auto; border-top:2px solid ${T.lineDim};
+    background:${T.card}; padding-bottom:14px; }
   /* ★ 上下拖拽条 ✓ —— 和左右那条（.lw-pgrip）一个思路 ✓，只是方向转了 90° ✓。
      ⚠️ 热区给 8px 高 ✗（看着只有 2px ✗）—— 太细抓不住 ✗，
         而它平时是**看不见**的 ✓，hover / 拖动时才亮 ✓。 */
@@ -3327,7 +3331,11 @@
           return { x: ev.clientX, w: target.getBoundingClientRect().width };
         },
         move: (ev, sess) => {
-          const w = Math.max(sp.min, Math.min(sp.max, sess.w + (ev.clientX - sess.x)));
+          /* ⚠️ `dir`：目标栏在拖拽条的**右边**时（外刊精读的「查词」栏 ✓），
+             往右拖 = **变窄** ✗ —— 不加这个的话手感完全颠倒 ✓
+             （往右拖它反而变宽 ✓，因为默认假设目标在**左边** ✓）。 */
+          const dir = sp.dir === -1 ? -1 : 1;
+          const w = Math.max(sp.min, Math.min(sp.max, sess.w + dir * (ev.clientX - sess.x)));
           target.style.width = Math.round(w) + 'px';
           target.style.flex = 'none';
         },
@@ -9946,18 +9954,19 @@
     const tmp = document.createElement('div');
     tmp.innerHTML = '<div class="lw-ep-panel" id="lw-ep-panel">' + epSentPanelHtml(a, s) + '</div>';
     const next = tmp.firstElementChild;
-    /* ⚠️ 面板**自己也会滚** ✗ —— 换内容时把滚动位置也带上 ✓，
+    /* ⚠️ 面板**自己会滚** ✗ —— 换内容时把滚动位置也带上 ✓，
        不然选下面那些句子时面板会跳回顶部 ✗。 */
     next.scrollTop = old.scrollTop;
-    /* ★★ 现在是**两栏各自滚** ✗（见 .lw-ep-col 的注释 ✓）——
-       面板自己的 scrollTop 恒为 0 了 ✓，真正要带的是**每栏各自的** ✓。
-       漏了这一步的话：拆解跑完重画 → 左栏跳回顶部 ✗（用户刚看到一半的拆解没了 ✓），
-       而右栏的词卡也会跳回顶部 ✓ —— 正是「只重画一小块」想避免的那种抖动 ✗。 */
-    const oldCols = Array.prototype.map.call(old.querySelectorAll('.lw-ep-col'), (c) => c.scrollTop);
-    Array.prototype.forEach.call(next.querySelectorAll('.lw-ep-col'), (c, i) => {
-      if (oldCols[i] != null) c.scrollTop = oldCols[i];
-    });
     old.replaceWith(next);
+    /* ★★ 右栏那两块也要跟着换 ✗ —— 划词 / 加词之后词卡和「本篇的生词」都得更新 ✓。
+       ⚠️ 只换 `#lw-ep-peek` 和 `#lw-ep-sidewords` 这两个容器 ✗✗，
+          **不重画整栏** ✓ —— 整栏重画会把「加生词」那个**输入框重建** ✗
+          （失焦 + 用户刚打的字没了 ✓，这个项目在备忘录 / 摘录上都栽过 ✓）。 */
+    const peek = host.querySelector('#lw-ep-peek');
+    if (peek) peek.innerHTML = epWordPeekHtml();
+    const sw = host.querySelector('#lw-ep-sidewords');
+    if (sw) sw.innerHTML = epSideWordsHtml(a, s);
+    epBindSide(host);
     /* 句子上的「选中」高亮 ✓ —— 只改 class ✓，一个节点都不重建 ✓（选区才活得下来 ✓） */
     host.querySelectorAll('[data-epsent]').forEach((el) => {
       const i = Number(el.dataset.epsent);
@@ -10239,7 +10248,9 @@
       }
     });
     if (cur >= 0) body += '</p>';
-    return '<div class="lw-ep-body' + (trOn ? ' tr' : '') + '" id="lw-ep-body">'
+    /* ★★ 上面两栏 ✗ —— 左正文 / 右查词 ✓（用户原话「上面两栏，下面一栏」✓）。 */
+    return '<div class="lw-ep-top">'
+      + '<div class="lw-ep-body' + (trOn ? ' tr' : '') + '" id="lw-ep-body">'
       + '<div class="hd"><h2>' + esc(a.title || '未命名') + '</h2>'
       + '<div class="mt">'
       + (a.site ? '<span>' + esc(a.site) + '</span>' : '')
@@ -10267,21 +10278,22 @@
       + '<div class="bd">' + (sents.length ? body
         : '<div class="lw-rd-empty" style="position:static">这篇没抽出正文 ✗</div>') + '</div>'
       + '</div>'
-      /* ★ 上下拖拽条 ✓ —— 放在正文和面板**中间** ✓（见 CSS 里 .lw-ep-grip ✓）。 */
+      /* 查词栏的左右拖拽条 ✓（`dir:-1` = 目标在**右边** ✓，见 bindPaneGrips ✓）*/
+      + paneGrip('epside')
+      + '<div class="lw-ep-side" id="lw-ep-side"' + paneW('epSideW', 200) + '>' + epLookSideHtml(a, s) + '</div>'
+      + '</div>'
+      /* ★ 上下拖拽条 ✓ —— 放在上面两栏和句子面板**中间** ✓（见 CSS 里 .lw-ep-grip ✓）。 */
       + '<div class="lw-ep-grip" data-epgrip="1" title="上下拖动调整高度；双击恢复默认"></div>'
       + '<div class="lw-ep-panel" id="lw-ep-panel">' + epSentPanelHtml(a, s) + '</div>';
   }
   function epSentPanelHtml(a, s) {
     const idx = EP_UI.sel;
     const notes = epNotesOf(a.id).filter((n) => Number(n.sent) === idx);
-    const have = s ? epWords().filter((w) => new RegExp('(^|[^A-Za-z])' + w.w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(s.text)) : [];
     const head = '<div class="lw-rd-hd">第 ' + (idx + 1) + ' 句 / 共 ' + epSents(a).length + ' 句</div>';
     if (!s) {
-      return '<div class="lw-ep-col lw-ep-col-a">'
-        + '<div class="lw-rd-hd">句子</div>'
+      return '<div class="lw-rd-hd">句子</div>'
         + '<div class="lw-rd-empty" style="position:static;padding:30px 14px">'
-        + '点中间任意一句话<br><span style="color:' + T.faint + '">选中后就能朗读、划词、加生词、拆解句子</span></div>'
-        + '</div>';
+        + '点中间任意一句话<br><span style="color:' + T.faint + '">选中后就能朗读、划词、加生词、拆解句子</span></div>';
     }
     const words = EN ? EN.tokenizeWords(s.text, { minLen: 1 }) : [];
     const lv = EN ? EN.levelOf(s.text) : '';
@@ -10295,10 +10307,10 @@
     const trOne = EP_UI.trOne === idx + 1;
     const an = epAnOf(a, idx);
     const anBusy = EP_UI.anBusy === idx + 1;
-    /* ══ 左栏：**原文** ✓（用户原话：「左边原文」✓）════════════════════════
-       句子 + 操作 + 译文 + 🧩 拆解 + 笔记 ✓ —— 都是「围着这一句读」的东西 ✓。 */
-    const left = '<div class="lw-ep-col lw-ep-col-a">'
-      + head
+    /* ══ 下面一栏：**句子详情**（通栏 ✓）══════════════════════════════════
+       用户原话：「上面两栏，下面一栏」✓ —— 查词已经挪到上面正文的右边了 ✓，
+       这里就只放「围着这一句读」的东西 ✓：句子 / 操作 / 译文 / 🧩 拆解 / 笔记 ✓。 */
+    return head
       /* ★ 这句**也要能划词** ✗ —— 用户原话：「划词不单单只有原文可以划词，
          选中的句子显示在下面的，也应该支持划词」✓。
          → 用和正文**同一个** `epMarkWords()` ✓（已加的词同样标出来 ✓），
@@ -10328,33 +10340,100 @@
       + '<div class="lw-rd-hd">这句的笔记</div>'
       + notes.map((n) => '<div class="lw-note k-quote"><div class="tx">' + esc(n.text) + '</div>'
         + '<div class="ft"><span class="x" data-epnotedel="' + esc(n.id) + '">✕</span></div></div>').join('')
-      + '<div class="lw-ep-add"><input id="lw-ep-note" placeholder="给这句写点笔记…"/><button id="lw-ep-notebtn">＋</button></div>'
-      + '</div>';
-    /* ══ 右栏：**查词 / 加单词本** ✓（用户原话：「右边所查询和加入单词本的单词」✓）
-       ⚠️ 原来是**竖着堆在句子下面** ✗ —— 句子一长（还有译文 + 笔记 ✓），
-          词卡就被顶到看不见的地方 ✓，划完词还得往下滚才看得到 ✓。
-          并排放之后：划词 → 右边立刻出现词卡 ✓，眼睛不用上下找 ✓。 */
-    const right = '<div class="lw-ep-col lw-ep-col-b">'
-      + '<div class="lw-rd-hd">加生词</div>'
+      + '<div class="lw-ep-add"><input id="lw-ep-note" placeholder="给这句写点笔记…"/><button id="lw-ep-notebtn">＋</button></div>';
+  }
+  /* ══ 上面两栏的**右栏：查词 / 加单词本** ✓ ═══════════════════════════════
+     用户原话：「上面两栏，下面一栏」+「右边所查询和加入单词本的单词」✓。
+
+     里面四块 ✓：
+       ① 加生词（输入框 + ＋ 加 ✓）
+       ② 划中提示 ✓
+       ③ **词卡**（`#lw-ep-peek` ✓，划中 / 点中的词自动查好显示 ✓）
+       ④ **本篇已加入的生词**（`#lw-ep-sidewords` ✓）——
+          用户原话：「原文中已经加入了的单词，需要显示」✓。
+          ⚠️ 原来只有「**这一句**里的生词」✗ —— 通篇加过哪些词根本看不到 ✓，
+             读到后面想回顾一下都没地方看 ✓。
+
+     ⚠️ ③④ 两个容器**单独留 id** ✗ —— 划词 / 加词之后只重画这两块 ✓，
+        不重画整栏 ✓：整栏重画会把「加生词」那个**输入框重建** ✓ → 失焦 + 内容丢 ✗。 */
+  function epLookSideHtml(a, s) {
+    return '<div class="lw-rd-hd">加生词</div>'
       + '<div class="lw-ep-add">'
       + '<input id="lw-ep-new" placeholder="划一个词，或手打…" value="' + esc(EP_UI.pick) + '"/>'
       + '<button id="lw-ep-addbtn" title="加进生词本（回车也行）">＋ 加</button>'
       + '</div>'
       + '<div class="lw-ep-tip" id="lw-ep-newtip">' + (EP_UI.pick
         ? '划中的是「' + esc(EP_UI.pick) + '」✓ 回车直接加'
-        : '用鼠标在正文里（或左边那句里）划一个词，这里会自动填上 ✓') + '</div>'
+        : '用鼠标在正文里（或下面那句里）划一个词，这里会自动填上 ✓') + '</div>'
       /* ★★ 词卡 ✓ —— 用户原话：「还有下面这种音标和词义，不应该需要我来填写，去掉。
          应该和查词一样，显示给我」✓。
          → 两个手填输入框**删掉** ✗，改成这一块：划中 / 点中的词，
            音标 / 词性 / 释义 / 例句 / 巧记 **自动查好显示出来** ✓
            （没配 AI 就说实话 ✓，加了词就自动补全 ✓）。 */
       + '<div id="lw-ep-peek">' + epWordPeekHtml() + '</div>'
-      + (have.length ? '<div class="lw-rd-hd">这句里的生词</div>'
-        + have.map((w) => '<div class="lw-rd-row" data-epword="' + esc(w.id) + '">'
-          + '<span class="em">' + (SRS ? ({ fresh: '○', learning: '◐', young: '●', mature: '◉' }[SRS.stageOf(w)] || '○') : '○') + '</span>'
-          + esc(w.w) + '<span class="n">' + (w.def ? esc(String(w.def).slice(0, 8)) : '') + '</span></div>').join('') : '')
-      + '</div>';
-    return left + right;
+      + '<div id="lw-ep-sidewords">' + epSideWordsHtml(a, s) + '</div>';
+  }
+  /* ★★ 「本篇已加入的生词」✓ —— 用户原话：「原文中已经加入了的单词，需要显示」✓。
+     ⚠️ 点一行 = **在右边直接看它的词卡** ✗（不是跳去生词本 ✓）——
+        这里就是「查词」栏 ✓，跳走反而要来回切 ✓。
+        （生词本入口词卡上本来就有「📕 去生词本」✓，不用重复 ✓。）
+     ⚠️⚠️ 只留**这一份**列表 ✗✗ —— 原来还有个「这句里的生词」✓，
+        但「这句」本来就是「本篇」的子集 ✗ → 一篇只有一两个词时两份**一模一样** ✓
+        （实测截图里就是 ✓），用户会当成「重复的没用的东西」✗
+        （本项目的老毛病：两个控件结果相同 = 用户眼里的两个都没用 ✓）。
+        → 合成一份 ✓，**当前这句里有的**用一个小点标出来 ✓。 */
+  function epSideWordsHtml(a, s) {
+    if (!a) return '';
+    const list = epWords().filter((w) => w && w.artId === a.id);
+    const stage = (w) => (SRS ? ({ fresh: '○', learning: '◐', young: '●', mature: '◉' }[SRS.stageOf(w)] || '○') : '○');
+    const inSent = (w) => !!(s && new RegExp('(^|[^A-Za-z])' + w.w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(s.text));
+    if (!list.length) {
+      return '<div class="lw-rd-hd">本篇的生词</div>'
+        + '<div class="lw-ep-tip" style="padding:4px 14px 0">这篇还没加过词 ✓<br>'
+        + '在正文里划一个词 → 点「＋ 加」就会出现在这儿</div>';
+    }
+    const here = list.filter(inSent).length;
+    return '<div class="lw-rd-hd">本篇的生词 ' + list.length
+      + (here ? '（这句里 ' + here + '）' : '') + '</div>'
+      + list.map((w) => '<div class="lw-rd-row' + (EP_UI.peek === w.w ? ' on' : '') + '" data-epsideword="' + esc(w.id) + '" title="'
+        + (inSent(w) ? '这句里有它 · ' : '') + '点一下看它的词卡">'
+        + '<span class="em">' + (inSent(w) ? '●' : stage(w)) + '</span>' + esc(w.w)
+        + '<span class="n">' + (w.def ? esc(String(w.def).slice(0, 8)) : '缺释义') + '</span></div>').join('');
+  }
+  /* ★ 绑定「查词」栏里的按钮 ✓ —— 词卡上那几个 + 「本篇的生词」每一行 ✓。
+     ⚠️ **必须抽成一个函数** ✗（原来这套绑定只写在**划词**那一条路上 ✓）——
+        现在词卡会被好几处重画 ✓（重画面板 / 点生词行 / 划词 ✓），
+        抄成两三份必然漂移 ✓（这个项目在这上面栽过好几次 ✗）。
+     ⚠️ `innerHTML` 一换，里面按钮的 onclick 就全没了 ✗ ——
+        所以每次重画之后**都要重新调它** ✓。 */
+  function epBindSide(root) {
+    if (!root) return;
+    const on = (sel, fn) => { const el = root.querySelector(sel); if (el) el.onclick = fn; };
+    on('#lw-ep-peekadd', () => { const x = EP_UI.peek; if (x) { epWordAdd(x); EP_UI.pick = ''; } });
+    on('#lw-ep-peeksay', () => { const x = epWordOf(EP_UI.peek); spkSay(x ? x.w : EP_UI.peek); });
+    on('#lw-ep-peekenrich', () => { const x = epWordOf(EP_UI.peek); if (x) epWordEnrich(x, true); });
+    on('#lw-ep-peekgo', () => epGotoWordSource(epWordOf(EP_UI.peek)));
+    on('#lw-ep-peekopen', () => {
+      const x = epWordOf(EP_UI.peek);
+      if (x) EP_UI.wordSel = x.id;
+      epSetMode('word');
+    });
+    /* ★ 点「本篇的生词」里的一行 → **就在右边看它的词卡** ✗（不跳生词本 ✓）——
+       这一栏本来就是「查词」✓，跳走反而要来回切 ✓。 */
+    Array.prototype.forEach.call(root.querySelectorAll('[data-epsideword]'), (el) => {
+      el.onclick = () => {
+        const w = epWordById(el.dataset.epsideword);
+        if (!w) return;
+        EP_UI.peek = w.w; EP_UI.pick = w.w;
+        const peek = root.querySelector('#lw-ep-peek');
+        if (peek) peek.innerHTML = epWordPeekHtml();
+        epBindSide(root);
+        /* 选中态只改 class ✓（不重建 ✓，免得又把刚绑好的 onclick 冲掉 ✗）*/
+        Array.prototype.forEach.call(root.querySelectorAll('[data-epsideword]'), (x) => x.classList.toggle('on', x === el));
+        const inp = root.querySelector('#lw-ep-new');
+        if (inp) inp.value = w.w;
+      };
+    });
   }
   /* ══ 🧩 句子拆解（语法分析）✓ ═════════════════════════════════════════════
      用户原话：「对句子进行拆解和分析，类似用英语语法的方式进行分析句子」✓。
@@ -11511,23 +11590,9 @@
          只换那一个容器 ✓，然后**立刻把它的按钮重新绑上** ✓
          （`innerHTML` 一换，里面按钮的 onclick 就全没了 ✓ —— 这个坑这个项目踩过好几次 ✗）。 */
       const peek = host && host.querySelector('#lw-ep-peek');
-      if (peek) {
-        peek.innerHTML = epWordPeekHtml();
-        const pkAdd = peek.querySelector('#lw-ep-peekadd');
-        if (pkAdd) pkAdd.onclick = () => { const x = EP_UI.peek; if (x) { epWordAdd(x); EP_UI.pick = ''; } };
-        const pkSay = peek.querySelector('#lw-ep-peeksay');
-        if (pkSay) pkSay.onclick = () => { const x = epWordOf(EP_UI.peek); spkSay(x ? x.w : EP_UI.peek); };
-        const pkEn = peek.querySelector('#lw-ep-peekenrich');
-        if (pkEn) pkEn.onclick = () => { const x = epWordOf(EP_UI.peek); if (x) epWordEnrich(x, true); };
-        const pkGo = peek.querySelector('#lw-ep-peekgo');
-        if (pkGo) pkGo.onclick = () => epGotoWordSource(epWordOf(EP_UI.peek));
-        const pkOpen = peek.querySelector('#lw-ep-peekopen');
-        if (pkOpen) pkOpen.onclick = () => {
-          const x = epWordOf(EP_UI.peek);
-          if (x) EP_UI.wordSel = x.id;
-          epSetMode('word');
-        };
-      }
+      /* ⚠️ 绑定统一交给 `epBindSide()` ✗ —— 原来这一套是**内联抄在这里**的 ✓，
+         现在词卡还会被别处重画 ✓，抄两份必然漂移 ✓（见 epBindSide 的注释 ✓）。 */
+      if (peek) { peek.innerHTML = epWordPeekHtml(); epBindSide(host); }
       return true;
     } catch (_) { return false; }
   }
@@ -11816,6 +11881,11 @@
     });
     /* ★ 上下拖拽 ✓ —— 用户原话「上下窗口无法自由拖动」✓（原来是写死的 44% ✗）。 */
     bindRowGrip(host, '[data-epgrip]', '#lw-ep-panel', { key: 'epPanelH', min: 110, maxFrac: 0.84 });
+    /* ★ 查词栏的**左右拖拽** ✓ —— ⚠️ `dir:-1` ✗：目标在拖拽条**右边** ✓，
+       往右拖 = 变窄 ✓（不加这个手感完全颠倒 ✓，见 bindPaneGrips ✓）。 */
+    bindPaneGrips(host, [{ which: 'epside', target: '#lw-ep-side', key: 'epSideW', min: 200, max: 560, dir: -1 }]);
+    /* ★ 查词栏里那些按钮 ✓（词卡上的 + 「本篇的生词」每一行 ✓）*/
+    epBindSide(host);
     /* ★ 双语对照 ✓ —— 用户原话「怎么没有双语对应翻译」✓。
        ⚠️ 按钮是**两态**的 ✗：没译过 / 译过但收起了 → 点开（必要时先译 ✓）；
           已经展开 → 点一下收起 ✓（**不重新请求** ✓，译文还在文章上 ✓）。 */

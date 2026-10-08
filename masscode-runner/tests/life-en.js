@@ -136,12 +136,17 @@ function stripMine(d) {
       JSON.stringify({ ef: W.ef, step: W.step, ivl: W.ivl, due: Number(W.due) > 0 }));
     ck('★ 记下了来自哪篇文章', String(W.artTitle || '').includes(MARK), W.artTitle);
     /* ⚠️ 断言要挑**真的含这个词的那句** ✗ —— acceleration 在第 2 句里 ✗，
-       刚才是选中第 3 句时加的词 ✓，所以第 3 句的「这句里的生词」**本来就该是空的** ✓
+       刚才是选中第 3 句时加的词 ✓，所以第 3 句的列表**本来就该是空的** ✓
        （第一版拿第 3 句去断言，是**测错了**，不是代码错了 ✗）。 */
     await p.locator('[data-epsent="1"]').click(); await p.waitForTimeout(700);
-    ck('★ 切到含这个词的那句 → 右栏列出「这句里的生词」',
-      (await txt('.lw-ep-panel')).includes('这句里的生词'), (await txt('.lw-ep-panel')).slice(0, 90));
-    ck('  而且列的就是 acceleration', (await txt('.lw-ep-panel')).includes('acceleration'));
+    /* ⚠️⚠️ 列表**挪到右上查词栏**了 ✗（2026-10-08 布局改版：上两栏 / 下一栏 ✓），
+       而且「这句里的生词」和「本篇的生词」**合并成一份**了 ✓ ——
+       「这句」本来就是「本篇」的子集 ✓，一篇只有一两个词时两份**一模一样** ✗
+       → 判据跟着换 ✓：查词栏里的「本篇的生词 N（这句里 M）」✓。 */
+    const sideTxt = await txt('.lw-ep-side');
+    ck('★ 切到含这个词的那句 → 查词栏的「本篇的生词」标出它在这句里',
+      /本篇的生词/.test(sideTxt) && /这句里\s*\d/.test(sideTxt), sideTxt.slice(0, 120));
+    ck('  而且列的就是 acceleration', sideTxt.includes('acceleration'), sideTxt.slice(0, 120));
 
     console.log('\n── ⑦ 生词本三栏 ──');
     await p.locator('[data-rdmode="word"]').click(); await p.waitForTimeout(800);

@@ -425,38 +425,67 @@ const TEXT = SENT.join(' ');
     await p.unroute('**/api/ai/chat');
     await p.route('**/api/ai/chat', mockAi);
 
-    await diagArt('③f 开始'); console.log('\n── ③f ★★ 左原文 / 右查词 + 🧩 句子拆解 + **不再自动翻译**（2026-10-08 新需求）──');
+    await diagArt('③f 开始'); console.log('\n── ③f ★★ 上两栏（左正文 / 右查词）+ 下一栏（句子详情）+ 🧩 拆解 + **不自动翻译** ──');
     /* 用户原话：
-       ①「单词查询和记忆的、该原文加入加单词本的，给我放到右边，类似，
-          左边原文，右边所查询和加入单词本的单词」
+       ①「上面两栏，下面一栏」（配合「左边原文，右边所查询和加入单词本的单词」）
        ②「对句子进行拆解和分析，类似用英语语法的方式进行分析句子」
-       ③「默认情况下，无需自动翻译，我点击翻译，才翻译」 */
+       ③「默认情况下，无需自动翻译，我点击翻译，才翻译」
+       ④「原文中已经加入了的单词，需要显示」 */
     await p.locator('[data-epsent="0"]').click();
     await p.waitForTimeout(1200);
-    ck('★★ 下半部分分成**左右两栏**',
-      await p.locator('.lw-ep-col-a').count() === 1 && await p.locator('.lw-ep-col-b').count() === 1);
-    ck('★★ 左边是**原文**（句子 + 操作 + 笔记）',
-      await p.locator('.lw-ep-col-a #lw-ep-sent').count() === 1
-      && await p.locator('.lw-ep-col-a #lw-ep-say').count() === 1
-      && await p.locator('.lw-ep-col-a #lw-ep-note').count() === 1);
-    ck('★★ 右边是**查词 / 加单词本**（输入框 + 词卡）',
-      await p.locator('.lw-ep-col-b #lw-ep-new').count() === 1
-      && await p.locator('.lw-ep-col-b #lw-ep-peek').count() === 1);
-    /* ⚠️ 两栏**各自滚** ✗ —— 左栏长的时候右栏的词卡还得在视野里 ✓。
-       判据只能是量：两栏的 overflowY 都必须是 auto/scroll ✓。 */
-    const colOv = await p.evaluate(() => ['.lw-ep-col-a', '.lw-ep-col-b'].map((s) => {
-      const el = document.querySelector(s);
-      return el ? getComputedStyle(el).overflowY : '(没有)';
+    /* ★★ 结构：**上面两栏 / 下面一栏** ✗ —— 判据看**父子关系** ✓，
+       不能只看「这几个元素存在」✗（都在，但摆成上下堆叠也照样"存在" ✓）。 */
+    const shape = await p.evaluate(() => {
+      const top = document.querySelector('.lw-ep-top');
+      const panel = document.querySelector('#lw-ep-panel');
+      if (!top || !panel) return null;
+      return {
+        kids: [...top.children].map((e) => e.id || e.className),
+        panelAfterTop: !!(top.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING),
+        sideRightOfBody: (() => {
+          const b = document.querySelector('#lw-ep-body'); const d = document.querySelector('#lw-ep-side');
+          return !!(b && d) && d.getBoundingClientRect().left > b.getBoundingClientRect().left;
+        })(),
+      };
+    });
+    console.log('    结构: ' + JSON.stringify(shape));
+    ck('★★ 上面是一个**两栏容器**（正文 + 查词 + 中间拖拽条）',
+      !!shape && shape.kids.indexOf('lw-ep-body') >= 0 && shape.kids.indexOf('lw-ep-side') >= 0, JSON.stringify(shape && shape.kids));
+    ck('★★ 查词栏在正文**右边**（不是上下堆）', !!shape && shape.sideRightOfBody, JSON.stringify(shape));
+    ck('★★ 句子详情在**下面**（通栏）', !!shape && shape.panelAfterTop, JSON.stringify(shape));
+    ck('★★ 查词栏里三样都在：加生词 + 词卡 + 本篇的生词',
+      await p.locator('#lw-ep-side #lw-ep-new').count() === 1
+      && await p.locator('#lw-ep-side #lw-ep-peek').count() === 1
+      && await p.locator('#lw-ep-side #lw-ep-sidewords').count() === 1);
+    ck('★ 加生词输入框**已经挪出**句子面板（不再重复一份）',
+      await p.locator('#lw-ep-panel #lw-ep-new').count() === 0);
+    ck('★ 句子面板里有句子 / 操作 / 笔记',
+      await p.locator('#lw-ep-panel #lw-ep-sent').count() === 1
+      && await p.locator('#lw-ep-panel #lw-ep-say').count() === 1
+      && await p.locator('#lw-ep-panel #lw-ep-note').count() === 1);
+    /* ⚠️⚠️ **id 不能重复** ✗✗ —— 这个项目栽过好几次 ✓（`#cg-body` 撞车那次 ✓）：
+       同名 id 会让 `querySelector` 抓到**另一个** ✓ → CSS 互相盖 ✓ / 绑定绑错 ✓，
+       而界面看起来完全正常 ✗。⚠️ 我这次就真撞了一次 ✗：
+       新写的 `epSideHtml()` 和**外刊精读左栏**那个**同名** ✓ →
+       JS 里后声明的那个赢 ✓ → 左栏被换成「加生词」✓ → `#lw-ep-new` 出现两份 ✗
+       （`locator.fill` 直接报 strict mode violation ✓ 才发现 ✓）。 */
+    const dupIds = await p.evaluate(() => {
+      const seen = {}, dup = [];
+      document.querySelectorAll('[id]').forEach((el) => {
+        if (seen[el.id]) { if (dup.indexOf(el.id) < 0) dup.push(el.id); } else seen[el.id] = 1;
+      });
+      return dup;
+    });
+    ck('★★ 页面上**没有重复 id**（同名 id 会让 querySelector 抓错人）',
+      dupIds.length === 0, JSON.stringify(dupIds).slice(0, 120));
+    /* ⚠️ 两栏各自滚 ✗ —— 正文滚到哪儿，查词栏不该跟着动 ✓ */
+    const ovs = await p.evaluate(() => ['#lw-ep-body', '#lw-ep-side'].map((s) => {
+      const el = document.querySelector(s); return el ? getComputedStyle(el).overflowY : '(没有)';
     }));
-    ck('★★ 两栏**各自能滚**（左栏长的时候右栏词卡不被顶走）',
-      colOv.every((v) => /auto|scroll/.test(v)), JSON.stringify(colOv));
+    ck('★★ 正文和查词栏**各自能滚**', ovs.every((v) => /auto|scroll/.test(v)), JSON.stringify(ovs));
     /* ⚠️⚠️ 「不自动翻译」**必须数请求** ✗✗ —— 只看界面上有没有译文是不够的 ✗：
-       自动翻译失败 / 没配 AI 时界面上也没有译文 ✓ → 那这条就变成**恒真** ✗。
-       （这正是本项目最忌讳的「看着通过、其实什么都没验」✗。） */
+       自动翻译失败 / 没配 AI 时界面上也没有译文 ✓ → 那这条就变成**恒真** ✗。 */
     const cAn0 = aiCalls;
-    /* ⚠️ 判据**不能是「界面上有没有译文」** ✗✗ —— 上面 ③c 已经把那句译过了 ✓，
-       所以切过去本来就会显示**存下来的旧译文** ✓，那不是「自动翻译跑了」✗。
-       真正要守的是「**没有多存下一条译文**」✓（自动翻译一定会落盘 ✓）。 */
     const trPairs = async () => {
       const d = await store();
       const a = (d.articles || []).find((x) => x.id === artId);
@@ -486,6 +515,40 @@ const TEXT = SENT.join(' ');
     ck('★ 标明了「AI 生成」（不冒充语法书）', /AI 生成/.test(anTxt), anTxt.slice(0, 90));
     ck('★ 模型包了 ```json 围栏 + 废话，也剥干净了（没把围栏写进字段）',
       !/```|好的，这是/.test(anTxt), anTxt.slice(0, 90));
+    /* ★★ 「原文中已经加入了的单词，需要显示」✗ —— 右侧要列出**本篇**的生词 ✓ */
+    const wp = 'forage';
+    await p.locator('#lw-ep-new').fill(wp);
+    await p.click('#lw-ep-addbtn');
+    await p.waitForTimeout(3200);
+    /* ⚠️⚠️ 探针**自己加的词必须登记** ✗✗ —— `finally` 是按 `madeWords` 里的 id 删的 ✓，
+       漏登记 = 用户生词本里永久多一个探针词 ✗
+       （今天已经栽过一次：`life-en-word` 的 `ubiquitous` 就是这么留下的 ✓）。 */
+    {
+      const stF = await store();
+      (stF.words || []).filter((w) => w && !wordsBefore.has(w.id))
+        .forEach((w) => { if (madeWords.indexOf(w.id) < 0) madeWords.push(w.id); });
+    }
+    const swTxt = await txt('#lw-ep-sidewords');
+    console.log('    本篇生词: ' + JSON.stringify(swTxt.slice(0, 90)));
+    ck('★★ 加进来的词出现在右侧「本篇的生词」里', new RegExp(wp, 'i').test(swTxt), swTxt.slice(0, 90));
+    ck('★ 而且标了数量', /本篇的生词\s*\d/.test(swTxt), swTxt.slice(0, 40));
+    ck('★ 只有一个列表（「这句里的生词」和「本篇」合并了，不重复两份）',
+      await p.locator('#lw-ep-sidewords').count() === 1
+      && !/这句里的生词/.test(await txt('#lw-ep-side')), (await txt('#lw-ep-side')).slice(0, 60));
+    /* 点一行 → **就在右边看词卡** ✓（不跳生词本 ✓） */
+    const swRow = await p.locator('#lw-ep-sidewords [data-epsideword]').count();
+    ck('★ 「本篇的生词」每一行都能点', swRow >= 1, String(swRow));
+    if (swRow) {
+      /* ⚠️ 要点**刚加的那个词**那一行 ✗ —— 列表里还有 ③b 加过的词 ✓，
+         点「第一行」点到的是别的 ✓（第一版就是这么写的 ✗，断言直接对不上 ✓）。 */
+      await p.locator('#lw-ep-sidewords [data-epsideword]').filter({ hasText: wp }).first().click();
+      await p.waitForTimeout(700);
+      const pk = await txt('#lw-ep-peek');
+      ck('★★ 点一行 → 右边**直接显示它的词卡**（不跳生词本）',
+        new RegExp(wp, 'i').test(pk) && /探针释义/.test(pk), pk.slice(0, 80));
+      ck('  而且**还留在外刊精读**（没被切到生词本）',
+        await p.locator('.lw-ep-body').count() === 1);
+    }
     /* ★ 拆解**落在文章上** ✓（和译文一个道理）→ 刷新后还在、且不再问一次模型 ✓ */
     await p.reload({ waitUntil: 'domcontentloaded' });
     await p.waitForSelector('#btn-lifework', { timeout: 20000 });
@@ -497,6 +560,7 @@ const TEXT = SENT.join(' ');
     await p.waitForTimeout(1200);
     ck('★★ 刷新后拆解**还在**（存在文章上，不是内存态）', await p.locator('.lw-ep-an').count() === 1);
     ck('★ 而且**没有再问一次模型**', aiCalls === cAn1, cAn1 + ' → ' + aiCalls);
+    ck('★ 刷新后「本篇的生词」也还在', new RegExp(wp, 'i').test(await txt('#lw-ep-sidewords')), (await txt('#lw-ep-sidewords')).slice(0, 60));
     /* ★ 换一句要**各管各的** ✓ —— 第 1 句不该显示第 2 句的拆解 ✗ */
     await p.locator('[data-epsent="0"]').click(); await p.waitForTimeout(1000);
     ck('★ 换一句不会串台（拆解是按句存的）', await p.locator('.lw-ep-an').count() === 0);
