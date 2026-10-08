@@ -1724,8 +1724,22 @@
         而且用户**没有任何办法**调整 ✗。
      ⚠️ 没拖过时用 44% ✓（flex:0 0 44% ✓），拖过之后由 JS 写 height ✓
         （写了 height 就同时要 flex:none ✗，不然 flex-basis 会打架 ✗）。 */
-  .lw-ep-panel { flex:0 0 44%; min-height:0; overflow:auto; border-top:2px solid ${T.lineDim};
-    background:${T.card}; padding-bottom:14px; }
+  .lw-ep-panel { flex:0 0 44%; min-height:0; overflow:hidden; border-top:2px solid ${T.lineDim};
+    background:${T.card}; display:flex; }
+  /* ★★ 下半部分**分成左右两栏** ✗ —— 用户原话：
+     「单词查询和记忆的、该原文加入加单词本的，给我放到右边，类似，左边原文，
+       右边所查询和加入单词本的单词」✓。
+     → **左栏 = 原文**（句子 / 操作 / 译文 / 拆解 / 笔记 ✓）
+       **右栏 = 查词**（加生词 / 词卡 / 这句里的生词 ✓）。
+     ⚠️ 两栏**各自滚** ✗（不是整块一起滚 ✓）——
+        左栏长（拆解 + 笔记）的时候，右栏的词卡**还得在视野里** ✓，
+        整块滚的话词卡会被顶出去 ✗（那用户又得来回滚 ✗）。
+     ⚠️ 所以 .lw-ep-panel 从 overflow:auto 改成 overflow:hidden ✗ ——
+        滚动交给两栏自己 ✓（外面再套一层滚动的话，两栏高度就跟着最长那栏走了 ✗）。 */
+  .lw-ep-col { flex:1 1 0; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; padding-bottom:14px; }
+  /* 左栏稍宽一点 ✓ —— 句子 + 译文 + 拆解都要横向空间 ✓；右栏（词卡）窄点够用 ✓ */
+  .lw-ep-col-a { flex:1.25 1 0; }
+  .lw-ep-col-b { flex:1 1 0; min-width:230px; border-left:1px solid ${T.lineDim}; }
   /* ★ 上下拖拽条 ✓ —— 和左右那条（.lw-pgrip）一个思路 ✓，只是方向转了 90° ✓。
      ⚠️ 热区给 8px 高 ✗（看着只有 2px ✗）—— 太细抓不住 ✗，
         而它平时是**看不见**的 ✓，hover / 拖动时才亮 ✓。 */
@@ -1781,6 +1795,31 @@
   .lw-ep-act button, .lw-ep-act .btn { height:24px; padding:0 9px; border:1px solid ${T.lineDim};
     background:transparent; color:${T.dim}; font:9.5px ${UI}; cursor:pointer; }
   .lw-ep-act button:hover, .lw-ep-act .btn:hover { border-color:${T.accent}; color:${T.accent}; }
+  /* ── 🧩 句子拆解（语法分析）✓ ──────────────────────────────────────────
+     用户原话：「对句子进行拆解和分析，类似用英语语法的方式进行分析句子」✓。
+     ⚠️ 结构**照抄「拆词」那一套** ✗（这个词根词缀模块里已经有了 ✓）——
+        骨架 + 逐成分（片段 / 角色 / 中文）+ 时态语态 + 为什么这么写 + 句式 + 仿写 ✓。
+        用户已经习惯了那个读法 ✓，换一套排版反而要多学一遍 ✓。 */
+  .lw-ep-an { margin:10px 14px 0; border:1px solid ${T.lineDim}; border-left:2px solid ${T.ok}; }
+  .lw-ep-an .hd { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    padding:8px 11px; border-bottom:1px solid ${T.lineDim}; font-size:10px; color:${T.faint}; }
+  .lw-ep-an .hd b { font-size:11px; color:${T.text}; font-weight:600; }
+  .lw-ep-an .hd .ai { margin-left:auto; font-size:9px; color:${T.faint}; }
+  .lw-ep-an .row { display:flex; gap:8px; padding:7px 11px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-ep-an .row:last-child { border-bottom:0; }
+  .lw-ep-an .row .k { flex:none; width:52px; font-size:9.5px; color:${T.faint}; padding-top:2px; }
+  .lw-ep-an .row .v { flex:1; min-width:0; font-size:12px; line-height:1.85; color:${T.text}; }
+  .lw-ep-an .skel { font-size:12.5px; line-height:1.9; color:${T.ok}; }
+  /* 逐成分：英文片段用等宽 / 主题色 ✓，一眼和中文说明分开 ✓ */
+  .lw-ep-an .p { display:flex; gap:8px; padding:6px 0; border-bottom:1px dotted ${T.lineDim}; }
+  .lw-ep-an .p:last-child { border-bottom:0; }
+  .lw-ep-an .p .en { flex:none; max-width:46%; font-size:11.5px; color:${T.accent};
+    word-break:break-word; }
+  .lw-ep-an .p .rl { flex:1; min-width:0; font-size:11px; line-height:1.8; color:${T.dim}; }
+  .lw-ep-an .p .rl i { font-style:normal; color:${T.faint}; }
+  .lw-ep-an .note { font-size:11.5px; line-height:1.9; color:${T.text}; }
+  .lw-ep-an .eg { font-size:11.5px; line-height:1.85; color:${T.dim}; }
+  .lw-ep-an .miss { font-size:11px; color:${T.faint}; line-height:1.8; }
   .lw-ep-add { display:flex; gap:6px; padding:8px 14px 0; }
   /* ★★ 词卡 ✓ —— 用户原话：「还有下面这种音标和词义，不应该需要我来填写，去掉。
      应该和查词一样，显示给我」✓。
@@ -2377,6 +2416,12 @@
        ⚠️ 单独译一句和整篇翻译**共用同一个闸门** ✗（都打同一个接口 ✓，
           同时跑两份只会互相抢 ✓、还浪费 token ✓）。 */
     trOne: 0,
+    /* ★ 🧩 句子拆解 ✓（用户原话：「对句子进行拆解和分析，
+       类似用英语语法的方式进行分析句子」✓）。
+       ⚠️ 和译文一样：**结果挂在文章对象上**（`a.an` ✓）——
+          拆一次要花模型的钱和时间 ✓，刷新 / 换文章都得还在 ✓。
+          这里只放「正在拆哪一句 / 上一句报错」这种**内存态** ✓。 */
+    anBusy: 0, anErr: '',
     /* ★ 生词「AI 补全 / 配图」的**进行中**状态 ✓（用户原话：
        「加入的单词，得自动解析好音标，词义和例句，以及巧记手段…最好还有对应图片场景理解」✓）。
        ⚠️ 只放**内存** ✗ —— 补全出来的内容（音标 / 释义 / 例句 / 巧记 / 图片 ✓）
@@ -9904,6 +9949,14 @@
     /* ⚠️ 面板**自己也会滚** ✗ —— 换内容时把滚动位置也带上 ✓，
        不然选下面那些句子时面板会跳回顶部 ✗。 */
     next.scrollTop = old.scrollTop;
+    /* ★★ 现在是**两栏各自滚** ✗（见 .lw-ep-col 的注释 ✓）——
+       面板自己的 scrollTop 恒为 0 了 ✓，真正要带的是**每栏各自的** ✓。
+       漏了这一步的话：拆解跑完重画 → 左栏跳回顶部 ✗（用户刚看到一半的拆解没了 ✓），
+       而右栏的词卡也会跳回顶部 ✓ —— 正是「只重画一小块」想避免的那种抖动 ✗。 */
+    const oldCols = Array.prototype.map.call(old.querySelectorAll('.lw-ep-col'), (c) => c.scrollTop);
+    Array.prototype.forEach.call(next.querySelectorAll('.lw-ep-col'), (c, i) => {
+      if (oldCols[i] != null) c.scrollTop = oldCols[i];
+    });
     old.replaceWith(next);
     /* 句子上的「选中」高亮 ✓ —— 只改 class ✓，一个节点都不重建 ✓（选区才活得下来 ✓） */
     host.querySelectorAll('[data-epsent]').forEach((el) => {
@@ -10224,16 +10277,28 @@
     const have = s ? epWords().filter((w) => new RegExp('(^|[^A-Za-z])' + w.w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(s.text)) : [];
     const head = '<div class="lw-rd-hd">第 ' + (idx + 1) + ' 句 / 共 ' + epSents(a).length + ' 句</div>';
     if (!s) {
-      return '<div class="lw-rd-hd">句子</div>'
+      return '<div class="lw-ep-col lw-ep-col-a">'
+        + '<div class="lw-rd-hd">句子</div>'
         + '<div class="lw-rd-empty" style="position:static;padding:30px 14px">'
-        + '点中间任意一句话<br><span style="color:' + T.faint + '">选中后就能朗读、划词、加生词</span></div>';
+        + '点中间任意一句话<br><span style="color:' + T.faint + '">选中后就能朗读、划词、加生词、拆解句子</span></div>'
+        + '</div>';
     }
     const words = EN ? EN.tokenizeWords(s.text, { minLen: 1 }) : [];
     const lv = EN ? EN.levelOf(s.text) : '';
     const tr = epTransOf(a);
     const dst = tr && tr[idx] && tr[idx].dst ? tr[idx].dst : '';
-    const trOne = EP_UI.trOne === idx;
-    return head
+    /* ⚠️⚠️ 这里**必须 `idx + 1`** ✗✗ —— `EP_UI.trOne` 的哨兵值是 **0** ✓
+       （`epTransOne` 里写的是 `EP_UI.trOne = i + 1` ✓），
+       而**第 1 句的 idx 正好是 0** ✗ → `0 === 0` 恒真 →
+       什么都没在翻的时候，第 1 句的按钮也写着「翻译中…」✗（实测截图里就是这样 ✓）。
+       → 统一成「存 `i + 1`、比 `idx + 1`」✓（拆解那个按钮一开始就是这么写的 ✓）。 */
+    const trOne = EP_UI.trOne === idx + 1;
+    const an = epAnOf(a, idx);
+    const anBusy = EP_UI.anBusy === idx + 1;
+    /* ══ 左栏：**原文** ✓（用户原话：「左边原文」✓）════════════════════════
+       句子 + 操作 + 译文 + 🧩 拆解 + 笔记 ✓ —— 都是「围着这一句读」的东西 ✓。 */
+    const left = '<div class="lw-ep-col lw-ep-col-a">'
+      + head
       /* ★ 这句**也要能划词** ✗ —— 用户原话：「划词不单单只有原文可以划词，
          选中的句子显示在下面的，也应该支持划词」✓。
          → 用和正文**同一个** `epMarkWords()` ✓（已加的词同样标出来 ✓），
@@ -10244,6 +10309,11 @@
       + '<button id="lw-ep-say-slow" title="慢速朗读（0.6 倍）">🐢 慢速</button>'
       + '<button id="lw-ep-trone" title="只把这一句译成中文（不用等整篇）">'
       + (trOne ? '翻译中…' : (dst ? '⇄ 重译这句' : '⇄ 译这句')) + '</button>'
+      /* ★★ 🧩 拆解这句 ✓ —— 用户原话：「对句子进行拆解和分析，
+         类似用英语语法的方式进行分析句子」✓。
+         ⚠️ 和「译这句」一样**必须手动点** ✗（不自动跑 ✓，见下面那段注释 ✓）。 */
+      + '<button id="lw-ep-anbtn" title="按英语语法拆开这一句：骨架 / 成分 / 时态 / 为什么这么写">'
+      + (anBusy ? '拆解中…' : (an ? '🧩 重新拆解' : '🧩 拆解这句')) + '</button>'
       + '<button id="lw-ep-ok" title="标成已懂 / 取消">' + ((a.done || {})[idx] ? '↺ 取消已懂' : '✓ 已懂') + '</button>'
       + '<button id="lw-ep-copy" title="复制这一句">⧉ 复制</button>'
       + '</div>'
@@ -10251,8 +10321,20 @@
       /* ⚠️ 报错要显示在**面板里** ✗，不能只弹个 toast ✓ ——
          toast 几秒就没了 ✓，而用户正是要看「为什么没译出来」✓。 */
       + (EP_UI.trErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.trErr) + '</div>' : '')
+      + (EP_UI.anErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.anErr) + '</div>' : '')
       + '<div class="lw-ep-tip">' + words.length + ' 个词' + (lv ? ' · 难度 ' + lv + '（估算）' : '')
       + ' · 这句里也能划词 ✓</div>'
+      + epAnHtml(idx)
+      + '<div class="lw-rd-hd">这句的笔记</div>'
+      + notes.map((n) => '<div class="lw-note k-quote"><div class="tx">' + esc(n.text) + '</div>'
+        + '<div class="ft"><span class="x" data-epnotedel="' + esc(n.id) + '">✕</span></div></div>').join('')
+      + '<div class="lw-ep-add"><input id="lw-ep-note" placeholder="给这句写点笔记…"/><button id="lw-ep-notebtn">＋</button></div>'
+      + '</div>';
+    /* ══ 右栏：**查词 / 加单词本** ✓（用户原话：「右边所查询和加入单词本的单词」✓）
+       ⚠️ 原来是**竖着堆在句子下面** ✗ —— 句子一长（还有译文 + 笔记 ✓），
+          词卡就被顶到看不见的地方 ✓，划完词还得往下滚才看得到 ✓。
+          并排放之后：划词 → 右边立刻出现词卡 ✓，眼睛不用上下找 ✓。 */
+    const right = '<div class="lw-ep-col lw-ep-col-b">'
       + '<div class="lw-rd-hd">加生词</div>'
       + '<div class="lw-ep-add">'
       + '<input id="lw-ep-new" placeholder="划一个词，或手打…" value="' + esc(EP_UI.pick) + '"/>'
@@ -10260,7 +10342,7 @@
       + '</div>'
       + '<div class="lw-ep-tip" id="lw-ep-newtip">' + (EP_UI.pick
         ? '划中的是「' + esc(EP_UI.pick) + '」✓ 回车直接加'
-        : '用鼠标在正文里（或上面这句里）划一个词，这里会自动填上 ✓') + '</div>'
+        : '用鼠标在正文里（或左边那句里）划一个词，这里会自动填上 ✓') + '</div>'
       /* ★★ 词卡 ✓ —— 用户原话：「还有下面这种音标和词义，不应该需要我来填写，去掉。
          应该和查词一样，显示给我」✓。
          → 两个手填输入框**删掉** ✗，改成这一块：划中 / 点中的词，
@@ -10271,10 +10353,120 @@
         + have.map((w) => '<div class="lw-rd-row" data-epword="' + esc(w.id) + '">'
           + '<span class="em">' + (SRS ? ({ fresh: '○', learning: '◐', young: '●', mature: '◉' }[SRS.stageOf(w)] || '○') : '○') + '</span>'
           + esc(w.w) + '<span class="n">' + (w.def ? esc(String(w.def).slice(0, 8)) : '') + '</span></div>').join('') : '')
-      + '<div class="lw-rd-hd">这句的笔记</div>'
-      + notes.map((n) => '<div class="lw-note k-quote"><div class="tx">' + esc(n.text) + '</div>'
-        + '<div class="ft"><span class="x" data-epnotedel="' + esc(n.id) + '">✕</span></div></div>').join('')
-      + '<div class="lw-ep-add"><input id="lw-ep-note" placeholder="给这句写点笔记…"/><button id="lw-ep-notebtn">＋</button></div>';
+      + '</div>';
+    return left + right;
+  }
+  /* ══ 🧩 句子拆解（语法分析）✓ ═════════════════════════════════════════════
+     用户原话：「对句子进行拆解和分析，类似用英语语法的方式进行分析句子」✓。
+
+     ⚠️ 为什么挂**文章对象**上（`a.an` ✓）而不是内存态 ✗：
+        和译文一个道理（见 `a.tr` ✓）—— 拆一次要花模型的钱和时间 ✓，
+        换文章 / 刷新 / 关掉再打开**都得还在** ✓，删文章时一起没 ✓。
+     ⚠️ 为什么**必须手动点** ✗（不自动跑 ✓）：
+        用户明确说了「默认情况下，无需自动翻译，我点击翻译，才翻译」✓ ——
+        拆解比翻译更贵 ✓，更没有理由偷偷跑 ✓。 */
+  function epAnOf(a, i) {
+    const m = a && a.an;
+    if (!m || typeof m !== 'object') return null;
+    const o = m[i];
+    return (o && typeof o === 'object') ? o : null;
+  }
+  function epAnHtml(i) {
+    const o = epAnOf(epCurArt(), i);
+    if (!o) return '';
+    const row = (k, inner) => '<div class="row"><div class="k">' + k + '</div><div class="v">' + inner + '</div></div>';
+    const parts = Array.isArray(o.parts) ? o.parts.filter((p) => p && (p.en || p.role)) : [];
+    return '<div class="lw-ep-an">'
+      + '<div class="hd"><b>🧩 句子拆解</b>'
+      + '<span>' + (parts.length ? parts.length + ' 个成分' : '') + '</span>'
+      /* ⚠️ 必须标明**这是模型给的** ✗ —— 语法术语模型偶尔会用错 ✓，
+         不标的话用户会当成「字典里写死的」✓（和 code-guide 那条同源 ✓）。 */
+      + '<span class="ai">AI 生成 · 供参考</span></div>'
+      + (o.skel ? row('骨架', '<div class="skel">' + esc(o.skel) + '</div>') : '')
+      + (parts.length ? '<div class="row"><div class="k">成分</div><div class="v">'
+        + parts.map((p) => '<div class="p"><span class="en">' + esc(p.en || '') + '</span>'
+          + '<span class="rl">' + esc(p.role || '') + (p.zh ? ' <i>· ' + esc(p.zh) + '</i>' : '') + '</span></div>').join('')
+        + '</div></div>' : '')
+      + (o.tense ? row('时态', '<div class="note">' + esc(o.tense) + '</div>') : '')
+      + (o.why ? row('为什么', '<div class="note">' + esc(o.why) + '</div>') : '')
+      + (o.pattern ? row('句式', '<div class="note">' + esc(o.pattern) + '</div>') : '')
+      + (o.sample ? row('仿写', '<div class="eg">' + esc(o.sample) + '</div>') : '')
+      + '</div>';
+  }
+  /* ★★ 问模型要「句子拆解」✓ —— 和 `epTransAsk` 一个套路（重试 + 人话报错 ✓），
+     但**不共用同一个函数** ✗：一个要的是「一行一句译文」✓，
+     一个要的是「一个 JSON 对象」✓，提示词和解析方式都不一样 ✓
+     （硬塞进一个函数只会两边都别扭 ✓）。 */
+  async function epAnAsk(cfg, text) {
+    let lastErr = '';
+    for (let k = 0; k < 2; k++) {
+      try {
+        const r = await fetch('/api/ai/chat', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            url: cfg.url, key: cfg.key, model: cfg.model, timeoutMs: 180000,
+            messages: [
+              {
+                role: 'system',
+                content: '你是英语语法老师，帮中国学习者**拆解**一个英文句子。'
+                  + '**只输出一个 JSON 对象**，不要 markdown 代码块、不要任何解释或前后缀。字段：'
+                  + '{"skel":"把修饰成分全去掉后的**骨架句**（英文，必须仍是完整句子）",'
+                  + '"parts":[{"en":"原句里的一个片段（**原样照抄**，不要改写）",'
+                  + '"role":"它是什么成分，用中文语法术语，并说清**修饰谁**（如：主语 / 谓语 / 过去分词短语作后置定语，修饰 communities）",'
+                  + '"zh":"这个片段的中文意思"}],'
+                  + '"tense":"时态 / 语态 / 情态，一句话说清",'
+                  + '"why":"这个句子为什么这么写（语序、信息安排、语气）—— 一到两句，说人话，别背术语",'
+                  + '"pattern":"可复用的句式模板，用 X / Y 之类占位",'
+                  + '"sample":"按这个句式新造的一个英文例句"}'
+                  + 'parts 要**按原句顺序**把主干和修饰**都**列出来：不漏、不重、不交叉，一般 3~6 条。',
+              },
+              { role: 'user', content: '句子：' + text },
+            ],
+          }),
+        });
+        const d = await r.json();
+        if (!d || !d.ok) throw new Error(epAiErrText((d && d.error) || 'AI 请求失败'));
+        const o = epJsonFrom(d.content);
+        if (!o) throw new Error('模型这次没返回能用的拆解（再点一次试试）');
+        if (!o.skel && !(Array.isArray(o.parts) && o.parts.length)) {
+          throw new Error('模型这次没返回能用的拆解（再点一次试试）');
+        }
+        return o;
+      } catch (e) {
+        lastErr = epAiErrText(String((e && e.message) || e));
+        if (k === 0) await new Promise((z) => setTimeout(z, 1200));
+      }
+    }
+    throw new Error(lastErr);
+  }
+  /* ★★ 「🧩 拆解这句」✓ —— 和 `epTransOne` 一样**只重画下面那块面板** ✗，
+     绝不整屏 `render()` ✓（会把正文滚回顶部 ✓，老 bug 就是这么来的 ✓）。 */
+  async function epAnalyzeOne(i) {
+    const a = epCurArt();
+    if (!a) return;
+    const sents = epSents(a);
+    if (!sents[i]) return;
+    if (EP_UI.anBusy) return;
+    const cfg = mailAiCfg();
+    if (!cfg) {
+      EP_UI.anErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key 就能拆句子';
+      epRenderPanel();
+      return;
+    }
+    EP_UI.anBusy = i + 1; EP_UI.anErr = '';
+    epRenderPanel();
+    try {
+      const o = await epAnAsk(cfg, sents[i].text);
+      if (!a.an || typeof a.an !== 'object') a.an = {};
+      a.an[i] = o;
+      a.an[i].at = Date.now();
+      epSave();
+    } catch (e) {
+      EP_UI.anErr = String((e && e.message) || e);
+    } finally {
+      EP_UI.anBusy = 0;
+      epRenderPanel();
+    }
   }
   /* ★★ 词卡 ✓ —— 「划中的词 / 点中的词」现在长什么样，就靠它 ✓。
      ⚠️ 分两种情况 ✗（一个字段 `EP_UI.peek` 同时覆盖 ✓）：
@@ -11220,21 +11412,12 @@
       epRenderTrans();
     }
   }
-  /* ★ 选中一句就**顺手译它** ✓ —— 用户原话：「我选中的句子进行翻译」✓。
-     ⚠️ 三道闸 ✗（少一道就会变成「点一下发一堆请求」✗）：
-       ① 得是**译文模式开着** ✓（没开说明用户现在不想看译文 ✓）；
-       ② 这句**还没译文** ✓；
-       ③ 现在**没有别的翻译在跑** ✓（`epTransOne` 自己也有一道 ✓，这里先挡掉省一次重绘 ✓）。 */
-  function epAutoTransOne() {
-    if (!EP_UI.trOn || EP_UI.trBusy || EP_UI.trOne) return;
-    const a = epCurArt();
-    if (!a || EP_UI.sel < 0) return;
-    const tr = epTransOf(a);
-    if (tr && tr[EP_UI.sel] && tr[EP_UI.sel].dst) return;
-    if (EP_UI.sel >= EP_TR_MAX) return;
-    if (!mailAiCfg()) return;                                /* 没配 AI 就别白点一下 ✓ */
-    epTransOne(EP_UI.sel, false);
-  }
+  /* ⚠️⚠️ `epAutoTransOne()` **已经删掉** ✗ ——
+     它原来是「选中一句就顺手译它」✓，理由是用户之前说过「我选中的句子进行翻译」✓。
+     但 2026-10-08 用户改口了：「**默认情况下，无需自动翻译，我点击翻译，才翻译**」✓。
+     → 现在选句子**一个请求都不发** ✓，翻译 / 拆解都要**手动点** ✓。
+     ⚠️ 别手贱加回来 ✗ —— 自动跑会 ① 每次都花一次模型调用 ✓（用户没要 ✓）
+        ② 没配 AI 时弹一堆报错 ✓ ③ 把「点一下句子」这件很轻的事变重 ✓。 */
   async function epTransGo(force) {
     const a = epCurArt();
     if (!a || EP_UI.trBusy) return;
@@ -11680,7 +11863,13 @@
            ② 鼠标刚划出的**选区销毁** ✗（「划词怎么没有用」✓）。
            → 只重画下半部分 ✓（见 epRenderPanel 的注释 ✓）。 */
         epRenderPanel();
-        epAutoTransOne();
+        /* ★★ 这里**原来会自动译这句** ✗✗（`epAutoTransOne()` ✓）——
+           用户原话：「默认情况下，无需自动翻译，我点击翻译，才翻译」✓。
+           → **删掉** ✓：选中句子只换面板内容 ✓，**一个模型请求都不发** ✓；
+             想翻译就点左栏那个「⇄ 译这句」✓（拆解同理 ✓）。
+           ⚠️ 这也是「别替用户做决定」的一条 ✗：他可能只是想看一眼句子 /
+             想划个词 / 想拆语法 ✓，并不想每次都花一次模型调用 ✓
+             （而且没配 AI 时还会弹一堆报错 ✓）。 */
       };
       /* ⚠️⚠️ 选区要在 **mouseup 这一刻同步抓下来** ✗✗，不能等到定时器里再抓 ✗：
            紧跟着的 `click` 会重画面板 ✓（就算现在只重画下半部分 ✓，
@@ -11774,6 +11963,11 @@
       const has = tr && tr[EP_UI.sel] && tr[EP_UI.sel].dst;
       epTransOne(EP_UI.sel, !!has);            /* 已经有译文 → 点它是「重译」✓ */
     };
+    /* ★ 「🧩 拆解这句」✓ —— 用户原话：「对句子进行拆解和分析，
+       类似用英语语法的方式进行分析句子」✓。
+       ⚠️ **只在这里触发** ✗ —— 选句子 / 划词**都不碰它** ✓（见下面 epAutoTransOne 的说明 ✓）。 */
+    const anb = q('#lw-ep-anbtn');
+    if (anb) anb.onclick = () => epAnalyzeOne(EP_UI.sel);
     const newEl = q('#lw-ep-new');
     if (newEl) {
       newEl.oninput = () => { EP_UI.pick = newEl.value; };

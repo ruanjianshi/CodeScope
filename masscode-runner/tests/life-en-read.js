@@ -102,6 +102,28 @@ const TEXT = SENT.join(' ');
       const m = (body.messages || []).filter((x) => x.role === 'user').pop();
       user = String((m && m.content) || '');
     } catch (_) {}
+    /* ★ 🧩 句子拆解 ✓（用户原话：「对句子进行拆解和分析，
+       类似用英语语法的方式进行分析句子」✓）——
+       ⚠️ 必须**排在「单词」那条前面** ✗：拆解的问句是「句子：…」✓，
+          而句子里可能正好含「单词：」这种字样 ✓（今天没有，但别赌 ✓）。
+       ⚠️ 故意包一层 ```json 围栏 ✗ —— 和词卡那条一样，验的就是「能不能剥干净」✓。 */
+    const mSent = /^句子：([\s\S]+)$/.exec(user.trim());
+    if (mSent) {
+      const an = {
+        skel: 'These two rural communities may appear to have little in common.',
+        parts: [
+          { en: 'These two rural communities', role: '主语', zh: '这两个乡村社区' },
+          { en: 'separated by an ocean', role: '过去分词短语作后置定语，修饰 communities', zh: '被大洋隔开' },
+          { en: 'may appear', role: '谓语（情态动词 + 动词原形，表推测）', zh: '可能显得' },
+          { en: 'to have little in common', role: '不定式短语作表语', zh: '没什么共同之处' },
+        ],
+        tense: '一般现在时；may appear 表推测；to have 是不定式，表状态。',
+        why: '主干很朴素，信息全塞在分隔结构里 —— 英文新闻的典型写法：先给结论，再插补充条件。',
+        pattern: 'X, <分词短语>, may appear to Y.',
+        sample: 'These two nearby villages, separated by a river, may appear to have nothing in common.',
+      };
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, content: '好的，这是拆解：\n```json\n' + JSON.stringify(an) + '\n```\n' }) });
+    }
     const mWord = /单词：\s*([A-Za-z][A-Za-z'\-]*)/.exec(user);
     if (mWord) {
       const card = {
@@ -402,6 +424,82 @@ const TEXT = SENT.join(' ');
        「整篇翻译」全失败 ✓ → 看起来像功能坏了 ✗（实测就是这么挂的 ✓）。 */
     await p.unroute('**/api/ai/chat');
     await p.route('**/api/ai/chat', mockAi);
+
+    await diagArt('③f 开始'); console.log('\n── ③f ★★ 左原文 / 右查词 + 🧩 句子拆解 + **不再自动翻译**（2026-10-08 新需求）──');
+    /* 用户原话：
+       ①「单词查询和记忆的、该原文加入加单词本的，给我放到右边，类似，
+          左边原文，右边所查询和加入单词本的单词」
+       ②「对句子进行拆解和分析，类似用英语语法的方式进行分析句子」
+       ③「默认情况下，无需自动翻译，我点击翻译，才翻译」 */
+    await p.locator('[data-epsent="0"]').click();
+    await p.waitForTimeout(1200);
+    ck('★★ 下半部分分成**左右两栏**',
+      await p.locator('.lw-ep-col-a').count() === 1 && await p.locator('.lw-ep-col-b').count() === 1);
+    ck('★★ 左边是**原文**（句子 + 操作 + 笔记）',
+      await p.locator('.lw-ep-col-a #lw-ep-sent').count() === 1
+      && await p.locator('.lw-ep-col-a #lw-ep-say').count() === 1
+      && await p.locator('.lw-ep-col-a #lw-ep-note').count() === 1);
+    ck('★★ 右边是**查词 / 加单词本**（输入框 + 词卡）',
+      await p.locator('.lw-ep-col-b #lw-ep-new').count() === 1
+      && await p.locator('.lw-ep-col-b #lw-ep-peek').count() === 1);
+    /* ⚠️ 两栏**各自滚** ✗ —— 左栏长的时候右栏的词卡还得在视野里 ✓。
+       判据只能是量：两栏的 overflowY 都必须是 auto/scroll ✓。 */
+    const colOv = await p.evaluate(() => ['.lw-ep-col-a', '.lw-ep-col-b'].map((s) => {
+      const el = document.querySelector(s);
+      return el ? getComputedStyle(el).overflowY : '(没有)';
+    }));
+    ck('★★ 两栏**各自能滚**（左栏长的时候右栏词卡不被顶走）',
+      colOv.every((v) => /auto|scroll/.test(v)), JSON.stringify(colOv));
+    /* ⚠️⚠️ 「不自动翻译」**必须数请求** ✗✗ —— 只看界面上有没有译文是不够的 ✗：
+       自动翻译失败 / 没配 AI 时界面上也没有译文 ✓ → 那这条就变成**恒真** ✗。
+       （这正是本项目最忌讳的「看着通过、其实什么都没验」✗。） */
+    const cAn0 = aiCalls;
+    /* ⚠️ 判据**不能是「界面上有没有译文」** ✗✗ —— 上面 ③c 已经把那句译过了 ✓，
+       所以切过去本来就会显示**存下来的旧译文** ✓，那不是「自动翻译跑了」✗。
+       真正要守的是「**没有多存下一条译文**」✓（自动翻译一定会落盘 ✓）。 */
+    const trPairs = async () => {
+      const d = await store();
+      const a = (d.articles || []).find((x) => x.id === artId);
+      return (((a && a.tr && a.tr.pairs) || []).filter((x) => x && x.dst)).length;
+    };
+    const trN0 = await trPairs();
+    await p.locator('[data-epsent="1"]').click();
+    await p.waitForTimeout(2200);
+    ck('★★ 选句子**一个模型请求都不发**（用户原话「默认情况下，无需自动翻译」）',
+      aiCalls === cAn0, cAn0 + ' → ' + aiCalls);
+    ck('★ 也没偷偷多存下一条译文（旧译文照常显示 ✓，但没新翻）',
+      await trPairs() === trN0, trN0 + ' → ' + await trPairs());
+    ck('  而且第 1 句的按钮不会误显示「翻译中…」（哨兵 0 撞下标 0 的坑）',
+      !/翻译中/.test(await txt('#lw-ep-trone')), await txt('#lw-ep-trone'));
+    /* 🧩 拆解：必须**手动点**才跑 ✓ */
+    ck('★ 有「🧩 拆解这句」按钮', await p.locator('#lw-ep-anbtn').count() === 1, await txt('#lw-ep-anbtn'));
+    ck('  拆之前没有拆解块', await p.locator('.lw-ep-an').count() === 0);
+    await p.click('#lw-ep-anbtn');
+    await p.waitForFunction(() => document.querySelector('.lw-ep-an'), null, { timeout: 20000 }).catch(() => {});
+    await p.waitForTimeout(900);
+    ck('★★ 点一下才打模型（就一次）', aiCalls === cAn0 + 1, cAn0 + ' → ' + aiCalls);
+    ck('★★ 拆解块出来了，而且**按成分逐条列开**',
+      await p.locator('.lw-ep-an .p').count() >= 3, String(await p.locator('.lw-ep-an .p').count()));
+    const anTxt = await txt('.lw-ep-an');
+    ck('★ 有「骨架句」', /骨架/.test(anTxt), anTxt.slice(0, 60));
+    ck('★ 时态 / 为什么 / 仿写 都在', /时态/.test(anTxt) && /为什么/.test(anTxt) && /仿写/.test(anTxt));
+    ck('★ 标明了「AI 生成」（不冒充语法书）', /AI 生成/.test(anTxt), anTxt.slice(0, 90));
+    ck('★ 模型包了 ```json 围栏 + 废话，也剥干净了（没把围栏写进字段）',
+      !/```|好的，这是/.test(anTxt), anTxt.slice(0, 90));
+    /* ★ 拆解**落在文章上** ✓（和译文一个道理）→ 刷新后还在、且不再问一次模型 ✓ */
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('#btn-lifework', { timeout: 20000 });
+    await p.click('#btn-lifework'); await p.waitForSelector('#lifework-view', { timeout: 20000 });
+    await p.locator('.lw-nav [data-tab="reading"]').dispatchEvent('click');
+    await p.waitForSelector('.lw-ep-body', { timeout: 20000 }); await p.waitForTimeout(900);
+    await p.locator('[data-epsent="1"]').click(); await p.waitForTimeout(1200);
+    const cAn1 = aiCalls;
+    await p.waitForTimeout(1200);
+    ck('★★ 刷新后拆解**还在**（存在文章上，不是内存态）', await p.locator('.lw-ep-an').count() === 1);
+    ck('★ 而且**没有再问一次模型**', aiCalls === cAn1, cAn1 + ' → ' + aiCalls);
+    /* ★ 换一句要**各管各的** ✓ —— 第 1 句不该显示第 2 句的拆解 ✗ */
+    await p.locator('[data-epsent="0"]').click(); await p.waitForTimeout(1000);
+    ck('★ 换一句不会串台（拆解是按句存的）', await p.locator('.lw-ep-an').count() === 0);
 
     await diagArt('④ 开始'); console.log('\n── ④ 双语对照翻译（用户原话「怎么没有双语对应翻译」）──');
     /* ⚠️ 先刷新一次 ✗ —— `EP_UI.trOn` 是**内存态** ✓，
