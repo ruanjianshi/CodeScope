@@ -677,18 +677,26 @@ const FAKE_PLAN = {
     ck('★★ 时间写的是**人话**（「刚刚 / N 分钟前」），不是一串 ISO 时间',
       /刚刚|分钟前|小时前|天前/.test(histTxt), histTxt.slice(0, 150));
     ck('★ 而且新的排在**最上面**（`add` 是后查的）', histTxt.indexOf('add') < histTxt.indexOf('main'), histTxt.slice(0, 150));
-    /* ④ 点一条 → 真的重查 ✓ */
+    /* ④ 点一条 → **秒开**（不再问 AI）✓ —— 用户原话：
+       「**为什么点击加载历史记录，还需要 AI 重新思考**」✓。
+       ⚠️⚠️ 判据要**两条一起** ✗✗：
+         ① 点完**立刻**就有内容 ✓（只等 0.5 秒 ✓ —— 真重跑的话这时候还没回来 ✓）；
+         ② 而且 `aiCalls` **一次都没涨** ✓ —— 只验①的话，
+            「重跑一遍但很快返回」也能过 ✓（假 AI 是毫秒级 ✓）→ 恒真 ✗。 */
     const goIdx = await p.evaluate(() => (window.__CODE_GUIDE.state.hist || []).findIndex((x) => x.q === 'main'));
+    const callsBeforeGo = aiCalls;
     await p.locator('[data-cgact="histgo"][data-cgval="' + goIdx + '"]').click();
-    await p.waitForTimeout(2800);
+    await p.waitForTimeout(500);
     const afterGo = await p.evaluate(() => {
       const e = document.getElementById('cgx-q');
       return { q: e ? e.value : '', rows: document.querySelectorAll('.cg-row').length, panel: !!document.querySelector('.cg-hist') };
     });
-    console.log('    点历史里那条 main → ' + JSON.stringify(afterGo));
-    ck('★★★ 点历史里的一条 → **真的重查了**（输入框填上 + 出结果 —— 不只是展示）',
+    console.log('    点历史里那条 main → ' + JSON.stringify(afterGo) + '（AI 调用 ' + callsBeforeGo + ' → ' + aiCalls + '）');
+    ck('★★★ 点历史里的一条 → **立刻**就有内容（不用再等 AI）',
       afterGo.q === 'main' && afterGo.rows >= 1, JSON.stringify(afterGo));
-    ck('★★ 而且历史面板**自己收起了**（不挡着刚查出来的结果）', afterGo.panel === false);
+    ck('★★★ 而且**一次 AI 都没调**（结果跟着历史一起存下来了）',
+      aiCalls === callsBeforeGo, callsBeforeGo + ' → ' + aiCalls);
+    ck('★★ 而且历史面板**自己收起了**（不挡着刚摆出来的结果）', afterGo.panel === false);
     /* ⑤ 落盘 ✓ —— 「回看」跨会话才有意义 ✓ */
     const saved = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('cg-hist') || '[]').length; } catch (_) { return -1; } });
     ck('★★★ 历史**落盘**了（关掉再打开还在 —— 不然「回看」无从谈起）', saved >= 2, String(saved));
@@ -701,6 +709,91 @@ const FAKE_PLAN = {
     ck('★ 清空后面板说了「还没查过东西」（不是一片空白）', /还没查过/.test(await txt('.cg-hist')), (await txt('.cg-hist')).slice(0, 80));
     await p.locator('[data-cgact="hist"]').click(); await p.waitForTimeout(600);
     ck('★ 「收起」能关掉面板', (await p.locator('.cg-hist').count()) === 0);
+
+    /* ══ ★★★★ ⑦c 存到知识库 ✓ —— 用户原话：
+       「给所查询的记录，做一个**注入到知识库**的按钮，同时做好**管理和分类**，
+        这样可以把一些常用的记录下来，到知识库，做成**技术知识积累**」✓。
+
+       ⚠️⚠️ 这一段会往**真知识库**里写东西 ✗✗ —— 所以：
+        ① 分类 / 项目 / 标题全用 `__探针代码向导__` 这种**一眼能认出来的名字** ✓；
+        ② 跑完**必须自己删掉** ✓（删项目 + 删分类 ✓），并且**断言删干净了** ✓；
+        ③ 名字里不带探针标记的话，用户的知识库里会多出一篇莫名其妙的东西 ✗。 */
+    console.log('\n── ⑦c 📥 存到知识库（分类 / 项目 + 能接着编辑）──');
+    await p.locator('[data-cgtab="find"]').click(); await p.waitForTimeout(700);
+    await p.locator('#cgx-q').fill('我想统计一段文本里每个词出现了几次');
+    await p.locator('#cgx-go').click(); await p.waitForTimeout(3400);
+    ck('★★ 结果区有「存到知识库」按钮', await p.locator('[data-cgact="asksavecur"]').count() >= 1);
+    await p.locator('[data-cgact="asksavecur"]').first().click();
+    await p.waitForSelector('.cg-ask', { timeout: 10000 }).catch(() => {});
+    ck('★★★ 点它弹出「存到知识库」对话框（页内浮层，不是原生弹窗）', await has('.cg-ask'));
+    const askTxt = await txt('.cg-ask');
+    console.log('    对话框: ' + JSON.stringify(askTxt.slice(0, 130)));
+    ck('★★ 对话框里有**分类 / 项目 / 标题**三项',
+      /分类/.test(askTxt) && /项目/.test(askTxt) && /标题/.test(askTxt), askTxt.slice(0, 130));
+    ck('★★ 而且写清了**会存到哪个路径**（存之前就知道）', /知识库\//.test(askTxt), askTxt.slice(0, 170));
+    ck('★★ 还能**预览正文**（存之前看得出要存什么）', /由「代码向导」/.test(askTxt), askTxt.slice(0, 200));
+    await p.locator('#cg-ask-title').fill('__探针词频方案__');
+    await p.locator('#cg-ask-cat').fill('__探针代码向导__');
+    await p.locator('#cg-ask-proj').fill('__探针分类__');
+    await p.waitForTimeout(500);
+    ck('★ 路径预览**跟着输入实时更新**（不用重绘、不丢焦点）',
+      /__探针代码向导__/.test(await txt('.cg-ask-path')), await txt('.cg-ask-path'));
+    await p.locator('[data-cgact="askrun"]').click();
+    await p.waitForTimeout(3800);
+    ck('★★★ 存完对话框**自己关了**', (await p.locator('.cg-ask').count()) === 0);
+    const kb1 = await p.evaluate(async () => (await (await fetch('/api/knowledge/status', { cache: 'no-store' })).json()));
+    const hit = (kb1.pages || []).find((x) => String(x.path).indexOf('__探针代码向导__') === 0);
+    console.log('    知识库里: ' + JSON.stringify(hit || null));
+    ck('★★★ 文件**真的进了知识库**（`/api/knowledge/status` 列得到它）',
+      !!hit, JSON.stringify((kb1.pages || []).map((x) => x.path).slice(0, 6)));
+    /* ⚠️⚠️ 还要断言**没有存到别的地方** ✗✗ ——
+       实测踩过：拉分类列表回来时会**重绘** ✓，而重绘会把已经填好的分类
+       **抹回默认值** ✗ → 文件存进了**用户自己的**「快速开始 / 使用指南」✗；
+       而上面那条断言只盯 `__探针代码向导__` ✓ → **根本看不见它** ✗
+       （用户的知识库里就这么多了一篇莫名其妙的东西 ✓）。
+       → 这里再查一次：探针那个标题**不许出现在别的分类下** ✓。 */
+    const strays = (kb1.pages || []).filter((x) => String(x.path).indexOf('__探针词频方案__') >= 0
+      && String(x.path).indexOf('__探针代码向导__') !== 0);
+    ck('★★★ 而且**没有**存到别的分类下（填好的分类不能被重绘抹回默认值）',
+      strays.length === 0, JSON.stringify(strays.map((x) => x.path)));
+    for (const s of strays) {
+      try {
+        await p.evaluate(async (rel) => {
+          await fetch('/api/readings/delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: '知识库/' + rel }),
+          });
+        }, s.path);
+      } catch (_) {}
+    }
+    const content = await p.evaluate(async () => {
+      const r = await fetch('/api/readings/text-fragment?path=' + encodeURIComponent('知识库/__探针代码向导__/__探针分类__/__探针词频方案__.md'), { cache: 'no-store' });
+      const d = await r.json();
+      return d && d.ok ? String(d.content || '') : ('✗ ' + ((d && d.error) || '读不到'));
+    });
+    console.log('    存进去的正文片段: ' + JSON.stringify(content.slice(0, 160)));
+    ck('★★★ 存的是**查到的内容**（不是空模板 —— 有思路 / 步骤 / 示例）',
+      /## 思路|## 步骤|## 示例/.test(content) && content.length > 150, content.slice(0, 160));
+    ck('★★ 而且带了**来源说明**（一眼知道是哪来的、什么时候存的）',
+      /由「代码向导」/.test(content), content.slice(0, 200));
+    ck('★★ 还写了 frontmatter（title / tags）—— 知识库里能搜到',
+      /^---\ntitle:/.test(content) && /tags:/.test(content), content.slice(0, 130));
+    /* ★ 清干净 ✓ —— 探针在**真知识库**里写过东西 ✗，必须自己收掉 ✓ */
+    await p.evaluate(async () => {
+      await fetch('/api/readings/project/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: '知识库/__探针代码向导__/__探针分类__' }),
+      });
+      await fetch('/api/readings/folder/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: '知识库/__探针代码向导__' }),
+      });
+    });
+    await p.waitForTimeout(800);
+    const kb2 = await p.evaluate(async () => (await (await fetch('/api/knowledge/status', { cache: 'no-store' })).json()));
+    ck('★★ 探针**自己清干净了**（没在真知识库里留东西）',
+      !(kb2.pages || []).some((x) => String(x.path).indexOf('__探针代码向导__') === 0),
+      JSON.stringify((kb2.pages || []).map((x) => x.path).slice(0, 6)));
 
     console.log('\n── ⑧ 「插到光标处」真的会改编辑器（改完立刻还原）──');
     const before = await editorCode();

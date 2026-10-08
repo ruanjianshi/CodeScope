@@ -100,8 +100,11 @@
           查到的东西可能几 MB ✓（手册 / 思维导图 ✓），存下来会把 localStorage 撑爆 ✗。
           回看的时候**点一下重查**就行 ✓（AI 那几项本来就该重算 ✓，
           而「查过什么」才是他记不住的 ✓）。 */
-    hist: [],             /* [{ tab, q, name, line, file, at }] ✓ 最近 60 条 ✓ */
+    hist: [],             /* [{ tab, q, name, line, file, at, res }] ✓ 最近 60 条 ✓ */
     histOn: false,        /* 历史面板开着没 ✓ */
+    /* ★ 「存到知识库」的对话框状态 ✓ —— 用户原话：
+       「给所查询的记录，做一个注入到知识库的按钮，同时做好管理和分类」✓ */
+    ask: null,            /* { tab, q, title, cat, proj, cats, projs, md, busy, err, loaded } ✓ */
     view: 'mind',         /* 拆逻辑下的视图：'mind'（思维导图）/ 'flow'（实现流程）/ 'code'（代码级）✓ */
     note: '',             /* 一句提示（比如「这段不是函数体，画不了图」）✓ */
     sym: null,            /* 当前文档的符号索引缓存 ✓ */
@@ -200,6 +203,9 @@
         不然历史会被反复查的同一个词刷满 ✗。 */
   const CG_HIST_KEY = 'cg-hist';
   const CG_HIST_MAX = 60;
+  /* ⚠️ 结果**不是每条都存** ✗（见 `cgHistSave` ✓）—— 落盘要限量 ✓ */
+  const CG_HIST_RES_MAX = 20;
+  const CG_HIST_RES_BYTES = 60 * 1024;
   function cgHistLoad() {
     try {
       const a = JSON.parse(localStorage.getItem(CG_HIST_KEY) || '[]');
@@ -208,7 +214,55 @@
     return CG.hist;
   }
   function cgHistSave() {
-    try { localStorage.setItem(CG_HIST_KEY, JSON.stringify(CG.hist.slice(0, CG_HIST_MAX))); } catch (_) {}
+    try {
+      /* ⚠️⚠️ 落盘前把**太大 / 太旧**的结果丢掉 ✗✗ —— localStorage 有配额 ✓，
+         撑爆了会**连历史一起写不进去** ✗（那就得不偿失了 ✓）。
+         · 只给**最近 20 条**存结果 ✓（再往前的「回看」需求本来就低 ✓）；
+         · 单条结果超过 **60 KB** 就不存 ✓（思维导图偶尔会很大 ✓）——
+           这些条**照样在历史里** ✓，只是点开时得重算一次 ✓。 */
+      const slim = CG.hist.slice(0, CG_HIST_MAX).map((x, i) => {
+        const o = Object.assign({}, x);
+        if (i >= CG_HIST_RES_MAX) delete o.res;
+        else if (o.res) {
+          let s = '';
+          try { s = JSON.stringify(o.res); } catch (_) { s = ''; }
+          if (!s || s.length > CG_HIST_RES_BYTES) delete o.res;
+        }
+        return o;
+      });
+      localStorage.setItem(CG_HIST_KEY, JSON.stringify(slim));
+    } catch (_) {
+      /* ⚠️ 还是写不进去（配额真满了 ✓）→ **退一步**：只存「查过什么」✗，
+         把结果全丢掉 ✓ —— 那本来就是历史最主要的信息 ✓，
+         而且绝不能因为「想存结果」把整条历史搞没 ✗。 */
+      try {
+        localStorage.setItem(CG_HIST_KEY, JSON.stringify(CG.hist.map((x) => {
+          const o = Object.assign({}, x); delete o.res; return o;
+        })));
+      } catch (__) {}
+    }
+  }
+  /* ★★★★ 把「这次查到的结果」跟着历史一起存下来 ✗✗ —— 用户原话：
+     「**为什么点击加载历史记录，还需要 AI 重新思考**」✓。
+
+     ⚠️⚠️ 我第一版是**故意**让它重跑的 ✗，理由写在 `cgHistGo` 里：
+        「缓存里那份可能是别的词留下的」✓ —— 那是**怕拿错** ✓，
+        但代价是「回看」要再等 5~20 秒 ✗，而**那就不是回看了** ✗。
+     → 正解是**把结果存进那条历史记录本身** ✓（按记录取 ✓，就不可能拿错 ✓），
+       而不是「每次重算」✗。这也说明：「怕拿错」应该用**更准的键**去解 ✗，
+       不该用「干脆不算」去解 ✓。 */
+  function cgHistSnapshot(tab) {
+    if (tab === 'break') return { graph: CG.graph, aiFlow: CG.aiFlow, view: CG.view, root: CG.root };
+    return { rows: CG.rows, note: CG.note, manual: CG.manual, ai: CG.ai };
+  }
+  function cgHistSetResult() {
+    const key = String(CG.q || (CG.root && CG.root.name) || '').trim();
+    if (!key) return;
+    const row = (CG.hist || []).find((x) => x.tab === CG.tab && String(x.q || x.name) === key);
+    if (!row) return;
+    row.res = cgHistSnapshot(CG.tab);
+    row.resAt = Date.now();
+    cgHistSave();
   }
   /* 记一条 ✓ —— `record` 为 false 的那些（打开时自动带上下文的查 ✓）**不记** ✗，
      不然开十次面板就刷出十条一样的 ✓（那不是「我查过的」✓，是「工具自己查的」✗）。 */
@@ -839,6 +893,8 @@
     await cgLoadGraph(root);
     /* 再让 AI 拆 ✓ */
     await cgAiFlow(root);
+    /* ★ 结果也记进历史 ✓（下次点它秒开 ✓，不再问 AI ✓）*/
+    if (!CG.err) cgHistSetResult();
     cgEnd();
   }
   async function cgLoadGraph(root) {
@@ -1534,7 +1590,18 @@
     /* ★ 历史面板**盖住整块正文** ✓ —— 它不属于任何一个页签 ✓，
        而且「回看」的时候本来就该把别的东西让开 ✓。 */
     if (CG.histOn) return cgHistHtml();
+    /* ★ 「存到知识库」的对话框也盖住整块 ✓（它是模态的 ✓）*/
+    if (CG.ask) return cgAskHtml();
     if (CG.err) h += '<div class="cg-note err">✗ ' + esc(CG.err) + '</div>';
+    /* ★ 「存到知识库」✓ —— 用户原话：「把一些常用的记录下来，到知识库，
+       做成**技术知识积累**」✓。**当前这次结果**也能直接存 ✓
+       （不必先绕到历史里点那一下 ✓ —— 刚查完就想存是最自然的时机 ✓）。 */
+    if (!CG.busy && cgTabHasResult(tab)) {
+      h += '<div class="cg-tools">'
+        + cgBtn({ act: 'asksavecur', icon: '📥', label: '存到知识库',
+          title: '把这次查到的存进知识库（分类 / 项目可选，能接着编辑）' })
+        + '<span class="tip">存进知识库以后能搜到、也能继续编辑 ✓</span></div>';
+    }
     if (!ctx) {
       return h + '<div class="cg-empty">先打开一个代码文件 ✓<br>'
         + '<span>（这个工具要知道你正在编辑什么，才能查符号 / 拆逻辑 ✓）</span></div>';
@@ -1635,6 +1702,229 @@
         点了就真的去查 ✓（`data-cgact="demo"` ✓）。
      ⚠️ `brief` = 上面已经有一句「没找到 X」的提示了 ✓ → 只留那几个按钮 ✓，
         别再说一遍「输入一个符号名」✗（自相矛盾 ✓）。 */
+  /* ══ ★★★★ 「存到知识库」✓ ═══════════════════════════════════════════════
+     用户原话：「给所查询的记录，做一个**注入到知识库**的按钮，同时做好**管理和分类**，
+               这样可以把一些常用的记录下来，到知识库，做成**技术知识积累**」✓。
+
+     ⚠️⚠️ 两件事必须做对 ✗✗：
+     ① **「分类 / 项目」两级**是知识库**自己的结构** ✓（`知识库/分类/项目/文档.md` ✓，
+        页面路径少于 3 段会被 `createPage()` 拒掉 ✓）——
+        所以这里照它的结构来 ✓，**不另造一套分类** ✗（另造一套 = 用户在知识库里
+        看到两套目录 ✗）。
+     ② **写文件之前要先确保「项目」存在** ✗ —— 知识库靠项目里的 `.meta` 认它 ✓，
+        直接写 `.md` 的话页面**可能根本不出现** ✗（那就白存了 ✓，而且很难查 ✓）。
+        → 先 `POST /api/knowledge/project` ✓（已存在会报错 ✓，忽略即可 ✓），
+          再 `POST /api/readings/text-fragment` 写正文 ✓（它落在知识库目录下会自动触发重建 ✓）。
+     ⚠️ 用**页内浮层** ✗（这个项目禁用原生弹窗 ✓ —— 见 skill ✓）。 */
+  const CG_KB_KEY = 'cg-kb-last';
+  function cgKbLast() {
+    try { return JSON.parse(localStorage.getItem(CG_KB_KEY) || '{}') || {}; } catch (_) { return {}; }
+  }
+  function cgKbRemember(cat, proj) {
+    try { localStorage.setItem(CG_KB_KEY, JSON.stringify({ cat, proj, at: Date.now() })); } catch (_) {}
+  }
+  function cgKbSafe(s) {
+    /* ⚠️ 文件名里不能出现 `/ \ : * ? " < > | #` ✗（会跑到别的目录 / 建不出来 ✓）*/
+    return String(s == null ? '' : s).replace(/[\\/:*?"<>|#]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 40);
+  }
+  /* 把「这次查到的」变成一段能长期留着的 markdown ✓。
+     ⚠️ 三种页签的正文形态**完全不一样** ✗ → 分开写 ✓（硬凑成一种会很难看 ✓，
+        而且「手册」和「思维导图」本来就不是一类东西 ✓）。 */
+  function cgMdOf(tab, snap, q) {
+    const L = [];
+    const kind = tab === 'look' ? '速查手册' : tab === 'find' ? '实现方案' : '逻辑拆解';
+    L.push('---');
+    L.push('title: ' + JSON.stringify(q));
+    L.push('tags: [代码向导, ' + kind + ']');
+    L.push('---', '');
+    L.push('# ' + q, '');
+    L.push('> 由「代码向导」在 ' + new Date().toLocaleString('zh-CN') + ' 存入 —— ' + kind + ' ✓');
+    L.push('');
+    if (tab === 'look') {
+      const m = snap && snap.manual;
+      const d = m && m.data;
+      if (d) {
+        if (d.what) L.push(d.what, '');
+        if (d.header) { L.push('```c_cpp', d.header, '```', ''); }
+        (d.sections || []).forEach((s) => {
+          L.push('## ' + s.t, '');
+          if (s.d) L.push(s.d, '');
+          if (s.code) L.push('```c_cpp', s.code, '```', '');
+        });
+        if ((d.apis || []).length) {
+          L.push('## 常用成员', '', '| 名字 | 签名 | 说明 |', '| --- | --- | --- |');
+          d.apis.forEach((a) => L.push('| `' + a.n + '` | ' + (a.sig || '—') + ' | ' + (a.d || '') + ' |'));
+          L.push('');
+        }
+        if ((d.pitfalls || []).length) {
+          L.push('## 容易踩的坑', '');
+          d.pitfalls.forEach((x) => L.push('- ' + x));
+          L.push('');
+        }
+        if (m.sig) L.push('> LSP 给的签名（权威）：`' + m.sig + '`', '');
+      } else if (snap && (snap.rows || []).length) {
+        L.push('## 相关符号', '');
+        (snap.rows || []).forEach((r) => {
+          L.push('- `' + r.name + '`' + (r.doc ? ' —— ' + String(r.doc).split('\n')[0].slice(0, 120) : ''));
+        });
+        L.push('');
+      }
+    } else if (tab === 'find') {
+      const ai = (snap && snap.ai) || {};
+      const pl = ai.plan || {};
+      if (pl.plan) L.push('## 思路', '', pl.plan, '');
+      if ((pl.steps || []).length) {
+        L.push('## 步骤', '');
+        pl.steps.forEach((s, i) => L.push((i + 1) + '. ' + s));
+        L.push('');
+      }
+      if (pl.example) L.push('## 示例代码', '', '```c_cpp', pl.example, '```', '');
+      if (ai.hint) L.push('## 注意', '', ai.hint, '');
+      if ((ai.names || []).length) {
+        L.push('## 用到的东西', '', '| 名字 | 为什么 | 怎么用 |', '| --- | --- | --- |');
+        ai.names.forEach((n) => L.push('| `' + n.n + '` | ' + (n.why || '') + ' | `' + (n.use || '') + '` |'));
+        L.push('');
+      }
+    } else {
+      const fl = snap && snap.aiFlow && snap.aiFlow.data;
+      if (fl) {
+        if (fl.what) L.push('## 这段在干什么', '', fl.what, '');
+        if ((fl.in || []).length || (fl.out || []).length) {
+          L.push('## 输入 / 输出', '');
+          (fl.in || []).forEach((x) => L.push('- 进：' + x));
+          (fl.out || []).forEach((x) => L.push('- 出：' + x));
+          L.push('');
+        }
+        if ((fl.steps || []).length) {
+          L.push('## 步骤', '');
+          fl.steps.forEach((s, i) => {
+            L.push((i + 1) + '. **' + (s.t || '') + '**' + (s.d ? ' —— ' + s.d : ''));
+            (s.branch || []).forEach((b) => L.push('   - 如果' + (b.cond || '') + ' → ' + (b.to || '')));
+          });
+          L.push('');
+        }
+        if ((fl.pitfalls || []).length) {
+          L.push('## 容易搞错的地方', '');
+          fl.pitfalls.forEach((x) => L.push('- ' + x));
+          L.push('');
+        }
+      }
+      const g = snap && snap.graph;
+      if (g && g.payload && (g.payload.nodes || []).length) {
+        L.push('## 控制流', '');
+        (g.payload.nodes || []).slice(0, 40).forEach((n) => {
+          L.push('- `' + String(n.kind || n.type || '').slice(0, 12) + '` ' + String(n.label || n.text || '').slice(0, 90));
+        });
+        L.push('');
+      }
+    }
+    L.push('---', '');
+    L.push('<!-- 由 CodeScope 代码向导生成 —— 存下来是为了以后不用再查一遍，可以自由编辑 ✓ -->');
+    return L.join('\n');
+  }
+  function cgAskOpen(tab, q, snap) {
+    const title = String(q || '').slice(0, 60);
+    CG.ask = {
+      tab, q: String(q || ''), title, cat: '', proj: '', busy: false, err: '', loaded: false,
+      md: cgMdOf(tab, snap, String(q || '')),
+    };
+    CG.histOn = false;
+    cgRender();
+    /* 拉现有的分类 / 项目 ✓（异步 ✓，回来再重绘 ✓）*/
+    fetch('/api/knowledge/status', { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+      if (!CG.ask) return;
+      /* ⚠️⚠️ 先把**用户已经打进去的**收回来 ✗✗ —— 这次会**重绘** ✓，
+         而重绘是按 `CG.ask` 重建输入框的 ✓ →
+         用户在「列表还没拉回来」那几百毫秒里打的字**会被抹掉** ✗✗。
+         实测踩过 ✓：探针先把分类填成 `__探针代码向导__` ✓，
+         拉取回来一重绘就变回默认的「快速开始 / 使用指南」✓ →
+         结果**存到了用户的默认分类下** ✗（探针自己的清理还查不到它 ✓，
+         因为那个断言只盯 `__探针代码向导__` ✓）。
+         ⚠️ 这类 bug 在界面上表现为「我明明打了字，怎么又变回去了」✗，
+            用户只会觉得「这个框有毛病」✓。 */
+      const t0 = document.getElementById('cg-ask-title');
+      const c0 = document.getElementById('cg-ask-cat');
+      const p0 = document.getElementById('cg-ask-proj');
+      if (t0 && t0.value) CG.ask.title = t0.value;
+      if (c0 && c0.value) CG.ask.cat = c0.value;
+      if (p0 && p0.value) CG.ask.proj = p0.value;
+      const pages = (d && d.pages) || [];
+      const cats = [], projs = [];
+      pages.forEach((p) => {
+        const parts = String((p && p.path) || '').split('/');
+        if (parts.length >= 2 && parts[0] && parts[0] !== 'index.md') {
+          if (cats.indexOf(parts[0]) < 0) cats.push(parts[0]);
+          const pj = parts[0] + '/' + parts[1];
+          if (projs.indexOf(pj) < 0) projs.push(pj);
+        }
+      });
+      CG.ask.cats = cats;
+      CG.ask.projs = projs;
+      CG.ask.loaded = true;
+      const last = cgKbLast();
+      /* ⚠️ 只在**还是空的**时候才套默认值 ✗（已经填过的不要覆盖 ✓）*/
+      if (!CG.ask.cat) CG.ask.cat = last.cat || cats[0] || '技术积累';
+      if (!CG.ask.proj) CG.ask.proj = last.proj || (projs[0] ? projs[0].split('/')[1] : '常用代码');
+      cgRender();
+    }).catch(() => { if (CG.ask) { CG.ask.loaded = true; if (!CG.ask.cat) CG.ask.cat = '技术积累'; if (!CG.ask.proj) CG.ask.proj = '常用代码'; cgRender(); } });
+  }
+  async function cgAskRun() {
+    const a = CG.ask;
+    if (!a || a.busy) return;
+    const cat = cgKbSafe(a.cat), proj = cgKbSafe(a.proj), title = cgKbSafe(a.title) || cgKbSafe(a.q) || '未命名';
+    if (!cat || !proj) { a.err = '分类和项目都要填 ✓'; cgRender(); return; }
+    a.busy = true; a.err = ''; cgRender();
+    try {
+      /* ① 先确保**项目**存在 ✓（知识库靠项目里的 .meta 认它 ✓ —— 见上面那段注释 ✓）*/
+      try {
+        await fetch('/api/knowledge/project', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: cat + '/' + proj, description: '代码向导积累的技术知识' }),
+        });
+      } catch (_) {}
+      /* ② 再写正文 ✓（落在知识库目录下会自动触发重建 ✓）*/
+      const rel = '知识库/' + cat + '/' + proj + '/' + title + '.md';
+      const r = await fetch('/api/readings/text-fragment', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: rel, content: a.md }),
+      });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || '保存失败');
+      cgKbRemember(cat, proj);
+      CG.ask = null;
+      cgRender();
+      toast('已存进知识库 ✓ ' + cat + ' / ' + proj + ' / ' + title + '.md');
+    } catch (e) {
+      a.busy = false; a.err = String((e && e.message) || e); cgRender();
+    }
+  }
+  function cgAskHtml() {
+    const a = CG.ask;
+    if (!a) return '';
+    const kind = a.tab === 'look' ? '速查手册' : a.tab === 'find' ? '实现方案' : '逻辑拆解';
+    let h = '<div class="cg-ask">';
+    h += '<div class="cg-ask-hd"><span class="t">📥 存到知识库</span>'
+      + '<span class="tag">' + esc(kind) + '</span><span class="sp"></span>'
+      + cgBtn({ act: 'ask', icon: '✕', label: '取消' }) + '</div>';
+    h += '<div class="cg-ask-b">';
+    h += '<div class="cg-ask-row"><label>标题</label><input id="cg-ask-title" value="' + esc(a.title) + '" placeholder="文档标题"></div>';
+    h += '<div class="cg-ask-row"><label>分类</label><input id="cg-ask-cat" list="cg-ask-cats" value="' + esc(a.cat || '') + '" placeholder="如 嵌入式 / C++">'
+      + '<datalist id="cg-ask-cats">' + (a.cats || []).map((x) => '<option value="' + esc(x) + '"></option>').join('') + '</datalist></div>';
+    h += '<div class="cg-ask-row"><label>项目</label><input id="cg-ask-proj" list="cg-ask-projs" value="' + esc(a.proj || '') + '" placeholder="如 常用代码 / STL">'
+      + '<datalist id="cg-ask-projs">' + (a.projs || []).map((x) => '<option value="' + esc(String(x).split('/')[1] || '') + '"></option>').join('') + '</datalist></div>';
+    h += '<div class="cg-ask-path">会存到：<code>' + esc('知识库/' + (cgKbSafe(a.cat) || '分类') + '/' + (cgKbSafe(a.proj) || '项目') + '/' + (cgKbSafe(a.title) || '标题') + '.md') + '</code></div>';
+    if (!a.loaded) h += '<div class="cg-ask-hint">正在读现有的分类 / 项目…</div>';
+    else if (!(a.cats || []).length) h += '<div class="cg-ask-hint">知识库里还没有分类 —— 直接填一个名字就会建 ✓</div>';
+    h += '<div class="cg-ask-md">' + esc(String(a.md).slice(0, 260)) + (String(a.md).length > 260 ? '\n…（共 ' + Math.round(String(a.md).length / 1024) + ' KB）' : '') + '</div>';
+    if (a.err) h += '<div class="cg-note err">✗ ' + esc(a.err) + '</div>';
+    h += '<div class="cg-ask-ft">'
+      + cgBtn({ act: 'askrun', pri: true, icon: '📥', label: a.busy ? '正在存…' : '存进去', busy: a.busy, busyText: '正在存…' })
+      + cgBtn({ act: 'ask', icon: '✕', label: '取消' })
+      + '<span class="tip">存进去之后，知识库里就能搜到、也能接着编辑 ✓</span></div>';
+    h += '</div></div>';
+    return h;
+  }
+
   /* ★★★★ 历史面板 ✓ —— 用户原话：「再给我新增查阅历史记录，方便我回看」✓。
      ⚠️ 每一行**点一下就重查** ✗（不只是给你看看 ✓）——
         「回看」的目的十有八九是「再看一遍那个东西」✓，
@@ -1663,11 +1953,19 @@
         + '<span class="e">' + esc(t.e) + '</span>'
         + '<span class="q">' + esc(q) + '</span>'
         + (other ? '<span class="w">别的文件</span>' : '')
+        /* ★ 「存到知识库」✓ —— 用户原话：「给所查询的记录，做一个注入到知识库的按钮」✓。
+           ⚠️ 它是**行内的按钮** ✗（整行是「点一下重查」✓）——
+              靠 `closest('[data-cgact]')` **先命中自己** ✓，
+              所以点它不会顺手把这条重查一遍 ✓（不用手动 stopPropagation ✓）。 */
+        + cgBtn({ act: 'asksave', val: i, icon: '📥', label: '存知识库', disabled: !x.res,
+          title: x.res ? '把这条查到的存进知识库（做技术积累）' : '这条没存下结果 —— 先点它一次再来存' })
         + '<span class="ago">' + esc(cgAgo(x.at)) + '</span></div>';
     }).join('');
     return h + '</div>';
   }
-  /* 从历史点回来 ✓ */
+  /* 从历史点回来 ✓ —— 用户原话：「**为什么点击加载历史记录，还需要 AI 重新思考**」✓。
+     ⚠️⚠️ 现在**有结果就直接摆出来** ✗（秒开 ✓），只有「没存到结果」的才重算 ✓
+        （结果太大的 / 太旧的，落盘时被丢掉了 ✓ —— 见 cgHistSave ✓）。 */
   function cgHistGo(i) {
     const row = (CG.hist || [])[Number(i)];
     if (!row) return;
@@ -1679,16 +1977,39 @@
         cgRender();
         return;
       }
+      /* ★ 存过结果 → 直接把那张导图摆回来 ✓（**不用再拆一遍** ✗）*/
+      if (row.res && row.res.graph) {
+        CG.graph = row.res.graph;
+        CG.aiFlow = row.res.aiFlow || null;
+        CG.view = row.res.view || 'mind';
+        CG.root = row.res.root || { name: row.q, line: row.line };
+        CG.err = ''; CG.note = ''; CG.rows = [];
+        CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
+        cgRender();
+        return;
+      }
       if (!row.line) { toast('这条没记下行号 —— 回到「拆逻辑」从列表里挑一个 ✓'); cgRender(); return; }
       cgPick({ name: row.q, line: row.line, frag: -1 });
       return;
     }
-    /* 切到那个页签 ✓、把查询词填回去 ✓、**重新查一遍** ✓
-       ⚠️ 不能直接用缓存 ✗（缓存里那份可能是别的词留下的 ✓）*/
+    /* 切到那个页签 ✓、把查询词填回去 ✓ */
     if (CG.tab !== row.tab) { cgStash(); CG.tab = row.tab; cgRestore(row.tab); }
-    CG.rows = []; CG.manual = null; CG.ai = null; CG.aiFlow = null; CG.note = ''; CG.err = '';
     CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
     CG.q = String(row.q || '');
+    if (row.res) {
+      /* ★ 秒开 ✓ —— 一个字节都不用重算 ✓ */
+      CG.rows = row.res.rows || [];
+      CG.note = row.res.note || '';
+      CG.manual = row.res.manual || null;
+      CG.ai = row.res.ai || null;
+      CG.graph = null; CG.aiFlow = null; CG.err = '';
+      cgRender();
+      const qi = $('#cgx-q');
+      if (qi) { qi.value = CG.q; qi.disabled = false; }
+      return;
+    }
+    /* 没存到结果（太大 / 太旧 / 老记录 ✓）→ 老老实实重查一遍 ✓ */
+    CG.rows = []; CG.manual = null; CG.ai = null; CG.aiFlow = null; CG.note = ''; CG.err = '';
     cgRender();
     const q = $('#cgx-q');
     if (q) { q.value = CG.q; q.disabled = false; }
@@ -1771,6 +2092,32 @@
     /* 历史按钮要**看得出开着** ✗（不然用户不知道自己在看历史面板 ✓）*/
     const histBtn = $('#cgx-hist');
     if (histBtn) histBtn.classList.toggle('on', !!CG.histOn);
+    /* ★ 存知识库的对话框：打字时**实时更新「会存到哪」** ✓
+       ⚠️ 只改那一行文字 ✗，**不重绘** ✗ —— 重绘会把输入框重建 ✓，光标就丢了 ✓。 */
+    if (CG.ask) {
+      const pick = (id) => document.getElementById(id);
+      const sync = () => {
+        const t = pick('cg-ask-title'), c = pick('cg-ask-cat'), p = pick('cg-ask-proj');
+        if (CG.ask) { if (t) CG.ask.title = t.value; if (c) CG.ask.cat = c.value; if (p) CG.ask.proj = p.value; }
+        const code = document.querySelector('.cg-ask-path code');
+        if (code) {
+          code.textContent = '知识库/' + (cgKbSafe(c && c.value) || '分类') + '/'
+            + (cgKbSafe(p && p.value) || '项目') + '/' + (cgKbSafe(t && t.value) || '标题') + '.md';
+        }
+      };
+      ['cg-ask-title', 'cg-ask-cat', 'cg-ask-proj'].forEach((id) => {
+        const el = pick(id);
+        if (!el) return;
+        el.oninput = sync;
+        /* 回车 = 直接存 ✓（这种小表单就该能一路回车走完 ✓）*/
+        el.onkeydown = (ev) => {
+          if (ev.key !== 'Enter') return;
+          ev.preventDefault();
+          const b = document.querySelector('[data-cgact="askrun"]');
+          if (b) b.click();
+        };
+      });
+    }
     const inp = $('#cgx-q');
     if (inp) {
       const t = TABS.find((x) => x.k === CG.tab) || TABS[0];
@@ -1905,6 +2252,31 @@
     '.cg-hist-chip:hover{border-color:var(--accent);color:var(--accent);',
     'background:color-mix(in srgb,var(--accent) 10%,var(--panel2))}',
     '.cg-hist-chip i{font-style:normal;font-size:9.5px;color:var(--dim)}',
+    /* ── ★★ 「存到知识库」✓（用户原话：「做一个注入到知识库的按钮，同时做好管理和分类」✓）
+       ⚠️ 历史行里的那个 📥 要**压小一点** ✗ —— 行本身才 30 多像素高 ✓，
+          用默认尺寸会把整行撑变形 ✓。 */
+    '.cg-hist-row .cg-btn{height:22px;font-size:10.5px;padding:0 8px;gap:4px}',
+    '.cg-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:8px 0 10px}',
+    '.cg-tools .tip{font-size:10.5px;color:var(--dim)}',
+    '.cg-ask-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}',
+    '.cg-ask-hd .t{font-size:12.5px;font-weight:600;color:var(--text)}',
+    '.cg-ask-hd .sp{flex:1;min-width:0}',
+    '.cg-ask-b{display:flex;flex-direction:column;gap:8px}',
+    '.cg-ask-row{display:flex;align-items:center;gap:9px}',
+    '.cg-ask-row label{flex:none;width:38px;font-size:11.5px;color:var(--dim);text-align:right}',
+    '.cg-ask-row input{flex:1;min-width:0;height:28px;padding:0 9px;border-radius:7px;',
+    'border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:12px;',
+    'font-family:inherit;outline:none}',
+    '.cg-ask-row input:focus{border-color:var(--accent)}',
+    '.cg-ask-path{font-size:10.5px;color:var(--dim);line-height:1.6;word-break:break-all}',
+    '.cg-ask-path code{font-family:var(--mono);color:var(--text)}',
+    '.cg-ask-hint{font-size:10.5px;color:var(--dim)}',
+    /* 预览：让人**存之前就知道要存什么** ✗（不然点了才知道内容不对 ✓）*/
+    '.cg-ask-md{margin-top:2px;max-height:150px;overflow:auto;padding:9px 10px;border-radius:8px;',
+    'border:1px solid var(--border);background:var(--panel2);color:var(--dim);',
+    'font-family:var(--mono);font-size:10.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}',
+    '.cg-ask-ft{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:4px}',
+    '.cg-ask-ft .tip{font-size:10.5px;color:var(--dim)}',
     /* ── ★★ 「找方案」的结果 ✓（思路 + 步骤 + 示例）────────────────────────── */
     '.cg-plan{border:1px solid color-mix(in srgb,var(--accent) 32%,transparent);border-radius:10px;',
     'background:color-mix(in srgb,var(--accent) 7%,transparent);padding:11px 12px;margin-bottom:11px}',
@@ -2325,6 +2697,27 @@
       if (act === 'hist') { CG.histOn = !CG.histOn; cgRender(); return; }
       if (act === 'histclear') { cgHistClear(); cgRender(); return; }
       if (act === 'histgo') { cgHistGo(btn.dataset.cgval); return; }
+      /* ★ 存到知识库 ✓ —— 用户原话：「做一个注入到知识库的按钮」✓ */
+      if (act === 'asksave') {
+        const row = (CG.hist || [])[Number(btn.dataset.cgval)];
+        if (row) {
+          const snap = row.res || null;
+          if (!snap) { toast('这条没存下结果 —— 先点它一次，再把结果存进知识库 ✓'); return; }
+          cgAskOpen(row.tab, row.q || row.name, snap);
+        }
+        return;
+      }
+      if (act === 'asksavecur') { cgAskOpen(CG.tab, CG.q || (CG.root && CG.root.name) || '', cgHistSnapshot(CG.tab)); return; }
+      if (act === 'ask') { CG.ask = null; cgRender(); return; }
+      if (act === 'askrun') {
+        /* ⚠️ 先把输入框里的值收进来 ✗ —— 它们是 DOM ✓，`cgAskRun` 读的是状态 ✓ */
+        const t = $('#cg-ask-title'), c = $('#cg-ask-cat'), p = $('#cg-ask-proj');
+        if (t && CG.ask) CG.ask.title = t.value;
+        if (c && CG.ask) CG.ask.cat = c.value;
+        if (p && CG.ask) CG.ask.proj = p.value;
+        cgAskRun();
+        return;
+      }
       if (act === 'demo') {
         /* 空态里那些「可点的例子」✓ —— 点了就真的去查 ✓（不是摆设 ✓）*/
         const v = btn.dataset.cgval || '';
@@ -2354,7 +2747,7 @@
     Promise.resolve()
       .then(() => cgLoadGraph(root))
       .then(() => cgAiFlow(root))
-      .then(() => cgEnd())
+      .then(() => { if (!CG.err) cgHistSetResult(); cgEnd(); })
       .catch((e) => { CG.err = String((e && e.message) || e); cgEnd(); });
   }
   async function cgRun(opts) {
@@ -2372,6 +2765,8 @@
     } catch (e) {
       CG.err = String((e && e.message) || e);
     }
+    /* ★ 把这次的结果**记进那条历史** ✓（下次点它就能秒开 ✓，不再问 AI ✓）*/
+    if (!CG.err) cgHistSetResult();
     cgEnd();
   }
   function cgOpen(tab) {
