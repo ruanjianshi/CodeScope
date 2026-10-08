@@ -570,6 +570,90 @@ const TEXT = SENT.join(' ');
     await p.locator('[data-epsent="0"]').click(); await p.waitForTimeout(1000);
     ck('★ 换一句不会串台（拆解是按句存的）', await p.locator('.lw-ep-an').count() === 0);
 
+    /* ══ ③g ★★ 每行删除 + 分类管理（用户原话：「这里缺少删除」「还有缺少分类管理」）══
+       ⚠️⚠️ 这一段最要紧的是**「取消不能改数据」** ✗✗ ——
+          实测踩到过（2026-10-08 ✓）：`lwChoose` 取消时 resolve 的是 `false` ✓
+          （不是 `null` ✓），而调用处写的是 `if (x === null) return;` ✗ →
+          `String(false)` 被当成分类名写进了文章 ✓ →
+          侧栏里凭空多出一个叫 **false** 的分类 ✗✗
+          （用户**根本没点过任何选项**，只是按了 Esc ✓）。 */
+    await diagArt('③g 开始'); console.log('\n── ③g ★★ 删除 + 分类管理 ──');
+    const catOf = async (id) => { const d = await store(); const x = (d.articles || []).find((a) => a.id === id); return x ? String(x.cat || '') : '(没了)'; };
+    const mkArt = async (n) => {
+      const d = await store();
+      const id = 'acat' + Date.now() + n;
+      d.articles = (d.articles || []).concat([{ id, title: MARK + '分类' + n, site: 'probe', url: '', text: TEXT, level: 'B2', words: 120, minutes: 1, done: {}, at: Date.now() + n, edit: Date.now() + n }]);
+      await put(d); return id;
+    };
+    const a1 = await mkArt(1), a2 = await mkArt(2);
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('#btn-lifework', { timeout: 20000 });
+    await p.click('#btn-lifework'); await p.waitForSelector('#lifework-view', { timeout: 20000 });
+    await p.locator('.lw-nav [data-tab="reading"]').dispatchEvent('click');
+    await p.waitForSelector('.lw-ep-body', { timeout: 20000 }); await p.waitForTimeout(1200);
+    /* ⚠️ 这个**不能是 async** ✗ —— `p.locator()` 是同步返回的 ✓，
+       写成 async 的话 `rowOf(id).locator(...)` 会变成「Promise 上没有 locator」✗（实测踩过 ✓）。 */
+    const rowOf = (id) => p.locator('.lw-ep-art[data-epart="' + id + '"]');
+    ck('★★ 列表每行都有「📁 分类」和「🗑 删除」',
+      await p.locator('[data-epartcat]').count() >= 2 && await p.locator('[data-epartdel]').count() >= 2,
+      '分类钮 ' + await p.locator('[data-epartcat]').count() + ' · 删除钮 ' + await p.locator('[data-epartdel]').count());
+    ck('★★ 左栏有「分类」栏（全部 / 未分类 / 新建）',
+      await p.locator('[data-epcat]').count() >= 2 && await p.locator('[data-epcatnew]').count() === 1,
+      '分类行 ' + await p.locator('[data-epcat]').count());
+    /* ★★★ 取消不能改数据 */
+    await rowOf(a1).locator('[data-epartcat]').click(); await p.waitForTimeout(800);
+    ck('  点 📁 弹出选择框', await p.locator('#lw-dlg-o0').count() === 1);
+    await p.keyboard.press('Escape'); await p.waitForTimeout(900);
+    ck('★★★ 按 Esc 取消 → **一个字都不改**（曾经把 false 当成分类名写进去）',
+      (await catOf(a1)) === '', JSON.stringify(await catOf(a1)));
+    /* 新建分类 */
+    await rowOf(a1).locator('[data-epartcat]').click(); await p.waitForTimeout(800);
+    await p.locator('[id^=lw-dlg-o]').filter({ hasText: '新建分类' }).first().click(); await p.waitForTimeout(700);
+    await p.waitForSelector('#lw-dlg-in', { timeout: 8000 });
+    await p.locator('#lw-dlg-in').fill('科技'); await p.keyboard.press('Enter'); await p.waitForTimeout(1300);
+    ck('★★ 新建分类后这篇就归进去了', (await catOf(a1)) === '科技', JSON.stringify(await catOf(a1)));
+    ck('★ 而且**记住了这个名字**（空分类也留得住）',
+      ((await store()).epCats || []).indexOf('科技') >= 0, JSON.stringify((await store()).epCats));
+    ck('★ 顺手切到了这个分类（列表只剩它）', await p.locator('.lw-ep-art').count() === 1,
+      String(await p.locator('.lw-ep-art').count()));
+    /* 给第二篇也选同一个分类 */
+    await p.locator('[data-epcat]').filter({ hasText: '全部' }).first().click(); await p.waitForTimeout(900);
+    await rowOf(a2).locator('[data-epartcat]').click(); await p.waitForTimeout(800);
+    await p.locator('[id^=lw-dlg-o]').filter({ hasText: '科技' }).first().click(); await p.waitForTimeout(1100);
+    ck('★★ 第二篇也能归到同一个分类', (await catOf(a2)) === '科技', JSON.stringify(await catOf(a2)));
+    /* 分类管理：改名 */
+    await p.locator('[data-epcatmgr]').first().click(); await p.waitForTimeout(800);
+    await p.locator('[id^=lw-dlg-o]').filter({ hasText: '改个名字' }).first().click(); await p.waitForTimeout(700);
+    await p.waitForSelector('#lw-dlg-in', { timeout: 8000 });
+    await p.locator('#lw-dlg-in').fill('科技与健康'); await p.keyboard.press('Enter'); await p.waitForTimeout(1300);
+    ck('★★ 改名要**两篇一起改**（不然会分成两个分类）',
+      (await catOf(a1)) === '科技与健康' && (await catOf(a2)) === '科技与健康',
+      JSON.stringify([await catOf(a1), await catOf(a2)]));
+    /* 分类管理：删分类 ≠ 删文章 */
+    const nB = ((await store()).articles || []).length;
+    await p.locator('[data-epcatmgr]').first().click(); await p.waitForTimeout(800);
+    await p.locator('[id^=lw-dlg-o]').filter({ hasText: '删掉这个分类' }).first().click(); await p.waitForTimeout(800);
+    await p.locator('#lw-dlg-ok').click(); await p.waitForTimeout(1300);
+    const dA = await store();
+    ck('★★★ 删分类**不删文章**（文章回到未分类）',
+      (dA.articles || []).length === nB && (await catOf(a1)) === '', '文章 ' + nB + ' → ' + (dA.articles || []).length + ' · cat=' + JSON.stringify(await catOf(a1)));
+    /* 每行删除 */
+    const nC = ((await store()).articles || []).length;
+    const openBefore = await p.evaluate(() => { const el = document.querySelector('.lw-ep-art.on'); return el ? el.dataset.epart : ''; });
+    await rowOf(a1).locator('[data-epartdel]').click(); await p.waitForTimeout(900);
+    await p.locator('#lw-dlg-ok').click(); await p.waitForTimeout(1300);
+    const openAfter = await p.evaluate(() => { const el = document.querySelector('.lw-ep-art.on'); return el ? el.dataset.epart : ''; });
+    ck('★★ 每行的 🗑 真能删掉那一篇', ((await store()).articles || []).length === nC - 1,
+      nC + ' → ' + ((await store()).articles || []).length);
+    ck('★★ 而且**没顺手把别的那篇打开**（stopPropagation）', openBefore === openAfter,
+      JSON.stringify(openBefore) + ' → ' + JSON.stringify(openAfter));
+    /* 清掉这一段造的两篇 */
+    {
+      const d = await store();
+      d.articles = (d.articles || []).filter((x) => x.id !== a1 && x.id !== a2);
+      await put(d);
+    }
+
     await diagArt('④ 开始'); console.log('\n── ④ 双语对照翻译（用户原话「怎么没有双语对应翻译」）──');
     /* ⚠️ 先刷新一次 ✗ —— `EP_UI.trOn` 是**内存态** ✓，
        上面 ③c 为了「译这句」把它打开了 ✓ → 不重置的话这一节一开始就有译文行 ✗，

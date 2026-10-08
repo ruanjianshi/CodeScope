@@ -250,9 +250,11 @@ function stripMine(d) {
     ck('★★ 「▶ 复习」按钮**不是灰的**（永远可点）',
       await p.locator('#lw-wd-rev:not([disabled])').count() === 1,
       JSON.stringify(await txt('#lw-wd-rev')));
-    ck('★ 而且 title 里写明了「没到期也能提前复习」',
-      /提前复习/.test(await p.locator('#lw-wd-rev').getAttribute('title') || ''),
-      await p.locator('#lw-wd-rev').getAttribute('title'));
+    /* ⚠️⚠️ title 是**跟着状态变的** ✗✗ —— 有到期时写「开始复习 N 个到期的词」✓，
+       没到期时写「…可以提前复习」✓。第一版把它放在**有到期**的那一段验 ✗ →
+       断言本身没错 ✓，但**测的时机不对** ✓（批量跑时用户的词到期了就红 ✓，
+       单独跑又绿 ✓ —— 典型的「看时间」型假失败 ✓）。
+       → 挪到下面「都没到期」那一段再验 ✓（那里才是它该出现的时候 ✓）。 */
     /* 把**所有**词的 due 推到未来 → 制造「一个都没到期」✓ */
     const dR = await store();
     const dueBack = (dR.words || []).map((w) => ({ id: w.id, due: w.due }));
@@ -266,6 +268,9 @@ function stripMine(d) {
     await p.locator('[data-rdmode="word"]').click(); await p.waitForTimeout(900);
     ck('★★ 一个都没到期时，按钮**还是可点**（以前是灰的 → 点了没反应）',
       await p.locator('#lw-wd-rev:not([disabled])').count() === 1);
+    ck('★ 而且这时候 title 写明了「可以提前复习」（状态对了才说这句话）',
+      /提前复习/.test(await p.locator('#lw-wd-rev').getAttribute('title') || ''),
+      await p.locator('#lw-wd-rev').getAttribute('title'));
     await p.locator('#lw-wd-rev').click(); await p.waitForTimeout(900);
     /* ⚠️ 确认框是**页内浮层**（`.lw-imp` ✓），不是原生弹窗 ✗ —— 读它的文本 ✓ */
     const dlgTxt = await txt('.lw-imp');

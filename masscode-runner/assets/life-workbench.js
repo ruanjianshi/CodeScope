@@ -1393,6 +1393,12 @@
   .lw-rd-row.on { background:${T.card2}; color:${T.text}; border-left-color:${T.accent}; }
   .lw-rd-row .n { margin-left:auto; font-size:9.5px; color:${T.faint}; font-variant-numeric:tabular-nums; }
   .lw-rd-row .em { font-size:13px; line-height:1; }
+  /* ★ 分类行上的「⋯」✓（改名 / 删分类 ✓）—— 平时**淡**一点 ✗，
+     hover 那行才亮 ✓（免得一栏里全是图标，和右边的数字打架 ✓）。
+     ⚠️ .n 有 margin-left:auto ✓，所以「⋯」会紧跟在数字右边 ✓。
+     ⚠️ 这段注释里不许出现反引号 ✗（本会话第 8 次了 ✗）。 */
+  .lw-rd-row .x { flex:none; font-size:12px; line-height:1; color:${T.faint}; cursor:pointer; padding:0 2px; }
+  .lw-rd-row .x:hover { color:${T.accent}; }
   /* 左栏统计 */
   .lw-rd-stat { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:${T.lineDim};
     margin:0 13px 12px; border:1px solid ${T.lineDim}; }
@@ -1702,14 +1708,31 @@
   .lw-rm-quiz .tip { font-size:10px; color:${T.faint}; }
 
   /* ── 文章列表 ── */
+  /* ⚠️ position:relative 是给右上角那两个操作（.ops ✓）当定位基准的 ✗ ——
+     少了它，.ops 会一路往上找最近的定位祖先 ✓ → 飘到整个列表外面去 ✓。
+     ⚠️ 这段注释里不许出现反引号 ✗（CSS 装在 JS 模板串里 ✓，本会话栽过 7 次 ✗）。 */
   .lw-ep-art { padding:11px 13px; border-bottom:1px solid ${T.lineDim}; cursor:pointer;
-    border-left:2px solid transparent; }
+    border-left:2px solid transparent; position:relative; }
   .lw-ep-art:hover { background:${T.card2}; }
   .lw-ep-art.on { background:${T.card2}; border-left-color:${T.accent}; }
   .lw-ep-art .ti { font-size:12px; color:${T.text}; line-height:1.5; margin-bottom:5px; }
   .lw-ep-art .mt { display:flex; gap:8px; flex-wrap:wrap; font-size:9.5px; color:${T.faint}; }
   .lw-ep-art .mt .lv { color:${T.accent}; }
   .lw-ep-art .mt .done { color:${T.ok}; }
+  /* ★★ 每行右上角那两个操作 ✓（📁 分类 / 🗑 删除 ✓）——
+     用户原话：「这里缺少删除」+「还有缺少分类管理」✓。
+     ⚠️ 平时 **opacity:0** ✗（不占视觉），hover / 当前这篇才显出来 ✓ ——
+        一直显示的话，一屏十几行挂二十几个图标，列表会很吵 ✓。
+     ⚠️ 绝对定位 + 父级相对定位 ✗（父级那条规则里已经加了 ✓）*/
+  .lw-ep-art .ops { position:absolute; top:6px; right:6px; display:flex; gap:2px;
+    opacity:0; transition:opacity .12s; }
+  .lw-ep-art:hover .ops, .lw-ep-art.on .ops { opacity:1; }
+  .lw-ep-art .ops button { width:22px; height:22px; padding:0; border:1px solid ${T.lineDim};
+    background:${T.bg}; color:${T.dim}; font-size:11px; line-height:1; cursor:pointer; }
+  .lw-ep-art .ops button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-ep-art .ops button.del:hover { border-color:${T.red}; color:${T.red}; }
+  /* 分类标记 ✓ —— 一行里要能一眼看出这篇归在哪 ✓ */
+  .lw-ep-art .mt .cat { color:${T.accent}; }
 
   /* ── 正文（逐句）── */
   .lw-ep-body { flex:1; min-height:0; overflow:auto; padding:22px 30px 60px; background:${T.bg}; }
@@ -2408,6 +2431,11 @@
     mode: '',                    /* '' = 书架 ✓ / 'ex' = 外刊精读 ✓ / 'word' = 生词本 ✓ */
     art: '',                     /* 当前文章 id ✓ */
     q: '',                       /* 文章搜索 ✓ */
+    /* ★ 📁 分类筛选 ✓（用户原话：「还有缺少分类管理」✓）——
+       值：`*` = 全部 ✓ / `!` = 未分类 ✓ / 其它 = 分类名 ✓（见 EP_CAT_ALL / EP_CAT_NONE ✓）。
+       ⚠️ 只放**内存** ✓ —— 它是「我现在在看哪一堆」✓，刷新回到「全部」最自然 ✓
+          （而且省得落盘的值和文章对不上 ✓）。 */
+    artCat: '*',
     sel: -1,                     /* 当前选中的**句子序号** ✓ */
     pick: '',                    /* 划词划中的那个词 ✓（还没加进生词本 ✓）*/
     /* ★ 「这个词现在显示在下面」✓ —— 用户原话：划中的词 / 点原文里高亮的词，
@@ -3474,7 +3502,18 @@
     if (!d || !root) return;
     const q = (s) => root.querySelector(s);
     const ok = q('#lw-dlg-ok'), no = q('#lw-dlg-no'), x = q('#lw-dlg-x'), inp = q('#lw-dlg-in');
-    const cancelVal = () => (d.kind === 'ask' ? null : false);
+    /* ⚠️⚠️ 取消值要**按类型分** ✗✗ ——
+       `confirm` 的语义本来就是布尔 ✓（取消 = `false` ✓），
+       而 `ask` / `choose` 的返回值是**任意值** ✓（字符串 / 枚举 ✓）——
+       它们取消**必须回 `null`** ✓，不能回 `false` ✗：
+       调用处写的是 `if (x === null) return;` ✓（全项目三处都这么写 ✓，本意就是 null ✓），
+       回 `false` 的话会**漏过去** ✗ → `false` 被当成一个真结果用 ✓。
+       ⚠️ 实测（2026-10-08 ✓）：`String(false)` 被当成分类名写进了文章 ✓
+          → 侧栏里凭空多出一个叫 **false** 的分类 ✗✗
+          （而且用户根本没点过任何选项 —— 他只是按了 Esc / 点了取消 ✓）。
+       ⚠️ 这个坑**潜伏了很久** ✗：日记模板那处（4893 行附近）也判 `=== null` ✓，
+          一直没被发现是因为那条路上「取消」很少被点 ✓。 */
+    const cancelVal = () => (d.kind === 'confirm' ? false : null);
     const submit = () => {
       if (d.kind === 'ask') {
         /* ⚠️ 空值**不给过** ✗ —— 原生 prompt 允许空 ✓，但这里每一处都要求非空 ✓，
@@ -9873,6 +9912,50 @@
   function epArts() { return ((STORE && STORE.articles) || []).filter(Boolean); }
   function epWords() { return ((STORE && STORE.words) || []).filter(Boolean); }
   function epArtById(id) { return epArts().find((a) => a && a.id === id) || null; }
+  /* ══ 📁 分类 ✓（用户原话：「还有缺少分类管理」）════════════════════════════
+     ⚠️⚠️ 刻意**不另存一份分类表** ✗ —— 分类就是文章上的一个字符串字段（`a.cat` ✓），
+        左侧那份列表是从文章里**推导**出来的 ✓（`epCats()` ✓）。
+        另存一份的话，「改了文章没改表 / 删了文章表里还留着」这类漂移迟早发生 ✓
+        （本项目在这上面栽过好几次 ✗）。
+     ⚠️ 代价：**空分类留不住** ✗（最后一篇移走，这个分类就没了 ✓）。
+        可以接受 ✓ —— 用户要的是「把文章分堆」✓，不是「维护一棵空的文件夹树」✓。
+     ⚠️ 过滤值用 `*`（全部）/ `!`（未分类）两个哨兵 ✗ —— 建分类时**要挡住这两个名字** ✓
+        （见 `epCatNew()` ✓），不然会对不上 ✓。 */
+  const EP_CAT_ALL = '*', EP_CAT_NONE = '!';
+  function epCatOf(a) { return String((a && a.cat) || '').trim(); }
+  /* ★ 分类名单 = **显式建过的**（`STORE.epCats` ✓）+ **文章上实际用到的** ✓，去重 ✓。
+     ⚠️ 为什么要显式那份 ✗：只从文章推导的话，
+        把分类里最后一篇文章删掉 / 移走 → **这个分类就凭空消失了** ✗
+        （用户会觉得「我建的分类怎么没了」✓）。
+        显式那份让空分类**留得住** ✓，而「文章 → 分类」这条链**仍然只有一份**
+        （就是 `a.cat` ✓）→ 不会漂移 ✓（漂移风险只剩「名单里有个没人用的名字」✓，无害 ✓）。 */
+  function epCats() {
+    const m = {};
+    ((STORE && STORE.epCats) || []).forEach((x) => { const t = String(x || '').trim(); if (t) m[t] = m[t] || 0; });
+    epArts().forEach((a) => { const c = epCatOf(a); if (c) m[c] = (m[c] || 0) + 1; });
+    return Object.keys(m).sort((x, y) => x.localeCompare(y, 'zh')).map((name) => ({ name, n: m[name] || 0 }));
+  }
+  function epCatRemember(name) {
+    if (!STORE) return;
+    const t = String(name || '').trim();
+    if (!t) return;
+    STORE.epCats = ((STORE.epCats) || []).filter((x) => String(x || '').trim() !== t).concat([t]);
+  }
+  /* ★ 分类名合法性 ✓ —— 挡住两个哨兵（`*` / `!` ✓）+ 空 + 超长 ✓。
+     挡住哨兵是**必须**的 ✗：不然「全部 / 未分类」的筛选值会和真分类名撞上 ✓。 */
+  function epCatName(raw) {
+    const t = String(raw == null ? '' : raw).trim().slice(0, 24);
+    if (!t) { rdToast('分类名不能是空的'); return ''; }
+    if (t === EP_CAT_ALL || t === EP_CAT_NONE) { rdToast('这个名字不能用 ✓ 换一个'); return ''; }
+    return t;
+  }
+  /* 这篇文章过不过当前的分类筛选 ✓ */
+  function epCatPass(a) {
+    const f = EP_UI.artCat || EP_CAT_ALL;
+    if (f === EP_CAT_ALL) return true;
+    if (f === EP_CAT_NONE) return !epCatOf(a);
+    return epCatOf(a) === f;
+  }
   /* ★ 当前文章：`EP_UI.art`（内存 ✓）→ `STORE.epArt`（落盘 ✓）→ **最近编辑的那篇**（兜底 ✓）。
      最后那层兜底很关键 ✗：不兜的话，切出去再回来 / 刷新一下，
      正文区永远是「← 从中间选一篇文章」✗，用户会以为文章没了 ✗。 */
@@ -10150,11 +10233,30 @@
     const words = arts.reduce((n, a) => n + (Number(a.words) || 0), 0);
     const flt = (k, label, n) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epflt="' + k + '">'
       + '<span class="em">▣</span>' + label + '<span class="n">' + n + '</span></div>';
+    /* 📁 分类那一栏 ✓（用户原话：「还有缺少分类管理」✓）*/
+    const catRow = (val, em, label, n, mgr) => '<div class="lw-rd-row'
+      + ((EP_UI.artCat || EP_CAT_ALL) === val ? ' on' : '') + '" data-epcat="' + esc(val) + '">'
+      + '<span class="em">' + em + '</span>' + esc(label) + '<span class="n">' + n + '</span>'
+      /* ⚠️ 「⋯」是**管理**入口 ✓（改名 / 删分类 ✓），点它**不能顺带切筛选** ✗
+         → 绑定时要 `stopPropagation` ✓（和文章行那两个操作一个道理 ✓）。 */
+      + (mgr ? '<span class="x" data-epcatmgr="' + esc(label) + '" title="改名字 / 删掉这个分类">⋯</span>' : '')
+      + '</div>';
+    const cats = epCats();
     return '<div class="lw-rd-hd">找文章</div>'
       + '<div class="lw-rd-row" data-epsrcopen="web" title="20 多个免费英文源，都是实测能抓正文的">'
       + '<span class="em">🌐</span>推荐外刊源<span class="n">' + (ENSRC ? epSrcGroups().length : 0) + ' 组</span></div>'
       + '<div class="lw-rd-row" data-epsrcopen="os" title="别人维护的公开仓库：杂志归档 / 教材 / 资源清单 / 背单词">'
       + '<span class="em">📦</span>开源资源<span class="n">' + ((ENSRC && ENSRC.OS_RESOURCES) ? ENSRC.OS_RESOURCES.length : 0) + ' 个</span></div>'
+      + '<div class="lw-rd-hd">分类</div>'
+      + catRow(EP_CAT_ALL, '▣', '全部', arts.length)
+      + catRow(EP_CAT_NONE, '○', '未分类', arts.filter((a) => !epCatOf(a)).length)
+      + cats.map((c) => catRow(c.name, '📁', c.name, c.n, true)).join('')
+      /* ⚠️ 空分类**留不住** ✗（见上面那段注释 ✓）——
+         所以「新建分类」建的是**一个空壳**：建完要立刻给文章选它 ✓，
+         这里只负责**建名字** ✓，建完自动切过去 ✓（让用户马上看到「0 篇」✓，
+         然后去列表里点 📁 把文章放进来 ✓）。 */
+      + '<div class="lw-rd-row" data-epcatnew="1" title="先建一个分类名，再到列表里点 📁 把文章放进去">'
+      + '<span class="em">＋</span>新建分类</div>'
       + '<div class="lw-rd-hd">精读统计</div>'
       + '<div class="lw-rd-stat">'
       + '<div><b>' + arts.length + '</b><span>篇文章</span></div>'
@@ -10206,9 +10308,11 @@
   function epArtListHtml() {
     const q = String(EP_UI.q || '').trim().toLowerCase();
     const list = epArts().filter((a) => {
+      if (!epCatPass(a)) return false;                    /* 📁 分类筛选 ✓ */
       if (q && (String(a.title || '') + ' ' + String(a.site || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
     }).sort((a, b) => (Number(b.edit) || 0) - (Number(a.edit) || 0));
+    const catFilter = !!(EP_UI.artCat && EP_UI.artCat !== EP_CAT_ALL);
     /* ★ 「挑一篇」放在**最前面** ✓ —— 用户原话：「自行帮我抓取热门的」✓。
        ⚠️ 不放在「＋ 导入」后面 ✗ —— 那个要用户先有链接 ✗，
           而多数人**一开始就是没有链接** ✗（这才是这个功能的真正入口 ✓）。 */
@@ -10218,18 +10322,38 @@
       + '<button id="lw-ep-imp" title="贴链接或正文，导入一篇外刊">＋ 导入</button>'
       + '</div>';
     if (!list.length) {
-      return tools + '<div class="lw-rd-empty">还没有文章<br>'
-        + '<span style="color:' + T.faint + '">点上面「🌐 挑一篇」从推荐外刊源里选 ✓<br>'
-        + '也可以「＋ 导入」贴个链接或直接贴正文</span>'
-        + '<div style="margin-top:14px"><button class="lw-ep-big" id="lw-ep-src2">🌐 看看有什么好文章</button></div>'
+      /* ⚠️ 空态要**分清**「一篇都没有」和「这个分类下没有」✗ ——
+         后者是**筛出来的空** ✓，说「还没有文章」会让用户以为文章丢了 ✓
+         （本项目的老毛病：把「筛出来是空的」和「真的没有」说成同一句 ✓）。 */
+      return tools + '<div class="lw-rd-empty">' + (catFilter
+        ? '这个分类下还没有文章<br>'
+          + '<span style="color:' + T.faint + '">在别的文章上点「📁」就能把它放进来 ✓</span>'
+        : '还没有文章<br>'
+          + '<span style="color:' + T.faint + '">点上面「🌐 挑一篇」从推荐外刊源里选 ✓<br>'
+          + '也可以「＋ 导入」贴个链接或直接贴正文</span>')
+        + (catFilter
+          ? '<div style="margin-top:14px"><button class="lw-ep-big" data-epcat="' + esc(EP_CAT_ALL) + '">看全部文章</button></div>'
+          : '<div style="margin-top:14px"><button class="lw-ep-big" id="lw-ep-src2">🌐 看看有什么好文章</button></div>')
         + '</div>';
     }
     return tools + list.map((a) => {
       const p = epArtProg(a);
       const nw = epWordsOfArt(a.id).length;
+      const cat = epCatOf(a);
       return '<div class="lw-ep-art' + (epCurArt() && epCurArt().id === a.id ? ' on' : '') + '" data-epart="' + esc(a.id) + '">'
+        /* ★★ 每行两个操作 ✓（用户原话：「这里缺少删除」+「还有缺少分类管理」✓）——
+           ⚠️ 平时**不占位** ✗（`opacity:0` ✓，hover / 当前这篇才显出来 ✓），
+              不然每一行都挂两个图标，列表会很吵 ✓。
+           ⚠️ 点击必须 `stopPropagation` ✗（否则会**顺手把这篇也选中** ✓，
+              删一篇的同时把它打开了 ✓ —— 用户会觉得「怎么点删除反而跳走了」✓）。 */
+        + '<div class="ops">'
+        + '<button data-epartcat="' + esc(a.id) + '" title="' + (cat ? '分类：' + esc(cat) + '（点一下改）' : '归到某个分类') + '">'
+        + (cat ? '📁' : '📂') + '</button>'
+        + '<button class="del" data-epartdel="' + esc(a.id) + '" title="删掉这篇文章（生词保留）">🗑</button>'
+        + '</div>'
         + '<div class="ti">' + esc(a.title || '未命名') + '</div>'
         + '<div class="mt">'
+        + (cat ? '<span class="cat">📁 ' + esc(cat) + '</span>' : '')
         + (a.site ? '<span>' + esc(a.site) + '</span>' : '')
         + '<span>' + (Number(a.words) || 0) + ' 词</span>'
         + (a.level ? '<span class="lv">' + esc(a.level) + '</span>' : '')
@@ -10298,6 +10422,10 @@
       + (trOn && tr ? '<button id="lw-ep-tredel" title="清掉这篇的译文，下次重新译">↺ 重译</button>' : '')
       + '<button id="lw-ep-allok" title="把所有句子标成已懂">✓ 全标已懂</button>'
       + '<button id="lw-ep-reset" title="清掉这篇的已懂标记">↺ 重置进度</button>'
+      /* ★ 📁 分类 ✓（用户原话：「还有缺少分类管理」✓）—— 列表每行也有一个 ✓，
+         这里再放一个是因为**读完一篇想顺手归档** ✓（那时手就在这一栏 ✓）。 */
+      + '<button id="lw-ep-artcat" title="把这篇文章归到某个分类">📁 '
+      + (epCatOf(a) ? esc(epCatOf(a)) : '分类') + '</button>'
       + '<button id="lw-ep-delart" title="删掉这篇文章（生词保留）">🗑 删文章</button>'
       + '</div>'
       + (EP_UI.trErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 翻译失败：' + esc(EP_UI.trErr) + '</div>' : '')
@@ -11276,17 +11404,113 @@
     epSave(); render();
     return a;
   }
-  async function epArtDel() {
-    const a = epCurArt(); if (!a) return;
+  /* ★★ 删一篇文章 ✓ —— **只留这一个实现** ✗✗，两个入口都调它：
+     · 文章列表每行的「🗑」✓（用户原话：「这里缺少删除」✓）
+     · 打开的文章工具栏里那个「🗑 删文章」✓（原来就有 ✓）
+     ⚠️ 抄成两份的话，「删的时候要不要清 artNotes / EP_SENTS / 当前选中」这种细节
+        迟早只改一边 ✓（本项目「同一件事写两处必然漂移」✓）。 */
+  async function epArtDelById(id) {
+    const a = epArtById(id);
+    if (!a) return;
     if (!(await lwConfirm({
       title: '删掉这篇文章？', danger: true, ok: '删除',
-      text: '《' + a.title + '》\n\n它带进来的生词会保留，复习记录不受影响。',
+      text: '《' + (a.title || '未命名') + '》\n\n它带进来的生词会保留，复习记录不受影响。',
     }))) return;
     STORE.articles = epArts().filter((x) => x.id !== a.id);
     STORE.artNotes = ((STORE && STORE.artNotes) || []).filter((n) => n.artId !== a.id);
     EP_SENTS.delete(a.id);
-    EP_UI.art = ''; EP_UI.sel = -1; if (STORE) STORE.epArt = '';
+    /* ⚠️ 删的**正好是当前打开的那篇**时才清选中 ✗ ——
+       删别人那篇时把当前这篇也关掉，是**没道理的副作用** ✓。 */
+    if (EP_UI.art === a.id) { EP_UI.art = ''; EP_UI.sel = -1; if (STORE) STORE.epArt = ''; }
     epSave(); render();
+  }
+  function epArtDel() {
+    const a = epCurArt();
+    if (a) epArtDelById(a.id);
+  }
+  /* ★★ 给一篇文章选分类 ✓（用户原话：「还有缺少分类管理」✓）。
+     ⚠️ 用**多选对话框** ✗（`lwChoose` ✓），不用下拉框 ✗ ——
+        这个项目的规矩：**不让用户面对原生控件** ✓（`<select>` 在深色主题里很难看 ✓，
+        而且没法「顺便新建」✓）。
+     ⚠️ 「移出分类」要**单独一个选项** ✗ —— 只给已有分类的话，
+        用户把文章放进去就**拿不出来了** ✓。 */
+  async function epArtSetCat(id) {
+    const a = epArtById(id);
+    if (!a) return;
+    const cur = epCatOf(a);
+    const opts = epCats().map((c) => ({ label: (c.name === cur ? '✓ ' : '') + '📁 ' + c.name, value: c.name }));
+    opts.push({ label: '＋ 新建分类…', value: '\u0001new' });
+    if (cur) opts.push({ label: '✕ 移出分类（变成未分类）', value: '\u0001none' });
+    const pick = await lwChoose({
+      title: '归到哪个分类？',
+      text: '《' + String(a.title || '未命名').slice(0, 40) + '》' + (cur ? '\n现在在「' + cur + '」' : '\n现在还没分类'),
+      options: opts, cancel: '不改了',
+    });
+    if (pick === null) return;
+    if (pick === '\u0001new') return epCatNew(id);
+    if (pick === '\u0001none') { a.cat = ''; a.edit = Date.now(); epSave(); render(); rdToast('已移出分类 ✓'); return; }
+    a.cat = String(pick); a.edit = Date.now();
+    epSave(); render();
+    rdToast('已归到「' + a.cat + '」✓');
+  }
+  /* ★ 新建分类 ✓ —— 建完**立刻把这篇放进去** ✓（否则新建一个空分类
+     什么都不会发生 ✓，用户会以为没生效 ✗）。 */
+  async function epCatNew(forArtId) {
+    const name = await lwAsk({
+      title: '新建分类', label: '分类名', ph: '如：科技 / 经济 / 精读课', ok: '建好并归入',
+      hint: '分类是「文章上的一个标签」✓ —— 建完这篇就归进去了 ✓，之后在列表里点 📁 可以改 ✓',
+    });
+    if (name === null) return;
+    const n = epCatName(name);
+    if (!n) return;
+    epCatRemember(n);                      /* ★ 显式记住 ✓ → 空分类也留得住 ✓ */
+    const a = forArtId ? epArtById(forArtId) : null;
+    if (a) { a.cat = n; a.edit = Date.now(); }
+    EP_UI.artCat = n;                      /* 顺手切过去 ✓，让用户马上看到结果 ✓ */
+    epSave(); render();
+    rdToast('分类「' + n + '」建好了 ✓' + (a ? '' : ' 到列表里点 📁 把文章放进来'));
+  }
+  /* ★★ 分类管理 ✓（用户原话：「还有缺少分类管理」✓）—— 改名 / 删掉。
+     ⚠️⚠️ **删分类 ≠ 删文章** ✗✗ —— 删掉分类只是把这个名字去掉 ✓，
+        里面的文章**回到「未分类」** ✓（文章一篇都不动 ✓）。
+        这一条必须写在确认框里 ✓，不然用户会以为「删分类把文章也删了」✓。
+     ⚠️ 改名要**同步三处** ✗：文章上的 `a.cat` ✓、显式名单 ✓、当前筛选值 ✓ ——
+        漏掉最后一个的话，用户改完名字会看到「列表突然空了」✗（因为筛选值还是旧名字 ✓）。 */
+  async function epCatManage(name) {
+    const n = epArts().filter((a) => epCatOf(a) === name).length;
+    const pick = await lwChoose({
+      title: '分类「' + name + '」',
+      text: n ? ('有 ' + n + ' 篇文章在这个分类里') : '这个分类现在还是空的',
+      options: [
+        { label: '✎ 改个名字', value: 'ren' },
+        { label: '🗑 删掉这个分类', value: 'del', danger: true },
+      ],
+      cancel: '不改了',
+    });
+    if (pick === null) return;
+    if (pick === 'ren') {
+      const nn = await lwAsk({ title: '改分类名', label: '新名字', value: name, ok: '改好' });
+      if (nn === null) return;
+      const t = epCatName(nn);
+      if (!t || t === name) return;
+      epArts().forEach((a) => { if (epCatOf(a) === name) { a.cat = t; a.edit = Date.now(); } });
+      if (STORE) STORE.epCats = ((STORE.epCats) || []).filter((x) => String(x || '').trim() !== name);
+      epCatRemember(t);
+      if (EP_UI.artCat === name) EP_UI.artCat = t;
+      epSave(); render();
+      rdToast('改成「' + t + '」了 ✓');
+      return;
+    }
+    if (!(await lwConfirm({
+      title: '删掉分类「' + name + '」？', danger: true, ok: '删掉分类',
+      text: (n ? '这 ' + n + ' 篇文章会回到「未分类」（文章本身一篇都不动）。' : '这个分类还是空的。')
+        + '\n\n注意：删的是分类，不是文章。',
+    }))) return;
+    if (STORE) STORE.epCats = ((STORE.epCats) || []).filter((x) => String(x || '').trim() !== name);
+    epArts().forEach((a) => { if (epCatOf(a) === name) { a.cat = ''; a.edit = Date.now(); } });
+    if (EP_UI.artCat === name) EP_UI.artCat = EP_CAT_ALL;
+    epSave(); render();
+    rdToast('分类删了 ✓' + (n ? '那 ' + n + ' 篇回到未分类了' : ''));
   }
   function epSentMark(on) {
     const a = epCurArt(); if (!a || EP_UI.sel < 0) return;
@@ -11978,6 +12202,25 @@
     const aq = q('#lw-ep-q');
     if (aq) aq.oninput = () => { EP_UI.q = aq.value; const host2 = document.getElementById('lifework-view'); /* 只过滤 ✓ */ };
     qa('[data-epart]').forEach((el) => { el.onclick = () => epPickArt(el.dataset.epart); });
+    /* ★ 📁 分类筛选 ✓（用户原话：「还有缺少分类管理」✓）*/
+    qa('[data-epcat]').forEach((el) => {
+      el.onclick = () => { EP_UI.artCat = el.dataset.epcat || EP_CAT_ALL; render(); };
+    });
+    qa('[data-epcatnew]').forEach((el) => { el.onclick = () => epCatNew(''); });
+    /* ⚠️ 「⋯」要 `stopPropagation` ✗ —— 它的父行挂了「点一下切到这个分类」✓，
+       不拦的话点「⋯」会**顺手把筛选也切过去** ✓（用户还没决定改不改名呢 ✓）。 */
+    qa('[data-epcatmgr]').forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); epCatManage(el.dataset.epcatmgr); };
+    });
+    /* ★★ 每行的两个操作 ✓ —— ⚠️ **必须 `stopPropagation`** ✗✗：
+       行本身挂了「点一下打开这篇」✓（`[data-epart]` ✓），
+       不拦的话点「🗑」会**顺手把这篇也打开** ✓（删完立刻跳进去 ✓，很怪 ✗）。 */
+    qa('[data-epartdel]').forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); epArtDelById(el.dataset.epartdel); };
+    });
+    qa('[data-epartcat]').forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); epArtSetCat(el.dataset.epartcat); };
+    });
     qa('[data-epflt]').forEach((el) => { el.onclick = () => { EP_UI.wordFilter = el.dataset.epflt; epSetMode('word'); }; });
     qa('[data-epwflt]').forEach((el) => { el.onclick = () => { EP_UI.wordFilter = el.dataset.epwflt; render(); }; });
     qa('[data-epword]').forEach((el) => { el.onclick = () => { EP_UI.wordSel = el.dataset.epword; epSetMode('word'); }; });
@@ -12098,6 +12341,8 @@
     const allok = q('#lw-ep-allok'); if (allok) allok.onclick = () => epArtMarkAll(true);
     const reset = q('#lw-ep-reset'); if (reset) reset.onclick = () => epArtMarkAll(false);
     const delart = q('#lw-ep-delart'); if (delart) delart.onclick = () => epArtDel();
+    const artcat = q('#lw-ep-artcat');
+    if (artcat) artcat.onclick = () => { const a = epCurArt(); if (a) epArtSetCat(a.id); };
     const copy = q('#lw-ep-copy');
     if (copy) copy.onclick = () => {
       const s = epSents(epCurArt())[EP_UI.sel];
