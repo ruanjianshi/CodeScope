@@ -92,6 +92,16 @@
        → 切页签时先 `cgStash()` 存当前 ✓、再 `cgRestore()` 取目标 ✓；
          目标页签**已经有结果就不重跑** ✓（见 `cgTabHasResult` ✓）。 */
     saved: {},            /* { look: {...}, find: {...}, break: {...} } ✓ */
+    /* ★★★★ 查阅历史 ✓ —— 用户原话：「再给我新增**查阅历史记录**，方便我回看」✓。
+       ⚠️ 存 `localStorage` ✗（**纯界面偏好** ✓，和服务端那份 store 无关 ✓）——
+          和服务端无关就不会被别的页面整份覆盖 ✓
+          （见 skill 里「整份覆盖会丢字段」那条 ✓）。
+       ⚠️ 记的是「**我查过什么**」✓，不是「查到了什么」✗ ——
+          查到的东西可能几 MB ✓（手册 / 思维导图 ✓），存下来会把 localStorage 撑爆 ✗。
+          回看的时候**点一下重查**就行 ✓（AI 那几项本来就该重算 ✓，
+          而「查过什么」才是他记不住的 ✓）。 */
+    hist: [],             /* [{ tab, q, name, line, file, at }] ✓ 最近 60 条 ✓ */
+    histOn: false,        /* 历史面板开着没 ✓ */
     view: 'mind',         /* 拆逻辑下的视图：'mind'（思维导图）/ 'flow'（实现流程）/ 'code'（代码级）✓ */
     note: '',             /* 一句提示（比如「这段不是函数体，画不了图」）✓ */
     sym: null,            /* 当前文档的符号索引缓存 ✓ */
@@ -177,6 +187,53 @@
     if (tab === 'break') return !!(CG.graph || CG.aiFlow);
     if (tab === 'find') return !!(CG.rows.length || (CG.ai && CG.ai.plan) || CG.manual);
     return !!(CG.rows.length || CG.manual);
+  }
+  /* ══ ★★★★ 查阅历史 ✓ ══════════════════════════════════════════════════
+     用户原话：「再给我新增**查阅历史记录**，方便我回看」✓。
+
+     ⚠️⚠️ 存 `localStorage` ✗✗，**不进服务端那份 store** ✓ ——
+        这是「我查过什么」的界面偏好 ✓，和服务端数据无关 ✓；
+        进 store 的话会被别的页面 / 探针的整份覆盖带跑 ✗
+        （本项目在这上面栽过好几次 ✓，见 skill 那条 ✓）。
+     ⚠️ 上限 60 条 ✗（localStorage 有配额 ✓，而且翻到第 100 条也没意义 ✓）。
+     ⚠️ **同名去重** ✓（同一个词查十遍只留最近一次 ✓，但时间更新 ✓）——
+        不然历史会被反复查的同一个词刷满 ✗。 */
+  const CG_HIST_KEY = 'cg-hist';
+  const CG_HIST_MAX = 60;
+  function cgHistLoad() {
+    try {
+      const a = JSON.parse(localStorage.getItem(CG_HIST_KEY) || '[]');
+      CG.hist = Array.isArray(a) ? a.filter((x) => x && x.tab && (x.q || x.name)).slice(0, CG_HIST_MAX) : [];
+    } catch (_) { CG.hist = []; }
+    return CG.hist;
+  }
+  function cgHistSave() {
+    try { localStorage.setItem(CG_HIST_KEY, JSON.stringify(CG.hist.slice(0, CG_HIST_MAX))); } catch (_) {}
+  }
+  /* 记一条 ✓ —— `record` 为 false 的那些（打开时自动带上下文的查 ✓）**不记** ✗，
+     不然开十次面板就刷出十条一样的 ✓（那不是「我查过的」✓，是「工具自己查的」✗）。 */
+  function cgHistPush(tab, q, extra) {
+    const key = String(q || (extra && extra.name) || '').trim();
+    if (!key) return;
+    const row = Object.assign({ tab, q: String(q || '').trim(), at: Date.now() }, extra || {});
+    /* 同名同页签 → 只更新时间 + 挪到最前 ✓ */
+    CG.hist = CG.hist.filter((x) => !(x.tab === tab && String(x.q || x.name) === key));
+    CG.hist.unshift(row);
+    if (CG.hist.length > CG_HIST_MAX) CG.hist.length = CG_HIST_MAX;
+    cgHistSave();
+  }
+  function cgHistClear() {
+    CG.hist = []; cgHistSave();
+  }
+  /* 「3 分钟前」这种人话 ✓ —— 摆一个 `2026-10-08T11:20:33.123Z` 给用户看等于没说 ✗ */
+  function cgAgo(ts) {
+    const d = Date.now() - Number(ts || 0);
+    if (!Number.isFinite(d) || d < 0) return '';
+    if (d < 60000) return '刚刚';
+    if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+    if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+    if (d < 86400000 * 30) return Math.floor(d / 86400000) + ' 天前';
+    try { return new Date(Number(ts)).toISOString().slice(0, 10); } catch (_) { return ''; }
   }
   /* 进 / 出忙碌态 ✓ —— 每次都**重绘** ✓（不重绘的话按钮还停在旧样子 ✗）*/
   function cgBegin(act, txt) { CG.busyAct = act; CG.busyTxt = txt || ''; CG.busy = true; cgRender(); }
@@ -731,7 +788,7 @@
                         → 归到「🧠 思维导图」/「🔀 实现流程」✓，**默认视图** ✓
      ⚠️ 别拿一个去替另一个 ✗ —— AI 那份会编 ✓，但没有它用户看不懂 ✓；
         控制流图不会编 ✓，但用户看不懂 ✓。**两份并排**才对 ✓。 */
-  async function cgRunBreak() {
+  async function cgRunBreak(opts) {
     const ctx = cgCtx();
     if (!ctx) { CG.err = '先打开一个代码文件 ✓'; return; }
     CG.graph = null; CG.aiFlow = null;
@@ -773,6 +830,8 @@
       return;
     }
     CG.root = Object.assign({}, root, { file: ctx && ctx.file });
+    /* ★ 拆了哪个函数也记一笔 ✓（回看时能看到「我拆过 led_read」✓）*/
+    if (!opts || opts.record !== false) cgHistPush('break', root.name, { line: root.line, file: ctx && ctx.file });
     CG.note = '';
     cgBegin('flow', '正在拆解「' + root.name + '」—— 先出控制流图，再让 AI 讲成人话…');
     /* 先出控制流图 ✓（本地解析，毫秒级 ✓）—— 用户马上有东西看 ✓，
@@ -1472,6 +1531,9 @@
     const ctx = cgCtx();
     const tab = CG.tab;
     let h = '';
+    /* ★ 历史面板**盖住整块正文** ✓ —— 它不属于任何一个页签 ✓，
+       而且「回看」的时候本来就该把别的东西让开 ✓。 */
+    if (CG.histOn) return cgHistHtml();
     if (CG.err) h += '<div class="cg-note err">✗ ' + esc(CG.err) + '</div>';
     if (!ctx) {
       return h + '<div class="cg-empty">先打开一个代码文件 ✓<br>'
@@ -1573,6 +1635,65 @@
         点了就真的去查 ✓（`data-cgact="demo"` ✓）。
      ⚠️ `brief` = 上面已经有一句「没找到 X」的提示了 ✓ → 只留那几个按钮 ✓，
         别再说一遍「输入一个符号名」✗（自相矛盾 ✓）。 */
+  /* ★★★★ 历史面板 ✓ —— 用户原话：「再给我新增查阅历史记录，方便我回看」✓。
+     ⚠️ 每一行**点一下就重查** ✗（不只是给你看看 ✓）——
+        「回看」的目的十有八九是「再看一遍那个东西」✓，
+        只展示不能点的话，你还得**手打一遍**那个词 ✗（那就不叫方便了 ✓）。
+     ⚠️ 在**别的文件**里拆的（`break` ✓）要标出来 ✗ ——
+        点它会跳不过去 ✓，得说清楚为什么 ✓（别让用户以为按钮坏了 ✗）。 */
+  function cgHistHtml() {
+    const list = CG.hist || [];
+    const ctx = cgCtx();
+    const tabOf = (k) => (TABS.find((x) => x.k === k) || TABS[0]);
+    let h = '<div class="cg-hist">';
+    h += '<div class="cg-hist-hd"><span class="t">🕘 查阅历史</span>'
+      + '<span class="n">' + list.length + ' 条</span><span class="sp"></span>'
+      + cgBtn({ act: 'histclear', icon: '🗑', label: '清空', disabled: !list.length })
+      + cgBtn({ act: 'hist', icon: '✕', label: '收起' }) + '</div>';
+    if (!list.length) {
+      return h + '<div class="cg-empty">还没查过东西 ✓<br>'
+        + '<span>你查过的会自动记在这儿，方便回看 ✓</span></div></div>';
+    }
+    h += list.map((x, i) => {
+      const t = tabOf(x.tab);
+      const q = String(x.q || x.name || '');
+      const other = x.tab === 'break' && x.file && ctx && x.file !== ctx.file;
+      return '<div class="cg-hist-row' + (other ? ' off' : '') + '" data-cgact="histgo" data-cgval="' + i + '"'
+        + ' title="' + esc(other ? '这条是在另一个文件里拆的 —— 先把那个文件打开' : ('再查一遍「' + q + '」')) + '">'
+        + '<span class="e">' + esc(t.e) + '</span>'
+        + '<span class="q">' + esc(q) + '</span>'
+        + (other ? '<span class="w">别的文件</span>' : '')
+        + '<span class="ago">' + esc(cgAgo(x.at)) + '</span></div>';
+    }).join('');
+    return h + '</div>';
+  }
+  /* 从历史点回来 ✓ */
+  function cgHistGo(i) {
+    const row = (CG.hist || [])[Number(i)];
+    if (!row) return;
+    CG.histOn = false;
+    if (row.tab === 'break') {
+      const ctx = cgCtx();
+      if (row.file && ctx && row.file !== ctx.file) {
+        toast('「' + row.q + '」是在另一个文件里拆的 —— 先把那个文件打开 ✓');
+        cgRender();
+        return;
+      }
+      if (!row.line) { toast('这条没记下行号 —— 回到「拆逻辑」从列表里挑一个 ✓'); cgRender(); return; }
+      cgPick({ name: row.q, line: row.line, frag: -1 });
+      return;
+    }
+    /* 切到那个页签 ✓、把查询词填回去 ✓、**重新查一遍** ✓
+       ⚠️ 不能直接用缓存 ✗（缓存里那份可能是别的词留下的 ✓）*/
+    if (CG.tab !== row.tab) { cgStash(); CG.tab = row.tab; cgRestore(row.tab); }
+    CG.rows = []; CG.manual = null; CG.ai = null; CG.aiFlow = null; CG.note = ''; CG.err = '';
+    CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
+    CG.q = String(row.q || '');
+    cgRender();
+    const q = $('#cgx-q');
+    if (q) { q.value = CG.q; q.disabled = false; }
+    cgRun();
+  }
   function cgEmptyHtml(tab, brief) {
     const ctx = cgCtx();
     const lang = (ctx && ctx.language) || '';
@@ -1586,15 +1707,28 @@
     const btns = '<div class="cg-demos">' + list.map((x) => cgBtn({
       act: 'demo', val: x, icon, label: x,
     })).join('') + '</div>';
-    if (brief) return btns;
+    /* ★ 空态顺手把**最近查过的**摆出来 ✓ —— 用户原话：
+       「再给我新增查阅历史记录，方便我回看」✓。
+       ⚠️ 只挑**当前页签**的 ✗（在「查手册」里摆一堆「找方案」的记录 ✓ 点不了还乱 ✗）。 */
+    const recent = (CG.hist || []).filter((x) => x.tab === tab).slice(0, 4);
+    const recentHtml = recent.length
+      ? '<div class="cg-hist-mini"><span class="lb">最近查过</span>'
+        + recent.map((x) => {
+          const at = (CG.hist || []).indexOf(x);
+          return '<span class="cg-hist-chip" data-cgact="histgo" data-cgval="' + at + '" title="再查一遍">'
+            + esc(String(x.q || x.name || '')) + '<i>' + esc(cgAgo(x.at)) + '</i></span>';
+        }).join('')
+        + '</div>'
+      : '';
+    if (brief) return btns + recentHtml;
     if (tab === 'look') {
       return '<div class="cg-empty">把光标放到你要查的那个词上 ✓，再按 ⌘I<br>'
         + '<span>打开就会自动帮你查它怎么用（定义 / 增删改查 / 例子）✓</span>'
-        + btns + '</div>';
+        + btns + recentHtml + '</div>';
     }
     return '<div class="cg-empty">用大白话说你要干什么 ✓<br>'
       + '<span>先选中一段代码再说，它会按你的上下文给方案（用哪个包 / 函数 + 例子）✓</span>'
-      + btns + '</div>';
+      + btns + recentHtml + '</div>';
   }
   /* AI 拆解失败 ✓ —— 必须带**重试入口** ✗（不能只报错就走 ✓，
      这个项目在「源挂了却说没内容」上栽过 ✓）。 */
@@ -1634,6 +1768,9 @@
         el.classList.toggle('on', el.dataset.cgtab === CG.tab);
       });
     }
+    /* 历史按钮要**看得出开着** ✗（不然用户不知道自己在看历史面板 ✓）*/
+    const histBtn = $('#cgx-hist');
+    if (histBtn) histBtn.classList.toggle('on', !!CG.histOn);
     const inp = $('#cgx-q');
     if (inp) {
       const t = TABS.find((x) => x.k === CG.tab) || TABS[0];
@@ -1737,6 +1874,37 @@
        给几个真能点的入口 ✓（点了就去查 ✓，不是摆设 ✓）。 */
     '.cg-demos{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px}',
     '.cg-demos .cg-btn{height:26px;font-size:11px}',
+    /* ── ★★ 查阅历史 ✓（用户原话：「再给我新增查阅历史记录，方便我回看」✓）────
+       ⚠️ 每一行**整行可点** ✗（不是只有一个小按钮 ✓）—— 「回看」的动作就是点它 ✓，
+          给一个小靶子反而难点 ✓。 */
+    '.cg-head .hb.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);',
+    'background:color-mix(in srgb,var(--accent) 14%,transparent)}',
+    '.cg-hist-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}',
+    '.cg-hist-hd .t{font-size:12.5px;font-weight:600;color:var(--text)}',
+    '.cg-hist-hd .n{font-size:10.5px;color:var(--dim)}',
+    '.cg-hist-hd .sp{flex:1;min-width:0}',
+    '.cg-hist-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;',
+    'border:1px solid var(--border);background:var(--panel2);margin-bottom:6px;cursor:pointer;',
+    'transition:border-color .13s,background .13s,transform .06s}',
+    '.cg-hist-row:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));',
+    'background:color-mix(in srgb,var(--accent) 8%,var(--panel2))}',
+    '.cg-hist-row:active{transform:translateY(1px)}',
+    '.cg-hist-row.off{opacity:.6}',
+    '.cg-hist-row .e{flex:none;font-size:12px}',
+    '.cg-hist-row .q{flex:1;min-width:0;font-size:12px;color:var(--text);font-family:var(--mono);',
+    'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.cg-hist-row .w{flex:none;font-size:9.5px;color:var(--dim);border:1px solid var(--border);',
+    'border-radius:999px;padding:1px 6px}',
+    '.cg-hist-row .ago{flex:none;font-size:10px;color:var(--dim)}',
+    /* 空态下面那排「最近查过」✓ —— 一眼看到、点一下就重查 ✓ */
+    '.cg-hist-mini{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}',
+    '.cg-hist-mini .lb{font-size:10.5px;color:var(--dim)}',
+    '.cg-hist-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;',
+    'border-radius:999px;border:1px solid var(--border);background:var(--panel2);color:var(--text);',
+    'cursor:pointer;font-family:var(--mono);transition:border-color .13s,color .13s,background .13s}',
+    '.cg-hist-chip:hover{border-color:var(--accent);color:var(--accent);',
+    'background:color-mix(in srgb,var(--accent) 10%,var(--panel2))}',
+    '.cg-hist-chip i{font-style:normal;font-size:9.5px;color:var(--dim)}',
     /* ── ★★ 「找方案」的结果 ✓（思路 + 步骤 + 示例）────────────────────────── */
     '.cg-plan{border:1px solid color-mix(in srgb,var(--accent) 32%,transparent);border-radius:10px;',
     'background:color-mix(in srgb,var(--accent) 7%,transparent);padding:11px 12px;margin-bottom:11px}',
@@ -2069,6 +2237,10 @@
       + '<span class="ic">🧭</span><b>代码向导</b>'
       + '<span class="ctx" id="cgx-ctx">' + (ctx ? esc((ctx.filename || ctx.file.split('/').pop()) + ' · ' + ctx.language + ' · 光标 ' + ctx.line + ':' + ctx.column) : '没有打开文件') + '</span>'
       + '<span class="kbd">⌘I</span>'
+      /* ★ 「🕘 查阅历史」✓ —— 用户原话：「再给我新增查阅历史记录，方便我回看」✓。
+         ⚠️ 摆在标题栏 ✗（**随时点得到** ✓）—— 塞进某个页签里的话，
+            想回看还得先切到那个页签 ✓（而且「历史」本来就不属于任何一个页签 ✓）。 */
+      + '<span class="hb" id="cgx-hist" title="查阅历史（回看 / 重查以前查过的）">🕘</span>'
       /* 折叠成一条药丸 ✓（用户原话：「也可以拖动放到一边」✓）——
          ⚠️ 折叠状态**也要落盘** ✗，不然每次打开都弹开 ✓，挡着代码 ✓。 */
       + '<span class="hb" id="cgx-min" title="折起来 / 展开（折起来只剩这一条，可以拖到边上）">—</span>'
@@ -2091,6 +2263,8 @@
        关是**显式**动作：✕ / Esc ✓）。 */
     $('#cgx-close', el).onclick = cgClose;
     $('#cgx-min', el).onclick = () => cgMin(!CG.min);
+    /* ★ 「🕘 查阅历史」✓ —— 用户原话：「再给我新增查阅历史记录，方便我回看」✓ */
+    $('#cgx-hist', el).onclick = () => { CG.histOn = !CG.histOn; cgRender(); };
     cgDrag(el);
     cgResize(el);
     Array.from(el.querySelectorAll('[data-cgtab]')).forEach((t) => {
@@ -2105,6 +2279,7 @@
         CG.tab = next;
         cgRestore(next);
         CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
+        CG.histOn = false;      /* ★ 切页签 → 历史面板收起 ✓（不然挡住内容 ✓）*/
         const q = $('#cgx-q');
         cgRender();
         /* ★ 目标页签**已经有结果** → 直接看 ✓，**绝不重跑 AI** ✗ */
@@ -2112,10 +2287,11 @@
           if (q && next !== 'break') q.focus();
           return;
         }
+        /* ⚠️ 同上：拆逻辑自动拆的**函数名记** ✓、查手册自动带的光标词**不记** ✗ */
         if (next === 'break') cgRunBreak();
         else if (next === 'look') {
           const seed = cgSeed();
-          if (seed) { CG.q = seed; if (q) q.value = seed; cgRun(); }
+          if (seed) { CG.q = seed; if (q) q.value = seed; cgRun({ record: false }); }
           else if (q) q.focus();
         } else if (q) q.focus();
       };
@@ -2146,6 +2322,9 @@
       if (act === 'pick') { cgPick(r); return; }
       if (act === 'manual') { cgManual(r); return; }
       if (act === 'concept') { cgAskConcept(btn.dataset.cgval || CG.manual && CG.manual.name || ''); return; }
+      if (act === 'hist') { CG.histOn = !CG.histOn; cgRender(); return; }
+      if (act === 'histclear') { cgHistClear(); cgRender(); return; }
+      if (act === 'histgo') { cgHistGo(btn.dataset.cgval); return; }
       if (act === 'demo') {
         /* 空态里那些「可点的例子」✓ —— 点了就真的去查 ✓（不是摆设 ✓）*/
         const v = btn.dataset.cgval || '';
@@ -2168,6 +2347,7 @@
     const ctx = cgCtx();
     /* ★ 记住「这次拆的是谁」✓ —— 不然再点「重新拆解」会弹回列表 ✗（见 cgRunBreak 那段注释 ✓）*/
     CG.root = { name: r.name, line: r.line, frag: r.frag, file: ctx && ctx.file };
+    cgHistPush('break', r.name, { line: r.line, file: ctx && ctx.file });
     cgBegin('flow', '正在拆解「' + r.name + '」…');
     const root = CG.root;
     CG.rows = [];
@@ -2177,8 +2357,13 @@
       .then(() => cgEnd())
       .catch((e) => { CG.err = String((e && e.message) || e); cgEnd(); });
   }
-  async function cgRun() {
+  async function cgRun(opts) {
     CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.aiFlow = null; CG.manual = null;
+    /* ★ 记进历史 ✓ —— 但**打开时自动带上下文的查**不记 ✗（`record:false` ✓），
+       不然开十次面板就刷出十条一样的 ✓。 */
+    if (!opts || opts.record !== false) cgHistPush(CG.tab, CG.q);
+    /* ★ 真去查了 → 历史面板**自动收起** ✓（不然结果被它挡着 ✓）*/
+    CG.histOn = false;
     cgBegin('run', CG.tab === 'find' ? '先搜本地，再让 AI 按你的上下文想方案…' : '正在查…');
     try {
       if (CG.tab === 'look') await cgRunLook();
@@ -2193,6 +2378,7 @@
     if (tab) CG.tab = tab;
     CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.ai = null; CG.aiFlow = null; CG.manual = null;
     CG.saved = {};    /* ★ 新开一次会话 → 三个页签的缓存全丢掉 ✓（上一轮的别串过来 ✓）*/
+    CG.histOn = false; /* ★ 历史面板也收起 ✓（每次打开都是「你要查什么」✓）*/
     CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
     CG.q = '';
     const el = cgBuild();
@@ -2213,13 +2399,21 @@
             （实测截图：光标明明停在 `std::unordered` 上 ✓，面板一片空白 ✓）。
             他得**手打一遍**才知道怎么用 ✗ —— 而他本来就记不清 ✗（鸡生蛋 ✓）。
          → 用 cgSeed() 取「此刻最可能想查的东西」✓，直接查 ✓。 */
+    /* ★★ 历史记不记，按「**这条有没有回看价值**」分 ✗✗：
+       · 「拆逻辑」自动拆的那个**函数名** → **记** ✓（「我拆过 led_read」是有价值的 ✓）
+       · 「查手册」自动带的光标词 → **不记** ✗ ——
+         它十有八九是 `int` / `return` / `;` 这种噪音 ✓
+         （实测截图里就出现过一条 `int` ✓），记进去只会把真查过的挤下去 ✗。
+       ⚠️ 但用户**手动打进去的**（点「查」/ 回车 ✓）一律记 ✓ —— 那才是「我查过的」✓。 */
     if (CG.tab === 'break') cgRunBreak();
     else {
       const i = $('#cgx-q');
       if (i) { i.disabled = false; i.value = ''; i.focus(); }
       if (CG.tab === 'look') {
         const seed = cgSeed();
-        if (seed) { CG.q = seed; if (i) i.value = seed; cgRun(); }
+        /* ⚠️ `record:false` ✗✗ —— 这是**工具自己查的** ✓，不是「用户查过的」✗。
+           记进去的话，开十次面板就刷出十条一样的 ✓（而且用户根本没查过 ✗）。 */
+        if (seed) { CG.q = seed; if (i) i.value = seed; cgRun({ record: false }); }
         else if (i) { i.value = ''; CG.q = ''; }
       }
     }
@@ -2248,6 +2442,8 @@
   }
   function cgMount() {
     cgStyle();
+    /* ★ 查阅历史在**挂载时读一次** ✓（之后都走内存 + 随手落盘 ✓）*/
+    cgHistLoad();
     document.addEventListener('keydown', cgOnKey, true);
     /* 全局 Esc 兜底 ✓（浮层自己也会收 ✓）*/
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && CG.open) cgClose(); });

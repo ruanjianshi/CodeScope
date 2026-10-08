@@ -630,6 +630,78 @@ const FAKE_PLAN = {
       ck('★★★ 跳完向导还开着', false, '上一条没有按钮，跳不了');
     }
 
+    /* ══ ★★★★ ⑦b 查阅历史 ✓ —— 用户原话：
+       「再给我新增**查阅历史记录**，方便我回看」✓。
+
+       ⚠️ 判据要**两条一起** ✗✗：
+         ① 手动查的**进**历史 ✓
+         ② 打开面板时「自动带上下文的查」**不进** ✗ ——
+            不然开十次面板就刷出十条一样的 ✓（那不是「我查过的」✗，是「工具自己查的」✓）。
+       ⚠️ 而且「回看」的目的十有八九是「再看一遍」✓ →
+          点历史里的一条必须**真的重查** ✓（不只是展示 ✓）。
+       ⚠️ 探针跑在**全新的浏览器 profile** 里 ✓ → localStorage 是隔离的 ✓
+          （不会动到用户自己那份历史 ✓，所以这里可以直接清 ✓）。 */
+    console.log('\n── ⑦b 🕘 查阅历史（回看 + 一键重查）──');
+    const histOf = () => p.evaluate(() => { try { return (window.__CODE_GUIDE.state.hist || []).length; } catch (_) { return -1; } });
+    /* 先清干净 ✓（前面几节已经查过好几轮了 ✓）*/
+    await p.evaluate(() => { try { window.__CODE_GUIDE.state.hist = []; localStorage.removeItem('cg-hist'); } catch (_) {} });
+    ck('  标题栏有「🕘 查阅历史」按钮', await p.locator('#cgx-hist').count() === 1);
+    /* ① 自动带上下文的查**不该**进历史 ✗ */
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    await p.keyboard.press('Meta+i'); await p.waitForTimeout(1600);
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    await p.keyboard.press('Meta+i'); await p.waitForTimeout(1600);
+    const n0 = await histOf();
+    ck('★★★ 打开面板时**自动带的光标词不进历史**（那十有八九是 `int` 这种噪音）', n0 === 0, String(n0));
+    /* ①b 但「拆逻辑」自动拆的那个**函数名要记** ✓ —— 「我拆过 led_read」是有回看价值的 ✓ */
+    await p.locator('[data-cgtab="break"]').click();
+    await p.waitForFunction(() => !!document.getElementById('cgx-mind'), null, { timeout: 40000 }).catch(() => {});
+    await p.waitForTimeout(900);
+    const nBreak = await histOf();
+    const breakName = await p.evaluate(() => { try { const h = window.__CODE_GUIDE.state.hist || []; return h.length ? String(h[0].q || '') : ''; } catch (_) { return ''; } });
+    ck('★★★ 拆逻辑自动拆的**函数名进了历史**（这才有回看价值）',
+      nBreak >= 1 && !!breakName, breakName + ' · 共 ' + nBreak + ' 条');
+    await p.locator('[data-cgtab="look"]').click(); await p.waitForTimeout(900);
+    /* ② 手动查两次 → 进历史 ✓ */
+    await p.locator('#cgx-q').fill('main'); await p.locator('#cgx-go').click(); await p.waitForTimeout(2600);
+    await p.locator('#cgx-q').fill('add'); await p.locator('#cgx-go').click(); await p.waitForTimeout(2600);
+    const n1 = await histOf();
+    ck('★★★ 手动查的**进了历史**', n1 >= 2, String(n1));
+    /* ③ 面板能打开、内容对 ✓ */
+    await p.locator('#cgx-hist').click(); await p.waitForTimeout(700);
+    ck('★★★ 点「🕘」能打开历史面板', await has('.cg-hist'));
+    const histTxt = await txt('.cg-hist');
+    console.log('    历史面板: ' + JSON.stringify(histTxt.slice(0, 150)));
+    ck('★★ 面板里能看到**刚才查过的那两个词**', /add/.test(histTxt) && /main/.test(histTxt), histTxt.slice(0, 150));
+    ck('★★ 每行标了**是哪个页签**查的（🔍 查手册 / 💡 找方案 / 🧩 拆逻辑）', /🔍/.test(histTxt), histTxt.slice(0, 90));
+    ck('★★ 时间写的是**人话**（「刚刚 / N 分钟前」），不是一串 ISO 时间',
+      /刚刚|分钟前|小时前|天前/.test(histTxt), histTxt.slice(0, 150));
+    ck('★ 而且新的排在**最上面**（`add` 是后查的）', histTxt.indexOf('add') < histTxt.indexOf('main'), histTxt.slice(0, 150));
+    /* ④ 点一条 → 真的重查 ✓ */
+    const goIdx = await p.evaluate(() => (window.__CODE_GUIDE.state.hist || []).findIndex((x) => x.q === 'main'));
+    await p.locator('[data-cgact="histgo"][data-cgval="' + goIdx + '"]').click();
+    await p.waitForTimeout(2800);
+    const afterGo = await p.evaluate(() => {
+      const e = document.getElementById('cgx-q');
+      return { q: e ? e.value : '', rows: document.querySelectorAll('.cg-row').length, panel: !!document.querySelector('.cg-hist') };
+    });
+    console.log('    点历史里那条 main → ' + JSON.stringify(afterGo));
+    ck('★★★ 点历史里的一条 → **真的重查了**（输入框填上 + 出结果 —— 不只是展示）',
+      afterGo.q === 'main' && afterGo.rows >= 1, JSON.stringify(afterGo));
+    ck('★★ 而且历史面板**自己收起了**（不挡着刚查出来的结果）', afterGo.panel === false);
+    /* ⑤ 落盘 ✓ —— 「回看」跨会话才有意义 ✓ */
+    const saved = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('cg-hist') || '[]').length; } catch (_) { return -1; } });
+    ck('★★★ 历史**落盘**了（关掉再打开还在 —— 不然「回看」无从谈起）', saved >= 2, String(saved));
+    /* ⑥ 清空 + 收起 ✓ */
+    await p.locator('#cgx-hist').click(); await p.waitForTimeout(700);
+    await p.locator('[data-cgact="histclear"]').click(); await p.waitForTimeout(700);
+    const cleared = await histOf();
+    const clearedLs = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('cg-hist') || '[]').length; } catch (_) { return -1; } });
+    ck('★★ 「清空」能清掉（内存和落盘都清）', cleared === 0 && clearedLs === 0, cleared + ' / ' + clearedLs);
+    ck('★ 清空后面板说了「还没查过东西」（不是一片空白）', /还没查过/.test(await txt('.cg-hist')), (await txt('.cg-hist')).slice(0, 80));
+    await p.locator('[data-cgact="hist"]').click(); await p.waitForTimeout(600);
+    ck('★ 「收起」能关掉面板', (await p.locator('.cg-hist').count()) === 0);
+
     console.log('\n── ⑧ 「插到光标处」真的会改编辑器（改完立刻还原）──');
     const before = await editorCode();
     await p.locator('[data-cgtab="look"]').click(); await p.waitForTimeout(400);
