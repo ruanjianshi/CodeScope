@@ -61,7 +61,12 @@ const TEXT = SENT.join(' ');
   const d0 = await store();
   const artId = 'aprobe' + Date.now();
   const keep = {
-    epArt: d0.epArt, readMode: d0.readMode, epPanelH: d0.epPanelH,
+    /* ⚠️ `epPanelH` / `epSideW` 是**界面尺寸**，会落盘 ✓ ——
+       探针拖动过之后必须**按值还原** ✗，不然会留在用户的界面上 ✓：
+       实测（2026-10-08 ✓）：`epPanelH` 被留在 **660** ✓ → 句子面板吃掉 660px ✗
+       → 正文只剩 **82px** ✗（用户看到的是「正文只剩两三行」✓，
+         而且「📍 回到原文」**根本没法定位** ✓ —— 视野太小放不下那一句 ✓）。 */
+    epArt: d0.epArt, readMode: d0.readMode, epPanelH: d0.epPanelH, epSideW: d0.epSideW,
     articles: (d0.articles || []).map((a) => a && a.id),
     words: d0.words, wordSel: d0.wordSel, epWordFilter: d0.epWordFilter,
   };
@@ -73,7 +78,7 @@ const TEXT = SENT.join(' ');
     at: Date.now(), edit: Date.now(),
   }]);
   d0.epArt = artId; d0.readMode = 'ex';
-  delete d0.epPanelH;
+  delete d0.epPanelH; delete d0.epSideW;
   await put(d0);
 
   const b = await chromium.launch({ executablePath: exe, headless: true });
@@ -674,6 +679,7 @@ const TEXT = SENT.join(' ');
       if (keep.epArt !== undefined) d.epArt = keep.epArt; else delete d.epArt;
       if (keep.readMode !== undefined) d.readMode = keep.readMode; else delete d.readMode;
       if (keep.epPanelH !== undefined) d.epPanelH = keep.epPanelH; else delete d.epPanelH;
+      if (keep.epSideW !== undefined) d.epSideW = keep.epSideW; else delete d.epSideW;
       if (keep.wordSel !== undefined) d.wordSel = keep.wordSel; else delete d.wordSel;
       if (keep.epWordFilter !== undefined) d.epWordFilter = keep.epWordFilter; else delete d.epWordFilter;
       await put(d);

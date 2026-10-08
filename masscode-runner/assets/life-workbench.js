@@ -1785,6 +1785,15 @@
   .lw-ep-w { border-bottom:1px dotted ${T.accent}; cursor:pointer; font-weight:600;
     background:color-mix(in srgb, ${T.accent} 11%, transparent); }
   .lw-ep-w:hover { background:color-mix(in srgb, ${T.accent} 24%, transparent); }
+  /* ★★ 「📍 回到原文」定位到的**那个词** ✓ —— 用户原话：
+     「还有单词需要定位到大概位置」✓。
+     ⚠️ 光把**句子**滚进视野是不够的 ✗：一句十几二十个词 ✓，
+        用户还是得自己找那个词在哪儿 ✓。→ 给**那个词**加个更重的底 ✓ + 描边 ✓。
+     ⚠️ 必须加 !important ✗ —— 上面「.lw-ep-sent .lw-ep-w」那条的**选择器权重更高** ✓，
+        不加的话句子面板里那个词点不亮 ✓（实测踩过 ✓）。
+     ⚠️ 这段注释里**一个反引号都不能有** ✗（CSS 装在 JS 模板串里 ✓，本会话栽过 6 次 ✗）。 */
+  .lw-ep-w.focus { background:color-mix(in srgb, ${T.accent} 42%, transparent) !important;
+    box-shadow:0 0 0 2px color-mix(in srgb, ${T.accent} 45%, transparent); border-radius:2px; }
 
   /* ── 右栏：句子详情 ── */
   .lw-ep-sent { font-size:13px; line-height:1.95; color:${T.text}; padding:12px 14px;
@@ -3507,13 +3516,31 @@
     const min = opts.min || 100;
     const key = opts.key;
     const maxFrac = opts.maxFrac || 0.85;
-    const saved = Number((STORE && STORE[key]) || 0);
-    if (saved >= min) { target.style.height = saved + 'px'; target.style.flex = 'none'; }
     const cap = () => {
       const box = target.parentElement;
       const h = box ? box.getBoundingClientRect().height : 800;
       return Math.max(min, Math.round(h * maxFrac));
     };
+    const saved = Number((STORE && STORE[key]) || 0);
+    /* ★★ 恢复时**必须按上下限夹一下** ✗✗ —— 和 `bindPaneGrips`（左右那条）一模一样 ✓：
+       实测（2026-10-08 ✓）：`epPanelH` 里存了 **660** ✓，而窗口只有 ~500 高 ✓ →
+       句子面板**原样吃下 660** ✗ → 正文被挤成 **82px** ✗✗ →
+       用户看到的是「正文只剩两三行」✓，而且「📍 回到原文」也**定位不了** ✓
+       （视野太小，要找的那一句根本放不下 ✓）。
+       ⚠️ `cap()` 本来就有 ✓（拖动时在用 ✓）—— **只是恢复时忘了用** ✗。
+       ⚠️⚠️ 夹取要**等布局好了**再做 ✗：这会儿刚挂上 DOM ✓，
+          父容器高度可能还是 **0** ✓ → 拿 0 去算会把面板压到 `min` ✓（比不夹更糟 ✗）。
+       → 先按原值放上 ✓，下一帧 + 260ms 各再夹一次 ✓。 */
+    if (saved >= min) {
+      target.style.height = saved + 'px';
+      target.style.flex = 'none';
+      const reclamp = () => {
+        const h = Math.min(Math.max(min, saved), cap());
+        if (Math.abs(target.getBoundingClientRect().height - h) > 1) target.style.height = h + 'px';
+      };
+      try { requestAnimationFrame(reclamp); } catch (_) { setTimeout(reclamp, 16); }
+      setTimeout(reclamp, 260);
+    }
     lwGrab(el, {
       down: (ev) => { el.classList.add('on'); return { y: ev.clientY, h: target.getBoundingClientRect().height }; },
       /* ⚠️ 方向：**往上拖 = 面板变高** ✗（因为面板在下面 ✓）→ 是 `h - (dy)` ✓，
@@ -10605,15 +10632,59 @@
     EP_UI.mode = 'ex'; STORE.readMode = 'ex';
     EP_UI.sel = idx >= 0 ? idx : -1;
     EP_UI.pick = w.w; EP_UI.peek = w.w;
-    EP_UI.trOn = !!epTransOf(a);          /* 有译文就展开 ✓（回去看原文多半想对着看 ✓）*/
+    /* ⚠️⚠️ **不许顺手打开对照翻译** ✗✗ —— 用户原话：
+       「右边点击回到原文，怎么原文打开对照翻译了」✓。
+       原来这里写的是 `EP_UI.trOn = !!epTransOf(a)` ✓
+       （注释还写着「回去看原文多半想对着看」—— 那是**我猜的** ✗）。
+       用户只是想去看看这个词在原文哪儿 ✓，突然铺满一屏译文只会碍事 ✓，
+       而且译文行会把每句都撑开 ✓ → 要找的那句被推得更远 ✓（正好和「定位」对着干 ✗）。
+       → 一律**不碰** `trOn` ✓：开着就开着 ✓，关着就关着 ✓（用户自己点「⇄ 对照翻译」✓）。 */
     epSave(); render();
     if (idx >= 0) {
-      /* ⚠️ 等 DOM 建好再滚 ✗（`render()` 是同步的 ✓，但滚动得等布局 ✓）*/
-      setTimeout(() => spkHighlight(idx), 60);
+      epLocateSent(idx, w.w);
       rdToast('已定位到第 ' + (idx + 1) + ' 句 ✓（就是你划「' + w.w + '」那句）');
     } else {
       rdToast('文章找到了 ✓ 但这句对不上（可能重新导入过）');
     }
+  }
+  /* ★★ 把某一句滚进视野 ✓，并把句子里**那个词**点亮 ✓ ——
+     用户原话：「还有单词需要定位到大概位置」✓。
+
+     ⚠️⚠️ 为什么**不能**只用 `spkHighlight()`（`scrollIntoView({behavior:'smooth'})`）✗：
+        · 外面刚 `render()` 过 ✓，紧接着的定时器 / 微信读书自动同步**还会再重画** ✗ →
+          平滑滚动被**打断** ✓ → 表现就是「点了没滚」✗（实测就是这样 ✓）。
+        · 正文是 `.lw-ep-body` **自己滚** ✓，`scrollIntoView` 在「元素已经可见」时
+          可能**一动不动** ✓；也可能被别的滚动容器接走 ✓。
+     → 两条一起上 ✓：
+        ① **瞬时**滚动（不带 smooth ✓）+ 重试几次（重画后 DOM 是新的 ✓）
+        ② 直接对**正文容器**算一次精确位置 ✓（最稳 ✓）
+     ⚠️ 重试是**幂等**的 ✓（每次都先清 `.focus` 再点 ✓），不会越滚越偏 ✓。 */
+  function epLocateSent(i, word) {
+    let tries = 0;
+    const go = () => {
+      tries++;
+      const host = document.getElementById('lifework-view');
+      const el = host && host.querySelector('[data-epsent="' + i + '"]');
+      if (!el) { if (tries < 8) setTimeout(go, 120); return; }
+      /* ① 把这句里**这个词**点亮 ✓（`epMarkWords()` 已经把它包成 `.lw-ep-w` 了 ✓）*/
+      Array.prototype.forEach.call(host.querySelectorAll('.lw-ep-w.focus'), (x) => x.classList.remove('focus'));
+      const q = String(word || '').trim().toLowerCase();
+      if (q) {
+        const hit = Array.prototype.find.call(el.querySelectorAll('.lw-ep-w'),
+          (x) => String(x.textContent || '').trim().toLowerCase().indexOf(q) === 0);
+        if (hit) hit.classList.add('focus');
+      }
+      /* ② 滚 —— 先让浏览器滚一遍 ✓（顺带把外层容器也带上 ✓）*/
+      try { el.scrollIntoView({ block: 'center' }); } catch (_) {}
+      /* ③ 再对**正文容器**精确滚一次 ✓ —— `scrollIntoView` 在元素已经可见时可能不动 ✓ */
+      const body = host.querySelector('#lw-ep-body');
+      if (body) {
+        const br = body.getBoundingClientRect(); const er = el.getBoundingClientRect();
+        body.scrollTop = Math.max(0, body.scrollTop + (er.top - br.top) - Math.max(0, (br.height - er.height) / 2));
+      }
+      if (tries < 3) setTimeout(go, 160);      /* 重画后可能又被冲掉 ✓，再补两次 ✓ */
+    };
+    setTimeout(go, 80);
   }
 
   /* ══ 生词本 ✓ ══════════════════════════════════════════════════════════ */
