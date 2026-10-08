@@ -53,6 +53,21 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     delete d0.flowSel;
     await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d0) });
   } catch (_) {}
+  /* ★★ 开跑那一刻的 **id 快照** ✓ —— 收尾靠它认出「**这一轮新出现的**」✗✗。
+     ⚠️⚠️ 为什么光按名字 / 标记过滤**不够** ✗：
+        「✨ 示例」建出来的工作流叫「示例：B站热门 AI 摘要」✓（**没有 MARK** ✗），
+        而且它是一条**真能跑**的图：「B站热门 → AI 挑 5 条 → 写进备忘录」✓ ——
+        探针后面还会 `#lw-fl-run` 跑它 ✓ → **跑一次就往用户的备忘录里写 5~7 条** ✗✗。
+        实测：一轮下来备忘录 **24 → 31** ✗、工作流 **1 → 8** ✗，
+        而且**攒了好几天**（用户看到的就是一排没用的「工作流产出」/「B站热门精选」✗）。
+     → 收尾按 id 快照清 ✓：**不在快照里的**、且（带 MARK 或落在「工作流」文件夹）的 ✓
+       一律收掉 ✓。两个条件一起 ✗ —— 绝不按名字乱删用户自己写的东西 ✓。 */
+  let snapFlowIds = [], snapMemoIds = [];
+  try {
+    const s = await store();
+    snapFlowIds = (s.flows || []).map((x) => x.id);
+    snapMemoIds = (s.memos || []).map((m) => m.id);
+  } catch (_) {}
 
   try {
     await p.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
@@ -593,14 +608,26 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     try {
       const d = await store();
       const before = { flows: (d.flows || []).length, memos: (d.memos || []).length };
-      d.flows = (d.flows || []).filter((x) => !String(x.name).includes(MARK) && !madeIds.includes(x.id));
-      d.memos = (d.memos || []).filter((m) => !String(m.text).includes(MARK));
+      d.flows = (d.flows || []).filter((x) => !String(x.name).includes(MARK)
+        && !madeIds.includes(x.id) && snapFlowIds.includes(x.id));
+      /* ⚠️⚠️ 备忘录**按 id 快照**清 ✗✗（见上面 `snapMemoIds` 那段注释 ✓）——
+         光按 MARK 过滤的话，「✨ 示例」跑一次写出来的 5~7 条全留下 ✗。
+         两个条件一起 ✓：**这一轮新出现的** + （带 MARK **或**落在「工作流」文件夹）✓。 */
+      d.memos = (d.memos || []).filter((m) => {
+        if (String(m.text || '').includes(MARK)) return false;
+        if (snapMemoIds.includes(m.id)) return true;
+        return !(String(m.folder || '') === '工作流');
+      });
       d.memoFolders = (d.memoFolders || []).filter((f) => !String(f).includes(MARK));
       delete d.flowSel;
       await fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
       const a = await store();
       console.log('\n收尾：工作流 ' + before.flows + '→' + (a.flows || []).length + ' · 备忘录 ' + before.memos + '→' + (a.memos || []).length
-        + ' | 残留探针: ' + (a.flows || []).filter((x) => String(x.name).includes(MARK)).length + ' / ' + (a.memos || []).filter((m) => String(m.text).includes(MARK)).length);
+        + ' | 残留探针: ' + (a.flows || []).filter((x) => String(x.name).includes(MARK)).length + ' / ' + (a.memos || []).filter((m) => String(m.text).includes(MARK)).length
+        /* ⚠️ 还要盯**「工作流」文件夹里新多出来的** ✗ —— 「✨ 示例」跑一次写 5~7 条 ✓，
+           那些名字里没有 MARK ✗，只有这个计数能看出来 ✓。 */
+        + ' / 工作流文件夹新增 ' + (a.memos || []).filter((m) => String(m.folder || '') === '工作流' && !snapMemoIds.includes(m.id)).length
+        + ' / 示例工作流残留 ' + (a.flows || []).filter((x) => !snapFlowIds.includes(x.id) && !String(x.name).includes(MARK)).length);
     } catch (e) { console.log('\n收尾失败: ' + e.message); }
     await b.close();
     console.log(fails.length ? '\n失败 ' + fails.length + ' 项：' + fails.join(' / ') : '\n全部通过 ✅');

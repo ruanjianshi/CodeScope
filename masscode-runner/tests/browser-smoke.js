@@ -789,17 +789,24 @@ print(r.run())
   }
   await page.locator('.lw-nav [data-tab="today"]').dispatchEvent('click');
   await page.waitForTimeout(400);
+  /* ⚠️⚠️ 这条**两个方向**的含义完全不一样 ✗✗：
+     · **上界**（越跳越多）才是真正要守的回归 ✓ —— 「定时器叠加了」✓；
+     · **下界**（跳得少）是**机器卡**的表现 ✗，不是产品问题 ✓。
+     实测：load 5~7 时 2.6 秒只跳 0~1 次 ✓ → 原来的 `< 2` **假失败过两次** ✗
+     （两次还挂在不同地方 ✓，一度让我以为「三次挂在三个地方 = 偶发」✓）。
+     → 窗口放到 **4 秒** ✓；只有「**一次都没跳**」（定时器根本没起来 ✓）
+       和「跳太多」（叠加 ✓）才算失败 ✓。 */
   const tickCount = await page.evaluate(() => new Promise((res) => {
     let n = 0;
     const el = document.getElementById('lw-clock');
     if (!el) return res(-1);
     const ob = new MutationObserver(() => { n++; });
     ob.observe(el, { childList: true, characterData: true, subtree: true });
-    setTimeout(() => { ob.disconnect(); res(n); }, 2600);
+    setTimeout(() => { ob.disconnect(); res(n); }, 4000);
   }));
-  if (tickCount < 2 || tickCount > 4) {
-    throw new Error('★ 秒针数量不对（2.6 秒里时钟被改了 ' + tickCount + ' 次，应约 2~3 次 —— 定时器叠加了？）');
-  }
+  if (tickCount < 0) throw new Error('找不到时钟（#lw-clock）');
+  if (tickCount === 0) throw new Error('★ 4 秒里时钟一次都没动 —— 定时器没起来？');
+  if (tickCount > 6) throw new Error('★ 秒针数量不对（4 秒里时钟被改了 ' + tickCount + ' 次 —— 定时器叠加了？）');
   /* ★ 心情：点开浮层 → 选一个 → 胶囊变 + **存进 STORE** ✓ */
   await page.locator('#lw-mood').click();
   await page.waitForTimeout(400);
@@ -1671,9 +1678,20 @@ print(r.run())
     throw new Error('邮箱列表宽度没存进 STORE：' + mlStore.mailListW + ' vs ' + mlListDrag.after);
   }
   /* 切文件夹后宽度要保持（局部重绘不能把 inline 宽度冲掉 ✗）*/
+  /* ⚠️⚠️ 基准要取**切文件夹之前那一刻**的宽度 ✗✗ ——
+     不能拿上面那个 `mlSideDrag.after`（286）✗：
+     中间那条「松手没收干净」的回归用例**故意又拖了 +40** ✓
+     （`cx + 40` ✓）→ 侧栏**已经是 326 了** ✓，而 286 是**更早**的值 ✗。
+     实测（诊断打印）：`sideW:326 inline:"326px" storeSideW:326` vs 期望 286 ✓ →
+     **产品完全正常** ✗，是这条断言**拿了个过期基准** ✗
+     （改这条之前它一直是红的 ✓，看着像「宽度丢了」✗）。
+     ⚠️ 教训：一条链里**前面动过的东西**，后面别拿更早的值当基准 ✓。 */
+  const mlSideBefore = await mlWidth('.lw-ml-side');
   await page.locator('[data-mbox="Sent Messages"]').click();
   await page.waitForTimeout(700);
-  if (Math.abs(await mlWidth('.lw-ml-side') - mlSideDrag.after) > 2) throw new Error('切文件夹后账号栏宽度丢了');
+  if (Math.abs(await mlWidth('.lw-ml-side') - mlSideBefore) > 2) {
+    throw new Error('切文件夹后账号栏宽度丢了：' + mlSideBefore + ' → ' + (await mlWidth('.lw-ml-side')));
+  }
   await page.locator('[data-mbox="INBOX"]').click();
   await page.waitForTimeout(700);
   /* 双击恢复默认 ✓ */
