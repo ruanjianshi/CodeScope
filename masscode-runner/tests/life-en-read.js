@@ -216,8 +216,18 @@ const TEXT = SENT.join(' ');
     await p.locator('[data-epsent="' + midIdx + '"]').click();
     await p.waitForTimeout(600);
     const after = await p.locator('#lw-ep-body').evaluate((el) => el.scrollTop);
-    console.log('    滚动位置 ' + before + ' → ' + after);
-    ck('★★ 点句子后**滚动位置没变**（没跳回开头）', Math.abs(after - before) <= 2, before + ' → ' + after);
+    const delta = after - before;
+    console.log('    滚动位置 ' + before + ' → ' + after + '（Δ ' + delta + '）');
+    /* ⚠️⚠️ 判据**不能要求「一字不差」** ✗✗ —— 第一版是 `Math.abs(after - before) <= 2` ✓，
+       连排跑时红过一次 ✓、单独跑就绿 ✓（典型偶发 ✓）。
+       根因：`locator.click()` 会在元素**没完全露出来**时**自己微调一下** ✗
+       （视口中间那句也可能被裁掉半行 ✓）→ 位置差几十像素 ✓，
+       那不是产品的问题 ✗，是**探针自己滚的** ✗（同一页上面那段注释就在讲这件事 ✓）。
+       → 守**真正要守的东西** ✓：用户原话是「点击原文**会自动跳到开头**去」✗，
+         所以判据是「**没往回跳到顶**」✓（外加「本来就不在顶上」✓），
+         而不是「一像素都没动」✗。Δ 照旧打出来 ✓，真有大幅偏移一眼看得到 ✓。 */
+    ck('★★ 点句子后**没跳回开头**（用户原话「点击原文会自动跳到开头去」）',
+      after > 60 && delta > -40, before + ' → ' + after + '（Δ ' + delta + '）');
     ck('★ 而且下半部分确实换成了新那句',
       new RegExp('第 ' + (midIdx + 1) + ' 句').test(await txt('.lw-ep-panel')),
       (await txt('.lw-ep-panel')).slice(0, 40));

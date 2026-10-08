@@ -1828,12 +1828,20 @@
   .lw-wd-def { font-size:12.5px; color:${T.text}; padding:10px 14px 0; line-height:1.9; }
   .lw-wd-eg { font-size:11px; color:${T.dim}; padding:8px 14px 0; line-height:1.9;
     border-left:2px solid ${T.lineDim}; margin:8px 14px 0; }
-  .lw-wd-hist { display:flex; gap:3px; flex-wrap:wrap; padding:8px 14px 0; }
+  /* ⚠️⚠️ 词卡里的**水平间距只能有一条基准线**（16px）✗✗ ——
+     踩过 ✗：.lw-wd-sec 自己已经有 16px 内边距 ✓，而 .lw-wd-next / .lw-wd-hist /
+     .lw-wd-ef 这几条是**旧版词卡**留下的 ✓（那时它们不在 sec 里 ✓），各自又带了 14px ✗
+     → 复习区块里的文字被**双重缩进成 30px** ✗，
+     比同一张卡上的释义 / 例句明显右移一截 ✗（截图一眼就看出来了 ✓）。
+     → 规矩：**.lw-wd-sec 的子元素一律不许再写水平 padding / margin** ✗，
+        只写 margin-top ✓；要离边就用 .lw-wd-sec 的 padding ✓。
+     ⚠️ 这条注释里不许出现反引号 ✗（CSS 装在 JS 模板串里 ✓，本会话已经栽过 4 次 ✗）。 */
+  .lw-wd-hist { display:flex; gap:3px; flex-wrap:wrap; margin-top:8px; }
   .lw-wd-hist i { width:11px; height:11px; display:block; border:1px solid ${T.lineDim}; }
   .lw-wd-hist i.ok { background:${T.ok}; border-color:${T.ok}; }
   .lw-wd-hist i.bad { background:${T.red}; border-color:${T.red}; }
   .lw-wd-hist i.hard { background:${T.warn}; border-color:${T.warn}; }
-  .lw-wd-next { font-size:10.5px; color:${T.dim}; padding:8px 14px 0; line-height:1.9; }
+  .lw-wd-next { font-size:10.5px; color:${T.dim}; line-height:1.9; }
   .lw-wd-next b { color:${T.accent}; font-weight:400; }
   /* ══ 词详情：**词典式**排版 ✓ ══════════════════════════════════════════
      ★ 用户原话：「这个词的详情，一般不需要我去修改，所以不用是这种输入框，
@@ -1850,6 +1858,9 @@
      ⚠️ 别去动 .lw-rd-read ✗ —— 那个类名被**四个模式共用** ✓
         （电子书 / 外刊 / 词根 / 生词本 ✓），动它等于一次改四处 ✗。 */
   .lw-wd-detail { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; padding:0 0 20px; }
+  /* 编辑区那个标题复用了侧栏的 .lw-rd-hd ✓ —— 它自带 13px 左右边距 ✗，
+     跟词卡的 16px 基准线差 3px ✓（单独看不出来 ✓，和下面的输入框并排就露馅 ✗）→ 在卡里覆盖掉 ✓。 */
+  .lw-wd-detail .lw-rd-hd { padding-left:16px; padding-right:16px; }
   .lw-wd-top { padding:16px 16px 13px; border-bottom:1px solid ${T.lineDim}; }
   .lw-wd-title { display:flex; align-items:center; gap:6px; }
   .lw-wd-title .w { font-size:26px; line-height:1.3; color:${T.text}; font-weight:600;
@@ -1899,10 +1910,19 @@
   .lw-wd-src { font-size:12px; color:${T.dim}; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .lw-wd-pv { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; font-size:10.5px; color:${T.faint}; }
   .lw-wd-pv b { color:${T.dim}; font-weight:400; }
-  .lw-wd-ef { font-size:10.5px; color:${T.faint}; padding:7px 14px 0; }
+  /* 新词阶段四档会重合 ✓ → 补一句解释 ✓（⚠️ 别加水平 padding ✗，见上面的基准线规矩 ✓）*/
+  .lw-wd-pvnote { font-size:10px; color:${T.faint}; margin-top:5px; line-height:1.8; }
+  .lw-wd-ef { font-size:10.5px; color:${T.faint}; margin-top:7px; }
   .lw-wd-ef b { color:${T.dim}; font-weight:400; }
-  /* 底部动作条 ✓ —— 常驻 ✓，不跟内容一起滚走 ✗（想补全时不用往上翻 ✓）*/
-  .lw-wd-foot { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  /* 底部动作条 ✓ —— **真的常驻** ✓，不跟内容一起滚走 ✓（想补全时不用往上翻 ✓）。
+     ⚠️⚠️ 这条注释以前是**假的** ✗✗ —— 写的是「常驻」✓，实现却是普通流 ✓，
+        词卡一变高它就跟着滚出视野 ✗（本次实测才发现 ✓）。
+        → 改成 position:sticky + bottom:0 ✓（父级 .lw-wd-detail 就是滚动容器 ✓）。
+     ⚠️ 必须给**不透明底色** ✗ —— 不然内容会从按钮底下透出来 ✓（.lw-rd-read 本身没底色 ✓，
+        继承下来就是 T.bg ✓，和卡片一致 ✓）。
+     ⚠️ 状态提示（正在补全 / 报错）要放在它**前面** ✗ —— 否则被压在底下看不见 ✓。 */
+  .lw-wd-foot { position:sticky; bottom:0; z-index:2; background:${T.bg};
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
     margin:16px 16px 0; padding-top:13px; border-top:1px solid ${T.lineDim}; }
   .lw-wd-foot .sp { flex:1; }
   .lw-wd-foot button { height:28px; padding:0 11px; border:1px solid ${T.lineDim};
@@ -1920,14 +1940,14 @@
         （这个项目在 「.lw-tr」 上栽过一模一样的跟头 ✓，见 skill 里那条 ✓。）
         → 改成 「.lw-wd-f」（field ✓），和列表项彻底分开 ✓。
      ⚠️ 标签**固定宽** ✗ —— 不固定的话每个输入框的左边参差不齐 ✗，一眼就乱 ✗。 */
-  .lw-wd-f { display:flex; gap:9px; align-items:flex-start; padding:7px 14px 0; }
+  .lw-wd-f { display:flex; gap:9px; align-items:flex-start; padding:7px 16px 0; }
   .lw-wd-f label { flex:none; width:56px; padding-top:5px; font-size:10.5px; color:${T.faint}; }
   .lw-wd-f input, .lw-wd-f textarea { flex:1; min-width:0; border:1px solid ${T.lineDim};
     background:${T.bg2}; color:${T.text}; font:11.5px/1.75 ${UI}; padding:5px 8px; outline:none; resize:vertical; }
   .lw-wd-f input:focus, .lw-wd-f textarea:focus { border-color:${T.accent}; }
   .lw-wd-f input::placeholder, .lw-wd-f textarea::placeholder { color:${T.faint}; }
   /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
-  .lw-wd-imgwrap { margin:10px 14px 0; border:1px solid ${T.lineDim}; background:${T.bg2}; }
+  .lw-wd-imgwrap { margin:10px 16px 0; border:1px solid ${T.lineDim}; background:${T.bg2}; }
   /* ⚠️ 用 contain ✗ **不用 cover** ✗ ——
      配图的用途是「图片场景理解」✓，cover 会把一张 16:9 的图**裁掉近一半**✗
      （700 宽下自然高 394 ✓ → 硬压到 210 ✓ → 竖着砍 46% ✗），
@@ -1940,7 +1960,7 @@
   .lw-wd-imgwrap.bad { display:none; }
   .lw-wd-imgwrap .cap { font-size:9.5px; color:${T.faint}; padding:4px 8px; border-top:1px solid ${T.lineDim}; }
   /* 「来自哪句话」✓ —— 给这个词一个上下文 ✓（也方便回忆是在哪儿遇到的 ✓） */
-  .lw-wd-sent { font-size:11px; line-height:1.85; color:${T.dim}; margin:8px 14px 14px;
+  .lw-wd-sent { font-size:11px; line-height:1.85; color:${T.dim}; margin:8px 0 0;
     padding-left:9px; border-left:2px solid ${T.lineDim}; }
   /* ⚠️ 正在跑 / 已开启的按钮要**看得出来** ✗（补全中 / 找图中 ✓） */
   .lw-ep-act button.on { border-color:${T.accent}; color:${T.accent}; }
@@ -8548,7 +8568,22 @@
     if (TR_UI.err) return tools + '<div class="lw-hl-err">✗ ' + esc(TR_UI.err) + '</div>';
     if (!TR_UI.data) return tools + '<div class="lw-rd-empty">还没拉过<br><span style="color:' + T.faint + '">点「↻ 刷新」拉一次（11 个源，几秒钟）</span></div>';
     const list = trFiltered();
-    if (!list.length) return tools + '<div class="lw-rd-empty">没有符合条件的条目</div>';
+    if (!list.length) {
+      /* ⚠️⚠️ 「源这次没拉到」和「筛出来是空的」**不能都说「没有符合条件的条目」** ✗✗ ——
+         实测：arXiv 被上游限流（HTTP 429：Rate exceeded ✓）→ 条数 0 ✓ →
+         中栏写「没有符合条件的条目」✗ → 用户以为**这个源本来就没内容** ✗，
+         而真相是**它这次没拉到** ✓（左边那个源的角标确实变红了 ✓、hover 也有原因 ✓，
+         但没人会去 hover ✗）。
+         ⚠️ 这跟「AI 没配却假装在补全」是同一类错 ✗ —— **把失败说成「没有」** ✗。 */
+      if (TR_UI.src) {
+        const r = trResults().find((z) => z.key === TR_UI.src);
+        if (r && !r.ok) {
+          return tools + '<div class="lw-hl-err">✗ 这个源这次没拉到：' + esc(r.error || '未知原因')
+            + '<div style="margin-top:10px"><button id="lw-hl-retry">↻ 再试一次</button></div></div>';
+        }
+      }
+      return tools + '<div class="lw-rd-empty">没有符合条件的条目</div>';
+    }
     /* 选了单个源 → 直接列 ✓；「全部」→ 按源分组 ✓（读起来清楚得多 ✓）*/
     if (TR_UI.src) return tools + list.map(trItemHtml).join('');
     const bySrc = new Map();
@@ -8660,6 +8695,9 @@
       el.onclick = () => { TR_UI.sel = el.dataset.trit; trSeen(el.dataset.trit); render(); };
     });
     const rl = q('#lw-hl-reload'); if (rl) rl.onclick = () => trLoad(true);
+    /* 「再试一次」和「↻ 刷新」是**同一个动作** ✓ —— 只是出现在源报错的空态里 ✓
+       （那时用户已经选定了这个源 ✓，不用先回去点刷新 ✓）。 */
+    const rt = q('#lw-hl-retry'); if (rt) rt.onclick = () => trLoad(true);
     /* ★★ 点日报里的**序号** → 跳到中栏对应那条 ✓ —— 用户原话：
        「帮助我快速理解和阅读好热点信息」✓。这是「读完简报就去读原文」那一步的关键 ✓，
        没有它的话用户看到「[2] 自托管密码管理」还得自己在中栏翻 ✓。 */
@@ -10484,6 +10522,16 @@
             + (Number(h.q) >= 4 ? '记得' : Number(h.q) >= 3 ? '模糊' : '忘了') + '"></i>').join('') + '</div>' : '')
         + (pv.length ? '<div class="lw-wd-pv">现在复习会排到：'
           + pv.map((g) => '<span>' + esc(g.label) + ' → <b>' + esc(g.next) + '</b></span>').join('') + '</div>' : '')
+        /* ⚠️ 新词阶段**三档会重合** ✗ —— 学习步是「10 分钟 → 1 天」✓，
+           「忘了 / 模糊 / 记得」在这一步都是「进下一步」✓ → 显示出来全是「10 分钟」✗。
+           光甩四个数字，用户只会觉得「这几个按钮有啥区别」✗
+           （这条在本项目是**老毛病**了 ✓ —— 见 skill 里「两个控件结果相同」那条 ✓）。
+           ⚠️ 但**不能改算法** ✗（lib/srs.js 是全端唯一一份 ✓，
+              改它等于改用户所有已有词的排期 ✗）→ 只补一句解释 ✓。 */
+        + (pv.length && (st === 'fresh' || st === 'learning')
+          ? '<div class="lw-wd-pvnote">新词先走学习步（10 分钟 → 1 天），之后才按难度因子放大 —— '
+            + '所以这四档在这一步会重合，但难度因子的加减不一样</div>'
+          : '')
         /* ⚠️ 「难度因子」**不能丢** ✗ —— 旧版词详情里有 ✓，重写成词典式时漏了 ✗
            （`tests/life-en.js` ⑦ 那条断言当场抓住 ✓）。
            但**光甩一个数字**等于没说 ✗（`2.36` 谁知道是高还是低 ✓）→ 带一句人话 ✓。 */
@@ -10493,8 +10541,13 @@
       + (w.artTitle ? sec('📍', '来自', '<div class="lw-wd-src">《' + esc(w.artTitle) + '》'
         + (w.artId ? ' <button id="lw-wd-src">回到原文</button>' : '') + '</div>'
         + (w.sent ? '<div class="lw-wd-sent">' + epHiWord(w.sent, w.w) + '</div>' : '')) : '')
-      /* ── 编辑区 ✓（编辑态已经在上面 body 里了 ✓，这里不再重复插 ✗）── */
-      /* ── 底部动作 ✓ ── */
+      /* ── 底部动作 ✓ ──
+         ⚠️⚠️ 状态提示必须放在动作条**前面** ✗✗ ——
+            动作条现在是 sticky（贴着滚动区底边 ✓），
+            提示放它后面的话会被**压在底下看不见** ✗（sticky 有不透明底色 ✓）。 */
+      + (busy ? '<div class="lw-ep-tip" style="color:' + T.accent + '">正在问 AI 补全…（一般 3~10 秒）</div>' : '')
+      + (EP_UI.enErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.enErr) + '</div>' : '')
+      + (EP_UI.imgErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 配图：' + esc(EP_UI.imgErr) + '</div>' : '')
       + '<div class="lw-wd-foot">'
       + '<button class="' + (busy ? 'on' : '') + '" id="lw-wd-enrich" title="用 AI 补全音标 / 词性 / 释义 / 例句 / 巧记 / 场景">'
       + (busy ? '补全中…' : (w.enAt ? '🪄 重新补全' : '🪄 AI 补全')) + '</button>'
@@ -10503,10 +10556,6 @@
       + '<span class="sp"></span>'
       + '<button data-act="del" id="lw-wd-del" class="danger" title="从生词本删掉">🗑 删除</button>'
       + '</div>'
-      /* ⚠️ 补全 / 找图的状态要**说清楚** ✗ —— 转圈十秒没提示的话用户以为卡死了 ✗ */
-      + (busy ? '<div class="lw-ep-tip" style="color:' + T.accent + '">正在问 AI 补全…（一般 3~10 秒）</div>' : '')
-      + (EP_UI.enErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.enErr) + '</div>' : '')
-      + (EP_UI.imgErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 配图：' + esc(EP_UI.imgErr) + '</div>' : '')
       + '</div>';
   }
   /* 例句里把**本词**标出来 ✓ —— 学一个词最需要的就是「看它在真句子里长什么样」✓。

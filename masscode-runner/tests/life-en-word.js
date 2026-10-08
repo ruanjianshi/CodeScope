@@ -17,20 +17,34 @@ const fails = []; const ck = (n, ok, x) => { if (ok) console.log('  ✅ ' + n); 
 const BASE = 'http://127.0.0.1:4877';
 const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache: 'no-store' })).json()).data) || {};
 const put = async (d) => fetch(BASE + '/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-/* ⚠️ 这个词必须**不在**用户的生词本里** ✗ —— 重复加会直接返回「已经在生词本里了」✗，
-   于是整条探针一路假失败 ✗（实测：第一版用了 individuals，而用户**正好**加过它 ✗）。
-   下面 ⓪ 有一条前置断言守着 ✓。 */
-const WORD = 'ubiquitous';
+/* ⚠️⚠️ 测试词**必须每次都不一样** ✗✗ —— 踩过两次，代价很大 ✓：
+   第一版用固定词 ubiquitous ✓ + ⓪ 一条「它不在生词本里」的前置断言守着 ✓。
+   问题出在**前置不成立时探针自己恢复不了** ✗：
+   上一轮跑崩（比如被并发的探针污染了 store ✓）→ `finally` 里 `madeIds` 是空的 ✗
+   → 这个词**永久留在用户生词本里** ✗ → 之后每次跑都红 ✗，而且**要人去手工清** ✗。
+   （今天实测卡了两轮 ✓。）
+   → 改成**带运行唯一后缀** ✓：词本身是假的没关系 ✓
+     （AI 是拦下来的假 AI ✓，词串只是个标识 ✓），
+     但**例句里必须真的出现它** ✓ —— 否则「例句里高亮本词」那条没法验 ✗。
+   ⚠️ 后缀**只能用字母** ✗ —— `EN.cleanWord()` 会剥掉词尾的非字母字符 ✓，
+      后缀带数字的话会被吃掉一部分 ✓（撞车概率变高 ✗）。 */
+const TAG = Array.from({ length: 5 }, () => 'abcdefghijkmnpqrstuvwxyz'[Math.floor(Math.random() * 24)]).join('');
+const WORD = 'ubiquitous' + TAG;
+
+/* ★★ 启动清扫 ✓ —— 只认**探针自己的签名** ✗（后缀形态 + 假 AI 给的音标 ✓），
+   绝不按名字乱删 ✗（万一用户真的收过 ubiquitous ✓，那是他的数据 ✓）。
+   这样即使某一轮崩了 ✓，下一轮也能自己收拾干净 ✓，不会再卡住 ✓。 */
+const RESIDUE_RE = /^ubiquitous[a-z]{5}$/;
+const RESIDUE_PH = '/juːˈbɪk.wɪ.təs/';
 
 /* 假 AI 的回答 ✓ —— 故意**带 ```json 围栏 + 前言** ✓，验的就是「能不能剥干净」✓。
-   ⚠️ 内容必须和 `WORD` **自洽** ✗ —— 第一版拿的是 `individuals` 的卡 ✓ 而词是别的 ✓，
-      于是「例句里把本词标出来」这条**根本没法验** ✗（句子里压根没这个词 ✗）。
-      → 例句里必须**真的出现** `ubiquitous` ✓（还带变形容忍的空间 ✓）。 */
+   ⚠️ 内容必须和 WORD **自洽** ✗ —— 第一版拿的是 `individuals` 的卡 ✓ 而词是别的 ✓，
+      于是「例句里把本词标出来」这条**根本没法验** ✗（句子里压根没这个词 ✗）。 */
 const FAKE_JSON = {
-  ph: '/juːˈbɪk.wɪ.təs/',
+  ph: RESIDUE_PH,
   pos: 'adj.',
   def: '无处不在的；普遍存在的',
-  eg: 'Mobile phones are now ubiquitous in daily life.',
+  eg: 'Mobile phones are now ' + WORD + ' in daily life.',
   egZh: '手机如今在日常生活中无处不在。',
   mnem: 'ubique（到处）+ -ous（…的）→ 到处都在的 → 无处不在的。',
   scene: '地铁车厢里几乎每个人都低头看着手机，一眼望去全是亮着的屏幕。',
@@ -44,6 +58,18 @@ const FAKE_JSON = {
   const keep = { words: snap.words, wordSel: snap.wordSel, epArt: snap.epArt, readMode: snap.readMode, epWordFilter: snap.epWordFilter };
   const idsBefore = new Set((snap.words || []).map((w) => w && w.id));
   const madeIds = [];
+
+  /* ★ 启动清扫：把**以前崩掉那一轮**留下的探针词收掉 ✓（只认签名 ✗，不按名字乱删 ✓） */
+  {
+    const left = (snap.words || []).filter((w) => w && RESIDUE_RE.test(String(w.w)) && String(w.ph || '') === RESIDUE_PH);
+    if (left.length) {
+      const d0 = await store();
+      d0.words = (d0.words || []).filter((w) => !(w && RESIDUE_RE.test(String(w.w)) && String(w.ph || '') === RESIDUE_PH));
+      await put(d0);
+      left.forEach((w) => idsBefore.delete(w.id));
+      console.log('清扫：收掉 ' + left.length + ' 个上一轮崩掉留下的探针词 ✓（' + left.map((x) => x.w).join(', ') + '）');
+    }
+  }
 
   const b = await chromium.launch({ executablePath: exe, headless: true });
   const p = await b.newPage({ viewport: { width: 1500, height: 1000 } });
@@ -100,11 +126,11 @@ const FAKE_JSON = {
     await p.waitForSelector('.lw-rd', { timeout: 20000 }); await p.waitForTimeout(900);
     await openWordbook();
 
-    console.log('\n── ⓪ 前置：这个词必须**不在**生词本里 ──');
+    console.log('\n── ⓪ 前置：测试词**本次运行独有**（不会再被历史残留卡住）──');
     {
       const w0 = (await store()).words || [];
       const dup = w0.filter((x) => x && String(x.w).toLowerCase() === WORD);
-      ck('★ 测试词 ' + WORD + ' 不在现有生词本里（不然重复加会直接返回、整条假失败）', dup.length === 0,
+      ck('★ 测试词 ' + WORD + ' 自带运行唯一后缀（不会撞上历史残留 / 用户自己的词）', dup.length === 0,
         '已存在 ' + dup.length + ' 个');
     }
 
@@ -161,10 +187,55 @@ const FAKE_JSON = {
     ck('★ 巧记是**高亮框**（不是输入框）', /ubique/.test(await txt('.lw-wd-tipbox.mnem')), await txt('.lw-wd-tipbox.mnem'));
     ck('★ 场景是**高亮框**', (await txt('.lw-wd-tipbox.scene')).length > 8, await txt('.lw-wd-tipbox.scene'));
     ck('★ 复习区块在（遗忘曲线看得见）', /下次复习/.test(panel), panel.slice(0, 60));
+    /* ⚠️ 新词阶段**三档会重合** ✗（学习步是「10 分钟 → 1 天」✓）——
+       四个数字里三个一样 ✓，光看图只会觉得「这几个按钮有啥区别」✗ →
+       必须补一句解释 ✓（本项目的老毛病 ✓，见 skill「两个控件结果相同」那条 ✓）。 */
+    ck('★★ 新词阶段说明了「四档为什么会重合」（不是甩四个数字就完）',
+      /学习步/.test(await txt('.lw-wd-pvnote')), await txt('.lw-wd-pvnote'));
     ck('★ 配图显示出来了（img 元素在）', await p.locator('.lw-wd-img').count() === 1);
     ck('★ 配图说明写清了来源', /百度图片/.test(await txt('.lw-wd-imgwrap')), await txt('.lw-wd-imgwrap'));
     ck('★ 列表行里有小缩略图', await p.locator('.lw-wd-thumb').count() >= 1);
     ck('★ 有「🪄」和「🖼」两个按钮', await p.locator('#lw-wd-enrich').count() === 1 && await p.locator('#lw-wd-img').count() === 1);
+    /* ⚠️⚠️ 词卡里的**水平基准线只能有一条**（16px）✗✗ ——
+       踩过 ✗：`.lw-wd-sec` 自己已经有 16px 内边距 ✓，
+       而 `.lw-wd-next` / `.lw-wd-hist` / `.lw-wd-ef` 是**旧版词卡**留下的 ✓
+       （那时它们不在 sec 里 ✓），各自又带了 14px ✗
+       → 复习区块里的文字被**双重缩进成 30px** ✗，
+       比同一张卡上的释义 / 例句明显右移一截 ✗（截图一眼看出来 ✓）。
+       ⚠️ 这类「差 2~14px」的错**肉眼在小图里看不准** ✗，必须**量** ✓。 */
+    const gut = await p.evaluate(() => {
+      const root = document.querySelector('.lw-wd-detail');
+      if (!root) return null;
+      const base = root.getBoundingClientRect().left;
+      /* ⚠️ 不含 .lw-wd-top ✗ —— 它是**通栏块** ✓（自带 16px 内边距 + 底边通栏 ✓），
+         量它的左边缘恒等于 0 ✓，放进来自检会自己挂 ✗。 */
+      const sels = ['.lw-wd-defs', '.lw-wd-next', '.lw-wd-pv', '.lw-wd-pvnote', '.lw-wd-ef',
+        '.lw-wd-imgwrap', '.lw-wd-sent', '.lw-wd-foot'];
+      const out = {};
+      sels.forEach((s) => {
+        const el = root.querySelector(s);
+        if (el) out[s] = Math.round(el.getBoundingClientRect().left - base);
+      });
+      return out;
+    });
+    const gutVals = Object.keys(gut || {}).map((k) => gut[k]);
+    console.log('    水平基准线: ' + JSON.stringify(gut));
+    ck('★★ 卡里所有区块**左边对齐同一条线**（不能有的 16 有的 30 —— 复习区块被双重缩进过）',
+      !!gut && gutVals.length >= 5 && new Set(gutVals).size === 1 && gutVals[0] === 16, JSON.stringify(gut));
+    /* ⚠️⚠️ 底部动作条**必须真的常驻** ✗✗ —— 注释里一直写着「常驻、不跟内容一起滚走」✓，
+       实现却是**普通流** ✗ → 词卡一变高它就跟着滚出视野 ✗（本次实测才发现 ✓）。
+       ⚠️ 这条**不能只验「存在」** ✗ —— 存在 ✓、能点到 ✓（Playwright 会自己滚 ✓），
+          但用户得先往下翻才看得见 ✗ → 只能**量位置** ✓。 */
+    const footVis = await p.evaluate(() => {
+      const box = document.querySelector('.lw-wd-detail');
+      const foot = document.querySelector('.lw-wd-foot');
+      if (!box || !foot) return null;
+      const bb = box.getBoundingClientRect(); const fb = foot.getBoundingClientRect();
+      return { over: box.scrollHeight - box.clientHeight, scrollTop: box.scrollTop,
+        inside: fb.top >= bb.top - 1 && fb.bottom <= bb.bottom + 1 };
+    });
+    ck('★★ 内容超出时底部动作条**仍然在视野里**（不用先往下翻 —— 以前注释写「常驻」其实是假的）',
+      !!footVis && footVis.over > 1 && footVis.inside, JSON.stringify(footVis));
     /* ⚠️⚠️ 词卡**自己得会滚** ✗✗ —— 父级 `.lw-rd-read` 是 `overflow:hidden` ✓，
        词卡改成词典式之后**明显变高** ✓ → 内容比可视区高时，
        底部的「🪄 补全 / 🗑 删除」**鼠标滚轮滚不到** ✗。

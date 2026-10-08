@@ -9,6 +9,14 @@ const fs = require('fs');
 const { chromium } = require('playwright-core');
 const exe = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((f) => fs.existsSync(f));
 const fails = []; const ck = (n, ok, x) => { if (ok) console.log('  ✅ ' + n); else { console.log('  ❌ ' + n + (x ? '  → ' + x : '')); fails.push(n); } };
+/* ⚠️⚠️ 这些源是**真网** ✗ —— 上游随时可能限流 / 抽风 ✓
+   （实测：arXiv 会返回 `HTTP 429：Rate exceeded.` ✓，条数 0 ✓）。
+   ⚠️ 这种时候**不能让整条探针超时变红** ✗ —— 那是**环境**的问题 ✗，不是产品坏了 ✗，
+      红了只会让人开始不信这个探针 ✓（狼来了 ✓）。
+   ⚠️ 但**更不能悄悄算通过** ✗✗ —— 那就成了「看着通过、其实什么都没验」✗
+      （本项目最忌讳的那种 ✓）。
+   → 用 `skip()` ✓：**显式跳过 + 写明原因** ✓，收尾时**单独列出来** ✓，一眼看得到 ✓。 */
+const skips = []; const skip = (n, why) => { console.log('  ⏭ ' + n + '（' + why + '）'); skips.push(n + '：' + why); };
 const BASE = 'http://127.0.0.1:4877';
 const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache: 'no-store' })).json()).data) || {};
 
@@ -232,7 +240,17 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
              ✓ 能嵌  = B站 / 掘金 / 少数派 / 微博 / 百度 / 抖音 / HN ✓。 */
     const frameCheck = async (srcKey) => {
       await p.locator('[data-trsrc="' + srcKey + '"]').click();
-      await p.waitForTimeout(3000);
+      /* ⚠️ 等「有条目」**或**「出了错误条」✗ —— 只等 [data-trit] 的话，
+         源被限流时会**死等 30 秒再超时** ✗，报出来的还是一句看不懂的 timeout ✗。 */
+      await p.waitForFunction(() => document.querySelectorAll('[data-trit]').length > 0
+        || document.querySelector('.lw-hl-err'), null, { timeout: 25000 }).catch(() => {});
+      await p.waitForTimeout(1500);
+      const err = await p.evaluate(() => {
+        const el = document.querySelector('.lw-hl-err');
+        return el ? el.innerText.replace(/\n/g, ' ').trim().slice(0, 90) : '';
+      });
+      if (err) return { error: err };
+      if (!(await p.locator('[data-trit]').count())) return { error: '（这个源一条都没拉到）' };
       await p.locator('[data-trit]').first().click();
       await p.waitForTimeout(2500);
       return p.evaluate(() => {
@@ -259,23 +277,40 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     };
     const gh = await frameCheck('github');
     console.log('    GitHub → ' + JSON.stringify(gh));
-    ck('★ GitHub 不塞 iframe（改出卡片）', gh.iframe === 0 && gh.card === 1, JSON.stringify(gh));
-    ck('★ 卡片说清了「是对方不允许，不是这边坏了」', /不允许被内嵌/.test(gh.txt), gh.txt);
-    ck('★ 卡片上有个大按钮能打开原文', gh.bigBtn === 1, String(gh.bigBtn));
-    /* 那张「不允许内嵌」的卡片也要撑满 —— 不然它下面同样是一大片空白 ✗。 */
-    ck('★ 卡片也撑满了（不是浮在顶上）', gh.cardH > 150, '卡片 ' + gh.cardH + ' · 栏高 ' + gh.bodyH);
-    ck('★ 卡片下面也不留空白', gh.bottomGap <= 2, '还剩 ' + gh.bottomGap + 'px');
+    if (gh && gh.error) {
+      skip('★ GitHub 不塞 iframe（改出卡片）', '这个源这次没拉到：' + gh.error);
+    } else {
+      ck('★ GitHub 不塞 iframe（改出卡片）', gh.iframe === 0 && gh.card === 1, JSON.stringify(gh));
+      ck('★ 卡片说清了「是对方不允许，不是这边坏了」', /不允许被内嵌/.test(gh.txt), gh.txt);
+      ck('★ 卡片上有个大按钮能打开原文', gh.bigBtn === 1, String(gh.bigBtn));
+      /* 那张「不允许内嵌」的卡片也要撑满 —— 不然它下面同样是一大片空白 ✗。 */
+      ck('★ 卡片也撑满了（不是浮在顶上）', gh.cardH > 150, '卡片 ' + gh.cardH + ' · 栏高 ' + gh.bodyH);
+      ck('★ 卡片下面也不留空白', gh.bottomGap <= 2, '还剩 ' + gh.bottomGap + 'px');
+    }
     const bl = await frameCheck('bili');
     console.log('    B站 → ' + JSON.stringify(bl));
-    ck('★ B站 照旧内嵌（它允许 ✓）', bl.iframe === 1 && bl.card === 0, JSON.stringify(bl));
-    /* ★★ 预览要**撑满**右栏，不能写死高度 ✗ ——
-       用户原话：「怎么有一段这么大的空白，修复」。
-       根因：`iframe { height:340px }` 写死 ✗，而右栏是整屏高 ✗ → 下面永远空一大片 ✗。 */
-    ck('★ 预览撑满右栏（不是写死的 340px）', bl.frameH > 400, '栏高 ' + bl.bodyH + ' · 预览 ' + bl.frameH);
-    ck('★ 预览下面**不留空白**', bl.bottomGap <= 2, '还剩 ' + bl.bottomGap + 'px');
+    if (bl && bl.error) {
+      skip('★ B站 照旧内嵌（它允许 ✓）', '这个源这次没拉到：' + bl.error);
+    } else {
+      ck('★ B站 照旧内嵌（它允许 ✓）', bl.iframe === 1 && bl.card === 0, JSON.stringify(bl));
+      /* ★★ 预览要**撑满**右栏，不能写死高度 ✗ ——
+         用户原话：「怎么有一段这么大的空白，修复」。
+         根因：`iframe { height:340px }` 写死 ✗，而右栏是整屏高 ✗ → 下面永远空一大片 ✗。 */
+      ck('★ 预览撑满右栏（不是写死的 340px）', bl.frameH > 400, '栏高 ' + bl.bodyH + ' · 预览 ' + bl.frameH);
+      ck('★ 预览下面**不留空白**', bl.bottomGap <= 2, '还剩 ' + bl.bottomGap + 'px');
+    }
     const ar = await frameCheck('arxiv');
     console.log('    arXiv → ' + JSON.stringify(ar));
-    ck('★ arXiv 也走卡片（实测 SAMEORIGIN + CSP none ✗）', ar.iframe === 0 && ar.card === 1, JSON.stringify(ar));
+    if (ar && ar.error) {
+      skip('★ arXiv 也走卡片（实测 SAMEORIGIN + CSP none ✗）', '这个源这次没拉到：' + ar.error);
+      /* ★★ 但「源这次没拉到」这件事本身**必须说清楚** ✗✗ ——
+         以前中栏写的是「没有符合条件的条目」✓ → 用户会以为**这个源本来就没内容** ✗。
+         这条断言**不依赖上游** ✓（恰恰是在上游挂掉时才验得到 ✓），所以照验 ✓。 */
+      ck('★★ 源没拉到时要说清「是源的问题」（不能写「没有符合条件的条目」）',
+        /没拉到/.test(ar.error) && !/没有符合条件的条目/.test(ar.error), ar.error);
+    } else {
+      ck('★ arXiv 也走卡片（实测 SAMEORIGIN + CSP none ✗）', ar.iframe === 0 && ar.card === 1, JSON.stringify(ar));
+    }
 
     /* ══════════════════════════════════════════════════════════════════
        ⑨ 所有「全高页签」都不许在底部留白
@@ -355,6 +390,9 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
         + ' | 用户备忘录 ' + (a.memos || []).length + ' 条');
     } catch (e) { console.log('\n收尾失败: ' + e.message); }
     await b.close();
+    /* ⚠️ 跳过的必须**单独列出来** ✗ —— 只在上面打一行 ⏭ 的话，
+       收尾一句「全部通过」会把它盖过去 ✓，下次就没人记得这几条**没验** ✗。 */
+    if (skips.length) console.log('\n跳过 ' + skips.length + ' 项（上游真网抽风，不是产品问题）：\n  · ' + skips.join('\n  · '));
     console.log(fails.length ? '\n失败 ' + fails.length + ' 项：' + fails.join(' / ') : '\n全部通过 ✅');
     process.exit(fails.length ? 1 : 0);
   }
