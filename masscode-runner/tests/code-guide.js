@@ -53,6 +53,39 @@ const FAKE_FLOW = {
   keys: ['先查空指针再解引用'],
   pitfalls: ['忘记把结果写回调用者的变量'],
 };
+/* ★★★★ 「怎么用」手册 ✓ —— 用户原话：
+   「我需要用到哈希表，但是我不记得哈希表的如何定义，
+     以及如何实现**增删改查插**等，我就需要进查询，
+     就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
+   ⚠️ 这份假数据**故意按「定义 → 增 → 查 → 删 → 遍历」排** ✗ ——
+      探针要断言的就是「这几段都在」✓（用户原话里点名的就是这个 ✓）。
+   ⚠️ 而且它是**按请求里的符号名生成**的 ✓（`符号：xxx` ✓）——
+      不然「手册里真的出现了那个符号」这条断言 ✓ 就变成在验假数据了 ✗。 */
+function fakeManual(sym) {
+  const s = sym || 'unordered_map';
+  return {
+    what: s + '：按 key 直接查到 value',
+    header: '#include <unordered_map>',
+    sections: [
+      { t: '定义', d: '声明一个「字符串 → 整数」的表', code: 'std::unordered_map<std::string, int> m;  // ' + s },
+      { t: '增 / 改', d: '不存在就插入，存在就覆盖', code: 'm["a"] = 1;\nm.insert({"b", 2});' },
+      { t: '查', d: '找不到时返回 end()', code: 'auto it = m.find("a");\nif (it != m.end()) { /* it->second */ }' },
+      { t: '删', d: '按 key 删', code: 'm.erase("a");' },
+      { t: '遍历', d: 'C++17 结构化绑定最省事', code: 'for (auto& [k, v] : m) { /* ... */ }' },
+    ],
+    apis: [{ n: 'find', sig: '', d: '查，返回迭代器' }, { n: 'count', sig: '', d: '存在返回 1' }],
+    pitfalls: ['用 m[key] 查会把不存在的 key 建出来'],
+  };
+}
+/* ★★ 「找方案」✓ —— 用户原话：「我**选中代码**，我需要实现这个功能，
+   但是我不清楚该如何用，用什么包，函数等来实现…基于上下文**推荐**」✓。 */
+const FAKE_PLAN = {
+  plan: '用 unordered_map 边读边累加，key 是词、value 是次数。',
+  names: FAKE_AI.names,
+  example: 'std::unordered_map<std::string, int> freq;\nfor (const auto& w : words) freq[w]++;',
+  steps: ['包含 <unordered_map>', '声明 freq 表', '遍历 words 累加'],
+  hint: '小文件用第一个，大文件用第二个。',
+};
 
 (async () => {
   try { const r = await fetch(BASE + '/api/version', { signal: AbortSignal.timeout(3000) }); if (!r.ok) throw new Error('x'); }
@@ -76,16 +109,30 @@ const FAKE_FLOW = {
   /* ⚠️ 原生弹窗哨兵 ✓ —— 只在**真的弹了原生框**时才触发 ✓（页内浮层不会 ✓）*/
   const natives = [];
   p.on('dialog', async (d) => { natives.push(d.type()); await d.dismiss().catch(() => {}); });
-  let aiCalls = 0, flowCalls = 0;
+  let aiCalls = 0, flowCalls = 0, manualCalls = 0, planCalls = 0;
+  /* ⚠️ 把「方案」那一次请求体存下来 ✓ —— 用来验「选中的代码有没有真的被当上下文送进去」✓
+     （只看界面出没出方案 ✗ 验不出这个 ✓：不送上下文也照样有方案 ✓，只是瞎猜的 ✓）。 */
+  let lastPlanBody = '';
   await p.route('**/api/ai/chat', async (r) => {
     aiCalls++;
     /* ⚠️ 按**请求内容**分岔 ✗（不是按调用顺序 ✓）——
-       顺序会随着「哪个按钮先点」变 ✓，按顺序判必然错位 ✓。 */
+       顺序会随着「哪个按钮先点」变 ✓，按顺序判必然错位 ✓。
+       现在同一个接口上有**四条路**了 ✓，所以标记要挑**各自独有的词** ✓。 */
     let body = '';
     try { body = JSON.stringify(r.request().postDataJSON() || {}); } catch (_) {}
-    const isFlow = /流程图|思维导图|讲成人话/.test(body);
+    const isManual = /速查手册/.test(body);
+    const isPlan = /不知道用什么/.test(body);
+    const isFlow = /讲成人话/.test(body);
+    let payload = FAKE_AI;
+    if (isManual) {
+      manualCalls++;
+      /* ⚠️ 手册要**跟着请求里的符号名**生成 ✗ —— 写死成「哈希表」的话 ✓，
+         「手册里真的出现了那个符号」那条断言就变成在验假数据 ✗。 */
+      const mm = /符号：([^\n（(\\"]+)/.exec(body);
+      payload = fakeManual(mm ? mm[1].trim() : '');
+    } else if (isPlan) { planCalls++; payload = FAKE_PLAN; lastPlanBody = body; }
+    else if (isFlow) { flowCalls++; payload = FAKE_FLOW; }
     if (isFlow) {
-      flowCalls++;
       /* ★★ 故意**拖一会儿** ✗✗ —— 不给这点延迟的话 ✓，
          请求瞬间返回 ✓ → 「按下有反馈 / 忙碌转圈」根本来不及观察 ✓ →
          那两条断言就变成**恒真**（按钮已经恢复了 ✓）✗。
@@ -94,7 +141,7 @@ const FAKE_FLOW = {
     }
     return r.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({ ok: true, content: '好的：\n```json\n' + JSON.stringify(isFlow ? FAKE_FLOW : FAKE_AI) + '\n```\n' }),
+      body: JSON.stringify({ ok: true, content: '好的：\n```json\n' + JSON.stringify(payload) + '\n```\n' }),
     });
   });
   await p.addInitScript(() => {
@@ -148,7 +195,7 @@ const FAKE_FLOW = {
     ck('★ 真的打开了片段', !!ctx, JSON.stringify(ctx));
     ck('★ 编辑器起来了（Monaco）', await p.evaluate(() => { try { return !!MONACO_EDITOR; } catch (_) { return false; } }));
 
-    console.log('\n── ③ 🔍 查符号（光标放上去直接 ⌘I）──');
+    console.log('\n── ③ 🔍 查手册（打开就**自动带上下文查**，不用手打）──');
     /* 把光标放到正文里第一个「像标识符」的词上 ✓ */
     const placed = await p.evaluate(() => {
       try {
@@ -173,8 +220,69 @@ const FAKE_FLOW = {
     ck('★★ 查出了结果', await p.locator('.cg-row').count() >= 1, String(await p.locator('.cg-row').count()));
     ck('★★ 结果上**标着来源**（本地符号 / LSP，不是含糊的「AI 说的」）',
       /本地符号|LSP/.test(lookBody), lookBody.slice(0, 100));
+    /* ★★★★ ③b 「📖 怎么用」手册 ✓ —— 用户**最主要**的用途 ✗✗
+       用户原话：「我主要需要的功能是…我需要用到哈希表，但是我不记得哈希表的如何定义，
+                 以及如何实现**增删改查插**等，我就需要进查询，
+                 就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
+       ⚠️ 判据是「**这几段都在**」✗✗ —— 光有「定义」不够 ✓，
+          用户点名的是「定义 + 增删改查」四件套 ✓（少一件他还是不会用 ✓）。 */
+    console.log('\n── ③b 📖 「怎么用」手册（定义 / 增删改查 / 能照抄的代码）──');
+    /* ⚠️ 得挑一条**有行号**的（本地符号 ✓）—— LSP 补全项没有行号 ✓，
+       手册里那段「LSP 权威签名」就拿不到 ✓（hover 要行号 ✓）。 */
+    const lsym = await p.evaluate(async () => {
+      try {
+        const r = await fetch('/api/graph?file=' + encodeURIComponent(CURRENT.file));
+        const d = await r.json();
+        const s = (d.symbols || []).find((x) => x && x.name && x.line
+          && ['fn', 'type', 'macro', 'var', 'method'].indexOf(x.kind) >= 0);
+        return s ? { name: s.name, line: s.line, kind: s.kind } : null;
+      } catch (_) { return null; }
+    });
+    console.log('    拿这个本地符号试手册: ' + JSON.stringify(lsym));
+    await p.locator('#cgx-q').fill((lsym && lsym.name) || placed);
+    await p.locator('#cgx-go').click();
+    await p.waitForTimeout(2600);
+    ck('★ 卡片上有「怎么用」按钮（摆在**第一个** —— 这是主用途）',
+      await p.locator('[data-cgact="manual"]').count() >= 1, String(await p.locator('[data-cgact="manual"]').count()));
+    /* ⚠️ 记下**点的是哪一条** ✓ —— 手册是给它做的 ✓，
+       「手册里有没有出现那个符号」要拿**它**比 ✓，不能拿别的 ✓。 */
+    const manRow = await p.evaluate(() => {
+      const b = document.querySelector('[data-cgact="manual"]');
+      const row = b && b.closest ? b.closest('[data-cgrow]') : null;
+      return row ? String(row.dataset.cgrow || '') : '';
+    });
+    console.log('    给这条做手册: ' + JSON.stringify(manRow));
+    await p.locator('[data-cgact="manual"]').first().click();
+    await p.waitForSelector('.cg-man', { timeout: 30000 }).catch(() => {});
+    await p.waitForFunction(() => !document.querySelector('.cg-man .cg-spin'), null, { timeout: 40000 }).catch(() => {});
+    await p.waitForTimeout(900);
+    const man = await txt('.cg-man');
+    console.log('    手册片段: ' + JSON.stringify(man.slice(0, 150)));
+    ck('★★★ 手册出来了', /怎么用/.test(man), man.slice(0, 120));
+    ck('★★★ 有「定义」（怎么声明）', /定义/.test(man), man.slice(0, 200));
+    ck('★★★ 有「增 / 改」（怎么插进去）', /增/.test(man), man.slice(0, 240));
+    ck('★★★ 有「查」', /查/.test(man), man.slice(0, 240));
+    ck('★★★ 有「删」', /删/.test(man), man.slice(0, 260));
+    ck('★★ 有「遍历」', /遍历/.test(man), man.slice(0, 260));
+    const manCodes = await p.locator('.cg-man-code pre').count();
+    console.log('    可抄的代码块: ' + manCodes);
+    ck('★★★ 每段都配了**可以直接抄的代码**（不是只有文字说明）', manCodes >= 4, String(manCodes));
+    ck('★★★ 手册里真的出现了**那个符号**（不是一份通用模板）',
+      !!manRow && new RegExp(manRow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(man),
+      '找 ' + manRow + ' → ' + man.slice(0, 140));
+    ck('★★★ 「LSP 签名」和「AI 用法」**分开摆**（不能混成一份 —— 混了用户会把 AI 编的签名当真）',
+      (await p.locator('.cg-man-sig').count()) === 1 && /LSP 签名/.test(man), man.slice(0, 200));
+    ck('★★ 而且明确标了「AI 整理」（不假装是权威）', /AI 整理/.test(man), man.slice(0, 140));
+    ck('★★ 底部说清了「编译不过以 LSP / 编译器为准」', /为准/.test(man), man.slice(-160));
+    ck('★ 给了「要包含」的头文件 / import', /要包含/.test(man), man.slice(0, 200));
+    ck('★ 有「常用成员」表', await p.locator('.cg-man-api tr').count() >= 1, String(await p.locator('.cg-man-api tr').count()));
+    ck('★ 有「容易踩的坑」', await p.locator('.cg-man-pit li').count() >= 1, String(await p.locator('.cg-man-pit li').count()));
+    ck('★★ 真的调了 AI 整理手册（不是本地编的）', manualCalls >= 1, String(manualCalls));
+    /* 收起来 ✓ */
+    await p.locator('[data-cgact="manual"]').first().click(); await p.waitForTimeout(500);
+    ck('★ 再点一下能收起（开开关关）', (await p.locator('.cg-man').count()) === 0);
 
-    console.log('\n── ④ 💡 找函数（大白话 → 候选，再回头核实）──');
+    console.log('\n── ④ 💡 找方案（大白话 → 候选，再回头核实）──');
     await p.locator('[data-cgtab="find"]').click(); await p.waitForTimeout(600);
     await p.locator('#cgx-q').fill('怎么把文件整个读进来');
     await p.locator('#cgx-go').click();
@@ -195,6 +303,52 @@ const FAKE_FLOW = {
        截图里 `main.cpp` / `int` / `calc.hpp` 这种噪音全冒出来 ✓，把 AI 的候选挤到下面去了 ✗。 */
     ck('★★ 中文查询**没有**把一堆无关符号全捞出来（那条兜底要判空）',
       !/main\.cpp|calc\.hpp|keyword/.test(findBody), findBody.slice(0, 160));
+    /* ★★★★ ④b 「选中代码 → 基于上下文给方案」✓ —— 用户原话：
+       「以及我**选中代码**，我需要实现这个功能，但是我不清楚该如何用，
+         用什么包，函数等来实现，所以，可以借助来查询，选中代码，
+         基于上下文**推荐**，来给我推荐该可以通过什么方式实现等等」✓。
+       ⚠️ 判据是「给了**方案**」✗✗，不只是「列了一堆候选名」✓ ——
+          候选名解决不了「我该怎么把它们串起来」✓，那正是用户卡住的地方 ✓。 */
+    console.log('\n── ④b 🧭 选中代码 → 基于上下文给方案（思路 + 步骤 + 例子）──');
+    ck('★★★ 给了「建议这么实现」的方案块（不只是候选名清单）', await has('.cg-plan'), (await cgBody()).slice(0, 160));
+    const planTxt = await txt('.cg-plan');
+    console.log('    方案片段: ' + JSON.stringify(planTxt.slice(0, 140)));
+    ck('★★★ 方案里有**思路**（为什么这么用）', /累加|unordered_map/.test(planTxt), planTxt.slice(0, 160));
+    ck('★★ 方案里有**落地步骤**', await p.locator('.cg-plan .st li').count() >= 2, String(await p.locator('.cg-plan .st li').count()));
+    ck('★★★ 方案里有**能直接改的示例代码**', await p.locator('.cg-plan .cg-man-code pre').count() === 1,
+      String(await p.locator('.cg-plan .cg-man-code pre').count()));
+    ck('★★ 示例代码能一键插到光标处（不是只能看）',
+      await p.locator('.cg-plan [data-cgact="use"]').count() === 1);
+    ck('★★ 方案标了「AI 整理 · 供参考」（不假装权威）', /AI 整理/.test(planTxt), planTxt.slice(0, 120));
+    ck('★★ 而且说清了「未核实的先确认名字」', /未核实|确认名字|已核实/.test(planTxt), planTxt.slice(-140));
+    ck('★ 真的调了 AI 出方案', planCalls >= 1, String(planCalls));
+    /* ⚠️⚠️ 「选中代码」这条要**真的验一下** ✗✗ —— 上面那次是「光标停在某一行」✓，
+       严格说不算选中 ✓。这里手动框一段 ✓，再看它有没有**被当成上下文送进请求** ✓。
+       ⚠️ 判据必须是「**请求体里出现了选中的那段原文**」✗ ——
+          只看界面上有没有方案 ✗ 是验不出「上下文到底送没送」的 ✓
+          （不送也照样有方案 ✓，只是方案是瞎猜的 ✓）。 */
+    const selText = await p.evaluate(() => {
+      try {
+        const m = MONACO_EDITOR.getModel();
+        const end = Math.min(m.getLineLength(1), 14);
+        MONACO_EDITOR.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: end });
+        return m.getValueInRange({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: end });
+      } catch (_) { return ''; }
+    });
+    console.log('    手动框选: ' + JSON.stringify(selText));
+    ck('  框住了一段代码', String(selText).trim().length >= 5, JSON.stringify(selText));
+    lastPlanBody = '';
+    await p.locator('#cgx-go').click();
+    await p.waitForTimeout(2800);
+    /* ⚠️⚠️ 请求体是 **JSON.stringify 过的** ✗✗ —— 选区里的 `"` 会变成 `\"` ✓、
+       换行会变成 `\n` ✓ → 拿**原文**去 indexOf **必然找不到** ✗
+       （实测就是这么假失败的 ✓：选区是 `#include "calc.hpp"` ✓，body 里是 `#include \"calc.hpp\"` ✗）。
+       → 先把转义还原回去 ✓ 再找 ✓。 */
+    const flatBody = String(lastPlanBody)
+      .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+    ck('★★★ 选中的那段代码**真的被当上下文送进请求了**（不是摆设）',
+      !!lastPlanBody && String(selText).trim().length >= 5 && flatBody.indexOf(String(selText).trim()) >= 0,
+      '找 ' + JSON.stringify(String(selText).trim()) + ' → ' + flatBody.slice(flatBody.indexOf('选中的代码'), flatBody.indexOf('选中的代码') + 180));
 
     /* ══ ⑤ ★★★★ 拆逻辑：**AI 讲成人话** + 思维导图 / 实现流程 / 代码级 ══════
        用户原话（第二次改）：

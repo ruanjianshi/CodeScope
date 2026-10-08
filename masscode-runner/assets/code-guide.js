@@ -75,6 +75,12 @@
           两份都留着 ✓，用视图切换 ✓ —— 别用一个去替另一个 ✗。 */
     aiFlow: null,         /* { busy, err, data } ✓ */
     root: null,           /* 当前正在拆的那个函数 ✓（{name,line,frag} ✓）*/
+    /* ★★★★ 「怎么用」手册 ✓ —— 用户原话：
+       「我需要用到哈希表，但是我不记得哈希表的如何定义，
+         以及如何实现增删改查插等，我就需要进查询，
+         就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
+       ⚠️ 一条一展开 ✓（`name` 是**哪一条**在展开 ✓）—— 同时开十个手册没有意义 ✓。 */
+    manual: null,         /* { name, busy, err, data } ✓ */
     view: 'mind',         /* 拆逻辑下的视图：'mind'（思维导图）/ 'flow'（实现流程）/ 'code'（代码级）✓ */
     note: '',             /* 一句提示（比如「这段不是函数体，画不了图」）✓ */
     sym: null,            /* 当前文档的符号索引缓存 ✓ */
@@ -168,18 +174,32 @@
       let pos = null, sel = null;
       try { if (ed && ed.getPosition) pos = ed.getPosition(); } catch (_) {}
       try { if (ed && ed.getSelection) sel = ed.getSelection(); } catch (_) {}
-      let selText = '';
+      let selText = '', hasSel = false;
       try {
-        if (ed && sel && ed.getModel && !sel.isEmpty && !sel.isEmpty()) selText = String(ed.getModel().getValueInRange(sel) || '');
+        if (ed && sel && ed.getModel && !sel.isEmpty && !sel.isEmpty()) {
+          selText = String(ed.getModel().getValueInRange(sel) || '');
+          hasSel = selText.trim().length > 0;
+        }
+      } catch (_) {}
+      /* ★★★ 光标底下的词 / 所在那一行 ✓ —— 用户原话（2026-10-08 第三次）：
+         「我写代码的时候，有时会不记得一些变量怎么写，或者…我需要用到哈希表，
+           但是我不记得哈希表的如何定义，以及如何实现增删改查插等，我就需要进查询，
+           就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
+         ⚠️⚠️ 这两个字段是给「打开就**自动查**」用的 ✗✗（见 cgSeed ✓）——
+            原来打开面板是**空的** ✓，写着「输入一个符号名」✓ →
+            用户光标明明停在 `std::unordered` 上 ✓，面板却一片空白 ✓（截图里就是这样 ✓）→
+            他得**手打一遍**「unordered」才知道怎么用 ✗（而他本来就记不清 ✓，鸡生蛋 ✓）。 */
+      let word = '', lineText = '';
+      try {
+        if (ed && pos && ed.getModel) {
+          const m = ed.getModel().getWordAtPosition && ed.getModel().getWordAtPosition(pos);
+          word = String((m && m.word) || '');
+          lineText = String(ed.getModel().getLineContent(pos.lineNumber) || '').trim();
+        }
       } catch (_) {}
       /* ⚠️ 选区可能是空的 ✓ —— 那就退回「光标所在那一行」✓
          （用户不选、直接把光标放在一行上也是很常见的用法 ✓）。 */
-      if (!selText && pos) {
-        try {
-          const line = ed.getModel().getLineContent(pos.lineNumber);
-          if (String(line || '').trim().length > 2) selText = String(line).trim();
-        } catch (_) {}
-      }
+      if (!selText && lineText.length > 2) selText = lineText;
       return {
         file: String(cur.file),
         name: String(cur.name || ''),
@@ -190,10 +210,73 @@
         line: pos ? Number(pos.lineNumber) : 1,
         column: pos ? Number(pos.column) : 1,
         sel: selText,
+        hasSel,
+        word,
+        lineText,
       };
     } catch (_) { return null; }
   }
   const LSP_LANGS = ['c', 'c_cpp', 'python', 'javascript', 'typescript', 'go'];
+
+  /* ══ ①b ★★★★ 「打开就该查什么」✓ —— 别再给用户一块空面板 ✗✗ ═══════════
+     用户原话：「我主要需要的功能是…**不记得**一些变量怎么写…**不知道用什么**…
+               就类似，以前程序员经常需要**查文档手册**一样去写代码」✓。
+
+     ⚠️⚠️ 判据（按「用户此刻最可能想查什么」排 ✓，不是按技术上好取 ✓）：
+       ① **有选中** → 用选中的那段里的**第一个标识符** ✓（他刚框住一段代码 ✓）
+       ② 光标在一个**像标识符的词**上 → 用那个词 ✓（`unordered` ✓ —— 最常见 ✓）
+       ③ 光标在 `a.b` / `a::b` 上 → 用**限定名** ✓（`std::unordered` ✓ 比裸 `unordered` 好查 ✓）
+       ④ 都不行 → 用**当前函数名** ✓（他大概在看这个函数 ✓）
+       ⑤ 再不行 → 空 ✓（这时才该显示「输入一个符号名」✓）
+     ⚠️ 别把**整行**当查询词 ✗ —— `std::unordered_map<string,int> m;` 拿去模糊搜 ✓
+        基本什么都匹配不上 ✓（子序列匹配会捞一堆垃圾 ✓）。
+        整行只用来**喂给 AI 当上下文** ✓（那是另一回事 ✓）。 */
+  function cgSeed() {
+    const ctx = cgCtx();
+    if (!ctx) return '';
+    const clean = (s) => String(s || '').replace(/[^A-Za-z0-9_:$]+/g, ' ').trim();
+    /* ① **真的框选**了一段 → 用里面的第一个标识符 ✓
+       ⚠️ 必须判 `hasSel` ✗✗ —— `ctx.sel` 在「没框选」时会**回退成整行** ✓（那是给 AI 当上下文用的 ✓），
+          拿它当「有选区」会误判 ✓ → 光标下的词永远轮不到 ✗（那就白做了 ✓）。 */
+    if (ctx.hasSel && ctx.sel) {
+      const m = clean(ctx.sel).match(/[A-Za-z_$][A-Za-z0-9_$]*/);
+      if (m && m[0].length >= 2) return m[0];
+    }
+    /* ② **光标底下的词** ✓ —— 这是最常见的一档 ✓
+       ⚠️⚠️ 用**裸词**（`unorder` ✓），**不要**拼成限定名（`std::unorder` ✗）✗✗ ——
+          实测：LSP 补全项的名字是 `unordered_map<...>` ✓，**不带 `std::` 前缀** ✗ →
+          拿 `std::unorder` 去模糊匹配 ✓ → 前缀 / 子串 / 子序列**全都不中** ✗
+          （`:` 在名字里根本不存在 ✓）→ 一条结果都没有 ✗。
+          而裸词 `unorder` 一搜就有 ✓（实测截图：`unordered_set` / `unordered_map` / … 全出来了 ✓）。
+       ⚠️ 而且**光标在词中间**时 `before` 只有半截（`std::unorde` ✓）→
+          拼出来的限定名还比词本身短 ✓，更匹配不上 ✗。
+       → 命名空间那点信息**交给 AI 当上下文** ✓（`ctx.lineText` 里就有 `std::` ✓），
+         模糊匹配只用裸词 ✓。 */
+    if (ctx.word && ctx.word.length >= 2) return ctx.word;
+    /* ④ 光标那一行里**离光标最近**的标识符 ✓（比「第一个」靠谱 ✓：
+       写 `std::unordered_map<string,int> freq;` 时，光标通常就在正在敲的那个词附近 ✓）*/
+    if (ctx.lineText) {
+      const ids = [];
+      const re = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+      let m;
+      while ((m = re.exec(ctx.lineText)) !== null) ids.push({ w: m[0], at: m.index });
+      if (ids.length) {
+        const col = Math.max(0, ctx.column - 1);
+        let best = ids[0];
+        ids.forEach((x) => { if (Math.abs(x.at - col) < Math.abs(best.at - col)) best = x; });
+        if (best.w.length >= 2) return best.w;
+      }
+    }
+    /* ⑤ 当前函数名 ✓ */
+    try {
+      const syms = CG.sym || [];
+      let best = null;
+      syms.filter((s) => s.line && s.line <= ctx.line && (s.kind === 'fn' || s.kind === 'method'))
+        .forEach((s) => { if (!best || s.line > best.line) best = s; });
+      if (best) return best.name;
+    } catch (_) {}
+    return '';
+  }
 
   /* ══ ② 当前文档的符号索引 ✓（走已有的代码图谱接口 ✓，不另造一套 ✗）════
      ★★★★ 这里从 `scope=document` 换成了 `file=` ✗✗ —— 用户原话：
@@ -456,7 +539,7 @@
     await cgFillJump(ctx, CG.rows);
     if (!CG.rows.length) {
       CG.note = '没找到「' + q2 + '」相关的符号。'
-        + '换个写法试试（缩写 / 片段都行），或者切到「💡 找」用大白话描述你要干什么 ✓';
+        + '换个写法试试（缩写 / 片段都行），或者切到「💡 找方案」用大白话描述你要干什么 ✓';
     } else {
       CG.note = '';
     }
@@ -511,25 +594,48 @@
     }));
     /* 本地也捞不到位置的（LSP 补全项 ✓）→ 去全库函数索引里补一遍 ✓ */
     await cgFillJump(ctx, CG.rows);
-    /* ② 问 AI 要候选名 ✓（只要名字 ✓）*/
-    CG.ai = { busy: true, err: '', names: [], hint: '' };
-    cgBegin('find', '正在让 AI 想候选名…');
+    /* ② 问 AI 要候选名 + **方案** ✓（只要名字 ✓，外加一段思路 ✓）
+       ★★★★ 用户原话（2026-10-08 第三次）：
+         「以及我**选中代码**，我需要实现这个功能，但是我不清楚该如何用，
+           用什么包，函数等来实现，所以，可以借助来查询，选中代码，
+           基于上下文**推荐**，来给我推荐该可以通过什么方式实现等等」✓。
+       ⚠️⚠️ 所以这里**不只是「候选名」** ✗ —— 用户要的是**方案**：
+          用哪个包 / 头文件 ✓、关键函数怎么串起来 ✓、一段能直接改的示例 ✓。
+       ⚠️ 但「候选名」仍然要 ✓，而且要**回头核实** ✓（见下面 known / extra ✓）——
+          「用什么包」可以让模型说 ✓，「这个函数到底存不存在」不能让模型说 ✗
+          （文件头那条铁律 ✓：编一个不存在的函数名，用户编译不过还会怪自己 ✗）。 */
+    CG.ai = { busy: true, err: '', names: [], hint: '', plan: null };
+    cgBegin('find', '正在按你的上下文想方案…');
     try {
-      const sys = '你是编程助手。用户用中文描述他想做的事，你**只输出候选 API 名字**，'
-        + '不要写代码、不要解释、不要客套。\n'
-        + '⚠️ **只给真实存在的**函数 / 类型名（标准库或这个语言里通用的）——'
-        + '不确定的**宁可不写**，绝不编造 ✗。';
+      const sys = '你是资深工程师。用户正在写代码，他知道**要什么功能**，但**不知道用什么**。\n'
+        + '请基于他给的**选中代码 / 上下文**给方案。\n'
+        + '⚠️ 硬要求：\n'
+        + '① 只输出一个 JSON 对象，不要 markdown 围栏、不要前后废话；\n'
+        + '② `names` 里**只给真实存在的**函数 / 类型名（标准库或这个语言里通用的）——'
+        + '不确定的**宁可不写**，绝不编造 ✗；\n'
+        + '③ `plan` 是**思路**：为什么用这个、怎么串起来（2~3 句中文，说人话）；\n'
+        + '④ `example` 是一段**能直接改的代码**（用他上下文里的变量名，6~15 行）；\n'
+        + '⑤ `steps` 是 2~5 条落地步骤（每条一句话）。\n'
+        + 'JSON 结构：\n'
+        + '{"plan":"一句话思路",'
+        + '"names":[{"n":"函数/类型名","why":"一句话：它管什么","use":"一行最简用法","header":"要 include 什么（没有就空串）"}],'
+        + '"example":"可直接改的代码",'
+        + '"steps":["第 1 步…"],'
+        + '"hint":"一句话说明这几个的关系 / 该选哪个"}';
       const usr = '语言：' + (ctx.language || '未知') + '\n'
         + '文件：' + (ctx.filename || ctx.file) + '\n'
-        + '他正在写的上下文（光标附近，可能为空）：\n' + String(ctx.sel || '').slice(0, 400) + '\n\n'
-        + '他想做的事：' + q + '\n\n'
-        + '请给 4~8 个候选，输出**一个 JSON 对象**（不要 markdown 围栏）：\n'
-        + '{"names":[{"n":"函数名","why":"一句话：它管什么","use":"一行最简用法示例"}],"hint":"一句话说明这几个的关系 / 该选哪个"}';
+        + '他**选中的代码 / 光标所在那一段**（这是最重要的上下文，优先按它来）：\n'
+        + String(ctx.sel || '').slice(0, 1200) + '\n\n'
+        + '他想要的功能：' + q + '\n\n'
+        + '请给 4~8 个候选 + 一份方案。';
       const out = await cgAi(sys, usr);
       const o = cgJson(out);
       const names = (o && Array.isArray(o.names) ? o.names : []).map((x) => (typeof x === 'string'
-        ? { n: x, why: '', use: '' }
-        : { n: String((x && x.n) || ''), why: String((x && x.why) || ''), use: String((x && x.use) || '') }))
+        ? { n: x, why: '', use: '', header: '' }
+        : {
+          n: String((x && x.n) || ''), why: String((x && x.why) || ''),
+          use: String((x && x.use) || ''), header: String((x && (x.header || x.include)) || ''),
+        }))
         .filter((x) => x.n && x.n.length <= 80).slice(0, 10);
       if (!names.length) throw new Error('模型没按要求返回 JSON（再点一次试试）');
       /* ★ 核实 ✓ —— 拿 AI 给的名字，回头去①那份**已核实**的名单里找 ✓ */
@@ -537,19 +643,26 @@
       const extra = names.filter((x) => !known.has(x.n.toLowerCase())).map((x) => ({
         name: x.n, kind: '', line: 0, frag: -1,
         source: 'ai', label: 'AI 建议 · 未核实 ⚠️',
-        detail: x.why, use: x.use,
+        detail: x.why, use: x.use, header: x.header,
       }));
       /* ⚠️ AI 那几条也**顺手核实一下位置** ✓ —— 模型给的名字经常就是本地已有的函数 ✓
          （只是①里没搜到 ✓）→ 能在全库里找到就照样给「跳到定义」✓。 */
       await cgFillJump(ctx, extra);
       CG.rows = CG.rows.concat(extra);
-      CG.ai = { busy: false, err: '', names, hint: String((o && o.hint) || '') };
+      CG.ai = {
+        busy: false, err: '', names, hint: String((o && o.hint) || ''),
+        plan: {
+          plan: String((o && o.plan) || ''),
+          example: String((o && o.example) || ''),
+          steps: (Array.isArray(o && o.steps) ? o.steps : []).map((x) => String(x || '')).filter(Boolean).slice(0, 6),
+        },
+      };
       CG.note = extra.length
         ? '下面带「AI 建议 · 未核实 ⚠️」的那几条，是模型根据你的描述想出来的 ✓ —— '
           + '我没有在本地核实过它们 ✗。用之前先确认名字对不对（编译器 / 编辑器报错为准 ✓）。'
         : 'AI 给的候选**全都在本地核实过了** ✓。';
     } catch (e) {
-      CG.ai = { busy: false, err: String((e && e.message) || e), names: [], hint: '' };
+      CG.ai = { busy: false, err: String((e && e.message) || e), names: [], hint: '', plan: null };
       if (!CG.rows.length) CG.note = '';
     }
     cgEnd();
@@ -927,6 +1040,117 @@
     cgEnd();
   }
 
+  /* ══ ⑧e ★★★★ 「怎么用」手册 ✓ —— 这个工具**最主要**的用途 ✗✗ ═══════════
+     用户原话：「我主要需要的功能是，我写代码的时候，有时会不记得一些变量怎么写，
+               或者，有时，我需要实现某个功能，但是不知道用什么，
+               就比如现在，我写代码测试函数，我需要用到**哈希表**，
+               但是我不记得哈希表的**如何定义**，以及**如何实现增删改查插**等，
+               我就需要进查询，就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
+
+     ⚠️⚠️ 这跟「查到一个名字」是**两回事** ✗✗：
+        查到 `unordered_map` 这个名字 ✓，用户**还是不会用** ✗（他还是不知道怎么写增删改查 ✓）。
+        手册要的是**能照着抄** ✓：怎么定义 ✓、增删改查遍历各一行 ✓、一段完整例子 ✓。
+
+     ⚠️⚠️ 但这里有个**必须守住的边界** ✗✗（文件头那条铁律 ✓）：
+        **签名 / 参数顺序 / 这个符号存不存在** → 只认 LSP ✓，**绝不让模型写** ✗；
+        **「怎么用」的示例代码** → 可以让模型写 ✓（那就是手册的内容 ✓），
+        但**必须标出来是 AI 写的** ✓，并且**附上 LSP 的权威签名** ✓ 让用户自己对 ✓。
+        → 一份手册 = 「LSP 的签名（权威）」+「AI 的用法示例（参考）」 ✓，两段分开摆 ✓。 */
+  async function cgManual(r) {
+    const ctx = cgCtx();
+    if (!ctx || !r || !r.name) return;
+    /* 再点一次就收起 ✓（开开关关很正常 ✓） */
+    if (CG.manual && CG.manual.name === r.name && CG.manual.data && !CG.manual.busy) {
+      CG.manual = null; cgRender(); return;
+    }
+    CG.manual = { name: r.name, busy: true, err: '', data: null };
+    cgBegin('manual', '正在整理「' + r.name + '」的用法…');
+    try {
+      /* ⚠️ 先把 LSP 的**权威信息**拿到手 ✓（签名 / 文档 ✓）——
+         这段**不经模型** ✓，直接摆给用户 ✓。
+         ⚠️⚠️ 要 hover 在**符号名那一列** ✗✗，不能一律 `column:1` ✗ ——
+            `int add(int a, int b) {` 的第 1 列是 `int` ✓，
+            hover 出来的是「int 是什么」✗，不是 `add` 的签名 ✓（那就白拿了 ✓）。
+         → 在那一行里**找一下名字的位置** ✓；找不到再退回第 1 列 ✓。 */
+      let sig = '', doc = r.doc || '';
+      if (LSP_LANGS.indexOf(ctx.language) >= 0 && r.line > 0) {
+        try {
+          let col = 1;
+          const lines = String(ctx.code || '').split('\n');
+          const line = lines[r.line - 1] || '';
+          const bare = String(r.name).split('(')[0].split('<')[0].trim();
+          const at = bare ? line.indexOf(bare) : -1;
+          if (at >= 0) col = at + 1;
+          const d = await cgLsp('hover', { line: r.line, column: col });
+          if (d && d.ok && d.hover && d.hover.markdown) {
+            /* ⚠️⚠️ hover 回来的是 **markdown** ✗✗ —— clangd 给的是
+               `### function \\`main\\`` + ```cpp 围栏 ✓ →
+               直接取第一行会得到 `### function \\`main\\`` 这种**带标记的怪东西** ✗
+               （实测截图里就是这么显示的 ✓，用户看到一堆 `###` 和反引号 ✓）。
+               → 先剥围栏 ✓、再剥 `#` / 反引号 / `**` ✓，然后挑**像签名的那一行** ✓
+                 （带括号 / 逗号 / 分号的 ✓，比如 `int main()` ✓）。 */
+            const md = String(d.hover.markdown).replace(/```[\w+-]*\n?/g, ' ');
+            const plain = md.replace(/^#{1,6}\s*/gm, '').replace(/\*\*/g, '').replace(/`/g, '').trim();
+            const lines = plain.split('\n').map((x) => x.trim()).filter(Boolean);
+            const sigLine = lines.find((x) => /[(){};,=]/.test(x)) || lines[0] || '';
+            sig = sigLine.slice(0, 200);
+            if (!doc) {
+              doc = lines.filter((x) => x !== sigLine).join('\n').slice(0, 500);
+            }
+          }
+        } catch (_) {}
+      }
+      const sys = '你是给程序员查的**速查手册**。读者知道要用什么，但**不记得怎么写**。\n'
+        + '⚠️ 硬要求：\n'
+        + '① 只输出一个 JSON 对象，不要 markdown 围栏、不要前后废话；\n'
+        + '② `code` 字段里是**可以直接抄的代码**（一行或几行），不要伪代码、不要省略号；\n'
+        + '③ 按「怎么用」的顺序组织：定义 → 增 → 删 → 改 → 查 → 遍历 → 其他常用；\n'
+        + '④ **只写这个语言里真的存在的用法**，不确定的宁可不写，绝不编造 API 名；\n'
+        + '⑤ 每段配一句中文说明（10~30 字）。\n'
+        + 'JSON 结构：\n'
+        + '{"what":"一句话：它是干什么的（30 字内）",'
+        + '"header":"要 include / import 什么（没有就空串）",'
+        + '"sections":[{"t":"定义","d":"一句说明","code":"可直接抄的代码"}],'
+        + '"apis":[{"n":"成员/函数名","sig":"签名（不确定就留空）","d":"一句说明"}],'
+        + '"pitfalls":["容易踩的坑"]}\n'
+        + '⚠️ sections 给 4~7 段（定义 / 增 / 删 / 改 / 查 / 遍历 / 其他 里挑相关的）。';
+      const usr = '语言：' + (ctx.language || '未知') + '\n'
+        + '符号：' + r.name + (r.kind ? '（' + r.kind + '）' : '') + '\n'
+        + (sig ? ('LSP 给的签名（权威，不要改它）：' + sig + '\n') : '')
+        + (doc ? ('已有文档：' + String(doc).slice(0, 600) + '\n') : '')
+        + '他正在写的代码（光标附近）：\n' + String(ctx.sel || ctx.lineText || '').slice(0, 400) + '\n\n'
+        + '请给这份符号一份「怎么写」的速查手册。';
+      const out = await cgAi(sys, usr, 150000);
+      const o = cgJson(out);
+      const d = cgManualData(o);
+      if (!d.sections.length && !d.apis.length) throw new Error('模型没按要求返回 JSON（再点一次试试）');
+      CG.manual = { name: r.name, busy: false, err: '', data: d, sig, doc };
+    } catch (e) {
+      CG.manual = { name: r.name, busy: false, err: String((e && e.message) || e), data: null };
+    }
+    cgEnd();
+  }
+  /* 把模型那份手册洗干净 ✓（字段名 / 类型都会飘 ✓） */
+  function cgManualData(o) {
+    const s = (v) => String(v == null ? '' : v).trim();
+    const arr = (v) => (Array.isArray(v) ? v : []).map(s).filter(Boolean);
+    return {
+      what: s(o && o.what),
+      header: s(o && (o.header || o.include)),
+      sections: (o && Array.isArray(o.sections) ? o.sections : []).map((x) => ({
+        t: s(x && (x.t || x.title)) || '用法',
+        d: s(x && (x.d || x.desc)),
+        code: s(x && (x.code || x.example || x.snippet)),
+      })).filter((x) => x.code || x.d).slice(0, 10),
+      apis: (o && Array.isArray(o.apis) ? o.apis : []).map((x) => ({
+        n: s(x && (x.n || x.name)),
+        sig: s(x && (x.sig || x.signature)),
+        d: s(x && (x.d || x.desc)),
+      })).filter((x) => x.n).slice(0, 24),
+      pitfalls: arr(o && (o.pitfalls || o.notes)).slice(0, 8),
+    };
+  }
+
   /* ══ ⑨ 动作 ✓ ══════════════════════════════════════════════════════════ */
   function cgInsert(text) {
     const t = String(text == null ? '' : text);
@@ -1008,8 +1232,8 @@
 
   /* ══ ⑩ 渲染 ✓ ══════════════════════════════════════════════════════════ */
   const TABS = [
-    { k: 'look', e: '🔍', n: '查符号', ph: '符号名（记得个大概也行：snpf → snprintf）', tip: '光标底下那个词直接 ⌘I 也行' },
-    { k: 'find', e: '💡', n: '找函数', ph: '用大白话说你要干什么：把字符串转成整数', tip: '先搜本地，再让 AI 补候选，然后回头核实' },
+    { k: 'look', e: '🔍', n: '查手册', ph: '符号名（记得个大概也行：snpf → snprintf）', tip: '打开就自动查光标底下那个词；想查「怎么写」点卡片上的「📖 怎么用」' },
+    { k: 'find', e: '💡', n: '找方案', ph: '用大白话说你要干什么：把字符串转成整数', tip: '选中一段代码再问，它会按上下文给方案（用哪个包 / 函数 + 例子）' },
     { k: 'break', e: '🧩', n: '拆逻辑', ph: '（不用输）光标放在要拆的函数里就行', tip: 'AI 讲成人话 + 思维导图 + 实现流程（想看代码有「代码级」视图）' },
   ];
   /* 拆逻辑下的三个视图 ✓ —— 用户原话：「我需要的是让AI给我拆解分析实现逻辑和功能的
@@ -1036,6 +1260,7 @@
     if (r.crossFile) sub.push('另一个文件：' + esc(String(r.file || '').split('/').pop()));
     const jump = cgJumpInfo(r, ctx);
     const canJump = !!(jump && jump.line);
+    const openM = !!(CG.manual && CG.manual.name === r.name);
     /* ⚠️ `data-cgline` 是给**探针**用的 ✗（量「跳完真的到了那一行」✓）——
        界面上不需要它 ✓，但没有它探针就只能去正则扒文案 ✓（脆 ✓）。 */
     return '<div class="cg-row" data-cgrow="' + esc(r.name) + '" data-cgline="' + (canJump ? jump.line : '') + '">'
@@ -1044,19 +1269,82 @@
       + (r.doc ? '<pre class="doc">' + esc(String(r.doc).slice(0, 600)) + '</pre>' : '')
       + (r.use ? '<pre class="use">' + esc(r.use) + '</pre>' : '')
       + '<div class="acts">'
+      /* ★★ 「怎么用」摆**最前面** ✗✗ —— 用户原话：
+         「我不记得哈希表的如何定义，以及如何实现增删改查插等…
+           就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
+         → 这才是这个工具的主用途 ✓，别把它埋在「插到光标处」后面 ✓。 */
+      + cgBtn({
+        act: 'manual', pri: !openM, on: openM, icon: '📖',
+        label: openM ? '收起用法' : '怎么用',
+        busy: openM && cgIsBusy('manual'), busyText: '正在整理…',
+        title: '给一份「怎么写」的速查手册：定义 / 增删改查 / 遍历 / 可直接抄的代码',
+      })
+      + (canJump ? cgBtn({
+        act: 'goto', icon: '↗', label: r.crossFile ? '跳到定义（另一个文件）' : '跳过去',
+        title: '跳到第 ' + jump.line + ' 行' + (jump.crossFile ? '（会切到另一个文件）' : '') + ' —— 向导不会关',
+      }) : '')
       + (r.use || r.insert ? cgBtn({
         act: 'use', text: r.use || r.insert, icon: '⤵', label: '插到光标处',
         title: '把这段插到你编辑器里的光标处（插完向导会关掉，好让你看结果）',
       }) : '')
-      + (canJump ? cgBtn({
-        act: 'goto', icon: '↗', pri: true, label: r.crossFile ? '跳到定义（另一个文件）' : '跳过去',
-        title: '跳到第 ' + jump.line + ' 行' + (jump.crossFile ? '（会切到另一个文件）' : '') + ' —— 向导不会关',
-      }) : '')
       + cgBtn({ act: 'copy', icon: '⧉', label: '复制名字' })
       + (r.pick ? cgBtn({ act: 'pick', pri: true, icon: '🧩', label: '拆这个' }) : '')
       + '</div>'
+      + (openM ? cgManualHtml() : '')
       + (canJump ? '' : '<div class="nj">' + esc((jump && jump.why) || '这条没有可跳的位置') + '（还是可以复制名字 ✓）</div>')
       + '</div>';
+  }
+  /* ★★★★ 手册正文 ✓ —— 两段**必须分开摆** ✗✗（文件头那条铁律 ✓）：
+     · 「LSP 给的签名」= 权威 ✓（参数顺序 / 返回类型都对 ✓）
+     · 「AI 写的用法」  = 参考 ✓（能照着抄 ✓，但编译前自己对一眼 ✓）
+     ⚠️ 混在一起的话，用户会把 AI 编的签名也当成真的 ✗
+        （「模型给的签名看着特别像真的」正是文件头警告的那个事故 ✓）。 */
+  function cgManualHtml() {
+    const m = CG.manual;
+    if (!m) return '';
+    if (m.busy) return '<div class="cg-man"><div class="cg-busy"><span class="cg-spin"></span>'
+      + '<span class="t">正在整理「' + esc(m.name) + '」的用法…<i>通常 5~20 秒</i></span></div></div>';
+    if (m.err) {
+      return '<div class="cg-man"><div class="cg-note err">✗ ' + esc(m.err) + '</div>'
+        + '<div class="cg-acts">' + cgBtn({ act: 'manual', pri: true, icon: '📖', label: '再试一次' }) + '</div></div>';
+    }
+    const d = m.data;
+    if (!d) return '';
+    let h = '<div class="cg-man">';
+    h += '<div class="cg-man-hd"><span class="t">📖 ' + esc(m.name) + ' 怎么用</span>'
+      + '<span class="tag ai">AI 整理 · 编译前对一眼</span></div>';
+    if (d.what) h += '<div class="cg-man-what">' + esc(d.what) + '</div>';
+    if (m.sig) h += '<div class="cg-man-sig"><span class="k">LSP 签名（权威）</span><code>' + esc(m.sig) + '</code></div>';
+    if (d.header) h += '<div class="cg-man-inc"><span class="k">要包含</span><code>' + esc(d.header) + '</code>'
+      + cgBtn({ act: 'use', text: d.header, icon: '⤵', label: '插到光标处' }) + '</div>';
+    h += d.sections.map((s) => '<div class="cg-man-sec">'
+      + '<div class="cg-man-t"><span>' + esc(s.t) + '</span>'
+      + (s.d ? '<span class="d">' + esc(s.d) + '</span>' : '')
+      + '<span class="sp"></span>'
+      /* ⚠️⚠️ 按钮放在**标题行右边** ✗✗ —— 第一版是绝对定位**压在代码上** ✓ →
+         盖住了第一行代码 ✗（实测截图：`std::unordered_map<...>` 被「复制」挡住半个字 ✓）。
+         放标题行既不挡代码 ✓，又比「代码下面再来一行按钮」省一半高度 ✓
+         （一份手册有 5~7 段 ✓，每段多一行按钮会把面板撑爆 ✓）。 */
+      + (s.code ? cgBtn({ act: 'copysk2', text: s.code, icon: '⧉', label: '复制' })
+        + cgBtn({ act: 'use', text: s.code, icon: '⤵', label: '插入' }) : '')
+      + '</div>'
+      + (s.code ? '<div class="cg-man-code"><pre>' + esc(s.code) + '</pre></div>' : '')
+      + '</div>').join('');
+    if (d.apis.length) {
+      h += '<div class="cg-man-sec"><div class="cg-man-t">常用成员</div><table class="cg-man-api">'
+        + d.apis.map((a) => '<tr><td class="n">' + esc(a.n) + '</td>'
+          + '<td class="s">' + esc(a.sig || '') + '</td>'
+          + '<td class="d">' + esc(a.d || '') + '</td></tr>').join('')
+        + '</table></div>';
+    }
+    if (d.pitfalls.length) {
+      h += '<div class="cg-man-sec"><div class="cg-man-t">容易踩的坑</div><ul class="cg-man-pit">'
+        + d.pitfalls.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+    }
+    h += '<div class="cg-man-foot">上面「LSP 签名」来自编译器 / LSP ✓（权威）；'
+      + '用法示例是 AI 整理的 ✓（参考）。编译不过时**以 LSP / 编译器报错为准** ✓。</div>';
+    h += '</div>';
+    return h;
   }
   /* 拆逻辑的视图切换条 ✓ */
   function cgViewsHtml() {
@@ -1137,15 +1425,58 @@
     h += cgBusyBar();
     if (CG.note) h += '<div class="cg-note">' + esc(CG.note).replace(/\*\*(.+?)\*\*/g, '$1') + '</div>';
     if (tab === 'find' && CG.ai && CG.ai.err) h += '<div class="cg-note err">✗ AI：' + esc(CG.ai.err) + '</div>';
+    /* ★★ 方案 ✓ —— 用户原话：「选中代码，基于上下文推荐，
+       来给我推荐该可以通过什么方式实现」✓ → 先给**思路 + 示例**，再列候选 ✓。 */
+    if (tab === 'find' && CG.ai && CG.ai.plan && CG.ai.plan.plan) {
+      const pl = CG.ai.plan;
+      h += '<div class="cg-plan"><div class="hd"><span class="t">💡 建议这么实现</span>'
+        + '<span class="tag ai">AI 整理 · 供参考</span></div>'
+        + '<div class="p">' + esc(pl.plan) + '</div>'
+        + (pl.steps.length ? '<ol class="st">' + pl.steps.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ol>' : '')
+        + (pl.example ? '<div class="cg-man-sec"><div class="cg-man-t"><span>可直接改的示例</span>'
+          + '<span class="sp"></span>'
+          + cgBtn({ act: 'copysk2', text: pl.example, icon: '⧉', label: '复制' })
+          + cgBtn({ act: 'use', text: pl.example, icon: '⤵', label: '插到光标处' })
+          + '</div><div class="cg-man-code"><pre>' + esc(pl.example) + '</pre></div></div>' : '')
+        + '<div class="foot">下面那几条是具体可用的函数 / 类型 ✓ —— 带「已核实」的可以直接用 ✓，'
+        + '带「未核实」的先确认名字 ✓。</div></div>';
+    }
     if (tab === 'find' && CG.ai && CG.ai.hint) h += '<div class="cg-note">💡 ' + esc(CG.ai.hint) + '</div>';
     if (!CG.rows.length && !CG.busy) {
-      if (!CG.note) h += '<div class="cg-empty">' + (tab === 'look'
-        ? '输入一个符号名，或者直接把光标放在那个词上按 ⌘I ✓'
-        : '用大白话描述你要干什么，比如「读一个文件」「定时器」「把 JSON 转成对象」✓') + '</div>';
+      h += cgEmptyHtml(tab, !!CG.note);
       return h;
     }
     h += CG.rows.map(cgRowHtml).join('');
     return h;
+  }
+  /* ★★ 空态**给能点的东西** ✗✗ —— 原来只有一句「输入一个符号名」✓，
+     用户面对一块空白 ✓ 不知道该干嘛 ✓（截图里就是这样 ✓）。
+     ⚠️ 而且**不要**用「试试这些」这种空话 ✗ —— 直接给可点的例子 ✓，
+        点了就真的去查 ✓（`data-cgact="demo"` ✓）。
+     ⚠️ `brief` = 上面已经有一句「没找到 X」的提示了 ✓ → 只留那几个按钮 ✓，
+        别再说一遍「输入一个符号名」✗（自相矛盾 ✓）。 */
+  function cgEmptyHtml(tab, brief) {
+    const ctx = cgCtx();
+    const lang = (ctx && ctx.language) || '';
+    const demos = /c_cpp|c\b/.test(lang) ? ['unordered_map', 'vector', 'std::string', 'printf']
+      : /python/.test(lang) ? ['dict', 'list', 'enumerate', 'json.dumps']
+        : /javascript|typescript/.test(lang) ? ['Map', 'Array.map', 'JSON.stringify', 'Promise.all']
+          : /go/.test(lang) ? ['map', 'slice', 'fmt.Sprintf', 'sync.Mutex'] : ['vector', 'unordered_map'];
+    const list = tab === 'look' ? demos
+      : ['把字符串转成整数', '读一个文件', '统计词频', '哈希表'];
+    const icon = tab === 'look' ? '🔍' : '💡';
+    const btns = '<div class="cg-demos">' + list.map((x) => cgBtn({
+      act: 'demo', val: x, icon, label: x,
+    })).join('') + '</div>';
+    if (brief) return btns;
+    if (tab === 'look') {
+      return '<div class="cg-empty">把光标放到你要查的那个词上 ✓，再按 ⌘I<br>'
+        + '<span>打开就会自动帮你查它怎么用（定义 / 增删改查 / 例子）✓</span>'
+        + btns + '</div>';
+    }
+    return '<div class="cg-empty">用大白话说你要干什么 ✓<br>'
+      + '<span>先选中一段代码再说，它会按你的上下文给方案（用哪个包 / 函数 + 例子）✓</span>'
+      + btns + '</div>';
   }
   /* AI 拆解失败 ✓ —— 必须带**重试入口** ✗（不能只报错就走 ✓，
      这个项目在「源挂了却说没内容」上栽过 ✓）。 */
@@ -1284,6 +1615,21 @@
     '.cg-note b{color:var(--text)}',
     '.cg-empty{color:var(--dim);font-size:12px;line-height:1.9;text-align:center;padding:28px 12px}',
     '.cg-empty span{font-size:11px;opacity:.8}',
+    /* ★★ 空态里那几个**可点的例子** ✓ —— 用户面对一块空白不知道该干嘛 ✗，
+       给几个真能点的入口 ✓（点了就去查 ✓，不是摆设 ✓）。 */
+    '.cg-demos{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px}',
+    '.cg-demos .cg-btn{height:26px;font-size:11px}',
+    /* ── ★★ 「找方案」的结果 ✓（思路 + 步骤 + 示例）────────────────────────── */
+    '.cg-plan{border:1px solid color-mix(in srgb,var(--accent) 32%,transparent);border-radius:10px;',
+    'background:color-mix(in srgb,var(--accent) 7%,transparent);padding:11px 12px;margin-bottom:11px}',
+    '.cg-plan .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}',
+    '.cg-plan .hd .t{font-size:12.5px;font-weight:600;color:var(--text)}',
+    '.cg-plan .hd .tag{font-size:10px;padding:1px 7px;border-radius:999px;color:#d29922;',
+    'border:1px solid color-mix(in srgb,#d29922 50%,transparent);background:color-mix(in srgb,#d29922 12%,transparent)}',
+    '.cg-plan .p{font-size:12.5px;line-height:1.85;color:var(--text)}',
+    '.cg-plan .st{margin:8px 0 0;padding-left:19px;font-size:11.5px;line-height:1.85;color:var(--dim)}',
+    '.cg-plan .foot{font-size:10.5px;line-height:1.7;color:var(--dim);margin-top:9px}',
+    '.cg-plan .cg-man-code{margin-top:9px}',
     /* ── 结果卡片 ✓ ────────────────────────────────────────────────────── */
     '.cg-row{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:9px;background:var(--panel2);',
     'transition:border-color .13s,box-shadow .13s}',
@@ -1299,6 +1645,43 @@
     'white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:8px 10px;background:var(--bg);border-radius:7px;max-height:150px;overflow:auto}',
     '.cg-row .use{color:var(--accent)}',
     '.cg-row .nj{font-size:10.5px;color:var(--dim);margin-top:7px;opacity:.9}',
+    /* ── ★★★★ 「怎么用」手册 ✓ —— 用户要的「查文档手册」就是这个 ✓ ─────────
+       ⚠️ 两段必须**视觉上分开** ✗✗：LSP 签名（权威 ✓）和 AI 用法（参考 ✓）。
+         混在一起的话用户会把 AI 编的签名也当真 ✗。 */
+    '.cg-man{margin-top:11px;border-top:1px dashed var(--border);padding-top:10px}',
+    '.cg-man-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}',
+    '.cg-man-hd .t{font-size:12px;font-weight:600;color:var(--text)}',
+    '.cg-man-hd .tag{font-size:10px;padding:1px 7px;border-radius:999px;',
+    'color:#d29922;border:1px solid color-mix(in srgb,#d29922 50%,transparent);',
+    'background:color-mix(in srgb,#d29922 12%,transparent)}',
+    '.cg-man-what{font-size:12px;line-height:1.75;color:var(--text);margin-bottom:9px}',
+    '.cg-man-sig,.cg-man-inc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px;',
+    'padding:7px 9px;border-radius:7px;border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);',
+    'background:color-mix(in srgb,var(--ok) 8%,transparent)}',
+    '.cg-man-inc{border-color:var(--border);background:var(--bg)}',
+    '.cg-man-sig .k,.cg-man-inc .k{flex:none;font-size:10px;letter-spacing:.6px;color:var(--dim)}',
+    '.cg-man-sig code,.cg-man-inc code{font-family:var(--mono);font-size:11.5px;color:var(--text);',
+    'word-break:break-all;min-width:0;flex:1}',
+    '.cg-man-sec{margin-bottom:10px}',
+    '.cg-man-t{font-size:11.5px;font-weight:600;color:var(--text);margin-bottom:5px;display:flex;',
+    'align-items:center;gap:8px;flex-wrap:wrap}',
+    '.cg-man-t .d{font-size:10.5px;font-weight:400;color:var(--dim)}',
+    '.cg-man-t .sp{flex:1;min-width:0}',
+    '.cg-man-t .cg-btn{height:22px;font-size:10px;padding:0 8px;font-weight:400}',
+    /* ⚠️ 代码块里**不放绝对定位的按钮** ✗（第一版就是那么写的 ✓ → 盖住第一行代码 ✗）——
+       按钮挪到标题行右边 ✓（见 cgManualHtml ✓）。 */
+    '.cg-man-code{border:1px solid var(--border);border-radius:7px;background:var(--bg);padding:8px 10px}',
+    '.cg-man-code pre{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--text);',
+    'white-space:pre-wrap;word-break:break-word;margin:0}',
+    '.cg-man-api{width:100%;border-collapse:collapse;font-size:11px}',
+    '.cg-man-api td{padding:4px 6px;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);',
+    'vertical-align:top;line-height:1.6}',
+    '.cg-man-api td.n{font-family:var(--mono);color:var(--accent);white-space:nowrap;width:1%}',
+    '.cg-man-api td.s{font-family:var(--mono);color:var(--dim);font-size:10.5px}',
+    '.cg-man-api td.d{color:var(--dim)}',
+    '.cg-man-pit{margin:0;padding-left:18px;font-size:11px;line-height:1.8;color:var(--dim)}',
+    '.cg-man-foot{font-size:10.5px;line-height:1.7;color:var(--dim);padding:7px 9px;border-radius:7px;',
+    'border-left:2px solid var(--border);background:color-mix(in srgb,var(--panel2) 55%,transparent)}',
     /* ── ★★★★ 按钮：hover / 按下 / 禁用 / 忙 —— 四态必须分得清 ✗✗ ────────────
        用户原话：「这些按键设计的也不合理，按下思考，都没有加载提醒，
                   等等，高亮和按下都分不清等等」✓。
@@ -1596,10 +1979,17 @@
       t.onclick = () => {
         CG.tab = t.dataset.cgtab;
         CG.rows = []; CG.note = ''; CG.err = ''; CG.graph = null; CG.ai = null; CG.aiFlow = null;
+        CG.manual = null; CG.q = '';
         CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
+        const q = $('#cgx-q'); if (q) q.value = '';
         cgRender();
         if (CG.tab === 'break') cgRunBreak();
-        else { const i = $('#cgx-q'); if (i) i.focus(); }
+        else if (CG.tab === 'look') {
+          /* ★ 切到「查手册」也**自动带上下文查** ✓（和打开时同一套 ✓，见 cgSeed ✓）*/
+          const seed = cgSeed();
+          if (seed) { CG.q = seed; if (q) q.value = seed; cgRun(); }
+          else if (q) q.focus();
+        } else { if (q) q.focus(); }
       };
     });
     const inp = $('#cgx-q', el);
@@ -1623,8 +2013,18 @@
       if (act === 'use') { cgInsert(btn.dataset.cgtext || r.use || r.insert || ''); return; }
       if (act === 'copy') { cgCopy(name); return; }
       if (act === 'copysk') { cgCopy((CG.graph && CG.graph.skel) || ''); return; }
+      if (act === 'copysk2') { cgCopy(btn.dataset.cgtext || ''); return; }
       if (act === 'goto') { cgGoto(r); return; }
       if (act === 'pick') { cgPick(r); return; }
+      if (act === 'manual') { cgManual(r); return; }
+      if (act === 'demo') {
+        /* 空态里那些「可点的例子」✓ —— 点了就真的去查 ✓（不是摆设 ✓）*/
+        const v = btn.dataset.cgval || '';
+        const q = $('#cgx-q');
+        CG.q = v; if (q) q.value = v;
+        cgRun();
+        return;
+      }
       if (act === 'view') { CG.view = btn.dataset.cgval || 'mind'; cgRender(); return; }
       if (act === 'flow') { cgRunBreak(); return; }
       if (act === 'skel') { cgSkeleton(); return; }
@@ -1649,8 +2049,8 @@
       .catch((e) => { CG.err = String((e && e.message) || e); cgEnd(); });
   }
   async function cgRun() {
-    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.aiFlow = null;
-    cgBegin('run', CG.tab === 'find' ? '先搜本地，再让 AI 补候选…' : '正在查…');
+    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.aiFlow = null; CG.manual = null;
+    cgBegin('run', CG.tab === 'find' ? '先搜本地，再让 AI 按你的上下文想方案…' : '正在查…');
     try {
       if (CG.tab === 'look') await cgRunLook();
       else if (CG.tab === 'find') await cgRunFind();
@@ -1662,7 +2062,7 @@
   }
   function cgOpen(tab) {
     if (tab) CG.tab = tab;
-    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.ai = null; CG.aiFlow = null;
+    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.ai = null; CG.aiFlow = null; CG.manual = null;
     CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
     CG.q = '';
     const el = cgBuild();
@@ -1675,19 +2075,22 @@
     cgRender();
     cgPlace();
     /* ⚠️ 「拆逻辑」一打开就**直接跑** ✓（它不需要输入 ✓，省一次点击 ✓）；
-       「查」把光标底下的词预填上 ✓（用户八成就是想知道它 ✓）。 */
+       ★★「查手册」也是**打开就跑** ✗✗ —— 用户原话：
+         「我写代码的时候，有时会不记得一些变量怎么写…就类似，
+           以前程序员经常需要查**文档手册**一样去写代码」✓。
+         ⚠️⚠️ 原来这里是「把光标底下的词**预填**进输入框」✓，但**不自动查** ✓ →
+            用户打开看到的还是「输入一个符号名」+ 空白 ✗
+            （实测截图：光标明明停在 `std::unordered` 上 ✓，面板一片空白 ✓）。
+            他得**手打一遍**才知道怎么用 ✗ —— 而他本来就记不清 ✗（鸡生蛋 ✓）。
+         → 用 cgSeed() 取「此刻最可能想查的东西」✓，直接查 ✓。 */
     if (CG.tab === 'break') cgRunBreak();
     else {
       const i = $('#cgx-q');
       if (i) { i.disabled = false; i.value = ''; i.focus(); }
       if (CG.tab === 'look') {
-        let word = '';
-        try {
-          const ed = (typeof MONACO_EDITOR !== 'undefined') ? MONACO_EDITOR : null;
-          const m = ed && ed.getModel && ed.getPosition && ed.getModel().getWordAtPosition(ed.getPosition());
-          word = String((m && m.word) || '');
-        } catch (_) {}
-        if (word) { CG.q = word; if (i) i.value = word; cgRun(); }
+        const seed = cgSeed();
+        if (seed) { CG.q = seed; if (i) i.value = seed; cgRun(); }
+        else if (i) { i.value = ''; CG.q = ''; }
       }
     }
   }
