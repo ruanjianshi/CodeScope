@@ -3075,6 +3075,26 @@
   let SAVE_TIMER = 0, SAVE_PENDING = false;
   function storePayload() {
     const b = Object.assign({}, STORE || {});
+    /* ══ ★★★★ 上传前丢掉**孤儿运行记录** ✗✗（2026-10-08 性能体检）══════════
+       实测：`flowRuns` 里堆了 **164 个键** ✗，而工作流只剩 **1 个** ✗ ——
+       那 163 个是**已经删掉的工作流**留下的运行记录 ✓（删工作流时没人清它 ✗）。
+       后果很实在 ✗：`flowRuns` 独占 **147 KB** ✓，是整个 store（183 KB）的 **80%** ✗，
+       而它在**每一次保存**里都跟着传一遍 ✗（改一个字的备忘录也传 ✗）——
+       实测打 8 秒字就上传了 373 KB ✗。
+       → 就在这儿过滤 ✓：`storePayload()` 是**唯一**组装上传体的地方 ✓，
+         放这一处就够 ✓，不用去「删工作流」那条路上补 ✗
+         （补在那儿的话，**别的**能删工作流的路径又会漏 ✗ —— 这个项目栽过太多次 ✓）。
+       ⚠️ 只丢「**对应的 flow 已经不存在**」的键 ✓：
+          工作流还在、只是还没跑过 → 它本来就该是空的 ✓，不受影响 ✓。 */
+    const alive = new Set((Array.isArray(b.flows) ? b.flows : []).map((f) => f && f.id).filter(Boolean));
+    if (b.flowRuns && typeof b.flowRuns === 'object' && !Array.isArray(b.flowRuns)) {
+      const kept = {};
+      Object.keys(b.flowRuns).forEach((k) => { if (alive.has(k)) kept[k] = b.flowRuns[k]; });
+      b.flowRuns = kept;
+      /* ⚠️ 内存里那份也一起换掉 ✗ —— 不然下一次保存又要重新过滤 164 个键 ✓，
+         而且「已删工作流的运行记录」会一直挂在内存里 ✓。 */
+      if (STORE) STORE.flowRuns = kept;
+    }
     const drop = (STORE && Array.isArray(STORE.__drop)) ? STORE.__drop : null;
     if (drop && drop.length) b.__drop = drop.slice();
     return JSON.stringify(b);

@@ -796,7 +796,7 @@ print(r.run())
      （两次还挂在不同地方 ✓，一度让我以为「三次挂在三个地方 = 偶发」✓）。
      → 窗口放到 **4 秒** ✓；只有「**一次都没跳**」（定时器根本没起来 ✓）
        和「跳太多」（叠加 ✓）才算失败 ✓。 */
-  const tickCount = await page.evaluate(() => new Promise((res) => {
+  const tickOnce = () => page.evaluate(() => new Promise((res) => {
     let n = 0;
     const el = document.getElementById('lw-clock');
     if (!el) return res(-1);
@@ -804,8 +804,14 @@ print(r.run())
     ob.observe(el, { childList: true, characterData: true, subtree: true });
     setTimeout(() => { ob.disconnect(); res(n); }, 4000);
   }));
+  let tickCount = await tickOnce();
+  /* ⚠️ 量到 **0** 时**再量一次** ✗ —— 机器卡的时候（load 7+ ✓）
+     4 秒里真的一次都没轮到 ✓，实测发生过两次 ✗。
+     真要守的是「**越跳越多**」（定时器叠加 ✓），
+     所以给它一次重试 ✓，**两次都是 0** 才判失败 ✓。 */
+  if (tickCount === 0) tickCount = await tickOnce();
   if (tickCount < 0) throw new Error('找不到时钟（#lw-clock）');
-  if (tickCount === 0) throw new Error('★ 4 秒里时钟一次都没动 —— 定时器没起来？');
+  if (tickCount === 0) throw new Error('★ 连着两次、每次 4 秒，时钟一次都没动 —— 定时器没起来？');
   if (tickCount > 6) throw new Error('★ 秒针数量不对（4 秒里时钟被改了 ' + tickCount + ' 次 —— 定时器叠加了？）');
   /* ★ 心情：点开浮层 → 选一个 → 胶囊变 + **存进 STORE** ✓ */
   await page.locator('#lw-mood').click();

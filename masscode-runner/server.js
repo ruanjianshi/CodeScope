@@ -790,7 +790,30 @@ let MEMORY_CACHE = { at: 0, value: null };
 function execFileText(command, args, timeout) {
   return new Promise((resolve, reject) => execFile(command, args, { encoding: 'utf8', timeout: timeout || 5000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => err ? reject(new Error(String(stderr || err.message))) : resolve(String(stdout || ''))));
 }
-async function onlyOfficeServiceStatus() {
+/* ══ ★★★★ ONLYOFFICE 服务状态：**加一层缓存** ✗✗（2026-10-08 性能体检）══════
+   实测：这个接口在本机（**Docker 没开** ✓）要 **1.1~1.9 秒**才返回 ✗ ——
+   因为 `docker info` 要 spawn 一个 docker 进程 ✓、再等它跟守护进程握手失败 ✓。
+   而前端 `wireOfficePanel()` 里 **每次打开页面都会调它** ✗ →
+   ① 首屏白白多等 1~2 秒 ✓；
+   ② 更糟的是那 1~2 秒里 docker 进程**占着 CPU** ✗ →
+      把同时段发出去的别的请求一起拖慢 ✓
+      （实测首屏那一批：`/api/git` 419ms ✓、`/api/env` 156ms ✗ —— 平时都是几十毫秒 ✓）。
+   → 缓存 **30 秒** ✓：状态查询本来就是「看一眼」✓，30 秒的新鲜度完全够 ✓。
+   ⚠️ 真要看最新的就带 `?refresh=1` ✓ —— 前端在「启动 / 停止」之后就是这么刷的 ✓
+      （`controlOnlyOfficeService()` 里那两处 ✓），所以操作完立刻能看到新状态 ✓。
+   ⚠️ 失败结果**也要缓存** ✗ —— 「Docker 没开」这个结论 30 秒内不会变 ✓，
+      而它恰恰是最慢的那条路 ✓（不缓存的话白等的就是它 ✓）。 */
+let ONLYOFFICE_SVC_CACHE = { at: 0, data: null };
+const ONLYOFFICE_SVC_TTL = 30000;
+async function onlyOfficeServiceStatus(force) {
+  if (!force && ONLYOFFICE_SVC_CACHE.data && (Date.now() - ONLYOFFICE_SVC_CACHE.at) < ONLYOFFICE_SVC_TTL) {
+    return ONLYOFFICE_SVC_CACHE.data;
+  }
+  const out = await onlyOfficeServiceStatusUncached();
+  ONLYOFFICE_SVC_CACHE = { at: Date.now(), data: out };
+  return out;
+}
+async function onlyOfficeServiceStatusUncached() {
   const base = { managed:true, container:ONLYOFFICE_CONTAINER_NAME, dockerAvailable:false, installed:false, running:false, status:'unavailable', health:'none', memory:'', cpu:'' };
   try {
     await execFileText('docker', ['info', '--format', '{{json .ServerVersion}}'], 5000);
@@ -819,12 +842,14 @@ async function onlyOfficeServiceStatus() {
 }
 async function controlOnlyOfficeService(action) {
   if (!['start','stop'].includes(action)) throw Object.assign(new Error('不支持的 ONLYOFFICE 服务操作'), { statusCode:400 });
-  const before = await onlyOfficeServiceStatus();
+  /* ⚠️ 这里要**强制刷新** ✗ —— 用户刚点了「启动 / 停止」✓，
+     给他看 30 秒前的缓存等于「点了没反应」✗（见上面缓存那段注释 ✓）。 */
+  const before = await onlyOfficeServiceStatus(true);
   if (!before.dockerAvailable) throw Object.assign(new Error(before.error || 'Docker 未运行'), { statusCode:503 });
   if (!before.installed) throw Object.assign(new Error('未找到固定容器 '+ONLYOFFICE_CONTAINER_NAME+'；请先完成 ONLYOFFICE 安装'), { statusCode:404 });
   if (action === 'start' && !before.running) await execFileText('docker', ['start', ONLYOFFICE_CONTAINER_NAME], 60000);
   if (action === 'stop' && before.running) await execFileText('docker', ['stop', '--time', '10', ONLYOFFICE_CONTAINER_NAME], 30000);
-  return onlyOfficeServiceStatus();
+  return onlyOfficeServiceStatus(true);
 }
 // ===================== 云同步：Tailscale 组网 · Syncthing 数据面 · restic 历史层 =====================
 // 设计原则：① 只读聚合优先，任何工具缺失/未配置/不可达都只降级不报错；
@@ -6286,7 +6311,8 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok:true, connection:publicOnlyOfficeConnection(), health });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/service') {
-      return send(res, 200, { ok:true, service:await onlyOfficeServiceStatus() });
+      /* ⚠️ 默认走缓存 ✓；`?refresh=1` 才真去问 docker ✓（见上面那段注释 ✓）*/
+      return send(res, 200, { ok:true, service:await onlyOfficeServiceStatus(u.searchParams.get('refresh') === '1') });
     }
     if (req.method === 'POST' && u.pathname === '/api/office/service') {
       try {
