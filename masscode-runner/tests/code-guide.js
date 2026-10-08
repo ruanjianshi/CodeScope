@@ -126,9 +126,11 @@ const FAKE_PLAN = {
     let payload = FAKE_AI;
     if (isManual) {
       manualCalls++;
-      /* ⚠️ 手册要**跟着请求里的符号名**生成 ✗ —— 写死成「哈希表」的话 ✓，
-         「手册里真的出现了那个符号」那条断言就变成在验假数据 ✗。 */
-      const mm = /符号：([^\n（(\\"]+)/.exec(body);
+      /* ⚠️ 手册要**跟着请求里的那个词**生成 ✗ —— 写死成「哈希表」的话 ✓，
+         「手册里真的出现了那个符号」那条断言就变成在验假数据 ✗。
+         ⚠️ 两种问法都要认 ✗：对着**符号**问（`符号：add` ✓）和
+            对着**一句话**问（`他想问的是：哈希表定义` ✓，见 cgAskConcept ✓）。 */
+      const mm = /符号：([^\n（(\\"]+)/.exec(body) || /他想问的是：([^\n\\"]+)/.exec(body);
       payload = fakeManual(mm ? mm[1].trim() : '');
     } else if (isPlan) { planCalls++; payload = FAKE_PLAN; lastPlanBody = body; }
     else if (isFlow) { flowCalls++; payload = FAKE_FLOW; }
@@ -282,6 +284,43 @@ const FAKE_PLAN = {
     await p.locator('[data-cgact="manual"]').first().click(); await p.waitForTimeout(500);
     ck('★ 再点一下能收起（开开关关）', (await p.locator('.cg-man').count()) === 0);
 
+    /* ══ ★★★★ ③c 在「查手册」里问**一句话**也要能查 ✗✗ ═══════════════════
+       用户原话：「**有些问题，怎么无法查阅，显示出来**」✓
+       （截图里他在「查手册」里打的是「**哈希表定义**」✓，结果只看到一句「没找到」✗）。
+       ⚠️ 根因 ✗：查手册走的是**符号模糊匹配** ✓ —— 而「哈希表定义」是**一句话** ✓，
+          一个符号名都对不上 ✓ → 必然回「没找到」✗。
+       ⚠️ 他问的是**概念** ✓，这条路上**根本没有符号可查** ✗ → 本地怎么搜都是白找 ✓
+          → **只能让 AI 直答** ✓（这就是这一节要守的 ✓）。
+       ⚠️ 但**不能**所有查不到的都去问 AI ✗（5~20 秒 ✓）——「`snpf` 打错了」不值得 ✓
+          → 只在**含中文**时才自动走 ✓（见 cgIsQuestion ✓），下面两条一起守 ✓。 */
+    console.log('\n── ③c 💬 在「查手册」里问一句话（中文）也要能查 ──');
+    const qCallsBefore = manualCalls;
+    await p.locator('[data-cgtab="look"]').click(); await p.waitForTimeout(700);
+    await p.locator('#cgx-q').fill('哈希表定义');
+    await p.locator('#cgx-go').click();
+    await p.waitForSelector('.cg-man', { timeout: 40000 }).catch(() => {});
+    await p.waitForFunction(() => !document.querySelector('.cg-man .cg-spin'), null, { timeout: 60000 }).catch(() => {});
+    await p.waitForTimeout(900);
+    const cm = await txt('.cg-man');
+    console.log('    概念手册片段: ' + JSON.stringify(cm.slice(0, 150)));
+    ck('★★★ 中文问题**不再是「没找到」**，而是真的给了一份手册',
+      /怎么用/.test(cm) && cm.length > 60, cm.slice(0, 150));
+    ck('★★ 手册里有「定义」（能照着写）', /定义/.test(cm), cm.slice(0, 180));
+    ck('★★ 而且说清了「你问的是一句话，不是符号名」',
+      /一句话|不是符号名/.test(await cgBody()), (await cgBody()).slice(0, 170));
+    ck('★★ 真的调了 AI（不是本地编的）', manualCalls > qCallsBefore, qCallsBefore + ' → ' + manualCalls);
+    ck('★ 有「重新整理」入口（概念手册没有卡片可以收起，得留个重来的按钮）',
+      await p.locator('[data-cgact="concept"]').count() === 1);
+    /* ⚠️ 反向：**英文符号**查不到时**不该**自动去问 AI ✗（那是 5~20 秒 ✓，不值得 ✓）*/
+    const qCalls2 = manualCalls;
+    await p.locator('#cgx-q').fill('zzzznosuchsymbol');
+    await p.locator('#cgx-go').click();
+    await p.waitForTimeout(2800);
+    ck('★★ 但**英文符号**查不到时**不会**自动去问 AI（那是 5~20 秒，不值得）',
+      manualCalls === qCalls2 && /没找到/.test(await cgBody()), qCalls2 + ' → ' + manualCalls);
+    ck('★ 而且给了能点的例子（不让用户对着空白发呆）',
+      await p.locator('.cg-demos .cg-btn').count() >= 3);
+
     console.log('\n── ④ 💡 找方案（大白话 → 候选，再回头核实）──');
     await p.locator('[data-cgtab="find"]').click(); await p.waitForTimeout(600);
     await p.locator('#cgx-q').fill('怎么把文件整个读进来');
@@ -408,6 +447,50 @@ const FAKE_PLAN = {
     await p.waitForTimeout(800);
     ck('★★ 骨架代码出来了（走已有的 /api/logic/skeleton）', await has('#cgx-skelcode'),
       (await txt('#cgx-body')).slice(0, 120));
+
+    /* ══ ★★★★ ⑤b 切页签**不丢结果、不重跑 AI** ✗✗ ═══════════════════════
+       用户原话：「**AI 思考后切换按钮后，东西就丢失了，后面又得重新思考，太慢了**」✓。
+
+       ⚠️⚠️ 原来切页签是**一把全清** ✗（`CG.rows = []` / `CG.graph = null` /
+          `CG.aiFlow = null` / `CG.ai = null` ✓）→
+          在「找方案」等 AI 想出方案 ✓ → 切去「拆逻辑」看一眼 ✓ → 切回来**全没了** ✗
+          → 又得等 5~20 秒 ✓。
+       ⚠️ AI 那几项**是真的慢**（5~20 秒 ✓），而切页签是**零成本的界面动作** ✓ ——
+          把两者绑在一起毫无道理 ✗。
+       ⚠️⚠️ 判据必须是**两条一起** ✗✗：
+          ① 切回来**立刻**有东西 ✓（不是转圈 ✓）
+          ② 而且**没重新问 AI** ✓（计数没涨 ✓）——
+          只验①的话，「重跑一遍但很快返回」也能过 ✓（假 AI 是毫秒级 ✓）→ 恒真 ✗。
+          这也是为什么下面那两次切换只等 **0.6 秒** ✓（真重跑的话来不及回来 ✓）。 */
+    console.log('\n── ⑤b ★★★ 切页签不丢结果、不重跑 AI（用户原话「切走了就得重新思考，太慢了」）──');
+    await p.locator('[data-cgact="view"][data-cgval="mind"]').click(); await p.waitForTimeout(700);
+    const mindBefore = await txt('#cgx-mind');
+    const flowBefore = flowCalls, planBefore = planCalls;
+    /* ⚠️ 别在**拆逻辑**页签里取「输入框原值」✗ —— 那个页签的输入框是**禁用**的 ✓、
+       值是空 ✓（`CG.q` 在 break 下本来就是 '' ✓）→ 拿它去比必然不等 ✗
+       （实测就是这么假失败的 ✓）。要比就跟 ④ 里**真正用过的那句查询**比 ✓。 */
+    const FIND_Q = '怎么把文件整个读进来';
+    /* → 切到「找方案」 */
+    await p.locator('[data-cgtab="find"]').click();
+    await p.waitForTimeout(600);
+    const planTxt2 = await txt('.cg-plan');
+    console.log('    切回「找方案」0.6 秒后的内容: ' + JSON.stringify(planTxt2.slice(0, 70)));
+    ck('★★★ 切到「找方案」**立刻**还有原来那份方案（不用再等 AI）',
+      /建议这么实现/.test(planTxt2), planTxt2.slice(0, 90));
+    ck('★★★ 而且**没有重新问 AI**（planCalls 没涨）', planCalls === planBefore, planBefore + ' → ' + planCalls);
+    ck('★ 输入框里还是刚才那句话（不用重打）',
+      (await p.evaluate(() => { const e = document.getElementById('cgx-q'); return e ? e.value : ''; })) === FIND_Q,
+      JSON.stringify(await p.evaluate(() => { const e = document.getElementById('cgx-q'); return e ? e.value : ''; })));
+    /* → 切回「拆逻辑」 */
+    await p.locator('[data-cgtab="break"]').click();
+    await p.waitForTimeout(600);
+    const mindAfter = await txt('#cgx-mind');
+    ck('★★★ 切回「拆逻辑」**立刻**还有那张导图', mindAfter.length > 20 && mindAfter === mindBefore,
+      JSON.stringify(mindAfter.slice(0, 70)));
+    ck('★★★ 而且**没有重新拆**（AI 没再跑一遍）', flowCalls === flowBefore, flowBefore + ' → ' + flowCalls);
+    ck('★★ 连骨架代码都还在（切页签不该把整页冲掉）', await has('#cgx-skelcode'));
+    ck('★★ 连当前视图都记得（切回来还是「思维导图」，不是跳回默认）',
+      (await p.locator('#cgx-mind').count()) === 1 && (await p.locator('#cgx-graph').count()) === 0);
 
     /* ══ ⑥ ★★ 按钮：按下有反馈 / 忙碌转圈 / 不能重复点 ══════════════════════
        用户原话：「这些按键设计的也不合理，按下思考，都没有加载提醒，等等，

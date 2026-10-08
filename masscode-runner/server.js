@@ -5669,6 +5669,30 @@ const server = http.createServer(async (req, res) => {
           if (req.method !== 'DELETE') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
           const id = String(u.searchParams.get('id') || '').trim();
           if (!EBOOK_ID_RE.test(id)) return send(res, 200, { ok: false, error: '书 id 不对' });
+          /* ══ ★★★★ 删盘**必须有正当理由** ✗✗（2026-10-08 加的安全网）══════════
+             事故：用户书架上 15 本书的**正文目录被整个删掉了** ✗
+             （19 本 → 4 本 ✓，`life-books/` 里那 15 个目录也没了 ✓）。
+             查了一圈**没锁定到唯一根因** ✗ —— 但有一条是确定的 ✓：
+             **这个接口谁都能调，而它删的是用户几 MB 的正文** ✗，删了**不可逆** ✗。
+             → 加一道闸 ✓：**店里还挂着这本书**（有书的 `ebookId` 等于它 ✓）时，
+                默认**拒绝删除** ✓，除非显式带 `force=1` ✓。
+             ⚠️ 前端的「🗑 删书」是**先删文件、再改 STORE** ✓（顺序有讲究 ✓，
+                见 CHANGELOG 那条 ✓）→ 所以它删的时候**店里确实还挂着** ✓ →
+                它得带 `force=1` ✓（那是**用户明确点了确认框**的动作 ✓，是正当的 ✓）。
+             ⚠️ 而**探针 / 脚本 / 手滑**直接调这个接口 ✗ → 默认被挡住 ✓
+                （实测这次的调用方就是没带任何标记的裸 DELETE ✗）。
+             ⚠️ 挡住了要说**人话** ✓（把书名列出来 ✓），不能只回一个 ok:false ✗。 */
+          if (String(u.searchParams.get('force') || '') !== '1') {
+            const store = readLifeStore();
+            const owner = ((store && store.books) || []).find((b) => b && String(b.ebookId || '') === id);
+            if (owner) {
+              return send(res, 200, {
+                ok: false, guarded: true,
+                error: '这本书还在书架上（《' + String(owner.title || '未命名').slice(0, 40) + '》）——'
+                  + '要删正文得先把它从书架删掉（走界面上的 🗑，那里会带 force=1）',
+              });
+            }
+          }
           try { fs.rmSync(path.join(EBOOK_DIR(), id), { recursive: true, force: true }); } catch (_) {}
           return send(res, 200, { ok: true });
         }

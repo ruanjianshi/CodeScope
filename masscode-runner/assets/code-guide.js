@@ -81,6 +81,17 @@
          就类似，以前程序员经常需要查**文档手册**一样去写代码」✓。
        ⚠️ 一条一展开 ✓（`name` 是**哪一条**在展开 ✓）—— 同时开十个手册没有意义 ✓。 */
     manual: null,         /* { name, busy, err, data } ✓ */
+    /* ★★★★ 每个页签**各存一份** ✗✗ —— 用户原话：
+       「AI 思考后**切换按钮后，东西就丢失了**，后面又得重新思考，太慢了」✓。
+       ⚠️⚠️ 原来切页签是**一把全清** ✗（`CG.rows = []` / `CG.graph = null` /
+           `CG.aiFlow = null` / `CG.ai = null` ✓）→
+          在「找方案」等 AI 想出方案 ✓ → 切去「拆逻辑」看一眼 ✓ → 切回来**全没了** ✗
+          → 又得等 5~20 秒 ✓（用户的原话就是「太慢了」✓）。
+       ⚠️ AI 那几项**是真的慢**（5~20 秒 ✓），而切页签是**零成本的界面动作** ✓ ——
+          把它和「重算」绑在一起是没道理的 ✗。
+       → 切页签时先 `cgStash()` 存当前 ✓、再 `cgRestore()` 取目标 ✓；
+         目标页签**已经有结果就不重跑** ✓（见 `cgTabHasResult` ✓）。 */
+    saved: {},            /* { look: {...}, find: {...}, break: {...} } ✓ */
     view: 'mind',         /* 拆逻辑下的视图：'mind'（思维导图）/ 'flow'（实现流程）/ 'code'（代码级）✓ */
     note: '',             /* 一句提示（比如「这段不是函数体，画不了图」）✓ */
     sym: null,            /* 当前文档的符号索引缓存 ✓ */
@@ -148,6 +159,25 @@
   }
   /* 当前是不是这个动作在跑 ✓ */
   const cgIsBusy = (act) => CG.busyAct === act;
+  /* ★★ 页签之间的状态搬运 ✓（见 CG.saved 那段注释 ✓）——
+     ⚠️ 要搬的字段写**一处** ✗（抄两份必然漏 ✓）。 */
+  const CG_KEEP = ['rows', 'note', 'err', 'graph', 'ai', 'aiFlow', 'manual', 'q'];
+  const CG_DEF = { rows: () => [], note: () => '', err: () => '', graph: () => null, ai: () => null, aiFlow: () => null, manual: () => null, q: () => '' };
+  function cgStash() {
+    const box = {};
+    CG_KEEP.forEach((k) => { box[k] = CG[k]; });
+    CG.saved[CG.tab] = box;
+  }
+  function cgRestore(tab) {
+    const s = CG.saved[tab];
+    CG_KEEP.forEach((k) => { CG[k] = (s && s[k] !== undefined) ? s[k] : CG_DEF[k](); });
+  }
+  /* 这个页签**已经有东西可看**了吗 ✓ —— 有就**不要重跑 AI** ✗（那才是「太慢」的根源 ✓）*/
+  function cgTabHasResult(tab) {
+    if (tab === 'break') return !!(CG.graph || CG.aiFlow);
+    if (tab === 'find') return !!(CG.rows.length || (CG.ai && CG.ai.plan) || CG.manual);
+    return !!(CG.rows.length || CG.manual);
+  }
   /* 进 / 出忙碌态 ✓ —— 每次都**重绘** ✓（不重绘的话按钮还停在旧样子 ✗）*/
   function cgBegin(act, txt) { CG.busyAct = act; CG.busyTxt = txt || ''; CG.busy = true; cgRender(); }
   function cgEnd() { CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false; cgRender(); }
@@ -538,8 +568,21 @@
        ⚠️ 捞到就补上 file/frag/line ✓ → 卡片上会多一个「跳到定义」✓。 */
     await cgFillJump(ctx, CG.rows);
     if (!CG.rows.length) {
-      CG.note = '没找到「' + q2 + '」相关的符号。'
-        + '换个写法试试（缩写 / 片段都行），或者切到「💡 找方案」用大白话描述你要干什么 ✓';
+      /* ★★★★ 输入的是**一句话**（含中文 ✓）→ 本地符号搜索**必然白搭** ✗✗ ——
+         用户原话：「**有些问题，怎么无法查阅，显示出来**」✓
+         （截图里他打的是「哈希表定义」✓，然后只看到一句「没找到」✗）。
+         ⚠️ 他问的是**概念** ✓，这条路上**根本没有符号可查** ✗ →
+            本地怎么搜都是白找 ✓ → **只能让 AI 直答** ✓（见 cgAskConcept ✓）。
+         ⚠️ 但**不能**所有查不到的都去问 AI ✗（那是 5~20 秒 ✓）——
+            「`snpf` 打错了」不值得 ✓ → 只在**含中文**时才自动走 AI ✓（见 cgIsQuestion ✓）。 */
+      if (cgIsQuestion(q2)) {
+        CG.note = '「' + q2 + '」是一句话 ✓，不是符号名 —— 符号搜索找不到是正常的 ✓。'
+          + '我按「你想问什么」让 AI 整理了一份手册 ✓（下面那些是相关的符号 ✓）';
+        await cgAskConcept(q2);
+      } else {
+        CG.note = '没找到「' + q2 + '」相关的符号。'
+          + '换个写法试试（缩写 / 片段都行），或者切到「💡 找方案」用大白话描述你要干什么 ✓';
+      }
     } else {
       CG.note = '';
     }
@@ -1065,23 +1108,61 @@
     }
     CG.manual = { name: r.name, busy: true, err: '', data: null };
     cgBegin('manual', '正在整理「' + r.name + '」的用法…');
+    await cgManualFetch(CG.manual, { name: r.name, kind: r.kind, line: r.line, doc: r.doc });
+    cgEnd();
+  }
+  /* ══ ⑧f ★★★★ 「问一句话」也要能查 ✗✗ —— 用户原话：
+     「**有些问题，怎么无法查阅，显示出来**」✓（截图里他打的是「哈希表定义」✓）。
+
+     ⚠️⚠️ 病根 ✗：查手册走的是**符号模糊匹配**（`cgScore` 那一套 ✓）——
+        而「哈希表定义」是**一句话** ✓，一个符号名都对不上 ✓ →
+        必然回一句「没找到」✗。用户看到的是「这东西没用」✗。
+     ⚠️ 而这条路上**根本没有符号可查** ✓（他要的是概念 ✓）→
+        本地怎么搜都是白搭 ✗ → **只能让 AI 直答** ✓。
+     ⚠️⚠️ 但**不能**所有查不到的都去问 AI ✗✗ —— 那是 5~20 秒 ✓，
+        而「`snpf` 打错了」这种根本不值得 ✓。
+        → 只在**输入里含中文**（= 一句话，不是符号名 ✓）时才自动走 AI ✓。
+          英文标识符查不到 → 还是给「换个写法 / 切到找方案」+ 可点的例子 ✓。 */
+  function cgIsQuestion(q) {
+    const s = String(q || '').trim();
+    if (!s) return false;
+    /* 含中日韩汉字 → 一定是「问一句话」✓（标识符里不会有 ✓）*/
+    if (/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(s)) return true;
+    /* 有空格且不像调用（`std::vector<int>` 这种没空格 ✓）*/
+    return /\s/.test(s) && s.length > 12;
+  }
+  async function cgAskConcept(q) {
+    const ctx = cgCtx();
+    if (!ctx || !q) return;
+    CG.manual = { name: q, busy: true, err: '', data: null, concept: true };
+    cgBegin('concept', '「' + q + '」不是符号名 —— 正在让 AI 按「你想问什么」整理…');
+    await cgManualFetch(CG.manual, { name: q, concept: true });
+    cgEnd();
+  }
+  /* ★★ 手册正文的**唯一实现** ✓ —— 两条路共用 ✓：
+       ① 卡片上的「📖 怎么用」（有具体符号 ✓）
+       ② 查手册里问了一句话（`concept: true` ✓，没有符号 ✓）
+     ⚠️ 抽成一个函数 ✗（抄两份必然漂移 ✓，这个项目在这上面栽过好几次 ✓）。 */
+  async function cgManualFetch(slot, opt) {
+    const ctx = cgCtx();
     try {
       /* ⚠️ 先把 LSP 的**权威信息**拿到手 ✓（签名 / 文档 ✓）——
          这段**不经模型** ✓，直接摆给用户 ✓。
+         ⚠️ 概念提问（`concept` ✓）没有符号 ✓ → 跳过 ✓（也就没有「LSP 签名」那一段 ✓）。
          ⚠️⚠️ 要 hover 在**符号名那一列** ✗✗，不能一律 `column:1` ✗ ——
             `int add(int a, int b) {` 的第 1 列是 `int` ✓，
             hover 出来的是「int 是什么」✗，不是 `add` 的签名 ✓（那就白拿了 ✓）。
          → 在那一行里**找一下名字的位置** ✓；找不到再退回第 1 列 ✓。 */
-      let sig = '', doc = r.doc || '';
-      if (LSP_LANGS.indexOf(ctx.language) >= 0 && r.line > 0) {
+      let sig = '', doc = opt.doc || '';
+      if (!opt.concept && LSP_LANGS.indexOf(ctx.language) >= 0 && opt.line > 0) {
         try {
           let col = 1;
           const lines = String(ctx.code || '').split('\n');
-          const line = lines[r.line - 1] || '';
-          const bare = String(r.name).split('(')[0].split('<')[0].trim();
+          const line = lines[opt.line - 1] || '';
+          const bare = String(opt.name).split('(')[0].split('<')[0].trim();
           const at = bare ? line.indexOf(bare) : -1;
           if (at >= 0) col = at + 1;
-          const d = await cgLsp('hover', { line: r.line, column: col });
+          const d = await cgLsp('hover', { line: opt.line, column: col });
           if (d && d.ok && d.hover && d.hover.markdown) {
             /* ⚠️⚠️ hover 回来的是 **markdown** ✗✗ —— clangd 给的是
                `### function \\`main\\`` + ```cpp 围栏 ✓ →
@@ -1114,21 +1195,27 @@
         + '"apis":[{"n":"成员/函数名","sig":"签名（不确定就留空）","d":"一句说明"}],'
         + '"pitfalls":["容易踩的坑"]}\n'
         + '⚠️ sections 给 4~7 段（定义 / 增 / 删 / 改 / 查 / 遍历 / 其他 里挑相关的）。';
+      /* ⚠️ 概念提问要**换个说法** ✗ —— 对着「哈希表定义」说「请给这份**符号**一份手册」✓
+         模型会犯迷糊 ✓（它不知道该查哪个符号 ✓）。 */
       const usr = '语言：' + (ctx.language || '未知') + '\n'
-        + '符号：' + r.name + (r.kind ? '（' + r.kind + '）' : '') + '\n'
-        + (sig ? ('LSP 给的签名（权威，不要改它）：' + sig + '\n') : '')
-        + (doc ? ('已有文档：' + String(doc).slice(0, 600) + '\n') : '')
+        + (opt.concept
+          ? ('他想问的是：' + opt.name + '\n'
+            + '⚠️ 这**不是**一个符号名 ✓，是一句人话 ✓ —— 请自己判断他想问什么，'
+            + '在这个语言里挑**最该用的那个东西**（比如「哈希表」→ C++ 里就是 unordered_map ✓），'
+            + '然后按上面的格式给手册 ✓。\n')
+          : ('符号：' + opt.name + (opt.kind ? '（' + opt.kind + '）' : '') + '\n'
+            + (sig ? ('LSP 给的签名（权威，不要改它）：' + sig + '\n') : '')
+            + (doc ? ('已有文档：' + String(doc).slice(0, 600) + '\n') : '')))
         + '他正在写的代码（光标附近）：\n' + String(ctx.sel || ctx.lineText || '').slice(0, 400) + '\n\n'
-        + '请给这份符号一份「怎么写」的速查手册。';
+        + '请给一份「怎么写」的速查手册。';
       const out = await cgAi(sys, usr, 150000);
       const o = cgJson(out);
       const d = cgManualData(o);
       if (!d.sections.length && !d.apis.length) throw new Error('模型没按要求返回 JSON（再点一次试试）');
-      CG.manual = { name: r.name, busy: false, err: '', data: d, sig, doc };
+      slot.busy = false; slot.err = ''; slot.data = d; slot.sig = sig; slot.doc = doc;
     } catch (e) {
-      CG.manual = { name: r.name, busy: false, err: String((e && e.message) || e), data: null };
+      slot.busy = false; slot.err = String((e && e.message) || e); slot.data = null;
     }
-    cgEnd();
   }
   /* 把模型那份手册洗干净 ✓（字段名 / 类型都会飘 ✓） */
   function cgManualData(o) {
@@ -1311,8 +1398,13 @@
     const d = m.data;
     if (!d) return '';
     let h = '<div class="cg-man">';
-    h += '<div class="cg-man-hd"><span class="t">📖 ' + esc(m.name) + ' 怎么用</span>'
-      + '<span class="tag ai">AI 整理 · 编译前对一眼</span></div>';
+    h += '<div class="cg-man-hd"><span class="t">📖 ' + esc(m.name) + (m.concept ? ' · 怎么用' : ' 怎么用') + '</span>'
+      + '<span class="tag ai">AI 整理 · 编译前对一眼</span>'
+      /* ⚠️ 概念手册**没有对应的卡片** ✗（它是「问了一句话」换来的 ✓）→
+         收不起来 ✓，所以得在这儿放一个「重新整理」✓（不然想重来一次都没入口 ✗）。 */
+      + (m.concept ? cgBtn({ act: 'concept', val: m.name, icon: '🪄', label: '重新整理',
+        busy: cgIsBusy('concept'), busyText: '正在整理…' }) : '')
+      + '</div>';
     if (d.what) h += '<div class="cg-man-what">' + esc(d.what) + '</div>';
     if (m.sig) h += '<div class="cg-man-sig"><span class="k">LSP 签名（权威）</span><code>' + esc(m.sig) + '</code></div>';
     if (d.header) h += '<div class="cg-man-inc"><span class="k">要包含</span><code>' + esc(d.header) + '</code>'
@@ -1341,8 +1433,12 @@
       h += '<div class="cg-man-sec"><div class="cg-man-t">容易踩的坑</div><ul class="cg-man-pit">'
         + d.pitfalls.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
     }
-    h += '<div class="cg-man-foot">上面「LSP 签名」来自编译器 / LSP ✓（权威）；'
-      + '用法示例是 AI 整理的 ✓（参考）。编译不过时**以 LSP / 编译器报错为准** ✓。</div>';
+    h += '<div class="cg-man-foot">'
+      + (m.concept
+        ? '这一份是 AI 按你问的那句话整理的 ✓（参考）—— 里面用到的 API 名请以编译器 / 编辑器的提示为准 ✓。'
+        : '上面「LSP 签名」来自编译器 / LSP ✓（权威）；用法示例是 AI 整理的 ✓（参考）。'
+          + '编译不过时以 LSP / 编译器报错为准 ✓。')
+      + '</div>';
     h += '</div>';
     return h;
   }
@@ -1443,7 +1539,9 @@
     }
     if (tab === 'find' && CG.ai && CG.ai.hint) h += '<div class="cg-note">💡 ' + esc(CG.ai.hint) + '</div>';
     if (!CG.rows.length && !CG.busy) {
-      h += cgEmptyHtml(tab, !!CG.note);
+      /* ★★ 问了一句话 → 手册挂在**没有结果行**的位置上 ✗（它不属于任何一行 ✓）*/
+      if (CG.manual) h += cgManualHtml();
+      else h += cgEmptyHtml(tab, !!CG.note);
       return h;
     }
     h += CG.rows.map(cgRowHtml).join('');
@@ -1977,19 +2075,29 @@
     cgResize(el);
     Array.from(el.querySelectorAll('[data-cgtab]')).forEach((t) => {
       t.onclick = () => {
-        CG.tab = t.dataset.cgtab;
-        CG.rows = []; CG.note = ''; CG.err = ''; CG.graph = null; CG.ai = null; CG.aiFlow = null;
-        CG.manual = null; CG.q = '';
+        const next = t.dataset.cgtab;
+        /* ⚠️ 同一个页签点了不重来 ✗（点两下不该把结果清掉 ✓）*/
+        if (next === CG.tab) return;
+        /* ★★ 先存当前、再取目标 ✗✗ —— 用户原话：
+           「AI 思考后切换按钮后，东西就丢失了，后面又得重新思考，太慢了」✓。
+           ⚠️ 原来这里是一把全清 ✓ → 切走再切回来就全没了 ✗。 */
+        cgStash();
+        CG.tab = next;
+        cgRestore(next);
         CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
-        const q = $('#cgx-q'); if (q) q.value = '';
+        const q = $('#cgx-q');
         cgRender();
-        if (CG.tab === 'break') cgRunBreak();
-        else if (CG.tab === 'look') {
-          /* ★ 切到「查手册」也**自动带上下文查** ✓（和打开时同一套 ✓，见 cgSeed ✓）*/
+        /* ★ 目标页签**已经有结果** → 直接看 ✓，**绝不重跑 AI** ✗ */
+        if (cgTabHasResult(next)) {
+          if (q && next !== 'break') q.focus();
+          return;
+        }
+        if (next === 'break') cgRunBreak();
+        else if (next === 'look') {
           const seed = cgSeed();
           if (seed) { CG.q = seed; if (q) q.value = seed; cgRun(); }
           else if (q) q.focus();
-        } else { if (q) q.focus(); }
+        } else if (q) q.focus();
       };
     });
     const inp = $('#cgx-q', el);
@@ -2017,6 +2125,7 @@
       if (act === 'goto') { cgGoto(r); return; }
       if (act === 'pick') { cgPick(r); return; }
       if (act === 'manual') { cgManual(r); return; }
+      if (act === 'concept') { cgAskConcept(btn.dataset.cgval || CG.manual && CG.manual.name || ''); return; }
       if (act === 'demo') {
         /* 空态里那些「可点的例子」✓ —— 点了就真的去查 ✓（不是摆设 ✓）*/
         const v = btn.dataset.cgval || '';
@@ -2063,6 +2172,7 @@
   function cgOpen(tab) {
     if (tab) CG.tab = tab;
     CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.ai = null; CG.aiFlow = null; CG.manual = null;
+    CG.saved = {};    /* ★ 新开一次会话 → 三个页签的缓存全丢掉 ✓（上一轮的别串过来 ✓）*/
     CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
     CG.q = '';
     const el = cgBuild();

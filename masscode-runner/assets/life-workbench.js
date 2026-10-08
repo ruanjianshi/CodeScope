@@ -7252,7 +7252,13 @@
     }))) return;
     if (b.ebookId) {
       try {
-        const r = await fetch('/api/life/ebook?id=' + encodeURIComponent(b.ebookId), { method: 'DELETE' });
+        /* ⚠️⚠️ 必须带 `force=1` ✗✗ —— 服务端有一道闸 ✓：
+           **店里还挂着这本书**时默认拒绝删盘 ✓（2026-10-08 加的安全网 ✓，
+           起因是用户书架上 15 本书的正文目录被裸 DELETE 删光了 ✗）。
+           这里走的是「用户明确点了确认框」的路 ✓ → 带 force 放行 ✓。
+           ⚠️ 而且顺序不能反 ✗：**先删文件、再改 STORE** ✓ ——
+              反过来的话书先从列表消失了 ✓，这时删文件再失败**没人知道** ✗。 */
+        const r = await fetch('/api/life/ebook?id=' + encodeURIComponent(b.ebookId) + '&force=1', { method: 'DELETE' });
         const d = await r.json();
         if (!d || !d.ok) rdToast('⚠️ 正文文件没删干净：' + ((d && d.error) || '未知原因'));
       } catch (e) { rdToast('⚠️ 正文文件没删干净：' + String((e && e.message) || e)); }

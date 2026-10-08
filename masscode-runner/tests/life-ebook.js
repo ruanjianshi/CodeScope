@@ -460,6 +460,30 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
       }
     }
 
+    /* ══ ★★★★ 保险闸：**裸 DELETE 删不掉还在书架上的书** ✗✗ ═══════════════
+       2026-10-08 的事故 ✓：用户书架上 **15 本书的正文目录被整个删掉** ✗
+       （19 本 → 4 本 ✓，`life-books/` 里那 15 个目录也没了 ✓）。
+       查了一圈**没锁定到唯一根因** ✗ —— 但有一条是确定的 ✓：
+       那个接口**谁都能调** ✓，而它删的是用户几 MB 的正文 ✓，**删了不可逆** ✗。
+       → 加了一道闸 ✓：**店里还挂着这本书**（有书的 `ebookId` 等于它 ✓）时
+          默认**拒绝** ✓，除非带 `force=1` ✓（前端删书会带 ✓，因为那是
+          「用户点了确认框」的正当动作 ✓）。
+       ⚠️ 这条断言就是守它 ✗ —— 不然哪天被人顺手删掉都没人知道 ✓。 */
+    console.log('\n── 保险闸：裸 DELETE 删不掉还在书架上的书 ──');
+    {
+      const d = await store();
+      const b = (d.books || []).find((x) => x && x.ebookId);
+      if (b) {
+        const r = await (await fetch(BASE + '/api/life/ebook?id=' + b.ebookId, { method: 'DELETE' })).json();
+        ck('★★★ 裸 DELETE 被挡住（返回 guarded + 人话解释，不是默默删掉）',
+          !!r && r.ok === false && r.guarded === true && /书架/.test(String(r.error || '')), JSON.stringify(r));
+        ck('★★★ 而且**目录真的还在**（没被删掉）',
+          fs.existsSync(path.join(os.homedir(), 'Library/Application Support/CodeScope/life-books', b.ebookId)));
+      } else {
+        ck('★★★ 裸 DELETE 被挡住', false, '没有带正文的书可试');
+      }
+    }
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
     ck('★ 全程没有原生弹窗', natives.length === 0, JSON.stringify(natives));
   } catch (e) {
@@ -467,8 +491,12 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
     fails.push('异常:' + e.message);
   } finally {
     try {
-      /* ① 删服务器上的书 ✓（不然磁盘上会堆垃圾 ✓） */
-      for (const id of madeEbookIds) { try { await fetch(BASE + '/api/life/ebook?id=' + id, { method: 'DELETE' }); } catch (_) {} }
+      /* ① 删服务器上的书 ✓（不然磁盘上会堆垃圾 ✓）
+         ⚠️⚠️ 必须带 `force=1` ✗✗ —— 服务端有一道闸 ✓：
+            **店里还挂着这本书**时默认拒绝删盘 ✓（2026-10-08 加的安全网 ✓，
+            起因是用户书架上 15 本书的正文目录被**裸 DELETE** 删光了 ✗）。
+            探针这里删的是**自己刚导入的**书 ✓ → 带 force 是正当的 ✓。 */
+      for (const id of madeEbookIds) { try { await fetch(BASE + '/api/life/ebook?id=' + id + '&force=1', { method: 'DELETE' }); } catch (_) {} }
       /* ② 还原 STORE ✓（只删自己造的 ✓） */
       const d = await store();
       /* ⚠️⚠️ 只按 **id 过滤**（自己造的才删 ✓），**不要再拿 `keep` 整份覆盖数组** ✗✗ ——
