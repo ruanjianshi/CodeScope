@@ -10977,6 +10977,33 @@
   function epSideWordsHtml(a, s) {
     if (!a) return '';
     const list = epWords().filter((w) => w && w.artId === a.id);
+    /* ★★ 按**原文出现顺序**排 ✓ —— 用户原话：「这个右边生词排序，应该按照从原文的顺序排序」✓。
+       ⚠️⚠️ 不能直接用 `epWords()` 的原始顺序 ✗ —— 那是**加入生词本的先后** ✓，
+          和正文顺序毫无关系 ✓：先划第 30 句的词、再划第 2 句的，列表就是反的 ✗。
+       ★ 判据用「在**正文全文**里第一次出现的位置」✓，不用 `sentIdx` ✗ ——
+         `sentIdx` 只记「划词当时在哪句」✓，从生词本 / 别的文章加进来的词是 **-1** ✗，
+         而正文位置**永远算得出来** ✓（正文里找不到的排到最后 ✓）。
+       ⚠️ 必须按**词边界**匹配 ✗ —— 直接 `indexOf('in')` 会命中 `indigenous` 里的 `in` ✓，
+          位置全错 ✓（同一个坑 `epSentHasWord` 那边也踩过 ✓）。
+       ⚠️ 位置**预先算好存进 Map** ✗ —— `sort` 的比较函数会被调用 O(n log n) 次 ✓，
+          每次都跑一遍正则（正文几千字）会明显卡 ✓。 */
+    const epText = String(a.text || '');
+    const epPosCache = new Map();
+    const epPosOf = (w) => {
+      const key = String((w && w.w) || '');
+      if (epPosCache.has(key)) return epPosCache.get(key);
+      let p = Number.MAX_SAFE_INTEGER;   /* 正文里找不到 → 排到最后 ✓ */
+      if (key) {
+        const rx = new RegExp('(^|[^A-Za-z])' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i');
+        const m = rx.exec(epText);
+        if (m) p = m.index + m[1].length;
+      }
+      epPosCache.set(key, p);
+      return p;
+    };
+    /* ⚠️ 位置相同的（理论上不该有 ✓）用字母序兜底 ✗ —— 否则顺序随引擎实现浮动 ✓，
+        探针会偶发红 ✓（本项目在「不稳的顺序」上栽过 ✓）。 */
+    const ordered = list.slice().sort((x, y) => (epPosOf(x) - epPosOf(y)) || String(x.w).localeCompare(String(y.w)));
     const stage = (w) => (SRS ? ({ fresh: '○', learning: '◐', young: '●', mature: '◉' }[SRS.stageOf(w)] || '○') : '○');
     const inSent = (w) => !!(s && new RegExp('(^|[^A-Za-z])' + w.w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(s.text));
     if (!list.length) {
@@ -10987,7 +11014,7 @@
     const here = list.filter(inSent).length;
     return '<div class="lw-rd-hd">本篇的生词 ' + list.length
       + (here ? '（这句里 ' + here + '）' : '') + '</div>'
-      + list.map((w) => '<div class="lw-rd-row' + (EP_UI.peek === w.w ? ' on' : '') + '" data-epsideword="' + esc(w.id) + '" title="'
+      + ordered.map((w) => '<div class="lw-rd-row' + (EP_UI.peek === w.w ? ' on' : '') + '" data-epsideword="' + esc(w.id) + '" title="'
         + (inSent(w) ? '这句里有它 · ' : '') + '点一下看它的词卡">'
         + '<span class="em">' + (inSent(w) ? '●' : stage(w)) + '</span>' + esc(w.w)
         + '<span class="n">' + (w.def ? esc(String(w.def).slice(0, 8)) : '缺释义') + '</span></div>').join('');

@@ -665,6 +665,48 @@ const TEXT = SENT.join(' ');
     ck('★★ 刷新后拆解**还在**（存在文章上，不是内存态）', await p.locator('.lw-ep-an').count() === 1);
     ck('★ 而且**没有再问一次模型**', aiCalls === cAn1, cAn1 + ' → ' + aiCalls);
     ck('★ 刷新后「本篇的生词」也还在', new RegExp(wp, 'i').test(await txt('#lw-ep-sidewords')), (await txt('#lw-ep-sidewords')).slice(0, 60));
+    /* ★★★ 「本篇的生词」必须按**原文出现顺序**排 ✗✗ ——
+       用户原话：「这个右边生词排序，应该按照从原文的顺序排序」✓。
+       ⚠️⚠️ 判据只能写「**列表顺序 == 正文位置升序**」✗ ——
+          写成「两个词都在列表里」是**恒真**的 ✓（按加入顺序排时照样通过 ✓）。
+       ⚠️⚠️ 而且必须**倒着加** ✗（先加正文靠后的、再加靠前的 ✓）——
+          顺着加的话「加入顺序」和「原文顺序」**恰好一致** ✓ →
+          回退到「按加入顺序排」也照样通过 ✓（**假通过** ✗，本项目的老坑 ✓）。 */
+    {
+      const EARLY = 'hadza';       /* 第 2 句 ✓ */
+      const LATE = 'microbiome';   /* 第 14 句 ✓ */
+      await p.locator('#lw-ep-new').fill(LATE);
+      await p.click('#lw-ep-addbtn'); await p.waitForTimeout(3200);
+      await p.locator('#lw-ep-new').fill(EARLY);
+      await p.click('#lw-ep-addbtn'); await p.waitForTimeout(3200);
+      { const stO = await store();
+        (stO.words || []).filter((w) => w && !wordsBefore.has(w.id))
+          .forEach((w) => { if (madeWords.indexOf(w.id) < 0) madeWords.push(w.id); }); }
+      /* ★ 从**行上的 id** 反查词 ✗ —— 行的 `textContent` 是「●词+释义前8字」**粘在一起**的 ✓，
+         按文本切词很脆 ✓（本项目在「拿整块文本去匹配」上栽过好几次 ✓）。 */
+      const orderIds = await p.locator('#lw-ep-sidewords [data-epsideword]')
+        .evaluateAll((els) => els.map((e) => e.getAttribute('data-epsideword')));
+      const stAll = await store();
+      const posInText = (w) => {
+        const rx = new RegExp('(^|[^A-Za-z])' + String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i');
+        const m = rx.exec(TEXT);
+        return m ? m.index + m[1].length : Number.MAX_SAFE_INTEGER;
+      };
+      const seq = orderIds.map((id) => {
+        const w = (stAll.words || []).find((x) => x && x.id === id);
+        return w ? { w: String(w.w), p: posInText(w.w) } : null;
+      }).filter(Boolean);
+      console.log('    本篇生词顺序: ' + JSON.stringify(seq.map((x) => x.w)));
+      const iE = seq.findIndex((x) => x.w.toLowerCase() === EARLY);
+      const iL = seq.findIndex((x) => x.w.toLowerCase() === LATE);
+      ck('★★★ 两个词都在列表里（不然下一条是恒真的）', iE >= 0 && iL >= 0, JSON.stringify(seq.map((x) => x.w)));
+      ck('★★★ 按原文顺序排：靠前的「' + EARLY + '」在靠后的「' + LATE + '」前面',
+        iE >= 0 && iL >= 0 && iE < iL, EARLY + '@' + iE + ' / ' + LATE + '@' + iL);
+      /* ★ 整张表再核一遍 ✗ —— 只验那两个词的话，「其它词乱序」照样过 ✓ */
+      let asc = true;
+      for (let i = 1; i < seq.length; i += 1) if (seq[i].p < seq[i - 1].p) { asc = false; break; }
+      ck('★★ 整张表的正文位置递增（不只是那两个词）', asc, JSON.stringify(seq.map((x) => x.w + ':' + x.p)));
+    }
     /* ★ 换一句要**各管各的** ✓ —— 第 1 句不该显示第 2 句的拆解 ✗ */
     await p.locator('[data-epsent="0"]').click(); await p.waitForTimeout(1000);
     ck('★ 换一句不会串台（拆解是按句存的）', await p.locator('.lw-ep-an').count() === 0);
