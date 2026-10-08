@@ -54,7 +54,8 @@
     "test:en-src": "node tests/en-sources.js",
     "test:ebook": "node tests/ebook.js",
     "test:ebook-real": "node tests/ebook-real.js",
-    "test:roots": "node tests/roots.js"
+    "test:roots": "node tests/roots.js",
+    "test:tour": "node tests/ui-tour.js"
   },
   "engines": {
     "node": ">=18"
