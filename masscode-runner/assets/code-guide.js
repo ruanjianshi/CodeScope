@@ -1381,6 +1381,25 @@
       + (canJump ? '' : '<div class="nj">' + esc((jump && jump.why) || '这条没有可跳的位置') + '（还是可以复制名字 ✓）</div>')
       + '</div>';
   }
+  /* ══ ★★★★ 代码高亮 ✓ —— 复用页面**自己那一套** ✗✗ ═════════════════════
+     用户原话：「代码**缺少渲染和语法高亮**」✓（截图里手册的代码块全是灰白一片 ✓）。
+
+     ⚠️ 页面里早就有了 ✓：`codeHtml(code, lang)` ✓（`index.html` 顶层函数 ✓）
+        —— 编辑器的代码块 / 定义速览 / Markdown 预览**都用它** ✓，
+        而且 `html[data-theme] .hljs-*` 有一层**主题变量覆盖** ✓
+        （`--syntax-keyword` / `--syntax-string` … ✓）→ 深浅色自动跟着走 ✓。
+     ⚠️⚠️ **不要**给 `<pre>` 加 `hljs` 这个类 ✗✗ ——
+        它在 `assets/hljs-theme.css` 里带着**写死的深色底** ✗
+        （`.hljs{color:#abb2bf;background:#282c34}` ✓）→
+        浅色主题下会糊成一块黑 ✗。只取它吐出来的 `<span class="hljs-*">` ✓ 就够了 ✓。
+     ⚠️ `codeHtml` 是**页面里**的函数 ✓（这个文件是经典脚本 ✓ 才拿得到 ✓）——
+        拿不到就退回 `esc()` ✓，**绝不让整块面板崩掉** ✗。 */
+  function cgCode(code, lang) {
+    const t = String(code == null ? '' : code);
+    try { if (typeof codeHtml === 'function') return codeHtml(t, lang || 'plaintext'); } catch (_) {}
+    return esc(t);
+  }
+
   /* ★★★★ 手册正文 ✓ —— 两段**必须分开摆** ✗✗（文件头那条铁律 ✓）：
      · 「LSP 给的签名」= 权威 ✓（参数顺序 / 返回类型都对 ✓）
      · 「AI 写的用法」  = 参考 ✓（能照着抄 ✓，但编译前自己对一眼 ✓）
@@ -1389,6 +1408,7 @@
   function cgManualHtml() {
     const m = CG.manual;
     if (!m) return '';
+    const lang = (cgCtx() && cgCtx().language) || 'plaintext';
     if (m.busy) return '<div class="cg-man"><div class="cg-busy"><span class="cg-spin"></span>'
       + '<span class="t">正在整理「' + esc(m.name) + '」的用法…<i>通常 5~20 秒</i></span></div></div>';
     if (m.err) {
@@ -1406,8 +1426,8 @@
         busy: cgIsBusy('concept'), busyText: '正在整理…' }) : '')
       + '</div>';
     if (d.what) h += '<div class="cg-man-what">' + esc(d.what) + '</div>';
-    if (m.sig) h += '<div class="cg-man-sig"><span class="k">LSP 签名（权威）</span><code>' + esc(m.sig) + '</code></div>';
-    if (d.header) h += '<div class="cg-man-inc"><span class="k">要包含</span><code>' + esc(d.header) + '</code>'
+    if (m.sig) h += '<div class="cg-man-sig"><span class="k">LSP 签名（权威）</span><code>' + cgCode(m.sig, lang) + '</code></div>';
+    if (d.header) h += '<div class="cg-man-inc"><span class="k">要包含</span><code>' + cgCode(d.header, lang) + '</code>'
       + cgBtn({ act: 'use', text: d.header, icon: '⤵', label: '插到光标处' }) + '</div>';
     h += d.sections.map((s) => '<div class="cg-man-sec">'
       + '<div class="cg-man-t"><span>' + esc(s.t) + '</span>'
@@ -1420,7 +1440,7 @@
       + (s.code ? cgBtn({ act: 'copysk2', text: s.code, icon: '⧉', label: '复制' })
         + cgBtn({ act: 'use', text: s.code, icon: '⤵', label: '插入' }) : '')
       + '</div>'
-      + (s.code ? '<div class="cg-man-code"><pre>' + esc(s.code) + '</pre></div>' : '')
+      + (s.code ? '<div class="cg-man-code"><pre>' + cgCode(s.code, lang) + '</pre></div>' : '')
       + '</div>').join('');
     if (d.apis.length) {
       h += '<div class="cg-man-sec"><div class="cg-man-t">常用成员</div><table class="cg-man-api">'
@@ -1508,7 +1528,7 @@
         + '</div>';
       if (g && g.skelErr) h += '<div class="cg-note err">✗ ' + esc(g.skelErr) + '</div>';
       if (g && g.skel) {
-        h += '<pre class="cg-code" id="cgx-skelcode">' + esc(g.skel) + '</pre>'
+        h += '<pre class="cg-code" id="cgx-skelcode">' + cgCode(g.skel, (g.payload && g.payload.language) || (cgCtx() && cgCtx().language) || 'plaintext') + '</pre>'
           + '<div class="cg-acts">'
           + cgBtn({ act: 'use', text: g.skel, icon: '⤵', label: '插到光标处' })
           + cgBtn({ act: 'copysk', icon: '⧉', label: '复制' })
@@ -1533,7 +1553,7 @@
           + '<span class="sp"></span>'
           + cgBtn({ act: 'copysk2', text: pl.example, icon: '⧉', label: '复制' })
           + cgBtn({ act: 'use', text: pl.example, icon: '⤵', label: '插到光标处' })
-          + '</div><div class="cg-man-code"><pre>' + esc(pl.example) + '</pre></div></div>' : '')
+          + '</div><div class="cg-man-code"><pre>' + cgCode(pl.example, (cgCtx() && cgCtx().language) || 'plaintext') + '</pre></div></div>' : '')
         + '<div class="foot">下面那几条是具体可用的函数 / 类型 ✓ —— 带「已核实」的可以直接用 ✓，'
         + '带「未核实」的先确认名字 ✓。</div></div>';
     }

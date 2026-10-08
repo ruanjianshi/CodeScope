@@ -269,6 +269,19 @@ const FAKE_PLAN = {
     const manCodes = await p.locator('.cg-man-code pre').count();
     console.log('    可抄的代码块: ' + manCodes);
     ck('★★★ 每段都配了**可以直接抄的代码**（不是只有文字说明）', manCodes >= 4, String(manCodes));
+    /* ══ ★★★★ 代码块要**有语法高亮** ✗✗ ═══════════════════════════════════
+       用户原话：「代码**缺少渲染和语法高亮**」✓（截图里手册的代码块全是灰白一片 ✗）。
+       ⚠️ 复用的是页面自己那一套 ✓（`codeHtml()` ✓ —— 编辑器 / 定义速览 / Markdown 预览
+          都用它 ✓，而且 `html[data-theme] .hljs-*` 有**主题变量覆盖** ✓ → 深浅色自动跟着走 ✓）。
+       ⚠️⚠️ 但**不能给 `<pre>` 加 `hljs` 那个类** ✗✗ ——
+          它在 `assets/hljs-theme.css` 里带着**写死的深色底** ✗
+          （`.hljs{color:#abb2bf;background:#282c34}` ✓）→
+          浅色主题下会糊成一块黑 ✗。下面两条一起守 ✓。 */
+    const hl = await p.locator('.cg-man-code pre [class^="hljs-"]').count();
+    console.log('    高亮片段: ' + hl);
+    ck('★★★ 代码块**有语法高亮**（不是灰白一片）', hl >= 3, String(hl) + ' 个高亮片段');
+    ck('★★★ 而且**没给 pre 加 `hljs` 类**（那个类带写死的深色底，浅色主题会糊成一块黑）',
+      await p.locator('.cg-man-code pre.hljs, .cg-man-code pre code.hljs, .cg-man-code pre .hljs').count() === 0);
     ck('★★★ 手册里真的出现了**那个符号**（不是一份通用模板）',
       !!manRow && new RegExp(manRow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(man),
       '找 ' + manRow + ' → ' + man.slice(0, 140));
@@ -356,6 +369,9 @@ const FAKE_PLAN = {
     ck('★★ 方案里有**落地步骤**', await p.locator('.cg-plan .st li').count() >= 2, String(await p.locator('.cg-plan .st li').count()));
     ck('★★★ 方案里有**能直接改的示例代码**', await p.locator('.cg-plan .cg-man-code pre').count() === 1,
       String(await p.locator('.cg-plan .cg-man-code pre').count()));
+    ck('★★ 示例代码也**有语法高亮**（和手册同一套）',
+      await p.locator('.cg-plan .cg-man-code pre [class^="hljs-"]').count() >= 3,
+      String(await p.locator('.cg-plan .cg-man-code pre [class^="hljs-"]').count()));
     ck('★★ 示例代码能一键插到光标处（不是只能看）',
       await p.locator('.cg-plan [data-cgact="use"]').count() === 1);
     ck('★★ 方案标了「AI 整理 · 供参考」（不假装权威）', /AI 整理/.test(planTxt), planTxt.slice(0, 120));
