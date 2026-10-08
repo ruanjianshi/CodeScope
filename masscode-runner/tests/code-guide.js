@@ -200,6 +200,102 @@ const FAKE_AI = {
       ck('★ 查出来的条目带「插到光标处」按钮', false, '没找到按钮');
     }
 
+    /* ══ ⑦ ★★ 浮在页面上的**小窗口**（可拖 / 可折 / 记位置）══════════════════
+       用户原话：「给我改成小窗口，可以任意拖动显示到不同位置，是浮于页面之上的那种，
+                  小窗口显示查询，可以随时查询和关闭，也可以拖动放到一边，
+                  参考学习这写代码等等」✓。
+       ⚠️ 和旧版最大的差别：**没有遮罩、点外面不关** ✗ ——
+          旧版是一层半透明全屏遮罩 + 点它关闭 ✓ →
+          用户**没法一边查一边写代码** ✗（点一下编辑器，向导就没了 ✓）。 */
+    console.log('\n── ⑦ ★★ 浮动小窗口：可拖 / 可折 / 记住位置 ──');
+    const win0 = await p.evaluate(() => localStorage.getItem('cg-win'));
+    await p.keyboard.press('Meta+i'); await p.waitForTimeout(800);
+    const f1 = await p.evaluate(() => {
+      const box = document.querySelector('#cgx-box');
+      const mask = document.querySelector('#cgx-mask');
+      if (!box || !mask) return null;
+      const r = box.getBoundingClientRect();
+      const cs = getComputedStyle(box); const ms = getComputedStyle(mask);
+      return { left: Math.round(r.left), top: Math.round(r.top), w: Math.round(r.width),
+        pos: cs.position, maskPe: ms.pointerEvents, maskBg: ms.backgroundColor };
+    });
+    ck('★★ 是**浮在页面上**的（position:fixed，不是居中的模态框）', !!f1 && f1.pos === 'fixed', JSON.stringify(f1));
+    ck('★★ 遮罩**不挡点击、没有背景**（所以能一边查一边写代码）',
+      !!f1 && f1.maskPe === 'none' && f1.maskBg === 'rgba(0, 0, 0, 0)', JSON.stringify(f1 && { pe: f1.maskPe, bg: f1.maskBg }));
+    ck('★ 窗口不大（是个「小窗口」，不是整屏）', !!f1 && f1.w <= 700, String(f1 && f1.w));
+    /* ★ 点页面别处**不该关** —— 这是「能一边查一边写」的关键 ✓ */
+    await p.mouse.click(60, 700); await p.waitForTimeout(500);
+    /* ⚠️⚠️ 判「开着」要看 **`#cgx-mask` 上的 `.on`** ✗✗ ——
+       `.on` 是加在**遮罩**上的 ✓（`el.classList.add('on')`，el = mask ✓），
+       盒子 `#cgx-box` **永远没有** `.on` ✗。
+       我第一版写成 `#cgx-box.on` ✗ → 这条**必挂** ✓（暴露了 ✓），
+       而下面「Esc 能关掉」那条判 `count() === 0` ✗ → **恒真、假通过** ✗✗
+       （「看着通过、其实什么都没验」✓ —— 要不是上面那条挂了，我根本不会发现 ✓）。 */
+    ck('★★ 点页面别处**不会把它关掉**（旧版一点外面就没了）',
+      await p.evaluate(() => { const e = document.getElementById('cgx-mask'); return !!e && e.classList.contains('on'); }));
+    /* ★ 拖顶栏 ✓ */
+    const hb = await p.locator('#cgx-head').boundingBox();
+    await p.mouse.move(hb.x + 120, hb.y + hb.height / 2);
+    await p.mouse.down();
+    await p.mouse.move(hb.x + 120 - 300, hb.y + hb.height / 2 + 200, { steps: 8 });
+    await p.mouse.up(); await p.waitForTimeout(600);
+    const f2 = await p.evaluate(() => {
+      const r = document.querySelector('#cgx-box').getBoundingClientRect();
+      return { left: Math.round(r.left), top: Math.round(r.top), saved: localStorage.getItem('cg-win') };
+    });
+    ck('★★ 拖顶栏真的能挪位置', f2.left < f1.left - 100 && f2.top > f1.top + 80, JSON.stringify(f2));
+    ck('★ 位置**落盘**了（下次按 ⌘I 还在那儿）', /"x":/.test(f2.saved || ''), String(f2.saved));
+    /* ★ 折叠 ✓ */
+    await p.locator('#cgx-min').click(); await p.waitForTimeout(600);
+    const f3 = await p.evaluate(() => {
+      const box = document.querySelector('#cgx-box');
+      const body = document.querySelector('#cgx-body');
+      return { min: box.classList.contains('min'), h: Math.round(box.getBoundingClientRect().height),
+        bodyHidden: !body || getComputedStyle(body).display === 'none' };
+    });
+    ck('★★ 「—」能折成一条（放到边上不挡代码）', f3.min && f3.bodyHidden && f3.h < 80, JSON.stringify(f3));
+    /* ★ 关掉再开：位置 + 折叠都记住 ✓ */
+    await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+    ck('★ Esc 能关掉', await p.evaluate(() => { const e = document.getElementById('cgx-mask'); return !e || !e.classList.contains('on'); }));
+    await p.keyboard.press('Meta+i'); await p.waitForTimeout(800);
+    const f4 = await p.evaluate(() => {
+      const box = document.querySelector('#cgx-box');
+      const r = box.getBoundingClientRect();
+      return { left: Math.round(r.left), top: Math.round(r.top), min: box.classList.contains('min') };
+    });
+    ck('★★ 再打开：**位置和折叠状态都记住了**', f4.left === f2.left && f4.top === f2.top && f4.min === true, JSON.stringify(f4));
+    await p.locator('#cgx-min').click(); await p.waitForTimeout(500);
+    /* ★★ 存一个「屏幕外」的坐标 → 必须夹回来 ✗（不然窗口跑到视口外 = 用户找不到它）*/
+    await p.evaluate(() => localStorage.setItem('cg-win', JSON.stringify({ x: 99999, y: 99999 })));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    await p.keyboard.press('Meta+i'); await p.waitForTimeout(800);
+    const f5 = await p.evaluate(() => {
+      const r = document.querySelector('#cgx-box').getBoundingClientRect();
+      return { left: Math.round(r.left), top: Math.round(r.top), vw: innerWidth, vh: innerHeight };
+    });
+    ck('★★★ 存成「屏幕外」的坐标也会**夹回视口内**（不然按了 ⌘I 像什么都没发生）',
+      f5.left >= 0 && f5.top >= 0 && f5.left < f5.vw && f5.top < f5.vh, JSON.stringify(f5));
+    /* ★ 右下角改大小 ✓ —— ⚠️ 先把窗口摆到左上角 ✗：
+       贴着右边缘时它已经到视口上限了 ✓，「改不动」是**对的** ✓。 */
+    await p.evaluate(() => localStorage.setItem('cg-win', JSON.stringify({ x: 70, y: 80 })));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    await p.keyboard.press('Meta+i'); await p.waitForTimeout(800);
+    const rsb = await p.locator('#cgx-rs').boundingBox();
+    await p.mouse.move(rsb.x + 6, rsb.y + 6); await p.mouse.down();
+    await p.mouse.move(rsb.x + 6 + 170, rsb.y + 6 + 150, { steps: 8 }); await p.mouse.up();
+    await p.waitForTimeout(600);
+    const f6 = await p.evaluate(() => {
+      const r = document.querySelector('#cgx-box').getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), saved: localStorage.getItem('cg-win') };
+    });
+    ck('★★ 右下角能拖大（和「能挪位置」是一对）', f6.w > 560 && f6.h > 320, JSON.stringify(f6));
+    ck('★ 大小也落盘了', /"w":/.test(f6.saved || ''), String(f6.saved));
+    /* 收尾：把这次改的界面偏好还原 ✓（不动用户自己的位置）*/
+    await p.evaluate((v) => {
+      try { if (v === null) localStorage.removeItem('cg-win'); else localStorage.setItem('cg-win', v); } catch (_) {}
+    }, win0);
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
     ck('★★ 全程没有原生弹窗（这个项目明令禁止）', natives.length === 0, JSON.stringify(natives));
   } catch (e) {

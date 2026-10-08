@@ -63,6 +63,9 @@
     symFor: '',           /* 缓存是给哪个文件算的 ✓ */
     list: null,           /* LSP 补全缓存 ✓ */
     listFor: '',
+    /* ★ 折起来了没 ✓（用户原话：「也可以拖动放到一边」✓）——
+       折起来只剩顶栏一条 ✓，不挡代码 ✓；状态**落盘** ✓（见 cgWinSave ✓）。 */
+    min: false,
   };
 
   /* ── 小工具 ✓ ─────────────────────────────────────────────────────────── */
@@ -649,20 +652,52 @@
      ⚠️ 颜色**全部用页面的 CSS 变量** ✓（`--bg/--panel/--border/--text/--dim/--accent/…` ✓）
         —— 这样深色 / 浅色主题切换**自动跟着变** ✓，不用维护两套 ✓。 */
   const CG_CSS = [
-    '.cg-mask{position:fixed;inset:0;z-index:9990;display:none;align-items:flex-start;justify-content:center;',
-    'background:rgba(0,0,0,.45);backdrop-filter:blur(2px);padding:9vh 16px 16px}',
-    '.cg-mask.on{display:flex}',
-    '.cg-box{width:min(760px,100%);max-height:82vh;display:flex;flex-direction:column;',
-    'background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;',
-    'box-shadow:0 18px 60px rgba(0,0,0,.5);font-family:var(--ui);color:var(--text)}',
-    '.cg-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border);flex:none}',
+    /* ★★★★ 从「居中模态框」改成**浮在页面上的小窗口** ✗✗ —— 用户原话：
+       「给我改成小窗口，可以任意拖动显示到不同位置，是浮于页面之上的那种，
+        小窗口显示查询，可以随时查询和关闭，也可以拖动放到一边，参考学习这写代码等等」✓。
+
+       ⚠️⚠️ 最关键的差别：**没有遮罩** ✗ ——
+          原来 `.cg-mask` 是一层半透明全屏遮罩 ✓ 而且**点它就关闭** ✓ →
+          用户**没法一边查一边写代码** ✗（点一下编辑器，向导就没了 ✓）。
+       → 现在：外层只用来兜住定位 ✓，`pointer-events:none` ✓（底下的页面**完全可点** ✓），
+         只有窗口本身 `pointer-events:auto` ✓。
+       ⚠️ 也**不再「点外面关闭」** ✗ —— 它是常驻小工具 ✓，要关就点 ✕ / 按 Esc ✓
+          （顺手还解决了「想复制一段但一点外面就没了」✓）。 */
+    '.cg-mask{position:fixed;inset:0;z-index:9990;display:none;pointer-events:none}',
+    '.cg-mask.on{display:block}',
+    '.cg-box{position:fixed;pointer-events:auto;width:520px;min-width:330px;max-width:96vw;',
+    'max-height:74vh;display:flex;flex-direction:column;',
+    'background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;',
+    'box-shadow:0 22px 70px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.35);font-family:var(--ui);color:var(--text)}',
+    /* 顶栏 = **拖动把手** ✓ —— `cursor:move` 让「这个能拖」一眼看得出来 ✓
+       （不能拖的地方写着 cursor:move 是骗人 ✗；能拖的地方不写就是藏着 ✓）。 */
+    '.cg-head{display:flex;align-items:center;gap:8px;padding:10px 12px;flex:none;cursor:move;',
+    'border-bottom:1px solid var(--border);user-select:none;',
+    'background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent)}',
+    '.cg-head.dragging{cursor:grabbing}',
+    /* 折叠成一条「药丸」✓ —— 用户原话：「也可以拖动放到一边」✓。
+       折起来之后只剩顶栏 ✓，可以贴着屏幕边放 ✓，不挡代码 ✓。 */
+    '.cg-box.min{max-height:none}',
+    '.cg-box.min .cg-tabs,.cg-box.min .cg-search,.cg-box.min .cg-tip,',
+    '.cg-box.min .cg-body,.cg-box.min .cg-foot,.cg-box.min .cg-rs{display:none}',
+    '.cg-box.min .cg-head{border-bottom:0}',
+    /* 右下角缩放把手 ✓（和「能拖」是一对：能挪位置，也能改大小 ✓）*/
+    '.cg-rs{position:absolute;right:0;bottom:0;width:15px;height:15px;cursor:nwse-resize;z-index:2}',
+    '.cg-rs::after{content:"";position:absolute;right:3px;bottom:3px;width:6px;height:6px;opacity:.45;',
+    'border-right:2px solid var(--dim);border-bottom:2px solid var(--dim)}',
+    '.cg-rs:hover::after{opacity:.9;border-color:var(--accent)}',
     '.cg-head .ic{font-size:15px}',
-    '.cg-head b{font-size:13px;letter-spacing:.5px}',
-    '.cg-head .ctx{font-size:11px;color:var(--dim);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46%}',
-    '.cg-head .sp{flex:1}',
-    '.cg-head .kbd{font-size:10px;color:var(--dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px}',
-    '.cg-head .x{cursor:pointer;color:var(--dim);padding:0 4px}',
-    '.cg-head .x:hover{color:var(--err)}',
+    '.cg-head b{font-size:13px;letter-spacing:.4px;white-space:nowrap}',
+    '.cg-head .ctx{font-size:11px;color:var(--dim);font-family:var(--mono);overflow:hidden;',
+    'text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}',
+    '.cg-head .sp{flex:1;min-width:0}',
+    '.cg-head .kbd{font-size:10px;color:var(--dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px;flex:none}',
+    /* ⚠️ 顶栏上那两个按钮**不能继承 cursor:move** ✗ ——
+       不然鼠标移上去还写着「可拖动」✓，点的时候心里没底 ✓。 */
+    '.cg-head .hb{flex:none;width:24px;height:22px;display:flex;align-items:center;justify-content:center;',
+    'border:1px solid transparent;border-radius:6px;color:var(--dim);cursor:pointer;font-size:12px;line-height:1}',
+    '.cg-head .hb:hover{border-color:var(--border);color:var(--text);background:var(--bg)}',
+    '.cg-head .hb.x:hover{color:var(--err);border-color:var(--err)}',
     '.cg-tabs{display:flex;gap:6px;padding:9px 14px 0;flex:none}',
     '.cg-tab{font-size:12px;padding:5px 11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--dim)}',
     '.cg-tab:hover{color:var(--text)}',
@@ -733,6 +768,129 @@
     document.head.appendChild(st);
   }
 
+  /* ══ ⑫ 窗口的位置 / 大小 / 折叠 ✓ ────────────────────────────────────────
+     ⚠️ 为什么要**落盘** ✗：用户把它拖到屏幕右边放着 ✓，
+        下次按 ⌘I 又弹回中间 ✗ —— 等于白拖 ✓（用户原话：
+        「可以任意拖动显示到不同位置…也可以拖动放到一边」✓，就是要它**记住** ✓）。
+     ⚠️ 存哪儿 ✗：`localStorage` ✓ —— 这是**纯界面偏好** ✓，
+        和服务端那份 store 无关 ✓（也就不会被别的页面整份覆盖 ✓，
+        见 skill 里「整份覆盖会丢字段」那条 ✓）。
+     ⚠️⚠️ 恢复时**必须按视口夹一下** ✗✗ —— 和 `bindPaneGrips` / `bindRowGrip`
+        那两个坑一模一样 ✓：上次存在第二块屏幕上的坐标 ✓，这次只有一块屏 ✓ →
+        窗口跑到屏幕外 ✓ → 用户看到的是「按了 ⌘I，什么都没出现」✗
+        （最糟的是他**不知道该往哪儿找** ✓）。 */
+  const CG_POS_KEY = 'cg-win';
+  function cgWin() {
+    try { return JSON.parse(localStorage.getItem(CG_POS_KEY) || '{}') || {}; } catch (_) { return {}; }
+  }
+  function cgWinSave(patch) {
+    try { localStorage.setItem(CG_POS_KEY, JSON.stringify(Object.assign(cgWin(), patch || {}))); } catch (_) {}
+  }
+  /* 摆到「记住的位置」✓；没记过就**靠右上角** ✓ ——
+     ⚠️ 不放正中间 ✗：正中间正好压着代码 ✓，而这个窗口是**边看边用**的 ✓
+        （用户原话「参考学习这写代码」✓）。 */
+  function cgPlace() {
+    const box = $('#cgx-box');
+    if (!box) return;
+    const w = cgWin();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const bw = box.offsetWidth || 520;
+    const bh = box.offsetHeight || 320;
+    let x = Number.isFinite(Number(w.x)) ? Number(w.x) : (vw - bw - 24);
+    let y = Number.isFinite(Number(w.y)) ? Number(w.y) : 72;
+    /* ⚠️ 用**当前**宽高夹 ✗（折叠之后高度会变 ✓）——
+       夹的时候按「整个窗口都要看得见」算 ✓。 */
+    x = Math.max(8, Math.min(x, Math.max(8, vw - Math.min(bw, vw - 16) - 8)));
+    y = Math.max(8, Math.min(y, Math.max(8, vh - Math.min(bh, vh - 16) - 8)));
+    box.style.left = Math.round(x) + 'px';
+    box.style.top = Math.round(y) + 'px';
+    if (Number(w.w) >= 330) box.style.width = Math.round(Math.min(Number(w.w), vw - 16)) + 'px';
+    /* ⚠️ 自己拖过高度之后，要把 CSS 里那条 max-height 让开 ✗ ——
+       不让开的话「拖到 800 高」会被 `max-height:74vh` 悄悄截回 74% ✓，
+       用户看到的是「拖了但没变高」✗（这个项目在「写死的尺寸上限」上栽过好几次 ✓）。 */
+    if (Number(w.h) >= 160) {
+      const h = Math.round(Math.min(Number(w.h), vh - 16));
+      box.style.height = h + 'px';
+      box.style.maxHeight = h + 'px';
+    }
+  }
+  /* ★ 拖动 ✓ —— 把手是**顶栏** ✓（`cursor:move` ✓）。
+     ⚠️ 顶栏上那两个按钮**不能当把手** ✗ —— 不然点「—」/「✕」会变成拖一下 ✓
+        （点不动、还顺手把窗口挪走 ✓）。
+     ⚠️ 拖动范围要**留边** ✗ —— 完全推出屏幕就抓不回来了 ✓
+        （拖出屏幕外 = 用户再也点不到它 ✗）。 */
+  function cgDrag(el) {
+    const box = $('#cgx-box', el);
+    const head = $('#cgx-head', el);
+    if (!box || !head) return;
+    head.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0) return;
+      if (ev.target && ev.target.closest && ev.target.closest('.hb')) return;
+      ev.preventDefault();
+      head.classList.add('dragging');
+      const sx = ev.clientX, sy = ev.clientY;
+      const r = box.getBoundingClientRect();
+      const ox = r.left, oy = r.top;
+      const move = (e2) => {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const bw = box.offsetWidth;
+        const x = Math.max(8 - bw + 56, Math.min(ox + (e2.clientX - sx), vw - 56));
+        const y = Math.max(8, Math.min(oy + (e2.clientY - sy), vh - 34));
+        box.style.left = Math.round(x) + 'px';
+        box.style.top = Math.round(y) + 'px';
+      };
+      const up = () => {
+        head.classList.remove('dragging');
+        document.removeEventListener('mousemove', move, true);
+        document.removeEventListener('mouseup', up, true);
+        const r2 = box.getBoundingClientRect();
+        cgWinSave({ x: Math.round(r2.left), y: Math.round(r2.top) });
+      };
+      document.addEventListener('mousemove', move, true);
+      document.addEventListener('mouseup', up, true);
+    });
+  }
+  /* ★ 右下角改大小 ✓ —— 和「能拖」是一对 ✓（能挪位置，也能改大小 ✓）*/
+  function cgResize(el) {
+    const box = $('#cgx-box', el);
+    const rs = $('#cgx-rs', el);
+    if (!box || !rs) return;
+    rs.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault(); ev.stopPropagation();
+      const sx = ev.clientX, sy = ev.clientY;
+      const r = box.getBoundingClientRect();
+      const move = (e2) => {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const w = Math.max(330, Math.min(r.width + (e2.clientX - sx), vw - r.left - 8));
+        const h = Math.max(160, Math.min(r.height + (e2.clientY - sy), vh - r.top - 8));
+        box.style.width = Math.round(w) + 'px';
+        box.style.height = Math.round(h) + 'px';
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move, true);
+        document.removeEventListener('mouseup', up, true);
+        const r2 = box.getBoundingClientRect();
+        cgWinSave({ w: Math.round(r2.width), h: Math.round(r2.height) });
+      };
+      document.addEventListener('mousemove', move, true);
+      document.addEventListener('mouseup', up, true);
+    });
+  }
+  /* ★ 折叠 ✓（用户原话：「也可以拖动放到一边」✓）——
+     折起来只剩顶栏那一条 ✓，贴着边放不挡代码 ✓。
+     ⚠️ 折起来之后**位置要重夹** ✗ —— 高度一下子变小 ✓，
+        原来贴底的坐标会显得很怪 ✓（甚至跑到视口外 ✓）。 */
+  function cgMin(on) {
+    const box = $('#cgx-box');
+    if (!box) return;
+    CG.min = !!on;
+    box.classList.toggle('min', CG.min);
+    const b = $('#cgx-min'); if (b) b.textContent = CG.min ? '▢' : '—';
+    cgWinSave({ min: CG.min });
+    cgPlace();
+  }
+
   /* ══ ⑫ 浮层 ✓ ══════════════════════════════════════════════════════════ */
   let CG_EL = null;
   function cgBuild() {
@@ -742,10 +900,14 @@
     el.className = 'cg-mask';
     el.id = 'cgx-mask';
     el.innerHTML = '<div class="cg-box" id="cgx-box" role="dialog" aria-label="代码向导">'
-      + '<div class="cg-head"><span class="ic">🧭</span><b>代码向导</b>'
+      + '<div class="cg-head" id="cgx-head" title="按住这里拖动窗口">'
+      + '<span class="ic">🧭</span><b>代码向导</b>'
       + '<span class="ctx" id="cgx-ctx">' + (ctx ? esc((ctx.filename || ctx.file.split('/').pop()) + ' · ' + ctx.language + ' · 光标 ' + ctx.line + ':' + ctx.column) : '没有打开文件') + '</span>'
-      + '<span class="sp"></span><span class="kbd">⌘I</span>'
-      + '<span class="x" id="cgx-close" title="关闭（Esc）">✕</span></div>'
+      + '<span class="kbd">⌘I</span>'
+      /* 折叠成一条药丸 ✓（用户原话：「也可以拖动放到一边」✓）——
+         ⚠️ 折叠状态**也要落盘** ✗，不然每次打开都弹开 ✓，挡着代码 ✓。 */
+      + '<span class="hb" id="cgx-min" title="折起来 / 展开（折起来只剩这一条，可以拖到边上）">—</span>'
+      + '<span class="hb x" id="cgx-close" title="关闭（Esc）">✕</span></div>'
       + '<div class="cg-tabs" id="cgx-tabs">'
       + TABS.map((t) => '<span class="cg-tab' + (t.k === CG.tab ? ' on' : '') + '" data-cgtab="' + t.k + '">' + t.e + ' ' + t.n + '</span>').join('')
       + '</div>'
@@ -755,10 +917,16 @@
       + '<div class="cg-body" id="cgx-body"></div>'
       + '<div class="cg-foot"><span>Esc 关掉</span><span class="sp"></span>'
       + '<span class="src-legend"><i class="ok"></i>LSP / 本地 = 已核实<i class="ai"></i>AI = 未核实</span></div>'
+      + '<div class="cg-rs" id="cgx-rs" title="拖动改大小"></div>'
       + '</div>';
     document.body.appendChild(el);
-    el.addEventListener('mousedown', (ev) => { if (ev.target === el) cgClose(); });
+    /* ⚠️⚠️ **没有「点外面关闭」** ✗✗ —— 它是常驻小工具 ✓，
+       点编辑器 / 看代码都不该把它关掉 ✓（用户原话：「可以随时查询和关闭」✓，
+       关是**显式**动作：✕ / Esc ✓）。 */
     $('#cgx-close', el).onclick = cgClose;
+    $('#cgx-min', el).onclick = () => cgMin(!CG.min);
+    cgDrag(el);
+    cgResize(el);
     Array.from(el.querySelectorAll('[data-cgtab]')).forEach((t) => {
       t.onclick = () => {
         CG.tab = t.dataset.cgtab;
@@ -820,7 +988,12 @@
     const el = cgBuild();
     el.classList.add('on');
     CG.open = true;
+    /* ★ 恢复「上次摆哪儿 / 多大 / 折没折」✓（用户原话：「可以拖动放到一边」✓）——
+       ⚠️ 顺序不能反 ✗：先定折叠 ✓ 再摆位置 ✓ ——
+          折叠会改高度 ✓，先摆位置的话夹取用的是旧高度 ✓（会摆偏 ✓）。 */
+    cgMin(!!cgWin().min);
     cgRender();
+    cgPlace();
     /* ⚠️ 「拆逻辑」一打开就**直接跑** ✓（它不需要输入 ✓，省一次点击 ✓）；
        「查」把光标底下的词预填上 ✓（用户八成就是想知道它 ✓）。 */
     if (CG.tab === 'break') cgRunBreak();
@@ -866,7 +1039,11 @@
     /* 全局 Esc 兜底 ✓（浮层自己也会收 ✓）*/
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && CG.open) cgClose(); });
     window.addEventListener('blur', () => { if (CG.open) cgClose(); });
-    window.__CODE_GUIDE = { open: cgOpen, close: cgClose, toggle: cgToggle, state: CG };
+    /* ★ 窗口变小之后**重新夹一次位置** ✓ —— 不然拖到右下角的窗口会被挤到屏幕外 ✓
+       （和 `bindPaneGrips` 恢复时夹取是同一个道理 ✓，见 skill 那条 ✓）。
+       ⚠️ 用 `resize` 而不是定时轮询 ✗ —— 事件驱动够了 ✓，也不烧 CPU ✓。 */
+    window.addEventListener('resize', () => { if (CG.open) cgPlace(); });
+    window.__CODE_GUIDE = { open: cgOpen, close: cgClose, toggle: cgToggle, state: CG, place: cgPlace, min: cgMin };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cgMount);
   else cgMount();
