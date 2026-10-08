@@ -54,15 +54,35 @@
     tab: 'look',          /* look = 查 / find = 找 / break = 拆 ✓ */
     q: '',                /* 输入框内容 ✓ */
     busy: false,
+    /* ★★ 正在跑的是**哪个**动作 ✗✗ —— 用户原话：
+       「这些按键设计的也不合理，按下思考，都没有加载提醒…高亮和按下都分不清」✓。
+       ⚠️ 原来只有一个笼统的 `busy` ✓ → 一忙起来**所有**按钮都长一样 ✗，
+          用户根本不知道点的是哪个 ✓、也不知道点没点上 ✓。
+       → 记具体动作 ✓（'run' / 'graph' / 'flow' / 'skel' / 'explain' / 'jump' ✓），
+         只有**那一个**按钮进忙碌态 ✓，其余照常可点 ✓。 */
+    busyAct: '',
+    busyTxt: '',          /* 忙碌横幅上那句话 ✓ */
     err: '',
     rows: [],             /* 结果条目 ✓（每条带 source ✓）*/
     ai: null,             /* AI 那一路的状态：{ busy, err, names, hint } ✓ */
     graph: null,          /* 拆逻辑：{ payload, root, err } ✓ */
+    /* ★★★★ AI 拆解（思维导图 / 实现流程）✓ —— 用户原话：
+       「第二个这里拆逻辑这里，我需要的是让AI给我拆解分析实现逻辑和功能的流程图，
+         思维导图那种，不是代码」✓。
+       ⚠️ 和 `graph`（代码级控制流图 ✓）**是两份东西** ✗：
+          graph  = 确定性来源 ✓（服务端解析出来的 if/return 语句 ✓），精确 ✓，但**是代码** ✗；
+          aiFlow = 模型把这段逻辑**讲成人话** ✓，不精确 ✓，但**看得懂** ✓。
+          两份都留着 ✓，用视图切换 ✓ —— 别用一个去替另一个 ✗。 */
+    aiFlow: null,         /* { busy, err, data } ✓ */
+    root: null,           /* 当前正在拆的那个函数 ✓（{name,line,frag} ✓）*/
+    view: 'mind',         /* 拆逻辑下的视图：'mind'（思维导图）/ 'flow'（实现流程）/ 'code'（代码级）✓ */
     note: '',             /* 一句提示（比如「这段不是函数体，画不了图」）✓ */
     sym: null,            /* 当前文档的符号索引缓存 ✓ */
     symFor: '',           /* 缓存是给哪个文件算的 ✓ */
     list: null,           /* LSP 补全缓存 ✓ */
     listFor: '',
+    allFns: null,         /* 全库函数索引 ✓（跨文件跳转用 ✓）*/
+    allFnsAt: 0,
     /* ★ 折起来了没 ✓（用户原话：「也可以拖动放到一边」✓）——
        折起来只剩顶栏一条 ✓，不挡代码 ✓；状态**落盘** ✓（见 cgWinSave ✓）。 */
     min: false,
@@ -91,6 +111,47 @@
     el.classList.add('on');
     clearTimeout(el._t);
     el._t = setTimeout(() => el.classList.remove('on'), 3200);
+  }
+
+  /* ══ ★★★★ 按钮 + 忙碌态 ✓ —— 用户原话：
+     「这些按键设计的也不合理，按下思考，都没有加载提醒，等等，高亮和按下都分不清等等」✓。
+
+     ⚠️⚠️ 两条硬规矩 ✗✗（这个文件里所有按钮都必须走这两个函数 ✓，不许手写 `<button>` ✗）：
+       ① **点了立刻有反应** ✓：按下 → 进 busy 态（转圈 + 文案换成「正在…」）→ 完成才恢复 ✓。
+          ⚠️ 不许「点了没反应、等几秒突然出结果」✗ —— 用户会以为没点上 ✓，
+             然后再点一次 ✓（就变成两个并发请求 ✓）。
+       ② **忙碌时那个按钮 disabled** ✓：防重复点 ✓，也顺手把「正在跑」表达清楚了 ✓。
+
+     ⚠️ 为什么用 `data-cgact` 而不是给每个按钮绑 onclick ✗：
+        结果区每次重绘 ✓（`innerHTML` 整个换掉 ✓），绑在元素上的监听会**一起消失** ✗ →
+        只能事件委托 ✓（`#cgx-body` 上那一个 ✓）。 */
+  function cgBtn(o) {
+    const act = o.act ? ' data-cgact="' + esc(o.act) + '"' : '';
+    const id = o.id ? ' id="' + esc(o.id) + '"' : '';
+    const text = o.text ? ' data-cgtext="' + esc(o.text) + '"' : '';
+    const val = o.val ? ' data-cgval="' + esc(o.val) + '"' : '';
+    const busy = !!o.busy;
+    const dis = busy || o.disabled;
+    const cls = ['cg-btn', o.pri ? 'pri' : '', o.on ? 'on' : '', busy ? 'busy' : ''].filter(Boolean).join(' ');
+    const label = busy ? (o.busyText || '正在…') : o.label;
+    return '<button class="' + cls + '"' + id + act + text + val
+      + (dis ? ' disabled' : '')
+      + (o.title ? ' title="' + esc(o.title) + '"' : '')
+      + '>' + (busy ? '<span class="cg-spin"></span>' : (o.icon ? '<span>' + o.icon + '</span>' : ''))
+      + '<span>' + esc(label) + '</span></button>';
+  }
+  /* 当前是不是这个动作在跑 ✓ */
+  const cgIsBusy = (act) => CG.busyAct === act;
+  /* 进 / 出忙碌态 ✓ —— 每次都**重绘** ✓（不重绘的话按钮还停在旧样子 ✗）*/
+  function cgBegin(act, txt) { CG.busyAct = act; CG.busyTxt = txt || ''; CG.busy = true; cgRender(); }
+  function cgEnd() { CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false; cgRender(); }
+  /* 忙碌横幅 ✓ —— 「按下去了、正在想」必须**全局可见** ✗，
+     不能只体现在那个小按钮上 ✓（按钮可能已经滚出视野 ✓）。 */
+  function cgBusyBar() {
+    if (!CG.busyAct) return '';
+    const txt = CG.busyTxt || '正在处理…';
+    return '<div class="cg-busy"><span class="cg-spin"></span><span class="t">' + esc(txt)
+      + '<i>AI 那几项通常要 5~20 秒；本地那几项是一瞬间 ✓</i></span></div>';
   }
 
   /* ══ ① 上下文 ✓ —— 「用户现在在哪、在写什么」════════════════════════════
@@ -134,37 +195,99 @@
   }
   const LSP_LANGS = ['c', 'c_cpp', 'python', 'javascript', 'typescript', 'go'];
 
-  /* ══ ② 当前文档的符号索引 ✓（走已有的代码图谱接口 ✓，不另造一套 ✗）════ */
+  /* ══ ② 当前文档的符号索引 ✓（走已有的代码图谱接口 ✓，不另造一套 ✗）════
+     ★★★★ 这里从 `scope=document` 换成了 `file=` ✗✗ —— 用户原话：
+       「有些怎么缺少跳转等等」✓。
+     ⚠️⚠️ 根因 ✗：`/api/graph?scope=document` 返回的节点**只有 file 和 fn 两种** ✗
+        （实测：`{"file":30,"fn":95}` ✓）→
+        `led` / `led_t` / `led_ops` 这些**类型**、`LED_H` 这些**宏**、文件级**变量** ✓
+        **一个都不在索引里** ✗ → 搜到了也没有行号 ✗ → 卡片上**根本没有「跳过去」按钮** ✗
+        （用户截图里那一列 `led_xxx` 就是这个现象 ✓）。
+     ⚠️ 而 `/api/graph?file=<文件>` 走的是**另一条路** ✓，返回完整的 `symbols` ✓
+        （实测：`{"type":4,"fn":19,"macro":7,"var":4}` ✓，每条带 `line` + `frag` ✓）。
+        → 换过来 ✓，顺手把「跳到源码」这条打通 ✓。 */
   async function cgSymbols(force) {
     const ctx = cgCtx();
     if (!ctx) return [];
     if (!force && CG.sym && CG.symFor === ctx.file) return CG.sym;
     try {
-      const r = await fetch('/api/graph?scope=document&file=' + encodeURIComponent(ctx.file));
+      const r = await fetch('/api/graph?file=' + encodeURIComponent(ctx.file));
       const d = await r.json();
-      /* ⚠️ 接口的形状要**容错** ✗ —— 文档级图谱返回的是若干组节点 ✓，
-         不同版本字段名可能不一样 ✓；这里把「看起来像符号」的都收进来 ✓，
-         收错了顶多多几条候选 ✓，收漏了才是真丢东西 ✓。 */
       const out = [];
       const seen = new Set();
       const push = (o) => {
         const name = String((o && (o.name || o.label || o.text)) || '').trim();
         if (!name || name.length > 120 || seen.has(name)) return;
         seen.add(name);
-        out.push({ name, kind: String((o && (o.kind || o.type)) || ''), line: Number((o && (o.line || o.startLine)) || 0) || 0 });
+        out.push({
+          name,
+          kind: String((o && (o.kind || o.type)) || ''),
+          line: Number((o && (o.line || o.startLine)) || 0) || 0,
+          frag: Number.isFinite(Number(o && o.frag)) ? Number(o.frag) : -1,
+        });
       };
-      const walk = (v, depth) => {
-        if (!v || depth > 4) return;
-        if (Array.isArray(v)) { v.forEach((x) => walk(x, depth + 1)); return; }
-        if (typeof v !== 'object') return;
-        if (v.name || v.label) push(v);
-        ['nodes', 'functions', 'symbols', 'items', 'children', 'groups', 'subgraphs'].forEach((k) => walk(v[k], depth + 1));
-      };
-      walk(d, 0);
+      /* 新接口的形状 ✓（symbols 数组 ✓） */
+      if (d && Array.isArray(d.symbols)) d.symbols.forEach(push);
+      /* ⚠️ 兜底：万一服务端版本不一样 ✓（没有 symbols ✓）→ 还是按老办法在树里刨 ✓，
+         刨到的照样能用 ✓（只是少了类型 ✓）。接口换形状不该让整个工具哑掉 ✗。 */
+      if (!out.length) {
+        const walk = (v, depth) => {
+          if (!v || depth > 4) return;
+          if (Array.isArray(v)) { v.forEach((x) => walk(x, depth + 1)); return; }
+          if (typeof v !== 'object') return;
+          if (v.name || v.label) push(v);
+          ['nodes', 'functions', 'symbols', 'items', 'children', 'groups', 'subgraphs'].forEach((k) => walk(v[k], depth + 1));
+        };
+        walk(d, 0);
+      }
       CG.sym = out;
       CG.symFor = ctx.file;
       return out;
     } catch (_) { return []; }
+  }
+
+  /* ══ ②b 全库**函数**索引 ✓（跨文件跳转用 ✓）════════════════════════════
+     ⚠️ 为什么单列一个 ✗：LSP 补全项**不带位置** ✗（`line: 0` ✓）——
+        它们是「在这个光标位置可以敲哪些名字」✓，不是「这个名字定义在哪」✗。
+        用户截图里 `led_open(led_t *led_handler)` 就在别的文件里 ✓，
+        当前文件的索引当然找不到 ✓ → 得去**全库**捞 ✓。
+     ⚠️ 全库那份**只有函数**（`scope=document` 的老限制 ✓）——
+        类型 / 宏 / 变量跨文件跳不了 ✓。这不是偷懒 ✗：
+        真要跨文件找类型，得改服务端的图谱构建 ✓（那是另一件事 ✓）。
+        → 所以**找不到的时候要说清原因** ✓，不能干晾着用户 ✗（见 cgJumpInfo ✓）。 */
+  async function cgAllFns() {
+    const now = Date.now();
+    if (CG.allFns && (now - CG.allFnsAt) < 60000) return CG.allFns;
+    try {
+      const r = await fetch('/api/graph?scope=document');
+      const d = await r.json();
+      const out = [];
+      const seen = new Set();
+      (d && Array.isArray(d.nodes) ? d.nodes : []).forEach((n) => {
+        if (!n || n.kind !== 'fn') return;
+        const name = String(n.label || n.name || '').trim();
+        if (!name || seen.has(name)) return;
+        seen.add(name);
+        out.push({ name, file: String(n.file || ''), frag: Number(n.frag) || 0, line: Number(n.line) || 0 });
+      });
+      CG.allFns = out; CG.allFnsAt = now;
+      return out;
+    } catch (_) { return CG.allFns || []; }
+  }
+
+  /* ══ ②c 「这条能不能跳、跳到哪」✓ —— 每条结果都要有个说法 ✗✗ ═══════════
+     ⚠️ 用户原话：「有些怎么缺少跳转等等」✓ ——
+        他要的不只是「多几个按钮」✓，而是**别让他猜** ✓：
+        能跳的给出按钮 ✓；不能跳的**写清为什么** ✓
+        （「标准库 / 头文件里的，本地没有源码」✓ 比「什么都没有」好一百倍 ✓）。
+     返回 { file, frag, line } 或 { why } ✓。 */
+  function cgJumpInfo(r, ctx) {
+    if (!r) return { why: '这条没有可跳的位置' };
+    if (r.line && r.line > 0) return { file: r.file || (ctx && ctx.file) || '', frag: Number.isFinite(r.frag) ? r.frag : -1, line: r.line };
+    if (r._def) return r._def;                       /* 已经查过的 ✓ */
+    return { why: r.source === 'ai'
+      ? 'AI 想出来的名字，本地没核实过，也就没有可跳的位置'
+      : '标准库 / 头文件里的名字，本地没有它的源码' };
   }
 
   /* ══ ③ 模糊匹配 ✓ —— 「记得个大概」也能搜到 ✓══════════════════════════
@@ -292,7 +415,7 @@
     const q2 = CG.q.trim();
     const syms = await cgSymbols();
     const local = cgBest(syms, q2, 10).map((s) => ({
-      name: s.name, kind: s.kind, line: s.line,
+      name: s.name, kind: s.kind, line: s.line, frag: s.frag,
       source: 'local', label: '本地符号 ✓', detail: s.line ? ('第 ' + s.line + ' 行') : '',
     }));
     CG.rows = local;
@@ -304,20 +427,54 @@
         CG.listFor = ctx.file + '#' + ctx.index;
       }
       const lsp = cgBest(CG.list, q2, 10).map((it) => ({
-        name: it.label, kind: it.kind, line: 0,
+        name: it.label, kind: it.kind, line: 0, frag: -1,
         source: 'lsp', label: 'LSP ✓ 已核实',
         detail: it.detail || '', doc: it.documentation || '', insert: it.insertText || it.label,
       }));
-      /* 合并去重 ✓：同名时**以 LSP 为准** ✓（它更权威 ✓）*/
-      const have = new Set(lsp.map((x) => x.name));
-      CG.rows = lsp.concat(local.filter((x) => !have.has(x.name)));
+      /* ⚠️⚠️ 合并**按匹配度排** ✗✗ —— 原来是「LSP 全排在本地前面」✓，
+         于是搜 `led` 时最上面是 `std::stable_partition` ✗、
+         而用户要找的 `led` / `led_t` / `led_ops` 被挤到下面 ✓
+         （实测截图就是这个样子 ✓，一眼就不对 ✓）。
+         → 两边一起打分 ✓、一起排 ✓；**同名时 LSP 赢** ✓（它更权威 ✓，这条规矩不变 ✓）。 */
+      const scored = [];
+      local.forEach((r) => scored.push({ r, sc: cgScore(r.name, q2), lsp: false }));
+      lsp.forEach((r) => scored.push({ r, sc: cgScore(r.name, q2), lsp: true }));
+      const byName = new Map();
+      scored.forEach((x) => {
+        const k = x.r.name.toLowerCase();
+        const prev = byName.get(k);
+        if (!prev || (x.lsp && !prev.lsp) || (x.lsp === prev.lsp && x.sc > prev.sc)) byName.set(k, x);
+      });
+      CG.rows = Array.from(byName.values())
+        .sort((a, b) => b.sc - a.sc)
+        .slice(0, 16)
+        .map((x) => x.r);
     }
+    /* ★★ 补「能不能跳」✓ —— 本地索引里没有的（LSP 补全项 / AI 候选 ✓），
+       再去**全库函数索引**里捞一遍 ✓（用户截图里 `led_open` 就定义在别的文件 ✓）。
+       ⚠️ 捞到就补上 file/frag/line ✓ → 卡片上会多一个「跳到定义」✓。 */
+    await cgFillJump(ctx, CG.rows);
     if (!CG.rows.length) {
       CG.note = '没找到「' + q2 + '」相关的符号。'
         + '换个写法试试（缩写 / 片段都行），或者切到「💡 找」用大白话描述你要干什么 ✓';
     } else {
       CG.note = '';
     }
+  }
+  /* 给一批结果补上「跳转位置」✓ —— 只补还**没有行号**的那些 ✓，别覆盖已有的 ✓ */
+  async function cgFillJump(ctx, rows) {
+    const need = rows.filter((r) => r && !(r.line > 0));
+    if (!need.length) return;
+    const fns = await cgAllFns();
+    if (!fns.length) return;
+    const byName = new Map();
+    fns.forEach((f) => { const k = f.name.toLowerCase(); if (!byName.has(k)) byName.set(k, f); });
+    need.forEach((r) => {
+      const hit = byName.get(String(r.name || '').toLowerCase());
+      /* ⚠️ 只认**完全同名** ✓ —— 模糊匹配在这里是灾难 ✗：
+         用户搜 `led` 时会蹦出一堆 `led_xxx` ✓，全标成「跳到定义」= 骗人 ✗。 */
+      if (hit) { r.file = hit.file; r.frag = hit.frag; r.line = hit.line; r.crossFile = hit.file !== (ctx && ctx.file); }
+    });
   }
 
   /* ══ ⑦ 模式二：找函数 ✓ ════════════════════════════════════════════════
@@ -348,13 +505,15 @@
       }));
     }
     CG.rows = Array.from(localHit.values()).map((s) => ({
-      name: s.name, kind: s.kind, line: s.line,
+      name: s.name, kind: s.kind, line: s.line, frag: Number.isFinite(s.frag) ? s.frag : -1,
       source: 'local', label: '本地 / LSP ✓ 已核实',
       detail: s.line ? ('第 ' + s.line + ' 行') : '', doc: (s._lsp && s._lsp.documentation) || '',
     }));
+    /* 本地也捞不到位置的（LSP 补全项 ✓）→ 去全库函数索引里补一遍 ✓ */
+    await cgFillJump(ctx, CG.rows);
     /* ② 问 AI 要候选名 ✓（只要名字 ✓）*/
     CG.ai = { busy: true, err: '', names: [], hint: '' };
-    cgRender();
+    cgBegin('find', '正在让 AI 想候选名…');
     try {
       const sys = '你是编程助手。用户用中文描述他想做的事，你**只输出候选 API 名字**，'
         + '不要写代码、不要解释、不要客套。\n'
@@ -376,10 +535,13 @@
       /* ★ 核实 ✓ —— 拿 AI 给的名字，回头去①那份**已核实**的名单里找 ✓ */
       const known = new Set(CG.rows.map((x) => x.name.toLowerCase()));
       const extra = names.filter((x) => !known.has(x.n.toLowerCase())).map((x) => ({
-        name: x.n, kind: '', line: 0,
+        name: x.n, kind: '', line: 0, frag: -1,
         source: 'ai', label: 'AI 建议 · 未核实 ⚠️',
         detail: x.why, use: x.use,
       }));
+      /* ⚠️ AI 那几条也**顺手核实一下位置** ✓ —— 模型给的名字经常就是本地已有的函数 ✓
+         （只是①里没搜到 ✓）→ 能在全库里找到就照样给「跳到定义」✓。 */
+      await cgFillJump(ctx, extra);
       CG.rows = CG.rows.concat(extra);
       CG.ai = { busy: false, err: '', names, hint: String((o && o.hint) || '') };
       CG.note = extra.length
@@ -390,40 +552,84 @@
       CG.ai = { busy: false, err: String((e && e.message) || e), names: [], hint: '' };
       if (!CG.rows.length) CG.note = '';
     }
+    cgEnd();
   }
 
   /* ══ ⑧ 模式三：拆逻辑 ✓ ════════════════════════════════════════════════
      ⚠️ 逻辑图**需要一个「函数符号」** ✗（`/api/logic/graph` 是按 `line` 找函数的 ✓）。
         所以：光标 / 选区**落在哪个函数里**，就拆哪个 ✓；
         不在任何函数里 → 老实说「选一个函数」✓，别硬画 ✗（硬画出来的图是错的 ✓）。
-     ⚠️ 画图复用页面**已有的** `buildLogicFlow()` ✓ —— 不另写一套渲染 ✗
-        （同一张图两种画法，迟早对不上 ✓）。 */
+
+     ★★★★ 用户原话（2026-10-08，第二次改）：
+       「第二个这里拆逻辑这里，我需要的是让AI给我拆解分析实现逻辑和功能的流程图，
+         思维导图那种，不是代码」✓。
+
+     ⚠️⚠️ 上一版**整个理解偏了** ✗✗：只把服务端解析出来的**控制流图**画了出来 ✓，
+        而那张图上每一格都是**代码原文** ✗（`if (led_handler == NULL || status == NULL)` ✓）——
+        用户要的恰恰是**别给他看代码** ✗，要的是「这段在干什么、分几步、哪里分叉」的人话 ✓。
+
+     → 现在**两份东西都要** ✓，各管各的 ✗：
+        · `CG.graph`  = 服务端的**控制流图** ✓ —— 精确 ✓（它不会编 ✓），但全是代码 ✓
+                        → 归到「◇ 代码级」视图 ✓，当**核对用** ✓（AI 讲错了能对回来 ✓）
+        · `CG.aiFlow` = 让 AI 把这段逻辑**讲成人话** ✓ + 结构化步骤 ✓
+                        → 归到「🧠 思维导图」/「🔀 实现流程」✓，**默认视图** ✓
+     ⚠️ 别拿一个去替另一个 ✗ —— AI 那份会编 ✓，但没有它用户看不懂 ✓；
+        控制流图不会编 ✓，但用户看不懂 ✓。**两份并排**才对 ✓。 */
   async function cgRunBreak() {
     const ctx = cgCtx();
     if (!ctx) { CG.err = '先打开一个代码文件 ✓'; return; }
-    CG.graph = null;
+    CG.graph = null; CG.aiFlow = null;
     const syms = await cgSymbols();
-    /* 找「包含光标行的、行号最大的那个符号」✓（函数是嵌套的 ✓，取最里层 ✓）*/
+    /* 找「包含光标行的、行号最大的那个函数」✓（函数是嵌套的 ✓，取最里层 ✓）。
+       ⚠️ 这里**必须过滤成 fn / method** ✗✗ —— 符号索引换成全量之后 ✓
+          （见 cgSymbols 那段注释 ✓），`led_ops` 这种**类型**也会带行号 ✓ →
+          不过滤的话，光标停在类型定义里就会拿一个类型去画控制流图 ✗（画不出来 ✓）。 */
     const line = ctx.line;
     let root = null;
-    syms.filter((s) => s.line && s.line <= line).forEach((s) => {
+    syms.filter((s) => s.line && s.line <= line && (s.kind === 'fn' || s.kind === 'method')).forEach((s) => {
       if (!root || s.line > root.line) root = s;
     });
+    /* ⚠️⚠️ 光标不在函数里时，**先用「上一次拆的那个」** ✗✗ ——
+       踩过 ✓：从列表里点「拆这个」拆了 A ✓，接着点「重新拆解」✓ →
+       光标还停在原地（不在函数里 ✓）→ 又给回一张「挑一个函数」的列表 ✗ →
+       用户会以为「重新拆解把我刚才选的弄丢了」✗。
+       ⚠️ 只在**光标真的不在任何函数里**时才回退 ✗ ——
+          光标已经挪到别的函数里了 ✓，那当然按光标的来 ✓（那才是用户的意思 ✓）。 */
+    if (!root && CG.root && CG.root.file === ctx.file) root = CG.root;
     if (!root) {
       /* 兜底：光标在最上面、或者符号索引没给出行号 ✓ → 让用户明确选一个函数 ✓ */
-      const fns = syms.filter((s) => s.line).sort((a, b) => a.line - b.line).slice(0, 12);
+      const fns = syms.filter((s) => s.line && (s.kind === 'fn' || s.kind === 'method'))
+        .sort((a, b) => a.line - b.line).slice(0, 12);
       CG.note = '光标不在任何函数里 —— 从下面挑一个要拆的函数 ✓'
         + (fns.length ? '' : '（这个文件里没识别出函数 ✗）');
-      CG.rows = fns.map((s) => ({ name: s.name, kind: s.kind, line: s.line, source: 'local', label: '本地符号 ✓', detail: '第 ' + s.line + ' 行', pick: true }));
+      CG.rows = fns.map((s) => ({
+        name: s.name, kind: s.kind, line: s.line, frag: s.frag,
+        source: 'local', label: '本地符号 ✓', detail: '第 ' + s.line + ' 行', pick: true,
+      }));
+      /* ⚠️⚠️ 这里**必须自己重绘** ✗✗ —— 原来这个 `return` 后面是靠外层的
+         `cgRun()` 兜一次 `cgRender()` ✓；改成「页签一点就直接跑」之后 ✓，
+         调用方不再兜了 ✓ → 不重绘的话页面上**一直停在空态** ✗
+         （实测：探针看到的是「把光标放在要拆的函数里」✓，
+           而其实 `CG.rows` 里已经有 3 个函数了 ✓ —— 数据对、界面没刷 ✓）。
+         ⚠️ 这类「数据更新了但没重绘」的 bug **探针一眼就能抓到** ✓（就是这次 ✓），
+            但它在浏览器里表现为「点了没反应」✗，很容易被当成「按钮坏了」✓。 */
+      cgRender();
       return;
     }
+    CG.root = Object.assign({}, root, { file: ctx && ctx.file });
     CG.note = '';
+    cgBegin('flow', '正在拆解「' + root.name + '」—— 先出控制流图，再让 AI 讲成人话…');
+    /* 先出控制流图 ✓（本地解析，毫秒级 ✓）—— 用户马上有东西看 ✓，
+       不用干等 AI ✓（AI 要 5~20 秒 ✓，这期间界面全空是最糟的 ✗）。 */
     await cgLoadGraph(root);
+    /* 再让 AI 拆 ✓ */
+    await cgAiFlow(root);
+    cgEnd();
   }
   async function cgLoadGraph(root) {
     const ctx = cgCtx();
     if (!ctx || !root) return;
-    CG.busy = true; CG.graph = { root, payload: null, err: '' };
+    CG.graph = { root, payload: null, err: '' };
     cgRender();
     try {
       const r = await fetch('/api/logic/graph', {
@@ -436,11 +642,229 @@
     } catch (e) {
       CG.graph = { root, payload: null, err: String((e && e.message) || e) };
     }
-    CG.busy = false;
     cgRender();
-    cgDrawGraph();
   }
-  /* 把图画到浮层里 ✓ —— 复用页面那两个渲染函数 ✓ */
+  /* ══ ⑧b ★★★★ AI 拆解 ✓ —— 把代码讲成「人话流程图」════════════════════
+     ⚠️⚠️ 提示词里那几条「不许」是**关键** ✗✗ ——
+        不写的话模型十有八九会把代码原样抄进 `steps` ✓，
+        那就等于白做 ✗（用户要的就是不看代码 ✓）。
+        · 不许出现代码原文 ✓（要写成「检查参数是否为空」✓，不是 `if (x == NULL)` ✓）
+        · 不许出现变量名（除非它本身就是业务概念 ✓）
+        · 每步一句话，不许长篇 ✓ */
+  async function cgAiFlow(root) {
+    const ctx = cgCtx();
+    if (!ctx || !root) return;
+    CG.aiFlow = { busy: true, err: '', data: null };
+    cgRender();
+    try {
+      const src = (CG.graph && CG.graph.payload && CG.graph.payload.source) || '';
+      const code = src || ctx.sel || String(ctx.code || '').slice(0, 6000);
+      if (!String(code).trim()) throw new Error('这段没有可分析的代码（光标放到函数体里试试 ✓）');
+      const sys = '你是资深嵌入式 / 系统工程师，负责把一段代码**讲成人话**，并整理成流程图。\n'
+        + '读者**看不懂代码**，他要的是：这段实现了什么功能、分几步、每步在干什么、哪里会分叉。\n'
+        + '⚠️⚠️ 硬要求（违反了这份回答就废了）：\n'
+        + '① steps 里**绝对不许出现代码原文** —— 不要写 "if (x == NULL)"，要写「检查参数是否为空」；\n'
+        + '② 不要贴变量名 / 函数名（除非它本身就是业务概念，比如 LED、串口）；\n'
+        + '③ 每一步**一句话**说清，最多 40 字，不要长篇大论；\n'
+        + '④ 3~8 步，按**执行顺序**排；\n'
+        + '⑤ 只输出一个 JSON 对象，不要 markdown 围栏、不要前后废话。\n'
+        + 'JSON 结构：\n'
+        + '{"title":"8 字内的短标题",'
+        + '"what":"一句话：这个函数干什么（40 字内）",'
+        + '"io":{"in":["输入是什么（人话）"],"out":["输出 / 返回什么（人话）"]},'
+        + '"steps":[{"t":"步骤标题（4~10 字）","d":"这一步在干什么（一句话）",'
+        + '"kind":"start|step|branch|loop|call|return|end",'
+        + '"branch":[{"cond":"什么条件（人话）","to":"就走哪儿（人话）"}]}],'
+        + '"keys":["关键点"],"pitfalls":["容易搞错的地方"]}\n'
+        + '⚠️ branch 只有 kind=branch 的步骤才需要；没有分支就给空数组。';
+      const usr = '语言：' + (ctx.language || '未知') + '\n'
+        + '函数：' + root.name + '（第 ' + root.line + ' 行起）\n\n'
+        + '```\n' + String(code).slice(0, 8000) + '\n```';
+      const out = await cgAi(sys, usr, 150000);
+      const o = cgJson(out);
+      const d = cgFlowData(o);
+      if (!d.steps.length) throw new Error('模型没按要求返回 JSON（再点一次试试）');
+      CG.aiFlow = { busy: false, err: '', data: d };
+    } catch (e) {
+      CG.aiFlow = { busy: false, err: String((e && e.message) || e), data: null };
+    }
+    cgRender();
+  }
+  /* 把模型那份 JSON **洗干净** ✓ —— 字段名 / 类型都可能飘 ✓，一律兜住 ✓。
+     ⚠️ 上限 14 步 ✗：模型偶尔会一口气给 30 步 ✓，图会长到没法看 ✓。 */
+  function cgFlowData(o) {
+    const s = (v) => String(v == null ? '' : v).trim();
+    const arr = (v) => (Array.isArray(v) ? v : []).map(s).filter(Boolean);
+    const steps = (o && Array.isArray(o.steps) ? o.steps : []).map((x) => ({
+      t: s(x && (x.t || x.title || x.name)),
+      d: s(x && (x.d || x.desc || x.detail || x.why)),
+      kind: s(x && x.kind) || 'step',
+      branch: (Array.isArray(x && x.branch) ? x.branch : []).map((b) => ({
+        cond: s(b && (b.cond || b.if || b.c)),
+        to: s(b && (b.to || b.then || b.go)),
+      })).filter((b) => b.cond || b.to),
+    })).filter((x) => x.t || x.d).slice(0, 14);
+    const io = (o && o.io) || {};
+    return {
+      title: s(o && o.title),
+      what: s(o && o.what),
+      steps,
+      in: arr(io.in || io.inputs || (o && o.inputs)),
+      out: arr(io.out || io.outputs || (o && o.outputs)),
+      keys: arr(o && o.keys),
+      pitfalls: arr(o && (o.pitfalls || o.notes)),
+    };
+  }
+  const CG_KIND_ICON = {
+    start: '▶', step: '▸', branch: '◆', loop: '↻', call: 'ƒ', return: '⏎', end: '■',
+  };
+  /* ══ ⑧c ★★★★ 思维导图渲染 ✓ ═══════════════════════════════════════════
+     做法 ✓：节点是**绝对定位的 HTML** ✓（好排版、文字能选中 ✓），
+             连线是**一层 SVG** ✓（贝塞尔曲线 ✓）。
+     ⚠️ 为什么不用纯 SVG 画文字 ✗：SVG 不换行 ✓，中文长句得自己算折行 ✓，不值当 ✗。
+     ⚠️ 为什么要**先测量再摆** ✗：节点高度是文字撑出来的 ✓（一步的说明可能两行 ✓），
+        写死高度必然错位 ✓ → 先 append 到 DOM 量 `offsetHeight` ✓，再算 y ✓。
+     ⚠️⚠️ 三列的宽度**必须跟着窗口算** ✗✗ —— 第一版写死 152/176/208 ✓（合计 614px ✓），
+        而窗口默认才 560 宽 ✓ → **右边那一列直接被裁掉** ✗
+        （实测截图：叶子节点半个字都看不见 ✓）。
+        → 按容器的实际宽度分配 ✓，窗口拖宽了就自动铺满 ✓。
+     ⚠️⚠️ 节点必须挂在**有 `position:relative` 的容器**里 ✗✗ ——
+        第一版给容器忘了加 `cg-mind` 这个类 ✓ → 相对定位没生效 ✓ →
+        节点去找最近的定位祖先 ✓ → 找到的是 `.cg-box`（`position:fixed` ✓）→
+        **整张图跑到标题栏上去了** ✗（实测截图 ✓，还盖住了「代码向导」那一行 ✓）。
+        ⚠️ 这类「少写一个类名」的错**探针查不出来** ✗（节点数、连线数、文字全对 ✓），
+           只有**截图**能看出来 ✓ —— 这就是为什么排版类改动必须截一次 ✓。 */
+  const CG_MIND_GAP = 26;
+  function cgMindCols(width) {
+    const avail = Math.max(360, width - 10);
+    const gaps = CG_MIND_GAP * 2;
+    let root = Math.round(Math.min(160, Math.max(104, avail * 0.24)));
+    let branch = Math.round(Math.min(170, Math.max(108, avail * 0.26)));
+    let leaf = avail - root - branch - gaps;
+    if (leaf < 150) { leaf = 150; }
+    return { root, branch, leaf };
+  }
+  function cgMindData(d) {
+    const branches = [];
+    if (d.what) branches.push({ id: 'what', ic: '🎯', text: '干什么', leaves: [{ text: d.what }] });
+    if (d.in.length) branches.push({ id: 'in', ic: '📥', text: '输入', leaves: d.in.map((x) => ({ text: x })) });
+    if (d.out.length) branches.push({ id: 'out', ic: '📤', text: '输出', leaves: d.out.map((x) => ({ text: x })) });
+    d.steps.forEach((s, i) => {
+      const leaves = [];
+      if (s.d) leaves.push({ text: s.d });
+      s.branch.forEach((b) => leaves.push({ cond: b.cond, text: b.to || '（继续）', chip: true }));
+      branches.push({ id: 's' + i, ic: CG_KIND_ICON[s.kind] || '▸', text: s.t || ('第 ' + (i + 1) + ' 步'), leaves, kind: s.kind });
+    });
+    if (d.keys.length) branches.push({ id: 'keys', ic: '🔑', text: '关键点', leaves: d.keys.map((x) => ({ text: x })) });
+    if (d.pitfalls.length) branches.push({ id: 'pit', ic: '⚠️', text: '容易搞错', leaves: d.pitfalls.map((x) => ({ text: x })) });
+    return branches;
+  }
+  function cgDrawMind() {
+    const host = $('#cgx-mind');
+    if (!host) return;
+    const d = CG.aiFlow && CG.aiFlow.data;
+    if (!d) return;
+    const branches = cgMindData(d);
+    if (!branches.length) { host.innerHTML = '<div class="cg-empty">这份拆解是空的</div>'; return; }
+    host.innerHTML = '';
+    const COL = cgMindCols(host.clientWidth || 520);
+    const X = [4, 4 + COL.root + CG_MIND_GAP, 4 + COL.root + COL.branch + CG_MIND_GAP * 2];
+    const mk = (cls, html, x, w) => {
+      const el = document.createElement('div');
+      el.className = 'cg-mind-node ' + cls;
+      el.style.left = x + 'px'; el.style.top = '0px'; el.style.width = w + 'px';
+      el.style.visibility = 'hidden';
+      el.innerHTML = html;
+      host.appendChild(el);
+      return el;
+    };
+    const rootEl = mk('cg-mind-root', esc(d.title || d.what || '这段逻辑')
+      + (d.what && d.title ? '<span class="t2">' + esc(d.what) + '</span>' : ''), X[0], COL.root);
+    const rows = branches.map((b) => {
+      const bEl = mk('cg-mind-branch', '<span class="ic">' + esc(b.ic) + '</span>' + esc(b.text), X[1], COL.branch);
+      const lEls = b.leaves.map((lf) => mk('cg-mind-leaf' + (lf.chip ? ' chip' : ''),
+        (lf.chip && lf.cond ? '<span class="k">' + esc(lf.cond) + '</span>' : '') + esc(lf.text), X[2], COL.leaf));
+      return { b, bEl, lEls };
+    });
+    /* ── 量高度 → 算 y ✓ ── */
+    const GAPY = 9, GRP = 16;
+    let cursor = 0;
+    rows.forEach((r) => {
+      const lh = r.lEls.map((e) => e.offsetHeight || 26);
+      let y = cursor;
+      r.leafY = lh.map((h) => { const cur = y; y += h + GAPY; return cur; });
+      const groupH = r.lEls.length ? (y - GAPY - cursor) : 0;
+      r.groupH = groupH;
+      r.bElH = r.bEl.offsetHeight || 26;
+      const total = Math.max(groupH, r.bElH);
+      r.bY = cursor + (total - r.bElH) / 2;
+      r.leafBase = cursor + (total - groupH) / 2;
+      cursor += total + GRP;
+    });
+    const totalH = Math.max(40, cursor - GRP);
+    const rootH = rootEl.offsetHeight || 30;
+    const rootY = Math.max(0, (totalH - rootH) / 2);
+    /* ── 摆位置 ✓ ── */
+    rootEl.style.top = Math.round(rootY) + 'px';
+    rootEl.style.visibility = '';
+    rows.forEach((r) => {
+      r.bEl.style.top = Math.round(r.bY) + 'px';
+      r.bEl.style.visibility = '';
+      r.lEls.forEach((e, i) => {
+        e.style.top = Math.round(r.leafBase + (r.leafY[i] - r.leafY[0])) + 'px';
+        e.style.visibility = '';
+      });
+    });
+    const width = X[2] + COL.leaf + 6;
+    host.style.height = Math.round(totalH + 8) + 'px';
+    /* ── 连线 ✓ ── */
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(Math.round(totalH + 8)));
+    const path = (x1, y1, x2, y2) => {
+      const mx = (x1 + x2) / 2;
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2);
+      p.setAttribute('fill', 'none');
+      p.setAttribute('stroke', 'var(--border)');
+      p.setAttribute('stroke-width', '1.5');
+      svg.appendChild(p);
+    };
+    const hb = (el) => (el.offsetHeight || 26) / 2;
+    const x0 = X[0] + COL.root;
+    const x1 = X[1] + COL.branch;
+    rows.forEach((r) => {
+      const by = r.bY + hb(r.bEl);
+      path(x0, rootY + hb(rootEl), X[1], by);
+      r.lEls.forEach((e, i) => {
+        path(x1, by, X[2], r.leafBase + (r.leafY[i] - r.leafY[0]) + hb(e));
+      });
+    });
+    host.insertBefore(svg, host.firstChild);
+  }
+  /* ══ ⑧d 实现流程（垂直步骤 + 箭头）✓ ══════════════════════════════════
+     ⚠️ 和思维导图**是同一份数据** ✓（`CG.aiFlow.data` ✓），只是画法不同 ✗：
+        思维导图看**结构** ✓（有哪些块、块里有什么 ✓）；
+        流程看**顺序** ✓（先干什么、再干什么、哪儿分叉 ✓）。
+     ⚠️ 箭头用 CSS 元素而不是 SVG ✗ —— 竖着一列 ✓，画线纯属自找麻烦 ✓。 */
+  function cgDrawFlow() {
+    const host = $('#cgx-flow');
+    if (!host) return;
+    const d = CG.aiFlow && CG.aiFlow.data;
+    if (!d) return;
+    const steps = d.steps || [];
+    if (!steps.length) { host.innerHTML = '<div class="cg-empty">这份拆解是空的</div>'; return; }
+    host.innerHTML = '<div class="cg-flow">'
+      + steps.map((s, i) => '<div class="cg-step k-' + esc(s.kind) + '">'
+        + '<span class="n">' + (i + 1) + '</span>'
+        + '<div class="t">' + esc(CG_KIND_ICON[s.kind] || '') + ' ' + esc(s.t || ('第 ' + (i + 1) + ' 步')) + '</div>'
+        + (s.d ? '<div class="d">' + esc(s.d) + '</div>' : '')
+        + (s.branch.length ? '<div class="br">' + s.branch.map((b) =>
+          '<span>' + esc(b.cond || '分支') + ' → ' + esc(b.to || '继续') + '</span>').join('') + '</div>' : '')
+        + '</div>').join('<div class="cg-arrow">↓</div>')
+      + '</div>';
+  }
+  /* 把图画到浮层里 ✓ —— 代码级那张复用页面自己的渲染函数 ✓ */
   function cgDrawGraph() {
     const box = $('#cgx-graph');
     if (!box || !CG.graph || !CG.graph.payload) return;
@@ -449,7 +873,8 @@
     const bar = document.createElement('div');
     bar.className = 'cg-gbar';
     bar.innerHTML = '<span class="t">' + esc(p.name || (CG.graph.root && CG.graph.root.name) || '') + '</span>'
-      + '<span class="n">' + ((p.nodes || []).length) + ' 个节点</span>';
+      + '<span class="n">' + ((p.nodes || []).length) + ' 个节点</span>'
+      + '<span class="badge">精确 · 服务端解析</span>';
     box.appendChild(bar);
     try {
       if (typeof buildLogicFlow === 'function') buildLogicFlow(box, p);       /* 卡片流程 ✓（自包含 ✓）*/
@@ -461,9 +886,9 @@
   }
   /* 「该怎么实现」✓ —— 用逻辑图生成骨架代码 ✓（走已有的 /api/logic/skeleton ✓）*/
   async function cgSkeleton() {
-    if (!CG.graph || !CG.graph.payload) return;
+    if (!CG.graph || !CG.graph.payload) { toast('还没有控制流图 —— 先「重新拆解」一次 ✓'); return; }
     const ctx = cgCtx();
-    CG.busy = true; cgRender();
+    cgBegin('skel', '正在按控制流图生成骨架代码…');
     try {
       const p = CG.graph.payload;
       const r = await fetch('/api/logic/skeleton', {
@@ -480,15 +905,14 @@
     } catch (e) {
       CG.graph.skelErr = String((e && e.message) || e);
     }
-    CG.busy = false;
-    cgRender();
+    cgEnd();
   }
   /* AI 讲一遍这段在干什么 ✓（不涉及精确签名 ✓，所以可以让它说 ✓）*/
   async function cgExplain() {
     const ctx = cgCtx();
     if (!ctx) return;
     const code = (CG.graph && CG.graph.payload && CG.graph.payload.source) || ctx.sel || ctx.code.slice(0, 3000);
-    CG.busy = true; cgRender();
+    cgBegin('explain', '正在让 AI 讲一遍这段在干什么…');
     try {
       const out = await cgAi(
         '你是资深工程师，帮人**看懂**一段代码。用中文，说人话，**别复述代码**。'
@@ -496,12 +920,11 @@
           + '③ 指出**容易搞错的地方**（边界 / 空值 / 溢出 / 资源释放之类），没有就直说没有。',
         '语言：' + (ctx.language || '') + '\n\n```\n' + String(code).slice(0, 6000) + '\n```',
         120000);
-      CG.graph = Object.assign({}, CG.graph, { explain: out });
+      CG.graph = Object.assign({}, CG.graph, { explain: out, explainErr: '' });
     } catch (e) {
       CG.graph = Object.assign({}, CG.graph, { explainErr: String((e && e.message) || e) });
     }
-    CG.busy = false;
-    cgRender();
+    cgEnd();
   }
 
   /* ══ ⑨ 动作 ✓ ══════════════════════════════════════════════════════════ */
@@ -527,48 +950,119 @@
       toast('✓ 已复制');
     } catch (_) { toast('复制失败 ✗ 手动选一下吧'); }
   }
-  /* 跳到某个符号 ✓ —— 复用页面自己的跳转 ✓（它知道怎么切文件 / 定位 ✓）*/
-  function cgGoto(row) {
-    if (!row || !row.line) { toast('这条没有行号（LSP 补全项不带位置 ✓）'); return; }
+  /* 按文件路径找页面自己的 snippet 对象 ✓ —— `goToLocation` 要的就是它 ✓ */
+  function cgSnippetFor(file) {
     try {
+      if (typeof SNIPPETS === 'undefined' || !Array.isArray(SNIPPETS)) return null;
+      const want = String(file || '').replace(/#editing$/, '');
+      return SNIPPETS.find((s) => s && String(s.file).replace(/#editing$/, '') === want) || null;
+    } catch (_) { return null; }
+  }
+  /* ★★★★ 跳到某个符号 ✓ —— 用户原话：
+     「有些怎么缺少跳转等等，还有点击跳转，会导致代码向导被关闭等等问题」✓。
+
+     ⚠️⚠️ 原来两个毛病 ✗✗，都在这里修掉：
+       ① **跳完就 `cgClose()`** ✗ —— 用户点一下「跳过去」✓，向导**没了** ✗，
+          想接着查下一个得重新 ⌘I ✓（而他正在**照着学** ✓，一次要跳好几处 ✓）。
+          → **不关** ✓。它是浮在页面上的小窗口 ✓，本来就能拖到一边 ✓
+            （这正是上一轮改成浮窗的意义 ✓，关掉等于把那个改动又抹了 ✗）。
+       ② 用 `MONACO_EDITOR.revealLineInCenter` ✗ —— 那个**只能跳当前文件** ✓，
+          跨文件（`led_open` 定义在另一个文件里 ✓）就废了 ✗，
+          而且它是直接操作编辑器 ✓，**绕过了页面自己的导航栈** ✗（返回按钮不认 ✓）。
+          → 改用页面自己的 `goToLocation({snippet, frag, line})` ✓：
+            它知道怎么切文件 ✓、怎么切片段 ✓、怎么推导航栈 ✓（返回能用 ✓）。
+     ⚠️ 找不到 snippet 对象时**退回**旧的编辑器跳转 ✓（本文件内的还是能跳 ✓），
+        别整个哑掉 ✗。 */
+  function cgGoto(row) {
+    const ctx = cgCtx();
+    const info = cgJumpInfo(row, ctx);
+    if (!info || !info.line) { toast(info && info.why ? info.why : '这条没有可跳的位置'); return; }
+    const file = info.file || (ctx && ctx.file) || '';
+    const name = String(row && row.name || '').trim();
+    /* ① 首选：页面自己的跳转 ✓（能跨文件 ✓、进导航栈 ✓）*/
+    try {
+      const snip = cgSnippetFor(file);
+      if (snip && typeof goToLocation === 'function') {
+        const frag = (Number.isFinite(info.frag) && info.frag >= 0) ? info.frag : 0;
+        if (goToLocation({ snippet: snip, frag, line: info.line })) {
+          toast('✓ 已跳到 ' + (name || '那行') + ' · ' + String(snip.name || file.split('/').pop())
+            + ' 第 ' + info.line + ' 行' + (info.crossFile ? '（另一个文件）' : ''));
+          return;
+        }
+      }
+    } catch (_) {}
+    /* ② 退回：本文件内直接操作编辑器 ✓ */
+    try {
+      const same = !file || !ctx || file === ctx.file;
       const ed = (typeof MONACO_EDITOR !== 'undefined') ? MONACO_EDITOR : null;
-      if (ed && ed.revealLineInCenter && ed.setPosition) {
-        ed.revealLineInCenter(row.line);
-        ed.setPosition({ lineNumber: row.line, column: 1 });
+      if (same && ed && ed.revealLineInCenter && ed.setPosition) {
+        ed.revealLineInCenter(info.line);
+        ed.setPosition({ lineNumber: info.line, column: 1 });
         ed.focus();
-        cgClose();
+        toast('✓ 已跳到第 ' + info.line + ' 行');
         return;
       }
     } catch (_) {}
-    toast('跳不过去 —— 手动到第 ' + row.line + ' 行看看 ✓');
+    toast('跳不过去 —— 手动到第 ' + info.line + ' 行看看 ✓');
   }
 
   /* ══ ⑩ 渲染 ✓ ══════════════════════════════════════════════════════════ */
   const TABS = [
     { k: 'look', e: '🔍', n: '查符号', ph: '符号名（记得个大概也行：snpf → snprintf）', tip: '光标底下那个词直接 ⌘I 也行' },
     { k: 'find', e: '💡', n: '找函数', ph: '用大白话说你要干什么：把字符串转成整数', tip: '先搜本地，再让 AI 补候选，然后回头核实' },
-    { k: 'break', e: '🧩', n: '拆逻辑', ph: '（不用输）光标放在要拆的函数里就行', tip: '画逻辑图 + 讲一遍 + 出骨架代码' },
+    { k: 'break', e: '🧩', n: '拆逻辑', ph: '（不用输）光标放在要拆的函数里就行', tip: 'AI 讲成人话 + 思维导图 + 实现流程（想看代码有「代码级」视图）' },
+  ];
+  /* 拆逻辑下的三个视图 ✓ —— 用户原话：「我需要的是让AI给我拆解分析实现逻辑和功能的
+     流程图，思维导图那种，不是代码」✓。
+     ⚠️ 默认落在「思维导图」✓（**不是**代码 ✓）—— 用户要看的顺序就是这个 ✓。 */
+  const VIEWS = [
+    { k: 'mind', e: '🧠', n: '思维导图', tip: '这段逻辑有哪些块、每块在干什么（人话，不看代码）' },
+    { k: 'flow', e: '🔀', n: '实现流程', tip: '按执行顺序一步步走，哪里分叉' },
+    { k: 'code', e: '◇', n: '代码级', tip: '服务端解析出来的精确控制流图 —— 拿它核对 AI 有没有讲错' },
   ];
   function cgSrcChip(r) {
     const cls = r.source === 'ai' ? 'ai' : 'ok';
     return '<span class="cg-src ' + cls + '">' + esc(r.label) + '</span>';
   }
+  /* ★★ 结果卡片 ✓ —— 「跳过去」这条按 cgJumpInfo 走 ✗✗：
+     能跳 → 给按钮 ✓（跨文件的标出来 ✓）；
+     不能跳 → **写清为什么** ✓（用户原话「有些怎么缺少跳转」✓ ——
+     他要的是「别让我猜」✓，不是「多几个按钮」✓）。 */
   function cgRowHtml(r) {
+    const ctx = cgCtx();
     const sub = [];
     if (r.kind) sub.push(esc(r.kind));
     if (r.detail) sub.push(esc(r.detail));
-    return '<div class="cg-row" data-cgrow="' + esc(r.name) + '">'
+    if (r.crossFile) sub.push('另一个文件：' + esc(String(r.file || '').split('/').pop()));
+    const jump = cgJumpInfo(r, ctx);
+    const canJump = !!(jump && jump.line);
+    /* ⚠️ `data-cgline` 是给**探针**用的 ✗（量「跳完真的到了那一行」✓）——
+       界面上不需要它 ✓，但没有它探针就只能去正则扒文案 ✓（脆 ✓）。 */
+    return '<div class="cg-row" data-cgrow="' + esc(r.name) + '" data-cgline="' + (canJump ? jump.line : '') + '">'
       + '<div class="hd"><span class="nm">' + esc(r.name) + '</span>' + cgSrcChip(r) + '</div>'
       + (sub.length ? '<div class="sub">' + sub.join(' · ') + '</div>' : '')
       + (r.doc ? '<pre class="doc">' + esc(String(r.doc).slice(0, 600)) + '</pre>' : '')
       + (r.use ? '<pre class="use">' + esc(r.use) + '</pre>' : '')
       + '<div class="acts">'
-      + (r.use ? '<button data-cgact="use" data-cgtext="' + esc(r.use) + '">插到光标处</button>' : '')
-      + (r.insert ? '<button data-cgact="use" data-cgtext="' + esc(r.insert) + '">插到光标处</button>' : '')
-      + (r.line ? '<button data-cgact="goto">跳过去</button>' : '')
-      + '<button data-cgact="copy">复制名字</button>'
-      + (r.pick ? '<button data-cgact="pick">拆这个</button>' : '')
-      + '</div></div>';
+      + (r.use || r.insert ? cgBtn({
+        act: 'use', text: r.use || r.insert, icon: '⤵', label: '插到光标处',
+        title: '把这段插到你编辑器里的光标处（插完向导会关掉，好让你看结果）',
+      }) : '')
+      + (canJump ? cgBtn({
+        act: 'goto', icon: '↗', pri: true, label: r.crossFile ? '跳到定义（另一个文件）' : '跳过去',
+        title: '跳到第 ' + jump.line + ' 行' + (jump.crossFile ? '（会切到另一个文件）' : '') + ' —— 向导不会关',
+      }) : '')
+      + cgBtn({ act: 'copy', icon: '⧉', label: '复制名字' })
+      + (r.pick ? cgBtn({ act: 'pick', pri: true, icon: '🧩', label: '拆这个' }) : '')
+      + '</div>'
+      + (canJump ? '' : '<div class="nj">' + esc((jump && jump.why) || '这条没有可跳的位置') + '（还是可以复制名字 ✓）</div>')
+      + '</div>';
+  }
+  /* 拆逻辑的视图切换条 ✓ */
+  function cgViewsHtml() {
+    return '<div class="cg-views">' + VIEWS.map((v) => cgBtn({
+      act: 'view', val: v.k, on: CG.view === v.k, icon: v.e, label: v.n, title: v.tip,
+    })).join('') + '</div>';
   }
   function cgBodyHtml() {
     const ctx = cgCtx();
@@ -580,27 +1074,68 @@
         + '<span>（这个工具要知道你正在编辑什么，才能查符号 / 拆逻辑 ✓）</span></div>';
     }
     if (tab === 'break') {
-      h += CG.graph
-        ? '<div id="cgx-graph" class="cg-graph"></div>'
-          + (CG.graph.err ? '<div class="cg-note err">✗ ' + esc(CG.graph.err) + '</div>' : '')
+      /* ⚠️ 没有上下文（光标不在函数里 ✓）→ 先给「挑一个」的列表 ✓，不给空图 ✗ */
+      if (!CG.graph && !CG.rows.length) {
+        return h + cgBusyBar()
+          + (CG.note ? '<div class="cg-note">' + esc(CG.note) + '</div>' : '')
+          + '<div class="cg-empty">把光标放在「要拆的那个函数」里 ✓，再点「拆」<br>'
+          + '<span>会先出一张控制流图，再让 AI 讲成人话 + 画成思维导图 ✓</span></div>';
+      }
+      if (CG.rows.length) {
+        h += cgBusyBar();
+        if (CG.note) h += '<div class="cg-note">' + esc(CG.note) + '</div>';
+        h += CG.rows.map(cgRowHtml).join('');
+        return h;
+      }
+      h += cgViewsHtml();
+      h += cgBusyBar();
+      if (CG.note) h += '<div class="cg-note">' + esc(CG.note) + '</div>';
+      if (CG.view === 'code') {
+        h += '<div id="cgx-graph" class="cg-graph"></div>';
+        if (CG.graph && CG.graph.err) h += '<div class="cg-note err">✗ ' + esc(CG.graph.err) + '</div>';
+      } else if (CG.view === 'flow') {
+        if (CG.aiFlow && CG.aiFlow.err) h += cgAiFlowErr();
+        else if (!CG.aiFlow || (!CG.aiFlow.data && !CG.aiFlow.busy)) h += '<div class="cg-empty">还没有 AI 拆解结果</div>';
+        else if (CG.aiFlow.data) h += '<div id="cgx-flow"></div>';
+      } else {
+        if (CG.aiFlow && CG.aiFlow.err) h += cgAiFlowErr();
+        else if (!CG.aiFlow || (!CG.aiFlow.data && !CG.aiFlow.busy)) h += '<div class="cg-empty">还没有 AI 拆解结果</div>';
+        else if (CG.aiFlow.data) {
+          const d = CG.aiFlow.data;
+          if (d.what) h += '<div class="cg-summary"><span class="k">这段在干什么</span>' + esc(d.what) + '</div>';
+          h += '<div id="cgx-mind" class="cg-mind"></div>';
+        }
+      }
+      /* ── 动作按钮 ✓ —— 忙碌时**只有那一个**变转圈 ✓（其余照常可点 ✓） */
+      const g = CG.graph;
+      h += '<div class="cg-acts">'
+        + cgBtn({
+          act: 'flow', pri: true, icon: '🪄', label: CG.aiFlow && CG.aiFlow.data ? '重新拆解' : '让 AI 拆解',
+          busy: cgIsBusy('flow'), busyText: '正在拆解…', title: '让 AI 用大白话讲一遍这段逻辑，并画成思维导图',
+        })
+        + cgBtn({
+          id: 'cgx-skel', act: 'skel', icon: '🧱', label: '给我一个骨架', busy: cgIsBusy('skel'), busyText: '正在生成…',
+          disabled: !(g && g.payload), title: '按控制流图生成一份骨架代码（走服务端解析，不是 AI 编的）',
+        })
+        + cgBtn({
+          id: 'cgx-explain', act: 'explain', icon: '📖', label: '讲一遍这段在干什么',
+          busy: cgIsBusy('explain'), busyText: '正在讲…',
+        })
+        + '</div>';
+      if (g && g.skelErr) h += '<div class="cg-note err">✗ ' + esc(g.skelErr) + '</div>';
+      if (g && g.skel) {
+        h += '<pre class="cg-code" id="cgx-skelcode">' + esc(g.skel) + '</pre>'
           + '<div class="cg-acts">'
-          + '<button class="pri" id="cgx-skel">🧱 给我一个骨架（该怎么实现）</button>'
-          + '<button id="cgx-explain">🧠 让它讲一遍这段在干什么</button>'
-          + '</div>'
-          + (CG.graph.skelErr ? '<div class="cg-note err">✗ ' + esc(CG.graph.skelErr) + '</div>' : '')
-          + (CG.graph.skel ? '<pre class="cg-code" id="cgx-skelcode">' + esc(CG.graph.skel) + '</pre>'
-            + '<div class="cg-acts"><button data-cgact="use" data-cgtext="' + esc(CG.graph.skel) + '">插到光标处</button>'
-            + '<button data-cgact="copysk">复制</button></div>' : '')
-          + (CG.graph.explainErr ? '<div class="cg-note err">✗ ' + esc(CG.graph.explainErr) + '</div>' : '')
-          + (CG.graph.explain ? '<div class="cg-explain">' + esc(CG.graph.explain).replace(/\n/g, '<br>') + '</div>' : '')
-        : '<div class="cg-empty">把光标放在「要拆的那个函数」里 ✓，再点「拆」<br>'
-          + '<span>会画一张控制流图 + 讲一遍 + 给你一份骨架代码 ✓</span></div>';
-      if (CG.rows.length) h += CG.rows.map(cgRowHtml).join('');
+          + cgBtn({ act: 'use', text: g.skel, icon: '⤵', label: '插到光标处' })
+          + cgBtn({ act: 'copysk', icon: '⧉', label: '复制' })
+          + '</div>';
+      }
+      if (g && g.explainErr) h += '<div class="cg-note err">✗ ' + esc(g.explainErr) + '</div>';
+      if (g && g.explain) h += '<div class="cg-explain">' + esc(g.explain).replace(/\n/g, '<br>') + '</div>';
       return h;
     }
-    if (CG.busy) h += '<div class="cg-note">正在查…</div>';
+    h += cgBusyBar();
     if (CG.note) h += '<div class="cg-note">' + esc(CG.note).replace(/\*\*(.+?)\*\*/g, '$1') + '</div>';
-    if (tab === 'find' && CG.ai && CG.ai.busy) h += '<div class="cg-note">正在让 AI 想候选…</div>';
     if (tab === 'find' && CG.ai && CG.ai.err) h += '<div class="cg-note err">✗ AI：' + esc(CG.ai.err) + '</div>';
     if (tab === 'find' && CG.ai && CG.ai.hint) h += '<div class="cg-note">💡 ' + esc(CG.ai.hint) + '</div>';
     if (!CG.rows.length && !CG.busy) {
@@ -611,6 +1146,22 @@
     }
     h += CG.rows.map(cgRowHtml).join('');
     return h;
+  }
+  /* AI 拆解失败 ✓ —— 必须带**重试入口** ✗（不能只报错就走 ✓，
+     这个项目在「源挂了却说没内容」上栽过 ✓）。 */
+  function cgAiFlowErr() {
+    const msg = String((CG.aiFlow && CG.aiFlow.err) || '');
+    const isNet = /Failed to fetch|NetworkError|Load failed|fetch failed/i.test(msg);
+    return '<div class="cg-note err">✗ AI 拆解失败：' + esc(msg) + '</div>'
+      + (isNet ? '<div class="cg-note">多半是 CodeScope 刚重启过（重启会掐断正在跑的请求）。等一下再点「重新拆解」✓</div>' : '')
+      + '<div class="cg-acts">' + cgBtn({ act: 'flow', pri: true, icon: '🪄', label: '再试一次' }) + '</div>';
+  }
+  /* 重绘之后要把三张图**重新画一遍** ✗ —— 它们是用 DOM 量出来的 ✓，
+     `innerHTML` 一换就全没了 ✓（只写 HTML 是画不出来的 ✓）。 */
+  function cgDrawAll() {
+    cgDrawGraph();
+    cgDrawMind();
+    cgDrawFlow();
   }
   function cgRender() {
     const box = $('#cgx-body');
@@ -643,7 +1194,9 @@
     }
     const tip = $('#cgx-tip');
     if (tip) tip.textContent = (TABS.find((x) => x.k === CG.tab) || TABS[0]).tip;
-    cgDrawGraph();
+    /* ⚠️ 三张图（控制流 / 思维导图 / 实现流程）都是**量出来的** ✗✗ ——
+       `innerHTML` 一换就全没了 ✓，光写 HTML 画不出来 ✓ → 必须重画一遍 ✓。 */
+    cgDrawAll();
   }
 
   /* ══ ⑪ 样式 ✓ ══════════════════════════════════════════════════════════
@@ -657,107 +1210,202 @@
         小窗口显示查询，可以随时查询和关闭，也可以拖动放到一边，参考学习这写代码等等」✓。
 
        ⚠️⚠️ 最关键的差别：**没有遮罩** ✗ ——
-          原来 `.cg-mask` 是一层半透明全屏遮罩 ✓ 而且**点它就关闭** ✓ →
+          原来 .cg-mask 是一层半透明全屏遮罩 ✓ 而且**点它就关闭** ✓ →
           用户**没法一边查一边写代码** ✗（点一下编辑器，向导就没了 ✓）。
-       → 现在：外层只用来兜住定位 ✓，`pointer-events:none` ✓（底下的页面**完全可点** ✓），
-         只有窗口本身 `pointer-events:auto` ✓。
-       ⚠️ 也**不再「点外面关闭」** ✗ —— 它是常驻小工具 ✓，要关就点 ✕ / 按 Esc ✓
-          （顺手还解决了「想复制一段但一点外面就没了」✓）。 */
+       → 现在：外层只用来兜住定位 ✓，pointer-events:none ✓（底下的页面**完全可点** ✓），
+         只有窗口本身 pointer-events:auto ✓。
+       ⚠️ 也**不再「点外面关闭」** ✗ —— 它是常驻小工具 ✓，要关就点 ✕ / 按 Esc ✓。 */
     '.cg-mask{position:fixed;inset:0;z-index:9990;display:none;pointer-events:none}',
     '.cg-mask.on{display:block}',
-    '.cg-box{position:fixed;pointer-events:auto;width:520px;min-width:330px;max-width:96vw;',
-    'max-height:74vh;display:flex;flex-direction:column;',
-    'background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;',
-    'box-shadow:0 22px 70px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.35);font-family:var(--ui);color:var(--text)}',
-    /* 顶栏 = **拖动把手** ✓ —— `cursor:move` 让「这个能拖」一眼看得出来 ✓
+    '.cg-box{position:fixed;pointer-events:auto;width:560px;min-width:340px;max-width:96vw;',
+    'max-height:76vh;display:flex;flex-direction:column;',
+    'background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;',
+    'box-shadow:0 26px 80px rgba(0,0,0,.5),0 2px 10px rgba(0,0,0,.32);font-family:var(--ui);color:var(--text)}',
+    /* 顶栏 = **拖动把手** ✓ —— cursor:move 让「这个能拖」一眼看得出来 ✓
        （不能拖的地方写着 cursor:move 是骗人 ✗；能拖的地方不写就是藏着 ✓）。 */
-    '.cg-head{display:flex;align-items:center;gap:8px;padding:10px 12px;flex:none;cursor:move;',
+    '.cg-head{display:flex;align-items:center;gap:9px;padding:11px 13px;flex:none;cursor:move;',
     'border-bottom:1px solid var(--border);user-select:none;',
-    'background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent)}',
+    'background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 12%,transparent),transparent)}',
     '.cg-head.dragging{cursor:grabbing}',
-    /* 折叠成一条「药丸」✓ —— 用户原话：「也可以拖动放到一边」✓。
-       折起来之后只剩顶栏 ✓，可以贴着屏幕边放 ✓，不挡代码 ✓。 */
+    /* 折叠成一条「药丸」✓ —— 用户原话：「也可以拖动放到一边」✓。 */
     '.cg-box.min{max-height:none}',
     '.cg-box.min .cg-tabs,.cg-box.min .cg-search,.cg-box.min .cg-tip,',
     '.cg-box.min .cg-body,.cg-box.min .cg-foot,.cg-box.min .cg-rs{display:none}',
     '.cg-box.min .cg-head{border-bottom:0}',
     /* 右下角缩放把手 ✓（和「能拖」是一对：能挪位置，也能改大小 ✓）*/
-    '.cg-rs{position:absolute;right:0;bottom:0;width:15px;height:15px;cursor:nwse-resize;z-index:2}',
-    '.cg-rs::after{content:"";position:absolute;right:3px;bottom:3px;width:6px;height:6px;opacity:.45;',
+    '.cg-rs{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;z-index:2}',
+    '.cg-rs::after{content:"";position:absolute;right:3px;bottom:3px;width:7px;height:7px;opacity:.45;',
     'border-right:2px solid var(--dim);border-bottom:2px solid var(--dim)}',
-    '.cg-rs:hover::after{opacity:.9;border-color:var(--accent)}',
-    '.cg-head .ic{font-size:15px}',
-    '.cg-head b{font-size:13px;letter-spacing:.4px;white-space:nowrap}',
-    '.cg-head .ctx{font-size:11px;color:var(--dim);font-family:var(--mono);overflow:hidden;',
+    '.cg-rs:hover::after{opacity:.95;border-color:var(--accent)}',
+    '.cg-head .ic{font-size:16px;line-height:1}',
+    '.cg-head b{font-size:13px;letter-spacing:.3px;white-space:nowrap;font-weight:600}',
+    '.cg-head .ctx{font-size:10.5px;color:var(--dim);font-family:var(--mono);overflow:hidden;',
     'text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}',
     '.cg-head .sp{flex:1;min-width:0}',
-    '.cg-head .kbd{font-size:10px;color:var(--dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px;flex:none}',
+    '.cg-head .kbd{font-size:10px;color:var(--dim);border:1px solid var(--border);border-radius:5px;padding:2px 6px;flex:none;',
+    'background:color-mix(in srgb,var(--panel2) 70%,transparent)}',
     /* ⚠️ 顶栏上那两个按钮**不能继承 cursor:move** ✗ ——
        不然鼠标移上去还写着「可拖动」✓，点的时候心里没底 ✓。 */
-    '.cg-head .hb{flex:none;width:24px;height:22px;display:flex;align-items:center;justify-content:center;',
-    'border:1px solid transparent;border-radius:6px;color:var(--dim);cursor:pointer;font-size:12px;line-height:1}',
+    '.cg-head .hb{flex:none;width:26px;height:24px;display:flex;align-items:center;justify-content:center;',
+    'border:1px solid transparent;border-radius:7px;color:var(--dim);cursor:pointer;font-size:12px;line-height:1;',
+    'transition:background .13s,border-color .13s,color .13s}',
     '.cg-head .hb:hover{border-color:var(--border);color:var(--text);background:var(--bg)}',
+    '.cg-head .hb:active{transform:translateY(1px)}',
+    '.cg-head .hb:focus-visible{outline:2px solid var(--accent);outline-offset:1px}',
     '.cg-head .hb.x:hover{color:var(--err);border-color:var(--err)}',
-    '.cg-tabs{display:flex;gap:6px;padding:9px 14px 0;flex:none}',
-    '.cg-tab{font-size:12px;padding:5px 11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--dim)}',
-    '.cg-tab:hover{color:var(--text)}',
-    '.cg-tab.on{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}',
-    '.cg-search{display:flex;gap:8px;padding:10px 14px 0;flex:none}',
-    '.cg-search input{flex:1;min-width:0;height:34px;padding:0 11px;background:var(--bg);color:var(--text);',
-    'border:1px solid var(--border);border-radius:7px;font:13px var(--mono);outline:none}',
-    '.cg-search input:focus{border-color:var(--accent)}',
-    '.cg-search input:disabled{opacity:.5}',
-    '.cg-search button{height:34px;padding:0 16px;border-radius:7px;border:1px solid var(--accent);',
-    'background:transparent;color:var(--accent);font:12px var(--ui);cursor:pointer}',
-    '.cg-search button:hover{background:var(--accent);color:#fff}',
-    '.cg-tip{font-size:11px;color:var(--dim);padding:7px 14px 0;flex:none}',
-    /* ⚠️⚠️ 这里必须是 `flex:1 1 auto` ✗✗，**不能写 `flex:1`** ✗ ——
-       `flex:1` = `flex-basis:0%` ✓，而 `.cg-box` 的高度是**内容撑出来的**（只有 max-height ✗，
+    /* ── 页签 ✓ ────────────────────────────────────────────────────────── */
+    '.cg-tabs{display:flex;gap:6px;padding:10px 13px 0;flex:none}',
+    '.cg-tab{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:6px 12px;border-radius:8px;',
+    'border:1px solid var(--border);background:transparent;color:var(--dim);cursor:pointer;',
+    'transition:background .13s,border-color .13s,color .13s}',
+    '.cg-tab:hover{color:var(--text);background:var(--bg);border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}',
+    '.cg-tab:active{transform:translateY(1px)}',
+    '.cg-tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}',
+    '.cg-tab.on{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,transparent)}',
+    '.cg-tab .e{font-size:12px}',
+    /* ── 搜索行 ✓ ──────────────────────────────────────────────────────── */
+    '.cg-search{display:flex;gap:8px;padding:10px 13px 0;flex:none}',
+    '.cg-search input{flex:1;min-width:0;height:35px;padding:0 12px;background:var(--bg);color:var(--text);',
+    'border:1px solid var(--border);border-radius:8px;font:13px var(--mono);outline:none;transition:border-color .13s}',
+    '.cg-search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}',
+    '.cg-search input:disabled{opacity:.45}',
+    '.cg-search .cg-btn{height:35px;padding:0 18px;font-size:12.5px;flex:none}',
+    '.cg-tip{font-size:11px;color:var(--dim);padding:7px 13px 0;flex:none;line-height:1.6}',
+    /* ⚠️⚠️ 这里必须是 flex:1 1 auto ✗✗，**不能写 flex:1** ✗ ——
+       flex:1 = flex-basis:0% ✓，而 .cg-box 的高度是**内容撑出来的**（只有 max-height ✗，
        没有固定高度 ✓）→ 父级高度「不确定」时 ✓，basis 0 的子项**拿不到任何剩余空间** ✗ →
        实测**高度直接塌成 0** ✗ → 逻辑图整块被裁掉 ✓、下面的按钮全都点不到 ✗
        （探针报的是「#cg-skel not visible」✗，看着像按钮没了 ✓，其实是**容器 0 高** ✗）。
-       → `flex-basis:auto` ✓：跟着**内容**长 ✓，长到超过 max-height 再靠 overflow 滚 ✓。 */
-    '.cg-body{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 14px 14px}',
-    '.cg-note{font-size:11.5px;line-height:1.75;color:var(--dim);padding:7px 10px;margin-bottom:8px;',
-    'border-left:2px solid var(--border);background:color-mix(in srgb,var(--panel2) 60%,transparent)}',
-    '.cg-note.err{color:var(--err);border-left-color:var(--err)}',
-    '.cg-empty{color:var(--dim);font-size:12px;line-height:1.9;text-align:center;padding:26px 10px}',
+       → flex-basis:auto ✓：跟着**内容**长 ✓，长到超过 max-height 再靠 overflow 滚 ✓。 */
+    '.cg-body{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 13px 14px}',
+    '.cg-note{font-size:11.5px;line-height:1.75;color:var(--dim);padding:8px 11px;margin-bottom:9px;border-radius:0 7px 7px 0;',
+    'border-left:2px solid var(--border);background:color-mix(in srgb,var(--panel2) 55%,transparent)}',
+    '.cg-note.err{color:var(--err);border-left-color:var(--err);background:color-mix(in srgb,var(--err) 8%,transparent)}',
+    '.cg-note b{color:var(--text)}',
+    '.cg-empty{color:var(--dim);font-size:12px;line-height:1.9;text-align:center;padding:28px 12px}',
     '.cg-empty span{font-size:11px;opacity:.8}',
-    '.cg-row{border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:8px;background:var(--panel2)}',
-    '.cg-row:hover{border-color:var(--accent)}',
+    /* ── 结果卡片 ✓ ────────────────────────────────────────────────────── */
+    '.cg-row{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:9px;background:var(--panel2);',
+    'transition:border-color .13s,box-shadow .13s}',
+    '.cg-row:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));',
+    'box-shadow:0 2px 10px rgba(0,0,0,.16)}',
     '.cg-row .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.cg-row .nm{font-family:var(--mono);font-size:13px;color:var(--text);font-weight:600;word-break:break-all}',
-    '.cg-src{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid}',
-    '.cg-src.ok{color:var(--ok);border-color:var(--ok)}',
-    '.cg-src.ai{color:#d29922;border-color:#d29922}',
-    '.cg-row .sub{font-size:11px;color:var(--dim);margin-top:3px}',
+    '.cg-src{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}',
+    '.cg-src.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 55%,transparent);background:color-mix(in srgb,var(--ok) 12%,transparent)}',
+    '.cg-src.ai{color:#d29922;border-color:color-mix(in srgb,#d29922 55%,transparent);background:color-mix(in srgb,#d29922 12%,transparent)}',
+    '.cg-row .sub{font-size:11px;color:var(--dim);margin-top:4px}',
     '.cg-row .doc,.cg-row .use{font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--text);',
-    'white-space:pre-wrap;word-break:break-word;margin:7px 0 0;padding:7px 9px;background:var(--bg);border-radius:6px;max-height:150px;overflow:auto}',
+    'white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:8px 10px;background:var(--bg);border-radius:7px;max-height:150px;overflow:auto}',
     '.cg-row .use{color:var(--accent)}',
-    '.cg-row .acts,.cg-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}',
-    '.cg-row .acts button,.cg-acts button{height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;',
-    'background:transparent;color:var(--dim);font:11px var(--ui);cursor:pointer}',
-    '.cg-row .acts button:hover,.cg-acts button:hover{border-color:var(--accent);color:var(--accent)}',
-    '.cg-acts button.pri{border-color:var(--accent);color:var(--accent)}',
-    '.cg-acts button.pri:hover{background:var(--accent);color:#fff}',
-    '.cg-graph{border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);',
-    'max-height:44vh;overflow:auto;margin-bottom:10px}',
-    '.cg-gbar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);margin-bottom:6px}',
+    '.cg-row .nj{font-size:10.5px;color:var(--dim);margin-top:7px;opacity:.9}',
+    /* ── ★★★★ 按钮：hover / 按下 / 禁用 / 忙 —— 四态必须分得清 ✗✗ ────────────
+       用户原话：「这些按键设计的也不合理，按下思考，都没有加载提醒，
+                  等等，高亮和按下都分不清等等」✓。
+       ⚠️ 原来只有一条 hover 规则 ✓（还是只换边框和字色 ✓，很淡 ✗）→
+          鼠标悬停和真的按下**长得一模一样** ✗，用户点完不知道点没点上 ✗。
+       → 四态各有明确视觉 ✓：
+          hover  淡背景 + 边框亮 ✓
+          active 更深的背景 + **下沉 1px** ✓（「按下去」的触感 ✓）
+          busy   主题色描边 + 转圈 + 文案换成「正在…」✓
+          disabled 变灰 + not-allowed ✓（不可点的东西**必须看得出来** ✓）*/
+    '.cg-btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:8px;',
+    'border:1px solid var(--border);background:var(--panel2);color:var(--dim);font:11.5px var(--ui);cursor:pointer;',
+    'transition:background .13s,border-color .13s,color .13s,transform .06s}',
+    '.cg-btn:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 60%,var(--border));color:var(--text);',
+    'background:color-mix(in srgb,var(--accent) 11%,var(--panel2))}',
+    '.cg-btn:active:not(:disabled){transform:translateY(1px);border-color:var(--accent);',
+    'background:color-mix(in srgb,var(--accent) 24%,var(--panel2))}',
+    '.cg-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}',
+    '.cg-btn:disabled{cursor:not-allowed;opacity:.45}',
+    '.cg-btn.pri{border-color:color-mix(in srgb,var(--accent) 70%,transparent);color:var(--accent);',
+    'background:color-mix(in srgb,var(--accent) 10%,transparent)}',
+    '.cg-btn.pri:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}',
+    '.cg-btn.pri:active:not(:disabled){background:color-mix(in srgb,var(--accent) 34%,transparent)}',
+    '.cg-btn.on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,transparent)}',
+    '.cg-btn.busy,.cg-btn.busy:disabled{border-color:var(--accent);color:var(--accent);opacity:1;',
+    'background:color-mix(in srgb,var(--accent) 14%,transparent);cursor:progress}',
+    /* 转圈 ✓ —— 用 currentColor ✓，跟着按钮的字色走 ✓（主题切换不用管 ✓）*/
+    '.cg-spin{flex:none;width:11px;height:11px;border-radius:50%;',
+    'border:1.6px solid color-mix(in srgb,currentColor 28%,transparent);border-top-color:currentColor;',
+    'animation:cg-spin .7s linear infinite}',
+    '@keyframes cg-spin{to{transform:rotate(360deg)}}',
+    /* 忙碌横幅 ✓ —— 「按下去了、正在想」要**全局可见** ✓，不能只体现在那个小按钮上 ✓ */
+    '.cg-busy{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--accent);padding:9px 12px;',
+    'margin-bottom:10px;border-radius:9px;border:1px solid color-mix(in srgb,var(--accent) 34%,transparent);',
+    'background:color-mix(in srgb,var(--accent) 9%,transparent)}',
+    '.cg-busy .t{flex:1;min-width:0;line-height:1.5}',
+    '.cg-busy .t i{display:block;font-style:normal;color:var(--dim);font-size:10.5px;margin-top:2px}',
+    '.cg-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}',
+    '.cg-row .acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}',
+    '.cg-row .acts .cg-btn,.cg-acts .cg-btn{height:27px}',
+    /* ── 视图切换（拆逻辑内部）✓ ─────────────────────────────────────────── */
+    '.cg-views{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;padding:5px;border-radius:10px;',
+    'background:color-mix(in srgb,var(--bg) 70%,transparent);border:1px solid var(--border)}',
+    '.cg-views .cg-btn{height:26px;font-size:11px;border-color:transparent;background:transparent}',
+    '.cg-views .cg-btn.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}',
+    /* ── ★★ 思维导图 ✓（用户原话：「流程图，思维导图那种，不是代码」✓）──────────
+       做法：节点是**绝对定位的 HTML** ✓（好排版、能选中文字 ✓），
+       连线是**一层 SVG** ✓（贝塞尔 ✓）—— 和页面自己的 buildLogicFlow 同一套技术 ✓
+       （纯 SVG 画文字要自己算换行 ✓，不值当 ✓）。 */
+    '.cg-mind{position:relative;min-width:100%;padding:4px 0 8px}',
+    '.cg-mind svg{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}',
+    '.cg-mind-node{position:absolute;border-radius:9px;border:1px solid var(--border);background:var(--panel2);',
+    'padding:7px 10px;font-size:11.5px;line-height:1.55;color:var(--text);box-sizing:border-box;',
+    'transition:border-color .13s,box-shadow .13s}',
+    '.cg-mind-node:hover{border-color:var(--accent);box-shadow:0 2px 10px rgba(0,0,0,.2)}',
+    '.cg-mind-root{border-color:var(--accent);font-weight:600;font-size:12.5px;',
+    'background:color-mix(in srgb,var(--accent) 15%,var(--panel2))}',
+    '.cg-mind-root .t2{display:block;font-weight:400;font-size:10.5px;color:var(--dim);margin-top:3px;line-height:1.5}',
+    '.cg-mind-branch{font-weight:600}',
+    '.cg-mind-branch .ic{margin-right:4px}',
+    '.cg-mind-leaf{background:var(--bg);font-size:11px;color:var(--dim);padding:6px 9px}',
+    '.cg-mind-leaf.chip{border-style:dashed}',
+    '.cg-mind-leaf.chip .k{color:var(--ok);font-weight:600;margin-right:3px}',
+    /* ── 实现流程（垂直步骤 + 箭头）✓ ────────────────────────────────────── */
+    '.cg-flow{position:relative;padding:2px 0 4px}',
+    '.cg-flow svg{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}',
+    '.cg-step{position:relative;border:1px solid var(--border);border-radius:9px;background:var(--panel2);',
+    'padding:9px 11px;margin-bottom:0}',
+    '.cg-arrow{display:flex;justify-content:center;align-items:center;height:18px;color:var(--dim);font-size:12px}',
+    '.cg-step .n{position:absolute;left:-9px;top:-9px;width:20px;height:20px;border-radius:50%;',
+    'display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;',
+    'background:var(--accent);color:#fff}',
+    '.cg-step .t{font-size:12.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}',
+    '.cg-step .d{font-size:11.5px;line-height:1.75;color:var(--dim);margin-top:4px}',
+    '.cg-step .br{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}',
+    '.cg-step .br span{font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px dashed var(--ok);color:var(--ok)}',
+    '.cg-step.k-branch{border-color:color-mix(in srgb,var(--ok) 45%,var(--border))}',
+    '.cg-step.k-branch .n{background:var(--ok)}',
+    '.cg-step.k-return .n,.cg-step.k-end .n{background:var(--err)}',
+    '.cg-step.k-loop .n{background:#d29922}',
+    '.cg-step.k-call .n{background:color-mix(in srgb,var(--accent) 70%,#000)}',
+    '.cg-summary{font-size:12.5px;line-height:1.85;color:var(--text);padding:10px 12px;border-radius:9px;',
+    'border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);',
+    'background:color-mix(in srgb,var(--accent) 8%,transparent);margin-bottom:11px}',
+    '.cg-summary .k{font-size:10px;letter-spacing:1.4px;color:var(--accent);display:block;margin-bottom:4px}',
+    /* ── 代码级控制流图（保留原渲染器）✓ ──────────────────────────────────── */
+    '.cg-graph{border:1px solid var(--border);border-radius:9px;padding:9px;background:var(--bg);',
+    'max-height:46vh;overflow:auto;margin-bottom:10px}',
+    '.cg-gbar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);margin-bottom:7px}',
     '.cg-gbar .t{font-family:var(--mono);color:var(--text)}',
+    '.cg-gbar .badge{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--border);color:var(--dim)}',
     '.cg-code{font-family:var(--mono);font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;',
-    'background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px;max-height:280px;overflow:auto;margin:0 0 8px}',
+    'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px;max-height:290px;overflow:auto;margin:0 0 9px}',
     '.cg-explain{font-size:12px;line-height:1.9;color:var(--text);border-left:2px solid var(--accent);',
-    'padding:8px 11px;background:color-mix(in srgb,var(--panel2) 60%,transparent);border-radius:0 6px 6px 0}',
-    '.cg-foot{display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--border);',
+    'padding:9px 12px;background:color-mix(in srgb,var(--panel2) 55%,transparent);border-radius:0 8px 8px 0}',
+    /* ── 底栏 ✓ ────────────────────────────────────────────────────────── */
+    '.cg-foot{display:flex;align-items:center;gap:8px;padding:9px 13px;border-top:1px solid var(--border);',
     'font-size:10.5px;color:var(--dim);flex:none}',
     '.cg-foot .sp{flex:1}',
-    '.cg-foot .src-legend{display:flex;align-items:center;gap:5px}',
-    '.cg-foot .src-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:7px}',
+    '.cg-foot .src-legend{display:flex;align-items:center;gap:5px;flex-wrap:wrap}',
+    '.cg-foot .src-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:8px}',
     '.cg-foot .src-legend i.ok{background:var(--ok)}',
     '.cg-foot .src-legend i.ai{background:#d29922}',
     '.cg-toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(12px);z-index:9999;',
-    'background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;',
-    'padding:9px 15px;font:12px var(--ui);opacity:0;pointer-events:none;transition:.18s}',
+    'background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;',
+    'padding:10px 16px;font:12px var(--ui);opacity:0;pointer-events:none;transition:.18s;',
+    'box-shadow:0 10px 30px rgba(0,0,0,.35)}',
     '.cg-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}',
   ].join('');
   function cgStyle() {
@@ -812,6 +1460,14 @@
       const h = Math.round(Math.min(Number(w.h), vh - 16));
       box.style.height = h + 'px';
       box.style.maxHeight = h + 'px';
+    }
+    /* ⚠️ 窗口宽度变了 → 思维导图要**重新分列** ✗（它的列宽是按容器宽度算的 ✓，
+       见 cgMindCols ✓）。不重算的话：拖宽了图还是窄的 ✓、拖窄了右边被裁 ✗。
+       ⚠️ 用 rAF 而不是同步重画 ✗ —— cgPlace 可能在一帧里被调好几次（resize 事件很密 ✓），
+          同步重画等于每帧量一次 DOM ✓（白烧 CPU ✓）。 */
+    if (CG.open && !CG.min) {
+      if (CG._drawT) cancelAnimationFrame(CG._drawT);
+      CG._drawT = requestAnimationFrame(() => { try { cgDrawAll(); } catch (_) {} });
     }
   }
   /* ★ 拖动 ✓ —— 把手是**顶栏** ✓（`cursor:move` ✓）。
@@ -872,6 +1528,8 @@
         document.removeEventListener('mouseup', up, true);
         const r2 = box.getBoundingClientRect();
         cgWinSave({ w: Math.round(r2.width), h: Math.round(r2.height) });
+        /* 拖完大小 → 思维导图重新分列 ✓（拖的过程中不重画 ✓，不然每帧量一次 DOM ✓）*/
+        try { cgDrawAll(); } catch (_) {}
       };
       document.addEventListener('mousemove', move, true);
       document.addEventListener('mouseup', up, true);
@@ -889,6 +1547,12 @@
     const b = $('#cgx-min'); if (b) b.textContent = CG.min ? '▢' : '—';
     cgWinSave({ min: CG.min });
     cgPlace();
+    /* ⚠️⚠️ 展开之后要**重画一遍图** ✗✗ —— 折起来的时候 `.cg-body` 是 `display:none` ✓，
+       里面所有元素的 `offsetHeight` 都是 **0** ✓ →
+       思维导图 / 实现流程全是靠量高度摆位置的 ✓ → 会摆成一堆重叠的方块 ✗
+       （实测：折一下再展开，导图就塌了 ✓）。
+       ⚠️ 而且这属于「探针天然测不到」那一类 ✗（它只在人手动折叠时才出现 ✓）。 */
+    if (!CG.min) requestAnimationFrame(() => { try { cgDrawAll(); } catch (_) {} });
   }
 
   /* ══ ⑫ 浮层 ✓ ══════════════════════════════════════════════════════════ */
@@ -909,10 +1573,11 @@
       + '<span class="hb" id="cgx-min" title="折起来 / 展开（折起来只剩这一条，可以拖到边上）">—</span>'
       + '<span class="hb x" id="cgx-close" title="关闭（Esc）">✕</span></div>'
       + '<div class="cg-tabs" id="cgx-tabs">'
-      + TABS.map((t) => '<span class="cg-tab' + (t.k === CG.tab ? ' on' : '') + '" data-cgtab="' + t.k + '">' + t.e + ' ' + t.n + '</span>').join('')
+      + TABS.map((t) => '<span class="cg-tab' + (t.k === CG.tab ? ' on' : '') + '" data-cgtab="' + t.k + '"'
+        + ' title="' + esc(t.tip) + '"><span class="e">' + t.e + '</span><span>' + esc(t.n) + '</span></span>').join('')
       + '</div>'
       + '<div class="cg-search"><input id="cgx-q" placeholder="" autocomplete="off" spellcheck="false"/>'
-      + '<button class="pri" id="cgx-go">查</button></div>'
+      + '<button class="cg-btn pri" id="cgx-go">查</button></div>'
       + '<div class="cg-tip" id="cgx-tip"></div>'
       + '<div class="cg-body" id="cgx-body"></div>'
       + '<div class="cg-foot"><span>Esc 关掉</span><span class="sp"></span>'
@@ -930,24 +1595,27 @@
     Array.from(el.querySelectorAll('[data-cgtab]')).forEach((t) => {
       t.onclick = () => {
         CG.tab = t.dataset.cgtab;
-        CG.rows = []; CG.note = ''; CG.err = ''; CG.graph = null; CG.ai = null;
+        CG.rows = []; CG.note = ''; CG.err = ''; CG.graph = null; CG.ai = null; CG.aiFlow = null;
+        CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
         cgRender();
         if (CG.tab === 'break') cgRunBreak();
         else { const i = $('#cgx-q'); if (i) i.focus(); }
       };
     });
     const inp = $('#cgx-q', el);
-    /* ⚠️ 输入框**不能每敲一个字就整块重绘** ✗ —— 会失焦 ✓（这个坑项目里踩过好几次 ✓）。
+    /* ⚠️ 输入框**不能每敲一个字就整块重绘** ✗ —— 会失焦 ✓（这个项目里踩过好几次 ✓）。
        只存值 ✓，回车 / 点「查」才跑 ✓。 */
     inp.oninput = () => { CG.q = inp.value; };
     inp.onkeydown = (ev) => {
       if (ev.key === 'Enter') { ev.preventDefault(); cgRun(); }
     };
     $('#cgx-go', el).onclick = () => cgRun();
-    /* 结果区用**事件委托** ✓ —— 内容每次重绘 ✓，逐条绑会漏 ✓ */
+    /* ★★ 结果区用**事件委托** ✓ —— 内容每次重绘 ✓（innerHTML 整个换掉 ✓），
+       绑在元素上的监听会跟着消失 ✗ → 只能挂在**不重绘的父级**上 ✓。
+       ⚠️ 一个监听搞定全部动作 ✗（原来是两个 ✓，加动作就得加一个 ✓，迟早漏 ✓）。 */
     $('#cgx-body', el).addEventListener('click', (ev) => {
-      const btn = ev.target.closest ? ev.target.closest('[data-cgact]') : null;
-      if (!btn) return;
+      const btn = ev.target && ev.target.closest ? ev.target.closest('[data-cgact]') : null;
+      if (!btn || btn.disabled) return;
       const act = btn.dataset.cgact;
       const row = btn.closest('[data-cgrow]');
       const name = row ? row.dataset.cgrow : '';
@@ -956,34 +1624,46 @@
       if (act === 'copy') { cgCopy(name); return; }
       if (act === 'copysk') { cgCopy((CG.graph && CG.graph.skel) || ''); return; }
       if (act === 'goto') { cgGoto(r); return; }
-      if (act === 'pick') { cgLoadGraph({ name: r.name, line: r.line }); return; }
-    });
-    /* 「骨架 / 讲一遍」这两个按钮也是重绘出来的 ✓ → 同样走委托 ✓ */
-    $('#cgx-body', el).addEventListener('click', (ev) => {
-      const t = ev.target;
-      if (!t || !t.id) return;
-      if (t.id === 'cgx-skel') { cgSkeleton(); return; }
-      if (t.id === 'cgx-explain') { cgExplain(); }
+      if (act === 'pick') { cgPick(r); return; }
+      if (act === 'view') { CG.view = btn.dataset.cgval || 'mind'; cgRender(); return; }
+      if (act === 'flow') { cgRunBreak(); return; }
+      if (act === 'skel') { cgSkeleton(); return; }
+      if (act === 'explain') { cgExplain(); }
     });
     CG_EL = el;
     return el;
   }
+  /* 「拆这个」✓ —— 从挑函数的那一列点进来 ✓ */
+  function cgPick(r) {
+    if (!r || !r.name) return;
+    const ctx = cgCtx();
+    /* ★ 记住「这次拆的是谁」✓ —— 不然再点「重新拆解」会弹回列表 ✗（见 cgRunBreak 那段注释 ✓）*/
+    CG.root = { name: r.name, line: r.line, frag: r.frag, file: ctx && ctx.file };
+    cgBegin('flow', '正在拆解「' + r.name + '」…');
+    const root = CG.root;
+    CG.rows = [];
+    Promise.resolve()
+      .then(() => cgLoadGraph(root))
+      .then(() => cgAiFlow(root))
+      .then(() => cgEnd())
+      .catch((e) => { CG.err = String((e && e.message) || e); cgEnd(); });
+  }
   async function cgRun() {
-    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null;
-    CG.busy = true; cgRender();
+    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.aiFlow = null;
+    cgBegin('run', CG.tab === 'find' ? '先搜本地，再让 AI 补候选…' : '正在查…');
     try {
       if (CG.tab === 'look') await cgRunLook();
       else if (CG.tab === 'find') await cgRunFind();
-      else await cgRunBreak();
+      else { await cgRunBreak(); return; }   /* 拆逻辑自己管 busy ✓（它要跑两趟 ✓）*/
     } catch (e) {
       CG.err = String((e && e.message) || e);
     }
-    CG.busy = false;
-    cgRender();
+    cgEnd();
   }
   function cgOpen(tab) {
     if (tab) CG.tab = tab;
-    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.ai = null;
+    CG.err = ''; CG.note = ''; CG.rows = []; CG.graph = null; CG.ai = null; CG.aiFlow = null;
+    CG.busyAct = ''; CG.busyTxt = ''; CG.busy = false;
     CG.q = '';
     const el = cgBuild();
     el.classList.add('on');

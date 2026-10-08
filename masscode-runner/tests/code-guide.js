@@ -24,13 +24,34 @@ const exe = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].fin
 const fails = []; const ck = (n, ok, x) => { if (ok) console.log('  ✅ ' + n); else { console.log('  ❌ ' + n + (x ? '  → ' + x : '')); fails.push(n); } };
 const BASE = 'http://127.0.0.1:4877';
 
-/* 假 AI ✓ —— 只答「找函数」那一路（要 JSON ✓），并故意包一层 ```json 围栏 ✓ */
+/* 假 AI ✓ —— **两条路都要答** ✗（同一个 /api/ai/chat ✓，靠请求内容分岔 ✓）：
+   ① 「找函数」要的是候选名 ✓（FAKE_AI ✓）
+   ② 「拆逻辑」要的是**人话流程图** ✓（FAKE_FLOW ✓）—— 用户原话：
+      「我需要的是让AI给我拆解分析实现逻辑和功能的流程图，思维导图那种，不是代码」✓
+   ⚠️ 两份都故意包一层 ```json 围栏 + 前言 ✗（验的就是「能不能剥干净」✓）。
+   ⚠️⚠️ FAKE_FLOW 里**故意不写任何代码原文** ✗ ——
+      探针要断言的就是「导图上不会出现 if (...) / return -1 这种」✓。
+      如果假数据里带了代码 ✓，那条断言就变成**恒假** ✗（永远红 ✓），
+      而真正要防的是「产品把 AI 给的代码原样渲染出来」✓。 */
 const FAKE_AI = {
   names: [
     { n: '探针_读文件', why: '一句话：把整个文件读成字符串', use: 'auto s = readAll("a.txt");' },
     { n: '探针_逐行读', why: '一句话：一行一行读，省内存', use: 'while (getline(in, line)) { }' },
   ],
   hint: '小文件用第一个，大文件用第二个。',
+};
+const FAKE_FLOW = {
+  title: '读 LED 电平',
+  what: '把 LED 当前的电平读出来，交给调用者',
+  io: { in: ['LED 句柄', '一个用来装结果的变量'], out: ['成功返回 0', '参数不对返回 -1'] },
+  steps: [
+    { t: '检查参数', d: '先看句柄和结果变量有没有传进来', kind: 'branch', branch: [{ cond: '有一个是空的', to: '直接返回失败码' }] },
+    { t: '读取电平', d: '从句柄里把当前电平取出来，写进结果变量', kind: 'step' },
+    { t: '打日志', d: '把读到的电平值记进日志，方便排查', kind: 'call' },
+    { t: '返回成功', d: '告诉调用者这次读成功了', kind: 'return' },
+  ],
+  keys: ['先查空指针再解引用'],
+  pitfalls: ['忘记把结果写回调用者的变量'],
 };
 
 (async () => {
@@ -55,12 +76,25 @@ const FAKE_AI = {
   /* ⚠️ 原生弹窗哨兵 ✓ —— 只在**真的弹了原生框**时才触发 ✓（页内浮层不会 ✓）*/
   const natives = [];
   p.on('dialog', async (d) => { natives.push(d.type()); await d.dismiss().catch(() => {}); });
-  let aiCalls = 0;
-  await p.route('**/api/ai/chat', (r) => {
+  let aiCalls = 0, flowCalls = 0;
+  await p.route('**/api/ai/chat', async (r) => {
     aiCalls++;
+    /* ⚠️ 按**请求内容**分岔 ✗（不是按调用顺序 ✓）——
+       顺序会随着「哪个按钮先点」变 ✓，按顺序判必然错位 ✓。 */
+    let body = '';
+    try { body = JSON.stringify(r.request().postDataJSON() || {}); } catch (_) {}
+    const isFlow = /流程图|思维导图|讲成人话/.test(body);
+    if (isFlow) {
+      flowCalls++;
+      /* ★★ 故意**拖一会儿** ✗✗ —— 不给这点延迟的话 ✓，
+         请求瞬间返回 ✓ → 「按下有反馈 / 忙碌转圈」根本来不及观察 ✓ →
+         那两条断言就变成**恒真**（按钮已经恢复了 ✓）✗。
+         1.6 秒够探针量一次计算样式了 ✓。 */
+      await new Promise((ok) => setTimeout(ok, 1600));
+    }
     return r.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({ ok: true, content: '好的：\n```json\n' + JSON.stringify(FAKE_AI) + '\n```\n' }),
+      body: JSON.stringify({ ok: true, content: '好的：\n```json\n' + JSON.stringify(isFlow ? FAKE_FLOW : FAKE_AI) + '\n```\n' }),
     });
   });
   await p.addInitScript(() => {
@@ -88,13 +122,15 @@ const FAKE_AI = {
        ⚠️ 判据：**同一个 id 在文档里出现两次** → `querySelectorAll('#x').length === 2` ✓。
        加浮层前先 grep 一遍 id ✓，加完之后**用这条守着** ✓。 */
     ck('★★★ 浮层的 id 没和页面已有的撞（撞了会被别人的 CSS 盖掉）', await p.evaluate(() => {
-      const mine = ['cgx-mask', 'cgx-box', 'cgx-tabs', 'cgx-q', 'cgx-go', 'cgx-ctx', 'cgx-tip',
-        'cgx-body', 'cgx-graph', 'cgx-skel', 'cgx-explain', 'cgx-style', 'cgx-close'];
+      const mine = ['cgx-mask', 'cgx-box', 'cgx-head', 'cgx-tabs', 'cgx-q', 'cgx-go', 'cgx-ctx', 'cgx-tip',
+        'cgx-body', 'cgx-graph', 'cgx-mind', 'cgx-flow', 'cgx-skel', 'cgx-explain', 'cgx-skelcode',
+        'cgx-style', 'cgx-close', 'cgx-min', 'cgx-rs'];
       const bad = mine.filter((id) => document.querySelectorAll('#' + id).length > 1);
       return bad.length ? bad.join(',') : '';
     }) === '', await p.evaluate(() => {
-      const mine = ['cgx-mask', 'cgx-box', 'cgx-tabs', 'cgx-q', 'cgx-go', 'cgx-ctx', 'cgx-tip',
-        'cgx-body', 'cgx-graph', 'cgx-skel', 'cgx-explain', 'cgx-style', 'cgx-close'];
+      const mine = ['cgx-mask', 'cgx-box', 'cgx-head', 'cgx-tabs', 'cgx-q', 'cgx-go', 'cgx-ctx', 'cgx-tip',
+        'cgx-body', 'cgx-graph', 'cgx-mind', 'cgx-flow', 'cgx-skel', 'cgx-explain', 'cgx-skelcode',
+        'cgx-style', 'cgx-close', 'cgx-min', 'cgx-rs'];
       return mine.filter((id) => document.querySelectorAll('#' + id).length > 1).join(',');
     }));
     await cgOpen();
@@ -160,24 +196,188 @@ const FAKE_AI = {
     ck('★★ 中文查询**没有**把一堆无关符号全捞出来（那条兜底要判空）',
       !/main\.cpp|calc\.hpp|keyword/.test(findBody), findBody.slice(0, 160));
 
-    console.log('\n── ⑤ 🧩 拆逻辑（画图 + 骨架）──');
+    /* ══ ⑤ ★★★★ 拆逻辑：**AI 讲成人话** + 思维导图 / 实现流程 / 代码级 ══════
+       用户原话（第二次改）：
+       「第二个这里拆逻辑这里，我需要的是让AI给我拆解分析实现逻辑和功能的流程图，
+         思维导图那种，**不是代码**」✓。
+       ⚠️⚠️ 这一节是**整节重写的** ✗ —— 上一版只验「逻辑图画出来了」✓，
+          而那张图上每格都是**代码原文** ✗（`if (led_handler == NULL ...)` ✓），
+          恰恰是用户明确说不要的东西 ✓。
+          → 现在判据换成：**导图上必须是人话、不许出现代码** ✓。 */
+    console.log('\n── ⑤ 🧩 拆逻辑：AI 讲成人话 + 思维导图（不是代码）──');
     await p.locator('[data-cgtab="break"]').click();
+    await p.waitForTimeout(1500);
+    /* ⚠️ 光标不一定落在函数体里 ✓（③ 是随便挑的「第一个像标识符的词」✓）→
+       那样会先给一张「挑一个函数」的列表 ✓ → 顺手点第一个「拆这个」✓。
+       ⚠️ 不自愈的话这条会**偶发红** ✗（取决于那个文件第一行长啥样 ✓）。 */
+    if (!(await has('#cgx-mind')) && (await p.locator('[data-cgact="pick"]').count())) {
+      console.log('    （光标不在函数里 → 点第一个「拆这个」）');
+      await p.locator('[data-cgact="pick"]').first().click();
+    }
+    await p.waitForFunction(() => !!document.getElementById('cgx-mind'), null, { timeout: 40000 }).catch(() => {});
+    await p.waitForTimeout(1200);
+    ck('★★★ AI 拆解出**思维导图**了（默认视图，不是代码图）', await has('#cgx-mind'), (await cgBody()).slice(0, 160));
+    const mnodes = await p.locator('#cgx-mind .cg-mind-node').count();
+    console.log('    导图节点数: ' + mnodes);
+    ck('★★ 导图上有节点（不是空壳）', mnodes >= 3, String(mnodes));
+    ck('★★ 有一条从「根」到「分支」的连线（真的画了图，不是一列文字）',
+      await p.locator('#cgx-mind svg path').count() >= 3, String(await p.locator('#cgx-mind svg path').count()));
+    const mindTxt = await txt('#cgx-mind');
+    console.log('    导图文字: ' + JSON.stringify(mindTxt.slice(0, 150)));
+    /* ★★★ 核心判据 —— 用户要的就是这个 ✗✗ */
+    ck('★★★ 导图里是**人话**（出现了「检查参数」这种描述）',
+      /检查参数|读取电平|打日志/.test(mindTxt), mindTxt.slice(0, 160));
+    ck('★★★ 导图里**没有代码原文**（不许出现 if ( / return -1 / NULL / 分号）',
+      !/if\s*\(|return\s+-?\d|NULL|;/.test(mindTxt), mindTxt.slice(0, 200));
+    ck('★★ 顶部有「这段在干什么」的一句话总结', /这段在干什么/.test(await txt('.cg-summary')), await txt('.cg-summary'));
+    /* ★ 实现流程视图 ✓ —— 同一份数据、换个画法 ✓ */
+    await p.locator('[data-cgact="view"][data-cgval="flow"]').click(); await p.waitForTimeout(700);
+    const flowN = await p.locator('#cgx-flow .cg-step').count();
+    ck('★★ 「实现流程」视图能切出来（按顺序一步步）', flowN >= 3, String(flowN));
+    ck('★ 流程里把**分支条件**标出来了', /→/.test(await txt('#cgx-flow')), (await txt('#cgx-flow')).slice(0, 140));
+    ck('★ 流程里也是人话（没代码）', !/if\s*\(|NULL|;/.test(await txt('#cgx-flow')), (await txt('#cgx-flow')).slice(0, 160));
+    /* ★ 代码级视图 ✓ —— 精确的那份**留着** ✓（拿它核对 AI 有没有讲错 ✓）*/
+    await p.locator('[data-cgact="view"][data-cgval="code"]').click();
     await p.waitForFunction(() => !!document.getElementById('cgx-graph'), null, { timeout: 30000 }).catch(() => {});
-    await p.waitForTimeout(2500);
-    ck('★★ 逻辑图画出来了（复用了页面自己的渲染器）', await has('#cgx-graph'));
+    await p.waitForTimeout(900);
+    ck('★★ 「代码级」视图还在（复用了页面自己的渲染器 —— 精确、可核对）', await has('#cgx-graph'));
     const nodes = await p.locator('#cgx-graph .logic-node').count();
-    console.log('    图上节点数: ' + nodes);
-    ck('★★ 图上真的有节点（不是空壳）', nodes >= 2, String(nodes));
+    console.log('    代码级图上节点数: ' + nodes);
+    ck('★★ 代码级图上真的有节点（不是空壳）', nodes >= 2, String(nodes));
     ck('★ 图头写了函数名 + 节点数', /个节点/.test(await txt('#cgx-graph .cg-gbar')), await txt('#cgx-graph .cg-gbar'));
+    ck('★ 而且标了「精确 · 服务端解析」（让人知道这份不是 AI 编的）',
+      /精确/.test(await txt('#cgx-graph .cg-gbar')), await txt('#cgx-graph .cg-gbar'));
     ck('★ 有「给我一个骨架」按钮（该怎么实现）', await has('#cgx-skel'));
-    ck('★ 有「让它讲一遍」按钮', await has('#cgx-explain'));
+    ck('★ 有「讲一遍」按钮', await has('#cgx-explain'));
     await p.locator('#cgx-skel').click();
     await p.waitForFunction(() => !!document.getElementById('cgx-skelcode'), null, { timeout: 30000 }).catch(() => {});
     await p.waitForTimeout(800);
     ck('★★ 骨架代码出来了（走已有的 /api/logic/skeleton）', await has('#cgx-skelcode'),
       (await txt('#cgx-body')).slice(0, 120));
 
-    console.log('\n── ⑥ 「插到光标处」真的会改编辑器（改完立刻还原）──');
+    /* ══ ⑥ ★★ 按钮：按下有反馈 / 忙碌转圈 / 不能重复点 ══════════════════════
+       用户原话：「这些按键设计的也不合理，按下思考，都没有加载提醒，等等，
+                 高亮和按下都分不清等等」✓。
+       ⚠️⚠️ 这一节**必须靠假 AI 的延迟**才验得出来 ✗（见上面 route 里那 1.6 秒 ✓）——
+          不延迟的话请求瞬间返回 ✓，量到的永远是「已经恢复」的样子 ✓ →
+          断言**恒真** ✗（「看着通过、其实什么都没验」✓）。 */
+    console.log('\n── ⑥ 🖱 按钮：按下有反馈 / 忙碌转圈 / 不能重复点 ──');
+    const styleOf = (sel) => p.evaluate((s) => {
+      const el = document.querySelector(s);
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return { bg: cs.backgroundColor, border: cs.borderColor, color: cs.color, tr: cs.transform, op: cs.opacity };
+    }, sel);
+    await p.locator('[data-cgact="view"][data-cgval="mind"]').click(); await p.waitForTimeout(400);
+    /* ⚠️⚠️ 拿**视图切换按钮**做 hover / 按下测试 ✗✗ —— 别拿「重新拆解」✗：
+       `mouse.down()` + `mouse.up()` 本身就是**一次真点击** ✓ →
+       按在「重新拆解」上会把分析**重跑一遍** ✓（好几秒 ✓），
+       而且中途 DOM 整个换掉 ✓ → 后面那句 `.click()` 找不到元素、干等 30 秒超时 ✗
+       （实测就是这么挂的 ✓）。视图切换是幂等的 ✓，随便点 ✓。 */
+    const vsel = '[data-cgact="view"][data-cgval="flow"]';
+    const b0 = await styleOf(vsel);
+    await p.locator(vsel).hover(); await p.waitForTimeout(300);
+    const b1 = await styleOf(vsel);
+    ck('★ 悬停和默认**长得不一样**（不是「只有一条很淡的 hover」）',
+      !!b0 && !!b1 && (b0.bg !== b1.bg || b0.border !== b1.border), JSON.stringify({ def: b0, hov: b1 }));
+    const bb = await p.locator(vsel).boundingBox();
+    await p.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+    await p.mouse.down(); await p.waitForTimeout(250);
+    const b2 = await styleOf(vsel);
+    await p.mouse.up(); await p.waitForTimeout(300);
+    ck('★★ 按下和悬停**也不一样**（下沉 1px —— 「按下去」要有触感）',
+      !!b1 && !!b2 && (b1.tr !== b2.tr || b1.bg !== b2.bg), JSON.stringify({ hov: b1.tr, act: b2.tr }));
+    /* 回到思维导图视图 ✓，再点「重新拆解」看忙碌态 ✓ */
+    await p.locator('[data-cgact="view"][data-cgval="mind"]').click(); await p.waitForTimeout(400);
+    /* ★★ 点下去**立刻**有反应 ✗✗ —— 这是用户最直接的抱怨 ✓ */
+    await p.locator('[data-cgact="flow"]').click();
+    await p.waitForTimeout(450);                    /* 假 AI 要 1.6 秒 ✓，这时候还在跑 ✓ */
+    const busy = await p.evaluate(() => {
+      const b = document.querySelector('[data-cgact="flow"]');
+      const bar = document.querySelector('.cg-busy');
+      if (!b) return null;
+      return {
+        cls: b.className, disabled: !!b.disabled,
+        spin: !!b.querySelector('.cg-spin'),
+        txt: (b.innerText || '').trim(),
+        bar: bar ? (bar.innerText || '').replace(/\n/g, ' ').trim() : '',
+      };
+    });
+    console.log('    忙碌态: ' + JSON.stringify(busy));
+    ck('★★★ 点下去**立刻**进忙碌态（转圈 + 文案变成「正在…」）',
+      !!busy && busy.spin && /正在/.test(busy.txt), JSON.stringify(busy));
+    ck('★★★ 忙碌时那个按钮**不可重复点**（disabled，防连点发两次请求）',
+      !!busy && busy.disabled === true, JSON.stringify(busy));
+    ck('★★ 而且有一条**全局可见**的进度提示（不只体现在小按钮上）',
+      !!busy && busy.bar.length > 4, JSON.stringify(busy));
+    await p.waitForFunction(() => !document.querySelector('.cg-busy'), null, { timeout: 30000 }).catch(() => {});
+    await p.waitForTimeout(600);
+    const after = await p.evaluate(() => {
+      const b = document.querySelector('[data-cgact="flow"]');
+      return b ? { disabled: !!b.disabled, spin: !!b.querySelector('.cg-spin'), txt: (b.innerText || '').trim() } : null;
+    });
+    ck('★★ 跑完**自己恢复**（不是一直转圈）',
+      !!after && !after.disabled && !after.spin, JSON.stringify(after));
+
+    /* ══ ⑦ ★★ 跳转：该有的都有入口 + 跳完**不关窗** ═══════════════════════
+       用户原话：「有些怎么缺少跳转等等，还有点击跳转，会导致代码向导被关闭等等问题」✓。 */
+    console.log('\n── ⑦ ↗ 跳转：入口 + 跳完不关窗 ──');
+    /* ⚠️⚠️ 搜索词必须挑**这个文件里真的有定义**的符号 ✗✗ ——
+       第一版拿的是 ③ 那个 `placed`（= 第一行的第一个标识符 ✓），
+       而那个词是 `include` ✗ → 它是**预处理指令** ✓，本来就没有「定义在哪」✓ →
+       四条结果全是 LSP 片段 ✓、一条都没有跳转入口 ✓ →
+       断言红了 ✓，而**产品是对的** ✗（假失败 ✓，白查一轮 ✓）。
+       → 改成：直接问页面要一个**本地真有的**符号（fn / type / macro / var ✓）。 */
+    const localSym = await p.evaluate(async () => {
+      try {
+        const r = await fetch('/api/graph?file=' + encodeURIComponent(CURRENT.file));
+        const d = await r.json();
+        const s = (d.symbols || []).find((x) => x && x.name && x.line
+          && ['fn', 'type', 'macro', 'var', 'method'].indexOf(x.kind) >= 0);
+        return s ? { name: s.name, line: s.line, kind: s.kind } : null;
+      } catch (_) { return null; }
+    });
+    console.log('    拿这个本地符号试跳转: ' + JSON.stringify(localSym));
+    ck('  这个文件里找得到一个有行号的本地符号', !!(localSym && localSym.name), JSON.stringify(localSym));
+    await p.locator('[data-cgtab="look"]').click(); await p.waitForTimeout(500);
+    await p.locator('#cgx-q').fill((localSym && localSym.name) || placed);
+    await p.locator('#cgx-go').click();
+    await p.waitForTimeout(2600);
+    const jinfo = await p.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('.cg-row'));
+      /* ⚠️ 找**第一个带跳转入口**的行 ✗，不是「第一行」✗ ——
+         LSP 补全项排在前面 ✓，它们本来就可能没有位置 ✓（标准库 ✓）→
+         拿第一行判会**偶发红** ✓。 */
+      const hit = rows.find((r) => r.querySelector('[data-cgact="goto"]'));
+      if (!hit) return { hasBtn: false, total: rows.length };
+      return { name: hit.dataset.cgrow, hasBtn: true, line: Number(hit.dataset.cgline) || 0, total: rows.length };
+    });
+    console.log('    第一条: ' + JSON.stringify(jinfo));
+    ck('★★ 能定位的条目**有「跳过去」按钮**（旧版只有本地符号才有，LSP 项一律没有）',
+      !!(jinfo && jinfo.hasBtn), JSON.stringify(jinfo));
+    /* ⚠️ 不能跳的那些**必须写清为什么** ✗ —— 用户抱怨的「缺少跳转」有一半是「不知道为什么没有」✓ */
+    const noJump = await p.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('.cg-row'));
+      const miss = rows.filter((r) => !r.querySelector('[data-cgact="goto"]'));
+      return { total: rows.length, miss: miss.length, why: miss.length ? (miss[0].querySelector('.nj') || {}).textContent || '' : '' };
+    });
+    console.log('    没有跳转入口的条目: ' + JSON.stringify(noJump));
+    ck('★★ 不能跳的条目**写清了原因**（不是干晾着用户）',
+      noJump.miss === 0 || String(noJump.why).length > 4, JSON.stringify(noJump));
+    if (jinfo && jinfo.hasBtn) {
+      await p.locator('[data-cgact="goto"]').first().click();
+      /* ⚠️ 跨片段跳转会**重建编辑器**（renderMain ✓）→ 多等一会儿 ✗ */
+      await p.waitForTimeout(2000);
+      const open2 = await p.evaluate(() => { const e = document.getElementById('cgx-mask'); return !!e && e.classList.contains('on'); });
+      ck('★★★ 跳完向导**还开着**（旧版一点就关 —— 用户没法连着跳好几处）', open2 === true);
+      const at = await p.evaluate(() => { try { return MONACO_EDITOR.getPosition().lineNumber; } catch (_) { return -1; } });
+      console.log('    跳完光标在第 ' + at + ' 行（目标第 ' + jinfo.line + ' 行）');
+      ck('★★ 而且真的**跳到了那一行**（不是只弹个提示）', at === jinfo.line, String(at) + ' vs ' + jinfo.line);
+    } else {
+      ck('★★★ 跳完向导还开着', false, '上一条没有按钮，跳不了');
+    }
+
+    console.log('\n── ⑧ 「插到光标处」真的会改编辑器（改完立刻还原）──');
     const before = await editorCode();
     await p.locator('[data-cgtab="look"]').click(); await p.waitForTimeout(400);
     await p.locator('#cgx-q').fill(placed); await p.locator('#cgx-go').click();
@@ -200,14 +400,14 @@ const FAKE_AI = {
       ck('★ 查出来的条目带「插到光标处」按钮', false, '没找到按钮');
     }
 
-    /* ══ ⑦ ★★ 浮在页面上的**小窗口**（可拖 / 可折 / 记位置）══════════════════
+    /* ══ ⑨ ★★ 浮在页面上的**小窗口**（可拖 / 可折 / 记位置）══════════════════
        用户原话：「给我改成小窗口，可以任意拖动显示到不同位置，是浮于页面之上的那种，
                   小窗口显示查询，可以随时查询和关闭，也可以拖动放到一边，
                   参考学习这写代码等等」✓。
        ⚠️ 和旧版最大的差别：**没有遮罩、点外面不关** ✗ ——
           旧版是一层半透明全屏遮罩 + 点它关闭 ✓ →
           用户**没法一边查一边写代码** ✗（点一下编辑器，向导就没了 ✓）。 */
-    console.log('\n── ⑦ ★★ 浮动小窗口：可拖 / 可折 / 记住位置 ──');
+    console.log('\n── ⑨ ★★ 浮动小窗口：可拖 / 可折 / 记住位置 ──');
     const win0 = await p.evaluate(() => localStorage.getItem('cg-win'));
     await p.keyboard.press('Meta+i'); await p.waitForTimeout(800);
     const f1 = await p.evaluate(() => {
