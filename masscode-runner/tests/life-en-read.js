@@ -410,6 +410,105 @@ const TEXT = SENT.join(' ');
       return r.bottom > b.top && r.top < b.bottom;
     }, sIdx));
 
+    /* ══ ★★★★ ③d2 老数据**没有句号**时也要能定位 ✗✗ ═══════════════════════
+       用户原话（2026-10-08 第三次）：「**怎么点击回到原文，定位不了**」✓。
+
+       ⚠️⚠️ 实测根因（探针复现 ✓）：那个词**根本没有 `sent` / `sentIdx` 字段** ✗
+          （老数据 ✓，或者当初不是从正文里划词加的 ✓）→ 算不出句序号 ✓ →
+          只能干说一句「这句对不上」✗。
+          实测：`scrollTop 0 → 0`，**一个词都没点亮** ✗。
+       ⚠️ 而**正文里明明就有这个词** ✓ —— 搜一下就有答案 ✓，
+          没理由说「不知道」✗（用户点这个按钮的意思就是「带我去看它在哪儿」✓）。
+       → 兜底必须是**按词在正文里搜** ✗，这一节就是守它 ✓。
+       ⚠️ 只测「有 sentIdx」那条路 ✗ 是不够的 ✓ —— 用户手上坏掉的正是**没有**的那条 ✓。 */
+    console.log('\n── ③d2 ★★ 老数据**没有句号**时，也要能定位（用户原话「定位不了」）──');
+    /* ⚠️⚠️ `STORE` 是 life-workbench 的**闭包变量** ✗（不是全局 ✓）→
+       页面里改不动它 ✓ → 只能**改服务端 + 重载页面** ✓（确定、可重复 ✓）。 */
+    const reloadToReading = async () => {
+      await p.reload({ waitUntil: 'domcontentloaded' });
+      /* ⚠️ 重载之后回到的是**主编辑器** ✗（不是生活工作台 ✓）→
+         必须重新点 `#btn-lifework` ✓，`.lw-nav` 才会出现 ✓
+         （第一版漏了这一步 ✓ → 卡在 `waiting for .lw-nav [data-tab="reading"]` ✗）。 */
+      await p.waitForSelector('#btn-lifework', { timeout: 25000 });
+      await p.click('#btn-lifework');
+      await p.waitForSelector('#lifework-view', { timeout: 25000 });
+      await p.locator('.lw-nav [data-tab="reading"]').dispatchEvent('click');
+      await p.waitForSelector('.lw-rd', { timeout: 20000 }); await p.waitForTimeout(1100);
+    };
+    const goFromWordbook = async () => {
+      await p.locator('[data-rdmode="word"]').click(); await p.waitForTimeout(900);
+      await p.locator('.lw-wd-row').filter({ hasText: WP }).first().click(); await p.waitForTimeout(700);
+      /* 先把正文滚回开头 ✓ —— 不滚的话「定位」可能本来就在视口里 ✓ → 断言**恒真** ✗ */
+      await p.evaluate(() => { const b = document.getElementById('lw-ep-body'); if (b) b.scrollTop = 0; });
+      await p.waitForTimeout(200);
+      await p.locator('#lw-wd-src').click(); await p.waitForTimeout(1700);
+    };
+    const stripWord = async (patch) => {
+      const dd = await store();
+      dd.words = (dd.words || []).map((x) => {
+        if (!x || x.w !== WP) return x;
+        const y = Object.assign({}, x);
+        Object.keys(patch).forEach((k) => { if (patch[k] === null) delete y[k]; else y[k] = patch[k]; });
+        return y;
+      });
+      await put(dd);
+    };
+    /* ① 模拟老数据：**连字段都没有** ✓ */
+    await stripWord({ sentIdx: null, sent: null });
+    await reloadToReading();
+    await goFromWordbook();
+    const after2 = await p.evaluate((i) => {
+      const host = document.getElementById('lifework-view');
+      const box = host && host.querySelector('#lw-ep-body');
+      const el = host && host.querySelector('[data-epsent="' + i + '"]');
+      const focused = host && host.querySelector('.lw-ep-w.focus');
+      return {
+        scrollTop: box ? Math.round(box.scrollTop) : -1,
+        on: !!el && el.classList.contains('on'),
+        focusWord: focused ? String(focused.textContent || '') : '',
+      };
+    }, sIdx);
+    console.log('    正文 scrollTop → ' + after2.scrollTop + ' · 点亮的词: ' + JSON.stringify(after2.focusWord));
+    ck('★★★ 没有句号也能**定位到那一句**（按词在正文里搜 —— 这就是用户报的那个 bug）',
+      after2.on === true, JSON.stringify(after2));
+    ck('★★ 而且真的**滚下去了**（不是只标中不动）', after2.scrollTop > 50, String(after2.scrollTop));
+    ck('★★ 那句里**这个词被点亮**了（一眼看到它在哪）',
+      String(after2.focusWord).toLowerCase().indexOf(WP.toLowerCase()) === 0, JSON.stringify(after2.focusWord));
+    /* ⚠️ 搜到了要**顺手把字段补回去** ✗ —— 下次不用再搜一遍 ✓，
+       而且词卡上那句「来自哪句」也就有了 ✓（原来它是空的 ✓）。 */
+    {
+      const d2 = await store();
+      const w2 = (d2.words || []).find((x) => x && x.w === WP);
+      console.log('    写回后 sentIdx: ' + (w2 && w2.sentIdx) + ' · sent: ' + JSON.stringify(String((w2 && w2.sent) || '').slice(0, 50)));
+      ck('★★ 搜到之后**把句号补回词上了**（下次直接精确跳，不用再搜）',
+        !!(w2 && Number(w2.sentIdx) === sIdx), JSON.stringify(w2 && w2.sentIdx));
+      ck('★ 顺带把那句原文也补上了（词卡上「来自哪句」不再是空的）',
+        !!(w2 && String(w2.sent || '').indexOf(WP) >= 0), JSON.stringify(String((w2 && w2.sent) || '').slice(0, 60)));
+    }
+    /* ② 反向：下标**漂了**（指向别的句子）✗✗ ——
+       正文重新导入 / 编辑过之后 ✓，同一个下标指向的**已经不是那句话**了 ✓ →
+       照它跳过去 = 跳到一句不相干的话上 ✗（比不跳还糟 ✗：用户会以为词记错了 ✓）。 */
+    await stripWord({ sentIdx: 0, sent: '' });        /* 0 = 第一句，里面肯定没有这个词 ✓ */
+    await reloadToReading();
+    await goFromWordbook();
+    const wrong = await p.evaluate((i) => {
+      const host = document.getElementById('lifework-view');
+      const el0 = host && host.querySelector('[data-epsent="0"]');
+      const el = host && host.querySelector('[data-epsent="' + i + '"]');
+      return { onRight: !!el && el.classList.contains('on'), onWrong: !!el0 && el0.classList.contains('on') };
+    }, sIdx);
+    console.log('    错下标的结果: ' + JSON.stringify(wrong));
+    ck('★★★ 下标**错了**（指向别的句子）也不会瞎跳 —— 当场核对那句里有没有这个词，没有就重搜',
+      wrong.onRight === true && wrong.onWrong === false, JSON.stringify(wrong));
+    /* ⚠️⚠️ 收尾**别乱点** `[data-rdmode="ex"]` ✗✗ —— 它调的是 `epSetMode()` ✓，
+       而 `epSetMode()` 会把 `EP_UI.sel` 清成 **-1** ✓ → 下面的**句子面板收起来** ✓ →
+       下一节要用的 `#lw-ep-trone` 就**没了** ✗（实测：③e 卡在 waiting for #lw-ep-trone ✓）。
+       ⚠️ 而且 `epGotoWordSource()` 本来就已经把模式设成 'ex' 了 ✓ →
+          **已经在外刊精读就什么都别做** ✓。 */
+    const inEx = (await p.locator('.lw-ep-body').count()) > 0;
+    console.log('    收尾：已经在外刊精读模式吗: ' + inEx);
+    if (!inEx) { await p.locator('[data-rdmode="ex"]').click(); await p.waitForTimeout(1200); }
+
     await diagArt('③e 开始'); console.log('\n── ③e ★ 「Failed to fetch」要说**人话**（用户截图里那句）──');
     /* ⚠️ 真的把接口**掐断** ✗（`route.abort()` ✓）—— 这样浏览器抛的就是
        `TypeError: Failed to fetch` ✓，和用户截图里一模一样 ✓。

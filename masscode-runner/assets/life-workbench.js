@@ -11174,18 +11174,75 @@
       + '<button id="lw-ep-peekopen" title="切到生词本看完整卡片">📕 去生词本</button>'
       + '</div></div>';
   }
+  /* ★★ 这一句里**有没有这个词** ✓（容忍变形 ✓：`microbes` / `microbe` ✓）——
+     和 `epHiWord()` 同一套判据 ✓（那个是渲染高亮用的 ✓，这是判定用的 ✓）。
+     ⚠️ 前后都要**边界** ✗（`[^A-Za-z]` ✓）—— 不然搜 `in` 会命中 `inside` ✗。 */
+  function epSentHasWord(text, word) {
+    const q = String(word || '').trim().toLowerCase();
+    if (!q) return false;
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|[^A-Za-z])' + esc + '[a-z]{0,3}([^A-Za-z]|$)', 'i').test(String(text || ''));
+  }
+  /* ══ ★★★★ 「按词在正文里搜」✓ —— 老数据没有 `sentIdx` 时的兜底 ✗✗ ═══════
+     用户原话：「**怎么点击回到原文，定位不了**」✓。
+
+     ⚠️⚠️ 实测根因（探针复现 ✓）：那个词**根本没有 `sent` / `sentIdx` 字段** ✗
+        （老数据 ✓，或者当初不是从正文里划词加的 ✓）→ 算不出句序号 ✓ →
+        `epGotoWordSource()` 只能干说一句「文章找到了 ✓ 但这句对不上」✗
+        （实测：`scrollTop 0 → 0`，一个词都没点亮 ✓）。
+     ⚠️ 而**正文里明明就有这个词** ✓ —— 搜一下就有答案 ✓，
+        没理由说「不知道」✗。用户点这个按钮的意思就是「带我去看它在哪儿」✓。
+     ⚠️ 所以兜底必须是**按词搜** ✗，而不是「查不到就算了」✗ ——
+        这是「点不动」和「点得动」的分界 ✓。
+
+     两趟扫 ✓（先准后宽 ✓）：
+       ① **原词 + 最多 3 个字母** ✓（`microbe` → `microbes` ✓，最准 ✓）
+       ② **词干前缀 + 最多 6 个字母** ✓（`individuals` → `individu…` → `individual` ✓）——
+          前缀长度取 `max(4, 词长-3)` ✓：太短会乱命中 ✓，太长等于没放宽 ✓。 */
+  function epFindWordSent(a, w) {
+    const q = String((w && w.w) || '').trim().toLowerCase();
+    if (!q || !a) return -1;
+    const sents = epSents(a);
+    if (!sents.length) return -1;
+    const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exact = new RegExp('(^|[^A-Za-z])' + escRe(q) + '[a-z]{0,3}([^A-Za-z]|$)', 'i');
+    const cut = Math.max(4, q.length - 3);
+    const stem = q.length > cut ? q.slice(0, cut) : '';
+    const loose = stem.length >= 4 ? new RegExp('(^|[^A-Za-z])' + escRe(stem) + '[a-z]{0,6}([^A-Za-z]|$)', 'i') : null;
+    const texts = sents.map((x) => String((x && x.text) || ''));
+    for (let i = 0; i < texts.length; i++) if (exact.test(texts[i])) return i;
+    if (loose) for (let i = 0; i < texts.length; i++) if (loose.test(texts[i])) return i;
+    return -1;
+  }
   /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓。
      从生词本点回来，要**精确落在那一句上** ✓（不是只把文章打开 ✓）。
      ⚠️ 优先用记下来的 `sentIdx` ✓；老数据没有这个字段 ✗ →
-        拿存下来的那句原文**逐句比一次** ✓（比丢了强 ✓）。 */
+        拿存下来的那句原文**逐句比一次** ✓（比丢了强 ✓）；
+        连原文都没有 ✗ → **按词在正文里搜** ✓（见 epFindWordSent ✓）。 */
   function epGotoWordSource(w) {
     if (!w || !w.artId) { rdToast('这个词没记下来自哪篇文章'); return; }
     const a = epArts().find((x) => x && x.id === w.artId);
     if (!a) { rdToast('那篇文章已经删了 ✗（生词留着 ✓）'); return; }
-    let idx = Number.isFinite(Number(w.sentIdx)) && w.sentIdx !== null && w.sentIdx !== '' ? Number(w.sentIdx) : -1;
     const sents = epSents(a);
-    if (!(idx >= 0 && sents[idx])) {
-      idx = w.sent ? sents.findIndex((s) => String(s.text).trim() === String(w.sent).trim()) : -1;
+    let idx = Number.isFinite(Number(w.sentIdx)) && w.sentIdx !== null && w.sentIdx !== '' ? Number(w.sentIdx) : -1;
+    /* ⚠️⚠️ 光有下标**不够** ✗✗ —— 正文重新导入 / 编辑过之后 ✓，
+       同一个下标指向的**已经不是那句话了** ✓（甚至超出范围 ✓）→
+       照它跳过去 = **跳到一句不相干的话上** ✗（比不跳还糟 ✗：用户会以为词记错了 ✓）。
+       → 下标必须**当场核对一遍**：那一句里真的有这个词 ✓ 才认 ✓。 */
+    if (idx >= 0 && !(sents[idx] && epSentHasWord(sents[idx].text, w.w))) idx = -1;
+    /* 老数据：拿存下来的那句原文比一次 ✓ */
+    if (idx < 0 && w.sent) idx = sents.findIndex((s) => String(s.text).trim() === String(w.sent).trim());
+    /* ★ 最后一道兜底：**直接在正文里按词搜** ✓ —— 这一条才真正解决「定位不了」✗ */
+    let bySearch = false;
+    if (idx < 0) {
+      idx = epFindWordSent(a, w);
+      bySearch = idx >= 0;
+      /* ⚠️ 搜到了就**顺手把字段补回去** ✓ —— 下次就不用再搜一遍 ✓，
+         而且词卡上那句「来自哪句」也就有了 ✓（现在它是空的 ✗）。 */
+      if (bySearch && sents[idx]) {
+        w.sentIdx = idx;
+        w.sent = String(sents[idx].text || '');
+      }
     }
     EP_UI.art = a.id; STORE.epArt = a.id;
     EP_UI.mode = 'ex'; STORE.readMode = 'ex';
@@ -11201,9 +11258,14 @@
     epSave(); render();
     if (idx >= 0) {
       epLocateSent(idx, w.w);
-      rdToast('已定位到第 ' + (idx + 1) + ' 句 ✓（就是你划「' + w.w + '」那句）');
+      /* ⚠️ 两种来源要**说清楚** ✗ —— 一个是「你当初划的那句」✓，
+         一个是「我按词在正文里搜到的」✓。含糊成同一句 ✓
+         会让用户以为「我划的就是这句」✗（万一是搜错的 ✓，他没法察觉 ✗）。 */
+      rdToast(bySearch
+        ? ('按「' + w.w + '」在正文里搜到了 · 第 ' + (idx + 1) + ' 句 ✓（下次会直接记住这句）')
+        : ('已定位到第 ' + (idx + 1) + ' 句 ✓（就是你划「' + w.w + '」那句）'));
     } else {
-      rdToast('文章找到了 ✓ 但这句对不上（可能重新导入过）');
+      rdToast('这篇文章里没找到「' + w.w + '」✗（正文可能后来改过）');
     }
   }
   /* ★★ 把某一句滚进视野 ✓，并把句子里**那个词**点亮 ✓ ——
