@@ -2110,6 +2110,21 @@
   .lw-wd-f input::placeholder, .lw-wd-f textarea::placeholder { color:${T.faint}; }
   /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
   .lw-wd-imgwrap { margin:10px 16px 0; border:1px solid ${T.lineDim}; background:${T.bg2}; }
+  /* ★★ 释义 + 配图**并排** ✓（用户原话：「中间这个图片，百度图片，
+     放置的位置不合理，左右存在大量空白，图片两边，合理重新排布一下位置设计」✓）——
+     ⚠️ 原来是**上下堆** ✗：图占一整宽 ✓，而配图**常常是竖图** ✓ →
+        图只占中间一小条 ✓ → 左右各空一大片 ✗（截图里就是这样 ✓）。
+     → 释义和图**并排** ✓：左边读释义 ✓、右边看图 ✓，横向空间就用起来了 ✓。
+     ⚠️ 图片列**要有上限** ✗（max-width ✓）：不给的话横图会撑到半屏 ✓，
+        把释义挤成一条 ✓；也不写死像素 ✗（窄窗口会溢出 ✓）。
+     ⚠️ 没释义时**不并排** ✗（那就只放图 ✓，别留一个空列 ✓）。 */
+  .lw-wd-hero { display:flex; gap:14px; align-items:flex-start; padding:0 16px; }
+  .lw-wd-hero-a { flex:1 1 auto; min-width:0; }
+  .lw-wd-hero-b { flex:0 0 38%; min-width:140px; max-width:280px; }
+  /* 并排之后，内边距由**外层**统一给 ✓（子元素再给就是双重缩进 ✗）*/
+  .lw-wd-hero .lw-wd-sec { padding-left:0; padding-right:0; }
+  .lw-wd-hero .lw-wd-imgwrap { margin:14px 0 0; }
+  .lw-wd-hero .lw-wd-imgwrap .cap { font-size:9px; padding:3px 6px; }
   /* ⚠️ 用 contain ✗ **不用 cover** ✗ ——
      配图的用途是「图片场景理解」✓，cover 会把一张 16:9 的图**裁掉近一半**✗
      （700 宽下自然高 394 ✓ → 硬压到 210 ✓ → 竖着砍 46% ✗），
@@ -11399,12 +11414,27 @@
          并排堆着等于同一份释义显示两遍 ✗。
        ⚠️ 配图 / 复习 / 来自**留着** ✗（它们不是表单字段 ✓：配图靠底部「🖼 换一张」改 ✓，
           复习是遗忘曲线的状态 ✓，来自是「回到原文」的入口 ✓）。 */
+    /* ★★ 释义 + 配图**并排** ✓（用户原话：「中间这个图片，百度图片，
+       放置的位置不合理，左右存在大量空白，图片两边，合理重新排布一下位置设计」✓）。
+       ⚠️ 原来是**上下堆** ✗：图占一整宽 ✓，而配图**常常是竖图 / 方图** ✓ →
+          `object-fit:contain` 把画面缩到中间一条 ✓ → 左右各空一大片 ✗（截图里就是这样 ✓）。
+       ⚠️ 没有释义时**不要留一个空列** ✗（那就只放图 ✓）。
+       ⚠️⚠️ 「例句」要**一起进左列** ✗✗ —— 第一版只把释义放进左列 ✓，
+          实测截图（individuals ✓）：释义 3 行 ≈ 118px ✓，图 ≈ 293px ✓
+          → **左列下方空出 215px** ✗，看着像「排版塌了一块」✗。
+          释义 + 例句 ≈ 245px ✓ 正好和图片列**差不多高** ✓，两列就齐了 ✓。
+       ⚠️ 巧记 / 场景**不进左列** ✗ —— 它们是长段落 ✓，
+          塞进 400px 的窄列会折成一大坨 ✗（那才叫真的难看 ✗）。 */
+    const egSec = sec('💬', '例句', egHtml
+      + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">🔊 读这句</button></div>' : ''));
+    const hero = (w.img && defs.length)
+      ? '<div class="lw-wd-hero">'
+        + '<div class="lw-wd-hero-a">' + sec('📖', '释义', defHtml) + egSec + '</div>'
+        + '<div class="lw-wd-hero-b">' + imgBlock + '</div></div>'
+      : sec('📖', '释义', defHtml) + imgBlock + egSec;
     const body = edit
       ? editPane + imgBlock
-      : sec('📖', '释义', defHtml)
-        + imgBlock
-        + sec('💬', '例句', egHtml
-          + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">🔊 读这句</button></div>' : ''))
+      : hero
         + (w.mnem ? sec('💡', '巧记', '<div class="lw-wd-tipbox mnem">' + esc(w.mnem) + '</div>') : '')
         + (w.scene ? sec('🎬', '场景', '<div class="lw-wd-tipbox scene">' + esc(w.scene) + '</div>') : '');
     return '<div class="lw-wd-detail' + (edit ? ' editing' : '') + '">'

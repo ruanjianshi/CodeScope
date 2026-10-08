@@ -209,8 +209,11 @@ const FAKE_JSON = {
       const base = root.getBoundingClientRect().left;
       /* ⚠️ 不含 .lw-wd-top ✗ —— 它是**通栏块** ✓（自带 16px 内边距 + 底边通栏 ✓），
          量它的左边缘恒等于 0 ✓，放进来自检会自己挂 ✗。 */
+      /* ⚠️ 这里**不含 .lw-wd-imgwrap** ✗✗ —— 它现在跟释义**并排** ✓，
+         落在右列 ✓（left 天然大于 16 ✓），量它等于自检自己挂 ✗。
+         它的落位由下面 ③b 单独验 ✓（必须真的在**同一行**的右侧 ✓）。 */
       const sels = ['.lw-wd-defs', '.lw-wd-next', '.lw-wd-pv', '.lw-wd-pvnote', '.lw-wd-ef',
-        '.lw-wd-imgwrap', '.lw-wd-sent', '.lw-wd-foot'];
+        '.lw-wd-sent', '.lw-wd-foot'];
       const out = {};
       sels.forEach((s) => {
         const el = root.querySelector(s);
@@ -222,6 +225,49 @@ const FAKE_JSON = {
     console.log('    水平基准线: ' + JSON.stringify(gut));
     ck('★★ 卡里所有区块**左边对齐同一条线**（不能有的 16 有的 30 —— 复习区块被双重缩进过）',
       !!gut && gutVals.length >= 5 && new Set(gutVals).size === 1 && gutVals[0] === 16, JSON.stringify(gut));
+    /* ★★ ③b 释义 + 配图**并排** ✓（用户原话：「中间这个图片，百度图片，
+       放置的位置不合理，左右存在大量空白，图片两边，合理重新排布一下位置设计」✓）——
+       ⚠️ 原来是**上下堆** ✗：图占一整宽 ✓，而配图**常常是竖图** ✓ →
+          图只占中间一小条 ✓ → 左右各空一大片 ✗。
+       ⚠️⚠️ 这条**只能量几何** ✗ —— 光验「有 .lw-wd-hero 这个类」是**假通过** ✗
+          （类在 ✓ 但两个子元素照样可能上下堆 ✓，CSS 一改就悄悄回退 ✗，
+          而这正是用户抱怨的那个 bug ✓）。
+       → 判据三条，缺一不可 ✓：
+         · 图在释义**右边** ✓（left 明显更大 ✓）
+         · 两者**竖直区间真的重叠** ✓（= 同一行 ✓，不是「上下的」✗）
+         · 图右边缘**贴到卡片右边** ✓（±20px 内 ✓ = 没有「左右大量空白」✗）*/
+    const hero = await p.evaluate(() => {
+      const root = document.querySelector('.lw-wd-detail');
+      const h = root && root.querySelector('.lw-wd-hero');
+      const defs = root && root.querySelector('.lw-wd-defs');
+      const img = root && root.querySelector('.lw-wd-imgwrap');
+      if (!root || !h || !defs || !img) return { ok: false, why: { h: !!h, defs: !!defs, img: !!img } };
+      const rb = root.getBoundingClientRect();
+      const hb = h.getBoundingClientRect(); const db = defs.getBoundingClientRect(); const ib = img.getBoundingClientRect();
+      return {
+        ok: true,
+        /* ⚠️ heroLeft **恒为 0** ✗ —— .lw-wd-hero 是**通栏块** ✓（跟 .lw-wd-top 一样 ✓，
+           16px 是它的内边距 ✓，不进 border-box 的 left ✓）。所以**不能拿它当基准** ✗，
+           只留作排查线索 ✓；要量的是**里面释义的落点** ✓（defLeft ✓）。 */
+        heroLeft: Math.round(hb.left - rb.left),
+        defLeft: Math.round(db.left - rb.left),
+        imgLeft: Math.round(ib.left - rb.left),
+        /* 图右边缘离卡片右边缘还差多少（越小越好 ✓）*/
+        imgRightGap: Math.round(rb.right - ib.right),
+        /* 竖直重叠量（> 0 就是同一行 ✓）*/
+        vOverlap: Math.round(Math.min(db.bottom, ib.bottom) - Math.max(db.top, ib.top)),
+        imgW: Math.round(ib.width), imgH: Math.round(ib.height),
+      };
+    });
+    console.log('    并排几何: ' + JSON.stringify(hero));
+    ck('★★ 释义和配图**并排**（图在释义右边，同一行 —— 不是上下堆）',
+      !!hero.ok && hero.imgLeft > hero.defLeft + 40 && hero.vOverlap > 20, JSON.stringify(hero));
+    ck('★★ 图右边缘**贴住卡片右边**（不再「左右大量空白」）',
+      !!hero.ok && hero.imgRightGap <= 22, hero.ok ? ('右留白 ' + hero.imgRightGap + 'px') : '没并排');
+    ck('★ 图片列**有上限**（横图不会撑到半屏、把释义挤成一条）',
+      !!hero.ok && hero.imgW <= 300, hero.ok ? ('图宽 ' + hero.imgW) : '没并排');
+    ck('★ 并排时释义仍从 16px 基准线起（没被并排吃掉缩进）',
+      !!hero.ok && hero.defLeft === 16, JSON.stringify(hero));
     /* ⚠️⚠️ 底部动作条**必须真的常驻** ✗✗ —— 注释里一直写着「常驻、不跟内容一起滚走」✓，
        实现却是**普通流** ✗ → 词卡一变高它就跟着滚出视野 ✗（本次实测才发现 ✓）。
        ⚠️ 这条**不能只验「存在」** ✗ —— 存在 ✓、能点到 ✓（Playwright 会自己滚 ✓），
