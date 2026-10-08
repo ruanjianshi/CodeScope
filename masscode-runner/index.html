@@ -5030,7 +5030,60 @@ function syncProxySelection(editor,input){const model=editor&&editor.getModel(),
 function monacoToken(editor){const model=editor.getModel(),position=editor.getPosition(),word=model&&position&&model.getWordAtPosition(position);return word&&position?{word:word.word,line:position.lineNumber,column:word.startColumn}:null;}
 function monacoSymbol(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel());return token&&context?symbolInContext(token,{snippet:context.snippet,index:context.index,frag:context.fragment}):null;}
 function monacoGoDefinition(editor){const token=monacoToken(editor),context=editor.getModel()&&monacoContext(editor.getModel()),sym=monacoSymbol(editor);if(!token||!context){showNavigationNotice('请把光标放在函数、类型、宏或变量上');return;}goToLspDefinition(token,{snippet:context.snippet,index:context.index,frag:context.fragment},sym);}
-function wireMonacoCommands(editor,isMain){const m=window.monaco;editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyS,()=>{if(isMain)flushSave();else flushSplitEditors();});editor.addCommand(m.KeyMod.CtrlCmd|m.KeyMod.Shift|m.KeyCode.KeyP,()=>openSymModal('command'));editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyP,()=>openSymModal('file'));editor.addCommand(m.KeyCode.F1,()=>openSymModal('command'));editor.addCommand(m.KeyMod.Alt|m.KeyCode.KeyZ,toggleEditorWordWrap);editor.addCommand(m.KeyCode.F8,()=>nextLspProblem(1));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F8,()=>nextLspProblem(-1));editor.addCommand(m.KeyCode.F12,()=>monacoGoDefinition(editor));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F12,()=>{const sym=monacoSymbol(editor);if(sym){SYM_SEL=sym;setSymMode('symbol');}});if(isMain)editor.onDidChangeCursorSelection(()=>{rememberMarkdownCaret();});if(isMain)editor.addAction({id:'codescope.referenceSelection',label:'↗ 引用选中的代码到 Markdown',contextMenuGroupId:'9_cutcopypaste',contextMenuOrder:9,precondition:'editorHasSelection',keybindings:[m.KeyMod.CtrlCmd|m.KeyMod.Alt|m.KeyCode.KeyR],run:()=>openCodeReferenceMenu()});}
+/* ══ ★★★★ 编辑器右键菜单：像 VS Code 那样的「跳转到定义」✗✗ ═══════════════
+   用户原话：「这种右键缺少，跳转到定义的功能，类似 vscode 那样」✓。
+
+   ⚠️⚠️ 为什么原来没有 ✗✗：Monaco 那几条**内置**的导航菜单项
+      （Go to Definition / Peek / Go to References ✓，注册在
+      `contrib/gotoSymbol/goToCommands.js` 的 `MenuId.EditorContext` 里 ✓）
+      **只在注册了 `registerDefinitionProvider` 之后才会出现** ✓ ——
+      而这个项目**一个都没注册** ✗（只注册了 completion / signature /
+      hover / rename / codeAction ✓，见 registerMonacoProviders ✓）→
+      右键里就只剩 Rename Symbol / Cut / Copy / Paste / Command Palette ✓
+      （用户截图里正是这几条 ✓）。
+
+   ⚠️⚠️ 那为什么不干脆**注册一个 DefinitionProvider** ✗✗（那才是「最像 VS Code」）：
+      Monaco 的「转到定义」是**在同一个 model 里跳** ✓ ——
+      而 LSP 给的 `definition` 经常指向**另一个文件** ✓
+      （实测：`led_create` 的定义在 `led.c` 里 ✓）→ 注册了照样跳不过去 ✗，
+      而且会和页面自己的 `goToLocation()` **打架** ✗
+      （只有那个知道怎么切文件 / 切片段 / 进导航栈 ✓，见 `goToLspDefinition` ✓）。
+      → 用 `addAction` **自己挂菜单项** ✓，回调走页面自己的跳转 ✓。
+
+   ⚠️ 分组用 `'navigation'` ✗ —— 那是 Monaco **内置导航项**用的组 ✓
+      （见 goToCommands.js ✓），位置和 VS Code 一致 ✓。
+   ⚠️ F12 / ⇧F12 原来是用 `addCommand` 绑的 ✗ → 现在**改由 action 自己绑** ✓，
+      两边都绑会**触发两次** ✗（跳转倒是幂等 ✓，但「查看引用」会闪一下 ✓）。 */
+function wireMonacoContextMenu(editor,isMain){
+  const m=window.monaco;if(!m||!editor.addAction)return;
+  const symNow=()=>{try{return monacoSymbol(editor);}catch(_){return null;}};
+  const add=(id,label,order,run,keys)=>editor.addAction({
+    id,label,contextMenuGroupId:'navigation',contextMenuOrder:order,
+    keybindings:keys||undefined,run,
+  });
+  add('codescope.revealDefinition','跳转到定义',1.1,(ed)=>monacoGoDefinition(ed||editor),[m.KeyCode.F12]);
+  add('codescope.peekDefinition','速览定义（不离开当前文件）',1.2,()=>{
+    const sym=symNow();
+    if(sym&&openDefinitionPeek(sym))return;
+    showNavigationNotice('这个符号在项目里没有定义（多半是标准库 / 第三方头文件里的）');
+  },[m.KeyMod.Alt|m.KeyCode.F12]);
+  add('codescope.findReferences','查看引用',1.3,()=>{
+    const sym=symNow();
+    if(!sym){showNavigationNotice('请把光标放在函数、类型、宏或变量上');return;}
+    SYM_SEL=sym;setSymMode('symbol');
+  },[m.KeyMod.Shift|m.KeyCode.F12]);
+  /* ⚠️ 这一条**不绑快捷键** ✗ —— ⌘I 已经是代码向导的全局快捷键了 ✓
+     （`assets/code-guide.js` 里 capture 抢在 Monaco 前面 ✓）→
+     再绑一次会**触发两次** ✗（一次开、一次关 ✓，看起来像「按了没反应」✗）。 */
+  add('codescope.codeGuide','用代码向导查这个符号',1.4,()=>{
+    try{if(window.__CODE_GUIDE)window.__CODE_GUIDE.open('look');}catch(_){}
+  });
+  /* 分屏编辑器里也加一条「在右侧打开定义」✓ —— 分屏本来就是为了对照看 ✓ */
+  if(!isMain){
+    add('codescope.revealInMain','在主编辑器里打开定义',1.5,()=>monacoGoDefinition(editor));
+  }
+}
+function wireMonacoCommands(editor,isMain){const m=window.monaco;editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyS,()=>{if(isMain)flushSave();else flushSplitEditors();});editor.addCommand(m.KeyMod.CtrlCmd|m.KeyMod.Shift|m.KeyCode.KeyP,()=>openSymModal('command'));editor.addCommand(m.KeyMod.CtrlCmd|m.KeyCode.KeyP,()=>openSymModal('file'));editor.addCommand(m.KeyCode.F1,()=>openSymModal('command'));editor.addCommand(m.KeyMod.Alt|m.KeyCode.KeyZ,toggleEditorWordWrap);editor.addCommand(m.KeyCode.F8,()=>nextLspProblem(1));editor.addCommand(m.KeyMod.Shift|m.KeyCode.F8,()=>nextLspProblem(-1));wireMonacoContextMenu(editor,isMain);if(isMain)editor.onDidChangeCursorSelection(()=>{rememberMarkdownCaret();});if(isMain)editor.addAction({id:'codescope.referenceSelection',label:'↗ 引用选中的代码到 Markdown',contextMenuGroupId:'9_cutcopypaste',contextMenuOrder:9,precondition:'editorHasSelection',keybindings:[m.KeyMod.CtrlCmd|m.KeyMod.Alt|m.KeyCode.KeyR],run:()=>openCodeReferenceMenu()});}
 async function syncMonacoMain(){
   const host=$('monaco-main'),wrap=$('code-wrap'),f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];
   if(!EDITING||!f){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';return;}

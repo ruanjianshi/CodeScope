@@ -2,6 +2,51 @@
 
 ## 未发布 — 2026-10-08
 
+### ★★★★ 编辑器右键菜单：补上「跳转到定义」（像 VS Code 那样）
+
+用户原话：「这种右键缺少，跳转到定义的功能，类似 vscode 那样」
+
+**为什么原来没有**：Monaco 那几条**内置**的导航菜单项
+（Go to Definition / Peek / Go to References，注册在 `contrib/gotoSymbol/goToCommands.js`
+的 `MenuId.EditorContext` 里）**只在注册了 `registerDefinitionProvider` 之后才会出现** ——
+而这个项目**一个都没注册**（只注册了 completion / signature / hover / rename / codeAction），
+右键里就只剩 Rename Symbol / Cut / Copy / Paste / Command Palette。
+
+**为什么不直接注册一个 `DefinitionProvider`**：Monaco 的「转到定义」是**在同一个 model 里跳**，
+而 LSP 给的定义经常在**另一个文件 / 片段**（`main.cpp` 里调 `add`，定义在 `calc.hpp`）→
+注册了照样跳不过去，还会和页面自己的 `goToLocation()` 打架
+（只有那个知道怎么切文件 / 切片段 / 进导航栈）。
+
+→ 用 `addAction` **自己挂菜单项**，回调走页面自己的 `goToLspDefinition()`：
+
+| 菜单项 | 快捷键 | 做什么 |
+|---|---|---|
+| **跳转到定义** | F12 | `goToLspDefinition()` —— **能跨文件 / 跨片段** |
+| **速览定义（不离开当前文件）** | ⌥F12 | `openDefinitionPeek()` 浮层，光标不动 |
+| **查看引用** | ⇧F12 | 把符号送到右侧符号面板 |
+| **用代码向导查这个符号** | — | 叫起代码向导并预填这个符号 |
+
+- 分组用 `navigation`（Monaco **内置导航项**用的就是它）→ 位置和 VS Code 一致，**排在最上面**。
+- ⚠️ F12 / ⇧F12 原来是用 `addCommand` 绑的 → 改由 action 自己绑，
+  两边都绑会**触发两次**（「查看引用」会闪一下）。
+- ⚠️ 「用代码向导查这个符号」**不绑快捷键** —— ⌘I 已经是代码向导的全局快捷键
+  （capture 抢在 Monaco 前面），再绑一次会触发两次（一次开、一次关，看起来像没反应）。
+- 分屏编辑器里多一条「在主编辑器里打开定义」。
+
+**探针**（新增 `tests/editor-menu.js`，21 条）
+- 用例是确定性的：`多文件示例_CPP.md` 里 `main.cpp` 第 9 行调 `add`，
+  定义在 **`calc.hpp` 第 5 行** —— 正是 Monaco 内置做不到的**跨片段**那种。
+- 断言：菜单里有那四条 + 排在最前面 + 原来的 Rename/Cut/Copy 还在 + 点「跳转到定义」真的
+  **跳到另一个片段** + F12 也能跳（且只跳一次）+ 速览定义弹浮层且光标不动 +
+  查看引用设上 `SYM_SEL` + 代码向导被叫起且输入框已预填。
+- ⚠️⚠️ Monaco 的右键菜单在 **shadow DOM** 里 —— `document.querySelectorAll('*')`
+  **看不到它**（实测 dump 全是空，而截图里菜单明明在）→ 必须**穿透 shadow root**。
+- ⚠️⚠️ **不能**在 `evaluate` 里 `el.click()` —— 实测点了没反应（菜单不关、动作不跑），
+  得先拿屏幕坐标再用 Playwright 的**真实鼠标**点。
+- ⚠️ 右键坐标要点在**那个词的首字符**上 —— 第一版往右偏了 26px（想避开行首），
+  结果挪过头 3 个字符，右键落在 `x, y` 的 `x` 上，跳转跳到 `int x, y;` 那行
+  （断言红的是「没跳到另一个片段」，而真因是**我点错了词**）。
+
 ### ★★★★ 外刊精读「回到原文」定位不了 —— 根因是**词上没记句号**
 
 用户原话：「**怎么点击回到原文，定位不了**」
