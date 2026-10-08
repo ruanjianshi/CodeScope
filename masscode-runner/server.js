@@ -5345,7 +5345,7 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/en/fetch' || u.pathname === '/api/life/en/sources' ||
         u.pathname === '/api/life/en/wordimg' || u.pathname === '/api/life/ebook/import' ||
         u.pathname === '/api/life/ebook/chapter' || u.pathname === '/api/life/ebook/meta' ||
-        u.pathname === '/api/life/ebook' ||
+        u.pathname === '/api/life/ebook' || u.pathname === '/api/life/ebook/search' ||
         u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
@@ -5671,6 +5671,55 @@ const server = http.createServer(async (req, res) => {
           if (!EBOOK_ID_RE.test(id)) return send(res, 200, { ok: false, error: '书 id 不对' });
           try { fs.rmSync(path.join(EBOOK_DIR(), id), { recursive: true, force: true }); } catch (_) {}
           return send(res, 200, { ok: true });
+        }
+
+        /* ★★ 全文搜索 ✓（用户原话：「电子书阅读器的很多功能都没有」✓）——
+           ⚠️ 逐章**扫文件** ✗，不建索引 ✓：一本书通常几百章 / 几 MB ✓，
+              本机读一遍是毫秒级 ✓；建索引反而要维护「什么时候失效」✓
+              （这个项目在「同一份数据存两处必然漂移」上栽过太多次 ✓）。
+           ⚠️ 每章**只留前 3 处** ✓、总共最多 200 章 ✓ ——
+              「the」在一本书里能命中几万次 ✓，全返回会把响应撑爆 ✓
+              （而且用户也不会翻到第 500 条 ✓）。
+           ⚠️ `total` 仍然**如实计数** ✓（只是不把每一条都带回来 ✓）——
+              截断要**说清楚**，不能让用户以为「就这么多」✓。 */
+        if (u.pathname === '/api/life/ebook/search') {
+          const id = String(u.searchParams.get('id') || '').trim();
+          const q = String(u.searchParams.get('q') || '').trim();
+          if (!EBOOK_ID_RE.test(id)) return send(res, 200, { ok: false, error: '书 id 不对' });
+          if (!q) return send(res, 200, { ok: false, error: '要搜什么？' });
+          const meta = readEbookMeta(id);
+          if (!meta) return send(res, 200, { ok: false, error: '这本书的目录没了（可能被删过）' });
+          const dir = path.join(EBOOK_DIR(), id);
+          const needle = q.toLowerCase();
+          const list = [];
+          let total = 0, capped = false;
+          const chapters = meta.chapters || [];
+          for (let i = 0; i < chapters.length; i++) {
+            if (list.length >= 200) { capped = true; break; }
+            let text = '';
+            try { text = fs.readFileSync(path.join(dir, 'c' + i + '.txt'), 'utf8'); } catch (_) { continue; }
+            const low = text.toLowerCase();
+            const got = [];
+            let from = 0;
+            for (;;) {
+              const at = low.indexOf(needle, from);
+              if (at < 0) break;
+              total++;
+              if (got.length < 3) {
+                got.push({
+                  at,
+                  pre: text.slice(Math.max(0, at - 36), at),
+                  hit: text.slice(at, at + q.length),
+                  post: text.slice(at + q.length, at + q.length + 36),
+                });
+              }
+              from = at + needle.length;
+              if (total > 20000) { capped = true; break; }
+            }
+            if (got.length) list.push({ i, title: String(chapters[i] && chapters[i].title || ''), n: got.length, hits: got });
+            if (capped) break;
+          }
+          return send(res, 200, { ok: true, q, total, capped, chapters: list.length, list });
         }
 
         if (u.pathname === '/api/life/en/fetch') {

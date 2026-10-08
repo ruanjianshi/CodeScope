@@ -50,8 +50,53 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
   catch (_) { console.log('（跳过：本机 127.0.0.1:4877 没在跑 —— 这个探针需要真实实例 ✓）'); process.exit(0); }
 
   const snap = await store();
-  const keep = { books: snap.books, bookSel: snap.bookSel, readMode: snap.readMode, words: snap.words, wordSel: snap.wordSel };
+  /* ★★ 启动清扫 ✓ —— 只认**探针自己的签名** ✗（绝不按名字乱删 ✓）。
+     ⚠️ 为什么需要 ✗：这个探针用的测试数据是**固定的**（`serendipity` / `ubiquitous` ✓、
+        书名叫 `__探针电子书__…` / `English Probe` ✓）——
+        一旦某一轮**崩在半路**（cleanup 没跑到 ✓），残留就留下了 ✓；
+        而下一轮 `keep` 会把它当「本来就有的」✓ → **原样还原** ✗ → 残留**自我延续** ✓，
+        而且因为词是固定的 ✓，「加进去」这一步会**一直失败** ✗
+        （`epWordAdd` 撞到已存在的词只会弹提示 ✓）→ 探针从此**永远红** ✓（实测踩过 ✓）。
+     ⚠️ 判据要**两条一起** ✗（名字 + 假 AI 给的释义「探针释义」✓）——
+        光看名字的话，万一用户真收过 `ubiquitous` ✓ 就被误删了 ✗。 */
+  {
+    const d0 = await store();
+    const PROBE_W = ['serendipity', 'ubiquitous'];
+    const badW = (d0.words || []).filter((w) => w && PROBE_W.indexOf(String(w.w)) >= 0 && String(w.def || '') === '探针释义');
+    const badB = (d0.books || []).filter((b) => b && (
+      String(b.title || '').indexOf('__探针电子书__') === 0
+      || (String(b.title || '') === 'English Probe' && String(b.author || '') === 'A')));
+    if (badW.length || badB.length) {
+      /* ⚠️ 用 `for...of` ✗，**不能用 `forEach(async …)`** ✗ ——
+         箭头函数不是 async 的话 `await` 直接是语法错 ✓；
+         写成 async 箭头又**不会被等**✓（forEach 不管返回值 ✓）→ 请求发没发出去都不知道 ✓。 */
+      for (const b of badB) {
+        if (!b.ebookId) continue;
+        try { await fetch(BASE + '/api/life/ebook?id=' + encodeURIComponent(b.ebookId), { method: 'DELETE' }); } catch (_) {}
+      }
+      d0.books = (d0.books || []).filter((b) => badB.indexOf(b) < 0);
+      d0.words = (d0.words || []).filter((w) => badW.indexOf(w) < 0);
+      await put(d0);
+      console.log('清扫：收掉上一轮崩掉留下的 ' + badB.length + ' 本书 + ' + badW.length + ' 个词 ✓（'
+        + badB.map((b) => b.title).join(',') + badW.map((w) => w.w).join(',') + '）');
+    }
+  }
+
+  /* ⚠️⚠️ 阅读偏好（`ebFont` 那一组）**必须一起备份还原** ✗✗ ——
+     它们**落盘**（`STORE.ebFont` 等 ✓，见 `rdEbPref` ✓），而 ④ / ⑨ 会去改它们 ✓。
+     实测踩过（2026-10-08 ✓）：探针每轮净 +1 字号 ✓、**从不还原** ✗ →
+     连跑几轮之后 `ebFont` 累到 **12** ✓ → 正文 27px ✗ →
+     第 2 段被顶到**视口外** ✓ → 拖选落在屏幕外 ✗ →
+     抓到的选区是**主页的文字** ✗ → 「划到英文词」那条**假失败** ✗
+     （看着像划词坏了 ✓，其实是探针把字放太大 ✓）。
+     ⚠️ 这和 `epPanelH` / `epSideW` 是**同一类**坑 ✓：
+        「探针改过的、会落盘的界面偏好，收尾必须按值还原」✓。 */
+  const keep = {
+    books: snap.books, bookSel: snap.bookSel, readMode: snap.readMode, words: snap.words, wordSel: snap.wordSel,
+    ebFont: snap.ebFont, ebLh: snap.ebLh, ebW: snap.ebW, ebSerif: snap.ebSerif, ebTheme: snap.ebTheme,
+  };
   const booksBefore = new Set((snap.books || []).map((b) => b && b.id));
+  const madeNotes = [];
   const wordsBefore = new Set((snap.words || []).map((w) => w && w.id));
   const madeBooks = []; const madeWords = []; const madeEbookIds = [];
 
@@ -145,6 +190,9 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
        而 `+` 在 CSS 里是**相邻兄弟选择器** ✗ → `querySelector('#lw-eb-font+')` **直接抛错** ✗ →
        `bindReading()` 从那一行**后面全都不绑** ✗（表现是「一大片点了没反应」✓）。
        已改名 `lw-eb-fminus` / `lw-eb-fplus` ✓。下面顺手断言**旧 id 不存在** ✓，防止有人改回去 ✗。 */
+    /* ⚠️ 2026-10-08 之后这两个按钮**搬进了「Aa 阅读设置」面板** ✓（成熟阅读器都这么做 ✓）——
+       所以得**先点开面板** ✓，否则 `getElementById` 直接是 null ✓（探针会假失败 ✓）。 */
+    await p.click('#lw-eb-setbtn'); await p.waitForTimeout(700);
     ck('★ 字号按钮的 id 里**没有 `+`**（那会抛错并带崩整个绑定）',
       await p.evaluate(() => !document.getElementById('lw-eb-font+') && !!document.getElementById('lw-eb-fplus') && !!document.getElementById('lw-eb-fminus')));
     const fs0 = await p.evaluate(() => parseFloat(getComputedStyle(document.getElementById('lw-eb-body')).fontSize));
@@ -157,11 +205,15 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
     const fs2 = await p.evaluate(() => parseFloat(getComputedStyle(document.getElementById('lw-eb-body')).fontSize));
     ck('★ 「A−」也管用（能缩回去）', fs2 < fs1, fs1 + ' → ' + fs2);
     ck('★ 改字号**不丢正文**（重绘了但还在这一章）', /这是第4章的正文开头/.test(await txt('.lw-eb-body')), (await txt('.lw-eb-body')).slice(0, 40));
+    /* ⚠️ 「↔」那个按钮**没了** ✗ —— 换成「窄 / 中 / 宽」三档 ✓（一档只能切两态 ✓，
+       三档才够用 ✓：手机宽 / 正常 / 大屏 ✓）。 */
     const w0 = await p.evaluate(() => getComputedStyle(document.querySelector('.lw-eb-body > p')).maxWidth);
-    await p.click('#lw-eb-wide'); await p.waitForTimeout(600);
+    await p.locator('[data-ebw="2"]').click(); await p.waitForTimeout(700);
     const w1 = await p.evaluate(() => getComputedStyle(document.querySelector('.lw-eb-body > p')).maxWidth);
     console.log('    正文最大宽 ' + w0 + ' → ' + w1);
-    ck('★ 「↔」真的把正文放宽了', w0 !== w1, w0 + ' → ' + w1);
+    ck('★ 页宽选「宽」真的把正文放宽了', w0 !== w1, w0 + ' → ' + w1);
+    await p.locator('[data-ebw="1"]').click(); await p.waitForTimeout(500);
+    await p.click('#lw-eb-setbtn'); await p.waitForTimeout(500);   /* 收起设置 ✓，别挡着后面 */
 
     console.log('\n── ⑤ 划词：中文书 ──');
     /* ⚠️ 拖选要落在**真实文字**上 ✗ —— inline 元素的 `boundingBox` 是**折行并集** ✓，
@@ -194,7 +246,14 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
     /* ★ 中文划词**不该**弹浮层 ✓ —— 这是**正确**行为 ✓，不是 bug ✓：
        生词本整条链路（音标 / 释义 / 例句 / 巧记 / 配图 / 遗忘曲线 ✓）都是给**英文**做的 ✓，
        把「这是」这种中文词加进去只会**污染词表** ✗。 */
-    ck('★★ 划中文**不弹**英文生词浮层（正确行为，不是 bug）', !(await pickShown()), await txt('#lw-eb-pick'));
+    /* ⚠️ 判据 2026-10-08 改过 ✗ —— 以前是「划中文**不弹浮层**」✓；
+       现在中文划词会弹**另一组**按钮（「✏️ 划线 / 💭 写想法」✓，用户要的 ✓）——
+       所以改成「弹了，但**没有「加生词」**」✓。
+       生词本整条链路（音标 / 释义 / 例句 / 巧记 / 配图 / 遗忘曲线 ✓）都是给**英文**做的 ✓，
+       把「这是」这种中文词加进去只会**污染词表** ✗。 */
+    const cnPick = await txt('#lw-eb-pick');
+    ck('★★ 划中文**不弹「加生词」**（生词本是给英文做的）',
+      !(await pickShown()) || !/加生词/.test(cnPick), JSON.stringify(cnPick));
     /* ★ 但**中文书里划到英文术语**要能加 ✓ —— 真实场景：读中文书遇到英文名词 ✓。
        这跟读外刊遇到生词是同一件事 ✓，走的是**同一个生词本** ✓。
        ⚠️ 那个英文词在**第 1 章** ✓，而我们现在在第 4 章 ✓（③ 翻过来的 ✓）→ 先跳回去 ✓。 */
@@ -279,6 +338,128 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
     await p.waitForTimeout(1500);
     ck('★★ 刷新后点这本书，**接着上次那章**（不是从第 1 章重来）', /这是第4章的正文开头/.test(await txt('.lw-eb-body')), (await txt('.lw-eb-body')).slice(0, 50));
 
+    /* ══ ⑨ ★★ 阅读器该有的功能（用户原话：「去移植成熟的电子书阅读器设计，
+       或者参考，还有…电子书阅读器的很多功能都没有，优化」✓）══════════════════ */
+    console.log('\n── ⑨ ★★ 阅读器：目录 / 进度 / 设置 / 搜索 / 划线 / 键盘 / 删书 ──');
+    await p.selectOption('#lw-eb-jump', '0'); await p.waitForTimeout(1500);
+    ck('★★ 顶栏有 目录 / 进度条 / 阅读设置', await p.locator('#lw-eb-toc').count() === 1
+      && await p.locator('#lw-eb-prog').count() === 1 && await p.locator('#lw-eb-setbtn').count() === 1);
+    /* ★ 目录抽屉 ✓ */
+    await p.locator('#lw-eb-toc').click(); await p.waitForTimeout(900);
+    ck('★★ 「目录」能拉出抽屉（成熟阅读器都有）', await p.locator('#lw-eb-drawer').count() === 1);
+    ck('★ 抽屉里有全部章节 + 当前章高亮',
+      await p.locator('.lw-eb-tocrow').count() === 5 && await p.locator('.lw-eb-tocrow.on').count() === 1,
+      (await p.locator('.lw-eb-tocrow').count()) + ' 章 · 高亮 ' + (await p.locator('.lw-eb-tocrow.on').count()));
+    ck('★ 抽屉里有「目录 / 笔记」两个页签', await p.locator('[data-ebtab]').count() === 2);
+    await p.locator('[data-ebgoto="3"]').first().click(); await p.waitForTimeout(1800);
+    ck('★★ 点目录里的一章 → 跳过去，而且**抽屉自动收起**（不挡着刚跳到的页）',
+      (await p.locator('#lw-eb-jump').inputValue()) === '3' && await p.locator('#lw-eb-drawer').count() === 0,
+      '第 ' + (await p.locator('#lw-eb-jump').inputValue()) + ' 章');
+    /* ★ 进度条 ✓ */
+    const pgb = await p.locator('#lw-eb-prog').boundingBox();
+    await p.mouse.click(pgb.x + 2, pgb.y + pgb.height / 2); await p.waitForTimeout(1800);
+    ck('★★ 点进度条最左边 → 跳到第 1 章', (await p.locator('#lw-eb-jump').inputValue()) === '0',
+      '第 ' + (await p.locator('#lw-eb-jump').inputValue()) + ' 章');
+    /* ★ 阅读设置 ✓（改了要**落盘** ✓，正文的 class 要跟着变 ✓）*/
+    await p.locator('#lw-eb-setbtn').click(); await p.waitForTimeout(800);
+    ck('★★ 「Aa」拉出阅读设置（字号 / 行距 / 页宽 / 字体 / 主题）',
+      await p.locator('#lw-eb-set').count() === 1 && await p.locator('[data-eblh]').count() === 3
+      && await p.locator('[data-ebw]').count() === 3 && await p.locator('[data-ebserif]').count() === 2
+      && await p.locator('[data-ebtheme]').count() === 3);
+    /* ⚠️ 变量名别和上面重 ✗（`fs0` 早就被用过了 ✓ → 直接 `Identifier has already been declared` ✓）*/
+    const ebFs0 = await p.evaluate(() => getComputedStyle(document.getElementById('lw-eb-body')).fontSize);
+    await p.locator('#lw-eb-fplus').click(); await p.waitForTimeout(700);
+    const ebFs1 = await p.evaluate(() => getComputedStyle(document.getElementById('lw-eb-body')).fontSize);
+    ck('★ 字号按钮真的改了字号', ebFs0 !== ebFs1, ebFs0 + ' → ' + ebFs1);
+    await p.locator('[data-ebtheme="sepia"]').click(); await p.waitForTimeout(700);
+    await p.locator('[data-eblh="2"]').click(); await p.waitForTimeout(700);
+    const cls = await p.evaluate(() => document.getElementById('lw-eb-body').className);
+    ck('★ 主题 / 行距真的落到正文上了', /th-sepia/.test(cls) && /lh-2/.test(cls), cls);
+    const pref = await store();
+    /* ⚠️ 字号别写死成某个数 ✗ —— 上面 ④ 已经加过两档 ✓，
+       这里再加一档就是 3 ✓；写 `=== 1` 会假失败 ✓（实测踩过 ✓）。
+       要验的是「**这个值存下来了**」✓，不是「它正好是几」✓。 */
+    ck('★★ 阅读偏好**落盘**了（关掉再打开还认）',
+      pref.ebTheme === 'sepia' && pref.ebLh === 2 && Number(pref.ebFont) >= 1,
+      JSON.stringify({ ebFont: pref.ebFont, ebLh: pref.ebLh, ebTheme: pref.ebTheme }));
+    await p.locator('#lw-eb-setbtn').click(); await p.waitForTimeout(600);
+    /* ★ 全书搜索 ✓ */
+    await p.locator('#lw-eb-toc').click(); await p.waitForTimeout(800);
+    ck('★ 抽屉里有「全书搜」输入框', await p.locator('#lw-eb-findq').count() === 1);
+    /* ⚠️ 搜的词**必须在这本书里** ✗ —— 我第一版写了「陋室」✓，
+       那是**另一本**探针书的词 ✓ → 探针报「全书没找到」✗（看着像功能坏了 ✓，
+       其实是**探针自己搜错了词** ✗）。这本 epub 的正文是「连绵的山」✓。 */
+    await p.locator('#lw-eb-findq').fill('连绵的山'); await p.keyboard.press('Enter');
+    await p.waitForFunction(() => document.querySelectorAll('.lw-eb-hit').length > 0, null, { timeout: 20000 }).catch(() => {});
+    await p.waitForTimeout(600);
+    const nHit = await p.locator('.lw-eb-hit').count();
+    ck('★★ 搜到了（带上下文，不是只给个章节号）', nHit > 0, nHit + ' 条');
+    ck('★ 命中数如实写着（不是「没有」）', /命中\s*\d+\s*处/.test(await txt('#lw-eb-drawer-bd')), (await txt('#lw-eb-drawer-bd')).slice(0, 40));
+    await p.locator('.lw-eb-hit').first().click(); await p.waitForTimeout(1800);
+    ck('★ 点一条结果 → 跳到它所在的那一章', await p.locator('#lw-eb-drawer').count() === 0);
+    /* ★ 划线 + 笔记 ✓ */
+    await p.evaluate(() => {
+      const el = document.getElementById('lw-eb-body');
+      const ps = el.querySelectorAll('p');
+      const node = ps[1] ? ps[1].firstChild : null;
+      if (!node) return;
+      const r = document.createRange();
+      r.setStart(node, 0); r.setEnd(node, Math.min(12, String(node.textContent || '').length));
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
+    await p.waitForTimeout(800);
+    ck('★★ 选中一段话 → 浮出「划线 / 写想法」（不是只有加生词）',
+      await p.locator('#lw-eb-pick [data-ebpick="hl"]').count() === 1
+      && await p.locator('#lw-eb-pick [data-ebpick="idea"]').count() === 1,
+      (await txt('#lw-eb-pick')));
+    await p.locator('#lw-eb-pick [data-ebpick="hl"]').click(); await p.waitForTimeout(1200);
+    /* ⚠️ 自己造的笔记**要登记** ✗ —— `finally` 是按 id 删的 ✓ */
+    ((await store()).bookNotes || []).filter((n) => n && n.kind === 'quote').forEach((n) => madeNotes.push(n.id));
+    const myNotes = ((await store()).bookNotes || []).filter((n) => n.kind === 'quote');
+    ck('★★ 划线存下来了（进的是**同一个** bookNotes，不是另起一套）',
+      myNotes.length >= 1, JSON.stringify((myNotes[0] || {}).text || '').slice(0, 30));
+    ck('★★ 划过的句子在正文里**标出来了**', await p.locator('.lw-eb-body mark.hl').count() >= 1,
+      String(await p.locator('.lw-eb-body mark.hl').count()) + ' 处');
+    await p.locator('#lw-eb-toc').click(); await p.waitForTimeout(700);
+    await p.locator('[data-ebtab="note"]').click(); await p.waitForTimeout(800);
+    ck('★★ 抽屉的「笔记」页签能看这本书的笔记',
+      /划线|想法/.test(await txt('#lw-eb-drawer-bd')), (await txt('#lw-eb-drawer-bd')).slice(0, 50));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(700);
+    ck('★ Esc 能关抽屉', await p.locator('#lw-eb-drawer').count() === 0);
+    /* ★ 键盘翻章 ✓ */
+    const k0 = Number(await p.locator('#lw-eb-jump').inputValue());
+    await p.keyboard.press('ArrowRight'); await p.waitForTimeout(1600);
+    const k1 = Number(await p.locator('#lw-eb-jump').inputValue());
+    ck('★★ → 键翻下一章', k1 === k0 + 1, k0 + ' → ' + k1);
+    await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(1600);
+    ck('★ ← 键翻回上一章', Number(await p.locator('#lw-eb-jump').inputValue()) === k0,
+      String(await p.locator('#lw-eb-jump').inputValue()));
+    /* ★ 删书 ✓（用户原话：「还有这个电子书这边缺少删除书籍等」✓）*/
+    ck('★★ 书架每本书都有「🗑」', await p.locator('[data-rdbkdel]').count() >= 1,
+      String(await p.locator('[data-rdbkdel]').count()) + ' 个');
+    {
+      /* ⚠️ 只拿**这次导入的探针书**试删 ✗ —— 绝不删用户自己的书 ✓ */
+      const probeB = ((await store()).books || []).find((x) => String(x.title).indexOf('__探针') === 0);
+      if (probeB) {
+        const n0 = ((await store()).books || []).length;
+        await p.locator('[data-rdbkdel="' + probeB.id + '"]').click({ force: true });
+        await p.waitForTimeout(800);
+        ck('  点 🗑 弹出确认（不是直接删）', await p.locator('#lw-dlg-ok').count() === 1);
+        await p.locator('#lw-dlg-ok').click(); await p.waitForTimeout(1600);
+        const d1 = await store();
+        ck('★★ 确认后这本书从书架没了', d1.books.length === n0 - 1 && !d1.books.some((x) => x.id === probeB.id),
+          n0 + ' → ' + d1.books.length);
+        /* ⚠️ 服务端正文文件也要删 ✗ —— 只从书架上拿掉的话，
+           `life-books/<id>/` 会**永久堆在磁盘上** ✓（一章一个文件 ✓）。 */
+        let onDisk = true;
+        try { onDisk = fs.existsSync(path.join(os.homedir(), 'Library/Application Support/CodeScope/life-books', probeB.ebookId)); } catch (_) {}
+        ck('★★ 服务端正文文件也删了（不是只从书架上拿掉）', onDisk === false, String(onDisk));
+      } else {
+        ck('★★ 确认后这本书从书架没了', false, '没找到这次导入的探针书');
+      }
+    }
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));
     ck('★ 全程没有原生弹窗', natives.length === 0, JSON.stringify(natives));
   } catch (e) {
@@ -290,9 +471,20 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
       for (const id of madeEbookIds) { try { await fetch(BASE + '/api/life/ebook?id=' + id, { method: 'DELETE' }); } catch (_) {} }
       /* ② 还原 STORE ✓（只删自己造的 ✓） */
       const d = await store();
+      /* ⚠️⚠️ 只按 **id 过滤**（自己造的才删 ✓），**不要再拿 `keep` 整份覆盖数组** ✗✗ ——
+         第一版这两行是**连着写**的 ✓：先 filter ✓ 再用 `keep.books` 盖回去 ✗ →
+         filter **等于白做** ✗，而且一旦**上一轮崩过**、`keep` 里已经带着残留 ✓，
+         这轮就会把残留**原样还原** ✗ → 残留**自我延续** ✓，
+         越跑越多 ✓（实测：探针书 +2、生词 +2 一直堆着 ✓）。
+         ⚠️ `keep` 只用来还原**标量**（bookSel / readMode / wordSel ✓）。 */
       d.books = (d.books || []).filter((x) => x && madeBooks.indexOf(x.id) < 0);
       d.words = (d.words || []).filter((w) => w && madeWords.indexOf(w.id) < 0);
-      ['books', 'bookSel', 'readMode', 'words', 'wordSel'].forEach((k) => { if (keep[k] === undefined) delete d[k]; else d[k] = keep[k]; });
+      /* ⚠️ ⑨ 那段会**划线**（写进 `bookNotes` ✓）→ 也得清 ✗，
+         不然用户的笔记里会多一条「第二段，用来验段落分隔。」✓。 */
+      d.bookNotes = (d.bookNotes || []).filter((n) => n && madeNotes.indexOf(n.id) < 0);
+      /* ⚠️ 标量 + **阅读偏好**一起还原 ✓（偏好也是「用户的东西」✓）*/
+      ['bookSel', 'readMode', 'wordSel', 'ebFont', 'ebLh', 'ebW', 'ebSerif', 'ebTheme']
+        .forEach((k) => { if (keep[k] === undefined) delete d[k]; else d[k] = keep[k]; });
       await put(d);
       const a = await store();
       console.log('\n收尾：书 ' + (a.books || []).length + ' 本（残留探针书 '

@@ -1385,6 +1385,84 @@
   .lw-eb-pick { position:absolute; z-index:20; padding:5px 10px; border:1px solid ${T.accent};
     background:${T.bg}; color:${T.accent}; font:11px ${UI}; cursor:pointer; white-space:nowrap; }
   .lw-eb-pick:hover { background:${T.accent}; color:${T.accentInk}; }
+
+  /* ══ 阅读器外壳 ✓（用户原话：「去移植成熟的电子书阅读器设计，或者参考，
+     还有…电子书阅读器的很多功能都没有，优化」✓）════════════════════════════
+     参照成熟阅读器（Kindle / Apple Books / 微信读书）的**基本盘**：
+     目录抽屉 · 可拖进度条 · 阅读设置（字号/行距/页宽/字体/主题）·
+     全文搜索 · 划线笔记 · 记住读到哪儿 ✓。 */
+  .lw-eb-bar .ttl { flex:1; min-width:0; font-size:11.5px; color:${T.text};
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+  .lw-eb-bar .ttl:hover { color:${T.accent}; }
+  /* ★ 进度条 ✓ —— 点一下 / 拖一下就能跳章 ✓（成熟阅读器都有 ✓）*/
+  .lw-eb-prog { flex:none; width:140px; height:6px; background:${T.lineDim}; cursor:pointer;
+    position:relative; }
+  .lw-eb-prog i { position:absolute; left:0; top:0; bottom:0; background:${T.accent}; display:block; }
+  .lw-eb-prog:hover i { background:${T.ok}; }
+  /* ★ 左侧抽屉（目录 / 搜索）✓ —— ⚠️ 覆盖在正文上 ✗，不挤走正文 ✓：
+     挤走的话正文宽度会跳一下 ✓（读书时最烦这个 ✓）。 */
+  .lw-eb-drawer { position:absolute; left:0; top:0; bottom:0; width:min(320px,86%); z-index:30;
+    display:flex; flex-direction:column; background:${T.card}; border-right:1px solid ${T.lineDim};
+    box-shadow:10px 0 28px rgba(0,0,0,.4); }
+  .lw-eb-drawer .hd { display:flex; align-items:center; gap:7px; padding:9px 12px; flex:none;
+    border-bottom:1px solid ${T.lineDim}; font-size:11px; color:${T.faint}; }
+  .lw-eb-drawer .hd b { color:${T.text}; font-size:11.5px; }
+  .lw-eb-drawer .hd .sp { flex:1; }
+  /* 抽屉顶部那两个**页签** ✓（目录 / 笔记 ✓）*/
+  .lw-eb-drawer .hd button { height:22px; padding:0 8px; border:1px solid ${T.lineDim};
+    background:transparent; color:${T.faint}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-eb-drawer .hd button:hover { color:${T.text}; }
+  .lw-eb-drawer .hd button.on { border-color:${T.accent}; color:${T.accent}; }
+  .lw-eb-drawer .hd .x { cursor:pointer; padding:0 4px; }
+  .lw-eb-drawer .hd .x:hover { color:${T.red}; }
+  .lw-eb-drawer .find { flex:none; padding:8px 12px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-eb-drawer .find input { width:100%; height:28px; padding:0 9px; background:${T.bg}; color:${T.text};
+    border:1px solid ${T.lineDim}; font:11.5px ${UI}; outline:none; }
+  .lw-eb-drawer .find input:focus { border-color:${T.accent}; }
+  .lw-eb-drawer .bd { flex:1; min-height:0; overflow:auto; }
+  .lw-eb-tocrow { display:flex; align-items:baseline; gap:8px; padding:7px 12px; cursor:pointer;
+    border-left:2px solid transparent; }
+  .lw-eb-tocrow:hover { background:${T.card2}; }
+  .lw-eb-tocrow.on { background:${T.card2}; border-left-color:${T.accent}; }
+  .lw-eb-tocrow .no { flex:none; width:28px; font-size:10px; color:${T.faint}; }
+  .lw-eb-tocrow .tx { flex:1; min-width:0; font-size:11.5px; color:${T.dim}; line-height:1.5;
+    word-break:break-word; }
+  .lw-eb-tocrow.on .tx { color:${T.text}; }
+  .lw-eb-tocrow .n { flex:none; font-size:9.5px; color:${T.faint}; }
+  /* 搜索命中 ✓ —— 带上下文，一眼看清「它在哪句话里」✓ */
+  .lw-eb-hit { padding:8px 12px; border-bottom:1px solid ${T.lineDim}; cursor:pointer; }
+  .lw-eb-hit:hover { background:${T.card2}; }
+  .lw-eb-hit .ch { font-size:10px; color:${T.accent}; margin-bottom:3px; }
+  .lw-eb-hit .sn { font-size:11px; color:${T.dim}; line-height:1.7; word-break:break-word; }
+  .lw-eb-hit .sn b { color:${T.accent}; font-weight:600; }
+  /* 阅读设置浮层 ✓ */
+  .lw-eb-set { position:absolute; right:12px; top:44px; z-index:31; width:262px;
+    background:${T.card}; border:1px solid ${T.lineDim}; box-shadow:0 14px 36px rgba(0,0,0,.5); }
+  .lw-eb-set .rw { display:flex; align-items:center; gap:6px; padding:9px 12px;
+    border-bottom:1px solid ${T.lineDim}; font-size:11px; color:${T.dim}; }
+  .lw-eb-set .rw:last-child { border-bottom:0; }
+  .lw-eb-set .rw .lb { flex:none; width:34px; color:${T.faint}; font-size:10px; }
+  .lw-eb-set .rw .sp { flex:1; }
+  .lw-eb-set .rw .vv { flex:none; width:34px; text-align:center; color:${T.text}; font-size:11px; }
+  .lw-eb-set button { height:22px; padding:0 8px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:10.5px ${UI}; cursor:pointer; }
+  .lw-eb-set button:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-eb-set button.on { border-color:${T.accent}; color:${T.accent}; }
+  /* 主题 ✓ —— ⚠️ 阅读区**自带底色** ✗，不跟着整个面板的主题走 ✓
+     （护眼/浅色是「读这本书时的偏好」✓，不是「整个 App 的主题」✓）。 */
+  .lw-eb-body.th-light { background:#fbfaf7; color:#22201d; }
+  .lw-eb-body.th-light .lw-eb-t { color:#161513; }
+  .lw-eb-body.th-sepia { background:#f4ecd8; color:#43382a; }
+  .lw-eb-body.th-sepia .lw-eb-t { color:#33291c; }
+  .lw-eb-body.serif > p, .lw-eb-body.serif > h3 {
+    font-family:Georgia,"Songti SC","Noto Serif CJK SC",serif; }
+  .lw-eb-body.lh-0 > p { line-height:1.72; }
+  .lw-eb-body.lh-2 > p { line-height:2.4; }
+  .lw-eb-body.nw-0 > p, .lw-eb-body.nw-0 > h3 { max-width:560px; }
+  .lw-eb-body.nw-2 > p, .lw-eb-body.nw-2 > h3 { max-width:min(1120px, 100%); }
+  /* 划线 ✓（读过的句子标出来 ✓，点一下能看笔记 ✓）*/
+  .lw-eb-body mark.hl { background:color-mix(in srgb, ${T.warn} 26%, transparent); color:inherit;
+    border-bottom:1px solid ${T.warn}; cursor:pointer; }
   .lw-rd-hd { font-size:9px; letter-spacing:1.8px; color:${T.faint}; text-transform:uppercase;
     padding:10px 13px 5px; }
   .lw-rd-row { display:flex; align-items:center; gap:8px; padding:6px 13px; font-size:11px;
@@ -1422,7 +1500,16 @@
     color:${T.accent}; font:11.5px ${UI}; cursor:pointer; }
   .lw-ep-big:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-rd-tools button:hover { border-color:${T.accent}; color:${T.accent}; }
-  .lw-bk { display:flex; gap:11px; padding:11px 13px; border-bottom:1px solid #1c1c1a; cursor:pointer; }
+  .lw-bk { display:flex; gap:11px; padding:11px 13px; border-bottom:1px solid #1c1c1a; cursor:pointer;
+    position:relative; }
+  /* ★ 书架每行右上角「🗑」✓（用户原话：「还有这个电子书这边缺少删除书籍等」✓）——
+     平时 opacity:0 ✓（一屏十几本都挂个垃圾桶会很吵 ✓），hover / 当前这本才显 ✓。 */
+  .lw-bk .ops { position:absolute; top:6px; right:6px; display:flex; gap:2px; opacity:0;
+    transition:opacity .12s; }
+  .lw-bk:hover .ops, .lw-bk.on .ops { opacity:1; }
+  .lw-bk .ops button { width:22px; height:22px; padding:0; border:1px solid ${T.lineDim};
+    background:${T.bg}; color:${T.dim}; font-size:11px; line-height:1; cursor:pointer; }
+  .lw-bk .ops button.del:hover { border-color:${T.red}; color:${T.red}; }
   .lw-bk:hover { background:${T.card2}; }
   .lw-bk.on { background:${T.card2}; box-shadow:inset 3px 0 0 ${T.accent}; }
   .lw-bk .cv { width:42px; height:58px; flex:none; border:1px solid ${T.lineDim}; background:${T.bg2};
@@ -2406,6 +2493,16 @@
           塞进 STORE 就是每次保存都序列化一遍 ✗（面板会卡死 ✗）。
           「读到第几章」是**小数据** ✓，落盘在书上（`b.rdCh` ✓）。 */
     rdCh: 0, rdText: '', rdTitle: '', rdBusy: false, rdErr: '', rdFont: 0, rdWide: false,
+    /* ★ 阅读器的外壳状态 ✓（用户原话：「去移植成熟的电子书阅读器设计」✓）——
+       ⚠️ 这些是**界面态** ✓（抽屉开没开 / 搜索词 / 结果 ✓），刷新就该重置 ✓；
+          真正要**记住**的阅读偏好（字号 / 行距 / 页宽 / 字体 / 主题 ✓）
+          落在 STORE 上（`ebFont` 那五个 ✓，见 rdEbPref ✓）。 */
+    ebToc: false, ebSet: false, ebFind: false, ebQ: '', ebRes: null, ebQBusy: false, ebQErr: '', ebNote: '',
+    /* 抽屉里那两页 ✓：目录 / 笔记 ✓（搜了东西时结果**优先**显示 ✓）*/
+    ebTab: 'toc',
+    /* ⚠️ 键盘只绑**一次** ✗ —— `bindReading()` 每次 render 都跑 ✓，
+       不设闸门的话按一下 ← 会翻好几章 ✓（监听器越挂越多 ✓）。 */
+    ebKeyBound: false,
     /* ⚠️ 书的**目录**（章节名 / 字数 ✓）只放内存 ✗ ——
        200 章的书光目录就 8KB ✓，塞进 STORE 是「每次保存都带上」✗（没必要 ✗）。
        书上只留一个 `ebookId` ✓，目录按需从服务端取 ✓（本机 ✓，快 ✓）。 */
@@ -6977,6 +7074,11 @@
       ? '<div class="cv"><img src="' + esc(b.cover) + '" alt="" onerror="this.style.display=\'none\'"/></div>'
       : '<div class="cv">' + src.e + '</div>';
     return '<div class="lw-bk' + (rdSel() === b.id ? ' on' : '') + '" data-rdbk="' + esc(b.id) + '">'
+      /* ★ 每本书右上角「🗑」✓（用户原话：「还有这个电子书这边缺少删除书籍等」✓）——
+         ⚠️ `stopPropagation` ✗（行本身挂着「点一下打开这本书」✓，
+            不拦的话点删除会**顺手把它打开** ✓）。 */
+      + '<div class="ops"><button class="del" data-rdbkdel="' + esc(b.id) + '" title="删掉这本书'
+      + (b.ebookId ? '（连同导入的正文文件）' : '') + '">🗑</button></div>'
       + cover
       + '<div class="mn"><div class="ti">' + esc(b.title || '未命名') + '</div>'
       + '<div class="au">' + esc(b.author || '—') + '</div>'
@@ -7024,6 +7126,15 @@
      ⚠️ 取章是**异步**的 ✗ → 要有 busy / err 状态 ✓（不然用户以为点了没反应 ✗）。 */
   async function rdEbookLoad(b, i) {
     if (!b || !b.ebookId || RD_UI.rdBusy) return;
+    /* ⚠️ 换章**之前**把「这一章读到哪儿」记下来 ✗ ——
+       用户翻回去看一眼、再翻回来，又回到章首会很难受 ✓
+       （成熟阅读器都记这个 ✓）。
+       ⚠️ 只记**一章**的位置 ✗（不是每章都记 ✓）：记全书每章的话这个字段会随书增长 ✓，
+          而用户真正需要的只是「刚才那章读到哪儿」✓。 */
+    if (RD_UI.rdText) {
+      const box0 = document.getElementById('lw-eb-body');
+      if (box0) { b.rdPosCh = Number(RD_UI.rdCh) || 0; b.rdPosY = Math.round(box0.scrollTop); }
+    }
     RD_UI.rdBusy = true; RD_UI.rdErr = ''; render();
     try {
       const r = await fetch('/api/life/ebook/chapter?id=' + encodeURIComponent(b.ebookId) + '&i=' + (Number(i) || 0), { cache: 'no-store' });
@@ -7045,9 +7156,10 @@
     } finally {
       RD_UI.rdBusy = false;
       render();
-      /* ⚠️ 换章后要把正文**滚回顶部** ✗ —— 不然还停在上次读的位置 ✓，看着像没换章 ✗ */
+      /* ⚠️ 换章后要把正文**滚回顶部** ✗ —— 不然还停在上次读的位置 ✓，看着像没换章 ✗。
+         ⚠️ **例外**：回到「刚才那一章」时，要**回到刚才的位置** ✓（见上面 rdPosY ✓）。 */
       const box = document.getElementById('lw-eb-body');
-      if (box) box.scrollTop = 0;
+      if (box) box.scrollTop = (Number(b.rdPosCh) === RD_UI.rdCh) ? (Number(b.rdPosY) || 0) : 0;
     }
   }
   /* 打开一本电子书 ✓ —— 先确保目录拿到了 ✓，再取当前那一章 ✓ */
@@ -7069,6 +7181,74 @@
     }
     /* ⚠️ 从**上次读到的那一章**继续 ✓（`b.rdCh` ✓）—— 不是从头开始 ✗ */
     await rdEbookLoad(b, Number(b.rdCh) || 0);
+  }
+  /* ★ 全文搜索 ✓ —— 走服务端逐章扫描（见 server.js 的 ebook/search ✓）。
+     ⚠️ 不用前端搜 ✗：一章几万字 ✓，全书几 MB ✓ ——
+        全下到前端再搜，既慢又费内存 ✓（而且用户搜的时候正文还没加载 ✓）。 */
+  async function rdEbFind() {
+    const b = rdCurrent();
+    if (!b || !b.ebookId) return;
+    const q = String(RD_UI.ebQ || '').trim();
+    if (!q) { RD_UI.ebRes = null; RD_UI.ebQErr = ''; render(); return; }
+    if (RD_UI.ebQBusy) return;
+    RD_UI.ebQBusy = true; RD_UI.ebQErr = ''; RD_UI.ebRes = null;
+    render();
+    try {
+      const r = await fetch('/api/life/ebook/search?id=' + encodeURIComponent(b.ebookId) + '&q=' + encodeURIComponent(q), { cache: 'no-store' });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || '搜不了');
+      RD_UI.ebRes = d;
+    } catch (e) {
+      RD_UI.ebQErr = String((e && e.message) || e);
+    } finally {
+      RD_UI.ebQBusy = false;
+      render();
+    }
+  }
+  /* ★ 跳到某一章 ✓（目录行 / 搜索结果 / 进度条都走它 ✓）。
+     ⚠️ 顺手把抽屉和设置**收起来** ✗ —— 不收的话它挡着刚跳过去的那一页 ✓。 */
+  function rdEbGoto(i) {
+    const b = rdCurrent();
+    if (!b) return;
+    RD_UI.ebToc = false; RD_UI.ebSet = false;
+    rdEbookLoad(b, Number(i) || 0);
+  }
+  /* ★★ 删一本书 ✓（用户原话：「还有这个电子书这边缺少删除书籍等」✓）——
+     ⚠️⚠️ 三件事都要做 ✗✗：
+       ① 从书架上拿掉 ✓
+       ② **删服务端的正文文件** ✓ —— 只做①的话 `life-books/<id>/` 会
+          **永久堆在磁盘上** ✓（一章一个文件 ✓，一本红楼梦 103 个 ✓）
+       ③ 清掉这本书的**笔记 / 阅读记录** ✓ —— 不清的话面板里会留一堆
+          「找不到书的笔记」✓
+     ⚠️ 顺序：**先删文件、再改 STORE** ✗ —— 反过来的话，
+        改完 STORE 一 render ✓ 书就从列表里消失了 ✓，
+        这时删文件再失败也**没人知道** ✓（用户已经以为删干净了 ✓）。
+     ⚠️ 删文件失败**要说出来** ✗（toast ✓），不能默默吞掉 ✓。 */
+  async function rdBookDel(id) {
+    const b = bookById(id);
+    if (!b || !STORE) return;
+    const n = bookNotesOf(b.id).length;
+    if (!(await lwConfirm({
+      title: '删掉这本书？', danger: true, ok: '删掉',
+      text: '《' + (b.title || '未命名') + '》\n\n'
+        + (b.ebookId ? '导入的正文文件会一起删掉（腾出磁盘空间）。\n' : '')
+        + (n ? '它的 ' + n + ' 条笔记也会一起删掉。\n' : '')
+        + '这个操作不能撤销。',
+    }))) return;
+    if (b.ebookId) {
+      try {
+        const r = await fetch('/api/life/ebook?id=' + encodeURIComponent(b.ebookId), { method: 'DELETE' });
+        const d = await r.json();
+        if (!d || !d.ok) rdToast('⚠️ 正文文件没删干净：' + ((d && d.error) || '未知原因'));
+      } catch (e) { rdToast('⚠️ 正文文件没删干净：' + String((e && e.message) || e)); }
+    }
+    STORE.books = rdBooks().filter((x) => x.id !== b.id);
+    STORE.bookNotes = ((STORE.bookNotes) || []).filter((x) => x && x.bookId !== b.id);
+    STORE.readLog = ((STORE.readLog) || []).filter((x) => x && x.bookId !== b.id);
+    if (RD_UI.sel === b.id) { RD_UI.sel = ''; STORE.bookSel = ''; }
+    if (RD_UI.ebMeta && RD_UI.ebMeta.id === b.ebookId) RD_UI.ebMeta = null;
+    rdSave(); render();
+    rdToast('《' + (b.title || '') + '》删掉了 ✓');
   }
   /* ★ 导入本地电子书 ✓ —— 用户原话「我需要的是可以实现阅读」✓。
      ⚠️ 用**隐藏的 file input** ✓ —— 绝不用原生弹窗 ✗
@@ -7116,40 +7296,191 @@
     };
     inp.click();
   }
-  /* 正文按段落渲染 ✓ —— 空行分段 ✓，段内单换行用 `<br>` ✓（诗 / 对白靠它 ✓） */
-  function rdEbookText(text) {
+  /* 正文按段落渲染 ✓ —— 空行分段 ✓，段内单换行用 `<br>` ✓（诗 / 对白靠它 ✓）。
+     ⚠️ 段落里要先把**划过的句子**标出来 ✓（`rdEbMarked` ✓，它自己会转义 ✓）*/
+  function rdEbookText(text, b) {
     const t = String(text || '');
     if (!t.trim()) return '<div class="lw-rd-empty" style="position:static">这一章是空的</div>';
-    return t.split(/\n{2,}/).map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+    return t.split(/\n{2,}/).map((p) => '<p>' + rdEbMarked(p, b).replace(/\n/g, '<br>') + '</p>').join('');
+  }
+  /* ══ 阅读偏好 ✓（字号 / 行距 / 页宽 / 字体 / 主题）══════════════════════════
+     ⚠️ 落 **STORE** ✗（不是内存 ✓）—— 用户把字号调大是**长期偏好** ✓，
+        关掉再打开又变回 15px 会很难受 ✓（成熟阅读器都记这个 ✓）。
+     ⚠️ 也**不跟着整个 App 的主题走** ✗：护眼/浅色是「读这本书时的偏好」✓。 */
+  function rdEbPref() {
+    const S = STORE || {};
+    const n = (v, lo, hi, dft) => {
+      const x = Number(v);
+      return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : dft;
+    };
+    return {
+      font: n(S.ebFont, -3, 12, 0),
+      lh: n(S.ebLh, 0, 2, 1),
+      w: n(S.ebW, 0, 2, 1),
+      serif: n(S.ebSerif, 0, 1, 0),
+      theme: (S.ebTheme === 'light' || S.ebTheme === 'sepia') ? S.ebTheme : 'dark',
+    };
+  }
+  function rdEbPrefSet(patch) {
+    if (!STORE) return;
+    Object.assign(STORE, patch);
+    epSave();
+  }
+  /* ★ 点 / 拖进度条 → 跳章 ✓ */
+  function rdEbSeekAt(ev) {
+    const b = rdCurrent();
+    const meta = RD_UI.ebMeta;
+    const el = document.getElementById('lw-eb-prog');
+    if (!b || !meta || !el) return;
+    const total = (meta.chapters || []).length;
+    if (total < 2) return;
+    const r = el.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (ev.clientX - r.left) / Math.max(1, r.width)));
+    rdEbookLoad(b, Math.round(frac * (total - 1)));
+  }
+  /* ★★ 划线与笔记 ✓ —— 用户原话：「电子书阅读器的很多功能都没有」✓。
+     ⚠️ 复用**已有的** `STORE.bookNotes` ✗（`{id, bookId, kind, text, loc, at}` ✓）——
+        再起一套「电子书笔记」的话，同一本书在「笔记」面板里会分成两处 ✓
+        （这个项目在「同一件事存两处必然漂移」上栽过太多次 ✓）。
+     ⚠️ `loc` 记**章号** ✓（不是字符偏移 ✓）：重新导入 / 换版本时偏移会错位 ✓，
+        章号 + 原文**双保险** ✓（对不上就只按章显示 ✓）。 */
+  function rdEbNote(kind) {
+    const b = rdCurrent();
+    const t = String(RD_UI.ebNote || '').trim();
+    if (!b || !t) { rdToast('先选中一段文字 ✓'); return; }
+    if (!STORE) return;
+    STORE.bookNotes = ((STORE.bookNotes) || []).concat([{
+      id: 'n' + Date.now() + Math.random().toString(36).slice(2, 6),
+      bookId: b.id, kind: kind === 'idea' ? 'idea' : 'quote',
+      text: t.slice(0, 2000), loc: Number(RD_UI.rdCh) || 0, at: Date.now(),
+    }]);
+    RD_UI.ebNote = '';
+    epSave(); render();
+    rdToast(kind === 'idea' ? '想法记下了 ✓（在「笔记」里能看到）' : '划线存下了 ✓（这一章里会标出来）');
+  }
+  /* ★ 把这一章里**划过的句子**标出来 ✓ —— 简单字符串匹配 ✓（和 epHiWord 一个思路 ✓）*/
+  function rdEbMarked(text, b) {
+    const t = String(text || '');
+    const marks = ((STORE && STORE.bookNotes) || [])
+      .filter((n) => n && n.bookId === b.id && n.kind === 'quote' && Number(n.loc) === (Number(RD_UI.rdCh) || 0))
+      .map((n) => String(n.text || '').trim()).filter((x) => x.length >= 2 && x.length <= 120);
+    if (!marks.length) return esc(t);
+    /* ⚠️ 先按**长度降序** ✗ —— 短句先替的话会把长句切碎 ✓ */
+    marks.sort((x, y) => y.length - x.length);
+    let out = esc(t);
+    marks.forEach((m) => {
+      const em = esc(m);
+      if (out.indexOf(em) < 0) return;
+      out = out.split(em).join('<mark class="hl" data-ebhl="1">' + em + '</mark>');
+    });
+    return out;
+  }
+  /* ★ 左侧抽屉 ✓：目录 / 笔记 两页 ✓ + 搜索框 ✓。
+     ⚠️ 搜了东西时**结果优先** ✗（不管当前在哪一页 ✓）——
+        用户敲了回车就是想看结果 ✓，再让他点一下页签是多余的一步 ✓。 */
+  function rdEbDrawerHtml(b) {
+    const meta = (RD_UI.ebMeta && RD_UI.ebMeta.id === b.ebookId) ? RD_UI.ebMeta : null;
+    const chs = (meta && meta.chapters) || [];
+    const ch = Number(RD_UI.rdCh) || 0;
+    const q = String(RD_UI.ebQ || '').trim();
+    const notes = bookNotesOf(b.id).slice().sort((x, y) => (Number(y.at) || 0) - (Number(x.at) || 0));
+    const tab = RD_UI.ebTab === 'note' ? 'note' : 'toc';
+    let inner;
+    if (q) {
+      if (RD_UI.ebQBusy) inner = '<div class="lw-rd-empty" style="position:static">正在搜…</div>';
+      else if (RD_UI.ebQErr) inner = '<div class="lw-rd-empty" style="position:static;color:' + T.red + '">✗ ' + esc(RD_UI.ebQErr) + '</div>';
+      else if (!RD_UI.ebRes) inner = '<div class="lw-rd-empty" style="position:static">按回车开始找</div>';
+      else if (!RD_UI.ebRes.list.length) inner = '<div class="lw-rd-empty" style="position:static">全书没找到「' + esc(q) + '」</div>';
+      else {
+        const R = RD_UI.ebRes;
+        /* ⚠️ 截断了要**说清楚** ✗（`capped` ✓）—— 不能让用户以为「就这么多」✓ */
+        inner = '<div class="lw-rd-hd">命中 ' + R.total + ' 处 · ' + R.chapters + ' 章'
+          + (R.capped ? '（只列了前面一部分）' : '') + '</div>'
+          + R.list.map((c) => c.hits.map((h) => '<div class="lw-eb-hit" data-ebgoto="' + c.i + '">'
+            + '<div class="ch">第 ' + (c.i + 1) + ' 章 · ' + esc(String(c.title || '').slice(0, 26)) + '</div>'
+            + '<div class="sn">…' + esc(h.pre) + '<b>' + esc(h.hit) + '</b>' + esc(h.post) + '…</div></div>').join('')).join('');
+      }
+    } else if (tab === 'note') {
+      inner = notes.length
+        ? '<div class="lw-rd-hd">' + notes.length + ' 条（点一条跳回那一章）</div>'
+          + notes.map((n) => '<div class="lw-eb-hit" data-ebgoto="' + (Number(n.loc) || 0) + '">'
+            + '<div class="ch">' + (n.kind === 'idea' ? '💭 想法' : '✏️ 划线') + ' · 第 ' + ((Number(n.loc) || 0) + 1) + ' 章</div>'
+            + '<div class="sn">' + esc(String(n.text || '').slice(0, 200)) + '</div></div>').join('')
+        : '<div class="lw-rd-empty" style="position:static">这本书还没有笔记<br>'
+          + '<span style="color:' + T.faint + '">在正文里选一段话 → 点「✏️ 划线」或「💭 写想法」</span></div>';
+    } else {
+      inner = '<div class="lw-rd-hd">共 ' + chs.length + ' 章</div>'
+        + chs.map((c, i) => '<div class="lw-eb-tocrow' + (i === ch ? ' on' : '') + '" data-ebgoto="' + i + '">'
+          + '<span class="no">' + (i + 1) + '</span>'
+          + '<span class="tx">' + esc(String(c.title || ('第 ' + (i + 1) + ' 节'))) + '</span>'
+          + '<span class="n">' + (Number(c.chars) ? Math.round(Number(c.chars) / 1000) + 'k' : '') + '</span></div>').join('');
+    }
+    const tb = (k, label, n) => '<button data-ebtab="' + k + '" class="' + (tab === k && !q ? 'on' : '') + '">'
+      + label + ' ' + n + '</button>';
+    return '<div class="lw-eb-drawer" id="lw-eb-drawer">'
+      + '<div class="hd">' + tb('toc', '📑 目录', chs.length) + tb('note', '📝 笔记', notes.length)
+      + '<span class="sp"></span><span class="x" id="lw-eb-drawer-x" title="关掉（Esc）">✕</span></div>'
+      + '<div class="find"><input id="lw-eb-findq" placeholder="全书搜一句 / 一个词…（回车）" value="' + esc(q) + '"/></div>'
+      + '<div class="bd" id="lw-eb-drawer-bd">' + inner + '</div></div>';
+  }
+  /* ★ 阅读设置浮层 ✓ */
+  function rdEbSetHtml() {
+    const p = rdEbPref();
+    const seg = (attr, val, label, cur) => '<button data-' + attr + '="' + val + '"'
+      + (String(cur) === String(val) ? ' class="on"' : '') + '>' + label + '</button>';
+    return '<div class="lw-eb-set" id="lw-eb-set">'
+      + '<div class="rw"><span class="lb">字号</span>'
+      + '<button id="lw-eb-fminus" title="小一点">A−</button>'
+      + '<span class="vv">' + (15 + p.font) + '</span>'
+      + '<button id="lw-eb-fplus" title="大一点">A+</button>'
+      + '<span class="sp"></span><button id="lw-eb-freset" title="回到默认">默认</button></div>'
+      + '<div class="rw"><span class="lb">行距</span>' + seg('eblh', 0, '紧凑', p.lh) + seg('eblh', 1, '正常', p.lh) + seg('eblh', 2, '宽松', p.lh) + '</div>'
+      + '<div class="rw"><span class="lb">页宽</span>' + seg('ebw', 0, '窄', p.w) + seg('ebw', 1, '中', p.w) + seg('ebw', 2, '宽', p.w) + '</div>'
+      + '<div class="rw"><span class="lb">字体</span>' + seg('ebserif', 0, '黑体', p.serif) + seg('ebserif', 1, '衬线', p.serif) + '</div>'
+      + '<div class="rw"><span class="lb">主题</span>'
+      + '<button data-ebtheme="dark"' + (p.theme === 'dark' ? ' class="on"' : '') + '>深色</button>'
+      + '<button data-ebtheme="light"' + (p.theme === 'light' ? ' class="on"' : '') + '>浅色</button>'
+      + '<button data-ebtheme="sepia"' + (p.theme === 'sepia' ? ' class="on"' : '') + '>护眼</button></div>'
+      + '</div>';
   }
   function rdEbookHtml(b) {
     const meta = (RD_UI.ebMeta && RD_UI.ebMeta.id === b.ebookId) ? RD_UI.ebMeta : null;
     const total = meta && meta.chapters ? meta.chapters.length : 0;
     const ch = Number(RD_UI.rdCh) || 0;
-    const font = Number(RD_UI.rdFont) || 0;           /* -2 ~ +6 ✓，0 = 默认 15px ✓ */
+    const p = rdEbPref();
+    const pct = total > 1 ? Math.round((ch / (total - 1)) * 100) : (ch ? 100 : 0);
+    /* ── 顶栏 ✓：目录 / 章节 / 进度 / 搜索 / 设置 ──
+       ⚠️ 保留原来那个「章节下拉」✗ —— 它跳章**很快** ✓（几十章的书 ✓），
+          而目录抽屉适合**翻着看** ✓。两个都留 ✓（成熟阅读器也常常两个都有 ✓）。 */
     const bar = '<div class="lw-eb-bar">'
-      + '<button id="lw-eb-prev"' + (ch <= 0 ? ' disabled' : '') + ' title="上一章">◀</button>'
+      + '<button class="' + (RD_UI.ebToc ? 'on' : '') + '" id="lw-eb-toc" title="目录 / 搜索（⌘F 也行）">📑 目录</button>'
+      + '<button id="lw-eb-prev"' + (ch <= 0 ? ' disabled' : '') + ' title="上一章（←）">◀</button>'
       + '<select id="lw-eb-jump" title="跳到某一章">'
       + (total ? meta.chapters.map((c, i) => '<option value="' + i + '"' + (i === ch ? ' selected' : '') + '>'
         + esc(String(i + 1) + '. ' + String(c.title || '')) + '</option>').join('') : '<option>（没有目录）</option>')
       + '</select>'
-      + '<button id="lw-eb-next"' + (total && ch >= total - 1 ? ' disabled' : '') + ' title="下一章">▶</button>'
-      + '<span class="sp"></span>'
-      + '<button id="lw-eb-fminus" title="字小一点">A−</button>'
-      + '<button id="lw-eb-fplus" title="字大一点">A+</button>'
-      + '<button class="' + (RD_UI.rdWide ? 'on' : '') + '" id="lw-eb-wide" title="正文宽一点 / 窄一点">↔</button>'
+      + '<button id="lw-eb-next"' + (total && ch >= total - 1 ? ' disabled' : '') + ' title="下一章（→）">▶</button>'
+      + '<span class="lw-eb-prog" id="lw-eb-prog" title="点 / 拖一下跳章"><i style="width:' + pct + '%"></i></span>'
       + '<span class="n">' + (total ? ('第 ' + (ch + 1) + ' / ' + total + ' 章 · 全书 ' + (Number(b.prog) || 0) + '%') : '') + '</span>'
+      + '<span class="sp"></span>'
+      + '<button id="lw-eb-setbtn" class="' + (RD_UI.ebSet ? 'on' : '') + '" title="阅读设置：字号 / 行距 / 页宽 / 字体 / 主题">Aa</button>'
       + '</div>';
+    const cls = 'lw-eb-body'
+      + (p.w === 2 ? ' wide' : '')                  /* 兼容老类名 ✓（探针里在用 ✓）*/
+      + ' nw-' + p.w + (p.lh === 1 ? '' : ' lh-' + p.lh)
+      + (p.serif ? ' serif' : '') + (p.theme === 'dark' ? '' : ' th-' + p.theme);
+    const cjk = ((String(RD_UI.rdText || '').match(/[\u4e00-\u9fa5]/g) || []).length) > String(RD_UI.rdText || '').length * 0.15;
     const body = RD_UI.rdBusy
       ? '<div class="lw-rd-empty" style="position:static">正在取这一章…</div>'
       : (RD_UI.rdErr
         ? '<div class="lw-rd-empty" style="position:static;color:' + T.red + '">✗ ' + esc(RD_UI.rdErr) + '</div>'
-        : '<h3 class="lw-eb-t">' + esc(RD_UI.rdTitle || '') + '</h3>' + rdEbookText(RD_UI.rdText));
-    /* ⚠️ 中文书要**首行缩进** ✓、英文书不要 ✗ —— 判据用汉字占比 ✓（>15% 就算中文书 ✓） */
-    const cjk = ((String(RD_UI.rdText || '').match(/[\u4e00-\u9fa5]/g) || []).length) > String(RD_UI.rdText || '').length * 0.15;
-    return '<div class="lw-rd-read lw-eb">' + bar
-      + '<div class="lw-eb-body' + (RD_UI.rdWide ? ' wide' : '') + (cjk ? ' cjk' : '') + '" id="lw-eb-body"'
-      + ' style="font-size:' + (15 + font) + 'px">' + body + '</div>'
+        : '<h3 class="lw-eb-t">' + esc(RD_UI.rdTitle || '') + '</h3>'
+          + rdEbookText(RD_UI.rdText, b));
+    return '<div class="lw-rd-read lw-eb" id="lw-eb-root">' + bar
+      + '<div class="' + cls + (cjk ? ' cjk' : '') + '" id="lw-eb-body"'
+      + ' style="font-size:' + (15 + p.font) + 'px">' + body + '</div>'
+      + (RD_UI.ebToc ? rdEbDrawerHtml(b) : '')
+      + (RD_UI.ebSet ? rdEbSetHtml() : '')
       /* ★ 划词加生词 ✓ —— 复用**外刊精读那套生词本** ✓（同一个 STORE.words ✓、
          同一套遗忘曲线 ✓）—— 读书时遇到的词和读外刊遇到的词，本来就该在一起复习 ✓。 */
       + '<div class="lw-eb-pick" id="lw-eb-pick" style="display:none"></div>'
@@ -9732,6 +10063,12 @@
     qa('[data-rdsrc]').forEach((el) => { el.onclick = () => { RD_UI.src = el.dataset.rdsrc; render(); }; });
     qa('[data-rdtag]').forEach((el) => { el.onclick = () => { RD_UI.tag = el.dataset.rdtag; render(); }; });
     qa('[data-rdbk]').forEach((el) => { el.onclick = () => rdPickBook(el.dataset.rdbk); });
+    /* ★ 每本书的「🗑」✓（用户原话：「还有这个电子书这边缺少删除书籍等」✓）——
+       ⚠️ `stopPropagation` ✗：行本身挂着「点一下打开这本书」✓，
+          不拦的话点删除会**顺手把它打开** ✓（删完立刻跳进去 ✓，很怪 ✗）。 */
+    qa('[data-rdbkdel]').forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); rdBookDel(el.dataset.rdbkdel); };
+    });
     qa('[data-rdset]').forEach((el) => { el.onclick = () => rdSetStatus(el.dataset.rdset); });
     qa('[data-rdsrcset]').forEach((el) => { el.onclick = () => rdSetSrc(el.dataset.rdsrcset); });
     qa('[data-rdrate]').forEach((el) => { el.onclick = () => rdSetRating(Number(el.dataset.rdrate)); });
@@ -9774,12 +10111,72 @@
         const next = q('#lw-eb-next'); if (next) next.onclick = () => rdEbookLoad(eb, (Number(RD_UI.rdCh) || 0) + 1);
         const jump = q('#lw-eb-jump');
         if (jump) jump.onchange = () => rdEbookLoad(eb, Number(jump.value) || 0);
+        /* ★ 目录抽屉 ✓（成熟阅读器都有 ✓）*/
+        const toc = q('#lw-eb-toc');
+        if (toc) toc.onclick = () => { RD_UI.ebToc = !RD_UI.ebToc; render(); };
+        const tocX = q('#lw-eb-drawer-x');
+        if (tocX) tocX.onclick = () => { RD_UI.ebToc = false; RD_UI.ebFind = false; render(); };
+        qa('[data-ebgoto]').forEach((el) => { el.onclick = () => rdEbGoto(el.dataset.ebgoto); });
+        qa('[data-ebtab]').forEach((el) => { el.onclick = () => { RD_UI.ebTab = el.dataset.ebtab; RD_UI.ebQ = ''; RD_UI.ebRes = null; render(); }; });
+        /* ★ 全书搜索 ✓ —— ⚠️ 输入框**不能每敲一个字就重绘** ✗（会失焦 ✓，这个项目踩过好几次 ✓）
+           → 只存值 ✓，回车 / 点搜才跑 ✓。 */
+        const fq = q('#lw-eb-findq');
+        if (fq) {
+          fq.oninput = () => { RD_UI.ebQ = fq.value; };
+          fq.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); rdEbFind(); } };
+        }
+        /* ★ 阅读设置 ✓（字号 / 行距 / 页宽 / 字体 / 主题 ✓）*/
+        const sb = q('#lw-eb-setbtn');
+        if (sb) sb.onclick = () => { RD_UI.ebSet = !RD_UI.ebSet; render(); };
+        const p = rdEbPref();
         const f1 = q('#lw-eb-fminus');
-        if (f1) f1.onclick = () => { RD_UI.rdFont = Math.max(-3, (Number(RD_UI.rdFont) || 0) - 1); render(); };
+        if (f1) f1.onclick = () => { rdEbPrefSet({ ebFont: Math.max(-3, p.font - 1) }); render(); };
         const f2 = q('#lw-eb-fplus');
-        if (f2) f2.onclick = () => { RD_UI.rdFont = Math.min(10, (Number(RD_UI.rdFont) || 0) + 1); render(); };
-        const wd = q('#lw-eb-wide');
-        if (wd) wd.onclick = () => { RD_UI.rdWide = !RD_UI.rdWide; render(); };
+        if (f2) f2.onclick = () => { rdEbPrefSet({ ebFont: Math.min(12, p.font + 1) }); render(); };
+        const fr = q('#lw-eb-freset');
+        if (fr) fr.onclick = () => { rdEbPrefSet({ ebFont: 0, ebLh: 1, ebW: 1, ebSerif: 0 }); render(); };
+        qa('[data-eblh]').forEach((el) => { el.onclick = () => { rdEbPrefSet({ ebLh: Number(el.dataset.eblh) }); render(); }; });
+        qa('[data-ebw]').forEach((el) => { el.onclick = () => { rdEbPrefSet({ ebW: Number(el.dataset.ebw) }); render(); }; });
+        qa('[data-ebserif]').forEach((el) => { el.onclick = () => { rdEbPrefSet({ ebSerif: Number(el.dataset.ebserif) }); render(); }; });
+        qa('[data-ebtheme]').forEach((el) => { el.onclick = () => { rdEbPrefSet({ ebTheme: el.dataset.ebtheme }); render(); }; });
+        /* ★ 进度条：点一下 / 按住拖 ✓ */
+        const pg = q('#lw-eb-prog');
+        if (pg) {
+          pg.onmousedown = (ev) => {
+            ev.preventDefault();
+            rdEbSeekAt(ev);
+            const mv = (e2) => rdEbSeekAt(e2);
+            const up = () => {
+              document.removeEventListener('mousemove', mv, true);
+              document.removeEventListener('mouseup', up, true);
+            };
+            document.addEventListener('mousemove', mv, true);
+            document.addEventListener('mouseup', up, true);
+          };
+        }
+        /* ★ 阅读器键盘 ✓ —— ←/→ 翻章 ✓、Esc 关抽屉 / 设置 ✓。
+           ⚠️ 只在**正在读电子书**时生效 ✗（`b.ebookId` ✓）——
+              不然会和编辑器 / 别的输入框抢键 ✓。
+           ⚠️ 焦点在**输入框 / 下拉**里时**不拦** ✗ ——
+              不然在搜索框里按 ← 会翻章 ✓（用户想移动光标 ✓）。
+           ⚠️ 只绑**一次** ✗（`ebKeyBound` ✓）—— `bindReading()` 每次 render 都跑 ✓，
+              不设闸门的话按一下 ← 会翻好几章 ✓。 */
+        if (!RD_UI.ebKeyBound) {
+          RD_UI.ebKeyBound = true;
+          document.addEventListener('keydown', (ev) => {
+            const cur = rdCurrent();
+            if (!cur || !cur.ebookId) return;
+            const t = ev.target;
+            if (t && t.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+            if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+            if (ev.key === 'ArrowLeft') { ev.preventDefault(); rdEbookLoad(cur, Math.max(0, (Number(RD_UI.rdCh) || 0) - 1)); return; }
+            if (ev.key === 'ArrowRight') { ev.preventDefault(); rdEbookLoad(cur, (Number(RD_UI.rdCh) || 0) + 1); return; }
+            if (ev.key === 'Escape' && (RD_UI.ebToc || RD_UI.ebSet)) {
+              ev.preventDefault();
+              RD_UI.ebToc = false; RD_UI.ebSet = false; render();
+            }
+          }, true);
+        }
         /* ★ 划词加生词 ✓ —— 和**外刊精读共用同一个生词本** ✓（同一套遗忘曲线 ✓）——
            读书时遇到的词、读外刊时遇到的词，本来就该在一起复习 ✓。 */
         const body = q('#lw-eb-body'), pick = q('#lw-eb-pick');
@@ -9787,28 +10184,47 @@
           body.onmouseup = () => {
             setTimeout(() => {
               const sel = String((window.getSelection && window.getSelection().toString()) || '');
-              const w = EN ? EN.cleanWord(sel) : sel.trim().toLowerCase();
-              if (!w || w.length > 40 || !/[a-z]/i.test(w)) { pick.style.display = 'none'; return; }
+              const s = sel.replace(/\s+/g, ' ').trim();
+              if (!s) { pick.style.display = 'none'; return; }
+              const w = EN ? EN.cleanWord(s) : s.toLowerCase();
+              /* ⚠️ 划到**一个英文词** → 加生词 ✓；划到**一段话 / 中文** → 划线 / 写想法 ✓。
+                 两个都不沾（比如一串标点 ✓）就不弹 ✓。 */
+              const isWord = !!(w && w.length <= 40 && /^[a-z][a-z'\-]*$/.test(w));
+              const isText = /[\u4e00-\u9fa5]/.test(s) || (s.length >= 6 && /\s/.test(s));
+              if (!isWord && !isText) { pick.style.display = 'none'; return; }
               let r = null;
               try { r = window.getSelection().getRangeAt(0).getBoundingClientRect(); } catch (_) {}
               if (!r || !r.width) { pick.style.display = 'none'; return; }
               const wrap = pick.parentElement.getBoundingClientRect();
-              pick.textContent = '＋ 加生词「' + w + '」';
-              pick.dataset.w = w;
+              RD_UI.ebNote = s.slice(0, 2000);
+              if (isWord) {
+                pick.dataset.w = w;
+                pick.innerHTML = '＋ 加生词「' + esc(w) + '」';
+              } else {
+                pick.dataset.w = '';
+                pick.innerHTML = '<button data-ebpick="hl">✏️ 划线</button>'
+                  + '<button data-ebpick="idea">💭 写想法</button>';
+              }
               pick.style.display = 'block';
-              pick.style.left = Math.max(4, Math.min(Math.max(0, wrap.width - 170), r.left - wrap.left)) + 'px';
+              pick.style.left = Math.max(4, Math.min(Math.max(0, wrap.width - 190), r.left - wrap.left)) + 'px';
               pick.style.top = Math.max(0, r.top - wrap.top - 36) + 'px';
             }, 0);
           };
           /* ⚠️ 用 mousedown + preventDefault ✗ —— 用 click 的话，
-             按下去的瞬间**选区就没了** ✓，而我们要先拿到那个词 ✓。 */
+             按下去的瞬间**选区就没了** ✓，而我们要先拿到那段文字 ✓。
+             ⚠️ 走**事件委托** ✓（浮层里现在是**按钮** ✓）——
+                但**容器自己**也要能接住 ✗：探针就是直接对容器派发 mousedown 的 ✓，
+                而且「划到一个词」时容器里根本没有按钮 ✓。 */
           pick.onmousedown = (ev) => {
             ev.preventDefault();
+            const btn = ev.target && ev.target.closest ? ev.target.closest('[data-ebpick]') : null;
+            const act = btn ? btn.dataset.ebpick : (pick.dataset.w ? 'word' : '');
             const w = pick.dataset.w;
             pick.style.display = 'none';
-            if (!w) return;
             try { window.getSelection().removeAllRanges(); } catch (_) {}
-            epWordAdd(w);      /* 复用外刊精读那套 ✓：加完自动补全音标 / 释义 / 巧记 + 配图 ✓ */
+            if (act === 'word') { if (w) epWordAdd(w); return; }   /* 复用外刊精读那套 ✓ */
+            if (act === 'hl') { rdEbNote('quote'); return; }
+            if (act === 'idea') { rdEbNote('idea'); return; }
           };
           body.onscroll = () => { pick.style.display = 'none'; };
         }
