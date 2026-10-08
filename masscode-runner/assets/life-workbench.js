@@ -10727,8 +10727,19 @@
     const due = SRS.dueCards(epWords(), now).length;
     const tools = '<div class="lw-rd-tools">'
       + '<input id="lw-wd-q" placeholder="搜索单词 / 释义…" value="' + esc(EP_UI.wordQ) + '"/>'
-      + '<button class="pri" id="lw-wd-rev" style="' + (due ? 'border-color:' + T.accent + ';color:' + T.accent : '') + '"'
-      + (due ? '' : ' disabled') + '>▶ 复习 ' + (due ? due : '') + '</button>'
+      /* ★★ 这个按钮**永远可点** ✗✗ —— 用户原话：「这个复习按钮点击怎么没有用」✓。
+         ⚠️⚠️ 根因：原来没到期时给它加了 `disabled` ✗ ——
+            而**恰恰是这种时候**用户最需要一句解释 ✓：
+            点下去什么都不发生 ✓、也不说为什么 ✓
+            （`epStartReview()` 里其实早就备好了「现在没有到期的词」这句话 ✓，
+             但**按钮是灰的、根本点不到** ✗✗ —— 死按钮 + 一句永远看不到的解释 ✓）。
+         → 有到期的就直接开始 ✓；没到期的就说清「最近的一个还要多久」✓
+           并给一个**「提前复习」** ✓（用户点它就是想现在学 ✓，
+           不该只回一句「明天再来」✗）。 */
+      + '<button class="pri" id="lw-wd-rev" title="'
+      + (due ? '开始复习 ' + due + ' 个到期的词' : '现在没有到期的词 —— 点一下可以提前复习') + '"'
+      + ' style="' + (due ? 'border-color:' + T.accent + ';color:' + T.accent : '') + '">▶ 复习'
+      + (due ? ' ' + due : '') + '</button>'
       + '<button id="lw-wd-add">＋ 加词</button>'
       + '</div>';
     return '<div class="lw-rd">'
@@ -10996,14 +11007,41 @@
       })
       .catch((e) => { EP_UI.srcImporting = ''; EP_UI.srcErr = String((e && e.message) || e); render(); });
   }
-  function epStartReview() {
+  /* ★★ 开始复习 ✓ —— 用户原话：「这个复习按钮点击怎么没有用」✓。
+     ⚠️⚠️ 这个函数以前**几乎跑不到** ✗：按钮没到期时是 `disabled` 的 ✓，
+        而没到期**正是**它被点的时候 ✓ —— 于是「点了一下什么都不发生」✗
+        （下面那句「现在没有到期的词」写在这儿 ✓，但用户永远看不到 ✓）。
+     → 现在按钮永远可点 ✓，这里分两条路：
+        · **有到期的** → 直接开始 ✓
+        · **没到期的** → 说清「最近的一个还要多久」✓ + 给一个**「提前复习」** ✓
+          （用户点这个按钮就是想现在学 ✓，只回一句「明天再来」等于把人赶走 ✗）
+     ⚠️ 提前复习会**按正常算法重新排期** ✗（等于把下次时间往前挪 ✓）——
+        所以必须**先讲清楚再确认** ✓，不能默默改掉他的复习计划 ✓。 */
+  async function epStartReview() {
     if (!SRS) return;
-    const due = SRS.dueCards(epWords(), Date.now(), 50);
-    if (!due.length) { rdToast('现在没有到期的词 ✓ 明天再来'); return; }
-    EP_UI.revQ = due.map((c) => c.id);
-    EP_UI.revI = 0; EP_UI.revShown = false; EP_UI.revDone = 0; EP_UI.revOK = 0;
-    EP_UI.revOpen = true;
-    render();
+    const words = epWords();
+    const start = (list) => {
+      EP_UI.revQ = list.map((c) => c.id);
+      EP_UI.revI = 0; EP_UI.revShown = false; EP_UI.revDone = 0; EP_UI.revOK = 0;
+      EP_UI.revOpen = true;
+      render();
+    };
+    const due = SRS.dueCards(words, Date.now(), 50);
+    if (due.length) { start(due); return; }
+    if (!words.length) { rdToast('生词本还是空的 ✓ 先去「外刊精读」里划几个词'); return; }
+    /* 没到期 → 挑**最近要复习的**几个 ✓（按 due 升序 ✓）*/
+    const soon = words.slice().sort((a, b) => (Number(a.due) || 0) - (Number(b.due) || 0)).slice(0, 20);
+    const first = soon[0] || {};
+    const gap = Number(first.due) ? SRS.fmtGap(Number(first.due) - Date.now()) : '';
+    const ok = await lwConfirm({
+      title: '现在没有到期的词',
+      text: '最近的「' + String(first.w || '') + '」还要 ' + (gap || '一会儿') + ' 才到期。\n\n'
+        + '要提前复习吗？会按正常算法重新排期 —— 等于把它的下次时间往前挪。\n'
+        + '（一共挑最近要复习的 ' + soon.length + ' 个词）',
+      ok: '提前复习', cancel: '先不复习',
+    });
+    if (!ok) return;
+    start(soon);
   }
   function epRevCur() { return epWordById(EP_UI.revQ[EP_UI.revI]); }
   function epGrade(q) {

@@ -240,6 +240,49 @@ function stripMine(d) {
       String(await p.locator('[data-epsent]').count()));
     ck('★ 列表里那篇是高亮的', await p.locator('.lw-ep-art.on').count() === 1, String(await p.locator('.lw-ep-art.on').count()));
 
+    /* ══ ⑪ ★★ 「▶ 复习」按钮**永远可点**（用户原话：「这个复习按钮点击怎么没有用」）══
+       ⚠️⚠️ 根因：没到期时给它加了 `disabled` ✗ —— 而**恰恰是这种时候**用户最需要一句解释 ✓：
+          点下去什么都不发生 ✓、也不说为什么 ✓
+          （`epStartReview()` 里那句「现在没有到期的词」**永远看不到** ✗✗）。
+       ⚠️ 判据要**真的点一下** ✗ —— 只验「按钮在不在」是验不出灰不灰的 ✓。 */
+    console.log('\n── ⑪ ★★ 复习按钮：没到期时也要说清楚（不是死按钮）──');
+    await p.locator('[data-rdmode="word"]').click(); await p.waitForTimeout(800);
+    ck('★★ 「▶ 复习」按钮**不是灰的**（永远可点）',
+      await p.locator('#lw-wd-rev:not([disabled])').count() === 1,
+      JSON.stringify(await txt('#lw-wd-rev')));
+    ck('★ 而且 title 里写明了「没到期也能提前复习」',
+      /提前复习/.test(await p.locator('#lw-wd-rev').getAttribute('title') || ''),
+      await p.locator('#lw-wd-rev').getAttribute('title'));
+    /* 把**所有**词的 due 推到未来 → 制造「一个都没到期」✓ */
+    const dR = await store();
+    const dueBack = (dR.words || []).map((w) => ({ id: w.id, due: w.due }));
+    dR.words = (dR.words || []).map((w) => Object.assign({}, w, { due: Date.now() + 14 * 3600 * 1000 }));
+    await put(dR);
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('#btn-lifework', { timeout: 20000 });
+    await p.click('#btn-lifework'); await p.waitForSelector('#lifework-view', { timeout: 20000 });
+    await p.locator('.lw-nav [data-tab="reading"]').dispatchEvent('click');
+    await p.waitForSelector('.lw-rd', { timeout: 20000 }); await p.waitForTimeout(1000);
+    await p.locator('[data-rdmode="word"]').click(); await p.waitForTimeout(900);
+    ck('★★ 一个都没到期时，按钮**还是可点**（以前是灰的 → 点了没反应）',
+      await p.locator('#lw-wd-rev:not([disabled])').count() === 1);
+    await p.locator('#lw-wd-rev').click(); await p.waitForTimeout(900);
+    /* ⚠️ 确认框是**页内浮层**（`.lw-imp` ✓），不是原生弹窗 ✗ —— 读它的文本 ✓ */
+    const dlgTxt = await txt('.lw-imp');
+    ck('★★ 点下去会**说清为什么**（不是默默无反应）',
+      /没有到期的词/.test(dlgTxt) && /还要/.test(dlgTxt), dlgTxt.replace(/\n/g, ' ').slice(0, 130));
+    ck('★ 并且给了「提前复习」这条路（不是把人赶走）', /提前复习/.test(dlgTxt), dlgTxt.replace(/\n/g, ' ').slice(0, 90));
+    await p.locator('#lw-dlg-ok').click(); await p.waitForTimeout(1200);
+    ck('★★ 确认后**真的开始复习**', await p.locator('#lw-rev').count() === 1);
+    await p.locator('#lw-rev-x').click(); await p.waitForTimeout(600);
+    /* 还原 due ✓（一个字都没评过级 ✓）*/
+    const dR2 = await store();
+    dR2.words = (dR2.words || []).map((w) => {
+      const b = dueBack.find((x) => x.id === w.id);
+      return b ? Object.assign({}, w, { due: b.due }) : w;
+    });
+    await put(dR2);
+
     ck('无页面异常', errs.length === 0, errs.slice(0, 3).join(' | '));
   } catch (e) {
     console.log('✗ 异常: ' + e.message); fails.push('异常:' + e.message);
