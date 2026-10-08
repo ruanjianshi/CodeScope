@@ -8,28 +8,32 @@
       "label": "B站",
       "url": "https://www.bilibili.com",
       "color": "#fb7299",
-      "category": "featured"
+      "category": "featured",
+      "openMode": "internal"
     },
     {
       "id": "github",
       "label": "GitHub",
       "url": "https://github.com",
       "color": "#8b949e",
-      "category": "featured"
+      "category": "featured",
+      "openMode": "internal"
     },
     {
       "id": "mdn",
       "label": "MDN",
       "url": "https://developer.mozilla.org",
       "color": "#62a0ea",
-      "category": "featured"
+      "category": "featured",
+      "openMode": "internal"
     },
     {
       "id": "arxiv",
       "label": "arXiv",
       "url": "https://arxiv.org/",
       "color": "#b31b1b",
-      "category": "featured"
+      "category": "featured",
+      "openMode": "internal"
     }
   ],
   "categories": [],
@@ -54,12 +58,12 @@
               "title": "网页 / B站",
               "componentType": "browser",
               "componentState": {
-                "url": "http://127.0.0.1:4877/knowledge/",
+                "url": "https://www.gamer520.com/",
                 "history": [
-                  "http://127.0.0.1:4877/knowledge/"
+                  "https://www.gamer520.com/"
                 ],
                 "index": 0,
-                "mode": "embedded",
+                "mode": "readable",
                 "videoTime": 0
               }
             }
@@ -182,5 +186,5 @@
     },
     "resolved": true
   },
-  "updatedAt": 1790952404744
+  "updatedAt": 1791363902538
 }
