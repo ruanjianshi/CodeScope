@@ -1826,6 +1826,7 @@
     const title = String(q || '').slice(0, 60);
     CG.ask = {
       tab, q: String(q || ''), title, cat: '', proj: '', busy: false, err: '', loaded: false,
+      newCat: false, newProj: false, byCat: {},
       md: cgMdOf(tab, snap, String(q || '')),
     };
     CG.histOn = false;
@@ -1846,25 +1847,28 @@
       const c0 = document.getElementById('cg-ask-cat');
       const p0 = document.getElementById('cg-ask-proj');
       if (t0 && t0.value) CG.ask.title = t0.value;
-      if (c0 && c0.value) CG.ask.cat = c0.value;
-      if (p0 && p0.value) CG.ask.proj = p0.value;
+      if (c0 && c0.value && c0.value !== '__new__') CG.ask.cat = c0.value;
+      if (p0 && p0.value && p0.value !== '__new__') CG.ask.proj = p0.value;
       const pages = (d && d.pages) || [];
-      const cats = [], projs = [];
+      const cats = [], byCat = {};
       pages.forEach((p) => {
         const parts = String((p && p.path) || '').split('/');
         if (parts.length >= 2 && parts[0] && parts[0] !== 'index.md') {
           if (cats.indexOf(parts[0]) < 0) cats.push(parts[0]);
-          const pj = parts[0] + '/' + parts[1];
-          if (projs.indexOf(pj) < 0) projs.push(pj);
+          byCat[parts[0]] = byCat[parts[0]] || [];
+          if (byCat[parts[0]].indexOf(parts[1]) < 0) byCat[parts[0]].push(parts[1]);
         }
       });
       CG.ask.cats = cats;
-      CG.ask.projs = projs;
+      CG.ask.byCat = byCat;
       CG.ask.loaded = true;
       const last = cgKbLast();
       /* ⚠️ 只在**还是空的**时候才套默认值 ✗（已经填过的不要覆盖 ✓）*/
       if (!CG.ask.cat) CG.ask.cat = last.cat || cats[0] || '技术积累';
-      if (!CG.ask.proj) CG.ask.proj = last.proj || (projs[0] ? projs[0].split('/')[1] : '常用代码');
+      if (!CG.ask.proj) {
+        const list = byCat[CG.ask.cat] || [];
+        CG.ask.proj = (last.cat === CG.ask.cat && last.proj) || list[0] || '常用代码';
+      }
       cgRender();
     }).catch(() => { if (CG.ask) { CG.ask.loaded = true; if (!CG.ask.cat) CG.ask.cat = '技术积累'; if (!CG.ask.proj) CG.ask.proj = '常用代码'; cgRender(); } });
   }
@@ -1898,6 +1902,34 @@
       a.busy = false; a.err = String((e && e.message) || e); cgRender();
     }
   }
+  /* 分类那一格 ✓ —— 现有分类的下拉 ✓，最后一项「＋ 新建分类…」✓；
+     选了「新建」就换成输入框 ✓（**能建新的**这件事必须看得见 ✗）。 */
+  function cgAskCatField(a) {
+    if (a.newCat) {
+      return '<input id="cg-ask-cat" value="' + esc(a.cat || '') + '" placeholder="新分类的名字，如 代码向导">'
+        + cgBtn({ act: 'askbackcat', icon: '↩', label: '选现有的' });
+    }
+    const cats = a.cats || [];
+    return '<select id="cg-ask-cat">'
+      + (cats.length ? '' : '<option value="">（还没有分类）</option>')
+      + cats.map((x) => '<option value="' + esc(x) + '"' + (x === a.cat ? ' selected' : '') + '>' + esc(x) + '</option>').join('')
+      + '<option value="__new__">＋ 新建分类…</option></select>';
+  }
+  /* 项目那一格 ✓ —— ⚠️ **只列「当前分类下」的项目** ✗✗ ——
+     原来是把所有项目都列出来 ✓（还只取路径第二段 ✓）→
+     选了「代码向导」这个分类 ✓，项目里却还挂着「使用指南」✗（那是别的分类下的 ✓），
+     选下去会存到 `代码向导/使用指南/…` ✗ —— 目录结构就乱了 ✓。 */
+  function cgAskProjField(a) {
+    if (a.newProj) {
+      return '<input id="cg-ask-proj" value="' + esc(a.proj || '') + '" placeholder="新项目的名字，如 常用代码 / STL">'
+        + cgBtn({ act: 'askbackproj', icon: '↩', label: '选现有的' });
+    }
+    const list = ((a.byCat || {})[a.cat] || []);
+    return '<select id="cg-ask-proj">'
+      + (list.length ? '' : '<option value="">（这个分类下还没有项目）</option>')
+      + list.map((x) => '<option value="' + esc(x) + '"' + (x === a.proj ? ' selected' : '') + '>' + esc(x) + '</option>').join('')
+      + '<option value="__new__">＋ 新建项目…</option></select>';
+  }
   function cgAskHtml() {
     const a = CG.ask;
     if (!a) return '';
@@ -1908,13 +1940,18 @@
       + cgBtn({ act: 'ask', icon: '✕', label: '取消' }) + '</div>';
     h += '<div class="cg-ask-b">';
     h += '<div class="cg-ask-row"><label>标题</label><input id="cg-ask-title" value="' + esc(a.title) + '" placeholder="文档标题"></div>';
-    h += '<div class="cg-ask-row"><label>分类</label><input id="cg-ask-cat" list="cg-ask-cats" value="' + esc(a.cat || '') + '" placeholder="如 嵌入式 / C++">'
-      + '<datalist id="cg-ask-cats">' + (a.cats || []).map((x) => '<option value="' + esc(x) + '"></option>').join('') + '</datalist></div>';
-    h += '<div class="cg-ask-row"><label>项目</label><input id="cg-ask-proj" list="cg-ask-projs" value="' + esc(a.proj || '') + '" placeholder="如 常用代码 / STL">'
-      + '<datalist id="cg-ask-projs">' + (a.projs || []).map((x) => '<option value="' + esc(String(x).split('/')[1] || '') + '"></option>').join('') + '</datalist></div>';
+    /* ⚠️⚠️ 分类 / 项目用**真正的下拉** ✗✗，不用 `<datalist>` ——
+       用户原话：「**没有其他选择**，比如代码向导里面去」✓。
+       实测：`<datalist>` 在 macOS 上**长得就像个下拉** ✓，
+       用户根本不会想到「这里还能自己打字」✗ → 等于**锁死在现有的分类里** ✗。
+       → 改成：**下拉列出现有的** ✓ + 最后一项「＋ 新建…」✓，
+         选它就把这一格换成输入框 ✓（明确告诉用户「能建新的」✓）。 */
+    h += '<div class="cg-ask-row"><label>分类</label>' + cgAskCatField(a) + '</div>';
+    h += '<div class="cg-ask-row"><label>项目</label>' + cgAskProjField(a) + '</div>';
     h += '<div class="cg-ask-path">会存到：<code>' + esc('知识库/' + (cgKbSafe(a.cat) || '分类') + '/' + (cgKbSafe(a.proj) || '项目') + '/' + (cgKbSafe(a.title) || '标题') + '.md') + '</code></div>';
     if (!a.loaded) h += '<div class="cg-ask-hint">正在读现有的分类 / 项目…</div>';
-    else if (!(a.cats || []).length) h += '<div class="cg-ask-hint">知识库里还没有分类 —— 直接填一个名字就会建 ✓</div>';
+    else if (!(a.cats || []).length) h += '<div class="cg-ask-hint">知识库里还没有分类 —— 选「＋ 新建分类…」建一个 ✓</div>';
+    else if (!(a.byCat || {})[a.cat] || !(a.byCat || {})[a.cat].length) h += '<div class="cg-ask-hint">「' + esc(a.cat || '') + '」下还没有项目 —— 选「＋ 新建项目…」建一个 ✓</div>';
     h += '<div class="cg-ask-md">' + esc(String(a.md).slice(0, 260)) + (String(a.md).length > 260 ? '\n…（共 ' + Math.round(String(a.md).length / 1024) + ' KB）' : '') + '</div>';
     if (a.err) h += '<div class="cg-note err">✗ ' + esc(a.err) + '</div>';
     h += '<div class="cg-ask-ft">'
@@ -2096,19 +2133,53 @@
        ⚠️ 只改那一行文字 ✗，**不重绘** ✗ —— 重绘会把输入框重建 ✓，光标就丢了 ✓。 */
     if (CG.ask) {
       const pick = (id) => document.getElementById(id);
-      const sync = () => {
+      const sync = (changedId) => {
         const t = pick('cg-ask-title'), c = pick('cg-ask-cat'), p = pick('cg-ask-proj');
-        if (CG.ask) { if (t) CG.ask.title = t.value; if (c) CG.ask.cat = c.value; if (p) CG.ask.proj = p.value; }
+        if (CG.ask) {
+          if (t) CG.ask.title = t.value;
+          if (c && c.value && c.value !== '__new__') CG.ask.cat = c.value;
+          if (p && p.value && p.value !== '__new__') CG.ask.proj = p.value;
+        }
         const code = document.querySelector('.cg-ask-path code');
-        if (code) {
-          code.textContent = '知识库/' + (cgKbSafe(c && c.value) || '分类') + '/'
-            + (cgKbSafe(p && p.value) || '项目') + '/' + (cgKbSafe(t && t.value) || '标题') + '.md';
+        if (code && CG.ask) {
+          code.textContent = '知识库/' + (cgKbSafe(CG.ask.cat) || '分类') + '/'
+            + (cgKbSafe(CG.ask.proj) || '项目') + '/' + (cgKbSafe(CG.ask.title) || '标题') + '.md';
+        }
+        /* ★ 换了**分类** → 项目列表要跟着换 ✓ ——
+           原来那个项目多半不属于新分类 ✓，留着就会存成 `新分类/老项目/…` ✗（目录就乱了 ✓）。
+           ⚠️ 重绘同样要**推到下一个任务** ✗（原因见上面 `onchange` 那段注释 ✓）。 */
+        if (changedId === 'cg-ask-cat' && CG.ask) {
+          const list = ((CG.ask.byCat || {})[CG.ask.cat] || []);
+          if (list.indexOf(CG.ask.proj) < 0) { CG.ask.proj = list[0] || ''; CG.ask.newProj = !list.length; }
+          setTimeout(cgRender, 0);
         }
       };
       ['cg-ask-title', 'cg-ask-cat', 'cg-ask-proj'].forEach((id) => {
         const el = pick(id);
         if (!el) return;
-        el.oninput = sync;
+        el.oninput = () => sync(id);
+        /* ★ 下拉选到「＋ 新建…」→ 把这一格换成输入框 ✓（用户原话：
+           「**没有其他选择**，比如代码向导里面去」✓ —— 得让他**看得见能建新的** ✗）*/
+        el.onchange = () => {
+          if (el.value === '__new__' && CG.ask) {
+            if (id === 'cg-ask-cat') { CG.ask.newCat = true; CG.ask.cat = ''; }
+            else if (id === 'cg-ask-proj') { CG.ask.newProj = true; CG.ask.proj = ''; }
+            /* ⚠️⚠️ 必须**让事件先跑完**再重绘 ✗✗ ——
+               在 `change` 处理器里直接 `cgRender()` ✓ → `innerHTML = …` 会把
+               **正在派发事件的那个 `<select>`** 从文档里摘掉 ✗ → Chrome 直接报
+               「The node to be removed is no longer a child of this node.
+                 Perhaps it was moved in a 'blur' event handler?」✗
+               （实测：`code-guide` 和 `editor-menu` 两个探针的「无页面异常」都挂了 ✗）。
+               → `setTimeout(…, 0)` 推到下一个任务 ✓，这时事件已经派发完了 ✓。 */
+            setTimeout(() => {
+              cgRender();
+              const n = document.getElementById(id);
+              if (n) n.focus();
+            }, 0);
+            return;
+          }
+          sync(id);
+        };
         /* 回车 = 直接存 ✓（这种小表单就该能一路回车走完 ✓）*/
         el.onkeydown = (ev) => {
           if (ev.key !== 'Enter') return;
@@ -2268,6 +2339,12 @@
     'border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:12px;',
     'font-family:inherit;outline:none}',
     '.cg-ask-row input:focus{border-color:var(--accent)}',
+    /* ★ 分类 / 项目 的**下拉** ✓（原来是 `<datalist>` 输入框 ✗ —— 用户看不出能建新的 ✓）*/
+    '.cg-ask-row select{flex:1;min-width:0;height:28px;padding:0 8px;border-radius:7px;',
+    'border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:12px;',
+    'font-family:inherit;outline:none;cursor:pointer}',
+    '.cg-ask-row select:focus{border-color:var(--accent)}',
+    '.cg-ask-row .cg-btn{height:28px;font-size:11px;flex:none}',
     '.cg-ask-path{font-size:10.5px;color:var(--dim);line-height:1.6;word-break:break-all}',
     '.cg-ask-path code{font-family:var(--mono);color:var(--text)}',
     '.cg-ask-hint{font-size:10.5px;color:var(--dim)}',
@@ -2709,12 +2786,26 @@
       }
       if (act === 'asksavecur') { cgAskOpen(CG.tab, CG.q || (CG.root && CG.root.name) || '', cgHistSnapshot(CG.tab)); return; }
       if (act === 'ask') { CG.ask = null; cgRender(); return; }
+      /* ★ 分类 / 项目 下拉 ✓ —— 选「＋ 新建…」就把那一格换成输入框 ✓。
+         ⚠️ 这几个也要**推到下一个任务**再重绘 ✗ —— 它们都是**点在自己身上**的 ✓，
+            重绘会把正在派发点击的那个按钮摘掉 ✗（和 `<select>` 的 change 同一类问题 ✓）。 */
+      if (act === 'askbackcat') {
+        if (CG.ask) { CG.ask.newCat = false; CG.ask.cat = (CG.ask.cats || [])[0] || ''; }
+        setTimeout(cgRender, 0);
+        return;
+      }
+      if (act === 'askbackproj') {
+        if (CG.ask) { CG.ask.newProj = false; CG.ask.proj = (((CG.ask.byCat || {})[CG.ask.cat] || [])[0]) || ''; }
+        setTimeout(cgRender, 0);
+        return;
+      }
       if (act === 'askrun') {
-        /* ⚠️ 先把输入框里的值收进来 ✗ —— 它们是 DOM ✓，`cgAskRun` 读的是状态 ✓ */
+        /* ⚠️ 先把输入框 / 下拉里的值收进来 ✗ —— 它们是 DOM ✓，
+           `cgAskRun` 读的是状态 ✓。`__new__` 是「＋ 新建…」这个占位选项 ✓，不是真名字 ✗。 */
         const t = $('#cg-ask-title'), c = $('#cg-ask-cat'), p = $('#cg-ask-proj');
         if (t && CG.ask) CG.ask.title = t.value;
-        if (c && CG.ask) CG.ask.cat = c.value;
-        if (p && CG.ask) CG.ask.proj = p.value;
+        if (c && CG.ask && c.value !== '__new__') CG.ask.cat = c.value;
+        if (p && CG.ask && p.value !== '__new__') CG.ask.proj = p.value;
         cgAskRun();
         return;
       }

@@ -732,8 +732,43 @@ const FAKE_PLAN = {
       /分类/.test(askTxt) && /项目/.test(askTxt) && /标题/.test(askTxt), askTxt.slice(0, 130));
     ck('★★ 而且写清了**会存到哪个路径**（存之前就知道）', /知识库\//.test(askTxt), askTxt.slice(0, 170));
     ck('★★ 还能**预览正文**（存之前看得出要存什么）', /由「代码向导」/.test(askTxt), askTxt.slice(0, 200));
+    /* ★★★ 分类 / 项目是**下拉**，而且**能建新的** ✗✗ —— 用户原话：
+       「**没有其他选择**，比如代码向导里面去」✓。
+       ⚠️ 原来是 `<datalist>` 输入框 ✗ —— 在 macOS 上长得就像个下拉 ✓，
+          用户根本不会想到「这里还能自己打字」✗ → 等于**锁死在现有分类里** ✗。 */
+    const catOpts = await p.locator('#cg-ask-cat option').allTextContents();
+    console.log('    分类下拉: ' + JSON.stringify(catOpts));
+    ck('★★★ 分类是**下拉**（列出现有的），而且带「＋ 新建分类…」',
+      catOpts.some((x) => /新建分类/.test(x)), JSON.stringify(catOpts));
+    const projOpts = await p.locator('#cg-ask-proj option').allTextContents();
+    console.log('    项目下拉: ' + JSON.stringify(projOpts));
+    ck('★★★ 项目也是下拉，而且带「＋ 新建项目…」',
+      projOpts.some((x) => /新建项目/.test(x)), JSON.stringify(projOpts));
+    /* ⚠️ 这条要**真去对一遍** ✗ —— 光看「下拉里有东西」是恒真的 ✓。
+       判据：项目下拉里那几项，**必须都属于当前分类** ✓（不是把别的分类的项目也堆上来 ✗）。 */
+    const kbNow = await p.evaluate(async () => (await (await fetch('/api/knowledge/status', { cache: 'no-store' })).json()));
+    const catNow = await p.locator('#cg-ask-cat').inputValue().catch(() => '');
+    const expect = new Set((kbNow.pages || [])
+      .filter((x) => String(x.path).indexOf(catNow + '/') === 0)
+      .map((x) => String(x.path).split('/')[1]));
+    const gotProj = projOpts.filter((x) => !/新建|还没有/.test(x));
+    console.log('    当前分类 ' + JSON.stringify(catNow) + ' → 该有的项目 ' + JSON.stringify([...expect]) + '，下拉里 ' + JSON.stringify(gotProj));
+    ck('★★★ 项目列表**只列当前分类下的**（不是把所有项目都堆上来）',
+      gotProj.every((x) => expect.has(x)), JSON.stringify({ cat: catNow, gotProj, expect: [...expect] }));
+    await p.locator('#cg-ask-cat').selectOption('__new__');
+    await p.waitForTimeout(500);
+    ck('★★★ 选「＋ 新建分类…」→ **变成输入框**（说明「能建新的」看得见）',
+      await p.locator('#cg-ask-cat').evaluate((el) => el.tagName) === 'INPUT');
     await p.locator('#cg-ask-title').fill('__探针词频方案__');
     await p.locator('#cg-ask-cat').fill('__探针代码向导__');
+    await p.waitForTimeout(500);
+    /* ⚠️ 新建分类之后，项目那一格**自己就变成输入框**了 ✗ ——
+       新分类下当然没有项目 ✓（这是对的行为 ✓，不是 bug ✓）→
+       不能无脑 `selectOption` ✗，得看它现在是什么标签 ✓。 */
+    const projTag = await p.locator('#cg-ask-proj').evaluate((el) => el.tagName);
+    ck('★★ 新建分类之后，项目那格**自动变成输入框**（新分类下本来就没有项目）',
+      projTag === 'INPUT', projTag);
+    if (projTag === 'SELECT') { await p.locator('#cg-ask-proj').selectOption('__new__'); await p.waitForTimeout(500); }
     await p.locator('#cg-ask-proj').fill('__探针分类__');
     await p.waitForTimeout(500);
     ck('★ 路径预览**跟着输入实时更新**（不用重绘、不丢焦点）',
