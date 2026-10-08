@@ -58,12 +58,12 @@
               "title": "网页 / B站",
               "componentType": "browser",
               "componentState": {
-                "url": "https://www.gamer520.com/",
+                "url": "https://www.bilibili.com/",
                 "history": [
-                  "https://www.gamer520.com/"
+                  "https://www.bilibili.com/"
                 ],
                 "index": 0,
-                "mode": "readable",
+                "mode": "start",
                 "videoTime": 0
               }
             }
@@ -186,5 +186,5 @@
     },
     "resolved": true
   },
-  "updatedAt": 1791363902538
+  "updatedAt": 1791478725649
 }
