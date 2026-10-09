@@ -4566,10 +4566,11 @@
           ce: memoCeNode,
           index: memoCeIdx,
           readAll: () => (readCe() == null ? '' : readCe()),
-          apply: (text, idx, keepFocus, caret) => { applyCe(text, idx, keepFocus, caret); saveMemoText(); },
+          apply: (text, idx, keepFocus, caret) => { snapMemo('edit'); applyCe(text, idx, keepFocus, caret); saveMemoText(); },
         })) return;
         if (e.key !== 'Enter') return;
         e.preventDefault();
+        snapMemo('edit');   /* Enter 换行也改内容 ✓ 得进撤销栈 ✓ */
         saveMemoText();
         const lines = String(readCe() == null ? '' : readCe()).split('\n');
         /* ★ 在**光标处**把当前行切成两半，后半段移到新行 ✓。
@@ -5053,10 +5054,11 @@
           ce,
           index: ceIdx,
           readAll,
-          apply: (text, idx, keepFocus, caret) => { applyCeJ(text, idx, keepFocus, caret); persist(); },
+          apply: (text, idx, keepFocus, caret) => { snapJournal('edit'); applyCeJ(text, idx, keepFocus, caret); persist(); },
         })) return;
         if (e.key === 'Enter') {
           e.preventDefault();
+          snapJournal('edit');   /* Enter 换行也改内容 ✓ */
           persist();
           const lines = readAll().split('\n');
           /* ★ 和备忘录同一套：在**光标处**把当前行切成两半 ✓
