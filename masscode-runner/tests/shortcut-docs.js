@@ -99,6 +99,7 @@ const SHORTCUTS = [
   { keys: ['⌘N'], label: '新建（备忘录）' },
   { keys: ['⌘F'], label: '搜索（备忘录）' },
   { keys: ['Ctrl/⌘+Shift+N', '⌘⇧N'], label: '快速捕捉', welcome: true },
+  { keys: ['Ctrl/⌘+Alt+Enter'], label: '运行本段（%% 分段，MATLAB / Octave）' },
 ];
 
 /* 允许「同一件事有别名」：手册里出现任意一个写法就算写了 ✓ */
