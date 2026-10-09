@@ -620,7 +620,11 @@ const TEXT = SENT.join(' ');
     ck('★ 模型包了 ```json 围栏 + 废话，也剥干净了（没把围栏写进字段）',
       !/```|好的，这是/.test(anTxt), anTxt.slice(0, 90));
     /* ★★ 「原文中已经加入了的单词，需要显示」✗ —— 右侧要列出**本篇**的生词 ✓ */
-    const wp = 'forage';
+    /* ⚠️ 别写死 forage ✗（2026-10-09）—— 上面已经从「用户还没有的词」里
+       动态挑了一个 WP ✓（microbiome / forage / striking / antibiotics ✓），
+       这里却又写死 forage ✗ → 用户要是已经有 forage，这步必然挂 ✓。
+       统一用 WP ✓。 */
+    const wp = WP;
     await p.locator('#lw-ep-new').fill(wp);
     await p.click('#lw-ep-addbtn');
     await p.waitForTimeout(3200);
