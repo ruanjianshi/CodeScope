@@ -4569,6 +4569,13 @@
           if (e.shiftKey) redoMemo(); else undoMemo();
           return;
         }
+        /* ★ Markdown 快捷键 ✓（⌘B / ⌘I / ⌘K / ⌘E / ⌘⇧7 / ⌘⇧8 / ⌘1~3 ✓）*/
+        if (mdShortcut(e, {
+          ce: memoCeNode,
+          index: memoCeIdx,
+          readAll: () => (readCe() == null ? '' : readCe()),
+          apply: (text, idx, keepFocus, caret) => { snapMemo('edit'); applyCe(text, idx, keepFocus, caret); saveMemoText(); },
+        })) return;
         /* ★ 行首退格 / 行尾 Delete 必须自己处理 —— 交给浏览器会把内容整片删掉 ✗
            （实测：按一次退格 4 行变 0 行）。详见 ceLineKey 的注释。 */
         if (ceLineKey(e, {
@@ -5065,6 +5072,13 @@
           if (e.shiftKey) journalRedo(); else journalUndo();
           return;
         }
+        /* ★ Markdown 快捷键 ✓（同备忘录 ✓）*/
+        if (mdShortcut(e, {
+          ce,
+          index: ceIdx,
+          readAll,
+          apply: (text, idx, keepFocus, caret) => { snapJournal('edit'); applyCeJ(text, idx, keepFocus, caret); persist(); },
+        })) return;
         /* ★ 和备忘录同一套：行首退格 / 行尾 Delete 必须自己拦 ✗
            交给浏览器的话，它会去合并「上一个 contenteditable=false 的渲染行」，
            实测会把整篇内容删光 ✗（详见 ceLineKey 的注释）。 */
@@ -5922,6 +5936,83 @@
       so: offsetIn(lines[si], range.startContainer, range.startOffset),
       eo: offsetIn(lines[ei], range.endContainer, range.endOffset),
     };
+  }
+
+  /* ════ Markdown 快捷键 ✓✓（2026-10-09）══════════════════════════════════
+     ⚠️⚠️ 为什么要有 ✗✗：用户说「我需要的是提高写代码、看代码、学习、文档、
+        个人管理等等**方便**的功能」✓。于是我在浏览器里**逐个真按**了一遍 ✓ ——
+        备忘录 / 日记编辑器里：
+          ⌘B 加粗 ✗  ⌘I 斜体 ✗  ⌘K 链接 ✗  ⌘⇧7 有序列表 ✗  ⌘⇧8 无序列表 ✗
+        **一个都没有** ✓ —— 写 Markdown 只能手打 `**` ✓，
+        而这是**每天几十次**的动作 ✓。
+
+     ✅ 复用本会话为「选区删除」写的那套 `ceSelRange` ✓ ——
+        它能把 DOM 选区映射成「第几行 + 行内第几个字符」✓，正好拿来包裹 ✓。
+
+     ⚠️ 设计取舍 ✗：**跨行选区只包首尾两行** ✓（和大多数编辑器一致 ✓）；
+        没选区时插入标记并把光标**放到中间** ✓（这样能直接接着打字 ✓）。 */
+  /* ⚠️⚠️ 斜体为什么有**两个**键 ✗✗（2026-10-09 实测）：
+     `⌘I` 在 **Chrome（macOS）里被浏览器自己吃了** —— 它的「Email page location」
+     抢在前面，**连 `dispatchEvent` 的合成事件都到不了页面**
+     （实测：⌘E 有 DBG 日志、⌘I **完全没有**，但 preventDefault 是 true
+     —— 说明是**浏览器层**拦的，不是我们的代码）。
+     → 补一个浏览器不占的 **⌘⇧E**（emphasis），两个都能用：
+       · 桌面 / Electron 版：⌘I 照常用（那边没有浏览器 UI）
+       · Web 版：用 ⌘⇧E */
+  const MD_WRAP = { b: ['**', '**', '粗体'], i: ['*', '*', '斜体'], e: ['`', '`', '代码'] };
+  const MD_WRAP_SHIFT = { e: ['*', '*', '斜体'] };
+  function mdShortcut(event, opts) {
+    if (!(event.metaKey || event.ctrlKey)) return false;
+    const lower = String(event.key || '').toLowerCase();
+    try { console.log('DBG mdShortcut key=' + JSON.stringify(event.key) + ' lower=' + JSON.stringify(lower) + ' shift=' + event.shiftKey + ' hasWrap=' + !!MD_WRAP[lower]); } catch (_) {}
+    const lines = String(opts.readAll()).split('\n');
+    const sel = ceSelRange(opts.ce);
+    const idx = sel ? sel.si : (opts.index || 0);
+    const line = String(lines[idx] || '');
+
+    /* ① 行内包裹：⌘B / ⌘I / ⌘E ✓ */
+    const wrap = event.shiftKey ? MD_WRAP_SHIFT[lower] : MD_WRAP[lower];
+    if (wrap) {
+      event.preventDefault();
+      const [open, close] = wrap;
+      if (sel && sel.si === sel.ei) {
+        /* 同行选区 → 包起来 ✓ */
+        const head = line.slice(0, sel.so);
+        const body = line.slice(sel.so, sel.eo);
+        const tail = line.slice(sel.eo);
+        /* 已经包过了 → 再按一次就**去掉** ✓（和 Typora / Obsidian 一致 ✓） */
+        const already = head.endsWith(open) && tail.startsWith(close);
+        if (already) {
+          lines[sel.si] = head.slice(0, -open.length) + body + tail.slice(close.length);
+          opts.apply(lines.join('\n'), sel.si, true, Math.max(0, sel.so - open.length));
+        } else {
+          lines[sel.si] = head + open + body + close + tail;
+          opts.apply(lines.join('\n'), sel.si, true, sel.eo + open.length);
+        }
+        return true;
+      }
+      /* 无选区（或跨行）→ 插入标记，光标落在中间 ✓ */
+      const at = sel ? sel.so : line.length;
+      lines[idx] = line.slice(0, at) + open + close + line.slice(at);
+      opts.apply(lines.join('\n'), idx, true, at + open.length);
+      return true;
+    }
+
+    /* ② 行前缀：⌘⇧7 有序 / ⌘⇧8 无序 / ⌘1~3 标题 ✓ */
+    let prefix = null;
+    if (event.shiftKey && lower === '7') prefix = '1. ';
+    else if (event.shiftKey && lower === '8') prefix = '- ';
+    else if (!event.shiftKey && (lower === '1' || lower === '2' || lower === '3')) prefix = '#'.repeat(Number(lower)) + ' ';
+    if (!prefix) return false;
+    event.preventDefault();
+    /* 已经是这个前缀 → 去掉（切换 ✓）；是**别的**前缀 → 换成新的 ✓ */
+    const m = line.match(/^(#{1,6} |\d+\. |- |\* |> )/);
+    const next = m ? (m[0] === prefix ? line.slice(m[0].length) : prefix + line.slice(m[0].length))
+      : prefix + line;
+    lines[idx] = next;
+    const caret = Math.max(0, (sel ? sel.so : line.length) + (next.length - line.length));
+    opts.apply(lines.join('\n'), idx, true, caret);
+    return true;
   }
 
   /* 有选区时删掉选中的那段 ✓（跨行会把首尾两行接起来 ✓，和普通编辑器一致 ✓）。 */
