@@ -12814,6 +12814,43 @@ function renderMain() {
     if (reason) { btn.dataset.why = reason; btn.title = reason; }
     else { delete btn.dataset.why; }
   }
+
+  /* ════ 个人数据同步的「心跳点」 ✓✓（2026-10-09）══════════════════════════
+     ⚠️ 为什么要有 ✗✗：自动同步原来是**完全静默**的 ——
+        跑没跑、成没成、多久没动静了，界面上**一个字都没有**。
+        用户实际踩过：「双端没同步」，而他**只能靠肉眼比对才发现**。
+     ✅ 做法（参考 Syncthing 托盘图标 / Dropbox 状态图标的思路）：
+        状态栏一个小圆点 —— 🟢 最近成功过 / 🟡 超过 2.5 个周期没动静 /
+        🔴 上次失败；悬停看「上次成功是几点」，点一下立刻刷新。
+     ⚠️ **没配同步就藏起来** ✗ —— 云端没有 data-sync.sh（enabled=false），
+        不该在那边显示一个永远黄着的点。 */
+  (function bindSyncTick() {
+    async function tick() {
+      const el = document.getElementById('sync-tick');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/life/sync-status', { cache: 'no-store' });
+        const d = await res.json();
+        if (!d || !d.enabled) { el.hidden = true; return; }
+        el.hidden = false;
+        const at = (d.last && d.last.at) || 0;
+        const period = Number(d.intervalMs) || 180000;
+        const age = at ? Date.now() - at : Infinity;
+        let cls = 'idle', tip = '';
+        if (!at) { cls = 'warn'; tip = '同步已启用，但还没跑过第一轮'; }
+        else if (d.last && d.last.ok === false) { cls = 'err'; tip = '上次同步失败：' + (d.last.note || '看日志'); }
+        else if (age > period * 2.5) { cls = 'warn'; tip = '上次同步是 ' + Math.round(age / 60000) + ' 分钟前，超过 ' + Math.round(period * 2.5 / 60000) + ' 分钟没动静了'; }
+        else { cls = 'ok'; tip = '上次同步成功：' + new Date(at).toLocaleTimeString('zh-CN'); }
+        el.className = 'pill ' + cls;
+        el.title = tip + '（点一下刷新）';
+        el.textContent = '●';
+      } catch (_) { el.hidden = true; }
+    }
+    setTimeout(tick, 8000);        /* 启动后等一会儿再问，别跟启动抢 */
+    setInterval(tick, 60000);
+    document.addEventListener('click', (ev) => { if (ev.target && ev.target.id === 'sync-tick') tick(); });
+  })();
+
   /* 全局挂一次 ✓：hover 到禁用按钮上 → 把原因写到状态栏 ✓ */
   (function bindDisabledWhy() {
     let last = null;

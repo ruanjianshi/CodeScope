@@ -2190,6 +2190,8 @@
   .pill.ok { background: rgba(63,185,80,.15); color: var(--ok); }
   .pill.err { background: rgba(248,81,73,.15); color: var(--err); }
   .pill.timeout { background: rgba(219,154,4,.15); color: #dbb904; }
+  /* ★ warn 原来没有 ✗（2026-10-09 加 ✓）—— 同步心跳点的「超期」状态要用 ✓ */
+  .pill.warn { background: rgba(219,154,4,.15); color: #dbb904; }
   .pill.idle { background: var(--panel2); color: var(--dim); }
   #out-body { flex: 1; overflow: auto; padding: 4px 14px 14px; font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all; }
   #out-body.hidden { display: none; }

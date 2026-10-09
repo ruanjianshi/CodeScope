@@ -575,6 +575,14 @@
         <span class="sp"></span>
         <span class="pill idle" id="save-tick">已保存</span>
         <span class="pill idle" id="status">空闲</span>
+        <!-- ★ 个人数据同步的心跳点 ✓（2026-10-09）——
+             原来自动同步是**完全静默**的：跑没跑、成没成、多久没动静，
+             界面上一个字都没有。用户实际踩过「双端没同步」，
+             而他只能靠肉眼比对才发现。
+             小圆点：绿=最近成功过 / 黄=超期 / 红=失败，
+             悬停能看到「上次成功是几点」，点一下立刻刷新。
+             ⚠️ 云端没有 data-sync.sh（enabled=false）→ 这个点自动隐藏。 -->
+        <span class="pill idle" id="sync-tick" hidden title="个人数据同步状态">●</span>
         <span id="elapsed" style="font-variant-numeric:tabular-nums"></span>
       </div>
       <div id="algo-cases" class="algo-panel hidden"></div>
