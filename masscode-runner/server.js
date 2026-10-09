@@ -7079,6 +7079,33 @@ const server = http.createServer(async (req, res) => {
       if (Buffer.byteLength(b.code, 'utf8') > 1024 * 1024) return send(res, 413, { ok: false, error: 'LaTeX 文档超过 1 MB，无法实时编译' });
       return send(res, 200, await compileLatex(b.code, b.file));
     }
+    if (req.method === 'GET' && u.pathname === '/api/matlab/console') {
+      /* ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-09）
+         用户原话：「matlab/octave 那种命令窗口也需要给我完成复刻过来，
+                   就是那种可以输入指令的」✓。
+         ✅ 做法：**不另造 REPL** ✗ —— 直接用现有的底部终端（真 PTY ✓），
+            这里只负责告诉前端「该敲哪条命令」✓。
+            MATLAB 用 `-nodesktop -nosplash`（不带界面、留在终端里 ✓），
+            Octave 用 `--no-gui --quiet` ✓ —— 都是**留在前台交互**的参数 ✓，
+            和「跑脚本」用的 `-batch` 不一样 ✗（那个跑完就退出 ✓）。
+         ⚠️ 两个都没装时返回 ok:false + 安装提示 ✓，
+            前端据此给出可操作的下一步 ✓（而不是静默失败 ✓）。 */
+      const cmd = matlabCmd();
+      if (!cmd) {
+        return send(res, 200, {
+          ok: false,
+          error: '这台机器上 MATLAB 和 Octave 都没装',
+          hint: installHint('octave'),
+        });
+      }
+      const octave = isOctaveCmd(cmd);
+      return send(res, 200, {
+        ok: true,
+        engine: octave ? 'octave' : 'matlab',
+        label: octave ? 'GNU Octave' : 'MATLAB',
+        argv: octave ? [cmd, '--no-gui', '--quiet'] : [cmd, '-nodesktop', '-nosplash'],
+      });
+    }
     if (req.method === 'POST' && u.pathname === '/api/run') {
       const b = await readBody(req);
       const snips = walkSnippets();

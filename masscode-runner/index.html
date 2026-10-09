@@ -605,6 +605,14 @@
   <div id="outline-panel">
     <div id="outline-actions">
       <button id="btn-run" class="btn-run" title="运行代码" aria-label="运行代码">▶</button>
+      <!-- ★ `%%` 段运行 ✓（2026-10-09）—— 只在 MATLAB/Octave（.m）片段上显示 ✓。
+           对应 MATLAB 的「Run Section」（Ctrl+Enter）✓：
+           只跑光标所在的那一段，调参时不用从头跑整个脚本 ✓。 -->
+      <button id="btn-run-section" title="运行本段（%% 分段）Ctrl/⌘+Alt+Enter" aria-label="运行本段" style="display:none">▶ 本段</button>
+      <!-- ★ MATLAB / Octave 命令窗口 ✓（2026-10-09）——
+           不另造 REPL，直接在底部终端里起引擎（真 PTY，能交互）✓。
+           只在 .m 片段上显示 ✓。 -->
+      <button id="btn-matlab-console" title="在底部终端打开 MATLAB / Octave 命令窗口（可直接输入指令）" aria-label="命令窗口" style="display:none">▮ 控制台</button>
       <button id="btn-check" title="语法检查" aria-label="语法检查">✓</button>
       <button id="btn-format" title="格式化代码" aria-label="格式化代码">✨</button>
       <button id="btn-preview" title="预览 HTML" style="display:none">👁</button>

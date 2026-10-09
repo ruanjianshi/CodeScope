@@ -11233,6 +11233,14 @@ function renderCode() {
   $('btn-check').title = isLatex ? '检查 LaTeX 并刷新 PDF' : '语法检查';
   $('btn-format').disabled = !f || isLatex;
   const isHtml = f && f.language === 'html';
+  /* ★ `%%` 段运行按钮：只在 MATLAB / Octave（.m）上显示 ✓✓（2026-10-09）
+     ⚠️ 和 btn-preview / btn-md 用**同一套显隐写法**（style.display ✓），
+        别另发明一种（否则样式和布局会不一致 ✓）。 */
+  const isMatlab = !!(f && (f.language === 'matlab' || f.language === 'octave'));
+  const secBtn = $('btn-run-section');
+  if (secBtn) { secBtn.style.display = isMatlab ? '' : 'none'; secBtn.disabled = !isMatlab; }
+  const conBtn = $('btn-matlab-console');
+  if (conBtn) { conBtn.style.display = isMatlab ? '' : 'none'; conBtn.disabled = !isMatlab; }
   $('btn-preview').style.display = isHtml ? '' : 'none';
   $('btn-preview').disabled = !isHtml;
   $('btn-preview').textContent=isHtml&&documentMode(f)==='source'?'▥':'×';
@@ -13049,6 +13057,46 @@ function showInputInOutput(message, preserveOutput) {
   setStatus('idle', '等待输入');
 }
 
+/* ★★ `%%` 段运行（MATLAB / Octave 的 cell 模式）✓✓（2026-10-09）
+   用户原话：「还有代码区的 %%，实现段运行，我也需要，就是基本上的功能都给我有」✓。
+
+   MATLAB 里以 `%%` 开头的行是**分节标记** ✓，编辑器把文件切成若干「段」✓，
+   按 Ctrl+Enter 只跑光标所在的那一段 ✓ —— 调参时不用每次从头跑整个脚本 ✓。
+
+   ⚠️ 边界规则（和 MATLAB 一致 ✓）：
+     · 第一个 `%%` **之前**的内容也算第 0 段 ✓（文件开头的公共初始化 ✓）；
+     · 段的范围是「这个 `%%` 到下一个 `%%`（不含）」✓；
+     · 没有 `%%` 时 → 返回 null，调用方**退回整篇运行** ✓（不报错 ✓）。
+   ⚠️ `%%%` 也是分节标记 ✓（MATLAB 里 3 个及以上百分号同样算 ✓），
+      所以判据用 `^\s*%%` 而不是 `^\s*%%[^%]` ✓。 */
+function currentSection(text) {
+  const src = String(text == null ? '' : text);
+  const lines = src.split('\n');
+  const marks = [];
+  lines.forEach((l, i) => { if (/^\s*%%/.test(l)) marks.push(i); });
+  if (!marks.length) return null;
+  let row = 0;
+  try {
+    const ta = $('code-edit');
+    if (ta && typeof ta.selectionStart === 'number') row = src.slice(0, ta.selectionStart).split('\n').length - 1;
+  } catch (_) {}
+  let start = 0, end = lines.length, idx = 0;
+  for (let k = 0; k < marks.length; k++) {
+    if (marks[k] <= row) { start = marks[k]; end = (k + 1 < marks.length) ? marks[k + 1] : lines.length; idx = k + 1; }
+  }
+  return { start, end, code: lines.slice(start, end).join('\n'), index: idx, total: marks.length };
+}
+
+async function runSection() {
+  const f = CURRENT && CURRENT.fragments[CINDEX];
+  if (!f) return;
+  if (!EDITING) { setStatus('err', '先点「✏ 编辑」再跑本段'); return; }
+  const sec = currentSection(editText());
+  if (!sec) { setStatus('idle', '这篇没有 %% 分节，跑整篇'); return doRun(); }
+  setStatus('idle', '跑第 ' + sec.index + ' 段（共 ' + sec.total + ' 段）');
+  return doRun({ code: sec.code });
+}
+
 async function doRun(options) {
   if (!CURRENT) return;
   const forceWithoutInput = !!(options && options.forceWithoutInput === true);
@@ -13071,7 +13119,11 @@ async function doRun(options) {
   setStatus('idle', '运行中…');
   const t0 = performance.now();
   const body = { file: CURRENT.file, fragment: CINDEX, input: inp };
-  if (EDITING) body.code = editText(); // 运行编辑框里的内容（未保存也先跑）
+  /* ★ 支持「只跑一段」✓✓（2026-10-09）——
+     options.code 由 runSection() 传进来（`%%` 段运行 ✓）。
+     ⚠️ 只在 EDITING 时覆盖 ✓ —— 非编辑态跑的是磁盘上的完整片段 ✓，
+        硬塞一段进去会和磁盘内容对不上 ✓。 */
+  if (EDITING) body.code = (options && options.code != null) ? String(options.code) : editText(); // 运行编辑框里的内容（未保存也先跑）
   const r = await api('/api/run', body);
   $('elapsed').textContent = ((performance.now() - t0) / 1000).toFixed(2) + 's';
   if (r.unsupported) { setStatus('err', '不支持'); showOut(r.reason, '', false); return; }
@@ -14099,6 +14151,47 @@ initRemotePanelResize();
 loadRemoteStatus();
 
 $('btn-run').onclick = doRun;
+/* ★ `%%` 段运行 ✓✓（2026-10-09）—— 按钮 + 快捷键 */
+$('btn-run-section').onclick = () => runSection();
+/* ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-09）
+   用户原话：「matlab/octave 那种命令窗口也需要给我完成复刻过来，
+             就是那种可以输入指令的」✓。
+   ✅ 做法：**不另造 REPL** ✗ —— 底部终端本来就是**真 PTY** ✓，
+      切到终端 tab、把引擎命令敲进去 ✓，就是一个能交互的命令窗口 ✓
+      （变量、`who`、`disp`、回车继续输入 —— 全都和原生一致 ✓）。
+   ⚠️ 必须**等终端连上**再发命令 ✗ —— 终端是 WebSocket 异步连的 ✓，
+      立刻发会丢 ✓（所以留了 900ms ✓，并且失败只提示、不报错 ✓）。
+   ⚠️ 命令末尾要带 `\r` ✗ —— 终端要的是**回车**，不是 `\n` ✓。 */
+$('btn-matlab-console').onclick = async () => {
+  const r = await api('/api/matlab/console');
+  if (!r || !r.ok) {
+    setStatus('err', '没有可用的引擎');
+    showOut((r && r.error ? r.error : '这台机器上没找到 MATLAB 或 Octave') +
+      (r && r.hint ? '\n\n安装：' + r.hint : ''), '', false);
+    return;
+  }
+  switchOutTab('term');
+  const line = r.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\r';
+  setTimeout(() => {
+    fetch('/api/term/input', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: line }) })
+      .then(() => setStatus('ok', '已在终端启动 ' + r.label + ' 命令窗口'))
+      .catch(() => setStatus('err', '终端还没连上，稍后再点一次'));
+  }, 900);
+};
+/* ⚠️ 快捷键用 **⌘⌥Enter** 而不是 ⌘⇧R ✗✗ ——
+   `⌘⇧R` 在 Chrome 里是**强制刷新** ✓，会被浏览器在页面之前吃掉 ✓
+   （和今天踩过的 ⌘I 是同一类问题 ✓）。
+   ⌘⌥Enter 没被浏览器占用 ✓，而且离 MATLAB 的 Ctrl+Enter 手感也近 ✓。
+   ⚠️ 只在**当前是 .m 片段**且处于编辑态时才接管 ✗ ——
+      否则会抢掉别的场景里这个组合键 ✓。 */
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || !e.altKey) return;
+  if (e.key !== 'Enter') return;
+  const f = CURRENT && CURRENT.fragments && CURRENT.fragments[CINDEX];
+  if (!f || (f.language !== 'matlab' && f.language !== 'octave')) return;
+  e.preventDefault();
+  runSection();
+});
 $('btn-check').onclick = doCheck;
 $('btn-format').onclick = doFormat;
 $('btn-preview').onclick = () => {const f=CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX];if(f&&f.language==='html')setDocumentMode(documentMode(f)==='source'?'split':'source');};
