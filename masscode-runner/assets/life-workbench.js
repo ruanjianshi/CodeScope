@@ -4309,10 +4309,26 @@
         if (!host) return;
         host.querySelectorAll('.lw-c').forEach((card, idx) => {
           /* 先恢复上次拖过的尺寸 ✓（卡片每次 render 都会重建 ✗，所以必须重放 ✓）
-             ⚠️ STORE 首屏可能是 null ✗（`Cannot read properties of null` ✗ —— 第二次踩 ✗）*/
+             ⚠️ STORE 首屏可能是 null ✗（`Cannot read properties of null` ✗ —— 第二次踩 ✗）
+
+             ★★ 2026-10-09 修：宽度改成**按当前网格从 span 重算** ✓✓
+             原来的问题：`saved.w` 是**绝对像素** ✗，而它是**在更宽的屏幕上**拖出来的 ✓
+             （实测 STORE 里有 `rsz_quote_0 = {w:2328, span:"span 12"}` ✓ ——
+              2328px 的 span 12 说明当时容器就有 2328px ✓，那是 2560 宽的屏 ✓）。
+             → 换到 1600 宽的窗口后，卡片**全都溢出** ✓
+              （today 页卡片宽度合计 4954px，容器只有 1368px ✓ → 横向滚动 ✓）。
+             ✅ 而 `span` **本来就是存的** ✓，且拖拽时宽度就是从 span 算的 ✓
+                （colW = (grid.clientWidth - 11*16)/12 ✓）→ 这里**按同一个公式重算** ✓，
+                换窗口 / 换屏就自动适配 ✓，用户拖出来的**相对布局**也保留 ✓。
+             ⚠️ 网格还没布局好时（clientWidth 为 0）→ **退回用 saved.w** ✓，
+                并由下面的 resize 兜底重算 ✓。 */
           const saved = STORE ? STORE['rsz_' + TAB + '_' + idx] : null;
           if (saved) {
-            if (saved.w) card.style.width = saved.w + 'px';
+            const grid = card.parentElement;
+            const span = Number(String(saved.span || '').replace(/[^0-9]/g, '')) || 0;
+            const colW = grid && grid.clientWidth > 0 ? (grid.clientWidth - 11 * 16) / 12 : 0;
+            if (span && colW > 0) card.style.width = Math.round(span * colW + (span - 1) * 16) + 'px';
+            else if (saved.w) card.style.width = saved.w + 'px';
             if (saved.h) card.style.height = saved.h + 'px';
             if (saved.span) card.style.gridColumn = saved.span;
           }
@@ -4684,6 +4700,35 @@
   }
   /* 暴露给别的模块用 ✓（app.js 里也能触发 ✓）*/
   try { window.codescopeQuickCapture = quickCapture; } catch (_) {}
+
+  /* ════ 窗口变化时按当前网格重算卡片宽度 ✓✓（2026-10-09）══════════════════
+     ⚠️ 配套上面那条「按 span 重算」的修复 ✓：
+        只在 render 时算一次还不够 ✗ —— 用户**拖着窗口改大小**时不会重渲染 ✓，
+        卡片还停在旧宽度上 ✓（还是会溢出 ✓）。
+     ✅ 防抖 180ms ✓ —— resize 会连续触发几十次 ✓，
+        每次都重排一遍会卡 ✓（而且会打断拖拽手感 ✓）。
+     ⚠️ 只重算**有 span 记录**的卡片 ✓ —— 没拖过的交给网格自动排 ✓，
+        不要给它们写死宽度 ✗（那反而会让自适应失效 ✓）。 */
+  (function bindCardRefit() {
+    let timer = 0;
+    window.addEventListener('resize', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const host = document.getElementById('lifework-view');
+        if (!host || !STORE) return;
+        const grid = host.querySelector('.lw-g12');
+        if (!grid || !grid.clientWidth) return;
+        const colW = (grid.clientWidth - 11 * 16) / 12;
+        Array.prototype.forEach.call(grid.children, (card, idx) => {
+          if (!card.classList || !card.classList.contains('lw-c')) return;
+          const saved = STORE['rsz_' + TAB + '_' + idx];
+          if (!saved || !saved.span) return;
+          const span = Number(String(saved.span).replace(/[^0-9]/g, ''));
+          if (span) card.style.width = Math.round(span * colW + (span - 1) * 16) + 'px';
+        });
+      }, 180);
+    });
+  })();
   /* ⚠️ 独立监听 ✓ —— 只在**没有其它输入框吃这个键**的时候接管 ✓，
      免得在别处打字时被抢 ✓。 */
   document.addEventListener('keydown', (ev) => {
