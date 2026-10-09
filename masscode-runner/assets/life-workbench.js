@@ -11676,7 +11676,7 @@
     const imgBlock = w.img ? '<div class="lw-wd-imgwrap">'
       + '<img class="lw-wd-img" src="' + esc(w.img) + '" alt="' + esc(w.w) + '" referrerpolicy="no-referrer" loading="lazy"'
       + ' onerror="this.parentNode.classList.add(\'bad\')"/>'
-      + '<div class="cap">配图 · 网络图片'
+      + '<div class="cap">配图 · ' + ({ baidu: '百度图片', bing: 'Bing 图片', '360': '360 图片' }[w.imgSrc] || '网络图片')
       + (w.imgs && w.imgs.length > 1 ? '（共 ' + w.imgs.length + ' 张，点「🖼 换一张」换）' : '')
       + '</div></div>' : '';
     /* ⚠️⚠️ 编辑态**不能**把表单插在最底下 ✗✗ ——
@@ -12337,6 +12337,9 @@
       if (!d || !d.ok) throw new Error((d && d.error) || '搜不到配图');
       w.imgs = (d.list || []).slice(0, 8);
       w.img = w.imgs[0] || '';
+      /* ★ 记下**图源**（baidu / bing / 360 ✓）—— 说明里要显示真实来源 ✓，
+         比笼统的「网络图片」信息量大 ✓（2026-10-09）。 */
+      w.imgSrc = String(d.src || '');
       w.edit = Date.now(); epSave();
     } catch (e) {
       EP_UI.imgErr = String((e && e.message) || e);

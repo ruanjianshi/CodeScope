@@ -193,7 +193,10 @@ const FAKE_JSON = {
     ck('★★ 新词阶段说明了「四档为什么会重合」（不是甩四个数字就完）',
       /学习步/.test(await txt('.lw-wd-pvnote')), await txt('.lw-wd-pvnote'));
     ck('★ 配图显示出来了（img 元素在）', await p.locator('.lw-wd-img').count() === 1);
-    ck('★ 配图说明写清了来源', /百度图片/.test(await txt('.lw-wd-imgwrap')), await txt('.lw-wd-imgwrap'));
+    /* ⚠️ 别写死「百度图片」✗（2026-10-09）—— 图源已经不止百度了 ✓：
+       云端走 Bing ✓（百度挡机房 IP ✓），本机走百度 ✓。
+       断言改成「说明了来源」，来源具体是哪家由后端 src 决定 ✓。 */
+    ck('★ 配图说明写清了来源', /配图 · (百度图片|Bing 图片|360 图片|网络图片)/.test(await txt('.lw-wd-imgwrap')), await txt('.lw-wd-imgwrap'));
     ck('★ 列表行里有小缩略图', await p.locator('.lw-wd-thumb').count() >= 1);
     ck('★ 有「🪄」和「🖼」两个按钮', await p.locator('#lw-wd-enrich').count() === 1 && await p.locator('#lw-wd-img').count() === 1);
     /* ⚠️⚠️ 词卡里的**水平基准线只能有一条**（16px）✗✗ ——

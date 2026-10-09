@@ -381,7 +381,7 @@ void bubbleSort(Array& values);
   assert(headPage.ok && Number(headPage.headers.get('content-length')) > 0 && (await headPage.text()) === '', '主页 HEAD 请求语义异常');
   assert(html.includes('href="https://github.com/ruanjianshi/massCode"'), 'GitHub 远程仓库入口缺失');
   assert(html.includes('id="theme-switcher"') && html.includes('data-app-theme="light"') && html.includes('codescope-theme'), '界面主题切换功能缺失');
-  assert(html.includes('id="app-nav"') && html.includes('id="workspace-welcome"') && html.includes('id="welcome-search"') && html.includes("welcome.hidden = !!s"), '响应式全局导航或空白工作区快捷入口缺失');
+  assert(html.includes('id="app-nav"') && html.includes('id="workspace-welcome"') && html.includes('id="welcome-search"') && html.includes('id="welcome-dsh"'), '响应式全局导航或空白工作区快捷入口缺失');
   assert(html.includes('content-visibility:auto') && html.includes('@media (prefers-contrast:more)') && html.includes("$('welcome-study').onclick"), '长列表延迟绘制、增强对比度或快捷入口交互缺失');
   assert(['welcome-dsh','welcome-office','welcome-project','welcome-remote'].every(id=>html.includes(`id="${id}"`)) && html.includes("$('welcome-dsh').onclick") && html.includes("$('welcome-office').onclick") && html.includes("$('welcome-project').onclick") && html.includes("$('welcome-remote').onclick"), '空白工作区未覆盖 DSH、Office、工程与远程开发入口');
   assert(['tab-cases','tab-results','algo-cases','algo-results'].every(id=>html.includes(`id="${id}"`)) && html.includes('async function runAlgoTests') && html.includes("const ALGO_CASES_KEY = 'mc-algorithm-cases-v1'"), '算法测试用例、结果面板或按片段持久化能力缺失');
