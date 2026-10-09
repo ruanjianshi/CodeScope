@@ -260,10 +260,21 @@ function assertRestartCommand(value) {
 
 /* ── 远端命令的安全拼装（红线③的唯一例外，见文件头说明）── */
 
-/* 单引号包裹：字符集里没有单引号，所以闭合不了。 */
-function quoteRemote(value) {
-  return "'" + String(value) + "'";
-}
+  /* 单引号包裹：字符集里没有单引号，所以闭合不了。 */
+  function quoteRemote(value) {
+    /* ⚠️⚠️ 值里的单引号必须**自己**处理掉 ✗✗（2026-10-09）——
+       原来就一句 `'` + value + `'` ✓，注释写着「字符集里没有单引号」✓ ——
+       那个假设来自**上游的 assert*** ✓（assertRemoteDir / assertProjectName
+       都会拒单引号 ✓），但：
+         · 这个函数有 **16 个调用点** ✓，实测其中 **14 个上游 25 行内看不到校验** ✓
+           （值大多是派生出来的 ✓，靠人记住「调用前先 assert」不可靠 ✓）；
+         · 一旦哪天有人加了个新调用点忘了校验 ✓，
+           值里的 `'` 就能闭合字符串、拼出任意远端命令 ✓。
+       → 改成 **POSIX 标准写法** ✓：把 `'` 换成 `'\''`
+         （闭合 → 转义的单引号 → 重新打开 ✓），这样**任何值都闭合不了** ✓。
+       ⚠️ 这是**纵深防御** ✓，不是替换上游校验 ✓ —— 那层仍然要在 ✓。 */
+    return "'" + String(value).replace(/'/g, "'\\''") + "'";
+  }
 
 /* ── 本地清单：排除项在这里生效（rsync 那边由 --exclude 生效）── */
 
@@ -1355,4 +1366,19 @@ function createRemoteSync(options = {}) {
   return { getConfig, setConfig, report, actionSpecs, runAction, resetCache };
 }
 
-module.exports = { createRemoteSync };
+/* ⚠️ 为什么要把校验函数导出来 ✗（2026-10-09）：
+   这些 assert* / quoteRemote 是**安全红线**所在 ✓ ——
+   防 SSH 选项注入 ✓、防 `..` 逃逸 ✓、防 shell 元字符 ✓，
+   但它们**全是私有的** ✓，之前一行测试都没有 ✗。
+   这个模块 1359 行、零测试 ✓，而今天**真实事故**就出在同步链路上 ✓
+   （用户的备忘录被合并逻辑覆盖过一次 ✓）→ 先给最该锁住的部分补测试 ✓。
+   `__test` 前缀是刻意起的 ✗：表明「只给测试用，不是对外 API」✓。 */
+module.exports = {
+  createRemoteSync,
+  __test: {
+    assertHost, assertUser, assertPort, assertIdentityFile, assertRemoteDir,
+    assertProjectName, assertTransport, assertBool, assertRestartCommand,
+    quoteRemote, excludePatterns, matchesExclude, invalid,
+    TRANSPORTS, RESTART_PREFIXES, PROJECT_NAME_MAX, REMOTE_DIR_MAX,
+  },
+};
