@@ -118,8 +118,13 @@ const ck = (name, ok, detail) => {
         await p.locator('.lw-nav [data-tab="' + t + '"]').dispatchEvent('click').catch(() => {});
         await p.waitForTimeout(1600);
         const body = await p.evaluate(() => (document.querySelector('.lw-main') || {}).innerText || '');
-        ck('页签「' + t + '」渲染出了内容', body.trim().length > 10 && errs.length === n0,
-          (body.trim().length <= 10 ? '内容为空' : '') + (errs.length > n0 ? errs.slice(n0, n0 + 1).join(' | ') : ''));
+        /* ⚠️⚠️ 断言要**认「空态」** ✗✗ —— 有些页签在**没有数据**时显示的是空态文案 ✓
+           （实测：「追更」在云端实例上是「▢ 还没扫到项目」✓ ——
+            那是**正常渲染** ✓，不是 bug ✗；本地有数据才是 979 字的卡片 ✓）。
+           → 只要求「**渲染出了东西**」✓（空态文案也算 ✓），不要求「内容多」✗ ——
+             原来写 `> 10` ✗，把云端那个 8 字的空态判成了失败 ✓。 */
+        ck('页签「' + t + '」渲染出了内容', body.trim().length > 3 && errs.length === n0,
+          (body.trim().length <= 3 ? '内容是空的' : '') + (errs.length > n0 ? errs.slice(n0, n0 + 1).join(' | ') : ''));
       }
       await p.locator('#btn-lifework').click({ timeout: 8000 }).catch(() => {});
       await p.waitForTimeout(800);
