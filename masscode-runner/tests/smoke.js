@@ -1099,8 +1099,21 @@ int main(void) { return 0; }
 main().catch((error) => {
   console.error(error.stack || error.message || String(error));
   process.exitCode = 1;
-}).finally(() => {
-  if (child && child.exitCode === null) child.kill();
-  if (officeStub) officeStub.close();
-  fs.rmSync(tempRoot, { recursive: true, force: true });
-});
+})  .finally(() => {
+    if (child && child.exitCode === null) child.kill();
+    if (officeStub) officeStub.close();
+    /* ⚠️⚠️ 删临时目录必须容错 ✗✗（2026-10-10）——
+       原来只写 {recursive:true, force:true} ✓，实测偶发崩在
+       `ENOTEMPTY: rmdir …/知识库/.vitepress` ✓：
+       fs.rmSync 走 rimraf **递归遍历** ✓，而**遍历过程中还有异步任务在往里写** ✓
+       （知识库构建 / VitePress ✓）→ 删到那个目录时它又非空了 ✓。
+       后果很恶劣 ✗：**595 条断言全过了** ✓，最后却因为**清理**报错整轮判失败 ✓
+       —— 看起来像功能坏了 ✓，其实是测试收尾没写稳 ✓。
+       → maxRetries + retryDelay 让它重试 ✓；
+       → 外面再包一层 try/catch ✓：**清理失败绝不该让测试失败** ✓。 */
+    try {
+      fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 120 });
+    } catch (e) {
+      console.log('  ⚠️ 临时目录清理失败（不影响测试结论）: ' + String(e && e.message).slice(0, 120));
+    }
+  });
