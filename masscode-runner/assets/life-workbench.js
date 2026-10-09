@@ -4181,6 +4181,7 @@
       const name = await lwAsk({ title: "新建文件夹", label: "文件夹名称", value: "新文件夹", ok: "创建" });
       if (name === null) return;
       const n = name.slice(0, 24);
+      snapMemo("folder");   /* 新建文件夹 ✓ */
       STORE.memoFolders = STORE.memoFolders || ["备忘录", "Study note"];
       if (!STORE.memoFolders.includes(n)) STORE.memoFolders.push(n);
       STORE.memoFolder = n; STORE.memoSmart = ""; STORE.memoView = "folder"; STORE.memoSel = ""; saveStore(); render();
@@ -4560,6 +4561,14 @@
          ⚠️ 必须用 applyCe 直接喂新文本 —— 用 renderMemoCe 的话它会**再读一次旧 DOM**，
             刚 splice 出来的新行会被覆盖掉 ✗（实测踩过：按回车没反应、字全挤在一行）。 */
       memoCeNode.onkeydown = (e) => {
+        /* ★ ⌘Z / ⌘⇧Z ✓ —— 按钮 title 一直写着「撤销（⌘Z）」✓ 但没实现 ✗。
+           为什么不用浏览器的原生撤销 ✗：这套编辑器是**逐行重建 DOM** ✓，
+           浏览器的撤销栈对不上 ✓（撤了会错乱）→ 走我们自己的快照栈 ✓。 */
+        if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) redoMemo(); else undoMemo();
+          return;
+        }
         /* ★ 行首退格 / 行尾 Delete 必须自己处理 —— 交给浏览器会把内容整片删掉 ✗
            （实测：按一次退格 4 行变 0 行）。详见 ceLineKey 的注释。 */
         if (ceLineKey(e, {
@@ -4849,9 +4858,10 @@
       if (!k) return;
       if (!(await lwConfirm({
         title: '删除这天的日记？', danger: true, ok: '删除',
-        text: k + '\n\n删掉就没了，不能撤销。',
+        text: k + '\n\n删掉之后可以按「撤销」找回来。',
       }))) return;
       JOURNAL_FLUSH();
+      snapJournal('delete');   /* 删除也要能撤 ✓（原来提示写着「不能撤销」✗）*/
       STORE.journal = (STORE.journal || []).filter((x) => x.date !== k);
       saveStore(); render();
     };
@@ -4892,6 +4902,7 @@
           text: '「' + c + '」\n\n日记不会被删，只是取消这个分类。',
         }))) return;
         JOURNAL_FLUSH();
+        snapJournal('cat');      /* 删分类会清掉各篇的 cat ✓ 得能撤 ✓ */
         STORE.journalCats = (STORE.journalCats || []).filter((x) => x !== c);
         (STORE.journal || []).forEach((j) => { if (j.cat === c) j.cat = ''; });
         if (STORE.journalCat === c) STORE.journalCat = '';
@@ -4902,6 +4913,7 @@
     if (catAdd && catIn) {
       const add = () => {
         const v = catIn.value.trim().slice(0, 12); if (!v) return;
+        snapJournal('cat');      /* 新建分类 ✓ */
         STORE.journalCats = STORE.journalCats || ['学习', '工作', '生活', '科研'];
         if (!STORE.journalCats.includes(v)) STORE.journalCats.push(v);
         JOURNAL_FLUSH();                 /* 同上：新增分类会 render ✗ */
@@ -5047,6 +5059,12 @@
       };
       /* Enter 换行 / 行首退格 / 行尾 Delete */
       ce.onkeydown = (e) => {
+        /* ★ ⌘Z / ⌘⇧Z ✓（同备忘录 ✓）—— 不用浏览器原生撤销，走自己的快照栈 ✓ */
+        if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) journalRedo(); else journalUndo();
+          return;
+        }
         /* ★ 和备忘录同一套：行首退格 / 行尾 Delete 必须自己拦 ✗
            交给浏览器的话，它会去合并「上一个 contenteditable=false 的渲染行」，
            实测会把整篇内容删光 ✗（详见 ceLineKey 的注释）。 */
