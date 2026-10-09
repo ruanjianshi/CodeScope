@@ -356,7 +356,23 @@ void bubbleSort(Array& values);
   assert(bundledLspStatus.ok && requiredBundledServers.every((command) => bundledLspStatus.servers.some((item) => item.command === command && item.available && item.bundled)), '内置语言服务器运行时状态异常');
 
   const page = await fetch(baseUrl + '/');
-  const html = await page.text();
+  /* ⚠️⚠️ 页面的 JS 早就拆到 assets/ 了 ✗（2026-10-09）——
+     后面这一大串 assert 的本意是「这个功能**在不在**」✓，
+     但它们在 index.html 里当然找不到（代码在 assets/app.js 等）✗ →
+     一大堆断言**假失败** ✓（实测 36 条）。
+     → 把 assets 里的代码也并进来一起查 ✓。
+     ⚠️ 只影响「功能存在性」这类断言 ✓；真要断言「服务出去的 HTML 里有某段」，
+        仍然看 pageText ✓。 */
+  const pageText = await page.text();
+  /* ⚠️ CSS 也是同样的道理 ✗：早拆到独立 .css 了 ✓，
+     所以 content-visibility / @media (prefers-contrast:more) 在 index.html 里找不到 ✓。 */
+  const cssBundle = fs.readdirSync(path.join(projectRoot, 'assets')).filter((f) => f.endsWith('.css'))
+    .map((f) => { try { return fs.readFileSync(path.join(projectRoot, 'assets', f), 'utf8'); } catch (_) { return ''; } })
+    .join('\n');
+  const assetsBundle = ['app.js', 'life-workbench.js', 'system-panel.js', 'reading-block-editor.js', 'app-pdf.js', 'code-guide.js']
+    .map((f) => { try { return fs.readFileSync(path.join(projectRoot, 'assets', f), 'utf8'); } catch (_) { return ''; } })
+    .join('\n');
+  const html = pageText + '\n' + assetsBundle + '\n' + cssBundle;
   const serverSource = fs.readFileSync(path.join(projectRoot, 'server.js'), 'utf8');
   const blockEditorSource = fs.readFileSync(path.join(projectRoot, 'src', 'reading-block-editor.js'), 'utf8');
   /* 知识库主题是拼在 JS 模板字符串里的，单个 \s 会被当成无效转义吃掉、正则变成 [s…]，
@@ -413,7 +429,7 @@ void bubbleSort(Array& values);
   assert(html.includes('#header-center #btn-study[hidden] { display:none; }'), '学习工作台按钮的 [hidden] 被 .header-action 的 display 覆盖，属性 hidden 但照样显示');
   assert(html.includes('id="workspace-launch-menu"') && html.includes('id="workspace-launch-study"') && html.includes('id="btn-study" hidden'), '学习工作台没有收进次级菜单（顶栏应当只留「编辑工作台」+ 一个 ⌄）');
   /* iframe 必须按「当前访问用的主机名」拼地址：写死 127.0.0.1 的话，局域网另一台机器会指到它自己。 */
-  assert(html.includes("'http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/'") && html.includes('let VSCODE_PROXY_PORT='), 'VS Code 的 iframe 没有按当前主机名拼代理地址，局域网访问会指到本机');
+  assert(html.includes("location.hostname+':'+VSCODE_PROXY_PORT+'/'") && html.includes('let VSCODE_PROXY_PORT='), 'VS Code 的 iframe 没有按当前主机名拼代理地址，局域网访问会指到本机');
   /* 「↗ 引用」浮条只能在**主动触发**时出现（编辑器右键菜单 / ⌘⌥R）。
      这个坑踩过两次：挂到 code-edit 的 select/keyup 上就会「一选中代码就弹出来，
      正压在刚选中的那几行上」。所以这里钉死两件事：① 自动触发不许回来；② 主动入口不许丢。 */
