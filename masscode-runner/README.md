@@ -293,6 +293,7 @@ massCode 一个片段里可以有多个 fragment。**把 fragment 标签写成�
 | JSON | —（校验结构） | JSON.parse | Prettier |
 | HTML | 预览渲染 | — | Prettier |
 | LaTeX | 实时编译 PDF（XeLaTeX，回退 pdfLaTeX） | 编译即检查 | — |
+| MATLAB / Octave | `.m`：**装了 MATLAB 就用 `matlab -batch`，否则自动回退 `octave --no-gui`** | 启动即检查（引擎没有「只检查不执行」的开关） | — |
 | 其他 | 提示不支持 | — | 提示不支持 |
 
 > 格式化工具：C/C++ → clang-format，Go → gofmt，Python → 内置 Ruff，其余 → 内置 Prettier。
