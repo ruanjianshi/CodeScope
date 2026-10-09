@@ -223,6 +223,19 @@
   .lw-c { background:${T.card}; border:2px solid ${T.lineDim}; overflow:auto;
     min-width:240px; min-height:120px; position:relative; }
   .lw-c:hover { border-color:${T.line}; }
+  /* ★ 卡片反馈强化 ✓✓（2026-10-09）——
+     原来只有「边框颜色变一下」✓，鼠标移上去几乎没感觉 ✓。
+     ⚠️⚠️ **绝对不能用 transform: translateY()** ✗✗ ——
+        卡片右边/下边/右下角有**拖拽热区**（「.lw-rs」，绝对定位在卡片边缘 ✓），
+        transform 会把热区一起挪走 ✓ → 用户拖的时候**抓不住** ✓（实测踩过这类坑 ✓）。
+     → 只用 **border-color + box-shadow** ✓（不占布局、不动热区 ✓）。
+     ⚠️ 也不加 border-radius ✗ —— 卡片是**刻意的直角**（「border-radius:0」 ✓，
+        这套 HUD 风格的一部分 ✓），不是漏了 ✓。 */
+  .lw-c { transition: border-color .14s ease, box-shadow .14s ease; }
+  .lw-c:hover { border-color:${T.line}; box-shadow:0 0 0 1px ${T.line}, 0 2px 10px rgba(0,0,0,.22); }
+  .lw-c:active { box-shadow:0 0 0 1px ${T.line}, inset 0 1px 0 rgba(255,255,255,.03); }
+  /* 拖拽时别跟着 hover 抖 ✓ */
+  .lw-c.lw-dragging:hover { box-shadow:none; }
   /* 三条热区 */
   .lw-rs { position:absolute; z-index:3; }
   .lw-rs-e  { top:0; bottom:0; right:-3px; width:8px; cursor:ew-resize; }      /* 右边 → 改宽 */

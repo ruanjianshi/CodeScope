@@ -3986,3 +3986,24 @@
   html[data-theme] #out-head,
   html[data-theme] #primary-group-bar,
   html[data-theme] .split-editor-head { box-shadow: 0 1px 0 var(--ui-divider); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   键盘焦点环 ✓✓（2026-10-09）
+   ⚠️ 为什么要有 ✗：全项目只有 **21 处** `:focus-visible` ✓ ——
+      键盘 Tab 走一圈，大部分按钮**看不出焦点在哪** ✓。
+      既是可访问性问题（读屏 / 键盘用户会迷路 ✓），
+      也是「看起来不精致」的来源之一 ✓。
+   ✅ 做法：**一条全局规则兜底** ✓，用主题的 accent 色 ✓（跟着换肤走 ✓）。
+   ⚠️ 用 `:focus-visible` 而不是 `:focus` ✗✗ ——
+      后者会让**鼠标点击**也冒出一圈环 ✓（很难看 ✓，而且用户会以为点错了 ✓）。
+      `:focus-visible` 只在「键盘操作」时才显示 ✓，这正是想要的 ✓。
+   ⚠️ 用 `outline` 而不是 `box-shadow` ✗：outline **不占布局** ✓
+      （加 box-shadow 环会在紧凑布局里把元素挤动 ✓）。
+   ⚠️ `outline-offset: 1px` ✗：紧贴边框会显得糊 ✓，留 1px 更清爽 ✓。 */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent, #4f8cff);
+  outline-offset: 1px;
+  border-radius: inherit;
+}
+/* 已经有自己焦点样式的输入框，别叠两层 ✓ */
+:where(input, select, textarea):focus-visible { outline-offset: 0; }
