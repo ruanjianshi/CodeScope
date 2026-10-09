@@ -3686,8 +3686,8 @@
         + '<button id="lw-dlg-no">' + esc(d.cancel) + '</button>'
         + '<span style="font-size:10px;color:' + T.faint + ';margin-left:auto">'
         + (isAsk ? '回车 = 确定 · Esc = 取消' : 'Esc = 取消') + '</span>';
-    return '<div class="lw-imp" id="lw-dlg"><div class="box" style="width:min(460px,92vw)">'
-      + '<div class="hd"><b>' + esc(d.title) + '</b><span class="x" id="lw-dlg-x">✕</span></div>'
+    return '<div class="lw-imp" id="lw-dlg" role="dialog" aria-modal="true" aria-labelledby="lw-dlg-title"><div class="box" style="width:min(460px,92vw)">'
+      + '<div class="hd"><b id="lw-dlg-title">' + esc(d.title) + '</b><span class="x" id="lw-dlg-x" role="button" aria-label="关闭">✕</span></div>'
       + '<div class="bd">'
       + (isAsk
         ? (d.label ? '<div class="lw-dlg-lb">' + esc(d.label) + '</div>' : '')
@@ -4016,7 +4016,7 @@
       ${clockHtml(d)}
       ${greetHtml(d)}
       ${moodHtml()}
-      <div class="lw-sub2" id="lw-sub">${esc(sub)}</div>
+      <div class="lw-sub2" id="lw-sub" aria-live="polite">${esc(sub)}</div>
       ${wxHtml}
       <div id="lw-mbslot">${mailBadgeHtml()}</div>
       <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>${stripHtml()}`;
@@ -5665,7 +5665,7 @@
       + '<button id="lw-nt-table" title="插入表格">▦</button>'
       + '<button id="lw-nt-live" class="' + (STORE.memoSource ? "on" : "") + '" title="显示全部源码（关掉则是实时渲染）">◫ 源码</button>'
       + '<span class="sp"></span>'
-      + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
+      + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status" aria-live="polite">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
       + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "★" : "☆") + '</button>'
       + '<button id="lw-memo-export" title="导出 Markdown（.md）">导出</button>'
       + '<button id="lw-memo-image" title="导出为图片：把渲染后的内容存成 PNG（含标题与日期）">图片</button>'

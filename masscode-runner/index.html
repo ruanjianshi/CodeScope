@@ -973,5 +973,35 @@
   </div>
 </div>
 <div id="ctx-menu" class="ctx-menu" role="menu" aria-label="上下文操作" hidden></div>
+<script>
+/* ═══ a11y 兜底：给「只有图标没有文字」的按钮补 aria-label ✓（2026-10-09）═══
+   ⚠️ 审计发现：index.html 本身很规范（148 个 aria-* ✓、43 个 role ✓），
+      但**动态渲染出来的**那几块几乎没有 ✗（life-workbench.js 只有 1 个 ✓）。
+      而图标按钮有几十个（▤ ▦ ↷ ☑ ⚙ ✕ ✓），它们**已经有 title** ✓ ——
+      那就是现成的好标签 ✓，只是 title 对读屏器支持很弱 ✓ → 复制一份成 aria-label ✓。
+   ⚠️ 只给**没有可读文字**的按钮加 ✗ —— 有文字的（「保存」✓）再加 aria-label
+      反而会**盖掉**文字 ✓，那是帮倒忙 ✓。
+   ⚠️ MutationObserver + 防抖 ✗：这个应用 render 很频繁 ✓，
+      每次都全量扫一遍会白烧 CPU ✓。 */
+(function a11yAutoLabel() {
+  var TEXTY = /[\u4e00-\u9fa5A-Za-z0-9]/;
+  function sweep() {
+    var list = document.querySelectorAll('button[title]:not([aria-label])');
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      /* 去掉「（⌘Z）」这类快捷键后缀 ✓，剩下的才是标签本身 ✓ */
+      var label = String(b.getAttribute('title') || '').replace(/（[^）]*）/g, '').trim();
+      if (!label) continue;
+      if (TEXTY.test(String(b.textContent || '').trim())) continue;
+      b.setAttribute('aria-label', label);
+    }
+  }
+  var timer = 0;
+  function schedule() { clearTimeout(timer); timer = setTimeout(sweep, 250); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+  else schedule();
+  try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+})();
+</script>
 </body>
 </html>
