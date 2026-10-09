@@ -4404,7 +4404,7 @@ function toggleTagHead() {
   renderTagBar(); renderTagHead();
 }
 
-function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+/* ⚠️ 单引号也必须转 ✗（2026-10-09）—— 原来只转 & < > " 四个 ✓，漏了 ' ✓。只要有人把它用在**单引号属性**里（`attr='${escapeHtml(x)}'` ✓），值里的 ' 就能提前闭合属性 ✓ → 再塞一个 onerror= 就是一个 XSS ✓。（实测翻遍全项目，目前没有这种用法 ✓，属于**纵深防御** ✓。） */function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---- 代码大纲：按语言提取类 / 函数 / 方法（含行号） ---- */
 const OL_CONTROL = new Set(['if','for','while','switch','catch','do','else','return','sizeof','new','delete','case','default','typeof','export','import','using','namespace','public','private','protected','static','inline','virtual','override','final','const','auto','void','int','double','float','char','bool','long','short','unsigned','signed','struct','class','enum','union','typedef','extern','template','synchronized','throws','extends','implements','this','super','yield','await','async','var','let','function','def','lambda','print','cout','cin','std','null','nullptr','true','false','struct','interface','protocol','extension','as','is','in','not','and','or','with','from','global','nonlocal']);
