@@ -861,7 +861,19 @@ function createCodeServerService(options = {}) {
   let message = '';
   let startPromise = null;
 
-  const missingHint = '未安装 code-server。在项目外装一次即可：mkdir -p ~/.codescope && cd ~/.codescope && npm install code-server';
+  /* ⚠️⚠️ 提示要给**两条路** ✗✗ —— 原来只写 `npm install code-server` ✓，
+     实测在云服务器（Ubuntu + Node 24）上**装不上** ✗：
+     code-server 的 npm 包会拉一个原生模块 `kerberos` ✓ → `gyp ERR!` 编译失败 ✗
+     （缺构建依赖 ✓，而且编过了也未必对 ✓）。
+     → 官方**推荐**的是那个独立安装脚本 ✓（下的是预编译包 ✓，不碰原生模块 ✓）；
+        npm 那条路只在**项目外**装才有意义 ✓（项目内有 @electron/node-gyp 会遮蔽 ✓）。
+     两条都写上 ✓，用户哪条能走通走哪条 ✓。 */
+  const missingHint = '未安装 code-server。二选一：'
+    + '① 官方脚本（推荐，装到 /usr/bin）：curl -fsSL https://code-server.dev/install.sh | sh  —— '
+    + '若服务器连不上 GitHub，就去 https://github.com/coder/code-server/releases 下 '
+    + 'code-server-<版本>-linux-amd64.tar.gz，解到 /usr/lib/code-server 再把 bin/code-server 链到 /usr/bin；'
+    + '② npm 方式（要本机有编译工具链，可能因原生模块 kerberos 编译失败）：'
+    + 'mkdir -p ~/.codescope && cd ~/.codescope && npm install code-server';
 
   function installed() {
     const resolved = resolveCodeServer();
