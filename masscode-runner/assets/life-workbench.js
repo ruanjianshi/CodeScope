@@ -4630,8 +4630,53 @@
     const prev = q("#lw-nt-prev");
     if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-ce"); if (t2) t2.focus(); };
     /* 新建 */
-    const mNew = q("#lw-memo-new");
-    if (mNew) mNew.onclick = () => {
+  /* ════ 快速捕捉 ✓✓（2026-10-09）════════════════════════════════════════
+     ⚠️ 为什么要有 ✗✗：用户说「我需要的是……方便的功能」✓。实测确认：
+        想随手记一句，得「切到个人管理 → 选备忘录 → 新建 → 写 → 切回来」**五步** ✓。
+     ✅ 做法：全局 **⌘⇧N** → 弹出输入框（复用应用自己的 `lwAsk` ✓，
+        不另造浮层 ✓）→ 回车即存进备忘录 ✓。
+     ⚠️ 为什么用 **⌘⇧N** 而不是 ⌘N ✗：⌘N 已经被「备忘录页签里的新建」占了 ✓。
+     ⚠️ 为什么**不**去改那个已有的全局 keydown ✗：它在一个很大的闭包里 ✓，
+        找准确切位置成本高、风险也高 ✓ → **另起一个独立监听** ✓（互不干扰 ✓）。
+     ⚠️ 存进**当前文件夹** ✓（用户在哪个文件夹下，捕捉的就进哪 ✓），
+        并**自动选中**它 ✓，方便接着补内容 ✓。 */
+  function quickCapture() {
+    if (!STORE) return;
+    lwAsk({ title: '快速捕捉', label: '记一句（回车即存进备忘录）', ph: '想到什么就写什么…', ok: '存进备忘录' })
+      .then((text) => {
+        if (text === null) return;
+        const t = String(text).trim();
+        if (!t) return;
+        snapMemo('new');
+        const id = 'm' + Date.now();
+        STORE.memos = STORE.memos || [];
+        STORE.memos.unshift({ id, text: t, folder: STORE.memoFolder || '备忘录', pin: false, at: Date.now(), edit: Date.now() });
+        STORE.memoSel = id;
+        STORE.memoEditing = '';
+        saveStore();
+        render();
+        flashMemoStatus('已存进备忘录 ✓');
+      })
+      .catch(() => {});
+  }
+  /* 暴露给别的模块用 ✓（app.js 里也能触发 ✓）*/
+  try { window.codescopeQuickCapture = quickCapture; } catch (_) {}
+  /* ⚠️ 独立监听 ✓ —— 只在**没有其它输入框吃这个键**的时候接管 ✓，
+     免得在别处打字时被抢 ✓。 */
+  document.addEventListener('keydown', (ev) => {
+    if (!(ev.metaKey || ev.ctrlKey) || !ev.shiftKey) return;
+    if (String(ev.key || '').toLowerCase() !== 'n') return;
+    const ae = document.activeElement;
+    const tag = ae && ae.tagName;
+    /* 正在某个输入框里打字 → 不抢 ✓（但备忘录/日记自己的编辑器除外 ✓）*/
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (ae && ae.isContentEditable && !(ae.id === 'lw-memo-ce' || ae.id === 'lw-j-ce')) return;
+    ev.preventDefault();
+    quickCapture();
+  });
+
+  const mNew = q("#lw-memo-new");
+  if (mNew) mNew.onclick = () => {
       flushMemo(); clearTimeout(memoBuf);
       closeMemoImgPreview();
       snapMemo("new");
