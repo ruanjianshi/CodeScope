@@ -11518,7 +11518,7 @@
     const imgBlock = w.img ? '<div class="lw-wd-imgwrap">'
       + '<img class="lw-wd-img" src="' + esc(w.img) + '" alt="' + esc(w.w) + '" referrerpolicy="no-referrer" loading="lazy"'
       + ' onerror="this.parentNode.classList.add(\'bad\')"/>'
-      + '<div class="cap">配图 · 百度图片'
+      + '<div class="cap">配图 · 网络图片'
       + (w.imgs && w.imgs.length > 1 ? '（共 ' + w.imgs.length + ' 张，点「🖼 换一张」换）' : '')
       + '</div></div>' : '';
     /* ⚠️⚠️ 编辑态**不能**把表单插在最底下 ✗✗ ——

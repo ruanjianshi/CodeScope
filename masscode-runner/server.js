@@ -5600,6 +5600,34 @@ const server = http.createServer(async (req, res) => {
               },
             },
             {
+              /* ★★★★ Bing 图片 ✓✓（2026-10-09 加，**云端的主力**）
+                 ⚠️ 为什么要加 ✗：百度把机房 IP 挡了 ✓、360 **限流很凶** ✗
+                 （实测连打 5 次：31/31/31/31/**5** ✓，被限之后只回 5 条的残表 ✓，
+                  那 5 条还常常全是死链 ✓）→ 云端经常一个源都拿不到 ✓。
+                 Bing 实测**从云端稳定可用** ✓：一次给 **35 条** ✓，抽验也能取到图 ✓。
+                 ⚠️ 它返回的是 **HTML**（不是 JSON ✗）→ 从里面扒 `murl&quot;:&quot;<原图地址>` ✓
+                 （`mediaurl=` 那个是**缩略图**，也能用 ✓，作为兜底 ✓）。
+                 ⚠️ 用 **cn.bing.com** ✗ —— `www.bing.com` 会 302 ✓。 */
+              name: 'bing',
+              url: 'https://cn.bing.com/images/async?q=' + encodeURIComponent(q) + '&first=0&count=35&mmasync=1',
+              headers: { 'User-Agent': FEED_UA, 'Referer': 'https://cn.bing.com/', 'Accept': 'text/html,application/xhtml+xml' },
+              pick(txt) {
+                const out = [];
+                const re = /murl&quot;:&quot;([^&]+?)(?:&quot;|&amp;)/g;
+                let m;
+                while ((m = re.exec(txt))) out.push(m[1]);
+                if (!out.length) {
+                  /* 兜底：从 `mediaurl=<urlencoded>` 里拿 ✓ */
+                  const re2 = /mediaurl=([^&"]+)/g;
+                  while ((m = re2.exec(txt))) {
+                    try { out.push(decodeURIComponent(m[1])); } catch (_) {}
+                  }
+                }
+                return out;
+              },
+              isHtml: true,
+            },
+            {
               name: '360',
               /* ⚠️⚠️ `src=srp` **必须带** ✗✗ —— 实测（2026-10-09）：
                  不带它 `list` 只有 **2 条** ✗（`rn` 调多大都没用 ✓）；
@@ -5620,9 +5648,15 @@ const server = http.createServer(async (req, res) => {
             try {
               const r = await fetch(source.url, { headers: source.headers, signal: AbortSignal.timeout(12000) });
               const txt = await r.text();
+              /* ⚠️ 有的源回 **JSON**（百度/360 ✓）、有的回 **HTML**（Bing ✗）→
+                 按 `source.isHtml` 决定把什么交给 `pick` ✓。 */
               let j = null;
-              try { j = JSON.parse(txt); } catch (_) {
-                try { j = JSON.parse(looseJson(txt)); } catch (_) { j = null; }
+              if (source.isHtml) {
+                j = txt;
+              } else {
+                try { j = JSON.parse(txt); } catch (_) {
+                  try { j = JSON.parse(looseJson(txt)); } catch (_) { j = null; }
+                }
               }
               const seen = new Set();
               const list = [];
@@ -5637,11 +5671,34 @@ const server = http.createServer(async (req, res) => {
                 seen.add(url);
                 list.push(url);
               });
-              const out = list.slice(0, want);
-              if (out.length) {
-                WORDIMG_CACHE.set(q, { at: Date.now(), list: out, src: source.name });
-                if (WORDIMG_CACHE.size > 120) WORDIMG_CACHE.delete(WORDIMG_CACHE.keys().next().value);
-                return send(res, 200, { ok: true, q, list: out, cached: false, src: source.name });
+              /* ⚠️⚠️ **要从大池子里探** ✗✗ —— 第一版只探 `want` 张（8 张 ✓），
+                 结果 `newsletter` 搜到的那 8 张**恰好全是死的** ✗ →
+                 整个源被判「没图」✗（实测报「360 搜到的图全挂了（2 张都没响应）」✓，
+                 其实 360 一共给了 31~41 条 ✓，后面还有活的 ✓）。
+                 → 探**前 24 条** ✓，挑出活的再取前 `want` 张 ✓。
+                 ⚠️ 并发探 ✓，最坏情况 ≈ 单个超时（7 秒）✓，不会线性变慢 ✓。 */
+              const pool = list.slice(0, Math.max(want * 3, 24));
+              if (pool.length) {
+                const probe = async (u) => {
+                  try {
+                    const r = await fetch(u, {
+                      headers: { 'User-Agent': FEED_UA, 'Range': 'bytes=0-0' },
+                      signal: AbortSignal.timeout(7000),
+                    });
+                    if (!r.ok && r.status !== 206) return '';
+                    if (!/^image\//i.test(String(r.headers.get('content-type') || ''))) return '';
+                    try { r.body && r.body.cancel && r.body.cancel(); } catch (_) {}
+                    return u;
+                  } catch (_) { return ''; }
+                };
+                const alive = (await Promise.all(pool.map(probe))).filter(Boolean).slice(0, want);
+                if (alive.length) {
+                  WORDIMG_CACHE.set(q, { at: Date.now(), list: alive, src: source.name });
+                  if (WORDIMG_CACHE.size > 120) WORDIMG_CACHE.delete(WORDIMG_CACHE.keys().next().value);
+                  return send(res, 200, { ok: true, q, list: alive, cached: false, src: source.name });
+                }
+                tried.push(source.name + ' 搜到的图全挂了（探了 ' + pool.length + ' 张都没响应）');
+                continue;
               }
               tried.push(source.name + ' 没结果（HTTP ' + r.status + '）');
             } catch (error) {
