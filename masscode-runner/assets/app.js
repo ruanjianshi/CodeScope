@@ -12787,9 +12787,56 @@ function renderMain() {
   if (MM_ACTIVE) mmRenderCurrent();   /* 导图模式下切换片段：用新片段内容重渲染导图 */
 }
 
-function setStatus(kind, text) {
-  const p = $('status'); p.className = 'pill ' + kind; p.textContent = text;
-}
+  function setStatus(kind, text) {
+    const p = $('status'); p.className = 'pill ' + kind; p.textContent = text;
+  }
+
+  /* ════ 禁用按钮必须能解释自己 ✓✓（2026-10-09）════════════════════════════
+     ⚠️⚠️ 为什么要有 ✗✗：用户报「本机 DSH 怎么关不了了」✓ ——
+        按钮是灰的 ✓，提示写着「不由 CodeScope 管理」✓，
+        但**没告诉他该怎么办** ✓，而且他**点也点不动** ✓（灰的 ✓），
+        完全不知道发生了什么 ✓。这是本次会话里最典型的摩擦 ✓。
+
+     ⚠️ **实测过的事实**（别再猜 ✓）：
+        真实鼠标点在 `disabled` 按钮上，
+        **只有 `mouseover` 会触发** ✓（`click` / `mousedown` 完全不触发 ✗）。
+        → 所以「点了给提示」这条路走不通 ✓，
+          **只能靠 hover 提前说** ✓ —— 这正好也是更早的提示 ✓。
+
+     ✅ 用法：给按钮写 `dataset.why = '为什么不能点 + 怎么才能点'` ✓，
+        然后在设 `disabled` 的地方同时设它 ✓。
+        悬停时原因会显示在底部状态栏 ✓（不弹窗、不打断 ✓）。
+
+     ⚠️ 文案要求 ✗：**不只是「为什么」，还要给「怎么办」** ✓ ——
+        只说「不能关」没用 ✓，要说「先点『重启』接管它」✓。 */
+  function whyDisabled(btn, reason) {
+    if (!btn) return;
+    if (reason) { btn.dataset.why = reason; btn.title = reason; }
+    else { delete btn.dataset.why; }
+  }
+  /* 全局挂一次 ✓：hover 到禁用按钮上 → 把原因写到状态栏 ✓ */
+  (function bindDisabledWhy() {
+    let last = null;
+    document.addEventListener('mouseover', (ev) => {
+      const t = ev.target;
+      const btn = t && t.closest ? t.closest('button[disabled], [aria-disabled="true"]') : null;
+      if (btn === last) return;
+      last = btn;
+      if (!btn) return;
+      const why = btn.dataset.why || '';
+      if (!why) return;
+      setStatus('idle', why);
+    }, true);
+    /* 移开就还回「空闲」✓（别把状态栏一直占着 ✓）*/
+    document.addEventListener('mouseout', (ev) => {
+      const t = ev.target;
+      const btn = t && t.closest ? t.closest('button[disabled], [aria-disabled="true"]') : null;
+      if (!btn || btn !== last) return;
+      last = null;
+      const p = $('status');
+      if (p && p.textContent === (btn.dataset.why || '')) setStatus('idle', '空闲');
+    }, true);
+  })();
 
 function currentRunSource() {
   if (!CURRENT) return '';
@@ -14844,11 +14891,21 @@ function renderDshService(service){
     :(service.message||'DSH 服务尚未启动');
   /* 元信息是单行省略号截断的，完整内容挂 title 才看得到 */
   detail.title=detail.textContent;
-  /* 四个按钮各自的可点条件：打开/关闭要求正在运行；启动要求没在运行；重启只要求不在启动中 */
-  $('btn-env-dsh-open').disabled=!ready;
-  $('btn-env-dsh-start').disabled=ready||starting;
-  $('btn-env-dsh-stop').disabled=!ready||starting;
-  $('btn-env-dsh-restart').disabled=starting;
+    /* 四个按钮各自的可点条件：打开/关闭要求正在运行；启动要求没在运行；重启只要求不在启动中
+       ★ 每条都配上「为什么不能点 + 该怎么办」✓（2026-10-09）——
+         只说「不能关」没用 ✓，要说「先点重启接管它」✓。
+         ⚠️ 原因是**分开算**的 ✗：「没在运行」和「正在启动中」是两回事 ✓，
+            笼统写一句会让用户更糊涂 ✓。 */
+    const openWhy = !ready ? 'DSH 还没运行。先点「启动」，起来之后这里就能打开了。' : '';
+    const startWhy = starting ? 'DSH 正在启动中，等它起来。'
+      : (ready ? 'DSH 已经在运行了。想重来请点「重启」。' : '');
+    const stopWhy = starting ? 'DSH 正在启动中，等它起来再关。'
+      : (!ready ? 'DSH 现在没在运行，不用关。' : '');
+    const restartWhy = starting ? 'DSH 正在启动中，等它起来再重启。' : '';
+    $('btn-env-dsh-open').disabled = !ready; whyDisabled($('btn-env-dsh-open'), openWhy);
+    $('btn-env-dsh-start').disabled = ready || starting; whyDisabled($('btn-env-dsh-start'), startWhy);
+    $('btn-env-dsh-stop').disabled = !ready || starting; whyDisabled($('btn-env-dsh-stop'), stopWhy);
+    $('btn-env-dsh-restart').disabled = starting; whyDisabled($('btn-env-dsh-restart'), restartWhy);
   const top=$('btn-dsh');top.classList.toggle('dsh-ready',ready);top.classList.toggle('dsh-bad',!ready);top.title=ready?'打开 DeepSeek Harness':(service.message||'DSH 未就绪，点击尝试启动');
 }
 /* 启动 / 关闭 / 重启共用一个入口：先给即时反馈（状态点变 busy），
