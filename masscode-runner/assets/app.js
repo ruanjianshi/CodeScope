@@ -12379,7 +12379,49 @@ function editorLineCommand(input,command){
   else return false;
   input.value=next;input.setSelectionRange(selStart,selEnd);input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();return true;
 }
-function handleCommonEditorShortcut(event,input){const key=String(event.key||'').toLowerCase(),command=event.metaKey||event.ctrlKey;if(event.altKey&&!command&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();editorLineCommand(input,(event.shiftKey?'duplicate-':'move-')+(event.key==='ArrowUp'?'up':'down'));return true;}if(command&&event.shiftKey&&key==='k'){event.preventDefault();editorLineCommand(input,'delete');return true;}if(command&&event.key==='Enter'){event.preventDefault();editorLineCommand(input,event.shiftKey?'insert-above':'insert-below');return true;}return false;}
+function handleCommonEditorShortcut(event,input){
+  const key=String(event.key||'').toLowerCase(),command=event.metaKey||event.ctrlKey;
+  if(event.altKey&&!command&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();editorLineCommand(input,(event.shiftKey?'duplicate-':'move-')+(event.key==='ArrowUp'?'up':'down'));return true;}
+  if(command&&event.shiftKey&&key==='k'){event.preventDefault();editorLineCommand(input,'delete');return true;}
+  if(command&&event.key==='Enter'){event.preventDefault();editorLineCommand(input,event.shiftKey?'insert-above':'insert-below');return true;}
+  /* ★ Tab / ⇧Tab 缩进 ✓✓（2026-10-09）——
+     ⚠️ textarea 里 Tab 默认是**跳焦点** ✗，写代码时完全没法用 ✓。
+     实测确认这是「代码编辑快捷键」里唯一真缺的 ✓
+     （⌘/ 注释、⌥↑↓ 移动行、⌘⇧K 删行、⌘Enter 插入 都已经有了 ✓）。
+     ⚠️ 多行选区要**整体**缩进 / 反缩进 ✗（不是只动光标那行 ✓）；
+     反缩进时**行首没有缩进就别硬删** ✗（不然会把代码吃掉 ✓）。 */
+  if(event.key==='Tab'&&!command&&!event.altKey){
+    const IND=' '.repeat(INDENT_WIDTH||2);
+    const v=String(input.value||'');
+    const s=input.selectionStart,e=input.selectionEnd;
+    const ls=v.lastIndexOf('\n',s-1)+1;
+    const le=(()=>{const i=v.indexOf('\n',e);return i===-1?v.length:i;})();
+    const multi=v.slice(ls,le).includes('\n');
+    event.preventDefault();
+    if(!event.shiftKey){
+      /* ⚠️ 单行**别用 `document.execCommand('insertText')`** ✗✗ ——
+         它已废弃 ✓，而且实测在无头 / 部分环境里**静默失败** ✓
+         （preventDefault 了、但一个字符都没插进去 ✓）。
+         → 统一走 `setRangeText` ✓（可靠 ✓，且顺手处理了「有选区时替换」✓）。 */
+      if(!multi){input.setRangeText(IND,s,e,'end');input.dispatchEvent(new Event('input',{bubbles:true}));return true;}
+      const lines=v.slice(ls,le).split('\n').map((l)=>IND+l).join('\n');
+      input.setRangeText(lines,ls,le,'select');
+    }else{
+      const lines=v.slice(ls,le).split('\n').map((l)=>{
+        if(l.startsWith(IND))return l.slice(IND.length);
+        /* 缩进宽度不够时，退而求其次去掉任意行首空白 ✓（但要**有**才去 ✓）*/
+        const m=/^[ \t]{1,}/.exec(l);
+        return m?l.slice(Math.min(m[0].length,IND.length)):l;
+      }).join('\n');
+      input.setRangeText(lines,ls,le,'select');
+    }
+    /* ⚠️ 改完必须手动派发 input ✗ —— 这套编辑器靠 input 事件做高亮 / 自动保存 ✓，
+       setRangeText 不会触发它 ✓（不派发的话画面和存盘都不同步 ✗）。 */
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    return true;
+  }
+  return false;
+}
 
 // 代码编辑实时高亮：把编辑框内容高亮进 #code（透明 textarea 下方的高亮层），并同步滚动 + 行号
 /* --------------------- 缩进单位（Tab 缩进与层级参考线共用） ---------------------
