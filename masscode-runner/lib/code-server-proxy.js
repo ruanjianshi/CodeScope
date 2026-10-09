@@ -14,6 +14,24 @@
 
 const http = require('http');
 const net = require('net');
+const zlib = require('zlib');
+
+/* ── 边转发边压缩 ✓✓ ──
+   ⚠️⚠️ 为什么必须做 ✗✗：实测（2026-10-09）从云服务器加载编辑工作台，
+      首屏 **27 MB / 72 个请求 / 60 秒以上** ✗ —— 而这 27 MB 是**未压缩**的 ✗：
+      code-server 自带的资源里**一个 `.js.gz` 都没有** ✓，代理又是裸 `pipe` ✓，
+      于是 1~2 MB 的 JS 原样裸传 ✓。VPS 出口只有 ~0.7 MB/s ✓ → 自然卡死 ✓。
+   → 对**文本类**资源做 gzip ✓（JS/CSS/HTML/JSON/SVG ✓），实测能省 3~4 倍 ✓。
+   ⚠️ 不压的 ✗：图片 / 字体 / 音视频（本来就压过了 ✓）、
+      已经带 `Content-Encoding` 的 ✗、以及太小的（< 1KB，压了反而更大 ✓）。
+   ⚠️ 压了以后 `Content-Length` 就不对了 ✗ → 必须删掉 ✓（改用 chunked ✓）。 */
+const COMPRESSIBLE = /^(?:text\/|application\/(?:javascript|json|xml|xhtml\+xml|manifest\+json)|image\/svg\+xml)/i;
+const MIN_COMPRESS_BYTES = 1024;
+
+function wantsGzip(req) {
+  const raw = req.headers['accept-encoding'];
+  return typeof raw === 'string' && /\bgzip\b/i.test(raw);
+}
 
 function copyHeaders(rawHeaders, targetHost) {
   const lines = [];
@@ -53,7 +71,26 @@ function createCodeServerProxy(options = {}) {
   function forward(req, res) {
     if (!isAllowed(req)) return res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('已拒绝跨站请求');
     const upstream = http.request({ host: targetHost, port: targetPort, method: req.method, path: req.url, headers: Object.fromEntries(copyHeaders(req.rawHeaders, upstreamHost).map((line) => { const at = line.indexOf(':'); return [line.slice(0, at), line.slice(at + 1).trim()]; })) }, (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+      const headers = upstreamRes.headers;
+      const type = String(headers['content-type'] || '');
+      const already = !!headers['content-encoding'];
+      const size = Number(headers['content-length'] || 0);
+      /* ★ 该压的才压 ✓（详见文件头那段注释 ✓）*/
+      const shouldGzip = wantsGzip(req) && !already && COMPRESSIBLE.test(type)
+        && (size === 0 || size >= MIN_COMPRESS_BYTES);
+      if (shouldGzip) {
+        delete headers['content-length'];          /* 压缩后长度变了 ✗，必须删 ✓ */
+        headers['content-encoding'] = 'gzip';
+        /* `Vary` 要带上 ✓：不然中间有缓存时会拿压缩版喂给不支持 gzip 的客户端 ✗ */
+        headers['vary'] = headers['vary'] ? headers['vary'] + ', Accept-Encoding' : 'Accept-Encoding';
+        res.writeHead(upstreamRes.statusCode || 502, headers);
+        const gz = zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED });
+        gz.on('error', () => { try { res.end(); } catch (_) {} });
+        upstreamRes.on('error', () => { try { gz.end(); } catch (_) {} });
+        upstreamRes.pipe(gz).pipe(res);
+        return;
+      }
+      res.writeHead(upstreamRes.statusCode || 502, headers);
       upstreamRes.pipe(res);
     });
     upstream.on('error', () => { if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' }); res.end('VS Code 服务未就绪'); });

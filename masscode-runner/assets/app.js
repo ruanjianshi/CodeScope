@@ -14961,8 +14961,15 @@ function closeVSCodeWorkspace(){
 }
 /* iframe 必须指向「当前访问 CodeScope 用的主机名」+ 代理端口：
    写死 127.0.0.1 的话，从局域网另一台机器打开会指到它自己身上去。 */
+/* ⚠️⚠️ 协议要**跟着页面走** ✗✗ —— 原来写死 `http://` ✓：
+   从公网 HTTPS 打开时（https://…:48770 ✓），拼出来是 `http://…:4880` ✗ →
+   浏览器按「混合内容」**直接拦死** ✗（实测：编辑工作台一直卡在
+   「正在启动 VS Code…」✓ —— 那个加载壳被 service worker 缓存过所以看得到 ✓，
+   但资源一个都拉不下来 ✗）。
+   ⚠️ 走 SSH 隧道时页面本身是 http ✓ → 拼出来还是 http ✓，**行为不变** ✓。 */
 function vscodeProxyUrl(folder){
-  const base='http://'+location.hostname+':'+VSCODE_PROXY_PORT+'/';
+  const scheme=(location.protocol==='https:')?'https:':'http:';
+  const base=scheme+'//'+location.hostname+':'+VSCODE_PROXY_PORT+'/';
   const target=unescapeShellPath(folder);
   return target?base+'?folder='+encodeURIComponent(target):base;
 }
