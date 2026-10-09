@@ -5487,8 +5487,36 @@ function aiCfg() {
   try { AI_CFG = JSON.parse(localStorage.getItem('mc-ai-cfg') || 'null') || {}; } catch (_) { AI_CFG = {}; }
   return AI_CFG;
 }
+/* ★★★★ AI 配置**同时存服务端** ✓✓ —— 用户原话：「（AI 配置）这种也需要同步过去」✓。
+   ⚠️ 为什么 ✗：它原来**只在 localStorage** ✓ → 换浏览器要重填 ✓、
+     换机器（云服务器）直接就是「没配」✗（实测云端外刊精读报「还没配置 AI」✓）。
+   ⚠️ 这里**保持同步写 localStorage** ✓（`aiCfg()` 是同步的 ✓，改成异步会牵动一大片 ✓）——
+     服务端那份只是**额外**存一份 ✓：启动时灌回来 ✓，保存时写过去 ✓。 */
 function saveAiCfg() {
   try { localStorage.setItem('mc-ai-cfg', JSON.stringify(AI_CFG)); } catch (_) {}
+  /* 顺带写服务端 ✓（失败也不影响本地使用 ✗ —— 比如离线 / 老版本服务端 ✓）*/
+  try {
+    fetch('/api/ai/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: AI_CFG || {} }),
+    }).catch(() => {});
+  } catch (_) {}
+}
+/* 启动时：把**服务端那份**灌回 localStorage ✓ ——
+   ⚠️ 只在本地**还没有**的时候灌 ✗（本地填过的优先级更高 ✓，不然会把用户的改动盖掉 ✓）。 */
+async function hydrateAiCfgFromServer() {
+  try {
+    const r = await fetch('/api/ai/config', { cache: 'no-store' });
+    const d = await r.json();
+    const srv = d && d.config;
+    if (!srv || !srv.url) return false;
+    let local = {};
+    try { local = JSON.parse(localStorage.getItem('mc-ai-cfg') || 'null') || {}; } catch (_) { local = {}; }
+    if (local.url) return false;                 /* 本地有 → 不动 ✓ */
+    localStorage.setItem('mc-ai-cfg', JSON.stringify(srv));
+    AI_CFG = srv;                                /* 让缓存失效 ✓ */
+    return true;
+  } catch (_) { return false; }
 }
 function aiCfgFromInputs() {
   return {
@@ -5507,17 +5535,24 @@ function aiNormalizeUrl(url) {
   return u;
 }
 function wireAiPanel() {
-  const cfg = aiCfg();
-  if (cfg.url) $('ai-url').value = cfg.url;
-  if (cfg.key) $('ai-key').value = cfg.key;
-  if (cfg.model) $('ai-model').value = cfg.model;
-  $('ai-search-provider').value = cfg.searchProvider === 'brave' ? 'brave' : 'tavily';
-  if (cfg.searchKey) $('ai-search-key').value = cfg.searchKey;
+  const fillAiInputs = () => {
+    const cfg = aiCfg();
+    if (cfg.url) $('ai-url').value = cfg.url;
+    if (cfg.key) $('ai-key').value = cfg.key;
+    if (cfg.model) $('ai-model').value = cfg.model;
+    $('ai-search-provider').value = cfg.searchProvider === 'brave' ? 'brave' : 'tavily';
+    if (cfg.searchKey) $('ai-search-key').value = cfg.searchKey;
+  };
+  fillAiInputs();
+  /* ★ 服务端那份可能才是「有的那份」✓ —— 新机器（云服务器）上本地 localStorage
+     是空的 ✓，而服务端存着一份 ✓ → 拿到之后**再填一次** ✓。
+     ⚠️ 只在本地为空时才会覆盖 ✗（见 hydrateAiCfgFromServer 里的判断 ✓）。 */
+  hydrateAiCfgFromServer().then((got) => { if (got) fillAiInputs(); });
   $('ai-cfg-toggle').onclick = () => $('ai-cfg').classList.toggle('hidden');
   $('ai-cfg-save').onclick = () => {
     AI_CFG = aiCfgFromInputs();
     saveAiCfg();
-    cfgStatus('✅ 设置已保存（本机 localStorage）', 'ok');
+    cfgStatus('✅ 设置已保存（本机 + 服务端，换机器不用重填）', 'ok');
   };
   $('ai-cfg-test').onclick = async () => {
     AI_CFG = aiCfgFromInputs();

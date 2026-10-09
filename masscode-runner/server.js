@@ -7862,6 +7862,46 @@ const server = http.createServer(async (req, res) => {
       }
     }
     // ---- AI 助手（OpenAI 兼容代理：URL/Key/模型由前端配置，服务器只做转发） ----
+    /* ★★★★ AI 配置存到服务端 ✓✓ —— 用户原话：
+       「（AI 配置）**这种也需要同步过去**」✓。
+
+       ⚠️⚠️ 原来它**只在浏览器的 localStorage 里** ✗（`mc-ai-cfg` ✓；
+         前端每次请求把 url/key/model 带上来 ✓，服务端**一个字节都不存** ✗）→
+         后果：① 换一个浏览器就要重填一遍 ✓；
+              ② **换一台机器就是「没配」** ✗ —— 实测云端「外刊精读」的 AI 补全
+                 直接报「还没配置 AI」✓，而这**根本同步不过去** ✗
+                 （localStorage 不是文件 ✓，rsync 同步不了 ✓）。
+       → 存一份到**数据目录** ✓：它能跟着「应用数据」一起同步 ✓✓，
+         而且同一台机器换浏览器也不用重填 ✓。
+
+       ⚠️ 安全：key 会**落盘** ✗ —— 但**它本来每次请求就已经发到服务端了** ✓，
+          没有增加新的暴露面 ✓（而且这是用户自己的机器 ✓）。
+       ⚠️ 前端那侧保持**同步**的 `aiCfg()` 不变 ✗（改成异步会牵动一大片 ✓）——
+          做法是「启动时把服务端那份**灌回 localStorage** ✓ + 保存时两边都写 ✓」。 */
+    if (u.pathname === '/api/ai/config') {
+      const aiCfgFile = path.join(applicationDataRoot(), 'ai-config.json');
+      if (req.method === 'GET') {
+        try { return send(res, 200, { ok:true, config: JSON.parse(fs.readFileSync(aiCfgFile, 'utf8')) }); }
+        catch (_) { return send(res, 200, { ok:true, config:null }); }
+      }
+      if (req.method === 'POST') {
+        try {
+          const b = await readBody(req, 64 * 1024);
+          const c = (b && b.config) || {};
+          const clean = {
+            url: String(c.url || '').trim().slice(0, 500),
+            key: String(c.key || '').trim().slice(0, 500),
+            model: String(c.model || '').trim().slice(0, 200),
+            searchProvider: String(c.searchProvider || '').trim().slice(0, 40),
+            searchKey: String(c.searchKey || '').trim().slice(0, 500),
+          };
+          fs.mkdirSync(path.dirname(aiCfgFile), { recursive:true });
+          writeFileAtomicSync(aiCfgFile, JSON.stringify(clean, null, 2), 'utf8');
+          return send(res, 200, { ok:true });
+        } catch (error) { return send(res, 500, { ok:false, error:String(error.message || error) }); }
+      }
+      return send(res, 405, { ok:false, error:'Method Not Allowed' });
+    }
     if (req.method === 'POST' && u.pathname === '/api/ai/chat') {
       const b = await readBody(req);
       const url = String((b && b.url) || '').trim();
