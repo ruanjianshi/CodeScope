@@ -1199,4 +1199,19 @@ function createFileManager(options = {}) {
   };
 }
 
-module.exports = { createFileManager };
+/* ⚠️ 为什么要把守卫导出来 ✗（2026-10-09）：
+   这些 assert* 是「**别把用户系统搞坏**」的最后一道闸 ✓ ——
+   但它们是私有的 ✓，之前一行测试都没有 ✗。
+   这个模块 1203 行、零测试 ✓，而它管的是**删 / 移 / 改名本机文件** ✓
+   —— 判错一次就是不可逆的数据丢失 ✓。
+   `__test` 前缀刻意起的 ✓：只给测试用，不是对外 API ✓。
+   ⚠️ 这些守卫**不写任何文件** ✓（纯校验 ✓），测试可以放心跑 ✓。 */
+module.exports = {
+  createFileManager,
+  __test: {
+    assertPath, assertMutable, assertChildName,
+    within, protectedReason, sensitiveReason, realTarget, isInsideAppBundle,
+    PROTECTED_TOP, PROTECTED_HOME, PROTECTED_PREFIXES, SENSITIVE_PREFIXES,
+    EXEMPT_PREFIXES, HOME,
+  },
+};
