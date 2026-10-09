@@ -11236,11 +11236,15 @@ function renderCode() {
   /* ★ `%%` 段运行按钮：只在 MATLAB / Octave（.m）上显示 ✓✓（2026-10-09）
      ⚠️ 和 btn-preview / btn-md 用**同一套显隐写法**（style.display ✓），
         别另发明一种（否则样式和布局会不一致 ✓）。 */
-  const isMatlab = !!(f && (f.language === 'matlab' || f.language === 'octave'));
+  const isMatlab = !!(f && (f.language === 'matlab' || f.language === 'octave' || f.language === 'python'));
   const secBtn = $('btn-run-section');
   if (secBtn) { secBtn.style.display = isMatlab ? '' : 'none'; secBtn.disabled = !isMatlab; }
   const conBtn = $('btn-matlab-console');
-  if (conBtn) { conBtn.style.display = isMatlab ? '' : 'none'; conBtn.disabled = !isMatlab; }
+  /* ⚠️ 命令窗口只给 MATLAB/Octave ✗ —— Python 走**持久内核**（段运行按钮 ✓），
+     它的交互体验是「跑一格看一格」✓，不是「在终端里敲」✓。
+     （想要 Python 终端的话，底部终端本来就能自己敲 python3 ✓。） */
+  const isM = !!(f && (f.language === 'matlab' || f.language === 'octave'));
+  if (conBtn) { conBtn.style.display = isM ? '' : 'none'; conBtn.disabled = !isM; }
   $('btn-preview').style.display = isHtml ? '' : 'none';
   $('btn-preview').disabled = !isHtml;
   $('btn-preview').textContent=isHtml&&documentMode(f)==='source'?'▥':'×';
@@ -13073,7 +13077,7 @@ function currentSection(text) {
   const src = String(text == null ? '' : text);
   const lines = src.split('\n');
   const marks = [];
-  lines.forEach((l, i) => { if (/^\s*%%/.test(l)) marks.push(i); });
+  lines.forEach((l, i) => { if (/^\s*%%/.test(l) || /^\s*#\s*%%/.test(l)) marks.push(i); });
   if (!marks.length) return null;
   let row = 0;
   try {
@@ -13091,10 +13095,46 @@ async function runSection() {
   const f = CURRENT && CURRENT.fragments[CINDEX];
   if (!f) return;
   if (!EDITING) { setStatus('err', '先点「✏ 编辑」再跑本段'); return; }
+  const lang = String(f.language || '');
+  const isPy = lang === 'python';
+  const isMatlab = lang === 'matlab' || lang === 'octave';
+  if (!isPy && !isMatlab) { setStatus('idle', '这个语言没有分段运行'); return; }
   const sec = currentSection(editText());
-  if (!sec) { setStatus('idle', '这篇没有 %% 分节，跑整篇'); return doRun(); }
+  if (!sec) { setStatus('idle', '这篇没有 %% 分节，跑整篇'); return isPy ? runKernelCell(editText()) : doRun(); }
+
+  /* ★ Python 走**持久内核** ✓✓（Jupyter 式：变量跨格保留 ✓）——
+     用户原话：「我需要可以实现 jupyter 那种方式运行」✓。
+     ⚠️ 和 MATLAB 的段运行**不是同一条路** ✗：
+        · MATLAB 段运行 → /api/run（每次新进程 ✓，但 MATLAB/Octave 本来就这样 ✓）；
+        · Python 段运行 → /api/py/exec（**同一个进程** ✓，变量留着 ✓✓）。 */
+  if (isPy) { setStatus('idle', '跑第 ' + sec.index + ' 格（共 ' + sec.total + ' 格）'); return runKernelCell(sec.code); }
   setStatus('idle', '跑第 ' + sec.index + ' 段（共 ' + sec.total + ' 段）');
   return doRun({ code: sec.code });
+}
+
+/* ★ 把一格代码交给持久 Python 内核 ✓✓（2026-10-10）——
+   ⚠️ 输出走**输出 tab** 而不是终端 ✓ —— 内核的 stdout/stderr 是结构化拿回来的 ✓，
+      不经过终端 ✓，所以能干净地显示 ✓（没有提示符、没有 ANSI 转义 ✓）。 */
+async function runKernelCell(code) {
+  switchOutTab('out');
+  $('out-body').innerHTML = '<span class="empty">内核运行中…</span>';
+  setStatus('idle', '内核运行中…');
+  const t0 = performance.now();
+  let r = null;
+  try { r = await api('/api/py/exec', { code: String(code == null ? '' : code) }); }
+  catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
+  const ms = ((performance.now() - t0) / 1000).toFixed(2) + 's';
+  $('elapsed').textContent = ms;
+  if (!r || r.ok === false) {
+    setStatus('err', '内核出错');
+    showOut(String((r && r.error) || '未知错误'), '', false);
+    return;
+  }
+  const out = String(r.stdout || '');
+  const err = String(r.stderr || '');
+  if (!out && !err) { setStatus('ok', '这一格没有输出 · ' + ms); showOut('（这一格没有输出）', '', true); return; }
+  setStatus(err ? 'err' : 'ok', (err ? '有报错' : '完成') + ' · ' + ms);
+  showOut(out + (err ? (out ? '\n\n' : '') + err : ''), '', !err);
 }
 
 async function doRun(options) {
@@ -14188,7 +14228,7 @@ document.addEventListener('keydown', (e) => {
   if (!(e.metaKey || e.ctrlKey) || !e.altKey) return;
   if (e.key !== 'Enter') return;
   const f = CURRENT && CURRENT.fragments && CURRENT.fragments[CINDEX];
-  if (!f || (f.language !== 'matlab' && f.language !== 'octave')) return;
+  if (!f || (f.language !== 'matlab' && f.language !== 'octave' && f.language !== 'python')) return;
   e.preventDefault();
   runSection();
 });

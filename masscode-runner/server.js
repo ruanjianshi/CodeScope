@@ -34,6 +34,10 @@ const { createOpencodeService } = require('./lib/opencode-service');
 const { createCodeServerService } = require('./lib/code-server-service');
 const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
+/* ★ Jupyter 式持久 Python 内核 ✓（2026-10-10）——
+   用户要「jupyter 那种方式运行」：变量跨单元格保留 ✓。
+   和「跑脚本」的区别：那个每次都是新进程 ✗，这个是**一个长期存活的进程** ✓。 */
+const { createPythonKernel } = require('./lib/python-kernel');
 /* 极简 SMTP 客户端（只依赖 Node 内置 tls/net）—— 用于「邮箱」页的测试连接与发信 ✓ */
 const MAIL_CLIENT = require('./lib/mail-client');
 const MAIL_IMAP = require('./lib/imap-client');
@@ -1453,6 +1457,12 @@ function matlabCmd() {
 }
 /* 用哪个引擎跑 .m —— 决定命令行参数（两者不一样 ✗） */
 function isOctaveCmd(cmd) { return /^octave/.test(String(cmd || '')); }
+
+/* ★ Jupyter 式持久 Python 内核 ✓✓（2026-10-10）
+   用户原话：「我需要可以实现 jupyter 那种方式运行」✓。
+   ⚠️ 实例化放在这里而不是文件顶部 ✗ —— 它依赖上面刚定义的 pythonCmd ✓，
+      放太早会拿到 undefined ✓（而且这个项目里 createXxx 都是「先定义依赖再实例化」✓）。 */
+const PY_KERNEL = createPythonKernel({ pythonCmd, spawn });
 function latexStarter() {
   let hasCtex = false;
   try { hasCtex = !!execFileSync('kpsewhich', ['ctexart.cls'], { encoding: 'utf8', timeout: 5000 }).trim(); } catch (_) {}
@@ -7105,6 +7115,33 @@ const server = http.createServer(async (req, res) => {
         label: octave ? 'GNU Octave' : 'MATLAB',
         argv: octave ? [cmd, '--no-gui', '--quiet'] : [cmd, '-nodesktop', '-nosplash'],
       });
+    }
+    /* ★ Jupyter 式持久 Python 内核 ✓✓（2026-10-10）——
+       用户原话：「我需要可以实现 jupyter 那种方式运行」✓。
+       ⚠️ 和 /api/run 的 python **不是一回事** ✗：
+          /api/run = 每次一个新进程（跑脚本 ✓，变量不保留 ✓）；
+          这里    = 一个**长期存活的进程**（跑单元格 ✓，变量跨格保留 ✓✓）。
+          两个都保留 ✓ —— 用户想要哪种就用哪种 ✓。 */
+    if (req.method === 'GET' && u.pathname === '/api/py/kernel') {
+      return send(res, 200, { ok: true, ...PY_KERNEL.status() });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/py/kernel/stop') {
+      return send(res, 200, { ok: true, killed: PY_KERNEL.kill() });
+    }
+    if (req.method === 'POST' && u.pathname === '/api/py/exec') {
+      const b = await readBody(req);
+      const code = String((b && b.code) || '');
+      if (!code.trim()) return send(res, 200, { ok: true, stdout: '', stderr: '', empty: true });
+      try {
+        /* ⚠️ cwd 给 vault ✓ —— 用户在单元格里 open('data.csv') 时，
+           期望是相对自己的项目目录 ✓，而不是服务器的启动目录 ✓。
+           ⚠️ 是 vaultPath() **函数**，不是变量 ✗（我第一次写成 VAULT 报
+              `VAULT is not defined` ✓ —— 这个项目里 vault 路径是算出来的 ✓）。 */
+        const r = await PY_KERNEL.exec(code, { cwd: vaultPath() });
+        return send(res, 200, r);
+      } catch (e) {
+        return send(res, 200, { ok: false, error: String((e && e.message) || e) });
+      }
     }
     if (req.method === 'POST' && u.pathname === '/api/run') {
       const b = await readBody(req);
