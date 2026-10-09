@@ -3919,16 +3919,26 @@
     }
     return n;
   }
-  /* 未完成待办数 ✓ —— 和「今日」页同一个口径 ✓（备忘录正文里的 - [ ] xxx / ☐ xxx）*/
+  /* 未完成待办数 ✓ —— 和「今日」页同一个口径 ✓
+     ⚠️⚠️ 2026-10-09 补：**日记里的 `- [ ]` 原来不算** ✗✗ ——
+        这个函数只扫了 `STORE.memos` ✓，而日记模板里明明写着 `- [ ]` ✓
+        （用户勾的就是「日记 ↔ 待办打通」✓）。
+        后果很典型：日记里列的待办**写了个寂寞** ✓，
+        因为它永远不进「今日」页那个待办数 ✓。
+     ⚠️ 扫的时候**两处都用同一套正则** ✗ —— 口径不一致比不统计更糟 ✓
+        （用户会以为哪边坏了 ✓，这个文件里另一处注释也强调过同样的道理 ✓）。 */
   function openTodoCount() {
     let n = 0;
-    ((STORE && STORE.memos) || []).forEach((m) => {
-      String((m && m.text) || '').split('\n').forEach((l) => {
+    const scan = (text) => {
+      String(text || '').split('\n').forEach((l) => {
         const a = /^\s*[-*+]\s*\[([ xX])\]\s*\S/.exec(l);
         const b = /^\s*([☐☑])\s*\S/.exec(l);
         if ((a && a[1].toLowerCase() !== 'x') || (b && b[1] === '☐')) n++;
       });
-    });
+    };
+    ((STORE && STORE.memos) || []).forEach((m) => scan(m && m.text));
+    /* ★ 日记也算 ✓（每条日记的正文 ✓）*/
+    ((STORE && STORE.journal) || []).forEach((j) => scan(j && j.text));
     return n;
   }
   /* ★ 该复习的生词数 ✓ —— 用户原话：「记忆的单词还需要有遗忘曲线，去制定记忆和提醒」✓。
