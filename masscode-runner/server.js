@@ -5171,6 +5171,18 @@ const server = http.createServer(async (req, res) => {
       return send(res, 405, { ok: false, error: 'Method Not Allowed' });
     }
     /* 工作台本地数据（待办 / 笔记 / 设置）—— 存 JSON 文件，纯本地 */
+    /* 自动同步的状态 ✓（界面上能看「上次什么时候跑的、成不成」✓）。
+       ⚠️ 只读 ✓，不触发同步 ✗ —— 想看效果就等下一轮 ✓（或手动跑那个脚本 ✓）。 */
+    if (req.method === 'GET' && u.pathname === '/api/life/sync-status') {
+      return send(res, 200, {
+        ok: true,
+        enabled: autoSyncEnabled(),
+        script: AUTO_SYNC_SCRIPT,
+        intervalMs: AUTO_SYNC_MS,
+        last: AUTO_SYNC_LAST,
+        running: AUTO_SYNC_BUSY,
+      });
+    }
     if (u.pathname === '/api/life/store') {
       const file = path.join(applicationDataRoot(), 'life-workbench.json');
       const read = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return {}; } };
@@ -8288,8 +8300,62 @@ VNC_WSS.on('connection', (ws, _req, target) => {
   ws.on('close', () => { try { tcp.destroy(); } catch (_) {} });
 });
 
+/* ★★★★ 个人数据自动双向同步（用户钩子）✓✓ —— 用户原话：「帮我做完就行」✓。
+   ⚠️ 为什么要放在应用里 ✗✗：
+      vault（代码 / 文档）走 **Syncthing** ✓，天然自动双向 ✓；
+      但**个人数据**（备忘录 / 日记 / 摘录 / 阅读…）**不在 vault 里** ✗ ——
+      它在应用数据目录 ✓，得靠脚本同步 ✓。
+      本来想用 launchd 定时跑 ✓ —— **装不上** ✗：
+      `launchctl bootstrap` 一直报 `Bootstrap failed: 5: Input/output error` ✓，
+      `crontab` 直接 `operation not permitted` ✓（4 种方式都试过 ✓）。
+      → 那就让**应用自己定时跑** ✓✓：应用本来就在常驻 ✓，
+        不依赖任何系统级调度 ✓，重启应用就生效 ✓。
+
+   ⚠️ **不写死路径** ✗ —— 约定一个「用户钩子」：
+      `<用户配置目录>/codescope/data-sync.sh` 存在才跑 ✓。
+      没有这个文件 = 用户没配过 = 什么都不做 ✓（对别的用户零影响 ✓）。
+   ⚠️ 间隔 3 分钟 ✓（和 Syncthing 的节奏差不多 ✓）；
+   ⚠️ `unref()` ✗：定时器不该阻止进程正常退出 ✓；
+   ⚠️ 跑的时候**串行** ✗（上一次没跑完就不开下一次 ✓），超时 120 秒 ✓。 */
+const AUTO_SYNC_SCRIPT = path.join(os.homedir(), '.config', 'codescope', 'data-sync.sh');
+const AUTO_SYNC_MS = Number(process.env.CODESCOPE_AUTO_SYNC_INTERVAL_MS) || 180000;
+let AUTO_SYNC_TIMER = null;
+let AUTO_SYNC_BUSY = false;
+let AUTO_SYNC_LAST = { at: 0, ok: null, note: '还没跑过' };
+function autoSyncEnabled() {
+  if (process.env.CODESCOPE_AUTO_SYNC === '0') return false;
+  try { return fs.existsSync(AUTO_SYNC_SCRIPT); } catch (_) { return false; }
+}
+function autoSyncTick() {
+  if (AUTO_SYNC_BUSY) return;
+  AUTO_SYNC_BUSY = true;
+  execFile('/bin/bash', [AUTO_SYNC_SCRIPT], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+    AUTO_SYNC_BUSY = false;
+    AUTO_SYNC_LAST = {
+      at: Date.now(),
+      ok: !err,
+      note: String(stdout || '').trim().split('\n').filter(Boolean).slice(-1)[0] || (err ? String(err.message || err) : 'ok'),
+    };
+    if (err) console.log('[自动同步] 失败: ' + AUTO_SYNC_LAST.note);
+  });
+}
+function startAutoSync() {
+  if (AUTO_SYNC_TIMER || !autoSyncEnabled()) return;
+  /* 启动后**等 30 秒**再开始 ✓ —— 刚起来那会儿在扫索引 / 建知识库 ✓，
+     这时候插一个要 ssh 出去的同步进去没必要 ✓。 */
+  AUTO_SYNC_TIMER = setTimeout(() => {
+    autoSyncTick();
+    AUTO_SYNC_TIMER = setInterval(autoSyncTick, AUTO_SYNC_MS);
+    if (AUTO_SYNC_TIMER && AUTO_SYNC_TIMER.unref) AUTO_SYNC_TIMER.unref();
+  }, 30000);
+  if (AUTO_SYNC_TIMER && AUTO_SYNC_TIMER.unref) AUTO_SYNC_TIMER.unref();
+  console.log('[自动同步] 已启用（每 ' + Math.round(AUTO_SYNC_MS / 1000) + ' 秒跑一次 ' + AUTO_SYNC_SCRIPT + '）');
+}
+
 server.listen(PORT, HOST, () => {
   console.log('码境 CodeScope 已启动 [' + APP_MODE + ']: http://' + HOST + ':' + PORT);
+  /* ★ 个人数据自动双向同步 ✓（详见上面 autoSync 那段注释 ✓）*/
+  startAutoSync();
   /* ★ 工作流定时排期：启动后**等 20 秒**再开始 tick ✓ ——
      刚起来那会儿磁盘 / CPU 都在忙（扫索引、建知识库 ✗），
      这时候插一个可能跑 30 秒的工作流进去，会让启动更慢 ✗。
