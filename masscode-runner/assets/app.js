@@ -14237,7 +14237,10 @@ function makeHResizer(handle, getter, setter) {
     const command=e.ctrlKey||e.metaKey,key=String(e.key||'').toLowerCase();
     if(e.key==='Escape'&&!$('definition-peek').classList.contains('hidden')){e.preventDefault();closeDefinitionPeek();return;}
     if(e.key==='Escape'&&$('sym-modal').classList.contains('open')){closeSymModal();return;}
-    if((command&&e.shiftKey&&key==='p')||e.key==='F1'){e.preventDefault();openSymModal('command');return;}
+    /* ★ ⌘K 也开命令面板 ✓（2026-10-09）—— Notion / Linear / Slack / Raycast 的
+   习惯键都是 ⌘K ✓，很多人第一反应就是它 ✓。原来只有 ⌘⇧P（VS Code 习惯）
+   和 F1 ✓，实测 ⌘K 完全没反应 ✓（浏览器里按了焦点还在 BODY ✓）。 */
+  if((command&&e.shiftKey&&key==='p')||e.key==='F1'||(command&&!e.shiftKey&&key==='k')){e.preventDefault();openSymModal('command');return;}
     if(command&&!e.shiftKey&&key==='p'){e.preventDefault();openSymModal('file');return;}
     if(command&&e.shiftKey&&key==='f'){e.preventDefault();openSymModal('text');return;}
     if(command&&e.shiftKey&&key==='o'){e.preventDefault();openSymModal('symbol');return;}
