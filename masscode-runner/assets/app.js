@@ -14765,6 +14765,23 @@ $('welcome-office').onclick = () => { document.body.classList.add('office-mode')
 $('welcome-draw').onclick = () => $('draw-new-manual').click();
 $('welcome-project').onclick = () => $('btn-project').click();
 $('welcome-remote').onclick = () => $('btn-remote').click();
+/* ★ 第二组「更多能力」✓✓（2026-10-09）——
+   用户原话：「工具介绍不够，codescope 的功能都应该介绍上去，让人明白了解」✓。
+   ⚠️ 全部**委托**给顶栏已有的按钮 ✓（`$('btn-xxx').click()` ✓），
+      不另写一套逻辑 ✓ —— 这样行为**永远和顶栏一致** ✓，
+      顶栏改了这里不用跟着改 ✓。 */
+$('welcome-code').onclick = () => { $('workspace-welcome').hidden = true; };
+$('welcome-symbols').onclick = () => $('btn-symbols').click();
+$('welcome-codegraph').onclick = () => $('btn-codegraph').click();
+$('welcome-logicgraph').onclick = () => $('btn-logicgraph').click();
+$('welcome-blockly').onclick = () => $('btn-blockly').click();
+$('welcome-latex').onclick = () => $('btn-new-latex').click();
+$('welcome-knowledge').onclick = () => $('btn-knowledge-launch').click();
+$('welcome-mindmap').onclick = () => $('btn-mindmap').click();
+$('welcome-vscode').onclick = () => $('btn-vscode').click();
+$('welcome-system').onclick = () => $('btn-system').click();
+$('welcome-history').onclick = () => $('btn-history').click();
+$('welcome-manual').onclick = () => $('btn-manual').click();
 $('btn-collapse-all').onclick = collapseAll;
 $('btn-expand-all').onclick = expandAll;
 // Git 面板

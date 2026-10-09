@@ -3708,6 +3708,15 @@
   #workspace-welcome h2 { margin:0; color:var(--text); font-size:clamp(24px,2.6vw,36px); font-weight:760; letter-spacing:-.035em; }
   #workspace-welcome>p { max-width:620px; margin:12px auto 26px; color:var(--dim); font-size:13px; line-height:1.7; }
   .welcome-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; width:min(1040px,100%); }
+  /* ★ 第二组「更多能力」✓✓（2026-10-09）——
+     用户说「工具介绍不够，功能都应该介绍上去」。
+     加了一组次级入口，所以给它一个小标题 + 稍微收一点的视觉权重：
+     ⚠️ 卡片本身**沿用同一套样式**（.welcome-actions button）✓，
+        只在外面加标题和组间距 ✓ —— 不另起一套卡片样式，
+        免得两组的悬停 / 焦点行为不一致 ✓。 */
+  .welcome-more-title { width:min(1040px,100%); margin:22px 0 10px; text-align:left; color:var(--dim); font:700 10.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; opacity:.72; }
+  .welcome-actions.more button { min-height:64px; }
+  .welcome-actions.more button>b { width:30px; height:30px; font-size:13px; }
   .welcome-actions button { display:flex; align-items:center; gap:12px; min-height:72px; padding:12px 14px; text-align:left; border-color:color-mix(in srgb,var(--border) 82%,transparent); background:color-mix(in srgb,var(--panel2) 78%,transparent); box-shadow:0 8px 24px color-mix(in srgb,#000 12%,transparent); }
   .welcome-actions button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 54%,var(--border)); background:color-mix(in srgb,var(--accent) 10%,var(--panel2)); transform:translateY(-2px); }
   .welcome-actions button.primary { border-color:color-mix(in srgb,var(--accent) 46%,var(--border)); background:color-mix(in srgb,var(--accent) 12%,var(--panel2)); }
