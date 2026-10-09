@@ -1090,7 +1090,7 @@ if (drawListHost) drawListHost.addEventListener('contextmenu', (e) => {
 });
 
 /* ---------------- 新建文件/文件夹 对话框（支持 类型/标签/说明） ---------------- */
-const ND_LANGS = ['plain_text', 'c_cpp', 'c', 'python', 'javascript', 'typescript', 'java', 'go', 'rust', 'bash', 'shell', 'swift', 'ruby', 'php', 'json', 'json5', 'html', 'css', 'scss', 'less', 'yaml', 'markdown', 'latex', 'sql'];
+const ND_LANGS = ['plain_text', 'c_cpp', 'c', 'python', 'matlab', 'javascript', 'typescript', 'java', 'go', 'rust', 'bash', 'shell', 'swift', 'ruby', 'php', 'json', 'json5', 'html', 'css', 'scss', 'less', 'yaml', 'markdown', 'latex', 'sql'];
 let ND_MODE = 'file';
 let ND_FOLDER = null;
 const ND_TAGS = new Set();   // 选中的已有标签 id
@@ -11335,6 +11335,58 @@ const HL_LANG = {
 
 // highlight.js 的精简离线包不含 LaTeX 语法，单独提供稳定的轻量高亮。
 // 只添加颜色 span，不改变字符、空格和换行，确保与透明 textarea 像素对齐。
+/* ★ .m（MATLAB / Octave）轻量高亮 ✓✓（2026-10-09）
+   ⚠️⚠️ 和 highlightLatex **同一个硬约束** ✗✗：**只加颜色 span，
+      绝不改变字符、空格和换行** —— 编辑区是**透明 textarea 叠在高亮层上** ✓，
+      字符数一变，光标和选区就会和高亮层错位 ✓。
+   ⚠️ 转置符 A' 和字符串起始 ' 长得一样 ✗（MATLAB 的经典歧义 ✓）：
+      判据是「前一个非空白字符是不是 标识符/右括号/右方括号/数字」✓ ——
+      是 → 转置（当运算符上色 ✓）；不是 → 字符串 ✓。 */
+function highlightMatlab(code) {
+  let out = '', i = 0;
+  const push = (t, c) => { out += c ? '<span class="' + c + '">' + escapeHtml(t) + '</span>' : escapeHtml(t); };
+  const KW = /^(?:function|if|elseif|else|end|for|while|switch|case|otherwise|try|catch|return|break|continue|global|persistent|classdef|properties|methods|events|enumeration|parfor|spmd|arguments|import|true|false|Inf|NaN|pi|eps)$/;
+  const BI = /^(?:disp|fprintf|sprintf|error|warning|num2str|str2num|strcmp|strcat|size|length|numel|ndims|reshape|repmat|linspace|logspace|zeros|ones|eye|rand|randn|sum|mean|std|min|max|abs|sqrt|exp|log|log2|log10|sin|cos|tan|asin|acos|atan|atan2|round|floor|ceil|mod|rem|find|sort|unique|plot|plot3|figure|hold|grid|axis|xlabel|ylabel|zlabel|title|legend|subplot|save|load|clear|clc|close|input|pause|tic|toc)$/;
+  while (i < code.length) {
+    const c = code[i];
+    if (c === '%') {
+      let j = code.indexOf('\n', i); if (j < 0) j = code.length;
+      push(code.slice(i, j), 'ml-comment'); i = j; continue;
+    }
+    if (c === "'" || c === '"') {
+      const prev = code.slice(0, i).replace(/[ \t]+$/, '').slice(-1);
+      if (c === "'" && /[A-Za-z0-9_)\].]/.test(prev)) { push(c, 'ml-op'); i += 1; continue; }
+      const q = c; let j = i + 1;
+      while (j < code.length) {
+        if (code[j] === q) { if (code[j + 1] === q) { j += 2; continue; } j++; break; }
+        if (code[j] === '\n') break;
+        j++;
+      }
+      push(code.slice(i, j), 'ml-string'); i = j; continue;
+    }
+    if (/[0-9]/.test(c) && !/[A-Za-z0-9_]/.test(code[i - 1] || '')) {
+      let j = i;
+      while (j < code.length) {
+        const ch = code[j];
+        if ((ch === '+' || ch === '-') && !/[eE]/.test(code[j - 1] || '')) break;
+        if (!/[0-9a-fA-FxX.eE+\-]/.test(ch)) break;
+        j++;
+      }
+      push(code.slice(i, j), 'ml-num'); i = j; continue;
+    }
+    if (/[A-Za-z_]/.test(c)) {
+      let j = i; while (j < code.length && /[A-Za-z0-9_]/.test(code[j])) j++;
+      const word = code.slice(i, j);
+      push(word, KW.test(word) ? 'ml-kw' : (BI.test(word) ? 'ml-bi' : ''));
+      i = j; continue;
+    }
+    if (c === '.' && code.slice(i, i + 3) === '...') { push('...', 'ml-op'); i += 3; continue; }
+    if (/[=+\-*/\\^<>&|~:@]/.test(c)) { push(c, 'ml-op'); i += 1; continue; }
+    push(c, ''); i += 1;
+  }
+  return out;
+}
+
 function highlightLatex(code) {
   let out = '', i = 0, pendingCommand = '';
   const push = (text, cls) => { out += cls ? '<span class="' + cls + '">' + escapeHtml(text) + '</span>' : escapeHtml(text); };
@@ -11391,6 +11443,15 @@ function highlightLatex(code) {
 // 优先用 highlight.js（本地资源）；加载失败时回退到内置高亮
 function codeHtml(code, lang) {
   if (lang === 'latex') return highlightLatex(code);
+  /* ★ .m（MATLAB / Octave）✓✓（2026-10-09）——
+     highlight.js 的**精简离线包不含 matlab 语法** ✗（实测：包里有 objectivec、
+     fortran，但没有 matlab / octave ✓），所以和 LaTeX 一样**单独提供** ✓。
+     ⚠️ 硬约束：**只加颜色 span，绝不改变字符、空格和换行** ✗✗ ——
+        编辑区是一层**透明 textarea** 叠在高亮层上面 ✓，
+        字符数一变，光标位置和选区就会和高亮层错位 ✓。
+     ⚠️ 用 matlab 而不是 octave 作为语言名 ✓：两者的语法高亮规则一样 ✓，
+        而 MATLAB 是超集 ✓ —— Octave 用户看到的高亮也完全正确 ✓。 */
+  if (lang === 'matlab' || lang === 'octave') return highlightMatlab(code);
   if (window.hljs) {
     const l = HL_LANG[lang] || 'plaintext';
     try { return window.hljs.highlight(code, { language: l, ignoreIllegals: true }).value; }

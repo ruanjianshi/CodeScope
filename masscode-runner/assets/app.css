@@ -2147,6 +2147,19 @@
   #code-wrap.latex-code #code .tex-special, .split-editor-code .tex-special { color: #f5a97f; }
   #code-wrap.latex-code #code .tex-number, .split-editor-code .tex-number { color: #f6c177; }
   #code-wrap.latex-code #code .tex-comment, .split-editor-code .tex-comment { color: #667085; }
+  /* ★ .m（MATLAB / Octave）高亮配色 ✓✓（2026-10-09）
+     ⚠️ 不加 `#code-wrap.matlab-code` 这种限定 ✗ ——
+        这几个类名（ml-*）**只由 highlightMatlab 产生** ✓，
+        别的语言不会出现 ✓，所以不需要额外挂一个 wrapper class ✓
+        （少一处状态、少一处可能忘同步的地方 ✓）。
+     ⚠️ 配色**对齐 LaTeX 那一套** ✓（注释/数字直接用同一个色值 ✓），
+        这样两种"自带高亮"的语言看起来是一家人 ✓。 */
+  #code .ml-comment, .split-editor-code .ml-comment { color: #667085; }
+  #code .ml-string, .split-editor-code .ml-string { color: #a6da95; }
+  #code .ml-kw, .split-editor-code .ml-kw { color: #c6a0f6; font-weight: 600; }
+  #code .ml-bi, .split-editor-code .ml-bi { color: #8aadf4; }
+  #code .ml-num, .split-editor-code .ml-num { color: #f6c177; }
+  #code .ml-op, .split-editor-code .ml-op { color: #8b949e; }
   #code-wrap.latex-code #code-edit:focus { outline: 1px solid rgba(99,155,255,.85); box-shadow: inset 0 0 0 1px rgba(99,155,255,.12); }
   #code-wrap.latex-code #code-edit.live-hl::selection { background: rgba(82,139,255,.34); -webkit-text-fill-color: transparent; }
   /* 自动换行：高亮层与透明输入框必须一起折行，否则可见文字仍停留在 pre 单行、

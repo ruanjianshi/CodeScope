@@ -1428,6 +1428,31 @@ function latexCmd() {
   }
   return _latexCmd = 'xelatex';
 }
+
+/* ★★ MATLAB / Octave 解析 ✓✓（2026-10-09）
+   用户要求：「新增对 .m 文件支持，octave，如果有 matlab 就用 matlab，
+             如果没有就用 octave，做好环境适配、检测和更新」。
+   → 和上面 latexCmd 完全同一个套路：**按优先级逐个探测**，
+     谁先能用就用谁 ✓。
+   ⚠️ MATLAB 的 CLI 名字各平台都是 `matlab` ✓（macOS 上装了 MATLAB 会在
+      /usr/local/bin/matlab 建一个启动器 ✓）；Octave 在 macOS/Linux 是 `octave`，
+      有些发行版只提供 `octave-cli`（无 GUI 版 ✓）→ 两个都试 ✓。
+   ⚠️ MATLAB 启动很慢（几秒到几十秒 ✓）→ 探测超时给到 15s ✓，
+      否则会把「装了但启动慢」误判成「没装」✗。
+   ⚠️ 返回空串表示**两个都没有** ✓ —— 调用方据此给出「缺 xx，安装: xxx」提示 ✓。 */
+let _matlabCmd = null;
+function matlabCmd() {
+  if (_matlabCmd !== null) return _matlabCmd;
+  for (const c of ['matlab', 'octave', 'octave-cli']) {
+    try {
+      execFileSync(c, ['--version'], { stdio: 'ignore', timeout: 15000 });
+      return _matlabCmd = c;
+    } catch (_) {}
+  }
+  return _matlabCmd = '';
+}
+/* 用哪个引擎跑 .m —— 决定命令行参数（两者不一样 ✗） */
+function isOctaveCmd(cmd) { return /^octave/.test(String(cmd || '')); }
 function latexStarter() {
   let hasCtex = false;
   try { hasCtex = !!execFileSync('kpsewhich', ['ctexart.cls'], { encoding: 'utf8', timeout: 5000 }).trim(); } catch (_) {}
@@ -1462,6 +1487,15 @@ const TOOLS = [
   { key: 'black',      builtin: { version: 'Ruff ' + packageVersion('@astral-sh/ruff-wasm-nodejs'), path: '应用内置 · WASM' }, label: 'Python 格式化（Ruff）', for: 'Python 格式化（Black 兼容）', group: '格式化工具', installable: false },
   { key: 'npx',        builtin: { version: 'Prettier ' + packageVersion('prettier'), path: require.resolve('prettier/bin/prettier.cjs') }, label: 'Prettier', for: '前端/文档/Shell 格式化', group: '格式化工具', installable: false },
   { key: 'latex',      probe: () => [latexCmd(), '--version'],  label: 'LaTeX 引擎',            for: 'LaTeX 实时 PDF 编译', group: '文档工具' },
+  /* ★ .m（MATLAB / Octave）✓✓（2026-10-09）——
+     用户要求「有 matlab 用 matlab，没有就用 octave」✓。
+     ⚠️ 故意列成**两条**而不是一条合并项 ✗ ——
+        这样环境面板能**分别**告诉用户「MATLAB 装没装 / Octave 装没装」✓，
+        而不是只显示一句「MATLAB/Octave 缺」让人不知道自己该装哪个 ✓。
+     ⚠️ 两个都**不是必需** ✓：只要有其中一个就能跑 .m ✓，
+        所以不要把缺一个当错误（两个都缺才算缺 ✓）。 */
+  { key: 'matlab',     probe: ['matlab', '--version'],          label: 'MATLAB',               for: '.m 运行/检查（优先使用）', group: '运行环境' },
+  { key: 'octave',     probe: ['octave', '--version'],          label: 'GNU Octave',           for: '.m 运行/检查（没有 MATLAB 时的回退）', group: '运行环境' },
   { key: 'biber',      probe: ['biber', '--version'],           label: 'Biber',                for: 'LaTeX 参考文献', group: '文档工具' },
   { key: 'ctex',       probe: ['kpsewhich', 'ctexart.cls'],     label: 'CTeX 中文宏包',          for: 'LaTeX 中文文档', group: '文档工具' },
   { key: 'clangd',     probe: ['clangd', '--version'],          label: 'clangd',               for: 'C/C++ 精确跳转、悬停与诊断', group: '语言服务器', installable: false },
@@ -1738,6 +1772,18 @@ function installHint(key) {
     black: mac ? 'pip3 install --user black' : win ? (pythonCmd() === 'py' ? 'py -m pip install black' : 'python -m pip install black') : linuxInstallHint(key),
     npx: mac ? 'brew install node（自带 npx）' : win ? '安装 Node.js（自带 npx）' : linuxInstallHint(key),
     latex: mac ? 'brew install --cask mactex-no-gui' : win ? 'winget install MiKTeX.MiKTeX' : linuxInstallHint(key),
+    /* ★ .m 的两个引擎 ✓✓（2026-10-09）——
+       ⚠️ 提示里要**说清楚「二选一就行」** ✗ —— 否则用户看到两个都缺，
+          会以为必须把 MATLAB 和 Octave 都装上 ✓。
+       ⚠️ MATLAB **没有**包管理器能装 ✓（商业授权 + 官方安装器 ✓），
+          所以直接给官网，并明确「不想装就用 Octave 代替」✓ ——
+          这正是用户要的「有 matlab 用 matlab，没有就用 octave」✓。 */
+    matlab: mac ? 'MATLAB 官网安装器（mathworks.com）—— 装完把 bin 加进 PATH；不想装 MATLAB 的话，装 Octave 就行（会自动回退）'
+      : win ? 'MATLAB 官网安装器（mathworks.com）；不想装的话装 Octave 即可（会自动回退）'
+      : 'MATLAB 官网安装器（mathworks.com）；不想装的话装 Octave 即可（会自动回退）',
+    octave: mac ? 'brew install octave'
+      : win ? 'winget install GNU.Octave（或 octave.org 下载）'
+      : 'sudo apt install octave / sudo dnf install octave',
     clangd: mac ? 'xcode-select --install 或 brew install llvm' : win ? 'winget install LLVM.LLVM' : '使用系统包管理器安装 clangd',
     pyrightlsp: 'npm install -g pyright',
     tslsp: 'npm install -g typescript typescript-language-server',
@@ -2587,6 +2633,47 @@ function runnerFor(language) {
           return run(pythonCmd(), [entry], { cwd: dir, timeoutMs: 15000, input: opts.input });
         }),
       };
+    /* ★★ .m（MATLAB / Octave）✓✓（2026-10-09）
+       用户要求：「新增对 .m 文件支持，octave，如果有 matlab 就用 matlab，
+                 如果没有就用 octave，做好环境适配、检测和更新」。
+       ⚠️ **两个引擎的命令行参数完全不同** ✗：
+          · MATLAB：`matlab -batch "run('main.m')"`
+            —— `-batch` 是无界面执行并在结束后退出（R2019a+ ✓），
+               比老的 `-nodisplay -nosplash -r "...; exit"` 干净得多 ✓；
+          · Octave：`octave --no-gui --quiet main.m` ✓。
+       ⚠️ 用 `run('文件.m')` 而不是直接传文件名 ✗ ——
+          MATLAB 的 `-batch` 里直接写文件名会被当成**表达式**求值 ✓，
+          用 run() 才是「执行这个脚本」的语义 ✓。
+       ⚠️ `guard()` 的 key 要**动态**给 ✗ —— 它决定「缺工具」时提示装哪个 ✓：
+          装了 MATLAB 就提示 matlab ✓，用 Octave 就提示 octave ✓。
+       ⚠️ MATLAB 启动慢 ✓（几秒到几十秒）→ 超时给 60s ✓，
+          用 10s 会把「能跑但慢」误判成失败 ✗。 */
+    case 'matlab':
+    case 'octave': {
+      const mCmd = matlabCmd();
+      const engine = mCmd ? (isOctaveCmd(mCmd) ? 'octave' : 'matlab') : 'matlab';
+      const runMatlab = (code, opts) => guard(engine, () => {
+        const files = (opts.files && opts.files.length) ? opts.files : [{ filename: 'main.m', code }];
+        const dir = writeFragments(files);
+        const entry = files[(opts.selIndex || 0)].filename;
+        const args = engine === 'octave'
+          ? ['--no-gui', '--quiet', entry]
+          : ['-batch', "run('" + entry.replace(/'/g, "''") + "')"];
+        return run(mCmd, args, { cwd: dir, timeoutMs: 60000, input: opts.input });
+      });
+      return {
+        supported: true,
+        /* .m 没有便宜的「只检查不执行」开关 ✓ ——
+           MATLAB 的 checkcode / Octave 的 --eval 都不能脱离启动开销 ✓，
+           所以「语法检查」也走一次真实启动 ✓，只是用一个**空脚本**跑，
+           把启动错误和语法错误一起暴露出来 ✓。 */
+        check: (code) => {
+          const probe = 'try\n' + code + '\ncatch err\n  disp(err.message);\n  exit(1);\nend\n';
+          return runMatlab(probe, { files: [{ filename: 'main.m', code: probe }], selIndex: 0 });
+        },
+        run: runMatlab,
+      };
+    }
     case 'bash':
     case 'shell':
       return {
@@ -3671,7 +3758,10 @@ function compileDatabaseInfo(projectFiles) {
   }
   return { ok: true, found: true, entries: rows.length, path: path.relative(projectRoot(), file).split(path.sep).join('/'), includePaths: [...includes].slice(0, 300), defines: [...defines].slice(0, 1000), languages };
 }
-const LANGUAGE_BY_EXT = { '.js':'JavaScript','.mjs':'JavaScript','.cjs':'JavaScript','.ts':'TypeScript','.tsx':'TypeScript','.jsx':'JavaScript','.py':'Python','.c':'C','.h':'C/C++','.cc':'C++','.cpp':'C++','.cxx':'C++','.hpp':'C++','.java':'Java','.go':'Go','.rs':'Rust','.rb':'Ruby','.php':'PHP','.swift':'Swift','.kt':'Kotlin','.sh':'Shell','.md':'Markdown','.tex':'LaTeX','.html':'HTML','.css':'CSS','.json':'JSON','.yaml':'YAML','.yml':'YAML' };
+const LANGUAGE_BY_EXT = { '.js':'JavaScript','.mjs':'JavaScript','.cjs':'JavaScript','.ts':'TypeScript','.tsx':'TypeScript','.jsx':'JavaScript','.py':'Python','.m':'MATLAB','.c':'C','.h':'C/C++','.cc':'C++','.cpp':'C++','.cxx':'C++','.hpp':'C++','.java':'Java','.go':'Go','.rs':'Rust','.rb':'Ruby','.php':'PHP','.swift':'Swift','.kt':'Kotlin','.sh':'Shell','.md':'Markdown','.tex':'LaTeX','.html':'HTML','.css':'CSS','.json':'JSON','.yaml':'YAML','.yml':'YAML' };
+/* ⚠️ `.m` 是**歧义**扩展名 ✗（MATLAB 和 Objective-C 都用它 ✓）。
+   这里按用户需求取 **MATLAB** ✓ —— 如果他以后写 Objective-C，
+   得靠显式选语言来区分（按扩展名猜不出来 ✓）。 */
 async function projectHealth() {
   const scannedFiles = walkProject();
   const generatedPath = /(?:^|\/)(?:vendor|assets\/pdfjs|mscdex-ssh2-[^/]+)(?:\/|$)|^markdown-vault\/(?:readings|libraries|drawings|office|\.timeline)(?:\/|$)/;
