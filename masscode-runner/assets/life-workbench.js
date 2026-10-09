@@ -5785,12 +5785,64 @@
      实测在备忘录里按**一次**退格，4 行直接变 0 行，而且空内容还被存进了服务端 ✗（数据丢失）。
      这里自己实现「和上一行合并 / 把下一行并上来」，并 preventDefault ✓。
      opts: { ce, index, readAll, apply(text, idx, keepFocus, caretOffset) } */
+  /* ── 选区坐标 → 文本坐标 ✓（2026-10-09 加）─────────────────────────────
+     ⚠️⚠️ 为什么需要 ✗✗：用户报「备忘录里**选中内容按 Backspace 删不掉**」✓。
+        根因：这个编辑器**每一行都是 `contenteditable="false"` 的渲染块** ✓
+        （所以浏览器自己**删不动**它们 ✗），而 `ceLineKey` 一看到「有选区」就
+        `return false` **交给浏览器** ✗ → 结果**两边都不管** ✓，按了完全没反应 ✓
+        （实测：选中 21 个字符按 Backspace，正文长度 123 → 123 ✗）。
+     → 有选区时**自己算**：把 DOM 选区映射成「第几行 + 行内第几个字符」✓，
+       然后交给调用方在**文本模型**上删 ✓。
+     返回 null = 没选区 / 选区不在这个编辑器里 ✓（那就还是交给浏览器 ✓）。 */
+  function ceSelRange(ce) {
+    const sel = window.getSelection();
+    if (!ce || !sel || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) return null;
+    if (!ce.contains(range.startContainer) || !ce.contains(range.endContainer)) return null;
+    const lines = Array.from(ce.querySelectorAll(':scope > .ln'));
+    const lineIndex = (node) => lines.findIndex((l) => l.contains(node));
+    const offsetIn = (lineEl, node, off) => {
+      if (!lineEl) return 0;
+      try {
+        const probe = document.createRange();
+        probe.selectNodeContents(lineEl);
+        probe.setEnd(node, off);
+        return probe.toString().length;
+      } catch (_) { return 0; }
+    };
+    const si = lineIndex(range.startContainer);
+    const ei = lineIndex(range.endContainer);
+    if (si < 0 || ei < 0) return null;
+    return {
+      si, ei,
+      so: offsetIn(lines[si], range.startContainer, range.startOffset),
+      eo: offsetIn(lines[ei], range.endContainer, range.endOffset),
+    };
+  }
+
+  /* 有选区时删掉选中的那段 ✓（跨行会把首尾两行接起来 ✓，和普通编辑器一致 ✓）。 */
+  function ceDeleteSelection(event, opts, sel) {
+    event.preventDefault();
+    const lines = String(opts.readAll()).split('\n');
+    const head = String(lines[sel.si] || '').slice(0, sel.so);
+    const tail = String(lines[sel.ei] || '').slice(sel.eo);
+    const next = lines.slice(0, sel.si).concat([head + tail], lines.slice(sel.ei + 1));
+    opts.apply(next.join('\n'), sel.si, true, sel.so);
+    return true;
+  }
+
   function ceLineKey(event, opts) {
     if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
     const ce = opts.ce;
     if (!ce) return false;
+    /* ★ 先看有没有**选区** ✓ —— 有的话必须自己删（详见 ceSelRange 那段注释 ✓）。
+       ⚠️ 顺序很关键 ✗：必须放在 `ceCaretOffset` 之前 ✓ ——
+          `ceCaretOffset` 遇到选区返回 null ✓，要是先判它就直接把球踢给浏览器了 ✓。 */
+    const sel = ceSelRange(ce);
+    if (sel) return ceDeleteSelection(event, opts, sel);
     const offset = ceCaretOffset(ce, opts.index);
-    if (offset == null) return false;                          /* 光标不在这行 / 有选区 → 交给浏览器 ✓ */
+    if (offset == null) return false;                          /* 光标不在这行 → 交给浏览器 ✓ */
     const lineEl = Array.from(ce.querySelectorAll(':scope > .ln'))[opts.index];
     const lineText = String(lineEl ? lineEl.textContent : '');
     if (event.key === 'Backspace' && offset === 0) {
