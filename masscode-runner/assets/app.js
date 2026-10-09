@@ -12971,7 +12971,17 @@ function renderMain() {
     let last = null;
     document.addEventListener('mouseover', (ev) => {
       const t = ev.target;
-      const btn = t && t.closest ? t.closest('button[disabled], [aria-disabled="true"]') : null;
+      /* ⚡ 优化（2026-10-10）：`closest()` 会**沿 DOM 往上走** ✓，
+         而这个应用有几千个元素 ✓ —— 每次 mouseover 都跑一遍是纯浪费 ✓。
+         先做一次**极廉价**的 tag 白名单判断 ✓，把绝大多数
+         （div / td / li / body 这些）直接挡掉 ✓。
+         ⚠️ 白名单里必须包含按钮**内部**常见的元素 ✗（span / b / small / svg ✓）——
+            因为鼠标落到的往往是按钮里的文字节点 ✓，不是 button 本身 ✓。 */
+      if (!t || t.nodeType !== 1) return;
+      const tag = t.tagName;
+      if (tag !== 'BUTTON' && tag !== 'SPAN' && tag !== 'B' && tag !== 'I' && tag !== 'SMALL'
+        && tag !== 'STRONG' && tag !== 'IMG' && tag !== 'SVG' && tag !== 'PATH' && tag !== 'INPUT') return;
+      const btn = t.closest ? t.closest('button[disabled], [aria-disabled="true"]') : null;
       if (btn === last) return;
       last = btn;
       if (!btn) return;
