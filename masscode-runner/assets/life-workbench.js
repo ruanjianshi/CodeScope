@@ -3158,6 +3158,74 @@
     if (u) u.disabled = !canUndo();
     if (r) r.disabled = !canRedo();
   }
+
+  /* ════ 日记的撤销 / 重做 ✓✓（2026-10-09 加）══════════════════════════════
+     ⚠️⚠️ 为什么要有 ✗✗：用户报「这个备忘录和日记，**都缺少撤销**」✓。
+        实测：备忘录那套是好的 ✓（打字后按钮就亮了 ✓，点完重做也出来 ✓）；
+        但**日记根本没有撤销机制** ✗ —— 按钮里没有 `lw-j-undo` ✓，
+        快照函数也只有 `snapMemo` ✓，日记那边一个都没有 ✓。
+        日记和备忘录用的是**同一个 contenteditable 逐行渲染编辑器** ✓，
+        所以「改错了没法回退」的痛感是一样的 ✓。
+     做法**完全照搬备忘录那套** ✓（保持一致，别再发明新花样 ✓）：
+       snapshotJournal → snapJournal → jApplySnap → journalUndo / journalRedo
+       → syncJUndoButtons ✓
+     ⚠️ 快照要连 `journalCats` 一起存 ✗ —— 新建 / 删除分类也是「改」，也该能撤 ✓。 */
+  const JUNDO = [], JREDO = [];
+  let JUNDO_AT = 0;
+  function snapshotJournal() {
+    return {
+      journal: JSON.parse(JSON.stringify((STORE && STORE.journal) || [])),
+      cats: JSON.parse(JSON.stringify((STORE && STORE.journalCats) || [])),
+      sel: (STORE && STORE.journalSel) || '',
+    };
+  }
+  function canJUndo() { return JUNDO.length > 0; }
+  function canJRedo() { return JREDO.length > 0; }
+  /* ⚠️ 和备忘录同一条规则 ✗：`kind === 'edit'` 且「上一次也是 edit」且间隔 < 900ms
+     → 算同一次连续输入，不重复压栈 ✓（不然打一行字会压几十个快照 ✓，
+     按一次 ⌘Z 只退一个字符 ✓，完全没法用 ✓）。 */
+  function snapJournal(kind) {
+    if (!STORE) return;
+    const now = Date.now();
+    const last = JUNDO[JUNDO.length - 1];
+    if (kind === 'edit' && last && last.kind === 'edit' && now - JUNDO_AT < 900) { JUNDO_AT = now; return; }
+    JUNDO.push(Object.assign({ at: now, kind }, snapshotJournal()));
+    if (JUNDO.length > 80) JUNDO.shift();
+    JREDO.length = 0;
+    JUNDO_AT = now;
+    syncJUndoButtons();
+  }
+  function jApplySnap(s) {
+    STORE.journal = s.journal;
+    STORE.journalCats = s.cats;
+    STORE.journalSel = s.sel;
+    /* ⚠️ 立刻落盘 ✗：不然刚撤销完，之前排队的防抖保存可能又把旧内容写回来 ✓
+       （备忘录那边也是这么处理的 ✓）。 */
+    saveStore(true);
+    render();
+  }
+  function journalUndo() {
+    if (!JUNDO.length) return false;
+    JREDO.push(Object.assign({ at: Date.now() }, snapshotJournal()));
+    jApplySnap(JUNDO.pop());
+    syncJUndoButtons();
+    return true;
+  }
+  function journalRedo() {
+    if (!JREDO.length) return false;
+    JUNDO.push(Object.assign({ at: Date.now() }, snapshotJournal()));
+    jApplySnap(JREDO.pop());
+    syncJUndoButtons();
+    return true;
+  }
+  /* ⚠️ 按钮的 disabled 只在 render() 里算 ✗，而打字时**不会**整屏渲染 ✓ ——
+     不单独同步的话，刚打完字「撤销」还是灰的 ✓（和备忘录踩过的是同一个坑 ✓）。 */
+  function syncJUndoButtons() {
+    const u = document.getElementById('lw-j-undo');
+    const r = document.getElementById('lw-j-redo');
+    if (u) u.disabled = !canJUndo();
+    if (r) r.disabled = !canJRedo();
+  }
   function applySnap(s) {
     STORE.memos = s.memos;
     STORE.memoSel = s.sel;
@@ -4938,6 +5006,11 @@
       ce.oninput = () => {
         clearTimeout(cebuf);
         cebuf = setTimeout(() => {
+          /* ★ 撤销快照 ✓（2026-10-09 加 ✓）—— ⚠️ **这里才是日记真正的自动保存** ✗，
+             不是 `JOURNAL_FLUSH`（那个只在切分类 / 切日期 / 离开时才调 ✓）。
+             一开始只加在 flush 里 → 打字时 `JUNDO` 一直是 0 ✓，撤销按钮永远灰的 ✓
+             （实测踩过 ✓）。快照必须在 `persist()` **之前** ✗。 */
+          snapJournal('edit');
           persist();
           const s2 = document.getElementById('lw-sub');
           if (s2) s2.textContent = '✓ 已自动保存';
@@ -4956,6 +5029,9 @@
         const txt = readAll().replace(/\s+$/, '');
         if (!hit && jIsTplOnly(txt)) return;       /* ① */
         if (hit && txt === String(hit.text == null ? '' : hit.text)) return;  /* ② */
+        /* ★ 撤销快照 ✓（2026-10-09 加 ✓）—— **必须在 persist() 之前** ✗：
+           快照存的是「改动前」的状态 ✓，写盘之后就没得撤了 ✓。 */
+        snapJournal('edit');
         persist();
       };
       /* 点任意行 → 那行变成"当前行"（显示源码 ✓）*/
@@ -4999,6 +5075,13 @@
     /* 工具栏：插入标题 / 清单项 */
     /* ⚠️ 这三个按钮是**直接改 DOM**（不走 applyCeJ）✗ → 改完必须立刻落盘 ✓，
        否则 STORE 里还是旧文本 → 标题的"已写 N 字"、左栏列表都会显示错的 ✗ */
+    /* ★ 撤销 / 重做 ✓（2026-10-09 加 ✓）—— 和备忘录那套完全一致 ✓ */
+    const jUn2 = q('#lw-j-undo');
+    if (jUn2) jUn2.onclick = () => { JOURNAL_FLUSH(); if (!journalUndo()) return; };
+    const jRe2 = q('#lw-j-redo');
+    if (jRe2) jRe2.onclick = () => { JOURNAL_FLUSH(); if (!journalRedo()) return; };
+    /* ⚠️ 点之前先 `JOURNAL_FLUSH()` ✗：把编辑框里**还没落盘**的字收进条目 ✓，
+       否则快照拿到的还是上一次的文本 ✓，「撤销」就等于白撤一步 ✓。 */
     const jMd2 = q('#lw-j-md');
     if (jMd2) jMd2.onclick = () => {
       const c2 = q('#lw-j-ce'); if (!c2) return;
@@ -5997,9 +6080,12 @@
       + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
       + '<div class="lw-live-bar"><span class="brand">✎ 边写边渲染</span>'
-      + '<span class="hint">光标行显示源码，其他行即时渲染</span>'
-      + '<span class="sp"></span>'
-      + '<select id="lw-j-catsel">'
++ '<span class="hint">光标行显示源码，其他行即时渲染</span>'
++ '<span class="sp"></span>'
+/* ★ 撤销 / 重做 ✓（2026-10-09 加 ✓）—— 和备忘录同一套快照机制 ✓ */
++ '<button id="lw-j-undo" title="撤销（⌘Z）"' + (canJUndo() ? '' : ' disabled') + '>↶ 撤销</button>'
++ '<button id="lw-j-redo" title="重做（⌘⇧Z）"' + (canJRedo() ? '' : ' disabled') + '>↷ 重做</button>'
++ '<select id="lw-j-catsel">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf2(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
       + '<button id="lw-j-md" title="把当前行变成标题"># 标题</button>'
       + '<button id="lw-j-ck" title="把当前行变成清单项">☐ 清单</button>'
