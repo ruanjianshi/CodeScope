@@ -5576,54 +5576,79 @@ const server = http.createServer(async (req, res) => {
           const want = Math.max(1, Math.min(12, Number(u.searchParams.get('n')) || 8));
           const hit = WORDIMG_CACHE.get(q);
           if (hit && !u.searchParams.get('force') && Date.now() - hit.at < 30 * 60 * 1000) {
-            return send(res, 200, { ok: true, q, list: hit.list, cached: true });
+            return send(res, 200, { ok: true, q, list: hit.list, cached: true, src: hit.src });
           }
-          try {
-            const api = 'https://image.baidu.com/search/acjson?tn=resultjson_com&ipn=rj&word='
-              + encodeURIComponent(q) + '&pn=0&rn=' + (want + 6);
-            const r = await fetch(api, {
-              headers: {
-                'User-Agent': FEED_UA,
-                'Referer': 'https://image.baidu.com/',
-                'Accept': 'application/json, text/plain, */*',
+          /* ★★★★ **多图源回退** ✓✓（2026-10-09 加）
+             ⚠️⚠️ 为什么要这样 ✗✗：原来只有**百度图片**一个源 ✓ ——
+                从**云服务器**上打过去被百度当爬虫挡了 ✗：
+                返回 `{"antiFlag":1,"message":"Forbid spider access"}` ✓（HTTP 200，但只有 82 字节 ✓）
+                → 前端只看到「图片搜索返回的不是预期结构」✗，配图永远转圈 ✓。
+                （本机没事 ✗ —— 家里/学校的 IP 百度不挡 ✓，**机房 IP 才挡** ✗。）
+             → 加 **360 图片**做备选 ✓：实测**从云服务器通** ✓（200 / 2436 字节 ✓），
+                而百度从本机通 ✓ —— 两边各有一个能用的 ✓✓。
+             ⚠️ 顺序是「先百度后 360」✓：百度出图质量更好 ✓，
+                而且本机（最常用的那台）走百度就行 ✓，不必多花一次请求 ✓。 */
+          const sources = [
+            {
+              name: 'baidu',
+              url: 'https://image.baidu.com/search/acjson?tn=resultjson_com&ipn=rj&word='
+                + encodeURIComponent(q) + '&pn=0&rn=' + (want + 6),
+              headers: { 'User-Agent': FEED_UA, 'Referer': 'https://image.baidu.com/', 'Accept': 'application/json, text/plain, */*' },
+              pick(j) {
+                if (!j || !Array.isArray(j.data)) return [];
+                return j.data.map((x) => (x ? String(x.middleURL || x.thumbURL || '').trim() : ''));
               },
-              signal: AbortSignal.timeout(12000),
-            });
-            const txt = await r.text();
-            let j = null;
-            /* ⚠️ 先按原样解析 ✓，失败了再用**宽松修复**试一次 ✓ ——
-               百度那边只是**偶尔**吐 `\'` ✗（取决于标题里有没有撇号 ✓），
-               所以别一上来就改字符串 ✗（能原样解析就别动它 ✓）。 */
-            try { j = JSON.parse(txt); } catch (_) {
-              try { j = JSON.parse(looseJson(txt)); } catch (_) { j = null; }
+            },
+            {
+              name: '360',
+              /* ⚠️⚠️ `src=srp` **必须带** ✗✗ —— 实测（2026-10-09）：
+                 不带它 `list` 只有 **2 条** ✗（`rn` 调多大都没用 ✓）；
+                 带上 `src=srp` 直接给 **31~41 条** ✓✓。
+                 这个参数大概是「从搜索结果页来的请求」的意思 ✓，
+                 不带的话服务端只回一个精简列表 ✗。 */
+              url: 'https://image.so.com/j?q=' + encodeURIComponent(q)
+                + '&src=srp&pn=0&rn=' + (want + 10),
+              headers: { 'User-Agent': FEED_UA, 'Referer': 'https://image.so.com/', 'Accept': 'application/json, text/plain, */*' },
+              pick(j) {
+                if (!j || !Array.isArray(j.list)) return [];
+                return j.list.map((x) => (x ? String(x.img || x.https || x.thumb || '').trim() : ''));
+              },
+            },
+          ];
+          const tried = [];
+          for (const source of sources) {
+            try {
+              const r = await fetch(source.url, { headers: source.headers, signal: AbortSignal.timeout(12000) });
+              const txt = await r.text();
+              let j = null;
+              try { j = JSON.parse(txt); } catch (_) {
+                try { j = JSON.parse(looseJson(txt)); } catch (_) { j = null; }
+              }
+              const seen = new Set();
+              const list = [];
+              source.pick(j).forEach((raw) => {
+                /* ⚠️ 360 给的地址**一半是 `http://`** ✗ —— 而 CodeScope 从公网走的是
+                   **HTTPS** ✓ → `<img src="http://…">` 会被浏览器按**混合内容**拦掉 ✗。
+                   → 先试**升级成 https** ✓（这些图床（搜狐/亚马逊 CDN ✓）基本都支持 ✓），
+                     升级后的地址留着 ✓，还是 http 的就丢掉 ✗（总比显示一个裂图好 ✓）。 */
+                const url = String(raw || '').trim().replace(/^http:\/\//i, 'https://');
+                if (!/^https:\/\//.test(url)) return;
+                if (seen.has(url)) return;
+                seen.add(url);
+                list.push(url);
+              });
+              const out = list.slice(0, want);
+              if (out.length) {
+                WORDIMG_CACHE.set(q, { at: Date.now(), list: out, src: source.name });
+                if (WORDIMG_CACHE.size > 120) WORDIMG_CACHE.delete(WORDIMG_CACHE.keys().next().value);
+                return send(res, 200, { ok: true, q, list: out, cached: false, src: source.name });
+              }
+              tried.push(source.name + ' 没结果（HTTP ' + r.status + '）');
+            } catch (error) {
+              tried.push(source.name + ' ' + String((error && error.message) || error).slice(0, 60));
             }
-            if (!j || !Array.isArray(j.data)) {
-              return send(res, 200, { ok: false, error: '图片搜索返回的不是预期结构（HTTP ' + r.status + '）' });
-            }
-            const seen = new Set();
-            const list = [];
-            j.data.forEach((x) => {
-              if (!x) return;
-              /* ⚠️ `thumbURL` 是**缩略图**（够小够快 ✓），`middleURL` 是中等图 ✓ ——
-                 两个都试 ✓，优先 middleURL ✓（面板里看得清 ✓）。 */
-              const url = String(x.middleURL || x.thumbURL || '').trim();
-              if (!/^https:\/\//.test(url)) return;
-              if (seen.has(url)) return;
-              seen.add(url);
-              list.push(url);
-            });
-            const out = list.slice(0, want);
-            if (!out.length) return send(res, 200, { ok: false, error: '这个词没搜到图片' });
-            WORDIMG_CACHE.set(q, { at: Date.now(), list: out });
-            if (WORDIMG_CACHE.size > 120) WORDIMG_CACHE.delete(WORDIMG_CACHE.keys().next().value);
-            return send(res, 200, { ok: true, q, list: out, cached: false });
-          } catch (error) {
-            const why = String((error && error.message) || error);
-            return send(res, 200, {
-              ok: false,
-              error: /abort|timeout/i.test(why) ? '搜图超时（网络不通？）' : ('搜图失败：' + why),
-            });
           }
+          return send(res, 200, { ok: false, error: '所有图源都没搜到（' + tried.join('；') + '）' });
         }
 
         /* ── 本地电子书：导入 / 取章 / 元信息 / 删除 ✓ ──────────────────────
