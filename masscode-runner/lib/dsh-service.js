@@ -84,6 +84,37 @@ function createDshService(options = {}) {
   const publicUrl = discoverPublicUrl();
   let child = null;
   let owned = false;
+  /* ★ 端口上那个「不是我们这次 spawn 的」DSH 的 PID ✓（孤儿 ✓）。
+     ⚠️ 为什么要记它 ✗✗：实测（2026-10-09）用户报「本机 DSH 关不了了」✓ ——
+        原因是**应用反复重启时，它 spawn 的 DSH 变成孤儿活了下来** ✓
+        （父进程没了 ✓，但 DSH 还在 3080 上听 ✓）→
+        新起来的应用一看「端口上有东西、又不是我 spawn 的」✗ → 判成 external ✓
+        → `owned=false` ✗ → 面板上「关闭」变灰 ✗，还显示
+        「现有 DSH 服务不由 CodeScope 管理，未将其关闭」✓ —— 用户完全没法关 ✓。
+     → 认领它 ✓：端口是**我们自己的**（`CODESCOPE_DSH_PORT` 默认 3080 ✓），
+        再看它的 **cwd 是不是本项目** ✓（是 → 基本可以确定是我们自己的孤儿 ✓）。 */
+  let externalPid = 0;
+
+  /* 端口上监听的进程 PID ✓（macOS / Linux 都有 lsof ✓）。
+     ⚠️ 拿不到就返回 0 ✓ —— 拿不到只是「不能关」✗，不该影响启动 ✓。 */
+  function pidOnPort(p) {
+    try {
+      const out = execFileSync('lsof', ['-ti:' + p, '-sTCP:LISTEN'], { encoding:'utf8', timeout:4000 });
+      const pid = Number(String(out).trim().split('\n')[0]);
+      return Number.isFinite(pid) ? pid : 0;
+    } catch (_) { return 0; }
+  }
+
+  /* 这个 PID 的工作目录是不是本项目 ✓（判断「是不是我们自己的孤儿」的关键依据 ✓） */
+  function cwdOfPid(pid) {
+    if (!pid) return '';
+    try {
+      const out = execFileSync('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], { encoding:'utf8', timeout:4000 });
+      const line = String(out).split('\n').find((l) => l.startsWith('n'));
+      return line ? line.slice(1) : '';
+    } catch (_) { return ''; }
+  }
+
   let state = autoStart ? 'stopped' : 'disabled';
   let message = autoStart ? '等待 CodeScope 启动 DSH' : '已通过 CODESCOPE_DSH_AUTOSTART 禁用自动启动';
   let tokenUrl = '';
@@ -120,7 +151,19 @@ function createDshService(options = {}) {
       }
       if (child && child.exitCode == null && !force) return status();
       if (await tcpOpen(LOOPBACK, port)) {
-        state = 'external'; owned = false; message = `已连接端口 ${port} 上现有的 DSH 服务`;
+        /* ★ 先看是不是**我们自己的孤儿** ✓（详见上面 externalPid 的注释 ✓）——
+           端口上那个进程的工作目录 == 本项目 → 认领它 ✓，这样「关闭」才点得动 ✓。 */
+        const pid = pidOnPort(port);
+        const cwd = cwdOfPid(pid);
+        if (pid && cwd && path.resolve(cwd) === path.resolve(projectRoot)) {
+          externalPid = pid; owned = true;
+          state = 'running';
+          message = `已接管此前遗留的 DSH（PID ${pid}）`;
+          return status();
+        }
+        externalPid = pid; owned = false;
+        state = 'external';
+        message = `已连接端口 ${port} 上现有的 DSH 服务`;
         return status();
       }
       fs.mkdirSync(logDir, { recursive:true });
@@ -166,10 +209,27 @@ function createDshService(options = {}) {
         new Promise((resolve) => setTimeout(resolve, 1800)),
       ]);
       if (active.exitCode == null) try { active.kill('SIGKILL'); } catch (_) {}
+    } else if (externalPid) {
+      /* ★ 端口上那个**不是这次 spawn 的**（孤儿 / 外部启动的）✓ ——
+         ⚠️ 老逻辑在这儿**直接拒绝** ✗（「不由 CodeScope 管理，未将其关闭」✓），
+            用户就**永远关不掉** ✓（实测用户就是这么报的 ✓）。
+         但那个端口是**我们自己的**（`CODESCOPE_DSH_PORT` ✓），
+         而且用户是**明确点了「关闭」** ✓ → 该关就关 ✓，把 PID 报出来让用户心里有数 ✓。 */
+      try { process.kill(externalPid, 'SIGTERM'); } catch (_) {}
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      if (await tcpOpen(LOOPBACK, port, 300)) {
+        try { process.kill(externalPid, 'SIGKILL'); } catch (_) {}
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+      const still = await tcpOpen(LOOPBACK, port, 300);
+      state = 'stopped';
+      message = still
+        ? `已尝试关闭端口 ${port} 上的 DSH（PID ${externalPid}），但它还在监听`
+        : `已关闭端口 ${port} 上的 DSH（PID ${externalPid}）`;
     } else {
-      state = 'stopped'; message = owned ? 'DSH 已停止' : '现有 DSH 服务不由 CodeScope 管理，未将其关闭';
+      state = 'stopped'; message = owned ? 'DSH 已停止' : 'DSH 本来就没在运行';
     }
-    child = null; owned = false; tokenUrl = '';
+    child = null; owned = false; externalPid = 0; tokenUrl = '';
     return status();
   }
 
