@@ -14267,7 +14267,7 @@ const DEBUG_CMDS = {
   c_cpp: { continue: 'continue', next: 'next', stepIn: 'step', stepOut: 'finish', vars: 'info locals', stop: 'quit' },
   c: { continue: 'continue', next: 'next', stepIn: 'step', stepOut: 'finish', vars: 'info locals', stop: 'quit' },
 };
-const DEBUG = { active: false, lang: '', file: '', label: '', lastLine: 0 };
+const DEBUG = { active: false, lang: '', file: '', label: '', lastLine: 0, pos: '' };
 
 function dbgCmdSet() { return DEBUG_CMDS[String(DEBUG.lang || '').toLowerCase()] || null; }
 
@@ -14305,7 +14305,10 @@ function showDbgBar(on) {
     st.textContent = !on ? '未在调试'
       : (elsewhere
         ? ('调试中 · ' + sessLang + '（会话在 ' + sessName + ' 上 · 当前片段是 ' + curLang + '）')
-        : ('调试中 · ' + sessLang + (sessName ? ' · ' + sessName : '')));
+        /* ★ 顺手把「停在第几行」也带出来 ✓✓（2026-10-10）——
+           用户要「位置，所在位置行号」✓；调试条**一直在** ✓，
+           比变量面板更容易看到 ✓（面板可能没开 ✓）。 */
+        : ('调试中 · ' + sessLang + (sessName ? ' · ' + sessName : '') + (DEBUG.lastLine ? ' · 第 ' + DEBUG.lastLine + ' 行' : '')));
     st.className = 'dbg-state' + (on ? ' on' : '');
     st.title = elsewhere ? '调试会话绑定在终端里跑的那个文件上；要调当前片段请先「停止」再重新点 🐞' : '';
   }
@@ -14457,7 +14460,7 @@ async function startDebug() {
 function stopDebug() {
   const cmds = dbgCmdSet();
   if (cmds && DEBUG.active) termSend(cmds.stop);
-  DEBUG.active = false; DEBUG.lastLine = 0; DEBUG.label = '';
+  DEBUG.active = false; DEBUG.lastLine = 0; DEBUG.label = ''; DEBUG.pos = '';
   showDbgBar(false);
   setDebugLine(0);
   setStatus('idle', '已退出调试');
@@ -14613,7 +14616,21 @@ function openVarPanel() {
     win.id = 'var-panel';
     const bar = document.createElement('div');
     bar.className = 'var-bar';
-    bar.innerHTML = '<b>👁 变量</b><span class="hint">点「刷新」重新读一次</span>';
+    bar.innerHTML = '<b>👁 变量</b>';
+    /* ★ 标题栏显示「**当前停在哪**」✓✓（2026-10-10）——
+       用户要「位置，**所在位置行号**」✓。
+       ⚠️ 放**标题栏**而不是表格的一列 ✗ ——
+          因为它描述的是**整个调试会话**（「现在停在哪」✓），
+          不是某个变量的属性 ✓（变量没有「位置」这个属性 ✓，见 scanDebugOutput 的说明 ✓）。 */
+    const posEl = document.createElement('span');
+    posEl.className = 'var-pos';
+    posEl.textContent = DEBUG.pos || (DEBUG.lastLine ? ('第 ' + DEBUG.lastLine + ' 行') : '');
+    posEl.title = posEl.textContent || '';
+    bar.appendChild(posEl);
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = '点「刷新」重新读一次';
+    bar.appendChild(hint);
     const close = document.createElement('button');
     close.textContent = '✕'; close.title = '关闭';
     const refresh = document.createElement('button');
@@ -14747,6 +14764,21 @@ function scanDebugOutput(text) {
   if (line && line !== DEBUG.lastLine) {
     DEBUG.lastLine = line;
     setDebugLine(line);
+    /* ★ 顺手记下「停在哪」的**原始描述** ✓✓（2026-10-10）——
+       用户要「**位置，所在位置行号**」✓。
+       ⚠️ 「每个变量定义在哪一行」**三种调试器都给不了** ✗：
+          Python 不记录赋值位置 ✓，Octave 的 whos 也没有 ✓，gdb 的 info locals 也没有 ✓。
+       ✅ 但**「调试器当前停在哪」能拿到** ✓ —— 而且这才是调试时最常看的 ✓。
+       ⚠️ 保留**原文**（`stopped in main at line 3 [/path/main.m]` ✓）而不是只留数字 ✗ ——
+          文件名 / 函数名都在里面 ✓，光有行号用户不知道是哪个文件 ✓。 */
+    try {
+      const m = /(stopped in .+|>\s+\S+\(\d+\).*|Breakpoint \d+.*)/.exec(s);
+      if (m) DEBUG.pos = m[1].trim().slice(0, 160);
+      else DEBUG.pos = 'line ' + line;
+    } catch (_) {}
+    /* ⚠️ 位置变了要**刷新调试条** ✗（它上面就显示着行号 ✓），
+       不然调试条会一直停在旧行号上 ✓。 */
+    try { showDbgBar(DEBUG.active); } catch (_) {}
   }
 }
 $('term-restart').onclick = () => {
