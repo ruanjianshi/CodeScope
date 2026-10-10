@@ -14604,7 +14604,43 @@ function openVarPanel() {
     const body = document.createElement('div');
     body.className = 'var-body';
     body.innerHTML = '<div class="var-empty">正在读取…</div>';
-    win.appendChild(bar); win.appendChild(body);
+    /* ★ 右下角缩放把手 ✓✓（2026-10-10）—— 用户：「**无法自由拖动大小**」✓
+       和图片浮窗（.img-popup-rs）/ 代码向导（.cg-rs）**同一套** ✓ ——
+       同一个应用里别有两套拖窗手感 ✓。 */
+    const rs = document.createElement('div');
+    rs.className = 'var-rs';
+    win.appendChild(bar); win.appendChild(body); win.appendChild(rs);
+    /* ⚠️ 记住上次的**位置和大小** ✓（用户调过一次之后不用每次再调 ✓）——
+       和图片浮窗那边是同一个做法 ✓。 */
+    const saveBox = () => {
+      try {
+        localStorage.setItem('cs.varpanel', JSON.stringify({
+          w: win.offsetWidth, h: win.offsetHeight, l: win.offsetLeft, t: win.offsetTop,
+        }));
+      } catch (_) {}
+    };
+    try {
+      const saved = JSON.parse(localStorage.getItem('cs.varpanel') || 'null');
+      if (saved) {
+        if (saved.w) win.style.width = Math.max(300, saved.w) + 'px';
+        if (saved.h) win.style.height = Math.max(160, saved.h) + 'px';
+        if (saved.l != null) { win.style.left = saved.l + 'px'; win.style.top = saved.t + 'px'; }
+      }
+    } catch (_) {}
+    rs.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const sx = e.clientX, sy = e.clientY, sw = win.offsetWidth, sh = win.offsetHeight;
+      rs.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        win.style.width = Math.max(300, sw + ev.clientX - sx) + 'px';
+        win.style.height = Math.max(160, sh + ev.clientY - sy) + 'px';
+      };
+      const up = () => {
+        rs.removeEventListener('pointermove', move); rs.removeEventListener('pointerup', up);
+        saveBox();
+      };
+      rs.addEventListener('pointermove', move); rs.addEventListener('pointerup', up);
+    });
     const shut = () => { win.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (e) => { if (e.key === 'Escape') shut(); };
     close.onclick = shut;
@@ -14614,7 +14650,7 @@ function openVarPanel() {
       if (e.target.closest('button')) return;
       const sx = e.clientX, sy = e.clientY, sl = win.offsetLeft, st = win.offsetTop;
       const move = (ev) => { win.style.left = Math.max(0, sl + ev.clientX - sx) + 'px'; win.style.top = Math.max(0, st + ev.clientY - sy) + 'px'; };
-      const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); };
+      const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); saveBox(); };
       bar.setPointerCapture(e.pointerId);
       bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up);
     });
@@ -14636,16 +14672,25 @@ function openVarPanel() {
         body.appendChild(pre);
         return;
       }
+      /* ★ 列**按需显示** ✓✓（2026-10-10）—— 用户反馈「排布美化，优化」✓
+         ⚠️ Python / gdb **没有** size / type ✗（那两列全空 ✓）——
+            硬撑着显示只会把「值」挤窄 ✓（用户截图里表头「大小/类型」都竖排换行了 ✓）。
+         → **哪一列全空就不显示** ✓（Octave 四列 ✓，Python/gdb 两列 ✓）。 */
+      const hasSize = rows.some((r) => r.size);
+      const hasType = rows.some((r) => r.type);
+      const cols = [['名字', 'name'], ['值', 'value']];
+      if (hasSize) cols.push(['大小', 'size']);
+      if (hasType) cols.push(['类型', 'type']);
       const tbl = document.createElement('table');
-      tbl.className = 'var-table';
-      tbl.innerHTML = '<thead><tr><th>名字</th><th>值</th><th>大小</th><th>类型</th></tr></thead>';
+      tbl.className = 'var-table' + (cols.length > 2 ? ' wide' : '');
+      tbl.innerHTML = '<thead><tr>' + cols.map(([h]) => '<th>' + h + '</th>').join('') + '</tr></thead>';
       const tb = document.createElement('tbody');
       for (const r of rows) {
         const tr = document.createElement('tr');
-        for (const v of [r.name, r.value, r.size, r.type]) {
+        for (const [, key] of cols) {
           const td = document.createElement('td');
-          td.textContent = v || '';
-          if (v === r.name) td.className = 'var-name';
+          td.textContent = r[key] || '';
+          td.className = 'var-' + key;
           tr.appendChild(td);
         }
         tb.appendChild(tr);

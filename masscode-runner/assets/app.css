@@ -4163,13 +4163,25 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent); }
 .var-bar .hint { margin-left: auto; color: var(--dim); font-size: 11px; }
 .var-bar button { border: 1px solid var(--border); background: transparent; color: var(--text); padding: 1px 8px; cursor: pointer; }
-.var-body { overflow: auto; padding: 8px 10px 10px; }
+/* ★ 变量面板：缩放把手 + 列宽优化 ✓✓（2026-10-10）—— 用户：「无法自由拖动大小，还有排布美化」 */
+.var-body { overflow: auto; padding: 8px 10px 10px; flex: 1; min-height: 0; }
+/* 右下角缩放把手 ✓（和图片浮窗 / 代码向导同一套 ✓） */
+.var-rs { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; z-index: 2; }
+.var-rs::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px; opacity: .45; border-right: 2px solid var(--dim); border-bottom: 2px solid var(--dim); }
+.var-rs:hover::after { opacity: .95; border-color: var(--accent); }
 .var-empty { color: var(--dim); font-size: 12px; padding: 6px 0; }
 .var-count { color: var(--dim); font-size: 11px; margin-top: 7px; }
 .var-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.var-table th { text-align: left; color: var(--dim); font-weight: 500; padding: 3px 8px 5px 0;
+.var-table th { text-align: left; color: var(--dim); font-weight: 500; padding: 3px 8px 5px 0; white-space: nowrap;
   border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
 .var-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
   vertical-align: top; word-break: break-word; }
 .var-table td.var-name { color: var(--accent); font-weight: 600; white-space: nowrap; }
 .var-raw { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--dim); margin: 0; }
+
+/* ★ 变量表格列宽 ✓✓（2026-10-10）—— 用户截图里「大小/类型」表头被挤成竖排 ✓
+   ⚠️ 名字列**不换行**且只占内容宽 ✓；值列吃掉剩余空间 ✓。 */
+.var-table td.var-name, .var-table td.var-size, .var-table td.var-type { white-space: nowrap; }
+.var-table td.var-value { width: 100%; }
+.var-table:not(.wide) td.var-value { width: auto; }
+.var-table td.var-name { color: var(--accent); font-weight: 600; }
