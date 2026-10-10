@@ -421,6 +421,11 @@ async function syncMonacoMain(){
     const proxyPosition=model.getPositionAt(Math.max(0,Math.min(ta.selectionStart||0,model.getValueLength())));
     MONACO_EDITOR.setPosition(proxyPosition);MONACO_EDITOR.revealPositionInCenterIfOutsideViewport(proxyPosition);
     MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';refreshSectionSeparators();refreshBreakpointDecorations();
+        /* ★ 切片段时刷新调试条 ✓✓（2026-10-10）——
+           用户实测报的 bug：「我切换文件，他不会自己更新」✓。
+           会话状态没变（还在终端里跑 ✓），但**显示**要跟着当前片段走 ✓ ——
+           不然会出现「在 C++ 文件上写着调试中 · matlab」这种自相矛盾 ✓。 */
+        try { showDbgBar(DEBUG.active); } catch (_) {}
     requestAnimationFrame(()=>{if(MONACO_EDITOR){MONACO_EDITOR.layout();syncMarkdownPreviewFromSource();}});
     updateMonacoDiagnostics();
   }catch(error){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';console.warn('Monaco 编辑器加载失败，已回退兼容编辑器',error);}
@@ -14236,7 +14241,7 @@ const DEBUG_CMDS = {
   c_cpp: { continue: 'continue', next: 'next', stepIn: 'step', stepOut: 'finish', vars: 'info locals', stop: 'quit' },
   c: { continue: 'continue', next: 'next', stepIn: 'step', stepOut: 'finish', vars: 'info locals', stop: 'quit' },
 };
-const DEBUG = { active: false, lang: '', file: '', lastLine: 0 };
+const DEBUG = { active: false, lang: '', file: '', label: '', lastLine: 0 };
 
 function dbgCmdSet() { return DEBUG_CMDS[String(DEBUG.lang || '').toLowerCase()] || null; }
 
@@ -14253,8 +14258,30 @@ function showDbgBar(on) {
   if (bar) bar.style.display = on ? '' : 'none';
   const st = $('dbg-state');
   if (st) {
-    st.textContent = on ? ('调试中 · ' + (DEBUG.lang || '')) : '未在调试';
+    /* ★ 调试条要显示**会话绑在哪个片段上** ✓✓（2026-10-10）——
+       用户实测报的 bug：「我切换文件，他不会自己更新」✓。
+       ⚠️ 现象 ✗：切到 uart.c（C++）后，调试条还写着「调试中 · matlab」✓ ——
+          那是**上一次**调试留下的状态 ✓，切片段时没跟着更新 ✓。
+       ⚠️ 但不能「切了就把语言换成新的」✗ ——
+          调试会话跑在**终端**里 ✓，绑的是**旧文件** ✓；
+          把标签改成新语言会**骗人** ✓（按钮发出去的命令还是旧会话的 ✓）。
+       → 正确做法：显示**会话自己的语言 + 文件名** ✓，
+          切到别的片段时**照实说明**「会话在 xxx 上」✓，
+          而不是假装跟随 ✓。 */
+    const sessLang = String(DEBUG.lang || '');
+    /* ⚠️ 用**片段名**（label ✓）而不是文件路径 ✗ ——
+       用户关心的是「在调 main.c 还是 uart.c」✓，
+       不是「在哪个 .md 里」✓（一个 .md 里可能有 5 个片段 ✓）。 */
+    const sessName = String(DEBUG.label || (DEBUG.file || '').split('/').pop());
+    const cur = CURRENT && CURRENT.fragments[CINDEX];
+    const curLang = String((cur && cur.language) || '').toLowerCase();
+    const elsewhere = on && sessLang && curLang && sessLang !== curLang;
+    st.textContent = !on ? '未在调试'
+      : (elsewhere
+        ? ('调试中 · ' + sessLang + '（会话在 ' + sessName + ' 上 · 当前片段是 ' + curLang + '）')
+        : ('调试中 · ' + sessLang + (sessName ? ' · ' + sessName : '')));
     st.className = 'dbg-state' + (on ? ' on' : '');
+    st.title = elsewhere ? '调试会话绑定在终端里跑的那个文件上；要调当前片段请先「停止」再重新点 🐞' : '';
   }
 }
 
@@ -14273,7 +14300,7 @@ async function startDebug() {
   const cmds = DEBUG_CMDS[lang];
   if (!cmds) { setStatus('err', '这个语言还没有调试支持（现在有：MATLAB/Octave · Python · C/C++）'); return; }
   const bps = BREAKPOINTS.list({ file: CURRENT.file, index: CINDEX });
-  DEBUG.active = true; DEBUG.lang = lang; DEBUG.file = CURRENT.file; DEBUG.lastLine = 0;
+  DEBUG.active = true; DEBUG.lang = lang; DEBUG.file = CURRENT.file; DEBUG.label = (f.label || ''); DEBUG.lastLine = 0;
   showDbgBar(true);
   switchOutTab('term');
   if (lang === 'matlab' || lang === 'octave') {
@@ -14326,7 +14353,7 @@ async function startDebug() {
 function stopDebug() {
   const cmds = dbgCmdSet();
   if (cmds && DEBUG.active) termSend(cmds.stop);
-  DEBUG.active = false; DEBUG.lastLine = 0;
+  DEBUG.active = false; DEBUG.lastLine = 0; DEBUG.label = '';
   showDbgBar(false);
   setDebugLine(0);
   setStatus('idle', '已退出调试');
