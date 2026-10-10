@@ -14311,36 +14311,38 @@ async function startDebug() {
       setStatus('idle', '没有断点 —— 先点行号槽左侧设一个（直接跑也行，出错会停在 error 上）');
       return;
     }
-    /* ⚠️⚠️ 必须先确保**引擎已经在终端里跑起来** ✗✗（2026-10-10）——
-       用户实测：终端里刷的是
-         zsh: command not found: dbstop / run / dbstep
-       因为 **Octave 根本没启动** ✓ —— 终端还是裸 zsh ✓，
-       而我把 `dbstop` 直接发给了 zsh ✓。
+    /* ⚠️⚠️ 还要**先把片段写到临时目录** ✗✗（2026-10-10）——
+       用户实测：终端里是
+         octave:1> dbstop in main.m at 3
+         error: add_breakpoints_in_function: unable to find function 'main.m'
+         octave:2> run main.m
+         error: run: file SCRIPT must exist and be a valid Octave scriptfile
+       **因为 Octave 起在项目目录** ✓，而片段代码在**临时目录** ✓ ——
+       调试器在**找不到文件的地方**起来了 ✓。
        ⚠️ 这和 C/C++ 那个 bug 是**同一类** ✗✓：
-          「往终端发命令」之前，得先确认**终端里跑的是调试器** ✓，
-          而不是 shell ✓。对 Octave/MATLAB 来说这一步就是**启动引擎** ✓。
-       ⚠️ 启动要**等** ✗：Octave 起得快（1~2 秒 ✓），MATLAB 慢（几秒到几十秒 ✓）——
-          发完立刻发 dbstop 会打到 shell 里 ✓（就是上面那个现象 ✓）。 */
-    setStatus('idle', '正在终端里启动 ' + (lang === 'matlab' ? 'MATLAB' : 'Octave') + '…');
-    const con = await api('/api/matlab/console');
-    if (!con || !con.ok) {
-      setStatus('err', '没有可用的引擎');
-      showOut((con && con.error ? con.error : '这台机器上没找到 MATLAB 或 Octave') +
-        (con && con.hint ? '\n\n安装：' + con.hint : ''), '', false);
+          **调试器必须在「放代码的目录」里起** ✓ ——
+          所以这里也走 `/api/dbg/prepare`（它现在两种语言都支持 ✓）。
+       ⚠️ 还有个小坑 ✗：Octave 的 `dbstop` / `run` 认的是**不带扩展名**的名字 ✓
+          （`dbstop in main at 3` ✓，不是 `main.m` ✓）——
+          接口会返回 `entry` 就是这个 ✓。 */
+    setStatus('idle', '正在准备调试（把片段写到临时目录）…');
+    const mFiles = (CURRENT.fragments || []).map((x) => ({ filename: (x.label || 'main.m'), code: x.code }));
+    const prep = await api('/api/dbg/prepare', { language: lang, code: f.code, files: mFiles });
+    if (!prep || !prep.ok) {
+      setStatus('err', '调试准备失败');
+      showOut(String((prep && prep.error) || '调试准备失败'), '', false);
       DEBUG.active = false; showDbgBar(false);
       return;
     }
+    setStatus('idle', '正在终端里启动引擎…');
     setTimeout(async () => {
-      /* ① 先把引擎起起来 ✓（这个片段还没起过才发 ✓，和「▮ MATLAB」标签页共用同一个记忆 ✓） */
-      if (MONCONSOLE_KEY !== key) {
-        MONCONSOLE_KEY = key;
-        await termSend(con.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' '));
-        /* ⚠️ 留时间给引擎启动 ✗ —— 少了这一步，dbstop 又会打到 shell 上 ✓ */
-        await new Promise((r) => setTimeout(r, 2600));
-      }
-      /* ② 再设断点、再 run ✓（顺序不能反 ✓） */
-      for (const line of bps) await termSend('dbstop in main.m at ' + line);
-      await termSend('run main.m');
+      /* ① 进到放代码的目录，在那里起引擎 ✓ */
+      await termSend('cd ' + JSON.stringify(prep.dir) + ' && ' + prep.launch);
+      /* ② 等引擎起来 ✓（Octave 快、MATLAB 慢 ✓） */
+      await new Promise((r) => setTimeout(r, 2600));
+      /* ③ 设断点、再 run ✓（名字**不带 .m** ✓） */
+      for (const line of bps) await termSend('dbstop in ' + prep.entry + ' at ' + line);
+      await termSend('run ' + prep.entry);
       setStatus('ok', '已进入调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
     }, 900);
   } else if (lang === 'c' || lang === 'c_cpp') {

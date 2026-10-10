@@ -7408,20 +7408,15 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
-    /* ★ 调试准备（C/C++）✓✓（2026-10-10）——
-       用户实测报的 bug：在 C++ 文件上点 🐞，调试命令却**发给了 bash** ✓ →
-          bash: syntax error near unexpected token `('
-          bash: p: command not found
-       ⚠️ 根因 ✗：C/C++ 的调试会话**必须先有 gdb 在跑** ✓，
-          而终端只是个裸 shell ✓ —— 往 shell 里发 `next` / `info locals` 当然不认 ✓。
-       ⚠️ 还有个前提：**必须带 `-g` 编译** ✓ ——
-          现有「▶ 运行」是 `gcc 编译+运行` ✓，不带调试符号 ✓ →
-          就算起了 gdb，**断点也对不上、变量全是优化掉的** ✓。
-       → 所以这里做两件事 ✓：① 写文件 ② **带 -g -O0 编译** ✓，
-          把编译产物留在临时目录里 ✓，返回目录和可执行文件名 ✓，
-          前端据此在终端里 `cd <dir> && gdb ./<bin>` ✓。
-       ⚠️ 编译失败要**把编译器的原话带回去** ✗（别只说「编译失败」✓）——
-          用户要的是 gcc 的报错行 ✓。 */
+    /* ★ 调试准备 ✓✓（2026-10-10）—— **C/C++ 和 MATLAB/Octave 都走这里** ✓
+       用户实测报的两个 bug（同一类 ✗✓）：
+       ① C++ 上点 🐞 → `bash: command not found`（终端是裸 shell ✓）
+       ② .m 上点 🐞 → `unable to find function 'main.m'`（Octave 起在**项目目录** ✓，
+          而片段代码在**临时目录** ✓ → dbstop/run 找不到文件 ✓）
+       ⚠️ 共同点 ✗✓：**调试器必须在「放代码的目录」里起** ✓ ——
+          终端只是个容器 ✓，容器里跑什么、在哪儿跑，都得先安排好 ✓。
+       → 这个接口统一负责：**写片段 → （需要编译就带 -g 编译）→ 返回目录** ✓，
+          前端据此在终端里 `cd <dir>` 再起 gdb / octave ✓。 */
     if (req.method === 'POST' && u.pathname === '/api/dbg/prepare') {
       try {
         const b = await readBody(req);
@@ -7430,6 +7425,23 @@ const server = http.createServer(async (req, res) => {
         const files = Array.isArray(b && b.files) && b.files.length
           ? b.files.map((f) => ({ filename: path.basename(String(f.filename || 'main.c')), code: String(f.code || '') }))
           : [{ filename: lang === 'c' ? 'main.c' : 'main.cpp', code }];
+        /* ── MATLAB / Octave ✓：只写文件，不编译 ✓（脚本语言 ✓） */
+        if (lang === 'matlab' || lang === 'octave') {
+          const mFiles = files.map((f, i) => ({
+            filename: /\.m$/i.test(f.filename) ? f.filename : (i === 0 ? 'main.m' : ('file' + (i + 1) + '.m')),
+            code: f.code,
+          }));
+          const mdir = writeFragments(mFiles);
+          const mEntry = mFiles.find((f) => /main\.m$/i.test(f.filename)) || mFiles[0];
+          const cmd = matlabCmd();
+          if (!cmd) return send(res, 200, { ok: false, error: '这台机器上没有 MATLAB / Octave', dir: '' });
+          return send(res, 200, {
+            ok: true, dir: mdir, bin: '', engine: isOctaveCmd(cmd) ? 'octave' : 'matlab',
+            entry: mEntry.filename.replace(/\.m$/i, ''),   /* dbstop/run 用的是**不带扩展名**的名字 ✓ */
+            launch: (isOctaveCmd(cmd) ? 'octave --no-gui --quiet' : 'matlab'),
+            hint: '在终端里： cd ' + mdir + ' && ' + (isOctaveCmd(cmd) ? 'octave --no-gui --quiet' : 'matlab'),
+          });
+        }
         /* ⚠️⚠️ 两个坑，都是实测踩出来的 ✗✗（2026-10-10）：
            ① **头文件不能进编译命令** ✗ ——
               `g++ -o a.out led.h led.c uart.c uart.h main.c` 会直接报
