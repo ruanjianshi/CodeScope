@@ -7425,6 +7425,23 @@ const server = http.createServer(async (req, res) => {
         const files = Array.isArray(b && b.files) && b.files.length
           ? b.files.map((f) => ({ filename: path.basename(String(f.filename || 'main.c')), code: String(f.code || '') }))
           : [{ filename: lang === 'c' ? 'main.c' : 'main.cpp', code }];
+        /* ── Python ✓：写文件，起 `python3 -m pdb <脚本>` ✓（标准库自带 ✓） */
+        if (lang === 'python') {
+          const pFiles = files.map((f, i) => ({
+            filename: /\.py$/i.test(f.filename) ? f.filename : (i === 0 ? 'main.py' : ('file' + (i + 1) + '.py')),
+            code: f.code,
+          }));
+          const pdir = writeFragments(pFiles);
+          const pEntry = pFiles.find((f) => /main\.py$/i.test(f.filename)) || pFiles[0];
+          const py = pythonCmd();
+          if (!py) return send(res, 200, { ok: false, error: '这台机器上没有 python3', dir: '' });
+          return send(res, 200, {
+            ok: true, dir: pdir, bin: '', engine: 'python',
+            entry: pEntry.filename,
+            launch: JSON.stringify(py) + ' -m pdb ' + JSON.stringify(pEntry.filename),
+            hint: '在终端里： cd ' + pdir + ' && ' + py + ' -m pdb ' + pEntry.filename,
+          });
+        }
         /* ── MATLAB / Octave ✓：只写文件，不编译 ✓（脚本语言 ✓） */
         if (lang === 'matlab' || lang === 'octave') {
           const mFiles = files.map((f, i) => ({

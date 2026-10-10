@@ -14299,10 +14299,26 @@ async function startDebug() {
   const lang = String(f.language || '').toLowerCase();
   const cmds = DEBUG_CMDS[lang];
   if (!cmds) { setStatus('err', '这个语言还没有调试支持（现在有：MATLAB/Octave · Python · C/C++）'); return; }
-  const bps = BREAKPOINTS.list({ file: CURRENT.file, index: CINDEX });
-  /* ⚠️ 引擎记忆的键，**和「▮ MATLAB」标签页用同一个** ✓（`MONCONSOLE_KEY` ✓）——
-     这样「先点了 MATLAB 标签页起了引擎」再点 🐞，就**不会重复启动** ✓。 */
-  const key = String(CURRENT.file || '') + '#' + String(f.language || '');
+  const ref = { file: CURRENT.file, index: CINDEX };
+  const bps = BREAKPOINTS.list(ref);
+  /* ⚠️⚠️ 一个终端里只能有**一个**调试器 ✗✗（2026-10-10）——
+     用户实测：Octave 会话还在跑 ✓，切到 Python 片段又点 🐞 ✓ →
+     终端里**两个调试器叠着** ✓ → 点「单步」发出的 pdb 命令 `n`
+     被**旧 Octave** 吃了 ✓ → `error: 'n' undefined near line 1, column 1` ✓✓。
+     → 重开调试前**先把终端重启**（清掉旧会话 ✓）——
+       这是最稳的清理方式 ✓：比往旧调试器里发 quit 可靠 ✓，
+       因为旧调试器可能已经卡在某个状态里 ✓（比如正停在断点上 ✓）。
+     ⚠️ 还要**清掉 MONCONSOLE_KEY** ✗ —— 终端重启后引擎也没了 ✓，
+        不清的话下次会以为「引擎已经起过」而跳过启动 ✓。 */
+  if (DEBUG.active) {
+    setStatus('idle', '先清理上一个调试会话…');
+    try { const old = dbgCmdSet(); if (old) termSend(old.stop); } catch (_) {}
+    try {
+      fetch('/api/term/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+    } catch (_) {}
+    await new Promise((r) => setTimeout(r, 1800));
+    DEBUG.active = false; MONCONSOLE_KEY = ''; setDebugLine(0);
+  }
   DEBUG.active = true; DEBUG.lang = lang; DEBUG.file = CURRENT.file; DEBUG.label = (f.label || ''); DEBUG.lastLine = 0;
   showDbgBar(true);
   switchOutTab('term');
@@ -14344,6 +14360,37 @@ async function startDebug() {
       for (const line of bps) await termSend('dbstop in ' + prep.entry + ' at ' + line);
       await termSend('run ' + prep.entry);
       setStatus('ok', '已进入调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
+    }, 900);
+  } else if (lang === 'python') {
+    /* ★ Python ✓✓（2026-10-10）——
+       ⚠️ 用户实测报的 bug ✗：在 Python 片段上点 🐞，
+          调试条显示「调试中 · python」✓，但终端里跑的还是**上一个 Octave 会话** ✓
+          → 点「单步」发出 pdb 的 `n` ✓ → **Octave** 执行它 →
+            `error: 'n' undefined near line 1, column 1` ✓✓。
+       根因：Python 分支原来是**空壳** ✓（只提示「已就绪」✓），
+             却把 DEBUG.lang 改成了 python ✗ → **劫持了旧会话的状态** ✓。
+       → 现在给 Python 一个**真会话** ✓：`python3 -m pdb <脚本>` ✓
+          （**标准库自带** ✓，不用装 debugpy ✓）。
+       ⚠️ 命令映射（DEBUG_CMDS.python ✓）本来就是 pdb 的 ✓：
+          c / n / s / r / p locals() / q ✓。
+       ⚠️ pdb 设断点是 `b <行号>` ✓（不是 dbstop ✓）。 */
+    setStatus('idle', '正在准备 Python 调试（写片段到临时目录）…');
+    const pyFiles = (CURRENT.fragments || []).map((x) => ({ filename: (x.label || 'main.py'), code: x.code }));
+    const prep = await api('/api/dbg/prepare', { language: 'python', code: f.code, files: pyFiles });
+    if (!prep || !prep.ok) {
+      setStatus('err', '调试准备失败');
+      showOut(String((prep && prep.error) || '调试准备失败'), '', false);
+      DEBUG.active = false; showDbgBar(false);
+      return;
+    }
+    setStatus('idle', '正在终端里启动 pdb…');
+    setTimeout(async () => {
+      await termSend('cd ' + JSON.stringify(prep.dir) + ' && ' + prep.launch);
+      /* pdb 起得很快 ✓，给一点点时间就够 ✓ */
+      await new Promise((r) => setTimeout(r, 1400));
+      for (const line of bps) await termSend('b ' + line);
+      await termSend('c');
+      setStatus('ok', '已进入 pdb 调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
     }, 900);
   } else if (lang === 'c' || lang === 'c_cpp') {
     /* ★ C / C++ ✓✓（2026-10-10）——
