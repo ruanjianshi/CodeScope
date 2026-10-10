@@ -4238,10 +4238,13 @@
       → 改成**直接判断表头右边缘 8px** ✓，这里只负责给视觉提示 ✓。 */
 .var-table th.var-th-grip { cursor: default; }
 /* 右边缘 8px 内显示 col-resize 光标 ✓（用背景条提示「这里能拖」✓） */
+/* ⚠️ 提示条要**细** ✗✓ —— 8px 实心会看成表头文字的一部分（用户截图里就是 "⬛类型" ✓）
+   → 改成 1px 竖线、只在 hover 时显形 ✓ */
 .var-table th.var-th-grip::after { content: ""; position: absolute; top: 3px; bottom: 5px;
-  right: 0; width: 8px; cursor: col-resize; }
-.var-table th.var-th-grip:hover::after { background: color-mix(in srgb, var(--accent) 45%, transparent); }
-.var-table th.var-th-grip.dragging::after { background: var(--accent); }
+  right: -4px; width: 9px; cursor: col-resize; border-right: 1px solid transparent; }
+.var-table th.var-th-grip:hover::after { border-right-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.var-table th.var-th-grip.dragging::after { border-right-color: var(--accent); }
+
 /* 值：等宽 ✓（数字 / 列表对齐好看 ✓） */
 .var-table td.var-value { font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; }
 /* 计数行 ✓ */

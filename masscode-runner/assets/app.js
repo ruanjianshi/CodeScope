@@ -14747,7 +14747,14 @@ function makeColsResizable(tbl, key) {
         if (box.right - e.clientX > 8) return;
         e.preventDefault(); e.stopPropagation();
         const sx = e.clientX;
+        /* ⚠️⚠️ 开拖之前，先把**所有列都钉成当前像素宽** ✗✗（2026-10-10 实测修）——
+           原来只有**被拖的那一列**是 px ✓，别的列还是 `15%` / `auto` ✓ →
+           拖「值」（它 `auto` ✓）让它变宽时 ✓，**浏览器会拿 `15%` 的名字列开刀** ✓
+           （实测：名字 93 → 23 ✓，几乎看不见了 ✓）。
+           → 先把每一列都转成 px ✓，拖动时**只有目标列变** ✓，
+             **别的列纹丝不动** ✓（这才是「拖列宽」该有的手感 ✓）。 */
         const start = cols.map((c) => c.getBoundingClientRect().width);
+        start.forEach((w0, k) => { cols[k].style.width = Math.round(w0) + 'px'; });
         th.classList.add('dragging');
         try { th.setPointerCapture(e.pointerId); } catch (_) {}
         const move = (ev) => {
