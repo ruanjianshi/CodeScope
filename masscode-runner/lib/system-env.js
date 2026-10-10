@@ -294,6 +294,27 @@ async function toolInfo() {
   await probe('npm', 'npm', 'npm', ['--version'], '安装依赖、装 code-server 都走它');
   await probe('docker', 'Docker CLI', 'docker', ['--version'], '容器工作区');
   await probe('colima', 'Colima', 'colima', ['version'], '在 macOS 上提供 Docker 运行环境');
+  /* ★ MATLAB / Octave ✓✓（2026-10-10）——
+     用户原话：「这是**云服务器**上的问题，怎么没有给 codescope 做环境适配和检测，
+               针对缺少环境的可以**一键部署**，补缺环境」✓。
+     ⚠️ 探测顺序**和运行时一致** ✗：有 MATLAB 用 MATLAB、没有才回退 Octave ✓
+        （服务端 matlabCmd() 就是这个顺序 ✓），面板显示的顺序也该一致 ✓。
+     ⚠️⚠️ 这里**只查路径，不启动引擎** ✗✗ ——
+        `matlab -help` 会**真的把 MATLAB 拉起来** ✓（几秒到几十秒 ✓），
+        而 probe 的超时只有 8 秒 ✓ → **装了也会被误报成「未安装」** ✓✓。
+        环境检测只该回答「装没装」✓；「能不能跑」交给运行时的报错 ✓。 */
+  const whichOr = (name) => (typeof HOST.which === 'function' ? HOST.which(name) : '') || '';
+  const probeByPath = (key, label, names, forWhat) => {
+    const found = names.map((n) => whichOr(n)).find(Boolean) || '';
+    tools.push({
+      key, label, for: forWhat,
+      ok: !!found,
+      version: found ? ('已安装：' + found) : '',
+      missing: found ? '' : '未安装或不在 PATH',
+    });
+  };
+  probeByPath('matlab', 'MATLAB', ['matlab'], '.m 片段的运行 / 检查（优先使用）');
+  probeByPath('octave', 'Octave', ['octave', 'octave-cli'], '.m 片段的运行 / 检查（免费替代）');
   return tools;
 }
 
@@ -325,6 +346,29 @@ function actionSpecs() {
       command: 'npm install',
       heavy: true,
     },
+    /* ★ 一键装 Octave ✓✓（2026-10-10）——
+       用户原话：「这是**云服务器**上的问题，怎么没有给 codescope 做环境适配和检测，
+                 针对缺少环境的可以**一键部署**，补缺环境」✓。
+       ⚠️ 为什么是 Octave 而不是 MATLAB ✗：MATLAB 要许可证 ✓，
+          没法一键装 ✓（只能去 mathworks.com ✓）——
+          而 **Octave 是免费且兼容 .m 的** ✓，CodeScope 本来就「有 MATLAB 用 MATLAB、
+          没有就自动回退 Octave」✓，所以「一键补齐 .m 环境」= 装 Octave ✓✓。
+       ⚠️ 命令**按平台分** ✗：macOS 走 brew ✓、Linux 走 apt ✓。
+          Linux 上装系统包需要 sudo ✓ —— 如果服务器上免密 sudo 没开 ✓，
+          这条会失败并**把原始报错原样显示** ✓（不吞错 ✓），
+          用户能据此手动跑一遍 ✓。
+       ⚠️ heavy: true ✗ —— 这是个几百 MB 的安装 ✓，
+          面板会把它当重活处理（可看进度、可取消 ✓）。 */
+    {
+      id: 'octave',
+      label: '安装 Octave（补齐 .m 运行环境）',
+      target: 'octave',
+      why: '.m 片段的运行 / 检查需要 MATLAB 或 Octave。MATLAB 要许可证、装不了；Octave 免费且兼容，装上就能跑 .m。',
+      command: process.platform === 'darwin'
+        ? 'brew install octave'
+        : 'sudo apt-get update && sudo apt-get install -y octave',
+      heavy: true,
+    },
   ];
 }
 
@@ -354,6 +398,17 @@ function createEnvManager(options = {}) {
       } else if (spec.id === 'assets') {
         needed = staleAssets.length > 0;
         status = staleAssets.length ? (staleAssets.length + ' 项需要重建：' + staleAssets.map((a) => a.label).join('、')) : '全部已是最新';
+      } else if (spec.id === 'octave') {
+        /* ⚠️ 这个分支**必须有** ✗（2026-10-10）——
+           原来只有 code-server / assets / else 三种 ✓，
+           新加的 octave 会掉进 `else`（那是给 deps 的 ✓）→
+           **判定条件用错** ✓（会拿「依赖齐不齐」来决定「要不要装 Octave」✓）。
+           ⚠️ 判据要和运行时一致 ✗：**MATLAB 或 Octave 任一可用**就不需要装 ✓。 */
+        const mt = (tools || []).find((t) => t.key === 'matlab');
+        const ot = (tools || []).find((t) => t.key === 'octave');
+        const have = (mt && mt.ok) ? mt : ((ot && ot.ok) ? ot : null);
+        needed = !have;
+        status = have ? ('已可用：' + have.label + '（' + have.version + '）') : '没检测到 MATLAB / Octave —— .m 片段跑不了';
       } else {
         needed = !deps.modulesPresent || deps.missingCount > 0 || deps.stale;
         status = !deps.modulesPresent ? 'node_modules 不存在'
@@ -435,6 +490,26 @@ function createEnvManager(options = {}) {
       emit(after.missingCount === 0 ? 'out' : 'err', after.missingCount === 0 ? '依赖已齐全（' + after.installedCount + ' 个）' : '仍缺 ' + after.missingCount + ' 个依赖');
       task.result = { installed: after.installedCount, missing: after.missingCount };
       return code === 0 && after.missingCount === 0 ? 0 : 1;
+    }
+    /* ★ 一键装 Octave ✓✓（2026-10-10）——
+       ⚠️ 必须走 `sh -c` ✗ —— 命令里有 `&&` 和 `sudo` ✓，
+          直接 spawn 一个二进制是跑不了的 ✓（其它动作都是「bin + args」✓，
+          只有这个是「一行 shell」✓）。
+       ⚠️ 装完**重新探测一次** ✓，把结论说出来 ✓ ——
+          用户真正关心的是「现在能不能跑 .m 了」✓，不是「命令退出码 0」✓。
+       ⚠️ 探测失败时给**可操作的话** ✗（「重开一个终端再试」✓）——
+          brew / apt 装完 PATH 有时要新开 shell 才生效 ✓。 */
+    if (action === 'octave') {
+      emit('out', '命令：' + spec.command);
+      if (dryRun) { emit('out', '[预演] 只安装 Octave（免费、兼容 .m），不碰 CodeScope 自身文件。'); return 0; }
+      const code = await helpers.spawnStep(task, 'sh', ['-c', spec.command], 1800000);
+      const after = await toolInfo();
+      const has = !!(after && after.octave && after.octave.available) || !!(after && after.matlab && after.matlab.available);
+      emit(has ? 'out' : 'err', has
+        ? '✓ 现在已经有可用的 .m 引擎了（.m 片段的运行 / 检查 / 画图都能用）'
+        : '装完仍没检测到引擎（退出码 ' + code + '）。如果是刚装好，重开一个终端 / 刷新页面再试；sudo 需要密码时请到终端手动跑一遍。');
+      task.result = { octaveAvailable: has, exit: code };
+      return has ? 0 : 1;
     }
     /* code-server：写死装进 ~/.codescope，绝不装进项目（iCloud + 695MB + postinstall 会打爆 Electron） */
     fs.mkdirSync(CODE_SERVER_DIR, { recursive: true });
