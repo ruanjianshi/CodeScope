@@ -2686,6 +2686,14 @@ function runnerFor(language) {
         const FIG_TAIL = [
           '',
           '% ---- CodeScope: 自动导出可编辑的 .fig（应用追加，不影响你的代码）----',
+          '% ⚠️ 顺手把 warning 静音 ✗（2026-10-10）——',
+          '%    savefig 会触发一次渲染 ✓，无界面下会打出',
+          '%    「warning: called from __xxx__ at line N」这类提示 ✓，',
+          '%    它指向的是**我追加的这段** ✓，对用户毫无意义 ✓，',
+          '%    而且会让人以为「我的代码有问题」✓ → 所以在这里就地关掉 ✓，',
+          '%    跑完再恢复原来的 warning 状态 ✓（不改变用户脚本后续行为 ✓）。',
+          '_cs_w = warning("query", "all");',
+          'warning("off", "all");',
           'try',
           '  _cs_figs = findall(0, "type", "figure");',
           '  for _cs_i = 1:numel(_cs_figs)',
@@ -2700,6 +2708,7 @@ function runnerFor(language) {
           'catch _cs_e',
           '  % 没画图或存图失败都不影响结果',
           'end',
+          'warning(_cs_w);',
           '',
         ].join('\n');
         const idx = Math.max(0, Number(opts.selIndex) || 0);
@@ -2776,7 +2785,15 @@ function runnerFor(language) {
                  （真报错绝不能被吞 ✓）。 */
             try {
               if (result && result.stderr) {
-                const NOISE = /^(FALLBACK (log once):|warning: print: .gs. (Ghostscript) binary is not available|warning: using the gnuplot|warning: [gnuplot])/;
+                /* ⚠️⚠️ 括号必须转义 ✗✗（2026-10-10 修）——
+                   原来写的是 `FALLBACK (log once):` ✓ ——
+                   但 `(log once)` 在正则里是**捕获组** ✗，
+                   等于在找 `FALLBACK log once:`（**不带括号** ✓）
+                   → **永远匹配不上** ✓ → 噪音一条都没滤掉 ✓
+                   （实测：三行 FALLBACK 原样出现在输出区 ✓，用户截图里也是 ✓）。
+                   ⚠️ 教训：**正则里的字面括号一律转义** ✓，尤其像这种「从日志里
+                      抄来的前缀」—— 看着像普通文本，其实是正则 ✓。 */
+                const NOISE = /^(FALLBACK \(log once\):|warning: print: .gs. \(Ghostscript\) binary is not available|warning: using the gnuplot|warning: \[gnuplot\]|warning: called from\s*$|^\s+__cs_|^\s+_cs_)/;
                 const kept = String(result.stderr).split('\n').filter((line) => line.trim() && !NOISE.test(line.trim()));
                 result.stderr = kept.join('\n');
               }

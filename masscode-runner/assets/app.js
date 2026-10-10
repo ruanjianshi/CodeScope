@@ -13557,6 +13557,8 @@ function renderRunImages(images) {
   if (!list.length) return null;
   const box = document.createElement('div');
   box.className = 'run-images';
+  /* 只把**图片**收进弹窗列表 ✓（.fig 是二进制 ✓，不能进 <img> ✓） */
+  const pics = list.filter((x) => x && x.data && /^image\//.test(String(x.mime || '')));
   for (const img of list) {
     if (!img || img.tooBig || !img.data) {
       const tip = document.createElement('div');
@@ -13580,7 +13582,7 @@ function renderRunImages(images) {
          浏览器里能做的「弹出」就是：放大看图 + 下载原件 ✓。 */
       im.title = '点击放大查看';
       im.style.cursor = 'zoom-in';
-      im.addEventListener('click', () => openImagePopup(img));
+      im.addEventListener('click', () => openImagePopup(pics, pics.indexOf(img)));
       wrap.appendChild(im);
     } else {
       const ph = document.createElement('div');
@@ -13606,10 +13608,16 @@ function renderRunImages(images) {
 }
 
 /* ★ 图片弹窗 ✓✓（2026-10-10）—— 点小图弹大图 ✓，
-   支持滚轮缩放 / 拖动平移 / Esc 关闭 ✓（尽量贴近「可编辑的弹出」的体验 ✓，
-   真正「可编辑」靠下载 .fig 用 Octave/MATLAB 打开 ✓）。 */
-function openImagePopup(img) {
+   支持滚轮缩放 / 拖动平移 / ← → 切图 / Esc 关闭 ✓。
+   ⚠️ 用户原话：「怎么在输出框里面，我需要弹小窗，那种」✓ ——
+      他想要的是**像 MATLAB 那样弹出一个图窗** ✓，不是塞在输出区里 ✓。
+      → 所以跑完**自动弹一次** ✓（见 showOut 末尾 ✓），
+        输出区里的图**同时保留** ✓（方便对照 / 复制 ✓）。 */
+function openImagePopup(images, startIndex) {
   try {
+    const list = (Array.isArray(images) ? images : [images]).filter((x) => x && x.data && /^image\//.test(String(x.mime || '')));
+    if (!list.length) return;
+    let idx = Math.max(0, Math.min(list.length - 1, Number(startIndex) || 0));
     const old = document.getElementById('img-popup');
     if (old) old.remove();
     const mask = document.createElement('div');
@@ -13618,22 +13626,42 @@ function openImagePopup(img) {
     const box = document.createElement('div');
     box.className = 'img-popup-box';
     const im = document.createElement('img');
-    im.src = img.data; im.alt = img.name || '';
     const bar = document.createElement('div');
     bar.className = 'img-popup-bar';
-    bar.innerHTML = '<span>' + escapeHtml(img.name || '图') + '</span>' +
-      '<span class="hint">滚轮缩放 · 拖动平移 · Esc 关闭</span>';
+    const nameEl = document.createElement('span');
+    const hintEl = document.createElement('span');
+    hintEl.className = 'hint';
+    hintEl.textContent = '滚轮缩放 · 拖动平移 · Esc 关闭';
+    const prev = document.createElement('button'); prev.textContent = '‹'; prev.title = '上一张';
+    const next = document.createElement('button'); next.textContent = '›'; next.title = '下一张';
     const dl = document.createElement('a');
-    dl.href = img.data; dl.download = img.name || 'plot.png'; dl.textContent = '⬇ 下载';
-    bar.appendChild(dl);
     const close = document.createElement('button');
     close.textContent = '✕'; close.title = '关闭';
-    bar.appendChild(close);
+    bar.appendChild(nameEl); bar.appendChild(hintEl);
+    if (list.length > 1) { bar.appendChild(prev); bar.appendChild(next); }
+    bar.appendChild(dl); bar.appendChild(close);
     box.appendChild(bar); box.appendChild(im); mask.appendChild(box);
     const apply = () => { im.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; };
+    const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+    const render = () => {
+      const cur = list[idx];
+      im.src = cur.data;
+      im.alt = cur.name || '';
+      nameEl.textContent = (cur.name || '图') + (list.length > 1 ? '（' + (idx + 1) + '/' + list.length + '）' : '');
+      dl.href = cur.data; dl.download = cur.name || 'plot.png'; dl.textContent = '⬇ 下载';
+      reset();
+    };
     const shut = () => { mask.remove(); document.removeEventListener('keydown', onKey); };
-    const onKey = (e) => { if (e.key === 'Escape') shut(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') shut();
+      else if (e.key === 'ArrowLeft' && list.length > 1) { idx = (idx - 1 + list.length) % list.length; render(); }
+      else if (e.key === 'ArrowRight' && list.length > 1) { idx = (idx + 1) % list.length; render(); }
+    };
     close.onclick = shut;
+    if (list.length > 1) {
+      prev.onclick = () => { idx = (idx - 1 + list.length) % list.length; render(); };
+      next.onclick = () => { idx = (idx + 1) % list.length; render(); };
+    }
     mask.addEventListener('click', (e) => { if (e.target === mask) shut(); });
     mask.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.max(0.2, Math.min(8, scale * (e.deltaY < 0 ? 1.12 : 0.89))); apply(); }, { passive: false });
     im.addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; ly = e.clientY; im.setPointerCapture(e.pointerId); im.style.cursor = 'grabbing'; });
@@ -13641,6 +13669,7 @@ function openImagePopup(img) {
     im.addEventListener('pointerup', () => { dragging = false; im.style.cursor = 'grab'; });
     im.style.cursor = 'grab';
     document.addEventListener('keydown', onKey);
+    render();
     document.body.appendChild(mask);
   } catch (_) {}
 }
@@ -13696,6 +13725,13 @@ function showOut(stdout, stderr, isOk, images) {
         那种也要给一句提示 ✓，见 renderRunImages ✓）。 */
   const imgBox = renderRunImages(images);
   if (imgBox) b.appendChild(imgBox);
+  /* ★ 跑完**自动弹出图窗** ✓✓（2026-10-10）——
+     用户原话：「怎么在输出框里面，我需要弹小窗，那种」✓。
+     → 只要这一趟产出了图，就自动弹一次 ✓（像 MATLAB 的 figure 窗口 ✓）。
+     ⚠️ 只弹**图片** ✗（`.fig` 是二进制 ✓，弹出来是破图 ✓）；
+     ⚠️ 输出区里**照样保留** ✓ —— 用户关掉弹窗后还能在下面看 / 复制 ✓。 */
+  const pics = (Array.isArray(images) ? images : []).filter((x) => x && x.data && /^image\//.test(String(x.mime || '')));
+  if (pics.length) setTimeout(() => openImagePopup(pics, 0), 260);
   b.scrollTop = b.scrollHeight;
 }
 
