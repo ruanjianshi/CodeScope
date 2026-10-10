@@ -14300,6 +14300,9 @@ async function startDebug() {
   const cmds = DEBUG_CMDS[lang];
   if (!cmds) { setStatus('err', '这个语言还没有调试支持（现在有：MATLAB/Octave · Python · C/C++）'); return; }
   const bps = BREAKPOINTS.list({ file: CURRENT.file, index: CINDEX });
+  /* ⚠️ 引擎记忆的键，**和「▮ MATLAB」标签页用同一个** ✓（`MONCONSOLE_KEY` ✓）——
+     这样「先点了 MATLAB 标签页起了引擎」再点 🐞，就**不会重复启动** ✓。 */
+  const key = String(CURRENT.file || '') + '#' + String(f.language || '');
   DEBUG.active = true; DEBUG.lang = lang; DEBUG.file = CURRENT.file; DEBUG.label = (f.label || ''); DEBUG.lastLine = 0;
   showDbgBar(true);
   switchOutTab('term');
@@ -14308,8 +14311,34 @@ async function startDebug() {
       setStatus('idle', '没有断点 —— 先点行号槽左侧设一个（直接跑也行，出错会停在 error 上）');
       return;
     }
-    setStatus('idle', '正在终端里启动调试会话…');
+    /* ⚠️⚠️ 必须先确保**引擎已经在终端里跑起来** ✗✗（2026-10-10）——
+       用户实测：终端里刷的是
+         zsh: command not found: dbstop / run / dbstep
+       因为 **Octave 根本没启动** ✓ —— 终端还是裸 zsh ✓，
+       而我把 `dbstop` 直接发给了 zsh ✓。
+       ⚠️ 这和 C/C++ 那个 bug 是**同一类** ✗✓：
+          「往终端发命令」之前，得先确认**终端里跑的是调试器** ✓，
+          而不是 shell ✓。对 Octave/MATLAB 来说这一步就是**启动引擎** ✓。
+       ⚠️ 启动要**等** ✗：Octave 起得快（1~2 秒 ✓），MATLAB 慢（几秒到几十秒 ✓）——
+          发完立刻发 dbstop 会打到 shell 里 ✓（就是上面那个现象 ✓）。 */
+    setStatus('idle', '正在终端里启动 ' + (lang === 'matlab' ? 'MATLAB' : 'Octave') + '…');
+    const con = await api('/api/matlab/console');
+    if (!con || !con.ok) {
+      setStatus('err', '没有可用的引擎');
+      showOut((con && con.error ? con.error : '这台机器上没找到 MATLAB 或 Octave') +
+        (con && con.hint ? '\n\n安装：' + con.hint : ''), '', false);
+      DEBUG.active = false; showDbgBar(false);
+      return;
+    }
     setTimeout(async () => {
+      /* ① 先把引擎起起来 ✓（这个片段还没起过才发 ✓，和「▮ MATLAB」标签页共用同一个记忆 ✓） */
+      if (MONCONSOLE_KEY !== key) {
+        MONCONSOLE_KEY = key;
+        await termSend(con.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' '));
+        /* ⚠️ 留时间给引擎启动 ✗ —— 少了这一步，dbstop 又会打到 shell 上 ✓ */
+        await new Promise((r) => setTimeout(r, 2600));
+      }
+      /* ② 再设断点、再 run ✓（顺序不能反 ✓） */
       for (const line of bps) await termSend('dbstop in main.m at ' + line);
       await termSend('run main.m');
       setStatus('ok', '已进入调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
