@@ -4178,18 +4178,19 @@
    ✅ 新版：**固定布局 + 明确列宽** ✓ + 斑马纹 + hover + 行号胶囊 + 类型彩标 ✓。 */
 .var-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: fixed; }
 .var-table th { text-align: left; color: var(--dim); font-weight: 500; font-size: 11px;
-  padding: 0 10px 6px 0; border-bottom: 1px solid var(--border); white-space: nowrap;
+  padding: 0 9px 7px 0; border-bottom: 1px solid var(--border); white-space: nowrap;
   position: sticky; top: 0; background: var(--panel); z-index: 1; }
-.var-table td { padding: 6px 10px 6px 0; vertical-align: middle; white-space: nowrap;
+.var-table td { padding: 7px 9px 7px 0; vertical-align: middle; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
 /* 斑马纹 + hover ✓（长表格里跟行不容易串 ✓） */
 .var-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--text) 4%, transparent); }
 .var-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 /* 列宽 ✓（固定布局，别再让「值」把别的挤走 ✓） */
-.var-table td.var-line { width: 46px; text-align: right; padding-right: 12px; }
-.var-table td.var-name { width: 17%; }
-.var-table td.var-size { width: 62px; text-align: right; }
-.var-table td.var-type { width: 92px; }
+/* ⚠️ 列宽统一在 colgroup 里 ✓（table-layout:fixed 下写在 td 上**不生效** ✗） */
+.var-table td.var-line { text-align: left; padding-right: 8px; }
+.var-table td.var-name { overflow: hidden; text-overflow: ellipsis; }
+.var-table td.var-size { text-align: right; padding-right: 16px; }
+.var-table td.var-type { }
 /* 名字：等宽 + 强调色 ✓（像代码 ✓） */
 .var-table td.var-name { color: var(--accent); font-weight: 600;
   font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; }

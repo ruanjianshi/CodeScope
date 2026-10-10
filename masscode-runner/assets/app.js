@@ -14784,7 +14784,13 @@ function openVarPanel() {
       if (hasType) cols.push(['类型', 'type']);
       const tbl = document.createElement('table');
       tbl.className = 'var-table' + (cols.length > 2 ? ' wide' : '');
-      tbl.innerHTML = '<thead><tr>' + cols.map(([h]) => '<th>' + h + '</th>').join('') + '</tr></thead>';
+      /* ⚠️⚠️ `table-layout: fixed` 下，列宽**必须写在第一行 / colgroup** ✗✗（实测踩到 ✓）——
+         我原来把 width 写在 `td` 上 ✓ → **完全不生效** ✓ →
+         五列被**平均分成 124px** ✓（= 640/5 ✓，值列一点没变宽 ✓）。
+         → 用 **`<colgroup>`** ✓：**一处定义、整表生效** ✓，也最干净 ✓。 */
+      const colW = { line: '34px', name: '15%', value: 'auto', size: '44px', type: '84px' };
+      tbl.innerHTML = '<colgroup>' + cols.map(([, k]) => '<col style="width:' + (colW[k] || 'auto') + '">').join('') + '</colgroup>'
+        + '<thead><tr>' + cols.map(([h]) => '<th>' + h + '</th>').join('') + '</tr></thead>';
       const tb = document.createElement('tbody');
       for (const r of rows) {
         const tr = document.createElement('tr');
