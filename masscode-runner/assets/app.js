@@ -13479,11 +13479,19 @@ async function pumpSave() {
 function showOut(stdout, stderr, isOk) {
   const b = $('out-body'); b.innerHTML = '';
   const pre = document.createElement('pre');
-  if (stdout) { const s = document.createElement('span'); s.textContent = stdout; pre.appendChild(s); }
-  if (stderr) {
+  /* ⚠️⚠️ 用 trim 判断「有没有内容」✗（2026-10-10 修）——
+     原来判的是 `if (stderr)` ✓，而服务端返回的 stderr 经常是 **`"\n"`**
+     （shell / 引擎收尾的一个换行 ✓）→ **truthy** ✓ → 输出区就多出一个
+     **空的 `[stderr]` 块** ✓（用户截图里正是这个 ✓）。
+     ⚠️ 注意：**显示的内容本身不要 trim** ✗ ——
+        stdout 里的缩进和换行是有意义的 ✓，只能拿 trim 来**判断空不空** ✓。 */
+  const hasOut = String(stdout == null ? '' : stdout).trim().length > 0;
+  const hasErr = String(stderr == null ? '' : stderr).trim().length > 0;
+  if (hasOut) { const s = document.createElement('span'); s.textContent = stdout; pre.appendChild(s); }
+  if (hasErr) {
     const s = document.createElement('span'); s.className = 'stderr'; s.textContent = '\n[stderr]\n' + stderr; pre.appendChild(s);
   }
-  if (!stdout && !stderr) pre.appendChild(Object.assign(document.createElement('span'), { className: 'empty', textContent: '(无输出)' }));
+  if (!hasOut && !hasErr) pre.appendChild(Object.assign(document.createElement('span'), { className: 'empty', textContent: '(无输出)' }));
   b.appendChild(pre);
   b.scrollTop = b.scrollHeight;
 }
