@@ -4189,3 +4189,10 @@
 /* ★ 变量面板标题栏的「当前停在哪」✓✓（2026-10-10）—— 用户：「位置，所在位置行号」 */
 .var-pos { color: #ffd166; font-size: 11px; margin-left: 10px; max-width: 44%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ★ 变量表格的「行」列 ✓✓（2026-10-10）—— 用户：「变量所在的行号」 */
+/* 可点击 ✓（跳到编辑器里那一行 ✓），所以给个手型和强调色 ✓ */
+.var-table td.var-line { color: var(--accent); cursor: pointer; white-space: nowrap;
+  text-align: right; padding-right: 12px; opacity: .9; }
+.var-table td.var-line:hover { text-decoration: underline; opacity: 1; }
+.var-table th:first-child { padding-right: 12px; }

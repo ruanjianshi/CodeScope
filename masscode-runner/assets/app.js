@@ -14608,6 +14608,46 @@ const VARS_CMD = {
   c: 'info locals', c_cpp: 'info locals',
 };
 
+/* ★ 变量「**定义在哪一行**」✓✓（2026-10-10）—— 用户要「变量所在的行号」✓
+   ⚠️ 调试器**给不了**这个 ✗（Python 不记录赋值位置 ✓，Octave 的 whos / gdb 的 info locals 也没有 ✓）——
+      所以这里**不看调试器，看源码** ✓：
+      **静态扫一遍当前片段的代码** ✓，找每个变量**第一次被赋值 / 定义**的那一行 ✓。
+   ⚠️ 是**近似**，不是精确 ✗：只看「名字出现在赋值左侧 / for / def / import」✓；
+      同名变量在多个分支里赋值时只给**第一次** ✓（够用 ✓，而且**比没有强得多** ✓）。
+   ⚠️ **找不到就留空** ✗（**不猜** ✓）—— 比如内置名、调试器临时变量 ✓。
+   ⚠️ 三种语言的赋值写法不同 ✗，所以按语言分开匹配 ✓。 */
+function findVarLines(code, lang) {
+  const map = new Map();
+  const set = (name, ln) => { if (name && !map.has(name)) map.set(name, ln); };
+  String(code || '').split('\n').forEach((raw, i) => {
+    const ln = i + 1;
+    /* 去掉行尾注释 ✓（`a = 3  # 说明` 不该被注释干扰 ✓）——
+       ⚠️ 别去 `#` 前面的内容 ✗：Python 里 `#` 是注释 ✓，但 C 里 `#` 是预处理 ✓，
+          所以只在 Python / MATLAB 下按 `#` 切 ✓。 */
+    const l = (lang === 'python' || lang === 'matlab' || lang === 'octave')
+      ? raw.replace(/#.*$/, '') : raw.replace(/\/\/.*$/, '');
+    let m;
+    if (lang === 'python') {
+      if ((m = /^\s*([A-Za-z_]\w*)\s*(?:,\s*[A-Za-z_]\w*\s*)*=(?!=)/.exec(l))) set(m[1], ln);
+      if ((m = /^\s*for\s+([A-Za-z_]\w*)/.exec(l))) set(m[1], ln);
+      if ((m = /^\s*def\s+([A-Za-z_]\w*)/.exec(l))) set(m[1], ln);
+      if ((m = /^\s*import\s+([A-Za-z_]\w*)/.exec(l))) set(m[1], ln);
+      if ((m = /^\s*from\s+\S+\s+import\s+([A-Za-z_]\w*)/.exec(l))) set(m[1], ln);
+      if ((m = /^\s*class\s+([A-Za-z_]\w*)/.exec(l))) set(m[1], ln);
+    } else if (lang === 'matlab' || lang === 'octave') {
+      if ((m = /^\s*([A-Za-z_]\w*)\s*=\s*/.exec(l))) set(m[1], ln);
+      if ((m = /^\s*function\s+.*?([A-Za-z_]\w*)\s*\(/.exec(l))) set(m[1], ln);
+    } else {
+      if ((m = /^\s*(?:[\w:*&<>]+\s+)+([A-Za-z_]\w*)\s*(?:=|;|\[)/.exec(l))) set(m[1], ln);
+      /* ⚠️ **函数定义**也要认 ✗✓（实测漏了 ✓）——
+         `int main(void) {` 里 `main` 后面只有 `(` ✓，没有 `=` / `;` / `[` ✓，
+         所以上面那条匹配不到 ✓。 */
+      if ((m = /^\s*[\w:*&<>]+\s+([A-Za-z_]\w*)\s*\(/.exec(l))) set(m[1], ln);
+    }
+  });
+  return map;
+}
+
 function openVarPanel() {
   try {
     const old = document.getElementById('var-panel');
@@ -14713,7 +14753,15 @@ function openVarPanel() {
          → **哪一列全空就不显示** ✓（Octave 四列 ✓，Python/gdb 两列 ✓）。 */
       const hasSize = rows.some((r) => r.size);
       const hasType = rows.some((r) => r.type);
-      const cols = [['名字', 'name'], ['值', 'value']];
+      /* ★ 「行」列：**变量定义在源码的第几行** ✓✓（2026-10-10）——
+         用户要「变量所在的行号」✓。**静态扫源码**得到 ✓（见 findVarLines 的说明 ✓）。
+         ⚠️ **有数据才显示这一列** ✗ —— 一个都没找到时别留个空列 ✓。 */
+      const curFrag = (CURRENT && CURRENT.fragments[CINDEX]) || {};
+      const lineMap = findVarLines(curFrag.code, String(DEBUG.lang || '').toLowerCase());
+      const hasLine = rows.some((r) => lineMap.has(r.name));
+      const cols = [];
+      if (hasLine) cols.push(['行', 'line']);
+      cols.push(['名字', 'name'], ['值', 'value']);
       if (hasSize) cols.push(['大小', 'size']);
       if (hasType) cols.push(['类型', 'type']);
       const tbl = document.createElement('table');
@@ -14724,6 +14772,24 @@ function openVarPanel() {
         const tr = document.createElement('tr');
         for (const [, key] of cols) {
           const td = document.createElement('td');
+          /* 「行」列特殊 ✓：点它**跳到编辑器里那一行** ✓（比只显示数字有用得多 ✓） */
+          if (key === 'line') {
+            const ln = lineMap.get(r.name);
+            td.className = 'var-line';
+            if (ln) {
+              td.textContent = String(ln);
+              td.title = '跳到第 ' + ln + ' 行';
+              td.onclick = () => {
+                try {
+                  MONACO_EDITOR.revealLineInCenter(ln);
+                  MONACO_EDITOR.setPosition({ lineNumber: ln, column: 1 });
+                  MONACO_EDITOR.focus();
+                } catch (_) {}
+              };
+            }
+            tr.appendChild(td);
+            continue;
+          }
           const raw = String(r[key] || '');
           td.textContent = raw;
           td.className = 'var-' + key;
