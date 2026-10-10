@@ -14577,7 +14577,13 @@ function parseVars(lang, text) {
       正好是面板要的四列 ✓。 */
 const VARS_CMD = {
   matlab: 'whos', octave: 'whos',
-  python: "p '\\n'.join(k + ' = ' + repr(v) for k, v in locals().items() if not k.startswith('__'))",
+  /* ⚠️⚠️ 用 `print(...)` 而不是 `p ...` ✗✗（2026-10-10 实测修）——
+     `p` 是**求值并显示结果** ✓，**字符串结果会带引号**打出来 ✓ →
+     面板拿到的第一行是 `'a = 3'` ✓（**开头一个单引号** ✓）→ 解析器认不出 ✓
+     （用户截图里正是这个 ✓）。
+     `print` 才是「**按原样输出**」✓ —— 这才是我们要的 ✓。
+     ⚠️ 顺带：`print` 在 pdb 里也是合法命令 ✓（它就是普通 Python 语句 ✓）。 */
+  python: "print('\\n'.join(k + ' = ' + repr(v) for k, v in locals().items() if not k.startswith('__')))",
   c: 'info locals', c_cpp: 'info locals',
 };
 
