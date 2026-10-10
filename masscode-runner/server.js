@@ -2669,7 +2669,56 @@ function runnerFor(language) {
         const args = engine === 'octave'
           ? ['--no-gui', '--quiet', entry]
           : ['-batch', "run('" + entry.replace(/'/g, "''") + "')"];
-        return run(mCmd, args, { cwd: dir, timeoutMs: 60000, input: opts.input });
+        return run(mCmd, args, { cwd: dir, timeoutMs: 60000, input: opts.input }).then((result) => {
+          /* ★ 把这一趟画出来的图收回来 ✓✓（2026-10-10）
+             用户原话：「octave 画图方面的测试，需要做」✓。
+             实测结论：**Octave 在 `--no-gui` 下能画图** ✓ ——
+             `figure('visible','off')` + `print('-dpng','out.png')` 会真的生成 PNG ✓
+             （本机实测生成了 15KB 的 out1.png ✓，只有 gs 缺失和 SW 顶点回退的无害警告 ✓）。
+             ⚠️ 但**图必须能看到**才算数 ✗ —— 临时目录跑完就删了 ✓，
+                所以这里在删之前把图片**读成 data URL** 一起回给前端 ✓✓。
+             ⚠️ 用 data URL 而不是「另开一个静态路由」✗：
+                图片是这一趟的产物 ✓，跟着响应走最省事 ✓，
+                也不用担心临时目录被清理后链接失效 ✓。
+             ⚠️ 只认图片后缀 ✗（png/jpg/svg/pdf ✓）—— 别的文件（.txt/.mat ✓）不往回传 ✓，
+                免得把用户自己写的数据文件也塞进响应 ✓。
+             ⚠️ 单张限 4MB ✗ —— 超大图（比如 -r600 的大画布 ✓）不往回传，
+                只提示一下 ✓，免得响应体爆掉 ✓。 */
+          try {
+            const IMG = /\.(png|jpe?g|svg|gif|webp|pdf)$/i;
+            const MAX = 4 * 1024 * 1024;
+            const imgs = [];
+            for (const name of fs.readdirSync(dir)) {
+              if (!IMG.test(name)) continue;
+              const full = path.join(dir, name);
+              let st; try { st = fs.statSync(full); } catch (_) { continue; }
+              if (!st.isFile()) continue;
+              if (st.size > MAX) { imgs.push({ name, tooBig: true, bytes: st.size }); continue; }
+              const ext = path.extname(name).toLowerCase();
+              const mime = ext === '.png' ? 'image/png'
+                : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg'
+                : ext === '.svg' ? 'image/svg+xml'
+                : ext === '.gif' ? 'image/gif'
+                : ext === '.webp' ? 'image/webp' : 'application/pdf';
+              imgs.push({ name, mime, bytes: st.size, data: 'data:' + mime + ';base64,' + fs.readFileSync(full).toString('base64') });
+            }
+            if (imgs.length) result.images = imgs;
+            /* ⚠️ 顺手滤掉 Octave 的**无害噪音** ✗（2026-10-10）——
+               无界面模式（--no-gui）下画图会往 stderr 打一堆 FALLBACK / gs 缺失的提示 ✓，
+               它们**不是错误** ✓，但会把 stderr 塞满 ✓，
+               用户看到「一片红」会以为画图失败了 ✓（实测截图就是这样 ✓）。
+               → 只滤掉这些**已知无害**的前缀 ✓，别的 stderr 一律保留 ✓
+                 （真报错绝不能被吞 ✓）。 */
+            try {
+              if (result && result.stderr) {
+                const NOISE = /^(FALLBACK (log once):|warning: print: .gs. (Ghostscript) binary is not available|warning: using the gnuplot|warning: [gnuplot])/;
+                const kept = String(result.stderr).split('\n').filter((line) => line.trim() && !NOISE.test(line.trim()));
+                result.stderr = kept.join('\n');
+              }
+            } catch (_) {}
+          } catch (_) {}
+          return result;
+        });
       });
       return {
         supported: true,

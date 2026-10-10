@@ -608,7 +608,7 @@
       <!-- ★ `%%` 段运行 ✓（2026-10-09）—— 只在 MATLAB/Octave（.m）片段上显示 ✓。
            对应 MATLAB 的「Run Section」（Ctrl+Enter）✓：
            只跑光标所在的那一段，调参时不用从头跑整个脚本 ✓。 -->
-      <button id="btn-run-section" title="运行本段（%% 分段）Ctrl/⌘+Alt+Enter" aria-label="运行本段" style="display:none">▶</button>
+      <button id="btn-run-section" title="运行本段；选中多行则只跑选区（可跨多段）Ctrl/⌘+Alt+Enter" aria-label="运行本段" style="display:none">▶</button>
       <!-- ★ 「跑到这里」✓（2026-10-10）——
            实测发现：MATLAB/Octave 的段运行是每次新进程，所以「只跑本段」时
            上一段的变量不存在（报 'a' undefined），而真 MATLAB 的 Run Section

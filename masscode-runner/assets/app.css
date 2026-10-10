@@ -4039,3 +4039,11 @@
    ⚠️ 只加极淡的背景 ✗ —— 太重会把代码压得喘不过气 ✓（这是编辑器不是表格 ✓）。 */
 .cs-section-line { border-top: 1px solid color-mix(in srgb, var(--accent, #4f8cff) 38%, transparent) !important; background: color-mix(in srgb, var(--accent, #4f8cff) 5%, transparent); }
 .cs-section-gutter { border-left: 2px solid color-mix(in srgb, var(--accent, #4f8cff) 70%, transparent); margin-left: 3px; }
+
+/* ★ 运行结果图（Octave / Matlab 画图 ✓）2026-10-10 */
+.run-images { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.run-image { border: 1px solid var(--border); background: var(--panel2); }
+.run-image img { display: block; max-width: 100%; height: auto; }
+.run-image-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--border); color: var(--dim); font-size: 11px; }
+.run-image-bar a { color: var(--accent); text-decoration: none; }
+.run-image-tip { color: var(--dim); font-size: 11px; }

@@ -13218,6 +13218,33 @@ async function runSection(opts) {
   const isPy = lang === 'python';
   const isMatlab = lang === 'matlab' || lang === 'octave';
   if (!isPy && !isMatlab) { setStatus('idle', '这个语言没有分段运行'); return; }
+
+  /* ★★ 段与段的**组合运行** ✓✓（2026-10-10）
+     用户原话：「还有缺少，段与段之间的组合运行」✓。
+     ✅ 做法：**有文本选区就跑选区** ✓ ——
+        选中「第 2 段到第 4 段」→ 这三段**一起跑** ✓✓，
+        这正好覆盖「段与段的组合」这个需求 ✓，
+        而且是最通用的做法（Jupyter / VS Code 都是「运行选区」✓）。
+     ⚠️ 选区**优先于**「本段 / 跑到这里」✗ —— 用户明确划了一块 ✓，
+        意图比「光标在哪」强得多 ✓。
+     ⚠️ 选区只有空白时不接管 ✗（`trim()` 判空 ✓），
+        否则用户随手点一下选中换行就会跑出奇怪的东西 ✓。 */
+  let selected = '';
+  try {
+    const ta = $('code-edit');
+    if (ta && typeof ta.selectionStart === 'number' && ta.selectionEnd > ta.selectionStart) {
+      const t = editText();
+      selected = String(t).slice(ta.selectionStart, ta.selectionEnd);
+    }
+  } catch (_) {}
+  if (selected && selected.trim()) {
+    const nLines = selected.split('\n').length;
+    const nSecs = (selected.match(/^\s*%%/gm) || []).length + (selected.match(/^\s*#\s*%%/gm) || []).length;
+    const label = '跑选区（' + nLines + ' 行' + (nSecs > 1 ? ' · 跨 ' + nSecs + ' 段' : '') + '）';
+    setStatus('idle', label);
+    return isPy ? runKernelCell(selected) : doRun({ code: selected });
+  }
+
   const sec = currentSection(editText(), { fromTop });
   if (!sec) { setStatus('idle', '这篇没有 %% 分节，跑整篇'); return isPy ? runKernelCell(editText()) : doRun(); }
 
@@ -13296,15 +13323,15 @@ async function doRun(options) {
   if (!r.ok) {
     if (r.timedOut) {
       setStatus('err', 'timeout');
-      showOut(r.stdout, r.stderr, false);
+      showOut(r.stdout, r.stderr, false, r.images);
       if (!inp) showInputInOutput('程序运行超时，可能正在等待标准输入。填写输入后可以直接重新运行。', true);
     } else {
       setStatus('err', '退出码 ' + (r.code ?? '?'));
-      showOut(r.stdout, r.stderr, false);
+      showOut(r.stdout, r.stderr, false, r.images);
     }
     return;
   }
-  setStatus('ok', '成功'); showOut(r.stdout, r.stderr, true);
+  setStatus('ok', '成功'); showOut(r.stdout, r.stderr, true, r.images);
 }
 
 async function doCheck() {
@@ -13322,7 +13349,7 @@ async function doCheck() {
   const r = await api('/api/check', body);
   if (r.unsupported) { setStatus('err', '不支持'); showOut(r.reason, '', false); return; }
   if (r.ok) { setStatus('ok', '通过'); showOut('✓ 语法检查通过', r.stderr, true); }
-  else { setStatus('err', '失败'); showOut(r.stdout, r.stderr, false); }
+  else { setStatus('err', '失败'); showOut(r.stdout, r.stderr, false, r.images); }
 }
 
 async function doFormat() {
@@ -13516,7 +13543,52 @@ async function pumpSave() {
   }
 }
 
-function showOut(stdout, stderr, isOk) {
+/* ★ 把这一趟跑出来的图**画在输出区** ✓✓（2026-10-10）
+   用户原话：「octave 画图方面的测试，需要做」✓。
+   ⚠️ 为什么要在前端画 ✗：服务端把图读成 data URL 一起回传了 ✓
+      （见 server.js 的 matlab 分支 ✓）—— 前端只要塞进 <img> 就行 ✓，
+      不需要额外的静态路由 ✓，也不会因为临时目录被清理而失效 ✓。
+   ⚠️ 图要能**另存** ✗ —— data URL 的 <img> 右键存图在有些浏览器里不好使 ✓，
+      所以下面附一个「⬇ 下载」链接 ✓（`download` 属性 ✓）。
+   ⚠️ 单张太大时服务端只回 `tooBig` ✗ —— 这里给一句提示 ✓，
+      别让用户以为「画图失败了」✓（其实是画出来了、只是没往回传 ✓）。 */
+function renderRunImages(images) {
+  const list = Array.isArray(images) ? images : [];
+  if (!list.length) return null;
+  const box = document.createElement('div');
+  box.className = 'run-images';
+  for (const img of list) {
+    if (!img || img.tooBig || !img.data) {
+      const tip = document.createElement('div');
+      tip.className = 'run-image-tip';
+      tip.textContent = '（' + ((img && img.name) || '图片') + ' 太大，未回传；文件已生成在运行目录里）';
+      box.appendChild(tip);
+      continue;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'run-image';
+    const im = document.createElement('img');
+    im.src = img.data;
+    im.alt = img.name || '运行结果图';
+    im.loading = 'lazy';
+    wrap.appendChild(im);
+    const bar = document.createElement('div');
+    bar.className = 'run-image-bar';
+    const nm = document.createElement('span');
+    nm.textContent = (img.name || '图') + ' · ' + Math.round((img.bytes || 0) / 1024) + 'KB';
+    bar.appendChild(nm);
+    const a = document.createElement('a');
+    a.href = img.data;
+    a.download = img.name || 'plot.png';
+    a.textContent = '⬇ 下载';
+    bar.appendChild(a);
+    wrap.appendChild(bar);
+    box.appendChild(wrap);
+  }
+  return box;
+}
+
+function showOut(stdout, stderr, isOk, images) {
   const b = $('out-body'); b.innerHTML = '';
   const pre = document.createElement('pre');
   /* ⚠️⚠️ 用 trim 判断「有没有内容」✗（2026-10-10 修）——
@@ -13533,6 +13605,11 @@ function showOut(stdout, stderr, isOk) {
   }
   if (!hasOut && !hasErr) pre.appendChild(Object.assign(document.createElement('span'), { className: 'empty', textContent: '(无输出)' }));
   b.appendChild(pre);
+  /* ★ 跑出来的图挂在文字下面 ✓（Octave / Matlab 画图 ✓）——
+     ⚠️ 判空用 `images.length` ✗（别忘了服务端可能返回 `tooBig` 的占位 ✓，
+        那种也要给一句提示 ✓，见 renderRunImages ✓）。 */
+  const imgBox = renderRunImages(images);
+  if (imgBox) b.appendChild(imgBox);
   b.scrollTop = b.scrollHeight;
 }
 
