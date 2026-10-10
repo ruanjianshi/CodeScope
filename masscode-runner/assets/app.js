@@ -14476,6 +14476,16 @@ function stopDebug() {
     if (!cmds || !DEBUG.active) { setStatus('err', '还没进入调试'); return; }
     termSend(cmds[key]);
     setStatus('idle', '已发送：' + cmds[key]);
+    /* ★ 变量面板开着 → **过一会儿自动刷新** ✓✓（2026-10-11）——
+       用户：「多多检查和优化」✓。
+       ⚠️ 为什么要做 ✗：调试时「单步 → 看变量 → 单步 → 看变量」是**最高频的循环** ✓，
+          每次都要手点「↻ 刷新」很烦 ✓。
+       ⚠️ 为什么要**延迟** ✗：命令刚发出去 ✓，调试器还没处理完、
+          还没打印新位置 ✓（实测 1.2 秒够 ✓）。
+       ⚠️ 为什么挂在**这几个按钮**上 ✗：`termSend` 到处都是 ✓，
+          挂在这里**语义最清楚**（就是「调试动作之后」✓），
+          而且**面板没开时不会发多余命令** ✓（不污染终端 ✓）。 */
+    if (VAR_PANEL_REFRESH) setTimeout(() => { try { VAR_PANEL_REFRESH(); } catch (_) {} }, 1200);
   };
 });
 /* ★ 「变量」不再往终端发命令 ✗✓（2026-10-10）——
@@ -14774,6 +14784,12 @@ function makeColsResizable(tbl, key) {
   } catch (_) {}
 }
 
+/* ★ 变量面板的「刷新」入口 ✓✓（2026-10-11）——
+   面板开着时记下来 ✓，调试动作之后**自动刷新** ✓；关掉时清空 ✓。
+   ⚠️ 为什么用模块级变量 ✗：面板是**动态创建**的 ✓，
+      而单步按钮在别处 ✓，那里拿不到面板内部的 `doRefresh` ✓。 */
+let VAR_PANEL_REFRESH = null;
+
 function openVarPanel() {
   try {
     const old = document.getElementById('var-panel');
@@ -14872,7 +14888,10 @@ function openVarPanel() {
       };
       rs.addEventListener('pointermove', move); rs.addEventListener('pointerup', up);
     });
-    const shut = () => { win.remove(); document.removeEventListener('keydown', onKey); };
+    /* ⚠️ 用 `let` 而不是 `const` ✗✓（2026-10-11）——
+       下面要把它**包一层** ✓：关面板时顺手清掉「自动刷新」的引用 ✓
+       （不清的话，面板关掉后单步还会去动已移除的节点 ✓）。 */
+    let shut = () => { win.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (e) => { if (e.key === 'Escape') shut(); };
     close.onclick = shut;
     document.addEventListener('keydown', onKey);
@@ -14989,7 +15008,18 @@ function openVarPanel() {
     }
     refresh.onclick = doRefresh;
     document.body.appendChild(win);
-    doRefresh();
+    /* ★ 让「单步」按钮能刷新它 ✓✓（2026-10-11）—— 用户：「多多检查和优化」✓
+       ⚠️ 为什么要做 ✗：调试时「单步 → 看变量 → 单步 → 看变量」是**最高频的循环** ✓，
+          每次都要手点「↻ 刷新」很烦 ✓。
+       ⚠️ 只在**面板开着**时才刷新 ✗ —— 面板关着还发命令会**污染终端输出** ✓
+          （用户可能正想看别的东西 ✓）。
+       ⚠️ 延迟要**够** ✗（调试器处理完单步、打印完新位置 ✓）—— 实测 1.2 秒够 ✓。
+       ⚠️ 用一个**模块级变量**记住刷新函数 ✗ —— 面板是动态创建的 ✓，
+          关掉时要清掉 ✓（否则会对着已移除的节点操作 ✓）。 */
+    VAR_PANEL_REFRESH = doRefresh;
+    const origShut = shut;
+    shut = () => { VAR_PANEL_REFRESH = null; origShut(); };
+    close.onclick = shut;
   } catch (_) {}
 }
 
