@@ -4047,3 +4047,21 @@
 .run-image-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--border); color: var(--dim); font-size: 11px; }
 .run-image-bar a { color: var(--accent); text-decoration: none; }
 .run-image-tip { color: var(--dim); font-size: 11px; }
+
+/* ★ 输出区美化 ✓✓（2026-10-10）—— 用户：「输出窗口需要美化，优化」
+   ⚠️ 设计原则：**只调样式，不改文本** ✗ ——
+      stdout/stderr 是程序真实输出，一个字都不能动（用户要复制出去用）✓。
+      所有「美化」都靠 class + CSS ✓，不动 textContent ✓。 */
+#out-body { padding: 10px 16px 16px; font: 12.5px/1.7 var(--mono); }
+/* stderr 分区：小标签 + 左侧竖线 ✓（比一行裸的 [stderr] 清楚得多 ✓） */
+.out-stderr-head { display: inline-block; margin: 14px 0 6px; padding: 1px 8px; border-radius: 3px; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.out-stderr-head.err { color: #ffb3ad; background: rgba(220, 80, 70, .16); border: 1px solid rgba(220, 80, 70, .38); }
+.out-stderr-head.warn { color: #ffd9a0; background: rgba(210, 150, 40, .14); border: 1px solid rgba(210, 150, 40, .34); }
+.out-stderr-body { border-left: 2px solid rgba(220, 80, 70, .45); padding: 2px 0 2px 10px; margin-left: 1px; }
+.out-stderr-body.warn { border-left-color: rgba(210, 150, 40, .45); }
+/* 逐行层次：错误行亮、位置行暗 ✓（次要信息不该抢眼 ✓） */
+.out-stderr-body .ln-err { color: #ff9b95; font-weight: 600; }
+.out-stderr-body .ln-warn { color: #ffcf8a; }
+.out-stderr-body .ln-loc { color: color-mix(in srgb, var(--dim) 78%, transparent); font-size: 11.5px; }
+/* 图片区再收一点 ✓ */
+.run-images { margin-top: 14px; }

@@ -13601,7 +13601,36 @@ function showOut(stdout, stderr, isOk, images) {
   const hasErr = String(stderr == null ? '' : stderr).trim().length > 0;
   if (hasOut) { const s = document.createElement('span'); s.textContent = stdout; pre.appendChild(s); }
   if (hasErr) {
-    const s = document.createElement('span'); s.className = 'stderr'; s.textContent = '\n[stderr]\n' + stderr; pre.appendChild(s);
+    /* ★ stderr 改成**带标题的分区** ✓✓（2026-10-10 美化）——
+       原来是一行裸的 `[stderr]` ✓（用户截图里就是那个 ✓），
+       看着像程序自己吐出来的 ✓，不像「这里开始是错误」✓。
+       → 现在给一个**小标签**（错 / 警告 / 输出 ✓ 自动判定 ✓）+ 左侧竖线 ✓，
+         并把 `error:` / `warning:` 这些**前缀行**上色 ✓，
+         把 `at line N` 这类**位置信息**压暗 ✓（次要信息 ✓）。
+       ⚠️ 仍然**只加 span、不改文本** ✗ ——
+          stdout/stderr 是程序真实输出 ✓，一个字都不能改 ✓
+          （改了用户复制出去就对不上了 ✓）。 */
+    const errText = String(stderr);
+    const kind = /(^|\n)\s*error[:\s]/i.test(errText) ? { cls: 'err', label: '错误' }
+      : /(^|\n)\s*warning[:\s]/i.test(errText) ? { cls: 'warn', label: '警告' }
+      : { cls: 'err', label: 'stderr' };
+    const head = document.createElement('div');
+    head.className = 'out-stderr-head ' + kind.cls;
+    head.textContent = kind.label;
+    pre.appendChild(head);
+    const body = document.createElement('div');
+    body.className = 'out-stderr-body ' + kind.cls;
+    /* 逐行上色：前缀行加粗、位置行压暗 ✓ */
+    for (const line of errText.split('\n')) {
+      const span = document.createElement('div');
+      const t = line.trim();
+      if (/^(error|错误)[:\s]/i.test(t)) span.className = 'ln-err';
+      else if (/^(warning|警告)[:\s]/i.test(t)) span.className = 'ln-warn';
+      else if (/^(at |called from|in file |\s*$)/i.test(t) || /at line \d+/i.test(t)) span.className = 'ln-loc';
+      span.textContent = line;
+      body.appendChild(span);
+    }
+    pre.appendChild(body);
   }
   if (!hasOut && !hasErr) pre.appendChild(Object.assign(document.createElement('span'), { className: 'empty', textContent: '(无输出)' }));
   b.appendChild(pre);

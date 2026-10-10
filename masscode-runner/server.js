@@ -1878,9 +1878,15 @@ const EXT_FOR_LANG = {
   c_cpp: 'cpp', c: 'c', java: 'java', ruby: 'rb', swift: 'swift', go: 'go',
   json: 'json', html: 'html', css: 'css', markdown: 'md', plain_text: 'txt',
   latex: 'tex',
+  /* ⚠️⚠️ 原来这里**少了 matlab / octave** ✗（2026-10-10 补）——
+     后果很隐蔽：`.m` 片段会落到下面的 `|| 'txt'` ✓ →
+     临时文件叫 **`main.txt`** ✓ → **报错信息里写 `main.txt at line N`** ✓，
+     用户一看就懵：「我哪来的 main.txt？」✓（实测截图里正是这个 ✓）。
+     补上之后报错变成 `main.m at line N` ✓，和用户写的文件对得上 ✓。 */
+  matlab: 'm', octave: 'm',
   draw: 'draw', drawing: 'draw',
 };
-const KNOWN_EXT = /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|py|js|mjs|cjs|ts|sh|go|java|rb|swift|json|html|css|yml|yaml|md|tex|txt|draw)$/i;
+const KNOWN_EXT = /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|py|js|mjs|cjs|ts|sh|go|java|rb|swift|m|json|html|css|yml|yaml|md|tex|txt|draw)$/i;
 function computeFilename(label, language, index, total) {
   const lbl = (label || '').trim();
   // 仅当 label 本身就是一个「纯文件名」时才直接使用：含路径分隔符、上跳或隐藏前缀的一律回落到默认名，
