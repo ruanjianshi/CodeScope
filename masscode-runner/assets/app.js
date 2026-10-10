@@ -14232,6 +14232,9 @@ async function termConnect() {
            ⚠️ 和 scanDeployOutput 同一个位置 ✗ —— 都是「旁听终端输出」✓，
               不消费、不改写 ✓，只做识别 ✓。 */
         scanDebugOutput(chunk);
+        /* ★ 顺手留一份原始文本 ✓（变量面板要解析它 ✓）——
+           和 scanDebugOutput 同一个位置 ✓，只读不改 ✓。 */
+        pushDebugOut(chunk);
       } catch (_) {}
     }
   } catch (_) { st.textContent = '连接断开'; st.className = 'pill err'; }
@@ -14462,7 +14465,7 @@ function stopDebug() {
 
 /* 调试按钮 ✓ —— 全部就是「把对应命令发进终端」✓ */
 [['dbg-continue', 'continue'], ['dbg-next', 'next'], ['dbg-stepin', 'stepIn'],
- ['dbg-stepout', 'stepOut'], ['dbg-vars', 'vars']].forEach(([id, key]) => {
+ ['dbg-stepout', 'stepOut']].forEach(([id, key]) => {
   const btn = $(id);
   if (!btn) return;
   btn.onclick = () => {
@@ -14472,6 +14475,14 @@ function stopDebug() {
     setStatus('idle', '已发送：' + cmds[key]);
   };
 });
+/* ★ 「变量」不再往终端发命令 ✗✓（2026-10-10）——
+   改成**弹一个表格面板** ✓（用户选了 A ✓）。
+   ⚠️ 面板自己会发 `whos` / `p locals()` / `info locals` ✓ ——
+      比 DEBUG_CMDS.vars 更适合解析 ✓（`who` 只有名字、没有值 ✓）。 */
+if ($('dbg-vars')) $('dbg-vars').onclick = () => {
+  if (!DEBUG.active) { setStatus('err', '还没进入调试'); return; }
+  openVarPanel();
+};
 if ($('dbg-stop')) $('dbg-stop').onclick = stopDebug;
 if ($('btn-debug')) $('btn-debug').onclick = () => startDebug();
 
@@ -14482,6 +14493,168 @@ if ($('btn-debug')) $('btn-debug').onclick = () => startDebug();
       所以按语言分别匹配 ✓，**匹配不到就不动高亮** ✓
       （宁可不高亮，也别高亮错行 ✓）。
    ⚠️ 匹配到之后**同时**做两件事 ✗：① 高亮那一行 ✓ ② 记下 lastLine ✓。 */
+/* ★ 调试输出缓冲 ✓✓（2026-10-10）—— 「变量」面板要从这里解析 ✓
+   ⚠️ 为什么要缓冲 ✗：终端是**流式**的 ✓，xterm 只负责**显示** ✓；
+      要「把 `whos` / `p locals()` 的输出变成表格」✓，
+      必须**自己留一份文本** ✓（xterm 的 buffer 能读 ✓，但按行取很难对齐 ✓）。
+   ⚠️ 只留最近 400 行 ✗ —— 调试输出可能很长 ✓（死循环里刷几万行 ✓），
+      无上限会吃内存 ✓。 */
+const DEBUG_OUT = { lines: [] };
+function pushDebugOut(chunk) {
+  try {
+    const t = String(chunk == null ? '' : chunk);
+    if (!t) return;
+    for (const raw of t.split('\n')) DEBUG_OUT.lines.push(raw.replace(/\r/g, ''));
+    if (DEBUG_OUT.lines.length > 400) DEBUG_OUT.lines.splice(0, DEBUG_OUT.lines.length - 400);
+  } catch (_) {}
+}
+
+/* 从缓冲里**从后往前**找第一段符合 pattern 的输出 ✓
+   （调试器的回答紧跟在命令之后 ✓，所以从尾部找最快也最准 ✓） */
+function debugOutTail(count) {
+  return DEBUG_OUT.lines.slice(-(count || 40)).join('\n');
+}
+
+/* ★★ 变量面板 ✓✓（2026-10-10）—— 用户选了「A. 变量面板」✓
+   ⚠️ 为什么值得做 ✗：`who` / `p locals()` 的输出在变量多的时候**真的看不清** ✓
+      （用户例子里已经 7 个 ✓，实际项目里几十个 ✓）。
+   ⚠️ 三种调试器的格式**完全不同** ✗✓，所以**解析必须分语言** ✓：
+      · Octave/MATLAB `whos` → 带表头的**列对齐**文本 ✓（按列宽切 ✓）
+      · pdb `p locals()`     → Python **dict repr** ✓（正则配对 ✓）
+      · gdb `info locals`    → `name = value` 一行一个 ✓（最简单 ✓）
+   ⚠️ 解析**失败就原样显示** ✗ —— 别为了好看把内容吞掉 ✓
+      （用户至少还能看到原文 ✓，也能据此告诉我「格式变了」✓）。 */
+function parseVars(lang, text) {
+  const rows = [];
+  const lines = String(text || '').split('\n');
+  if (/^(matlab|octave)$/.test(lang)) {
+    /* `whos` 的表头：Attr Name Size Bytes Class（可能没有 Attr ✓） */
+    let head = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\s*(\S+\s+)?Name\s+Size\s+Bytes\s+Class\s*$/.test(lines[i])) { head = i; break; }
+    }
+    if (head >= 0) {
+      const H = lines[head];
+      const iName = H.indexOf('Name'), iSize = H.indexOf('Size'), iBytes = H.indexOf('Bytes'), iClass = H.indexOf('Class');
+      for (let i = head + 2; i < lines.length; i++) {   /* head+1 是 ==== 那行 ✓ */
+        const l = lines[i];
+        if (!l.trim() || /^\s*====/.test(l)) continue;
+        if (/^\s*(debug>|\(|error)/.test(l)) break;      /* 到提示符就结束 ✓ */
+        /* ⚠️ 到汇总行也**必须停** ✗✓ —— 实测 `Total is 7 elements using 42 bytes`
+           会被当成一个变量 ✓（名字变成 `7 elements u` ✓）。 */
+        if (/^Total is\b/i.test(l.trim()) || /^variables in scope/i.test(l.trim())) break;
+        const name = l.slice(iName, iSize).trim();
+        if (!name) continue;
+        rows.push({ name, size: l.slice(iSize, iBytes).trim(), type: l.slice(iClass).trim(), value: '' });
+      }
+    }
+  } else if (lang === 'python') {
+    /* ⚠️ Python 现在也是 `name = value` 一行一个 ✗✓（见 VARS_CMD 的说明 ✓）——
+       不再解析 dict repr ✓（那个有嵌套逗号 ✓，实测会把值切碎 ✓）。 */
+    for (const l of lines) {
+      const m = /^\s*([A-Za-z_][\w.]*)\s*=\s*(.+)$/.exec(l);
+      if (m && !/^__/.test(m[1])) rows.push({ name: m[1], size: '', type: '', value: m[2].trim() });
+    }
+  } else {
+    /* gdb：`info locals` 是 `name = value` ✓ */
+    for (const l of lines) {
+      const m = /^\s*([A-Za-z_][\w.]*)\s*=\s*(.+)$/.exec(l);
+      if (m) rows.push({ name: m[1], size: '', type: '', value: m[2].trim() });
+    }
+  }
+  return rows;
+}
+
+/* 每种语言「问变量」用哪条命令 ✓
+   ⚠️⚠️ Python 不能用 `p locals()` ✗✗（实测踩到两次 ✓）：
+      ① 它会把 **`__builtins__`** 整个打出来 ✓（几百个内置名 ✓）→ 面板被淹没 ✓；
+      ② 就算过滤了 ✓，**dict repr 里的嵌套逗号**会把值切碎 ✓
+         （`'arr': '[1, 2, 3]'` 被切成 `'[1` ✓，实测就是这样 ✓）。
+      → 改成**一行一个变量** ✓：用 `'\n'.join(...)` + `repr` ✓，
+        解析就退化成最简单的 `name = value` ✓（和 gdb 那套共用 ✓）。
+   ⚠️ Octave 用 `whos` 而不是 `who` ✗ ——
+      `who` 只给**名字** ✓，`whos` 给 **Name / Size / Bytes / Class** ✓，
+      正好是面板要的四列 ✓。 */
+const VARS_CMD = {
+  matlab: 'whos', octave: 'whos',
+  python: "p '\\n'.join(k + ' = ' + repr(v) for k, v in locals().items() if not k.startswith('__'))",
+  c: 'info locals', c_cpp: 'info locals',
+};
+
+function openVarPanel() {
+  try {
+    const old = document.getElementById('var-panel');
+    if (old) old.remove();
+    const win = document.createElement('div');
+    win.id = 'var-panel';
+    const bar = document.createElement('div');
+    bar.className = 'var-bar';
+    bar.innerHTML = '<b>👁 变量</b><span class="hint">点「刷新」重新读一次</span>';
+    const close = document.createElement('button');
+    close.textContent = '✕'; close.title = '关闭';
+    const refresh = document.createElement('button');
+    refresh.textContent = '↻ 刷新';
+    bar.appendChild(refresh); bar.appendChild(close);
+    const body = document.createElement('div');
+    body.className = 'var-body';
+    body.innerHTML = '<div class="var-empty">正在读取…</div>';
+    win.appendChild(bar); win.appendChild(body);
+    const shut = () => { win.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') shut(); };
+    close.onclick = shut;
+    document.addEventListener('keydown', onKey);
+    /* 拖动（和图片浮窗 / 代码向导 / 图形编辑器同一套 ✓） */
+    bar.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+      const sx = e.clientX, sy = e.clientY, sl = win.offsetLeft, st = win.offsetTop;
+      const move = (ev) => { win.style.left = Math.max(0, sl + ev.clientX - sx) + 'px'; win.style.top = Math.max(0, st + ev.clientY - sy) + 'px'; };
+      const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); };
+      bar.setPointerCapture(e.pointerId);
+      bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up);
+    });
+    async function doRefresh() {
+      const lang = String(DEBUG.lang || '').toLowerCase();
+      const cmd = VARS_CMD[lang];
+      if (!DEBUG.active || !cmd) { body.innerHTML = '<div class="var-empty">还没进入调试</div>'; return; }
+      body.innerHTML = '<div class="var-empty">正在读取…</div>';
+      DEBUG_OUT.lines.length = 0;              /* 清空缓冲 ✓，免得读到上一次的 ✓ */
+      await termSend(cmd);
+      await new Promise((r) => setTimeout(r, 1200));
+      const raw = debugOutTail(60);
+      const rows = parseVars(lang, raw);
+      if (!rows.length) {
+        body.innerHTML = '<div class="var-empty">没能解析出变量（原文如下）</div>';
+        const pre = document.createElement('pre');
+        pre.className = 'var-raw';
+        pre.textContent = raw.trim();
+        body.appendChild(pre);
+        return;
+      }
+      const tbl = document.createElement('table');
+      tbl.className = 'var-table';
+      tbl.innerHTML = '<thead><tr><th>名字</th><th>值</th><th>大小</th><th>类型</th></tr></thead>';
+      const tb = document.createElement('tbody');
+      for (const r of rows) {
+        const tr = document.createElement('tr');
+        for (const v of [r.name, r.value, r.size, r.type]) {
+          const td = document.createElement('td');
+          td.textContent = v || '';
+          if (v === r.name) td.className = 'var-name';
+          tr.appendChild(td);
+        }
+        tb.appendChild(tr);
+      }
+      tbl.appendChild(tb);
+      body.innerHTML = '';
+      body.appendChild(tbl);
+      body.insertAdjacentHTML('beforeend', '<div class="var-count">共 ' + rows.length + ' 个变量</div>');
+    }
+    refresh.onclick = doRefresh;
+    document.body.appendChild(win);
+    doRefresh();
+  } catch (_) {}
+}
+
 function scanDebugOutput(text) {
   if (!DEBUG.active || !text) return;
   const s = String(text);

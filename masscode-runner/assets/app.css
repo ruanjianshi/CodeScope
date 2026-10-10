@@ -4153,3 +4153,23 @@
 .ln-warn { color: #ffd166; }
 /* 位置信息（at line N）压暗 ✓ —— 次要信息，别和正文抢注意力 ✓ */
 .ln-loc { color: var(--dim); }
+
+/* ★ 变量面板 ✓✓（2026-10-10）—— 可拖动浮窗 + 表格 ✓（和代码向导同风格 ✓） */
+#var-panel { position: fixed; left: 60px; top: 90px; z-index: 94; width: 520px; max-height: 62vh;
+  display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; background: var(--panel); box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+.var-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: move;
+  user-select: none; border-bottom: 1px solid var(--border); font-size: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent); }
+.var-bar .hint { margin-left: auto; color: var(--dim); font-size: 11px; }
+.var-bar button { border: 1px solid var(--border); background: transparent; color: var(--text); padding: 1px 8px; cursor: pointer; }
+.var-body { overflow: auto; padding: 8px 10px 10px; }
+.var-empty { color: var(--dim); font-size: 12px; padding: 6px 0; }
+.var-count { color: var(--dim); font-size: 11px; margin-top: 7px; }
+.var-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.var-table th { text-align: left; color: var(--dim); font-weight: 500; padding: 3px 8px 5px 0;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
+.var-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  vertical-align: top; word-break: break-word; }
+.var-table td.var-name { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.var-raw { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--dim); margin: 0; }
