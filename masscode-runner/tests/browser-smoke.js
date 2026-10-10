@@ -291,6 +291,11 @@ print(r.run())
     await page.waitForTimeout(900);
   };
   await page.goto(baseUrl+'/?legacy-editor=1',{waitUntil:'domcontentloaded'});
+    /* ★★ 等应用真的就绪 ✗✓（2026-10-10）——
+       只等 domcontentloaded 不够 ✓：首屏渲染是异步的（要拉 vault ✓）→
+       原来靠后面写死的 waitForTimeout 兜 ✓，**时好时坏** ✓（实测连跑三次失败点各不相同 ✓）。
+       → 用 app.js 末尾挂的就绪信号 ✓（两次 rAF，不依赖业务变量 ✓）。 */
+    await page.waitForFunction(()=>window.__csReady===true,null,{timeout:60000});
   await page.route('**/api/study/readable?*',route=>{const requestUrl=new URL(route.request().url()),target=requestUrl.searchParams.get('url')||'';const chapter=target.includes('chapter-2');route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,url:chapter?'https://docs.example.test/chapter-2.html':'https://docs.example.test/start.html',title:chapter?'第二章':'学习网页',html:chapter?'<main><h1>第二章内容</h1><p>阅读视图内导航成功。</p></main>':'<main><h1>学习网页正文</h1><p>公网网址已通过站内阅读视图载入。</p></main>',navigationHtml:'<ol><li><a href="start.html">首页</a></li><li><a href="chapter-2.html">第二章</a></li></ol>',navigationUrl:'https://docs.example.test/toc.html'})});});
   // 注意：传给 waitForFunction 的函数会被序列化到页面里执行，外部变量必须用参数传入。
   await page.waitForFunction((expected)=>{const el=document.querySelector('.brand-version');return !!el&&el.textContent===expected;},'v'+packageVersion+' · Web');

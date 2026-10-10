@@ -17,3 +17,6 @@ markdown-vault/**/.*.tmp-*
 # 每次都要手动忽略很烦，直接按运行时产物排除。
 markdown-vault/**/.vitepress/.temp/
 markdown-vault/**/.vitepress/cache/
+
+# Octave 在项目目录里留下的工作区文件（调试时会生成，不该进版本库）
+**/octave-workspace

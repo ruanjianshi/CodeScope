@@ -17040,3 +17040,23 @@ refresh(false);
 api('/api/project/compile-db').then((data) => { if (data && data.ok) { COMPILE_DB=data; PROJECT_DATA.compile=data; COMP_IDX_FILE=''; } }).catch(() => {});
 loadEnv(false, true);
 setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
+
+/* ★★ 就绪信号 ✓✓（2026-10-10）—— 给自动化测试用的 ✓
+   ⚠️ 为什么需要 ✗：tests/browser-smoke.js 有 **131 处 waitForTimeout** ✓（写死等待 ✓），
+      而启动只等 domcontentloaded ✓ —— 但**首屏渲染是异步的**（要拉 vault / 建索引 ✓）
+      → 等待不够就**时好时坏** ✓（实测连跑三次，失败点各不相同 ✓）。
+   ⚠️ 用**两次 requestAnimationFrame** 等首帧画完 ✗ ——
+      比 setTimeout(0) 靠谱 ✓，而且**不依赖任何业务变量** ✓
+      （写进业务逻辑里会漏、会随重构失效 ✓）。
+   ⚠️ 同时挂 DOM 属性和 window 变量 ✗ —— 测试用哪个都行 ✓
+      （waitForSelector 和 waitForFunction 各有各的方便 ✓）。 */
+try {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        window.__csReady = true;
+        document.documentElement.setAttribute('data-cs-ready', '1');
+      } catch (_) {}
+    });
+  });
+} catch (_) {}
