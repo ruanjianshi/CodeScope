@@ -4029,3 +4029,13 @@
 }
 /* 已经有自己焦点样式的输入框，别叠两层 ✓ */
 :where(input, select, textarea):focus-visible { outline-offset: 0; }
+
+/* ★  /  分节标记的整行分隔线 ✓✓（2026-10-10）——
+   用户反馈「缺少分割线显示，难以区分段与段」。
+   做法：Monaco 整行装饰（不改文本 ✓），段首那条线上加一条横线 + 淡背景 ✓，
+   并在左侧行号槽画一个小竖条 ✓（像 VS Code 的 cell 标记 ✓）。
+   ⚠️ 用 border-top 而不是 border-bottom ✗ —— 段首的线应该在**标记行上方** ✓，
+      这样视觉上「这一段的开始」很明确 ✓。
+   ⚠️ 只加极淡的背景 ✗ —— 太重会把代码压得喘不过气 ✓（这是编辑器不是表格 ✓）。 */
+.cs-section-line { border-top: 1px solid color-mix(in srgb, var(--accent, #4f8cff) 38%, transparent) !important; background: color-mix(in srgb, var(--accent, #4f8cff) 5%, transparent); }
+.cs-section-gutter { border-left: 2px solid color-mix(in srgb, var(--accent, #4f8cff) 70%, transparent); margin-left: 3px; }

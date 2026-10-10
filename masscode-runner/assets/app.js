@@ -101,6 +101,46 @@ applyEditorFontSize(EDITOR_FONT_SIZE,false);
       · **编辑态**用 **Monaco**（它有自己的 tokenizer ✓）→ 走这张表 ✓；
       · **只读态**用 `#code` 那层（`codeHtml` → `highlightMatlab` ✓）→ 走 `.ml-*` CSS ✓。
       两套都要能认 matlab ✓，只补一套是不够的 ✗（我一开始就只补了后者 ✓）。 */
+/* ★ 给 `%%` / `# %%` 分节标记画**整行分隔线** ✓✓（2026-10-10）
+   用户原话：「缺少分割线显示，难以区分段与段」✓。
+   ⚠️ 为什么需要 ✗：`%%` 现在只是**注释色** ✓ —— 一行灰字 ✓，
+      扫一眼分不出「段从哪开始」✓（实测用户反馈 ✓）。
+      VS Code / Jupyter 的做法是**在段首上方画一条横线** ✓，这里照做 ✓。
+   ⚠️ 用 Monaco 的**整行装饰**（isWholeLine + className ✓）而不是改文本 ✗ ——
+      装饰**不影响文档内容** ✓（不会污染保存的文件 ✓），也不影响光标/选区 ✓。
+   ⚠️ 装饰要**在模型内容变化后重算** ✗（用户加/删一段，行号全变了 ✓）——
+      所以内容变化时也调一次 ✓。
+   ⚠️ 用 `createDecorationsCollection` 时要注意版本兼容 ✗：
+      这里用**老的 `deltaDecorations` 风格**（`getModelDecorations` + 重设 ✓）
+      在 Monaco 0.30+ 已被弃用 ✓ —— 所以优先用 `createDecorationsCollection` ✓，
+      拿不到就退回 `deltaDecorations` ✓（两个都兜住 ✓）。 */
+let SECTION_DECO_COLLECTION = null;
+let SECTION_DECO_IDS = [];
+function refreshSectionSeparators() {
+  try {
+    if (!MONACO_EDITOR) return;
+    const model = MONACO_EDITOR.getModel();
+    if (!model) return;
+    const lines = model.getValue().split('\n');
+    const ranges = [];
+    for (let i = 0; i < lines.length; i++) {
+      /* 和 currentSection 的判据**保持一致** ✓（%% 与 # %% ✓，%%% 也算 ✓） */
+      if (/^\s*%%/.test(lines[i]) || /^\s*#\s*%%/.test(lines[i])) {
+        ranges.push({
+          range: new window.monaco.Range(i + 1, 1, i + 1, 1),
+          options: { isWholeLine: true, className: 'cs-section-line', linesDecorationsClassName: 'cs-section-gutter' },
+        });
+      }
+    }
+    if (typeof MONACO_EDITOR.createDecorationsCollection === 'function') {
+      if (SECTION_DECO_COLLECTION) SECTION_DECO_COLLECTION.set(ranges);
+      else SECTION_DECO_COLLECTION = MONACO_EDITOR.createDecorationsCollection(ranges);
+    } else {
+      SECTION_DECO_IDS = MONACO_EDITOR.deltaDecorations(SECTION_DECO_IDS, ranges);
+    }
+  } catch (_) {}
+}
+
 function monacoLanguage(language){return({c:'c',c_cpp:'cpp',javascript:'javascript',typescript:'typescript',python:'python',go:'go',rust:'rust',java:'java',csharp:'csharp',html:'html',css:'css',json:'json',markdown:'markdown',yaml:'yaml',xml:'xml',shell:'shell',latex:'latex',matlab:'matlab',octave:'matlab',plain_text:'plaintext'})[String(language||'').toLowerCase()]||'plaintext';}
 
 /* ★ 给 Monaco 注册 MATLAB 语法 ✓✓（2026-10-10）
@@ -258,7 +298,7 @@ async function syncMonacoMain(){
     if(!MONACO_EDITOR){
       MONACO_EDITOR=m.editor.create(host,Object.assign(monacoOptions(false),{model}));
       wireMonacoCommands(MONACO_EDITOR,true);
-      MONACO_EDITOR.onDidChangeModelContent(()=>{if(MONACO_SYNCING)return;const ta=$('code-edit');MONACO_SYNCING=true;ta.value=MONACO_EDITOR.getValue();syncProxySelection(MONACO_EDITOR,ta);ta.dispatchEvent(new Event('input',{bubbles:true}));MONACO_SYNCING=false;});
+      MONACO_EDITOR.onDidChangeModelContent(()=>{if(MONACO_SYNCING)return;refreshSectionSeparators();const ta=$('code-edit');MONACO_SYNCING=true;ta.value=MONACO_EDITOR.getValue();syncProxySelection(MONACO_EDITOR,ta);ta.dispatchEvent(new Event('input',{bubbles:true}));MONACO_SYNCING=false;});
       MONACO_EDITOR.onDidChangeCursorSelection(()=>{syncProxySelection(MONACO_EDITOR,$('code-edit'));scheduleSyncMdPreview();syncRelationToEditorCaret();updateCodeContextBar();});
       MONACO_EDITOR.onDidFocusEditorText(()=>clearActiveSplitReading());
       MONACO_EDITOR.onDidScrollChange(event=>{const ta=$('code-edit');ta.scrollTop=event.scrollTop;ta.scrollLeft=event.scrollLeft;syncMarkdownPreviewFromSource();});
@@ -267,7 +307,7 @@ async function syncMonacoMain(){
     MONACO_EDITOR.updateOptions(monacoOptions(false));applyEditorWordWrap();
     const proxyPosition=model.getPositionAt(Math.max(0,Math.min(ta.selectionStart||0,model.getValueLength())));
     MONACO_EDITOR.setPosition(proxyPosition);MONACO_EDITOR.revealPositionInCenterIfOutsideViewport(proxyPosition);
-    MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';
+    MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';refreshSectionSeparators();
     requestAnimationFrame(()=>{if(MONACO_EDITOR){MONACO_EDITOR.layout();syncMarkdownPreviewFromSource();}});
     updateMonacoDiagnostics();
   }catch(error){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';console.warn('Monaco 编辑器加载失败，已回退兼容编辑器',error);}
