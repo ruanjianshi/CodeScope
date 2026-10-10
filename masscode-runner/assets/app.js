@@ -13116,7 +13116,23 @@ async function runSection(opts) {
   const fromTop = !!(opts && opts.fromTop);
   const f = CURRENT && CURRENT.fragments[CINDEX];
   if (!f) return;
-  if (!EDITING) { setStatus('err', '先点「✏ 编辑」再跑本段'); return; }
+  /* ★ 自动进编辑态 ✓✓（2026-10-10 修）——
+     ⚠️ 原来这里写的是「不在编辑态就报错退出」✗：
+        `if (!EDITING) { setStatus('err', '先点「✏ 编辑」再跑本段'); return; }`
+        后果很糟 ✗：**只改了状态栏，输出区一个字都不变** ✓ ——
+        用户看到的就是「**点了没反应**」✓（实测踩到 ✓）。
+     ✅ 改成和 doRun 对 LaTeX 一样的做法 ✓：**自动切进编辑态**再跑 ✓
+        （用户点「跑本段」的意图很明确 ✓，没必要让他先点「编辑」✓）。
+     ⚠️⚠️ 但切编辑态会 **renderCode() 重建编辑框** ✗ ——
+        光标会**回到开头** ✓，那样 currentSection 就会**取错段** ✓（会跑第 0 段 ✓）。
+        → 所以先把**光标位置存下来** ✓，重建之后再放回去 ✓✓。 */
+  let caret = 0;
+  try { const ta = $('code-edit'); if (ta && typeof ta.selectionStart === 'number') caret = ta.selectionStart; } catch (_) {}
+  if (!EDITING) { EDITING = true; renderCode(); }
+  try {
+    const ta2 = $('code-edit');
+    if (ta2 && caret) { ta2.focus(); ta2.setSelectionRange(caret, caret); }
+  } catch (_) {}
   const lang = String(f.language || '');
   const isPy = lang === 'python';
   const isMatlab = lang === 'matlab' || lang === 'octave';

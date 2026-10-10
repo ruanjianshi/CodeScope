@@ -51,6 +51,8 @@ function createPythonKernel(options = {}) {
   function alive() { return !!(proc && proc.exitCode === null && !proc.killed); }
 
   function kill() {
+    /* 固定 cell 文件在内核结束时统一删 ✓ */
+    try { fs.unlinkSync(path.join(os.tmpdir(), 'codescope-cell-' + process.pid + '.py')); } catch (_) {}
     if (!proc) return false;
     try { proc.kill('SIGKILL'); } catch (_) {}
     proc = null;
@@ -98,7 +100,7 @@ function createPythonKernel(options = {}) {
     waiting = null;
     cellCount += 1;
     /* 临时 cell 文件用完就删 ✓（别在 /tmp 里堆 ✓）*/
-    if (task.cellFile) { try { fs.unlinkSync(task.cellFile); } catch (_) {} }
+    /* 不再每格删文件 ✓（见上面那段说明 ✓）—— 内核退出时统一删 ✓ */
     task.resolve({ ok: true, stdout: out, stderr: err, index: task.index, ms: Date.now() - task.t0 });
   }
 
@@ -117,12 +119,19 @@ function createPythonKernel(options = {}) {
            ① 只有**一条**语句，REPL 不用猜块边界 ✓；
            ② 报错信息里显示 `<cell>`，比 `<stdin>` 清楚 ✓；
            ③ exec 在**交互命名空间**里执行 ✓，所以变量照样跨格保留 ✓✓。 */
-      const cellFile = path.join(os.tmpdir(), 'codescope-cell-' + process.pid + '-' + (++seq) + '.py');
+      seq++;
+      const cellFile = path.join(os.tmpdir(), 'codescope-cell-' + process.pid + '.py');
       try { fs.writeFileSync(cellFile, src, 'utf8'); }
       catch (e) { waiting = null; return reject(e); }
       const sentinel = SENT_PREFIX + seq + '__';
       const task = { sentinel, resolve, reject, t0: Date.now(), index: cellCount, cellFile };
       waiting = task;
+      /* ⚠️⚠️ 每格一个临时文件 + 用完就删 → **有一整类生命周期问题** ✗✗
+         （实测：UI 里连跑几格时偶发 `FileNotFoundError: …codescope-cell-…-3.py` ✓ ——
+          删文件的那一刻，Python 那边的 exec 还没读到它 ✓）。
+         → 改成 **每个内核一个固定文件** ✓，**每格覆写** ✓，**内核退出时才删** ✓✓：
+           文件的生命周期跟内核一样长 ✓，中间不存在「被删掉」的时刻 ✓；
+           而且文件更少 ✓（不再每格攒一个 ✓）。 */
       const payload = 'exec(compile(open(' + JSON.stringify(cellFile) + ", encoding='utf-8').read(), '<cell>', 'exec'))\n"
         + 'print(' + JSON.stringify(sentinel) + ')\n';
       try { proc.stdin.write(payload); }
