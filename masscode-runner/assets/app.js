@@ -11239,6 +11239,8 @@ function renderCode() {
   const isMatlab = !!(f && (f.language === 'matlab' || f.language === 'octave' || f.language === 'python'));
   const secBtn = $('btn-run-section');
   if (secBtn) { secBtn.style.display = isMatlab ? '' : 'none'; secBtn.disabled = !isMatlab; }
+  const upBtn = $('btn-run-upto');
+  if (upBtn) { upBtn.style.display = isMatlab ? '' : 'none'; upBtn.disabled = !isMatlab; }
   const conBtn = $('btn-matlab-console');
   /* ⚠️ 命令窗口只给 MATLAB/Octave ✗ —— Python 走**持久内核**（段运行按钮 ✓），
      它的交互体验是「跑一格看一格」✓，不是「在终端里敲」✓。
@@ -13083,7 +13085,7 @@ function showInputInOutput(message, preserveOutput) {
      · 没有 `%%` 时 → 返回 null，调用方**退回整篇运行** ✓（不报错 ✓）。
    ⚠️ `%%%` 也是分节标记 ✓（MATLAB 里 3 个及以上百分号同样算 ✓），
       所以判据用 `^\s*%%` 而不是 `^\s*%%[^%]` ✓。 */
-function currentSection(text) {
+function currentSection(text, opts) {
   const src = String(text == null ? '' : text);
   const lines = src.split('\n');
   const marks = [];
@@ -13098,10 +13100,20 @@ function currentSection(text) {
   for (let k = 0; k < marks.length; k++) {
     if (marks[k] <= row) { start = marks[k]; end = (k + 1 < marks.length) ? marks[k + 1] : lines.length; idx = k + 1; }
   }
-  return { start, end, code: lines.slice(start, end).join('\n'), index: idx, total: marks.length };
+  /* ★ 「跑到这里」模式 ✓✓（2026-10-10）——
+     ⚠️ 为什么需要 ✗：MATLAB / Octave 的段运行是**每次新进程** ✓，
+        所以「只跑本段」时上一段的变量**不存在** ✓
+        （实测报 `error: 'a' undefined` ✓）。
+        但真 MATLAB 的 Run Section 是**保留工作区**的 ✓ —— 用户会觉得「变量丢了」✓。
+     ✅ 补一个「跑到这里」✓：**从文件开头跑到光标所在段** ✓，
+        这样前面所有段都会先执行 ✓，状态就重建了 ✓。
+        这也是 VS Code / Jupyter 的通用做法（Run Up To / Run Above ✓）。 */
+  const code = opts && opts.fromTop ? lines.slice(0, end).join('\n') : lines.slice(start, end).join('\n');
+  return { start, end, code, index: idx, total: marks.length, fromTop: !!(opts && opts.fromTop) };
 }
 
-async function runSection() {
+async function runSection(opts) {
+  const fromTop = !!(opts && opts.fromTop);
   const f = CURRENT && CURRENT.fragments[CINDEX];
   if (!f) return;
   if (!EDITING) { setStatus('err', '先点「✏ 编辑」再跑本段'); return; }
@@ -13109,16 +13121,22 @@ async function runSection() {
   const isPy = lang === 'python';
   const isMatlab = lang === 'matlab' || lang === 'octave';
   if (!isPy && !isMatlab) { setStatus('idle', '这个语言没有分段运行'); return; }
-  const sec = currentSection(editText());
+  const sec = currentSection(editText(), { fromTop });
   if (!sec) { setStatus('idle', '这篇没有 %% 分节，跑整篇'); return isPy ? runKernelCell(editText()) : doRun(); }
+
+  const label = fromTop
+    ? ('跑到第 ' + sec.index + ' 段（含前面所有段 ✓）')
+    : ('跑第 ' + sec.index + (isPy ? ' 格' : ' 段') + '（共 ' + sec.total + (isPy ? ' 格' : ' 段') + '）');
 
   /* ★ Python 走**持久内核** ✓✓（Jupyter 式：变量跨格保留 ✓）——
      用户原话：「我需要可以实现 jupyter 那种方式运行」✓。
      ⚠️ 和 MATLAB 的段运行**不是同一条路** ✗：
         · MATLAB 段运行 → /api/run（每次新进程 ✓，但 MATLAB/Octave 本来就这样 ✓）；
-        · Python 段运行 → /api/py/exec（**同一个进程** ✓，变量留着 ✓✓）。 */
-  if (isPy) { setStatus('idle', '跑第 ' + sec.index + ' 格（共 ' + sec.total + ' 格）'); return runKernelCell(sec.code); }
-  setStatus('idle', '跑第 ' + sec.index + ' 段（共 ' + sec.total + ' 段）');
+        · Python 段运行 → /api/py/exec（**同一个进程** ✓，变量留着 ✓✓）。
+     ⚠️ Python 走内核时**不需要**「跑到这里」✗ —— 变量本来就在 ✓；
+        传了也只会把前面几格**重跑一遍**（可能有副作用 ✓），所以忽略它 ✓。 */
+  if (isPy) { setStatus('idle', label); return runKernelCell(sec.code); }
+  setStatus('idle', label);
   return doRun({ code: sec.code });
 }
 
@@ -14203,6 +14221,7 @@ loadRemoteStatus();
 $('btn-run').onclick = doRun;
 /* ★ `%%` 段运行 ✓✓（2026-10-09）—— 按钮 + 快捷键 */
 $('btn-run-section').onclick = () => runSection();
+$('btn-run-upto').onclick = () => runSection({ fromTop: true });
 /* ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-09）
    用户原话：「matlab/octave 那种命令窗口也需要给我完成复刻过来，
              就是那种可以输入指令的」✓。

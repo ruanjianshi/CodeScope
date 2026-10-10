@@ -609,6 +609,11 @@
            对应 MATLAB 的「Run Section」（Ctrl+Enter）✓：
            只跑光标所在的那一段，调参时不用从头跑整个脚本 ✓。 -->
       <button id="btn-run-section" title="运行本段（%% 分段）Ctrl/⌘+Alt+Enter" aria-label="运行本段" style="display:none">▶ 本段</button>
+      <!-- ★ 「跑到这里」✓（2026-10-10）——
+           实测发现：MATLAB/Octave 的段运行是每次新进程，所以「只跑本段」时
+           上一段的变量不存在（报 'a' undefined），而真 MATLAB 的 Run Section
+           是保留工作区的。补一个「从开头跑到本段」让状态能重建 ✓。 -->
+      <button id="btn-run-upto" title="从文件开头跑到光标所在段（重建前面所有段的变量）Ctrl/⌘+Alt+Shift+Enter" aria-label="跑到这里" style="display:none">▶▶ 跑到这里</button>
       <!-- ★ MATLAB / Octave 命令窗口 ✓（2026-10-09）——
            不另造 REPL，直接在底部终端里起引擎（真 PTY，能交互）✓。
            只在 .m 片段上显示 ✓。 -->
