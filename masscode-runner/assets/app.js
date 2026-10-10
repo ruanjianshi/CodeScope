@@ -14549,11 +14549,21 @@ function parseVars(lang, text) {
       }
     }
   } else if (lang === 'python') {
-    /* ⚠️ Python 现在也是 `name = value` 一行一个 ✗✓（见 VARS_CMD 的说明 ✓）——
-       不再解析 dict repr ✓（那个有嵌套逗号 ✓，实测会把值切碎 ✓）。 */
+    /* ⚠️ Python 用 `\x1f` 分隔**四段** ✗✓：名字 \x1f 值 \x1f 类型 \x1f 长度 ✓
+       ⚠️ **按 `\x1f` 切，不按空格 / 逗号** ✗ —— 值里本来就有它们 ✓
+          （`[0, 1, 4, 9, 16, 25]` ✓）。
+       ⚠️ **兼容没有 `\x1f` 的行** ✗：比如用户手敲过旧命令、或以后命令改了 ✓，
+          退回「name = value」解析 ✓ —— **别让整张表空掉** ✓。 */
     for (const l of lines) {
-      const m = /^\s*([A-Za-z_][\w.]*)\s*=\s*(.+)$/.exec(l);
-      if (m && !/^__/.test(m[1])) rows.push({ name: m[1], size: '', type: '', value: m[2].trim() });
+      if (l.indexOf('\x1f') >= 0) {
+        const p = l.split('\x1f');
+        if (p[0] && !/^__/.test(p[0])) {
+          rows.push({ name: p[0], value: p[1] || '', type: p[2] || '', size: p[3] || '' });
+        }
+      } else {
+        const m = /^\s*([A-Za-z_][\w.]*)\s*=\s*(.+)$/.exec(l);
+        if (m && !/^__/.test(m[1])) rows.push({ name: m[1], size: '', type: '', value: m[2].trim() });
+      }
     }
   } else {
     /* gdb：`info locals` 是 `name = value` ✓ */
@@ -14583,7 +14593,15 @@ const VARS_CMD = {
      （用户截图里正是这个 ✓）。
      `print` 才是「**按原样输出**」✓ —— 这才是我们要的 ✓。
      ⚠️ 顺带：`print` 在 pdb 里也是合法命令 ✓（它就是普通 Python 语句 ✓）。 */
-  python: "print('\\n'.join(k + ' = ' + repr(v) for k, v in locals().items() if not k.startswith('__')))",
+  /* ⚠️ 用户问「**没有大小、类型吗**」✗✓（2026-10-10）——
+     Python **是有类型的** ✓（int / list / module / function … ✓），
+     容器也**有长度** ✓ —— 只是我第一版没让 pdb 把它们打出来 ✓。
+     → 现在拼四段 ✓：**名字 \x1f 值 \x1f 类型 \x1f 长度** ✓。
+     ⚠️ 为什么用 `\x1f`（ASCII 单元分隔符）当分隔符 ✗：
+        **值里本来就有逗号和空格** ✓（`[0, 1, 4, 9, 16, 25]` ✓）——
+        拿它们当分隔符**必然切错** ✓（这个坑今天在 dict repr 上已经踩过一次 ✓）。
+        `\x1f` 是专门干这个的 ✓，正常值里不会出现 ✓。 */
+  python: "print('\\n'.join(k + '\\x1f' + repr(v) + '\\x1f' + type(v).__name__ + '\\x1f' + (str(len(v)) if hasattr(v, '__len__') else '') for k, v in locals().items() if not k.startswith('__')))",
   c: 'info locals', c_cpp: 'info locals',
 };
 
@@ -14689,8 +14707,14 @@ function openVarPanel() {
         const tr = document.createElement('tr');
         for (const [, key] of cols) {
           const td = document.createElement('td');
-          td.textContent = r[key] || '';
+          const raw = String(r[key] || '');
+          td.textContent = raw;
           td.className = 'var-' + key;
+          /* ⚠️ 长值**截断显示**，但**完整值放 title** ✓（悬停能看全 ✓）——
+             `math` 的 repr 有 90 多字符 ✓（`<module 'math' from '/Users/…/math.cpython-313-darwin.so'>` ✓），
+             不截会把表格撑得很宽 ✓，而且**真正想看的 `[0,1,4,…]` 反而被挤没了** ✓。 */
+          if (key === 'value' && raw.length > 90) td.textContent = raw.slice(0, 90) + '…';
+          if (raw.length > 40) td.title = raw;
           tr.appendChild(td);
         }
         tb.appendChild(tr);
