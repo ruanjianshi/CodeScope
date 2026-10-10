@@ -14311,6 +14311,23 @@ function showDbgBar(on) {
         : ('调试中 · ' + sessLang + (sessName ? ' · ' + sessName : '') + (DEBUG.lastLine ? ' · 第 ' + DEBUG.lastLine + ' 行' : '')));
     st.className = 'dbg-state' + (on ? ' on' : '');
     st.title = elsewhere ? '调试会话绑定在终端里跑的那个文件上；要调当前片段请先「停止」再重新点 🐞' : '';
+    /* ★ 点调试条 → **跳到当前停的那一行** ✓✓（2026-10-11）—— 用户：「多多检查和优化」✓
+       ⚠️ 为什么要做 ✗：调试时经常「眼睛在终端、想知道代码在哪」 ✓，
+          或者滚走了想回来 ✓ —— 点一下比手动找行号快得多 ✓。
+       ⚠️ 只在**有行号**时才让它是可点的 ✗（`on && lastLine` ✓）——
+          否则点了没反应，用户会以为坏了 ✓。
+       ⚠️ 用 `style.cursor` + `onclick` 而不是给整条加 ✗ ——
+          只让**状态文字**可点 ✓，免得和「停止」按钮抢点击 ✓。 */
+    const canJump = on && DEBUG.lastLine > 0;
+    st.style.cursor = canJump ? 'pointer' : '';
+    st.onclick = canJump ? () => {
+      try {
+        MONACO_EDITOR.revealLineInCenter(DEBUG.lastLine);
+        MONACO_EDITOR.setPosition({ lineNumber: DEBUG.lastLine, column: 1 });
+        MONACO_EDITOR.focus();
+      } catch (_) {}
+    } : null;
+    if (canJump) st.title = '点一下跳到第 ' + DEBUG.lastLine + ' 行';
   }
 }
 
@@ -14910,8 +14927,14 @@ function openVarPanel() {
       if (!DEBUG.active || !cmd) { body.innerHTML = '<div class="var-empty">还没进入调试</div>'; return; }
       body.innerHTML = '<div class="var-empty">正在读取…</div>';
       DEBUG_OUT.lines.length = 0;              /* 清空缓冲 ✓，免得读到上一次的 ✓ */
-      await termSend(cmd);
-      await new Promise((r) => setTimeout(r, 1200));
+      /* ⚠️⚠️ **不要 `await termSend(cmd)`** ✗✗（2026-10-11 实测修）——
+         `termSend` 返回的是 `fetch(...)` 的 Promise ✓，
+         **请求挂住时它永远不 resolve** ✓ →
+         后面的等待代码**永远执行不到** ✓ → 面板**卡在「正在读取…」** ✓✓
+         （实测就是这样：面板 body 永远是「正在读取…」✓）。
+         → **发出去就行** ✓，用**定时等待**控制节奏 ✓（这才是本来的意图 ✓）。 */
+      termSend(cmd);
+      await new Promise((r) => setTimeout(r, 1400));
       const raw = debugOutTail(60);
       const rows = parseVars(lang, raw);
       if (!rows.length) {
@@ -14985,11 +15008,41 @@ function openVarPanel() {
             continue;
           }
           td.textContent = raw;
-          /* ⚠️ 长值**截断显示**，但**完整值放 title** ✓（悬停能看全 ✓）——
-             `math` 的 repr 有 90 多字符 ✓，不截会把表格撑得很宽 ✓，
-             而且**真正想看的 `[0,1,4,…]` 反而被挤没了** ✓。
-             ⚠️ 现在配合 `table-layout: fixed` + `ellipsis` ✓，
-                截断是**按列宽自动**的 ✓（这里再截一次是双保险 ✓）。 */
+          /* ★ 值可以**点一下复制** ✓✓（2026-10-11）—— 用户：「多多检查和优化」✓
+             ⚠️ 为什么要做 ✗：调试时经常要把值**贴到别处** ✓
+                （去搜索、去对比、写进笔记 ✓）—— 手动拖选一长串很容易选漏 ✓。
+             ⚠️ 长值**显示是截断的** ✓，但**复制的是完整值** ✗ ——
+                这才是用户要的（**看到的是缩略，拿到的是全的** ✓）。
+             ⚠️ `navigator.clipboard` 是**异步而且可能被拒** ✗（非安全上下文 / 无权限 ✓）→
+                兜底用 `execCommand('copy')` ✓；两条都不行就**明说复制失败** ✓
+                （别假装成功 ✓，用户会以为复制到了、粘出来是空的 ✓）。 */
+          if (key === 'value' && raw) {
+            td.title = raw.length > 40 ? raw : '点一下复制';
+            td.classList.add('var-copyable');
+            td.onclick = () => {
+              const full = String(r.value || '');
+              const done = () => setStatus('ok', '已复制：' + (full.length > 40 ? full.slice(0, 40) + '…' : full));
+              const fail = () => setStatus('err', '复制失败（浏览器不允许）—— 可以手动选中复制');
+              const legacy = () => {
+                try {
+                  const ta = document.createElement('textarea');
+                  ta.value = full;
+                  ta.style.position = 'fixed';
+                  ta.style.opacity = '0';
+                  document.body.appendChild(ta);
+                  ta.select();
+                  const ok = document.execCommand('copy');
+                  ta.remove();
+                  ok ? done() : fail();
+                } catch (_) { fail(); }
+              };
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(full).then(done).catch(legacy);
+                } else { legacy(); }
+              } catch (_) { legacy(); }
+            };
+          }
           if (key === 'value' && raw.length > 90) td.textContent = raw.slice(0, 90) + '…';
           if (raw.length > 40) td.title = raw;
           tr.appendChild(td);
@@ -15008,18 +15061,15 @@ function openVarPanel() {
     }
     refresh.onclick = doRefresh;
     document.body.appendChild(win);
-    /* ★ 让「单步」按钮能刷新它 ✓✓（2026-10-11）—— 用户：「多多检查和优化」✓
-       ⚠️ 为什么要做 ✗：调试时「单步 → 看变量 → 单步 → 看变量」是**最高频的循环** ✓，
-          每次都要手点「↻ 刷新」很烦 ✓。
-       ⚠️ 只在**面板开着**时才刷新 ✗ —— 面板关着还发命令会**污染终端输出** ✓
-          （用户可能正想看别的东西 ✓）。
-       ⚠️ 延迟要**够** ✗（调试器处理完单步、打印完新位置 ✓）—— 实测 1.2 秒够 ✓。
-       ⚠️ 用一个**模块级变量**记住刷新函数 ✗ —— 面板是动态创建的 ✓，
-          关掉时要清掉 ✓（否则会对着已移除的节点操作 ✓）。 */
     VAR_PANEL_REFRESH = doRefresh;
     const origShut = shut;
     shut = () => { VAR_PANEL_REFRESH = null; origShut(); };
     close.onclick = shut;
+    /* ⚠️⚠️ 这行**不能少** ✗✗（2026-10-11 实测踩到）——
+       我上一处编辑把它删了 ✓ → 面板**永远停在「正在读取…」** ✓
+       （因为 `doRefresh` 只在点「↻ 刷新」时才跑 ✓）。
+       教训：**改「创建面板」的代码时，别忘了它最后还要**自己跑一次** ✓。 */
+    doRefresh();
   } catch (_) {}
 }
 

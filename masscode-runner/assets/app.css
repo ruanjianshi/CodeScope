@@ -4279,3 +4279,9 @@
 .var-col-grip:hover::after, .var-col-grip.dragging::after { background: var(--accent); }
 /* 拖的时候整列给一点提示 ✓ */
 .var-col-grip.dragging { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* ★ 变量值可点击复制 ✓✓（2026-10-11）—— 用户：「多多检查和优化」 */
+/* ⚠️ 给个**细微**的可点提示 ✗ —— 满屏 hover 下划线会太吵 ✓ */
+.var-table td.var-copyable { cursor: copy; }
+.var-table td.var-copyable:hover { background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px; }
