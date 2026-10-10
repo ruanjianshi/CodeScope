@@ -4120,3 +4120,23 @@
 .fig-editor-msg.ok { color: #8ce09a; }
 .fig-editor-msg.err { color: #ff9b95; }
 .run-file-card button { margin-left: auto; border: 1px solid var(--border); background: transparent; color: var(--accent); padding: 2px 9px; cursor: pointer; font-size: 11px; }
+
+/* ★ 断点与调试 ✓✓（2026-10-10）—— 用户：「缺少一个很重要的能力，调试…」 */
+/* 断点红点：画在行号槽**左侧**的 glyph margin 上 ✓（不盖行号 ✓） */
+.cs-bp-dot { position: relative; }
+.cs-bp-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
+  margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: #ff5f56;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 0 6px rgba(255,95,86,.55); }
+/* 当前停在的调试行 ✓（黄色高亮 + 左侧箭头 ✓） */
+.cs-dbg-line { background: color-mix(in srgb, #ffd166 15%, transparent) !important; }
+.cs-dbg-arrow { border-left: 3px solid #ffd166; }
+/* 调试工具条 ✓ —— 浮在输出区上方 ✓（和「更新与安装」那类条同风格 ✓） */
+#dbg-bar { display: flex; align-items: center; gap: 6px; padding: 5px 10px; flex: none;
+  border-bottom: 1px solid var(--border); background: var(--panel2); font-size: 12px; }
+#dbg-bar button { border: 1px solid var(--border); background: transparent; color: var(--text);
+  padding: 3px 10px; cursor: pointer; font: inherit; }
+#dbg-bar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+#dbg-bar button:disabled { opacity: .4; cursor: not-allowed; }
+#dbg-bar .sp { flex: 1; }
+#dbg-bar .dbg-state { color: var(--dim); font-size: 11px; }
+#dbg-bar .dbg-state.on { color: #8ce09a; }

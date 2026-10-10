@@ -141,6 +141,102 @@ function refreshSectionSeparators() {
   } catch (_) {}
 }
 
+/* ★★ 断点 + 调试 ✓✓（2026-10-10）
+   用户原话：「缺少一个很重要的能力，调试，代码的调试，单步运行，断点，等等调试」✓
+   （并补充「项目中的 C++ 程序也需要」✓）。
+   设计稿：docs/design/调试能力设计.md ✓。
+
+   ⚠️ 三条线（MATLAB/Octave · Python · C/C++）**共用同一套 UI** ✗✓ ——
+      断点红点、当前行高亮、变量面板 ✓；
+      **不同点只在驱动层** ✓（Octave 走 dbstop / Python 走 pdb / C++ 走 GDB-MI ✓）。
+      所以这一层必须**与语言无关** ✓，否则以后加语言要改三遍 ✓。
+
+   ⚠️ 断点存哪 ✗：**独立存**（localStorage ✓），**不写进 .md** ✓ ——
+      断点是**调试状态** ✓，不是文档内容 ✓。
+      写进文档的话：① 会污染用户的内容 ✓ ② 复制粘贴片段时会把断点带走 ✓。 */
+const BREAKPOINTS = (() => {
+  let map = {};
+  try { map = JSON.parse(localStorage.getItem('cs.breakpoints') || '{}') || {}; } catch (_) { map = {}; }
+  const save = () => { try { localStorage.setItem('cs.breakpoints', JSON.stringify(map)); } catch (_) {} };
+  /* 键用「文件#片段序号」✓ —— 同一个文件里有多个片段时不能串 ✓ */
+  const keyOf = (ref) => String((ref && ref.file) || '') + '#' + String((ref && ref.index) || 0);
+  return {
+    get(ref) { return new Set(map[keyOf(ref)] || []); },
+    has(ref, line) { return this.get(ref).has(Number(line)); },
+    toggle(ref, line) {
+      const k = keyOf(ref);
+      const set = new Set(map[k] || []);
+      const n = Number(line);
+      if (set.has(n)) set.delete(n); else set.add(n);
+      if (set.size) map[k] = [...set].sort((a, b) => a - b); else delete map[k];
+      save();
+      return set.has(n);
+    },
+    clear(ref) { delete map[keyOf(ref)]; save(); },
+    list(ref) { return [...this.get(ref)].sort((a, b) => a - b); },
+  };
+})();
+
+/* 断点 / 当前行 的装饰集合 ✓（每换一次模型都要重建 ✓） */
+let BP_DECO = null;
+let CUR_LINE_DECO = null;
+
+/* 把断点画成行号槽里的红点 ✓✓ ——
+   ⚠️ 用 **glyphMarginClassName** ✗（行号槽左侧那条窄边 ✓），
+      而不是 `linesDecorationsClassName` ✓ —— 后者会盖住行号本身 ✓。 */
+function refreshBreakpointDecorations() {
+  try {
+    if (!MONACO_EDITOR) return;
+    const model = MONACO_EDITOR.getModel();
+    if (!model) return;
+    const ref = currentMonacoRef();
+    if (!ref) return;
+    const ranges = BREAKPOINTS.list(ref).map((line) => ({
+      range: new window.monaco.Range(line, 1, line, 1),
+      options: { isWholeLine: false, glyphMarginClassName: 'cs-bp-dot' },
+    }));
+    if (typeof MONACO_EDITOR.createDecorationsCollection === 'function') {
+      if (BP_DECO) BP_DECO.set(ranges);
+      else BP_DECO = MONACO_EDITOR.createDecorationsCollection(ranges);
+    } else {
+      BP_DECO_IDS = MONACO_EDITOR.deltaDecorations(BP_DECO_IDS || [], ranges);
+    }
+  } catch (_) {}
+}
+let BP_DECO_IDS = [];
+
+/* 当前停在哪一行（调试时高亮 ✓） */
+function setDebugLine(line) {
+  try {
+    if (!MONACO_EDITOR) return;
+    const model = MONACO_EDITOR.getModel();
+    if (!model) return;
+    const ranges = line
+      ? [{ range: new window.monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'cs-dbg-line', linesDecorationsClassName: 'cs-dbg-arrow' } }]
+      : [];
+    if (typeof MONACO_EDITOR.createDecorationsCollection === 'function') {
+      if (CUR_LINE_DECO) CUR_LINE_DECO.set(ranges);
+      else CUR_LINE_DECO = MONACO_EDITOR.createDecorationsCollection(ranges);
+    } else {
+      CUR_LINE_DECO_IDS = MONACO_EDITOR.deltaDecorations(CUR_LINE_DECO_IDS || [], ranges);
+    }
+    if (line) { try { MONACO_EDITOR.revealLineInCenterIfOutsideViewport(line); } catch (_) {} }
+  } catch (_) {}
+}
+let CUR_LINE_DECO_IDS = [];
+
+/* 当前 Monaco 里是哪个「文件#片段」✓ —— 断点按它存 ✓ */
+function currentMonacoRef() {
+  try {
+    const m = MONACO_EDITOR && MONACO_EDITOR.getModel();
+    if (!m) return null;
+    const ctx = MONACO_MODEL_CONTEXT.get(m.uri.toString());
+    if (ctx) return { file: ctx.snippet && ctx.snippet.file, index: ctx.index };
+    const f = CURRENT && CURRENT.fragments[CINDEX];
+    return { file: CURRENT && CURRENT.file, index: CINDEX };
+  } catch (_) { return null; }
+}
+
 function monacoLanguage(language){return({c:'c',c_cpp:'cpp',javascript:'javascript',typescript:'typescript',python:'python',go:'go',rust:'rust',java:'java',csharp:'csharp',html:'html',css:'css',json:'json',markdown:'markdown',yaml:'yaml',xml:'xml',shell:'shell',latex:'latex',matlab:'matlab',octave:'matlab',plain_text:'plaintext'})[String(language||'').toLowerCase()]||'plaintext';}
 
 /* ★ 给 Monaco 注册 MATLAB 语法 ✓✓（2026-10-10）
@@ -302,12 +398,29 @@ async function syncMonacoMain(){
       MONACO_EDITOR.onDidChangeCursorSelection(()=>{syncProxySelection(MONACO_EDITOR,$('code-edit'));scheduleSyncMdPreview();syncRelationToEditorCaret();updateCodeContextBar();});
       MONACO_EDITOR.onDidFocusEditorText(()=>clearActiveSplitReading());
       MONACO_EDITOR.onDidScrollChange(event=>{const ta=$('code-edit');ta.scrollTop=event.scrollTop;ta.scrollLeft=event.scrollLeft;syncMarkdownPreviewFromSource();});
-      MONACO_EDITOR.onMouseDown(event=>{if((event.event.ctrlKey||event.event.metaKey)&&event.target.position){syncProxySelection(MONACO_EDITOR,$('code-edit'));const sym=focusedSymbol();if(sym)goToSymbol(resolveDefinition(sym)||sym);}});
+      MONACO_EDITOR.onMouseDown(event=>{
+        /* ★ 点**行号槽空白处** = 切一个断点 ✓✓（2026-10-10）
+           ⚠️ 只在 **GUTTER_GLYPH_MARGIN** 上响应 ✗ ——
+              点在代码正文 / 行号上是「选中」「跳转」的语义 ✓，
+              在那儿切断点会**误触** ✓（尤其拖选代码时 ✓）。 */
+        try {
+          const MT = window.monaco.editor.MouseTargetType;
+          if (event.target && event.target.type === MT.GUTTER_GLYPH_MARGIN && event.target.position) {
+            const ref = currentMonacoRef();
+            if (ref) {
+              const on = BREAKPOINTS.toggle(ref, event.target.position.lineNumber);
+              refreshBreakpointDecorations();
+              setStatus('idle', on ? ('已设断点 · 第 ' + event.target.position.lineNumber + ' 行') : '已取消断点');
+            }
+            return;
+          }
+        } catch (_) {}
+        if((event.event.ctrlKey||event.event.metaKey)&&event.target.position){syncProxySelection(MONACO_EDITOR,$('code-edit'));const sym=focusedSymbol();if(sym)goToSymbol(resolveDefinition(sym)||sym);}});
     }else MONACO_EDITOR.setModel(model);
     MONACO_EDITOR.updateOptions(monacoOptions(false));applyEditorWordWrap();
     const proxyPosition=model.getPositionAt(Math.max(0,Math.min(ta.selectionStart||0,model.getValueLength())));
     MONACO_EDITOR.setPosition(proxyPosition);MONACO_EDITOR.revealPositionInCenterIfOutsideViewport(proxyPosition);
-    MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';refreshSectionSeparators();
+    MONACO_MAIN_KEY=key;wrap.classList.add('monaco-active');host.style.display='block';refreshSectionSeparators();refreshBreakpointDecorations();
     requestAnimationFrame(()=>{if(MONACO_EDITOR){MONACO_EDITOR.layout();syncMarkdownPreviewFromSource();}});
     updateMonacoDiagnostics();
   }catch(error){MONACO_MAIN_KEY='';wrap.classList.remove('monaco-active');host.style.display='none';console.warn('Monaco 编辑器加载失败，已回退兼容编辑器',error);}
@@ -11322,6 +11435,15 @@ function renderCode() {
   if (secBtn) { secBtn.style.display = isMatlab ? '' : 'none'; secBtn.disabled = !isMatlab; }
   const upBtn = $('btn-run-upto');
   if (upBtn) { upBtn.style.display = isMatlab ? '' : 'none'; upBtn.disabled = !isMatlab; }
+  /* ★ 调试按钮 ✓✓（2026-10-10）—— **支持调试的语言才显示** ✓
+     （判据就是 DEBUG_CMDS 里有没有这门语言 ✓ ——
+      加语言只改映射表一处 ✓，不用再来这里补 ✓）。 */
+  const dbgBtn = $('btn-debug');
+  if (dbgBtn) {
+    const canDebug = !!DEBUG_CMDS[String((f && f.language) || '').toLowerCase()];
+    dbgBtn.style.display = canDebug ? '' : 'none';
+    dbgBtn.disabled = !canDebug;
+  }
   /* ★ 命令窗口从**工具栏按钮**改成**底部面板的标签页** ✗✓（2026-10-10）——
      用户原话：「这个命令窗口，应该不需要按钮，应该放到 [底部面板]」✓。
      这里只负责**显隐** ✓（规则和原来一样：只有 MATLAB / Octave 才给 ✓），
@@ -14078,6 +14200,10 @@ async function termConnect() {
         const chunk = dec.decode(value, { stream: true });
         term.write(chunk);
         scanDeployOutput(chunk);
+        /* ★ 调试：从终端输出里认「停在哪一行」✓✓（2026-10-10）
+           ⚠️ 和 scanDeployOutput 同一个位置 ✗ —— 都是「旁听终端输出」✓，
+              不消费、不改写 ✓，只做识别 ✓。 */
+        scanDebugOutput(chunk);
       } catch (_) {}
     }
   } catch (_) { st.textContent = '连接断开'; st.className = 'pill err'; }
@@ -14097,6 +14223,125 @@ $('term-hide').onclick = () => switchOutTab('out');
    如果 `let` 写在后面会**踩 TDZ**（ReferenceError）✓。 */
 let MONCONSOLE_KEY = '';
 let MONCONSOLE_AT = 0;
+
+/* ★★ 调试：命令映射 + 会话状态 ✓✓（2026-10-10）
+   设计稿见 docs/design/调试能力设计.md ✓。
+   ⚠️ **三条线共用一套 UI** ✗✓（断点红点 / 当前行 / 变量 / 继续 / 单步 ✓），
+      **只有命令名不同** ✓ —— 所以这里就是一张映射表 ✓。
+      加一门语言 = 加一行 ✓（这正是 DAP「协议与 UI 解耦」的朴素版本 ✓）。 */
+const DEBUG_CMDS = {
+  matlab: { continue: 'dbcont', next: 'dbstep', stepIn: 'dbstep in', stepOut: 'dbstep out', vars: 'who', stop: 'dbquit' },
+  octave: { continue: 'dbcont', next: 'dbstep', stepIn: 'dbstep in', stepOut: 'dbstep out', vars: 'who', stop: 'dbquit' },
+  python: { continue: 'c', next: 'n', stepIn: 's', stepOut: 'r', vars: 'p list(locals().items())', stop: 'q' },
+  c_cpp: { continue: 'continue', next: 'next', stepIn: 'step', stepOut: 'finish', vars: 'info locals', stop: 'quit' },
+  c: { continue: 'continue', next: 'next', stepIn: 'step', stepOut: 'finish', vars: 'info locals', stop: 'quit' },
+};
+const DEBUG = { active: false, lang: '', file: '', lastLine: 0 };
+
+function dbgCmdSet() { return DEBUG_CMDS[String(DEBUG.lang || '').toLowerCase()] || null; }
+
+/* 往终端里发一行 ✓（和「MATLAB 命令窗口」用的是同一个通道 ✓） */
+function termSend(line) {
+  return fetch('/api/term/input', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: String(line) + '\r' }),
+  }).catch(() => {});
+}
+
+function showDbgBar(on) {
+  const bar = $('dbg-bar');
+  if (bar) bar.style.display = on ? '' : 'none';
+  const st = $('dbg-state');
+  if (st) {
+    st.textContent = on ? ('调试中 · ' + (DEBUG.lang || '')) : '未在调试';
+    st.className = 'dbg-state' + (on ? ' on' : '');
+  }
+}
+
+/* ★ 启动调试 ✓✓ ——
+   ⚠️ Octave / MATLAB 的做法 ✗：**在终端里跑** ✓，而不是走「▶ 运行」✓。
+      因为断点需要**持久会话** ✓（`dbstop` 设好之后要在**同一个** Octave 里 run ✓），
+      而「▶ 运行」每次都开新进程 ✓，断点设了也白设 ✓。
+   ⚠️ 命令顺序**不能错** ✗：先 `dbstop in <file> at <line>`（每个断点一条 ✓），
+      最后 `run <file>` ✓；反过来的话 run 完了才设断点 ✓。
+   ⚠️ 文件名用**运行时同名** ✓（main.m ✓）—— 和服务端写临时文件的名字一致 ✓，
+      否则 dbstop 找不到文件 ✓。 */
+async function startDebug() {
+  const f = CURRENT && CURRENT.fragments[CINDEX];
+  if (!f) return;
+  const lang = String(f.language || '').toLowerCase();
+  const cmds = DEBUG_CMDS[lang];
+  if (!cmds) { setStatus('err', '这个语言还没有调试支持（现在有：MATLAB/Octave · Python · C/C++）'); return; }
+  const bps = BREAKPOINTS.list({ file: CURRENT.file, index: CINDEX });
+  DEBUG.active = true; DEBUG.lang = lang; DEBUG.file = CURRENT.file; DEBUG.lastLine = 0;
+  showDbgBar(true);
+  switchOutTab('term');
+  if (lang === 'matlab' || lang === 'octave') {
+    if (!bps.length) {
+      setStatus('idle', '没有断点 —— 先点行号槽左侧设一个（直接跑也行，出错会停在 error 上）');
+      return;
+    }
+    setStatus('idle', '正在终端里启动调试会话…');
+    setTimeout(async () => {
+      for (const line of bps) await termSend('dbstop in main.m at ' + line);
+      await termSend('run main.m');
+      setStatus('ok', '已进入调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
+    }, 900);
+  } else {
+    setStatus('idle', lang + ' 调试已就绪 —— 继续=' + cmds.continue + ' 单步=' + cmds.next + '（命令会发到终端）');
+  }
+}
+
+function stopDebug() {
+  const cmds = dbgCmdSet();
+  if (cmds && DEBUG.active) termSend(cmds.stop);
+  DEBUG.active = false; DEBUG.lastLine = 0;
+  showDbgBar(false);
+  setDebugLine(0);
+  setStatus('idle', '已退出调试');
+}
+
+/* 调试按钮 ✓ —— 全部就是「把对应命令发进终端」✓ */
+[['dbg-continue', 'continue'], ['dbg-next', 'next'], ['dbg-stepin', 'stepIn'],
+ ['dbg-stepout', 'stepOut'], ['dbg-vars', 'vars']].forEach(([id, key]) => {
+  const btn = $(id);
+  if (!btn) return;
+  btn.onclick = () => {
+    const cmds = dbgCmdSet();
+    if (!cmds || !DEBUG.active) { setStatus('err', '还没进入调试'); return; }
+    termSend(cmds[key]);
+    setStatus('idle', '已发送：' + cmds[key]);
+  };
+});
+if ($('dbg-stop')) $('dbg-stop').onclick = stopDebug;
+if ($('btn-debug')) $('btn-debug').onclick = () => startDebug();
+
+/* ★ 从终端输出里认出「停在哪一行」✓✓ ——
+   ⚠️ 这是**解析文本** ✗（最脆的一环 ✓）：
+      Octave 是 `stopped in t at line 3 [/path/t.m]` ✓、
+      pdb 是 `> /path/x.py(12)main()` ✓、gdb 是 `Breakpoint 1, main () at t.c:5` ✓。
+      所以按语言分别匹配 ✓，**匹配不到就不动高亮** ✓
+      （宁可不高亮，也别高亮错行 ✓）。
+   ⚠️ 匹配到之后**同时**做两件事 ✗：① 高亮那一行 ✓ ② 记下 lastLine ✓。 */
+function scanDebugOutput(text) {
+  if (!DEBUG.active || !text) return;
+  const s = String(text);
+  let line = 0;
+  if (/^(matlab|octave)$/.test(DEBUG.lang)) {
+    const m = /at line\s+(\d+)/i.exec(s);
+    if (m) line = Number(m[1]);
+  } else if (DEBUG.lang === 'python') {
+    const m = /\((\d+)\)/.exec(s);
+    if (m) line = Number(m[1]);
+  } else {
+    const m = /at\s+[\w./\\-]+:(\d+)/.exec(s) || /:(\d+)$/m.exec(s);
+    if (m) line = Number(m[1]);
+  }
+  if (line && line !== DEBUG.lastLine) {
+    DEBUG.lastLine = line;
+    setDebugLine(line);
+  }
+}
 $('term-restart').onclick = () => {
   /* ⚠️ 重启终端 = 里面跑的引擎也一起没了 ✗（2026-10-10）——
      所以要**清掉「这个片段已经起过引擎」的记忆** ✓，

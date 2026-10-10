@@ -564,6 +564,23 @@
       <textarea id="input-box" placeholder="示例：3 5&#10;程序需要多个输入时每行一个"></textarea>
     </div>
     <div id="split-h" title="拖拽调整输出窗口高度"></div>
+    <!-- ★ 调试工具条 ✓✓（2026-10-10）—— 用户：「缺少…调试，单步运行，断点」✓
+         默认隐藏，点「🐞 调试」进入调试后才出现 ✓。
+         ⚠️ 按钮**按语言映射到不同命令** ✗（title 里写了三种）——
+            Octave: dbcont/dbstep/dbstep in/dbstep out/who/dbquit
+            pdb:    c/n/s/r/p locals()/q
+            gdb:    continue/next/step/finish/info locals/quit
+            映射表在 app.js 的 DEBUG_CMDS 里 ✓。 -->
+    <div id="dbg-bar" style="display:none">
+      <span class="dbg-state" id="dbg-state">未在调试</span>
+      <button id="dbg-continue" title="继续（Octave: dbcont · pdb: c · gdb: continue）">▶ 继续</button>
+      <button id="dbg-next" title="单步跳过（Octave: dbstep · pdb: n · gdb: next）">⤵ 单步</button>
+      <button id="dbg-stepin" title="单步进入（Octave: dbstep in · pdb: s · gdb: step）">⤵↘ 步入</button>
+      <button id="dbg-stepout" title="单步跳出（Octave: dbstep out · pdb: r · gdb: finish）">⤴ 步出</button>
+      <button id="dbg-vars" title="查看变量（Octave: who · pdb: p locals() · gdb: info locals）">👁 变量</button>
+      <span class="sp"></span>
+      <button id="dbg-stop" title="停止调试（Octave: dbquit · pdb: q · gdb: quit）">⏹ 停止</button>
+    </div>
     <div id="output">
       <div id="out-head">
         <div id="out-tabs">
@@ -622,6 +639,10 @@
            上一段的变量不存在（报 'a' undefined），而真 MATLAB 的 Run Section
            是保留工作区的。补一个「从开头跑到本段」让状态能重建 ✓。 -->
       <button id="btn-run-upto" title="从文件开头跑到光标所在段（重建前面所有段的变量）Ctrl/⌘+Alt+Shift+Enter" aria-label="跑到这里" style="display:none">▶▶</button>
+      <!-- ★ 调试 ✓✓（2026-10-10）—— 用户：「缺少…调试，单步运行，断点」✓
+           点它 = 在**终端里**起一个调试会话（断点需要持久会话，不能用「▶ 运行」）✓，
+           然后输出区上方会出现调试工具条（继续 / 单步 / 步入 / 步出 / 变量 / 停止）✓。 -->
+      <button id="btn-debug" title="调试本段（在终端里起调试会话，配合行号槽左侧的红点断点）" aria-label="调试" style="display:none">🐞</button>
       <!-- ★ MATLAB / Octave 命令窗口 ✓（2026-10-09）——
            不另造 REPL，直接在底部终端里起引擎（真 PTY，能交互）✓。
            只在 .m 片段上显示 ✓。 -->
