@@ -315,6 +315,10 @@ async function toolInfo() {
   };
   probeByPath('matlab', 'MATLAB', ['matlab'], '.m 片段的运行 / 检查（优先使用）');
   probeByPath('octave', 'Octave', ['octave', 'octave-cli'], '.m 片段的运行 / 检查（免费替代）');
+  /* ★ GDB ✓✓（2026-10-10）—— C/C++ 调试要用 ✓
+     （用户实测在 C++ 文件上点 🐞 时被提示「这台机器上没有 gdb」✓，
+       那就该让他在**环境面板里一键装上** ✓，而不是让他自己去 apt/brew ✓）。 */
+  probeByPath('gdb', 'GDB', ['gdb'], 'C / C++ 调试（断点、单步、看变量）');
   return tools;
 }
 
@@ -369,6 +373,22 @@ function actionSpecs() {
         : 'sudo apt-get update && sudo apt-get install -y octave',
       heavy: true,
     },
+    /* ★ 一键装 GDB ✓✓（2026-10-10）—— C/C++ 调试要用 ✓
+       ⚠️ macOS 上 gdb 装完**还要签名**才能 attach ✗（`codesign -s gdb-cert …`），
+          否则报的错**看起来毫不相关** ✓（`attach failed` ✓）。
+          → why 里把这件事写清楚 ✓，别让用户以为「装了但坏了」✓。
+       ⚠️ Linux 上没这个问题 ✓ —— 云服务器 / 嵌入式环境都是 Linux ✓，
+          装完就能用 ✓。 */
+    {
+      id: 'gdb',
+      label: '安装 GDB（C/C++ 调试）',
+      target: 'gdb',
+      why: 'C/C++ 的断点、单步、看变量都靠它；没装的话点 🐞 会被拦下。⚠️ macOS 上装完还需要给 gdb 签名（codesign -s gdb-cert …）才能 attach，否则会报 attach failed；Linux 上不需要。',
+      command: process.platform === 'darwin'
+        ? 'brew install gdb'
+        : 'sudo apt-get update && sudo apt-get install -y gdb',
+      heavy: true,
+    },
   ];
 }
 
@@ -398,6 +418,13 @@ function createEnvManager(options = {}) {
       } else if (spec.id === 'assets') {
         needed = staleAssets.length > 0;
         status = staleAssets.length ? (staleAssets.length + ' 项需要重建：' + staleAssets.map((a) => a.label).join('、')) : '全部已是最新';
+      } else if (spec.id === 'gdb') {
+        /* ⚠️ 和 octave 一样，**必须有专门分支** ✗ ——
+           否则会掉进 `else`（那是给 deps 的），拿「依赖齐不齐」
+           来决定「要不要装 gdb」。 */
+        const g = (tools || []).find((t) => t.key === 'gdb');
+        needed = !(g && g.ok);
+        status = (g && g.ok) ? ('已可用：' + g.version) : '没检测到 gdb —— C/C++ 调试用不了';
       } else if (spec.id === 'octave') {
         /* ⚠️ 这个分支**必须有** ✗（2026-10-10）——
            原来只有 code-server / assets / else 三种 ✓，
@@ -499,6 +526,19 @@ function createEnvManager(options = {}) {
           用户真正关心的是「现在能不能跑 .m 了」✓，不是「命令退出码 0」✓。
        ⚠️ 探测失败时给**可操作的话** ✗（「重开一个终端再试」✓）——
           brew / apt 装完 PATH 有时要新开 shell 才生效 ✓。 */
+    if (action === 'gdb') {
+      /* 和 octave 同一套 ✓（走 sh -c，因为命令里有 && 和 sudo ✓） */
+      emit('out', '命令：' + spec.command);
+      if (dryRun) { emit('out', '[预演] 只安装 GDB（C/C++ 调试器），不碰 CodeScope 自身文件。'); return 0; }
+      const code = await helpers.spawnStep(task, 'sh', ['-c', spec.command], 1800000);
+      const after = await toolInfo();
+      const has = !!(after || []).find((t) => t.key === 'gdb' && t.ok);
+      emit(has ? 'out' : 'err', has
+        ? '✓ GDB 已可用（C/C++ 断点 / 单步 / 看变量）'
+        : '装完仍没检测到 gdb（退出码 ' + code + '）。⚠️ macOS 上还要给 gdb 签名（codesign -s gdb-cert …）才能 attach，否则会报 attach failed；sudo 需要密码时请到终端手动跑一遍。');
+      task.result = { gdbAvailable: has, exit: code };
+      return has ? 0 : 1;
+    }
     if (action === 'octave') {
       emit('out', '命令：' + spec.command);
       if (dryRun) { emit('out', '[预演] 只安装 Octave（免费、兼容 .m），不碰 CodeScope 自身文件。'); return 0; }
