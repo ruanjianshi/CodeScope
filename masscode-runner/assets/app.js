@@ -93,7 +93,48 @@ document.addEventListener('keydown',event=>{
   event.preventDefault();applyEditorFontSize(EDITOR_FONT_DEFAULT);
 });
 applyEditorFontSize(EDITOR_FONT_SIZE,false);
-function monacoLanguage(language){return({c:'c',c_cpp:'cpp',javascript:'javascript',typescript:'typescript',python:'python',go:'go',rust:'rust',java:'java',csharp:'csharp',html:'html',css:'css',json:'json',markdown:'markdown',yaml:'yaml',xml:'xml',shell:'shell',latex:'latex',plain_text:'plaintext'})[String(language||'').toLowerCase()]||'plaintext';}
+/* ★ Monaco 的「片段语言 → Monaco 语言 id」映射 ✓✓
+   ⚠️ 2026-10-10 修：原来这里**没有 matlab** ✗ —— 于是 `matlab` 片段落到
+      `|| 'plaintext'` ✓ → **编辑器里完全没有语法高亮** ✓
+      （用户实测反馈：「没有语法高亮」✓）。
+   ⚠️ 注意这是**两套高亮**，别搞混 ✗：
+      · **编辑态**用 **Monaco**（它有自己的 tokenizer ✓）→ 走这张表 ✓；
+      · **只读态**用 `#code` 那层（`codeHtml` → `highlightMatlab` ✓）→ 走 `.ml-*` CSS ✓。
+      两套都要能认 matlab ✓，只补一套是不够的 ✗（我一开始就只补了后者 ✓）。 */
+function monacoLanguage(language){return({c:'c',c_cpp:'cpp',javascript:'javascript',typescript:'typescript',python:'python',go:'go',rust:'rust',java:'java',csharp:'csharp',html:'html',css:'css',json:'json',markdown:'markdown',yaml:'yaml',xml:'xml',shell:'shell',latex:'latex',matlab:'matlab',octave:'matlab',plain_text:'plaintext'})[String(language||'').toLowerCase()]||'plaintext';}
+
+/* ★ 给 Monaco 注册 MATLAB 语法 ✓✓（2026-10-10）
+   ⚠️ 为什么要自己注册 ✗：Monaco 的**精简发行版不含 matlab** ✓
+      （它的 matlab 支持在 `monaco-languages` 的完整包里 ✓，这个项目没引 ✓）。
+   ✅ 用 **Monarch** 写一份轻量 tokenizer ✓ ——
+      和 `highlightMatlab` 的规则**保持一致** ✓（注释 `%`、字符串 `'…'`/`"…"`、
+      关键字、内置函数、数字、运算符 ✓），这样编辑态和只读态**看起来是一套** ✓。
+   ⚠️ 只在 Monaco 真的加载后注册一次 ✗（`monaco.languages.register` 重复调用会覆盖 ✓，
+      加个标记避免每次渲染都跑 ✓）。 */
+function registerMatlabForMonaco() {
+  try {
+    if (!window.monaco || window.__csMatlabRegistered) return;
+    const langs = (window.monaco.languages.getLanguages() || []).map((l) => l.id);
+    window.__csMatlabRegistered = true;
+    if (langs.includes('matlab')) return;   /* 万一以后换了完整包，就别重复注册 ✓ */
+    window.monaco.languages.register({ id: 'matlab', extensions: ['.m'], aliases: ['MATLAB', 'matlab', 'Octave'] });
+    window.monaco.languages.setMonarchTokensProvider('matlab', {
+      keywords: ['function','if','elseif','else','end','for','while','switch','case','otherwise','try','catch','return','break','continue','global','persistent','classdef','properties','methods','events','enumeration','parfor','spmd','arguments','import','true','false','Inf','NaN','pi','eps'],
+      builtins: ['disp','fprintf','sprintf','error','warning','num2str','str2num','strcmp','strcat','size','length','numel','ndims','reshape','repmat','linspace','logspace','zeros','ones','eye','rand','randn','sum','mean','std','min','max','abs','sqrt','exp','log','log2','log10','sin','cos','tan','asin','acos','atan','atan2','round','floor','ceil','mod','rem','find','sort','unique','plot','plot3','figure','hold','grid','axis','xlabel','ylabel','zlabel','title','legend','subplot','save','load','clear','clc','close','input','pause','tic','toc'],
+      tokenizer: {
+        root: [
+          [/[A-Za-z_]\w*/, { cases: { '@keywords': 'keyword', '@builtins': 'type.identifier', '@default': 'identifier' } }],
+          [/[ \t\r\n]+/, ''],
+          [/%.*$/, 'comment'],
+          [/'[^'\n]*'/, 'string'],
+          [/"[^"\n]*"/, 'string'],
+          [/\d+(\.\d+)?([eE][-+]?\d+)?/, 'number'],
+          [/[=+\-*/\\^<>&|~:@.]+/, 'operator'],
+        ],
+      },
+    });
+  } catch (_) {}
+}
 function monacoTheme(){return APP_THEME==='light'?'vs':'vs-dark';}
 function monacoModelKey(file,index){return String(file||'untitled')+'#'+String(Number(index)||0);}
 function monacoUriFor(file,index){return window.monaco.Uri.parse('inmemory://codescope/'+encodeURIComponent(String(file||'snippet'))+'/'+String(Number(index)||0));}
@@ -101,7 +142,7 @@ function monacoRange(range){return new window.monaco.Range(Number(range&&range.s
 function monacoOptions(readOnly=false){return{automaticLayout:true,readOnly,theme:monacoTheme(),fontFamily:'JetBrains Mono, SFMono-Regular, Consolas, monospace',fontSize:EDITOR_FONT_SIZE,lineHeight:editorLineHeight(EDITOR_FONT_SIZE),mouseWheelZoom:false,fontLigatures:true,tabSize:currentIndentWidth(),insertSpaces:true,detectIndentation:true,lineNumbers:'on',glyphMargin:true,folding:true,foldingStrategy:'auto',showFoldingControls:'mouseover',bracketPairColorization:{enabled:true},guides:{bracketPairs:true,indentation:true,highlightActiveIndentation:true},minimap:{enabled:true,autohide:true,showSlider:'mouseover',renderCharacters:false,maxColumn:90},stickyScroll:{enabled:true,maxLineCount:5},smoothScrolling:true,cursorSmoothCaretAnimation:'on',cursorBlinking:'smooth',multiCursorModifier:'alt',multiCursorPaste:'spread',formatOnPaste:true,formatOnType:true,wordWrap:EDITOR_WORD_WRAP?'on':'off',scrollBeyondLastLine:false,padding:{top:10,bottom:16},suggest:{preview:true,showStatusBar:true,shareSuggestSelections:true},quickSuggestions:{other:true,comments:false,strings:false},parameterHints:{enabled:true,cycle:true},hover:{enabled:true,delay:450,sticky:true},lightbulb:{enabled:'on'},inlayHints:{enabled:'on'},renderWhitespace:'selection',renderControlCharacters:true,linkedEditing:true,renameOnType:true,occurrencesHighlight:'multiFile',selectionHighlight:true,codeLens:true,accessibilitySupport:'auto'};}
 function applyEditorWordWrap(){const on=editorWordWrapOn();const value=on?'on':'off';if(MONACO_EDITOR)MONACO_EDITOR.updateOptions({wordWrap:value});for(const editor of MONACO_SPLIT_EDITORS)editor.updateOptions({wordWrap:value});if(READING_HTML_EDITOR)try{READING_HTML_EDITOR.updateOptions({wordWrap:value});}catch(_){}const wrap=$('code-wrap');if(wrap)wrap.classList.toggle('wrap-on',on);document.querySelectorAll('.split-editor-group').forEach(group=>group.classList.toggle('wrap-on',on));const input=$('code-edit');if(input)input.wrap=on?'soft':'off';document.querySelectorAll('.split-editor-input').forEach(node=>node.wrap=on?'soft':'off');const btn=$('btn-wrap');if(btn){btn.classList.toggle('on',on);btn.textContent=on?'↵':'↔';btn.title='自动换行：'+(on?'已开启':'已关闭')+'（Alt+Z）';btn.setAttribute('aria-pressed',String(on));}}
 function toggleEditorWordWrap(){EDITOR_WORD_WRAP=!editorWordWrapOn();EDITOR_WORD_WRAP_SET=true;try{localStorage.setItem('mc-editor-word-wrap',EDITOR_WORD_WRAP?'1':'0');}catch(_){}applyEditorWordWrap();setStatus('ok','自动换行已'+(EDITOR_WORD_WRAP?'开启':'关闭'));}
-function monacoModel(ref,code){const key=monacoModelKey(ref.snippet.file,ref.index);let model=MONACO_MODELS.get(key);if(!model||model.isDisposed()){const uri=monacoUriFor(ref.snippet.file,ref.index);model=window.monaco.editor.getModel(uri)||window.monaco.editor.createModel(String(code||''),monacoLanguage(ref.frag.language),uri);MONACO_MODELS.set(key,model);}else window.monaco.editor.setModelLanguage(model,monacoLanguage(ref.frag.language));MONACO_MODEL_CONTEXT.set(model.uri.toString(),{snippet:ref.snippet,index:ref.index,fragment:ref.frag});return model;}
+function monacoModel(ref,code){registerMatlabForMonaco();const key=monacoModelKey(ref.snippet.file,ref.index);let model=MONACO_MODELS.get(key);if(!model||model.isDisposed()){const uri=monacoUriFor(ref.snippet.file,ref.index);model=window.monaco.editor.getModel(uri)||window.monaco.editor.createModel(String(code||''),monacoLanguage(ref.frag.language),uri);MONACO_MODELS.set(key,model);}else window.monaco.editor.setModelLanguage(model,monacoLanguage(ref.frag.language));MONACO_MODEL_CONTEXT.set(model.uri.toString(),{snippet:ref.snippet,index:ref.index,fragment:ref.frag});return model;}
 function monacoContext(model){const context=MONACO_MODEL_CONTEXT.get(model.uri.toString());if(!context)return null;const fresh=SNIPPETS.find(item=>item.file===context.snippet.file)||context.snippet,fragment=fresh.fragments&&fresh.fragments[context.index];return fragment?{snippet:fresh,index:context.index,fragment}:null;}
 async function monacoLsp(model,position,action,extra){const context=monacoContext(model);if(!context||!LSP_LANGUAGES.has(context.fragment.language))return{ok:false};return api('/api/lsp/query',Object.assign({file:context.snippet.file,fragment:context.index,code:model.getValue(),action,line:position.lineNumber,column:position.column},extra||{}));}
 function monacoCompletionKind(kind){const K=window.monaco.languages.CompletionItemKind;return({method:K.Method,function:K.Function,constructor:K.Constructor,field:K.Field,variable:K.Variable,class:K.Class,interface:K.Interface,module:K.Module,property:K.Property,unit:K.Unit,value:K.Value,enum:K.Enum,keyword:K.Keyword,snippet:K.Snippet,color:K.Color,file:K.File,reference:K.Reference,folder:K.Folder,enumMember:K.EnumMember,constant:K.Constant,struct:K.Struct,event:K.Event,operator:K.Operator,typeParameter:K.TypeParameter})[kind]||K.Text;}
