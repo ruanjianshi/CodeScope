@@ -14287,6 +14287,37 @@ async function startDebug() {
       await termSend('run main.m');
       setStatus('ok', '已进入调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
     }, 900);
+  } else if (lang === 'c' || lang === 'c_cpp') {
+    /* ★ C / C++ ✓✓（2026-10-10）——
+       ⚠️ 用户实测报的 bug ✗：在 C++ 文件上点 🐞，命令却**发给了 bash** ✓ →
+           `bash: syntax error near unexpected token '('` / `bash: p: command not found` ✓。
+       根因：**C/C++ 的调试会话必须先有 gdb 在跑** ✓，
+             而终端只是个裸 shell ✓ —— 往 shell 里发 `next` / `info locals` 当然不认 ✓。
+       还有一层：现有「▶ 运行」编译时**不带 `-g`** ✗ →
+             就算起了 gdb，断点也对不上、变量全被优化掉 ✓。
+       → 所以：① 先让服务端**带 `-g -O0` 编译** ✓
+               ② 再在终端里 `cd <dir> && gdb ./a.out` ✓
+               ③ 最后才把断点和 run 发进去 ✓（顺序不能错 ✓）。 */
+    setStatus('idle', '正在编译（带 -g 调试符号）…');
+    const files = (CURRENT.fragments || []).map((x) => ({ filename: (x.label || 'main.c'), code: x.code }));
+    const r = await api('/api/dbg/prepare', { language: lang, code: f.code, files });
+    if (!r || !r.ok) {
+      setStatus('err', '编译失败 —— 调试需要一个能编译通过的程序');
+      showOut(String((r && r.error) || '编译失败'), '', false);
+      DEBUG.active = false; showDbgBar(false);
+      return;
+    }
+    if (!r.gdb) {
+      setStatus('err', '这台机器上没有 gdb —— 先装一个（Linux: apt install gdb · macOS: brew install gdb，且需要签名）');
+      DEBUG.active = false; showDbgBar(false);
+      return;
+    }
+    setTimeout(async () => {
+      await termSend('cd ' + JSON.stringify(r.dir) + ' && gdb ./' + r.bin);
+      for (const line of bps) await termSend('break ' + (f.label || 'main.c') + ':' + line);
+      await termSend('run');
+      setStatus('ok', '已进入 gdb 调试（' + bps.length + ' 个断点）· 用上面的按钮单步');
+    }, 900);
   } else {
     setStatus('idle', lang + ' 调试已就绪 —— 继续=' + cmds.continue + ' 单步=' + cmds.next + '（命令会发到终端）');
   }

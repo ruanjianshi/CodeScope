@@ -7408,6 +7408,64 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
+    /* ★ 调试准备（C/C++）✓✓（2026-10-10）——
+       用户实测报的 bug：在 C++ 文件上点 🐞，调试命令却**发给了 bash** ✓ →
+          bash: syntax error near unexpected token `('
+          bash: p: command not found
+       ⚠️ 根因 ✗：C/C++ 的调试会话**必须先有 gdb 在跑** ✓，
+          而终端只是个裸 shell ✓ —— 往 shell 里发 `next` / `info locals` 当然不认 ✓。
+       ⚠️ 还有个前提：**必须带 `-g` 编译** ✓ ——
+          现有「▶ 运行」是 `gcc 编译+运行` ✓，不带调试符号 ✓ →
+          就算起了 gdb，**断点也对不上、变量全是优化掉的** ✓。
+       → 所以这里做两件事 ✓：① 写文件 ② **带 -g -O0 编译** ✓，
+          把编译产物留在临时目录里 ✓，返回目录和可执行文件名 ✓，
+          前端据此在终端里 `cd <dir> && gdb ./<bin>` ✓。
+       ⚠️ 编译失败要**把编译器的原话带回去** ✗（别只说「编译失败」✓）——
+          用户要的是 gcc 的报错行 ✓。 */
+    if (req.method === 'POST' && u.pathname === '/api/dbg/prepare') {
+      try {
+        const b = await readBody(req);
+        const code = String((b && b.code) || '');
+        const lang = String((b && b.language) || 'c_cpp').toLowerCase();
+        const files = Array.isArray(b && b.files) && b.files.length
+          ? b.files.map((f) => ({ filename: path.basename(String(f.filename || 'main.c')), code: String(f.code || '') }))
+          : [{ filename: lang === 'c' ? 'main.c' : 'main.cpp', code }];
+        /* ⚠️⚠️ 两个坑，都是实测踩出来的 ✗✗（2026-10-10）：
+           ① **头文件不能进编译命令** ✗ ——
+              `g++ -o a.out led.h led.c uart.c uart.h main.c` 会直接报
+              `error: cannot specify -o when generating multiple output files`
+              （编译器把每个 .h 也当成一个要产出的翻译单元了 ✓）
+              → 只把**源文件**（.c/.cc/.cpp/.cxx）列进去 ✓。
+           ② **`.c` 要用 gcc，不能用 g++** ✗ ——
+              用 g++ 编 .c 会按 C++ 处理 ✓，刷一屏
+              `treating 'c' input as 'c++' when in C++ mode, this behavior is deprecated` ✓，
+              而且不少合法 C 代码在 C++ 下**直接编不过** ✓。
+              → 按**入口文件**的后缀选 gcc / g++ ✓。
+           ⚠️ 入口文件怎么认 ✗：优先找名字里带 `main` 的源文件 ✓
+              （多文件片段的惯例 ✓），找不到就用第一个源文件 ✓。 */
+        const srcFiles = files.filter((f) => /\.(c|cc|cpp|cxx)$/i.test(f.filename));
+        if (!srcFiles.length) {
+          return send(res, 200, { ok: false, error: '没有可编译的源文件（需要 .c / .cpp）', dir: '' });
+        }
+        const entry = srcFiles.find((f) => /main\./i.test(f.filename)) || srcFiles[0];
+        const isC = /\.c$/i.test(entry.filename);
+        const cc = isC ? 'gcc' : 'g++';
+        const binName = 'a.out';
+        const dir = writeFragments(files);
+        const args = ['-g', '-O0', '-o', binName, ...srcFiles.map((f) => f.filename)];
+        const built = await run(cc, args, { cwd: dir, timeoutMs: 120000 });
+        if (!built.ok) {
+          return send(res, 200, { ok: false, error: (built.stderr || built.stdout || '编译失败').trim(), dir: '' });
+        }
+        return send(res, 200, {
+          ok: true, dir, bin: binName, cc,
+          gdb: (() => { try { execFileSync('gdb', ['--version'], { stdio: 'ignore', timeout: 5000 }); return true; } catch (_) { return false; } })(),
+          hint: '在终端里： cd ' + dir + ' && gdb ./' + binName,
+        });
+      } catch (e) {
+        return send(res, 200, { ok: false, error: String((e && e.message) || e) });
+      }
+    }
     if (req.method === 'GET' && u.pathname === '/api/py/kernel') {
       return send(res, 200, { ok: true, ...PY_KERNEL.status() });
     }
