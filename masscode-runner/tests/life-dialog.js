@@ -58,6 +58,20 @@ const FOL = '__探针文件夹__';
     await p.locator('.lw-nav [data-tab="memo"]').dispatchEvent('click');
     await p.waitForSelector('.lw-nt', { timeout: 20000 }); await p.waitForTimeout(900);
 
+    /* ★★ 开场先清掉上次可能残留的探针文件夹 ✗✗（2026-10-11）——
+       ⚠️ 为什么需要 ✗：收尾清理写在 try 里 ✓，但**进程被强杀时不会执行** ✓
+          （我自己用 `perl alarm` 限时跑测试，就把它杀在半路 ✓，
+           留下 `__探针文件夹__` ✓）
+          → **下一次跑必然挂在「取消后没有建出文件夹」** ✓✓（实测 ✓）。
+       ⚠️ 这是「测试互相污染」的经典形态 ✗：
+          **上一条跑挂了，会毒到下一轮** ✓ —— 而且看起来像"代码坏了" ✓。
+       → 开场**无条件先清一次** ✓，让每轮都从干净状态开始 ✓。 */
+    try {
+      const d0 = await store();
+      d0.memoFolders = (d0.memoFolders || []).filter((x) => x !== FOL);
+      await put(d0);
+    } catch (_) {}
+
     console.log('\n── ① 输入型：新建文件夹 ──');
     ck('  有「新建文件夹」按钮', await has('#lw-nt-addfol'));
     await p.click('#lw-nt-addfol'); await p.waitForTimeout(700);
