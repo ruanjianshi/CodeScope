@@ -4231,3 +4231,14 @@
   text-align: right; padding-right: 12px; opacity: .9; }
 .var-table td.var-line:hover { text-decoration: underline; opacity: 1; }
 .var-table th:first-child { padding-right: 12px; }
+
+/* ★ 列宽拖拽把手 ✓✓（2026-10-10）—— 用户：「表格之间需要可以自由拖动」 */
+/* 贴在表头右边缘的一条窄条 ✓；平时透明、hover 才显形 ✓（不干扰阅读 ✓） */
+.var-table th { position: relative; }
+.var-col-grip { position: absolute; top: 0; right: -3px; width: 7px; height: 100%;
+  cursor: col-resize; z-index: 2; }
+.var-col-grip::after { content: ""; position: absolute; left: 3px; top: 2px; bottom: 4px;
+  width: 1px; background: transparent; }
+.var-col-grip:hover::after, .var-col-grip.dragging::after { background: var(--accent); }
+/* 拖的时候整列给一点提示 ✓ */
+.var-col-grip.dragging { background: color-mix(in srgb, var(--accent) 18%, transparent); }

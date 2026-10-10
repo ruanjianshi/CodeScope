@@ -14704,6 +14704,59 @@ function typeClass(t) {
   return '';
 }
 
+/* ★ 列宽可以拖 ✓✓（2026-10-10）—— 用户：「这种变量面板，表格，之间需要可以自由拖动」✓
+   ⚠️ 实现要点 ✗：表用了 `table-layout: fixed` ✓ →
+      改列宽必须改 **`<col>` 的 width** ✓（改 `th` 的**没用** ✓，这个坑刚踩过 ✓）。
+   ⚠️ 拖拽用 **pointer 事件 + `setPointerCapture`** ✗（和拖窗口 / 缩放面板同一套 ✓）——
+      不然鼠标一移出表头，拖动就断了 ✓。
+   ⚠️ 最窄 **36px** ✗ —— 拖到 0 列就消失了 ✓，用户会以为坏了 ✓。
+   ⚠️ 列宽**记住** ✗（localStorage ✓，按「有哪些列」当键 ✓）——
+      用户调一次就够了 ✓；列的组合变了（比如 Octave 有 5 列、Python 有 4 列）就各自记 ✓。 */
+function makeColsResizable(tbl, key) {
+  try {
+    const cols = [...tbl.querySelectorAll('colgroup > col')];
+    const ths = [...tbl.querySelectorAll('thead > tr > th')];
+    if (!cols.length || cols.length !== ths.length) return;
+    /* 恢复上次的列宽 ✓ */
+    try {
+      const saved = JSON.parse(localStorage.getItem('cs.varcols.' + key) || 'null');
+      if (Array.isArray(saved) && saved.length === cols.length) {
+        saved.forEach((w, i) => { if (w > 30) cols[i].style.width = w + 'px'; });
+      }
+    } catch (_) {}
+    const saveCols = () => {
+      try {
+        localStorage.setItem('cs.varcols.' + key, JSON.stringify(cols.map((c) => Math.round(c.getBoundingClientRect().width))));
+      } catch (_) {}
+    };
+    ths.forEach((th, i) => {
+      const grip = document.createElement('div');
+      grip.className = 'var-col-grip';
+      th.appendChild(grip);
+      grip.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const sx = e.clientX;
+        const start = cols.map((c) => c.getBoundingClientRect().width);
+        grip.setPointerCapture(e.pointerId);
+        grip.classList.add('dragging');
+        const move = (ev) => {
+          const d = ev.clientX - sx;
+          /* 只改**当前这一列** ✓，别的列跟着让位 ✓（fixed 布局会自动重分 ✓） */
+          cols[i].style.width = Math.max(36, Math.round(start[i] + d)) + 'px';
+        };
+        const up = () => {
+          grip.removeEventListener('pointermove', move);
+          grip.removeEventListener('pointerup', up);
+          grip.classList.remove('dragging');
+          saveCols();
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', up);
+      });
+    });
+  } catch (_) {}
+}
+
 function openVarPanel() {
   try {
     const old = document.getElementById('var-panel');
@@ -14908,6 +14961,11 @@ function openVarPanel() {
         tb.appendChild(tr);
       }
       tbl.appendChild(tb);
+      /* ★ 列宽可拖 ✓✓（2026-10-10）—— 用户：「表格之间需要可以自由拖动」✓
+         ⚠️ 键用**列的组合** ✗（`line-name-value-size-type` ✓）——
+            三条线的列数不一样 ✓（Octave 5 列 / Python 4 列 ✓），
+            用同一个键会把彼此的列宽**串掉** ✓。 */
+      makeColsResizable(tbl, cols.map(([, k]) => k).join('-'));
       body.innerHTML = '';
       body.appendChild(tbl);
       body.insertAdjacentHTML('beforeend', '<div class="var-count">共 ' + rows.length + ' 个变量</div>');
