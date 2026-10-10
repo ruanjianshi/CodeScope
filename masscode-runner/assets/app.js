@@ -14081,7 +14081,17 @@ $('tab-out').onclick = () => switchOutTab('out');
 $('tab-term').onclick = () => switchOutTab('term');
 $('term-clear').onclick = () => { if (term) term.clear(); };
 $('term-hide').onclick = () => switchOutTab('out');
+/* ⚠️ 这两个状态**必须声明在用到它们之前** ✗（2026-10-10）——
+   `term-restart` 那个 handler 在上面就用到 MONCONSOLE_KEY 了 ✓，
+   如果 `let` 写在后面会**踩 TDZ**（ReferenceError）✓。 */
+let MONCONSOLE_KEY = '';
+let MONCONSOLE_AT = 0;
 $('term-restart').onclick = () => {
+  /* ⚠️ 重启终端 = 里面跑的引擎也一起没了 ✗（2026-10-10）——
+     所以要**清掉「这个片段已经起过引擎」的记忆** ✓，
+     否则用户重启终端后再点 MATLAB 标签页会**什么也不做** ✓，
+     看着像「标签页坏了」✓。 */
+  MONCONSOLE_KEY = '';
   fetch('/api/term/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
   // 会话被终止 → 流结束 → termConnect 自动重连并拉起新 shell
 };
@@ -14699,7 +14709,28 @@ $('btn-run-upto').onclick = () => runSection({ fromTop: true });
 /* ★ 入口从工具栏按钮改成**底部面板的标签页** ✓✓（2026-10-10）——
    用户原话：「这个命令窗口，应该不需要按钮，应该放到 [底部面板]」✓。
    点这个标签页 = 「切到终端 + 把引擎命令敲进去」✓，和点原来的按钮一样 ✓。 */
+/* ⚠️⚠️ 防重复启动 ✗✗（2026-10-10 修 bug）——
+   实测（用户截图）：连点两次 / 双击会把 `octave --no-gui --quiet` **发两遍** ✓，
+   而第二遍是在 **Octave 自己的提示符里**执行的 ✓ →
+       octave:1> octave --no-gui --quiet
+       error: 'octave' undefined near line 1, column 1
+   Octave 把启动命令当成了一条**用户指令**去执行 ✓ —— 看着像「命令窗口坏了」✓，
+   其实只是重复发送 ✓。
+   → 两道闸 ✓：
+     ① 记住「这个片段已经在终端里起过引擎」✓，再点只切 tab、**不再发命令** ✓；
+     ② 1.5 秒防抖 ✓（双击、手抖、连点都拦得住 ✓）。
+   ⚠️ 引擎是**启动很慢**的（MATLAB 几秒到几十秒 ✓），第一道闸还能避免
+      「等不及又点一次 → 又起一个」这种更糟的情况 ✓。 */
 $('tab-mconsole').onclick = async () => {
+  const f = CURRENT && CURRENT.fragments[CINDEX];
+  const key = String((CURRENT && CURRENT.file) || '') + '#' + String((f && f.language) || '');
+  const now = Date.now();
+  if (MONCONSOLE_KEY === key || now - MONCONSOLE_AT < 1500) {
+    switchOutTab('term');
+    if (MONCONSOLE_KEY === key) setStatus('ok', '命令窗口已经开在终端里了（在上面的终端里直接输入指令）');
+    return;
+  }
+  MONCONSOLE_AT = now;
   const r = await api('/api/matlab/console');
   if (!r || !r.ok) {
     setStatus('err', '没有可用的引擎');
@@ -14708,11 +14739,12 @@ $('tab-mconsole').onclick = async () => {
     return;
   }
   switchOutTab('term');
+  MONCONSOLE_KEY = key;
   const line = r.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\r';
   setTimeout(() => {
     fetch('/api/term/input', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: line }) })
       .then(() => setStatus('ok', '已在终端启动 ' + r.label + ' 命令窗口'))
-      .catch(() => setStatus('err', '终端还没连上，稍后再点一次'));
+      .catch(() => { MONCONSOLE_KEY = ''; setStatus('err', '终端还没连上，稍后再点一次'); });
   }, 900);
 };
 /* ⚠️ 快捷键用 **⌘⌥Enter** 而不是 ⌘⇧R ✗✗ ——
