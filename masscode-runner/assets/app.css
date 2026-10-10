@@ -4155,7 +4155,7 @@
 .ln-loc { color: var(--dim); }
 
 /* ★ 变量面板 ✓✓（2026-10-10）—— 可拖动浮窗 + 表格 ✓（和代码向导同风格 ✓） */
-#var-panel { position: fixed; left: 60px; top: 90px; z-index: 94; width: 520px; max-height: 62vh;
+#var-panel { position: fixed; left: 60px; top: 90px; z-index: 94; width: 640px; max-height: 62vh;
   display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px;
   overflow: hidden; background: var(--panel); box-shadow: 0 18px 50px rgba(0,0,0,.5); }
 .var-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: move;
@@ -4171,12 +4171,45 @@
 .var-rs:hover::after { opacity: .95; border-color: var(--accent); }
 .var-empty { color: var(--dim); font-size: 12px; padding: 6px 0; }
 .var-count { color: var(--dim); font-size: 11px; margin-top: 7px; }
-.var-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.var-table th { text-align: left; color: var(--dim); font-weight: 500; padding: 3px 8px 5px 0; white-space: nowrap;
-  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
-.var-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
-  vertical-align: top; word-break: break-word; }
-.var-table td.var-name { color: var(--accent); font-weight: 600; white-space: nowrap; }
+/* ★ 变量表格 v2 ✓✓（2026-10-10 重做）—— 用户：「太丑了，美化优化设计」
+   ⚠️ 旧版的问题 ✗：**没有固定列宽** ✓ → 「值」列吃掉全部空间 ✓，
+      把「大小 / 类型」挤到最右边 ✓（中间一大片空白 ✓）；
+      而且长值会**换行** ✓（ 那行变两行 ✓，行高不齐 ✓）。
+   ✅ 新版：**固定布局 + 明确列宽** ✓ + 斑马纹 + hover + 行号胶囊 + 类型彩标 ✓。 */
+.var-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: fixed; }
+.var-table th { text-align: left; color: var(--dim); font-weight: 500; font-size: 11px;
+  padding: 0 10px 6px 0; border-bottom: 1px solid var(--border); white-space: nowrap;
+  position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.var-table td { padding: 6px 10px 6px 0; vertical-align: middle; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+/* 斑马纹 + hover ✓（长表格里跟行不容易串 ✓） */
+.var-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.var-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+/* 列宽 ✓（固定布局，别再让「值」把别的挤走 ✓） */
+.var-table td.var-line { width: 46px; text-align: right; padding-right: 12px; }
+.var-table td.var-name { width: 17%; }
+.var-table td.var-size { width: 62px; text-align: right; }
+.var-table td.var-type { width: 92px; }
+/* 名字：等宽 + 强调色 ✓（像代码 ✓） */
+.var-table td.var-name { color: var(--accent); font-weight: 600;
+  font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; }
+/* 行号：小胶囊 ✓（可点 ✓，点了跳过去 ✓） */
+.var-table td.var-line span { display: inline-block; min-width: 24px; padding: 1px 6px; border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent);
+  font-size: 11px; text-align: center; cursor: pointer; }
+.var-table td.var-line span:hover { background: var(--accent); color: var(--panel); }
+/* 类型：彩色小标签 ✓（扫一眼就能分辨数字 / 字符串 / 序列 / 函数 / 模块 ✓） */
+.var-table td.var-type span { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px;
+  background: color-mix(in srgb, var(--dim) 16%, transparent); color: var(--dim); }
+.var-table td.var-type span.t-num { background: rgba(126,231,135,.16); color: #7ee787; }
+.var-table td.var-type span.t-str { background: rgba(255,209,102,.16); color: #ffd166; }
+.var-table td.var-type span.t-seq { background: rgba(122,162,247,.16); color: #7aa2f7; }
+.var-table td.var-type span.t-fn  { background: rgba(187,154,247,.16); color: #bb9af7; }
+.var-table td.var-type span.t-mod { background: rgba(125,207,255,.16); color: #7dcfff; }
+/* 值：等宽 ✓（数字 / 列表对齐好看 ✓） */
+.var-table td.var-value { font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; }
+/* 计数行 ✓ */
+.var-count { color: var(--dim); font-size: 11px; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--border); }
 .var-raw { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--dim); margin: 0; }
 
 /* ★ 变量表格列宽 ✓✓（2026-10-10）—— 用户截图里「大小/类型」表头被挤成竖排 ✓

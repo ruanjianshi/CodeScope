@@ -14648,6 +14648,24 @@ function findVarLines(code, lang) {
   return map;
 }
 
+/* ★ 类型标签的配色 ✓✓（2026-10-10）—— 扫一眼就能分辨 ✓
+   ⚠️ 按**语义分类**而不是按语言 ✗ —— 三种语言的类型名不一样 ✓
+      （Python 是 `list` / Octave 是 `double` / C 是 `int` ✓），
+      但**用户看到的东西**是一类：数字 / 字符串 / 序列 / 函数 / 模块 ✓。
+   ⚠️ 认不出就**用默认灰** ✓（别乱上色 ✓）。 */
+function typeClass(t) {
+  const s = String(t || '').toLowerCase();
+  if (/^(int|float|double|complex|bool|long|short|char|uint|size_t|number|decimal)/.test(s)) return 't-num';
+  if (/^(str|string|char|bytes|text)/.test(s)) return 't-str';
+  if (/^(list|tuple|dict|set|array|ndarray|vector|matrix|struct|cell|map)/.test(s)) return 't-seq';
+  /* ⚠️ `module` 必须排在 `t-fn` **前面** ✗✓（2026-10-10）——
+     不然 `module` 会被 `t-fn` 抢走 ✓（两条规则都含它 ✓，**先匹配的赢** ✓），
+     颜色就不是我想要的青色了 ✓。 */
+  if (/^(module|package)/.test(s)) return 't-mod';
+  if (/^(function|builtin|method|function_handle|lambda|type|class)/.test(s)) return 't-fn';
+  return '';
+}
+
 function openVarPanel() {
   try {
     const old = document.getElementById('var-panel');
@@ -14697,7 +14715,7 @@ function openVarPanel() {
     try {
       const saved = JSON.parse(localStorage.getItem('cs.varpanel') || 'null');
       if (saved) {
-        if (saved.w) win.style.width = Math.max(300, saved.w) + 'px';
+        if (saved.w) win.style.width = Math.max(360, saved.w) + 'px';
         if (saved.h) win.style.height = Math.max(160, saved.h) + 'px';
         if (saved.l != null) { win.style.left = saved.l + 'px'; win.style.top = saved.t + 'px'; }
       }
@@ -14707,7 +14725,7 @@ function openVarPanel() {
       const sx = e.clientX, sy = e.clientY, sw = win.offsetWidth, sh = win.offsetHeight;
       rs.setPointerCapture(e.pointerId);
       const move = (ev) => {
-        win.style.width = Math.max(300, sw + ev.clientX - sx) + 'px';
+        win.style.width = Math.max(360, sw + ev.clientX - sx) + 'px';
         win.style.height = Math.max(160, sh + ev.clientY - sy) + 'px';
       };
       const up = () => {
@@ -14772,30 +14790,43 @@ function openVarPanel() {
         const tr = document.createElement('tr');
         for (const [, key] of cols) {
           const td = document.createElement('td');
-          /* 「行」列特殊 ✓：点它**跳到编辑器里那一行** ✓（比只显示数字有用得多 ✓） */
+          /* 「行」列特殊 ✓：做成**小胶囊** ✓，点它**跳到编辑器里那一行** ✓ */
           if (key === 'line') {
             const ln = lineMap.get(r.name);
             td.className = 'var-line';
             if (ln) {
-              td.textContent = String(ln);
-              td.title = '跳到第 ' + ln + ' 行';
-              td.onclick = () => {
+              const sp = document.createElement('span');
+              sp.textContent = String(ln);
+              sp.title = '跳到第 ' + ln + ' 行';
+              sp.onclick = () => {
                 try {
                   MONACO_EDITOR.revealLineInCenter(ln);
                   MONACO_EDITOR.setPosition({ lineNumber: ln, column: 1 });
                   MONACO_EDITOR.focus();
                 } catch (_) {}
               };
+              td.appendChild(sp);
             }
             tr.appendChild(td);
             continue;
           }
           const raw = String(r[key] || '');
-          td.textContent = raw;
           td.className = 'var-' + key;
+          /* 「类型」做成**彩色小标签** ✓（扫一眼就能分辨数字 / 字符串 / 序列 / 函数 / 模块 ✓） */
+          if (key === 'type' && raw) {
+            const sp = document.createElement('span');
+            sp.textContent = raw;
+            sp.className = typeClass(raw);
+            td.appendChild(sp);
+            tr.appendChild(td);
+            continue;
+          }
+          td.textContent = raw;
           /* ⚠️ 长值**截断显示**，但**完整值放 title** ✓（悬停能看全 ✓）——
-             `math` 的 repr 有 90 多字符 ✓（`<module 'math' from '/Users/…/math.cpython-313-darwin.so'>` ✓），
-             不截会把表格撑得很宽 ✓，而且**真正想看的 `[0,1,4,…]` 反而被挤没了** ✓。 */
+             `math` 的 repr 有 90 多字符 ✓，不截会把表格撑得很宽 ✓，
+             而且**真正想看的 `[0,1,4,…]` 反而被挤没了** ✓。
+             ⚠️ 现在配合 `table-layout: fixed` + `ellipsis` ✓，
+                截断是**按列宽自动**的 ✓（这里再截一次是双保险 ✓）。 */
           if (key === 'value' && raw.length > 90) td.textContent = raw.slice(0, 90) + '…';
           if (raw.length > 40) td.title = raw;
           tr.appendChild(td);
