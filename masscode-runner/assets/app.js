@@ -14507,7 +14507,12 @@ function pushDebugOut(chunk) {
   try {
     const t = String(chunk == null ? '' : chunk);
     if (!t) return;
-    for (const raw of t.split('\n')) DEBUG_OUT.lines.push(raw.replace(/\r/g, ''));
+    /* ⚠️⚠️ 先**剥掉 ANSI 转义** ✗✗（2026-10-10 实测修）——
+       终端里混着 `\x1b[?2004l`（关闭 bracketed paste ✓）、`\x1b[C`（光标右移 ✓）
+       这类控制序列 ✓ → 不剥的话**会混进变量名** ✓
+       （实测：名字变成 `\u001b[?2004lA` ✓，行号也对不上 ✓）。 */
+    const clean = t.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+    for (const raw of clean.split('\n')) DEBUG_OUT.lines.push(raw.replace(/\r/g, ''));
     if (DEBUG_OUT.lines.length > 400) DEBUG_OUT.lines.splice(0, DEBUG_OUT.lines.length - 400);
   } catch (_) {}
 }
@@ -14531,7 +14536,18 @@ function parseVars(lang, text) {
   const rows = [];
   const lines = String(text || '').split('\n');
   if (/^(matlab|octave)$/.test(lang)) {
-    /* `whos` 的表头：Attr Name Size Bytes Class（可能没有 Attr ✓） */
+    /* ★ 新版 Octave 命令也输出 `\x1f` 四段 ✓（2026-10-10）—— **先试它** ✓ */
+    const usRows = lines.filter((l) => l.indexOf('\x1f') >= 0);
+    if (usRows.length) {
+      for (const l of usRows) {
+        const p = l.split('\x1f');
+        if (p[0]) rows.push({ name: p[0], value: p[1] || '', size: p[2] || '', type: p[3] || '' });
+      }
+      return rows;
+    }
+    /* ── 兜底：老格式（`whos` 的表 ✓）——
+       万一新命令失败（比如某个变量让 `eval` 抛了 ✓），面板还能显示名字 / 大小 / 类型 ✓。
+       ⚠️ 注意：这条路上**没有值** ✓（`whos` 本来就不给 ✓）。 */
     let head = -1;
     for (let i = 0; i < lines.length; i++) {
       if (/^\s*(\S+\s+)?Name\s+Size\s+Bytes\s+Class\s*$/.test(lines[i])) { head = i; break; }
@@ -14589,7 +14605,29 @@ function parseVars(lang, text) {
       `who` 只给**名字** ✓，`whos` 给 **Name / Size / Bytes / Class** ✓，
       正好是面板要的四列 ✓。 */
 const VARS_CMD = {
-  matlab: 'whos', octave: 'whos',
+  /* ⚠️⚠️ Octave/MATLAB 的 `whos` **不给值** ✗✗（用户实测：「变量怎么没有数值」✓）——
+     `whos` 只给 Name / Size / Bytes / Class ✓，所以「值」那列**永远是空的** ✓。
+     → 换成**自己遍历 + `mat2str`** ✓：一行一个变量 ✓，四段用 `\x1f` 隔开 ✓
+       （**和 Python 那边同一套** ✓，解析器也共用 ✓）。
+     ⚠️ `eval` 每个变量要**包 try** ✗ —— function_handle / 大对象可能报错 ✓，
+        报错就写「<无法显示>」✓，**不能因为一个变量挂了整张表** ✓。
+     ⚠️ 值**截断到 120 字符** ✗ —— 一个 1000×1000 矩阵 mat2str 出来几 MB ✓，
+        会把终端和面板都卡死 ✓。
+     ⚠️ 末尾**清掉自己的临时变量** ✗ —— 否则 `_v` / `_i` / `_n` / `_e` / `_s`
+        会出现在**下一次**的变量表里 ✓。
+     ⚠️⚠️ 换行和分隔符**必须用 `char(10)` / `char(31)`** ✗✗（实测踩到 ✓）——
+        **Octave 的双引号字符串「不处理转义」** ✓：`"\n"` 就是**反斜杠 + n 两个字符** ✓
+        （单引号才处理 ✓）→ 输出全挤在一行 ✓，面板只解析出 1 个变量 ✓。
+        用 `char()` 最**无歧义** ✓，也不依赖单双引号的差异 ✓。
+     ⚠️⚠️ **MATLAB 和 Octave 必须用同一条命令** ✗✗（2026-10-10 实测又踩到 ✓）——
+        我原来只给 `octave` 换了新命令 ✓，`matlab` 还留着 `whos` ✓ →
+        而**用户那个片段的语言标签正是 `matlab`** ✓ →
+        `VARS_CMD['matlab']` = `whos` ✓ → **值那列永远是空的** ✓✓
+        （用户截图里就是这样 ✓，我一开始还以为是解析问题 ✓）。
+        这条命令是**纯 MATLAB 语法** ✓（`mat2str` / `ischar` / `strrep` / `class` / `char` ✓）
+        → **两边都能跑** ✓，不需要分两份 ✓。 */
+  matlab: 'cs_vars',
+  octave: 'cs_vars',
   /* ⚠️⚠️ 用 `print(...)` 而不是 `p ...` ✗✗（2026-10-10 实测修）——
      `p` 是**求值并显示结果** ✓，**字符串结果会带引号**打出来 ✓ →
      面板拿到的第一行是 `'a = 3'` ✓（**开头一个单引号** ✓）→ 解析器认不出 ✓
@@ -14693,7 +14731,22 @@ function openVarPanel() {
     close.textContent = '✕'; close.title = '关闭';
     const refresh = document.createElement('button');
     refresh.textContent = '↻ 刷新';
-    bar.appendChild(refresh); bar.appendChild(close);
+    /* ★ 一键靠右 ✓✓（2026-10-10）—— 用户：「解决**又被遮挡**问题」✓
+       ⚠️ 为什么需要它 ✗：浮窗**天生会挡内容** ✓ ——
+          与其猜「放哪儿不挡」✓，不如给一个**一键挪开**的出口 ✓；
+          而且挪完会**记住** ✓（下次打开就在右边 ✓，**不会再挡** ✓）。 */
+    const snap = document.createElement('button');
+    snap.textContent = '⇥ 靠右';
+    snap.title = '贴到窗口右边（会记住，下次不再挡代码）';
+    snap.onclick = () => {
+      const w0 = win.offsetWidth;
+      win.style.left = Math.max(12, Math.round(window.innerWidth - w0 - 22)) + 'px';
+      win.style.top = '72px';
+      saveBox();
+    };
+    bar.appendChild(snap);
+    bar.appendChild(refresh);
+    bar.appendChild(close);
     const body = document.createElement('div');
     body.className = 'var-body';
     body.innerHTML = '<div class="var-empty">正在读取…</div>';
@@ -14712,12 +14765,27 @@ function openVarPanel() {
         }));
       } catch (_) {}
     };
+    /* ★ 默认位置：**贴右边** ✓✓（2026-10-10）—— 用户：「解决**又被遮挡**问题」✓
+       ⚠️ 原来是 `left: 60px; top: 90px` ✗ —— **正盖在代码中间** ✓
+          （用户截图里它挡住了第 4~27 行 ✓）。
+       ⚠️ 为什么默认放右边 ✗：代码**从左上开始写** ✓，
+          **右下角最不容易挡到内容** ✓；
+          而且用户**拖动后会记住** ✓（下次就在他自己放的地方 ✓）。
+       ⚠️ 宽度也别用死值 ✗：**窗口窄的时候 640px 会占掉大半个屏** ✓
+          → 用 `min(640px, 44vw)` ✓。 */
     try {
       const saved = JSON.parse(localStorage.getItem('cs.varpanel') || 'null');
-      if (saved) {
-        if (saved.w) win.style.width = Math.max(360, saved.w) + 'px';
-        if (saved.h) win.style.height = Math.max(160, saved.h) + 'px';
-        if (saved.l != null) { win.style.left = saved.l + 'px'; win.style.top = saved.t + 'px'; }
+      if (saved && saved.w) win.style.width = Math.max(360, saved.w) + 'px';
+      else win.style.width = 'min(640px, 44vw)';
+      if (saved && saved.h) win.style.height = Math.max(160, saved.h) + 'px';
+      if (saved && saved.l != null) {
+        win.style.left = saved.l + 'px';
+        win.style.top = saved.t + 'px';
+      } else {
+        /* 先量一下宽度再算 left ✓（否则 offsetWidth 还是 0 ✓） */
+        const w0 = win.getBoundingClientRect().width || 640;
+        win.style.left = Math.max(12, Math.round(window.innerWidth - w0 - 22)) + 'px';
+        win.style.top = '72px';
       }
     } catch (_) {}
     rs.addEventListener('pointerdown', (e) => {

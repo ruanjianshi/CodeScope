@@ -2366,6 +2366,38 @@ function sweepTempDirs() {
       传回来最省事 ✓：不依赖临时目录、也不用把用户产物落到别处 ✓。
    ⚠️ 编辑的是**产物**（figN.fig ✓），**不是用户的 .m 源文件** ✗ ——
       用户下次重跑脚本，图还是按他自己代码画的 ✓（编辑不会被悄悄固化 ✓）。 */
+/* ★ 取变量的小脚本 ✓✓（2026-10-10）—— 写到调试目录里，终端里发 `cs_vars` 就行 ✓
+   ⚠️ 为什么是文件而不是一长串命令 ✗：真 PTY 里长命令会被 readline 重绘搞乱 ✓
+      （实测：只看到回显、没有输出 ✓）。
+   ⚠️ 用 char(31) / char(10) 当分隔符 ✗ ——
+      **Octave 的双引号字符串不处理转义** ✓（`"
+"` 是字面的反斜杠+n ✓）。
+   ⚠️ 每个变量 eval 要包 try ✗ —— function_handle / 大对象会抛 ✓，
+      抛了就写 `?` ✓，**不能因为一个变量挂掉整张表** ✓。
+   ⚠️ 值截断 120 字符 ✗ —— 大矩阵 mat2str 出来几 MB ✓。
+   ⚠️ 末尾 clear 掉自己的临时变量 ✗ —— 否则会出现在下一次的变量表里 ✓。 */
+/* ★ 取变量的小脚本 ✓✓（2026-10-10）—— 写到调试目录里，终端里发 cs_vars 就行 ✓
+   ⚠️ 为什么是文件而不是一长串命令 ✗：**真 PTY 里长命令会被 readline 重绘搞乱** ✓
+      （实测：只看到回显、没有输出 ✓）。
+   ⚠️ 用 char(31) / char(10) 当分隔符 ✗ ——
+      **Octave 的双引号字符串不处理转义** ✓（"\n" 是字面的反斜杠+n ✓）。
+   ⚠️ 每个变量 eval 要包 try ✗ —— function_handle / 大对象会抛 ✓，抛了写 ? ✓。
+   ⚠️ 值截断 120 字符 ✗ —— 大矩阵 mat2str 出来几 MB ✓。
+   ⚠️ 末尾 clear 掉临时变量 ✗ —— 否则会出现在下一次的变量表里 ✓。
+   ⚠️ join 用 String.fromCharCode(10) ✗ —— 直接在 JS 里写 \n 太容易被工具链搞坏 ✓
+      （我这次就是 ✓，写坏的 server.js 直接语法错误 ✓）。 */
+const CS_VARS_M = [
+  "_v=who;",
+  "_f=[\"%s\" char(31) \"%s\" char(31) \"%s\" char(31) \"%s\" char(10)];",
+  "for _i=1:numel(_v);",
+  "  _n=_v{_i}; _s=\"?\";",
+  "  try; _e=eval(_n); if ischar(_e); _s=[char(34) _e char(34)]; else; _s=mat2str(_e,6); end; catch; _s=\"?\"; end;",
+  "  if numel(_s)>120; _s=[_s(1:120) \"...\"]; end;",
+  "  _z=strrep(mat2str(size(_e)),\" \",\"x\");",
+  "  fprintf(_f,_n,_s,_z(2:end-1),class(_e));",
+  "end;",
+  "clear _v _f _i _n _e _s _z",
+].join(String.fromCharCode(10));
 async function handleFigEdit(req, res) {
   const b = await readBody(req);
   const figName = path.basename(String((b && b.fig) || 'fig1.fig').trim());
@@ -7449,6 +7481,13 @@ const server = http.createServer(async (req, res) => {
             code: f.code,
           }));
           const mdir = writeFragments(mFiles);
+          /* ★ 顺带写一个「取变量」小脚本 ✓✓（2026-10-10）——
+             ⚠️ 为什么不在终端里直接发一长串 ✗：**352 字符的命令在真 PTY 里
+                会被 readline 的换行重绘搞乱** ✓（实测：只看到回显、没有输出 ✓）。
+             → 写成 `.m` 文件 ✓，终端里只要发 `cs_vars` 四个字母 ✓，
+                短、稳、也好调试 ✓。
+             ⚠️ 文件名带 `cs_` 前缀 ✗ —— 避免和用户的脚本撞名 ✓。 */
+          try { writeFileAtomicSync(path.join(mdir, 'cs_vars.m'), CS_VARS_M); } catch (_) {}
           const mEntry = mFiles.find((f) => /main\.m$/i.test(f.filename)) || mFiles[0];
           const cmd = matlabCmd();
           if (!cmd) return send(res, 200, { ok: false, error: '这台机器上没有 MATLAB / Octave', dir: '' });

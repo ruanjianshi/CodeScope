@@ -4188,7 +4188,8 @@
 /* 列宽 ✓（固定布局，别再让「值」把别的挤走 ✓） */
 /* ⚠️ 列宽统一在 colgroup 里 ✓（table-layout:fixed 下写在 td 上**不生效** ✗） */
 .var-table td.var-line { text-align: left; padding-right: 8px; }
-.var-table td.var-name { overflow: hidden; text-overflow: ellipsis; }
+/* ⚠️ 名字**不要裁剪** ✗✓ —— 名字都很短 ✓，裁剪只会把 `A` 显示成 `..A` ✓ */
+.var-table td.var-name { overflow: visible; text-overflow: clip; }
 .var-table td.var-size { text-align: right; padding-right: 16px; }
 .var-table td.var-type { }
 /* 名字：等宽 + 强调色 ✓（像代码 ✓） */
