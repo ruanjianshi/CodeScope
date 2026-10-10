@@ -13567,25 +13567,82 @@ function renderRunImages(images) {
     }
     const wrap = document.createElement('div');
     wrap.className = 'run-image';
-    const im = document.createElement('img');
-    im.src = img.data;
-    im.alt = img.name || '运行结果图';
-    im.loading = 'lazy';
-    wrap.appendChild(im);
+    /* ⚠️ `.fig` 是**二进制**（MATLAB/Octave 的可编辑图形文件 ✓），
+       不能塞进 <img> ✗（浏览器不认这个 MIME ✓，会显示成破图 ✓）。
+       → 非图片一律渲染成**下载卡片** ✓（用户要的就是「拿到可编辑的 fig」✓）。 */
+    const isImage = /^image\//.test(String(img.mime || ''));
+    if (isImage) {
+      const im = document.createElement('img');
+      im.src = img.data;
+      im.alt = img.name || '运行结果图';
+      im.loading = 'lazy';
+      /* ★ 点图**弹出大图** ✓（2026-10-10）—— 用户要「可以编辑的弹出」✓，
+         浏览器里能做的「弹出」就是：放大看图 + 下载原件 ✓。 */
+      im.title = '点击放大查看';
+      im.style.cursor = 'zoom-in';
+      im.addEventListener('click', () => openImagePopup(img));
+      wrap.appendChild(im);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'run-file-card';
+      ph.innerHTML = '<b>⧉</b><span>' + escapeHtml(img.name || '文件') +
+        '</span><small>用 Octave / MATLAB 打开可继续编辑</small>';
+      wrap.appendChild(ph);
+    }
     const bar = document.createElement('div');
     bar.className = 'run-image-bar';
     const nm = document.createElement('span');
-    nm.textContent = (img.name || '图') + ' · ' + Math.round((img.bytes || 0) / 1024) + 'KB';
+    nm.textContent = (img.name || '文件') + ' · ' + Math.round((img.bytes || 0) / 1024) + 'KB';
     bar.appendChild(nm);
     const a = document.createElement('a');
     a.href = img.data;
     a.download = img.name || 'plot.png';
-    a.textContent = '⬇ 下载';
+    a.textContent = isImage ? '⬇ 下载' : '⬇ 下载（可编辑）';
     bar.appendChild(a);
     wrap.appendChild(bar);
     box.appendChild(wrap);
   }
   return box;
+}
+
+/* ★ 图片弹窗 ✓✓（2026-10-10）—— 点小图弹大图 ✓，
+   支持滚轮缩放 / 拖动平移 / Esc 关闭 ✓（尽量贴近「可编辑的弹出」的体验 ✓，
+   真正「可编辑」靠下载 .fig 用 Octave/MATLAB 打开 ✓）。 */
+function openImagePopup(img) {
+  try {
+    const old = document.getElementById('img-popup');
+    if (old) old.remove();
+    const mask = document.createElement('div');
+    mask.id = 'img-popup';
+    let scale = 1, tx = 0, ty = 0, dragging = false, lx = 0, ly = 0;
+    const box = document.createElement('div');
+    box.className = 'img-popup-box';
+    const im = document.createElement('img');
+    im.src = img.data; im.alt = img.name || '';
+    const bar = document.createElement('div');
+    bar.className = 'img-popup-bar';
+    bar.innerHTML = '<span>' + escapeHtml(img.name || '图') + '</span>' +
+      '<span class="hint">滚轮缩放 · 拖动平移 · Esc 关闭</span>';
+    const dl = document.createElement('a');
+    dl.href = img.data; dl.download = img.name || 'plot.png'; dl.textContent = '⬇ 下载';
+    bar.appendChild(dl);
+    const close = document.createElement('button');
+    close.textContent = '✕'; close.title = '关闭';
+    bar.appendChild(close);
+    box.appendChild(bar); box.appendChild(im); mask.appendChild(box);
+    const apply = () => { im.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; };
+    const shut = () => { mask.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') shut(); };
+    close.onclick = shut;
+    mask.addEventListener('click', (e) => { if (e.target === mask) shut(); });
+    mask.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.max(0.2, Math.min(8, scale * (e.deltaY < 0 ? 1.12 : 0.89))); apply(); }, { passive: false });
+    im.addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; ly = e.clientY; im.setPointerCapture(e.pointerId); im.style.cursor = 'grabbing'; });
+    im.addEventListener('pointermove', (e) => { if (!dragging) return; tx += e.clientX - lx; ty += e.clientY - ly; lx = e.clientX; ly = e.clientY; apply(); });
+    im.addEventListener('pointerup', () => { dragging = false; im.style.cursor = 'grab'; });
+    im.style.cursor = 'grab';
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(mask);
+  } catch (_) {}
 }
 
 function showOut(stdout, stderr, isOk, images) {

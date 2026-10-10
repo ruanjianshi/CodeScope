@@ -2672,10 +2672,48 @@ function runnerFor(language) {
         const files = (opts.files && opts.files.length) ? opts.files : [{ filename: 'main.m', code }];
         const dir = writeFragments(files);
         const entry = files[(opts.selIndex || 0)].filename;
+        /* ★ 自动存一份可编辑的 .fig ✓✓（2026-10-10）
+           用户原话：「这个画图，我需要的是，fig，可以编辑的弹出」✓。
+           实测：Octave 在 --no-gui 下 **savefig 能存 .fig** ✓（63KB ✓），
+                而且 **openfig 能再打开** ✓（证明它是真·可编辑的 ✓）。
+           → 在用户代码**末尾追加**一段：把当前所有 figure 各存一份 .fig ✓。
+           ⚠️ **必须追加在末尾** ✗ —— 这样**行号不受影响** ✓，
+              用户看到的报错行号还是他自己的代码行 ✓。
+           ⚠️ 用 try/catch 包住 ✗ —— 没画图时 `findall(0,'type','figure')` 返回空 ✓，
+              存图失败也不该让整个程序算失败 ✓。
+           ⚠️ 命名 `fig1.fig` / `fig2.fig` ✓（按 figure 的 Number ✓），
+              和用户自己 `print` 出来的 PNG 分开 ✓，互不覆盖 ✓。 */
+        const FIG_TAIL = [
+          '',
+          '% ---- CodeScope: 自动导出可编辑的 .fig（应用追加，不影响你的代码）----',
+          'try',
+          '  _cs_figs = findall(0, "type", "figure");',
+          '  for _cs_i = 1:numel(_cs_figs)',
+          '    _cs_h = _cs_figs(_cs_i);',
+          '    _cs_n = get(_cs_h, "number");',
+          '    if isempty(_cs_n) || _cs_n <= 0, _cs_n = _cs_i; end',
+          '    savefig(_cs_h, sprintf("fig%d.fig", _cs_n));',
+          '  end',
+          '  if numel(_cs_figs) > 0',
+          '    fprintf("已导出 %d 个可编辑的 .fig（在输出区下载，或用 Octave/MATLAB 打开继续编辑）\\n", numel(_cs_figs));',
+          '  end',
+          'catch _cs_e',
+          '  % 没画图或存图失败都不影响结果',
+          'end',
+          '',
+        ].join('\n');
+        const idx = Math.max(0, Number(opts.selIndex) || 0);
+        const patched = files.map((f, i) => (i === idx && /\.m$/i.test(String(f.filename || '')))
+          ? { filename: f.filename, code: String(f.code || '') + FIG_TAIL }
+          : f);
+        const realFiles = patched.length ? patched : files;
+        const wdir = writeFragments(realFiles);
+        /* ⚠️ 两个引擎的命令行参数完全不同 ✗（这段别弄丢 ✓）：
+           MATLAB 用 -batch "run('main.m')"、Octave 用 --no-gui --quiet main.m ✓。 */
         const args = engine === 'octave'
           ? ['--no-gui', '--quiet', entry]
           : ['-batch', "run('" + entry.replace(/'/g, "''") + "')"];
-        return run(mCmd, args, { cwd: dir, timeoutMs: 60000, input: opts.input }).then((result) => {
+        return run(mCmd, args, { cwd: wdir, timeoutMs: 60000, input: opts.input }).then((result) => {
           /* ★ 把这一趟画出来的图收回来 ✓✓（2026-10-10）
              用户原话：「octave 画图方面的测试，需要做」✓。
              实测结论：**Octave 在 `--no-gui` 下能画图** ✓ ——
@@ -2691,12 +2729,26 @@ function runnerFor(language) {
              ⚠️ 单张限 4MB ✗ —— 超大图（比如 -r600 的大画布 ✓）不往回传，
                 只提示一下 ✓，免得响应体爆掉 ✓。 */
           try {
-            const IMG = /\.(png|jpe?g|svg|gif|webp|pdf)$/i;
+            /* ⚠️ `.fig` 也要收 ✗（2026-10-10）——
+               用户要「fig，可以编辑的弹出」✓ ——
+               `.fig` 是 MATLAB/Octave 的**可编辑图形文件** ✓
+               （实测 openfig 能重新打开 ✓），是这次的主角 ✓，
+               别只收 PNG 把它漏了 ✓（我第一版就漏了 ✓）。
+               MIME 给 application/octet-stream ✓（浏览器不认识 .fig ✓，
+               当成二进制下载即可 ✓）。 */
+            const IMG = /\.(png|jpe?g|svg|gif|webp|pdf|fig)$/i;
             const MAX = 4 * 1024 * 1024;
             const imgs = [];
-            for (const name of fs.readdirSync(dir)) {
+            /* ⚠️⚠️ 用 **wdir** 不是 dir ✗✗（2026-10-10 修）——
+               我把写文件那步改名成 wdir 了 ✓，但这里还写着 dir ✓
+               → `fs.readdirSync(undefined)` 直接抛 ✓
+               → 被下面的 `catch (_) {}` **静默吞掉** ✓✓
+               → 现象是：stdout 明明说「已导出 .fig」✓，但一张图都拿不到 ✓。
+               ⚠️ 教训：**静默 catch 会把「变量名写错」这种低级错误藏得死死的** ✓ ——
+                  下面那个 catch 现在会打日志了 ✓。 */
+            for (const name of fs.readdirSync(wdir)) {
               if (!IMG.test(name)) continue;
-              const full = path.join(dir, name);
+              const full = path.join(wdir, name);
               let st; try { st = fs.statSync(full); } catch (_) { continue; }
               if (!st.isFile()) continue;
               if (st.size > MAX) { imgs.push({ name, tooBig: true, bytes: st.size }); continue; }
@@ -2705,9 +2757,16 @@ function runnerFor(language) {
                 : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg'
                 : ext === '.svg' ? 'image/svg+xml'
                 : ext === '.gif' ? 'image/gif'
-                : ext === '.webp' ? 'image/webp' : 'application/pdf';
+                : ext === '.webp' ? 'image/webp'
+                : ext === '.fig' ? 'application/octet-stream'
+                : 'application/pdf';
               imgs.push({ name, mime, bytes: st.size, data: 'data:' + mime + ';base64,' + fs.readFileSync(full).toString('base64') });
             }
+            if (imgs.length) result.images = imgs;
+            /* ⚠️ 这行**必须留着** ✗（2026-10-10 补回来）——
+               我上一次用同一行当锚点加噪音过滤 ✓，把它顶掉了 ✓，
+               结果 `images` 字段整个消失 ✓，前端一张图都拿不到 ✓
+               （实测：回传文件数 0 ✓，但 stdout 里明明说「已导出 .fig」✓）。 */
             if (imgs.length) result.images = imgs;
             /* ⚠️ 顺手滤掉 Octave 的**无害噪音** ✗（2026-10-10）——
                无界面模式（--no-gui）下画图会往 stderr 打一堆 FALLBACK / gs 缺失的提示 ✓，
@@ -2722,7 +2781,10 @@ function runnerFor(language) {
                 result.stderr = kept.join('\n');
               }
             } catch (_) {}
-          } catch (_) {}
+          } catch (e) {
+            /* ⚠️ 别再静默吞掉 ✗ —— 之前就是这里把「变量名写错」藏了一轮 ✓ */
+            console.error("[run] 收集运行产物失败: " + String((e && e.message) || e));
+          }
           return result;
         });
       });
