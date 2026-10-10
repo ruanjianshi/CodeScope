@@ -14730,28 +14730,38 @@ function makeColsResizable(tbl, key) {
       } catch (_) {}
     };
     ths.forEach((th, i) => {
-      const grip = document.createElement('div');
-      grip.className = 'var-col-grip';
-      th.appendChild(grip);
-      grip.addEventListener('pointerdown', (e) => {
+      /* ⚠️⚠️ 把手**不能做成 `th` 的子元素** ✗✗（2026-10-10 实测修）——
+         原来在 `th` 里插一个 `position:absolute` 的 div ✓，
+         但实测 `elementFromPoint(把手中心)` 返回的是 **`TH`** ✗ →
+         **把手根本收不到 pointerdown** ✓ → 拖动**完全没反应** ✓
+         （量了宽度：拖前拖后一模一样 ✓，五个把手位置都对 ✓，就是不动 ✓）。
+         ⚠️ 真因 ✗：`th` 自己 `position: relative` ✓ 且带 `z-index` ✓ →
+            **子元素的 z-index 压不过父元素本身** ✓（同一个层叠上下文 ✓）。
+         → 改成**直接在 `th` 上判断** ✓：
+            `pointerdown` 时看 `e.clientX` 是否落在**右边缘 8px** 内 ✓，
+            是就当成「拖列宽」✓；不是就**直接放行** ✓
+            （让表头以后可能有的点击 / 排序照常 ✓）。 */
+      th.classList.add('var-th-grip');
+      th.addEventListener('pointerdown', (e) => {
+        const box = th.getBoundingClientRect();
+        if (box.right - e.clientX > 8) return;
         e.preventDefault(); e.stopPropagation();
         const sx = e.clientX;
         const start = cols.map((c) => c.getBoundingClientRect().width);
-        grip.setPointerCapture(e.pointerId);
-        grip.classList.add('dragging');
+        th.classList.add('dragging');
+        try { th.setPointerCapture(e.pointerId); } catch (_) {}
         const move = (ev) => {
           const d = ev.clientX - sx;
-          /* 只改**当前这一列** ✓，别的列跟着让位 ✓（fixed 布局会自动重分 ✓） */
           cols[i].style.width = Math.max(36, Math.round(start[i] + d)) + 'px';
         };
         const up = () => {
-          grip.removeEventListener('pointermove', move);
-          grip.removeEventListener('pointerup', up);
-          grip.classList.remove('dragging');
+          th.removeEventListener('pointermove', move);
+          th.removeEventListener('pointerup', up);
+          th.classList.remove('dragging');
           saveCols();
         };
-        grip.addEventListener('pointermove', move);
-        grip.addEventListener('pointerup', up);
+        th.addEventListener('pointermove', move);
+        th.addEventListener('pointerup', up);
       });
     });
   } catch (_) {}

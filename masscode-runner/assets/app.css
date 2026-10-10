@@ -4232,6 +4232,40 @@
 .var-table td.var-line:hover { text-decoration: underline; opacity: 1; }
 .var-table th:first-child { padding-right: 12px; }
 
+/* ★ 列宽拖拽 ✓✓（2026-10-10）—— 用户：「表格之间需要可以自由拖动」
+   ⚠️ 把手**不做成子元素** ✗✗：实测 `elementFromPoint` 命中的是 `TH` 本身 ✓
+      （父元素 position:relative + z-index 压过子元素 ✓）→ 把手收不到事件 ✓。
+      → 改成**直接判断表头右边缘 8px** ✓，这里只负责给视觉提示 ✓。 */
+.var-table th.var-th-grip { cursor: default; }
+/* 右边缘 8px 内显示 col-resize 光标 ✓（用背景条提示「这里能拖」✓） */
+.var-table th.var-th-grip::after { content: ""; position: absolute; top: 3px; bottom: 5px;
+  right: 0; width: 8px; cursor: col-resize; }
+.var-table th.var-th-grip:hover::after { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.var-table th.var-th-grip.dragging::after { background: var(--accent); }
+/* 值：等宽 ✓（数字 / 列表对齐好看 ✓） */
+.var-table td.var-value { font-family: 'JetBrains Mono', SFMono-Regular, Consolas, monospace; }
+/* 计数行 ✓ */
+.var-count { color: var(--dim); font-size: 11px; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--border); }
+.var-raw { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: var(--dim); margin: 0; }
+
+/* ★ 变量表格列宽 ✓✓（2026-10-10）—— 用户截图里「大小/类型」表头被挤成竖排 ✓
+   ⚠️ 名字列**不换行**且只占内容宽 ✓；值列吃掉剩余空间 ✓。 */
+.var-table td.var-name, .var-table td.var-size, .var-table td.var-type { white-space: nowrap; }
+.var-table td.var-value { width: 100%; }
+.var-table:not(.wide) td.var-value { width: auto; }
+.var-table td.var-name { color: var(--accent); font-weight: 600; }
+
+/* ★ 变量面板标题栏的「当前停在哪」✓✓（2026-10-10）—— 用户：「位置，所在位置行号」 */
+.var-pos { color: #ffd166; font-size: 11px; margin-left: 10px; max-width: 44%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ★ 变量表格的「行」列 ✓✓（2026-10-10）—— 用户：「变量所在的行号」 */
+/* 可点击 ✓（跳到编辑器里那一行 ✓），所以给个手型和强调色 ✓ */
+.var-table td.var-line { color: var(--accent); cursor: pointer; white-space: nowrap;
+  text-align: right; padding-right: 12px; opacity: .9; }
+.var-table td.var-line:hover { text-decoration: underline; opacity: 1; }
+.var-table th:first-child { padding-right: 12px; }
+
 /* ★ 列宽拖拽把手 ✓✓（2026-10-10）—— 用户：「表格之间需要可以自由拖动」 */
 /* 贴在表头右边缘的一条窄条 ✓；平时透明、hover 才显形 ✓（不干扰阅读 ✓） */
 .var-table th { position: relative; }
