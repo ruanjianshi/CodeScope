@@ -13973,7 +13973,30 @@ function showOut(stdout, stderr, isOk, images) {
         stdout 里的缩进和换行是有意义的 ✓，只能拿 trim 来**判断空不空** ✓。 */
   const hasOut = String(stdout == null ? '' : stdout).trim().length > 0;
   const hasErr = String(stderr == null ? '' : stderr).trim().length > 0;
-  if (hasOut) { const s = document.createElement('span'); s.textContent = stdout; pre.appendChild(s); }
+  /* ★ stdout 也做**行级高亮** ✓✓（2026-10-10）—— 用户原话：
+     「输出终端，怎么没有相应的**语法高亮**」✓（他指的是这个「⚙ 输出」面板 ✓，
+     终端本身是有 ANSI 颜色的 ✓）。
+     ⚠️ 只加 class、**一个字都不改** ✗ —— 输出是程序真实结果 ✓，
+        改了用户复制出去就对不上了 ✓（和 stderr 那套同一个原则 ✓）。
+     ⚠️ 只认**明确的**几类 ✗，别乱猜语义 ✓：
+        · `debug>` / `(Pdb)` / `(gdb)` → 调试器在等你输入 ✓（最该显眼的 ✓）
+        · `stopped in … at line N` / `> file(N)` / `Breakpoint N` → 停在哪 ✓
+        · `error:` / `warning:` → 红 / 黄（stdout 里也可能有 ✓）
+        · `at line N` / `in file …` → 位置信息，压暗 ✓（次要 ✓） */
+  if (hasOut) {
+    const outText = String(stdout);
+    for (const line of outText.split('\n')) {
+      const div = document.createElement('div');
+      const t = line.trim();
+      if (/^(debug>|\(Pdb\)|\(gdb\))/.test(t)) div.className = 'ln-prompt';
+      else if (/^(stopped in\b|Breakpoint \d+)/.test(t) || /^>\s+\S+\(\d+\)/.test(t)) div.className = 'ln-stop';
+      else if (/^(error|错误)[:\s]/i.test(t)) div.className = 'ln-err';
+      else if (/^(warning|警告)[:\s]/i.test(t)) div.className = 'ln-warn';
+      else if (/^at line\s+\d+/.test(t) || /\bat line \d+ column \d+/.test(t)) div.className = 'ln-loc';
+      div.textContent = line;
+      pre.appendChild(div);
+    }
+  }
   if (hasErr) {
     /* ★ stderr 改成**带标题的分区** ✓✓（2026-10-10 美化）——
        原来是一行裸的 `[stderr]` ✓（用户截图里就是那个 ✓），

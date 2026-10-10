@@ -4140,3 +4140,16 @@
 #dbg-bar .sp { flex: 1; }
 #dbg-bar .dbg-state { color: var(--dim); font-size: 11px; }
 #dbg-bar .dbg-state.on { color: #8ce09a; }
+
+/* ★ 输出面板的行级高亮 ✓✓（2026-10-10）—— 用户：「输出终端没有语法高亮」 */
+/* ⚠️ 只上色、不改文本 ✓（输出是程序真实结果 ✓，改了复制出去就不对 ✓） */
+#out-body pre > div { white-space: pre-wrap; word-break: break-word; }
+/* 调试器在等你输入 ✓（最该显眼的一个 ✓） */
+.ln-prompt { color: #7ee787; font-weight: 600; }
+/* 停在哪一行 / 断点命中 ✓ */
+.ln-stop { color: #ffd166; }
+/* 错误 / 警告 ✓ */
+.ln-err { color: #ff9b95; }
+.ln-warn { color: #ffd166; }
+/* 位置信息（at line N）压暗 ✓ —— 次要信息，别和正文抢注意力 ✓ */
+.ln-loc { color: var(--dim); }
