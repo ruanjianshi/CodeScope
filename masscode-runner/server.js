@@ -2793,8 +2793,39 @@ function runnerFor(language) {
                    （实测：三行 FALLBACK 原样出现在输出区 ✓，用户截图里也是 ✓）。
                    ⚠️ 教训：**正则里的字面括号一律转义** ✓，尤其像这种「从日志里
                       抄来的前缀」—— 看着像普通文本，其实是正则 ✓。 */
-                const NOISE = /^(FALLBACK \(log once\):|warning: print: .gs. \(Ghostscript\) binary is not available|warning: using the gnuplot|warning: \[gnuplot\]|warning: called from\s*$|^\s+__cs_|^\s+_cs_)/;
-                const kept = String(result.stderr).split('\n').filter((line) => line.trim() && !NOISE.test(line.trim()));
+                /* ⚠️⚠️ 别再写 `^\s+` ✗✗ ——
+                   下面过滤时对每一行做了 `line.trim()` ✓，
+                   所以行首**根本没有空白** ✓ → `^\s+xxx` **永远匹配不上** ✓
+                   （我第一版就写了 `^\s+__cs_` ✓，实测 7 个用例只过 6 个 ✓，
+                    一眼看出那条是死的 ✓）。
+                   ⚠️ 教训：**过滤前先 trim，正则就别再写行首空白** ✓；
+                      写完一定要**拿真实字符串跑一遍** ✓，别只看「代码像是对的」✓。 */
+                const NOISE = /^(FALLBACK \(log once\):|warning: print: .gs. \(Ghostscript\) binary is not available|warning: using the gnuplot|warning: \[gnuplot\]|warning: text_renderer:|warning: called from$|__cs_|_cs_|__axis_label__ at line \d+)/;
+                /* ⚠️ 位置行要**跟着它上面那行**一起决定去留 ✗（2026-10-10）——
+                   Octave 的警告长这样：
+                       warning: text_renderer: substituting font …
+                           __axis_label__ at line 38 column 6
+                           title at line 64 column 3
+                           main at line 4 column 1
+                   「warning: …」那行被滤掉了 ✓，但**后面几行位置**还在 ✓
+                   → 输出区就剩几行**没头没尾的**位置 ✓，比不滤还让人困惑 ✓
+                     （实测截图就是这样 ✓）。
+                   ⚠️ 但**不能**见到「xxx at line N」就滤 ✗✗ ——
+                      真报错的位置**也是这个格式** ✓（`main at line 34 column 1` ✓），
+                      滤掉用户就**不知道错在哪一行**了 ✓。
+                   → 所以做**有状态**过滤 ✓：只有**紧跟在被滤行之后**的位置行才丢 ✓；
+                      一旦遇到保留的行，状态立刻复位 ✓。 */
+                const LOC = /^(?:\S+ at line \d+ column \d+|called from|in file .*)$/;
+                const kept = [];
+                let droppedPrev = false;
+                for (const raw of String(result.stderr).split('\n')) {
+                  const line = raw.trim();
+                  if (!line) continue;                            /* 空行丢掉 ✓ */
+                  if (NOISE.test(line)) { droppedPrev = true; continue; }
+                  if (droppedPrev && LOC.test(line)) continue;     /* 被滤行的尾巴 ✓ */
+                  droppedPrev = false;
+                  kept.push(raw);
+                }
                 result.stderr = kept.join('\n');
               }
             } catch (_) {}

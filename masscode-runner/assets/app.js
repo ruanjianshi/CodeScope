@@ -13596,6 +13596,17 @@ function renderRunImages(images) {
     const nm = document.createElement('span');
     nm.textContent = (img.name || '文件') + ' · ' + Math.round((img.bytes || 0) / 1024) + 'KB';
     bar.appendChild(nm);
+    /* ★ 输出区里只留**缩略图 + 一个「看图」按钮** ✓✓（2026-10-10）——
+       用户原话：「怎么输出框还有」✓ —— 他不想要大图塞在输出区里 ✓。
+       但完全删掉也不好 ✗（关掉浮窗后就没法再看了 ✓）——
+       → 缩略图（CSS 限高 150px ✓）+ 点它或点「看图」都能把浮窗调出来 ✓。 */
+    if (isImage) {
+      const open = document.createElement('button');
+      open.textContent = '⤢ 看图';
+      open.title = '在可拖动的浮窗里打开';
+      open.addEventListener('click', () => openImagePopup(pics, pics.indexOf(img)));
+      bar.appendChild(open);
+    }
     const a = document.createElement('a');
     a.href = img.data;
     a.download = img.name || 'plot.png';
@@ -13619,19 +13630,31 @@ function openImagePopup(images, startIndex) {
     if (!list.length) return;
     let idx = Math.max(0, Math.min(list.length - 1, Number(startIndex) || 0));
     const old = document.getElementById('img-popup');
+    const oldRect = old ? { l: old.offsetLeft, t: old.offsetTop, w: old.offsetWidth, h: old.offsetHeight } : null;
     if (old) old.remove();
-    const mask = document.createElement('div');
-    mask.id = 'img-popup';
-    let scale = 1, tx = 0, ty = 0, dragging = false, lx = 0, ly = 0;
-    const box = document.createElement('div');
-    box.className = 'img-popup-box';
-    const im = document.createElement('img');
+    /* ★ 改成**可自由拖动的浮窗** ✓✓（2026-10-10）—— 用户原话：
+       「我需要的是类似**代码向导**那种可以自由拖动的小窗」✓。
+       ⚠️ 去掉**遮罩** ✗ —— 遮罩会挡住代码 ✓，没法边看图边改代码 ✓；
+       ⚠️ 拖动/缩放**照代码向导的做法** ✗（标题栏 cursor:move + 右下角把手 ✓），
+          同一个应用里两套拖窗手感会让人困惑 ✓；
+       ⚠️ 重开时**沿用上次的位置和大小** ✓ —— 用户拖到顺手的位置后，
+          下次弹出来还在那儿 ✓（不然每次都要重新拖 ✓）。 */
+    const win = document.createElement('div');
+    win.id = 'img-popup';
+    const w = oldRect ? oldRect.w : Math.min(760, Math.round(window.innerWidth * 0.82));
+    const h = oldRect ? oldRect.h : Math.min(560, Math.round(window.innerHeight * 0.78));
+    let left = oldRect ? oldRect.l : Math.max(12, window.innerWidth - w - 28);
+    let top = oldRect ? oldRect.t : Math.max(12, window.innerHeight - h - 90);
+    win.style.left = left + 'px';
+    win.style.top = top + 'px';
+    win.style.width = w + 'px';
+    win.style.height = h + 'px';
     const bar = document.createElement('div');
     bar.className = 'img-popup-bar';
     const nameEl = document.createElement('span');
     const hintEl = document.createElement('span');
     hintEl.className = 'hint';
-    hintEl.textContent = '滚轮缩放 · 拖动平移 · Esc 关闭';
+    hintEl.textContent = '拖标题栏移动 · 右下角缩放 · Esc 关闭';
     const prev = document.createElement('button'); prev.textContent = '‹'; prev.title = '上一张';
     const next = document.createElement('button'); next.textContent = '›'; next.title = '下一张';
     const dl = document.createElement('a');
@@ -13640,18 +13663,18 @@ function openImagePopup(images, startIndex) {
     bar.appendChild(nameEl); bar.appendChild(hintEl);
     if (list.length > 1) { bar.appendChild(prev); bar.appendChild(next); }
     bar.appendChild(dl); bar.appendChild(close);
-    box.appendChild(bar); box.appendChild(im); mask.appendChild(box);
-    const apply = () => { im.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; };
-    const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+    const im = document.createElement('img');
+    const rs = document.createElement('div');
+    rs.className = 'img-popup-rs';
+    win.appendChild(bar); win.appendChild(im); win.appendChild(rs);
     const render = () => {
       const cur = list[idx];
       im.src = cur.data;
       im.alt = cur.name || '';
       nameEl.textContent = (cur.name || '图') + (list.length > 1 ? '（' + (idx + 1) + '/' + list.length + '）' : '');
       dl.href = cur.data; dl.download = cur.name || 'plot.png'; dl.textContent = '⬇ 下载';
-      reset();
     };
-    const shut = () => { mask.remove(); document.removeEventListener('keydown', onKey); };
+    const shut = () => { win.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (e) => {
       if (e.key === 'Escape') shut();
       else if (e.key === 'ArrowLeft' && list.length > 1) { idx = (idx - 1 + list.length) % list.length; render(); }
@@ -13662,15 +13685,38 @@ function openImagePopup(images, startIndex) {
       prev.onclick = () => { idx = (idx - 1 + list.length) % list.length; render(); };
       next.onclick = () => { idx = (idx + 1) % list.length; render(); };
     }
-    mask.addEventListener('click', (e) => { if (e.target === mask) shut(); });
-    mask.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.max(0.2, Math.min(8, scale * (e.deltaY < 0 ? 1.12 : 0.89))); apply(); }, { passive: false });
-    im.addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; ly = e.clientY; im.setPointerCapture(e.pointerId); im.style.cursor = 'grabbing'; });
-    im.addEventListener('pointermove', (e) => { if (!dragging) return; tx += e.clientX - lx; ty += e.clientY - ly; lx = e.clientX; ly = e.clientY; apply(); });
-    im.addEventListener('pointerup', () => { dragging = false; im.style.cursor = 'grab'; });
-    im.style.cursor = 'grab';
+    /* 拖标题栏移动 ✓（和代码向导同一套写法 ✓） */
+    bar.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button, a')) return;   /* 别抢按钮的点击 ✓ */
+      const sx = e.clientX, sy = e.clientY, sl = left, st = top;
+      bar.classList.add('dragging');
+      bar.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        left = Math.max(-w + 80, Math.min(window.innerWidth - 80, sl + ev.clientX - sx));
+        top = Math.max(0, Math.min(window.innerHeight - 32, st + ev.clientY - sy));
+        win.style.left = left + 'px';
+        win.style.top = top + 'px';
+      };
+      const up = () => { bar.classList.remove('dragging'); bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); };
+      bar.addEventListener('pointermove', move);
+      bar.addEventListener('pointerup', up);
+    });
+    /* 右下角缩放 ✓ */
+    rs.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const sx = e.clientX, sy = e.clientY, sw = win.offsetWidth, sh = win.offsetHeight;
+      rs.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        win.style.width = Math.max(260, sw + ev.clientX - sx) + 'px';
+        win.style.height = Math.max(180, sh + ev.clientY - sy) + 'px';
+      };
+      const up = () => { rs.removeEventListener('pointermove', move); rs.removeEventListener('pointerup', up); };
+      rs.addEventListener('pointermove', move);
+      rs.addEventListener('pointerup', up);
+    });
     document.addEventListener('keydown', onKey);
     render();
-    document.body.appendChild(mask);
+    document.body.appendChild(win);
   } catch (_) {}
 }
 
