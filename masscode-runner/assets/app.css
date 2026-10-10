@@ -4100,3 +4100,23 @@
 .run-images img { max-height: 150px; width: auto; cursor: zoom-in; }
 /* 输出区里那行「看图」按钮 ✓ */
 .run-image-bar button { border: 1px solid var(--border); background: transparent; color: var(--accent); padding: 1px 8px; cursor: pointer; font-size: 11px; }
+
+/* ★ .fig 属性编辑器（可拖动小表单 ✓）2026-10-10 */
+#fig-editor { position: fixed; left: 40px; top: 120px; z-index: 93; width: 300px;
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--panel); box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+.fig-editor-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: move;
+  user-select: none; border-bottom: 1px solid var(--border); font-size: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent); }
+.fig-editor-bar .hint { margin-left: auto; color: var(--dim); font-size: 11px; }
+.fig-editor-bar button { border: 1px solid var(--border); background: transparent; color: var(--text); padding: 1px 8px; cursor: pointer; }
+.fig-editor-body { padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+.fig-editor-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.fig-editor-row > span { width: 74px; flex: none; color: var(--dim); }
+.fig-editor-row input[type=text], .fig-editor-row input:not([type]) { flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--border); color: var(--text); padding: 3px 7px; font: inherit; }
+.fig-editor-row input[type=checkbox] { width: auto; }
+.fig-editor-apply { margin-top: 3px; border: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); padding: 6px 10px; cursor: pointer; }
+.fig-editor-msg { font-size: 11px; color: var(--dim); min-height: 14px; }
+.fig-editor-msg.ok { color: #8ce09a; }
+.fig-editor-msg.err { color: #ff9b95; }
+.run-file-card button { margin-left: auto; border: 1px solid var(--border); background: transparent; color: var(--accent); padding: 2px 9px; cursor: pointer; font-size: 11px; }

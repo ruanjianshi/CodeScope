@@ -2353,6 +2353,97 @@ function sweepTempDirs() {
   } catch (_) { return 0; }
 }
 
+/* ★ 图形属性编辑 ✓✓（2026-10-10）—— 用户原话：
+   「怎么缺少 .fig 该有的编辑等功能」✓。
+   ⚠️ 事实先说清楚 ✗：`.fig` 是 **Octave/MATLAB 的二进制文件** ✓，
+      **浏览器里改不了它本身** ✓（没有可用的 .fig 解析器 ✓）。
+   ✅ 但**服务端能替你编辑** ✓✓ —— 实测确认：
+        openfig(h,'invisible') 拿到句柄 ✓ → set(...) 改属性 ✓ →
+        savefig 存回 + print 重新出图 ✓✓。
+   ⚠️ `.fig` 由**前端把 base64 传回来** ✗ ——
+      原来的 fig 在**临时目录**里 ✓，跑完就被清了 ✓，
+      服务端按文件名根本找不到 ✓（我第一版就是这么写的 ✓，必然失败 ✓）。
+      传回来最省事 ✓：不依赖临时目录、也不用把用户产物落到别处 ✓。
+   ⚠️ 编辑的是**产物**（figN.fig ✓），**不是用户的 .m 源文件** ✗ ——
+      用户下次重跑脚本，图还是按他自己代码画的 ✓（编辑不会被悄悄固化 ✓）。 */
+async function handleFigEdit(req, res) {
+  const b = await readBody(req);
+  const figName = path.basename(String((b && b.fig) || 'fig1.fig').trim());
+  const imgName = path.basename(String((b && b.image) || 'fig1.png').trim());
+  if (!/^[\w.-]+\.fig$/i.test(figName)) return send(res, 200, { ok: false, error: '图文件名不合法' });
+  const m = /^data:[^;]*;base64,([\s\S]+)$/.exec(String((b && b.figData) || ''));
+  if (!m) return send(res, 200, { ok: false, error: '没有收到图数据' });
+  const buf = Buffer.from(m[1], 'base64');
+  if (!buf.length || buf.length > 32 * 1024 * 1024) return send(res, 200, { ok: false, error: '图数据大小异常' });
+  const mCmd = matlabCmd();
+  if (!mCmd) return send(res, 200, { ok: false, error: '没有可用的 MATLAB / Octave' });
+  const engine = isOctaveCmd(mCmd) ? 'octave' : 'matlab';
+  const opts = (b && b.opts) || {};
+  const q = (v) => "'" + String(v == null ? '' : v).replace(/'/g, "''") + "'";
+  const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  const lines = [
+    'warning("off", "all");',
+    'h = openfig(' + q(figName) + ', "invisible");',
+    'ax = get(h, "currentaxes");',
+    'if isempty(ax), error("这张图里没有坐标轴"); end',
+  ];
+  if (String(opts.title || '').trim()) lines.push('set(get(ax, "title"), "string", ' + q(opts.title) + ');');
+  if (String(opts.xlabel || '').trim()) lines.push('set(get(ax, "xlabel"), "string", ' + q(opts.xlabel) + ');');
+  if (String(opts.ylabel || '').trim()) lines.push('set(get(ax, "ylabel"), "string", ' + q(opts.ylabel) + ');');
+  lines.push('set(findall(ax, "type", "line"), "linewidth", ' + num(opts.lineWidth, 1) + ');');
+  lines.push('grid(ax, ' + q(opts.grid ? 'on' : 'off') + ');');
+  if (Number.isFinite(Number(opts.fontSize))) lines.push('set(ax, "fontsize", ' + num(opts.fontSize, 10) + ');');
+  lines.push('set(h, "visible", "off");');
+  lines.push('savefig(h, ' + q(figName) + ');');
+  lines.push('print(h, "-dpng", "-r120", ' + q(imgName) + ');');
+  lines.push('disp("已应用修改 ✓");');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mscr-fig-'));
+  writeFileAtomicSync(path.join(dir, figName), buf);
+  /* ⚠️ 脚本名**别叫 edit.m** ✗（2026-10-10）—— `edit` 是 Octave 的内置函数 ✓，
+     同名会触发 `warning: function …/edit.m shadows a core library function` ✓，
+     白给用户一条没意义的警告 ✓。改叫 cs_edit.m ✓。 */
+  const entry = 'cs_edit.m';
+  writeFileAtomicSync(path.join(dir, entry), lines.join('\n'));
+  const args = engine === 'octave' ? ['--no-gui', '--quiet', entry] : ['-batch', "run('" + entry + "')"];
+  let result;
+  try {
+    result = await run(mCmd, args, { cwd: dir, timeoutMs: 60000 });
+  } finally {
+    /* 产物先收走再删目录 ✓（下面 collect 用的是同一套逻辑 ✓） */
+  }
+  /* 收产物 ✓ + 滤噪音 ✓ */
+  const IMG = /\.(png|jpe?g|svg|gif|webp|pdf|fig)$/i;
+  const MAX = 8 * 1024 * 1024;
+  const out = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (!IMG.test(name)) continue;
+    const full = path.join(dir, name);
+    let st; try { st = fs.statSync(full); } catch (_) { continue; }
+    if (!st.isFile() || st.size > MAX) continue;
+    const ext = path.extname(name).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+    out.push({ name, mime, bytes: st.size, data: 'data:' + mime + ';base64,' + fs.readFileSync(full).toString('base64') });
+  }
+  if (out.length) result.images = out;
+  if (result && result.stderr) {
+    const NOISE = /^(FALLBACK \(log once\):|warning: print: |warning: text_renderer:|warning: called from$|__cs_|_cs_|__axis_label__ at line \d+)/;
+    const LOC = /^(?:\S+ at line \d+ column \d+|called from|in file .*)$/;
+    const kept = [];
+    let drop = false;
+    for (const raw of String(result.stderr).split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (NOISE.test(line)) { drop = true; continue; }
+      if (drop && LOC.test(line)) continue;
+      drop = false;
+      kept.push(raw);
+    }
+    result.stderr = kept.join('\n');
+  }
+  try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 6, retryDelay: 100 }); } catch (_) {}
+  return send(res, 200, result);
+}
+
 function run(interp, args, opts = {}) {
   return new Promise((resolve) => {
     const timeoutMs = opts.timeoutMs || 10000;
@@ -7287,6 +7378,36 @@ const server = http.createServer(async (req, res) => {
           /api/run = 每次一个新进程（跑脚本 ✓，变量不保留 ✓）；
           这里    = 一个**长期存活的进程**（跑单元格 ✓，变量跨格保留 ✓✓）。
           两个都保留 ✓ —— 用户想要哪种就用哪种 ✓。 */
+    /* ★ 图形属性编辑 ✓✓（2026-10-10）—— 用户原话：
+       「怎么缺少 .fig 该有的编辑等功能」✓。
+       ⚠️ 事实先说清楚 ✗：`.fig` 是 **Octave/MATLAB 的二进制文件** ✓，
+          **浏览器里改不了它本身** ✓（没有可用的 .fig 解析器 ✓）。
+       ✅ 但**服务端能替你编辑** ✓✓ —— 实测确认：
+            openfig(h,'invisible') → 拿到句柄 ✓
+            set(...) 改属性 → savefig 存回 → print 重新出图 ✓✓
+       → 所以做一个「属性编辑器」✓：前端给几个字段（标题 / 线宽 / 网格 ✓），
+          服务端拼成一段 Octave 脚本 ✓，openfig → set → savefig + print ✓，
+          再把新的 .fig 和 PNG 一起回传 ✓（复用已有的产物收集 ✓）。
+       ⚠️ 编辑的是**产物**（figN.fig ✓），不是用户的 .m 源文件 ✗ ——
+          用户下次重跑脚本，图还是按他自己代码画的 ✓（编辑不会被悄悄固化 ✓）。 */
+    if (req.method === 'POST' && u.pathname === '/api/fig/edit') {
+      /* ⚠️⚠️ 一定要包 try/catch ✗✗（2026-10-10）——
+         实测：这个接口一被调用，**服务端进程直接消失** ✓，
+         而日志里**一个字都没有** ✓（静默崩溃 ✓）。
+         原因：异步链里抛的异常没人接 ✓ → Node 15+ **直接结束进程** ✓✓。
+         ⚠️ 现象极具误导性 ✗：请求方看到 `fetch failed / other side closed` ✓，
+            服务端日志**干干净净** ✓ —— 看着像「网络问题」✓，
+            其实是**自己崩了** ✓（而且监管进程会立刻重启 ✓，PID 一直变 ✓）。
+         ✅ 教训：**HTTP 处理函数里的异步必须有兜底** ✓✓，
+            否则这类 bug 能查掉一整轮 ✓（这次就是 ✓）。 */
+      try {
+        return await handleFigEdit(req, res);
+      } catch (e) {
+        console.error('[fig/edit] 失败: ' + String((e && e.stack) || e));
+        try { return send(res, 200, { ok: false, error: String((e && e.message) || e) }); } catch (_) {}
+        return;
+      }
+    }
     if (req.method === 'GET' && u.pathname === '/api/py/kernel') {
       return send(res, 200, { ok: true, ...PY_KERNEL.status() });
     }

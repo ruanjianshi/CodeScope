@@ -13590,6 +13590,20 @@ function renderRunImages(images) {
       ph.innerHTML = '<b>⧉</b><span>' + escapeHtml(img.name || '文件') +
         '</span><small>用 Octave / MATLAB 打开可继续编辑</small>';
       wrap.appendChild(ph);
+      /* ★ `.fig` 的「编辑」入口 ✓✓（2026-10-10）—— 用户原话：
+         「怎么缺少 .fig 该有的编辑等功能」✓。
+         ⚠️ 说清楚边界 ✗：`.fig` 是 Octave/MATLAB 的二进制 ✓，
+            浏览器里**改不了它本身** ✓；
+            但服务端可以**替你改**（openfig → set → savefig ✓，实测通过 ✓）——
+            所以这里给的是「**改几个常用属性 → 重新出图**」✓，
+            不是「像 MATLAB 图窗那样随便点」✗（那需要 GUI ✓，本项目给不了 ✓）。 */
+      if (/\.fig$/i.test(String(img.name || ''))) {
+        const ed = document.createElement('button');
+        ed.textContent = '✎ 编辑图形';
+        ed.title = '改标题 / 线宽 / 网格等，然后重新出图';
+        ed.addEventListener('click', () => openFigEditor(img, list));
+        ph.appendChild(ed);
+      }
     }
     const bar = document.createElement('div');
     bar.className = 'run-image-bar';
@@ -13624,6 +13638,103 @@ function renderRunImages(images) {
       他想要的是**像 MATLAB 那样弹出一个图窗** ✓，不是塞在输出区里 ✓。
       → 所以跑完**自动弹一次** ✓（见 showOut 末尾 ✓），
         输出区里的图**同时保留** ✓（方便对照 / 复制 ✓）。 */
+/* ★ `.fig` 属性编辑器 ✓✓（2026-10-10）—— 一个**可拖动的小表单** ✓，
+   改完让服务端 openfig → set → savefig ✓，再把新图和 fig 拿回来 ✓。
+   ⚠️ 边界要说清楚 ✗：这不是「MATLAB 图窗」✗ ——
+      浏览器里**没有 .fig 解析器** ✓，改不了它本身 ✓；
+      能改的是**服务端替你改的那几个属性** ✓（标题 / 轴标签 / 线宽 / 字号 / 网格 ✓）。
+      想要完整的图形编辑，还是得下载 .fig 用 Octave / MATLAB 打开 ✓。
+   ⚠️ 编辑的是**这一趟的产物** ✗，不是用户的 .m 源码 ✓ ——
+      下次重跑脚本，图还是按他自己的代码画的 ✓（编辑不会被悄悄固化 ✓）。 */
+function openFigEditor(figItem, allItems) {
+  try {
+    const old = document.getElementById('fig-editor');
+    if (old) old.remove();
+    const png = (Array.isArray(allItems) ? allItems : []).find((x) => /\.png$/i.test(String(x.name || '')));
+    const win = document.createElement('div');
+    win.id = 'fig-editor';
+    const bar = document.createElement('div');
+    bar.className = 'fig-editor-bar';
+    bar.innerHTML = '<b>✎ 编辑图形</b><span class="hint">改完点「应用」重新出图</span>';
+    const close = document.createElement('button');
+    close.textContent = '✕'; close.title = '关闭';
+    bar.appendChild(close);
+    const body = document.createElement('div');
+    body.className = 'fig-editor-body';
+    const F = (label, id, val, ph) => {
+      const row = document.createElement('label');
+      row.className = 'fig-editor-row';
+      const sp = document.createElement('span'); sp.textContent = label;
+      const inp = document.createElement('input');
+      inp.id = id; inp.value = val == null ? '' : String(val);
+      if (ph) inp.placeholder = ph;
+      row.appendChild(sp); row.appendChild(inp);
+      body.appendChild(row);
+      return inp;
+    };
+    const fTitle = F('标题', 'fe-title', '', '（不改就留空）');
+    const fX = F('X 轴标签', 'fe-x', '', '（不改就留空）');
+    const fY = F('Y 轴标签', 'fe-y', '', '（不改就留空）');
+    const fLw = F('线宽', 'fe-lw', 2, '1 ~ 10');
+    const fFs = F('字号', 'fe-fs', 10, '6 ~ 40');
+    const gridRow = document.createElement('label');
+    gridRow.className = 'fig-editor-row';
+    gridRow.innerHTML = '<span>网格</span>';
+    const fGrid = document.createElement('input');
+    fGrid.type = 'checkbox'; fGrid.id = 'fe-grid'; fGrid.checked = true;
+    gridRow.appendChild(fGrid);
+    body.appendChild(gridRow);
+    const msg = document.createElement('div');
+    msg.className = 'fig-editor-msg';
+    const apply = document.createElement('button');
+    apply.className = 'fig-editor-apply';
+    apply.textContent = '应用并重新出图';
+    body.appendChild(apply); body.appendChild(msg);
+    win.appendChild(bar); win.appendChild(body);
+    /* 拖动（和图片浮窗 / 代码向导同一套 ✓） */
+    bar.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+      const sx = e.clientX, sy = e.clientY;
+      const sl = win.offsetLeft, st = win.offsetTop;
+      const move = (ev) => { win.style.left = Math.max(0, sl + ev.clientX - sx) + 'px'; win.style.top = Math.max(0, st + ev.clientY - sy) + 'px'; };
+      const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); };
+      bar.setPointerCapture(e.pointerId);
+      bar.addEventListener('pointermove', move);
+      bar.addEventListener('pointerup', up);
+    });
+    const shut = () => { win.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') shut(); };
+    close.onclick = shut;
+    document.addEventListener('keydown', onKey);
+    apply.onclick = async () => {
+      apply.disabled = true;
+      msg.className = 'fig-editor-msg';
+      msg.textContent = '正在应用…';
+      let r = null;
+      try {
+        r = await api('/api/fig/edit', {
+          fig: figItem.name, image: png ? png.name : 'fig1.png', figData: figItem.data,
+          opts: {
+            title: fTitle.value, xlabel: fX.value, ylabel: fY.value,
+            lineWidth: Number(fLw.value), fontSize: Number(fFs.value), grid: fGrid.checked,
+          },
+        });
+      } catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
+      apply.disabled = false;
+      if (!r || r.ok === false) {
+        msg.className = 'fig-editor-msg err';
+        msg.textContent = String((r && r.error) || '失败');
+        return;
+      }
+      msg.className = 'fig-editor-msg ok';
+      msg.textContent = '已应用 ✓ 新图已刷新';
+      /* 用新产物替换输出区里那组图 ✓（复用 showOut ✓） */
+      if (Array.isArray(r.images) && r.images.length) showOut(String(r.stdout || ''), String(r.stderr || ''), true, r.images);
+    };
+    document.body.appendChild(win);
+  } catch (_) {}
+}
+
 function openImagePopup(images, startIndex) {
   try {
     const list = (Array.isArray(images) ? images : [images]).filter((x) => x && x.data && /^image\//.test(String(x.mime || '')));
