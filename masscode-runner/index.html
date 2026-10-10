@@ -571,6 +571,14 @@
           <button id="tab-results" class="otab" title="查看最近一次测试结果">⌁ 测试结果</button>
           <button id="tab-out" class="otab on" title="程序运行输出">⚙ 输出</button>
           <button id="tab-term" class="otab" title="交互式终端（shell）">>_ 终端</button>
+          <!-- ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-10）——
+               用户原话：「这个命令窗口，应该不需要按钮，应该放到 [底部面板]」✓。
+               ⚠️ 从工具栏搬到**底部面板**当一个标签页 ✗ ——
+                  命令窗口本来就是「在底部开一个会话」✓，
+                  和「输出 / 终端」是同一类东西 ✓，
+                  放工具栏上反而让人以为它是个「一次性动作」✓。
+               ⚠️ 只在 .m 片段时显示 ✓（和原来工具栏按钮的显隐规则一致 ✓）。 -->
+          <button id="tab-mconsole" class="otab" title="MATLAB / Octave 命令窗口（可直接输入指令）" style="display:none">▮ MATLAB</button>
         </div>
         <span class="sp"></span>
         <span class="pill idle" id="save-tick">已保存</span>
@@ -617,7 +625,10 @@
       <!-- ★ MATLAB / Octave 命令窗口 ✓（2026-10-09）——
            不另造 REPL，直接在底部终端里起引擎（真 PTY，能交互）✓。
            只在 .m 片段上显示 ✓。 -->
-      <button id="btn-matlab-console" title="在底部终端打开 MATLAB / Octave 命令窗口（可直接输入指令）" aria-label="命令窗口" style="display:none">▮</button>
+      <!-- ⚠️ 原来这里有个「▮ 控制台」按钮 ✗（2026-10-10 移除）——
+           用户原话：「这个命令窗口，应该不需要按钮」✓。
+           已经搬到**底部面板的标签页**（见 #tab-mconsole ✓）——
+           命令窗口和「输出 / 终端」是同一类东西，放工具栏上位置不对 ✓。 -->
       <button id="btn-check" title="语法检查" aria-label="语法检查">✓</button>
       <button id="btn-format" title="格式化代码" aria-label="格式化代码">✨</button>
       <button id="btn-preview" title="预览 HTML" style="display:none">👁</button>

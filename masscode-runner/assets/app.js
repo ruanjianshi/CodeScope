@@ -11322,12 +11322,16 @@ function renderCode() {
   if (secBtn) { secBtn.style.display = isMatlab ? '' : 'none'; secBtn.disabled = !isMatlab; }
   const upBtn = $('btn-run-upto');
   if (upBtn) { upBtn.style.display = isMatlab ? '' : 'none'; upBtn.disabled = !isMatlab; }
-  const conBtn = $('btn-matlab-console');
-  /* ⚠️ 命令窗口只给 MATLAB/Octave ✗ —— Python 走**持久内核**（段运行按钮 ✓），
-     它的交互体验是「跑一格看一格」✓，不是「在终端里敲」✓。
-     （想要 Python 终端的话，底部终端本来就能自己敲 python3 ✓。） */
+  /* ★ 命令窗口从**工具栏按钮**改成**底部面板的标签页** ✗✓（2026-10-10）——
+     用户原话：「这个命令窗口，应该不需要按钮，应该放到 [底部面板]」✓。
+     这里只负责**显隐** ✓（规则和原来一样：只有 MATLAB / Octave 才给 ✓），
+     点击逻辑在 #tab-mconsole 那边 ✓。
+     ⚠️ 命令窗口只给 MATLAB/Octave ✗ —— Python 走**持久内核**（段运行按钮 ✓），
+        它的交互体验是「跑一格看一格」✓，不是「在终端里敲」✓。
+        （想要 Python 终端的话，底部终端本来就能自己敲 python3 ✓。） */
   const isM = !!(f && (f.language === 'matlab' || f.language === 'octave'));
-  if (conBtn) { conBtn.style.display = isM ? '' : 'none'; conBtn.disabled = !isM; }
+  const mTab = $('tab-mconsole');
+  if (mTab) mTab.style.display = isM ? '' : 'none';
   $('btn-preview').style.display = isHtml ? '' : 'none';
   $('btn-preview').disabled = !isHtml;
   $('btn-preview').textContent=isHtml&&documentMode(f)==='source'?'▥':'×';
@@ -14692,7 +14696,10 @@ $('btn-run-upto').onclick = () => runSection({ fromTop: true });
    ⚠️ 必须**等终端连上**再发命令 ✗ —— 终端是 WebSocket 异步连的 ✓，
       立刻发会丢 ✓（所以留了 900ms ✓，并且失败只提示、不报错 ✓）。
    ⚠️ 命令末尾要带 `\r` ✗ —— 终端要的是**回车**，不是 `\n` ✓。 */
-$('btn-matlab-console').onclick = async () => {
+/* ★ 入口从工具栏按钮改成**底部面板的标签页** ✓✓（2026-10-10）——
+   用户原话：「这个命令窗口，应该不需要按钮，应该放到 [底部面板]」✓。
+   点这个标签页 = 「切到终端 + 把引擎命令敲进去」✓，和点原来的按钮一样 ✓。 */
+$('tab-mconsole').onclick = async () => {
   const r = await api('/api/matlab/console');
   if (!r || !r.ok) {
     setStatus('err', '没有可用的引擎');
