@@ -14003,6 +14003,17 @@ function switchOutTab(which) {
   $('tab-results').classList.toggle('on', which === 'results');
   $('tab-out').classList.toggle('on', which === 'out');
   $('tab-term').classList.toggle('on', which === 'term');
+  /* ★ MATLAB 标签页**跟着一起高亮** ✓✓（2026-10-10）——
+     用户原话：「为什么是终端按钮高亮不是 matlab」✓。
+     ⚠️ 命令窗口**物理上就在终端里** ✗（复用真 PTY ✓），
+        所以「终端」高亮是**必然的** ✓；
+        但用户点的是「MATLAB」✓，看到高亮跑到「终端」上会以为**点错了** ✓。
+     → **两个一起亮** ✓：终端 = 「内容在哪儿」✓，MATLAB = 「你刚点的那个」✓。
+        切到别处（输出 / 测试用例）时 MATLAB 的高亮一起灭 ✓。
+     ⚠️ 只在**引擎真的起过**时才亮 ✗（MONCONSOLE_KEY ✓）——
+        否则点一下终端 tab 也会把 MATLAB 点亮 ✓，那就骗人了 ✓。 */
+  const mTab = $('tab-mconsole');
+  if (mTab) mTab.classList.toggle('on', which === 'term' && !!MONCONSOLE_KEY);
   $('algo-cases').classList.toggle('hidden', which !== 'cases');
   $('algo-results').classList.toggle('hidden', which !== 'results');
   $('out-body').classList.toggle('hidden', which !== 'out');
@@ -14738,12 +14749,15 @@ $('tab-mconsole').onclick = async () => {
       (r && r.hint ? '\n\n安装：' + r.hint : ''), '', false);
     return;
   }
-  switchOutTab('term');
+  /* ⚠️ 顺序很重要 ✗：**先记状态，再切 tab** ✓ ——
+     switchOutTab 里会读 MONCONSOLE_KEY 决定 MATLAB 标签页亮不亮 ✓，
+     反过来写的话**第一次点不会亮** ✓（实测踩到 ✓）。 */
   MONCONSOLE_KEY = key;
+  switchOutTab('term');
   const line = r.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\r';
   setTimeout(() => {
     fetch('/api/term/input', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: line }) })
-      .then(() => setStatus('ok', '已在终端启动 ' + r.label + ' 命令窗口'))
+      .then(() => setStatus('ok', '已在终端启动 ' + r.label + ' 命令窗口 —— 要退出引擎回到普通 shell：点终端栏的「重启」'))
       .catch(() => { MONCONSOLE_KEY = ''; setStatus('err', '终端还没连上，稍后再点一次'); });
   }, 900);
 };
