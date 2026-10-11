@@ -14,9 +14,18 @@
  *     真正的判定靠**运行时**：在浏览器里**真的按一下** ✓，
  *     看 DOM 有没有变化 ✓。
  *
- * 判据：按下之后 600ms 内 **DOM 一次都没变** → 判定为「死快捷键」✗。
- * ⚠️ 少数快捷键**本来就不改 DOM**（复制 / 粘贴改的是剪贴板 ✓）→ 白名单 ✓。
- *
+ * 判据：按下之后 **DOM 一次都没变** → 判定为「死快捷键」✗。
+ *   ⚠️⚠️ 判据（`mut > 0`）**是"粗"的** ✗ —— 实测：把按键换成 `Meta+Alt+Shift+F12`
+ *      （不存在的组合）✓，测试**照样全绿** ✗。因为按 Escape 的余波、
+ *      以及页面上本来就跑的计时器（闪烁光标 / 定时刷新），都会贡献 DOM 变化 ✓。
+ *      ⚠️ 我试过改成「比空闲基线动得多」✓ —— **反而更糟** ✗：
+ *        把 3 个真快捷键判成了死的 ✓（它们本来就只多动一下 ✓）。
+ *      ⇒ 它的定位是「**能挡住"把绑定整个删掉"这类明显回归**」✓，
+ *        **不能**当成"这个快捷键真的对"的证据 ✗。
+ *        要做严得逐个定义**可观测的效果**（⌘Z 必须让编辑器正文变化 ✓）——
+ *        那是另一件事 ✓（**没做**，别把这条当已解决 ✓）。
+ *   ⚠️ 单次判定还会误报（窗口太短 / 快捷键与状态有关，比如重做栈空时的 ⌘⇧Z ✓），
+ *      所以**失败会再试一次**（窗口加倍）✓，两次都没动静才算死 ✓。
  * 运行：node tests/shortcut-titles.js
  */
 const fs = require('fs');
@@ -137,8 +146,9 @@ async function main() {
 
   /* ② 运行时：真的按一下，数 DOM 变化 ✓ */
   console.log('');
-  console.log('  ── 逐个真按（判据：600ms 内 DOM 有没有变化）──');
+  console.log('  ── 逐个真按（判据：DOM 有没有变化；一次没动静会**再试一次**）──');
   const dead = [];
+
   for (const d of declared) {
     const combo = toPlaywright(d.key);
     if (!combo) { console.log('    ? ' + d.key.padEnd(14) + '（无法解析成按键）'); continue; }
@@ -148,12 +158,21 @@ async function main() {
       window.__mo = new MutationObserver(() => { window.__mut++; });
       window.__mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
     });
-    await page.keyboard.press('Escape').catch(() => {});
-    await page.waitForTimeout(150);
-    await page.evaluate(() => { window.__mut = 0; });
-    await page.keyboard.press(combo).catch(() => {});
-    await page.waitForTimeout(600);
-    const mut = await page.evaluate(() => window.__mut || 0);
+    /* ⚠️⚠️ 判"死"**必须试两次** ✗✗ —— 一次太容易误报 ✓：
+       · 600ms 窗口在负载高的时候不够 ✓（`npm test` 前面跑了一堆东西 ✓）；
+       · 有些快捷键**本来就与状态有关** ✓ —— 比如 ⌘⇧Z（重做）在**重做栈为空**时
+         按下去确实什么都没发生 ✓，但那不是"死快捷键" ✓。
+       ⇒ 第一次没动静就**再试一次**（窗口加倍）✓，两次都没动静才算死 ✓。
+         （真死的按几次都不会有动静 ✓，所以断言并没有变松 ✓。） */
+    let mut = 0;
+    for (let attempt = 0; attempt < 2 && mut === 0; attempt++) {
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(attempt === 0 ? 150 : 400);
+      await page.evaluate(() => { window.__mut = 0; });
+      await page.keyboard.press(combo).catch(() => {});
+      await page.waitForTimeout(attempt === 0 ? 600 : 1200);
+      mut = await page.evaluate(() => window.__mut || 0);
+    }
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(250);
     const ok = mut > 0 || NO_DOM_EFFECT.has(d.key);

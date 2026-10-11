@@ -188,6 +188,17 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 ck('  package.json 有 test 脚本', !!(pkg.scripts && pkg.scripts.test));
 ck('  package.json 有 test:browser 脚本', !!(pkg.scripts && pkg.scripts['test:browser']));
 
+console.log('\n── ⑥b 视图状态一致性（用户：「高亮的是图谱，为什么显示架构图」）──');
+/* ⚠️ 根因：`CG_VIEW` 是从 **localStorage** 读的 ✓，
+   但按钮的 `on` 类和标题是 **HTML 里的死值** ✓（`<button id="cg-view-graph" class="on">`）✓ ——
+   而 `setCodeGraphView()` **只在两个按钮的 onclick 里被调用过** ✗，启动时从来没同步 ✓
+   → 上次停在「架构」，下次打开就是「高亮图谱 + 画架构图」✓。
+   ⚠️ 这条是**静态断言**（查"启动时有没有调同步"）✗ —— 不是最优 ✓，
+      但真开浏览器跑一遍要十几秒 ✓，这条能挡住"把同步那行删掉" ✓。 */
+const archViewSrc = (() => { try { return fs.readFileSync(path.join(root, 'assets/arch-view.js'), 'utf8'); } catch (_) { return ''; } })();
+ck('  arch-view.js 启动时会 setCodeGraphView(CG_VIEW) 同步按钮/标题',
+  /setCodeGraphView\(CG_VIEW\)/.test(archViewSrc));
+
 console.log('\n── ⑥ 没有遗留标记 ──');
 /* ⚠️⚠️ 只认**注释形式**的 TODO ✗✗（第一次写成裸词，误报 4 处 ✓）：
        · `server.js` 里有一段**代码本身就在数 TODO**（`text.match(/TODO|FIXME/)`）✓；

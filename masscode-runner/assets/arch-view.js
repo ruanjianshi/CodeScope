@@ -1,22 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * 架构视图 · 面板集成（assets/arch-view.js）
  * ---------------------------------------------------------------------------
- * 和「图谱」**同一个面板**（#cg-canvas / #cg-body），工具栏两个按钮切换
- * （🕸 图谱 / ▦ 架构）—— 不另开浮层；数据源完全一样
- * （`/api/graph?scope=document&file=`）。
- *
- * ⚠️ **画图那一半在 `assets/arch-graph-svg.js`**（`archFragOf` / `archGraphSvg`）——
- *    那边是纯函数，能被 `tests/arch-geom.js` 用假 DOM 直接测。
- *    这里只管：抓数据 → 塞进面板 → 缩放平移 → 点方块跳源码。
- *
- * ⚠️ 面板切换按钮（🕸 图谱 / ▦ 架构）仍在 app.js ——
- *    它要和 `CG_ACTIVE` / `renderCodeGraphPane` / 工具栏拧在一起，搬过来更绕。
- *
- * ★ 两种画法（2026-10-11）：
- *     · 默认 —— `archGraphSvg()`：机械图，**片段 → 函数**两级，边是函数→函数；
- *     · 点过「✦ AI 分析」—— `archAISvg()`：语义图，**边界 → 模块**两级，
- *       边是模块→模块（聚合），节点带 AI 写的标题和要点。
- *       分析结果缓存在 `ARCH_AI` 里（按文件比对，换文件自动失效）✓。
+ * 和「图谱」**同一个面板**（#cg-canvas / #cg-body），工具栏按钮切换 ✓。
+ * 这里只管：抓数据 → 塞进面板 → 缩放平移 → 点方块跳源码 ✓。
+ * ⚠️ 画图在 `arch-graph-svg.js`（机械图）/ `arch-ai-view.js`（AI 语义图），
+ *    走线在 `arch-layout.js`，缩放平移在 `arch-zoom.js` ✓。
+ * ⚠️ 面板切换按钮（🕸 图谱 / ▦ 架构）仍在 app.js —— 它和 CG_ACTIVE /
+ *    renderCodeGraphPane / 工具栏拧在一起 ✓，搬过来更绕 ✓。
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* AI 分析结果（只对**当前文件**有效 ✓ —— 换文件自动失效，不用手动清 ✓）*/
@@ -72,7 +62,17 @@ async function renderArchIntoPane(body) {
   }
 }
 
-/* 工具栏那个「✦ AI 分析」按钮 —— 真正的实现在 arch-ai-view.js ✓ */
+/* ── 工具栏接线 + 启动时同步视图状态 ──
+   ⚠️⚠️ 用户撞到的 BUG：「**高亮的是图谱，为什么显示架构图**」✓
+      `CG_VIEW` 从 localStorage 读 ✓，但按钮的 `on` 类和标题是 **HTML 里的死值** ✓，
+      而 `setCodeGraphView()` **只在 onclick 里被调用** ✗ → 启动时两边对不上 ✓。
+   ⇒ 启动补一次同步 ✓（只切类名/标题，此时 CG_ACTIVE 还是 false ✓，不会多绘 ✓）。
+   详见 CHANGELOG「第五轮」。 */
 function wireArchToolbar() {
   if (typeof wireArchAIButton === 'function') wireArchAIButton();
+  try {
+    if (typeof setCodeGraphView === 'function' && typeof CG_VIEW === 'string') setCodeGraphView(CG_VIEW);
+  } catch (_) { /* app.js 还没跑完就跳过，不值得为它炸掉整个脚本 ✓ */ }
 }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireArchToolbar);
+else wireArchToolbar();
