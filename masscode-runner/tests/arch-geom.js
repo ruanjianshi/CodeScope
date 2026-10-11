@@ -62,7 +62,7 @@ function makeDom() {
 const ARCH_SOURCES = ['assets/arch-graph-svg.js', 'assets/arch-view.js', 'assets/app.js'];
 /* 布局+走线在 arch-layout.js（纯数据），画 SVG 在 arch-graph-svg.js ——
    两个拼起来才能跑 ✓（顺序不能反：archGraphSvg 调 archLayout）。 */
-const ARCH_PRELUDE = ['assets/arch-layout.js'];
+const ARCH_PRELUDE = ['assets/arch-layout.js', 'assets/arch-round.js'];
 function loadArchView() {
   for (const rel of ARCH_SOURCES) {
     let src;
@@ -282,9 +282,18 @@ const piled = [...anchors.entries()].filter(([, n]) => n > 1);
 ck('没有一堆线扎在同一个起点（deterministic spread）', piled.length === 0,
   piled.slice(0, 3).map(([k, n]) => k + '×' + n).join(' / '));
 
-/* ⑤ 全是正交折线 —— 没有贝塞尔（`C` 曲线是"一团毛线"的来源） */
-const curved = paths.filter((p) => /[CcSsQqTtAa]/.test(p.getAttribute('d') || ''));
-ck('全部是正交折线（没有曲线段）', curved.length === 0, curved.length + ' 条带曲线');
+/* ⑤ 全是正交折线 —— 没有贝塞尔（`C` 曲线是"一团毛线"的来源）。
+   ⚠️ 现在**允许 `Q`** ✓ —— 那是**拐角磨圆**（`assets/arch-round.js` ✓，用户要"美化" ✓）。
+      磨圆**不改变走线** ✓，只把直角削掉一点点 ✓；
+      但半径必须**小** ✗ —— 大了就变成真曲线了 ✓，所以下面单独加一条量半径 ✓。 */
+const curved = paths.filter((p) => /[CcSsTtAa]/.test(p.getAttribute('d') || ''));
+ck('全是正交折线（没有贝塞尔；只允许拐角的小圆角 Q）', curved.length === 0, curved.length + ' 条带曲线');
+const bigArc = paths.filter((p) => {
+  const qs = String(p.getAttribute('d') || '').match(/Q-?\d+(?:\.\d+)? -?\d+(?:\.\d+)? -?\d+(?:\.\d+)? -?\d+(?:\.\d+)?/g) || [];
+  return qs.some((q) => { const n = q.match(/-?\d+(?:\.\d+)?/g).map(Number);
+    return Math.hypot(n[0] - n[2], n[1] - n[3]) > 8; });   /* 控制点到终点 = 圆角半径 ✓ */
+});
+ck('拐角圆角半径都很小（≤ 8px，不是真曲线）', bigArc.length === 0, bigArc.length + ' 条圆角过大');
 
 /* ⑥ 卡片宽度一致（同一批数据里，负载相近的卡片不该宽窄悬殊） */
 const widths = cards.map((c) => c.w);

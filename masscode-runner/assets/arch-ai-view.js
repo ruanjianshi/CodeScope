@@ -301,7 +301,7 @@ function archAISvg(graph, ai, opts) {
     }
     const inc = hit.inc;
     const path = mk('path', {
-      d, fill: 'none',
+      d: archRoundPath(d), fill: 'none',   /* 拐角磨圆 ✓ */
       stroke: inc ? '#8c9bb5' : '#7aa2f7',
       'stroke-opacity': inc ? .6 : .85, 'stroke-width': 1.5,
       'stroke-linejoin': 'round',

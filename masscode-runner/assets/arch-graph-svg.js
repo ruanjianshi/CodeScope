@@ -33,7 +33,7 @@ function archGraphSvg(graph, opts) {
 
   pending.forEach((x) => {
     const path = mk('path', {
-      d: x.d,
+      d: archRoundPath(x.d),   /* 拐角磨圆 ✓（见 arch-round.js）*/
       fill: 'none',
       stroke: x.inc ? '#8c9bb5' : '#7aa2f7',
       'stroke-opacity': x.inc ? .45 : .6,

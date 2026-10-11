@@ -80,6 +80,7 @@ const SIZE_CAP = [
         plan 和布局是**互相依赖**的（plan 决定走廊宽度 → 走廊宽度决定卡片宽度），
         拆不干净 ✗。 */
   ['assets/arch-layout.js', 481],
+  ['assets/arch-round.js', 48],    /* 拐角磨圆（纯字符串处理）*/
   ['assets/arch-graph-svg.js', 132],
   ['server.js', 8263],
   ['assets/app.css', 4287],
