@@ -63,7 +63,11 @@ const SIZE_CAP = [
   /* 2026-10-11 又一轮：加「自由缩放 + 卡片折行」→ arch-view.js 涨到 611，棘轮红 ✓
      → 按**天然边界**拆成两个：纯画图（arch-graph-svg.js）+ 面板集成（arch-view.js）✓，
      两个上限都记成拆完之后的实际值 ✓。 */
-  ['assets/arch-view.js', 137],
+  /* 2026-10-11 第四轮：加「✦ AI 分析」（用户：「没有接入 AI 去分析」）——
+     新功能全进新文件（arch-ai-view.js / arch-zoom.js），arch-view.js 反而**变小**了 ✓。 */
+  ['assets/arch-view.js', 78],
+  ['assets/arch-zoom.js', 87],
+  ['assets/arch-ai-view.js', 462],
   /* 2026-10-11 第三轮：加「主干合并（总线画法）」→ arch-graph-svg.js 涨到 550，棘轮红 ✓
      → 按**管线**再拆一刀：布局+走线（纯数据，不碰 DOM）| 画成 SVG ✓。 */
   ['assets/arch-layout.js', 436],
@@ -77,7 +81,8 @@ const SIZE_CAP = [
   ['lib/routes/latex.js', 200],
   ['lib/arch/analyze.js', 350],
   ['lib/arch/render.js', 450],
-    ['lib/routes/arch.js', 200],
+  ['lib/arch/ai.js', 191],
+    ['lib/routes/arch.js', 209],   /* 加了 /api/arch/ai（AI 语义分析）*/
   ['lib/routes/check.js', 250],
   ['lib/routes/env.js', 250],
   ['lib/routes/fig.js', 250],

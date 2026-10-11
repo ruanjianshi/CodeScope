@@ -510,7 +510,8 @@
                  ▦ 架构 = 分层方块图（自绘 SVG，新增）
                ⚠️ 只切 #cg-body 里画什么 ✗ —— 面板、工具栏、拖宽、放大都共用 ✓。 -->
           <button id="cg-view-graph" class="on" title="力导向圆点图（函数 / 文件 / 调用）">🕸 图谱</button>
-          <button id="cg-view-arch" title="分层方块图（按文件分组，可点节点高亮上下游）">▦ 架构</button>
+          <button id="cg-ai" title="让 AI 读这个文档，出「语义版」架构图（带模块标题、要点、边界）">✦ AI 分析</button>
+        <button id="cg-view-arch" title="分层方块图（按文件分组，可点节点高亮上下游）">▦ 架构</button>
           <button id="cg-refresh" title="重新生成">⟳ 刷新</button>
           <button id="cg-zoom" title="全屏放大查看">⤢ 放大</button>
           <button id="cg-copy" title="复制 Mermaid 源码">⧉ Mermaid</button>
@@ -964,6 +965,8 @@
      **必须按 布局 → 画图 → 面板 这个顺序加载** ✓。 -->
 <script src="/assets/arch-layout.js"></script>
 <script src="/assets/arch-graph-svg.js"></script>
+<script src="/assets/arch-zoom.js"></script>
+<script src="/assets/arch-ai-view.js"></script>
 <script src="/assets/arch-view.js"></script>
 <script src="/assets/app-pdf.js"></script>
 

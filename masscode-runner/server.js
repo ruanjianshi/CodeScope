@@ -6736,7 +6736,7 @@ const server = http.createServer(async (req, res) => {
       /* ★ rev 路由抽到 lib/routes/rev.js（2026-10-11）*/
       if (await revRoute.handle(req, res, u, { send, computeRev, APP_VERSION }) || res.writableEnded) return;
       /* ★ 架构图（2026-10-11 新功能）—— 指一个项目 → 出可交互的架构图 ✓ */
-      if (await archRoute.handle(req, res, u, { send, analyze, renderHTML, vaultPath }) || res.writableEnded) return;
+      if (await archRoute.handle(req, res, u, { send, analyze, renderHTML, vaultPath, walkSnippets, buildDocumentGraph, readBody, applicationDataRoot, computeRev }) || res.writableEnded) return;
       /* ★ version 路由抽到 lib/routes/version.js（2026-10-11）*/
       if (await versionRoute.handle(req, res, u, { send, APP_VERSION, APP_MODE }) || res.writableEnded) return;
       /* ★ office 路由抽到 lib/routes/office.js（2026-10-11）*/
