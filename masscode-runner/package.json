@@ -58,7 +58,8 @@
     "test:tour": "node tests/ui-tour.js",
     "test:arch": "node tests/architecture.js",
     "arch:map": "node tools/archify/index.js . --out docs/architecture.html --ir docs/architecture.ir.json --title CodeScope",
-    "test:archai": "node tests/arch-ai.js"
+    "test:archai": "node tests/arch-ai.js",
+    "test:all": "node tests/all.js"
   },
   "engines": {
     "node": ">=18"

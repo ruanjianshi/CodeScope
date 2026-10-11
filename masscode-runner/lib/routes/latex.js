@@ -24,7 +24,7 @@ async function handle(req, res, u, ctx) {
   /* ⚠️ 这几个都是**从 server.js 传进来**的 ✓（不是我瞎猜的 ✓）——
      用 tools/extract-route.js 抽完之后，**必须回看这一段** ✓：
      漏一个，运行时才炸 ✓。 */
-  const { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync } = ctx;
+  const { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync, MIME } = ctx;
 
     if (req.method === 'GET' && u.pathname === '/api/latex/resource/raw') {
     let resource;

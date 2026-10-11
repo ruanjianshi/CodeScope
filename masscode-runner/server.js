@@ -7018,7 +7018,7 @@ const server = http.createServer(async (req, res) => {
       if (await envRoute.handle(req, res, u, { ONLYOFFICE_CONNECTION, readOnlyOfficeConnection, getEnv, runtimeReadiness, onlyOfficeHealth, XLSX, path, Document, DSH, installHint, platformInfo, send, APP_VERSION, APP_MODE, deploymentInfo, vaultPath }) || res.writableEnded) return;
       /* ★ latex 路由抽到 lib/routes/latex.js（2026-10-11）——
          样板见那个文件的文件头。 */
-      if (await latexRoute.handle(req, res, u, { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync }) || res.writableEnded) return;
+      if (await latexRoute.handle(req, res, u, { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync, MIME }) || res.writableEnded) return;
       /* ★ matlab 路由抽到 lib/routes/matlab.js（2026-10-11）*/
       if (await matlabRoute.handle(req, res, u, { matlabCmd, send, installHint, isOctaveCmd }) || res.writableEnded) return;
     /* ★ Jupyter 式持久 Python 内核 ✓✓（2026-10-10）——
@@ -7054,7 +7054,7 @@ const server = http.createServer(async (req, res) => {
          这是**路由模块化**的第一刀 ✓，样板写在那边的文件头 ✓。
          后面每抽一组都照它做：新建 lib/routes/<组>.js →
          导出 handle(req,res,u,ctx) 返回 boolean → 这里换成三行 ✓。 */
-      if (await dbgRoute.handle(req, res, u, { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync }) || res.writableEnded) return;
+      if (await dbgRoute.handle(req, res, u, { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync, run }) || res.writableEnded) return;
       /* ★ py 路由抽到 lib/routes/py.js（2026-10-11）*/
       if (await pyRoute.handle(req, res, u, { send, PY_KERNEL, exec, readBody, vaultPath }) || res.writableEnded) return;
       /* ★ run 路由抽到 lib/routes/run.js（2026-10-11）*/
@@ -8073,7 +8073,7 @@ const server = http.createServer(async (req, res) => {
       if (await graphRoute.handle(req, res, u, { walkSnippets, send, buildDocumentGraph, computeRev, buildCodeGraph }) || res.writableEnded) return;
     // ===== 逻辑图：函数实现 ↔ 语句级控制流（薄路由，计算在 lib/logic-graph.js） =====
       /* ★ logic 路由抽到 lib/routes/logic.js（2026-10-11）*/
-      if (await logicRoute.handle(req, res, u, { readBody, walkSnippets, send, buildSnippetIndex, resolveDefinition, buildLogicGraph, logicToDrawio }) || res.writableEnded) return;
+      if (await logicRoute.handle(req, res, u, { readBody, walkSnippets, send, buildSnippetIndex, resolveDefinition, buildLogicGraph, logicToDrawio, logicToSkeleton }) || res.writableEnded) return;
     // ===== 云同步：Tailscale 组网 / Syncthing 数据面 / restic 历史层 =====
       /* ★ sync 路由抽到 lib/routes/sync.js（2026-10-11）*/
       if (await syncRoute.handle(req, res, u, { send, syncStatus, discoverSyncthingApiKey, syncConfig, syncthingConfigPaths, saveSyncConfig, readBody, syncthingAction, startSyncSnapshot, syncGithubStatus, vaultStats }) || res.writableEnded) return;

@@ -34,7 +34,7 @@ const path = require('path');
      readBody / writeFragments / pythonCmd / matlabCmd / isOctaveCmd /
      CS_VARS_M / send / writeFileAtomicSync */
 async function handle(req, res, u, ctx) {
-  const { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync } = ctx;
+  const { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync, run } = ctx;
 
     if (req.method === 'POST' && u.pathname === '/api/dbg/prepare') {
     try {

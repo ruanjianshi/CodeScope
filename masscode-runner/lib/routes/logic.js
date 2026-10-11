@@ -18,7 +18,7 @@
  */
 
 async function handle(req, res, u, ctx) {
-  const { readBody, walkSnippets, send, buildSnippetIndex, resolveDefinition, buildLogicGraph, logicToDrawio } = ctx;
+  const { readBody, walkSnippets, send, buildSnippetIndex, resolveDefinition, buildLogicGraph, logicToDrawio, logicToSkeleton } = ctx;
 
     if (req.method === 'POST' && u.pathname === '/api/logic/graph') {
     try {

@@ -200,6 +200,38 @@ const archViewSrc = (() => { try { return fs.readFileSync(path.join(root, 'asset
 ck('  arch-view.js 启动时会 setCodeGraphView(CG_VIEW) 同步按钮/标题',
   /setCodeGraphView\(CG_VIEW\)/.test(archViewSrc));
 
+console.log('\n── ⑤b 路由模块的 ctx 依赖完整性 ──');
+/* ⚠️⚠️ 这个 bug **真的漏了很久**，是这次全项目自检扫出来的 ✓：
+      `lib/routes/logic.js` 用了 `logicToSkeleton` ✓，
+      但**既没在 `const {...} = ctx` 里解构、也没在 server.js 的挂载点传** ✗
+      （抽路由那个工具扫漏了 ✓）→ 一调就 `ReferenceError` → **HTTP 500** ✓
+      → 「按控制流图生成骨架代码」整个功能**一直是坏的** ✗（4 处 UI 在调它 ✓）
+      → 而 `npm test` 里**没有一条断言会红** ✗。
+   ⇒ 判据：**凡是用了 server.js 顶层名字的，都必须在 ctx 里解构 ✓**。
+      依赖用 ctx 显式传是这个项目的约定 ✓，这条就是给那个约定上的锁 ✓。 */
+const serverSrc = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const topNames = new Set();
+for (const m of serverSrc.matchAll(/^(?:async )?function ([A-Za-z_$][\w$]*)\s*\(/gm)) topNames.add(m[1]);
+for (const m of serverSrc.matchAll(/^const ([A-Za-z_$][\w$]*)\s*=/gm)) topNames.add(m[1]);
+const ctxMissing = [];
+fs.readdirSync(path.join(root, 'lib', 'routes')).filter((f) => f.endsWith('.js')).forEach((f) => {
+  const rawSrc = fs.readFileSync(path.join(root, 'lib', 'routes', f), 'utf8');
+  /* ⚠️ **先剥注释再扫** ✗ —— 不剥的话，注释里提到的名字会被当成"用了" ✓
+     （第一版就报了 `streamStatic` / `run`，全是注释里的 ✓）。 */
+  const src = rawSrc.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const dm = src.match(/const \{([^}]*)\} = ctx;/s);
+  const got = new Set((dm ? dm[1] : '').split(',').map((x) => x.trim()).filter(Boolean));
+  /* 本文件自己 require 的（fs / path / os…）和本地声明的，不算缺 ✓ */
+  const local = new Set([...src.matchAll(/(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]));
+  ['fs', 'path', 'os', 'crypto', 'http', 'https', 'url', 'child_process', 'stream', 'util'].forEach((b) => local.add(b));
+  topNames.forEach((n) => {
+    if (got.has(n) || local.has(n)) return;
+    /* ⚠️ 只看**裸标识符** ✗ —— `ctx.vaultPath` 这种是显式走 ctx 的 ✓，不该报 ✓ */
+    if (new RegExp('(?<![.\\w])' + n + '\\b').test(src)) ctxMissing.push(f + ' 用了 ' + n);
+  });
+});
+ck('  路由模块用到的 server.js 顶层符号，都从 ctx 取了', ctxMissing.length === 0, ctxMissing.slice(0, 4).join(' / '));
+
 console.log('\n── ⑥ 没有遗留标记 ──');
 /* ⚠️⚠️ 只认**注释形式**的 TODO ✗✗（第一次写成裸词，误报 4 处 ✓）：
        · `server.js` 里有一段**代码本身就在数 TODO**（`text.match(/TODO|FIXME/)`）✓；
