@@ -960,8 +960,9 @@
      抽出来是因为棘轮（app.js ≤ 16581 行）顶到了：重写走线涨了 156 行 → 测试红。
      ⚠️ 放在 app.js **之后** ✓：它只声明函数，app.js 里是**调用时才找**
         `renderArchIntoPane` ✓，所以先后无所谓；但放在后面更符合"依赖 app.js"的直觉。 -->
-<!-- ⚠️ 顺序要紧：arch-view.js 里 renderArchIntoPane 会调 archGraphSvg ✓，
-     所以**纯画图那半必须先加载** ✓。 -->
+<!-- ⚠️ 顺序要紧：archGraphSvg 会调 archLayout ✓，renderArchIntoPane 会调 archGraphSvg ✓ ——
+     **必须按 布局 → 画图 → 面板 这个顺序加载** ✓。 -->
+<script src="/assets/arch-layout.js"></script>
 <script src="/assets/arch-graph-svg.js"></script>
 <script src="/assets/arch-view.js"></script>
 <script src="/assets/app-pdf.js"></script>

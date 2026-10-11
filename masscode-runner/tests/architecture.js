@@ -64,7 +64,10 @@ const SIZE_CAP = [
      → 按**天然边界**拆成两个：纯画图（arch-graph-svg.js）+ 面板集成（arch-view.js）✓，
      两个上限都记成拆完之后的实际值 ✓。 */
   ['assets/arch-view.js', 137],
-  ['assets/arch-graph-svg.js', 467],
+  /* 2026-10-11 第三轮：加「主干合并（总线画法）」→ arch-graph-svg.js 涨到 550，棘轮红 ✓
+     → 按**管线**再拆一刀：布局+走线（纯数据，不碰 DOM）| 画成 SVG ✓。 */
+  ['assets/arch-layout.js', 436],
+  ['assets/arch-graph-svg.js', 132],
   ['server.js', 8263],
   ['assets/app.css', 4287],
   ['src/system-panel.js', 3746],

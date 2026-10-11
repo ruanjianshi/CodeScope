@@ -60,14 +60,21 @@ function makeDom() {
        按天然边界拆：**纯画图** vs **面板集成**）。
    三个路径都找一遍 ✓ —— 以后再搬家也不会让测试莫名其妙地"找不到函数" ✓。 */
 const ARCH_SOURCES = ['assets/arch-graph-svg.js', 'assets/arch-view.js', 'assets/app.js'];
+/* 布局+走线在 arch-layout.js（纯数据），画 SVG 在 arch-graph-svg.js ——
+   两个拼起来才能跑 ✓（顺序不能反：archGraphSvg 调 archLayout）。 */
+const ARCH_PRELUDE = ['assets/arch-layout.js'];
 function loadArchView() {
   for (const rel of ARCH_SOURCES) {
     let src;
     try { src = fs.readFileSync(path.join(root, rel), 'utf8'); } catch (_) { continue; }
     if (src.indexOf('function archGraphSvg(') < 0) continue;
+    let pre = '';
+    for (const q of ARCH_PRELUDE) {
+      try { pre += fs.readFileSync(path.join(root, q), 'utf8') + '\n'; } catch (_) {}
+    }
     const sandbox = { document: makeDom() };
     // eslint-disable-next-line no-new-func
-    const factory = new Function('document', src + '\nreturn { archGraphSvg, archFragOf };');
+    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf };');
     return factory(sandbox.document);
   }
   throw new Error('在 ' + ARCH_SOURCES.join(' / ') + ' 里都找不到 archGraphSvg');
@@ -165,7 +172,9 @@ function crossingsOf(svg) {
   const { chips, cards } = classify(svg);
   const boxes = chips.concat(cards);
   let n = 0;
-  svg.all('path').filter((p) => p.getAttribute('marker-end')).forEach((p) => {
+  /* ⚠️ 检查**所有** path，不只是带箭头的 —— 主干（多条边共用的那一段）
+     是**不带箭头**的 ✓，漏掉它等于漏掉一半的线 ✓。 */
+  svg.all('path').forEach((p) => {
     const pts = pointsOf(p.getAttribute('d'));
     if (pts.length < 2) { n += 1; return; }
     const samples = [];
@@ -206,7 +215,8 @@ ck('owns 边不画线（9 条 owns 一条都不该出现）', paths.length === 1
 
 /* ③ route clearance：线不许扎进别的方块 */
 const crossings = [];
-paths.forEach((p, i) => {
+/* ⚠️ 同上：主干也走这段检查（它没箭头，但一样会穿方块）*/
+svg.all('path').forEach((p, i) => {
   const pts = pointsOf(p.getAttribute('d'));
   if (pts.length < 2) { crossings.push({ i, why: '路径点不足' }); return; }
   const samples = [];
