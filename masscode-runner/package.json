@@ -56,7 +56,8 @@
     "test:ebook-real": "node tests/ebook-real.js",
     "test:roots": "node tests/roots.js",
     "test:tour": "node tests/ui-tour.js",
-    "test:arch": "node tests/architecture.js"
+    "test:arch": "node tests/architecture.js",
+    "arch:map": "node tools/archify/index.js . --out docs/architecture.html --ir docs/architecture.ir.json --title CodeScope"
   },
   "engines": {
     "node": ">=18"
