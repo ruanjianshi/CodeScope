@@ -6567,8 +6567,12 @@ function applyMmMode() {
     graphBtn.disabled = !hasCode;
     graphBtn.style.display = hasCode ? '' : 'none';
     graphBtn.classList.toggle('on', CG_ACTIVE);
-    const logicBtn = $('btn-logicgraph');
-    if (logicBtn) { logicBtn.disabled = !hasCode; logicBtn.style.display = hasCode ? '' : 'none'; }
+      const logicBtn = $('btn-logicgraph');
+      if (logicBtn) { logicBtn.disabled = !hasCode; logicBtn.style.display = hasCode ? '' : 'none'; }
+      /* ★ 架构图按钮（2026-10-11 新增）—— 和「图谱」同条件：
+         只要这个文档里有代码片段就可用（不限当前片段）。 */
+      const archBtn = $('btn-archgraph');
+      if (archBtn) { archBtn.disabled = !hasCode; archBtn.style.display = hasCode ? '' : 'none'; }
     const bpBtn = $('btn-blockly');
     if (bpBtn) { bpBtn.disabled = !hasCode; bpBtn.style.display = hasCode ? '' : 'none'; }
     /* 换成没有代码的文档就自动收起图谱栏，别留一块空白 */
@@ -7872,6 +7876,165 @@ async function openDocumentGraph() {
       + (graph.stats ? graph.stats.calls : 0) + ' 条调用');
   } catch (error) {
     setStatus('err', '代码图谱失败：' + String(error.message || error));
+  }
+}
+
+/* ── 架构图（文档级）· 和「图谱」同一份数据，不同画法 ──
+   ★ 2026-10-11 新增 ✓。用户原话：
+     「和图谱那种，整合进图谱那种，自动分析当前文件里面的片段的可交互架构图」
+     并明确：「**不破坏现有的这个，新增**」。
+
+   所以：
+     · **数据源完全一样** —— /api/graph?scope=document&file=<当前文档>
+       （「图谱」用 Mermaid 力导向画；这里自己排布）；
+     · **不碰 renderCodeGraphPane / CG_ACTIVE / 那套面板** ——
+       只在工具栏加一个「架构」按钮，点开是一个**可缩放的浮层**
+       （复用已有的 openLogicZoom，它已经会处理拖动 / 缩放 / Esc）。
+
+   ⚠️ 为什么画法要不一样：Mermaid 的力导向是"谁连得多谁在中间"，
+      看着热闹但**读不出结构**。这里按**角色分层**：
+        第 1 层 文件（它包含哪些函数）→ 层内横排函数
+      这样"哪个文件里有哪些函数"是一眼可见的。 */
+function archGraphSvg(graph) {
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  const W = 1180, H = 760, PAD = 40;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('width', String(W));
+  svg.setAttribute('style', 'background:#12141c;border-radius:12px');
+  const mk = (tag, attrs, text) => {
+    const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = String(text);
+    svg.appendChild(n);
+    return n;
+  };
+
+  const files = nodes.filter((n) => n.kind === 'file');
+  const fns = nodes.filter((n) => n.kind === 'fn');
+  if (!files.length && !fns.length) {
+    mk('text', { x: W / 2, y: 60, fill: '#8c9bb5', 'font-size': 14, 'text-anchor': 'middle' },
+      '这个文档里没有代码片段');
+    return svg;
+  }
+
+  const byFile = new Map();
+  fns.forEach((n) => {
+    const k = String(n.file || '');
+    if (!byFile.has(k)) byFile.set(k, []);
+    byFile.get(k).push(n);
+  });
+
+  const pos = new Map();
+  const FNH = 28, GAPX = 12, GAPY = 12, CW = 152;
+  let y = 52;
+
+  files.forEach((f) => {
+    const kids = byFile.get(String(f.file || '')) || [];
+    const cols = Math.max(1, Math.min(5, kids.length || 1));
+    const boxW = Math.max(230, cols * (CW + GAPX) + GAPX);
+    const rows = kids.length ? Math.ceil(kids.length / cols) : 1;
+    const boxH = 46 + rows * (FNH + GAPY) + 4;
+    mk('rect', { x: PAD, y: y, width: boxW, height: boxH, rx: 12,
+      fill: 'rgba(239,159,39,.10)', stroke: '#EF9F27', 'stroke-opacity': .55, 'stroke-width': .8 });
+    mk('text', { x: PAD + 14, y: y + 28, fill: '#EF9F27', 'font-size': 14, 'font-weight': 500 },
+      String(f.label || f.file || '').split('/').pop());
+    pos.set(f.id, { x: PAD, y: y, w: boxW, h: 44 });
+    kids.forEach((k, i) => {
+      const cx = PAD + GAPX + (i % cols) * (CW + GAPX);
+      const cy = y + 48 + Math.floor(i / cols) * (FNH + GAPY);
+      mk('rect', { x: cx, y: cy, width: CW, height: FNH, rx: 7,
+        fill: 'rgba(122,162,247,.14)', stroke: '#7aa2f7', 'stroke-opacity': .5, 'stroke-width': .8 });
+      mk('text', { x: cx + 10, y: cy + 19, fill: '#c0caf5', 'font-size': 13 },
+        String(k.label || '').slice(0, 17));
+      pos.set(k.id, { x: cx, y: cy, w: CW, h: FNH });
+    });
+    y += boxH + 20;
+  });
+
+  const orphans = fns.filter((n) => !pos.has(n.id));
+  if (orphans.length) {
+    orphans.forEach((k, i) => {
+      const cx = PAD + (i % 6) * (CW + GAPX);
+      const cy = y + Math.floor(i / 6) * (FNH + GAPY);
+      mk('rect', { x: cx, y: cy, width: CW, height: FNH, rx: 7,
+        fill: 'rgba(122,162,247,.14)', stroke: '#7aa2f7', 'stroke-opacity': .5, 'stroke-width': .8 });
+      mk('text', { x: cx + 10, y: cy + 19, fill: '#c0caf5', 'font-size': 13 },
+        String(k.label || '').slice(0, 17));
+      pos.set(k.id, { x: cx, y: cy, w: CW, h: FNH });
+    });
+    y += Math.ceil(orphans.length / 6) * (FNH + GAPY) + 20;
+  }
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  ['call', 'include'].forEach((kind) => {
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    m.setAttribute('id', 'arch-arrow-' + kind);
+    m.setAttribute('viewBox', '0 0 10 10');
+    m.setAttribute('refX', '9'); m.setAttribute('refY', '5');
+    m.setAttribute('markerWidth', '6'); m.setAttribute('markerHeight', '6');
+    m.setAttribute('orient', 'auto-start-reverse');
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', 'M2 1L8 5L2 9');
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', kind === 'call' ? '#7aa2f7' : '#8c9bb5');
+    p.setAttribute('stroke-width', '1.5');
+    p.setAttribute('stroke-linecap', 'round');
+    m.appendChild(p); defs.appendChild(m);
+  });
+  svg.insertBefore(defs, svg.firstChild);
+
+  const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  svg.appendChild(edgeLayer);
+  let drawn = 0;
+  edges.forEach((e) => {
+    const a = pos.get(e.from), b = pos.get(e.to);
+    if (!a || !b || a === b) return;
+    const acx = a.x + a.w / 2, acy = a.y + a.h / 2;
+    const bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
+    const d = 'M' + acx + ' ' + acy + ' C' + acx + ' ' + ((acy + bcy) / 2) + ' ' + bcx + ' ' + ((acy + bcy) / 2) + ' ' + bcx + ' ' + bcy;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', e.kind === 'include' ? '#8c9bb5' : '#7aa2f7');
+    path.setAttribute('stroke-opacity', e.kind === 'include' ? .4 : .55);
+    path.setAttribute('stroke-width', '1.2');
+    if (e.kind === 'include') path.setAttribute('stroke-dasharray', '4 4');
+    path.setAttribute('marker-end', 'url(#arch-arrow-' + (e.kind === 'include' ? 'include' : 'call') + ')');
+    edgeLayer.appendChild(path);
+    drawn += 1;
+  });
+
+  const lg = [['#EF9F27', '文件'], ['#7aa2f7', '函数'], ['#7aa2f7', '调用（实线）'], ['#8c9bb5', '包含 / include（虚线）']];
+  const lh = 20, lx = W - 200, ly = H - lg.length * lh - 26;
+  mk('rect', { x: lx, y: ly, width: 186, height: lg.length * lh + 16, rx: 10,
+    fill: 'rgba(18,20,28,.92)', stroke: '#2b3040', 'stroke-width': .8 });
+  lg.forEach(([color, label], i) => {
+    const cy = ly + 14 + i * lh;
+    mk('rect', { x: lx + 12, y: cy - 5, width: 10, height: 10, rx: 3, fill: color });
+    mk('text', { x: lx + 28, y: cy + 4, fill: '#8c9bb5', 'font-size': 12 }, label);
+  });
+
+  svg.dataset.count = String(drawn);
+  return svg;
+}
+
+async function openArchGraph() {
+  if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
+  setStatus('ok', '正在生成架构图…');
+  try {
+    const response = await fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file));
+    const graph = await response.json();
+    if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
+    if (!(graph.nodes || []).length) { setStatus('err', '这个文档里没有代码片段'); return; }
+    const svg = archGraphSvg(graph);
+    openLogicZoom(svg, (CURRENT.file.split('/').pop() || '') + ' · 架构图');
+    const st = graph.stats || {};
+    setStatus('ok', '架构图：' + (st.fragments || 0) + ' 个片段 · ' + (st.functions || 0) + ' 个函数 · '
+      + (st.calls || 0) + ' 条调用 · ' + svg.dataset.count + ' 条连线');
+  } catch (error) {
+    setStatus('err', '架构图失败：' + String(error.message || error));
   }
 }
 
@@ -15159,10 +15322,14 @@ function makeHResizer(handle, getter, setter) {
   $('tab-ai').onclick = () => chooseSymMode('ai');
   $('btn-mindmap').onclick = () => { MM_ACTIVE = !MM_ACTIVE; applyMmMode(); };
   /* 工具栏两个独立按钮（用户要求分开放，不要合成下拉） */
-  if ($('btn-codegraph')) $('btn-codegraph').onclick = () => {
-    if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
-    setCodeGraphActive(!CG_ACTIVE);
-  };
+    if ($('btn-codegraph')) $('btn-codegraph').onclick = () => {
+      if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
+      setCodeGraphActive(!CG_ACTIVE);
+    };
+    /* ★ 架构图（2026-10-11 新增）—— 和「图谱」**并存** ✓：
+       「图谱」是面板里的力导向图；这个是浮层里的分层方块图 ✓。
+       两者共用同一份数据（/api/graph?scope=document），互不影响 ✓。 */
+    if ($('btn-archgraph')) $('btn-archgraph').onclick = () => { openArchGraph(); };
   if ($('btn-logicgraph')) $('btn-logicgraph').onclick = () => {
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
     setLogicGraphActive(!LG_ACTIVE);

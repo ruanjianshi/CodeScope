@@ -337,6 +337,14 @@
       <button id="btn-outline" title="显示/隐藏代码大纲">大纲</button>
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
       <button id="btn-codegraph" disabled title="代码图谱：整篇文档的片段 / 函数 / 调用 / 包含关系">图谱</button>
+      <!-- ★ 架构图（2026-10-11 新增）——
+           和「图谱」**同一份数据**（/api/graph?scope=document），
+           但**画法不同**：按「文件 / 函数」分层排布、方块 + 连线 + 图例，
+           而不是力导向圆点。两者并存，互不影响。
+           ⚠️ 为什么另开一个按钮而不是替换「图谱」✗ ——
+              用户原话：「不破坏现有的这个，新增」。
+           数据来自**当前文档**（不用选路径），和「图谱」一致。 -->
+      <button id="btn-archgraph" disabled title="架构图：当前文档的分层架构（文件 / 函数 / 调用 / 包含），方块 + 连线 + 图例">架构</button>
       <button id="btn-logicgraph" disabled title="逻辑图：当前函数的控制流，可图形化编辑后生成代码">逻辑图</button>
       <button id="btn-blockly" disabled title="图形化编程：把当前函数拆成积木，拖拽改完再生成代码">积木</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
