@@ -30,7 +30,11 @@ function archRoundPath(d, r) {
     const v1x = a[0] - b[0], v1y = a[1] - b[1];
     const v2x = c[0] - b[0], v2y = c[1] - b[1];
     const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
-    if (!l1 || !l2) { out += ' L' + b[0] + ' ' + b[1]; continue; }   /* 重合点 → 原样 ✓ */
+    /* ⚠️⚠️ **两段都够长才磨** ✗ —— 只按 `min(r, l1/2, l2/2)` 磨的话，
+       短线（比如 3px 的小横档 ✓）会被**啃掉大半** ✓，
+       看起来就是"线条断开了" ✓（用户原话 ✓）。
+       ⇒ 任一段短于 `2r` 就**保持直角** ✓：宁可少磨一点，也不能把线磨断 ✓。 */
+    if (l1 < radius * 2 || l2 < radius * 2) { out += ' L' + b[0] + ' ' + b[1]; continue; }
     const rr = Math.min(radius, l1 / 2, l2 / 2);
     const x1 = b[0] + v1x / l1 * rr, y1 = b[1] + v1y / l1 * rr;
     const x2 = b[0] + v2x / l2 * rr, y2 = b[1] + v2y / l2 * rr;

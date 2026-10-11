@@ -74,7 +74,7 @@ function loadArchView() {
     }
     const sandbox = { document: makeDom() };
     // eslint-disable-next-line no-new-func
-    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf, archBestRowW, archLayout };');
+    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf, archBestRowW, archLayout, archRoundPath };');
     return factory(sandbox.document);
   }
   throw new Error('在 ' + ARCH_SOURCES.join(' / ') + ' 里都找不到 archGraphSvg');
@@ -204,7 +204,7 @@ function ck(name, ok, detail) {
 
 console.log('\n── 架构图几何（线不能穿过别人的方块 / 端点不能重叠）──\n');
 
-const { archGraphSvg, archFragOf, archBestRowW, archLayout } = loadArchView();
+const { archGraphSvg, archFragOf, archBestRowW, archLayout, archRoundPath } = loadArchView();
 const graph = buildGraph();
 const svg = archGraphSvg(graph);
 
@@ -412,6 +412,30 @@ ck('一行宽到离谱（> 面板宽 × 2.5）时才折行',
     if (!insideBox(z, B)) wrong.push((B && B.label ? B.label : labelOfId.get(pd.ids[1]) || pd.ids[1]) + '（末端 ' + Math.round(z.x) + ',' + Math.round(z.y) + '，目标框 ' + (B ? [B.x, B.y, B.w, B.h].map(Math.round).join('/') : '?') + '）');
   });
   ck('★★ 每个箭头的末端都落在它的**目标**方块上（指向不能反）', wrong.length === 0, wrong.slice(0, 3).join(' / '));
+}
+
+/* ⑮ 拐角磨圆（assets/arch-round.js）—— 纯函数，单独验 ✓
+   ⚠️ 用户原话：「**有些线条都断开了，圆角处等**」✓ ——
+      根因就是**短线段被强行磨圆**（3px 的小横档被啃掉大半 ✓）。
+      ⇒ 判据：**任一段短于 2r 就保持直角** ✓ —— 宁可少磨，不能磨断 ✓。 */
+{
+  const rc = [
+    ['长边直角 → 磨圆', 'M0 0 L100 0 L100 100', (d) => /Q/.test(d)],
+    ['短边（3px）→ 保持直角（不能啃断）', 'M0 0 L3 0 L3 100', (d) => !/Q/.test(d)],
+    ['只有一边短 → 也保持直角', 'M0 0 L100 0 L100 5 L200 5', (d) => !/Q/.test(d)],
+    ['两点直线 → 原样返回', 'M0 0 L100 0', (d) => d === 'M0 0 L100 0'],
+    ['空串 → 不抛异常', '', () => true],
+    ['重合点 → 不抛异常', 'M5 5 L5 5 L100 5', () => true],
+  ];
+  rc.forEach(([name, input, ok]) => {
+    let out = null;
+    try { out = archRoundPath(input); } catch (_) { out = null; }
+    ck('拐角磨圆：' + name, out !== null && ok(out), String(out).slice(0, 64));
+  });
+  /* 半径必须小 ✓ —— 大了就从"磨圆"变成"真曲线"了 ✓ */
+  const rq = archRoundPath('M0 0 L100 0 L100 100').match(/Q(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/);
+  ck('拐角磨圆：半径 ≤ 8px', !!rq && Math.hypot(+rq[1] - +rq[3], +rq[2] - +rq[4]) <= 8,
+    rq ? 'r=' + Math.hypot(+rq[1] - +rq[3], +rq[2] - +rq[4]).toFixed(1) : '没有圆角');
 }
 
 /* ⑬ 折行 —— 用户原话「**排布不合理**」（2026-10-11）：
