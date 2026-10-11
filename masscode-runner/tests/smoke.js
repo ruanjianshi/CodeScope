@@ -373,7 +373,21 @@ void bubbleSort(Array& values);
     .map((f) => { try { return fs.readFileSync(path.join(projectRoot, 'assets', f), 'utf8'); } catch (_) { return ''; } })
     .join('\n');
   const html = pageText + '\n' + assetsBundle + '\n' + cssBundle;
-  const serverSource = fs.readFileSync(path.join(projectRoot, 'server.js'), 'utf8');
+  /* ★ serverSource 现在要连 lib/routes/ 一起读（2026-10-11）——
+     ⚠️ 这个测试原来的假设是「所有 /api 路由都在 server.js 里」，
+        而 2026-10-11 开始把路由拆到 lib/routes/*.js 了，
+        于是那些 serverSource.includes(某个端点) 的断言会逐个变红
+        （实测：先是 /api/integrations/dsh）。
+     ⚠️ 不要「把断言改到某个具体文件」—— 那等于把测试绑死在文件布局上，
+        下次再拆又要改一遍。
+     → 把「服务端源码」定义成 server.js + lib/routes/ 全部，
+        断言关心的是「这个端点在不在服务端」，不是「在哪个文件」。 */
+  const serverSource = [
+    fs.readFileSync(path.join(projectRoot, 'server.js'), 'utf8'),
+    ...fs.readdirSync(path.join(projectRoot, 'lib', 'routes'))
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => fs.readFileSync(path.join(projectRoot, 'lib', 'routes', f), 'utf8')),
+  ].join('\n');
   const blockEditorSource = fs.readFileSync(path.join(projectRoot, 'src', 'reading-block-editor.js'), 'utf8');
   /* 知识库主题是拼在 JS 模板字符串里的，单个 \s 会被当成无效转义吃掉、正则变成 [s…]，
      结果是「任何含字母 s 的术语都被过滤掉」（sizeof…、static… 实测就是这么丢的）。 */
