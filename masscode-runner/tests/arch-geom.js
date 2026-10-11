@@ -74,7 +74,7 @@ function loadArchView() {
     }
     const sandbox = { document: makeDom() };
     // eslint-disable-next-line no-new-func
-    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf, archBestRowW };');
+    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf, archBestRowW, archLayout };');
     return factory(sandbox.document);
   }
   throw new Error('在 ' + ARCH_SOURCES.join(' / ') + ' 里都找不到 archGraphSvg');
@@ -204,7 +204,7 @@ function ck(name, ok, detail) {
 
 console.log('\n── 架构图几何（线不能穿过别人的方块 / 端点不能重叠）──\n');
 
-const { archGraphSvg, archFragOf, archBestRowW } = loadArchView();
+const { archGraphSvg, archFragOf, archBestRowW, archLayout } = loadArchView();
 const graph = buildGraph();
 const svg = archGraphSvg(graph);
 
@@ -371,6 +371,39 @@ ck('archBestRowW 优先「一行放完」（按片段顺序横向排开）',
   typeof archBestRowW === 'function' && archBestRowW(graph, 928, 540) > 1e5);
 ck('一行宽到离谱（> 面板宽 × 2.5）时才折行',
   typeof archBestRowW === 'function' && archBestRowW(graph, 200, 900) < 1e5);
+
+/* ⑭ ★★ 箭头**方向**：每条带箭头的线，起点必须是「源」方块、终点必须是「目标」方块 ——
+   ⚠️ 用户原话：「**仔细检查这箭头指向对吗**」✓。光验"落在某个方块上"不够 ✗ ——
+      还要验**落对了哪个** ✓（反向画的话，线也是贴着方块边的 ✓）。
+   ⚠️ 这条在**浏览器里**也能验 ✓，但那是十几秒 ✓；这里用 DOM shim 是毫秒级 ✓。
+      路径顺序 = `pending` 顺序（渲染器就是按它 mk path 的 ✓）。 */
+{
+  const L0 = archLayout(graph, {});
+  /* 函数块在 cards[].kids[] 里（不是单独的 chips 字段 ✓）*/
+  /* ⚠️ 坐标在 `chipPos` 这个 Map 里 ✗ —— `cards[].kids[]` 是**原始节点** ✓，
+     身上**没有** x/y/w/h ✓（第一版拿 kids 当框，算出来全是 NaN ✓）。 */
+  const chipById = new Map(L0.chipPos);
+  L0.cards.forEach((c) => chipById.set(c.node.id, { x: c.x, y: c.y, w: c.w, h: c.h, label: c.node.label }));
+  const labelOfId = new Map(graph.nodes.map((n) => [n.id, n.label || n.id]));
+  const insideBox = (pt, b) => b && pt.x >= b.x - 3 && pt.x <= b.x + b.w + 3 && pt.y >= b.y - 3 && pt.y <= b.y + b.h + 3;
+  /* ⚠️ 只比**带 marker 的**那批 ✗ —— `pending` 里还有**主干**（`marker` 为空 ✓），
+     主干本来就不带箭头 ✓（总线画法：主干 + 带箭头的横档 ✓）。 */
+  const marked = svg.all('path').filter((p) => p.getAttribute('marker-end'));
+  const withArrow = L0.pending.filter((pd) => pd.marker);
+  const wrong = [];
+  if (marked.length !== withArrow.length) wrong.push('箭头数 ' + marked.length + ' ≠ 带箭头的边数 ' + withArrow.length);
+  /* ⚠️ 只验**末端** ✗ —— 合并成总线之后，横档是从**主干交汇点**出发的 ✓，
+     起点不是源方块 ✓（"起点必须是源"这个口径对横档不成立 ✓，第一版就报了一片误报 ✓）。
+     用户问的正是"箭头**指向**" ✓ → 末端落在**目标**上才是要验的 ✓。 */
+  else withArrow.forEach((pd, i) => {
+    const pts = pointsOf(marked[i].getAttribute('d'));
+    if (pts.length < 2) { wrong.push('第 ' + i + ' 条没有端点'); return; }
+    const B = chipById.get(pd.ids[1]);
+    const z = pts[pts.length - 1];
+    if (!insideBox(z, B)) wrong.push((B && B.label ? B.label : labelOfId.get(pd.ids[1]) || pd.ids[1]) + '（末端 ' + Math.round(z.x) + ',' + Math.round(z.y) + '，目标框 ' + (B ? [B.x, B.y, B.w, B.h].map(Math.round).join('/') : '?') + '）');
+  });
+  ck('★★ 每个箭头的末端都落在它的**目标**方块上（指向不能反）', wrong.length === 0, wrong.slice(0, 3).join(' / '));
+}
 
 /* ⑬ 折行 —— 用户原话「**排布不合理**」（2026-10-11）：
    5 个片段横向铺开 1494px，侧栏只有 ~520px → 得滚半天才看得全。
