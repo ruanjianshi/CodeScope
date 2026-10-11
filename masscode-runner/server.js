@@ -42,6 +42,29 @@ const { createPythonKernel } = require('./lib/python-kernel');
 const MAIL_CLIENT = require('./lib/mail-client');
 /* ★ 路由模块（2026-10-11 开始抽）—— 每一组一个文件 ✓ */
 const dbgRoute = require('./lib/routes/dbg');
+const termRoute = require('./lib/routes/term');
+const remoteRoute = require('./lib/routes/remote');
+const syncRoute = require('./lib/routes/sync');
+const logicRoute = require('./lib/routes/logic');
+const graphRoute = require('./lib/routes/graph');
+const reorderRoute = require('./lib/routes/reorder');
+const tagsRoute = require('./lib/routes/tags');
+const saveRoute = require('./lib/routes/save');
+const formatRoute = require('./lib/routes/format');
+const checkRoute = require('./lib/routes/check');
+const runRoute = require('./lib/routes/run');
+const pyRoute = require('./lib/routes/py');
+const figRoute = require('./lib/routes/fig');
+const matlabRoute = require('./lib/routes/matlab');
+const envRoute = require('./lib/routes/env');
+const integrationsRoute = require('./lib/routes/integrations');
+const officeRoute = require('./lib/routes/office');
+const versionRoute = require('./lib/routes/version');
+const revRoute = require('./lib/routes/rev');
+const snippetsRoute = require('./lib/routes/snippets');
+const studyRoute = require('./lib/routes/study');
+const systemPanelRoute = require('./lib/routes/system-panel');
+const systemRoute = require('./lib/routes/system');
 const latexRoute = require('./lib/routes/latex');
 const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
@@ -4163,6 +4186,15 @@ function gzipStaticFile(file, stat, callback) {
     });
   });
 }
+/* ⚠️⚠️ 这个函数**必须返回 true** ✗✗（2026-10-11 实测修）——
+   它原来是纯回调、返回 undefined ✓。
+   在**原始的大 router** 里这不是问题 ✓：调用点写的是 `return streamStatic(...)` ✓，
+   而 `return` 在 router 里**退出的是整个 router** ✓。
+   但把路由抽成 `lib/routes/*.js` 的 `handle` 之后 ✗：
+   那个 `return` 只退出 handle ✓，它的返回值成了「这一组吃掉了吗」的答案 ✓ →
+   `undefined` = **没吃掉** ✗ → 调用方继续往下走 → 撞到 404 兜底 ✓✓
+   （实测：POST /api/study/asset 正常，GET 同一个地址却 404 ✓）。
+   → 返回 true ✓（和 send() 一致：**发了就算吃掉** ✓）。 */
 function streamStatic(req, res, root, relative, options = {}) {
   const file = path.resolve(root, relative);
   if (file !== root && !file.startsWith(root + path.sep)) return send(res, 403, { ok:false, error:'forbidden' });
@@ -4206,6 +4238,7 @@ function streamStatic(req, res, root, relative, options = {}) {
     };
     if (canGzip) gzipStaticFile(file, stat, finish); else finish(null);
   });
+  return true;   /* 发了就算吃掉 ✓ */
 }
 function pipeReadingFile(res, input) {
   // 必须挂 error 监听：否则 iCloud 未落地/权限变化时未捕获的 'error' 事件会直接终止整个进程。
@@ -5454,9 +5487,8 @@ const server = http.createServer(async (req, res) => {
       const root = path.join(__dirname, 'node_modules', 'pptx-preview', 'dist');
       return streamStatic(req, res, root, u.pathname.slice('/office-pptx/'.length), { cacheControl:'public, max-age=86400', notFound:'演示文稿预览组件不存在；请先运行 npm install' });
     }
-    if (req.method === 'GET' && u.pathname === '/api/system/status') {
-      return send(res, 200, await systemStatus());
-    }
+      /* ★ system 路由抽到 lib/routes/system.js（2026-10-11）*/
+      if (await systemRoute.handle(req, res, u, { send, systemStatus }) || res.writableEnded) return;
     /* 本机管家（一站式本机管理面板）。接口全部收在 /api/system-panel/ 下，
        和上面 /api/system/status 那套健康检查互不干扰；非 GET 请求已经由前面的
        trustedHttpOrigin 网关拦过一道，所以这里只做参数校验与执行。 */
@@ -6692,253 +6724,18 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: false, error: String((error && error.message) || error) });
       }
     }
-    if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {
-      try {
-        if (await SYSTEM_PANEL.handle(req, res, u)) return;
-      } catch (error) {
-        return send(res, 500, { ok:false, error:String((error && error.message) || error) });
-      }
-    }
-    if (u.pathname === '/api/study/config') {
-      if (req.method === 'GET') return send(res, 200, { ok:true, config:readStudyConfig() });
-      if (req.method === 'POST') {
-        try { return send(res, 200, { ok:true, config:saveStudyConfig(await readBody(req, 2 * 1024 * 1024)) }); }
-        catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
-      }
-    }
-    if (u.pathname === '/api/study/note') {
-      const id = studySafeName(u.searchParams.get('id'));
-      const file = studyNoteFile(id);
-      if (!file) return send(res, 400, { ok:false, error:'笔记标识不合法' });
-      if (req.method === 'GET') {
-        try { return send(res, 200, { ok:true, id, content:fs.readFileSync(file, 'utf8') }); }
-        catch (_) { return send(res, 200, { ok:true, id, content:'# 学习笔记\n\n' }); }
-      }
-      if (req.method === 'POST') {
-        try {
-          const body = await readBody(req, 9 * 1024 * 1024), content = String(body && body.content != null ? body.content : '');
-          if (Buffer.byteLength(content) > 8 * 1024 * 1024) return send(res, 413, { ok:false, error:'笔记超过 8 MB' });
-          fs.mkdirSync(path.dirname(file), { recursive:true });
-          writeFileAtomicSync(file, content, 'utf8');
-          return send(res, 200, { ok:true, id, size:Buffer.byteLength(content) });
-        } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
-      }
-    }
-    if (u.pathname === '/api/study/asset') {
-      if (req.method === 'GET' || req.method === 'HEAD') {
-        const name = studySafeName(u.searchParams.get('name')), file = studyAssetFile(name);
-        if (!file) return send(res, 400, { ok:false, error:'学习图片路径不合法' });
-        return streamStatic(req, res, path.dirname(file), path.basename(file), { cacheControl:'private, no-cache', notFound:'学习图片不存在' });
-      }
-      if (req.method === 'POST') {
-        try {
-          const type = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
-          if (!['image/png','image/jpeg','image/webp'].includes(type)) return send(res, 415, { ok:false, error:'仅支持 PNG、JPEG 或 WebP 学习图片' });
-          const body = await readRawBody(req, 12 * 1024 * 1024), ext = type === 'image/png' ? '.png' : (type === 'image/webp' ? '.webp' : '.jpg');
-          if (!body.length) return send(res, 400, { ok:false, error:'学习图片内容为空' });
-          if (!isStudyImage(body, type)) return send(res, 415, { ok:false, error:'学习图片内容与图片格式不匹配' });
-          const name = 'frame-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex') + ext, file = studyAssetFile(name);
-          fs.mkdirSync(path.dirname(file), { recursive:true });
-          writeFileAtomicSync(file, body);
-          const url = '/api/study/asset?name=' + encodeURIComponent(name), title = String(u.searchParams.get('title') || '视频帧').replace(/[\[\]]/g, '').slice(0, 80);
-          return send(res, 200, { ok:true, name, url, markdown:'![' + title + '](' + url + ')' });
-        } catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
-      }
-    }
-    if (req.method === 'GET' && u.pathname === '/api/study/resolve-url') {
-      const raw = String(u.searchParams.get('url') || '').trim();
-      let parsed;
-      try { parsed = new URL(raw); }
-      catch (_) { return send(res, 400, { ok:false, error:'网址格式不正确' }); }
-      const allowed = new Set(['b23.tv','www.bilibili.com','bilibili.com','m.bilibili.com','player.bilibili.com']);
-      if (!allowed.has(parsed.hostname.toLowerCase())) return send(res, 200, { ok:true, url:parsed.toString() });
-      try {
-        if (parsed.hostname.toLowerCase() === 'b23.tv') {
-          const response = await fetch(parsed, { method:'HEAD', redirect:'follow', signal:AbortSignal.timeout(8000) });
-          const resolved = new URL(response.url);
-          if (allowed.has(resolved.hostname.toLowerCase())) parsed = resolved;
-        }
-      } catch (_) {}
-      return send(res, 200, { ok:true, url:parsed.toString() });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/study/readable') {
-      try {
-        const target = parsedReadingWebUrl(String(u.searchParams.get('url') || ''));
-        return send(res, 200, { ok:true, ...(await fetchReadableWebPage(target)) });
-      } catch (error) { return send(res, error.statusCode || 502, { ok:false, error:String(error.message || error) }); }
-    }
-    if (req.method === 'GET' && u.pathname === '/api/snippets') {
-      send(res, 200, { vault: vaultPath(), rev: computeRev(), tags: readTagRegistry().list, folders: walkFolders(), resources: walkLatexResources(), snippets: walkSnippets() });
-      return;
-    }
-    if (req.method === 'GET' && u.pathname === '/api/rev') {
-      send(res, 200, { rev: computeRev(), version: APP_VERSION });
-      return;
-    }
-    if (req.method === 'GET' && u.pathname === '/api/version') {
-      return send(res, 200, { ok: true, name: '码境 CodeScope', version: APP_VERSION, apiRevision: 6, releaseChannel:'stable', mode:APP_MODE,
-        capabilities:{ web:true, desktop:APP_MODE === 'desktop', nativeBridge:APP_MODE === 'desktop' },
-        study:{ available:true, webOnly:true, layoutEngine:'Golden Layout', paneTypes:['browser','code','notes','pdf'], presets:['study','dual','notes','quad'] },
-        knowledge:{ available:true, engine:'VitePress', url:'/knowledge/', source:'readings/知识库', autoBuild:true, localSearch:true },
-        features: ['study-workspace', 'study-bookmarks', 'study-site-catalog', 'study-site-categories', 'study-layout-presets', 'study-layout-truth', 'study-readable-browser', 'study-video-timepoints', 'study-video-frame-capture', 'dual-mode-runtime', 'desktop-shell', 'unified-workbench-ui', 'environment-readiness', 'browser-capabilities', 'cross-platform-preflight', 'git-diff', 'timeline', 'remote-files', 'remote-folder-transfer', 'stream-transfer', 'project-tasks', 'project-tests', 'project-debug', 'compile-database', 'project-health', 'markdown-code-links', 'workspace-backlinks', 'markdown-note-links', 'xmind-markdown-export', 'xmind-native', 'xmind-official-viewer', 'xmind-mind-elixir', 'xmind-simple-mind-map', 'xmind-advanced-layouts', 'xmind-node-reparent', 'opml-export', 'workspace-snapshots', 'live-web-search', 'search-history', 'editor-groups', 'monaco-editor', 'multi-cursor', 'editor-folding', 'editor-command-palette', 'editor-line-actions', 'editor-word-wrap', 'editor-wheel-zoom', 'editor-position', 'lsp-completion', 'lsp-signature-help', 'lsp-code-actions', 'lsp-rename', 'lsp-problems', 'drawio', 'drawio-xml', 'ai-drawio', 'full-text-search', 'quick-open', 'workspace-quick-open', 'workspace-recent', 'reading-full-text-search', 'pdf-text-cache', 'navigation-history', 'definition-peek', 'header-source-switch', 'lsp', 'pdf-library', 'pdf-translation', 'pdf-full-text-search', 'pdf-thumbnail-navigation', 'pdf-focus-mode', 'pdfjs-official-viewer', 'pdf-virtual-rendering', 'pdf-page-layouts', 'onlyoffice-pdf-editor', 'reading-fragments', 'reading-split-view', 'reading-projects', 'reading-code-notes', 'reading-folders', 'reading-project-metadata', 'reading-docx', 'docx-page-break-normalization', 'reading-spreadsheets', 'reading-presentations', 'reading-web-pages', 'reading-web-site-navigation', 'reading-web-session', 'reading-web-whole-page-zoom', 'reading-web-annotations', 'reading-web-location', 'office-library', 'office-folders', 'office-provider-api-v1', 'office-responsive-layout', 'onlyoffice-docs', 'onlyoffice-required', 'onlyoffice-connection-settings', 'onlyoffice-service-control', 'onlyoffice-jwt', 'onlyoffice-save-callback'] });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/tree') {
-      const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
-    }
-    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/office/file') {
-      const rel = officePath(u.searchParams.get('path'));
-      if (!rel) return send(res, 400, { ok:false, error:'Office 文件路径不合法' });
-      if (u.searchParams.get('download') === '1') res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(path.basename(rel)));
-      return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-cache', notFound:'Office 文件不存在' });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/connection') {
-      const health = await onlyOfficeHealth();
-      return send(res, 200, { ok:true, connection:publicOnlyOfficeConnection(), health });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/service') {
-      /* ⚠️ 默认走缓存 ✓；`?refresh=1` 才真去问 docker ✓（见上面那段注释 ✓）*/
-      return send(res, 200, { ok:true, service:await onlyOfficeServiceStatus(u.searchParams.get('refresh') === '1') });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/service') {
-      try {
-        const body = await readBody(req, 16 * 1024), action = String(body && body.action || '');
-        const service = await controlOnlyOfficeService(action);
-        return send(res, 200, { ok:true, action, service });
-      } catch (error) {
-        return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error) });
-      }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/connection') {
-      try {
-        const body = await readBody(req, 128 * 1024);
-        const connection = saveOnlyOfficeConnection(body);
-        const health = await onlyOfficeHealth();
-        return send(res, health.ok ? 200 : 202, { ok:true, connection, health });
-      } catch (error) {
-        return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) });
-      }
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/status') {
-      const health = await onlyOfficeHealth();
-      return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', connection:publicOnlyOfficeConnection(), editable:['docx','xlsx','xls','csv','pptx','pdf'] });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/providers/v1') {
-      return send(res, 200, await OFFICE_ENGINE.status({ probe:u.searchParams.get('refresh') !== '0' }));
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/config') {
-      const rel = officePath(u.searchParams.get('path'));
-      if (!rel) return send(res, 400, { ok:false, error:'Office 文件路径不合法' });
-      const file = path.join(officeDir(), rel), kind = officeKind(rel);
-      if (!fs.existsSync(file) || !onlyOfficeDocumentType(kind)) return send(res, 404, { ok:false, error:'Office 文件不存在或类型不受支持' });
-      const health = await onlyOfficeHealth();
-      if (!health.ok) return send(res, 503, { ok:false, error:health.error || 'ONLYOFFICE Docs 尚未连接', documentServerUrl:ONLYOFFICE_CONNECTION.publicUrl, connection:publicOnlyOfficeConnection() });
-      return send(res, 200, { ok:true, engine:'ONLYOFFICE Docs', documentServerUrl:onlyOfficeBrowserUrl(req), connection:publicOnlyOfficeConnection(), config:onlyOfficeConfig(rel, file) });
-    }
-    if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname === '/api/office/onlyoffice-file') {
-      const rel = officePath(u.searchParams.get('path'));
-      if (!rel || !onlyOfficeTokenValid(rel, 'document', u.searchParams.get('token'))) return send(res, 403, { ok:false, error:'Office 文件访问令牌无效' });
-      return streamStatic(req, res, officeDir(), rel, { cacheControl:'private, no-store', notFound:'Office 文件不存在' });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/onlyoffice-callback') {
-      const rel = officePath(u.searchParams.get('path'));
-      if (!rel || !onlyOfficeTokenValid(rel, 'callback', u.searchParams.get('token'))) return send(res, 403, { error:1 });
-      const body = await readBody(req, 4 * 1024 * 1024), status = Number(body && body.status);
-      if ((status === 2 || status === 6) && body.url) {
-        try { await saveOnlyOfficeResult(rel, body.url); }
-        catch (error) { console.error('ONLYOFFICE 保存失败:', rel, error); return send(res, 500, { error:1 }); }
-      }
-      if (status === 3 || status === 7) console.error('ONLYOFFICE 编辑服务报告保存错误:', rel, body && body.error);
-      return send(res, 200, { error:0 });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/office/word-html') {
-      const rel = officePath(u.searchParams.get('path'));
-      if (!rel || path.extname(rel).toLowerCase() !== '.docx') return send(res, 400, { ok:false, error:'Word 文件路径不合法' });
-      const file = path.join(officeDir(), rel);
-      if (!fs.existsSync(file)) return send(res, 404, { ok:false, error:'Word 文件不存在' });
-      try { const result = await officeWordToHtml(file); return send(res, 200, { ok:true, path:rel, ...result }); }
-      catch (error) { return send(res, 400, { ok:false, error:'Word 内容解析失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/word-save') {
-      const b = await readBody(req, 24 * 1024 * 1024), rel = officePath(b && b.path);
-      if (!rel || path.extname(rel).toLowerCase() !== '.docx') return send(res, 400, { ok:false, error:'Word 文件路径不合法' });
-      const file = path.join(officeDir(), rel);
-      if (!fs.existsSync(file)) return send(res, 404, { ok:false, error:'要保存的 Word 文档不存在' });
-      try { const stat = await saveOfficeWordHtml(file, b && b.html); return send(res, 200, { ok:true, path:rel, size:stat.size, updated:stat.mtimeMs }); }
-      catch (error) { return send(res, error.statusCode || 400, { ok:false, error:'Word 保存失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/folder') {
-      const b = await readBody(req), parent = officeSafeFolder(b && b.parent), name = officeSafeFolder(b && b.name);
-      if (parent === null || !name || name.includes('/')) return send(res, 400, { ok:false, error:'文件夹名称或位置不合法' });
-      const rel = parent ? parent + '/' + name : name, target = path.join(officeDir(), rel);
-      if (fs.existsSync(target)) return send(res, 409, { ok:false, error:'同名文件夹已存在' });
-      fs.mkdirSync(target, { recursive:true }); return send(res, 200, { ok:true, path:rel });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/new') {
-      const b = await readBody(req), folder = officeSafeFolder(b && b.folder), kind = String(b && b.kind || '');
-      if (folder === null || !['word', 'sheet', 'slides'].includes(kind)) return send(res, 400, { ok:false, error:'新建文档参数不合法' });
-      const raw = String(b && b.name || '').trim().replace(/\.(?:docx|xlsx|pptx)$/i, '');
-      if (!raw || !/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&]+$/.test(raw) || ['.', '..'].includes(raw)) return send(res, 400, { ok:false, error:'文档名称不合法' });
-      const ext = kind === 'word' ? '.docx' : (kind === 'sheet' ? '.xlsx' : '.pptx'), target = uniqueOfficeTarget(folder, raw + ext);
-      try { await createOfficeDocument(kind, target.file, raw); return send(res, 200, { ok:true, path:target.path, name:target.name, kind, size:fs.statSync(target.file).size }); }
-      catch (error) { try { fs.unlinkSync(target.file); } catch (_) {} return send(res, 500, { ok:false, error:'创建 Office 文档失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/upload-stream') {
-      let info;
-      try { info = JSON.parse(Buffer.from(String(req.headers['x-codescope-office'] || ''), 'base64').toString('utf8')); }
-      catch (_) { return send(res, 400, { ok:false, error:'上传信息格式错误' }); }
-      const folder = officeSafeFolder(info && info.folder), base = path.basename(String(info && info.name || '')).trim(), ext = path.extname(base).toLowerCase();
-      if (folder === null || !officePath(base) || !OFFICE_EXTS.has(ext)) return send(res, 400, { ok:false, error:'仅支持 DOCX、XLSX、XLS、CSV 和 PPTX 文件' });
-      const target = uniqueOfficeTarget(folder, base), temp = path.join(path.dirname(target.file), '.' + crypto.randomUUID() + '.upload');
-      try {
-        const bytes = await officeStreamToFile(req, temp); validateOfficeFile(temp, ext); fs.renameSync(temp, target.file);
-        return send(res, 200, { ok:true, path:target.path, name:target.name, kind:officeKind(target.name), size:bytes });
-      } catch (error) { try { fs.unlinkSync(temp); } catch (_) {} return send(res, error.statusCode || 400, { ok:false, error:'导入失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/save-stream') {
-      let info;
-      try { info = JSON.parse(Buffer.from(String(req.headers['x-codescope-office'] || ''), 'base64').toString('utf8')); }
-      catch (_) { return send(res, 400, { ok:false, error:'保存信息格式错误' }); }
-      const rel = officePath(info && info.path), ext = path.extname(String(rel || '')).toLowerCase();
-      if (!rel || !['.xlsx', '.xls', '.csv'].includes(ext)) return send(res, 400, { ok:false, error:'当前只允许在 CodeScope 内保存表格文件' });
-      const target = path.join(officeDir(), rel), temp = path.join(path.dirname(target), '.' + crypto.randomUUID() + '.saving');
-      if (!fs.existsSync(target)) return send(res, 404, { ok:false, error:'要保存的表格不存在' });
-      try {
-        const bytes = await officeStreamToFile(req, temp); validateOfficeFile(temp, ext); fs.renameSync(temp, target);
-        return send(res, 200, { ok:true, path:rel, size:bytes, updated:fs.statSync(target).mtimeMs });
-      } catch (error) { try { fs.unlinkSync(temp); } catch (_) {} return send(res, error.statusCode || 400, { ok:false, error:'保存失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/rename') {
-      const b = await readBody(req), rel = officePath(b && b.path, true), rawName = String(b && b.name || '').trim();
-      if (!rel || !rawName || /[\\/]/.test(rawName) || !/^[A-Za-z0-9._\-\u00a0-\uffff ()\[\],+&]+$/.test(rawName) || ['.', '..'].includes(rawName)) return send(res, 400, { ok:false, error:'名称不合法' });
-      const source = path.join(officeDir(), rel); let stat; try { stat = fs.statSync(source); } catch (_) { return send(res, 404, { ok:false, error:'文件或文件夹不存在' }); }
-      const parent = path.posix.dirname(rel) === '.' ? '' : path.posix.dirname(rel);
-      let name = rawName;
-      if (stat.isFile()) { const ext = path.extname(rel).toLowerCase(); name = rawName.replace(/\.(?:docx|xlsx|xls|csv|pptx)$/i, '') + ext; }
-      const targetRel = parent ? parent + '/' + name : name, target = path.join(officeDir(), targetRel);
-      if (targetRel === rel) return send(res, 200, { ok:true, path:rel, unchanged:true });
-      if (fs.existsSync(target)) return send(res, 409, { ok:false, error:'同名文件或文件夹已存在' });
-      try { fs.renameSync(source, target); return send(res, 200, { ok:true, path:targetRel }); }
-      catch (error) { return send(res, 500, { ok:false, error:'重命名失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/move') {
-      const b = await readBody(req), rel = officePath(b && b.path, true), toFolder = officeSafeFolder(b && b.toFolder);
-      if (!rel || toFolder === null || toFolder === rel || toFolder.startsWith(rel + '/')) return send(res, 400, { ok:false, error:'移动路径不合法' });
-      const source = path.join(officeDir(), rel), name = path.basename(rel); let stat; try { stat = fs.statSync(source); } catch (_) { return send(res, 404, { ok:false, error:'文件或文件夹不存在' }); }
-      const dir = path.join(officeDir(), toFolder || '.'); fs.mkdirSync(dir, { recursive:true });
-      let targetName = name, index = 2, ext = stat.isFile() ? path.extname(name) : '', stem = ext ? path.basename(name, ext) : name;
-      while (fs.existsSync(path.join(dir, targetName))) { targetName = stem + '-' + index + ext; index += 1; }
-      const targetRel = toFolder ? toFolder + '/' + targetName : targetName;
-      if (targetRel === rel) return send(res, 200, { ok:true, path:rel, unchanged:true });
-      try { fs.renameSync(source, path.join(dir, targetName)); return send(res, 200, { ok:true, path:targetRel }); }
-      catch (error) { return send(res, 500, { ok:false, error:'移动失败：' + String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/office/delete') {
-      const b = await readBody(req), rel = officePath(b && b.path, true);
-      if (!rel) return send(res, 400, { ok:false, error:'删除路径不合法' });
-      const target = path.join(officeDir(), rel);
-      try { const stat = fs.statSync(target); stat.isDirectory() ? fs.rmSync(target, { recursive:true }) : fs.unlinkSync(target); return send(res, 200, { ok:true, path:rel }); }
-      catch (error) { return send(res, 404, { ok:false, error:'删除失败：文件不存在或已被占用' }); }
-    }
+      /* ★ system-panel 路由抽到 lib/routes/system-panel.js（2026-10-11）*/
+      if (await systemPanelRoute.handle(req, res, u, { SYSTEM_PANEL, send }) || res.writableEnded) return;
+      /* ★ study 路由抽到 lib/routes/study.js（2026-10-11）*/
+      if (await studyRoute.handle(req, res, u, { send, readStudyConfig, saveStudyConfig, readBody, studySafeName, studyNoteFile, fs, path, writeFileAtomicSync, studyAssetFile, streamStatic, readRawBody, isStudyImage, crypto, parsedReadingWebUrl, fetchReadableWebPage }) || res.writableEnded) return;
+      /* ★ snippets 路由抽到 lib/routes/snippets.js（2026-10-11）*/
+      if (await snippetsRoute.handle(req, res, u, { send, vaultPath, computeRev, readTagRegistry, walkFolders, walkLatexResources, walkSnippets }) || res.writableEnded) return;
+      /* ★ rev 路由抽到 lib/routes/rev.js（2026-10-11）*/
+      if (await revRoute.handle(req, res, u, { send, computeRev, APP_VERSION }) || res.writableEnded) return;
+      /* ★ version 路由抽到 lib/routes/version.js（2026-10-11）*/
+      if (await versionRoute.handle(req, res, u, { send, APP_VERSION, APP_MODE }) || res.writableEnded) return;
+      /* ★ office 路由抽到 lib/routes/office.js（2026-10-11）*/
+      if (await officeRoute.handle(req, res, u, { officeTree, send, officeDir, officePath, path, streamStatic, onlyOfficeHealth, publicOnlyOfficeConnection, onlyOfficeServiceStatus, readBody, controlOnlyOfficeService, saveOnlyOfficeConnection, OFFICE_ENGINE, officeKind, fs, onlyOfficeDocumentType, ONLYOFFICE_CONNECTION, onlyOfficeBrowserUrl, onlyOfficeConfig, onlyOfficeTokenValid, saveOnlyOfficeResult, officeWordToHtml, saveOfficeWordHtml, officeSafeFolder, uniqueOfficeTarget, createOfficeDocument, OFFICE_EXTS, XLSX, crypto, officeStreamToFile, validateOfficeFile }) || res.writableEnded) return;
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
       const root = readingTree();
@@ -7210,120 +7007,15 @@ const server = http.createServer(async (req, res) => {
       try { fs.unlinkSync(path.join(readingsDir(), rel)); if(readingHasMeta(rel))try { fs.unlinkSync(readingMetaFile(rel)); } catch (_) {} return send(res, 200, { ok:true }); }
       catch (error) { return send(res, 500, { ok:false, error:'删除失败：' + String(error.message || error) }); }
     }
-    if (u.pathname === '/api/integrations/dsh') {
-      if (req.method === 'GET') return send(res, 200, { ok:true, service:DSH.status() });
-      if (req.method === 'POST') {
-        const body = await readBody(req, 64 * 1024);
-        const action = String(body && body.action || 'start');
-        if (!['start', 'stop', 'restart'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 DSH 操作' });
-        const service = await DSH[action]();
-        return send(res, service.available || action === 'stop' ? 200 : 503, { ok:service.available || action === 'stop', service });
-      }
-      return send(res, 405, { ok:false, error:'Method Not Allowed' });
-    }
-    if (u.pathname === '/api/integrations/code-server') {
-      if (req.method === 'GET') return send(res, 200, { ok:true, service: codeServerStatus() });
-      if (req.method === 'POST') {
-        const body = await readBody(req, 64 * 1024);
-        const action = String(body && body.action || 'open');
-        if (action === 'stop') {
-          VSCODE_PROXY.stop();
-          return send(res, 200, { ok:true, service: codeServerStatus(await VSCODE.stop()) });
-        }
-        if (action !== 'open') return send(res, 400, { ok:false, error:'不支持的 VS Code 操作' });
-        const service = await VSCODE.start();
-        /* 代理按需启动：没用这个功能就不额外占端口。 */
-        if (service.available) await VSCODE_PROXY.start();
-        return send(res, service.available ? 200 : 503, { ok:service.available, service: codeServerStatus(service) });
-      }
-      return send(res, 405, { ok:false, error:'Method Not Allowed' });
-    }
-    if (u.pathname === '/api/integrations/opencode') {
-      if (req.method === 'GET') return send(res, 200, { ok:true, service:OPENCODE.status() });
-      if (req.method === 'POST') {
-        const body = await readBody(req, 64 * 1024);
-        const action = String(body && body.action || 'open');
-        if (action === 'stop') {
-          const service = await OPENCODE.stop();
-          return send(res, 200, { ok:true, service });
-        }
-        if (action !== 'open') return send(res, 400, { ok:false, error:'不支持的 opencode 操作' });
-        const service = await OPENCODE.start();
-        return send(res, service.available ? 200 : 503, { ok:service.available, service });
-      }
-      return send(res, 405, { ok:false, error:'Method Not Allowed' });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/env') {
-      const force = u.searchParams.get('refresh') === '1';
-      // 自动准备完成或用户在“连接设置”里改了地址后，重新检测时同步读取，避免必须重启
-      if (force) { try { ONLYOFFICE_CONNECTION = readOnlyOfficeConnection(); } catch (_) {} }
-      const detected = await getEnv(force);
-      const env = detected.tools;
-      const runtime = runtimeReadiness();
-      const onlyOffice = await onlyOfficeHealth();
-      env.onlyoffice = {
-        key:'onlyoffice', label:'ONLYOFFICE Docs', for:'DOCX、XLSX 与 PPTX 完整编辑和多人协作', group:'Office 运行服务',
-        available:!!(onlyOffice && onlyOffice.ok), installed:!!(onlyOffice && onlyOffice.ok), required:true,
-        version:onlyOffice && onlyOffice.ok ? '已连接' : '', path:ONLYOFFICE_CONNECTION.publicUrl,
-        issue:onlyOffice ? (onlyOffice.ok ? '' : (onlyOffice.error || '服务未连接')) : (ONLYOFFICE_CONNECTION.publicUrl ? '等待重新检测服务' : '尚未配置 Document Server 地址'),
-        hint:'在 Office 工作区点击“连接设置”，填写 ONLYOFFICE Document Server 地址、回调地址和 JWT 密钥', installable:false, relevant:true, external:true, scope:'Office 必需',
-      };
-      env.dsh = DSH.status();
-      const all = [...Object.values(runtime), ...Object.values(env)];
-      const required = all.filter((e) => e.required);
-      const unavailable = all.filter((e) => !e.available).length;
-      const requiredMissing = required.filter((e) => !e.available).length;
-      const optionalUnavailable = all.filter((e) => !e.available && !e.required && !e.external).length;
-      const externalUnavailable = all.filter((e) => !e.available && e.external).length;
-      const total = all.length;
-      // 保留条目自己提供的说明，只为没有说明的外部工具补充平台提示。
-      for (const e of all) e.hint = e.hint || installHint(e.key);
-      const system = platformInfo();
-      send(res, 200, {
-        env, runtime, version:APP_VERSION, mode:APP_MODE, node:process.version,
-        summary: {
-          total, unavailable, missing: requiredMissing, ready: total - unavailable, ok: requiredMissing === 0,
-          required: required.length, requiredMissing, requiredReady: required.length - requiredMissing,
-          optionalMissing: optionalUnavailable, optionalUnavailable, externalUnavailable,
-        },
-        project: { languages: detected.project.languages, tools: [...detected.project.keys] },
-        deployment: deploymentInfo(env, detected.project.keys),
-        vault: (() => { try { return vaultPath(); } catch (e) { return String(e.message); } })(),
-        platform: system.label + ' · ' + system.arch,
-        system,
-      });
-      return;
-    }
+      /* ★ integrations 路由抽到 lib/routes/integrations.js（2026-10-11）*/
+      if (await integrationsRoute.handle(req, res, u, { send, DSH, readBody, server, codeServerStatus, VSCODE_PROXY, VSCODE, OPENCODE }) || res.writableEnded) return;
+      /* ★ env 路由抽到 lib/routes/env.js（2026-10-11）*/
+      if (await envRoute.handle(req, res, u, { ONLYOFFICE_CONNECTION, readOnlyOfficeConnection, getEnv, runtimeReadiness, onlyOfficeHealth, XLSX, path, Document, DSH, installHint, platformInfo, send, APP_VERSION, APP_MODE, deploymentInfo, vaultPath }) || res.writableEnded) return;
       /* ★ latex 路由抽到 lib/routes/latex.js（2026-10-11）——
          样板见那个文件的文件头。 */
-      if (await latexRoute.handle(req, res, u, { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync })) return;
-    if (req.method === 'GET' && u.pathname === '/api/matlab/console') {
-      /* ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-09）
-         用户原话：「matlab/octave 那种命令窗口也需要给我完成复刻过来，
-                   就是那种可以输入指令的」✓。
-         ✅ 做法：**不另造 REPL** ✗ —— 直接用现有的底部终端（真 PTY ✓），
-            这里只负责告诉前端「该敲哪条命令」✓。
-            MATLAB 用 `-nodesktop -nosplash`（不带界面、留在终端里 ✓），
-            Octave 用 `--no-gui --quiet` ✓ —— 都是**留在前台交互**的参数 ✓，
-            和「跑脚本」用的 `-batch` 不一样 ✗（那个跑完就退出 ✓）。
-         ⚠️ 两个都没装时返回 ok:false + 安装提示 ✓，
-            前端据此给出可操作的下一步 ✓（而不是静默失败 ✓）。 */
-      const cmd = matlabCmd();
-      if (!cmd) {
-        return send(res, 200, {
-          ok: false,
-          error: '这台机器上 MATLAB 和 Octave 都没装',
-          hint: installHint('octave'),
-        });
-      }
-      const octave = isOctaveCmd(cmd);
-      return send(res, 200, {
-        ok: true,
-        engine: octave ? 'octave' : 'matlab',
-        label: octave ? 'GNU Octave' : 'MATLAB',
-        argv: octave ? [cmd, '--no-gui', '--quiet'] : [cmd, '-nodesktop', '-nosplash'],
-      });
-    }
+      if (await latexRoute.handle(req, res, u, { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync }) || res.writableEnded) return;
+      /* ★ matlab 路由抽到 lib/routes/matlab.js（2026-10-11）*/
+      if (await matlabRoute.handle(req, res, u, { matlabCmd, send, installHint, isOctaveCmd }) || res.writableEnded) return;
     /* ★ Jupyter 式持久 Python 内核 ✓✓（2026-10-10）——
        用户原话：「我需要可以实现 jupyter 那种方式运行」✓。
        ⚠️ 和 /api/run 的 python **不是一回事** ✗：
@@ -7342,24 +7034,8 @@ const server = http.createServer(async (req, res) => {
           再把新的 .fig 和 PNG 一起回传 ✓（复用已有的产物收集 ✓）。
        ⚠️ 编辑的是**产物**（figN.fig ✓），不是用户的 .m 源文件 ✗ ——
           用户下次重跑脚本，图还是按他自己代码画的 ✓（编辑不会被悄悄固化 ✓）。 */
-    if (req.method === 'POST' && u.pathname === '/api/fig/edit') {
-      /* ⚠️⚠️ 一定要包 try/catch ✗✗（2026-10-10）——
-         实测：这个接口一被调用，**服务端进程直接消失** ✓，
-         而日志里**一个字都没有** ✓（静默崩溃 ✓）。
-         原因：异步链里抛的异常没人接 ✓ → Node 15+ **直接结束进程** ✓✓。
-         ⚠️ 现象极具误导性 ✗：请求方看到 `fetch failed / other side closed` ✓，
-            服务端日志**干干净净** ✓ —— 看着像「网络问题」✓，
-            其实是**自己崩了** ✓（而且监管进程会立刻重启 ✓，PID 一直变 ✓）。
-         ✅ 教训：**HTTP 处理函数里的异步必须有兜底** ✓✓，
-            否则这类 bug 能查掉一整轮 ✓（这次就是 ✓）。 */
-      try {
-        return await handleFigEdit(req, res);
-      } catch (e) {
-        console.error('[fig/edit] 失败: ' + String((e && e.stack) || e));
-        try { return send(res, 200, { ok: false, error: String((e && e.message) || e) }); } catch (_) {}
-        return;
-      }
-    }
+      /* ★ fig 路由抽到 lib/routes/fig.js（2026-10-11）*/
+      if (await figRoute.handle(req, res, u, { handleFigEdit, send }) || res.writableEnded) return;
     /* ★ 调试准备 ✓✓（2026-10-10）—— **C/C++ 和 MATLAB/Octave 都走这里** ✓
        用户实测报的两个 bug（同一类 ✗✓）：
        ① C++ 上点 🐞 → `bash: command not found`（终端是裸 shell ✓）
@@ -7373,160 +7049,22 @@ const server = http.createServer(async (req, res) => {
          这是**路由模块化**的第一刀 ✓，样板写在那边的文件头 ✓。
          后面每抽一组都照它做：新建 lib/routes/<组>.js →
          导出 handle(req,res,u,ctx) 返回 boolean → 这里换成三行 ✓。 */
-      if (await dbgRoute.handle(req, res, u, { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync })) return;
-    if (req.method === 'GET' && u.pathname === '/api/py/kernel') {
-      return send(res, 200, { ok: true, ...PY_KERNEL.status() });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/py/kernel/stop') {
-      return send(res, 200, { ok: true, killed: PY_KERNEL.kill() });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/py/exec') {
-      const b = await readBody(req);
-      const code = String((b && b.code) || '');
-      if (!code.trim()) return send(res, 200, { ok: true, stdout: '', stderr: '', empty: true });
-      try {
-        /* ⚠️ cwd 给 vault ✓ —— 用户在单元格里 open('data.csv') 时，
-           期望是相对自己的项目目录 ✓，而不是服务器的启动目录 ✓。
-           ⚠️ 是 vaultPath() **函数**，不是变量 ✗（我第一次写成 VAULT 报
-              `VAULT is not defined` ✓ —— 这个项目里 vault 路径是算出来的 ✓）。 */
-        const r = await PY_KERNEL.exec(code, { cwd: vaultPath() });
-        return send(res, 200, r);
-      } catch (e) {
-        return send(res, 200, { ok: false, error: String((e && e.message) || e) });
-      }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/run') {
-      const b = await readBody(req);
-      const snips = walkSnippets();
-      const snip = snips.find((s) => s.file === b.file);
-      if (!snip) return send(res, 404, { ok: false, error: '片段不存在（vault 可能已变动）' });
-      const frag = snip.fragments[b.fragment];
-      if (!frag) return send(res, 400, { ok: false, error: '片段索引无效' });
-      const runner = runnerFor(frag.language);
-      if (!runner.supported) return send(res, 200, { ok: false, unsupported: true, reason: runner.reason });
-      // 编辑模式：用前端传来的 code 覆盖磁盘内容（无需先保存）
-      const code = b.code != null ? b.code : frag.code;
-      const files = snip.fragments.map((f, i) => ({ filename: f.filename, code: (i === b.fragment && b.code != null) ? b.code : f.code }));
-      const r = await runner.run(code, {
-        input: b.input || '',
-        selIndex: b.fragment,
-        files,
-      });
-      return send(res, 200, { ok: true, ...r });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/check') {
-      const b = await readBody(req);
-      const snips = walkSnippets();
-      const snip = snips.find((s) => s.file === b.file);
-      if (!snip) return send(res, 404, { ok: false, error: '片段不存在' });
-      const frag = snip.fragments[b.fragment];
-      if (!frag) return send(res, 400, { ok: false, error: '片段索引无效' });
-      const runner = runnerFor(frag.language);
-      if (!runner.supported) return send(res, 200, { ok: false, unsupported: true, reason: runner.reason });
-      const code = b.code != null ? b.code : frag.code;
-      const files = snip.fragments.map((f, i) => ({ filename: f.filename, code: (i === b.fragment && b.code != null) ? b.code : f.code }));
-      const r = await runner.check(code, {
-        selIndex: b.fragment,
-        files,
-      });
-      return send(res, 200, { ok: true, ...r });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/format') {
-      const b = await readBody(req);
-      const snips = walkSnippets();
-      const snip = snips.find((s) => s.file === b.file);
-      if (!snip) return send(res, 404, { ok: false, error: '片段不存在' });
-      const frag = snip.fragments[b.fragment];
-      if (!frag) return send(res, 400, { ok: false, error: '片段索引无效' });
-      const fspec = FORMATTERS[(frag.language || '').toLowerCase()];
-      if (!fspec) {
-        const supported = Object.keys(FORMATTERS).join(' / ');
-        return send(res, 200, { ok: false, reason: '该语言暂不支持格式化：' + frag.language + '（支持: ' + supported + '）' });
-      }
-      const { tools: env } = await getEnv();
-      if (!env[fspec.key] || !env[fspec.key].available) {
-        return send(res, 200, { ok: false, formatter: fspec.name, reason: missingReason(fspec.key, env[fspec.key]) });
-      }
-      const code = b.code != null ? b.code : frag.code;
-      const fr = fspec.format ? await fspec.format(code) : await formatWithPrettier(fspec.prettier, code);
-      if (!fr.ok) return send(res, 200, { ok: false, formatter: fspec.name, reason: fr.reason });
-      // 编辑模式（writeBack:false）：只返回格式化结果，由前端更新编辑框，不写盘
-      if (b.writeBack === false) {
-        return send(res, 200, { ok: true, formatter: fspec.name, formatted: fr.formatted, written: false, message: '已格式化（编辑模式，自动保存会立即写回 vault）' });
-      }
-      const written = writeBackFragment(b.file, frag, fr.formatted.replace(/\n+$/, ''));
-      return send(res, 200, {
-        ok: true, formatter: fspec.name, formatted: fr.formatted, written,
-        message: written
-          ? '已用 ' + fspec.name + ' 格式化并写回 vault（massCode 会实时同步）'
-          : fspec.name + ' 格式化完成（未能自动写回，请手动复制）',
-      });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/save') {
-      const b = await readBody(req);
-      const snips = walkSnippets();
-      const snip = snips.find((s) => s.file === b.file);
-      if (!snip) return send(res, 404, { ok: false, error: '片段不存在（vault 可能已变动）' });
-      const frag = snip.fragments[b.fragment];
-      if (!frag) return send(res, 400, { ok: false, error: '片段索引无效' });
-      if (typeof b.code !== 'string') return send(res, 400, { ok: false, error: '缺少 code' });
-      const nextCode = b.code.replace(/\n+$/, '');
-      if (nextCode === String(frag.code || '').replace(/\n+$/, '')) {
-        return send(res, 200, { ok: true, written: false, unchanged: true, message: '内容未变化' });
-      }
-      const written = writeBackFragment(b.file, frag, nextCode);
-      // 保存成功后记录“覆盖前”的内容，保证时间线第一项就能真正撤回本次编辑。
-      if (written) recordTimeline(b.file, b.fragment, frag.code, '自动保存');
-      return send(res, 200, { ok: written, written, message: written ? '已保存到 vault（massCode 会实时同步）' : '保存失败：未能定位片段代码块' });
-    }
+      if (await dbgRoute.handle(req, res, u, { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync }) || res.writableEnded) return;
+      /* ★ py 路由抽到 lib/routes/py.js（2026-10-11）*/
+      if (await pyRoute.handle(req, res, u, { send, PY_KERNEL, exec, readBody, vaultPath }) || res.writableEnded) return;
+      /* ★ run 路由抽到 lib/routes/run.js（2026-10-11）*/
+      if (await runRoute.handle(req, res, u, { run, readBody, walkSnippets, send, runnerFor }) || res.writableEnded) return;
+      /* ★ check 路由抽到 lib/routes/check.js（2026-10-11）*/
+      if (await checkRoute.handle(req, res, u, { readBody, walkSnippets, send, runnerFor }) || res.writableEnded) return;
+      /* ★ format 路由抽到 lib/routes/format.js（2026-10-11）*/
+      if (await formatRoute.handle(req, res, u, { readBody, walkSnippets, send, FORMATTERS, getEnv, missingReason, formatWithPrettier, writeBackFragment }) || res.writableEnded) return;
+      /* ★ save 路由抽到 lib/routes/save.js（2026-10-11）*/
+      if (await saveRoute.handle(req, res, u, { readBody, walkSnippets, send, writeBackFragment, recordTimeline }) || res.writableEnded) return;
     /* 标签管理：重命名（只改注册表）/ 删除 / 合并（重写片段 frontmatter 的 tags） */
-    if (req.method === 'POST' && u.pathname === '/api/tags/update') {
-      const b = await readBody(req);
-      const st = readState();
-      if (!Array.isArray(st.tags)) st.tags = [];
-      const id = Number(b.id);
-      const tag = st.tags.find((t) => Number(t.id) === id);
-      if (!tag) return send(res, 200, { ok: false, error: '标签不存在（vault 可能已变动）' });
-      const action = String(b.action || '').trim();
-      if (action === 'rename') {
-        const name = String(b.name || '').trim();
-        if (!name) return send(res, 200, { ok: false, error: '标签名不能为空' });
-        if (name.length > 60) return send(res, 200, { ok: false, error: '标签名过长' });
-        if (st.tags.some((t) => Number(t.id) !== id && t.name === name)) return send(res, 200, { ok: false, error: '已存在同名标签「' + name + '」' });
-        const before = tag.name;
-        tag.name = name;
-        tag.updatedAt = Date.now();
-        writeState(st);
-        return send(res, 200, { ok: true, message: '标签「' + before + '」已重命名为「' + name + '」（片段保存的是标签 id，无需改动片段）' });
-      }
-      if (action === 'delete' || action === 'merge') {
-        let targetId = null;
-        if (action === 'merge') {
-          targetId = Number(b.targetId);
-          if (targetId === id) return send(res, 200, { ok: false, error: '不能合并到自己' });
-          if (!st.tags.some((t) => Number(t.id) === targetId)) return send(res, 200, { ok: false, error: '目标标签不存在' });
-        }
-        const changed = retagSnippets(id, targetId);
-        st.tags = st.tags.filter((t) => Number(t.id) !== id);
-        writeState(st);
-        return send(res, 200, {
-          ok: true,
-          changed,
-          message: action === 'delete'
-            ? '已删除标签「' + tag.name + '」，并从 ' + changed + ' 个片段移除'
-            : '已把「' + tag.name + '」合并，' + changed + ' 个片段改用目标标签',
-        });
-      }
-      return send(res, 200, { ok: false, error: '未知标签操作：' + action });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/reorder') {
-      const b = await readBody(req);
-      const snips = walkSnippets();
-      const snip = snips.find((s) => s.file === b.file);
-      if (!snip) return send(res, 404, { ok: false, error: '片段不存在（vault 可能已变动）' });
-      const r = reorderFragments(b.file, b.order);
-      return send(res, 200, { ok: r.ok, error: r.error, message: r.ok ? '片段顺序已调整（massCode 会实时同步）' : undefined });
-    }
+      /* ★ tags 路由抽到 lib/routes/tags.js（2026-10-11）*/
+      if (await tagsRoute.handle(req, res, u, { readBody, readState, send, writeState, retagSnippets }) || res.writableEnded) return;
+      /* ★ reorder 路由抽到 lib/routes/reorder.js（2026-10-11）*/
+      if (await reorderRoute.handle(req, res, u, { readBody, walkSnippets, send, reorderFragments }) || res.writableEnded) return;
     /* ------------------------------ 文件系统：新建/移动 ------------------------------ */
     if (req.method === 'POST' && u.pathname === '/api/fs/mkdir') {
       const b = await readBody(req);
@@ -8526,224 +8064,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, await LSP.query({ snippet, fragment, language:source.language, code, action, line:b.line, column:b.column, newName:b.newName, triggerKind:b.triggerKind, triggerCharacter:b.triggerCharacter, range:b.range, only:b.only }));
     }
     // ===== 代码图谱：单文件多片段 → 符号索引 → 函数/文件子图（薄路由，计算在 lib/code-graph.js） =====
-    if (req.method === 'GET' && u.pathname === '/api/graph') {
-      try {
-        /* file 必须真的用来收窄范围。原来直接 walkSnippets() 拿全库，
-           file 参数被忽略 —— 传一个不存在的路径也会返回全库 230 个符号，
-           ok 还是 true。前端拿它当某个文件的索引就会串味
-           （实测：把临时项目的文件塞满全库符号，Sticky Scope 直接失灵）。 */
-        const wanted = String(u.searchParams.get('file') || '').trim();
-        const all = walkSnippets();
-        const snippets = wanted ? all.filter((item) => item.file === wanted) : all;
-        if (wanted && !snippets.length) return send(res, 404, { ok:false, error:'片段不存在（vault 可能已变动）' });
-        /* 文档级图谱：把一个文档里所有片段/函数摊平（不需要 root）。
-           前端那个「代码图谱」按钮走这条。 */
-        if (String(u.searchParams.get('scope') || '') === 'document') {
-          const doc = buildDocumentGraph(snippets);
-          return send(res, 200, { ok:true, rev:computeRev(), scope:'document', ...doc });
-        }
-        const depth = Math.max(1, Math.min(5, Number(u.searchParams.get('depth')) || 3));
-        const direction = String(u.searchParams.get('direction') || 'both');
-        if (!['up', 'down', 'both'].includes(direction)) return send(res, 400, { ok:false, error:'direction 仅支持 up/down/both' });
-        const result = buildCodeGraph(snippets, {
-          rootFunction: String(u.searchParams.get('rootFunction') || '').slice(0, 500),
-          rootFile: String(u.searchParams.get('rootFile') || '').slice(0, 1000),
-          depth, direction,
-        });
-        if (!result.functionGraph.ok) return send(res, 404, result.functionGraph);
-        if (!result.fileGraph.ok) return send(res, 404, result.fileGraph);
-        return send(res, 200, { ok:true, rev:computeRev(), depth, direction, ...result });
-      } catch (error) { return send(res, 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
-    }
+      /* ★ graph 路由抽到 lib/routes/graph.js（2026-10-11）*/
+      if (await graphRoute.handle(req, res, u, { walkSnippets, send, buildDocumentGraph, computeRev, buildCodeGraph }) || res.writableEnded) return;
     // ===== 逻辑图：函数实现 ↔ 语句级控制流（薄路由，计算在 lib/logic-graph.js） =====
-    if (req.method === 'POST' && u.pathname === '/api/logic/graph') {
-      try {
-        const b = await readBody(req, 3 * 1024 * 1024);
-        const snippets = walkSnippets();
-        let code = typeof b.code === 'string' ? b.code : '';
-        let language = String(b.language || ''), name = String(b.name || 'fn').slice(0, 120);
-        /* 函数体是**切片**出来再解析的，所以图里的行号是「函数内相对行」。
-           这里记下偏移量，返回前加回去 —— 否则前端点节点跳转会整体错位
-           （用户报过：图上写 L2，实际在编辑器第 27 行）。 */
-        let lineOffset = 0;
-        if (!code) {
-          const snippet = snippets.find((item) => item.file === String(b.file || ''));
-          if (!snippet) return send(res, 404, { ok:false, error:'片段不存在（vault 可能已变动）' });
-          const fragment = Number(b.fragment);
-          if (!Number.isInteger(fragment) || fragment < 0 || fragment >= snippet.fragments.length) return send(res, 400, { ok:false, error:'片段索引无效' });
-          const source = snippet.fragments[fragment];
-          language = language || source.language;
-          const full = String(source.code || '');
-          const line = Number(b.line);
-          if (Number.isInteger(line) && line >= 1) {
-            const idx = buildSnippetIndex(snippet);
-            const hit = idx.find((s) => s.kind === 'fn' && s.frag === fragment && line >= s.line && line <= (s.endLine || s.line));
-            const target = hit ? (resolveDefinition(hit, idx) || hit) : null;
-            if (target && target.endLine) {
-              code = full.replace(/\r\n/g, '\n').split('\n').slice(target.line - 1, target.endLine).join('\n');
-              name = target.name || name;
-              lineOffset = Math.max(0, target.line - 1);
-            } else code = full;
-          } else code = full;
-        }
-        if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'函数内容超过 2 MB' });
-        const graph = buildLogicGraph(code, { language: language || 'c_cpp', name });
-        /* 相对行号 → 片段绝对行号（前端 goToLocation 用的是后者） */
-        if (lineOffset) {
-          graph.nodes.forEach((n) => {
-            n.line = (Number(n.line) || 1) + lineOffset;
-            n.endLine = (Number(n.endLine) || Number(n.line) || 1) + lineOffset;
-          });
-        }
-        if (String(b.format) === 'drawio') return send(res, 200, { ok:true, ...graph, xml:logicToDrawio(graph, { title:name }) });
-        return send(res, 200, { ok:true, ...graph });
-      } catch (error) { return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/logic/skeleton') {
-      try {
-        const b = await readBody(req, 2 * 1024 * 1024);
-        const graph = b && b.graph;
-        if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length > 2000) return send(res, 400, { ok:false, error:'逻辑图节点不合法（1–2000 个）' });
-        return send(res, 200, { ok:true, ...logicToSkeleton(graph, {
-          language:String(b.language || 'c_cpp'), fnName:String(b.fnName || b.name || 'generated').slice(0, 120),
-        }) });
-      } catch (error) { return send(res, error.statusCode || 500, { ok:false, error:String(error.message || error).slice(0, 300) }); }
-    }
+      /* ★ logic 路由抽到 lib/routes/logic.js（2026-10-11）*/
+      if (await logicRoute.handle(req, res, u, { readBody, walkSnippets, send, buildSnippetIndex, resolveDefinition, buildLogicGraph, logicToDrawio }) || res.writableEnded) return;
     // ===== 云同步：Tailscale 组网 / Syncthing 数据面 / restic 历史层 =====
-    if (req.method === 'GET' && u.pathname === '/api/sync/status') {
-      return send(res, 200, await syncStatus(u.searchParams.get('refresh') === '1'));
-    }
-    if (u.pathname === '/api/sync/config') {
-      if (req.method === 'GET') {
-        const discovered = discoverSyncthingApiKey();
-        return send(res, 200, {
-          ok: true, config: syncConfig(),
-          discovered: { syncthingApiKey: discovered.key ? '已在本机 config.xml 中发现' : '', file: discovered.file },
-          configXmlCandidates: syncthingConfigPaths(),
-        });
-      }
-      if (req.method === 'POST') {
-        try { return send(res, 200, { ok: true, config: saveSyncConfig(await readBody(req)) }); }
-        catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
-      }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/sync/device') {
-      try { return send(res, 200, await syncthingAction(await readBody(req))); }
-      catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/sync/scan') {
-      try {
-        const body = await readBody(req);
-        return send(res, 200, await syncthingAction({ action: 'scan', folder: body.folder }));
-      } catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/sync/snapshot') {
-      try { return send(res, 200, await startSyncSnapshot((await readBody(req)).targets)); }
-      catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String(error.message || error) }); }
-    }
-    // GitHub 体积预检：单文件 ≥100 MiB 一旦进历史，push 会被永久拒绝，必须在入库前拦住。
-    if (req.method === 'GET' && u.pathname === '/api/sync/github/precheck') {
-      const config = syncConfig();
-      const repo = await syncGithubStatus(config).catch(() => ({ largeFiles: [] }));
-      const vault = vaultStats();
-      const largeFiles = repo.largeFiles || [];
-      const blocking = largeFiles.filter((item) => item.bytes >= 100 * 1024 * 1024);
-      return send(res, 200, {
-        ok: true, thresholdMiB: config.largeFileMiB, githubLimitMiB: 100,
-        largeFiles, blocking,
-        pdfBackups: { files: vault.pdfBackupFiles, bytes: vault.pdfBackupBytes },
-        advice: blocking.length
-          ? '存在 ≥100 MiB 的文件：一旦提交，git push 会被永久拒绝，请先压缩或移出仓库'
-          : (largeFiles.length ? '存在接近上限的文件（≥' + config.largeFileMiB + ' MiB），提交前请确认' : '未发现超限文件'),
-      });
-    }
+      /* ★ sync 路由抽到 lib/routes/sync.js（2026-10-11）*/
+      if (await syncRoute.handle(req, res, u, { send, syncStatus, discoverSyncthingApiKey, syncConfig, syncthingConfigPaths, saveSyncConfig, readBody, syncthingAction, startSyncSnapshot, syncGithubStatus, vaultStats }) || res.writableEnded) return;
     // ===== 远程开发：SSH 复用底部 PTY 终端；SFTP 浏览文件；VNC 由 WebSocket 代理 =====
-    if (req.method === 'GET' && u.pathname === '/api/remote/status') {
-      return send(res, 200, {
-        ok: true,
-        ssh: { available: !!executablePath('ssh'), path: executablePath('ssh'), files: true },
-        vnc: { available: fs.existsSync(path.join(__dirname, 'node_modules', '@novnc', 'novnc', 'core', 'rfb.js')) },
-        terminal: TERM ? { active: true, mode: TERM.mode, label: TERM.label, host: TERM.host || '', port: TERM.port || 0 } : { active: false, mode: '', label: '', host: '', port: 0 },
-      });
-    }
-    if (req.method === 'GET' && u.pathname === '/api/remote/latency') {
-      const host = remoteHost(u.searchParams.get('host'));
-      const port = remotePort(u.searchParams.get('port'), 0);
-      if (!host || !port) return send(res, 400, { ok: false, error: '主机或端口不合法' });
-      const result = await measureNetworkLatency(host);
-      return send(res, result.ok ? 200 : 504, result);
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/ssh/connect') {
-      const b = await readBody(req);
-      const spec = sshSessionSpec(b);
-      if (spec.error) return send(res, 400, { ok: false, error: spec.error });
-      stopTerm();
-      if (!termSpawn(spec)) return send(res, 500, { ok: false, error: 'SSH 终端启动失败' });
-      return send(res, 200, { ok: true, mode: 'ssh', label: spec.label, host: spec.host, port: spec.port, user: spec.user });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/ssh/disconnect') {
-      stopTerm();
-      return send(res, 200, { ok: true });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/files/list') {
-      try { return send(res, 200, await remoteList(await readBody(req))); }
-      catch (error) { return send(res, 200, { ok:false, error:String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/files/read') {
-      try { return send(res, 200, await remoteRead(await readBody(req))); }
-      catch (error) { return send(res, 200, { ok:false, error:String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/files/write') {
-      try { return send(res, 200, await remoteWrite(await readBody(req))); }
-      catch (error) { return send(res, 200, { ok:false, error:String(error.message || error) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/files/upload-stream') {
-      await streamRemoteUpload(req, res);
-      return;
-    }
-    if (req.method === 'POST' && u.pathname === '/api/remote/files/download-stream') {
-      try { await streamRemoteDownload(res, await readBody(req)); }
-      catch (error) {
-        if (!res.headersSent) send(res, 200, { ok:false, error:String(error.message || error) });
-        else res.destroy(error);
-      }
-      return;
-    }
+      /* ★ remote 路由抽到 lib/routes/remote.js（2026-10-11）*/
+      if (await remoteRoute.handle(req, res, u, { send, executablePath, path, fs, TERM, remoteHost, remotePort, measureNetworkLatency, readBody, sshSessionSpec, stopTerm, termSpawn, remoteList, remoteRead, remoteWrite, streamRemoteUpload, streamRemoteDownload }) || res.writableEnded) return;
     // ===== 底部终端（PTY shell，script 命令分配伪终端）=====
-    if (req.method === 'GET' && u.pathname === '/api/term/stream') {
-      if (!TERM || !TERM.child) termSpawn();
-      if (!TERM) { res.end('终端启动失败'); return; }
-      const session = TERM;
-      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-CodeScope-Terminal-Replay': '1' });
-      session.clients.add(res);
-      if (session.buffer.length) { try { res.write(session.buffer); } catch (_) {} }
-      req.on('close', () => {
-        // 页面刷新/多标签切换只移除自己的订阅，不再杀掉共享 SSH 会话。
-        session.clients.delete(res);
-      });
-      return;   // 保持连接，输出由 termSpawn 的 stdout/stderr 回调实时推送
-    }
-    if (req.method === 'POST' && u.pathname === '/api/term/input') {
-      const b = await readBody(req);
-      const data = String((b && b.data) || '');
-      if (!TERM || !TERM.child) return send(res, 409, { ok: false, error: '终端尚未连接' });
-      try { TERM.child.stdin.write(data); return send(res, 200, { ok: true }); }
-      catch (e) { return send(res, 500, { ok: false, error: String(e.message || e) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/term/resize') {
-      const b = await readBody(req);
-      const cols = Math.max(20, Math.min(1000, Math.floor(Number(b.cols) || 0)));
-      const rows = Math.max(5, Math.min(500, Math.floor(Number(b.rows) || 0)));
-      if (!TERM || !TERM.child) return send(res, 409, { ok: false, error: '终端尚未连接' });
-      const control = TERM.child.stdio && TERM.child.stdio[3];
-      if (!control || !control.writable) return send(res, 200, { ok: true, forwarded: false });
-      try { control.write(JSON.stringify({ cols, rows }) + '\n'); return send(res, 200, { ok: true, forwarded: true }); }
-      catch (e) { return send(res, 500, { ok: false, error: String(e.message || e) }); }
-    }
-    if (req.method === 'POST' && u.pathname === '/api/term/stop') {
-      stopTerm();
-      return send(res, 200, { ok: true });
-    }
+      /* ★ term 路由抽到 lib/routes/term.js（2026-10-11）*/
+      if (await termRoute.handle(req, res, u, { TERM, termSpawn, readBody, send, stopTerm }) || res.writableEnded) return;
     send(res, 404, { ok: false, error: 'Not Found: ' + u.pathname });
   } catch (e) {
     const statusCode = Number(e && e.statusCode);

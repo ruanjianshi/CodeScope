@@ -121,7 +121,16 @@ async function handle(req, res, u, ctx) {
       return send(res, 200, { ok: false, error: String((e && e.message) || e) });
     }
     }
-  return false;   /* 这一组没吃掉，调用方继续往下走 */
+  /* ★★ 判断标准不是「我 return 了吗」，而是「响应发出去了吗」（2026-10-11 实测修）——
+     ⚠️ 根因：原来这里写 `return false`，但**分支里那些 `return streamStatic(...)`
+        和 `return send(...)`**，在原始 router 里 `return` 退出的是**整个 router**；
+        抽到 handle 里之后，它只退出 handle ——
+        而 `streamStatic` 返回 `undefined` → handle 返回 `undefined` →
+        调用方当成「没处理」→ 继续往下走 → 撞到 404 兜底。
+        （实测：POST /api/study/asset 正常，GET 同一个地址却 404。）
+     → 用 `res.writableEnded` 判断：**响应发了就算吃掉**，
+       不管中间是 `return send(...)` 还是 `return streamStatic(...)`。 */
+  return res.writableEnded === true;
 }
 
 module.exports = { handle };

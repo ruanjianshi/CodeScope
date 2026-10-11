@@ -57,13 +57,36 @@ console.log('\n── ① 巨型文件棘轮（只准变小，不准变大）─
    ⚠️ 别为了让测试变绿而往上调 —— 那就把棘轮拆了。 */
 const SIZE_CAP = [
   ['assets/app.js', 16294],
-  ['server.js', 8924],
+  ['server.js', 8258],
   ['assets/app.css', 4287],
   ['src/system-panel.js', 3746],
   ['lib/system-panel.js', 2471],
   ['assets/debug-panel.js', 900],
   ['lib/routes/dbg.js', 160],
-  ['lib/routes/latex.js', 200],   /* 路由模块，样板 ✓ */   /* 刚抽出来的，别让它再涨回去 ✓ */
+  ['lib/routes/latex.js', 200],
+  ['lib/routes/check.js', 250],
+  ['lib/routes/env.js', 250],
+  ['lib/routes/fig.js', 250],
+  ['lib/routes/format.js', 250],
+  ['lib/routes/graph.js', 250],
+  ['lib/routes/integrations.js', 250],
+  ['lib/routes/logic.js', 250],
+  ['lib/routes/matlab.js', 250],
+  ['lib/routes/office.js', 250],
+  ['lib/routes/py.js', 250],
+  ['lib/routes/remote.js', 250],
+  ['lib/routes/reorder.js', 250],
+  ['lib/routes/rev.js', 250],
+  ['lib/routes/run.js', 250],
+  ['lib/routes/save.js', 250],
+  ['lib/routes/snippets.js', 250],
+  ['lib/routes/study.js', 250],
+  ['lib/routes/sync.js', 250],
+  ['lib/routes/system-panel.js', 250],
+  ['lib/routes/system.js', 250],
+  ['lib/routes/tags.js', 250],
+  ['lib/routes/term.js', 250],
+  ['lib/routes/version.js', 250],   /* 路由模块，样板 ✓ */   /* 刚抽出来的，别让它再涨回去 ✓ */
 ];
 for (const [rel, cap] of SIZE_CAP) {
   const n = lines(rel);
@@ -92,13 +115,27 @@ for (const [rel, real] of DOC_FACTS) {
     shown ? '' : '文档里找不到 ' + real);
 }
 
-console.log('\n── ③ API 分组数 ──');
+console.log('\n── ③ 路由模块化进度 ──');
+/* ⚠️ 这条断言**换过指标** ✗✓（2026-10-11）——
+   原来写的是「server.js 里 /api/* 分组数 ≥ 20」✓，
+   那是"路由很大"的**代理指标** ✓。等真开始拆了，这个数**必然下降** ✓ →
+   它就从"守质量"变成"挡重构"了 ✓✓（实测：抽完 25 组后它红了 ✓）。
+   → 换成**正向指标**：lib/routes/ 里有多少个模块 ✓，
+     以及 server.js 里**还剩**多少组 ✓（剩得越少越好 ✓）。 */
+const routesDir = path.join(root, 'lib', 'routes');
+let routeFiles = 0;
+if (fs.existsSync(routesDir)) {
+  routeFiles = fs.readdirSync(routesDir).filter((f) => f.endsWith('.js')).length;
+}
+ck('  lib/routes/ 已抽出模块 ≥ 20 个（现在 ' + routeFiles + ' 个）', routeFiles >= 20);
+
 let groups = 0;
 try {
   const src = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
   groups = new Set((src.match(/['"]\/api\/[a-z0-9-]+/g) || []).map((x) => x.replace(/['"]\/api\//, ''))).size;
 } catch (_) {}
-ck('  /api/* 分组数 ≥ 20（现在 ' + groups + ' 组）', groups >= 20);
+/* 上界：只准往下走 ✓（现在是 15 组，给了点余量 ✓） */
+ck('  server.js 里剩的 /api 分组 ≤ 20（现在 ' + groups + ' 组）', groups > 0 && groups <= 20);
 
 console.log('\n── ④ 每个 lib 模块都能被 require（没有语法/依赖炸）──');
 const libDir = path.join(root, 'lib');
