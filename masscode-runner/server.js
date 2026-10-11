@@ -42,6 +42,7 @@ const { createPythonKernel } = require('./lib/python-kernel');
 const MAIL_CLIENT = require('./lib/mail-client');
 /* ★ 路由模块（2026-10-11 开始抽）—— 每一组一个文件 ✓ */
 const dbgRoute = require('./lib/routes/dbg');
+const latexRoute = require('./lib/routes/latex');
 const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
 const MAIL_LIST = require('./lib/mail-list');
@@ -7293,92 +7294,9 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
-    if (req.method === 'GET' && u.pathname === '/api/latex/resource/raw') {
-      let resource;
-      try { resource = resolveLatexResource(u.searchParams.get('path')); }
-      catch (e) { return send(res, 404, { ok: false, error: e.message }); }
-      const data = fs.readFileSync(resource.full);
-      const displayName = path.basename(resource.full).replace(/["\r\n]/g, '');
-      const asciiName = ('resource' + resource.ext).replace(/[^\x20-\x7e]/g, '');
-      const encodedName = encodeURIComponent(displayName).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
-      res.writeHead(200, { 'Content-Type': MIME[resource.ext] || 'application/octet-stream', 'Content-Length': data.length, 'Cache-Control': 'no-store', 'Content-Disposition': 'inline; filename="' + asciiName + '"; filename*=UTF-8\'\'' + encodedName });
-      res.end(data); return;
-    }
-    if (req.method === 'GET' && u.pathname === '/api/latex/resource') {
-      let resource;
-      try { resource = resolveLatexResource(u.searchParams.get('path')); }
-      catch (e) { return send(res, 404, { ok: false, error: e.message }); }
-      const stat = fs.statSync(resource.full);
-      if (!LATEX_TEXT_EXTS.has(resource.ext)) return send(res, 200, { ok: true, path: resource.rel, kind: resource.kind, ext: resource.ext, size: stat.size, text: false });
-      if (stat.size > 2 * 1024 * 1024) return send(res, 413, { ok: false, error: '文本资源超过 2 MB，无法在线编辑' });
-      return send(res, 200, { ok: true, path: resource.rel, kind: resource.kind, ext: resource.ext, size: stat.size, text: true, content: fs.readFileSync(resource.full, 'utf8') });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/latex/resource/save') {
-      const b = await readBody(req); let resource;
-      try { resource = resolveLatexResource(b.path, true); }
-      catch (e) { return send(res, 400, { ok: false, error: e.message }); }
-      if (!LATEX_TEXT_EXTS.has(resource.ext)) return send(res, 400, { ok: false, error: '该资源不是可编辑文本' });
-      const content = String(b.content == null ? '' : b.content);
-      if (Buffer.byteLength(content, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok: false, error: '文本资源超过 2 MB' });
-      fs.mkdirSync(path.dirname(resource.full), { recursive: true });
-      writeFileAtomicSync(resource.full, content, 'utf8');
-      return send(res, 200, { ok: true, path: resource.rel, size: Buffer.byteLength(content, 'utf8') });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/latex/resource/upload') {
-      const b = await readBody(req);
-      const folder = String(b.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      const name = path.basename(String(b.name || '')).replace(/[\x00-\x1f]/g, '');
-      if (!folder || !name || name === '.' || name === '..') return send(res, 400, { ok: false, error: '上传路径不合法' });
-      let resource;
-      try { resource = resolveLatexResource(folder + '/' + name, true); }
-      catch (e) { return send(res, 400, { ok: false, error: e.message }); }
-      const encoded = String(b.data || '').replace(/^data:[^,]*,/, '');
-      let data; try { data = Buffer.from(encoded, 'base64'); } catch (_) { return send(res, 400, { ok: false, error: '文件数据无效' }); }
-      if (!data.length || data.length > 30 * 1024 * 1024) return send(res, 413, { ok: false, error: '资源文件必须在 30 MB 以内' });
-      fs.mkdirSync(path.dirname(resource.full), { recursive: true });
-      writeFileAtomicSync(resource.full, data);
-      return send(res, 200, { ok: true, path: resource.rel, size: data.length, replaced: !!b.replace });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/latex/resource/rename') {
-      const b = await readBody(req); let source;
-      try { source = resolveLatexResource(b.path); }
-      catch (e) { return send(res, 400, { ok: false, error: e.message }); }
-      let name = path.basename(String(b.name || '').trim()).replace(/[\x00-\x1f]/g, '');
-      if (!name || name === '.' || name === '..' || name !== String(b.name || '').trim()) return send(res, 400, { ok: false, error: '文件名不合法' });
-      // 只输入主文件名时保留原扩展名，避免图片重命名后意外失去格式。
-      if (!path.extname(name)) name += source.ext;
-      if (path.extname(name).toLowerCase() !== source.ext) return send(res, 400, { ok: false, error: '重命名不能改变文件格式，请保留 ' + source.ext + ' 扩展名' });
-      let target;
-      try { target = resolveLatexResource(path.posix.dirname(source.rel) + '/' + name, true); }
-      catch (e) { return send(res, 400, { ok: false, error: e.message }); }
-      if (path.resolve(source.full) === path.resolve(target.full)) return send(res, 200, { ok: true, path: source.rel, name: path.basename(source.rel) });
-      if (fs.existsSync(target.full)) return send(res, 409, { ok: false, error: '同一目录已存在同名资源' });
-      try { fs.renameSync(source.full, target.full); }
-      catch (e) { return send(res, 500, { ok: false, error: '重命名失败: ' + e.message }); }
-      return send(res, 200, { ok: true, path: target.rel, name });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/latex/resource/move') {
-      const b = await readBody(req); let source;
-      try { source = resolveLatexResource(b.path); }
-      catch (e) { return send(res, 400, { ok: false, error: e.message }); }
-      const toFolder = String(b.toFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      let target;
-      try { target = resolveLatexResource(toFolder + '/' + path.basename(source.rel), true); }
-      catch (e) { return send(res, 400, { ok: false, error: e.message }); }
-      if (target.kind !== source.kind) return send(res, 400, { ok: false, error: '资源只能移动到同类型目录（' + source.kind + '）' });
-      if (path.resolve(source.full) === path.resolve(target.full)) return send(res, 200, { ok: true, path: source.rel });
-      if (fs.existsSync(target.full)) return send(res, 409, { ok: false, error: '目标目录已存在同名资源' });
-      fs.mkdirSync(path.dirname(target.full), { recursive: true });
-      try { fs.renameSync(source.full, target.full); }
-      catch (e) { return send(res, 500, { ok: false, error: '移动失败: ' + e.message }); }
-      return send(res, 200, { ok: true, path: target.rel });
-    }
-    if (req.method === 'POST' && u.pathname === '/api/latex/compile') {
-      const b = await readBody(req);
-      if (typeof b.code !== 'string') return send(res, 400, { ok: false, error: '缺少 LaTeX 源码' });
-      if (Buffer.byteLength(b.code, 'utf8') > 1024 * 1024) return send(res, 413, { ok: false, error: 'LaTeX 文档超过 1 MB，无法实时编译' });
-      return send(res, 200, await compileLatex(b.code, b.file));
-    }
+      /* ★ latex 路由抽到 lib/routes/latex.js（2026-10-11）——
+         样板见那个文件的文件头。 */
+      if (await latexRoute.handle(req, res, u, { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync })) return;
     if (req.method === 'GET' && u.pathname === '/api/matlab/console') {
       /* ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-09）
          用户原话：「matlab/octave 那种命令窗口也需要给我完成复刻过来，
