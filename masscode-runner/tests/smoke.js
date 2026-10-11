@@ -212,7 +212,14 @@ void bubbleSort(Array& values);
   const output = [];
   child = spawn(process.execPath, ['server.js'], {
     cwd: projectRoot,
-    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_DSH_AUTOSTART:'0',CODESCOPE_AUTO_OFFICE:'0' },
+    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_DSH_AUTOSTART:'0',CODESCOPE_AUTO_OFFICE:'0',
+      /* ⚠️⚠️ 必须给它一个**独立的 DSH 端口** ✗✗（2026-10-11 实测）——
+         不隔离的话，这个临时服务会去连**用户正在跑的那个 DSH**（默认端口 3080 ✓），
+         收尾时把它**杀掉** ✓：实测跑一次 `npm test`，
+         用户的 DSH 就变成「已退出（0）」，而且日志里**没有任何新增** ✓
+         （= 被 kill 的，不是正常退出 ✓）。
+         ⇒ 端口一隔离，这个测试就**碰不到**用户的 DSH 了 ✓。 */
+      CODESCOPE_DSH_PORT:'3099' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (chunk) => output.push(String(chunk)));

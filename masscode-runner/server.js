@@ -8210,7 +8210,8 @@ server.listen(PORT, HOST, () => {
   // 清扫上次服务留下的运行临时目录（正常退出会由 TTL 回收，强杀则依赖这里）
   try { const swept = sweepTempDirs(); if (swept) console.log('已清理运行临时目录: ' + swept + ' 个'); } catch (_) {}
   console.log('正在检测本机环境…');
-  DSH.start().then((service) => {
+  /* ⚠️⚠️ 开机自启必须**尊重 `CODESCOPE_DSH_AUTOSTART`** ✗✗（2026-10-11 实测）—— 原来无条件 start ✓，而 autoStart=false 只是把初始 state 标成 disabled ✗ → 测试起的临时服务照样去连用户正在跑的 DSH（默认端口 3080）✓、认领它 ✓，退出时 DSH.stop() 把它**杀掉** ✓。⇒ 禁用了就别自动启动（面板上仍可手动点「启动」✓）。 */
+  if (DSH.status().state !== 'disabled') DSH.start().then((service) => {
     const suffix = service.available ? (service.managed ? '（由 CodeScope 托管）' : '（连接现有服务）') : '：' + service.message;
     console.log('DeepSeek Harness ' + (service.available ? '已就绪' : '未就绪') + suffix);
   }).catch((error) => console.log('DeepSeek Harness 启动失败：' + String(error.message || error)));

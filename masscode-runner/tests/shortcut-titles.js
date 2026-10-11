@@ -116,7 +116,7 @@ async function main() {
   const baseUrl = 'http://127.0.0.1:' + port;
   server = spawn(process.execPath, ['server.js'], {
     cwd: projectRoot,
-    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_ONLYOFFICE_URL: 'http://127.0.0.1:1', CODESCOPE_DSH_AUTOSTART: '0', CODESCOPE_AUTO_OFFICE: '0' },
+    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: vault, CODESCOPE_DATA_HOME: path.join(tempRoot, 'data'), CODESCOPE_ONLYOFFICE_URL: 'http://127.0.0.1:1', CODESCOPE_DSH_AUTOSTART: '0', CODESCOPE_AUTO_OFFICE: '0', CODESCOPE_DSH_PORT: '3099' },   /* ⚠️ DSH 端口必须隔离：不隔离就会去认领并杀掉用户正在跑的那个 ✓ */
     stdio: 'ignore',
   });
   await waitForServer(baseUrl);

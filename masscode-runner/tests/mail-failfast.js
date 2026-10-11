@@ -44,7 +44,7 @@ async function waitForServer(url) {
   const base = 'http://127.0.0.1:' + port;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: projectRoot,
-    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: path.join(tempRoot, 'vault'), CODESCOPE_DATA_HOME: dataHome, CODESCOPE_ONLYOFFICE_URL: 'http://127.0.0.1:1', CODESCOPE_DSH_AUTOSTART: '0', CODESCOPE_AUTO_OFFICE: '0' },
+    env: { ...process.env, CODESCOPE_HOST: '127.0.0.1', CODESCOPE_PORT: String(port), CODESCOPE_VAULT: path.join(tempRoot, 'vault'), CODESCOPE_DATA_HOME: dataHome, CODESCOPE_ONLYOFFICE_URL: 'http://127.0.0.1:1', CODESCOPE_DSH_AUTOSTART: '0', CODESCOPE_DSH_PORT: '3099', CODESCOPE_AUTO_OFFICE: '0' },
     stdio: 'ignore',
   });
   const get = async (u) => { const r = await fetch(base + u, { cache: 'no-store' }); return r.json(); };
