@@ -44,8 +44,8 @@ function archLayout(graph, opts) {
   const CHIP_W = 158, CHIP_H = 25, CHIP_GAP = 6;
   const CARD_HEAD = 32, CARD_TAIL = 8;
   const COL_GAP = 24;                 /* 列间隙基准宽（会按负载加宽） */
-  const LANE_BASE = 12, LANE_STEP = 5, LANE_MAX = 54;
-  const SLOT = 5;
+  const LANE_BASE = 12, LANE_STEP = 7, LANE_MAX = 72;
+  const SLOT = 8;
   const PAD = 18;
   const EMPTY_CARD_W = 104;           /* 0 函数的片段：只放标题 */
   /* 一行超过这个宽就折行。**调用方可以传**（renderArchIntoPane 按面板宽算）——
@@ -90,26 +90,26 @@ function archLayout(graph, opts) {
     });
   });
 
-  /* ③ 走廊宽度 —— ⚠️ 这里只能**估**：
-        「走卡片哪一侧」要等列位置定下来才知道 ✓（那才是循环依赖）。
-        按「一个卡片的边**两边各分一半**」估 ✓ ——
-        估出来只会**偏宽**（实际每条走廊只用一半的边）✓，不会溢出 ✓。 */
-  const perCard = new Map();
+  /* ③ 走廊宽度按**真实左右负载**分别算 ✗（原来两边都按「总边数 / 2」估 ✓，
+        但同卡片的边**一律走右** ✗ → 右边按一半宽度做、却要塞全部同卡片边 ✓ → 挤成一团 ✓）。
+        同卡片的边**不需要位置**就能定侧 ✓ → 全额算右边 ✓；跨卡片只能各半估 ✓。 */
+  const perSide = new Map();
+  const bump = (k, v) => perSide.set(k, (perSide.get(k) || 0) + v);
   plan.forEach((p) => {
     if (p.cardA || p.cardB) return;                  /* 卡片端点在顶边，不占内部走廊 */
     const ia = idxOf.get(p.a), ib = idxOf.get(p.b);
-    perCard.set(ia, (perCard.get(ia) || 0) + 1);
-    if (ib !== ia) perCard.set(ib, (perCard.get(ib) || 0) + 1);
+    if (ia === ib) { bump(ia + 'R', 1); return; }
+    bump(ia + 'L', 0.5); bump(ia + 'R', 0.5); bump(ib + 'L', 0.5); bump(ib + 'R', 0.5);
   });
-  const laneW = (i) => {
-    const n = Math.ceil((perCard.get(i) || 0) / 2);
+  const laneW = (key) => {
+    const n = Math.ceil(perSide.get(key) || 0);
     return Math.max(LANE_BASE, Math.min(LANE_MAX, LANE_BASE + Math.max(0, n - 1) * LANE_STEP));
   };
 
   /* ④ 卡片尺寸 */
   cards.forEach((c, i) => {
     if (c.kids.length) {
-      c.lw = c.rw = laneW(i);
+      c.lw = laneW(i + 'L'); c.rw = laneW(i + 'R');
       c.w = c.lw + CHIP_W + c.rw;
       c.h = CARD_HEAD + c.kids.length * CHIP_H + (c.kids.length - 1) * CHIP_GAP + CARD_TAIL;
     } else {
