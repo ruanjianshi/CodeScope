@@ -28,8 +28,30 @@ async function handle(req, res, u, ctx) {
     const frag = snip.fragments[b.fragment];
     if (!frag) return send(res, 400, { ok: false, error: '片段索引无效' });
     if (typeof b.code !== 'string') return send(res, 400, { ok: false, error: '缺少 code' });
-    const nextCode = b.code.replace(/\n+$/, '');
-    if (nextCode === String(frag.code || '').replace(/\n+$/, '')) {
+      const nextCode = b.code.replace(/\n+$/, '');
+      /* ⚠️⚠️ **护栏：拒绝"把有内容的片段写成空"** ✗✗（2026-10-11 加 ✓）
+         ⚠️ 为什么要加：当天出过一次**真实的数据丢失** ✓ ——
+            浏览器里开着**旧页面**（内存里是空片段 ✓），
+            它按 700ms 的防抖**持续把空内容往回写** ✓ →
+            `接口化最小代码实现.md` 的四个片段被清空 ✓，
+            而且**恢复之后又被写空了一次** ✓✓（因为那个页面还开着 ✓）。
+
+         ⚠️ 为什么护栏放**服务端** ✗：客户端护栏（`EDITOR_OWNER` ✓）
+            只能保护**新代码** ✓ —— 已经打开的旧页面**跑的还是旧 JS** ✓，
+            它照样会写 ✓。**只有服务端拦得住所有客户端** ✓✓。
+
+         ⚠️ 为什么允许显式清空 ✗：用户**确实可能想清空一个片段** ✓，
+            所以留一个逃生口 ✓：请求里带 `allowEmpty: true` 就放行 ✓。
+            （前端以后要加"清空"按钮时记得带上它 ✓。） */
+      const prevCode = String(frag.code || '').replace(/\n+$/, '');
+      if (nextCode === '' && prevCode !== '' && b.allowEmpty !== true) {
+        return send(res, 409, {
+          ok: false,
+          error: '拒绝把有内容的片段清空（' + frag.label + '）：这通常是旧页面在覆盖。'
+            + '确实要清空的话，请求里带 allowEmpty: true',
+        });
+      }
+      if (nextCode === String(frag.code || '').replace(/\n+$/, '')) {
       return send(res, 200, { ok: true, written: false, unchanged: true, message: '内容未变化' });
     }
     const written = writeBackFragment(b.file, frag, nextCode);
