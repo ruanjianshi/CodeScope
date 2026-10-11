@@ -235,8 +235,7 @@ function archLayout(graph, opts) {
   };
   plan.forEach((p) => {
     if (p.same) {
-      /* 同卡片：看目标在上还是下、在左还是右，挑近的那条走廊 */
-      p.side = 'R';
+      p.side = 'R';   /* 同卡片一律走右侧走廊（试过左右分走，断言红了 → 先回退）*/
     } else {
       const r1 = rowOfCard.get(p.a), r2 = rowOfCard.get(p.b);
       if (r2 === r1) {
@@ -296,7 +295,9 @@ function archLayout(graph, opts) {
     const w = side === 'R' ? card.rw : card.lw;
     const step = n > 1 ? Math.min(SLOT, Math.max(2, (w - 6) / (n - 1))) : 0;
     const base = side === 'R' ? card.x + card.lw + CHIP_W + card.rw / 2 : card.x + card.lw / 2;
-    return base + (i - (n - 1) / 2) * step;
+    const half = Math.max(0, (w - 6) / 2);   /* 槽位偏移钳在走廊里（漏过一次 ✓）*/
+    const off = (i - (n - 1) / 2) * step;
+    return base + Math.max(-half, Math.min(half, off));
   };
   /* ⚠️⚠️ 槽位偏移**必须钳在通道带内** ✗✗ ——
      偏移是 `(i - (n-1)/2) * step` ✓，边一多（n 大）就会**散出通道带** ✓，
@@ -467,8 +468,7 @@ function archLayout(graph, opts) {
   };
 }
 
-/* 挑折行宽度 —— 用户要「按片段顺序横向排开」✓ → **优先一行放完**（比面板宽就横向滚动 ✓）；
-   只有一行宽到离谱（> 面板宽 × 2.5）才折行 ✗。 */
+/* 挑折行宽度 —— 用户要「按片段顺序横向排开」→ **优先一行放完**（宽了横向滚动 ✓）；离谱才折行 ✗。 */
 function archBestRowW(graph, panelW, panelH) {
   if (archLayout(graph, { maxRowW: 1e6 }).W <= panelW * 2.5) return 1e6;
   let best = panelW * 1.2, score = Infinity;
