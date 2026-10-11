@@ -54,13 +54,23 @@ function makeDom() {
   return { createElementNS: (ns, tag) => new El(tag) };
 }
 
-/* ── 加载 arch-view.js（剥掉注释头无所谓，只要别带 shebang）── */
+/* ── 加载「纯画图」那一半 ──
+   ⚠️ 2026-10-11 它从 `assets/arch-view.js` 拆成了 **`assets/arch-graph-svg.js`** ✓
+      （棘轮：arch-view.js ≤ 408 行，加完「自由缩放 + 卡片折行」涨到 611 →
+       按天然边界拆：**纯画图** vs **面板集成**）。
+   三个路径都找一遍 ✓ —— 以后再搬家也不会让测试莫名其妙地"找不到函数" ✓。 */
+const ARCH_SOURCES = ['assets/arch-graph-svg.js', 'assets/arch-view.js', 'assets/app.js'];
 function loadArchView() {
-  const src = fs.readFileSync(path.join(root, 'assets/arch-view.js'), 'utf8');
-  const sandbox = { document: makeDom() };
-  // eslint-disable-next-line no-new-func
-  const factory = new Function('document', src + '\nreturn { archGraphSvg, archFragOf };');
-  return factory(sandbox.document);
+  for (const rel of ARCH_SOURCES) {
+    let src;
+    try { src = fs.readFileSync(path.join(root, rel), 'utf8'); } catch (_) { continue; }
+    if (src.indexOf('function archGraphSvg(') < 0) continue;
+    const sandbox = { document: makeDom() };
+    // eslint-disable-next-line no-new-func
+    const factory = new Function('document', src + '\nreturn { archGraphSvg, archFragOf };');
+    return factory(sandbox.document);
+  }
+  throw new Error('在 ' + ARCH_SOURCES.join(' / ') + ' 里都找不到 archGraphSvg');
 }
 
 /* ── 手搓一份有代表性的图 ──────────────────────────────────────────────
@@ -150,6 +160,29 @@ function touches(p, b) {
 }
 
 let pass = 0, fail = 0;
+/* 数「有多少条线扎进了无关方块」—— 主流程用一次，折行那组也复用 ✓ */
+function crossingsOf(svg) {
+  const { chips, cards } = classify(svg);
+  const boxes = chips.concat(cards);
+  let n = 0;
+  svg.all('path').filter((p) => p.getAttribute('marker-end')).forEach((p) => {
+    const pts = pointsOf(p.getAttribute('d'));
+    if (pts.length < 2) { n += 1; return; }
+    const samples = [];
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const c = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
+      for (let t = 0; t <= c; t++) samples.push({ x: a.x + (b.x - a.x) * t / c, y: a.y + (b.y - a.y) * t / c });
+    }
+    const owners = new Set();
+    [pts[0], pts[pts.length - 1]].forEach((q) => boxes.forEach((b, bi) => { if (touches(q, b)) owners.add(bi); }));
+    const bad = new Set();
+    samples.forEach((q) => boxes.forEach((b, bi) => { if (!owners.has(bi) && inBox(q, b, PAD)) bad.add(bi); }));
+    if (bad.size) n += 1;
+  });
+  return n;
+}
+
 function ck(name, ok, detail) {
   if (ok) { pass++; console.log('  ✓ ' + name); }
   else { fail++; console.log('  ✗ ' + name + (detail ? '  —— ' + detail : '')); }
@@ -268,6 +301,29 @@ try {
   archGraphSvg({ nodes: [{ id: 'x', kind: 'fn', label: 'a', file: 'f', frag: 0, line: 1 }], edges: [{ from: 'x', to: 'x', kind: 'call' }] });
 } catch (e) { threw = String(e.message); }
 ck('空图 / 只有自环 都不炸', threw === '', threw);
+
+/* ⑬ 折行 —— 用户原话「**排布不合理**」（2026-10-11）：
+   5 个片段横向铺开 1494px，侧栏只有 ~520px → 得滚半天才看得全。
+   现在按 maxRowW 折行，而且**调用方按面板宽传**（renderArchIntoPane）✓。
+   ⚠️ 折行改了骨架，必须重新验一遍 route clearance ✓（这里就是那条回归）。 */
+console.log('── 折行（按面板宽自适应）──');
+const wrapNarrow = archGraphSvg(graph, { maxRowW: 380 });
+const wrapOne = archGraphSvg(graph, { maxRowW: 99999 });
+const wW = Number(wrapNarrow.getAttribute('width')), wH = Number(wrapNarrow.getAttribute('height'));
+const oW = Number(wrapOne.getAttribute('width')), oH = Number(wrapOne.getAttribute('height'));
+ck('maxRowW 小 → 画布更窄', wW < oW, wW + 'px vs ' + oW + 'px');
+ck('maxRowW 小 → 画布更高（真的折行了）', wH > oH, wH + 'px vs ' + oH + 'px');
+ck('折行之后仍然不穿块', crossingsOf(wrapNarrow) === 0, crossingsOf(wrapNarrow) + ' 条');
+ck('折行之后端点仍然不重叠', (() => {
+  const seen = new Map();
+  wrapNarrow.all('path').filter((p) => p.getAttribute('marker-end')).forEach((p) => {
+    const pts = pointsOf(p.getAttribute('d'));
+    if (!pts.length) return;
+    const k = pts[0].x.toFixed(1) + ',' + pts[0].y.toFixed(1);
+    seen.set(k, (seen.get(k) || 0) + 1);
+  });
+  return [...seen.values()].every((n) => n === 1);
+})());
 
 console.log('\n架构图几何：' + pass + '/' + (pass + fail) + ' 项通过' + (fail ? '，失败 ' + fail + ' 项' : ''));
 if (fail) process.exit(1);

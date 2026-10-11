@@ -60,7 +60,11 @@ const SIZE_CAP = [
      **抽成 assets/arch-view.js** 而不是调上限 ✓（注释里那句「别往上调」）——
      顺带把上限**往下拧**到抽完之后的实际值 ✓（棘轮的正经用法）。 */
   ['assets/app.js', 16356],
-  ['assets/arch-view.js', 408],   /* 2026-10-11 修 orient/宽度两处后拧到 408 ✓ */
+  /* 2026-10-11 又一轮：加「自由缩放 + 卡片折行」→ arch-view.js 涨到 611，棘轮红 ✓
+     → 按**天然边界**拆成两个：纯画图（arch-graph-svg.js）+ 面板集成（arch-view.js）✓，
+     两个上限都记成拆完之后的实际值 ✓。 */
+  ['assets/arch-view.js', 137],
+  ['assets/arch-graph-svg.js', 467],
   ['server.js', 8263],
   ['assets/app.css', 4287],
   ['src/system-panel.js', 3746],
