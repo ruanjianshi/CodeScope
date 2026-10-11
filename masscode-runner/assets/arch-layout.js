@@ -134,6 +134,18 @@ function archLayout(graph, opts) {
     if (cur.length) rows.push(cur);
   }
   const nCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  /* ⚠️ 贪心折行会把**最后一行留成"几乎空的"** ✗（用户截图：4 张一行 + 1 张一行）——
+     折完**平衡一下**：把最宽那行的**尾卡**挪到最窄那行，直到两边差不多宽 ✓。
+     （最多挪 8 次防震荡；只挪尾卡 → 阅读顺序基本不变 ✓。） */
+  if (rows.length > 1) {
+    for (let guard = 0; guard < 8; guard++) {
+      const w = rows.map((r) => r.reduce((a, c) => a + c.w, 0) + Math.max(0, r.length - 1) * COL_GAP);
+      const wi = w.indexOf(Math.max.apply(null, w)), ni = w.indexOf(Math.min.apply(null, w));
+      const mv = rows[wi][rows[wi].length - 1];
+      if (wi === ni || rows[wi].length < 2 || w[wi] - mv.w <= w[ni] + mv.w) break;
+      rows[wi].pop(); rows[ni].push(mv);
+    }
+  }
   const rowOfCard = new Map(), colOfCard = new Map();
   rows.forEach((row, ri) => row.forEach((c, ci) => { rowOfCard.set(c, ri); colOfCard.set(c, ci); }));
 
