@@ -956,6 +956,11 @@
         scanDebugOutput()，那两个是函数声明（有提升），先加载才调得到。 -->
 <script src="/assets/debug-panel.js"></script>
 <script src="/assets/app.js"></script>
+<!-- ★ 架构视图（2026-10-11 从 app.js 抽出来的 409 行）——
+     抽出来是因为棘轮（app.js ≤ 16581 行）顶到了：重写走线涨了 156 行 → 测试红。
+     ⚠️ 放在 app.js **之后** ✓：它只声明函数，app.js 里是**调用时才找**
+        `renderArchIntoPane` ✓，所以先后无所谓；但放在后面更符合"依赖 app.js"的直觉。 -->
+<script src="/assets/arch-view.js"></script>
 <script src="/assets/app-pdf.js"></script>
 
 
