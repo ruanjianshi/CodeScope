@@ -12714,7 +12714,7 @@ function handleCommonEditorShortcut(event,input){
      ⚠️ 多行选区要**整体**缩进 / 反缩进 ✗（不是只动光标那行 ✓）；
      反缩进时**行首没有缩进就别硬删** ✗（不然会把代码吃掉 ✓）。 */
   if(event.key==='Tab'&&!command&&!event.altKey){
-    const IND=' '.repeat(INDENT_WIDTH||2);
+    const IND=indentUnit();   /* ⚠️ 走 indentUnit()（含按语言探测的缩进）—— 原来只用 INDENT_WIDTH||2，Python 探到 4 却插 2 */
     const v=String(input.value||'');
     const s=input.selectionStart,e=input.selectionEnd;
     const ls=v.lastIndexOf('\n',s-1)+1;

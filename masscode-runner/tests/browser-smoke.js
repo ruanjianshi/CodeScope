@@ -566,6 +566,13 @@ print(r.run())
   /* ---- 远程面板：记住上次标签页 + VNC 会话在「收起」后保持 ----
      用户反馈：连上 VNC → 回代码工作区 → 再点「远程」必须重新连 ✗。
      现在「收起」只隐藏画面、不断开；顶栏「远程」直接回到画面 ✓。 */
+  /* ⚠️⚠️ 还要 mock **服务端的可用性** ✗ —— 前端按钮的 `disabled` 来自
+     `/api/remote/status` 里的 `vnc.available` ✓，而那取决于**本机装没装 VNC 客户端** ✓。
+     不 mock 的话：这台机器没装 → 按钮永远是灰的 → 点不动 → 测试**必然超时红** ✗
+     （一直挂着的"陈年红"就是这么来的 ✓）。
+     mock 掉之后，这条路**不再依赖环境** ✓ —— 它本来要测的就是**前端的会话保持** ✓。 */
+  await page.route('**/api/remote/status',(route)=>route.fulfill({contentType:'application/json',
+    body:JSON.stringify({ok:true,ssh:{available:true,path:'/usr/bin/ssh',files:true},vnc:{available:true},terminal:{active:false,mode:'',label:'',host:'',port:0}})}));
   await page.route('**/novnc/core/rfb.js',(route)=>route.fulfill({contentType:'application/javascript',body:FAKE_RFB_SRC}));
   await page.route('**/novnc/core/input/keysymdef.js',(route)=>route.fulfill({contentType:'application/javascript',body:'export default {};'}));
   const remoteState=()=>page.evaluate(()=>({
@@ -2084,7 +2091,10 @@ print(r.run())
   const indentUnit=await page.evaluate(()=>indentUnit());
   const indented=await page.locator('#code-edit').evaluate((el)=>el.value);
   const bodyLines=indented.split('\n').filter((line)=>line.trim());
-  if(!bodyLines.every((line)=>line.startsWith(indentUnit)))throw new Error('多行 Tab 缩进未按每级 '+indentUnit.length+' 空格整体缩进');
+  /* ⚠️ 报错要**指出是哪几行** ✗ —— 只说"没缩进"没法查 ✓（这次就卡在这 ✓）。 */
+  const badLines=bodyLines.filter((line)=>!line.startsWith(indentUnit));
+  if(badLines.length)throw new Error('多行 Tab 缩进未按每级 '+indentUnit.length+' 空格整体缩进；'
+    +badLines.length+'/'+bodyLines.length+' 行不合格，例如：'+JSON.stringify(badLines.slice(0,3)));
   await page.keyboard.press('Shift+Tab');
   const dedented=await page.locator('#code-edit').evaluate((el)=>el.value);
   if(new RegExp('^ {'+indentUnit.length+'}class Robot').test(dedented))throw new Error('Shift+Tab 反缩进无效');
