@@ -291,6 +291,14 @@ const widths = cards.map((c) => c.w);
 ck('卡片宽度整齐（极差 ≤ 200px）', Math.max(...widths) - Math.min(...widths) <= 200,
   '宽度 ' + widths.map(Math.round).join(' / '));
 
+/* ⑥b 卡片**顶对齐** ——
+   ⚠️ 用户截图：`led.h` / `uart.c` / `uart.h`（都是 0 函数）**浮在行中间** ✓，
+      因为行高由最高的那张卡决定 ✓，矮卡**居中**之后就悬在半空 ✓，
+      看着像"飘着" ✓。顶对齐之后卡片头落在同一条水平线上 ✓，读起来像表格 ✓。
+   ⇒ 判据：**顶边 y 的种类数 ≤ 行数** ✓（居中时每张卡的 y 都不同 ✗，这条会红 ✓）。 */
+const topYs = [...new Set(cards.map((c) => Math.round(c.y)))];
+ck('卡片头按行对齐（顶对齐，不是行内居中）', topYs.length <= 2, '顶边 y = ' + topYs.join(' / '));
+
 /* ⑦ 0 函数的片段：卡片要压扁，不能留一片空白 */
 const flat = Math.min(...cards.map((c) => c.h));
 ck('0 函数的片段卡片是压扁的（≤ 60px）', flat <= 60, '最矮 ' + Math.round(flat) + 'px');
