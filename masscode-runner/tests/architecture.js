@@ -91,6 +91,7 @@ const SIZE_CAP = [
   ['lib/arch/analyze.js', 350],
   ['lib/arch/render.js', 450],
   ['lib/arch/ai.js', 191],
+  ['lib/arch/ai-error.js', 78],   /* 把上游 AI 报错翻成人话（纯函数）*/
     ['lib/routes/arch.js', 209],   /* 加了 /api/arch/ai（AI 语义分析）*/
   ['lib/routes/check.js', 250],
   ['lib/routes/env.js', 250],

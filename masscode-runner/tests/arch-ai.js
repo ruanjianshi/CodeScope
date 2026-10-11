@@ -118,6 +118,25 @@ console.log('\n── ④ 退化输入不炸 ──');
   t('fragLabels 是空数组 → 不炸', () => { ai.parseReply('{"title":"X"}', [], []); });
 }
 
+console.log('\n── ⑤ 把上游 AI 报错翻成人话 ──');
+{
+  const { describeApiError } = require(path.resolve(__dirname, '..', 'lib', 'arch', 'ai-error.js'));
+  /* 用户 2026-10-11 实际撞到的那个 403（ModelScope：账号没验证）*/
+  const real = describeApiError(403, JSON.stringify({ error: { message: 'For account security, please complete your profile via email verification. ModelScope Maiguobis is only available to verified accounts. Please refer to https://modelscope.cn/my/settings/account?request_id=072116a3-8749-4099-a30a-aa2d478ad7d3' } }));
+  ck('403 给出「账号没完成验证 / 模型不对账号开放」', /账号没完成验证/.test(real), real.slice(0, 40));
+  ck('403 把上游那句真原因也带出来', /email verification/.test(real));
+  ck('403 擦掉了 request_id 之类的长串', real.indexOf('072116a3-8749') < 0 && real.indexOf('***') >= 0);
+  ck('401 提示 key 不对', /API Key/.test(describeApiError(401, '{}')));
+  ck('429 提示太频繁', /太频繁|额度/.test(describeApiError(429, '{}')));
+  ck('500 明确说"不是你的配置问题"', /不是你的配置问题/.test(describeApiError(500, 'boom')));
+  /* ⚠️ 上游错误体**可能回显 key** ✗ —— 绝不能让它出现在界面上 ✓ */
+  const withKey = describeApiError(401, JSON.stringify({ error: { message: 'Invalid API key: sk-abcdefghijklmnop123456' } }));
+  ck('上游回显的 API Key 被擦掉', withKey.indexOf('sk-abcdefghijklmnop123456') < 0 && withKey.indexOf('***') >= 0, withKey.slice(0, 60));
+  ck('非 JSON 的上游错误体也能兜住（网关 HTML）', /上游说/.test(describeApiError(502, '<html>Bad Gateway</html>')));
+  ck('提示里没有 markdown 星号（状态栏是纯文本）', describeApiError(403, '{}').indexOf('**') < 0);
+  ck('状态码未知时也不抛异常', typeof describeApiError(418, '') === 'string');
+}
+
 console.log('');
 console.log('架构图语义层：' + pass + '/' + (pass + fail) + ' 项通过' + (fail ? '，失败 ' + fail + ' 项' : ''));
 if (fail) process.exit(1);

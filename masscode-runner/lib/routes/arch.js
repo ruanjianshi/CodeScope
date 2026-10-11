@@ -21,7 +21,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const archAI = require('../arch/ai');
+const archAI = require('../arch/ai'), archAIError = require('../arch/ai-error');
 
 /* ⚠️ 安全：只允许分析**白名单根目录**下的路径 ✗✓ ——
    这个接口能读任意目录的结构 ✓，不限制的话等于给了一个"目录扫描器" ✓。
@@ -179,7 +179,7 @@ async function handle(req, res, u, ctx) {
         signal: AbortSignal.timeout(180000),
       });
       const text = await resp.text();
-      if (!resp.ok) return send(res, 200, { ok: false, error: 'API 错误 ' + resp.status + '：' + text.slice(0, 300) });
+      if (!resp.ok) return send(res, 200, { ok: false, error: archAIError.describeApiError(resp.status, text) });  /* 翻成人话，别甩 JSON */
       let data;
       try { data = JSON.parse(text); } catch (_) { return send(res, 200, { ok: false, error: 'AI 返回非 JSON 内容' }); }
       content = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
