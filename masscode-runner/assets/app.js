@@ -6569,9 +6569,6 @@ function applyMmMode() {
     graphBtn.classList.toggle('on', CG_ACTIVE);
       const logicBtn = $('btn-logicgraph');
       if (logicBtn) { logicBtn.disabled = !hasCode; logicBtn.style.display = hasCode ? '' : 'none'; }
-      /* ★ 架构图按钮（2026-10-11 新增）—— 和「图谱」同条件：
-         只要这个文档里有代码片段就可用（不限当前片段）。 */
-      const archBtn = $('btn-archgraph');
       if (archBtn) { archBtn.disabled = !hasCode; archBtn.style.display = hasCode ? '' : 'none'; }
     const bpBtn = $('btn-blockly');
     if (bpBtn) { bpBtn.disabled = !hasCode; bpBtn.style.display = hasCode ? '' : 'none'; }
@@ -7879,163 +7876,196 @@ async function openDocumentGraph() {
   }
 }
 
-/* ── 架构图（文档级）· 和「图谱」同一份数据，不同画法 ──
-   ★ 2026-10-11 新增 ✓。用户原话：
-     「和图谱那种，整合进图谱那种，自动分析当前文件里面的片段的可交互架构图」
-     并明确：「**不破坏现有的这个，新增**」。
+/* ── 架构图（文档级）· 和「图谱」同一份数据，另一种画法 ──
+   ★ 2026-10-11 新增 ✓，当天改过两轮 ✓。用户原话：
+     第一轮：「和图谱那种，整合进图谱那种，自动分析当前文件里面的片段的可交互架构图」
+     第二轮：「**放这个图谱里面，可以通过按钮切换**」
+             「目前的这个架构图**不行，无法交互**，差的太多了」
 
-   所以：
-     · **数据源完全一样** —— /api/graph?scope=document&file=<当前文档>
-       （「图谱」用 Mermaid 力导向画；这里自己排布）；
-     · **不碰 renderCodeGraphPane / CG_ACTIVE / 那套面板** ——
-       只在工具栏加一个「架构」按钮，点开是一个**可缩放的浮层**
-       （复用已有的 openLogicZoom，它已经会处理拖动 / 缩放 / Esc）。
+   现在的形态：
+     · 和「图谱」**同一个面板**（#cg-canvas / #cg-body），
+       工具栏上两个按钮切换（🕸 图谱 / ▦ 架构）✓ —— 不另开浮层 ✗；
+     · 数据源完全一样（/api/graph?scope=document）✓；
+     · **点节点会高亮它和它的上下游** ✓（这就是"可交互"）。
 
-   ⚠️ 为什么画法要不一样：Mermaid 的力导向是"谁连得多谁在中间"，
-      看着热闹但**读不出结构**。这里按**角色分层**：
-        第 1 层 文件（它包含哪些函数）→ 层内横排函数
-      这样"哪个文件里有哪些函数"是一眼可见的。 */
+   ⚠️⚠️ 第一版分组是错的 ✗✗（用户截图里每个文件都列出全部函数）——
+      我按 `n.file` 分组 ✓，但**所有节点的 `file` 都是同一个文档** ✓，
+      于是每个文件都拿到同一份完整函数表 ✓。
+      **正确做法是按「片段」分组** ✓ —— 片段序号藏在 id 里：
+        file 节点 id = `f:<路径>|<片段号>`
+        fn   节点 id = `s:<路径>|<片段号>|<行号>|fn|<名字>`
+      → 用 id 里那个片段号配对 ✓（比按 label 猜可靠 ✓）。 */
+function archFragOf(node) {
+  const id = String(node.id || '');
+  const parts = id.split('|');
+  if (id.startsWith('f:')) return parts[parts.length - 1];   /* f:path|frag */
+  if (id.startsWith('s:')) return parts[1];                   /* s:path|frag|line|kind|name */
+  return '';
+}
+
 function archGraphSvg(graph) {
+  const NS = 'http://www.w3.org/2000/svg';
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
-  const W = 1180, H = 760, PAD = 40;
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-  svg.setAttribute('width', String(W));
-  svg.setAttribute('style', 'background:#12141c;border-radius:12px');
-  const mk = (tag, attrs, text) => {
-    const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  const svg = document.createElementNS(NS, 'svg');
+  const mk = (tag, attrs, text, parent) => {
+    const n = document.createElementNS(NS, tag);
     for (const k in attrs) n.setAttribute(k, attrs[k]);
     if (text != null) n.textContent = String(text);
-    svg.appendChild(n);
+    (parent || svg).appendChild(n);
     return n;
   };
 
-  const files = nodes.filter((n) => n.kind === 'file');
-  const fns = nodes.filter((n) => n.kind === 'fn');
-  if (!files.length && !fns.length) {
-    mk('text', { x: W / 2, y: 60, fill: '#8c9bb5', 'font-size': 14, 'text-anchor': 'middle' },
-      '这个文档里没有代码片段');
-    return svg;
-  }
-
-  const byFile = new Map();
-  fns.forEach((n) => {
-    const k = String(n.file || '');
-    if (!byFile.has(k)) byFile.set(k, []);
-    byFile.get(k).push(n);
+  /* ★ 按**片段**分组（不是按 file ✓ —— file 全是一样的 ✓）*/
+  const fileNodes = nodes.filter((n) => n.kind === 'file');
+  const fnNodes = nodes.filter((n) => n.kind === 'fn');
+  const fnByFrag = new Map();
+  fnNodes.forEach((n) => {
+    const k = archFragOf(n);
+    if (!fnByFrag.has(k)) fnByFrag.set(k, []);
+    fnByFrag.get(k).push(n);
   });
 
+  const PAD = 36, CW = 150, CH = 28, GX = 10, GY = 10, COLS = 5;
+  /* ⚠️ 宽度按**实际内容**算 ✗（不写死 1180 ✓）——
+     写死的话：文件少时右边一大片空白 ✓、文件多时又不够 ✓。
+     → 先排完、量出最宽的那一行，再定 viewBox ✓。 */
+  let W = 900;
   const pos = new Map();
-  const FNH = 28, GAPX = 12, GAPY = 12, CW = 152;
-  let y = 52;
+  const groups = [];
+  let y = 46;
 
-  files.forEach((f) => {
-    const kids = byFile.get(String(f.file || '')) || [];
-    const cols = Math.max(1, Math.min(5, kids.length || 1));
-    const boxW = Math.max(230, cols * (CW + GAPX) + GAPX);
+  fileNodes.forEach((f) => {
+    const frag = archFragOf(f);
+    const kids = fnByFrag.get(frag) || [];
+    const cols = Math.max(1, Math.min(COLS, kids.length || 1));
     const rows = kids.length ? Math.ceil(kids.length / cols) : 1;
-    const boxH = 46 + rows * (FNH + GAPY) + 4;
-    mk('rect', { x: PAD, y: y, width: boxW, height: boxH, rx: 12,
-      fill: 'rgba(239,159,39,.10)', stroke: '#EF9F27', 'stroke-opacity': .55, 'stroke-width': .8 });
-    mk('text', { x: PAD + 14, y: y + 28, fill: '#EF9F27', 'font-size': 14, 'font-weight': 500 },
-      String(f.label || f.file || '').split('/').pop());
-    pos.set(f.id, { x: PAD, y: y, w: boxW, h: 44 });
+    const boxW = Math.max(240, cols * (CW + GX) + GX);
+    const boxH = 44 + rows * (CH + GY);
+    groups.push({ f, frag, kids, x: PAD, y, w: boxW, h: boxH });
+    pos.set(f.id, { x: PAD, y, w: boxW, h: 42 });
     kids.forEach((k, i) => {
-      const cx = PAD + GAPX + (i % cols) * (CW + GAPX);
-      const cy = y + 48 + Math.floor(i / cols) * (FNH + GAPY);
-      mk('rect', { x: cx, y: cy, width: CW, height: FNH, rx: 7,
-        fill: 'rgba(122,162,247,.14)', stroke: '#7aa2f7', 'stroke-opacity': .5, 'stroke-width': .8 });
-      mk('text', { x: cx + 10, y: cy + 19, fill: '#c0caf5', 'font-size': 13 },
-        String(k.label || '').slice(0, 17));
-      pos.set(k.id, { x: cx, y: cy, w: CW, h: FNH });
+      const cx = PAD + GX + (i % cols) * (CW + GX);
+      const cy = y + 46 + Math.floor(i / cols) * (CH + GY);
+      pos.set(k.id, { x: cx, y: cy, w: CW, h: CH });
     });
-    y += boxH + 20;
+    y += boxH + 18;
   });
 
-  const orphans = fns.filter((n) => !pos.has(n.id));
-  if (orphans.length) {
-    orphans.forEach((k, i) => {
-      const cx = PAD + (i % 6) * (CW + GAPX);
-      const cy = y + Math.floor(i / 6) * (FNH + GAPY);
-      mk('rect', { x: cx, y: cy, width: CW, height: FNH, rx: 7,
-        fill: 'rgba(122,162,247,.14)', stroke: '#7aa2f7', 'stroke-opacity': .5, 'stroke-width': .8 });
-      mk('text', { x: cx + 10, y: cy + 19, fill: '#c0caf5', 'font-size': 13 },
-        String(k.label || '').slice(0, 17));
-      pos.set(k.id, { x: cx, y: cy, w: CW, h: FNH });
-    });
-    y += Math.ceil(orphans.length / 6) * (FNH + GAPY) + 20;
-  }
-
-  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-  ['call', 'include'].forEach((kind) => {
-    const m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    m.setAttribute('id', 'arch-arrow-' + kind);
-    m.setAttribute('viewBox', '0 0 10 10');
-    m.setAttribute('refX', '9'); m.setAttribute('refY', '5');
-    m.setAttribute('markerWidth', '6'); m.setAttribute('markerHeight', '6');
-    m.setAttribute('orient', 'auto-start-reverse');
-    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    p.setAttribute('d', 'M2 1L8 5L2 9');
-    p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', kind === 'call' ? '#7aa2f7' : '#8c9bb5');
-    p.setAttribute('stroke-width', '1.5');
-    p.setAttribute('stroke-linecap', 'round');
-    m.appendChild(p); defs.appendChild(m);
+  /* 没有归到任何片段的函数，兜底放一层 */
+  const orphans = fnNodes.filter((n) => !pos.has(n.id));
+  orphans.forEach((k, i) => {
+    const cx = PAD + (i % COLS) * (CW + GX);
+    const cy = y + Math.floor(i / COLS) * (CH + GY);
+    pos.set(k.id, { x: cx, y: cy, w: CW, h: CH });
   });
-  svg.insertBefore(defs, svg.firstChild);
+  if (orphans.length) y += Math.ceil(orphans.length / COLS) * (CH + GY) + 18;
 
-  const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  svg.appendChild(edgeLayer);
-  let drawn = 0;
+  /* 排完之后量一下：最宽的那一行 + 右边留给图例的位置 */
+  groups.forEach((g) => { W = Math.max(W, g.x + g.w + PAD + 210); });
+  orphans.forEach((k) => { const p = pos.get(k.id); if (p) W = Math.max(W, p.x + p.w + PAD + 210); });
+
+  const H = Math.max(420, y + 96);
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  /* ⚠️ **不要写死 width/height** ✗✗（第一版写了 1180 ✓）——
+     面板只有几百像素宽 ✓，写死之后图被挤在左上角、右边一大片空白 ✓
+     （用户截图里就是这样 ✓）。
+     → 用 `width:100%` + `height:auto` ✓，让 SVG 按 viewBox **等比缩放** ✓，
+        面板多宽它就多宽 ✓。 */
+  svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
+  svg.setAttribute('style', 'background:#12141c;border-radius:10px;display:block;width:100%;height:auto');
+
+  /* ── 连线层（先画，压在方块下面 ✓）── */
+  const edgeLayer = mk('g', {});
+  const edgeEls = [];
   edges.forEach((e) => {
     const a = pos.get(e.from), b = pos.get(e.to);
-    if (!a || !b || a === b) return;
-    const acx = a.x + a.w / 2, acy = a.y + a.h / 2;
-    const bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
-    const d = 'M' + acx + ' ' + acy + ' C' + acx + ' ' + ((acy + bcy) / 2) + ' ' + bcx + ' ' + ((acy + bcy) / 2) + ' ' + bcx + ' ' + bcy;
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', e.kind === 'include' ? '#8c9bb5' : '#7aa2f7');
-    path.setAttribute('stroke-opacity', e.kind === 'include' ? .4 : .55);
-    path.setAttribute('stroke-width', '1.2');
-    if (e.kind === 'include') path.setAttribute('stroke-dasharray', '4 4');
-    path.setAttribute('marker-end', 'url(#arch-arrow-' + (e.kind === 'include' ? 'include' : 'call') + ')');
-    edgeLayer.appendChild(path);
-    drawn += 1;
+    if (!a || !b) return;
+    const ax = a.x + a.w / 2, ay = a.y + a.h;
+    const bx = b.x + b.w / 2, by = b.y;
+    const p = mk('path', {
+      d: 'M' + ax + ' ' + ay + ' C' + ax + ' ' + (ay + 40) + ' ' + bx + ' ' + (by - 40) + ' ' + bx + ' ' + by,
+      fill: 'none',
+      stroke: e.kind === 'include' ? '#8c9bb5' : '#7aa2f7',
+      'stroke-opacity': e.kind === 'include' ? .4 : .55,
+      'stroke-width': 1.2,
+      ...(e.kind === 'include' ? { 'stroke-dasharray': '4 4' } : {}),
+      'marker-end': 'url(#arch-arrow)',
+    }, null, edgeLayer);
+    edgeEls.push({ el: p, from: e.from, to: e.to, kind: e.kind });
   });
 
+  /* 箭头 ✓ */
+  const defs = mk('defs', {});
+  const marker = mk('marker', { id: 'arch-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5,
+    markerWidth: 6, markerHeight: 6, orient: 'auto-start-start-reverse' }, null, defs);
+  mk('path', { d: 'M2 1L8 5L2 9', fill: 'none', stroke: '#7aa2f7',
+    'stroke-width': 1.5, 'stroke-linecap': 'round' }, null, marker);
+
+  /* ── 方块层 ── */
+  const nodeLayer = mk('g', {});
+  const nodeEls = new Map();
+  groups.forEach((g) => {
+    mk('rect', { x: g.x, y: g.y, width: g.w, height: g.h, rx: 12,
+      fill: 'rgba(239,159,39,.09)', stroke: '#EF9F27', 'stroke-opacity': .5, 'stroke-width': .8 }, null, nodeLayer);
+    mk('text', { x: g.x + 14, y: g.y + 27, fill: '#EF9F27', 'font-size': 14, 'font-weight': 500 },
+      String(g.f.label || '').slice(0, 30), nodeLayer);
+    g.kids.forEach((k) => {
+      const p = pos.get(k.id);
+      const rect = mk('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: 7,
+        fill: 'rgba(122,162,247,.14)', stroke: '#7aa2f7', 'stroke-opacity': .5, 'stroke-width': .8 }, null, nodeLayer);
+      const label = mk('text', { x: p.x + 10, y: p.y + 19, fill: '#c0caf5', 'font-size': 13 },
+        String(k.label || '').slice(0, 17), nodeLayer);
+      nodeEls.set(k.id, { rect, label, node: k });
+      const grp = mk('g', { style: 'cursor:pointer' }, null, nodeLayer);
+      grp.appendChild(rect); grp.appendChild(label);
+      /* ★ 点节点 → 高亮它和它的上下游 ✓✓（这就是"可交互" ✓）*/
+      grp.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const up = new Set(), down = new Set();
+        edges.forEach((e) => { if (e.to === k.id) up.add(e.from); if (e.from === k.id) down.add(e.to); });
+        nodeEls.forEach((o, oid) => {
+          const on = oid === k.id || up.has(oid) || down.has(oid);
+          o.rect.setAttribute('fill', oid === k.id ? 'rgba(239,159,39,.35)' : (on ? 'rgba(122,162,247,.3)' : 'rgba(122,162,247,.05)'));
+          o.label.setAttribute('fill', on ? '#e7edf6' : '#565f89');
+        });
+        edgeEls.forEach((o) => {
+          const on = o.from === k.id || o.to === k.id;
+          o.el.setAttribute('stroke-opacity', on ? .95 : .06);
+          o.el.setAttribute('stroke-width', on ? 2 : 1);
+        });
+      });
+    });
+  });
+  /* 点空白 → 复原 ✓ */
+  svg.addEventListener('click', () => {
+    nodeEls.forEach((o) => {
+      o.rect.setAttribute('fill', 'rgba(122,162,247,.14)');
+      o.label.setAttribute('fill', '#c0caf5');
+    });
+    edgeEls.forEach((o) => {
+      o.el.setAttribute('stroke-opacity', o.kind === 'include' ? .4 : .55);
+      o.el.setAttribute('stroke-width', 1.2);
+    });
+  });
+
+  /* ── 图例 ── */
   const lg = [['#EF9F27', '文件'], ['#7aa2f7', '函数'], ['#7aa2f7', '调用（实线）'], ['#8c9bb5', '包含 / include（虚线）']];
-  const lh = 20, lx = W - 200, ly = H - lg.length * lh - 26;
-  mk('rect', { x: lx, y: ly, width: 186, height: lg.length * lh + 16, rx: 10,
-    fill: 'rgba(18,20,28,.92)', stroke: '#2b3040', 'stroke-width': .8 });
+  const lh = 19, lx = W - 196, ly = H - lg.length * lh - 24;
+  mk('rect', { x: lx, y: ly, width: 182, height: lg.length * lh + 14, rx: 10,
+    fill: 'rgba(18,20,28,.94)', stroke: '#2b3040', 'stroke-width': .8 });
   lg.forEach(([color, label], i) => {
-    const cy = ly + 14 + i * lh;
+    const cy = ly + 13 + i * lh;
     mk('rect', { x: lx + 12, y: cy - 5, width: 10, height: 10, rx: 3, fill: color });
     mk('text', { x: lx + 28, y: cy + 4, fill: '#8c9bb5', 'font-size': 12 }, label);
   });
 
-  svg.dataset.count = String(drawn);
-  return svg;
-}
+  /* 提示一行（告诉用户能点 ✓）*/
+  mk('text', { x: PAD, y: H - 16, fill: '#565f89', 'font-size': 12 },
+    '点任意方块 → 高亮它的上下游 · 点空白处复原 · ' + groups.length + ' 个文件 / ' + fnNodes.length + ' 个函数');
 
-async function openArchGraph() {
-  if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
-  setStatus('ok', '正在生成架构图…');
-  try {
-    const response = await fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file));
-    const graph = await response.json();
-    if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
-    if (!(graph.nodes || []).length) { setStatus('err', '这个文档里没有代码片段'); return; }
-    const svg = archGraphSvg(graph);
-    openLogicZoom(svg, (CURRENT.file.split('/').pop() || '') + ' · 架构图');
-    const st = graph.stats || {};
-    setStatus('ok', '架构图：' + (st.fragments || 0) + ' 个片段 · ' + (st.functions || 0) + ' 个函数 · '
-      + (st.calls || 0) + ' 条调用 · ' + svg.dataset.count + ' 条连线');
-  } catch (error) {
-    setStatus('err', '架构图失败：' + String(error.message || error));
-  }
+  svg.dataset.count = String(edgeEls.length);
+  return svg;
 }
 
 /* ── 代码图谱（文档级）· 面板内渲染 ──
@@ -8362,6 +8392,53 @@ function showLogicEditCode(host, code) {
    和代码并列显示（左代码 / 右图谱），不是塞在右侧的「大纲/关系图」面板里。
    布局与 mm-canvas 同款：主区域 flex 行里的兄弟节点，加 .on 才显示。 */
 let CG_ACTIVE = false;
+/* ★ 图谱面板的**视图切换**（2026-10-11 新增）——
+   'graph' = 力导向圆点图（原有）· 'arch' = 分层方块图（新增）。
+   用户原话：「放这个图谱里面，可以通过按钮切换」。
+   ⚠️ 只是**换 #cg-body 里画什么** —— 面板 / 工具栏 / 拖宽 / 放大 全共用。 */
+let CG_VIEW = (() => { try { return localStorage.getItem('mc-cg-view') === 'arch' ? 'arch' : 'graph'; } catch (_) { return 'graph'; } })();
+function setCodeGraphView(v) {
+  CG_VIEW = v === 'arch' ? 'arch' : 'graph';
+  try { localStorage.setItem('mc-cg-view', CG_VIEW); } catch (_) {}
+  if ($('cg-view-graph')) $('cg-view-graph').classList.toggle('on', CG_VIEW === 'graph');
+  if ($('cg-view-arch')) $('cg-view-arch').classList.toggle('on', CG_VIEW === 'arch');
+  if ($('cg-title')) $('cg-title').textContent = CG_VIEW === 'arch' ? '▦ 架构图' : '🕸 代码图谱';
+  if (CG_ACTIVE) renderCodeGraphPane();
+}
+/* 架构视图：同一份数据，画成分层方块（点节点高亮上下游 ✓） */
+async function renderArchIntoPane(body) {
+  const seq = ++CG_SEQ;
+  body.innerHTML = '<span class="ol-empty">正在生成架构图…</span>';
+  if ($('cg-stats')) $('cg-stats').textContent = '…';
+  try {
+    const response = await fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file));
+    const graph = await response.json();
+    if (seq !== CG_SEQ) return;
+    if (!graph || !graph.ok) throw new Error((graph && graph.error) || '生成失败');
+    if (!(graph.nodes || []).length) {
+      body.innerHTML = '<span class="ol-empty">这个文档里没有代码片段</span>';
+      if ($('cg-stats')) $('cg-stats').textContent = '';
+      return;
+    }
+    const svg = archGraphSvg(graph);
+    body.innerHTML = '';
+    const host = document.createElement('div');
+    host.className = 'doc-graph';
+    host.style.cssText = 'overflow:auto;padding:10px 12px 16px';
+    host.appendChild(svg);
+    body.appendChild(host);
+    const st = graph.stats || {};
+    if ($('cg-stats')) {
+      $('cg-stats').textContent = (st.fragments || 0) + ' 个片段 · ' + (st.functions || 0) + ' 个函数 · '
+        + (st.calls || 0) + ' 条调用 · ' + (st.includes || 0) + ' 条包含';
+    }
+    setStatus('ok', '架构图：点方块可高亮它的上下游');
+  } catch (error) {
+    if (seq !== CG_SEQ) return;
+    body.innerHTML = '<span class="ol-empty">架构图失败：' + escapeHtml(String((error && error.message) || error)) + '</span>';
+    if ($('cg-stats')) $('cg-stats').textContent = '';
+  }
+}
 let CG_SEQ = 0;
 let CG_SOURCE = '';
 function setCodeGraphActive(on) {
@@ -8382,15 +8459,22 @@ function setCodeGraphActive(on) {
   if (btn) btn.classList.toggle('on', CG_ACTIVE);
   if (CG_ACTIVE) renderCodeGraphPane();
 }
-function renderCodeGraphPane() {
-  const body = $('cg-body');
-  if (!body) return;
-  if (!CURRENT || !CURRENT.file) {
-    body.innerHTML = '<span class="ol-empty">先打开一个代码文档</span>';
-    if ($('cg-stats')) $('cg-stats').textContent = '';
-    return;
-  }
-  const seq = ++CG_SEQ;
+  function renderCodeGraphPane() {
+    const body = $('cg-body');
+    if (!body) return;
+    if (!CURRENT || !CURRENT.file) {
+      body.innerHTML = '<span class="ol-empty">先打开一个代码文档</span>';
+      if ($('cg-stats')) $('cg-stats').textContent = '';
+      return;
+    }
+    /* ★ 架构视图（2026-10-11 新增）——
+       和「图谱」**同一份数据**（/api/graph?scope=document），
+       只是**换个画法**：分层方块 + 可点高亮，而不是 Mermaid 力导向。
+       ⚠️ 分支放在这里 ✗（而不是另开面板）—— 用户原话：
+          「**放这个图谱里面，可以通过按钮切换**」。
+          面板 / 工具栏 / 拖宽 / 放大 全部共用 ✓。 */
+    if (CG_VIEW === 'arch') { renderArchIntoPane(body); return; }
+    const seq = ++CG_SEQ;
   body.innerHTML = '<span class="ol-empty">正在生成代码图谱…</span>';
   if ($('cg-stats')) $('cg-stats').textContent = '…';
   fetch('/api/graph?scope=document&file=' + encodeURIComponent(CURRENT.file))
@@ -15326,10 +15410,10 @@ function makeHResizer(handle, getter, setter) {
       if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
       setCodeGraphActive(!CG_ACTIVE);
     };
-    /* ★ 架构图（2026-10-11 新增）—— 和「图谱」**并存** ✓：
-       「图谱」是面板里的力导向图；这个是浮层里的分层方块图 ✓。
-       两者共用同一份数据（/api/graph?scope=document），互不影响 ✓。 */
-    if ($('btn-archgraph')) $('btn-archgraph').onclick = () => { openArchGraph(); };
+    /* ★ 图谱面板内的视图切换（2026-10-11 新增）——
+       两个按钮切同一个面板里画什么：🕸 力导向 / ▦ 分层方块。 */
+    if ($('cg-view-graph')) $('cg-view-graph').onclick = () => setCodeGraphView('graph');
+    if ($('cg-view-arch')) $('cg-view-arch').onclick = () => setCodeGraphView('arch');
   if ($('btn-logicgraph')) $('btn-logicgraph').onclick = () => {
     if (!CURRENT || !CURRENT.file) { setStatus('err', '先打开一个代码文档'); return; }
     setLogicGraphActive(!LG_ACTIVE);

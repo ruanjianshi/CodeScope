@@ -337,14 +337,6 @@
       <button id="btn-outline" title="显示/隐藏代码大纲">大纲</button>
       <button id="btn-mindmap" disabled title="把当前 Markdown 文档转为思维导图">导图</button>
       <button id="btn-codegraph" disabled title="代码图谱：整篇文档的片段 / 函数 / 调用 / 包含关系">图谱</button>
-      <!-- ★ 架构图（2026-10-11 新增）——
-           和「图谱」**同一份数据**（/api/graph?scope=document），
-           但**画法不同**：按「文件 / 函数」分层排布、方块 + 连线 + 图例，
-           而不是力导向圆点。两者并存，互不影响。
-           ⚠️ 为什么另开一个按钮而不是替换「图谱」✗ ——
-              用户原话：「不破坏现有的这个，新增」。
-           数据来自**当前文档**（不用选路径），和「图谱」一致。 -->
-      <button id="btn-archgraph" disabled title="架构图：当前文档的分层架构（文件 / 函数 / 调用 / 包含），方块 + 连线 + 图例">架构</button>
       <button id="btn-logicgraph" disabled title="逻辑图：当前函数的控制流，可图形化编辑后生成代码">逻辑图</button>
       <button id="btn-blockly" disabled title="图形化编程：把当前函数拆成积木，拖拽改完再生成代码">积木</button>
       <button id="btn-history" disabled title="查看当前文件的自动保存时间线">历史</button>
@@ -511,6 +503,14 @@
           <span id="cg-title">🕸 代码图谱</span>
           <span id="cg-stats"></span>
           <span class="sp"></span>
+          <!-- ★ 视图切换（2026-10-11 新增）——
+               用户原话：「放这个图谱里面，可以通过按钮切换」。
+               两个视图**同一份数据**（/api/graph?scope=document）：
+                 🕸 图谱 = 力导向圆点图（Mermaid，原有）
+                 ▦ 架构 = 分层方块图（自绘 SVG，新增）
+               ⚠️ 只切 #cg-body 里画什么 ✗ —— 面板、工具栏、拖宽、放大都共用 ✓。 -->
+          <button id="cg-view-graph" class="on" title="力导向圆点图（函数 / 文件 / 调用）">🕸 图谱</button>
+          <button id="cg-view-arch" title="分层方块图（按文件分组，可点节点高亮上下游）">▦ 架构</button>
           <button id="cg-refresh" title="重新生成">⟳ 刷新</button>
           <button id="cg-zoom" title="全屏放大查看">⤢ 放大</button>
           <button id="cg-copy" title="复制 Mermaid 源码">⧉ Mermaid</button>
