@@ -6582,10 +6582,9 @@ function applyMmMode() {
     graphBtn.disabled = !hasCode;
     graphBtn.style.display = hasCode ? '' : 'none';
     graphBtn.classList.toggle('on', CG_ACTIVE);
-      const logicBtn = $('btn-logicgraph');
-      if (logicBtn) { logicBtn.disabled = !hasCode; logicBtn.style.display = hasCode ? '' : 'none'; }
-      if (archBtn) { archBtn.disabled = !hasCode; archBtn.style.display = hasCode ? '' : 'none'; }
-    const bpBtn = $('btn-blockly');
+        const logicBtn = $('btn-logicgraph');
+        if (logicBtn) { logicBtn.disabled = !hasCode; logicBtn.style.display = hasCode ? '' : 'none'; }
+      const bpBtn = $('btn-blockly');
     if (bpBtn) { bpBtn.disabled = !hasCode; bpBtn.style.display = hasCode ? '' : 'none'; }
     /* 换成没有代码的文档就自动收起图谱栏，别留一块空白 */
     if (!hasCode && CG_ACTIVE) setCodeGraphActive(false);
