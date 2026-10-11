@@ -363,13 +363,14 @@ ck('空图 / 只有自环 都不炸', threw === '', threw);
       **`ReferenceError: archBestRowW is not defined`** ✗，图直接白屏 ✓。
    ⇒ 所以「改完跑一下真实调用链」和「断言它存在」都要有 ✓。 */
 ck('archBestRowW 是**顶层**函数（能被 arch-view.js 调到）', typeof archBestRowW === 'function');
-ck('archBestRowW 会按面板宽高比挑折行宽度',
-  (() => {
-    if (typeof archBestRowW !== 'function') return false;
-    const wide = archBestRowW(graph, 1400, 400);   /* 面板很扁 → 图也该扁 → 一行更宽 */
-    const tall = archBestRowW(graph, 500, 900);    /* 面板很高 → 图该多折几行 → 一行更窄 */
-    return Number.isFinite(wide) && Number.isFinite(tall) && wide > tall;
-  })());
+/* ⚠️ 用户明确要「**按片段顺序横向排开**」✓ —— 所以行为是**优先一行放完** ✓
+   （比面板宽就横向滚动 ✓），只有一行宽到离谱（> 面板宽 × 2.5）才折行 ✓。
+   （原来这条断言写的是"按宽高比挑"✗ —— 改行为时**断言也要跟着改** ✓，
+     不然它会一直红 ✗。改完记得问一句：这条断言还代表用户要的东西吗？） */
+ck('archBestRowW 优先「一行放完」（按片段顺序横向排开）',
+  typeof archBestRowW === 'function' && archBestRowW(graph, 928, 540) > 1e5);
+ck('一行宽到离谱（> 面板宽 × 2.5）时才折行',
+  typeof archBestRowW === 'function' && archBestRowW(graph, 200, 900) < 1e5);
 
 /* ⑬ 折行 —— 用户原话「**排布不合理**」（2026-10-11）：
    5 个片段横向铺开 1494px，侧栏只有 ~520px → 得滚半天才看得全。

@@ -35,8 +35,7 @@ function archLayout(graph, opts) {
   });
 
   /* ── 骨架：**卡片 + 走廊** ──
-     卡片折行排布（列宽对齐 → 列间隙跨行贯通）、卡片内左右两条垂直走廊、
-     行与行之间是水平通道、0 函数的片段卡片收窄。
+     卡片折行排布（列宽对齐 → 列间隙跨行贯通）、卡片内左右两条垂直走廊、行与行之间是水平通道。
      ⇒ 水平段只落在行通道里、垂直段只落在卡片内走廊 / 列间隙里，**几何上不可能穿方块** ✓。
      详见 CHANGELOG「第一 / 二 / 三 / 七轮」。 */
   /* ⚠️ 第八轮：用户选了「**更紧凑**」（原话：「整体太空」）—— 整体缩一圈：
@@ -468,8 +467,10 @@ function archLayout(graph, opts) {
   };
 }
 
-/* 挑折行宽度：试几个值，取**宽高比最接近面板**的那个 ✓（试 4 次很便宜，纯数据 ✓）。 */
+/* 挑折行宽度 —— 用户要「按片段顺序横向排开」✓ → **优先一行放完**（比面板宽就横向滚动 ✓）；
+   只有一行宽到离谱（> 面板宽 × 2.5）才折行 ✗。 */
 function archBestRowW(graph, panelW, panelH) {
+  if (archLayout(graph, { maxRowW: 1e6 }).W <= panelW * 2.5) return 1e6;
   let best = panelW * 1.2, score = Infinity;
   [0.7, 1.0, 1.5, 2.2].forEach((k) => {
     const L = archLayout(graph, { maxRowW: Math.max(360, panelW * k) });
