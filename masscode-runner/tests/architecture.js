@@ -34,6 +34,29 @@ function ck(name, ok, detail) {
   else fails.push(name + (detail ? '（' + detail + '）' : ''));
 }
 
+/* ★★ 棘轮的度量：**代码行数**（不是总行数）✗✗ —— 2026-10-11 换的 ✓
+   ⚠️ 为什么换：这个项目的风格就是**注释多** ✓（把"为什么"写清楚 ✓），
+      用总行数当棘轮会**一直误伤** ✓ —— 加一段解释就红 ✓，
+      于是只有两条路：砍注释 ✗、或调上限 ✗，**两条都在毁掉棘轮** ✓。
+      （实测：v3.1.0 为了不调上限，一天里拆了 4 次文件、压了 7 次注释 ✓，
+        已经压到"再改一行就红" ✓ —— 那不是棘轮，那是镣铐 ✓。）
+   ⇒ 只数**非空、非注释**的行 ✓：注释可以随便写 ✓，代码要克制 ✓。 */
+function codeLines(rel) {
+  let s;
+  try { s = fs.readFileSync(path.join(root, rel), 'utf8'); } catch (_) { return -1; }
+  let inBlock = false;
+  let n = 0;
+  for (const raw of s.split('\n')) {
+    const line = raw.trim();
+    if (inBlock) { if (line.includes('*/')) inBlock = false; continue; }
+    if (!line) continue;                                  /* 空行 ✓ */
+    if (line.startsWith('//')) continue;                   /* 整行注释 ✓ */
+    if (line.startsWith('/*')) { if (!line.includes('*/')) inBlock = true; continue; }
+    n += 1;
+  }
+  return n;
+}
+
 function lines(rel) {
   try {
     /* ⚠️ 要和 `wc -l` 对齐 ✗（第一次写漏了 `- 1` ✓）——
@@ -51,23 +74,25 @@ function countIn(rel, re) {
   } catch (_) { return -1; }
 }
 
-console.log('\n── ① 巨型文件棘轮（只准变小，不准变大）──');
+console.log('\n── ① 巨型文件棘轮（只准变小，不准变大；度量 = **代码行数**）──');
 
 /* 现状上限。**只准往下调**（重构成功就把数字改小）。
-   ⚠️ 别为了让测试变绿而往上调 —— 那就把棘轮拆了。 */
+   ⚠️ 别为了让测试变绿而往上调 —— 那就把棘轮拆了。
+   ★★ 2026-10-11：度量从「总行数」换成「**代码行数**」（见上面 `codeLines` 的理由 ✓）——
+      所以下面这一整列数字都**重新量过** ✓，不是"往上调" ✓（代码行数普遍比总行数小 ✓）。 */
 const SIZE_CAP = [
   /* 2026-10-11：架构视图重写走线时涨到 16737 ✓（棘轮红了 ✓）→
      **抽成 assets/arch-view.js** 而不是调上限 ✓（注释里那句「别往上调」）——
      顺带把上限**往下拧**到抽完之后的实际值 ✓（棘轮的正经用法）。 */
-  ['assets/app.js', 16356],
+  ['assets/app.js', 14552],
   /* 2026-10-11 又一轮：加「自由缩放 + 卡片折行」→ arch-view.js 涨到 611，棘轮红 ✓
      → 按**天然边界**拆成两个：纯画图（arch-graph-svg.js）+ 面板集成（arch-view.js）✓，
      两个上限都记成拆完之后的实际值 ✓。 */
   /* 2026-10-11 第四轮：加「✦ AI 分析」（用户：「没有接入 AI 去分析」）——
      新功能全进新文件（arch-ai-view.js / arch-zoom.js），arch-view.js 反而**变小**了 ✓。 */
-  ['assets/arch-view.js', 78],
-  ['assets/arch-zoom.js', 87],
-  ['assets/arch-ai-view.js', 462],
+  ['assets/arch-view.js', 52],
+  ['assets/arch-zoom.js', 57],
+  ['assets/arch-ai-view.js', 359],
   /* 2026-10-11 第三轮：加「主干合并（总线画法）」→ arch-graph-svg.js 涨到 550，棘轮红 ✓
      → 按**管线**再拆一刀：布局+走线（纯数据，不碰 DOM）| 画成 SVG ✓。 */
   /* ⚠️ 2026-10-11 这一次**明确往上调了**（436 → 481），理由说清楚：
@@ -79,48 +104,48 @@ const SIZE_CAP = [
      ⚠️ **下次再加功能必须拆**（布局 / 走线分成两个文件）—— 这次不拆是因为
         plan 和布局是**互相依赖**的（plan 决定走廊宽度 → 走廊宽度决定卡片宽度），
         拆不干净 ✗。 */
-  ['assets/arch-layout.js', 481],
-  ['assets/arch-round.js', 48],    /* 拐角磨圆（纯字符串处理）*/
-  ['assets/arch-graph-svg.js', 132],
-  ['server.js', 8263],
-  ['assets/app.css', 4287],
-  ['src/system-panel.js', 3746],
-  ['lib/system-panel.js', 2471],
-  ['assets/debug-panel.js', 900],
-  ['lib/routes/dbg.js', 160],
-  ['lib/routes/latex.js', 200],
-  ['lib/arch/analyze.js', 350],
-  ['lib/arch/render.js', 450],
-  ['lib/arch/ai.js', 191],
-  ['lib/arch/ai-error.js', 78],   /* 把上游 AI 报错翻成人话（纯函数）*/
-    ['lib/routes/arch.js', 209],   /* 加了 /api/arch/ai（AI 语义分析）*/
-  ['lib/routes/check.js', 250],
-  ['lib/routes/env.js', 250],
-  ['lib/routes/fig.js', 250],
-  ['lib/routes/format.js', 250],
-  ['lib/routes/graph.js', 250],
-  ['lib/routes/integrations.js', 250],
-  ['lib/routes/logic.js', 250],
-  ['lib/routes/matlab.js', 250],
-  ['lib/routes/office.js', 250],
-  ['lib/routes/py.js', 250],
-  ['lib/routes/remote.js', 250],
-  ['lib/routes/reorder.js', 250],
-  ['lib/routes/rev.js', 250],
-  ['lib/routes/run.js', 250],
-  ['lib/routes/save.js', 250],
-  ['lib/routes/snippets.js', 250],
-  ['lib/routes/study.js', 250],
-  ['lib/routes/sync.js', 250],
-  ['lib/routes/system-panel.js', 250],
-  ['lib/routes/system.js', 250],
-  ['lib/routes/tags.js', 250],
-  ['lib/routes/term.js', 250],
-  ['lib/routes/version.js', 250],   /* 路由模块，样板 ✓ */   /* 刚抽出来的，别让它再涨回去 ✓ */
+  ['assets/arch-layout.js', 370],
+  ['assets/arch-round.js', 23],    /* 拐角磨圆（纯字符串处理）*/
+  ['assets/arch-graph-svg.js', 110],
+  ['server.js', 7107],
+  ['assets/app.css', 3869],
+  ['src/system-panel.js', 3189],
+  ['lib/system-panel.js', 2097],
+  ['assets/debug-panel.js', 530],
+  ['lib/routes/dbg.js', 72],
+  ['lib/routes/latex.js', 94],
+  ['lib/arch/analyze.js', 220],
+  ['lib/arch/render.js', 297],
+  ['lib/arch/ai.js', 134],
+  ['lib/arch/ai-error.js', 44],   /* 把上游 AI 报错翻成人话（纯函数）*/
+    ['lib/routes/arch.js', 152],   /* 加了 /api/arch/ai（AI 语义分析）*/
+  ['lib/routes/check.js', 24],
+  ['lib/routes/env.js', 46],
+  ['lib/routes/fig.js', 16],
+  ['lib/routes/format.js', 37],
+  ['lib/routes/graph.js', 30],
+  ['lib/routes/integrations.js', 49],
+  ['lib/routes/logic.js', 56],
+  ['lib/routes/matlab.js', 24],
+  ['lib/routes/office.js', 163],
+  ['lib/routes/py.js', 24],
+  ['lib/routes/remote.js', 58],
+  ['lib/routes/reorder.js', 15],
+  ['lib/routes/rev.js', 11],
+  ['lib/routes/run.js', 25],
+  ['lib/routes/save.js', 31],
+  ['lib/routes/snippets.js', 11],
+  ['lib/routes/study.js', 75],
+  ['lib/routes/sync.js', 53],
+  ['lib/routes/system-panel.js', 14],
+  ['lib/routes/system.js', 10],
+  ['lib/routes/tags.js', 46],
+  ['lib/routes/term.js', 40],
+  ['lib/routes/version.js', 14],   /* 路由模块，样板 ✓ */   /* 刚抽出来的，别让它再涨回去 ✓ */
 ];
 for (const [rel, cap] of SIZE_CAP) {
-  const n = lines(rel);
-  ck('  ' + rel + ' ≤ ' + cap + ' 行', n > 0 && n <= cap, '实际 ' + n + ' 行');
+  const n = codeLines(rel);
+  ck('  ' + rel + ' ≤ ' + cap + ' 行代码', n > 0 && n <= cap, '实际 ' + n + ' 行代码');
 }
 
 console.log('\n── ② ARCHITECTURE.md 里的数字必须和代码一致（源证据）──');
@@ -134,15 +159,17 @@ ck('  文档存在（' + docPath + '）', doc.length > 0);
 /* ⚠️ 先**去掉千分位逗号** ✗（文档里写 `17,142` ✓，代码量出来是 `17142` ✓）——
    不归一化就会"文档明明写了却找不到" ✓（第一次跑就是这样 ✓）。 */
 const docFlat = doc.replace(/(\d),(?=\d{3}\b)/g, '$1');
-const DOC_FACTS = [
-  ['assets/app.js', lines('assets/app.js')],
-  ['server.js', lines('server.js')],
-  ['assets/app.css', lines('assets/app.css')],
-];
-for (const [rel, real] of DOC_FACTS) {
-  const shown = real > 0 && docFlat.includes(String(real));
-  ck('  文档里的 ' + rel + ' 行数（' + real + '）与代码一致', shown,
-    shown ? '' : '文档里找不到 ' + real);
+/* ⚠️ 文档里**两个数都写** ✓（总行 / 代码行）—— 两个都验 ✓：
+   总行是"这个文件多大" ✓，代码行是"棘轮守的那个数" ✓，缺一个都对不上 ✓。 */
+const DOC_FACTS = ['assets/app.js', 'server.js', 'assets/app.css'];
+for (const rel of DOC_FACTS) {
+  const t = lines(rel), c = codeLines(rel);
+  /* ⚠️ 用**词边界**匹配 ✗ —— `includes` 是子串匹配 ✓，
+     文档里有 `14,287` 时它会以为找到了 `4287` ✓（实测踩到过 ✓）。 */
+  const has = (n) => n > 0 && new RegExp('(?<!\\d)' + n + '(?!\\d)').test(docFlat);
+  const okT = has(t), okC = has(c);
+  ck('  文档里的 ' + rel + ' 行数（总 ' + t + ' / 代码 ' + c + '）与代码一致', okT && okC,
+    okT && okC ? '' : (okT ? '' : '缺总行 ' + t) + (okC ? '' : ' 缺代码行 ' + c));
 }
 
 console.log('\n── ③ 路由模块化进度 ──');
