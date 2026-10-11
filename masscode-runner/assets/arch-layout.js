@@ -39,17 +39,20 @@ function archLayout(graph, opts) {
      行与行之间是水平通道、0 函数的片段卡片收窄。
      ⇒ 水平段只落在行通道里、垂直段只落在卡片内走廊 / 列间隙里，**几何上不可能穿方块** ✓。
      详见 CHANGELOG「第一 / 二 / 三 / 七轮」。 */
-  const CHIP_W = 176, CHIP_H = 30, CHIP_GAP = 9;
-  const CARD_HEAD = 38, CARD_TAIL = 10;
-  const COL_GAP = 30;                 /* 列间隙基准宽（会按负载加宽） */
-  const LANE_BASE = 14, LANE_STEP = 6, LANE_MAX = 62;
-  const SLOT = 6;
-  const PAD = 24;
-  const EMPTY_CARD_W = 148;           /* 0 函数的片段：只放标题 */
+  /* ⚠️ 第八轮：用户选了「**更紧凑**」（原话：「整体太空」）—— 整体缩一圈：
+     函数块 176×30→158×25、卡片头 38→32、列间隙 30→24、行通道 14+n·7→12+n·6、
+     外边距 24→18、0 函数卡片 148→**104**（只放名字）。9 函数的卡片 390→**330** ✓。 */
+  const CHIP_W = 158, CHIP_H = 25, CHIP_GAP = 6;
+  const CARD_HEAD = 32, CARD_TAIL = 8;
+  const COL_GAP = 24;                 /* 列间隙基准宽（会按负载加宽） */
+  const LANE_BASE = 12, LANE_STEP = 5, LANE_MAX = 54;
+  const SLOT = 5;
+  const PAD = 18;
+  const EMPTY_CARD_W = 104;           /* 0 函数的片段：只放标题 */
   /* 一行超过这个宽就折行。**调用方可以传**（renderArchIntoPane 按面板宽算）——
      固定值会让窄侧栏里的图要么太宽（缩放后字太小）要么太窄（高得离谱）✓。 */
   const MAX_ROW_W = Math.max(360, Number(opts && opts.maxRowW) || 820);
-  const LEGEND_W = 186, LEGEND_H = 4 * 19 + 14;
+  const LEGEND_W = 168, LEGEND_H = 4 * 17 + 12;
 
   /* ① 一个片段 = 一张卡片 */
   const cards = [];
@@ -166,8 +169,8 @@ function archLayout(graph, opts) {
       gapLoad[p.gap] += 1;
     });
   }
-  const rowLaneH = rowLoad.map((n) => Math.max(26, 14 + n * 7));
-  const gapW = gapLoad.map((n) => Math.max(22, 12 + n * 7));
+  const rowLaneH = rowLoad.map((n) => Math.max(22, 12 + n * 6));
+  const gapW = gapLoad.map((n) => Math.max(18, 10 + n * 6));
 
   /* ⑦ 位置：列内居中、行内垂直居中 */
   const pos = new Map();

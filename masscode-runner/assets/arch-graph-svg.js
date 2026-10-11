@@ -69,16 +69,16 @@ function archGraphSvg(graph, opts) {
     /* ⚠️ 标题/计数要放在**函数列**里，不能放到走廊上 ——
        放到走廊上会被竖线划过（用户截图里「9 个函数」上就有线）。 */
     const headX = c.x + (c.kids.length ? c.lw : 0);
-    mk('text', { x: headX + 12, y: c.y + 25, fill: '#EF9F27', 'font-size': 14, 'font-weight': 500 },
+    mk('text', { x: headX + 10, y: c.y + 21, fill: '#EF9F27', 'font-size': 13, 'font-weight': 500 },
       String(c.node.label || '').slice(0, 22), nodeLayer);
-    mk('text', { x: headX + (c.kids.length ? CHIP_W : c.w) - 12, y: c.y + 25,
-      fill: '#8a7350', 'font-size': 11, 'text-anchor': 'end' }, c.kids.length + ' 个函数', nodeLayer);
+    mk('text', { x: headX + (c.kids.length ? CHIP_W : c.w) - 10, y: c.y + 21,
+      fill: '#8a7350', 'font-size': 10, 'text-anchor': 'end' }, c.kids.length ? c.kids.length + ' 个函数' : '', nodeLayer);
     c.kids.forEach((k) => {
       const p = pos.get(k.id);
       const grp = mk('g', { style: 'cursor:pointer' }, null, nodeLayer);
       const rect = mk('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: 7,
         fill: 'rgba(122,162,247,.14)', stroke: '#7aa2f7', 'stroke-opacity': .5, 'stroke-width': .8 }, null, grp);
-      const label = mk('text', { x: p.x + 10, y: p.y + 19, fill: '#c0caf5', 'font-size': 13 },
+      const label = mk('text', { x: p.x + 8, y: p.y + 17, fill: '#c0caf5', 'font-size': 12 },
         String(k.label || '').slice(0, 20), grp);
       nodeEls.set(k.id, { rect, label, node: k });
       /* ★ 点节点 → 高亮它和它的上下游 ✓✓（这就是"可交互" ✓）*/
@@ -114,13 +114,13 @@ function archGraphSvg(graph, opts) {
 
   /* ── 图例（放在内容**下面**，不再压在卡片上）── */
   const lg = [['#EF9F27', '片段'], ['#7aa2f7', '函数'], ['#7aa2f7', '调用（实线）'], ['#8c9bb5', '包含 / include（虚线）']];
-  const lh = 19, lx = Math.max(PAD, W - LEGEND_W - 14), ly = legendY;
+  const lh = 17, lx = Math.max(PAD, W - LEGEND_W - 12), ly = legendY;
   mk('rect', { x: lx, y: ly, width: LEGEND_W - 8, height: LEGEND_H, rx: 10,
     fill: 'rgba(18,20,28,.94)', stroke: '#2b3040', 'stroke-width': .8 });
   lg.forEach(([color, label], i) => {
-    const cy = ly + 13 + i * lh;
+    const cy = ly + 12 + i * lh;
     mk('rect', { x: lx + 12, y: cy - 5, width: 10, height: 10, rx: 3, fill: color });
-    mk('text', { x: lx + 28, y: cy + 4, fill: '#8c9bb5', 'font-size': 12 }, label);
+    mk('text', { x: lx + 26, y: cy + 4, fill: '#8c9bb5', 'font-size': 11 }, label);
   });
 
   /* 提示一行（告诉用户怎么用 ✓）*/
