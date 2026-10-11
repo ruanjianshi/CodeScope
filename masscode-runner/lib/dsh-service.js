@@ -73,6 +73,36 @@ function cleanChildEnv() {
   return env;
 }
 
+/* ★★ 启动前清掉**残留的凭据锁** ✗✗ —— 2026-10-11 用户报「CodeScope 无法管理 DSH 的开关」✓。
+ *
+ * 根因（从日志里挖出来的 ✓）：
+ *   `~/.dsh/.credentials.yaml.lock` 是**上一次进程留下的死锁** ✓（文件里写着那个 PID ✓，
+ *   进程早没了 ✓）→ DSH 的 `connection` 插件（**必需** ✓）等锁超时 ✓ →
+ *   `dsh: startup failed: 1 required plugin did not activate` ✓ → 退出码 1 ✓ →
+ *   面板上永远显示「DSH 已退出（1）」✗ —— **点多少次「启动」都没用** ✓，
+ *   手动删掉锁文件才好 ✓。**但那不该是解法** ✗。
+ *
+ * ⚠️⚠️ 判据必须是「**锁里写的那个 PID 还活着吗**」✗，不能看文件年龄 ✓ ——
+ *     DSH 冷启动本身就可能几分钟 ✓，按年龄判会**删掉活锁** ✓（那是真事故 ✓）。
+ *     拿不到 / 不是数字 / 没权限 → **一律不动** ✓（宁可不修，也不能删活锁 ✗）。
+ *
+ * 返回一句说明（清掉了才非空 ✓），给面板的 message 用 ✓。
+ */
+function clearStaleCredentialLock(home) {
+  const lock = path.join(home || os.homedir(), '.dsh', '.credentials.yaml.lock');
+  let raw;
+  try { raw = fs.readFileSync(lock, 'utf8').trim(); } catch (_) { return ''; }
+  const pid = Number(raw);
+  if (!Number.isFinite(pid) || pid <= 0) return '';
+  try {
+    process.kill(pid, 0);                       /* 还活着 → 别动 ✓ */
+    return '';
+  } catch (error) {
+    if (error && error.code === 'EPERM') return '';   /* 活着但没权限 → 也别动 ✓ */
+  }
+  try { fs.unlinkSync(lock); return '（已清掉上一次残留的凭据锁）'; } catch (_) { return ''; }
+}
+
 function createDshService(options = {}) {
   const projectRoot = options.projectRoot || path.resolve(__dirname, '..');
   const dataRoot = options.dataRoot || path.join(os.tmpdir(), 'codescope');
@@ -167,8 +197,10 @@ function createDshService(options = {}) {
         return status();
       }
       fs.mkdirSync(logDir, { recursive:true });
-      appendLog(`\n[${new Date().toISOString()}] CodeScope starting DSH ${cli.version || ''}\n`);
-      state = 'starting'; message = '正在启动 DSH…'; tokenUrl = ''; lastExit = null;
+      /* ⚠️ **先清死锁再 spawn** ✗ —— 否则 DSH 必然启动失败（见 clearStaleCredentialLock ✓）。 */
+      const lockNote = clearStaleCredentialLock(options.home);
+      appendLog(`\n[${new Date().toISOString()}] CodeScope starting DSH ${cli.version || ''}${lockNote}\n`);
+      state = 'starting'; message = '正在启动 DSH…' + lockNote; tokenUrl = ''; lastExit = null;
       const args = [...cli.prefix, 'web', '--no-open', '--host', LOOPBACK, '--port', String(port)];
       child = spawn(cli.command, args, { cwd:projectRoot, env:cleanChildEnv(), stdio:['ignore', 'pipe', 'pipe'], windowsHide:true });
       owned = true;
@@ -183,7 +215,8 @@ function createDshService(options = {}) {
       child.once('exit', (code, signal) => {
         lastExit = { code, signal, at:new Date().toISOString() };
         child = null; owned = false;
-        if (state !== 'stopped') { state = 'error'; message = `DSH 已退出（${signal || code}）`; }
+        /* ⚠️ 报错要**指路** ✗ —— 原来只说「DSH 已退出（1）」✓，用户不知道去哪看 ✓（这次就卡在这 ✓）。 */
+        if (state !== 'stopped') { state = 'error'; message = `DSH 已退出（${signal || code}）—— 详情见运行日志`; }
       });
       for (let attempt = 0; attempt < 60; attempt++) {
         if (await tcpOpen(LOOPBACK, port, 250)) {
@@ -245,4 +278,4 @@ function createDshService(options = {}) {
   return { status, start, stop, restart };
 }
 
-module.exports = { createDshService };
+module.exports = { createDshService, clearStaleCredentialLock };
