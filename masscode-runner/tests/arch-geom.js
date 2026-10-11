@@ -123,6 +123,11 @@ function buildGraph() {
   call('1:uart_init', '1:uart_write');
   call('0:led_read', '1:uart_read');       /* 跨片段 */
   inc(0, 2); inc(1, 2); inc(3, 2);         /* 三个卡片 include 同一个头文件 */
+  /* ⚠️ 再加一条**同列跨行**的 include（main.c 在第 2 行第 1 列 → led.c 在第 1 行第 1 列）——
+     这正是用户截图里那条 882px "大环"的触发条件 ✓：
+     同一列时 `round((ca+cb)/2)` 就等于 `ca`，而 `ca = 0` 是**最左外侧通道** ✓。
+     没有这条边，下面那条「绕远路」断言就是**恒真**的 ✓（第一次加就踩到了 ✓）。 */
+  inc(3, 0);
   return { nodes, edges, stats: { fragments: 4, functions: 15, calls: 9, includes: 3 } };
 }
 
@@ -211,7 +216,7 @@ ck('画出了 4 张片段卡片', cards.length === 4, '实际 ' + cards.length);
 ck('画出了 15 个函数方块', chips.length === 15, '实际 ' + chips.length);
 
 /* ② `owns` 边不画 —— 它由"函数装在卡片里"表达，画出来就是重复信息（原来 57 条边里 29 条是它） */
-ck('owns 边不画线（9 条 owns 一条都不该出现）', paths.length === 12, '实际 ' + paths.length + ' 条（应为 9 call + 3 include）');
+ck('owns 边不画线（9 条 owns 一条都不该出现）', paths.length === 13, '实际 ' + paths.length + ' 条（应为 9 call + 4 include）');
 
 /* ③ route clearance：线不许扎进别的方块 */
 const crossings = [];
@@ -233,6 +238,37 @@ svg.all('path').forEach((p, i) => {
 });
 ck('没有一条线穿过无关方块（route clearance）', crossings.length === 0,
   crossings.length ? crossings.slice(0, 3).map((c) => '#' + c.i + ' ' + c.why).join(' / ') : '');
+
+/* 数「有多少条线绕了远路」—— 路径长度 / 两端曼哈顿距离 ——
+   ⚠️ 这条是**肉眼看出来的、当时所有断言都放过去了** ✓：
+      用户截图里 `main.c → led.h` 绕到**最左外侧通道**再上去 ✓，882px 一圈 ✓，
+      在图上看着像凭空多了个虚线框 ✓。
+      根因：同一列时 `round((ca+cb)/2)` 就等于 `ca` ✓，而 `ca = 0` 是**最左外侧** ✗。
+   ⇒ 判据：**路径长度 ≤ 两端曼哈顿距离 × 2.5 + 120** ✓
+     （正常走线是「横一段 + 竖一段」，比例远小于 2.5 ✓）。 */
+function detoursOf(svg) {
+  const out = [];
+  svg.all('path').forEach((p) => {
+    const pts = pointsOf(p.getAttribute('d'));
+    if (pts.length < 2) return;
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+    const a = pts[0], z = pts[pts.length - 1];
+    const direct = Math.abs(z.x - a.x) + Math.abs(z.y - a.y);
+    if (len > direct * 2.5 + 120) out.push(Math.round(len) + 'px（直线只要 ' + Math.round(direct) + 'px）');
+  });
+  return out;
+}
+
+/* ③b 不能**绕远路** ——
+   ⚠️ 这条是**肉眼看出来的、上面所有断言都放过去了** ✓：
+      用户截图里 `main.c → led.h` 绕到了**最左外侧通道**再上去 ✓，
+      882px 的一圈 ✓，在图上看着像凭空多了个虚线框 ✓。
+      根因：同一列时 `round((ca+cb)/2)` 就等于 `ca` ✓，而 `ca = 0` 是**最左外侧** ✗。
+   ⇒ 判据：**路径长度 ≤ 两端曼哈顿距离 × 2.5 + 120** ✓
+     （正常走线是「横一段 + 竖一段」，比例远小于 2.5 ✓）。 */
+const detours = detoursOf(svg);
+ck('没有绕远路的线（路径长度 ≤ 两端曼哈顿距离×2.5+120）', detours.length === 0, detours.slice(0, 3).join(' / '));
 
 /* ④ 端点确定性分散：不能一堆线扎在同一个点 */
 const anchors = new Map();
@@ -324,6 +360,10 @@ const oW = Number(wrapOne.getAttribute('width')), oH = Number(wrapOne.getAttribu
 ck('maxRowW 小 → 画布更窄', wW < oW, wW + 'px vs ' + oW + 'px');
 ck('maxRowW 小 → 画布更高（真的折行了）', wH > oH, wH + 'px vs ' + oH + 'px');
 ck('折行之后仍然不穿块', crossingsOf(wrapNarrow) === 0, crossingsOf(wrapNarrow) + ' 条');
+/* ⚠️ **「绕远路」的触发条件在窄版** —— 窄版才把卡片折成"同列跨行" ✓，
+   所以这条必须在这里再验一次 ✓（只验默认宽度的话它是**恒真**的 ✓，第一次就踩到了 ✓）。 */
+const wrapDetours = detoursOf(wrapNarrow);
+ck('折行之后仍然没有绕远路的线', wrapDetours.length === 0, wrapDetours.slice(0, 3).join(' / '));
 ck('折行之后端点仍然不重叠', (() => {
   const seen = new Map();
   wrapNarrow.all('path').filter((p) => p.getAttribute('marker-end')).forEach((p) => {

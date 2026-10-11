@@ -17,7 +17,7 @@
   index.html          1,072 行  ← 已抽外链（原 1,771 行）
   assets/app.js      16,356 行  ← ★ 曾是 17,142 行，2026-10-11 抽出调试面板 + 架构视图
   assets/debug-panel.js  879 行  ← ★ 抽出来的（断点 / 单步 / 变量表）
-  assets/arch-layout.js     436 行  ← ★ 抽出来的（架构图**布局 + 走线**，纯数据不碰 DOM）
+  assets/arch-layout.js     481 行  ← ★ 抽出来的（架构图**布局 + 走线**，纯数据不碰 DOM）
   assets/arch-graph-svg.js  132 行  ← ★ 抽出来的（把布局数据画成 SVG）
   assets/arch-view.js    137 行  ← ★ 抽出来的（架构图面板集成 + 缩放平移）
   assets/app.css      4,287 行

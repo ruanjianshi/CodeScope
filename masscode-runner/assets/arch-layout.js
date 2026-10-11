@@ -172,7 +172,14 @@ function archLayout(graph, opts) {
     plan.forEach((p) => {
       if (p.same) return;
       const r1 = rowOfCard.get(p.a), r2 = rowOfCard.get(p.b);
-      if (r2 !== r1) p.gap = Math.max(0, Math.min(nCols, Math.round((colOfCard.get(p.a) + colOfCard.get(p.b)) / 2)));
+      /* ⚠️⚠️ 同一列时 `round((ca+cb)/2)` 就等于 `ca` ✓ —— 而 `ca = 0` 是**最左外侧通道** ✗，
+         线于是要**绕到所有卡片左边**再上去 ✓（实测一条 882px 的"大环"✓，
+         在图上看着像凭空多了个虚线框 ✓）。同一列 → 取**右边那条间隙** ✓。 */
+      if (r2 !== r1) {
+        const ca = colOfCard.get(p.a), cb = colOfCard.get(p.b);
+        p.gap = (ca === cb) ? Math.min(nCols, ca + 1)
+          : Math.max(0, Math.min(nCols, Math.round((ca + cb) / 2)));
+      }
       const k = gkeyOf(p);
       if (counted.has(k)) return;
       counted.add(k);
@@ -305,19 +312,27 @@ function archLayout(graph, opts) {
     const base = side === 'R' ? card.x + card.lw + CHIP_W + card.rw / 2 : card.x + card.lw / 2;
     return base + (i - (n - 1) / 2) * step;
   };
+  /* ⚠️⚠️ 槽位偏移**必须钳在通道带内** ✗✗ ——
+     偏移是 `(i - (n-1)/2) * step` ✓，边一多（n 大）就会**散出通道带** ✓，
+     于是水平段落到**旁边卡片身上** ✓（穿块断言抓到了 ✓）。
+     钳到半宽/半高之内 ✓，最多是槽位挤一点 ✓，但绝不会跑到卡片上 ✓。 */
   const rowLaneY = (r) => {
     const n = rowLoad[r] || 1;
     const i = rowSlotUsed.get(r) || 0;
     rowSlotUsed.set(r, i + 1);
     const step = n > 1 ? Math.min(7, Math.max(2, (rowLaneH[r] - 8) / (n - 1))) : 0;
-    return laneY[r] + (i - (n - 1) / 2) * step;
+    const half = Math.max(0, (rowLaneH[r] - 10) / 2);
+    const off = (i - (n - 1) / 2) * step;
+    return laneY[r] + Math.max(-half, Math.min(half, off));
   };
   const gapLaneX = (g) => {
     const n = gapLoad[g] || 1;
     const i = gapSlotUsed.get(g) || 0;
     gapSlotUsed.set(g, i + 1);
     const step = n > 1 ? Math.min(7, Math.max(2, (gapW[g] - 8) / (n - 1))) : 0;
-    return gapXOf(g) + (i - (n - 1) / 2) * step;
+    const half = Math.max(0, (gapW[g] - 10) / 2);
+    const off = (i - (n - 1) / 2) * step;
+    return gapXOf(g) + Math.max(-half, Math.min(half, off));
   };
   const outX = (box, side) => (side === 'R' ? box.x + box.w : box.x);
   /* 相邻函数之间的竖线：同一个节点的多条竖线要错开，否则叠成一条 ✓ */
@@ -359,18 +374,41 @@ function archLayout(graph, opts) {
       g.head = 'M' + outX(A, p.side) + ' ' + oy + ' L' + lx + ' ' + oy;
     } else {
       const r1 = rowOfCard.get(p.a), r2 = rowOfCard.get(p.b);
-      const aY = p.cardA ? A.y : outY(A, p.e.from);
-      const aLane = p.cardA ? portX(A, p.e.from) : laneXOf(p.a, p.side, p.keyA);
-      const ly1 = rowLaneY(r1);
-      const ly2 = (r2 === r1) ? ly1 : rowLaneY(r2);
-      const gx = (r2 === r1) ? null : gapLaneX(p.gap);
-      const bLane = p.cardB ? portX(B, p.e.to) : laneXOf(p.b, p.sideB, p.keyB);
+      /* ⚠️⚠️ 卡片端点用的是 `pos` 里的**头部条**盒子（h = CARD_HEAD）✗，
+         **不是整张卡片** ✓ —— 所以要用 `A.card` / `B.card` 拿真高度 ✓
+         （拿头部条的话 `y + h` 落在卡片**中间** ✓，箭头就贴不到边 ✓）。 */
+      const cA = A.card || A, cB = B.card || B;
+      /* ⚠️⚠️ 判反过一次 ✗：目标是**在下面**（r2 > r1）才从**底边**出 ✓；
+         目标在**上面**要从**顶边**出 ✓。写成 `r2 < r1 ? 底边 : 顶边` 就反了 ✓ ——
+         于是线从底边出发、却要往上去够**卡片上方**的通道 ✓ → **穿过整张卡片** ✓
+         （穿块断言抓到了 ✓）。 */
+      const aY = p.cardA ? (r2 > r1 ? cA.y + cA.h : cA.y) : outY(A, p.e.from);
+      const aLane = p.cardA ? portX(cA, p.e.from) : laneXOf(p.a, p.side, p.keyA);
+      /* ⚠️⚠️ 通道必须和**出口在同一侧** ✗✗ —— 这条我错了两次 ✓：
+         · 源端从**底边**出（目标在下面）→ 通道必须是**源下方**那条 = `laneY[r1+1]` ✓，
+           用 `laneY[r1]`（源**上方**那条）就会**从底边往上穿过整张卡片** ✗；
+         · 目标端从**顶边**进（目标在下面）→ 通道是**目标上方**那条 = `laneY[r2]` ✓，
+           反了就会从下面穿过目标卡片去够顶边 ✗。
+         ⇒ 统一成：`ly1 = laneY[down ? r1+1 : r1]`、`ly2 = laneY[down ? r2 : r2+1]` ✓。
+         ⇒ 同行 / 相邻行时这两条**是同一条** ✓ → 只取一次（省两个弯）✓，
+           不用绕列间隙 ✓。 */
+      const down = r2 > r1;
+      const near = Math.abs(r2 - r1) <= 1;
+      let ly1, ly2, gx = null;
+      if (near) {
+        ly1 = ly2 = rowLaneY(r2 === r1 ? r1 : (down ? r2 : r1));
+      } else {
+        ly1 = rowLaneY(down ? r1 + 1 : r1);
+        ly2 = rowLaneY(down ? r2 : r2 + 1);
+        gx = gapLaneX(p.gap);
+      }
+      const bLane = p.cardB ? portX(cB, p.e.to) : laneXOf(p.b, p.sideB, p.keyB);
       g.trunkX = bLane;
       g.juncY = ly2;
       g.head = 'M' + (p.cardA ? aLane : outX(A, p.side)) + ' ' + aY
         + (p.cardA ? '' : ' L' + aLane + ' ' + aY)
         + ' L' + aLane + ' ' + ly1
-        + (r2 === r1
+        + (near
           ? ' L' + bLane + ' ' + ly1
           : ' L' + gx + ' ' + ly1 + ' L' + gx + ' ' + ly2 + ' L' + bLane + ' ' + ly2);
     }
@@ -397,7 +435,14 @@ function archLayout(graph, opts) {
     const g = groupOf(p);
     g.n += 1;
     g.ids.push(p.e.from, p.e.to);
-    const bY = p.cardB ? B.y : outY(B, p.e.to);
+    /* ⚠️⚠️ 卡片端点：**从上面来就进顶边、从下面来就进底边** ✗✓ ——
+       一律用顶边的话，从下面上来的线会**穿过整张卡片**去够顶边 ✓
+       （穿块断言和"箭头指向"断言同时抓到了 ✓）。
+       ⚠️ 而且必须用**整张卡片** `B.card` 的高度 ✗ ——
+          `B` 是 `pos` 里的**头部条**（h = CARD_HEAD = 38）✓，
+          `B.y + B.h` 落在卡片**中间** ✓，箭头就贴不到边 ✓。 */
+    const cB = B.card || B;
+    const bY = p.cardB ? (g.juncY <= cB.y ? cB.y : cB.y + cB.h) : outY(B, p.e.to);
     const bOut = p.cardB ? g.trunkX : outX(B, p.sideB);
     if (g.bMin == null || bY < g.bMin) g.bMin = bY;
     if (g.bMax == null || bY > g.bMax) g.bMax = bY;
