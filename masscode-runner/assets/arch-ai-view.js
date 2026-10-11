@@ -413,7 +413,7 @@ function archAISvg(graph, ai, opts) {
   svg.appendChild(titleLayer);
 
   mk('text', { x: PAD, y: H - 12, fill: '#4a5666', 'font-size': 11 },
-    '点模块 → 高亮它的关系 · 滚轮缩放 · 拖拽平移 · 双击适应窗口');
+    '点模块 → 高亮它的关系 · 滚轮缩放 · 拖拽平移 · 双击适应宽度');
   svg.dataset.count = String(edgeEls.length);
   return svg;
 }

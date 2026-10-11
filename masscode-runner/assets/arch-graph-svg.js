@@ -1,12 +1,7 @@
-/* ═══════════════════════════════════════════════════════════════════════════
- * 架构图 · 画成 SVG（assets/arch-graph-svg.js）
- * ---------------------------------------------------------------------------
- * 只做一件事：把 `archLayout()` 算出来的**纯数据**（坐标 + 路径）变成 `<svg>` ✓。
- * 布局和走线在 `assets/arch-layout.js`（那边不碰 DOM，所以能直接单测）。
- *
- * ⚠️ 骨架、四条铁律（owns 不画线 / 端点分散 / **主干合并** / orient 必须是 auto）
- *    都写在 `arch-layout.js` 的注释里 —— **改走线去那边改** ✓。
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* 架构图 · 画成 SVG（assets/arch-graph-svg.js）
+ * 只做一件事：把 `archLayout()` 的**纯数据**（坐标 + 路径）变成 `<svg>` ✓。
+ * 布局 / 走线在 `arch-layout.js`（不碰 DOM，能单测）—— **改走线去那边改** ✓。
+ * 点选高亮要**连卡片外框和标题一起**压暗 ✓，不然焦点会被没暗下去的部分稀释 ✓。 */
 
 function archGraphSvg(graph, opts) {
   const NS = 'http://www.w3.org/2000/svg';
@@ -26,9 +21,7 @@ function archGraphSvg(graph, opts) {
 
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-  /* ⚠️ 必须给**明确像素宽** —— 「⤢ 放大」把 SVG 克隆进浮层，克隆体没有父容器约束，
-     `width:100%` 会退化成极小值。明确 px + `max-width:100%` 两处都对。
-     （面板里**自由缩放**靠改这两个属性，见 wireArchZoom ✓。） */
+  /* ⚠️ 必须给**明确像素宽**：放大时克隆体没有父容器约束，`width:100%` 会退化成极小值 ✓。 */
   svg.setAttribute('width', String(W));
   svg.setAttribute('height', String(H));
   svg.setAttribute('style', 'background:#12141c;border-radius:10px;display:block;max-width:100%;height:auto');
@@ -52,8 +45,7 @@ function archGraphSvg(graph, opts) {
     edgeEls.push({ el: path, ids: x.ids, kind: x.inc ? 'include' : 'call' });
   });
 
-  /* 箭头 ✓ ⚠️ `orient` 必须是 `auto` —— 原来写的 `auto-start-start-reverse`
-     是**非法值**，Chrome 报错后**静默回退到 0 → 箭头一律朝右**（详见 CHANGELOG）。 */
+  /* 箭头 ✓ ⚠️ `orient` 必须是 `auto` —— 写成非法值时 Chrome 静默回退成「一律朝右」✓。 */
   const defs = mk('defs', {});
   const marker = mk('marker', { id: 'arch-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5,
     markerWidth: 6, markerHeight: 6, orient: 'auto' }, null, defs);
@@ -63,16 +55,17 @@ function archGraphSvg(graph, opts) {
   /* ── 方块层 ── */
   const nodeLayer = mk('g', {});
   const nodeEls = new Map();
+  const cardEls = [];   /* ⚠️ 卡片外框 / 标题也要跟着高亮走 —— 不然点选时它们一直亮着 ✓ */
   cards.forEach((c) => {
-    mk('rect', { x: c.x, y: c.y, width: c.w, height: c.h, rx: 12,
+    const frame = mk('rect', { x: c.x, y: c.y, width: c.w, height: c.h, rx: 12,
       fill: 'rgba(239,159,39,.07)', stroke: '#EF9F27', 'stroke-opacity': .45, 'stroke-width': .8 }, null, nodeLayer);
-    /* ⚠️ 标题/计数要放在**函数列**里，不能放到走廊上 ——
-       放到走廊上会被竖线划过（用户截图里「9 个函数」上就有线）。 */
+    /* ⚠️ 标题/计数放**函数列**里，别放走廊上 —— 否则会被竖线划过 ✓。 */
     const headX = c.x + (c.kids.length ? c.lw : 0);
-    mk('text', { x: headX + 10, y: c.y + 21, fill: '#EF9F27', 'font-size': 13, 'font-weight': 500 },
+    const title = mk('text', { x: headX + 10, y: c.y + 21, fill: '#EF9F27', 'font-size': 13, 'font-weight': 500 },
       String(c.node.label || '').slice(0, 22), nodeLayer);
-    mk('text', { x: headX + (c.kids.length ? CHIP_W : c.w) - 10, y: c.y + 21,
+    const count = mk('text', { x: headX + (c.kids.length ? CHIP_W : c.w) - 10, y: c.y + 21,
       fill: '#8a7350', 'font-size': 10, 'text-anchor': 'end' }, c.kids.length ? c.kids.length + ' 个函数' : '', nodeLayer);
+    cardEls.push({ frame, title, count, card: c });
     c.kids.forEach((k) => {
       const p = pos.get(k.id);
       const grp = mk('g', { style: 'cursor:pointer' }, null, nodeLayer);
@@ -97,6 +90,12 @@ function archGraphSvg(graph, opts) {
           o.el.setAttribute('stroke-opacity', on ? .95 : .06);
           o.el.setAttribute('stroke-width', on ? 2 : 1);
         });
+        cardEls.forEach((o) => {
+          const on = o.card.kids.some((x) => x.id === k.id || up.has(x.id) || down.has(x.id));
+          o.frame.setAttribute('stroke-opacity', on ? .8 : .1);
+          o.title.setAttribute('fill-opacity', on ? 1 : .22);
+          o.count.setAttribute('fill-opacity', on ? 1 : .22);
+        });
       });
     });
   });
@@ -110,6 +109,7 @@ function archGraphSvg(graph, opts) {
       o.el.setAttribute('stroke-opacity', o.kind === 'include' ? .4 : .55);
       o.el.setAttribute('stroke-width', 1.2);
     });
+    cardEls.forEach((o) => { o.frame.setAttribute('stroke-opacity', .45); o.title.setAttribute('fill-opacity', 1); o.count.setAttribute('fill-opacity', 1); });
   });
 
   /* ── 图例（放在内容**下面**，不再压在卡片上）── */
@@ -125,7 +125,7 @@ function archGraphSvg(graph, opts) {
 
   /* 提示一行（告诉用户怎么用 ✓）*/
   mk('text', { x: PAD, y: H - 14, fill: '#565f89', 'font-size': 12 },
-    '点方块 → 高亮上下游 · 滚轮缩放 · 拖拽平移 · 双击适应窗口 · ' + L.fragCount + ' 个片段 / ' + L.fnCount + ' 个函数');
+    '点方块 → 高亮上下游 · 滚轮缩放 · 拖拽平移 · 双击适应宽度 · ' + L.fragCount + ' 个片段 / ' + L.fnCount + ' 个函数');
 
   svg.dataset.count = String(edgeEls.length);
   return svg;
