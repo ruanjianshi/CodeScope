@@ -57,11 +57,12 @@ console.log('\n── ① 巨型文件棘轮（只准变小，不准变大）─
    ⚠️ 别为了让测试变绿而往上调 —— 那就把棘轮拆了。 */
 const SIZE_CAP = [
   ['assets/app.js', 16294],
-  ['server.js', 9084],
+  ['server.js', 9006],
   ['assets/app.css', 4287],
   ['src/system-panel.js', 3746],
   ['lib/system-panel.js', 2471],
-  ['assets/debug-panel.js', 900],   /* 刚抽出来的，别让它再涨回去 ✓ */
+  ['assets/debug-panel.js', 900],
+  ['lib/routes/dbg.js', 160],   /* 路由模块，样板 ✓ */   /* 刚抽出来的，别让它再涨回去 ✓ */
 ];
 for (const [rel, cap] of SIZE_CAP) {
   const n = lines(rel);

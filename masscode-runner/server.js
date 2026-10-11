@@ -40,6 +40,8 @@ const { createKnowledgeBase } = require('./lib/knowledge-base');
 const { createPythonKernel } = require('./lib/python-kernel');
 /* 极简 SMTP 客户端（只依赖 Node 内置 tls/net）—— 用于「邮箱」页的测试连接与发信 ✓ */
 const MAIL_CLIENT = require('./lib/mail-client');
+/* ★ 路由模块（2026-10-11 开始抽）—— 每一组一个文件 ✓ */
+const dbgRoute = require('./lib/routes/dbg');
 const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
 const MAIL_LIST = require('./lib/mail-list');
@@ -7449,91 +7451,11 @@ const server = http.createServer(async (req, res) => {
           终端只是个容器 ✓，容器里跑什么、在哪儿跑，都得先安排好 ✓。
        → 这个接口统一负责：**写片段 → （需要编译就带 -g 编译）→ 返回目录** ✓，
           前端据此在终端里 `cd <dir>` 再起 gdb / octave ✓。 */
-    if (req.method === 'POST' && u.pathname === '/api/dbg/prepare') {
-      try {
-        const b = await readBody(req);
-        const code = String((b && b.code) || '');
-        const lang = String((b && b.language) || 'c_cpp').toLowerCase();
-        const files = Array.isArray(b && b.files) && b.files.length
-          ? b.files.map((f) => ({ filename: path.basename(String(f.filename || 'main.c')), code: String(f.code || '') }))
-          : [{ filename: lang === 'c' ? 'main.c' : 'main.cpp', code }];
-        /* ── Python ✓：写文件，起 `python3 -m pdb <脚本>` ✓（标准库自带 ✓） */
-        if (lang === 'python') {
-          const pFiles = files.map((f, i) => ({
-            filename: /\.py$/i.test(f.filename) ? f.filename : (i === 0 ? 'main.py' : ('file' + (i + 1) + '.py')),
-            code: f.code,
-          }));
-          const pdir = writeFragments(pFiles);
-          const pEntry = pFiles.find((f) => /main\.py$/i.test(f.filename)) || pFiles[0];
-          const py = pythonCmd();
-          if (!py) return send(res, 200, { ok: false, error: '这台机器上没有 python3', dir: '' });
-          return send(res, 200, {
-            ok: true, dir: pdir, bin: '', engine: 'python',
-            entry: pEntry.filename,
-            launch: JSON.stringify(py) + ' -m pdb ' + JSON.stringify(pEntry.filename),
-            hint: '在终端里： cd ' + pdir + ' && ' + py + ' -m pdb ' + pEntry.filename,
-          });
-        }
-        /* ── MATLAB / Octave ✓：只写文件，不编译 ✓（脚本语言 ✓） */
-        if (lang === 'matlab' || lang === 'octave') {
-          const mFiles = files.map((f, i) => ({
-            filename: /\.m$/i.test(f.filename) ? f.filename : (i === 0 ? 'main.m' : ('file' + (i + 1) + '.m')),
-            code: f.code,
-          }));
-          const mdir = writeFragments(mFiles);
-          /* ★ 顺带写一个「取变量」小脚本 ✓✓（2026-10-10）——
-             ⚠️ 为什么不在终端里直接发一长串 ✗：**352 字符的命令在真 PTY 里
-                会被 readline 的换行重绘搞乱** ✓（实测：只看到回显、没有输出 ✓）。
-             → 写成 `.m` 文件 ✓，终端里只要发 `cs_vars` 四个字母 ✓，
-                短、稳、也好调试 ✓。
-             ⚠️ 文件名带 `cs_` 前缀 ✗ —— 避免和用户的脚本撞名 ✓。 */
-          try { writeFileAtomicSync(path.join(mdir, 'cs_vars.m'), CS_VARS_M); } catch (_) {}
-          const mEntry = mFiles.find((f) => /main\.m$/i.test(f.filename)) || mFiles[0];
-          const cmd = matlabCmd();
-          if (!cmd) return send(res, 200, { ok: false, error: '这台机器上没有 MATLAB / Octave', dir: '' });
-          return send(res, 200, {
-            ok: true, dir: mdir, bin: '', engine: isOctaveCmd(cmd) ? 'octave' : 'matlab',
-            entry: mEntry.filename.replace(/\.m$/i, ''),   /* dbstop/run 用的是**不带扩展名**的名字 ✓ */
-            launch: (isOctaveCmd(cmd) ? 'octave --no-gui --quiet' : 'matlab'),
-            hint: '在终端里： cd ' + mdir + ' && ' + (isOctaveCmd(cmd) ? 'octave --no-gui --quiet' : 'matlab'),
-          });
-        }
-        /* ⚠️⚠️ 两个坑，都是实测踩出来的 ✗✗（2026-10-10）：
-           ① **头文件不能进编译命令** ✗ ——
-              `g++ -o a.out led.h led.c uart.c uart.h main.c` 会直接报
-              `error: cannot specify -o when generating multiple output files`
-              （编译器把每个 .h 也当成一个要产出的翻译单元了 ✓）
-              → 只把**源文件**（.c/.cc/.cpp/.cxx）列进去 ✓。
-           ② **`.c` 要用 gcc，不能用 g++** ✗ ——
-              用 g++ 编 .c 会按 C++ 处理 ✓，刷一屏
-              `treating 'c' input as 'c++' when in C++ mode, this behavior is deprecated` ✓，
-              而且不少合法 C 代码在 C++ 下**直接编不过** ✓。
-              → 按**入口文件**的后缀选 gcc / g++ ✓。
-           ⚠️ 入口文件怎么认 ✗：优先找名字里带 `main` 的源文件 ✓
-              （多文件片段的惯例 ✓），找不到就用第一个源文件 ✓。 */
-        const srcFiles = files.filter((f) => /\.(c|cc|cpp|cxx)$/i.test(f.filename));
-        if (!srcFiles.length) {
-          return send(res, 200, { ok: false, error: '没有可编译的源文件（需要 .c / .cpp）', dir: '' });
-        }
-        const entry = srcFiles.find((f) => /main\./i.test(f.filename)) || srcFiles[0];
-        const isC = /\.c$/i.test(entry.filename);
-        const cc = isC ? 'gcc' : 'g++';
-        const binName = 'a.out';
-        const dir = writeFragments(files);
-        const args = ['-g', '-O0', '-o', binName, ...srcFiles.map((f) => f.filename)];
-        const built = await run(cc, args, { cwd: dir, timeoutMs: 120000 });
-        if (!built.ok) {
-          return send(res, 200, { ok: false, error: (built.stderr || built.stdout || '编译失败').trim(), dir: '' });
-        }
-        return send(res, 200, {
-          ok: true, dir, bin: binName, cc,
-          gdb: (() => { try { execFileSync('gdb', ['--version'], { stdio: 'ignore', timeout: 5000 }); return true; } catch (_) { return false; } })(),
-          hint: '在终端里： cd ' + dir + ' && gdb ./' + binName,
-        });
-      } catch (e) {
-        return send(res, 200, { ok: false, error: String((e && e.message) || e) });
-      }
-    }
+      /* ★ 调试路由抽到 lib/routes/dbg.js ✓✓（2026-10-11）——
+         这是**路由模块化**的第一刀 ✓，样板写在那边的文件头 ✓。
+         后面每抽一组都照它做：新建 lib/routes/<组>.js →
+         导出 handle(req,res,u,ctx) 返回 boolean → 这里换成三行 ✓。 */
+      if (await dbgRoute.handle(req, res, u, { readBody, writeFragments, pythonCmd, matlabCmd, isOctaveCmd, CS_VARS_M, send, writeFileAtomicSync })) return;
     if (req.method === 'GET' && u.pathname === '/api/py/kernel') {
       return send(res, 200, { ok: true, ...PY_KERNEL.status() });
     }
