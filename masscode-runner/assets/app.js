@@ -433,7 +433,22 @@ async function syncMonacoMain(){
 function currentEditorDocumentKey(){return CURRENT?monacoModelKey(CURRENT.file,CINDEX):'';}
 function monacoMainActive(){return !!(MONACO_EDITOR&&$('code-wrap').classList.contains('monaco-active')&&EDITING&&MONACO_MAIN_KEY===currentEditorDocumentKey());}
 function focusMainEditor(){if(monacoMainActive())MONACO_EDITOR.focus();else $('code-edit').focus();}
-function setMainEditorValue(value){$('code-edit').value=String(value||'');if(monacoMainActive()&&MONACO_EDITOR.getValue()!==$('code-edit').value){MONACO_SYNCING=true;MONACO_EDITOR.setValue($('code-edit').value);MONACO_SYNCING=false;}}
+/* ★ 编辑器"归属"追踪（2026-10-11 加）——
+   记录**编辑器现在装的是哪个 (文件, 片段号)**。
+   `flushSave()` 保存前拿它和 `CURRENT` 对一下 ✓：
+   **对不上就拒绝保存** ✓（宁可少存一次，也不能把 A 的内容写进 B ✓）。
+   ⚠️ 为什么要加：当天出过一次**真实的数据丢失** ✓ ——
+      自动化测试里直接改了 `CURRENT`（指向真实文件、片段是空的），
+      **但没重新加载编辑器** ✓ → `flushSave()` 把**编辑器里上一个文件的内容**
+      写进了那个真实路径 ✓ → **四个片段的代码被写成空的** ✓。
+      （幸好那个文件在 git 里，已从 `3d7c670` 恢复 ✓。） */
+let EDITOR_OWNER = null;
+
+function setMainEditorValue(value){
+  /* ★ 只有**真正往编辑器里放内容**时才更新归属 ✓ ——
+     这样"谁装了什么"永远是准的 ✓。 */
+  try { EDITOR_OWNER = CURRENT ? { file: CURRENT.file, index: CINDEX } : null; } catch (_) { EDITOR_OWNER = null; }
+  $('code-edit').value=String(value||'');if(monacoMainActive()&&MONACO_EDITOR.getValue()!==$('code-edit').value){MONACO_SYNCING=true;MONACO_EDITOR.setValue($('code-edit').value);MONACO_SYNCING=false;}}
 function updateMonacoDiagnostics(){if(!window.monaco||!MONACO_EDITOR||!MONACO_EDITOR.getModel())return;const severity=window.monaco.MarkerSeverity;window.monaco.editor.setModelMarkers(MONACO_EDITOR.getModel(),'codescope-lsp',(LSP_DIAGNOSTICS||[]).map(item=>({startLineNumber:Number(item.range&&item.range.start&&item.range.start.line||0)+1,startColumn:Number(item.range&&item.range.start&&item.range.start.character||0)+1,endLineNumber:Number(item.range&&item.range.end&&item.range.end.line||0)+1,endColumn:Number(item.range&&item.range.end&&item.range.end.character||0)+1,message:String(item.message||'诊断信息'),source:String(item.source||'LSP'),code:item.code==null?undefined:String(item.code),severity:Number(item.severity)===1?severity.Error:Number(item.severity)===2?severity.Warning:Number(item.severity)===4?severity.Hint:severity.Info})));}
 function disposeSplitMonacoEditors(){for(const editor of MONACO_SPLIT_EDITORS){try{editor.dispose();}catch(_){}}MONACO_SPLIT_EDITORS.clear();for(const entry of SPLIT_EDITORS)entry.monacoEditor=null;}
 
@@ -13860,12 +13875,34 @@ function scheduleSave() {
   SAVE_TIMER = setTimeout(flushSave, 700);
 }
 
-function flushSave() {
-  if (!CURRENT || !EDITING) return;
-  if (SAVE_TIMER) { clearTimeout(SAVE_TIMER); SAVE_TIMER = null; }
-  pushSave(CURRENT.file, CINDEX, editText());
-  if (SAVE_MODE_DIRTY) { SAVE_MODE_DIRTY = false; applySaveMode(); }
-}
+  function flushSave() {
+    if (!CURRENT || !EDITING) return;
+    /* ⚠️⚠️ **护栏：保存前先确认"编辑器里装的确实是 CURRENT 这个片段"** ✗✗
+       （2026-10-11 加的 —— 当天出过一次**真实的数据丢失** ✓）
+
+       ⚠️ 事故经过：我在自动化测试里直接改了 `CURRENT`
+          （`CURRENT = { file: 真实路径, fragments: [{code:''}] }`），
+          **没有重新加载编辑器** ✓ → 编辑器里还是上一个文件的内容 ✓ →
+          `flushSave()` 把**编辑器里的内容**写进了**那个真实路径** ✓ →
+          **四个片段的代码被写成空的** ✓✓。
+          幸好那个文件在 git 里（`3d7c670`），已经从历史恢复了 ✓。
+
+       ⚠️ 所以这里加一道**归属校验** ✗：
+          `EDITOR_OWNER` 记录"编辑器现在装的是哪个 (文件, 片段号)"，
+          由 `renderCode()` 在**真正把内容放进编辑器时**设置 ✓。
+          保存前对一下：**对不上就拒绝保存** ✓✓
+          （宁可少存一次，也不能把 A 的内容写进 B ✓）。
+
+       ⚠️ `EDITOR_OWNER` 为空时不拦 ✗ —— 那说明还没渲染过 ✓，
+          `editText()` 也拿不到东西 ✓，放过去是安全的 ✓。 */
+    if (EDITOR_OWNER && (EDITOR_OWNER.file !== CURRENT.file || EDITOR_OWNER.index !== CINDEX)) {
+      try { setStatus('err', '没保存：编辑器和当前片段对不上（内部状态异常）'); } catch (_) {}
+      return;
+    }
+    if (SAVE_TIMER) { clearTimeout(SAVE_TIMER); SAVE_TIMER = null; }
+    pushSave(CURRENT.file, CINDEX, editText());
+    if (SAVE_MODE_DIRTY) { SAVE_MODE_DIRTY = false; applySaveMode(); }
+  }
 
 function pushSave(file, fragment, code) {
   if (!SAVE_BUSY && !SAVE_QUEUE.length) SAVE_BATCH_OK = true;
