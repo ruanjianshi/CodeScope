@@ -943,6 +943,10 @@
   <textarea id="vnc-keyboard-input" aria-label="VNC 键盘输入" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
 </div>
 <script src="/monaco/vs/loader.js"></script>
+<!-- ★ 调试面板（2026-10-11 从 app.js 抽出来的 879 行）——
+     ⚠️ **必须在 app.js 之前** ✗✓：app.js 启动时就会调 showDbgBar() /
+        scanDebugOutput()，那两个是函数声明（有提升），先加载才调得到。 -->
+<script src="/assets/debug-panel.js"></script>
 <script src="/assets/app.js"></script>
 <script src="/assets/app-pdf.js"></script>
 

@@ -14,14 +14,15 @@
 
 ```
 浏览器
-  index.html          1,060 行  ← 已抽外链（原 1,771 行）
-  assets/app.js      17,142 行  ← ★ 单文件 SPA
+  index.html          1,064 行  ← 已抽外链（原 1,771 行）
+  assets/app.js      16,294 行  ← ★ 曾是 17,142 行，2026-10-11 抽出调试面板
+  assets/debug-panel.js  879 行  ← ★ 抽出来的（断点 / 单步 / 变量表）
   assets/app.css      4,287 行
   src/                 9,485 行  ← 10 个独立视图
         │  HTTP / SSE
         ▼
 服务端
-  server.js           9,084 行  ← 215 个端点 / 22 组
+  server.js           9,085 行  ← 215 个端点 / 22 组
         │  函数调用
         ▼
 领域服务 lib/        17,154 行  ← 35 个模块
@@ -33,6 +34,17 @@
 
 **源证据**：`wc -l server.js assets/app.js assets/app.css index.html lib/*.js src/*.js`；
 端点数 `grep -oE "'/api/[a-z0-9-]+" server.js | sort -u | wc -l`。
+
+### 已做的拆分（棘轮在往下走）
+
+| 日期 | 动作 | 效果 |
+|---|---|---|
+| 2026-10-10 | `ceff78b` 把内联脚本抽成外链 | 重复打开 595 KB → 43 KB |
+| **2026-10-11** | **把调试面板抽成 `assets/debug-panel.js`** | **app.js 17,142 → 16,294 行** |
+
+⚠️ 抽完之后**棘轮要同步调小**（`tests/architecture.js` 里的 `SIZE_CAP`）——
+否则下次有人涨回去也不会红，**棘轮就白上了**。
+
 
 ---
 

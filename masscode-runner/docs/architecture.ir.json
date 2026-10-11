@@ -2,19 +2,19 @@
   "irVersion": 1,
   "generatedBy": "archify-lite (analyze.js)",
   "root": "/Users/xiaoq/Library/Mobile Documents/com~apple~CloudDocs/massCode/masscode-runner",
-  "generatedAt": "2026-10-11T04:57:20.501Z",
+  "generatedAt": "2026-10-11T05:15:03.608Z",
   "truncated": false,
   "summary": {
-    "files": 141,
-    "totalLines": 112105,
-    "totalBytes": 13808035,
+    "files": 142,
+    "totalLines": 112162,
+    "totalBytes": 13811956,
     "modules": 13,
     "langs": [
       [
         "javascript",
         {
-          "files": 127,
-          "lines": 102331
+          "files": 128,
+          "lines": 102371
         }
       ],
       [
@@ -28,7 +28,7 @@
         "html",
         {
           "files": 3,
-          "lines": 1397
+          "lines": 1414
         }
       ],
       [
@@ -89,11 +89,11 @@
     {
       "id": "assets",
       "layer": "ui",
-      "fileCount": 14,
-      "lines": 44609,
-      "bytes": 8197708,
+      "fileCount": 15,
+      "lines": 44648,
+      "bytes": 8200293,
       "langs": {
-        "javascript": 9,
+        "javascript": 10,
         "css": 5
       },
       "exports": [],
@@ -104,7 +104,7 @@
       "evidence": [
         {
           "rel": "assets/app.js",
-          "lines": 17142
+          "lines": 16294
         },
         {
           "rel": "assets/life-workbench.js",
@@ -188,8 +188,8 @@
       "id": "tests",
       "layer": "test",
       "fileCount": 51,
-      "lines": 15972,
-      "bytes": 1198344,
+      "lines": 15973,
+      "bytes": 1198430,
       "langs": {
         "javascript": 51
       },
@@ -266,8 +266,8 @@
       "id": "(根目录)",
       "layer": "other",
       "fileCount": 9,
-      "lines": 10720,
-      "bytes": 695450,
+      "lines": 10724,
+      "bytes": 695762,
       "langs": {
         "powershell": 1,
         "shell": 3,
@@ -311,7 +311,7 @@
         },
         {
           "rel": "index.html",
-          "lines": 1060
+          "lines": 1064
         },
         {
           "rel": "deploy-env.sh",
@@ -503,8 +503,8 @@
       "id": "docs",
       "layer": "doc",
       "fileCount": 1,
-      "lines": 266,
-      "bytes": 19216,
+      "lines": 279,
+      "bytes": 20154,
       "langs": {
         "html": 1
       },
@@ -513,7 +513,7 @@
       "evidence": [
         {
           "rel": "docs/architecture.html",
-          "lines": 266
+          "lines": 279
         }
       ]
     },
@@ -559,8 +559,8 @@
   "bigFiles": [
     {
       "rel": "assets/app.js",
-      "lines": 17142,
-      "bytes": 1288500,
+      "lines": 16294,
+      "bytes": 1237720,
       "lang": "javascript"
     },
     {
