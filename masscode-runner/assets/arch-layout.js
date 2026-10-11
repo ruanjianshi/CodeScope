@@ -34,34 +34,11 @@ function archLayout(graph, opts) {
     fnByFrag.get(k).push(n);
   });
 
-  /* ── 骨架：**卡片 + 走廊** ──────────────────────────────────────────
-     第一版错在：函数摆成横向网格、边只有「方块中心」一个锚点 →
-     同层两个不相邻方块之间的线**几何上必然穿过中间的方块**，
-     跨层的线没有通道可走，只能横穿整个画布。
-     Archify 的 README 正好点名这个病：
-       「shared automatic endpoints spread deterministically
-         instead of piling arrows on one midpoint」
-       「route / label-to-route clearance 必须全过」
-
-     ★★ 2026-10-11 第二轮（用户：「无法自由放大缩小等，第二点，排布不合理」）★★
-        原来 5 个片段**横向铺开 1494px**，侧栏只有 ~520px → 得滚半天才看得全；
-        卡片还**顶对齐**，一个 9 函数的卡片旁边挂着两个空卡片，下面一大片空白。
-        第三轮又发现：光折行还不够 ✗ —— 列不对齐的话，
-        跨行的线只能**绕到画布最外侧**兜一大圈（实测 main.c → led.c 绕了 600px）。
-
-     现在的骨架：
-        ┌ 行通道（水平走线）─────────────────────────────┐
-        │  laneL │ 函数方块（单列） │ laneR  │           │
-        └────────────────────────────────────────────────┘
-          ↑ 卡片内垂直走廊     ↑ 列间隙（跨行时在这里上下走）
-        · 卡片**折行**排布，一行超过 MAX_ROW_W 就换行；
-        · **列宽对齐**（每列取该列最宽卡片）→ 列间隙**跨行贯通** ✓
-          → 跨行的线就近在某个列间隙里上下走，不用绕最外侧 ✓；
-        · 行内**垂直居中**；0 函数的片段卡片**收窄**（只放标题）。
-        ⇒ 水平段只落在「行通道」里、垂直段只落在「卡片内走廊 / 列间隙」里，
-          **几何上不可能穿过任何方块** ✓（route clearance）。
-        ⇒ 走廊宽度**先按负载算**，再摆方块 ✓
-          （Archify：「Layout judgment over generic auto-layout」）。 */
+  /* ── 骨架：**卡片 + 走廊** ──
+     卡片折行排布（列宽对齐 → 列间隙跨行贯通）、卡片内左右两条垂直走廊、
+     行与行之间是水平通道、0 函数的片段卡片收窄。
+     ⇒ 水平段只落在行通道里、垂直段只落在卡片内走廊 / 列间隙里，**几何上不可能穿方块** ✓。
+     详见 CHANGELOG「第一 / 二 / 三 / 七轮」。 */
   const CHIP_W = 176, CHIP_H = 30, CHIP_GAP = 9;
   const CARD_HEAD = 38, CARD_TAIL = 10;
   const COL_GAP = 30;                 /* 列间隙基准宽（会按负载加宽） */
@@ -466,11 +443,23 @@ function archLayout(graph, opts) {
     g.stubs.forEach((s) => { const t = mkStub(s); if (t.d) pending.push(t); });
   });
 
-  /* 布局 + 走线 → **纯数据**（一个 `document` 都不碰）✓ ——
+  
+/* 布局 + 走线 → **纯数据**（一个 `document` 都不碰）✓ ——
      所以 `tests/arch-geom.js` 能直接断言这些坐标 / 路径字符串，连假 DOM 都不用 ✓。 */
   return {
     W, H, legendY, PAD, LEGEND_W, LEGEND_H, CHIP_W,
     cards, chipPos: pos, pending,
     fragCount: cards.length, fnCount: fnNodes.length,
   };
+}
+
+/* 挑折行宽度：试几个值，取**宽高比最接近面板**的那个 ✓（试 4 次很便宜，纯数据 ✓）。 */
+function archBestRowW(graph, panelW, panelH) {
+  let best = panelW * 1.2, score = Infinity;
+  [0.7, 1.0, 1.5, 2.2].forEach((k) => {
+    const L = archLayout(graph, { maxRowW: Math.max(360, panelW * k) });
+    const d = Math.abs(Math.log((L.W / L.H) / (panelW / Math.max(1, panelH))));
+    if (d < score) { score = d; best = Math.max(360, panelW * k); }
+  });
+  return best;
 }

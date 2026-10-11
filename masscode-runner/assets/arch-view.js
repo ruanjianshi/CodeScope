@@ -3,10 +3,8 @@
  * ---------------------------------------------------------------------------
  * 和「图谱」**同一个面板**（#cg-canvas / #cg-body），工具栏按钮切换 ✓。
  * 这里只管：抓数据 → 塞进面板 → 缩放平移 → 点方块跳源码 ✓。
- * ⚠️ 画图在 `arch-graph-svg.js`（机械图）/ `arch-ai-view.js`（AI 语义图），
- *    走线在 `arch-layout.js`，缩放平移在 `arch-zoom.js` ✓。
- * ⚠️ 面板切换按钮（🕸 图谱 / ▦ 架构）仍在 app.js —— 它和 CG_ACTIVE /
- *    renderCodeGraphPane / 工具栏拧在一起 ✓，搬过来更绕 ✓。
+ * ⚠️ 画图在 arch-graph-svg.js / arch-ai-view.js，走线在 arch-layout.js，缩放平移在 arch-zoom.js ✓。
+ * ⚠️ 面板切换按钮仍在 app.js（和 CG_ACTIVE / renderCodeGraphPane 拧在一起）✓。
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* AI 分析结果（只对**当前文件**有效 ✓ —— 换文件自动失效，不用手动清 ✓）*/
@@ -32,8 +30,10 @@ async function renderArchIntoPane(body) {
     }
     /* 按**面板宽度**决定折行点 —— 面板窄就多折几行，
        让「打开即适应」的比例尽量接近可读（而不是缩到 45% 看不清字）✓ */
+    /* 折行宽度**按面板的宽高比挑** ✓（不是拍一个固定倍数 ✗）—— 图太宽/太高都会留一大片白 ✓ */
     const panelW = Math.max(320, (body.clientWidth || 0) - 40);
-    const maxRowW = Math.min(1200, panelW * 1.2);
+    const panelH = Math.max(240, (body.clientHeight || 0) - 40);
+    const maxRowW = archBestRowW(graph, panelW, panelH);
     const ai = archAIFor(CURRENT.file);
     const svg = ai ? archAISvg(graph, ai, { maxRowW: maxRowW * 1.6 })
                    : archGraphSvg(graph, { maxRowW });

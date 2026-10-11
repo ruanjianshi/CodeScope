@@ -46,12 +46,10 @@ function wireArchZoom(host, svg) {
     host.scrollLeft = rx * zoom - cx;
     host.scrollTop = ry * zoom - cy;
   };
-  /* 适应窗口：整张图进面板 ✓（打开时的默认，也是双击的效果）*/
+  /* 适应：**只按宽度**（原来同时按高度 ✗）—— 面板是"宽而扁"的，
+     按高度缩必然左右各留一大片 ✗（用户：「怎么还是老样子」）。纵向不够就滚动 ✓。 */
   const fit = () => {
-    const bw = Math.max(120, host.clientWidth - PADPX * 2);
-    const bh = host.clientHeight > 120 ? host.clientHeight - PADPX * 2 : 0;
-    let k = bw / W;
-    if (bh) k = Math.min(k, bh / H);
+    const k = Math.max(120, host.clientWidth - PADPX * 2) / W;
     zoom = Math.max(MIN, Math.min(MAX, Math.min(k, 1)));
     apply();
     host.scrollLeft = 0; host.scrollTop = 0;

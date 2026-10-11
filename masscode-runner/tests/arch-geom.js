@@ -74,7 +74,7 @@ function loadArchView() {
     }
     const sandbox = { document: makeDom() };
     // eslint-disable-next-line no-new-func
-    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf };');
+    const factory = new Function('document', pre + src + '\nreturn { archGraphSvg, archFragOf, archBestRowW };');
     return factory(sandbox.document);
   }
   throw new Error('在 ' + ARCH_SOURCES.join(' / ') + ' 里都找不到 archGraphSvg');
@@ -204,7 +204,7 @@ function ck(name, ok, detail) {
 
 console.log('\n── 架构图几何（线不能穿过别人的方块 / 端点不能重叠）──\n');
 
-const { archGraphSvg, archFragOf } = loadArchView();
+const { archGraphSvg, archFragOf, archBestRowW } = loadArchView();
 const graph = buildGraph();
 const svg = archGraphSvg(graph);
 
@@ -355,6 +355,21 @@ try {
   archGraphSvg({ nodes: [{ id: 'x', kind: 'fn', label: 'a', file: 'f', frag: 0, line: 1 }], edges: [{ from: 'x', to: 'x', kind: 'call' }] });
 } catch (e) { threw = String(e.message); }
 ck('空图 / 只有自环 都不炸', threw === '', threw);
+
+/* ⑫b **全局函数必须真的是全局的** ——
+   ⚠️ 我踩过：把 `archBestRowW` 插到了 `archLayout` **函数体内部** ✓
+      （锚点选在了 `return {` 上面的注释 ✓）→ 它是合法的**嵌套函数** ✓
+      → 语法检查过 ✓、几何断言全过 ✓ → 但 `arch-view.js` 调它时
+      **`ReferenceError: archBestRowW is not defined`** ✗，图直接白屏 ✓。
+   ⇒ 所以「改完跑一下真实调用链」和「断言它存在」都要有 ✓。 */
+ck('archBestRowW 是**顶层**函数（能被 arch-view.js 调到）', typeof archBestRowW === 'function');
+ck('archBestRowW 会按面板宽高比挑折行宽度',
+  (() => {
+    if (typeof archBestRowW !== 'function') return false;
+    const wide = archBestRowW(graph, 1400, 400);   /* 面板很扁 → 图也该扁 → 一行更宽 */
+    const tall = archBestRowW(graph, 500, 900);    /* 面板很高 → 图该多折几行 → 一行更窄 */
+    return Number.isFinite(wide) && Number.isFinite(tall) && wide > tall;
+  })());
 
 /* ⑬ 折行 —— 用户原话「**排布不合理**」（2026-10-11）：
    5 个片段横向铺开 1494px，侧栏只有 ~520px → 得滚半天才看得全。
