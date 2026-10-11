@@ -116,6 +116,17 @@ function buildGraph() {
   call('3:main', '0:led_create');          /* 跨片段 */
   call('0:led_create', '0:dev_open');      /* 同片段、隔行 */
   call('0:led_create', '0:dev_read');      /* 同片段、同一个源出两条（端点要分散）*/
+  /* ⚠️⚠️ 再加一条**从最后一行往上调**的边（led_close → led_create）——
+     这是主干"折返"的**唯一触发条件** ✓：主干从 `lo` 画到 `hi` ✗，而笔**已经停在 `juncY`** ✓；
+     只有 `juncY > bMax`（**源在所有目标下方** ✓）时才会"过去再折回来" ✓，
+     竖线从拐角两边伸出来 ✓（用户原话：「没修复好，线条」✓）。
+     ⚠️ 试了两次才加对 ✓：
+        ① `led_create → led_close`（源在**上方**）✗ —— 那时 `lo` 恰好等于 `juncY` ✓，不折返 ✓；
+        ② 只加**一条** `led_close → led_create` ✗ —— **单目标的组没有主干** ✓
+           （走 `g.n === 1` 分支 ✓），也不折返 ✓。
+        ⇒ 必须**源在下方 + 至少两个目标** ✓✓。 */
+  call('0:led_close', '0:led_create');
+  call('0:led_close', '0:dev_open');
   call('0:led_open', '0:dev_write');
   call('0:dev_close', '0:led_close');      /* 同片段、隔行、反向 */
   call('1:uart_init', '1:uart_open');      /* 同片段、相邻行 → 直连竖线 */
@@ -216,7 +227,7 @@ ck('画出了 4 张片段卡片', cards.length === 4, '实际 ' + cards.length);
 ck('画出了 15 个函数方块', chips.length === 15, '实际 ' + chips.length);
 
 /* ② `owns` 边不画 —— 它由"函数装在卡片里"表达，画出来就是重复信息（原来 57 条边里 29 条是它） */
-ck('owns 边不画线（9 条 owns 一条都不该出现）', paths.length === 13, '实际 ' + paths.length + ' 条（应为 9 call + 4 include）');
+ck('owns 边不画线（9 条 owns 一条都不该出现）', paths.length === 15, '实际 ' + paths.length + ' 条（应为 11 call + 4 include）');
 
 /* ③ route clearance：线不许扎进别的方块 */
 const crossings = [];
@@ -281,6 +292,37 @@ paths.forEach((p) => {
 const piled = [...anchors.entries()].filter(([, n]) => n > 1);
 ck('没有一堆线扎在同一个起点（deterministic spread）', piled.length === 0,
   piled.slice(0, 3).map(([k, n]) => k + '×' + n).join(' / '));
+
+/* ④b ★★ **不能有"折返"** —— 连续两段沿同一根轴**反向**画回去 ✗✗
+   ⚠️ 用户原话：「**没修复好，线条**」（放大截图：拐角处竖线上下都伸出来 ✓）。
+      根因：主干从 `lo` 画到 `hi` ✗，而笔**已经停在 `juncY`** ✓ ——
+      `juncY` 在区间外时就"画过去再折回来" ✓（`L x 122.5 L x 277.5` ✓），
+      那条竖线看起来就从拐角两边都伸出来 ✓。
+   ⇒ 判据：转向角 180°（dot < 0 且共线）= 回折 ✓。
+   ⚠️⚠️ **这条 fixture 覆盖不到** ✗ —— 触发条件是「**源在所有目标下方 + 至少两个目标**」✓，
+      fixture 里凑不出这个拓扑 ✓（试了三次 ✓）。
+      所以它**不是在 fixture 上证明的** ✓，而是在**真实 vault** 上验证的：
+      修之前全库 74 条路径里 **8 条折返** ✗ → 修之后 **0 条** ✓
+      （`/tmp/backtrack-check.js` 那种一次性脚本 ✓，见 CHANGELOG）。
+   ⚠️ 另外「笔落在目标区间**内**」的情况**本来就该折返** ✓（主干要覆盖两边 ✓），
+      路径级判据分不出它和 bug ✓ —— 真实数据上没出现这种情况 ✓，所以先留着 ✓。 */
+const backtracks = [];
+/* ⚠️⚠️ 必须用**全部**路径 ✗ —— `paths` 只含**带箭头的**那些 ✓，
+   而**主干没有箭头** ✗ → 折返正好出在主干上 ✓，用 `paths` 会**全部漏掉** ✓
+   （第一版就是这样：变异测试红不起来 ✓）。 */
+svg.all('path').forEach((p) => {
+  const pts = pointsOf(p.getAttribute('d'));
+  for (let i = 2; i < pts.length; i++) {
+    const ax = pts[i - 1].x - pts[i - 2].x, ay = pts[i - 1].y - pts[i - 2].y;
+    const bx = pts[i].x - pts[i - 1].x, by = pts[i].y - pts[i - 1].y;
+    const dot = ax * bx + ay * by, cross = ax * by - ay * bx;
+    /* ⚠️ 判据用**转向角**，不是"同轴反向" ✗ —— 磨圆会把 180° 折返变成**小发夹** ✓，
+       同轴判据就漏了 ✓（第一版就漏了 ✓）。dot < 0 且**共线**（cross ≈ 0）= 回折 ✓。 */
+    if (dot < -0.5 && Math.abs(cross) < 0.5) backtracks.push(p.getAttribute('d').slice(0, 60));
+  }
+});
+ck('★ 没有"折返"（同轴反向画回去 —— 竖线会从拐角两边伸出来）', backtracks.length === 0,
+  backtracks.slice(0, 2).join(' / '));
 
 /* ⑤ 全是正交折线 —— 没有贝塞尔（`C` 曲线是"一团毛线"的来源）。
    ⚠️ 现在**允许 `Q`** ✓ —— 那是**拐角磨圆**（`assets/arch-round.js` ✓，用户要"美化" ✓）。

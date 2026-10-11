@@ -436,7 +436,7 @@ function archLayout(graph, opts) {
     g.stubs.push({ bY, bOut, inc, ids: [p.e.from, p.e.to] });
   });
 
-  /* 主干：竖直段**一次画到覆盖所有目标** ✓，横档只画横向那一小段 ✓ */
+  /* 主干：从**笔当前的位置**（`juncY` ✓）往**远端**画 ✓ —— 原来画 `lo → hi` 会折返 ✓。 */
   groups.forEach((g) => {
     if (!g.stubs.length) return;
     const mkStub = (s) => (s.bOut === g.trunkX
@@ -450,9 +450,9 @@ function archLayout(graph, opts) {
       });
       return;
     }
-    const lo = Math.min(g.juncY, g.bMin), hi = Math.max(g.juncY, g.bMax);
+    const far = g.juncY < g.bMin ? [g.bMax] : g.juncY > g.bMax ? [g.bMin] : [g.bMin, g.bMax];
     pending.push({
-      d: g.head + ' L' + g.trunkX + ' ' + lo + ' L' + g.trunkX + ' ' + hi,
+      d: g.head + far.map((y) => ' L' + g.trunkX + ' ' + y).join(''),
       inc: g.inc, marker: false, ids: g.ids,
     });
     g.stubs.forEach((s) => { const t = mkStub(s); if (t.d) pending.push(t); });
