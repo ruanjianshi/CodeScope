@@ -397,6 +397,31 @@ const SidebarResizer = defineComponent({
   }
 })
 
+/* 左侧目录**默认折叠** ✓（用户：「左侧的目录需要默认是折叠的，不要全部展开」）
+   ⚠️ VitePress 的侧栏折叠是 **Vue 状态** ✗ —— 光写 CSS 藏起来的话
+      「展开」按钮就点不动了 ✗。所以这里**模拟一次点击** ✓：
+      进入页面后把**顶层**（.level-0）的可折叠项点一下 → 收起来 ✓。
+   ⚠️ 只在**首次进入**做 ✓（用 sessionStorage 记 ✓）——
+      用户自己展开过之后，翻页不该再给他收回去 ✗。 */
+const SidebarCollapse = defineComponent({
+  setup() {
+    const KEY = 'codescope-kb-sidebar-collapsed'
+    const run = () => {
+      if (typeof document === 'undefined') return
+      try { if (sessionStorage.getItem(KEY) === '1') return; sessionStorage.setItem(KEY, '1') } catch (_) {}
+      document.querySelectorAll('.VPSidebarItem.level-0.collapsible > .item').forEach((el) => {
+        /* aria-expanded=true 才需要收 ✓（VitePress 默认是展开的 ✓） */
+        const item = el.closest('.VPSidebarItem')
+        if (item && item.querySelector(':scope > .items') && el.getAttribute('aria-expanded') !== 'false') {
+          try { el.click() } catch (_) {}
+        }
+      })
+    }
+    onMounted(() => { setTimeout(run, 120); setTimeout(run, 900) })
+    return () => null
+  }
+})
+
 const ReadingHud = defineComponent({
   setup() {
     const progress = ref(0)
@@ -680,7 +705,7 @@ export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, {
     'layout-top': () => [h(ReadingProgress), h(AccurateOutline)],
-    'layout-bottom': () => [h(SidebarResizer), h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
+    'layout-bottom': () => [h(SidebarResizer), h(SidebarCollapse), h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
     'doc-before': () => h(DocContext),
     'nav-bar-content-after': () => h('div', { class:'kb-nav-extras' }, [
       h(ReaderControls),
@@ -836,6 +861,26 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
 .vp-doc strong { color:color-mix(in srgb,var(--vp-c-brand-1) 56%,var(--vp-c-text-1));font-weight:720; }
 .vp-doc :not(pre) > code { padding:.16em .42em;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 18%,var(--vp-c-divider));border-radius:6px;background:color-mix(in srgb,var(--vp-c-brand-soft) 72%,var(--vp-c-bg-soft));color:color-mix(in srgb,var(--vp-c-brand-1) 76%,var(--vp-c-text-1));font-size:.88em; }
 .vp-doc div[class*="language-"] { margin:11px 0; overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
+/* ── 右侧「本页目录」的层次感 ✓ ────────────────────────────────────────────
+   用户：「知识库右侧的目录，层次感太差，美化，优化一下」✓。
+   VitePress 默认所有层级**字号颜色几乎一样** ✗ → 看着是一坨 ✓。
+   按层级给「字号 / 字重 / 缩进 / 颜色」四档区分 ✓，并加一条层级竖线 ✓。 */
+.VPDocAsideOutline .outline-link { display:block; padding:3px 0 3px var(--kb-ol-indent, 0px); font-size:12.5px; line-height:1.55; color:var(--vp-c-text-1); font-weight:640; letter-spacing:-.008em; transition:color .14s ease; }
+/* ⚠️⚠️ VitePress 的目录链接**只有 .outline-link 一个类** ✗（没有 level-2/level-3 ✓）——
+   层级是靠 **DOM 嵌套深度**表达的 ✓（.VPDocOutlineItem 套 .VPDocOutlineItem ✓）。
+   所以按**嵌套层数**做层次 ✓：一层比一层小一号、淡一档、多缩进 14px ✓。 */
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .outline-link { font-size:11.5px; font-weight:520; color:var(--vp-c-text-2); }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .VPDocOutlineItem .outline-link { font-size:11px; font-weight:480; color:var(--vp-c-text-3); }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem > li > .outline-link { position:relative; }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem > li > .outline-link::before {
+  content:''; position:absolute; left:3px; top:50%; width:5px; height:1px; margin-top:-0.5px;
+  background:color-mix(in srgb,var(--vp-c-brand-1) 32%,var(--vp-c-divider)); }
+.VPDocAsideOutline .outline-link:hover { color:var(--vp-c-brand-1); }
+.VPDocAsideOutline .outline-link.active { color:var(--vp-c-brand-1); font-weight:700; }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem > li > .outline-link.active::before { width:9px; background:var(--vp-c-brand-1); }
+/* 顶层的 active 加一条左侧竖条 ✓ */
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li > .outline-link.active { box-shadow:inset 2px 0 0 var(--vp-c-brand-1); padding-left:8px; }
+
 /* ── 标题与内容之间的间距收紧 ✓ ────────────────────────────────────────
    用户：「这个标题、图片之间的间距也太宽了」✓。
    实测：h2 底部到代码块 **88px** ✗ —— 拆开看是
@@ -850,7 +895,15 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
    ⚠️ 上面那行 overflow:hidden 是**为了裁圆角** ✓（不裁的话代码会溢出圆角 ✗），
       但它同时把**横向滚动条也吃掉了** ✗ → 长行直接看不见 ✓。
    ⇒ 外层继续 hidden ✓（圆角照裁 ✓），把滚动**下放到内层 pre** ✓。 */
-.vp-doc div[class*="language-"] > pre { overflow-x:auto;overflow-y:hidden; }
+/* ★ 代码块顶部不留空 ✓（用户：「代码向导上面怎么有一段空白」）──────
+   ⚠️ VitePress 给 pre 留了 **34px 上内边距** ✗ —— 那是给右上角那个语言标签
+      （.lang）腾位置的 ✓；但这个标签**经常是空的** ✓（没写语言 ✓）→ 白留一段 ✗。
+   ⇒ 标签为空时把上边距收到 16px ✓；有标签时保留一点 ✓。 */
+/* ⚠️⚠️ 必须 !important ✗✗ —— VitePress 自己的选择器带 .vp-doc 前缀
+   （带 .vp-doc 前缀 ✓，优先级比这里高 ✗），实测不加的话 padding-top 还是 34px ✓。 */
+.vp-doc div[class*="language-"] > pre { overflow-x:auto;overflow-y:hidden;padding-top:16px !important;padding-bottom:16px !important; }
+.vp-doc div[class*="language-"]:has(> .lang:not(:empty)) > pre { padding-top:30px !important; }
+.vp-doc div[class*="language-"] > .lang:empty { display:none !important; }
 .vp-doc div[class*="language-"] > pre > code { display:block;width:max-content;min-width:100%; }
 /* 横向滚动条**常显** ✓ —— macOS 默认是覆盖式的（不滚就不显示 ✓），
    用户根本不知道右边还有内容 ✓。这里给它一个细一点的常显样式 ✓。 */
