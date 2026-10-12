@@ -1773,9 +1773,20 @@ async function ensureKnowledgeSite(force=false){
    原来关知识库时**不恢复** ✗ → 落到欢迎页 ✗（用户报的 bug ✓）。
    这些模式的 close 只删 body class、不拆 DOM ✓，所以加回 class 即原样恢复 ✓。 */
 let KB_PREV_MODES=[];
+/* 进知识库前快照「阅读项目标签栏」的状态 ✓（项目路径 + 两栏打开的片段 ✓）。 */
+let KB_PREV_READING=null;
+function snapshotReading(){return {project:READING_PROJECT_CURRENT,slots:[...READING_SLOTS]};}
+/* 索引里查不到就**原样不动** ✗ —— 宁可少恢复也不要清空标签栏 ✓。 */
+function restoreReadingSnapshot(snap){
+  if(!snap)return;
+  if(snap.project&&READING_PROJECT_INDEX.get(snap.project))READING_PROJECT_CURRENT=snap.project;
+  if(Array.isArray(snap.slots)&&snap.slots.length===READING_SLOTS.length)snap.slots.forEach((v,i)=>{if(v&&READING_FRAGMENT_INDEX.get(v))READING_SLOTS[i]=v;});
+  renderReadingProjectTabs();
+}
 const KB_MODES=['study-mode','dsh-mode','opencode-mode','vscode-mode','office-mode','reading-mode','drawing-mode'];
 async function leaveWorkspaceModesForKnowledge(){
   KB_PREV_MODES=KB_MODES.filter((m)=>document.body.classList.contains(m));
+  KB_PREV_READING=snapshotReading();
   if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
   if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();if(document.body.classList.contains('vscode-mode'))closeVSCodeWorkspace();
   if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
@@ -1838,6 +1849,10 @@ function closeKnowledgeWorkspace(){
         → 关掉知识库反而冒出「学习工作台」（用户报的正是这个 ✓）。 */
   const prev=KB_PREV_MODES;KB_PREV_MODES=[];
   prev.forEach((m)=>{if(m!=='study-mode')document.body.classList.add(m);});
+  /* ★ 同时恢复「阅读项目标签栏」的状态 ✓（用户：「关闭知识库后这上面丢失了」）——
+     标签栏显示空提示的条件是 READING_PROJECT_CURRENT 在索引里**找不到** ✓
+     （见 renderReadingProjectTabs ✓）。进知识库前先快照 ✓，关掉时恢复 ✓。 */
+  if(KB_PREV_READING){try{restoreReadingSnapshot(KB_PREV_READING);}catch(_){}KB_PREV_READING=null;}
   if(prev.includes('study-mode')&&window.CodeScopeStudy&&typeof window.CodeScopeStudy.open==='function'){try{window.CodeScopeStudy.open();}catch(_){}}
   setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
 }
