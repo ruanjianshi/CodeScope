@@ -2720,6 +2720,22 @@ workbench.append(rz);}
       preview.setAttribute('sandbox','allow-scripts allow-modals allow-forms allow-popups');preview.setAttribute('referrerpolicy','no-referrer');
       preview.title='HTML 渲染预览';preview.srcdoc=record.content||'';
       previewWrap.appendChild(preview);
+      /* ★ markdown 源码模式：**行号栏** ✓（用户：「markdown 文档缺少行号」）——
+         textarea 自己画不了行号 ✓，所以加一个**同步滚动的行号栏** ✓：
+         · 行号栏放源码框左边 ✓，行高/字号与 textarea 对齐 ✓（CSS 用同一套 ✓）
+         · 输入时重算行数 ✓，滚动时同步 scrollTop ✓
+         · pointer-events:none ✓，不挡选中文字 ✓ */
+      (function(){const gutter=document.createElement('div');gutter.className='reading-md-gutter';gutter.setAttribute('aria-hidden','true');
+       sourceWrap.insertBefore(gutter,source);
+       let lastCount=-1;
+       const paint=()=>{const n=source.value.split('\n').length;
+         if(n!==lastCount){lastCount=n;const frag=document.createDocumentFragment();
+           for(let i=1;i<=n;i++){const d=document.createElement('div');d.textContent=String(i);frag.appendChild(d);}
+           gutter.replaceChildren(frag);}
+         gutter.scrollTop=source.scrollTop;};
+       source.addEventListener('input',paint);
+       source.addEventListener('scroll',()=>{gutter.scrollTop=source.scrollTop;},{passive:true});
+       paint();})();
       workbench.append(sourceWrap,divider,previewWrap);
       let monacoEditor=null,renderTimer=0,editorDisposed=false,resizeHandler=null;
       const getSource=()=>monacoEditor&&!editorDisposed?monacoEditor.getValue():record.content||'';

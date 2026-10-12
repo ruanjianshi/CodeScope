@@ -1202,6 +1202,13 @@
   .reading-md-editor:empty::before { content:'这里会实时显示 Markdown 渲染结果'; color:var(--muted); font-size:11px; }
   .reading-md-editor > * { width:min(100%,var(--md-measure)); max-width:var(--md-measure); margin-left:auto; margin-right:auto; }
   .reading-md-preview-content { zoom:var(--reading-md-zoom,1); }
+/* ★ markdown 源码模式的**行号栏** ✓ ——
+   ⚠️ 行高/字号/字体必须和 .reading-md-source **完全一致** ✗，
+      不然行号会和代码错位 ✓。 */
+.reading-md-gutter { flex:none; width:44px; overflow:hidden; padding:0 8px 0 0; text-align:right;
+  color:var(--dim); font-family:var(--mono); font-size:11px; line-height:1.7;
+  user-select:none; pointer-events:none; opacity:.62; }
+.reading-md-gutter > div { height:1.7em; }
 /* ★ ③ 全宽模式 ✓：把预览区里所有限宽的地方放开 ✓
    （正文的「居中窄」是靠里面某一层的 max-width 做的 ✓，
     这里统一放开 ✓，比逐个点名稳 ✓）。 */

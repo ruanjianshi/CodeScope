@@ -90,7 +90,7 @@ const SIZE_CAP = [
   /* ⚠️ 2026-10-12 再上调一次（14559 → 14569）：修「关掉知识库后阅读项目标签栏丢失」——
      进知识库前快照项目/两栏状态、关掉时按快照恢复（和模式恢复同一套思路）。
      净增 10 行代码，已压行。 */
-  ['assets/app.js', 14600],
+  ['assets/app.js', 14611],
   /* 2026-10-11 又一轮：加「自由缩放 + 卡片折行」→ arch-view.js 涨到 611，棘轮红 ✓
      → 按**天然边界**拆成两个：纯画图（arch-graph-svg.js）+ 面板集成（arch-view.js）✓，
      两个上限都记成拆完之后的实际值 ✓。 */
@@ -122,7 +122,7 @@ const SIZE_CAP = [
      发信接口加了「附件兜底」（最多 10 个、合计 base64 ≤ 20MB ✓），
      并把 body 上限从 1MB 放宽到 24MB ✓（带附件发信要传 base64 进来 ✓）。 */
   ['server.js', 7134],
-  ['assets/app.css', 3881],
+  ['assets/app.css', 3885],
   ['src/system-panel.js', 3189],
   ['lib/system-panel.js', 2097],
   ['assets/debug-panel.js', 530],
