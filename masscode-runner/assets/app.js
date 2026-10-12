@@ -1832,9 +1832,13 @@ async function openKnowledgeWorkspace(forceBuild=false){
 }
 function closeKnowledgeWorkspace(){
   document.body.classList.remove('knowledge-mode');stopKnowledgePageTracking();syncKnowledgeWorkspaceButton();
-  /* 恢复进知识库前的模式 ✓（不恢复会落到欢迎页 ✗）；study-mode 走自己的 open ✓ */
-  KB_PREV_MODES.forEach((m)=>{if(m!=='study-mode')document.body.classList.add(m);});KB_PREV_MODES=[];
-  try{if(window.CodeScopeStudy&&typeof window.CodeScopeStudy.open==='function')window.CodeScopeStudy.open();}catch(_){}
+  /* 恢复进知识库前的模式 ✓（不恢复会落到欢迎页 ✗）。
+     ⚠️⚠️ study-mode 必须**先判断它原来开着**再 open ✗✗ ——
+        上一版漏了这个判断 ✓，结果**不管原来开没开都去 open** ✗
+        → 关掉知识库反而冒出「学习工作台」（用户报的正是这个 ✓）。 */
+  const prev=KB_PREV_MODES;KB_PREV_MODES=[];
+  prev.forEach((m)=>{if(m!=='study-mode')document.body.classList.add(m);});
+  if(prev.includes('study-mode')&&window.CodeScopeStudy&&typeof window.CodeScopeStudy.open==='function'){try{window.CodeScopeStudy.open();}catch(_){}}
   setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
 }
 async function openKnowledgeSplit(){
