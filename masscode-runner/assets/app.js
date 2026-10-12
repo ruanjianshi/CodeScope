@@ -2568,28 +2568,34 @@ async function renderReadingSlot(slot) {
       const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlinePath=document.createElement('div');outlinePath.className='reading-md-outline-path';const outlinePathParent=document.createElement('span');outlinePathParent.className='seg parent';const outlinePathSep=document.createElement('span');outlinePathSep.className='sep';outlinePathSep.textContent='›';const outlinePathCurrent=document.createElement('span');outlinePathCurrent.className='seg current';outlinePath.append(outlinePathParent,outlinePathSep,outlinePathCurrent);const outlineProgress=document.createElement('div');outlineProgress.className='reading-md-outline-progress';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineList.__path={box:outlinePath,parent:outlinePathParent,current:outlinePathCurrent};/* ★ ③ 正文宽度切换 ✓（用户：「正文无法自由切换这种居中窄页面，和完全填满的宽页面」）——
    在大纲头部加一个小按钮 ✓，点一下在 workbench 上切 md-wide ✓，
    状态存 localStorage ✓（下次进来还是你选的那个 ✓）。 */
-const widthBtn=document.createElement('button');widthBtn.type='button';widthBtn.className='reading-md-width-toggle';
-try{const w=localStorage.getItem('codescope-md-wide')==='1';if(w)workbench.classList.add('md-wide');widthBtn.textContent=w?'⤢':'⤡';widthBtn.title=w?'切换为居中窄页面':'切换为填满的宽页面';}catch(_){widthBtn.textContent='⤡';widthBtn.title='切换正文宽度';}
-widthBtn.onclick=(e)=>{e.stopPropagation();const wide=workbench.classList.toggle('md-wide');widthBtn.textContent=wide?'⤢':'⤡';widthBtn.title=wide?'切换为居中窄页面':'切换为填满的宽页面';try{localStorage.setItem('codescope-md-wide',wide?'1':'0');}catch(_){}};
-outlineHead.append(outlineTitle,outlineCount,outlinePath,outlineProgress);
-/* ⚠️ 按钮要放到**顶部工具条**（大纲/源码/区块编辑/阅读 那一排 ✓）——
-   放到大纲头部会跟「48」挤在一起 ✓（用户：「按钮放背景高亮那边去」✓）。
-   工具条是动态生成的 ✓，所以运行时找它 ✓，找不到再退回大纲头部 ✓。 */
-/* ⚠️⚠️ 工具条可能**在大纲之后很久**才生成 ✗ ——
-   定时重试（80ms × 6）试了两版都没赶上 ✓（用户实测按钮一直留在大纲头部 ✓）。
-   ⇒ 改用 **MutationObserver** ✓：工具条**一出现**就把它挪进去 ✓，
-     真正做到「不管什么时候生成都能接住」✓。找不到就留在大纲头部兜底 ✓。 */
-/* ⚠️⚠️ 不能挪一次就 disconnect ✗✗ ——
-   实测：工具条是**会重建**的 ✓，挪进去的按钮**随后被冲掉** ✓
-   （用户截图里工具条和大纲头部**两处都没有按钮** ✓，就是被冲掉了 ✓）。
-   ⇒ observer **一直开着** ✓，只要按钮不在工具条里就再挪一次 ✓。
-     （hoistWidthBtn 里判断了「已经在里面就不动」✓，不会死循环 ✓。） */
-outlineHead.append(widthBtn);
-const hoistWidthBtn=()=>{const bar=workbench.querySelector('.reading-md-toolbar');if(bar&&widthBtn.parentElement!==bar){bar.append(widthBtn);}};
-hoistWidthBtn();
-const mo=new MutationObserver(hoistWidthBtn);
-mo.observe(workbench,{childList:true,subtree:true});
-setTimeout(()=>mo.disconnect(),60000);outline.append(outlineHead,outlineList);
+/* ★ ③ 正文宽度切换 ✓（用户：「正文无法自由切换这种居中窄页面，和完全填满的宽页面」）
+   ⚠️⚠️ 前四版都失败 ✗✗，教训：
+     1. 类名不能凭记忆写（第 1 版找 .reading-md-modes 是错的 ✓）
+     2. 定时重试靠不住（第 2 版没赶上 ✓）
+     3. **observer 挂在 workbench 上会被"连锅端"** ✗✗ ——
+        实测整个 .reading-md-workbench **会被重建** ✓，
+        挂在它身上的 observer 和按钮**一起被销毁** ✓
+        （用户截图：按钮又回到大纲头部 ✓）。
+   ⇒ 这一版：observer 挂在 **document.body** ✓（工作台重建它也在 ✓），
+     并且**每次现建一个新按钮** ✗（旧按钮会随工作台被销毁 ✓），
+     已经存在就跳过 ✓。 */
+const mountMdWidthBtn=()=>{
+  const wb=document.querySelector('.reading-md-workbench');
+  const bar=wb&&wb.querySelector('.reading-md-toolbar');
+  if(!bar||bar.querySelector('.reading-md-width-toggle'))return;
+  const btn=document.createElement('button');btn.type='button';btn.className='reading-md-width-toggle';
+  let wide=false;try{wide=localStorage.getItem('codescope-md-wide')==='1';}catch(_){}
+  if(wide)wb.classList.add('md-wide');
+  btn.textContent=wide?'⤢':'⤡';btn.title=wide?'切换为居中窄页面':'切换为填满的宽页面';
+  btn.onclick=(e)=>{e.stopPropagation();const cur=document.querySelector('.reading-md-workbench');
+    const w=cur?cur.classList.toggle('md-wide'):false;
+    btn.textContent=w?'⤢':'⤡';btn.title=w?'切换为居中窄页面':'切换为填满的宽页面';
+    try{localStorage.setItem('codescope-md-wide',w?'1':'0');}catch(_){}};
+  bar.append(btn);
+};
+mountMdWidthBtn();
+const moMd=new MutationObserver(mountMdWidthBtn);
+moMd.observe(document.body,{childList:true,subtree:true});outline.append(outlineHead,outlineList);
 /* ★ ② 大纲拖拽条 ✓（用户：「大纲无法自由左右拖动」）——
    大纲宽度原来是**写死的 252px** ✗，现在走 CSS 变量 ✓。
    拖拽用 pointer 事件 + setPointerCapture ✓（划出窗口也不丢 ✓），宽度落盘 ✓。 */
