@@ -995,6 +995,23 @@
   .lw-ml-item.unread .subj { color:${T.text}; font-weight:650; }
   .lw-ml-item.unread .r1::before { content:'●'; color:${T.accent}; font-size:8px; flex:none; }
   .lw-ml-tools { display:flex; gap:7px; align-items:center; padding:9px 11px; border-bottom:2px solid ${T.line}; flex:none; }
+  .lw-mc-mask { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:flex;
+    align-items:flex-start; justify-content:center; padding:8vh 16px 16px; }
+  .lw-mc { width:min(560px,100%); background:${T.panel}; border:1px solid ${T.line}; border-radius:12px;
+    box-shadow:0 18px 50px rgba(0,0,0,.4); padding:14px 16px 16px; }
+  .lw-mc .hd { display:flex; align-items:center; font:700 13px ${UI}; color:${T.text}; margin-bottom:10px; }
+  .lw-mc .hd .sp { flex:1; }
+  .lw-mc .hd button { border:1px solid ${T.lineDim}; background:transparent; color:${T.dim}; cursor:pointer;
+    width:24px; height:24px; border-radius:6px; font-size:12px; }
+  .lw-mc label { display:block; font:600 10px ${UI}; color:${T.dim}; margin-bottom:9px; letter-spacing:.5px; }
+  .lw-mc input, .lw-mc select, .lw-mc textarea { display:block; width:100%; margin-top:4px; padding:7px 9px;
+    border:1px solid ${T.lineDim}; background:transparent; color:${T.text}; font:11.5px ${UI};
+    border-radius:7px; outline:none; }
+  .lw-mc textarea { resize:vertical; line-height:1.7; }
+  .lw-mc .ft { display:flex; gap:8px; align-items:center; margin-top:11px; }
+  .lw-mc .ft .sp { flex:1; }
+  .lw-mc .msg { font:11px ${UI}; }
+  .lw-mc-empty { font-size:12px; line-height:1.9; color:${T.dim}; padding:6px 0 2px; }
   .lw-ml-tools input { flex:1; height:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
     color:${T.text}; font:11px ${UI}; outline:none; min-width:0; }
   .lw-ml-tools button { height:28px; padding:0 10px; border:1px solid ${T.lineDim}; background:transparent;
@@ -2742,6 +2759,9 @@
     list: null, listErr: '', listLoading: false,
     uid: 0, msg: null, msgErr: '', msgLoading: false,
     cfgOpen: false, showImages: false,
+    /* ✎ 写邮件弹窗（2026-10-12 加 ✓）—— `compose` 是开关 ✓，
+       后四个是「关掉弹窗也不丢」的草稿 ✓ */
+    compose: false, composeFrom: '', composeTo: '', composeSubject: '', composeBody: '',
     /* 在途去重用：记「正在拉的是哪个 (账号,文件夹)」✓（见 mailLoadList 的注释）*/
     _loadingKey: '', _loadingBox: '',
     /* 对照翻译的状态（每封邮件一份）✓ */
@@ -3411,7 +3431,8 @@
     }).join('')).join('');
     host.innerHTML = headHtml() + `<div class="lw-body2">
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
-      <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>` + dlgHtml();
+      <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>` + dlgHtml()
+      + (MAIL_UI.compose ? mailComposeOverlay() : '');
     bind();
     /* ★ `#lw-sub` 刚被重建 ✗ —— 把还没过期的状态消息（如「已移到… ↩ 撤销」）重画上去 ✓，
        否则会被默认的「日期 · 项目数」盖掉 ✗（天气异步回来就会触发一次 render ✗）。 */
@@ -4298,6 +4319,8 @@
     /* ★ 对话框要**每次 render 都重绑** ✗ —— 它跟着 render 一起重建 ✓，
        所以绑在 `bind()` 里最稳 ✓（不用另外记着在哪重绑 ✓）。 */
     bindDlg(host);
+    /* ✎ 写邮件弹窗（只有它开着时才在 DOM 里 ✓，绑了没坏处 ✓） */
+    bindMailCompose();
     /* 左栏 + 中栏的交互（提出来，方便 render() 局部刷新时复用 ✓）*/
     bindMemoSide();
     /* ── 卡片：拖「边」改大小 ✓（右边改宽 / 下边改高 / 右下角一起）──
@@ -6698,6 +6721,101 @@
   }
 
   /* ── 顶栏邮箱胶囊 ──────────────────────────────────────────────────────── */
+  /* ── 写邮件弹窗 ✓ ────────────────────────────────────────────────────────
+     ⚠️ 为什么要单独做一个 ✗✗（2026-10-12 用户报「这里缺少，发送邮箱，那种」）——
+        原来「发一封邮件」的表单**埋在「⚙ 账号配置」那个默认折叠的区里** ✓，
+        在邮件列表界面**根本看不到写信入口** ✗；而且那个表单是**按账号渲染**的 ✓，
+        想换个邮箱发就得先切到对应账号的配置里 ✗ —— 很不顺手 ✗。
+     ⇒ 这里在工具条上放一个「✎ 写邮件」✓，弹窗里**第一项就是选发件邮箱** ✓，
+        不用切账号、不用展开配置 ✓。 */
+  function mailComposeOverlay() {
+    const keys = mailConfiguredKeys();
+    const acc = (STORE && STORE.mailAcc) || MAIL_BOOT.acc || {};
+    const label = (k) => {
+      const u = (acc[k] && acc[k].user) || k;
+      return u + '（' + k + '）';
+    };
+    if (!keys.length) {
+      return '<div class="lw-mc-mask"><div class="lw-mc">'
+        + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">✕</button></div>'
+        + '<div class="lw-mc-empty">还没有配好邮箱 ✗<br>先点右上角「⚙ 账号配置」填一个（要填<b>授权码</b>，不是登录密码）。</div>'
+        + '</div></div>';
+    }
+    const cur = keys.indexOf(MAIL_UI.composeFrom) >= 0 ? MAIL_UI.composeFrom : keys[0];
+    MAIL_UI.composeFrom = cur;
+    return '<div class="lw-mc-mask"><div class="lw-mc">'
+      + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">✕</button></div>'
+      + '<label>发件邮箱<select id="lw-mc-from">'
+      + keys.map((k) => '<option value="' + esc(k) + '"' + (k === cur ? ' selected' : '') + '>' + esc(label(k)) + '</option>').join('')
+      + '</select></label>'
+      + '<label>收件人<input id="lw-mc-to" placeholder="someone@example.com（多个用逗号分隔）" value="' + esc(MAIL_UI.composeTo || '') + '"/></label>'
+      + '<label>主题<input id="lw-mc-subject" placeholder="（无主题）" value="' + esc(MAIL_UI.composeSubject || '') + '"/></label>'
+      + '<label>正文<textarea id="lw-mc-body" rows="7" placeholder="写点什么…">' + esc(MAIL_UI.composeBody || '') + '</textarea></label>'
+      + '<div class="ft"><button class="lw-btn" id="lw-mc-send">发送</button>'
+      + '<button class="lw-btn" id="lw-mc-self" title="用上面选的发件邮箱发给自己，验证发信链路">发一封给自己</button>'
+      + '<span class="sp"></span><span id="lw-mc-msg" class="msg"></span></div>'
+      + '</div></div>';
+  }
+  /* 收集弹窗里的输入 ✓（关掉弹窗也不丢 ✓，下次打开还在 ✓） */
+  function mailComposeGrab() {
+    const g = (id) => { const el = document.getElementById(id); return el ? String(el.value || '') : ''; };
+    MAIL_UI.composeFrom = g('lw-mc-from') || MAIL_UI.composeFrom;
+    MAIL_UI.composeTo = g('lw-mc-to');
+    MAIL_UI.composeSubject = g('lw-mc-subject');
+    MAIL_UI.composeBody = g('lw-mc-body');
+  }
+  function mailComposeClose() {
+    mailComposeGrab();
+    MAIL_UI.compose = false;
+    render();
+  }
+  function mailComposeOpen() {
+    MAIL_UI.compose = true;
+    render();
+    setTimeout(() => { const el = document.getElementById('lw-mc-to'); if (el) el.focus(); }, 30);
+  }
+  async function mailComposeSend(selfOnly) {
+    mailComposeGrab();
+    const msg = document.getElementById('lw-mc-msg');
+    const say = (t, ok) => { if (msg) { msg.textContent = t; msg.style.color = ok ? T.green || T.accent : T.red; } };
+    const key = MAIL_UI.composeFrom;
+    if (!key) return say('✗ 先选发件邮箱', false);
+    const acc = (STORE && STORE.mailAcc) || MAIL_BOOT.acc || {};
+    const to = selfOnly ? String((acc[key] && acc[key].user) || '') : String(MAIL_UI.composeTo || '').trim();
+    if (!to) return say('✗ 还没填收件人', false);
+    say('正在发送…', true);
+    try {
+      const r = await fetch('/api/life/mail/send', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key, account: {}, to, subject: MAIL_UI.composeSubject, body: MAIL_UI.composeBody }),
+      });
+      const d = await r.json();
+      if (d && d.ok) { say('✓ 已发送到 ' + to, true); MAIL_UI.composeBody = ''; MAIL_UI.composeSubject = ''; MAIL_UI.composeTo = ''; }
+      else say('✗ ' + ((d && d.error) || '发送失败'), false);
+    } catch (err) { say('✗ ' + err.message, false); }
+  }
+  /* ⚠️⚠️ 这里必须用**事件委托**（绑在 document 上，只装一次）✗✗ ——
+     本面板是「整块 `host.innerHTML = …` 重建」的 ✓，
+     普通 `el.onclick` 会被**下一次 render 冲掉** ✗：
+     实测 `bind()` 里明明绑上了（日志确认元素找到了 ✓），
+     但读回来 `onclick` 还是 false ✗ —— 因为后面又渲染了一次 ✓。
+     ⇒ 委托挂在 document 上 ✓，元素怎么重建都还在 ✓。 */
+  let MAIL_COMPOSE_BOUND = false;
+  function bindMailCompose() {
+    if (MAIL_COMPOSE_BOUND) return;
+    MAIL_COMPOSE_BOUND = true;
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('#lw-ml-compose')) { e.preventDefault(); mailComposeOpen(); return; }
+      if (t.closest('[data-mcx]')) { e.preventDefault(); mailComposeClose(); return; }
+      if (t.closest('#lw-mc-send')) { e.preventDefault(); mailComposeSend(false); return; }
+      if (t.closest('#lw-mc-self')) { e.preventDefault(); mailComposeSend(true); return; }
+      /* 点遮罩空白处也关掉 ✓（点弹窗内部不关 ✓） */
+      if (t.classList && t.classList.contains('lw-mc-mask')) mailComposeClose();
+    });
+  }
+
   function mailConfiguredKeys() {
     const acc = (STORE && STORE.mailAcc) || MAIL_BOOT.acc || {};
     return Object.keys(MAIL_PRESET).filter((k) => acc[k] && String(acc[k].user || '').trim());
@@ -7024,6 +7142,7 @@
       + '<input id="lw-ml-q" placeholder="筛选发件人 / 主题…" value="' + esc(MAIL_UI.q) + '"/>'
       + '<button id="lw-ml-unread" class="' + (MAIL_UI.unreadOnly ? 'on' : '') + '" title="只看未读">未读</button>'
       + '<button id="lw-ml-star" class="' + (MAIL_UI.importantOnly ? 'on' : '') + '" title="只看重要（⭐）">⭐</button>'
+      + '<button id="lw-ml-compose" title="写邮件（可自选发件邮箱）" style="font-weight:700">✎ 写邮件</button>'
       + '<button id="lw-ml-reload" title="重新收信">↻</button></div>';
 
     if (MAIL_UI.listLoading) return tools + '<div class="lw-ml-empty">正在收信…</div>';

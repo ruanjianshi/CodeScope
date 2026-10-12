@@ -1750,6 +1750,27 @@ print(r.run())
     throw new Error('打开一封未读邮件后顶栏未读数应减 1（' + unreadBefore + ' → ' + unreadAfter
       + '；若等于 ' + unreadBefore + ' 多半是后台刷新把它校正回了服务端值 —— 那不是回归）');
   }
+  /* ★★ 「写邮件」入口必须在**邮件列表界面**就能看到 ✗✗（2026-10-12 用户报
+     「个人管理面板这里缺少，发送邮箱，那种」）——
+     原来「发一封邮件」的表单**埋在默认折叠的「⚙ 账号配置」区里**，
+     在列表界面根本看不到写信入口，而且那个表单是按账号渲染的、换邮箱发要切账号。
+     ⇒ 现在工具条上有「✎ 写邮件」，弹窗里**第一项就是选发件邮箱**。
+     ⚠️ 这条断言守两件事：① 入口在列表界面可见 ✓；② 弹窗里能**选发件邮箱** ✓。 */
+  {
+    if (await page.locator('#lw-ml-compose').count() !== 1) throw new Error('邮件工具条上没有「写邮件」入口');
+    await page.click('#lw-ml-compose');
+    await page.waitForTimeout(500);
+    if (await page.locator('.lw-mc-mask').count() !== 1) throw new Error('点了「写邮件」没弹出写信窗口');
+    const froms = await page.locator('#lw-mc-from option').evaluateAll((els) => els.map((e) => e.value));
+    if (!froms.length) throw new Error('写信窗口里没有「发件邮箱」可选');
+    for (const id of ['lw-mc-to', 'lw-mc-subject', 'lw-mc-body', 'lw-mc-send']) {
+      if (await page.locator('#' + id).count() !== 1) throw new Error('写信窗口缺少 ' + id);
+    }
+    await page.click('[data-mcx]');
+    await page.waitForTimeout(400);
+    if (await page.locator('.lw-mc-mask').count() !== 0) throw new Error('写信窗口关不掉');
+  }
+
   /* ★★ 天气胶囊和邮箱胶囊必须**等高** ✗ ——
      用户原话：「这个天气和邮箱的框，怎么高度不一致」。
      根因：天气那边是两行（地区 + 体感/湿度）自然撑到 38.6px，
