@@ -307,6 +307,78 @@ const ReaderControls = defineComponent({
 /* 右下角的阅读浮标：阅读进度百分比 + 回到顶部。
    知识库里的文档动辄几千像素高（实测一篇 5300px），滚到一半想回顶部得一路划回去；
    顶部那条 2px 的进度线只能看个大概，给个准确数字更有用。 */
+/* 侧栏宽度手柄 ✓（2026-10-12 加，用户：「左侧大纲和正文之间需要可以自由左右拖动」）
+   ⚠️ 为什么做成**独立组件**而不是改 VitePress 布局 ✗：
+     默认主题的侧栏是 position:fixed + --vp-sidebar-width ✓，
+     动它的结构风险大 ✗；只改**一个 CSS 变量**最稳 ✓（见 custom.css 的覆盖 ✓）。
+   ⚠️ 拖拽用 **pointer 事件 + setPointerCapture** ✓ —— 鼠标划出窗口也不会丢 ✓
+     （用 mousemove 挂在 window 上，快速拖到屏幕外就会断 ✓）。
+   ⚠️ 宽度**落盘** ✓（localStorage ✓）—— 用户调一次就该记住 ✓。 */
+const SidebarResizer = defineComponent({
+  setup() {
+    const KEY = 'codescope-kb-sidebar-w'
+    const MIN = 200, MAX = 560, DEFAULT = 272
+    const el = ref(null)
+    let dragging = false
+    const setW = (w) => {
+      const v = Math.max(MIN, Math.min(MAX, Math.round(w)))
+      if (typeof document === 'undefined') return v
+      document.documentElement.style.setProperty('--kb-sidebar-w', v + 'px')
+      /* ⚠️⚠️ **行内 + !important** ✗✗ —— VitePress 的侧栏样式是 scoped 的
+         （.VPSidebar[data-v-xxxx] ✓），和我们的规则**同为 !important** 时它靠优先级赢 ✗
+         （实测：规则明明在 CSS 里、变量也改了，侧栏宽度纹丝不动 ✗）。
+         行内 important 是**唯一一定赢**的写法 ✓。 */
+      document.querySelectorAll('.VPSidebar').forEach((el) => {
+        try { el.style.setProperty('width', v + 'px', 'important') } catch (_) {}
+      })
+      document.querySelectorAll('.VPContent.has-sidebar').forEach((el) => {
+        try { el.style.setProperty('padding-left', v + 'px', 'important') } catch (_) {}
+      })
+      return v
+    }
+    const onDown = (e) => {
+      /* 窄屏（侧栏是抽屉）不参与 ✓ */
+      if (typeof window === 'undefined' || window.innerWidth < 960) return
+      dragging = true
+      if (el.value && el.value.setPointerCapture) { try { el.value.setPointerCapture(e.pointerId) } catch {} }
+      if (el.value) el.value.classList.add('kb-dragging')
+      document.body.classList.add('kb-resizing')
+      e.preventDefault()
+    }
+    const onMove = (e) => {
+      if (!dragging) return
+      /* 侧栏贴左边缘 ✓，所以「宽度 = 指针的 clientX」✓ */
+      setW(e.clientX)
+      e.preventDefault()
+    }
+    const onUp = (e) => {
+      if (!dragging) return
+      dragging = false
+      if (el.value) el.value.classList.remove('kb-dragging')
+      document.body.classList.remove('kb-resizing')
+      try { localStorage.setItem(KEY, String(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w'), 10) || DEFAULT)) } catch {}
+      if (el.value && el.value.releasePointerCapture) { try { el.value.releasePointerCapture(e.pointerId) } catch {} }
+    }
+    const onReset = () => { setW(DEFAULT); try { localStorage.setItem(KEY, String(DEFAULT)) } catch {} }
+    onMounted(() => {
+      try {
+        const saved = parseInt(localStorage.getItem(KEY) || '', 10)
+        setW(saved >= MIN && saved <= MAX ? saved : DEFAULT)
+      } catch (_) { setW(DEFAULT) }
+    })
+    return () => h('div', {
+      ref: el,
+      class: 'kb-sidebar-resizer',
+      title: '拖动调整左侧栏宽度（双击复位）',
+      onPointerdown: onDown,
+      onPointermove: onMove,
+      onPointerup: onUp,
+      onPointercancel: onUp,
+      onDblclick: onReset
+    })
+  }
+})
+
 const ReadingHud = defineComponent({
   setup() {
     const progress = ref(0)
@@ -590,7 +662,7 @@ export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, {
     'layout-top': () => [h(ReadingProgress), h(AccurateOutline)],
-    'layout-bottom': () => [h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
+    'layout-bottom': () => [h(SidebarResizer), h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
     'doc-before': () => h(DocContext),
     'nav-bar-content-after': () => h('div', { class:'kb-nav-extras' }, [
       h(ReaderControls),
@@ -601,6 +673,10 @@ export default {
 `;
 
 const THEME_CSS = `:root {
+  /* ★ 侧栏宽度：由右下角那条拖拽条写这个变量 ✓（默认 272 = VitePress 原值 ✓）。
+     ⚠️ 直接改 --vp-sidebar-width ✗ 会连 VitePress 自己的布局一起动 ✓，
+     所以用我们自己的变量 + 下面显式覆盖 ✓。 */
+  --kb-sidebar-w:272px;
   --vp-c-brand-1:#5b8cff;
   --vp-c-brand-2:#79a4ff;
   --vp-c-brand-3:#3d6fd6;
@@ -892,6 +968,62 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
   .kb-doc-meta span:last-child { display:inline-flex; }
 }
 @media (prefers-reduced-motion:reduce) { .VPFeature,.VPSidebarItem .text,.VPDocAsideOutline .outline-link { transition:none; } }
+/* ── 图片居中 ✓ ────────────────────────────────────────────────────────────
+   ⚠️ 原来**一条 img 规则都没有** ✗ —— 图片按内联元素排 ✓，自然靠左 ✓
+   （用户报「为什么图片不居中显示」✓）。
+   只对「独占一段的图」生效 ✓ —— 行内小徽章（badge / 表情）不受影响 ✗。 */
+/* ⚠️ 必须 !important ✗✗ —— VitePress 默认主题给 .vp-doc img 也定了 margin ✓，
+   优先级比这里的 .vp-doc p > img:only-child 高不了多少 ✓，实测被盖成 margin:0 ✗
+   （display:block 生效了、margin-left 还是 0 ✓）。 */
+.vp-doc p > img:only-child,
+.vp-doc figure img,
+.vp-doc img.kb-block {
+  display:block !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+  margin-top:1.15em; margin-bottom:1.15em;
+  max-width:100%;
+}
+.vp-doc figure { margin:1.15em 0; text-align:center; }
+.vp-doc figcaption { margin-top:.5em; font-size:.86em; color:var(--vp-c-text-2); }
+/* 图注（紧跟图片的斜体段）也居中 ✓ */
+.vp-doc p > img:only-child + em,
+.vp-doc p > em:only-child { display:block; text-align:center; }
+
+/* ── 侧栏宽度可拖 ✓ ────────────────────────────────────────────────────────
+   ⚠️ 覆盖 VitePress 自己的 --vp-sidebar-width ✓（custom.css 在主题之后加载 ✓，
+   但为稳妥还是加 !important ✗ —— 这个值只该由拖拽条决定 ✓）。 */
+/* ⚠️⚠️ VitePress 的侧栏样式是 **scoped** 的 ✗✗（.VPSidebar[data-v-xxxx] ✓），
+   比 .VPSidebar 高一个属性选择器 ✓ —— 光加 !important 也未必稳 ✓。
+   所以：CSS 这里写一份兜底 ✓，**真正生效靠 JS 写行内样式** ✓
+   （行内 + !important 一定赢 ✓，见 SidebarResizer 的 applyWidth ✓）。 */
+:root { --vp-sidebar-width: var(--kb-sidebar-w) !important; }
+html body .VPSidebar[class] { width: var(--kb-sidebar-w) !important; min-width:0 !important; }
+html body .VPContent.has-sidebar[class] { padding-left: var(--kb-sidebar-w) !important; }
+.VPNavBar.has-sidebar .curtain,
+.VPNavBar.has-sidebar .content-body { left: 0; }
+@media (min-width: 960px) {
+  .VPContent.has-sidebar { padding-left: var(--kb-sidebar-w) !important; }
+}
+/* 拖拽条：贴在侧栏右边缘 ✓，只在桌面端显示 ✓ */
+.kb-sidebar-resizer {
+  display:none;
+  position:fixed; top:0; bottom:0; left:var(--kb-sidebar-w);
+  width:7px; margin-left:-3px; z-index:60;
+  cursor:col-resize;
+  background:transparent;
+  transition:background .15s;
+}
+@media (min-width: 960px) { .kb-sidebar-resizer { display:block; } }
+.kb-sidebar-resizer::after {
+  content:''; position:absolute; inset:0 3px;
+  background:transparent; transition:background .15s;
+}
+.kb-sidebar-resizer:hover::after,
+.kb-sidebar-resizer.kb-dragging::after { background:var(--vp-c-brand-1); }
+body.kb-resizing { cursor:col-resize !important; user-select:none; }
+body.kb-resizing iframe { pointer-events:none; }
+
 `;
 
 /* CodeScope 阅读模块有一套自己的行内标注语法，磁盘上原样落盘（见 index.html 的 MD_COLOR_KEYS）：
