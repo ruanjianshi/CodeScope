@@ -865,21 +865,31 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
    用户：「知识库右侧的目录，层次感太差，美化，优化一下」✓。
    VitePress 默认所有层级**字号颜色几乎一样** ✗ → 看着是一坨 ✓。
    按层级给「字号 / 字重 / 缩进 / 颜色」四档区分 ✓，并加一条层级竖线 ✓。 */
-.VPDocAsideOutline .outline-link { display:block; padding:3px 0 3px var(--kb-ol-indent, 0px); font-size:12.5px; line-height:1.55; color:var(--vp-c-text-1); font-weight:640; letter-spacing:-.008em; transition:color .14s ease; }
-/* ⚠️⚠️ VitePress 的目录链接**只有 .outline-link 一个类** ✗（没有 level-2/level-3 ✓）——
-   层级是靠 **DOM 嵌套深度**表达的 ✓（.VPDocOutlineItem 套 .VPDocOutlineItem ✓）。
-   所以按**嵌套层数**做层次 ✓：一层比一层小一号、淡一档、多缩进 14px ✓。 */
-.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .outline-link { font-size:11.5px; font-weight:520; color:var(--vp-c-text-2); }
-.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .VPDocOutlineItem .outline-link { font-size:11px; font-weight:480; color:var(--vp-c-text-3); }
-.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem > li > .outline-link { position:relative; }
-.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem > li > .outline-link::before {
-  content:''; position:absolute; left:3px; top:50%; width:5px; height:1px; margin-top:-0.5px;
-  background:color-mix(in srgb,var(--vp-c-brand-1) 32%,var(--vp-c-divider)); }
-.VPDocAsideOutline .outline-link:hover { color:var(--vp-c-brand-1); }
-.VPDocAsideOutline .outline-link.active { color:var(--vp-c-brand-1); font-weight:700; }
-.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem > li > .outline-link.active::before { width:9px; background:var(--vp-c-brand-1); }
-/* 顶层的 active 加一条左侧竖条 ✓ */
-.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li > .outline-link.active { box-shadow:inset 2px 0 0 var(--vp-c-brand-1); padding-left:8px; }
+/* 目录标题 ✓ */
+.VPDocAsideOutline .outline-title { font-size:10.5px; letter-spacing:.14em; color:var(--vp-c-text-3); margin:0 0 10px; }
+
+/* ⚠️ VitePress 的目录链接**只有 .outline-link 一个类** ✗（没有 level-2/3）——
+   层级靠 **DOM 嵌套深度**表达 ✓，所以这里按嵌套层数写 ✓。
+   ★ 强化层次的做法：顶层给「左侧品牌竖条 + 更大更粗 + 上方留白」✓，
+     二级给「连续导轨线 + 更小更淡 + 缩进」✓ —— 一眼能分出组 ✓。 */
+
+/* 顶层（h2：一、二、三…）✓ */
+.VPDocAsideOutline .outline-link { position:relative; display:block; padding:5px 6px 5px 12px; font-size:13px; line-height:1.45; color:var(--vp-c-text-1); font-weight:700; letter-spacing:-.01em; border-radius:6px; transition:color .14s ease, background .14s ease; }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li { margin-top:5px; }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li:first-child { margin-top:0; }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li > .outline-link::before {
+  content:''; position:absolute; left:2px; top:50%; width:3px; height:13px; margin-top:-6.5px; border-radius:2px;
+  background:color-mix(in srgb,var(--vp-c-brand-1) 42%,transparent); transition:background .14s ease, height .14s ease; }
+
+/* 二级 / 三级（h3、h4）✓ —— 连续导轨线 + 更小更淡 ✓ */
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem { margin:2px 0 2px 6px; padding-left:9px; border-left:1px solid color-mix(in srgb,var(--vp-c-brand-1) 22%,var(--vp-c-divider)); }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .outline-link { padding:3px 6px 3px 4px; font-size:11.5px; font-weight:500; color:var(--vp-c-text-2); letter-spacing:0; }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .VPDocOutlineItem .outline-link { font-size:11px; font-weight:450; color:var(--vp-c-text-3); }
+
+/* 悬停 / 当前 ✓ */
+.VPDocAsideOutline .outline-link:hover { color:var(--vp-c-brand-1); background:color-mix(in srgb,var(--vp-c-brand-1) 8%,transparent); }
+.VPDocAsideOutline .outline-link.active { color:var(--vp-c-brand-1); font-weight:700; background:color-mix(in srgb,var(--vp-c-brand-1) 13%,transparent); }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li > .outline-link.active::before { height:17px; margin-top:-8.5px; background:var(--vp-c-brand-1); }
 
 /* ── 标题与内容之间的间距收紧 ✓ ────────────────────────────────────────
    用户：「这个标题、图片之间的间距也太宽了」✓。
