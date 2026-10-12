@@ -1205,10 +1205,16 @@
 /* ★ markdown 源码模式的**行号栏** ✓ ——
    ⚠️ 行高/字号/字体必须和 .reading-md-source **完全一致** ✗，
       不然行号会和代码错位 ✓。 */
-.reading-md-gutter { flex:none; width:44px; overflow:hidden; padding:0 8px 0 0; text-align:right;
-  color:var(--dim); font-family:var(--mono); font-size:11px; line-height:1.7;
+/* ⚠️⚠️ 必须**逐项对齐** .reading-md-source ✗✗ ——
+   它的实际值是 font:12px/1.72 + padding:20px 22px 56px ✓
+   （第一版我凭感觉写了 11px/1.7 且没有上内边距 ✗ → 行号会逐行错位 ✓）。
+   ⇒ 字号 12px ✓、行高 1.72 ✓、上内边距 20px ✓ —— 三项缺一不可 ✓。
+   （line-height 用无单位倍数 ✓，这样和字号一起算出来的行盒高度才和 textarea 一致 ✓。） */
+.reading-md-gutter { flex:none; width:46px; overflow:hidden;
+  padding:20px 8px 56px 0; text-align:right;
+  color:var(--dim); font:12px/1.72 var(--mono);
   user-select:none; pointer-events:none; opacity:.62; }
-.reading-md-gutter > div { height:1.7em; }
+.reading-md-gutter > div { height:1.72em; }
 /* ★ ③ 全宽模式 ✓：把预览区里所有限宽的地方放开 ✓
    （正文的「居中窄」是靠里面某一层的 max-width 做的 ✓，
     这里统一放开 ✓，比逐个点名稳 ✓）。 */
