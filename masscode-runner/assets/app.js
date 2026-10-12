@@ -2579,13 +2579,17 @@ outlineHead.append(outlineTitle,outlineCount,outlinePath,outlineProgress);
    定时重试（80ms × 6）试了两版都没赶上 ✓（用户实测按钮一直留在大纲头部 ✓）。
    ⇒ 改用 **MutationObserver** ✓：工具条**一出现**就把它挪进去 ✓，
      真正做到「不管什么时候生成都能接住」✓。找不到就留在大纲头部兜底 ✓。 */
+/* ⚠️⚠️ 不能挪一次就 disconnect ✗✗ ——
+   实测：工具条是**会重建**的 ✓，挪进去的按钮**随后被冲掉** ✓
+   （用户截图里工具条和大纲头部**两处都没有按钮** ✓，就是被冲掉了 ✓）。
+   ⇒ observer **一直开着** ✓，只要按钮不在工具条里就再挪一次 ✓。
+     （hoistWidthBtn 里判断了「已经在里面就不动」✓，不会死循环 ✓。） */
 outlineHead.append(widthBtn);
-const hoistWidthBtn=()=>{const bar=workbench.querySelector('.reading-md-toolbar');if(bar&&bar!==widthBtn.parentElement){bar.append(widthBtn);return true;}return false;};
-if(!hoistWidthBtn()){
-  const mo=new MutationObserver(()=>{if(hoistWidthBtn())mo.disconnect();});
-  mo.observe(workbench,{childList:true,subtree:true});
-  setTimeout(()=>mo.disconnect(),15000);
-}outline.append(outlineHead,outlineList);
+const hoistWidthBtn=()=>{const bar=workbench.querySelector('.reading-md-toolbar');if(bar&&widthBtn.parentElement!==bar){bar.append(widthBtn);}};
+hoistWidthBtn();
+const mo=new MutationObserver(hoistWidthBtn);
+mo.observe(workbench,{childList:true,subtree:true});
+setTimeout(()=>mo.disconnect(),60000);outline.append(outlineHead,outlineList);
 /* ★ ② 大纲拖拽条 ✓（用户：「大纲无法自由左右拖动」）——
    大纲宽度原来是**写死的 252px** ✗，现在走 CSS 变量 ✓。
    拖拽用 pointer 事件 + setPointerCapture ✓（划出窗口也不丢 ✓），宽度落盘 ✓。 */
