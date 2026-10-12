@@ -149,19 +149,56 @@ function encodeHeader(value) {
   if (/^[\x20-\x7e]*$/.test(text)) return text;
   return '=?UTF-8?B?' + Buffer.from(text, 'utf8').toString('base64') + '?=';
 }
-function buildMessage(from, to, subject, body) {
+/* base64 按 76 列折行 ✓（避免长行被中间服务器截断 ✓）*/
+function pushBase64(lines, text) {
+  const b64 = Buffer.from(String(text || ''), 'utf8').toString('base64');
+  for (let i = 0; i < b64.length; i += 76) lines.push(b64.slice(i, i + 76));
+}
+/* 附件文件名可能是中文 ✓ —— 光用 `filename="中文.pdf"` 在老客户端会乱码 ✗，
+   所以同时给 RFC 2231 的 `filename*=UTF-8''<百分号编码>` ✓（现代客户端优先用它 ✓）。 */
+function attachHeader(name) {
+  const safe = String(name || 'file').replace(/[\r\n"\\]/g, '_');
+  const ascii = safe.replace(/[^\x20-\x7e]/g, '_');
+  const enc = encodeURIComponent(safe).replace(/['()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+  return 'filename="' + ascii + '"; filename*=UTF-8\'\'' + enc;
+}
+function buildMessage(from, to, subject, body, extra) {
+  const opt = extra || {};
+  const cc = (opt.cc || []).map((x) => String(x).trim()).filter(Boolean);
+  const atts = (opt.attachments || []).filter((a) => a && a.name && a.data);
   const lines = [];
   lines.push('From: ' + encodeHeader(from.name ? from.name + ' <' + from.address + '>' : from.address));
   lines.push('To: ' + to.join(', '));
+  /* ⚠️ 密送（Bcc）**只用于投递** ✗，绝不写进头部 ✓（写进去就等于告诉所有人你密送了谁 ✗）*/
+  if (cc.length) lines.push('Cc: ' + cc.join(', '));
   lines.push('Subject: ' + encodeHeader(subject || '(无主题)'));
   lines.push('Date: ' + new Date().toUTCString());
   lines.push('MIME-Version: 1.0');
+  if (!atts.length) {
+    lines.push('Content-Type: text/plain; charset=UTF-8');
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('');
+    pushBase64(lines, body);
+    return lines.join('\r\n');
+  }
+  /* 有附件 → multipart/mixed ✓：第 1 段是正文 ✓，后面每段一个附件 ✓ */
+  const boundary = '----CodeScope_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+  lines.push('Content-Type: multipart/mixed; boundary="' + boundary + '"');
+  lines.push('');
+  lines.push('--' + boundary);
   lines.push('Content-Type: text/plain; charset=UTF-8');
   lines.push('Content-Transfer-Encoding: base64');
   lines.push('');
-  /* 正文按 76 列折行的 base64（避免长行被中间服务器截断 ✓）*/
-  const b64 = Buffer.from(String(body || ''), 'utf8').toString('base64');
-  for (let i = 0; i < b64.length; i += 76) lines.push(b64.slice(i, i + 76));
+  pushBase64(lines, body);
+  for (const a of atts) {
+    lines.push('--' + boundary);
+    lines.push('Content-Type: ' + (String(a.type || '').trim() || 'application/octet-stream') + '; name="' + String(a.name).replace(/[\r\n"\\]/g, '_') + '"');
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('Content-Disposition: attachment; ' + attachHeader(a.name));
+    lines.push('');
+    pushBase64(lines, a.data);
+  }
+  lines.push('--' + boundary + '--');
   return lines.join('\r\n');
 }
 
@@ -192,8 +229,12 @@ async function sendMail(account, message, options) {
   const from = String(account.user || '').trim();
   try {
     const to = (message.to || []).map((x) => String(x).trim()).filter(Boolean);
+    const cc = (message.cc || []).map((x) => String(x).trim()).filter(Boolean);
+    const bcc = (message.bcc || []).map((x) => String(x).trim()).filter(Boolean);
+    /* ⚠️ 投递名单 = To + Cc + **Bcc** ✓（Bcc 参与投递 ✓，但**不进头部** ✗）*/
+    const rcpt = to.concat(cc, bcc);
     if (!from) throw new SmtpError('没有填发件邮箱', 'config');
-    if (!to.length) throw new SmtpError('没有填收件人', 'config');
+    if (!rcpt.length) throw new SmtpError('没有填收件人', 'config');
 
     const conn = await connect(account, timeout);
     sock = conn.sock;
@@ -202,11 +243,12 @@ async function sendMail(account, message, options) {
 
     await expect(sock, 'MAIL FROM:<' + from + '>', [250], 'MAIL FROM', timeout);
     steps.push('发件人已受理');
-    for (const addr of to) await expect(sock, 'RCPT TO:<' + addr + '>', [250, 251], 'RCPT TO', timeout);
-    steps.push(`收件人已受理（${to.length} 个）`);
+    for (const addr of rcpt) await expect(sock, 'RCPT TO:<' + addr + '>', [250, 251], 'RCPT TO', timeout);
+    steps.push(`收件人已受理（${rcpt.length} 个）`);
 
     await expect(sock, 'DATA', [354], 'DATA', timeout);
-    const data = buildMessage({ address: from, name: message.fromName || '' }, to, message.subject, message.body);
+    const data = buildMessage({ address: from, name: message.fromName || '' }, to, message.subject, message.body,
+      { cc, attachments: message.attachments });
     /* DATA 结束标记必须是单独一行的 "." ✓ */
     sock.write(data + '\r\n.\r\n');
     const done = await readResponse(sock, timeout);
@@ -221,4 +263,4 @@ async function sendMail(account, message, options) {
   }
 }
 
-module.exports = { testConnection, sendMail, SmtpError };
+module.exports = { testConnection, sendMail, buildMessage, SmtpError };

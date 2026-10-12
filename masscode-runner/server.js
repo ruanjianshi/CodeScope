@@ -5788,7 +5788,9 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/life/mail/test' || u.pathname === '/api/life/mail/send') {
       if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
       try {
-        const body = await readBody(req, 1e6);
+        /* ⚠️ 上限 24MB ✗（原来是 1MB ✓）—— 带附件发信要传 base64 进来 ✓，
+           1MB 连一张截图都放不下 ✗。SMTP 服务器普遍在 25MB 左右设限 ✓，跟着来 ✓。 */
+        const body = await readBody(req, 24e6);
         const key = String((body && body.key) || '').trim();
         const file = path.join(applicationDataRoot(), 'life-mail.json');
         let stored = {};
@@ -5806,9 +5808,25 @@ const server = http.createServer(async (req, res) => {
         if (u.pathname === '/api/life/mail/test') {
           return send(res, 200, await MAIL_CLIENT.testConnection(account));
         }
-        const to = String((body && body.to) || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+        const split = (v) => String(v || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+        const to = split(body && body.to);
+        const cc = split(body && body.cc);
+        const bcc = split(body && body.bcc);
+        /* ⚠️ 附件兜底 ✗ —— 前端已经限制过一次 ✓，服务端再拦一道 ✓：
+           最多 10 个、总 base64 不超过 20MB ✓（不然一封邮件能把 SMTP 撑爆 ✗）。 */
+        const rawAtt = Array.isArray(body && body.attachments) ? body.attachments : [];
+        const attachments = [];
+        let attBytes = 0;
+        for (const a of rawAtt.slice(0, 10)) {
+          const name = String((a && a.name) || '').trim();
+          const data = String((a && a.data) || '');
+          if (!name || !data) continue;
+          attBytes += data.length;
+          if (attBytes > 20e6) return send(res, 400, { ok: false, error: '附件太大（合计超过约 15MB），请分批发送' });
+          attachments.push({ name, type: String((a && a.type) || ''), data });
+        }
         return send(res, 200, await MAIL_CLIENT.sendMail(account, {
-          to,
+          to, cc, bcc, attachments,
           subject: String((body && body.subject) || ''),
           body: String((body && body.body) || ''),
           fromName: String((body && body.fromName) || ''),

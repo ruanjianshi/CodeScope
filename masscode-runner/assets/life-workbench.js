@@ -995,9 +995,13 @@
   .lw-ml-item.unread .subj { color:${T.text}; font-weight:650; }
   .lw-ml-item.unread .r1::before { content:'●'; color:${T.accent}; font-size:8px; flex:none; }
   .lw-ml-tools { display:flex; gap:7px; align-items:center; padding:9px 11px; border-bottom:2px solid ${T.line}; flex:none; }
+  /* ⚠️ 位置：**垂直居中** ✓（原来 align-items:flex-start + padding-top 8vh ✗ ——
+     弹窗顶在页面上边、跟邮件面板没有关系，看着很怪 ✗，用户报过 ✓）。
+     遮罩留一点内边距 ✓，弹窗最高 88vh、内部可滚 ✓，内容多了也不会顶出屏幕 ✗。 */
   .lw-mc-mask { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:flex;
-    align-items:flex-start; justify-content:center; padding:8vh 16px 16px; }
-  .lw-mc { width:min(560px,100%); background:${T.panel}; border:1px solid ${T.line}; border-radius:12px;
+    align-items:center; justify-content:center; padding:24px 16px; overflow:auto; }
+  .lw-mc { width:min(620px,100%); max-height:88vh; overflow:auto; background:${T.panel};
+    border:1px solid ${T.line}; border-radius:12px;
     box-shadow:0 18px 50px rgba(0,0,0,.4); padding:14px 16px 16px; }
   .lw-mc .hd { display:flex; align-items:center; font:700 13px ${UI}; color:${T.text}; margin-bottom:10px; }
   .lw-mc .hd .sp { flex:1; }
@@ -1012,6 +1016,22 @@
   .lw-mc .ft .sp { flex:1; }
   .lw-mc .msg { font:11px ${UI}; }
   .lw-mc-empty { font-size:12px; line-height:1.9; color:${T.dim}; padding:6px 0 2px; }
+  .lw-mc .two { display:flex; gap:10px; }
+  .lw-mc .two label { flex:1; min-width:0; }
+  /* 「附件」那行：左边标题、右边「选择文件」按钮 ✓ */
+  .lw-mc label:has(#lw-mc-pick) { display:flex; align-items:center; gap:8px; }
+  .lw-mc label:has(#lw-mc-pick) .sp { flex:1; }
+  .lw-mc .mini { height:24px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
+    color:${T.dim}; font:600 10px ${UI}; border-radius:6px; cursor:pointer; }
+  .lw-mc .mini:hover { color:${T.text}; border-color:${T.accent}; }
+  .lw-mc .atts { display:flex; flex-wrap:wrap; gap:6px; margin:-2px 0 10px; }
+  .lw-mc .atts .none { font:10.5px ${UI}; color:${T.faint}; }
+  .lw-mc .atts .att { display:inline-flex; align-items:center; gap:5px; padding:3px 6px;
+    border:1px solid ${T.lineDim}; border-radius:6px; font:10.5px ${UI}; color:${T.text};
+    max-width:100%; overflow:hidden; }
+  .lw-mc .atts .att b { color:${T.faint}; font-weight:400; font-size:9.5px; }
+  .lw-mc .atts .att i { cursor:pointer; color:${T.faint}; font-style:normal; padding:0 1px; }
+  .lw-mc .atts .att i:hover { color:${T.red}; }
   .lw-ml-tools input { flex:1; height:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent;
     color:${T.text}; font:11px ${UI}; outline:none; min-width:0; }
   .lw-ml-tools button { height:28px; padding:0 10px; border:1px solid ${T.lineDim}; background:transparent;
@@ -2761,7 +2781,8 @@
     cfgOpen: false, showImages: false,
     /* ✎ 写邮件弹窗（2026-10-12 加 ✓）—— `compose` 是开关 ✓，
        后四个是「关掉弹窗也不丢」的草稿 ✓ */
-    compose: false, composeFrom: '', composeTo: '', composeSubject: '', composeBody: '',
+    compose: false, composeFrom: '', composeTo: '', composeCc: '', composeBcc: '',
+    composeSubject: '', composeBody: '', composeAtts: [],
     /* 在途去重用：记「正在拉的是哪个 (账号,文件夹)」✓（见 mailLoadList 的注释）*/
     _loadingKey: '', _loadingBox: '',
     /* 对照翻译的状态（每封邮件一份）✓ */
@@ -6731,10 +6752,7 @@
   function mailComposeOverlay() {
     const keys = mailConfiguredKeys();
     const acc = (STORE && STORE.mailAcc) || MAIL_BOOT.acc || {};
-    const label = (k) => {
-      const u = (acc[k] && acc[k].user) || k;
-      return u + '（' + k + '）';
-    };
+    const label = (k) => ((acc[k] && acc[k].user) || k) + '（' + k + '）';
     if (!keys.length) {
       return '<div class="lw-mc-mask"><div class="lw-mc">'
         + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">✕</button></div>'
@@ -6749,18 +6767,62 @@
       + keys.map((k) => '<option value="' + esc(k) + '"' + (k === cur ? ' selected' : '') + '>' + esc(label(k)) + '</option>').join('')
       + '</select></label>'
       + '<label>收件人<input id="lw-mc-to" placeholder="someone@example.com（多个用逗号分隔）" value="' + esc(MAIL_UI.composeTo || '') + '"/></label>'
+      + '<div class="two">'
+      + '<label>抄送<input id="lw-mc-cc" placeholder="可选" value="' + esc(MAIL_UI.composeCc || '') + '"/></label>'
+      + '<label>密送<input id="lw-mc-bcc" placeholder="可选（对方看不到）" value="' + esc(MAIL_UI.composeBcc || '') + '"/></label>'
+      + '</div>'
       + '<label>主题<input id="lw-mc-subject" placeholder="（无主题）" value="' + esc(MAIL_UI.composeSubject || '') + '"/></label>'
       + '<label>正文<textarea id="lw-mc-body" rows="7" placeholder="写点什么…">' + esc(MAIL_UI.composeBody || '') + '</textarea></label>'
+      + '<label>附件<span class="sp"></span>'
+      + '<button type="button" id="lw-mc-pick" class="mini">📎 选择文件</button>'
+      + '<input type="file" id="lw-mc-files" multiple style="display:none"/></label>'
+      + '<div id="lw-mc-atts" class="atts">' + mailAttsHtml() + '</div>'
       + '<div class="ft"><button class="lw-btn" id="lw-mc-send">发送</button>'
       + '<button class="lw-btn" id="lw-mc-self" title="用上面选的发件邮箱发给自己，验证发信链路">发一封给自己</button>'
       + '<span class="sp"></span><span id="lw-mc-msg" class="msg"></span></div>'
       + '</div></div>';
   }
-  /* 收集弹窗里的输入 ✓（关掉弹窗也不丢 ✓，下次打开还在 ✓） */
+  /* 附件列表 ✓（单独画 ✓ —— 选完文件**不能整页重渲染** ✗，
+     那样会把已经填好的输入框内容冲掉 ✗，所以只更新这一小块 ✓） */
+  function mailAttsHtml() {
+    const list = MAIL_UI.composeAtts || [];
+    if (!list.length) return '<div class="none">还没有附件</div>';
+    return list.map((a, i) => '<span class="att">📎 ' + esc(a.name)
+      + '<b>' + (a.size ? Math.max(1, Math.round(a.size / 1024)) + 'KB' : '') + '</b>'
+      + '<i data-mcatt-rm="' + i + '" title="移除">✕</i></span>').join('');
+  }
+  function mailComposePaintAtts() {
+    const el = document.getElementById('lw-mc-atts');
+    if (el) el.innerHTML = mailAttsHtml();
+  }
+  /* 选文件 → 读成 base64 ✓（服务端按 base64 拼 MIME ✓）。
+     ⚠️ 单个 8MB / 合计 15MB 就在**前端先拦** ✗ —— 传上去再被拒，白等一次 ✗。 */
+  function mailComposeFiles(files) {
+    const arr = Array.from(files || []);
+    if (!arr.length) return;
+    let total = (MAIL_UI.composeAtts || []).reduce((n, a) => n + (a.size || 0), 0);
+    const msg = document.getElementById('lw-mc-msg');
+    for (const f of arr) {
+      if ((MAIL_UI.composeAtts || []).length >= 10) { if (msg) msg.textContent = '✗ 最多 10 个附件'; break; }
+      if (f.size > 8 * 1024 * 1024) { if (msg) msg.textContent = '✗ ' + f.name + ' 超过 8MB'; continue; }
+      if (total + f.size > 15 * 1024 * 1024) { if (msg) msg.textContent = '✗ 附件合计超过 15MB'; break; }
+      total += f.size;
+      const fr = new FileReader();
+      fr.onload = () => {
+        const raw = String(fr.result || '');
+        const data = raw.indexOf(',') >= 0 ? raw.slice(raw.indexOf(',') + 1) : raw;
+        MAIL_UI.composeAtts = (MAIL_UI.composeAtts || []).concat([{ name: f.name, type: f.type || '', size: f.size, data }]);
+        mailComposePaintAtts();
+      };
+      fr.readAsDataURL(f);
+    }
+  }
   function mailComposeGrab() {
     const g = (id) => { const el = document.getElementById(id); return el ? String(el.value || '') : ''; };
     MAIL_UI.composeFrom = g('lw-mc-from') || MAIL_UI.composeFrom;
     MAIL_UI.composeTo = g('lw-mc-to');
+    MAIL_UI.composeCc = g('lw-mc-cc');
+    MAIL_UI.composeBcc = g('lw-mc-bcc');
     MAIL_UI.composeSubject = g('lw-mc-subject');
     MAIL_UI.composeBody = g('lw-mc-body');
   }
@@ -6787,10 +6849,19 @@
     try {
       const r = await fetch('/api/life/mail/send', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key, account: {}, to, subject: MAIL_UI.composeSubject, body: MAIL_UI.composeBody }),
+        body: JSON.stringify({
+          key, account: {}, to, subject: MAIL_UI.composeSubject, body: MAIL_UI.composeBody,
+          cc: MAIL_UI.composeCc, bcc: MAIL_UI.composeBcc, attachments: MAIL_UI.composeAtts || [],
+        }),
       });
       const d = await r.json();
-      if (d && d.ok) { say('✓ 已发送到 ' + to, true); MAIL_UI.composeBody = ''; MAIL_UI.composeSubject = ''; MAIL_UI.composeTo = ''; }
+      if (d && d.ok) {
+        const n = (MAIL_UI.composeAtts || []).length;
+        say('✓ 已发送到 ' + to + (n ? '（含 ' + n + ' 个附件）' : ''), true);
+        MAIL_UI.composeBody = ''; MAIL_UI.composeSubject = ''; MAIL_UI.composeTo = '';
+        MAIL_UI.composeCc = ''; MAIL_UI.composeBcc = ''; MAIL_UI.composeAtts = [];
+        mailComposePaintAtts();
+      }
       else say('✗ ' + ((d && d.error) || '发送失败'), false);
     } catch (err) { say('✗ ' + err.message, false); }
   }
@@ -6812,7 +6883,23 @@
       if (t.closest('#lw-mc-send')) { e.preventDefault(); mailComposeSend(false); return; }
       if (t.closest('#lw-mc-self')) { e.preventDefault(); mailComposeSend(true); return; }
       /* 点遮罩空白处也关掉 ✓（点弹窗内部不关 ✓） */
+      if (t.closest('#lw-mc-pick')) { e.preventDefault(); const f = document.getElementById('lw-mc-files'); if (f) f.click(); return; }
+      const rm = t.closest('[data-mcatt-rm]');
+      if (rm) {
+        e.preventDefault();
+        const i = Number(rm.getAttribute('data-mcatt-rm'));
+        MAIL_UI.composeAtts = (MAIL_UI.composeAtts || []).filter((_, j) => j !== i);
+        mailComposePaintAtts();
+        return;
+      }
       if (t.classList && t.classList.contains('lw-mc-mask')) mailComposeClose();
+    });
+    /* 选文件是 change 事件 ✗（不是 click ✓），要单独委托 ✓ */
+    document.addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t || t.id !== 'lw-mc-files') return;
+      mailComposeFiles(t.files);
+      t.value = '';
     });
   }
 

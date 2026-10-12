@@ -1746,9 +1746,13 @@ print(r.run())
       await page.waitForTimeout(120);
     }
   }
-  if (unreadAfter !== unreadBefore - 1) {
-    throw new Error('打开一封未读邮件后顶栏未读数应减 1（' + unreadBefore + ' → ' + unreadAfter
-      + '；若等于 ' + unreadBefore + ' 多半是后台刷新把它校正回了服务端值 —— 那不是回归）');
+  /* ⚠️ 这条**允许"被后台刷新校正回去"** ✗ ——
+     「点开时减 1」已经在上面的断言里**严格验过一次** ✓（那才是行为本身 ✓）；
+     这里只是回头看"经历了一堆 UI 操作后还在不在" ✓，
+     而后台邮件刷新会把它拉回服务端值 ✓（代码注释自己写了「服务端缓存到期后会自然校正」✓）。
+     死守 `-1` 会**间歇性红** ✗（实测：单独跑绿 ✓、和别的测试并跑红 ✓）。 */
+  if (unreadAfter !== unreadBefore - 1 && unreadAfter !== unreadBefore) {
+    throw new Error('顶栏未读数变成了意外的值（' + unreadBefore + ' → ' + unreadAfter + '）');
   }
   /* ★★ 「写邮件」入口必须在**邮件列表界面**就能看到 ✗✗（2026-10-12 用户报
      「个人管理面板这里缺少，发送邮箱，那种」）——
@@ -1763,8 +1767,29 @@ print(r.run())
     if (await page.locator('.lw-mc-mask').count() !== 1) throw new Error('点了「写邮件」没弹出写信窗口');
     const froms = await page.locator('#lw-mc-from option').evaluateAll((els) => els.map((e) => e.value));
     if (!froms.length) throw new Error('写信窗口里没有「发件邮箱」可选');
-    for (const id of ['lw-mc-to', 'lw-mc-subject', 'lw-mc-body', 'lw-mc-send']) {
+    /* 常见写信字段都要在 ✓ —— 抄送 / 密送 / 附件是 2026-10-12 用户点名要的
+       （原话「还有缺少，上传附件等等写邮箱功能」） */
+    for (const id of ['lw-mc-to', 'lw-mc-cc', 'lw-mc-bcc', 'lw-mc-subject', 'lw-mc-body', 'lw-mc-send', 'lw-mc-pick', 'lw-mc-files', 'lw-mc-atts']) {
       if (await page.locator('#' + id).count() !== 1) throw new Error('写信窗口缺少 ' + id);
+    }
+    /* ★ 附件要**真的能选进来** ✗ —— 只断言元素存在是「恒真」的 ✓（本项目的老坑 ✓）。
+       塞一个真文件，断言它出现在附件列表里 ✓。 */
+    const attFile = path.join(os.tmpdir(), 'codescope-att-' + Date.now() + '.txt');
+    fs.writeFileSync(attFile, 'attachment payload');
+    await page.locator('#lw-mc-files').setInputFiles(attFile);
+    await page.waitForTimeout(700);
+    if (await page.locator('#lw-mc-atts .att').count() !== 1) throw new Error('选了文件却没出现在附件列表里');
+    /* 还能移除 ✓ */
+    await page.click('#lw-mc-atts [data-mcatt-rm]');
+    await page.waitForTimeout(300);
+    if (await page.locator('#lw-mc-atts .att').count() !== 0) throw new Error('附件移除不了');
+    try { fs.unlinkSync(attFile); } catch (_) {}
+    /* ★ 弹窗要**垂直居中** ✗ —— 用户报过「位置有些怪」（原来顶在上边 ✓） */
+    {
+      const box = await page.locator('.lw-mc').boundingBox();
+      const vp = page.viewportSize();
+      const cy = box.y + box.height / 2;
+      if (Math.abs(cy - vp.height / 2) > 140) throw new Error('写信窗口没垂直居中（中心 y=' + Math.round(cy) + '）');
     }
     await page.click('[data-mcx]');
     await page.waitForTimeout(400);
