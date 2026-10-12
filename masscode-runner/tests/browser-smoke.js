@@ -1734,9 +1734,21 @@ print(r.run())
   if (await page.locator('.lw-ml-list').count() !== 1) throw new Error('关掉配置后没回到收件箱');
   /* 顶栏胶囊（面板打开时就在） */
   if (await page.locator('#lw-mb').count() !== 1) throw new Error('顶栏没有邮箱状态胶囊');
-  const unreadAfter = await badgeNum();
+  /* ⚠️⚠️ 这里**不能固定读一次** ✗✗ —— 未读数是异步刷新的 ✓，
+     而且**后台邮件刷新会把它校正回服务端的值** ✓（上面那段注释自己就写了
+     「服务端缓存到期后会自然校正」✓）。固定读一次 = 竞态 ✗：
+     实测 `npm run test:all` 连跑时红过一次（3 → 3），单独跑又绿 ✓。
+     ⇒ 改成**等它变**（最多 5 秒 ✓）；等不到再报错 ✓，报错里带上"是不是被刷新校正了" ✓。 */
+  let unreadAfter = await badgeNum();
   if (unreadAfter !== unreadBefore - 1) {
-    throw new Error('打开一封未读邮件后顶栏未读数应减 1（' + unreadBefore + ' → ' + unreadAfter + '）');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 5000 && (unreadAfter = await badgeNum()) !== unreadBefore - 1) {
+      await page.waitForTimeout(120);
+    }
+  }
+  if (unreadAfter !== unreadBefore - 1) {
+    throw new Error('打开一封未读邮件后顶栏未读数应减 1（' + unreadBefore + ' → ' + unreadAfter
+      + '；若等于 ' + unreadBefore + ' 多半是后台刷新把它校正回了服务端值 —— 那不是回归）');
   }
   /* ★★ 天气胶囊和邮箱胶囊必须**等高** ✗ ——
      用户原话：「这个天气和邮箱的框，怎么高度不一致」。

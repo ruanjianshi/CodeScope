@@ -265,6 +265,41 @@ fs.readdirSync(path.join(root, 'lib', 'routes')).filter((f) => f.endsWith('.js')
 });
 ck('  路由模块用到的 server.js 顶层符号，都从 ctx 取了', ctxMissing.length === 0, ctxMissing.slice(0, 4).join(' / '));
 
+console.log('\n── ⑤c 「抽路由」的相对路径（__dirname 位移）──');
+/* ★★ 从根目录的 server.js 抽到 `lib/routes/` 之后，`__dirname` **多下移了两层** ✗✗ ——
+   跟文件位置有关的东西（`path.join(__dirname, …)` / `require('./x')`）都要跟着改 ✓。
+   ⚠️ 实测踩过（2026-10-12 用户报「怎么缺失了」）：
+      `lib/routes/remote.js` 查 noVNC 时写的是 `path.join(__dirname, 'node_modules', …)` ✗
+      → 一直在查 `lib/routes/node_modules/…`（永远不存在）→
+      面板永远「VNC 缺失」，可依赖明明装着 ✓。
+   ⇒ 这条断言把「抽出去的路由里，指向 node_modules 的路径必须真的存在」钉住 ✓。
+      比盯着某个字符串强 ✓：它验的是**文件真的在那儿** ✓。 */
+{
+  const routeDir = path.join(root, 'lib', 'routes');
+  const offenders = [];
+  let checked = 0;
+  if (fs.existsSync(routeDir)) {
+    for (const f of fs.readdirSync(routeDir).filter((x) => x.endsWith('.js'))) {
+      const src = fs.readFileSync(path.join(routeDir, f), 'utf8');
+      /* 只看**代码**里的 path.join(__dirname, …) ✗ —— 注释里写的不算 ✓ */
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      for (const m of code.matchAll(/path\.join\(__dirname,([^)]*)\)/g)) {
+        const parts = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+        if (!parts.length) continue;
+        checked += 1;
+        const resolved = path.join(routeDir, ...parts);
+        /* 只对"应该存在的目录"较真 ✓ —— `node_modules` 这种一定存在 ✓，
+           而 `.bin/code-server` 之类可能没装 ✓，不该判错 ✓。 */
+        if (parts[0] !== 'node_modules') continue;
+        if (!fs.existsSync(resolved)) offenders.push(f + ' → ' + path.relative(root, resolved));
+      }
+    }
+  }
+  ck('  lib/routes/ 里指向 node_modules 的路径都真的存在（__dirname 没少两层）',
+    offenders.length === 0, offenders.slice(0, 3).join(' / '));
+  console.log('  （扫了 ' + checked + ' 处 path.join(__dirname, …)）');
+}
+
 console.log('\n── ⑥ 没有遗留标记 ──');
 /* ⚠️⚠️ 只认**注释形式**的 TODO ✗✗（第一次写成裸词，误报 4 处 ✓）：
        · `server.js` 里有一段**代码本身就在数 TODO**（`text.match(/TODO|FIXME/)`）✓；
