@@ -252,6 +252,19 @@ void bubbleSort(Array& values);
   const knowledgeFolderCreated = await postJson(baseUrl, '/api/knowledge/folder', { path:'嵌入式 Linux' });
   const knowledgeProject = await postJson(baseUrl, '/api/knowledge/project', { path:'嵌入式 Linux/驱动开发', description:'Linux 驱动学习与调试' });
   assert(knowledgeFolderCreated.ok && knowledgeProject.ok && knowledgeProject.readingPath === '知识库/嵌入式 Linux/驱动开发/项目概览.md', '知识库分类或项目创建失败');
+  /* ★★ 项目概览的 frontmatter `title` 必须和正文 H1 **一模一样** ✗✗（2026-10-12 用户报「知识库不对应」）——
+     原来写的是 `<项目名> · 项目概览`，而正文是 `# <项目名>` →
+     **侧栏读 frontmatter、文档显示 H1** → 两边对不上，用户以为"多了一个项目概览"。
+     ⇒ 这条断言就是守「侧栏和文档必须说同一个名字」。 */
+  {
+    const overviewPath = path.join(vault, 'readings', '知识库', '嵌入式 Linux', '驱动开发', '项目概览.md');
+    const overview = fs.readFileSync(overviewPath, 'utf8');
+    const fm = (overview.match(/^---\s*\ntitle:\s*(.+?)\s*\n/) || [])[1] || '';
+    const h1 = (overview.match(/^#\s+(.+?)\s*$/m) || [])[1] || '';
+    const unquote = (x) => String(x).trim().replace(/^["']|["']$/g, '');
+    assert(unquote(fm) === '驱动开发' && unquote(h1) === '驱动开发',
+      '项目概览的 frontmatter title（' + fm + '）与正文 H1（' + h1 + '）不一致 —— 侧栏会和文档对不上');
+  }
   const knowledgePage = await postJson(baseUrl, '/api/knowledge/page', { path:'嵌入式 Linux/驱动开发/设备驱动.md', title:'Linux 设备驱动' });
   assert(knowledgePage.ok && knowledgePage.readingPath === '知识库/嵌入式 Linux/驱动开发/设备驱动.md', '知识库项目内 Markdown 片段创建失败');
   const knowledgeImageInfo=Buffer.from(JSON.stringify({path:'设备驱动/示意图.png'})).toString('base64');

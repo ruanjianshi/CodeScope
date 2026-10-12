@@ -1376,7 +1376,11 @@ function createKnowledgeBase(options) {
     const rawTags = Array.isArray(input && input.tags) ? input.tags : String(input && input.tags || '').split(/[,，]/);
     const tags = rawTags.map(String).map((tag)=>tag.trim()).filter(Boolean).slice(0, 30);
     writeFileAtomicSync(path.join(target, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description, tags, updatedAt:Date.now() }, null, 2) + '\n', 'utf8');
-    writeIfMissing(path.join(target, '项目概览.md'), `---\ntitle: ${JSON.stringify(name + ' · 项目概览')}\n---\n\n# ${name}\n\n${description || '在这里记录项目概览、学习目标和文档索引。'}\n`);
+    /* ⚠️⚠️ frontmatter 的 `title` 必须和正文 H1 **一模一样** ✗✗（2026-10-12 用户报「知识库不对应」）——
+       原来写的是 `<项目名> · 项目概览` ✗，而正文是 `# <项目名>` ✓ →
+       **侧栏读 frontmatter、文档显示 H1** ✓ → 两边对不上 ✓，用户以为"多了一个项目概览" ✓。
+       ⇒ 标题就用项目名 ✓；「这是项目概览」由**文件名** `项目概览.md` 表达就够了 ✓。 */
+    writeIfMissing(path.join(target, '项目概览.md'), `---\ntitle: ${JSON.stringify(name)}\n---\n\n# ${name}\n\n${description || '在这里记录项目概览、学习目标和文档索引。'}\n`);
     schedule('create-project');
     return { ok:true, path:rel, readingPath:KNOWLEDGE_FOLDER + '/' + rel + '/项目概览.md' };
   }
