@@ -1205,9 +1205,16 @@
 /* ★ ③ 全宽模式 ✓：把预览区里所有限宽的地方放开 ✓
    （正文的「居中窄」是靠里面某一层的 max-width 做的 ✓，
     这里统一放开 ✓，比逐个点名稳 ✓）。 */
-.reading-md-workbench.md-wide .reading-md-preview-content,
+/* ⚠️ 只放开两层**不够** ✗（用户：「点击切换成宽页面没有用」✓）——
+   正文的限宽可能埋在第 3 层 ✓，所以放到**三层** ✓，并把左右 padding 也清掉 ✓
+   （光清 margin 的话，中间那层的 padding 还在 ✓，看着还是窄 ✓）。 */
 .reading-md-workbench.md-wide .reading-md-preview-content > *,
-.reading-md-workbench.md-wide .reading-md-preview-content > * > * { max-width:none!important; margin-left:0!important; margin-right:0!important; }
+.reading-md-workbench.md-wide .reading-md-preview-content > * > *,
+.reading-md-workbench.md-wide .reading-md-preview-content > * > * > * {
+  max-width:none!important; margin-left:0!important; margin-right:0!important;
+  padding-left:0!important; padding-right:0!important; width:auto!important; }
+/* 正文区本身也撑满 ✓ */
+.reading-md-workbench.md-wide .reading-md-preview { padding-left:0!important; padding-right:0!important; }
 /* 切换按钮 ✓ */
 /* ⚠️ 按钮必须留在**标题那一行** ✗ —— outlineHead 是个网格 ✓，
    直接 append 会当成第 5 个子元素**换到新的一行** ✓（用户截图里就是浮在中间 ✓）。

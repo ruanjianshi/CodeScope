@@ -2571,7 +2571,11 @@ async function renderReadingSlot(slot) {
 const widthBtn=document.createElement('button');widthBtn.type='button';widthBtn.className='reading-md-width-toggle';
 try{const w=localStorage.getItem('codescope-md-wide')==='1';if(w)workbench.classList.add('md-wide');widthBtn.textContent=w?'⤢':'⤡';widthBtn.title=w?'切换为居中窄页面':'切换为填满的宽页面';}catch(_){widthBtn.textContent='⤡';widthBtn.title='切换正文宽度';}
 widthBtn.onclick=(e)=>{e.stopPropagation();const wide=workbench.classList.toggle('md-wide');widthBtn.textContent=wide?'⤢':'⤡';widthBtn.title=wide?'切换为居中窄页面':'切换为填满的宽页面';try{localStorage.setItem('codescope-md-wide',wide?'1':'0');}catch(_){}};
-outlineHead.append(outlineTitle,outlineCount,outlinePath,outlineProgress,widthBtn);outline.append(outlineHead,outlineList);
+outlineHead.append(outlineTitle,outlineCount,outlinePath,outlineProgress);
+/* ⚠️ 按钮要放到**顶部工具条**（大纲/源码/区块编辑/阅读 那一排 ✓）——
+   放到大纲头部会跟「48」挤在一起 ✓（用户：「按钮放背景高亮那边去」✓）。
+   工具条是动态生成的 ✓，所以运行时找它 ✓，找不到再退回大纲头部 ✓。 */
+{const bar=workbench.querySelector('.reading-md-modes');if(bar)bar.append(widthBtn);else outlineHead.append(widthBtn);}outline.append(outlineHead,outlineList);
 /* ★ ② 大纲拖拽条 ✓（用户：「大纲无法自由左右拖动」）——
    大纲宽度原来是**写死的 252px** ✗，现在走 CSS 变量 ✓。
    拖拽用 pointer 事件 + setPointerCapture ✓（划出窗口也不丢 ✓），宽度落盘 ✓。 */
