@@ -813,7 +813,7 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
    用户看到的「行间距变了」就是这个：同一篇里段间距不均匀。
    现在统一成和普通段落一样的间距，整篇节奏一致（阅读器那边也是均匀的）。 */
 .vp-doc h1 + p { max-width:760px;margin:0 0 14px;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
-.vp-doc h2 { counter-increment:kb-h2;display:flex;align-items:center;gap:11px;margin-top:2.55em;padding-top:1.05em;border-top:1px solid color-mix(in srgb,var(--vp-c-brand-1) 16%,var(--vp-c-divider));font-size:1.5rem; }
+.vp-doc h2 { counter-increment:kb-h2;display:flex;align-items:center;gap:11px;margin-top:1.75em;margin-bottom:9px;padding-top:.85em;border-top:1px solid color-mix(in srgb,var(--vp-c-brand-1) 16%,var(--vp-c-divider));font-size:1.5rem; }
 .vp-doc h2::before { content:counter(kb-h2,decimal-leading-zero);display:inline-grid;place-items:center;min-width:30px;height:24px;padding:0 5px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));border-radius:7px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font:750 11px/1 var(--vp-font-family-mono);letter-spacing:0; }
 .vp-doc h3 { position:relative;margin-top:1.85em;padding-left:14px;font-size:1.16rem; }
 .vp-doc h3::before { content:'';position:absolute;left:0;top:.42em;width:4px;height:1em;border-radius:99px;background:var(--vp-c-brand-1);box-shadow:0 0 12px var(--vp-c-brand-soft); }
@@ -835,7 +835,17 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
 .vp-doc a:hover { text-decoration-thickness:2px; }
 .vp-doc strong { color:color-mix(in srgb,var(--vp-c-brand-1) 56%,var(--vp-c-text-1));font-weight:720; }
 .vp-doc :not(pre) > code { padding:.16em .42em;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 18%,var(--vp-c-divider));border-radius:6px;background:color-mix(in srgb,var(--vp-c-brand-soft) 72%,var(--vp-c-bg-soft));color:color-mix(in srgb,var(--vp-c-brand-1) 76%,var(--vp-c-text-1));font-size:.88em; }
-.vp-doc div[class*="language-"] { overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
+.vp-doc div[class*="language-"] { margin:11px 0; overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
+/* ── 标题与内容之间的间距收紧 ✓ ────────────────────────────────────────
+   用户：「这个标题、图片之间的间距也太宽了」✓。
+   实测：h2 底部到代码块 **88px** ✗ —— 拆开看是
+     h2 下边距 16 + 中间那个 <p> 的上下边距 28 + 代码块上边距 16 + 行高 ✓。
+   ⚠️ 顺带把 h2 的 margin-top 从 2.55em 收到 1.75em ✓（上一节标题到下一节标题空太多 ✓）。 */
+.vp-doc h2 + p, .vp-doc h2 + div[class*="language-"] { margin-top:5px; }
+.vp-doc p + div[class*="language-"] { margin-top:7px; }
+.vp-doc div[class*="language-"] + p { margin-top:7px; }
+.vp-doc h2 + table, .vp-doc p + table { margin-top:7px; }
+
 /* ── 长内容要能横向滚 ✓（用户：「内容太长了，缺少横向的拖动条，被遮挡掉了」）──────
    ⚠️ 上面那行 overflow:hidden 是**为了裁圆角** ✓（不裁的话代码会溢出圆角 ✗），
       但它同时把**横向滚动条也吃掉了** ✗ → 长行直接看不见 ✓。
