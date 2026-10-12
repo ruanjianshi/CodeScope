@@ -107,7 +107,12 @@ const SIZE_CAP = [
   ['assets/arch-layout.js', 370],
   ['assets/arch-round.js', 23],    /* 拐角磨圆（纯字符串处理）*/
   ['assets/arch-graph-svg.js', 110],
-  ['server.js', 7107],
+  /* ⚠️ 2026-10-12 **明确往上调了**（7107 → 7120），理由：这不是新功能，是**两个数据护栏** ✗✗ ——
+     `POST /api/life/store` 加了「拒绝把有内容的仓库清空」（新键数不到现有的一半就拒收 ✓）
+     + 「flowRuns 封顶 200 条」✓。起因是用户报「东西都丢失了」：
+     flowRuns 涨到 36MB → 超过 4MB body 上限 → 被不完整副本覆盖 → 82 个键只剩 27 个 ✓。
+     **护栏本身就是"防止代码把事情搞坏"的代码** ✓，压它等于压掉安全网 ✓。 */
+  ['server.js', 7120],
   ['assets/app.css', 3869],
   ['src/system-panel.js', 3189],
   ['lib/system-panel.js', 2097],

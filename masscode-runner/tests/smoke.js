@@ -227,6 +227,23 @@ void bubbleSort(Array& values);
 
   await waitForServer(baseUrl, output);
 
+  /* ★★ 数据护栏：拒绝「把有内容的仓库清空」✗✗（2026-10-12，用户报「东西都丢失了」）——
+     起因：flowRuns 涨到 36MB → 超过本接口 4MB 的 body 上限 → 之后任何一次保存
+     都用**不完整的内存状态**覆盖它 → 用户 82 个键只剩 27 个（书签/日记/待办/文章/单词全没）。
+     ⇒ 判据：新 payload 的键数不到现有的一半就拒收 ✓（真要删得显式带 __drop ✓）。 */
+  const storeSeed = { a:1, b:2, c:3, d:4, e:5, f:6, g:7, h:8, i:9, j:10, k:11, l:12 };
+  await postJson(baseUrl, '/api/life/store', storeSeed);
+  const storeFull = await requestJson(baseUrl, '/api/life/store');
+  /* ⚠️ 这一次**预期就是 409** ✓ —— 所以用原始 fetch ✗（`postJson` 会在非 2xx 上抛错 ✓）。 */
+  const shrinkResp = await fetch(baseUrl + '/api/life/store', {
+    method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ a:1, b:2 }),
+  });
+  assert(shrinkResp.status === 409, '「不完整副本」应当被拒（409），实际 ' + shrinkResp.status);
+  const storeAfter = await requestJson(baseUrl, '/api/life/store');
+  assert(Object.keys(storeFull.data).length >= 12
+    && Object.keys(storeAfter.data).length === Object.keys(storeFull.data).length,
+    '「不完整副本」把 life store 清空了 —— 数据护栏没生效');
+
   const dshIntegration = await requestJson(baseUrl, '/api/integrations/dsh');
   assert(dshIntegration.ok && dshIntegration.service && dshIntegration.service.installed && dshIntegration.service.bundled, 'DeepSeek Harness 未作为 CodeScope 内置托管服务暴露');
 

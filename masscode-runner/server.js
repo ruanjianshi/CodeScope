@@ -5633,6 +5633,27 @@ const server = http.createServer(async (req, res) => {
             });
           } catch (_) { }
           delete next.__drop;      /* 这个标记只用于本次请求 ✗，不许落盘 ✗ */
+          /* ★★ 拒绝「把有内容的仓库清空」✗✗（2026-10-12 实测，用户报「东西都丢失了」）——
+             `flowRuns`（工作流运行日志）涨到 **36MB** ✗ → 超过本接口 4MB 的 body 上限 ✗ →
+             之后任何一次保存都用**不完整的内存状态**把它覆盖掉 ✗ →
+             用户 82 个键只剩 27 个 ✗（书签 / 日记 / 待办 / 文章 / 单词全没了 ✓）。
+             ⇒ 判据：**新 payload 的键数不到现有的一半** → 拒收 ✓。
+                保存**不该让数据变少** ✓；真要删就显式带 `__drop` ✓。 */
+          try {
+            const kept = Object.keys(read()).length, got = Object.keys(next).length;
+            if (kept >= 10 && got < kept / 2) {
+              return send(res, 409, { ok:false, error:'拒绝保存：这次只提交了 ' + got + ' 个键，而现有数据有 ' + kept
+                + ' 个 —— 疑似不完整的副本（数据没动）。若确实要删，请带 __drop。' });
+            }
+          } catch (_) { }
+          /* ⚠️ 顺手给 `flowRuns` 封顶 ✗ —— 它是**运行日志** ✓，会无限增长 ✓
+             （实测一个工作流跑了 49,152 次 → 36MB ✓）。只留最近 200 条 ✓。 */
+          try {
+            const fr = next.flowRuns;
+            if (fr && typeof fr === 'object') for (const k of Object.keys(fr)) {
+              if (Array.isArray(fr[k]) && fr[k].length > 200) fr[k] = fr[k].slice(-200);
+            }
+          } catch (_) { }
           try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
           /* ★★ 写盘前先轮转一份快照 ✓ ——
              教训：备忘录内容被写串（bug 已修）时，**一个历史版本都没有** ✗，
