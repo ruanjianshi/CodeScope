@@ -826,6 +826,29 @@ body {
    没有大纲就整条收掉，并把容器收窄让正文居中（有大纲时行为完全不变）。 */
 html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container > .aside.aside { display:none; }
 html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:calc(var(--kb-content-max) + 80px)!important; }
+/* ★★ 让「版心」真正生效 ✗✗ ——
+   VitePress 默认给 .content-container 加了 max-width:688px ✓（有右侧目录时 ✓），
+   把这里设的 --kb-content-max（默认 900px ✓）**整个盖住** ✗
+   → 表现为「版心选择器调了没反应」✗，正文只有 588px ✓，长图被压得很小 ✓
+   （用户：「知识库打开是这个样子的，而 markdown 是这个样子的」✓）。
+   ⚠️ 必须 !important ✗ —— VitePress 那条也是 .VPDoc.has-aside 里的具体值 ✓。 */
+/* ⚠️⚠️ 光给 max-width 不够 ✗✗ —— 实测 .content-container 的 flex 是 0 1 auto
+   （**不长** ✓），而 .aside 是 1 1 auto（**会长** ✗）→ 多余空间全被右侧目录吃掉 ✓
+   → 正文只有 588px ✓、长图被压到 496px ✓（图自然宽 1696px ✓）。
+   ⇒ 正文要 flex-grow:1 ✓、右侧目录要 flex:0 0 auto ✓（别抢空间 ✓）。 */
+/* ⚠️⚠️ 再补一刀 ✗✗ —— 实测 .container 有 1164px 可用，
+   但 .content 只吃到 652px（.content-container 588 ✓）。
+   光写 max-width 和 flex 都不够 ✓（.content 的 flex 已是 1 1 auto 却没长 ✓），
+   所以这里**直接把宽度撑到版心** ✓：min-width 用版心值 ✓，上限也用版心值 ✓。
+   右侧目录 .aside 固定不抢空间 ✓（原来是 1 1 auto，会跟正文抢 ✓）。 */
+html .VPDoc.VPDoc > .container.container > .content > .content-container.content-container {
+  flex:1 1 auto!important;
+  width:min(var(--kb-content-max), 100%)!important;
+  max-width:var(--kb-content-max)!important;
+  margin-left:auto; margin-right:auto; }
+html .VPDoc.VPDoc > .container.container > .content { flex:1 1 auto!important; max-width:none!important; }
+html .VPDoc.VPDoc > .container.container > .aside { flex:0 0 auto!important; }
+html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-content-max) + 320px)!important; }
 .vp-doc { counter-reset:kb-h2;color:color-mix(in srgb,var(--vp-c-text-1) 89%,var(--vp-c-text-2));font-size:16px;line-height:1.82; }
 .vp-doc > :first-child { margin-top:0; }
 .vp-doc h1,.vp-doc h2,.vp-doc h3,.vp-doc h4 { color:var(--kb-heading);letter-spacing:-.025em;scroll-margin-top:90px; }
