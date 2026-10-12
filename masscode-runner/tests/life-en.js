@@ -4,6 +4,8 @@
    ⚠️ 收尾只删**自己造的** ✓（用户的文章 / 生词一条不动 ✗）。
    运行：node tests/life-en.js */
 const fs = require('fs');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const { chromium } = require('playwright-core');
 /* ★ 共享的 SRS 模块 ✓（双栖 ✓）—— 用来把「界面上点一下」的结果和
    「纯逻辑模块算出来的」**逐字段对齐** ✓（比「step 0→1」这种硬编码强得多 ✓）。 */

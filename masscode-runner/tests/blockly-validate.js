@@ -14,6 +14,8 @@
    否则 Blockly 会在**创建积木时抛错**，整个积木不可用。
    （实测踩过：cpp_mutex 的 message0 少写一个 %1） */
 const { chromium } = require('playwright-core');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const FILE = process.argv[2] || '/Users/xiaoq/Library/Mobile Documents/com~apple~CloudDocs/massCode/markdown-vault/code/Test/手搓代码/接口化最小代码实现.md';
 (async () => {
   const b = await chromium.launch({ headless: true, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--disable-gpu'] });

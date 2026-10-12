@@ -14,6 +14,8 @@
  */
 /* 全量审计：遍历文档里每个函数，对比「原文」与「积木生成的代码」 */
 const fs = require('fs');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const { chromium } = require('playwright-core');
 const FILE = process.argv[2];
 if (!FILE) { console.error('用法: node tests/blockly-roundtrip.js <文档绝对路径>'); process.exit(1); }

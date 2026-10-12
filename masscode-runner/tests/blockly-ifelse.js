@@ -33,6 +33,8 @@
 
 const { chromium } = require('playwright-core');
 
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const PANEL = 'http://127.0.0.1:4877/';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 /* 造一个签名是 int main() 的函数片段当上下文，这样 blockJsonToCode()

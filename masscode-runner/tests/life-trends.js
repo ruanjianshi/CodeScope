@@ -6,6 +6,8 @@
    ⚠️ 这个探针**真的会联网**（拉 11 个热点源 ✗）—— 所以比别的探针慢一点 ✓，属正常 ✓。 */
 'use strict';
 const fs = require('fs');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const { chromium } = require('playwright-core');
 const exe = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((f) => fs.existsSync(f));
 const fails = []; const ck = (n, ok, x) => { if (ok) console.log('  ✅ ' + n); else { console.log('  ❌ ' + n + (x ? '  → ' + x : '')); fails.push(n); } };
@@ -202,7 +204,13 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     await p.waitForTimeout(500);
     const w1 = await p.evaluate(() => Math.round(document.querySelector('.lw-hl-ai').getBoundingClientRect().width));
     console.log('    AI 日报宽度 ' + w0 + ' → ' + w1);
-    ck('★★ 拖拽条**真的能改宽度**（用户原话「窗口无法自由拖动」）', w1 < w0 - 60, w0 + ' → ' + w1);
+    /* ⚠️⚠️ 判据是「**变小了**」+「**没突破下限**」✗✗，不是「至少缩 60px」✗ ——
+       面板的默认宽度只有 262px，而下限是 220px ✓（见上面那段注释 ✓），
+       往左拖最多只能缩 42px ✓ → 「缩 60px」这条**必然失败** ✓
+       （实测：262 → 220，明明拖动了，却被判失败 ✗）。
+       ⇒ 守两件真事：① 拖动真的改了宽度 ✓；② 没被拖破下限 ✓。 */
+    ck('★★ 拖拽条**真的能改宽度**（用户原话「窗口无法自由拖动」）', w1 < w0, w0 + ' → ' + w1);
+    ck('★★ 而且没被拖破下限（≥ 220px）', w1 >= 220, String(w1));
     const savedW = (await store()).trendAiW;
     ck('★ 而且宽度**落盘**了（下次打开还记得）', Number(savedW) === w1, String(savedW));
     /* ★ 顺手守一条：宽度上限**不能写死** ✗ —— 写死 760 的话，

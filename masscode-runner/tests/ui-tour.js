@@ -18,6 +18,8 @@
  */
 'use strict';
 const fs = require('fs');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const { chromium } = require('playwright-core');
 
 const BASE = process.env.CODESCOPE_BASE || 'http://127.0.0.1:4877';

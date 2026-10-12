@@ -3,6 +3,8 @@
    ⚠️ 只读：本探针**不删任何文件**，也不改服务端数据（只读接口）。
    运行：node tests/file-atlas-view.js */
 const fs = require('fs');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const { chromium } = require('playwright-core');
 const exe = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((f) => fs.existsSync(f));
 const BASE = 'http://127.0.0.1:4877';

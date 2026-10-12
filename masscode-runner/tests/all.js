@@ -23,6 +23,12 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+/* ⚠️⚠️ **先装数据保护罩** ✗✗ —— `tests/` 下有 15+ 个「探针」是**打真实实例**的 ✓
+   （开头都写着「打本机真实实例 127.0.0.1:4877」✓），它们会**写你的真实数据** ✓。
+   实测：跑一次这里，`life-workbench.json` 82 键掉到 77 键 ✓。
+   ⇒ 跑之前快照，跑完（哪怕崩了）恢复 ✓。详见 tests/probe-guard.js ✓。 */
+const probeGuard = require('./probe-guard.js');
+probeGuard.arm();
 
 const root = path.resolve(__dirname, '..');
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));

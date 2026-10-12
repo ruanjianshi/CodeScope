@@ -7,6 +7,8 @@
    ⚠️ 样本是**现造的** ✗（这台机器上一个 epub 都没有 ✓，见 tests/ebook.js 顶部 ✓）。 */
 'use strict';
 const fs = require('fs');
+/* 数据保护罩：探针会写真实数据，跑完必须还原 ✓（见 probe-guard.js） */
+require('./probe-guard.js').arm();
 const path = require('path');
 const os = require('os');
 const { zipSync, strToU8 } = require('fflate');
