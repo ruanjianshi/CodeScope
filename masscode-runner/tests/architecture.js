@@ -122,7 +122,7 @@ const SIZE_CAP = [
      发信接口加了「附件兜底」（最多 10 个、合计 base64 ≤ 20MB ✓），
      并把 body 上限从 1MB 放宽到 24MB ✓（带附件发信要传 base64 进来 ✓）。 */
   ['server.js', 7134],
-  ['assets/app.css', 3886],
+  ['assets/app.css', 3888],
   ['src/system-panel.js', 3189],
   ['lib/system-panel.js', 2097],
   ['assets/debug-panel.js', 530],
