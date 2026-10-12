@@ -1267,7 +1267,13 @@
      点在行中间本想跳转，却先被复制的委托分支 stopImmediatePropagation 掐掉。
      隐形即 pointer-events:none，行悬停/按钮聚焦后才可点，中心点击永远落到标题行上。 */
   .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy { pointer-events:none; }
-  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref { margin-left:auto; pointer-events:none; }
+  /* ★ 大纲行右侧的两个小按钮要**贴在一起靠右** ✓（用户：「这两个按键怎么分这么开，右对齐」）
+     ⚠️ 原来是给「↗」加 margin-left:auto ✗ —— 把它推到最右，
+        但它后面还有「⧉」「▾」✓ → 于是「↗」被推远、后面几个跟着 ✓，
+        视觉上两个按钮被**撑开** ✗。
+     ⇒ 改成：让**标签**吃掉剩余空间（flex:1 ✓），三个小按钮 flex:none 紧贴右侧 ✓。 */
+  .reading-md-workbench .reading-md-outline-item > .label { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref, .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy, .reading-md-workbench .reading-md-outline-item .reading-md-outline-more { flex:none; margin-left:0; pointer-events:none; }
   .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-copy,
   .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-ref,
   .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy:focus-visible,
