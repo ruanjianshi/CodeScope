@@ -334,7 +334,23 @@ const SidebarResizer = defineComponent({
       document.querySelectorAll('.VPContent.has-sidebar').forEach((el) => {
         try { el.style.setProperty('padding-left', v + 'px', 'important') } catch (_) {}
       })
+      place()
       return v
+    }
+    /* 把拖拽条摆到侧栏**真实右边缘** ✓ —— 侧栏起点不一定在 0（实测偏 44px ✓），
+       所以要用 getBoundingClientRect 实测 ✓，不能靠 left:var(--kb-sidebar-w) ✗。 */
+    const place = () => {
+      if (typeof document === 'undefined') return
+      const sb = document.querySelector('.VPSidebar')
+      const h = document.querySelector('.kb-sidebar-resizer')
+      if (!sb || !h) return
+      const r = sb.getBoundingClientRect()
+      if (r.width < 1) return
+      h.style.setProperty('left', Math.round(r.right) + 'px', 'important')
+    }
+    const offset = () => {
+      const sb = document.querySelector('.VPSidebar')
+      return sb ? sb.getBoundingClientRect().left : 0
     }
     const onDown = (e) => {
       /* 窄屏（侧栏是抽屉）不参与 ✓ */
@@ -347,8 +363,8 @@ const SidebarResizer = defineComponent({
     }
     const onMove = (e) => {
       if (!dragging) return
-      /* 侧栏贴左边缘 ✓，所以「宽度 = 指针的 clientX」✓ */
-      setW(e.clientX)
+      /* 宽度 = 指针位置 - 侧栏起点 ✓（侧栏起点不一定在 0 ✗） */
+      setW(e.clientX - offset())
       e.preventDefault()
     }
     const onUp = (e) => {
@@ -365,6 +381,8 @@ const SidebarResizer = defineComponent({
         const saved = parseInt(localStorage.getItem(KEY) || '', 10)
         setW(saved >= MIN && saved <= MAX ? saved : DEFAULT)
       } catch (_) { setW(DEFAULT) }
+      setTimeout(place, 60); setTimeout(place, 600)
+      window.addEventListener('resize', place)
     })
     return () => h('div', {
       ref: el,
@@ -1008,16 +1026,21 @@ html body .VPContent.has-sidebar[class] { padding-left: var(--kb-sidebar-w) !imp
 /* 拖拽条：贴在侧栏右边缘 ✓，只在桌面端显示 ✓ */
 .kb-sidebar-resizer {
   display:none;
-  position:fixed; top:0; bottom:0; left:var(--kb-sidebar-w);
-  width:7px; margin-left:-3px; z-index:60;
+  /* ⚠️ left 由 JS 按侧栏**真实右边缘**写 ✓（不能写 left:var(--kb-sidebar-w) ✗ ——
+     实测侧栏起点不在 0 ✓，用变量定位会偏 47px ✗）。这里给个兜底值 ✓。 */
+  position:fixed; top:0; bottom:0; left:272px;
+  width:9px; margin-left:-4px; z-index:60;
   cursor:col-resize;
   background:transparent;
   transition:background .15s;
 }
 @media (min-width: 960px) { .kb-sidebar-resizer { display:block; } }
 .kb-sidebar-resizer::after {
-  content:''; position:absolute; inset:0 3px;
-  background:transparent; transition:background .15s;
+  content:''; position:absolute; inset:0 3px; border-radius:2px;
+  /* ⚠️ 原来这里是**全透明**的 ✗ —— 用户根本找不到拖拽条 ✓（实测报「我怎么看没变」✓）。
+     改成一条**常显的淡竖线** ✓，悬停/拖动时变主题色 ✓。 */
+  background:color-mix(in srgb,var(--vp-c-brand-1) 22%,transparent);
+  transition:background .15s;
 }
 .kb-sidebar-resizer:hover::after,
 .kb-sidebar-resizer.kb-dragging::after { background:var(--vp-c-brand-1); }
