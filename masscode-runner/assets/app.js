@@ -1769,7 +1769,16 @@ async function ensureKnowledgeSite(force=false){
   if(!state||!state.ok||!state.built)throw new Error(state&&state.error||'知识库生成失败');
   renderKnowledgeCenter(state);return state;
 }
+/* ★ 进知识库前把「当前开着的模式」记下来 ✓ ——
+   openKnowledgeWorkspace 会把这些模式**全关掉** ✗（它们是全屏覆盖层，会打架 ✓），
+   但原来 closeKnowledgeWorkspace 只删自己的 class、**不恢复** ✗
+   → 用户「打开知识库再关掉」就落到**欢迎页** ✗（用户报的正是这个 ✓）。
+   ⚠️ 这些模式的 close 只删 body 上的 class、**不拆 DOM** ✓（见 closeVSCodeWorkspace ✓），
+   所以关知识库时把 class 加回去就能**原样恢复** ✓。 */
+let KB_PREV_MODES=[];
+const KB_MODES=['study-mode','dsh-mode','opencode-mode','vscode-mode','office-mode','reading-mode','drawing-mode'];
 async function leaveWorkspaceModesForKnowledge(){
+  KB_PREV_MODES=KB_MODES.filter((m)=>document.body.classList.contains(m));
   if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
   if(document.body.classList.contains('dsh-mode'))closeDshWorkspace();if(document.body.classList.contains('opencode-mode'))closeOpencodeWorkspace();if(document.body.classList.contains('vscode-mode'))closeVSCodeWorkspace();
   if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
@@ -1825,7 +1834,16 @@ async function openKnowledgeWorkspace(forceBuild=false){
   }catch(error){loading.textContent='知识库打开失败：'+(error.message||error);setStatus('err', '知识库打开失败：'+(error.message||error));}
 }
 function closeKnowledgeWorkspace(){
-  document.body.classList.remove('knowledge-mode');stopKnowledgePageTracking();syncKnowledgeWorkspaceButton();setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
+  document.body.classList.remove('knowledge-mode');stopKnowledgePageTracking();syncKnowledgeWorkspaceButton();
+  /* ★ 恢复进知识库前开着的模式 ✓ —— 不恢复的话会落到欢迎页 ✗（用户报的 bug ✓）。
+     ⚠️ study-mode 特殊：它的关闭走了 CodeScopeStudy.close() ✓，
+        光加 class 不一定能还原 ✓，所以单独调它的 open ✓（有就调 ✓）。 */
+  const back=KB_PREV_MODES.filter((m)=>m!=='study-mode');KB_PREV_MODES=[];
+  back.forEach((m)=>document.body.classList.add(m));
+  if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy&&typeof window.CodeScopeStudy.open==='function'){
+    try{window.CodeScopeStudy.open();}catch(_){}
+  }
+  setTimeout(()=>window.dispatchEvent(new Event('resize')),20);
 }
 async function openKnowledgeSplit(){
   setKnowledgeLaunchMenu(false);closeKnowledgeWorkspace();
