@@ -216,7 +216,11 @@ export default defineConfig({
       }]
     })(),
     sidebar: scan(sourceRoot),
-    outline: { level:[2, 4], label:'本页目录' },
+    /* ⚠️ 目录层级要从 **h1** 开始收 ✗ —— 原来写的是 [2,4] ✓，
+       但知识库的文档习惯用 **#（h1）当章节标题** ✓
+       （如「整体框架：分层架构」「硬件设施」✓），
+       于是这些标题**全都不出现在目录里** ✗ → 目录和正文对不上 ✓（用户报的就是这个 ✓）。 */
+    outline: { level:[1, 4], label:'本页目录' },
     lastUpdated: { text:'最后更新', formatOptions:{ dateStyle:'medium', timeStyle:'short', forceLocale:true } },
     docFooter: { prev:'上一篇', next:'下一篇' },
     darkModeSwitchLabel:'主题',
