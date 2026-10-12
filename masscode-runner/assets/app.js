@@ -4830,7 +4830,7 @@ function renderMarkdownOutline(src) {
     const d = document.createElement('div'); d.className = 'ol-item class'; d.dataset.line = h.line;
     d.style.paddingLeft = (8 + (h.level - 1) * 14) + 'px';
     d.innerHTML = '<span class="ol-ico">H' + h.level + '</span><span>' + escapeHtml(h.text) + '</span><span class="ol-ln">:' + h.line + '</span>';
-    d.onclick = () => jumpToMdHeading(h.line); body.appendChild(d);
+    d.onclick = () => jumpToMdHeading(h.line, h.level, h.text); body.appendChild(d);
   });
 }
 function renderLatexOutline(src) {
@@ -13149,7 +13149,27 @@ function layoutEditEditor() {
   ta.style.bottom = '0px';
 }
 
-function jumpToMdHeading(line) {
+function jumpToMdHeading(line, level, text) {
+  /* ★ 区块编辑器（Crepe / ProseMirror）✓ ——
+     ⚠️ 原来这个函数**只认两种视图** ✗：EDITING（代码编辑器 ✓）和 #md-view/#edit-preview（只读渲染 ✓）。
+        区块编辑器是**第三种** ✓ → 两条都匹配不上 ✓ → target 为 null ✓ → **点了不跳** ✓
+        （用户：「点击右侧大纲，无法跳转」✓）。
+     ⇒ 这里按**标题文本**在 .ProseMirror 里找 ✓（比按行号稳 ✓，
+       因为 ProseMirror 的标题节点不一定带源码行号 ✓）。 */
+  if (text) {
+    const pm = document.querySelector('.ProseMirror');
+    if (pm) {
+      const want = String(text).trim();
+      const hit = [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')].find((x) => x.textContent.trim() === want);
+      if (hit) {
+        hit.scrollIntoView({ block: 'start' });
+        pm.querySelectorAll('.md-flash').forEach((x) => x.classList.remove('md-flash'));
+        hit.classList.add('md-flash');
+        setTimeout(() => hit.classList.remove('md-flash'), 1400);
+        return;
+      }
+    }
+  }
   /* 编辑模式：统一走源码跳转（滚动 + 光标跟随到标题行 + 预览按比例同步），
      避免 scrollIntoView 与预览比例回写互相打架导致“乱跳” */
   if (EDITING) { jumpToLine(line); return; }
