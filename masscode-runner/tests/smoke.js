@@ -244,6 +244,19 @@ void bubbleSort(Array& values);
     && Object.keys(storeAfter.data).length === Object.keys(storeFull.data).length,
     '「不完整副本」把 life store 清空了 —— 数据护栏没生效');
 
+  /* ★★ VNC 可用性必须**真的查得到** ✗✗（2026-10-12 用户报「怎么缺失了」）——
+     `lib/routes/remote.js` 是从根目录的 server.js 抽出来的 ✓，
+     抽出来之后 `__dirname` 变成 `lib/routes/` ✓，而那句漏了补 `'..','..'` ✗ →
+     一直在查 `lib/routes/node_modules/@novnc/...`（永远不存在）→
+     面板永远「VNC 缺失 / noVNC 前端资源未安装」，可依赖明明装着 ✓。
+     ⇒ 这条断言直接问「**服务端自己认为 VNC 可用吗**」+「**资源真的取得到吗**」，
+        把「路径写错」这一整类都盖住 ✓（比盯着某个字符串强 ✓）。 */
+  const remoteStatus = await requestJson(baseUrl, '/api/remote/status');
+  assert(remoteStatus.ok && remoteStatus.vnc && remoteStatus.vnc.available === true,
+    'noVNC 前端资源被判成"未安装" —— 多半是 lib/routes/ 里 __dirname 的相对路径少了两层');
+  const rfbResp = await fetch(baseUrl + '/novnc/core/rfb.js');
+  assert(rfbResp.ok && (await rfbResp.text()).length > 1000, '/novnc/core/rfb.js 取不到内容');
+
   const dshIntegration = await requestJson(baseUrl, '/api/integrations/dsh');
   assert(dshIntegration.ok && dshIntegration.service && dshIntegration.service.installed && dshIntegration.service.bundled, 'DeepSeek Harness 未作为 CodeScope 内置托管服务暴露');
 

@@ -24,7 +24,13 @@ async function handle(req, res, u, ctx) {
     return send(res, 200, {
       ok: true,
       ssh: { available: !!executablePath('ssh'), path: executablePath('ssh'), files: true },
-      vnc: { available: fs.existsSync(path.join(__dirname, 'node_modules', '@novnc', 'novnc', 'core', 'rfb.js')) },
+      /* ⚠️⚠️ `__dirname` 是 **`lib/routes/`** ✗ —— 这个路由是从根目录的 server.js 抽出来的 ✓，
+         抽出来之后相对路径就**多下移了两层** ✓，而这里忘了补 `'..','..'` ✗ →
+         一直在查 `lib/routes/node_modules/@novnc/...` ✓（**永远不存在** ✓）→
+         面板永远显示「VNC 缺失 / noVNC 前端资源未安装」✗（用户报「怎么缺失了」✓），
+         可 `node_modules/@novnc/novnc` **明明装着** ✓。
+         ⇒ 同一目录的 `arch.js` 就是正确写法：`path.resolve(__dirname, '..', '..')` ✓。 */
+      vnc: { available: fs.existsSync(path.join(__dirname, '..', '..', 'node_modules', '@novnc', 'novnc', 'core', 'rfb.js')) },
       terminal: TERM ? { active: true, mode: TERM.mode, label: TERM.label, host: TERM.host || '', port: TERM.port || 0 } : { active: false, mode: '', label: '', host: '', port: 0 },
     });
     }
