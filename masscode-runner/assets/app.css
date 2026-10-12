@@ -1273,7 +1273,8 @@
         视觉上两个按钮被**撑开** ✗。
      ⇒ 改成：让**标签**吃掉剩余空间（flex:1 ✓），三个小按钮 flex:none 紧贴右侧 ✓。 */
   .reading-md-workbench .reading-md-outline-item > .label { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref, .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy, .reading-md-workbench .reading-md-outline-item .reading-md-outline-more { flex:none; margin-left:0; pointer-events:none; }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-ref, .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy, .reading-md-workbench .reading-md-outline-item .reading-md-outline-more { flex:none; margin-left:0; pointer-events:auto; cursor:pointer; }
+  .reading-md-workbench .reading-md-outline-item .reading-md-outline-more:hover { color:var(--md-accent); background:color-mix(in srgb,var(--md-accent) 16%,transparent); }
   .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-copy,
   .reading-md-workbench .reading-md-outline-item:hover .reading-md-outline-ref,
   .reading-md-workbench .reading-md-outline-item .reading-md-outline-copy:focus-visible,
