@@ -929,14 +929,26 @@
   .reading-toolbar button[hidden] { display:none; }
   #reading-project-tabs { min-height:42px; display:flex; align-items:flex-end; gap:2px; padding:5px 8px 0; overflow-x:auto; overflow-y:hidden; border-bottom:1px solid var(--border); background:var(--theme-deep,var(--bg)); scrollbar-width:thin; }
   /* 阅读片段标签：与代码工作区的 .tab 同一套外观；行内 ✎/× 已收进右键菜单，不再有悬停显形按钮 */
-  .reading-project-tab { position:relative; min-width:110px; max-width:250px; min-height:34px; height:34px; display:flex; align-items:center; gap:7px; padding:0 12px; flex:none; border:0; border-radius:6px 6px 0 0; background:transparent; color:var(--dim); cursor:pointer; user-select:none; transition:background .14s,color .14s; }
-  .reading-project-tab:hover { color:var(--text); background:color-mix(in srgb,var(--text) 5%,transparent); }
-  .reading-project-tab.on { color:var(--text); background:var(--panel2); }
+  /* ★ 片段标签：拉开区分度 ✓（用户：「这个片段之间区分度不高」）——————
+   原来所有标签都是**透明底、无分隔** ✗ —— 一排看过去像一串文字 ✓，
+   只有选中的那个有底色 ✓，其余分不出边界 ✓。
+   做法：给每个标签一层**很淡的底** + 右侧**分隔线** ✓，
+        选中态再加**顶部高光 + 实底 + 加粗** ✓，未选中的图标压暗 ✓。 */
+.reading-project-tab { position:relative; min-width:110px; max-width:250px; min-height:34px; height:34px; display:flex; align-items:center; gap:7px; padding:0 12px; flex:none; border:0; border-radius:6px 6px 0 0;
+  background:color-mix(in srgb,var(--panel2) 52%,transparent); color:var(--dim); cursor:pointer; user-select:none; transition:background .14s,color .14s,box-shadow .14s; }
+.reading-project-tab + .reading-project-tab { margin-left:2px; }
+/* 分隔线：放在**右侧**，选中/悬停时隐藏 ✓（不然贴着高亮很难看 ✓） */
+.reading-project-tab::before { content:''; position:absolute; right:-1px; top:8px; bottom:8px; width:1px;
+  background:color-mix(in srgb,var(--border) 62%,transparent); transition:background .14s; }
+.reading-project-tab:hover::before, .reading-project-tab.on::before, .reading-project-tab.dragging::before { background:transparent; }
+    .reading-project-tab:hover { color:var(--text); background:color-mix(in srgb,var(--panel2) 82%,transparent); }
+.reading-project-tab.on { color:var(--text); font-weight:620; background:var(--panel2); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--accent) 42%,transparent), 0 -1px 0 color-mix(in srgb,var(--border) 70%,transparent); }
   .reading-project-tab.on::after { content:''; position:absolute; left:10px; right:10px; bottom:0; height:2px; border-radius:2px 2px 0 0; background:var(--accent); }
   .reading-project-tab.dragging { opacity:.45; }
-  .reading-project-tab .tab-kind { flex:none; color:var(--accent); font:700 9px var(--mono); }
+  .reading-project-tab .tab-kind { flex:none; color:color-mix(in srgb,var(--accent) 52%,var(--dim)); font:700 9px var(--mono); transition:color .14s; }
+.reading-project-tab.on .tab-kind { color:var(--accent); }
   .reading-project-tab .tab-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
-  .reading-project-tab .tab-role { flex:none; padding:1px 6px; border:1px solid color-mix(in srgb,var(--border) 70%,transparent); border-radius:6px; background:color-mix(in srgb,var(--panel2) 70%,transparent); color:var(--dim); font-size:8px; }
+  .reading-project-tab .tab-role { flex:none; padding:1px 6px; border:1px solid color-mix(in srgb,var(--border) 70%,transparent); border-radius:6px; background:color-mix(in srgb,var(--panel2) 70%,transparent); color:var(--dim); font-size:8px; opacity:.8; }
   #reading-project-add { height:34px; margin:0 0 1px 3px; padding:0 12px; flex:none; border-style:dashed; color:var(--dim); background:transparent; }
   #reading-project-add:hover { color:var(--accent); border-color:var(--accent); }
   #reading-stage { --reading-left:50%; --reading-fragments-width:300px; flex:1; min-height:0; display:flex; overflow:hidden; padding:8px; gap:0; }
