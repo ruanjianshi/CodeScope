@@ -2565,41 +2565,8 @@ async function renderReadingSlot(slot) {
       const workbench=document.createElement('div');workbench.className='reading-md-workbench';const source=document.createElement('textarea');source.className='reading-md-source';source.spellcheck=false;source.value=record.content||'';source.placeholder='# 从这里开始写 Markdown…\n\n输入 / 可插入标题、列表、引用与提示块';source.setAttribute('aria-label','Markdown 源码编辑器');
       const live=document.createElement('div');live.className='reading-md-block';live.dataset.readingPath=path;live.setAttribute('aria-label','Markdown 区块编辑器');
       const preview=document.createElement('div');preview.className='reading-md-editor reading-md-preview';preview.dataset.readingPath=path;preview.setAttribute('aria-label','Markdown 阅读视图');
-      const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlinePath=document.createElement('div');outlinePath.className='reading-md-outline-path';const outlinePathParent=document.createElement('span');outlinePathParent.className='seg parent';const outlinePathSep=document.createElement('span');outlinePathSep.className='sep';outlinePathSep.textContent='›';const outlinePathCurrent=document.createElement('span');outlinePathCurrent.className='seg current';outlinePath.append(outlinePathParent,outlinePathSep,outlinePathCurrent);const outlineProgress=document.createElement('div');outlineProgress.className='reading-md-outline-progress';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineList.__path={box:outlinePath,parent:outlinePathParent,current:outlinePathCurrent};/* ★ ③ 正文宽度切换 ✓（用户：「正文无法自由切换这种居中窄页面，和完全填满的宽页面」）
-   ⚠️⚠️ 前五版都失败 ✗✗，教训很贵：
-     1. 凭记忆写类名（.reading-md-modes ✗）
-     2. 定时重试靠不住（没赶上 ✗）
-     3. observer 挂 workbench → 工作台重建时连锅端 ✗
-     4. 换 .reading-md-toolbar + 挂 body → **按钮整个不见了** ✗
-        ⇒ 说明 .reading-md-toolbar **也不是工具条的真实类名** ✗
-   ⇒ **这一版彻底不依赖任何类名** ✓：
-     · 按钮放回**大纲头部**（这个位置前几版验证过，一定可见 ✓）
-     · 点它**直接改行内样式** ✗ —— 不走 CSS 类、不赌选择器 ✓
-       （把预览区里所有后代的 max-width 清成 none ✓，排除图片/表格/代码 ✓） */
-const mountMdWidthBtn=()=>{
-  const head=document.querySelector('.reading-md-outline-head');
-  if(!head||head.querySelector('.reading-md-width-toggle'))return;
-  const btn=document.createElement('button');btn.type='button';btn.className='reading-md-width-toggle';
-  let wide=false;try{wide=localStorage.getItem('codescope-md-wide')==='1';}catch(_){}
-  const apply=(w)=>{
-    const box=document.querySelector('.reading-md-preview-content')||document.querySelector('.reading-md-preview');
-    if(!box)return;
-    if(w){box.style.setProperty('max-width','none','important');box.style.setProperty('margin-left','0','important');box.style.setProperty('margin-right','0','important');}
-    else{box.style.removeProperty('max-width');box.style.removeProperty('margin-left');box.style.removeProperty('margin-right');}
-    box.querySelectorAll('*').forEach((el)=>{
-      if(/^(IMG|TABLE|THEAD|TBODY|TR|TD|TH|PRE|CODE)$/.test(el.tagName))return;
-      if(w){el.style.setProperty('max-width','none','important');el.style.setProperty('margin-left','0','important');el.style.setProperty('margin-right','0','important');el.style.setProperty('padding-left','0','important');el.style.setProperty('padding-right','0','important');}
-      else{el.style.removeProperty('max-width');el.style.removeProperty('margin-left');el.style.removeProperty('margin-right');el.style.removeProperty('padding-left');el.style.removeProperty('padding-right');}
-    });
-  };
-  btn.textContent=wide?'⤢':'⤡';btn.title=wide?'切换为居中窄页面':'切换为填满的宽页面';
-  btn.onclick=(e)=>{e.stopPropagation();wide=!wide;btn.textContent=wide?'⤢':'⤡';btn.title=wide?'切换为居中窄页面':'切换为填满的宽页面';apply(wide);try{localStorage.setItem('codescope-md-wide',wide?'1':'0');}catch(_){}};
-  head.append(btn);
-  if(wide)setTimeout(()=>apply(true),100);
-};
-mountMdWidthBtn();
-const moMd=new MutationObserver(mountMdWidthBtn);
-moMd.observe(document.body,{childList:true,subtree:true});outline.append(outlineHead,outlineList);
+      const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlinePath=document.createElement('div');outlinePath.className='reading-md-outline-path';const outlinePathParent=document.createElement('span');outlinePathParent.className='seg parent';const outlinePathSep=document.createElement('span');outlinePathSep.className='sep';outlinePathSep.textContent='›';const outlinePathCurrent=document.createElement('span');outlinePathCurrent.className='seg current';outlinePath.append(outlinePathParent,outlinePathSep,outlinePathCurrent);const outlineProgress=document.createElement('div');outlineProgress.className='reading-md-outline-progress';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineList.__path={box:outlinePath,parent:outlinePathParent,current:outlinePathCurrent};/* ③ 正文宽度切换：**已按用户要求移除**（试了五版都没能让它稳定生效，用户说「算了去掉这个」）。
+   教训见 .workbuddy-ai/memory 2026-10-12：不要赌 DOM 类名，够不着的界面早点要 class。 */outline.append(outlineHead,outlineList);
 /* ★ ② 大纲拖拽条 ✓（用户：「大纲无法自由左右拖动」）——
    大纲宽度原来是**写死的 252px** ✗，现在走 CSS 变量 ✓。
    拖拽用 pointer 事件 + setPointerCapture ✓（划出窗口也不丢 ✓），宽度落盘 ✓。 */

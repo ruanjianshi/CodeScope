@@ -1205,35 +1205,7 @@
 /* ★ ③ 全宽模式 ✓：把预览区里所有限宽的地方放开 ✓
    （正文的「居中窄」是靠里面某一层的 max-width 做的 ✓，
     这里统一放开 ✓，比逐个点名稳 ✓）。 */
-/* ⚠️ 只放开两层**不够** ✗（用户：「点击切换成宽页面没有用」✓）——
-   正文的限宽可能埋在第 3 层 ✓，所以放到**三层** ✓，并把左右 padding 也清掉 ✓
-   （光清 margin 的话，中间那层的 padding 还在 ✓，看着还是窄 ✓）。 */
-.reading-md-workbench.md-wide .reading-md-preview-content > *,
-.reading-md-workbench.md-wide .reading-md-preview-content > * > *,
-.reading-md-workbench.md-wide .reading-md-preview-content > * > * > * {
-  max-width:none!important; margin-left:0!important; margin-right:0!important;
-  padding-left:0!important; padding-right:0!important; width:auto!important; }
-/* 正文区本身也撑满 ✓ */
-.reading-md-workbench.md-wide .reading-md-preview { padding-left:0!important; padding-right:0!important; }
-/* ⚠️⚠️ 兜底一刀 ✗✗ —— 上面按「三层」清还**不够**（用户实测「没有变」✓），
-   说明限宽埋得更深 ✓，或者用了 `width: min(…, 760px)` 这类写法 ✓。
-   ⇒ 直接把预览区里**所有后代**的 max-width / margin / padding 清掉 ✓，
-     但**排除图片、表格、代码块** ✓（它们本来就需要限宽 ✓，清了会溢出 ✓）。 */
-.reading-md-workbench.md-wide .reading-md-preview-content *:not(img):not(table):not(thead):not(tbody):not(tr):not(td):not(th):not(pre):not(code) {
-  max-width:none!important; margin-left:0!important; margin-right:0!important; }
-.reading-md-workbench.md-wide .reading-md-preview-content *:not(img):not(table):not(pre) {
-  padding-left:0!important; padding-right:0!important; }
 /* 切换按钮 ✓ */
-/* ⚠️ 按钮必须留在**标题那一行** ✗ —— outlineHead 是个网格 ✓，
-   直接 append 会当成第 5 个子元素**换到新的一行** ✓（用户截图里就是浮在中间 ✓）。
-   ⇒ 用 grid-row:1 强行拉回第一行 ✓，并靠右 ✓。 */
-/* ⚠️ 头部是 **2 列网格**（minmax(0,1fr) auto ✗）——
-   写 grid-column:5 超出范围 ✓，反而又开了一列 ✓ → 按钮浮到别处 ✓。
-   ⇒ 把头改成 **3 列** ✓，按钮放第 3 列 ✓。 */
-.reading-md-outline-head { grid-template-columns:minmax(0,1fr) auto auto; }
-.reading-md-outline-head > .reading-md-width-toggle { grid-row:1; grid-column:3; align-self:center; justify-self:end; }
-.reading-md-width-toggle { flex:none; margin-left:auto; width:22px; height:22px; padding:0; border:1px solid color-mix(in srgb,var(--border) 80%,transparent); border-radius:6px; background:transparent; color:var(--dim); font:600 11px var(--mono); line-height:1; cursor:pointer; transition:color .14s,border-color .14s,background .14s; }
-.reading-md-width-toggle:hover { color:var(--md-accent); border-color:var(--md-accent); background:color-mix(in srgb,var(--md-accent) 14%,transparent); }
   .reading-md-block { display:none; height:100%; min-height:0; overflow:auto; scrollbar-gutter:stable; background:transparent; }
   .reading-md-block-loading,.reading-md-block-error { width:min(100%,var(--md-measure)); margin:0 auto; padding:56px 0; color:var(--muted); font-size:11px; text-align:center; }
   .reading-md-block-error { color:var(--err); }
