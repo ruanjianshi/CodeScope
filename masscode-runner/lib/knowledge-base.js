@@ -836,6 +836,27 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
 .vp-doc strong { color:color-mix(in srgb,var(--vp-c-brand-1) 56%,var(--vp-c-text-1));font-weight:720; }
 .vp-doc :not(pre) > code { padding:.16em .42em;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 18%,var(--vp-c-divider));border-radius:6px;background:color-mix(in srgb,var(--vp-c-brand-soft) 72%,var(--vp-c-bg-soft));color:color-mix(in srgb,var(--vp-c-brand-1) 76%,var(--vp-c-text-1));font-size:.88em; }
 .vp-doc div[class*="language-"] { overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
+/* ── 长内容要能横向滚 ✓（用户：「内容太长了，缺少横向的拖动条，被遮挡掉了」）──────
+   ⚠️ 上面那行 overflow:hidden 是**为了裁圆角** ✓（不裁的话代码会溢出圆角 ✗），
+      但它同时把**横向滚动条也吃掉了** ✗ → 长行直接看不见 ✓。
+   ⇒ 外层继续 hidden ✓（圆角照裁 ✓），把滚动**下放到内层 pre** ✓。 */
+.vp-doc div[class*="language-"] > pre { overflow-x:auto;overflow-y:hidden; }
+.vp-doc div[class*="language-"] > pre > code { display:block;width:max-content;min-width:100%; }
+/* 横向滚动条**常显** ✓ —— macOS 默认是覆盖式的（不滚就不显示 ✓），
+   用户根本不知道右边还有内容 ✓。这里给它一个细一点的常显样式 ✓。 */
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar { height:9px; }
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar-track { background:transparent; }
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar-thumb {
+  background:color-mix(in srgb,var(--vp-c-brand-1) 34%,transparent);border-radius:5px; }
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar-thumb:hover {
+  background:color-mix(in srgb,var(--vp-c-brand-1) 62%,transparent); }
+/* 表格同理 ✓（原来也是 overflow:hidden ✗）：包一层可滚的壳 ✓ */
+.vp-doc .kb-table-wrap { overflow-x:auto; }
+.vp-doc .kb-table-wrap > table { margin:0; }
+.vp-doc .kb-table-wrap::-webkit-scrollbar { height:9px; }
+.vp-doc .kb-table-wrap::-webkit-scrollbar-thumb {
+  background:color-mix(in srgb,var(--vp-c-brand-1) 34%,transparent);border-radius:5px; }
+
 .vp-doc div[class*="language-"]::before { content:'●  ●  ●';position:absolute;left:16px;top:10px;z-index:2;color:color-mix(in srgb,var(--vp-c-text-3) 66%,var(--vp-c-brand-1));font-size:9px;letter-spacing:2px; }
 .vp-doc div[class*="language-"] pre { padding-top:34px; }
 .vp-doc blockquote { margin:22px 0;padding:14px 18px;border-left:4px solid var(--vp-c-brand-1);border-radius:0 10px 10px 0;background:var(--vp-c-brand-soft);color:var(--vp-c-text-2); }
