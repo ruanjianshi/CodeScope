@@ -1185,7 +1185,13 @@
   .reading-md-outline-toggle { display:flex; align-items:center; gap:5px; min-height:29px; padding:4px 9px; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb,var(--theme-code,var(--bg)) 82%,var(--panel)); color:var(--dim); font:650 10px var(--ui); cursor:pointer; }
   .reading-md-outline-toggle:hover,.reading-md-outline-toggle.active { border-color:color-mix(in srgb,var(--accent) 48%,var(--border)); background:var(--accent-soft); color:var(--accent); }
   .reading-md-workbench { position:relative; display:grid; grid-template-columns:minmax(0,1fr); min-height:0; overflow:hidden; background:radial-gradient(circle at 48% -12%,color-mix(in srgb,var(--md-accent) 7%,transparent),transparent 38%),var(--md-page); }
-  .reading-md-workbench.outline-open { grid-template-columns:252px minmax(0,1fr); }
+  /* ★ ② 大纲宽度改成变量 ✓（原来是写死的 252px ✗）—— 拖拽条写这个变量 ✓。 */
+.reading-md-workbench.outline-open { grid-template-columns:var(--reading-md-outline-w,252px) minmax(0,1fr); }
+/* 拖拽条：贴在大纲右边缘 ✓（网格第二列的第 1 格 ✓，position:absolute 定位到边界 ✓） */
+.reading-md-outline-resizer { position:absolute; top:0; bottom:0; z-index:5; width:7px; margin-left:-3px; cursor:col-resize;
+  left:var(--reading-md-outline-w,252px); background:transparent; transition:background .15s; }
+.reading-md-outline-resizer::after { content:''; position:absolute; inset:0 3px; background:transparent; transition:background .15s; }
+.reading-md-outline-resizer:hover::after, .reading-md-outline-resizer.dragging::after { background:var(--md-accent); }
   .reading-md-workbench > .reading-md-source,.reading-md-workbench > .reading-md-block,.reading-md-workbench > .reading-md-editor { grid-column:1; grid-row:1; }
   .reading-md-workbench.outline-open > .reading-md-source,.reading-md-workbench.outline-open > .reading-md-block,.reading-md-workbench.outline-open > .reading-md-editor { grid-column:2; }
   .reading-md-source { display:none; width:100%; height:100%; min-height:0; resize:none; box-sizing:border-box; padding:20px 22px 56px; overflow:auto; border:0; outline:0; background:color-mix(in srgb,var(--theme-code,var(--bg)) 94%,var(--panel)); color:var(--text); font:12px/1.72 var(--mono); tab-size:2; caret-color:var(--accent); }
@@ -1196,6 +1202,15 @@
   .reading-md-editor:empty::before { content:'这里会实时显示 Markdown 渲染结果'; color:var(--muted); font-size:11px; }
   .reading-md-editor > * { width:min(100%,var(--md-measure)); max-width:var(--md-measure); margin-left:auto; margin-right:auto; }
   .reading-md-preview-content { zoom:var(--reading-md-zoom,1); }
+/* ★ ③ 全宽模式 ✓：把预览区里所有限宽的地方放开 ✓
+   （正文的「居中窄」是靠里面某一层的 max-width 做的 ✓，
+    这里统一放开 ✓，比逐个点名稳 ✓）。 */
+.reading-md-workbench.md-wide .reading-md-preview-content,
+.reading-md-workbench.md-wide .reading-md-preview-content > *,
+.reading-md-workbench.md-wide .reading-md-preview-content > * > * { max-width:none!important; margin-left:0!important; margin-right:0!important; }
+/* 切换按钮 ✓ */
+.reading-md-width-toggle { flex:none; margin-left:auto; width:22px; height:22px; padding:0; border:1px solid color-mix(in srgb,var(--border) 80%,transparent); border-radius:6px; background:transparent; color:var(--dim); font:600 11px var(--mono); line-height:1; cursor:pointer; transition:color .14s,border-color .14s,background .14s; }
+.reading-md-width-toggle:hover { color:var(--md-accent); border-color:var(--md-accent); background:color-mix(in srgb,var(--md-accent) 14%,transparent); }
   .reading-md-block { display:none; height:100%; min-height:0; overflow:auto; scrollbar-gutter:stable; background:transparent; }
   .reading-md-block-loading,.reading-md-block-error { width:min(100%,var(--md-measure)); margin:0 auto; padding:56px 0; color:var(--muted); font-size:11px; text-align:center; }
   .reading-md-block-error { color:var(--err); }
