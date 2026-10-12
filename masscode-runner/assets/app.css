@@ -1215,6 +1215,14 @@
   padding-left:0!important; padding-right:0!important; width:auto!important; }
 /* 正文区本身也撑满 ✓ */
 .reading-md-workbench.md-wide .reading-md-preview { padding-left:0!important; padding-right:0!important; }
+/* ⚠️⚠️ 兜底一刀 ✗✗ —— 上面按「三层」清还**不够**（用户实测「没有变」✓），
+   说明限宽埋得更深 ✓，或者用了 `width: min(…, 760px)` 这类写法 ✓。
+   ⇒ 直接把预览区里**所有后代**的 max-width / margin / padding 清掉 ✓，
+     但**排除图片、表格、代码块** ✓（它们本来就需要限宽 ✓，清了会溢出 ✓）。 */
+.reading-md-workbench.md-wide .reading-md-preview-content *:not(img):not(table):not(thead):not(tbody):not(tr):not(td):not(th):not(pre):not(code) {
+  max-width:none!important; margin-left:0!important; margin-right:0!important; }
+.reading-md-workbench.md-wide .reading-md-preview-content *:not(img):not(table):not(pre) {
+  padding-left:0!important; padding-right:0!important; }
 /* 切换按钮 ✓ */
 /* ⚠️ 按钮必须留在**标题那一行** ✗ —— outlineHead 是个网格 ✓，
    直接 append 会当成第 5 个子元素**换到新的一行** ✓（用户截图里就是浮在中间 ✓）。

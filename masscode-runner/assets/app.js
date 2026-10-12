@@ -2575,7 +2575,11 @@ outlineHead.append(outlineTitle,outlineCount,outlinePath,outlineProgress);
 /* ⚠️ 按钮要放到**顶部工具条**（大纲/源码/区块编辑/阅读 那一排 ✓）——
    放到大纲头部会跟「48」挤在一起 ✓（用户：「按钮放背景高亮那边去」✓）。
    工具条是动态生成的 ✓，所以运行时找它 ✓，找不到再退回大纲头部 ✓。 */
-{const bar=workbench.querySelector('.reading-md-modes');if(bar)bar.append(widthBtn);else outlineHead.append(widthBtn);}outline.append(outlineHead,outlineList);
+/* ⚠️ 工具条的真实类名是 .reading-md-toolbar ✗（我上一版找的是 .reading-md-modes ✓，
+   那是另一个东西 ✓，所以没找到、退回了大纲头部 ✓）。
+   ⚠️ 而且工具条可能在**大纲之后**才生成 ✗ —— 所以找不到就延后再试一次 ✓。 */
+const mountWidthBtn=(tries)=>{const bar=workbench.querySelector('.reading-md-toolbar');if(bar){bar.append(widthBtn);return;}if(tries>0){setTimeout(()=>mountWidthBtn(tries-1),80);return;}outlineHead.append(widthBtn);};
+mountWidthBtn(6);outline.append(outlineHead,outlineList);
 /* ★ ② 大纲拖拽条 ✓（用户：「大纲无法自由左右拖动」）——
    大纲宽度原来是**写死的 252px** ✗，现在走 CSS 变量 ✓。
    拖拽用 pointer 事件 + setPointerCapture ✓（划出窗口也不丢 ✓），宽度落盘 ✓。 */
