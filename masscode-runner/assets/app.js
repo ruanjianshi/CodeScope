@@ -2325,14 +2325,19 @@ function syncReadingMarkdownOutlineView(container,outlineList,isPreview){
      表现出来就是「我明明在看『里程计』，大纲却指着别处」（用户报的正是这个）。
      往下放到约 1/3 高度处，才和人的视觉焦点对齐。 */
   const bounds=container.getBoundingClientRect(),anchor=bounds.top+readingMarkdownViewportOffset(container,isPreview)+bounds.height*0.28;
-  let active=0,last=0;
+  /* ★ 初值必须是 -1 ✗✗ —— 原来是 0：一旦**所有条目都没配上**（entryOfNode 全 -1，
+     例如标题文本刚被 ProseMirror 重绘、或大纲刚重建还没配对），active 就停在 0 →
+     大纲「跳到开头」。用户报的正是这个（在「里程计」下面打字时，输入会让编辑器
+     自动滚动保持光标可见，从而触发一次同步）。
+     改成：一个都没配上就**什么都不做**，保持上一次的高亮，别乱跳。 */
+  let active=-1,last=-1;
   /* 跳转后标题正好停在 anchor 处，亚像素误差会让 top<=anchor 落空，高亮就慢一拍；
      给 10px 容差（相邻标题间距远大于 10px，不会误判）。 */
   const slack=anchor+10;
   for(let index=0;index<nodes.length;index++){
     if(nodes[index].getBoundingClientRect().top<=slack){if(entryOfNode[index]>=0)last=entryOfNode[index];active=last;}else break;
   }
-  setReadingMarkdownOutlineActive(outlineList,active);
+  if(active>=0)setReadingMarkdownOutlineActive(outlineList,active);
 }
 /* ── 颜色 / 高亮 ──
    预览侧由 mdInline 直接把语法渲染成锚点；区块编辑侧则不同：编辑器只保留 markdown 原生结构，
