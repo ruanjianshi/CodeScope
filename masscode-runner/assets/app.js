@@ -2183,13 +2183,23 @@ function readingMarkdownViewHeadings(container,isPreview){return isPreview?[...c
    按下标硬取会点错标题。这里按「层级 + 文本」按顺序配对，配不上再退回同下标。 */
 function readingMarkdownHeadingElement(node){if(!node)return null;if(node.matches&&node.matches('h1,h2,h3,h4,h5,h6'))return node;return node.querySelector?node.querySelector('h1,h2,h3,h4,h5,h6'):null;}
 function readingMarkdownPairOutline(entries,nodes){
-  const norm=(v)=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+  /* ⚠️⚠️ 必须去掉零宽字符 ✗✗ —— ProseMirror/Milkdown 会在标题文本里插 \u200b
+     （项目里别处已有两处在清它，见第 2080 行的 replace(/\u200b/g,'')），
+     而 \u200b **不属于 \s** ✗ → 两边文本永远不相等 → 配对全部失败 → 退回「同下标」，
+     再叠加 DOM 里存在大纲没有的标题（引用块内标题等）→ **整个映射错位**
+     （用户报的正是这个：鼠标在「里程计」，大纲却高亮到章节末尾的「七、一览速查」）。 */
+  const norm=(v)=>String(v==null?'':v).replace(/[\u200b\u200c\u200d\u2060\ufeff]/g,'').replace(/\s+/g,' ').trim();
   const used=new Array(nodes.length).fill(false),byEntry=new Array(entries.length).fill(-1);
   let cursor=0;
   for(let i=0;i<entries.length;i++){
     const want=norm(entries[i].text),level=Number(entries[i].level)||0;
     let exact=-1,partial=-1;
-    for(let k=cursor;k<nodes.length;k++){
+    /* ★ 精确匹配只在 cursor 之后的**窗口内**找 ✓ —— 原来一直扫到末尾 ✗：
+       某个条目的文本若恰好等于很后面某个标题，就会「跳跃式」命中 → cursor 前移 →
+       中间那些条目全部错位。窗口内匹配既能跳过「引用块内标题」这类多余节点，
+       又不会跳到远处（窗口外找不到就退回顺序/同下标，和原来一样安全）。 */
+    const limit=Math.min(nodes.length,cursor+8);
+    for(let k=cursor;k<limit;k++){
       if(used[k])continue;
       const el=readingMarkdownHeadingElement(nodes[k])||nodes[k];
       if((Number((el.tagName||'').slice(1))||0)!==level)continue;
@@ -2310,7 +2320,11 @@ function syncReadingMarkdownOutlineView(container,outlineList,isPreview){
   const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
   const entryOfNode=new Array(nodes.length).fill(-1);
   readingMarkdownPairOutline(buttons.map((b)=>({level:Number(b.dataset.level)||0,text:(b.querySelector('.label')||b).textContent})),nodes).forEach((nodeIndex,entryIndex)=>{if(nodeIndex>=0)entryOfNode[nodeIndex]=entryIndex;});
-  const bounds=container.getBoundingClientRect(),anchor=bounds.top+readingMarkdownViewportOffset(container,isPreview);
+  /* ★ 判定基准**不能贴在容器顶部** ✗✗ —— 用户看的是**视口中间那块**：
+     正文顶部常常还是上一节的尾巴（代码块、表格、图），基准贴顶就会一直高亮「上一节」，
+     表现出来就是「我明明在看『里程计』，大纲却指着别处」（用户报的正是这个）。
+     往下放到约 1/3 高度处，才和人的视觉焦点对齐。 */
+  const bounds=container.getBoundingClientRect(),anchor=bounds.top+readingMarkdownViewportOffset(container,isPreview)+bounds.height*0.28;
   let active=0,last=0;
   /* 跳转后标题正好停在 anchor 处，亚像素误差会让 top<=anchor 落空，高亮就慢一拍；
      给 10px 容差（相邻标题间距远大于 10px，不会误判）。 */
@@ -2630,7 +2644,9 @@ workbench.append(rz);}
          宽栏时它是并排的一列侧栏，点正文当然不该把它关掉，所以先看计算样式里的 position 再决定。
          收起时一并持久化：否则下次打开这份文档又是「正文被盖住」的状态。 */
       const closeOverlayOutline=()=>{if(!outlineOpen)return;if(getComputedStyle(outline).position!=='absolute')return;setOutlineOpen(false,true);};
-      const setOutlineActive=(index)=>setReadingMarkdownOutlineActive(outlineList,index,true,true);const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);closeOverlayOutline();};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);delete outlineList.__refreshFold;return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));
+      /* 跳转时**锁定**高亮 ✗✗ —— 基准在视口 1/3 处，而跳转把标题停在顶部，
+   不锁的话跳完立刻又被判成「上一个标题」。锁定由**用户主动操作**解除（见下面）。 */
+      const setOutlineActive=(index)=>{live.__outlineTargetIndex=index;setReadingMarkdownOutlineActive(outlineList,index,true,true);};const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);closeOverlayOutline();};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);delete outlineList.__refreshFold;return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));
       /* 折叠可见性：从头扫一遍，遇到 data-folded=1 就把它后面更深的层级全部隐藏（天然支持嵌套折叠） */
       const refreshFold=()=>{const nodes=[...outlineList.querySelectorAll('.reading-md-outline-item')];let hideDeeperThan=Infinity;nodes.forEach((node)=>{const level=Number(node.dataset.level||0);if(level>hideDeeperThan){node.classList.add('hidden-by-fold');return;}node.classList.remove('hidden-by-fold');hideDeeperThan=Infinity;if(node.dataset.folded==='1')hideDeeperThan=level;});};
       outlineList.__refreshFold=refreshFold;
@@ -2661,6 +2677,10 @@ workbench.append(rz);}
       source.addEventListener('blur',()=>setTimeout(()=>{if(READING_SLASH_STATE&&READING_SLASH_STATE.editor===source&&(!READING_SLASH_MENU||!READING_SLASH_MENU.contains(document.activeElement)))hideReadingSlashMenu();},0));
       source.addEventListener('keyup',(e)=>{if(!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key))updateReadingSlashMenu(source,slot);});
       source.addEventListener('select',syncOutlineFromSource);source.addEventListener('click',syncOutlineFromSource);source.addEventListener('keyup',syncOutlineFromSource);
+      /* ★ 只有**用户主动**操作才解除锁定 ✗ —— 不能用 scroll 事件：
+         跳转本身就会触发滚动 ✗，那样锁一设上就被自己清掉、等于没锁。
+         wheel / touchstart / keydown / pointerdown 只在真人操作时才有。 */
+      ['wheel','touchstart','keydown','pointerdown'].forEach((type)=>live.addEventListener(type,()=>{delete live.__outlineTargetIndex;},{passive:true}));
       live.addEventListener('scroll',()=>requestAnimationFrame(()=>{syncReadingMarkdownOutlineView(live,outlineList,false);updateReadingMarkdownOutlineProgress(live,outlineList);scheduleReadingExcerptMarks();}));preview.addEventListener('scroll',()=>requestAnimationFrame(()=>{syncReadingMarkdownOutlineView(preview,outlineList,true);updateReadingMarkdownOutlineProgress(preview,outlineList);scheduleReadingExcerptMarks();}));
       outlineList.addEventListener('click',(event)=>{const refHit=event.target.closest('.reading-md-outline-ref');
         if(refHit){event.preventDefault();event.stopImmediatePropagation();const refItem=refHit.closest('.reading-md-outline-item');
