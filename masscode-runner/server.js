@@ -4276,9 +4276,9 @@ function saveReadingOrder(order) {
   catch (_) {}
 }
 /* 移动后更新顺序表（给了 before 插到那个兄弟前面，否则追加末尾）；没记录的目录先用实际内容初始化 ✓。 */
-function applyReadingOrderMove(from, toFolder, before) {
+function applyReadingOrderMove(from, toFolder, before, newName) {
   const order = loadReadingOrder();
-  const name = path.posix.basename(from);
+  const name = newName || path.posix.basename(from);
   const parentOf = (rel) => (rel && rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
   const fromParent = parentOf(from), toParent = toFolder || '';
   const ensure = (rel) => {
@@ -6900,8 +6900,8 @@ const server = http.createServer(async (req, res) => {
       const b=await readBody(req),type=String(b.type||''),from=readingPath(String(b.path||''),true),toFolder=b.toFolder?readingPath(String(b.toFolder),true):'';
       if(!['folder','project'].includes(type)||!from||(b.toFolder&&!toFolder))return send(res,400,{ok:false,error:'阅读节点或目标文件夹路径不合法'});if(type==='folder'&&toFolder&&(toFolder===from||toFolder.startsWith(from+'/')))return send(res,400,{ok:false,error:'不能把文件夹移动到自身或子文件夹中'});
       const source=path.join(readingsDir(),from);if(!fs.existsSync(source)||!fs.statSync(source).isDirectory())return send(res,404,{ok:false,error:'待移动的阅读项目或文件夹不存在'});if(toFolder){const parent=path.join(readingsDir(),toFolder);if(!fs.existsSync(parent)||!fs.statSync(parent).isDirectory())return send(res,404,{ok:false,error:'目标阅读文件夹不存在'});}
-      const base=path.posix.basename(from),to=toFolder?toFolder+'/'+base:base;if(to===from){if(b.before===undefined)return send(res,200,{ok:true,path:from,unchanged:true});applyReadingOrderMove(from,toFolder,String(b.before||''));return send(res,200,{ok:true,path:from});}const target=path.join(readingsDir(),to);if(fs.existsSync(target))return send(res,409,{ok:false,error:'目标位置已有同名项目或文件夹'});
-      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(source,from);fs.mkdirSync(path.dirname(target),{recursive:true});fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));applyReadingOrderMove(from,toFolder,b.before?String(b.before):'');return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'移动失败：'+String(error.message||error)});}
+      let base=path.posix.basename(from),to=toFolder?toFolder+'/'+base:base;if(to===from){if(b.before===undefined)return send(res,200,{ok:true,path:from,unchanged:true});applyReadingOrderMove(from,toFolder,String(b.before||''),base);return send(res,200,{ok:true,path:from});}let target=path.join(readingsDir(),to);if(fs.existsSync(target)){if(!b.autoRename)return send(res,409,{ok:false,error:'目标位置已有同名项目或文件夹'});let n=2,found=false;while(n<500){const cand=base+' '+n,cTo=toFolder?toFolder+'/'+cand:cand,cTarget=path.join(readingsDir(),cTo);if(!fs.existsSync(cTarget)){base=cand;to=cTo;target=cTarget;found=true;break;}n++;}if(!found)return send(res,409,{ok:false,error:'同名太多，请手动重命名'});}
+      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(source,from);fs.mkdirSync(path.dirname(target),{recursive:true});fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));applyReadingOrderMove(from,toFolder,b.before?String(b.before):'',base);return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'移动失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/text/new') {
       const b=await readBody(req), project=readingPath(String(b.project||''),true), name=path.basename(String(b.name||'')).trim();
