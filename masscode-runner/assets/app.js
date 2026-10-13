@@ -2128,7 +2128,7 @@ function saveReadingMarkdownOutline(path,value){try{localStorage.setItem(reading
 function readingMarkdownHeadings(content){const result=[],lines=String(content||'').split('\n');let fenced=false;for(let line=0;line<lines.length;line++){if(/^\s*```/.test(lines[line])){fenced=!fenced;continue;}if(fenced)continue;const match=lines[line].match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);if(!match)continue;const text=match[2].replace(/!?(\[([^\]]*)\])\([^)]*\)/g,'$2').replace(/[*_~`]/g,'').trim();if(text)result.push({level:match[1].length,text,line});}return result;}
 /* 大纲层级归属：展开祖先链 → 标记祖先链 → 更新「当前章节路径」。
    独立成函数，不侵入原有的滚动与高亮逻辑。 */
-function syncReadingMarkdownOutlinePath(outlineList,index){
+function syncReadingMarkdownOutlinePath(outlineList,index,autoUnfold){
   const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
   const levelOf=(node)=>Number((node&&node.dataset&&node.dataset.level)||0);
   const labelOf=(node)=>{const label=node&&node.querySelector('.label');return label?label.textContent:'';};
@@ -2136,7 +2136,7 @@ function syncReadingMarkdownOutlinePath(outlineList,index){
   for(let i=index-1;i>=0;i--){const level=levelOf(buttons[i]);if(level&&level<need){chain.push(i);need=level;}}
   buttons.forEach((button,itemIndex)=>button.classList.toggle('in-path',chain.indexOf(itemIndex)>=0));
   let unfolded=false;
-  chain.forEach((i)=>{if(buttons[i].dataset.folded==='1'){buttons[i].dataset.folded='0';buttons[i].setAttribute('aria-expanded','true');unfolded=true;}});
+  if(autoUnfold)chain.forEach((i)=>{if(buttons[i].dataset.folded==='1'){buttons[i].dataset.folded='0';buttons[i].setAttribute('aria-expanded','true');unfolded=true;}});
   if(unfolded&&typeof outlineList.__refreshFold==='function')outlineList.__refreshFold();
   const path=outlineList.__path;
   if(!path)return;
@@ -2155,12 +2155,21 @@ function updateReadingMarkdownOutlineProgress(container,outlineList){
   const ratio=max>8?Math.min(1,Math.max(0,(container.scrollTop||0)/max)):0;
   outline.style.setProperty('--outline-progress',ratio.toFixed(4));
 }
-function setReadingMarkdownOutlineActive(outlineList,index,keepVisible=true){
-  syncReadingMarkdownOutlinePath(outlineList,index);
+/* ⚠️ autoUnfold 只给「用户主动定位」用（点大纲条目 / 编辑时同步）——
+   滚动跟随**绝不能**展开 ✗：用户手动折叠了章节，一滚到它下面就又被展开，
+   而且展开会触发 __refreshFold() 重排大纲 DOM，offsetTop 一变又影响跟随滚动，
+   来回就是「乱跳」。 */
+function setReadingMarkdownOutlineActive(outlineList,index,keepVisible=true,autoUnfold=false){
+  syncReadingMarkdownOutlinePath(outlineList,index,autoUnfold);
   const buttons=[...outlineList.querySelectorAll('.reading-md-outline-item')];
   buttons.forEach((button,itemIndex)=>button.classList.toggle('active',itemIndex===index));
   const active=buttons[index];
-  if(keepVisible&&active&&outlineList.parentElement){const scroller=outlineList.parentElement,top=active.offsetTop,bottom=top+active.offsetHeight,viewTop=scroller.scrollTop+45,viewBottom=scroller.scrollTop+scroller.clientHeight-12;if(top<viewTop)scroller.scrollTo({top:Math.max(0,top-57),behavior:'smooth'});else if(bottom>viewBottom)scroller.scrollTo({top:Math.max(0,bottom-scroller.clientHeight+18),behavior:'smooth'});}
+  /* ★ 这里必须用**瞬时**滚动（直接写 scrollTop）✗✗ —— 原来写的是 behavior:'smooth'，
+     而滚动正文时**每一帧**都会走到这里：上一帧的平滑滚动还没结束、下一帧又发起新的，
+     目标互相打断；更糟的是平滑滚动期间 scrollTop 是**渐变的**，于是 viewTop/viewBottom
+     的判断在帧与帧之间反复翻转，形成反馈循环 → 大纲就会「乱跳」（用户报的正是这个）。
+     跟随高亮本来就该「跟」而不是「滑」；直接写 scrollTop 是**幂等**的，重复调用无副作用。 */
+  if(keepVisible&&active&&outlineList.parentElement){const scroller=outlineList.parentElement,top=active.offsetTop,bottom=top+active.offsetHeight,viewTop=scroller.scrollTop+45,viewBottom=scroller.scrollTop+scroller.clientHeight-12;if(top<viewTop)scroller.scrollTop=Math.max(0,top-57);else if(bottom>viewBottom)scroller.scrollTop=Math.max(0,bottom-scroller.clientHeight+18);}
 }
 function readingMarkdownViewHeadings(container,isPreview){return isPreview?[...container.querySelectorAll('[data-outline-index]')]:[...container.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];}
 /* 大纲条目由源码解析而来，DOM 里的标题常常更多（setext 标题、引用块内标题、HTML 标题…），
@@ -2614,7 +2623,7 @@ workbench.append(rz);}
          宽栏时它是并排的一列侧栏，点正文当然不该把它关掉，所以先看计算样式里的 position 再决定。
          收起时一并持久化：否则下次打开这份文档又是「正文被盖住」的状态。 */
       const closeOverlayOutline=()=>{if(!outlineOpen)return;if(getComputedStyle(outline).position!=='absolute')return;setOutlineOpen(false,true);};
-      const setOutlineActive=(index)=>setReadingMarkdownOutlineActive(outlineList,index);const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);closeOverlayOutline();};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);delete outlineList.__refreshFold;return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));
+      const setOutlineActive=(index)=>setReadingMarkdownOutlineActive(outlineList,index,true,true);const sourceLine=()=>source.value.slice(0,source.selectionStart).split('\n').length-1;const syncOutlineFromSource=()=>{const line=sourceLine();let active=-1;outlineEntries.forEach((entry,index)=>{if(entry.line<=line)active=index;});setOutlineActive(active);};const syncOutlineFromView=(container)=>{const nodes=container===preview?[...preview.querySelectorAll('[data-outline-index]')]:[...live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];if(!nodes.length)return setOutlineActive(-1);const top=container.getBoundingClientRect().top+88;let active=0;nodes.forEach((node,index)=>{if(node.getBoundingClientRect().top<=top)active=container===preview?Number(node.dataset.outlineIndex):index;});if(container.scrollTop+container.clientHeight>=container.scrollHeight-4)active=container===preview?Number(nodes[nodes.length-1].dataset.outlineIndex):nodes.length-1;setOutlineActive(active);};const focusOutlineEntry=(entry,index)=>{const mode=shell.dataset.mdMode;if(mode==='edit'){const offset=record.content.split('\n').slice(0,entry.line).reduce((sum,line)=>sum+line.length+1,0);source.focus();source.setSelectionRange(offset,offset);const lineHeight=parseFloat(getComputedStyle(source).lineHeight)||20;source.scrollTop=Math.max(0,entry.line*lineHeight-source.clientHeight*.24);}else if(mode==='preview'){preview.querySelector('[data-outline-index="'+index+'"]')?.scrollIntoView({behavior:'smooth',block:'start'});}else{live.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')[index]?.scrollIntoView({behavior:'smooth',block:'start'});}setOutlineActive(index);closeOverlayOutline();};const renderOutline=()=>{outlineEntries=readingMarkdownHeadings(record.content);outlineCount.textContent=String(outlineEntries.length);outlineList.replaceChildren();if(!outlineEntries.length){const empty=document.createElement('div');empty.className='reading-md-outline-empty';empty.textContent='使用 #、##、### 标题后，这里会自动生成导航。';outlineList.appendChild(empty);delete outlineList.__refreshFold;return;}const base=Math.min(...outlineEntries.map((entry)=>entry.level));
       /* 折叠可见性：从头扫一遍，遇到 data-folded=1 就把它后面更深的层级全部隐藏（天然支持嵌套折叠） */
       const refreshFold=()=>{const nodes=[...outlineList.querySelectorAll('.reading-md-outline-item')];let hideDeeperThan=Infinity;nodes.forEach((node)=>{const level=Number(node.dataset.level||0);if(level>hideDeeperThan){node.classList.add('hidden-by-fold');return;}node.classList.remove('hidden-by-fold');hideDeeperThan=Infinity;if(node.dataset.folded==='1')hideDeeperThan=level;});};
       outlineList.__refreshFold=refreshFold;
