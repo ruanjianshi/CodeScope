@@ -2169,7 +2169,14 @@ function setReadingMarkdownOutlineActive(outlineList,index,keepVisible=true,auto
      目标互相打断；更糟的是平滑滚动期间 scrollTop 是**渐变的**，于是 viewTop/viewBottom
      的判断在帧与帧之间反复翻转，形成反馈循环 → 大纲就会「乱跳」（用户报的正是这个）。
      跟随高亮本来就该「跟」而不是「滑」；直接写 scrollTop 是**幂等**的，重复调用无副作用。 */
-  if(keepVisible&&active&&outlineList.parentElement){const scroller=outlineList.parentElement,top=active.offsetTop,bottom=top+active.offsetHeight,viewTop=scroller.scrollTop+45,viewBottom=scroller.scrollTop+scroller.clientHeight-12;if(top<viewTop)scroller.scrollTop=Math.max(0,top-57);else if(bottom>viewBottom)scroller.scrollTop=Math.max(0,bottom-scroller.clientHeight+18);}
+  /* ★ 交给浏览器算滚动位置 ✓✓ —— 原来手算 active.offsetTop 再写 scroller.scrollTop，
+     但 offsetTop 是相对「**最近的定位祖先**」的，而 .reading-md-outline-list 正好是
+     position:relative ✗ → 基准比滚动容器（aside）少了一个头部高度 →
+     滚过去总是偏（用户：「没有滚动到合适位置」）。
+     scrollIntoView 由浏览器自己找**正确的滚动祖先** ✓；block:'nearest' 是**幂等**的 ✓
+     （已经在视口里就什么都不做），也不会像 behavior:'smooth' 那样每帧重启动画、互相打断 ✓。
+     留白交给 CSS 的 scroll-margin（见 .reading-md-outline-item）。 */
+  if(keepVisible&&active){try{active.scrollIntoView({block:'nearest',inline:'nearest'});}catch(_){}}
 }
 function readingMarkdownViewHeadings(container,isPreview){return isPreview?[...container.querySelectorAll('[data-outline-index]')]:[...container.querySelectorAll('.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6')];}
 /* 大纲条目由源码解析而来，DOM 里的标题常常更多（setext 标题、引用块内标题、HTML 标题…），

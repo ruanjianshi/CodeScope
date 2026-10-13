@@ -4349,3 +4349,8 @@
 /* ★ 阅读区拖拽的**插入指示线**（上=插到前面 / 下=插到后面）—— 让"会插到哪"一眼可见 ✓ */
 .reading-library-folder.drop-before, .reading-project.drop-before { box-shadow:inset 0 2px 0 0 var(--accent); }
 .reading-library-folder.drop-after, .reading-project.drop-after { box-shadow:inset 0 -2px 0 0 var(--accent); }
+
+/* ★ 大纲跟随滚动改用 scrollIntoView 后，留白交给 scroll-margin ✓
+   （原来是手算 top-57 / bottom-clientHeight+18；手算的基准不对，见 app.js 里的说明）。
+   上 57px = 让当前项离顶部留一行的呼吸；下 18px = 别贴着底边。 */
+.reading-md-workbench .reading-md-outline-item { scroll-margin:57px 0 18px; }

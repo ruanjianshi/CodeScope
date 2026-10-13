@@ -134,7 +134,9 @@ const SIZE_CAP = [
      没有移动条」—— 根因是 overflow-x 写的 auto，而 ::-webkit-scrollbar
      只在 overflow:scroll 下显示（MDN），且 scrollbar-width 会让 Chrome
      忽略它。改成 scroll + 常显滚动条，三处代码块统一。净增 11 行，已压紧。 */
-  ['assets/app.css', 3900],
+  /* ⚠️ 2026-10-13 上调（3900 → 3901）：大纲跟随改用 scrollIntoView，留白交给
+     scroll-margin（原来手算 offsetTop 的基准不对，见 app.js 里的说明）。+1 行。 */
+  ['assets/app.css', 3901],
   ['src/system-panel.js', 3189],
   ['lib/system-panel.js', 2097],
   ['assets/debug-panel.js', 530],
