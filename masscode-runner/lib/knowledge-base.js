@@ -1394,6 +1394,12 @@ function createKnowledgeBase(options) {
     const legacyGuide = path.join(root, '快速开始', '知识库使用指南.md');
     const guideProject = path.join(root, '快速开始', '使用指南');
     const guideFile = path.join(guideProject, '知识库使用指南.md');
+    /* ★ 内置示例指南**只在首次**（知识库还基本是空的）创建 ——
+       用户删掉它之后不该每次重建又冒出来（用户报的正是这个：「删除了快速开始，却还不行」）。
+       判据：root 下除了 index.md 没有别的可见条目，就当作首次。 */
+    let firstRun = true;
+    try { firstRun = fs.readdirSync(root).filter((n) => !n.startsWith('.') && n !== 'index.md').length === 0; } catch (_) { firstRun = true; }
+    if (firstRun) {
     fs.mkdirSync(guideProject, { recursive:true });
     if (fs.existsSync(legacyGuide) && !fs.existsSync(guideFile)) fs.renameSync(legacyGuide, guideFile);
     if (fs.existsSync(legacyGuide) && fs.existsSync(guideFile)) {
@@ -1402,6 +1408,7 @@ function createKnowledgeBase(options) {
     writeManaged(guideFile, GUIDE_SOURCE);
     writeManaged(path.join(guideProject, '笔记写法示例.md'), SYNTAX_SOURCE);
     writeIfMissing(path.join(guideProject, KNOWLEDGE_PROJECT_META), JSON.stringify({ version:1, description:'CodeScope 知识库的结构与使用说明', tags:['指南'], updatedAt:Date.now() }, null, 2) + '\n');
+    }
     /* index.md 必须在指南写完之后再生成：它要扫一遍站点内容挑第一篇文档 */
     writeManaged(path.join(root, 'index.md'), homeSource(root));
     /* 这两个文件必须叫 .mjs，不能改名成 .js —— 实测过：
