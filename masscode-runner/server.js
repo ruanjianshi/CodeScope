@@ -4263,6 +4263,54 @@ function trustedHttpOrigin(req) {
 
 function readingsDir() { return path.join(vaultPath(), 'readings'); }
 
+/* ★ 阅读区**自定义顺序**（用户：「阅读区的文件和文件夹，无法自由移动归属，和顺序等」）——
+   阅读区原来只有 fs 顺序 + 名字排序 ✗，没法像代码项目区那样调顺序 ✓。
+   顺序表存在 readings/.codescope/order.json：{ 父目录相对路径: [子项名…] }（根用 ''）。 */
+function readingOrderFile() { return path.join(readingsDir(), '.codescope', 'order.json'); }
+function loadReadingOrder() {
+  try { const raw = JSON.parse(fs.readFileSync(readingOrderFile(), 'utf8')); return raw && typeof raw === 'object' ? raw : {}; }
+  catch (_) { return {}; }
+}
+function saveReadingOrder(order) {
+  try { fs.mkdirSync(path.dirname(readingOrderFile()), { recursive:true }); writeFileAtomicSync(readingOrderFile(), JSON.stringify(order, null, 1), 'utf8'); }
+  catch (_) {}
+}
+/* 移动后更新顺序表（给了 before 插到那个兄弟前面，否则追加末尾）；没记录的目录先用实际内容初始化 ✓。 */
+function applyReadingOrderMove(from, toFolder, before) {
+  const order = loadReadingOrder();
+  const name = path.posix.basename(from);
+  const parentOf = (rel) => (rel && rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
+  const fromParent = parentOf(from), toParent = toFolder || '';
+  const ensure = (rel) => {
+    if (Array.isArray(order[rel])) return order[rel];
+    let names = [];
+    try {
+      names = fs.readdirSync(path.join(readingsDir(), rel), { withFileTypes:true })
+        .filter((e) => ![READING_PROJECT_META, READING_FOLDER_META, '.codescope', '.vitepress', 'node_modules'].includes(e.name))
+        .map((e) => e.name);
+    } catch (_) {}
+    order[rel] = names;
+    return names;
+  };
+  if (fromParent !== toParent) order[fromParent] = ensure(fromParent).filter((n) => n !== name);
+  const list = ensure(toParent).filter((n) => n !== name);
+  const at = before ? list.indexOf(before) : -1;
+  if (at >= 0) list.splice(at, 0, name); else list.push(name);
+  order[toParent] = list;
+  saveReadingOrder(order);
+}
+/* 按顺序表排：表里有的按位次，没记录的排后面按名字 ✓。 */
+function sortByReadingOrder(rows, parentRel) {
+  const list = (loadReadingOrder()[parentRel || '']) || [];
+  const rank = new Map(list.map((name, i) => [name, i]));
+  rows.sort((a, b) => {
+    const ra = rank.has(a.name) ? rank.get(a.name) : Number.MAX_SAFE_INTEGER;
+    const rb = rank.has(b.name) ? rank.get(b.name) : Number.MAX_SAFE_INTEGER;
+    return ra - rb || a.name.localeCompare(b.name);
+  });
+  return rows;
+}
+
 /* ------------------------------- 学习工作台 ------------------------------- */
 
 function studyDir() { return path.join(vaultPath(), '.codescope', 'study'); }
@@ -4695,7 +4743,7 @@ function readingTree() {
   const walkProject = (node, dir, prefix, projectPath) => {
     let rows = [];
     try { rows = fs.readdirSync(dir, { withFileTypes:true }).filter((entry) => ![READING_PROJECT_META,READING_FOLDER_META,'.codescope','.vitepress','node_modules','public'].includes(entry.name)); } catch (_) {}
-    rows.sort((a, b) => a.name.localeCompare(b.name));
+    sortByReadingOrder(rows, prefix);   /* ★ 自定义顺序优先，没记录的按名字 ✓ */
     let count = 0;
     for (const entry of rows) {
       const rel = prefix ? prefix + '/' + entry.name : entry.name;
@@ -4717,7 +4765,7 @@ function readingTree() {
   const directoryHasDirectAssets=(dir)=>{try{return fs.readdirSync(dir,{withFileTypes:true}).some((entry)=>entry.isFile()&&![READING_PROJECT_META,READING_FOLDER_META].includes(entry.name)&&readingAssetPath(entry.name));}catch(_){return false;}};
   const buildKnowledgeProject=(dir,rel)=>{const meta=loadReadingProjectMeta(rel),project={type:'project',knowledge:true,name:path.basename(rel),path:rel,description:meta.description,tags:meta.tags,children:[],count:0};let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.isFile()&&!entry.name.startsWith('.')&&['.md','.markdown'].includes(path.extname(entry.name).toLowerCase()));}catch(_){}entries.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true}));for(const entry of entries){const childRel=rel+'/'+entry.name,full=path.join(dir,entry.name);let stat={size:0,mtimeMs:0};try{stat=fs.statSync(full);}catch(_){}const fragment=readingFragmentInfo(childRel,stat,rel);fragment.knowledge=true;project.children.push(fragment);project.count+=1;}return project;};
   const buildKnowledgeFolder=(dir,rel,isRoot=false)=>{let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.isDirectory()&&!entry.name.startsWith('.')&&!['.codescope','.vitepress','node_modules','public'].includes(entry.name));}catch(_){}entries.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true}));const folder={type:'folder',knowledge:true,knowledgeRoot:isRoot,name:path.basename(rel),path:rel,children:[],count:0};for(const entry of entries){const childRel=rel+'/'+entry.name,full=path.join(dir,entry.name);if(fs.existsSync(path.join(full,READING_PROJECT_META))){const project=buildKnowledgeProject(full,childRel);folder.children.push(project);folder.count+=1;}else{const child=buildKnowledgeFolder(full,childRel,false);folder.children.push(child);folder.count+=child.count;}}return folder;};
-  const walkFolders=(dir,prefix,depth)=>{let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.name!=='.codescope'&&![READING_PROJECT_META,READING_FOLDER_META].includes(entry.name));}catch(_){}entries.sort((a,b)=>a.name.localeCompare(b.name));const children=[];
+  const walkFolders=(dir,prefix,depth)=>{let entries=[];try{entries=fs.readdirSync(dir,{withFileTypes:true}).filter((entry)=>entry.name!=='.codescope'&&![READING_PROJECT_META,READING_FOLDER_META].includes(entry.name));}catch(_){}sortByReadingOrder(entries,prefix);const children=[];
     for(const entry of entries){if(!entry.isDirectory())continue;const rel=prefix?prefix+'/'+entry.name:entry.name,full=path.join(dir,entry.name);const explicitFolder=fs.existsSync(path.join(full,READING_FOLDER_META)),explicitProject=fs.existsSync(path.join(full,READING_PROJECT_META));
       if(rel===KNOWLEDGE.folderName){const folder=buildKnowledgeFolder(full,rel,true);children.push(folder);root.count+=folder.count;continue;}
       if(explicitFolder){const folder={type:'folder',name:entry.name,path:rel,children:walkFolders(full,rel,depth+1)};folder.count=folder.children.reduce((sum,item)=>sum+(item.type==='project'?1:item.count||0),0);children.push(folder);continue;}
@@ -6852,8 +6900,8 @@ const server = http.createServer(async (req, res) => {
       const b=await readBody(req),type=String(b.type||''),from=readingPath(String(b.path||''),true),toFolder=b.toFolder?readingPath(String(b.toFolder),true):'';
       if(!['folder','project'].includes(type)||!from||(b.toFolder&&!toFolder))return send(res,400,{ok:false,error:'阅读节点或目标文件夹路径不合法'});if(type==='folder'&&toFolder&&(toFolder===from||toFolder.startsWith(from+'/')))return send(res,400,{ok:false,error:'不能把文件夹移动到自身或子文件夹中'});
       const source=path.join(readingsDir(),from);if(!fs.existsSync(source)||!fs.statSync(source).isDirectory())return send(res,404,{ok:false,error:'待移动的阅读项目或文件夹不存在'});if(toFolder){const parent=path.join(readingsDir(),toFolder);if(!fs.existsSync(parent)||!fs.statSync(parent).isDirectory())return send(res,404,{ok:false,error:'目标阅读文件夹不存在'});}
-      const base=path.posix.basename(from),to=toFolder?toFolder+'/'+base:base;if(to===from)return send(res,200,{ok:true,path:from,unchanged:true});const target=path.join(readingsDir(),to);if(fs.existsSync(target))return send(res,409,{ok:false,error:'目标位置已有同名项目或文件夹'});
-      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(source,from);fs.mkdirSync(path.dirname(target),{recursive:true});fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'移动失败：'+String(error.message||error)});}
+      const base=path.posix.basename(from),to=toFolder?toFolder+'/'+base:base;if(to===from){if(b.before!==undefined)applyReadingOrderMove(from,toFolder,String(b.before||''));return send(res,200,{ok:true,path:from,unchanged:true});}const target=path.join(readingsDir(),to);if(fs.existsSync(target))return send(res,409,{ok:false,error:'目标位置已有同名项目或文件夹'});
+      const metaAssets=[];const scan=(dir,prefix)=>{for(const e of fs.readdirSync(dir,{withFileTypes:true})){const rel=prefix+'/'+e.name;if(e.isDirectory())scan(path.join(dir,e.name),rel);else if(readingHasMeta(e.name))metaAssets.push(rel);}};try{scan(source,from);fs.mkdirSync(path.dirname(target),{recursive:true});fs.renameSync(source,target);for(const oldRel of metaAssets)moveReadingMeta(oldRel,to+oldRel.slice(from.length));applyReadingOrderMove(from,toFolder,b.before?String(b.before):'');return send(res,200,{ok:true,path:to});}catch(error){return send(res,500,{ok:false,error:'移动失败：'+String(error.message||error)});}
     }
     if (req.method === 'POST' && u.pathname === '/api/readings/text/new') {
       const b=await readBody(req), project=readingPath(String(b.project||''),true), name=path.basename(String(b.name||'')).trim();
