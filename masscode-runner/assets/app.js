@@ -2414,11 +2414,16 @@ function readingProjectFor(path){const fragment=readingFragment(path);return fra
 function readingSize(bytes) { if(bytes<1024*1024)return Math.max(1,Math.round(bytes/1024))+' KB';return (bytes/1024/1024).toFixed(1)+' MB'; }
 function saveReadingDirs() { try { localStorage.setItem('mc-reading-dirs',JSON.stringify([...READING_DIR_OPEN])); } catch (_) {} }
 function readingNodePayload(event){try{return JSON.parse(event.dataTransfer.getData('application/x-codescope-reading-node')||'null');}catch(_){return null;}}
+/* ★ 拖拽结束**兜底**清掉所有拖放高亮（含阅读区最外面那圈 root-drop）——
+   行的 drop 里 stopPropagation → 根容器的 ondrop 不会触发 → root-drop 会一直留着（用户：「最外面一圈高亮去不掉了」）；
+   从子行直接拖出面板时 dragleave 的 target 是子行 → 也不会清。dragend 一定触发，用它兜底 ✓。 */
+document.addEventListener('dragend',()=>document.querySelectorAll('.root-drop,.drop-before,.drop-after,.drop-target').forEach((el)=>el.classList.remove('root-drop','drop-before','drop-after','drop-target')));
 /* ★ 阅读区行的放置接线：上 25%=插到前面 / 下 25%=插到后面 / 文件夹中间=放进文件夹。必须 stopPropagation，否则冒泡到根容器 ✓。 */
 function wireReadingRowDrop(row,node,next){
   row.addEventListener('dragover',(e)=>{
     if(!e.dataTransfer||!e.dataTransfer.types.includes('application/x-codescope-reading-node'))return;
     e.preventDefault();e.stopPropagation();
+    const rlist=document.getElementById('reading-list');if(rlist)rlist.classList.remove('root-drop');   /* ★ 行上要显示插入线了 → 把最外圈那圈灭掉 ✓ */
     const rect=row.getBoundingClientRect(),ratio=(e.clientY-rect.top)/Math.max(1,rect.height);
     const isFolder=row.classList.contains('reading-library-folder');
     const zone=ratio<0.25?'before':ratio>0.75?'after':(isFolder?'inside':'after');
