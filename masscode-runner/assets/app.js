@@ -2205,9 +2205,18 @@ function readingMarkdownPairOutline(entries,nodes){
       if((Number((el.tagName||'').slice(1))||0)!==level)continue;
       const text=norm(el.textContent);
       if(text===want){exact=k;break;}
-      if(partial<0&&want&&(text.startsWith(want)||want.startsWith(text)))partial=k;
+      /* ★ 用 includes 而不是 startsWith ✗✗ —— 标题文本经常被 ProseMirror 改写
+         （前面挂序号、后面加锚点标记、插入零宽字符…），startsWith 太严会全部落空 →
+         配对整体失败 → 高亮长期停在开头。includes 宽松得多，且标题本身够长、仍有区分度。 */
+      if(partial<0&&want&&want.length>1&&(text.includes(want)||want.includes(text)))partial=k;
     }
     let found=exact>=0?exact:partial;
+    /* ★★ 文本没匹配上时，**按「层级 + 顺序」兜底** ✗✗ —— 原来是退到「同下标 i」：
+       DOM 里一旦有大纲没有的标题（引用块内标题、HTML 标题、表格里的标题…），
+       下标就整体错位、越往后越配不上 → 结果只有最前面几个能配上 →
+       高亮长期停在开头（用户报的正是这个：「在里程计下面输入内容，大纲跳到开头」）。
+       大纲条目和 DOM 标题**都是源码顺序**，所以「从 cursor 起第一个同层级的」最稳 ✓。 */
+    if(found<0){for(let k=cursor;k<nodes.length;k++){if(used[k])continue;const el=readingMarkdownHeadingElement(nodes[k])||nodes[k];if((Number((el.tagName||'').slice(1))||0)!==level)continue;found=k;break;}}
     if(found<0&&i<nodes.length&&!used[i])found=i;
     if(found<0){for(let k=0;k<nodes.length;k++){if(!used[k]){found=k;break;}}}
     if(found<0)break;
