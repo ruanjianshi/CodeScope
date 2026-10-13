@@ -4327,3 +4327,19 @@
 .var-table td.var-copyable { cursor: copy; }
 .var-table td.var-copyable:hover { background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: 4px; }
+
+/* ★ 代码块横向滚动条**常显**（用户：太宽被遮挡，应该有个移动条）——
+   ⚠️ MDN：::-webkit-scrollbar 只在 overflow:scroll 下显示（写 auto 不显示）；
+      也不能写 scrollbar-width —— 标准属性会让 Chrome 忽略 ::-webkit-scrollbar。
+   三处：区块编辑器(CodeMirror) / 只读预览 / 实时预览。 */
+.reading-md-block .milkdown .milkdown-code-block .cm-scroller{overflow-x:scroll!important;}
+.reading-md-block .milkdown .milkdown-code-block .cm-scroller::-webkit-scrollbar{height:9px;}
+.reading-md-block .milkdown .milkdown-code-block .cm-scroller::-webkit-scrollbar-track{background:transparent;}
+.reading-md-block .milkdown .milkdown-code-block .cm-scroller::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--md-accent,var(--accent,#6aa9ff)) 38%,transparent);border-radius:5px;}
+.reading-md-block .milkdown .milkdown-code-block .cm-scroller::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--md-accent,var(--accent,#6aa9ff)) 62%,transparent);}
+.reading-md-block .milkdown .milkdown-code-block .cm-content{padding-bottom:14px!important;}
+.md-doc .md-pre,.reading-md-editor pre.md-code-block{overflow-x:scroll!important;}
+.md-doc .md-pre::-webkit-scrollbar,.reading-md-editor pre.md-code-block::-webkit-scrollbar{height:9px;}
+.md-doc .md-pre::-webkit-scrollbar-track,.reading-md-editor pre.md-code-block::-webkit-scrollbar-track{background:transparent;}
+.md-doc .md-pre::-webkit-scrollbar-thumb,.reading-md-editor pre.md-code-block::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--md-accent,var(--accent,#6aa9ff)) 38%,transparent);border-radius:5px;}
+.md-doc .md-pre::-webkit-scrollbar-thumb:hover,.reading-md-editor pre.md-code-block::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--md-accent,var(--accent,#6aa9ff)) 62%,transparent);}

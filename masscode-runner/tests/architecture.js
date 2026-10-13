@@ -122,7 +122,11 @@ const SIZE_CAP = [
      发信接口加了「附件兜底」（最多 10 个、合计 base64 ≤ 20MB ✓），
      并把 body 上限从 1MB 放宽到 24MB ✓（带附件发信要传 base64 进来 ✓）。 */
   ['server.js', 7134],
-  ['assets/app.css', 3886],
+  /* ⚠️ 2026-10-13 再上调一次（3886 → 3897）：修「代码块太宽、右边被遮挡，
+     没有移动条」—— 根因是 overflow-x 写的 auto，而 ::-webkit-scrollbar
+     只在 overflow:scroll 下显示（MDN），且 scrollbar-width 会让 Chrome
+     忽略它。改成 scroll + 常显滚动条，三处代码块统一。净增 11 行，已压紧。 */
+  ['assets/app.css', 3897],
   ['src/system-panel.js', 3189],
   ['lib/system-panel.js', 2097],
   ['assets/debug-panel.js', 530],
