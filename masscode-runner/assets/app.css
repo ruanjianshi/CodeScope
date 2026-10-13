@@ -129,7 +129,7 @@
   .ai-msg.sys { justify-content: center; }
   .ai-msg.sys .body { background: transparent; border: none; box-shadow: none; color: var(--dim); font-size: 11px; text-align: center; padding: 2px 10px; }
   .ai-msg .body .code-wrap { margin: 6px 0; display: grid; grid-template-columns: 1fr auto; align-items: center; border: 1px solid rgba(255,255,255,.07); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,.42); }
-  .ai-msg .body .code-wrap pre { grid-column: 1 / -1; margin: 0; padding: 9px 11px; background: transparent; border: 0; border-top: 1px solid rgba(255,255,255,.06); border-radius: 0; overflow: auto; font: 11px/1.55 var(--mono); white-space: pre; }
+  .ai-msg .body .code-wrap pre { grid-column: 1 / -1; margin: 0; padding: 9px 11px; background: transparent; border: 0; border-top: 1px solid rgba(255,255,255,.06); border-radius: 0; overflow-y: auto; overflow-x: scroll; /* ★ 横向必须是 scroll：::-webkit-scrollbar 只在 scroll 下显示（写 auto 时下面的常显样式不生效） */ font: 11px/1.55 var(--mono); white-space: pre; }
   .ai-msg .body .code-wrap .code-lang { position: static; padding: 4px 10px; color:#778397; font:10px var(--mono); line-height: 18px; text-transform:uppercase; pointer-events:none; }
   .ai-msg .body .code-wrap .k { color:#7db3ff; } .ai-msg .body .code-wrap .s { color:#a5e075; }
   .ai-msg .body .code-wrap .c { color:#6a7280; font-style:italic; } .ai-msg .body .code-wrap .n { color:#f0a35e; }
@@ -4343,3 +4343,5 @@
 .md-doc .md-pre::-webkit-scrollbar-track,.reading-md-editor pre.md-code-block::-webkit-scrollbar-track{background:transparent;}
 .md-doc .md-pre::-webkit-scrollbar-thumb,.reading-md-editor pre.md-code-block::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--md-accent,var(--accent,#6aa9ff)) 38%,transparent);border-radius:5px;}
 .md-doc .md-pre::-webkit-scrollbar-thumb:hover,.reading-md-editor pre.md-code-block::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--md-accent,var(--accent,#6aa9ff)) 62%,transparent);}
+
+.reading-md-editor, #ai-msgs, .split-md-block { overflow-y: scroll; } /* ★ 全局 *::-webkit-scrollbar 只在 overflow:scroll 下显示 → 主滚动容器一直「能滚但看不见条」（macOS 覆盖式），这里让条常显 */
