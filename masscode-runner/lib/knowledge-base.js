@@ -1200,10 +1200,15 @@ function kbColorPlugin(md) {
     /* {红|文字} —— 0x7b 是 {，写成码点免得和外层模板字符串的花括号混淆 */
     if (ch === 0x7b) {
       const key = src[start + 1]
-      if (!key || KEYS.indexOf(key) < 0 || src[start + 2] !== '|') return false
-      const end = src.indexOf('}', start + 3)
+      if (!key || KEYS.indexOf(key) < 0) return false
+      /* 分隔符接受 | 也接受 \| —— 在 Markdown 表格里，裸的 | 会被当成列分隔符把整行切开
+         （表格先按 | 切列，再解析行内语法），所以表格里必须写 \|。这里两种都认，
+         用户就不用记「正文用 |、表格用 \|」这条规矩了。 */
+      const barLen = src[start + 2] === '|' ? 1 : (src[start + 2] === '\\\\' && src[start + 3] === '|' ? 2 : 0)
+      if (!barLen) return false
+      const end = src.indexOf('}', start + 2 + barLen)
       if (end < 0) return false
-      const body = src.slice(start + 3, end)
+      const body = src.slice(start + 2 + barLen, end)
       if (!body || body.indexOf('\\n') >= 0) return false
       if (!silent) {
         state.push('html_inline', '', 0).content =
@@ -1249,10 +1254,14 @@ title: 笔记写法示例
 
 ## 一、文字标注
 
-| 写法 | 效果 |
-| --- | --- |
-| \`{红|文字}\` | 指定颜色文字，九色：红 橙 黄 绿 青 蓝 紫 粉 灰 |
-| \`==文字==\` | 黄底高亮 |
+| 写法 | 效果 | 说明 |
+| --- | --- | --- |
+| \`{红\\|文字}\` | {红\\|文字} | 指定颜色文字。九色：红 橙 黄 绿 青 蓝 紫 粉 灰 |
+| \`==文字==\` | ==文字== | 黄底高亮 |
+
+> 表格里写彩色文字，分隔符要写成 \`{红\\|文字}\` —— 因为 Markdown 会**先按 \`|\` 切表格列、再解析行内语法**，
+> 裸的 \`|\` 会把这一行切成两列（本页这个表格原先就踩了这个坑）。
+> 正文和引用块里不用转义，直接写 {红|文字} 就行。
 
 效果示例：函数指针 {红|指向函数的指针}，而 ==指针函数== 是「返回指针的函数」，别混。
 
@@ -1402,12 +1411,13 @@ function createKnowledgeBase(options) {
     const legacyGuide = path.join(root, '快速开始', '知识库使用指南.md');
     const guideProject = path.join(root, '快速开始', '使用指南');
     const guideFile = path.join(guideProject, '知识库使用指南.md');
-    /* ★ 内置示例指南**只在首次**（知识库还基本是空的）创建 ——
-       用户删掉它之后不该每次重建又冒出来（用户报的正是这个：「删除了快速开始，却还不行」）。
-       判据：root 下除了 index.md 没有别的可见条目，就当作首次。 */
+    /* ★ 内置示例指南的**两个相反需求**要同时满足：
+       · 用户**删掉**它之后，不该每次重建又冒出来（「删除了快速开始，却还不行」）；
+       · 用户**留着**它时，示例内容要能跟着版本更新（否则修了示例文档用户永远看不到 —— 实测踩过）。
+       所以：首次（知识库基本是空的）→ 建；目录**还在** → 只更新内容；被删了 → 不重建。 */
     let firstRun = true;
     try { firstRun = fs.readdirSync(root).filter((n) => !n.startsWith('.') && n !== 'index.md').length === 0; } catch (_) { firstRun = true; }
-    if (firstRun) {
+    if (firstRun || fs.existsSync(guideProject)) {
     fs.mkdirSync(guideProject, { recursive:true });
     if (fs.existsSync(legacyGuide) && !fs.existsSync(guideFile)) fs.renameSync(legacyGuide, guideFile);
     if (fs.existsSync(legacyGuide) && fs.existsSync(guideFile)) {
