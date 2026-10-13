@@ -938,7 +938,9 @@ html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-con
    ⇒ 标签为空时把上边距收到 16px ✓；有标签时保留一点 ✓。 */
 /* ⚠️⚠️ 必须 !important ✗✗ —— VitePress 自己的选择器带 .vp-doc 前缀
    （带 .vp-doc 前缀 ✓，优先级比这里高 ✗），实测不加的话 padding-top 还是 34px ✓。 */
-.vp-doc div[class*="language-"] > pre { overflow-x:auto;overflow-y:hidden;padding-top:16px !important;padding-bottom:16px !important; }
+/* ⚠️ 必须是 scroll 而不是 auto ✗ —— MDN：::-webkit-scrollbar 只在 overflow:scroll 下显示；
+   写 auto 时下面那套滚动条样式**根本不显示** ✓（和区块编辑器是同一个坑 ✓）。 */
+.vp-doc div[class*="language-"] > pre { overflow-x:scroll;overflow-y:hidden;padding-top:16px !important;padding-bottom:16px !important; }
 .vp-doc div[class*="language-"]:has(> .lang:not(:empty)) > pre { padding-top:30px !important; }
 .vp-doc div[class*="language-"] > .lang:empty { display:none !important; }
 .vp-doc div[class*="language-"] > pre > code { display:block;width:max-content;min-width:100%; }
@@ -951,7 +953,7 @@ html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-con
 .vp-doc div[class*="language-"] > pre::-webkit-scrollbar-thumb:hover {
   background:color-mix(in srgb,var(--vp-c-brand-1) 62%,transparent); }
 /* 表格同理 ✓（原来也是 overflow:hidden ✗）：包一层可滚的壳 ✓ */
-.vp-doc .kb-table-wrap { overflow-x:auto; }
+.vp-doc .kb-table-wrap { overflow-x:scroll; }
 .vp-doc .kb-table-wrap > table { margin:0; }
 .vp-doc .kb-table-wrap::-webkit-scrollbar { height:9px; }
 .vp-doc .kb-table-wrap::-webkit-scrollbar-thumb {
