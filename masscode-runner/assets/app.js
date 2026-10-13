@@ -2346,7 +2346,11 @@ function syncReadingMarkdownOutlineView(container,outlineList,isPreview){
   for(let index=0;index<nodes.length;index++){
     if(nodes[index].getBoundingClientRect().top<=slack){if(entryOfNode[index]>=0)last=entryOfNode[index];active=last;}else break;
   }
-  if(active>=0)setReadingMarkdownOutlineActive(outlineList,active);
+  /* ★ 配对率太低就**别更新高亮** ✗✗ —— 「部分配对成功」最坑：active 会指向一个错误的位置
+     （用户报的「在里程计下面打字、大纲跳到开头」就是只有最前面几个配上）。
+     宁可保持上一次的高亮，也不要乱指。阈值取一半：正常文档远高于它。 */
+  const paired=new Set(entryOfNode.filter((k)=>k>=0)).size;
+  if(active>=0&&paired*2>=buttons.length)setReadingMarkdownOutlineActive(outlineList,active);
 }
 /* ── 颜色 / 高亮 ──
    预览侧由 mdInline 直接把语法渲染成锚点；区块编辑侧则不同：编辑器只保留 markdown 原生结构，
