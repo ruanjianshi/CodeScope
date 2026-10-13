@@ -136,10 +136,18 @@ function pageLink(relative) {
   const clean = relative.replace(/\\\\/g, '/').replace(/(?:^|\\/)index\\.md$/i, '').replace(/\\.md$/i, '')
   return '/' + clean.split('/').filter(Boolean).map(encodeURIComponent).join('/')
 }
+function readOrder() {
+  try { return JSON.parse(fs.readFileSync(path.resolve(sourceRoot, '..', '.codescope', 'order.json'), 'utf8')) || {} } catch { return {} }
+}
 function scan(directory, prefix = '') {
   let entries = []
   try { entries = fs.readdirSync(directory, { withFileTypes:true }).filter((entry) => !entry.name.startsWith('.') && !ignored.has(entry.name)) } catch { return [] }
-  entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name, 'zh-CN', { numeric:true }))
+  /* ★ 用**阅读区的顺序表**排 —— 否则侧栏顺序和阅读模块里看到的对不上
+     （用户：「和阅读模块下知识库下面的文件顺序不同步」）。表里没有的排后面按名字。 */
+  const kbPrefix = '知识库' + (prefix ? '/' + prefix : '')
+  const rank = new Map((readOrder()[kbPrefix] || []).map((n, i) => [n, i]))
+  const at = (n) => (rank.has(n) ? rank.get(n) : Number.MAX_SAFE_INTEGER)
+  entries.sort((a, b) => at(a.name) - at(b.name) || Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name, 'zh-CN', { numeric:true }))
   const items = []
   for (const entry of entries) {
     const relative = prefix ? prefix + '/' + entry.name : entry.name
