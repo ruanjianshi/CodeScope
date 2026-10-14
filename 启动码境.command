@@ -5,7 +5,10 @@
 # ============================================
 cd "$(dirname "$0")/masscode-runner" || { echo "找不到 masscode-runner 目录"; read -r -p "按回车退出"; exit 1; }
 PORT="${CODESCOPE_PORT:-${MASSCODE_RUNNER_PORT:-4877}}"
-HOST="${CODESCOPE_HOST:-${MASSCODE_RUNNER_HOST:-127.0.0.1}}"
+# ★ 默认绑 0.0.0.0（局域网可访问）—— 2026-10-14 用户要求。
+#   想恢复「只本机」：把下面 0.0.0.0 改回 127.0.0.1，或删掉这一行改用环境变量。
+#   ⚠️ 绑 0.0.0.0 后同一局域网内任何人都能打开（含笔记与凭据），仅限可信网络。
+HOST="${CODESCOPE_HOST:-${MASSCODE_RUNNER_HOST:-0.0.0.0}}"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "未找到 Node.js，请先安装：https://nodejs.org/"

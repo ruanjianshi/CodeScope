@@ -715,6 +715,12 @@ const ONLYOFFICE_CONTAINER_NAME = /^[A-Za-z0-9_.-]+$/.test(String(process.env.CO
   : 'codescope-onlyoffice';
 // 默认仅监听本机，避免终端、文件编辑与代码执行接口意外暴露到局域网。
 // 确实需要跨设备访问时，可显式设置 CODESCOPE_HOST=0.0.0.0，并配合受信网络使用。
+/* 默认保持「只本机」✗✗ —— 这是**有意的安全决策**：tests/smoke.js 有一条断言
+   专门守着字面量 `|| '127.0.0.1'`，防止有人不小心把它改成全网监听、把笔记和凭据暴露出去。
+   要跨设备访问就**显式打开**（别改这个默认值 ✗）：
+     · 用项目里的「启动码境.command」—— 它的 HOST 默认已改成 0.0.0.0（2026-10-14）；
+     · 或命令行：CODESCOPE_HOST=0.0.0.0 node server.js。
+   注意别用 `npm start` 直接起 —— 那条路径不带环境变量，仍是只本机。 */
 const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
 const DSH = createDshService({ projectRoot:__dirname, dataRoot:applicationDataRoot() });
 const OPENCODE = createOpencodeService({});
