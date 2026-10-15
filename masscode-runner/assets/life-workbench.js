@@ -12125,17 +12125,25 @@
        ⚠️ 全书 174 个词群 ✗ → 用滚动容器限高 ✗，别把侧栏撑爆 ✓。 */
     + (() => {
       const gs = {};
-      epWords().forEach((x) => { const g = String(x.group || ''); if (g) gs[g] = (gs[g] || 0) + 1; });
-      const keys = Object.keys(gs).sort((a, b) => a.localeCompare(b, 'zh'));
+      /* ★ 按**书里的出现顺序**排 ✓✓ —— 词是按书页顺序灌进来的 ✓，
+         所以「第一次出现」的先后就是书里的先后 ✓（原来按拼音排 ✗，和书对不上 ✓）。
+         顺手给每个群编上序号 ✓（1. 2. 3. … ✓），和书里的「词以群记N」呼应 ✓。 */
+      const order = new Map();
+      epWords().forEach((x) => {
+        const g = String(x.group || '');
+        if (!g) return;
+        gs[g] = (gs[g] || 0) + 1;
+        if (!order.has(g)) order.set(g, order.size);
+      });
+      const keys = Object.keys(gs).sort((a, b) => order.get(a) - order.get(b));
       if (!keys.length) return '';
       const short = (g) => {
-        const num = (String(g).match(/\d+/) || [])[0] || '';
         const m = String(g).match(/[「“]([^」”]+)[」”]/);
-        return (num ? num + ' ' : '') + (m ? m[1] : String(g));
+        return m ? m[1] : String(g);
       };
       return '<div class="lw-rd-hd">词群（按书）</div>'
         + '<div class="lw-rd-grps">'
-        + keys.map((g) => flt('group:' + g, esc(short(g)), gs[g], '🗂')).join('')
+        + keys.map((g, i) => flt('group:' + g, esc((i + 1) + '. ' + short(g)), gs[g], '🗂')).join('')
         + '</div>';
     })()
     /* ★ 「我的标记」✓ —— 用户原话：「有些词我不熟悉，我需要标记，有些词，一点不记得，
