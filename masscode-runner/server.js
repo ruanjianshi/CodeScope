@@ -5669,7 +5669,15 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') return send(res, 200, { ok: true, data: read() });
       if (req.method === 'POST' || req.method === 'PUT') {
         try {
-          const body = await readBody(req, 4 * 1024 * 1024);
+          /* ★ 上限 4MB → **32MB** ✓（2026-10-15）——
+             用户把整本六级词书灌进生词本（1994 词 ✓，每词 19 个字段 ✓），
+             实测 payload 已到 **3.4MB** ✓，再加词就会顶到 4MB 上限 ✗
+             （会报「请求内容超过 4 MB」✓，数据写不进去 ✓）。
+             词书只会越写越大 ✗ → 直接放宽到 32MB ✓，留足余量 ✓。
+             ⚠️ 注意：POST 时要 **ensure_ascii=False** ✗✓ ——
+                默认 json.dumps 会把中文转义成 \uXXXX ✓，
+                体积凭空涨 15%+ ✓（3.4MB → 4.1MB ✗ 正好越过上限 ✓）。 */
+          const body = await readBody(req, 32 * 1024 * 1024);
           const next = body && typeof body === 'object' ? body : {};
           /* ★★ 凭据防覆盖 ✓ —— 见 GUARDED_STORE_KEYS 上面那段注释 ✓。
              ⚠️ 要删就显式带 `__drop: [...]` ✗ —— 不然「断开连接」也删不掉 ✓。

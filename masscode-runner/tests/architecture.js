@@ -135,6 +135,9 @@ const SIZE_CAP = [
      并把 body 上限从 1MB 放宽到 24MB ✓（带附件发信要传 base64 进来 ✓）。 */
   /* ⚠️ 2026-10-13 上调（7134 → 7176）：阅读区**顺序表**（readings/.codescope/order.json）
      + move 接口支持 before（插到某个兄弟前面），同目录排序也生效。net +42 行。 */
+  /* ⚠️ 2026-10-15 上调（7176 → 7176）：生词本的 `POST /api/life/store`
+     body 上限 4MB → 32MB（用户把整本六级词书灌进来，实测 payload 3.4MB，
+     再加词就顶到 4MB 上限、写不进去）。净增注释 + 1 行代码。 */
   ['server.js', 7176],
   /* ⚠️ 2026-10-13 再上调一次（3886 → 3897）：修「代码块太宽、右边被遮挡，
      没有移动条」—— 根因是 overflow-x 写的 auto，而 ::-webkit-scrollbar
