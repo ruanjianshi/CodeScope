@@ -2081,6 +2081,15 @@
   .lw-wd-title .spk { flex:none; width:28px; height:28px; border:1px solid ${T.lineDim};
     border-radius:50%; background:transparent; color:${T.dim}; font-size:12px; cursor:pointer; }
   .lw-wd-title .spk:hover { border-color:${T.accent}; color:${T.accent}; }
+  /* ★ 熟练度星标 ✓ —— 三态：未标（灰）→ 不熟悉（黄）→ 完全不记得（红）✓。
+     颜色**硬编码** ✗（不走主题变量 ✓）—— 「警告黄 / 危险红」是有语义的 ✓，
+     跟着主题色变反而看不出严重程度 ✗。 */
+  .lw-wd-title .mark { flex:none; width:36px; height:28px; border:1px solid ${T.lineDim}; border-radius:8px;
+    background:transparent; color:${T.faint}; cursor:pointer; font-size:13px; line-height:1;
+    display:flex; align-items:center; justify-content:center; }
+  .lw-wd-title .mark:hover { border-color:${T.accent}; }
+  .lw-wd-title .mark.on-fuzzy { color:#e8b100; border-color:rgba(232,177,0,.6); background:rgba(232,177,0,.12); }
+  .lw-wd-title .mark.on-blank { color:#e5534b; border-color:rgba(229,83,75,.6); background:rgba(229,83,75,.12); }
   .lw-wd-title .sp { flex:1; }
   .lw-wd-title .ed { flex:none; height:26px; padding:0 10px; border:1px solid ${T.lineDim};
     background:transparent; color:${T.faint}; font:10.5px ${UI}; cursor:pointer; }
@@ -2092,10 +2101,62 @@
   .lw-wd-sub .pos { font-size:11px; color:${T.dim}; border:1px solid ${T.lineDim}; padding:0 6px; }
   .lw-wd-sub .tag { font-size:10px; color:${T.faint}; border:1px solid ${T.lineDim}; padding:0 6px; }
   .lw-wd-sub .tag.warn { color:${T.warn}; border-color:${T.warn}; }
-  .lw-wd-sec { padding:14px 16px 0; }
-  .lw-wd-sec .hd { display:flex; align-items:center; gap:5px; margin-bottom:7px;
-    font-size:10px; letter-spacing:1.6px; color:${T.faint}; }
-  .lw-wd-sec .hd .ic { font-size:12px; letter-spacing:0; }
+  /* ★ 排版优化（第二轮）✓ —— 用户：「继续优化一下排版」✓。
+     ⚠️ 原来 14px ✗ → 15px → 现在 20px ✓：十几个区块紧贴着排，
+        视线没有落脚点 ✗；拉开一点才有「一段一段读」的节奏 ✓。
+     ⚠️ 这是**顶部内边距** ✗（区块之间靠它撑开 ✓），不是 margin ✗ ——
+        和上面那条「子元素不许写水平 padding」的规矩不冲突 ✓（这是纵向的 ✓）。 */
+  /* ★★ 左右两列 ✓✓ —— 用户原话：「是否可以考虑左右排布，不要把页面拉的很长，
+     需要滚轮去翻页面」✓。
+     ⚠️ 原来是**十几个区块一路竖排** ✗（截图里得滚好几屏 ✓），
+        而右半边**大片空白** ✗（配图只有小小一块 ✓）—— 两头浪费 ✓。
+     → hero（释义 + 例句 | 配图）**保持全宽** ✓（它本身就是两列 ✓），
+       **下面那堆参考资料分左右两栏** ✓：左栏放「怎么记」（巧记 / 场景 ✓），
+       右栏放「查什么」（考频 / 词形 / 短语 / 用法 / 真题 / 同反义 / 拓展 ✓）。
+     ⚠️ align-items:start 不能省 ✗ —— 不加的话两栏会被拉成等高 ✓，
+        左栏底下留一大块空白 ✗（和之前 hero 那个坑同源 ✓）。
+     ⚠️ 窄屏（小于 1100px）**退回单列** ✗ —— 两栏挤在一起比一栏还难读 ✓。
+     ⚠️ 注释里别写反引号 ✗（这是 CSS 模板字符串 ✓，会提前终止 ✓）。 */
+  /* ★★ 改用**真瀑布流**（CSS columns）✗✗ —— 用户截图：「左侧空白太多」✓。
+     ⚠️ 第一版是 grid 两栏**手动分组** ✗（左栏巧记/场景 ✓、右栏其余 7 块 ✓）——
+        结果**严重不均衡** ✗：abnormal 的巧记+场景很短 ✓，左栏早早结束 ✓，
+        下面空出一大片 ✗（截图里就是这个问题 ✓）。
+     → columns 由**浏览器自己按高度平衡** ✓，块数/高度怎么变都不会空 ✓✓。
+     ⚠️ break-inside:avoid 必须有 ✗ —— 不然一个区块会被从中间劈到两栏 ✓
+        （标题在这栏、内容在那栏 ✓，完全没法读 ✓）。
+     ⚠️ 阅读顺序变成「先左栏到底、再右栏」✗（不再是左右交替 ✓）——
+        对「上面 7 块参考资料」这种并列内容完全没问题 ✓。
+     ⚠️ 窄屏退回单列 ✗。
+     ⚠️⚠️ 这一段在 **CSS 模板字符串** 里 ✗ —— 注释里**一个反引号都不能有** ✗
+        （踩过三次了 ✓ 每次都让整个文件语法错误 ✓）。 */
+  /* ★★★ 改回 grid 两栏 + **手动分组** ✓✓✓ ——
+     columns 试过三版都不行 ✗：它**自己决定每个块分到哪栏** ✓，
+     不管我怎么调结构 ✓（标签配对核对过是平衡的 ✓，但「复习」仍被分到左栏 ✗）。
+     ⇒ 换成 grid：**每个块放哪栏由我说了算** ✓✓。
+     分组依据（用户要「填补右侧的空白」✓）：
+       左栏 = 怎么记 + 基础信息（巧记/场景/考频/词形/短语/用法 ✓）
+       右栏 = 参考资料 + **复习**（真题/同反义/拓展/复习 ✓）
+     ⚠️ 「复习」放**右栏** ✗ 而不是全宽 ✗ —— 右栏本来就短 ✓，
+        把它放进去两栏自然就齐了 ✓✓，**不用碰 column-span / 跨栏** ✗✓。
+     ⚠️ align-items:start 不能省 ✗ —— 否则两栏被拉成等高 ✓，短的那栏底下留空白 ✗。 */
+  .lw-wd-cols { display:grid; grid-template-columns:1fr 1fr; align-items:start; column-gap:22px; }
+  @media (max-width:1100px) { .lw-wd-cols { grid-template-columns:1fr; } }
+  /* 右栏第一块要**顶到和左栏同一水平线** ✗（它自带 20px 顶距 ✓）→ 抹掉 ✓。 */
+  .lw-wd-col-b > .lw-wd-sec:first-child { padding-top:0; }
+  .lw-wd-sec { padding:20px 16px 0; }
+  /* ★ 排版改进 ✓ —— 用户原话：「内容深度不够，排版不好」✓。
+     ⚠️ 原来区块标题是 10px + faint 色 ✗ —— 又小又淡 ✓，
+        十几个区块排下来整页像一锅粥 ✗，找不到「释义在哪、例句在哪」✗。
+     → ① 字号 10 → 11.5px ✓ ② 颜色 faint → dim ✓ ③ 加粗 ✓
+       ④ 左侧加一根**主题色小竖条** ✓ —— 视线能顺着竖条扫下来 ✓，
+          区块边界一眼分明 ✓（比加分割线轻 ✗，不会把页面切碎 ✗）。
+     ⚠️ 这段是 CSS 模板字符串 ✗✗ —— 注释里**不能写反引号** ✗（会提前终止字符串 ✗），
+        也**不能写美元花括号插值写法** ✗（会被求值 ✗）。两种都踩过 ✓。 */
+  .lw-wd-sec .hd { display:flex; align-items:center; gap:6px; margin-bottom:9px;
+    font-size:11.5px; letter-spacing:.5px; color:${T.dim}; font-weight:600; }
+  .lw-wd-sec .hd::before { content:''; flex:none; width:3px; height:13px; border-radius:2px;
+    background:${T.accent}; opacity:.75; }
+  .lw-wd-sec .hd .ic { font-size:13px; letter-spacing:0; }
   /* 释义：**主角** ✓ —— 字号最大 ✓，多义项编号 ✓（词典就是这么排的 ✓）*/
   .lw-wd-defs { margin:0; padding:0; list-style:none; }
   .lw-wd-defs li { position:relative; padding-left:21px; margin-bottom:3px;
@@ -2114,11 +2175,38 @@
     background:transparent; color:${T.dim}; font:10px ${UI}; cursor:pointer; }
   .lw-wd-secact button:hover, .lw-wd-src button:hover { border-color:${T.accent}; color:${T.accent}; }
   /* 巧记 / 场景：高亮框 ✓（一眼看到 ✓，不用在表单里找 ✓）*/
-  .lw-wd-tipbox { font-size:12.5px; line-height:1.9; color:${T.text}; padding:10px 12px; }
-  .lw-wd-tipbox.mnem { background:color-mix(in srgb, ${T.accent} 10%, transparent);
-    border-left:3px solid ${T.accent}; }
-  .lw-wd-tipbox.scene { background:color-mix(in srgb, ${T.ok} 9%, transparent);
-    border-left:3px solid ${T.ok}; }
+  /* ⚠️ 色块**调淡** ✗（10% → 6.5% / 9% → 5.5%）+ 竖条 3px → 2px + 右侧圆角 ✓ ——
+     用户截图里巧记/场景两块**绿黄一大片** ✗，抢了释义的视线 ✓；
+     它们本来就是**辅助信息** ✓，淡淡的提示一下就够了 ✓。 */
+  .lw-wd-tipbox { font-size:12.5px; line-height:1.9; color:${T.text}; padding:10px 13px;
+    border-radius:0 7px 7px 0; }
+  .lw-wd-tipbox.mnem { background:color-mix(in srgb, ${T.accent} 6.5%, transparent);
+    border-left:2px solid color-mix(in srgb, ${T.accent} 65%, transparent); }
+  .lw-wd-tipbox.scene { background:color-mix(in srgb, ${T.ok} 5.5%, transparent);
+    border-left:2px solid color-mix(in srgb, ${T.ok} 65%, transparent); }
+  /* ★ 列表行的星标 ✓ —— 颜色硬编码 ✗（黄/红有语义 ✓，同卡片头部 ✓）。 */
+  .lw-wd-mk { flex:none; font-size:9px; line-height:1; margin-left:2px; letter-spacing:-1px; }
+  /* ★ 列表里的词群标记 ✓（有词群的词挂个 🗂 ✓）。 */
+  .lw-wd-grp { flex:none; font-size:9px; line-height:1; margin-left:2px; opacity:.85; }
+  /* ★ 词群栏的滚动容器 ✓ —— 全书 174 个词群 ✗，不限高会把侧栏撑到几屏 ✓。
+     缩进 22px 区分于上面那些一级分组 ✓，字号略小一点 ✓。 */
+  .lw-rd-grps { max-height:240px; overflow-y:auto; }
+  .lw-rd-grps .lw-rd-row { padding-left:22px; font-size:10.5px; }
+  .lw-wd-mk.fuzzy { color:#e8b100; }
+  .lw-wd-mk.blank { color:#e5534b; }
+  /* ★ 考频徽章 ✓ —— 「高频」要一眼看见 ✓，平铺成一行文字就淹了 ✗。
+     颜色**硬编码** ✗（红/黄/灰 = 严重程度 ✓，跟主题色变就失去意义 ✗）。 */
+  .lw-wd-badge { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px;
+    font-weight:600; letter-spacing:.3px; }
+  .lw-wd-badge.hi { color:#e5534b; background:rgba(229,83,75,.13); border:1px solid rgba(229,83,75,.35); }
+  .lw-wd-badge.mid { color:#e8b100; background:rgba(232,177,0,.13); border:1px solid rgba(232,177,0,.35); }
+  .lw-wd-badge.lo { color:${T.dim}; background:${T.lineDim}; border:1px solid ${T.lineDim}; }
+  /* ★ 标签云 ✓ —— 同义词 / 反义词 / 词形变化用标签排 ✓，
+     比一行逗号连缀好扫 ✓（用户要「全方位拆解」✓，排得清爽才看得下去 ✓）。 */
+  .lw-wd-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:3px; }
+  .lw-wd-tags span { padding:2px 10px; border-radius:6px; font-size:12px; line-height:1.75;
+    background:color-mix(in srgb, ${T.accent} 11%, transparent); color:${T.text}; }
+  .lw-wd-tags.ant span { background:color-mix(in srgb, #e5534b 11%, transparent); }
   .lw-wd-src { font-size:12px; color:${T.dim}; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .lw-wd-pv { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; font-size:10.5px; color:${T.faint}; }
   .lw-wd-pv b { color:${T.dim}; font-weight:400; }
@@ -11936,10 +12024,24 @@
     const now = Date.now();
     return epWords().filter((w) => {
       if (q && (String(w.w || '') + ' ' + String(w.def || '')).toLowerCase().indexOf(q) < 0) return false;
-      if (f === 'all') return true;
-      if (f === 'due') return Number(w.due || 0) <= now;
-      if (SRS) return SRS.stageOf(w) === f;
-      return true;
+    if (f === 'all') return true;
+    if (f === 'due') return Number(w.due || 0) <= now;
+    /* ★ 词书筛选 ✓（`book:<id>`）—— 左侧「六级词书」这类入口用它 ✓。
+       放在 stageOf 之前 ✗：`book:cet6` 不是记忆阶段，交给 SRS 会返回 undefined ✗。 */
+    if (f.indexOf('book:') === 0) return String(w.book || '') === f.slice(5);
+    /* ★ 星标筛选 ✓（`mark:fuzzy` / `mark:blank` / `mark:none`）—— 左侧「我标过的」分组用 ✓。
+       `mark:none` 查的是**没标过**的词 ✗，所以要和 `''` 比 ✓，不能直接 slice ✗。 */
+    if (f.indexOf('mark:') === 0) {
+      const want = f.slice(5);
+      const cur = String(w.mark || '');
+      return want === 'none' ? cur === '' : cur === want;
+    }
+    /* ★ 词群筛选 ✓（`group:<完整词群名>`）—— 左侧「词群（按书）」分组用 ✓。
+       按书里的「词以群记N」组织 ✓，一个词群 6 个词 ✓，点进去就是那一群 ✓。
+       ⚠️ 用 slice(6) 而不是 slice(5) ✗（前缀是「group:」共 6 个字符 ✓）。 */
+    if (f.indexOf('group:') === 0) return String(w.group || '') === f.slice(6);
+    if (SRS) return SRS.stageOf(w) === f;
+    return true;
     }).sort((a, b) => (Number(a.due) || 0) - (Number(b.due) || 0));
   }
   function epWordRowHtml(w) {
@@ -11950,6 +12052,12 @@
     const busy = EP_UI.enBusy === w.id;
     return '<div class="lw-wd-row' + (EP_UI.wordSel === w.id ? ' on' : '') + '" data-epword="' + esc(w.id) + '">'
       + '<span class="lw-wd-dot ' + st + '" title="' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '"></span>'
+    /* ★ 星标 ✓ —— 列表里就要看得见 ✗（不然得逐个点开才知道标过没有 ✗）。 */
+    + (w.mark === 'blank' ? '<span class="lw-wd-mk blank" title="完全不记得">⭐⭐</span>'
+      : (w.mark === 'fuzzy' ? '<span class="lw-wd-mk fuzzy" title="不熟悉">⭐</span>' : ''))
+    /* ★ 词群标记 ✓ —— 用户反馈「没看到词群」✗，因为他点的是**没有词群**的词 ✓。
+       列表里给有词群的词挂个 🗂 ✓，一眼就知道该点哪个看词群 ✓。 */
+    + (w.group ? '<span class="lw-wd-grp" title="' + esc(w.group) + '">🗂</span>' : '')
       /* ★ 缩略图 ✓ —— 列表里扫一眼就能想起这个词是什么 ✓（配图的意义就在这儿 ✓）。
          ⚠️ 图挂了要**收起来** ✗（破图标很难看 ✗）→ `onerror` 把父级隐藏 ✓。 */
       + (w.img ? '<img class="lw-wd-thumb" src="' + esc(w.img) + '" alt="" referrerpolicy="no-referrer" loading="lazy"'
@@ -11990,12 +12098,15 @@
       + (list.length ? list.map(epWordRowHtml).join('')
         : '<div class="lw-rd-empty">没有符合条件的词<br><span style="color:' + T.faint + '">去「外刊精读」里划几个词</span></div>')
       + '</div>' + paneGrip('list')
-      + '<div class="lw-rd-read">' + epWordDetailHtml() + '</div>'
+      /* ⚠️ 临时的调试暴露 ✗ —— 把渲染结果挂到 window 上 ✓，
+         好用 Playwright 直接读出来看结构 ✓（确认完就删 ✓）。 */
+      + '<div class="lw-rd-read">' + (window.__wd = epWordDetailHtml()) + '</div>'
       + '</div>';
   }
   function epWordSideHtml(st) {
-    const flt = (k, label, n) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epwflt="' + k + '">'
-      + '<span class="em">▣</span>' + label + '<span class="n">' + n + '</span></div>';
+    /* ★ 第 4 个参数 em 是图标 ✓（默认 ▣ ✓）—— 词群那一栏用 🗂 区分开 ✓。 */
+    const flt = (k, label, n, em) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epwflt="' + esc(k) + '">'
+      + '<span class="em">' + (em || '▣') + '</span>' + label + '<span class="n">' + n + '</span></div>';
     return '<div class="lw-rd-hd">记忆统计</div>'
       + '<div class="lw-rd-stat">'
       + '<div><b>' + st.total + '</b><span>总词数</span></div>'
@@ -12003,8 +12114,39 @@
       + '<div><b>' + st.mature + '</b><span>已掌握</span></div>'
       + '<div><b>' + (st.retentionN ? st.retention + '%' : '—') + '</b><span>记住率</span></div>'
       + '</div>'
-      + '<div class="lw-rd-hd">按阶段</div>'
-      + flt('all', '全部', st.total)
+    /* ★ 词书入口 ✓（用户：「我需要的是新增一本词书，而不是放生词本里面」）——
+       词书 = 给词打 `book` 标记 ✗，不是塞进生词本 ✗。以后加新词书只要再挂一行 flt ✓。
+       数量在这里现算 ✗（几百个词过滤一次的开销可以忽略 ✓），不往 st 里塞字段 ✗。 */
+    + '<div class="lw-rd-hd">我的词书</div>'
+    + flt('book:cet6', '📘 六级核心词', epWords().filter((x) => String(x.book || '') === 'cet6').length)
+    /* ★ 词群（按书）✓ —— 用户要「按照词群分类」✓。
+       数据里的 group 字段就是词群名 ✓，这里【动态列出现有的词群】✗（不写死 ✓）
+       —— 灌一批新词群，侧栏自动多一行 ✓。
+       ⚠️ 全书 174 个词群 ✗ → 用滚动容器限高 ✗，别把侧栏撑爆 ✓。 */
+    + (() => {
+      const gs = {};
+      epWords().forEach((x) => { const g = String(x.group || ''); if (g) gs[g] = (gs[g] || 0) + 1; });
+      const keys = Object.keys(gs).sort((a, b) => a.localeCompare(b, 'zh'));
+      if (!keys.length) return '';
+      const short = (g) => {
+        const num = (String(g).match(/\d+/) || [])[0] || '';
+        const m = String(g).match(/[「“]([^」”]+)[」”]/);
+        return (num ? num + ' ' : '') + (m ? m[1] : String(g));
+      };
+      return '<div class="lw-rd-hd">词群（按书）</div>'
+        + '<div class="lw-rd-grps">'
+        + keys.map((g) => flt('group:' + g, esc(short(g)), gs[g], '🗂')).join('')
+        + '</div>';
+    })()
+    /* ★ 「我的标记」✓ —— 用户原话：「有些词我不熟悉，我需要标记，有些词，一点不记得，
+       也需要标记，然后在左边分类管理」✓。
+       ⚠️ 只列**已标**的两类 ✗ —— 不加「未标记」（那是「全部」的意思 ✓，
+          列出来只会让这一栏变长 ✗）。 */
+    + '<div class="lw-rd-hd">我的标记</div>'
+    + flt('mark:fuzzy', '⭐ 不熟悉', epWords().filter((x) => x.mark === 'fuzzy').length)
+    + flt('mark:blank', '⭐⭐ 完全不记得', epWords().filter((x) => x.mark === 'blank').length)
+    + '<div class="lw-rd-hd">按阶段</div>'
+    + flt('all', '全部', st.total)
       + flt('due', '⏰ 该复习了', st.due)
       + flt('fresh', '○ 新词', st.fresh)
       + flt('learning', '◐ 学习中', st.learning)
@@ -12079,9 +12221,20 @@
         + row('释义', 'lw-wd-def', w.def, '中文释义（多个义项用；隔开）', 2)
         + row('例句', 'lw-wd-eg', w.eg, '英文例句（会一起朗读）', 3)
         + row('例句中文', 'lw-wd-egzh', w.egZh, '上面那句的翻译', 2)
-        + row('巧记', 'lw-wd-mnem', w.mnem, '词根词缀 / 联想 / 谐音', 3)
-        + row('场景', 'lw-wd-scene', w.scene, '一句能帮你想起来的画面', 2)
-      : '';
+    + row('巧记', 'lw-wd-mnem', w.mnem, '词根词缀 / 联想 / 谐音', 3)
+    + row('场景', 'lw-wd-scene', w.scene, '一句能帮你想起来的画面', 2)
+    /* ★ 词书字段 ✓（和上面展示区的 7 个区块一一对应 ✓）——
+       ⚠️ id 必须和 `epWordBindEdit()` 里读的那份**完全一致** ✗，否则改了不落盘 ✗。 */
+    + row('考频', 'lw-wd-freq', w.freq, '如 高频（阅读 + 翻译常考）')
+    + row('词形变化', 'lw-wd-forms', w.forms, '如 过去式 foraged / 分词 foraging / 名词 foraging', 2)
+    + row('常用短语', 'lw-wd-phrase', w.phrase, '如 be abundant in 富于…', 2)
+    + row('用法', 'lw-wd-usage', w.usage, '搭配、句型、易错点', 3)
+    + row('六级真题例句', 'lw-wd-cet6eg', w.cet6eg, '真题里出现过的句子（含译文更好）', 3)
+    + row('同义词', 'lw-wd-syn', w.syn, '如 plentiful / ample')
+    + row('反义词', 'lw-wd-ant', w.ant, '如 scarce / deficient')
+    + row('拓展', 'lw-wd-ext', w.ext, '派生词、同族词', 2)
+    + row('词根拆解', 'lw-wd-roots', w.roots, '如 ab-（加强）+ und（波浪）→ 像波浪涌来', 2)
+    : '';
     /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
     const imgBlock = w.img ? '<div class="lw-wd-imgwrap">'
       + '<img class="lw-wd-img" src="' + esc(w.img) + '" alt="' + esc(w.w) + '" referrerpolicy="no-referrer" loading="lazy"'
@@ -12108,24 +12261,101 @@
           释义 + 例句 ≈ 245px ✓ 正好和图片列**差不多高** ✓，两列就齐了 ✓。
        ⚠️ 巧记 / 场景**不进左列** ✗ —— 它们是长段落 ✓，
           塞进 400px 的窄列会折成一大坨 ✗（那才叫真的难看 ✗）。 */
-    const egSec = sec('💬', '例句', egHtml
+    /* ★ 考频渲染成「彩色徽章 + 说明」✓ —— 数据里存的是「高频 · 阅读 + 完形常考」这种
+     自然语言 ✓（用户确认过：不编具体次数 ✓，标高频/中频/低频 ✓）。
+     这里把开头的频度词抽出来做成徽章 ✓，剩下的当说明 ✓。
+     ⚠️ 抽不出来就**原样显示** ✗ —— 老数据 / 手填的内容不能因为格式不符就丢掉 ✗。 */
+  const freqHtml = (() => {
+    const f = String(w.freq || '');
+    if (!f) return '';
+    const m = f.match(/高频|中频|低频/);
+    if (!m) return '<div class="lw-wd-tipbox">' + esc(f) + '</div>';
+    const cls = m[0] === '高频' ? 'hi' : (m[0] === '中频' ? 'mid' : 'lo');
+    const rest = f.replace(m[0], '').replace(/^[\s·、,，]+/, '');
+    return '<div class="lw-wd-tipbox"><span class="lw-wd-badge ' + cls + '">' + m[0] + '</span>'
+      + (rest ? esc(rest) : '') + '</div>';
+  })();
+  /* ★ 标签云 ✓ —— 同义 / 反义 / 词形变化都是「一组词」✓，拆成标签排 ✓。 */
+  const tagCloud = (s, cls) => '<div class="lw-wd-tags' + (cls ? ' ' + cls : '') + '">'
+    + String(s).split(/[,，、\/]/).map((x) => x.trim()).filter(Boolean)
+      .map((x) => '<span>' + esc(x) + '</span>').join('') + '</div>';
+  const egSec = sec('💬', '例句', egHtml
       + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">🔊 读这句</button></div>' : ''));
     const hero = (w.img && defs.length)
       ? '<div class="lw-wd-hero">'
         + '<div class="lw-wd-hero-a">' + sec('📖', '释义', defHtml) + egSec + '</div>'
         + '<div class="lw-wd-hero-b">' + imgBlock + '</div></div>'
       : sec('📖', '释义', defHtml) + imgBlock + egSec;
-    const body = edit
-      ? editPane + imgBlock
-      : hero
-        + (w.mnem ? sec('💡', '巧记', '<div class="lw-wd-tipbox mnem">' + esc(w.mnem) + '</div>') : '')
-        + (w.scene ? sec('🎬', '场景', '<div class="lw-wd-tipbox scene">' + esc(w.scene) + '</div>') : '');
+  /* ★★ 分栏容器的**开合标签**改成一对变量 ✓✓ ——
+     用户原话：「复习最下面的，可以不需要左右排版，单行排布就行，填补右侧的空白」✓。
+     ⚠️ 关键：`columns` 容器的高度 = **两栏中较高的那栏** ✗ ——
+        「复习」原来挂在容器**外面** ✗ → 它紧贴在左栏底下 ✓，
+        看起来像"在左栏里" ✓，而右栏底下**空一大片** ✗（用户截图正是这个 ✓）。
+     → 把「复习」**移进容器** ✗ 并让它**跨栏** ✓（.lw-wd-full ✓），
+       它横跨整宽排在两栏之后 ✓ → 右下角的空白被填掉 ✓✓。
+     ⚠️ 编辑态**不参与分栏** ✗ → 两个变量都取空串 ✓，
+        这样 `</div>` 的数量不会错 ✗（手写死标签最容易多一个少一个 ✓）。 */
+  /* ⚠️⚠️ `lw-wd-full`（跨栏）**不能开在容器开头** ✗✗ —— 第一版就是这么写的 ✓，
+     结果**所有区块都被它包住、全部跨栏** ✓ → 整个卡片退回单栏 ✓
+     （用户截图：「怎么布局退回去了」✓）。
+     → 跨栏只包**「复习」那一块** ✓（见下面 fullOpen / fullClose ✓）。 */
+  /* ★ grid 手动分组 ✓ —— 三个变量：开左栏 / 切到右栏 / 全关 ✓。
+     左栏 = 怎么记 + 基础信息 · 右栏 = 参考资料 + 复习 ✓（见 CSS 那段注释 ✓）。 */
+  const colsOpen = edit ? '' : '<div class="lw-wd-cols"><div class="lw-wd-col-a">';
+  const colsSplit = edit ? '' : '</div><div class="lw-wd-col-b">';
+  const colsClose = edit ? '' : '</div></div>';
+  const body = edit
+    ? editPane + imgBlock
+      /* ★★ 左右两栏 ✓ —— 用户：「是否可以考虑左右排布，不要把页面拉的很长」✓。
+         左栏 = 「怎么记」（巧记 / 场景 ✓）· 右栏 = 「查什么」（下面那 7 块 ✓）。 */
+      : hero + colsOpen
+    + (w.mnem ? sec('💡', '巧记', '<div class="lw-wd-tipbox mnem">' + esc(w.mnem) + '</div>') : '')
+    + (w.scene ? sec('🎬', '场景', '<div class="lw-wd-tipbox scene">' + esc(w.scene) + '</div>') : '')
+    /* ★★ 词书的「全方位拆解」区块 ✓ —— 用户原话：「还缺少对应的单词短语，等等，用法，
+       以及统计六级中考到多少次，六级中的例句等等，都需要有，单词变形，拓展，同义词，
+       反义词，等等全方位的单词拆解」✓。
+       ⚠️ 字段在**数据层分开存** ✗（`freq` / `forms` / `phrase` / `usage` / `cet6eg` /
+          `syn` / `ant` / `ext` / `roots` 九个 ✓，各自可单独编辑 ✓），
+          但在**展示层合并成 7 个区块** ✓（同义+反义一行、拓展含词根 ✓）——
+          九块独立竖排会把卡片拉得特别长 ✗。
+       ⚠️ 一律**复用 `lw-wd-tipbox`** ✓，不新增 CSS ✗（省事 ✓ 且和巧记/场景视觉一致 ✓）。
+       ⚠️ 空字段**整块不渲染** ✗（和巧记/场景一致 ✓）—— 没内容的词不会留一堆空框 ✗。 */
+    /* ★ 词群 ✓ —— 用户原话：「按照词群分类，补充联想和词缀记忆等等，和这本书一样」✓。
+       一本书的一个「词以群记」就是一群 ✓（如「雄心」相关：ambition / aggressive /
+       congress / conquer / parliament / ambassador ✓）。
+       ⚠️ 放在最前面 ✗ —— 它决定「这个词为什么和那几个词放一起」✓，
+          先看到它再往下读词根拆解 ✓，逻辑才顺 ✓。 */
+    + (w.group ? sec('🗂', '词群', '<div class="lw-wd-tipbox">' + esc(w.group) + '</div>') : '')
+    + (w.freq ? sec('📊', '六级考频', freqHtml) : '')
+    + (w.forms ? sec('🔄', '词形变化', tagCloud(w.forms)) : '')
+    + (w.phrase ? sec('🔗', '常用短语', '<div class="lw-wd-tipbox">' + esc(w.phrase) + '</div>') : '')
+    + (w.usage ? sec('📝', '用法', '<div class="lw-wd-tipbox">' + esc(w.usage) + '</div>') : '')
+    + colsSplit   /* ★ 左栏到此为止（巧记/场景/考频/词形/短语/用法 ✓），切到右栏 ✓ */
+    + (w.cet6eg ? sec('🎯', '六级真题例句', '<div class="lw-wd-tipbox">' + esc(w.cet6eg) + '</div>') : '')
+    + ((w.syn || w.ant)
+      ? sec('≈', '同义 / 反义',
+        (w.syn ? '<div class="lw-wd-tipbox"><b style="color:' + T.dim + '">同义</b>' + tagCloud(w.syn) + '</div>' : '')
+        + (w.ant ? '<div class="lw-wd-tipbox"><b style="color:' + T.dim + '">反义</b>' + tagCloud(w.ant, 'ant') + '</div>' : ''))
+      : '')
+    + ((w.ext || w.roots)
+      ? sec('🌱', '拓展', (w.roots ? '<div class="lw-wd-tipbox mnem">' + esc(w.roots) + '</div>' : '')
+        + (w.ext ? '<div class="lw-wd-tipbox">' + esc(w.ext) + '</div>' : ''))
+      : '')
+    + '';   /* ⚠️ 这里**不闭合**分栏容器 ✗ —— 「复习」还要跨栏放进来 ✓（见下面 colsClose ✓） */
     return '<div class="lw-wd-detail' + (edit ? ' editing' : '') + '">'
       /* ── 头部：单词 + 音标 + 词性 + 状态 ✓ ── */
       + '<div class="lw-wd-top">'
       + '<div class="lw-wd-title">'
-      + '<span class="w" id="lw-wd-titleword" title="点一下听发音">' + esc(w.w) + '</span>'
-      + '<button class="spk" id="lw-wd-say" title="读这个单词">🔊</button>'
+    + '<span class="w" id="lw-wd-titleword" title="点一下听发音">' + esc(w.w) + '</span>'
+    /* ★★ 熟练度星标 ✓ —— 用户原话：「有些词我不熟悉，我需要标记，有些词，一点不记得，
+       也需要标记，然后在左边分类管理」✓。
+       三态循环：未标 → ⭐ 不熟悉（黄）→ ⭐⭐ 完全不记得（红）→ 未标 ✓。
+       ⚠️ 和「记忆阶段」是**两回事** ✗：阶段由遗忘曲线算法算 ✓，星标是用户**主观**感受 ✓，
+          两者互补（算法觉得你熟了、但你自己知道这词一考就懵 ✓）。 */
+    + '<button class="mark' + (w.mark === 'fuzzy' ? ' on-fuzzy' : (w.mark === 'blank' ? ' on-blank' : ''))
+    + '" id="lw-wd-mark" title="点一下循环：未标 → 不熟悉 → 完全不记得">'
+    + (w.mark === 'blank' ? '⭐⭐' : (w.mark === 'fuzzy' ? '⭐' : '☆')) + '</button>'
+    + '<button class="spk" id="lw-wd-say" title="读这个单词">🔊</button>'
       + '<button class="spk" id="lw-wd-say-slow" title="慢速读">🐢</button>'
       + '<span class="sp"></span>'
       + '<button class="ed' + (edit ? ' on' : '') + '" id="lw-wd-edit" title="'
@@ -12141,7 +12371,16 @@
       /* ── 正文：词典态 = 只读区 ✓ / 编辑态 = 表单 ✓（见上面 body ✓）── */
       + body
       /* ── 复习 ✓（遗忘曲线要看得见 ✓）── */
-      + sec('⏰', '复习',
+      /* ★★ 先**关掉分栏容器** ✗，再放「复习」✓✓ ——
+       这样它在容器**外面** ✓，天然横跨整宽 ✓，不依赖 column-span ✗
+       （column-span:all 试过两版都没生效 ✗ —— 与其跟它较劲 ✓，
+        不如让它干脆不在多栏容器里 ✓，这是**结构上一定成立**的做法 ✓）。 */
+    /* ★ 「复习」**留在右栏里** ✓✓ —— 用户要「填补右侧的空白」✓：
+       右栏原本只有真题/同反义/拓展三块 ✗（比左栏短 ✓），
+       把「复习」放进来 → 两栏高度接近 ✓ → 右下角不再空着 ✓✓。
+       ⚠️ 之前试过让它**全宽跨栏** ✗（column-span / 移出容器 ✓ 都不成 ✓）——
+          现在改成"放进右栏"✓，不依赖任何跨栏特性 ✓，一定生效 ✓。 */
+    + sec('⏰', '复习',
         '<div class="lw-wd-next">下次复习：<b>'
         + (due <= now2 ? '现在（已到期）' : (SRS ? SRS.fmtGap(due - now2) + '后' : '—')) + '</b>'
         + (w.ivl ? ' · 当前间隔 ' + w.ivl + ' 天' : '') + '</div>'
@@ -12165,8 +12404,9 @@
         /* ⚠️ 「难度因子」**不能丢** ✗ —— 旧版词详情里有 ✓，重写成词典式时漏了 ✗
            （`tests/life-en.js` ⑦ 那条断言当场抓住 ✓）。
            但**光甩一个数字**等于没说 ✗（`2.36` 谁知道是高还是低 ✓）→ 带一句人话 ✓。 */
-        + '<div class="lw-wd-ef">难度因子 <b>' + (Number(w.ef) || 0).toFixed(2) + '</b>'
-        + '<span>（1.3 ~ 2.8，越低说明这个词越难记）</span></div>')
+      + '<div class="lw-wd-ef">难度因子 <b>' + (Number(w.ef) || 0).toFixed(2) + '</b>'
+      + '<span>（1.3 ~ 2.8，越低说明这个词越难记）</span></div>')
+    + colsClose;   /* ★ 关右栏 + 关分栏容器 ✓（「复习」是右栏最后一块 ✓） */
       /* ── 来源 ✓ ── */
       + (w.artTitle ? sec('📍', '来自', '<div class="lw-wd-src">《' + esc(w.artTitle) + '》'
         + (w.artId ? ' <button id="lw-wd-src">回到原文</button>' : '') + '</div>'
@@ -12813,8 +13053,14 @@
     const map = [
       ['#lw-wd-ph', 'ph'], ['#lw-wd-pos', 'pos'], ['#lw-wd-def', 'def'],
       ['#lw-wd-eg', 'eg'], ['#lw-wd-egzh', 'egZh'],
-      ['#lw-wd-mnem', 'mnem'], ['#lw-wd-scene', 'scene'],
-    ];
+    ['#lw-wd-mnem', 'mnem'], ['#lw-wd-scene', 'scene'],
+    /* ★ 词书字段 ✓（对应编辑区那 9 个 row ✓）—— 少一个就是「改了但没存」✗。 */
+    ['#lw-wd-freq', 'freq'], ['#lw-wd-forms', 'forms'],
+    ['#lw-wd-phrase', 'phrase'], ['#lw-wd-usage', 'usage'],
+    ['#lw-wd-cet6eg', 'cet6eg'],
+    ['#lw-wd-syn', 'syn'], ['#lw-wd-ant', 'ant'],
+    ['#lw-wd-ext', 'ext'], ['#lw-wd-roots', 'roots'],
+  ];
     let ch = false;
     map.forEach(([sel, key]) => {
       const v = g(sel);
@@ -13566,7 +13812,10 @@
     /* ⚠️ 这里必须和 `epWordSave()` 里那张表**一一对应** ✗ ——
        漏一个就是「输入框里改了、看着像存了、其实没存」✗（最坑的那种 ✗）。
        （两张表分居两处 ✗ 确实是隐患 ✓ —— 但探针里有一条「改完刷新还在」的断言守着 ✓。） */
-    ['#lw-wd-ph', '#lw-wd-pos', '#lw-wd-def', '#lw-wd-eg', '#lw-wd-egzh', '#lw-wd-mnem', '#lw-wd-scene']
+    ['#lw-wd-ph', '#lw-wd-pos', '#lw-wd-def', '#lw-wd-eg', '#lw-wd-egzh', '#lw-wd-mnem', '#lw-wd-scene',
+      /* ★ 词书字段 ✓ —— 必须和 `epWordSave()` 那张 map 表**逐条对应** ✗（见上面那段警告 ✓）。 */
+      '#lw-wd-freq', '#lw-wd-forms', '#lw-wd-phrase', '#lw-wd-usage', '#lw-wd-cet6eg',
+      '#lw-wd-syn', '#lw-wd-ant', '#lw-wd-ext', '#lw-wd-roots']
       .forEach((sel) => {
         const el = q(sel);
         if (el) el.onblur = () => epWordSave();
@@ -13587,6 +13836,15 @@
        默认**收起** ✓，想改的人才点开 ✓（能力没砍 ✗，只是不挡路 ✓）。 */
     const wedit = q('#lw-wd-edit');
     if (wedit) wedit.onclick = () => { EP_UI.wdEdit = !EP_UI.wdEdit; render(); };
+    /* ★ 熟练度星标 ✓ —— 三态循环，和左侧「⭐ 不熟悉 / ⭐⭐ 完全不记得」筛选配套 ✓。
+       ⚠️ 只改 `mark` + `edit` ✗ —— 不碰 SRS 字段 ✗（星标是主观标记 ✓，
+          不该影响遗忘曲线的排期 ✓，否则「标一下」会打乱复习节奏 ✗）。 */
+    const wmark = q('#lw-wd-mark');
+    if (wmark) wmark.onclick = () => {
+      const w = epWordById(EP_UI.wordSel); if (!w) return;
+      w.mark = w.mark === 'fuzzy' ? 'blank' : (w.mark === 'blank' ? '' : 'fuzzy');
+      w.edit = Date.now(); epSave(); render();
+    };
     /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓ */
     const wsrc = q('#lw-wd-src');
     if (wsrc) wsrc.onclick = () => epGotoWordSource(epWordById(EP_UI.wordSel));
