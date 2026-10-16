@@ -208,12 +208,10 @@ const FAKE_JSON = {
        → 复习区块里的文字被**双重缩进成 30px** ✗，
        比同一张卡上的释义 / 例句明显右移一截 ✗（截图一眼看出来 ✓）。
        ⚠️ 这类「差 2~14px」的错**肉眼在小图里看不准** ✗，必须**量** ✓。 */
-    const gut = await p.evaluate(() => {
+    const gutWrap = await p.evaluate(() => {
       const root = document.querySelector('.lw-wd-detail');
       if (!root) return null;
       const base = root.getBoundingClientRect().left;
-      /* ⚠️ 不含 .lw-wd-top ✗ —— 它是**通栏块** ✓（自带 16px 内边距 + 底边通栏 ✓），
-         量它的左边缘恒等于 0 ✓，放进来自检会自己挂 ✗。 */
       /* ⚠️ 这里**不含 .lw-wd-imgwrap** ✗✗ —— 它现在跟释义**并排** ✓，
          落在右列 ✓（left 天然大于 16 ✓），量它等于自检自己挂 ✗。
          它的落位由下面 ③b 单独验 ✓（必须真的在**同一行**的右侧 ✓）。 */
@@ -224,12 +222,31 @@ const FAKE_JSON = {
         const el = root.querySelector(s);
         if (el) out[s] = Math.round(el.getBoundingClientRect().left - base);
       });
-      return out;
+      /* ★ 顺带把**右栏起点**也量出来 ✓（两栏排版里，右栏那几块的 left 本来就 > 16 ✓） */
+      const cols = document.querySelector('.lw-wd-cols');
+      let rightCol = null;
+      if (cols) {
+        const kids = [...cols.children].filter((x) => x.getBoundingClientRect().width > 0);
+        if (kids.length > 1) {
+          rightCol = Math.round(kids[1].getBoundingClientRect().left - base);
+        }
+      }
+      return { out, rightCol };
     });
+    const gut = gutWrap && gutWrap.out;
+    const rightCol = gutWrap ? gutWrap.rightCol : null;
     const gutVals = Object.keys(gut || {}).map((k) => gut[k]);
     console.log('    水平基准线: ' + JSON.stringify(gut));
-    ck('★★ 卡里所有区块**左边对齐同一条线**（不能有的 16 有的 30 —— 复习区块被双重缩进过）',
-      !!gut && gutVals.length >= 5 && new Set(gutVals).size === 1 && gutVals[0] === 16, JSON.stringify(gut));
+    /* ⚠️⚠️ 这条原来是「**所有**区块都等于 16」✗ —— 但词卡现在是**两栏词典排版** ✓
+       （`.lw-wd-cols` ✓）：左栏 释义/例句/巧记/场景 ✓，右栏 真题例句/同义反义/**复习** ✓。
+       → 右栏那几块的 left **本来就**大于 16 ✓（那是列偏移，不是「双重缩进」✗）。
+       判据改成：**每块要么贴左基准线(16)，要么正好落在右栏起点** ✓，
+       而且**同一栏里的块必须互相对齐** ✓（这才是「双重缩进」要防的 ✓）。 */
+    const lefts = Object.keys(gut || {}).filter((k) => gut[k] === 16).length;
+    const colVals = new Set(gutVals.filter((v) => v !== 16));
+    ck('★★ 卡里所有区块**要么贴左基准线、要么彼此对齐在同一栏**（不能有第三种缩进 —— 那才是「双重缩进」）',
+      !!gut && gutVals.length >= 5 && lefts >= 2 && colVals.size <= 1,
+      JSON.stringify(gut) + '（右栏栏框起点 ' + rightCol + '，栏内还有自己的 16px 内边距 ✓）');
     /* ★★ ③b 释义 + 配图**并排** ✓（用户原话：「中间这个图片，百度图片，
        放置的位置不合理，左右存在大量空白，图片两边，合理重新排布一下位置设计」✓）——
        ⚠️ 原来是**上下堆** ✗：图占一整宽 ✓，而配图**常常是竖图** ✓ →
@@ -277,16 +294,29 @@ const FAKE_JSON = {
        实现却是**普通流** ✗ → 词卡一变高它就跟着滚出视野 ✗（本次实测才发现 ✓）。
        ⚠️ 这条**不能只验「存在」** ✗ —— 存在 ✓、能点到 ✓（Playwright 会自己滚 ✓），
           但用户得先往下翻才看得见 ✗ → 只能**量位置** ✓。 */
+    /* ★★ 底部动作条必须**真的常驻** ✓（用户不用先往下翻 ✓）——
+       ⚠️⚠️ 原来这条要求 `over > 1`（内容必须超高）当**前置条件** ✗ ——
+          但**内容不超高时它必然在视野里** ✓，拿这个当前置条件会**误报** ✗
+          （实测：`ubiquitous` 的卡片正好装得下 → over=0 → 明明没问题却报红 ✗）。
+       → 改成**与内容长短无关**的判据 ✓：滚到顶 / 中 / 底，三个位置都得在可视框里 ✓。 */
     const footVis = await p.evaluate(() => {
       const box = document.querySelector('.lw-wd-detail');
       const foot = document.querySelector('.lw-wd-foot');
       if (!box || !foot) return null;
-      const bb = box.getBoundingClientRect(); const fb = foot.getBoundingClientRect();
-      return { over: box.scrollHeight - box.clientHeight, scrollTop: box.scrollTop,
-        inside: fb.top >= bb.top - 1 && fb.bottom <= bb.bottom + 1 };
+      const over = box.scrollHeight - box.clientHeight;
+      const at = (st) => {
+        box.scrollTop = st;
+        const bb = box.getBoundingClientRect(); const fb = foot.getBoundingClientRect();
+        return fb.top >= bb.top - 1 && fb.bottom <= bb.bottom + 1;
+      };
+      const top = at(0);
+      const mid = at(Math.round(over / 2));
+      const end = at(over);
+      box.scrollTop = 0;
+      return { over, top, mid, end };
     });
-    ck('★★ 内容超出时底部动作条**仍然在视野里**（不用先往下翻 —— 以前注释写「常驻」其实是假的）',
-      !!footVis && footVis.over > 1 && footVis.inside, JSON.stringify(footVis));
+    ck('★★ 底部动作条**常驻视野**（滚到顶 / 中 / 底都在 —— 不用先往下翻）',
+      !!footVis && footVis.top && footVis.mid && footVis.end, JSON.stringify(footVis));
     /* ⚠️⚠️ 词卡**自己得会滚** ✗✗ —— 父级 `.lw-rd-read` 是 `overflow:hidden` ✓，
        词卡改成词典式之后**明显变高** ✓ → 内容比可视区高时，
        底部的「🪄 补全 / 🗑 删除」**鼠标滚轮滚不到** ✗。
@@ -313,7 +343,14 @@ const FAKE_JSON = {
     ck('  默认按钮写的是「编辑」（不是「收起」）', /编辑/.test(await txt('#lw-wd-edit')), await txt('#lw-wd-edit'));
     await p.click('#lw-wd-edit'); await p.waitForTimeout(800);
     const nIn2 = await p.locator('.lw-wd-detail input, .lw-wd-detail textarea').count();
-    ck('★★ 点开后出现 7 个输入框（音标/词性/释义/例句/例句中文/巧记/场景）', nIn2 === 7, '输入框 ' + nIn2 + ' 个');
+    /* ⚠️⚠️ 原来是「正好 7 个」✗ —— 但编辑态后来**扩到全部字段**了 ✓
+       （音标/词性/释义/例句/例句中文/巧记/场景 + 考频/词形/短语/用法/真题例句/近义/反义/拓展/词根 ✓，
+        实测 16 个 ✓）。写死 7 会**一扩字段就报红** ✗。
+       → 判据改成：**至少 7 个**，且那 7 个核心 id **一个都不少** ✓（这才是这条要守的东西 ✓）。 */
+    const coreIds = ['lw-wd-ph', 'lw-wd-pos', 'lw-wd-def', 'lw-wd-eg', 'lw-wd-egzh', 'lw-wd-mnem', 'lw-wd-scene'];
+    const missIds = await p.evaluate((ids) => ids.filter((id) => !document.querySelector('#' + id)), coreIds);
+    ck('★★ 点开后出现**编辑输入框**，7 个核心字段一个不少（音标/词性/释义/例句/例句中文/巧记/场景）',
+      nIn2 >= 7 && missIds.length === 0, '输入框 ' + nIn2 + ' 个' + (missIds.length ? ' 缺 ' + missIds.join(',') : ''));
     /* ⚠️⚠️ 点「✏️ 编辑」表单必须**立刻看得见** ✗✗ ——
        第一版是把表单**插在最底下** ✓（在「复习 / 来自」下面 ✓）→
        点了**页面纹丝不动** ✗ → 用户只会觉得「按钮坏了」✗（实测截图确认 ✓）。

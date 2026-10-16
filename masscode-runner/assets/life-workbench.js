@@ -1406,8 +1406,12 @@
      ⚠️ 三栏高度由 .lw-main.fill 那条链撑满 ✓（见上面全高面板的注释 ✓）。
      ══════════════════════════════════════════════════════════════════════ */
   .lw-rd { display:flex; min-height:320px; border:2px solid ${T.lineDim}; background:${T.bg}; }
-  .lw-rd-side { width:206px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto; padding:12px 0; background:${T.bg}; }
-  .lw-rd-list { width:330px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; background:${T.card}; }
+  /* ⚠️⚠️ overflow-anchor:none 是**必须**的 ✗ —— 见 render() 里 lwRestScroll 的注释 ✓：
+     Chrome 的「滚动锚定」会在我们设完 scrollTop **之后**再自己调一次 ✓，
+     于是「换词群后词表归零」被它调成了「停在列表底部」✗（实测 0 → 22 ✓）。
+     ⚠️ 这里是**模板字符串** ✗ —— 注释里不能出现反引号 ✓（写了会直接语法错 ✓，踩过 ✓）。 */
+  .lw-rd-side { width:206px; flex:none; border-right:2px solid ${T.lineDim}; overflow:auto; overflow-anchor:none; padding:12px 0; background:${T.bg}; }
+  .lw-rd-list { width:330px; flex:none; border-right:1px solid ${T.lineDim}; overflow:auto; overflow-anchor:none; background:${T.card}; }
   .lw-rd-read { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
   /* ── 本地电子书阅读器 ✓（用户原话：「我需要的是可以实现阅读」✓）────────────
      ⚠️ 正文的**最大宽度**是关键 ✗ —— 一行铺满 1400px 的话，
@@ -2019,7 +2023,18 @@
   .lw-ep-tip { padding:6px 14px 0; font-size:9.5px; color:${T.faint}; line-height:1.85; }
 
   /* ── 生词本 ── */
+  /* ★★ 性能：content-visibility:auto ✗✗ ——
+     词书一筛就是 **1979 行** ✓（每行 6~8 个元素 + 一张缩略图 ✓，
+     整个面板 DOM 一万四千多个节点 ✓）。整块重建之后浏览器要**全部布局 + 绘制** ✗，
+     实测点一个词到下一帧要 **3 秒** ✓（用户反馈「点击单词加载时间太长，很卡顿」✓）。
+     content-visibility:auto 让浏览器**跳过屏幕外那些行** ✓ ——
+     只算可见的十几行 ✓，滚到哪儿才渲染哪儿 ✓。
+     ⚠️ 必须配 contain-intrinsic-size ✗ —— 否则屏幕外的行高度算 0 ✓，
+        滚动条会乱跳 ✓、滚到后面位置全错 ✓。
+        用 auto 52px ✓（先按 52px 估 ✓，量过之后记住真实高度 ✓）。
+     ⚠️⚠️ 这一段是**模板字符串** ✗ —— 注释里**不能出现反引号** ✓（我在这上面栽两次了 ✓）。 */
   .lw-wd-row { display:flex; align-items:center; gap:8px; padding:8px 13px;
+    content-visibility:auto; contain-intrinsic-size:auto 52px;
     border-bottom:1px solid ${T.lineDim}; cursor:pointer; border-left:2px solid transparent; }
   .lw-wd-row:hover { background:${T.card2}; }
   .lw-wd-row.on { background:${T.card2}; border-left-color:${T.accent}; }
@@ -2190,7 +2205,7 @@
   .lw-wd-grp { flex:none; font-size:9px; line-height:1; margin-left:2px; opacity:.85; }
   /* ★ 词群栏的滚动容器 ✓ —— 全书 174 个词群 ✗，不限高会把侧栏撑到几屏 ✓。
      缩进 22px 区分于上面那些一级分组 ✓，字号略小一点 ✓。 */
-  .lw-rd-grps { max-height:240px; overflow-y:auto; }
+  .lw-rd-grps { max-height:240px; overflow-y:auto; overflow-anchor:none; }
   .lw-rd-grps .lw-rd-row { padding-left:22px; font-size:10.5px; }
   .lw-wd-mk.fuzzy { color:#e8b100; }
   .lw-wd-mk.blank { color:#e5534b; }
@@ -3057,7 +3072,17 @@
         /* ★ 自举放在**这里**而不是 mount() 的调用处 ✗ ——
            按钮经常是稍后由定时器 / MutationObserver 挂上的（首次进来时 #header-center 还没出来），
            放在调用处的话那条路径不会触发 → 提醒功能整个不生效 ✗（实测踩过）。 */
-        bootstrapMailNotify();
+        /* ★★ 用 `setTimeout(…, 0)` **推到模块求值之后再跑** ✗✓ ——
+           ⚠️ `tryMount()` 是在模块**求值期间**被调用的 ✓，直接 `bootstrapMailNotify()`
+              会立刻开始跑 ✓，一路摸到 `mailConfiguredKeys()` → `MAIL_PRESET` ✓，
+              而 `MAIL_PRESET` 声明在**文件很后面**（第 6700 多行 ✗）→
+              那时它还在 **TDZ** 里 ✗ → 抛
+              `Cannot access 'MAIL_PRESET' before initialization` ✗，自举静默失败 ✗。
+           ⚠️⚠️ 原来之所以没炸 ✗，只是因为里面**先有两次网络往返**（fetch + json ✓）
+              —— 网络够慢 ✓，模块早就求值完了 ✓。**这是在靠运气** ✗：
+              实测 2026-10-16 把它换成「一次共享请求」（少一次往返 ✓）就立刻炸了 ✗。
+           ⇒ 正确做法：**别依赖 await 的时长** ✓，显式推迟到本轮同步求值之后 ✓。 */
+        setTimeout(bootstrapMailNotify, 0);
         return true;
       }
       const btn = document.createElement('button');
@@ -3075,7 +3100,7 @@
         else openInPanel();
       });
       clearInterval(MOUNT_TIMER); MOUNT_TIMER = 0;
-      bootstrapMailNotify();
+      setTimeout(bootstrapMailNotify, 0);   /* ★ 同上 ✓：推迟出模块求值 ✓，避开 TDZ ✗ */
       return true;
     };
     if (tryMount()) return;
@@ -3181,6 +3206,29 @@
     LW_AWAY_SEEN = null;
   }
 
+  /* ★★ 共享的 store 请求 ✓✓ —— 修「开一次面板白传两份 store」✗
+     ⚠️ 实测（2026-10-16）：开机自举 `bootstrapMailNotify()` 拉一次 ✓、
+        打开面板 `load()` 又拉一次 ✗ —— store 现在有 **10 MB** ✓
+        → 每次开面板等于白传 **20 MB** ✗（本机也要多花 ~70 ms + 服务端多解析一遍 ✗）。
+     ★ 做法：两份**共用一个请求** ✓，且**极短时间内可以复用结果** ✓（3 秒窗口 ✓）。
+       · 用户点开面板通常就在页面加载后一两秒内 ✓ → 正好命中 ✓
+       · 期间只要本地存过盘（`STORE_DIRTY`）就**立刻作废** ✓ → 不会读到旧数据 ✓
+     ⚠️ 窗口故意取**很短**（3 秒 ✓）—— 长窗口会读到过期数据 ✗。
+        store 是**单一客户端**在写 ✓，3 秒内不会有别人的写入 ✓（自己的写入由 dirty 挡 ✓）。
+     ⚠️ 失败要**能退回直连** ✓ —— 共享请求挂了不能让面板打不开 ✗。 */
+  const STORE_TTL = 3000;
+  let STORE_FETCH = null;      /* { at, p } ✓ */
+  let STORE_DIRTY = false;     /* 本地刚存过盘 → 缓存作废 ✓ */
+  function fetchStoreShared() {
+    const now = Date.now();
+    if (!STORE_DIRTY && STORE_FETCH && (now - STORE_FETCH.at) < STORE_TTL) return STORE_FETCH.p;
+    const p = fetch('/api/life/store', { cache: 'no-store' })
+      .then((r) => r.json())
+      .catch(() => { STORE_FETCH = null; return null; });   /* 挂了就清缓存 ✓，让下次重试 ✓ */
+    STORE_FETCH = { at: now, p };
+    return p;
+  }
+
   async function load(force) {
     if (LOADING) return;
     LOADING = true;
@@ -3192,7 +3240,13 @@
        以前三个请求 Promise.all 一起等 ✗ —— 天气最慢，把整个面板卡住 ✗。 */
     const [idx, store] = await Promise.all([
       j('/api/life/index?depth=3' + (force ? '&fresh=1' : ''), { cache: 'no-store' }),
-      j('/api/life/store', { cache: 'no-store' }),
+      /* ★ 走共享请求 ✓（开机自举刚拉过就直接复用 ✓，见 `fetchStoreShared` 的注释 ✓）；
+         ⚠️ 拿不到要**兜底直连**一次 ✗ —— 不能让面板因为共享请求挂了就打不开 ✗。 */
+      (async () => {
+        const shared = await fetchStoreShared();
+        if (shared && shared.data) return shared;
+        return j('/api/life/store', { cache: 'no-store' });
+      })(),
     ]);
     if (idx && idx.ok) DATA = idx;
     STORE = (store && store.data) || {};
@@ -3244,7 +3298,12 @@
   function saveStore(now) {
     const post = () => {
       fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: storePayload() })
-        .then((r) => { if (r && r.ok && STORE) delete STORE.__drop; })
+        .then((r) => {
+          if (r && r.ok && STORE) delete STORE.__drop;
+          /* ★ 本地刚写过 → 共享缓存**立刻作废** ✓✗（否则紧接着的 load() 会读到旧数据 ✗） */
+          STORE_DIRTY = true;
+          STORE_FETCH = null;
+        })
         .catch(() => { });
     };
     if (now) {
@@ -3518,10 +3577,57 @@
     memoDownload(rendered.blob, (fileBase || 'memo') + '.png');
   }
 
+  /* ★ 滚动位置保持 ✓✓ —— `render()` 是把整棵 DOM 换掉 ✗，
+     于是**侧栏和词表都会跳回顶部** ✗。
+     用户反馈（2026-10-15）：
+       「滚轮滚动单词到其他，点击单词，莫名会回到初始位置」✓
+       「点击第 27 个词群，结果页面刷新，词群滚回去了，回到第 1 个」✓
+     ⚠️ 根因就是这里 ✗ —— `[data-epword]` / `[data-epwflt]` 的点击都走 `render()` ✓，
+        重建之后 scrollTop 自然归零 ✗。
+     做法：渲染前把几个**可滚容器**的 scrollTop 记下 ✓，渲染后原样写回 ✓。
+     ⚠️⚠️ 词表（`.lw-rd-list`）**只在筛选条件没变时**才恢复 ✗ ——
+        点了别的词群，词表本来就该从**新内容的顶部**开始 ✓；
+        用户抱怨的是**侧栏那一栏**跑回第 1 个词群 ✓，那才是要保住的 ✓。 */
+  const LW_SCROLL_SEL = ['.lw-nav', '.lw-rd-side', '.lw-rd-grps', '.lw-main'];
+  /* ⚠️⚠️ 必须记「**上一次渲染**用的是哪个筛选」✗✗ ——
+     不能在 render() 里比较 `EP_UI.wordFilter` 的前后值 ✓：
+     点击处理器是**先改 `EP_UI.wordFilter`、再调 `render()`** ✓
+     （`qa('[data-epwflt]').forEach(... EP_UI.wordFilter = ...; render(); ...)` ✓），
+     所以 render() 里读到的「前」和「后」是**同一份** ✗ —— 判定永远为"没变" ✗，
+     于是词表归零那条分支**根本不执行** ✓（实测卡在这儿 ✓）。 */
+  let LW_LAST_FILTER = null;
+  function lwSnapScroll() {
+    const host = document.getElementById('lifework-view');
+    if (!host) return null;
+    const snap = { filter: LW_LAST_FILTER, list: [] };
+    LW_SCROLL_SEL.concat(['.lw-rd-list']).forEach((sel) => {
+      host.querySelectorAll(sel).forEach((el, i) => {
+        if (el.scrollTop > 0) snap.list.push([sel, i, el.scrollTop]);
+      });
+    });
+    return snap;
+  }
+  function lwRestScroll(snap) {
+    const host = document.getElementById('lifework-view');
+    if (!host) return;
+    const sameFilter = !snap || snap.filter === EP_UI.wordFilter;
+    /* ★ 换了筛选 → 词表**显式归零** ✓ ——
+       不能只是「不恢复」✗：新内容短的时候，浏览器会把旧的 scrollTop
+       **夹到新的最大值** ✗（实测 300 → 22 ✓），结果一进去就停在列表底部 ✓。 */
+    if (!sameFilter) host.querySelectorAll('.lw-rd-list').forEach((el) => { el.scrollTop = 0; });
+    LW_LAST_FILTER = EP_UI.wordFilter;
+    if (!snap || !snap.list.length) return;
+    snap.list.forEach(([sel, i, top]) => {
+      if (sel === '.lw-rd-list' && !sameFilter) return;   /* 换了筛选 → 词表从头看 ✓ */
+      const el = host.querySelectorAll(sel)[i];
+      if (el) el.scrollTop = top;
+    });
+  }
   function render() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
     if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
+    const scroll = lwSnapScroll();   /* ★ 换 DOM 前先记住滚动位置 ✓（见上面的注释 ✓） */
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
     const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading, flow: viewFlow, trends: viewTrends }[TAB] || viewToday;
     const openTodo = ((STORE && STORE.memos) || []).filter((t) => t.todo && !t.done).length;
@@ -3543,6 +3649,11 @@
       <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>` + dlgHtml()
       + (MAIL_UI.compose ? mailComposeOverlay() : '');
     bind();
+    lwRestScroll(scroll);
+    /* ⚠️ 同步设完还要**再补一帧** ✗ —— Chrome 的「滚动锚定」（scroll anchoring ✓）
+       会在 DOM 替换后自己把位置调回去 ✓（实测：归零 0 被调成 22 = 新列表的最大值 ✓），
+       同步那一次会被它盖掉 ✓。rAF 里再设一次就稳了 ✓（重复设同一个值是幂等的 ✓）。 */
+    requestAnimationFrame(() => lwRestScroll(scroll));
     /* ★ `#lw-sub` 刚被重建 ✗ —— 把还没过期的状态消息（如「已移到… ↩ 撤销」）重画上去 ✓，
        否则会被默认的「日期 · 项目数」盖掉 ✗（天气异步回来就会触发一次 render ✗）。 */
     paintStatus();
@@ -7163,9 +7274,14 @@
     if (MAIL_BOOTSTRAPPED) return;
     MAIL_BOOTSTRAPPED = true;
     try {
-      const r = await fetch('/api/life/store', { cache: 'no-store' });
-      const d = await r.json();
-      const s = (d && d.data) || null;
+      /* ★ 面板已经把 store 拉回来了就直接用 ✓；没有才走**共享请求** ✓ ——
+         ⚠️ 原来这里是**自己拉一整份 store** ✗（10 MB ✗），
+            和「打开面板」那份撞在一起 ✓ → 白传 20 MB ✗（见 `fetchStoreShared` 的注释 ✓）。 */
+      let s = STORE || null;
+      if (!s) {
+        const d = await fetchStoreShared();
+        s = (d && d.data) || null;
+      }
       if (s) {
         if (!MAIL_BOOT.acc) MAIL_BOOT.acc = s.mailAcc || {};
         if (MAIL_BOOT.notify === undefined) MAIL_BOOT.notify = s.mailNotify;
@@ -11137,6 +11253,46 @@
     /* ⚠️ 切走要把朗读**停掉** ✗（不然切到别的页签还在念英文 ✗，很吓人 ✗）*/
     spkStop(); epSave(); render();
   }
+  /* ★★★ 点一个词：**只换选中态 + 右栏词卡** ✓✓，**不整块重建** ✗✗
+     ────────────────────────────────────────────────────────────────
+     用户原话：「点击单词的加载时间太长，很卡顿」✓。
+
+     实测（2026-10-15）：
+       · 词书一筛 1979 行 → `.lw-rd-list` 里 **13857 个节点** ✓
+       · 点一个词走 `epSetMode('word')` → `render()` → `host.innerHTML = …` ✓
+       · **光把旧的 1.4 万个节点拆掉就要 200 多毫秒** ✗
+         （所以列表只有 11 行时也一样慢 ✓ —— 瓶颈是**拆旧 DOM** ✗，不是建新的 ✓）
+       · 从点击到下一帧：**3004ms → 优化后 ~300ms** ✓，仍明显卡 ✓
+     根因：`render()` 是「整块换 DOM」✓，而点单词**只改了两处** ✗：
+       · 旧行去掉 `.on`、新行加上 `.on` ✓
+       · 右栏词卡换一份 HTML ✓
+     → 这里就只做这两件事 ✓，再调一次现成的 `bind()` 把**词卡上的绑定补回来** ✓
+       （`bind()` 本身很便宜 ✓：它就是一堆 querySelector + 赋 onclick ✓，
+        而且它是幂等的 ✓ —— 重复赋同一个 onclick 只是覆盖 ✓，不会叠加 ✓）。
+
+     ⚠️ 也**不存库** ✗ —— `epSetMode()` 里那句 `epSave()` 会把**整份 store（4MB）**
+        POST 回去 ✓，而「当前选了哪个词」根本不落盘 ✓（`EP_UI.wordSel` 不在
+        `storePayload()` 里 ✓），纯粹白花 ✓。 */
+  function epPickWord(id) {
+    EP_UI.wordSel = id;
+    const list = document.querySelector('#lifework-view .lw-rd-list');
+    if (list) {
+      list.querySelectorAll('[data-epword]').forEach((el) => {
+        if (el.dataset.epword === id) el.classList.add('on');
+        else el.classList.remove('on');
+      });
+    }
+    epPaintWordDetail();
+  }
+  /* ★ 只重画**右栏词卡** ✓（词卡里「✏️ 编辑」切换、换词都用它 ✓）——
+     同样是为了绕开「拆掉 1.4 万个节点」那 200 多毫秒 ✓（见上面 epPickWord 的注释 ✓）。 */
+  function epPaintWordDetail() {
+    const read = document.querySelector('#lifework-view .lw-rd-read');
+    if (!read) { render(); return; }
+    read.innerHTML = epWordDetailHtml();
+    bind();   /* ★ 必须补绑 ✓ —— 词卡里那 17 个输入框的 onblur 都在 bind() 里 ✓，
+                 不重绑就是「改了看着像存了、其实没存」✗（本项目最坑的那种 ✗）。 */
+  }
   /* 分句结果缓存 ✓ —— 每次渲染都重切一遍纯属浪费 ✗。
      ⚠️ key 里带上**正文长度** ✗：正文一改（重新导入 ✓）key 就变了 ✓，自动失效 ✓。
      ⚠️ 只放内存 ✗（落盘会让 STORE 白胖一圈 ✗）。 */
@@ -12056,8 +12212,12 @@
     + (w.mark === 'blank' ? '<span class="lw-wd-mk blank" title="完全不记得">⭐⭐</span>'
       : (w.mark === 'fuzzy' ? '<span class="lw-wd-mk fuzzy" title="不熟悉">⭐</span>' : ''))
     /* ★ 词群标记 ✓ —— 用户反馈「没看到词群」✗，因为他点的是**没有词群**的词 ✓。
-       列表里给有词群的词挂个 🗂 ✓，一眼就知道该点哪个看词群 ✓。 */
-    + (w.group ? '<span class="lw-wd-grp" title="' + esc(w.group) + '">🗂</span>' : '')
+       列表里给有词群的词挂个 ▤ ✓，一眼就知道该点哪个看词群 ✓。
+       ⚠️⚠️ 这里**绝不能用 🗂（U+1F5C2）** ✗✗ —— 完整说明见 epWordSideHtml 里那段长注释 ✓：
+         U+1F5xx 那块「传统绘文字」会触发昂贵的字体回退 ✓，一行约 1.3ms ✗，
+         而词书一筛就是 **1979 行** ✓（虽然 content-visibility 只渲染可见的几十行 ✓，
+         但那几十行也要 ~45ms ✗）。 */
+    + (w.group ? '<span class="lw-wd-grp" title="' + esc(w.group) + '">▤</span>' : '')
       /* ★ 缩略图 ✓ —— 列表里扫一眼就能想起这个词是什么 ✓（配图的意义就在这儿 ✓）。
          ⚠️ 图挂了要**收起来** ✗（破图标很难看 ✗）→ `onerror` 把父级隐藏 ✓。 */
       + (w.img ? '<img class="lw-wd-thumb" src="' + esc(w.img) + '" alt="" referrerpolicy="no-referrer" loading="lazy"'
@@ -12069,9 +12229,50 @@
       + '<span class="df" style="color:' + (due <= now ? T.warn : T.faint) + '">' + esc(when) + '</span>'
       + '</div>';
   }
+  /* ★★ 词行 HTML ✓（**只**这段会跟着搜索框变 ✓）——
+     抽出来是为了「**只重绘词行**」✗：搜索框在 `.lw-rd-tools` 里 ✓，
+     而 tools 和词行是**同一个** `.lw-rd-list` 的子节点 ✓ →
+     整块重绘会把输入框也换掉 ✗（见 `epPaintWordRows` 的注释 ✓）。 */
+  function epWordRowsHtml() {
+    const arr = epFilteredWords();
+    if (arr.length) return arr.map(epWordRowHtml).join('');
+    const q = String(EP_UI.wordQ || '').trim();
+    /* ⚠️ 空态要分清「搜出来是空」和「真没有词」✗ —— 说成同一句会让人以为词丢了 ✓ */
+    return '<div class="lw-rd-empty">' + (q
+      ? '没有匹配的词<br><span style="color:' + T.faint + '">换个关键词，或点左边「全部」看看</span>'
+      : '还没有词<br><span style="color:' + T.faint + '">去「外刊精读」里划几个词</span>')
+      + '</div>';
+  }
+
+  /* ★★★ 只重绘**词行** ✓✓ —— 这是「搜索框打不全单词」的修复 ✗→✓
+     ⚠️⚠️ 根因：原来 `wq.oninput = () => { …; render(); }` ✓ ——
+        `render()` 是 `host.innerHTML = …` **整块重建** ✗ →
+        输入框连同整棵 DOM 一起被换掉 ✓ → **焦点丢失** ✗ →
+        再敲下一个字符就落不到框里 ✓ → 表现就是「只能输一个字母」✗
+        （用户反馈：「这个搜索框，有些问题，无法输入完整单词」✓）。
+     ⚠️ 备忘录 / 书签那两个搜索框也踩过同一个坑 ✗，
+        它们是靠 render() 之后**手动重新聚焦 + 把光标移到末尾**绕过去的 ✓（能跑 ✓ 但笨 ✓）。
+     → 这里用**更干净的办法** ✓：把词行单独包一层 `.lw-wd-rows` ✓，
+        搜索时只换这一层 ✓，`.lw-rd-tools`（搜索框在里面 ✓）**原封不动** ✓
+        → 焦点天然不丢 ✓，也不用每次重建一万多个节点 ✓。 */
+  function epPaintWordRows() {
+    const host = document.getElementById('lifework-view');
+    const box = host && host.querySelector('.lw-wd-rows');
+    if (!box) return false;                 /* 不在词书页 → 交给调用方兜底 ✓ */
+    box.innerHTML = epWordRowsHtml();
+    const list = box.parentElement;         /* 换了筛选 → 词表从头看 ✓ */
+    if (list && list.classList.contains('lw-rd-list')) list.scrollTop = 0;
+    /* 行是新的 ✓ → 点击要重新绑 ✓（`epPickWord` 幂等 ✓，重复绑不会叠加 ✓） */
+    box.querySelectorAll('[data-epword]').forEach((el) => {
+      el.onclick = () => epPickWord(el.dataset.epword);
+    });
+    return true;
+  }
+
   function viewWordbook() {
     if (!SRS) return '<div class="lw-rd">' + epNoLib() + '</div>';
-    const list = epFilteredWords();
+    /* ⚠️ 这里**不再**预先算 `epFilteredWords()` ✗ —— 词行交给 `epWordRowsHtml()` ✓，
+       它自己会算 ✓（同一份数据算两遍是白花 ✓）。 */
     const now = Date.now();
     const st = SRS.stats(epWords(), now);
     const due = SRS.dueCards(epWords(), now).length;
@@ -12095,16 +12296,30 @@
     return '<div class="lw-rd">'
       + '<div class="lw-rd-side"' + paneW('bookSideW', 150) + '>' + epWordSideHtml(st) + '</div>' + paneGrip('side')
       + '<div class="lw-rd-list"' + paneW('bookListW', 260) + '>' + tools
-      + (list.length ? list.map(epWordRowHtml).join('')
-        : '<div class="lw-rd-empty">没有符合条件的词<br><span style="color:' + T.faint + '">去「外刊精读」里划几个词</span></div>')
+      /* ⚠️ 词行**单独包一层** ✗✓ —— 搜索时只换这一层 ✓，工具条（含搜索框）不动 ✓
+         （见 `epPaintWordRows` 的注释 ✓）。 */
+      + '<div class="lw-wd-rows">' + epWordRowsHtml() + '</div>'
       + '</div>' + paneGrip('list')
-      /* ⚠️ 临时的调试暴露 ✗ —— 把渲染结果挂到 window 上 ✓，
-         好用 Playwright 直接读出来看结构 ✓（确认完就删 ✓）。 */
-      + '<div class="lw-rd-read">' + (window.__wd = epWordDetailHtml()) + '</div>'
+      /* ⚠️ 这里原来有个**调试暴露** ✗ —— `window.__wd = epWordDetailHtml()` ✓，
+         注释里自己写着「确认完就删」✓（2026-10-16 删掉 ✓）：
+         没有任何测试 / 代码读 `window.__wd` ✓，留着只是每次渲染多挂一个全局变量 ✓。 */
+      + '<div class="lw-rd-read">' + epWordDetailHtml() + '</div>'
       + '</div>';
   }
   function epWordSideHtml(st) {
-    /* ★ 第 4 个参数 em 是图标 ✓（默认 ▣ ✓）—— 词群那一栏用 🗂 区分开 ✓。 */
+    /* ★ 第 4 个参数 em 是图标 ✓（默认 ▣ ✓）—— 词群那一栏用 ▤ 区分开 ✓。
+       ★★★ 图标字形**必须选廉价的** ✓✓ —— 这是一条性能红线 ✗：
+         · 原来用 🗂（U+1F5C2）时，**174 行词群的布局要 273ms** ✓（实测 ✓）
+           —— 就是用户反馈「点击词群卡顿」的**真正元凶** ✗
+           （前几轮一直以为「DOM 节点太多」✗，其实是这个字形 ✓）。
+         · 换成 ▤（U+25A4）后同样 174 行只要 **32ms** ✓（快 8.5 倍 ✓）。
+         · 实测「U+1F5xx 传统绘文字」整块都慢 ✗：🗂 273ms、🗑 235ms ✗；
+           而**现代 emoji（📁🧩🪄📖）和 BMP 符号（✓✗★⭐▣▤▶）都只要 32ms** ✓。
+           原因：这一块字形要 Chrome 逐个去字体回退链里找 ✓，找一次约 1.3ms ✗。
+         ⇒ **高频列表里一律不用 U+1F5xx** ✓（🗂🗑🗒🖼🗓🗕… ✗）。
+           个别按钮上用一两次无所谓 ✓（1.3ms ✓），列表里一行一个就不行 ✗。
+       ⚠️ 同类字形还有 🗑（U+1F5D1）✓ —— 它用在「书架每行右上角」和「文章列表每行」✗，
+          那两个列表**通常只有几行** ✓，暂时留着 ✓；哪天变成几百行也要一起换 ✗。 */
     const flt = (k, label, n, em) => '<div class="lw-rd-row' + (EP_UI.wordFilter === k ? ' on' : '') + '" data-epwflt="' + esc(k) + '">'
       + '<span class="em">' + (em || '▣') + '</span>' + label + '<span class="n">' + n + '</span></div>';
     return '<div class="lw-rd-hd">记忆统计</div>'
@@ -12143,7 +12358,7 @@
       };
       return '<div class="lw-rd-hd">词群（按书）</div>'
         + '<div class="lw-rd-grps">'
-        + keys.map((g, i) => flt('group:' + g, esc((i + 1) + '. ' + short(g)), gs[g], '🗂')).join('')
+        + keys.map((g, i) => flt('group:' + g, esc((i + 1) + '. ' + short(g)), gs[g], '▤')).join('')
         + '</div>';
     })()
     /* ★ 「我的标记」✓ —— 用户原话：「有些词我不熟悉，我需要标记，有些词，一点不记得，
@@ -12333,7 +12548,7 @@
        congress / conquer / parliament / ambassador ✓）。
        ⚠️ 放在最前面 ✗ —— 它决定「这个词为什么和那几个词放一起」✓，
           先看到它再往下读词根拆解 ✓，逻辑才顺 ✓。 */
-    + (w.group ? sec('🗂', '词群', '<div class="lw-wd-tipbox">' + esc(w.group) + '</div>') : '')
+    + (w.group ? sec('▤', '词群', '<div class="lw-wd-tipbox">' + esc(w.group) + '</div>') : '')
     + (w.freq ? sec('📊', '六级考频', freqHtml) : '')
     + (w.forms ? sec('🔄', '词形变化', tagCloud(w.forms)) : '')
     + (w.phrase ? sec('🔗', '常用短语', '<div class="lw-wd-tipbox">' + esc(w.phrase) + '</div>') : '')
@@ -12414,7 +12629,14 @@
            但**光甩一个数字**等于没说 ✗（`2.36` 谁知道是高还是低 ✓）→ 带一句人话 ✓。 */
       + '<div class="lw-wd-ef">难度因子 <b>' + (Number(w.ef) || 0).toFixed(2) + '</b>'
       + '<span>（1.3 ~ 2.8，越低说明这个词越难记）</span></div>')
-    + colsClose;   /* ★ 关右栏 + 关分栏容器 ✓（「复习」是右栏最后一块 ✓） */
+    + colsClose   /* ★ 关右栏 + 关分栏容器 ✓（「复习」是右栏最后一块 ✓）
+      ⚠️⚠️ **这里绝不能写分号** ✗✗ ——
+         `return a + b; + c` 里的 `+ c` 会被当成**新语句丢掉** ✗（不是语法错 ✗，所以不报错 ✓）。
+         原来这里就是 `+ colsClose;` ✗ → 下面「📍 来源」和「底部动作条」**全是死代码** ✗✗
+         → 词卡上**看不到「🪄 AI 补全 / 🖼 换一张 / 🗑 删除」** ✗，
+         而上面还写着「点下面的『🪄 AI 补全』自动填」✗（用户反馈：
+         「怎么加词，没有AI自动补全功能」✓ —— 按钮压根没渲染出来 ✓）。
+         ⇒ **长串 `+` 拼接的 return 里，只在最后写一个分号** ✓。 */
       /* ── 来源 ✓ ── */
       + (w.artTitle ? sec('📍', '来自', '<div class="lw-wd-src">《' + esc(w.artTitle) + '》'
         + (w.artId ? ' <button id="lw-wd-src">回到原文</button>' : '') + '</div>'
@@ -12423,7 +12645,10 @@
          ⚠️⚠️ 状态提示必须放在动作条**前面** ✗✗ ——
             动作条现在是 sticky（贴着滚动区底边 ✓），
             提示放它后面的话会被**压在底下看不见** ✗（sticky 有不透明底色 ✓）。 */
-      + (busy ? '<div class="lw-ep-tip" style="color:' + T.accent + '">正在问 AI 补全…（一般 3~10 秒）</div>' : '')
+      /* ⚠️ 耗时提示要**说实话** ✗ —— 原来写「一般 3~10 秒」✗，
+         实测慢的模型（如 DeepSeek-V4-Pro）要 **90 秒左右** ✓，
+         用户等了 30 秒看没动静会以为「坏了 / 没这功能」✗。 */
+      + (busy ? '<div class="lw-ep-tip" style="color:' + T.accent + '">正在问 AI 补全…（慢的模型可能要 1~2 分钟，别关页面 ✓）</div>' : '')
       + (EP_UI.enErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ ' + esc(EP_UI.enErr) + '</div>' : '')
       + (EP_UI.imgErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 配图：' + esc(EP_UI.imgErr) + '</div>' : '')
       + '<div class="lw-wd-foot">'
@@ -13586,7 +13811,22 @@
     const si = q('#lw-epsrc-imp');
     if (si) si.onclick = () => { EP_UI.srcOpen = false; EP_UI.impOpen = true; EP_UI.impMsg = ''; render(); };
     const aq = q('#lw-ep-q');
-    if (aq) aq.oninput = () => { EP_UI.q = aq.value; const host2 = document.getElementById('lifework-view'); /* 只过滤 ✓ */ };
+    if (aq) {
+      /* ⚠️⚠️ 原来这里**只有一句赋值、没有重绘** ✗✗ ——
+         值存进了 EP_UI.q ✓，但文章列表是**渲染时**才算的 ✓ →
+         **界面上什么都不发生** ✗（搜了跟没搜一样 ✓）。
+         → 补上重绘 ✓，并按本项目既有写法**手动把焦点放回去** ✓
+           （备忘录 / 书签那两个搜索框就是这么绕的 ✓）。
+         ⚠️ 文章列表**只有几行** ✓，整块重绘很便宜 ✓，
+            所以这里不套词表那套「只重绘行」的做法（词表有 4601 行才需要 ✓）。
+         ⚠️⚠️ 写注释时**不要嵌 ` 和成对斜杠星号** ✗ —— 会提前闭合外层注释 ✗。 */
+      aq.oninput = () => {
+        EP_UI.q = aq.value;
+        render();
+        const i2 = document.getElementById('lw-ep-q');
+        if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); }
+      };
+    }
     qa('[data-epart]').forEach((el) => { el.onclick = () => epPickArt(el.dataset.epart); });
     /* ★ 📁 分类筛选 ✓（用户原话：「还有缺少分类管理」✓）*/
     qa('[data-epcat]').forEach((el) => {
@@ -13609,7 +13849,7 @@
     });
     qa('[data-epflt]').forEach((el) => { el.onclick = () => { EP_UI.wordFilter = el.dataset.epflt; epSetMode('word'); }; });
     qa('[data-epwflt]').forEach((el) => { el.onclick = () => { EP_UI.wordFilter = el.dataset.epwflt; render(); }; });
-    qa('[data-epword]').forEach((el) => { el.onclick = () => { EP_UI.wordSel = el.dataset.epword; epSetMode('word'); }; });
+    qa('[data-epword]').forEach((el) => { el.onclick = () => epPickWord(el.dataset.epword); });
     qa('[data-epnotedel]').forEach((el) => {
       el.onclick = (ev) => {
         ev.stopPropagation();
@@ -13798,7 +14038,20 @@
 
     /* ── 生词本 ── */
     const wq = q('#lw-wd-q');
-    if (wq) wq.oninput = () => { EP_UI.wordQ = wq.value; render(); };
+    if (wq) {
+      /* ★★ 只重绘**词行** ✓，绝不 render ✗✗ ——
+         render() 会把搜索框一起换掉 ✓ → 焦点丢 ✓ → 只能输一个字母 ✗
+         （用户反馈：「无法输入完整单词」✓，见 `epPaintWordRows` 的注释 ✓）。
+         ⚠️ 加 120ms 防抖 ✓：4601 行重绘约 80ms ✓，每敲一下都重绘会顿 ✓。 */
+      let wdQTimer = 0;
+      wq.oninput = () => {
+        EP_UI.wordQ = wq.value;
+        clearTimeout(wdQTimer);
+        wdQTimer = setTimeout(() => {
+          if (!epPaintWordRows()) render();   /* 结构不对（罕见）→ 老实整块渲染 ✓ */
+        }, 120);
+      };
+    }
     const rev = q('#lw-wd-rev'); if (rev) rev.onclick = () => epStartReview();
     const wa = q('#lw-wd-add');
     if (wa) wa.onclick = async () => {
@@ -13843,7 +14096,7 @@
     /* ★ 「✏️ 编辑」开关 ✓ —— 用户原话：「一般不需要我去修改，所以不用是这种输入框」✓。
        默认**收起** ✓，想改的人才点开 ✓（能力没砍 ✗，只是不挡路 ✓）。 */
     const wedit = q('#lw-wd-edit');
-    if (wedit) wedit.onclick = () => { EP_UI.wdEdit = !EP_UI.wdEdit; render(); };
+    if (wedit) wedit.onclick = () => { EP_UI.wdEdit = !EP_UI.wdEdit; epPaintWordDetail(); };
     /* ★ 熟练度星标 ✓ —— 三态循环，和左侧「⭐ 不熟悉 / ⭐⭐ 完全不记得」筛选配套 ✓。
        ⚠️ 只改 `mark` + `edit` ✗ —— 不碰 SRS 字段 ✗（星标是主观标记 ✓，
           不该影响遗忘曲线的排期 ✓，否则「标一下」会打乱复习节奏 ✗）。 */

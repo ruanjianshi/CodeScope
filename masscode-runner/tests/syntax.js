@@ -226,6 +226,97 @@ console.log('CSS 模板闸门：✓ 没有混进反引号');
   console.log('UI 文案闸门：✓ 界面文案里没有 markdown 粗体');
 }
 
+/* ── ★★★ 死代码闸门：`return a + b;` 后面还跟着 `+ c` ✗✗ ─────────────────────
+   ★ 为什么要有这条 ✗：2026-10-16 实测踩过一次 ✓ ——
+     `assets/life-workbench.js` 的 `epWordDetailHtml()` 里，长串 `+` 拼接中间
+     多写了一个分号 ✓：
+     ```js
+         + colsClose;   /* 关右栏 ✓ *／        // ← 这个分号 ✗✗
+           + (w.artTitle ? sec('📍', '来自', …) : '')
+           + '<div class="lw-wd-foot">' + … + '</div>'
+     ```
+     `return a + b; + c` 里的 `+ c` 会被当成**新语句丢掉** ✗ ——
+     ⚠️⚠️ **而且它不是语法错** ✗✗（`+expr` 是合法的一元表达式 ✓）：
+       `vm.Script` / `node --check` **照样通过** ✗、也不告警 ✗ →
+       上面那道语法闸门**完全查不出来** ✗。
+     ⇒ 后果：「📍 来源」和**整个底部动作条**成了死代码 ✗ →
+       词卡上**看不到「🪄 AI 补全 / 🖼 换一张 / 🗑 删除」** ✗，
+       而卡片里还写着「点下面的『🪄 AI 补全』自动填」✗ ——
+       让用户去找一个**根本没渲染出来**的按钮 ✓（用户就是这么报上来的 ✓）。
+   ★ 判据：某行以分号结尾 ✓，而**往后第一个「非空、非注释」的行以加号 / 点 / 逗号开头** ✗ ——
+     那说明拼接链在分号处断了 ✓，后面整段是死代码 ✓。
+   ⚠️⚠️ 必须**跳过注释行和空行**再判 ✗✗ —— 第一版只看紧邻下一行 ✓，
+      而实际上分号后面先跟着一段块注释（好几行 ✓），加号在更后面 ✓ →
+      **漏报** ✗（负向测试一试就露馅 ✓：把分号加回去，闸门居然还说「没有」✗）。
+   ⚠️ 排除 for 循环头里的分号 ✗（那里的分号是语法 ✓）。
+   ⚠️ 只扫加号 / 点 / 逗号三种续行符 ✓ —— 它们出现在语句开头**几乎必然是**断链 ✓
+      （真把一元加号当独立语句写出来是无意义的 ✓）。
+   ⚠️⚠️ **写这段注释时别嵌块注释符号、也别嵌反引号** ✗✗ ——
+      2026-10-16 就在这里踩了两次 ✓：注释里写一个块注释开始符号，会**把外层注释提前闭合** ✗ →
+      后面那些中文就变成代码 ✓ → SyntaxError ✓。一律用普通文字 ✓。 */
+{
+  const deadHits = [];
+  for (const rel of externals) {
+    const abs = path.join(__dirname, '..', rel);
+    if (!fs.existsSync(abs)) continue;
+    const src = fs.readFileSync(abs, 'utf8').split('\n');
+    /* 先标出每一行是不是「纯注释行」✓ */
+    const isComment = new Array(src.length).fill(false);
+    let inBlock = false;
+    for (let i = 0; i < src.length; i++) {
+      const raw = src[i];
+      if (inBlock) {                                   /* 上一行开了一段块注释 → 本行整行是注释 ✓ */
+        isComment[i] = true;
+        if (raw.includes('*/')) inBlock = false;
+        continue;
+      }
+      /* ⚠️⚠️ **块注释经常从行中间开始** ✗✗ —— 比如
+         `+ colsClose;   /* 关右栏 …` ✓：行首是代码 ✓、注释在中间开 ✓。
+         第一版判 `trim().startsWith('/*')` ✗ → **判不到** ✗ → 后面几行注释没被标记 ✗
+         → 找「下一个非注释行」时会落到注释行上 ✗ → 第三次漏报 ✓（一路试出来的 ✓）。
+         → 正确做法：先把**成对的**块注释去掉 ✓，再看**还剩没有未闭合的** ✓。 */
+      const t = raw.replace(/\/\*[\s\S]*?\*\//g, ' ');
+      const open = t.indexOf('/*');
+      if (open >= 0) {
+        if (!t.slice(0, open).trim()) isComment[i] = true;   /* 注释前没代码 → 整行注释 ✓ */
+        inBlock = true;
+        continue;
+      }
+      const trimmed = t.trim();
+      if (trimmed === '' || trimmed.startsWith('//')) isComment[i] = true;
+    }
+    /* ⚠️⚠️ 判「这行以分号结尾」之前，**必须先把行内注释剥掉** ✗✗ ——
+       实测那个 bug 的原始写法是 `+ colsClose;   /* 关右栏 … ✓）` ✓：
+       **分号在行中间** ✓，行尾是注释 ✓ → 直接 `endsWith(';')` 判不出来 ✗（第二次漏报 ✓）。 */
+    const codePart = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\*[\s\S]*$/, ' ').replace(/\s+$/, '');
+    for (let i = 0; i < src.length - 1; i++) {
+      const cur = codePart(src[i]);
+      if (!cur.endsWith(';')) continue;
+      if (/\bfor\s*\(/.test(cur)) continue;                 /* for(;;) 的分号是语法 ✓ */
+      /* ★ 往后找第一个非空、非注释行 ✓ */
+      let j = i + 1;
+      while (j < src.length && isComment[j]) j++;
+      if (j >= src.length) continue;
+      const nx = src[j].replace(/^\s+/, '');
+      if (!/^[+.,]/.test(nx)) continue;
+      deadHits.push({ rel, n: i + 1, cur: cur.trim().slice(-90), nx: nx.slice(0, 70), gap: j - i - 1 });
+    }
+  }
+  if (deadHits.length) {
+    console.error('✗ 拼接链被**分号截断**（后面整段是死代码）→ ' + deadHits.length + ' 处：');
+    for (const x of deadHits) {
+      console.error('   ' + x.rel + ':' + x.n + (x.gap ? '（后面隔着 ' + x.gap + ' 行注释 ✓ 也算 ✗）' : ''));
+      console.error('     ' + x.cur);
+      console.error('   + ' + x.nx);
+    }
+    console.error('死代码闸门：`return a + b;` 之后的 `+ c` 会被当成**新语句丢掉** ✗ ——');
+    console.error('  而且**不是语法错** ✗，语法闸门查不出来，只能在这里拦 ✓。');
+    console.error('  长串 `+` 拼接的 return / 赋值里，**只在最后写一个分号** ✓。');
+    process.exit(1);
+  }
+  console.log('死代码闸门：✓ 没有「分号截断拼接链」');
+}
+
 if (extFailed) {
   console.error('外链脚本语法闸门：' + extFailed + ' 个文件有语法错误 —— 面板会整块白屏，先修这个');
   process.exit(1);

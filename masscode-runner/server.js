@@ -34,6 +34,7 @@ const { createOpencodeService } = require('./lib/opencode-service');
 const { createCodeServerService } = require('./lib/code-server-service');
 const { createCodeServerProxy } = require('./lib/code-server-proxy');
 const { createKnowledgeBase } = require('./lib/knowledge-base');
+const { createLifeStoreReader } = require('./lib/life-store');
 /* ★ Jupyter 式持久 Python 内核 ✓（2026-10-10）——
    用户要「jupyter 那种方式运行」：变量跨单元格保留 ✓。
    和「跑脚本」的区别：那个每次都是新进程 ✗，这个是**一个长期存活的进程** ✓。 */
@@ -223,9 +224,19 @@ function writeFlowSched(st) {
     fs.writeFileSync(FLOW_SCHED_FILE, JSON.stringify(st, null, 2));
   } catch (error) { console.log('[flow-sched] 写状态失败：' + String((error && error.message) || error)); }
 }
-function readLifeStore() {
-  try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-workbench.json'), 'utf8')); } catch (_) { return {}; }
-}
+/* ★★ 个人数据（life-workbench.json）的读取缓存 ✓✓ —— 2026-10-16
+   ⚠️ 实现抽到 `lib/life-store.js` 了 ✓ —— 这里原来只有一句
+      `JSON.parse(fs.readFileSync(…))` ✗，而文件现在有 **11.5 MB** ✓：
+      每次 GET / POST `/api/life/store` 都要**同步**啃一遍 ✓（约 55 ms ✗），
+      再加上 `send()` 里的 `JSON.stringify`（约 25 ms ✗）——
+      这 80 ms 里**整个事件循环被卡住** ✗，所有并发请求一起等 ✓。
+      ⇒ 按 mtime 缓存解析结果和序列化结果 ✓（实测首字节 **69 ms → 14 ms** ✓）。
+   ⚠️ 抽出去还有个原因 ✗：server.js 有 **7,176 行的代码体积棘轮** ✗，
+      直接把缓存写在这儿会把它顶破 ✓（本项目的做法就是「涨了就抽到 lib/」✓）。
+   ⚠️⚠️ 调用方**只许读、不许就地改**返回值 ✗✗（返回的是同一个对象引用 ✓）——
+      细节见 `lib/life-store.js` 顶部那段 ✓。 */
+const LIFE_STORE = createLifeStoreReader({ fs, path, dataRoot: applicationDataRoot });
+function readLifeStore() { return LIFE_STORE.read(); }
 /* ★★ 外刊源的 feed 走「curl 优先、fetch 兜底」✗✗ —— 为什么 ✗：
    本机实测（同一台机器、同一个地址、同一时间）：
      · `feeds.npr.org/1004/rss.xml` —— Node 的 fetch **7~30 秒，而且经常直接超时** ✗；
@@ -5331,11 +5342,16 @@ async function saveOfficeWordHtml(file, value) {
   return fs.statSync(file);
 }
 
-function send(res, code, obj) {
+/* ⚠️ 第 4 个参数 `type` 是给「**已经序列化好的字符串**」用的 ✗✓ ——
+   不传的话字符串会被当成 `text/plain` ✓，而 `/api/life/store` 的响应体
+   虽然已经 stringify 过 ✓（见 `lifeStoreJson` ✓），但内容仍然是 JSON ✓ →
+   要显式声明 `application/json` ✓（客户端 `r.json()` 其实不挑 ✓，
+   但响应头写错会误导调试工具和其它调用方 ✗）。 */
+function send(res, code, obj, type) {
   if (res.writableEnded || res.destroyed) return false;
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, {
-    'Content-Type': typeof obj === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
+    'Content-Type': type || (typeof obj === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8'),
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
   });
@@ -5665,8 +5681,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.pathname === '/api/life/store') {
       const file = path.join(applicationDataRoot(), 'life-workbench.json');
-      const read = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return {}; } };
-      if (req.method === 'GET') return send(res, 200, { ok: true, data: read() });
+      /* ★ 复用**带缓存的**统一读取 ✓ —— 原来这里自己又写了一份 `readFileSync + JSON.parse` ✗，
+         等于把「同一件事写两处」的老毛病又犯一遍 ✗（而且那份没缓存 ✓，
+         每次 GET / POST 都要同步啃 11.5 MB ✗，把事件循环卡住约 55 ms ✗）。
+         ⚠️ `file` 变量**还要留着** ✗ —— 下面写盘（`writeFileSync(file, …)`）和
+            备份轮转（`rotateStoreBackup(file)`）都要用它 ✓。 */
+      const read = readLifeStore;
+      if (req.method === 'GET') return send(res, 200, LIFE_STORE.json(), 'application/json; charset=utf-8');
       if (req.method === 'POST' || req.method === 'PUT') {
         try {
           /* ★ 上限 4MB → **32MB** ✓（2026-10-15）——

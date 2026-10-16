@@ -128,7 +128,12 @@ function stripMine(d) {
     ck('★ 「已懂」标记落盘了', a2 && Object.keys(a2.done || {}).length === 1, JSON.stringify(a2 && a2.done));
 
     console.log('\n── ⑥ 加生词（进记忆系统）──');
-    await p.locator('#lw-ep-new').fill('acceleration');
+    /* ⚠️⚠️ 探针词**必须挑一个「不在书里」的** ✗✗ ——
+       原来固定用 acceleration ✓，但 2026-10-16 把整本六级词书导进生词本之后 ✓，
+       acceleration 已经是**库里的词**了 ✗ → `epWordAdd` 判定「已存在」直接返回 ✓
+       → 根本没有新词落盘 ✗ → 后面 5 条断言全红 ✗（**是测试假设过期了**，不是代码坏了 ✓）。
+       改挑同句里的 melting ✓ —— 它在探针文章里 ✓、但不在书里 ✓。 */
+    await p.locator('#lw-ep-new').fill('melting');
     await p.locator('#lw-ep-addbtn').click(); await p.waitForTimeout(900);
     const w1 = ((await store()).words || []).filter((x) => String(x.artTitle || '').includes(MARK));
     ck('★ 生词落盘了', w1.length === 1, String(w1.length));
@@ -137,7 +142,7 @@ function stripMine(d) {
       W.ef === 2.5 && W.step === 0 && Number(W.due) > 0 && Number(W.ivl) === 0,
       JSON.stringify({ ef: W.ef, step: W.step, ivl: W.ivl, due: Number(W.due) > 0 }));
     ck('★ 记下了来自哪篇文章', String(W.artTitle || '').includes(MARK), W.artTitle);
-    /* ⚠️ 断言要挑**真的含这个词的那句** ✗ —— acceleration 在第 2 句里 ✗，
+    /* ⚠️ 断言要挑**真的含这个词的那句** ✗ —— melting 在第 2 句里 ✗，
        刚才是选中第 3 句时加的词 ✓，所以第 3 句的列表**本来就该是空的** ✓
        （第一版拿第 3 句去断言，是**测错了**，不是代码错了 ✗）。 */
     await p.locator('[data-epsent="1"]').click(); await p.waitForTimeout(700);
@@ -148,13 +153,22 @@ function stripMine(d) {
     const sideTxt = await txt('.lw-ep-side');
     ck('★ 切到含这个词的那句 → 查词栏的「本篇的生词」标出它在这句里',
       /本篇的生词/.test(sideTxt) && /这句里\s*\d/.test(sideTxt), sideTxt.slice(0, 120));
-    ck('  而且列的就是 acceleration', sideTxt.includes('acceleration'), sideTxt.slice(0, 120));
+    ck('  而且列的就是 melting', sideTxt.includes('melting'), sideTxt.slice(0, 120));
 
     console.log('\n── ⑦ 生词本三栏 ──');
     await p.locator('[data-rdmode="word"]').click(); await p.waitForTimeout(800);
     ck('三栏都在', await p.locator('.lw-rd-side').count() === 1
       && await p.locator('.lw-rd-list').count() === 1 && await p.locator('.lw-rd-read').count() === 1);
-    ck('★ 词表里能看到这个词', (await txt('.lw-rd-list')).includes('acceleration'), (await txt('.lw-rd-list')).slice(0, 60));
+    /* ⚠️⚠️ 这里**不能**用 `txt()` ✗ —— 它取的是 `innerText` ✓，而 `innerText`
+       **只返回「已渲染」的文字** ✗：词表现在有 **4600 多行** ✓，
+       又加了 `content-visibility:auto`（屏幕外的行**不渲染** ✓）→
+       刚加的那个词排在很后面 ✓ → `innerText` 里**根本没有它** ✗ → 假红 ✗。
+       → 改用 `textContent` ✓（拿的是 DOM 文本 ✓，跟渲不渲染无关 ✓）。 */
+    const listTxt = await p.evaluate(() => {
+      const el = document.querySelector('.lw-rd-list');
+      return el ? el.textContent : '';
+    });
+    ck('★ 词表里能看到这个词', listTxt.includes('melting'), listTxt.slice(0, 60));
     ck('左栏讲了「遗忘曲线怎么走」', /遗忘曲线怎么走/.test(await txt('.lw-rd-side')), (await txt('.lw-rd-side')).slice(0, 80));
     await p.locator('[data-epword]').first().click(); await p.waitForTimeout(700);
     const det = await txt('.lw-rd-read');
