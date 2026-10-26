@@ -191,9 +191,20 @@
     if (!drag.moved && drag.collapse) selectOnly(drag.id);
     if (drag.moved) {
       const hit = xmindFind(drag.id);
-      if (hit?.parent && xmindDetachFloatingAt(drag.id, finalPosition)) return;
       if (hit) {
-        hit.topic.position = finalPosition;
+        /* ⚠️ 自由组里的**子主题**要单独处理 ✗✗
+           原来走 `xmindDetachFloatingAt` → 拖一下它就「另立门户」变成新的自由导图 ✓
+           （实测：拖 新主题L2，它立刻从组里脱出来）—— 用户说的「移动怎么不对」就是这个 ✗
+           ⇒ 记**相对父级的偏移** `codescopeOffset`：只挪它自己，组的层级关系不变 ✓ */
+        if (hit.isDetached && hit.parent) {
+          const prev = hit.topic.codescopeOffset || { dx: 0, dy: 0 };
+          hit.topic.codescopeOffset = {
+            dx: Number(prev.dx || 0) + (finalPosition.x - drag.ox),
+            dy: Number(prev.dy || 0) + (finalPosition.y - drag.oy),
+          };
+        } else {
+          hit.topic.position = finalPosition;
+        }
         xmindNormalize();
         xmindRecord();
         xmindMarkSnapshotDirty();
