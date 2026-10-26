@@ -63,6 +63,7 @@
     document.querySelectorAll('.xmind-floating-node').forEach((node) => {
       node.classList.toggle('selected', set.has(String(node.dataset.topicId || '')));
     });
+    updateGroupBox();
   }
 
   function setSelection(ids, primary) {
@@ -265,6 +266,82 @@
     return true;
   }
 
+  /* ══ 「选中分组」的视觉：多选时在画布上画一个虚线包围框 ═══════════════════
+     用户两次说「缺少分组那种选择」—— XMind 多选时会把整组圈起来，
+     我们之前只给每个节点描边，**看不出"这是一组"** ✗ */
+  function updateGroupBox() {
+    const overlay = document.getElementById('xmind-float-overlay');
+    const engine = engineEl();
+    if (!overlay || !engine) return;
+    let boxEl = document.getElementById('cs-xmind-group-box');
+    const ids = [...multi()];
+    if (ids.length < 2) { if (boxEl) boxEl.remove(); return; }
+    const er = engine.getBoundingClientRect();
+    const rects = [];
+    ids.forEach((id) => {
+      const el = document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(id) + '"]') || xmindSmmNode(id)?.group?.node;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) rects.push(rect);
+    });
+    if (rects.length < 2) { if (boxEl) boxEl.remove(); return; }
+    const left = Math.min(...rects.map((r) => r.left));
+    const top = Math.min(...rects.map((r) => r.top));
+    const right = Math.max(...rects.map((r) => r.right));
+    const bottom = Math.max(...rects.map((r) => r.bottom));
+    if (!boxEl) {
+      boxEl = document.createElement('div');
+      boxEl.id = 'cs-xmind-group-box';
+      overlay.appendChild(boxEl);
+    }
+    boxEl.style.left = (left - er.left - 12) + 'px';
+    boxEl.style.top = (top - er.top - 12) + 'px';
+    boxEl.style.width = (right - left + 24) + 'px';
+    boxEl.style.height = (bottom - top + 24) + 'px';
+  }
+
+  /* ══ 大纲里的多选（Shift 连选 / ⌘ 加减选 / 点分组标题选整组）═════════════ */
+  let outlineAnchor = null;
+
+  function outlineRange(fromId, toId) {
+    const rows = [...document.querySelectorAll('#xmind-outline .xmind-row')];
+    const a = rows.findIndex((row) => row.dataset.id === fromId);
+    const b = rows.findIndex((row) => row.dataset.id === toId);
+    if (a < 0 || b < 0) return [toId];
+    const [start, end] = a <= b ? [a, b] : [b, a];
+    return rows.slice(start, end + 1).map((row) => row.dataset.id);
+  }
+
+  function bindOutline(outline) {
+    if (!outline || outline.dataset.csMultiBound === '1') return;
+    outline.dataset.csMultiBound = '1';
+    outline.addEventListener('click', (event) => {
+      /* ⚠️ 不能一上来就把 textarea 排除掉 ✗ —— 行里的标题就是个 textarea，
+         它几乎铺满整行 ✓ → 排除之后 Shift 连选**永远点不到行**（实测：只选中 1 个）✗ */
+      if (event.target.closest('input')) return;
+      /* 点「自由导图 · N」分组标题 → 选中整组 ✓ */
+      const section = event.target.closest('.xmind-outline-section');
+      if (section) {
+        event.preventDefault();
+        event.stopPropagation();
+        const ids = [...document.querySelectorAll('#xmind-outline .xmind-row.floating')].map((row) => row.dataset.id);
+        if (ids.length) { setSelection(ids, ids[0]); syncEngineSelection(); }
+        return;
+      }
+      const row = event.target.closest('.xmind-row');
+      if (!row) return;
+      const id = row.dataset.id;
+      const additive = event.metaKey || event.ctrlKey;
+      const range = event.shiftKey;
+      if (!additive && !range) { outlineAnchor = id; return; }   /* 单选交给 app.js 原本的处理 ✓ */
+      event.preventDefault();
+      event.stopPropagation();
+      if (range && outlineAnchor) setSelection(outlineRange(outlineAnchor, id), id);
+      else { toggleOne(id); outlineAnchor = id; }
+      syncEngineSelection();
+    }, true);
+  }
+
   /* ══ 分组选择（用户：「缺少分组那种选择」）═══════════════════════════════
      XMind 的做法：右键主题 → 选择同级 / 选择分支；Ctrl+A 全选。
      分支选择必须**连子孙一起选**，否则「删除分支」只能删一半 ✓ */
@@ -422,6 +499,10 @@
        自由主题浮层是 #xmind-preview 的子节点、**不在引擎里** ✓
        → 挂在引擎上，点自由主题的 pointerdown 根本收不到（实测：dbg 为空）✗ */
     const surface = engine.parentElement || engine;
+
+    bindOutline(document.getElementById('xmind-outline'));
+    map.on('scale', updateGroupBox);
+    map.on('translate', updateGroupBox);
 
     map.on('node_active', (node, list) => {
       if (muting) return;

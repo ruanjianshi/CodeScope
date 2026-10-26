@@ -738,3 +738,17 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 .cs-ask-foot button.primary {
   border-color: transparent; background: var(--accent, #78a9ff); color: #08111c; font-weight: 600;
 }
+
+/* ═══ 多选时的「组包围框」 ═══════════════════════════════════════════════════
+   用户两次说「缺少选中分组那种」—— 只给每个节点描边，看不出**这是一组** ✗
+   ⇒ 选 2 个以上就画一个虚线包围框，和 XMind 多选时一样 ✓ */
+#cs-xmind-group-box {
+  position: absolute;
+  pointer-events: none;
+  border: 1px dashed color-mix(in srgb, var(--xm-accent, #78a9ff) 70%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--xm-accent, #78a9ff) 6%, transparent);
+}
+/* 大纲里「自由导图 · N」这行点一下就选整组 → 得看得出能点 ✓ */
+#xmind-outline .xmind-outline-section { cursor: pointer; }
+#xmind-outline .xmind-outline-section:hover { color: var(--xm-text, #dbe4ef); }
