@@ -543,34 +543,40 @@
     }
     layer.replaceChildren();
     const paths = [...container.querySelectorAll(':scope > path')];
+    /* ⚠️ 用「多边形描边」这条路是错的 ✗ —— 折角处内外偏移点会**自交**，
+       画出来一格一格的台阶（用户：「什么垃圾渐细」）✓
+       ⇒ 改成：把一条线切成 N 小段，**每段用不同的 stroke-width** 描边 ✓
+          · 每段都是沿原路径的真实描边 → 折角永远是干净的 ✓
+          · round 线帽 + 少量重叠 → 段与段之间无缝 ✓ */
+    const SEGMENTS = 18;
     paths.forEach((path) => {
       let len = 0;
       try { len = path.getTotalLength(); } catch (_) { return; }
-      if (!len || len < 6) return;
-      const steps = Math.max(6, Math.min(22, Math.round(len / 26)));
-      const w0 = 3.6;   /* 靠父级一端 */
-      const w1 = 1.1;   /* 靠子级一端 */
-      const left = [];
-      const right = [];
-      for (let i = 0; i <= steps; i += 1) {
-        const t = i / steps;
-        const dist = len * t;
-        const p = path.getPointAtLength(dist);
-        const ahead = path.getPointAtLength(Math.min(len, dist + 0.8));
-        const dx = ahead.x - p.x;
-        const dy = ahead.y - p.y;
-        const norm = Math.hypot(dx, dy) || 1;
-        const nx = -dy / norm;
-        const ny = dx / norm;
-        const half = (w0 + (w1 - w0) * t) / 2;
-        left.push((p.x + nx * half).toFixed(1) + ',' + (p.y + ny * half).toFixed(1));
-        right.push((p.x - nx * half).toFixed(1) + ',' + (p.y - ny * half).toFixed(1));
+      if (!len || len < 10) return;
+      const color = path.getAttribute('stroke') || '#8fa6c9';
+      const opacity = path.getAttribute('stroke-opacity') || '1';
+      const w0 = 2.8;
+      const w1 = 1.0;
+      for (let i = 0; i < SEGMENTS; i += 1) {
+        const from = (len * i) / SEGMENTS;
+        const to = Math.min(len, (len * (i + 1)) / SEGMENTS + 0.6);   /* 稍微重叠，别留缝 */
+        const t = (i + 0.5) / SEGMENTS;
+        const width = w0 + (w1 - w0) * t;
+        const steps = 6;
+        const cmds = [];
+        for (let k = 0; k <= steps; k += 1) {
+          const p = path.getPointAtLength(from + ((to - from) * k) / steps);
+          cmds.push((k === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1));
+        }
+        const seg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        seg.setAttribute('d', cmds.join(' '));
+        seg.setAttribute('fill', 'none');
+        seg.setAttribute('stroke', color);
+        seg.setAttribute('stroke-width', width.toFixed(2));
+        seg.setAttribute('stroke-linecap', 'round');
+        seg.setAttribute('stroke-opacity', opacity);
+        layer.appendChild(seg);
       }
-      const shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      shape.setAttribute('points', left.concat(right.reverse()).join(' '));
-      shape.setAttribute('fill', path.getAttribute('stroke') || '#8fa6c9');
-      shape.setAttribute('opacity', path.getAttribute('stroke-opacity') || '1');
-      layer.appendChild(shape);
     });
   }
 
