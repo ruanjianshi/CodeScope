@@ -85,7 +85,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
     ck('左栏（工作流 + 节点库）', await p.locator('.lw-fl-side').count() === 1);
     ck('画布', await p.locator('.lw-fl-cv').count() === 1);
     ck('右栏（属性）', await p.locator('.lw-fl-cfg').count() === 1);
-    ck('节点库有 28 种节点', await p.locator('[data-fladd]').count() === 28, String(await p.locator('[data-fladd]').count()));
+    ck('节点库有 33 种节点', await p.locator('[data-fladd]').count() === 33, String(await p.locator('[data-fladd]').count()));
     const fill = await p.evaluate(() => {
       const m = document.querySelector('.lw-main'), cs = getComputedStyle(m), mb = m.getBoundingClientRect();
       const fl = document.querySelector('.lw-fl').getBoundingClientRect();
@@ -222,13 +222,13 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
         withSub: it.filter((e) => { const i = e.querySelector('.tx i'); return i && i.textContent.trim().length > 4; }).length,
       };
     });
-    ck('★ 节点库 28 项全都带「这节点干什么」说明', palSub.n === 28 && palSub.withSub === 28, JSON.stringify(palSub));
+    ck('★ 节点库 33 项全都带「这节点干什么」说明', palSub.n === 33 && palSub.withSub === 33, JSON.stringify(palSub));
     /* 点开说明 */
     await p.click('#lw-fl-help'); await p.waitForTimeout(800);
     ck('★ 说明面板出来了', await p.locator('.lw-fl-help').count() === 1);
     ck('★ 说明和画布**互斥**（不叠在一起）', await p.locator('.lw-fl-cv').count() === 0);
     const hn = await p.locator('.lw-fl-hn').count();
-    ck('★ 说明里 28 个节点逐个讲了作用', hn === 28, String(hn));
+    ck('★ 说明里 33 个节点逐个讲了作用', hn === 33, String(hn));
     const htxt = await txt('.lw-fl-helpin');
     for (const k of ['一分钟上手', '变量怎么传', '每个节点是干什么的', '常见问题', '照着搭一个']) ck('  说明里有「' + k + '」', htxt.includes(k));
     ck('★ 说明讲了 {{}} 怎么引用（新表达式写法）', htxt.includes('{{ $json.title }}') && htxt.includes('$node['), htxt.slice(0,60));
@@ -268,7 +268,7 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
        ══════════════════════════════════════════════════════════════════ */
     console.log('\n── ⑭ 节点库扩充 ──');
     const nAdd = await p.locator('[data-fladd]').count();
-    ck('★ 节点数 = 28（原来 14）', nAdd === 28, String(nAdd));
+    ck('★ 节点数 = 33（原来 14；2026-10-18 加了 AI 生图 / AI 生视频 / 下载文件 / 网页版对话 / 网页版生视频）', nAdd === 33, String(nAdd));
     const grpNames = await p.locator('.lw-fl-side .lw-rd-hd').allInnerTexts();
     ck('★ 多了「列表」这一组', grpNames.indexOf('列表') >= 0, JSON.stringify(grpNames));
     for (const k of ['logic.switch', 'list.filter', 'list.sort', 'list.limit', 'list.unique',
@@ -394,10 +394,13 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
        ══════════════════════════════════════════════════════════════════ */
     console.log('\n── ⑲ 连线箭头 + 实时执行进度 ──');
     await lwAskFill('#lw-fl-new', MARK + '箭头');
+    /* ⚠️ 加节点现在会**自动接到选中节点后面** ✓（2026-10-18）——
+       所以必须**按最终顺序**加 ✓，不然自动连出来的链和下面手动连的那几条会打架 ✗
+       （先加 notify 再加 delay → notify→delay ✓，再加上手动连的 delay→notify ✗ → 成环 ✗）。 */
     await p.locator('[data-fladd="trigger.manual"]').click(); await p.waitForTimeout(500);
     await p.locator('[data-fladd="data.template"]').click(); await p.waitForTimeout(500);
-    await p.locator('[data-fladd="out.notify"]').click(); await p.waitForTimeout(500);
-    await p.locator('[data-fladd="util.delay"]').click(); await p.waitForTimeout(600);
+    await p.locator('[data-fladd="util.delay"]').click(); await p.waitForTimeout(500);
+    await p.locator('[data-fladd="out.notify"]').click(); await p.waitForTimeout(600);
     let aWf = ((await store()).flows || []).filter((x) => String(x.name).includes(MARK + '箭头')).pop();
     ck('  建好了 4 个节点（含「等待」）', !!aWf && aWf.nodes.length === 4, aWf ? String(aWf.nodes.length) : 'null');
     const aTrig = aWf.nodes.find((n) => n.type === 'trigger.manual');
@@ -601,6 +604,53 @@ const store = async () => ((await (await fetch(BASE + '/api/life/store', { cache
       ck('★★ 定时产出落进了备忘录（前端收 outbox）', landed, memosBefore2 + ' → ' + ((await store()).memos || []).filter((m) => String(m.text).indexOf(MARK + '定时产出') >= 0).length);
       const sch2 = await (await fetch(BASE + '/api/life/flow/schedule')).json();
       ck('★ outbox 被回执清空（不会重复落地）', (sch2.outbox || []).filter((x) => x.flowId === tNodes.id).length === 0);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       ㉑ 拖拽调宽条：**方向必须跟着目标栏的左右** ✓✓
+       ⚠️ 用户原话：「工作流右边的，自由拖动，方向是反的」✓。
+          根因是 `bindPaneGrips` 原来靠 spec 里**手写 `dir:-1`** ✗，
+          而工作流右栏（`.lw-fl-cfg`）**漏写了** ✗ → 往右拖它反而变宽 ✗。
+          ⇒ 改成**按几何自动判**（目标栏中心在拖拽条哪边 ✓）。
+       ⚠️ 判据必须是**量出来的宽度差** ✗，不能看有没有 `dir` 字段 ✓ ——
+          字段在不在和「方向对不对」是两件事 ✗（漏写那次字段就是不在 ✓，
+          但就算写了 1 也照样反 ✓）。
+       ⚠️ 拖完要**把内联宽度抹掉** ✓ —— 不然下一段（或用户）看到的是被探针改过的布局 ✗。
+       ══════════════════════════════════════════════════════════════════ */
+    console.log('\n── ㉑ 拖拽调宽条：方向跟着目标栏的左右走 ──');
+    if (await p.locator('.lw-fl').count()) {
+      const dragGrip = async (which, sel, dx) => {
+        const grip = p.locator('[data-pgrip="' + which + '"]').first();
+        if (!(await grip.count())) return null;
+        const gb = await grip.boundingBox();
+        const w0 = await p.evaluate((s) => {
+          const el = document.querySelector(s); return el ? Math.round(el.getBoundingClientRect().width) : -1;
+        }, sel);
+        const x = gb.x + gb.width / 2;
+        const y = gb.y + Math.min(gb.height / 2, 120);
+        await p.mouse.move(x, y);
+        await p.mouse.down();
+        for (let i = 1; i <= 8; i++) await p.mouse.move(x + (dx / 8) * i, y);
+        await p.mouse.up();
+        await p.waitForTimeout(400);
+        const w1 = await p.evaluate((s) => {
+          const el = document.querySelector(s); return el ? Math.round(el.getBoundingClientRect().width) : -1;
+        }, sel);
+        await p.evaluate((s) => {
+          const el = document.querySelector(s); if (el) { el.style.width = ''; el.style.flex = ''; }
+        }, sel);
+        return { w0, w1, d: w1 - w0 };
+      };
+      /* 左栏：往右拖 = 变宽 ✓ */
+      const a = await dragGrip('side', '.lw-fl-side', 80);
+      ck('★★ 左栏拖拽条：往右拖 → 左栏变**宽**', !!a && a.d > 40,
+        a ? a.w0 + ' → ' + a.w1 + '（Δ' + a.d + '）' : '没这根条');
+      /* 右栏：往右拖 = 变**窄** ✓（它就是这次报的那个 ✗） */
+      const c = await dragGrip('cfg', '.lw-fl-cfg', 80);
+      ck('★★ 右栏拖拽条：往右拖 → 右栏变**窄**（反了就是用户报的那个 bug）', !!c && c.d < -40,
+        c ? c.w0 + ' → ' + c.w1 + '（Δ' + c.d + '）' : '没这根条');
+    } else {
+      ck('★ 工作流三栏渲染出来了（不然上面两条无从谈起）', false, '没有 .lw-fl');
     }
 
     ck('无页面异常', errs.length === 0, errs.slice(0, 2).join(' | '));

@@ -103,6 +103,41 @@ function clearStaleCredentialLock(home) {
   try { fs.unlinkSync(lock); return '（已清掉上一次残留的凭据锁）'; } catch (_) { return ''; }
 }
 
+/* ★ 清理 profile 目录里的**残留写锁** ✓（2026-10-21）
+   用户报：在 DSH 设置里保存模型配置，弹
+   `atomic-write: timed out waiting for the writer lock at ~/.dsh/profiles/web/package.json.lock` ✓。
+   实测那个锁是 **10-06 17:29** 留下的 ✓，里面写的 PID（98615）早就不在了 ✓ ——
+   某次更新被硬杀（SIGKILL）留下的僵尸锁 ✓，DSH 一直没接管它 ✓。
+   插件市场自己的说明也写着：「确认没有安装或更新正在进行后，删掉这个文件再重试」✓，
+   但它**故意不替用户删** ✗（怕撞上进行中的操作 ✓）—— 那就在**启动前**替用户清掉 ✓。
+
+   ⚠️ 判据只有一条：**锁里的 PID 死了才删** ✓✓ ——
+      活着（或 EPERM 说明活着但没权限）一律不动 ✓，否则会两个进程同时写 package.json ✓。
+   只在 spawn 之前调用 ✓ —— 那时端口没人监听 ✓，不存在进行中的写操作 ✓。 */
+function clearStaleProfileLocks(home) {
+  const root = path.join(home || os.homedir(), '.dsh', 'profiles');
+  let profiles = [];
+  try { profiles = fs.readdirSync(root); } catch (_) { return ''; }
+  const cleared = [];
+  for (const name of profiles) {
+    const dir = path.join(root, name);
+    let files = [];
+    try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.lock')); } catch (_) { continue; }
+    for (const file of files) {
+      const full = path.join(dir, file);
+      let pid = 0;
+      try { pid = Number(fs.readFileSync(full, 'utf8').trim()); } catch (_) { continue; }
+      if (!Number.isFinite(pid) || pid <= 0) continue;      /* 内容不是 PID → 不是我们的锁，别动 ✓ */
+      let alive = false;
+      try { process.kill(pid, 0); alive = true; }
+      catch (error) { if (error && error.code === 'EPERM') alive = true; }
+      if (alive) continue;                                   /* 活锁 → 绝不删 ✓✓ */
+      try { fs.unlinkSync(full); cleared.push(name + '/' + file); } catch (_) {}
+    }
+  }
+  return cleared.length ? `（已清掉 ${cleared.length} 个残留写锁：${cleared.join('、')}）` : '';
+}
+
 function createDshService(options = {}) {
   const projectRoot = options.projectRoot || path.resolve(__dirname, '..');
   const dataRoot = options.dataRoot || path.join(os.tmpdir(), 'codescope');
@@ -149,7 +184,9 @@ function createDshService(options = {}) {
   let message = autoStart ? '等待 CodeScope 启动 DSH' : '已通过 CODESCOPE_DSH_AUTOSTART 禁用自动启动';
   let tokenUrl = '';
   let lastExit = null;
+  let lastOutputLine = '';
   let startPromise = null;
+  let readyTimer = null;
 
   function status() {
     const running = state === 'running' || state === 'external';
@@ -198,7 +235,7 @@ function createDshService(options = {}) {
       }
       fs.mkdirSync(logDir, { recursive:true });
       /* ⚠️ **先清死锁再 spawn** ✗ —— 否则 DSH 必然启动失败（见 clearStaleCredentialLock ✓）。 */
-      const lockNote = clearStaleCredentialLock(options.home);
+      const lockNote = clearStaleCredentialLock(options.home) + clearStaleProfileLocks(options.home);
       appendLog(`\n[${new Date().toISOString()}] CodeScope starting DSH ${cli.version || ''}${lockNote}\n`);
       state = 'starting'; message = '正在启动 DSH…' + lockNote; tokenUrl = ''; lastExit = null;
       const args = [...cli.prefix, 'web', '--no-open', '--host', LOOPBACK, '--port', String(port)];
@@ -209,27 +246,77 @@ function createDshService(options = {}) {
         appendLog(text);
         const match = text.match(/https?:\/\/127\.0\.0\.1:\d+\/?\?token=[^\s]+/);
         if (match) tokenUrl = match[0];
+        /* 记下最后一行有内容的输出 ✓ —— 超时/退出时把它带进提示里，
+           用户不用去翻日志就知道卡在哪 ✓（原来只说「请查看运行日志」✗）。 */
+        const tail = text.split('\n').map((l) => l.trim()).filter(Boolean).pop();
+        if (tail) lastOutputLine = tail.slice(0, 160);
       };
       child.stdout.on('data', consume); child.stderr.on('data', consume);
       child.once('error', (error) => { state = 'error'; message = 'DSH 启动失败：' + error.message; appendLog(message + '\n'); });
       child.once('exit', (code, signal) => {
         lastExit = { code, signal, at:new Date().toISOString() };
         child = null; owned = false;
+        /* 进程没了，后台的「等就绪」也没意义了 ✓ */
+        if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
         /* ⚠️ 报错要**指路** ✗ —— 原来只说「DSH 已退出（1）」✓，用户不知道去哪看 ✓（这次就卡在这 ✓）。 */
         if (state !== 'stopped') { state = 'error'; message = `DSH 已退出（${signal || code}）—— 详情见运行日志`; }
       });
-      for (let attempt = 0; attempt < 60; attempt++) {
-        if (await tcpOpen(LOOPBACK, port, 250)) {
+      /* ★★ 就绪判定重做 ✓✓（2026-10-21，用户：「DSH 启动不了了」）★★
+         ⚠️ 原来只等 `60 × 150ms ≈ 9 秒` ✗ —— 而**实测冷启动要 19.8 秒**才监听端口 ✓
+            （15 个插件 bundle 要逐个挂载 ✓），于是**每次都被判超时** ✓；
+            更糟的是：超时后状态钉死在 `error` ✓，等它 20 秒后真的起来了也没人再管 ✗
+            → 界面永远显示「未运行」，可 `lsof` 明明看到 3080 在监听 ✓（这次就是这样 ✓）。
+         现在三件事一起改：
+         ① 总窗口 45s，并且**认 token 行**（`dsh web: http://…?token=…` 才是真就绪 ✓）；
+         ② 请求里最多阻塞 12s（不让 HTTP 请求挂太久），剩下的交给后台盯 ✓；
+         ③ 后台每 1s 复查端口，起来了就翻成 running ✓ —— 不再「一次判死」✓。 */
+      const READY_DEADLINE_MS = 45000;
+      const BLOCK_BUDGET_MS = 12000;
+      let waited = 0;
+      while (waited < READY_DEADLINE_MS) {
+        if (tokenUrl || await tcpOpen(LOOPBACK, port, 250)) {
           state = 'running'; message = 'DSH 已由 CodeScope 托管运行';
           return status();
         }
         if (!child || child.exitCode != null || state === 'error') break;
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        if (waited >= BLOCK_BUDGET_MS) break;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        waited += 200;
       }
-      if (state !== 'error') { state = 'error'; message = 'DSH 启动超时，请查看运行日志'; }
+      if (state !== 'error' && child && child.exitCode == null) {
+        state = 'starting';
+        message = 'DSH 正在启动（插件较多，首次约 20 秒）…';
+        watchUntilReady();
+      } else if (state !== 'error') {
+        state = 'error';
+        message = 'DSH 启动超时，请查看运行日志' + (lastOutputLine ? '：' + lastOutputLine : '');
+      }
       return status();
     })();
     try { return await startPromise; } finally { startPromise = null; }
+  }
+
+  /* 后台等 DSH 真正监听端口 ✓ —— 启动慢不该被判成失败 ✓（见上面 start() 的注释 ✓） */
+  function watchUntilReady() {
+    if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+    const startedAt = Date.now();
+    readyTimer = setInterval(async () => {
+      if (state !== 'starting') { clearInterval(readyTimer); readyTimer = null; return; }
+      if (!child || child.exitCode != null) { clearInterval(readyTimer); readyTimer = null; return; }
+      if (await tcpOpen(LOOPBACK, port, 300)) {
+        clearInterval(readyTimer); readyTimer = null;
+        state = 'running';
+        message = 'DSH 已由 CodeScope 托管运行';
+        appendLog(`[${new Date().toISOString()}] DSH 端口 ${port} 已就绪（后台等了 ${Math.round((Date.now() - startedAt) / 1000)}s）\n`);
+        return;
+      }
+      if (Date.now() - startedAt > 120000) {
+        clearInterval(readyTimer); readyTimer = null;
+        state = 'error';
+        message = 'DSH 启动超时（2 分钟仍未监听端口）' + (lastOutputLine ? '：' + lastOutputLine : '');
+      }
+    }, 1000);
+    if (readyTimer.unref) readyTimer.unref();
   }
 
   async function stop() {
@@ -263,6 +350,7 @@ function createDshService(options = {}) {
       state = 'stopped'; message = owned ? 'DSH 已停止' : 'DSH 本来就没在运行';
     }
     child = null; owned = false; externalPid = 0; tokenUrl = '';
+    if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
     return status();
   }
 
@@ -278,4 +366,4 @@ function createDshService(options = {}) {
   return { status, start, stop, restart };
 }
 
-module.exports = { createDshService, clearStaleCredentialLock };
+module.exports = { createDshService, clearStaleCredentialLock, clearStaleProfileLocks };

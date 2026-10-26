@@ -18,8 +18,15 @@
  */
 
 async function handle(req, res, u, ctx) {
-  const { officeTree, send, officeDir, officePath, path, streamStatic, onlyOfficeHealth, publicOnlyOfficeConnection, onlyOfficeServiceStatus, readBody, controlOnlyOfficeService, saveOnlyOfficeConnection, OFFICE_ENGINE, officeKind, fs, onlyOfficeDocumentType, ONLYOFFICE_CONNECTION, onlyOfficeBrowserUrl, onlyOfficeConfig, onlyOfficeTokenValid, saveOnlyOfficeResult, officeWordToHtml, saveOfficeWordHtml, officeSafeFolder, uniqueOfficeTarget, createOfficeDocument, OFFICE_EXTS, XLSX, crypto, officeStreamToFile, validateOfficeFile } = ctx;
+  const { officeTree, send, officeDir, officePath, path, streamStatic, onlyOfficeHealth, publicOnlyOfficeConnection, onlyOfficeServiceStatus, readBody, controlOnlyOfficeService, saveOnlyOfficeConnection, OFFICE_ENGINE, officeKind, fs, onlyOfficeDocumentType, ONLYOFFICE_CONNECTION, onlyOfficeBrowserUrl, onlyOfficeConfig, onlyOfficeTokenValid, saveOnlyOfficeResult, officeWordToHtml, saveOfficeWordHtml, officeSafeFolder, uniqueOfficeTarget, createOfficeDocument, OFFICE_EXTS, XLSX, crypto, officeStreamToFile, validateOfficeFile, reorderInDir } = ctx;
 
+    /* ★ Office：同一层换顺序 ✓（2026-10-19）—— 只写目录里的 `.order.json` ✓，不动文件 ✓ */
+    if (req.method === 'POST' && u.pathname === '/api/office/reorder') {
+    const body = await readBody(req, 16 * 1024);
+    const r = reorderInDir(officeDir(), body.path, body.target, body.position,
+      (name) => OFFICE_EXTS.has(path.extname(name).toLowerCase()));
+    return send(res, r.ok ? 200 : 400, r);
+    }
     if (req.method === 'GET' && u.pathname === '/api/office/tree') {
     const root = officeTree(); return send(res, 200, { ok:true, dir:officeDir(), root, total:root.count });
     }

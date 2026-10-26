@@ -66,6 +66,121 @@ const ReaderControls = defineComponent({
 /* 右下角的阅读浮标：阅读进度百分比 + 回到顶部。
    知识库里的文档动辄几千像素高（实测一篇 5300px），滚到一半想回顶部得一路划回去；
    顶部那条 2px 的进度线只能看个大概，给个准确数字更有用。 */
+/* 侧栏宽度手柄 ✓（2026-10-12 加，用户：「左侧大纲和正文之间需要可以自由左右拖动」）
+   ⚠️ 为什么做成**独立组件**而不是改 VitePress 布局 ✗：
+     默认主题的侧栏是 position:fixed + --vp-sidebar-width ✓，
+     动它的结构风险大 ✗；只改**一个 CSS 变量**最稳 ✓（见 custom.css 的覆盖 ✓）。
+   ⚠️ 拖拽用 **pointer 事件 + setPointerCapture** ✓ —— 鼠标划出窗口也不会丢 ✓
+     （用 mousemove 挂在 window 上，快速拖到屏幕外就会断 ✓）。
+   ⚠️ 宽度**落盘** ✓（localStorage ✓）—— 用户调一次就该记住 ✓。 */
+const SidebarResizer = defineComponent({
+  setup() {
+    const KEY = 'codescope-kb-sidebar-w'
+    const MIN = 200, MAX = 560, DEFAULT = 272
+    const el = ref(null)
+    let dragging = false
+    const setW = (w) => {
+      const v = Math.max(MIN, Math.min(MAX, Math.round(w)))
+      if (typeof document === 'undefined') return v
+      document.documentElement.style.setProperty('--kb-sidebar-w', v + 'px')
+      /* ⚠️⚠️ **行内 + !important** ✗✗ —— VitePress 的侧栏样式是 scoped 的
+         （.VPSidebar[data-v-xxxx] ✓），和我们的规则**同为 !important** 时它靠优先级赢 ✗
+         （实测：规则明明在 CSS 里、变量也改了，侧栏宽度纹丝不动 ✗）。
+         行内 important 是**唯一一定赢**的写法 ✓。 */
+      document.querySelectorAll('.VPSidebar').forEach((el) => {
+        try { el.style.setProperty('width', v + 'px', 'important') } catch (_) {}
+      })
+      document.querySelectorAll('.VPContent.has-sidebar').forEach((el) => {
+        try { el.style.setProperty('padding-left', v + 'px', 'important') } catch (_) {}
+      })
+      place()
+      return v
+    }
+    /* 把拖拽条摆到侧栏**真实右边缘** ✓ —— 侧栏起点不一定在 0（实测偏 44px ✓），
+       所以要用 getBoundingClientRect 实测 ✓，不能靠 left:var(--kb-sidebar-w) ✗。 */
+    const place = () => {
+      if (typeof document === 'undefined') return
+      const sb = document.querySelector('.VPSidebar')
+      const h = document.querySelector('.kb-sidebar-resizer')
+      if (!sb || !h) return
+      const r = sb.getBoundingClientRect()
+      if (r.width < 1) return
+      h.style.setProperty('left', Math.round(r.right) + 'px', 'important')
+    }
+    const offset = () => {
+      const sb = document.querySelector('.VPSidebar')
+      return sb ? sb.getBoundingClientRect().left : 0
+    }
+    const onDown = (e) => {
+      /* 窄屏（侧栏是抽屉）不参与 ✓ */
+      if (typeof window === 'undefined' || window.innerWidth < 960) return
+      dragging = true
+      if (el.value && el.value.setPointerCapture) { try { el.value.setPointerCapture(e.pointerId) } catch {} }
+      if (el.value) el.value.classList.add('kb-dragging')
+      document.body.classList.add('kb-resizing')
+      e.preventDefault()
+    }
+    const onMove = (e) => {
+      if (!dragging) return
+      /* 宽度 = 指针位置 - 侧栏起点 ✓（侧栏起点不一定在 0 ✗） */
+      setW(e.clientX - offset())
+      e.preventDefault()
+    }
+    const onUp = (e) => {
+      if (!dragging) return
+      dragging = false
+      if (el.value) el.value.classList.remove('kb-dragging')
+      document.body.classList.remove('kb-resizing')
+      try { localStorage.setItem(KEY, String(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w'), 10) || DEFAULT)) } catch {}
+      if (el.value && el.value.releasePointerCapture) { try { el.value.releasePointerCapture(e.pointerId) } catch {} }
+    }
+    const onReset = () => { setW(DEFAULT); try { localStorage.setItem(KEY, String(DEFAULT)) } catch {} }
+    onMounted(() => {
+      try {
+        const saved = parseInt(localStorage.getItem(KEY) || '', 10)
+        setW(saved >= MIN && saved <= MAX ? saved : DEFAULT)
+      } catch (_) { setW(DEFAULT) }
+      setTimeout(place, 60); setTimeout(place, 600)
+      window.addEventListener('resize', place)
+    })
+    return () => h('div', {
+      ref: el,
+      class: 'kb-sidebar-resizer',
+      title: '拖动调整左侧栏宽度（双击复位）',
+      onPointerdown: onDown,
+      onPointermove: onMove,
+      onPointerup: onUp,
+      onPointercancel: onUp,
+      onDblclick: onReset
+    })
+  }
+})
+
+/* 左侧目录**默认折叠** ✓（用户：「左侧的目录需要默认是折叠的，不要全部展开」）
+   ⚠️ VitePress 的侧栏折叠是 **Vue 状态** ✗ —— 光写 CSS 藏起来的话
+      「展开」按钮就点不动了 ✗。所以这里**模拟一次点击** ✓：
+      进入页面后把**顶层**（.level-0）的可折叠项点一下 → 收起来 ✓。
+   ⚠️ 只在**首次进入**做 ✓（用 sessionStorage 记 ✓）——
+      用户自己展开过之后，翻页不该再给他收回去 ✗。 */
+const SidebarCollapse = defineComponent({
+  setup() {
+    const KEY = 'codescope-kb-sidebar-collapsed'
+    const run = () => {
+      if (typeof document === 'undefined') return
+      try { if (sessionStorage.getItem(KEY) === '1') return; sessionStorage.setItem(KEY, '1') } catch (_) {}
+      document.querySelectorAll('.VPSidebarItem.level-0.collapsible > .item').forEach((el) => {
+        /* aria-expanded=true 才需要收 ✓（VitePress 默认是展开的 ✓） */
+        const item = el.closest('.VPSidebarItem')
+        if (item && item.querySelector(':scope > .items') && el.getAttribute('aria-expanded') !== 'false') {
+          try { el.click() } catch (_) {}
+        }
+      })
+    }
+    onMounted(() => { setTimeout(run, 120); setTimeout(run, 900) })
+    return () => null
+  }
+})
+
 const ReadingHud = defineComponent({
   setup() {
     const progress = ref(0)
@@ -349,7 +464,7 @@ export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, {
     'layout-top': () => [h(ReadingProgress), h(AccurateOutline)],
-    'layout-bottom': () => [h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
+    'layout-bottom': () => [h(SidebarResizer), h(SidebarCollapse), h(ReadingHud), h(MiniOutline), h(ImageZoom), h(ReadingPosition)],
     'doc-before': () => h(DocContext),
     'nav-bar-content-after': () => h('div', { class:'kb-nav-extras' }, [
       h(ReaderControls),

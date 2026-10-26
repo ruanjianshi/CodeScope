@@ -540,7 +540,7 @@ let EDITOR_FIND_MATCHES = [], EDITOR_FIND_INDEX = -1, EDITOR_FIND_ANCHOR = 0, ED
 function editorFindVisible() { return !$('editor-find').classList.contains('hidden'); }
 function editorFindReplaceMode(show) {
   $('editor-find-replace-row').classList.toggle('hidden', !show);
-  $('editor-find-toggle').textContent = show ? '▾' : '▸';
+  $('editor-find-toggle').innerHTML = show ? csGlyphIcon('▾') : csGlyphIcon('▸');
   $('editor-find-toggle').title = show ? '收起替换' : '展开替换';
 }
 function editorFindSelect(index, focusEditor = false) {
@@ -865,15 +865,50 @@ function closeContextMenu() {
   menu.hidden = true;
   menu.replaceChildren();
 }
-function showContextMenu(event, items) {
+
+function showContextMenu(event, items, opts) {
   const menu = $('ctx-menu');
-  if (!menu || !items || !items.length) return;
+  if (!menu || !items || !items.length) return; if (window.__csExtendMenu) window.__csExtendMenu(event, items);
   event.preventDefault();
   event.stopPropagation();
   /* 记下打开时刻：紧接着的滚动多半是页面自身的布局抖动（列表重渲染、焦点滚入视口等），
      不是用户想滚走 —— 见下面 scroll 监听里的宽限期。 */
   CTX_MENU_OPENED_AT = Date.now();
   menu.replaceChildren();
+  /* ★ 长列表（分片多时的「全部」菜单）加一个**筛选框** —— 20 项还能扫，60 项就只能瞎滚了 ✓。
+     只给显式要求 search 的菜单加（右键菜单 5~8 项，加了纯属碍事 ✗）。 */
+  const searchable = !!(opts && opts.search) && items.length > 8;
+  let emptyTip = null;
+  if (searchable) {
+    const finder = document.createElement('input');
+    finder.type = 'search';
+    finder.className = 'ctx-search';
+    finder.placeholder = '筛选 ' + items.length + ' 项…';
+    finder.setAttribute('aria-label', '筛选菜单项');
+    finder.addEventListener('input', () => {
+      const q = finder.value.trim().toLowerCase();
+      let shown = 0;
+      menu.querySelectorAll('.ctx-item').forEach((b) => {
+        const hit = !q || (b.dataset.ctxText || '').includes(q);
+        b.hidden = !hit;
+        if (hit) shown++;
+      });
+      /* 分隔线在筛选时没有意义（筛完剩两条中间夹一根线很难看）→ 有查询就整体藏掉 ✓ */
+      menu.querySelectorAll('.ctx-sep').forEach((sep) => { sep.hidden = !!q; });
+      if (emptyTip) emptyTip.hidden = shown > 0;
+    });
+    finder.addEventListener('keydown', (e) => {
+      /* ↑↓ 从输入框跳进列表；回车直接选第一条匹配项（和 IDE 的快速打开一致 ✓） */
+      if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); const f = menu.querySelector('.ctx-item:not([hidden]):not([disabled])'); if (f) f.focus(); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const f = menu.querySelector('.ctx-item:not([hidden]):not([disabled])'); if (f) f.click(); }
+    });
+    menu.appendChild(finder);
+    emptyTip = document.createElement('div');
+    emptyTip.className = 'ctx-empty';
+    emptyTip.textContent = '没有匹配的分片';
+    emptyTip.hidden = true;
+    menu.appendChild(emptyTip);
+  }
   for (const item of items) {
     if (item.type === 'separator') { const sep = document.createElement('div'); sep.className = 'ctx-sep'; menu.appendChild(sep); continue; }
     const button = document.createElement('button');
@@ -881,7 +916,9 @@ function showContextMenu(event, items) {
     button.className = 'ctx-item' + (item.danger ? ' danger' : '');
     button.setAttribute('role', 'menuitem');
     button.disabled = !!item.disabled;
-    if (item.icon) { const ico = document.createElement('span'); ico.className = 'ctx-ico'; ico.textContent = item.icon; button.appendChild(ico); }
+    /* 筛选用的纯文本（标签 + 类型），别拿 textContent 现拼 —— 里面还混着图标和 hint ✗ */
+    if (searchable) button.dataset.ctxText = (item.label + ' ' + (item.hint || '')).toLowerCase();
+    if (item.icon) { const ico = document.createElement('span'); ico.className = 'ctx-ico'; ico.innerHTML = csGlyphIcon(item.icon); button.appendChild(ico); }
     const label = document.createElement('span'); label.className = 'ctx-label'; label.textContent = item.label; button.appendChild(label);
     if (item.hint) { const hint = document.createElement('span'); hint.className = 'ctx-hint'; hint.textContent = item.hint; button.appendChild(hint); }
     button.addEventListener('click', () => { closeContextMenu(); if (typeof item.run === 'function') item.run(); });
@@ -892,7 +929,8 @@ function showContextMenu(event, items) {
   const pad = 6, box = menu.getBoundingClientRect();
   menu.style.left = Math.max(pad, Math.min(event.clientX, innerWidth - box.width - pad)) + 'px';
   menu.style.top = Math.max(pad, Math.min(event.clientY, innerHeight - box.height - pad)) + 'px';
-  const first = menu.querySelector('.ctx-item:not([disabled])');
+  /* 有筛选框就把焦点给它（直接打字就能筛）；否则按老规矩聚焦第一项 ✓ */
+  const first = searchable ? menu.querySelector('.ctx-search') : menu.querySelector('.ctx-item:not([disabled])');
   if (first) first.focus({ preventScroll: true });
 }
 /* 把行内按钮转换成右键菜单项：按钮仍是行动作的唯一定义处，菜单与按钮不会两套逻辑走偏。 */
@@ -904,7 +942,7 @@ function rowContextMenu(event, row, leadingItems, buttonSelector) {
     const label = button.title || (button.textContent || '').trim();
     if (!label) continue;
     items.push({
-      icon: (button.textContent || '').trim(),
+      icon: csGlyphOf(button),
       label,
       danger: button.classList.contains('danger'),
       disabled: button.disabled,
@@ -928,9 +966,11 @@ function showFolderContextMenu(event, node, resourceFolder) {
   if (resourceFolder) {
     items.push({ icon: '＋', label: '上传资源', run: () => chooseLatexResource(node.path, node.name) });
   } else {
-    items.push({ icon: '＋', label: '新建文件', run: () => openNewDialog('file', node.path) });
-    items.push({ icon: '▣', label: '新建文件夹', run: () => openNewDialog('folder', node.path) });
-    items.push({ icon: '✎', label: '重命名', run: () => renameProjectFolder(node.path, node.name) });
+    /* ⚠️ 这里**必须**走 window ✓ —— 这三个函数都在闭包里 ✓，
+       直接写名字是 ReferenceError（点了没反应）✗。见 window.__openNewDialog 那段注释。 */
+    items.push({ icon: '＋', label: '新建文件', run: () => window.__openNewDialog('file', node.path) }); items.push({ icon: '▣', label: '新建文件夹', run: () => window.__openNewDialog('folder', node.path) });
+    items.push(...(window.__csMenuItems ? window.__csMenuItems(node.path, true) : []));
+    items.push({ icon: '✎', label: '重命名', run: () => window.__renameFolder(node.path, node.name) });
   }
   items.push({ type: 'separator' });
   items.push({ icon: '×', label: '删除文件夹', danger: true, run: () => { if (window.__deleteFolder) window.__deleteFolder(node.path, node.name); } });
@@ -952,10 +992,16 @@ document.addEventListener('keydown', (e) => {
 /* 滚动关闭菜单，但要区分「用户滚走了」和「页面自己抖了一下」：
    这里挂的是 document 捕获，页面上**任何**容器的**任何**滚动都会进来 ——
    实测右键菜单刚打开 6ms，侧栏列表一次重排滚动就把菜单关掉了（菜单项还没被点到就没了）。
-   打开后 250ms 内的滚动一律忽略，之后照旧关闭。 */
-document.addEventListener('scroll', () => {
+   打开后 250ms 内的滚动一律忽略，之后照旧关闭。
+   ★★ 还要放过「**菜单自己**滚动」（2026-10-19，用户：「如果有更多片段呢，是否加入可以滚动」）★★
+   `.ctx-menu` 是 max-height + overflow-y:auto 的，分片一多（实测 60 个 = 1690px 内容）
+   就靠滚它才能看到后面的项 ✓；但捕获监听分不清是谁滚的 ✗ → 一滚就 closeContextMenu()
+   → 这个列表**永远只能看前十几项** ✓。判据是 `e.target`：滚动事件的目标就是被滚的那个元素 ✓。 */
+document.addEventListener('scroll', (e) => {
   if (!CTX_MENU_OPEN) return;
   if (Date.now() - CTX_MENU_OPENED_AT < 250) return;
+  const menu = $('ctx-menu');
+  if (menu && e.target instanceof Node && (e.target === menu || menu.contains(e.target))) return;
   closeContextMenu();
 }, true);
 window.addEventListener('resize', () => closeContextMenu());
@@ -999,9 +1045,10 @@ function itemEl(s) {
   d.onclick = () => select(s);
   d.addEventListener('contextmenu', (e) => showContextMenu(e, [
     { icon: '▸', label: '打开', run: () => select(s) },
+    ...(window.__csMenuItems ? window.__csMenuItems(s.file, false) : []),
     { icon: '✎', label: '编辑信息 / 重命名', run: () => { select(s); openEditDialog(); } },
     { type: 'separator' },
-    { icon: '×', label: '删除片段', danger: true, run: () => deleteSnippetRow(s) },
+    { icon: '×', label: '删除片段', danger: true, run: () => window.__deleteSnippetRow(s) },
   ]));
   // 拖拽到文件夹 = 移动片段所属
   d.draggable = true;
@@ -1053,7 +1100,7 @@ function renderTree(root, container) {
       const folderIcon = node.name === 'data' ? 'data' : node.name === 'figures' ? 'image' : node.name === 'fonts' ? 'font' : (isOpen ? 'folderOpen' : 'folder');
       const f = document.createElement('div');
       f.className = 'fnode' + (isOpen ? ' open' : '') + (resourceFolder ? ' resource-folder' : '');
-      f.innerHTML = `<span class="arrow">${isOpen ? '▾' : '▸'}</span><span class="ico side-glyph">${sideGlyphMarkup(folderIcon)}</span><span class="fname">${escapeHtml(node.name)}</span><span class="count" title="${node.total} 个项目">${node.total}</span>`;
+      f.innerHTML = `<span class="arrow"><svg class="cs-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span><span class="ico side-glyph">${sideGlyphMarkup(folderIcon)}</span><span class="fname">${escapeHtml(node.name)}</span><span class="count" title="${node.total} 个项目">${node.total}</span>`;
       f.addEventListener('contextmenu', (e) => showFolderContextMenu(e, node, resourceFolder));
       f.onclick = () => { isOpen ? collapsed.add(node.path) : collapsed.delete(node.path); saveCollapsed(); renderList(); };
       if (!resourceFolder) {
@@ -1063,13 +1110,37 @@ function renderTree(root, container) {
         f.addEventListener('dragend', () => f.classList.remove('dragging'));
       }
       // 拖放：把片段拖到文件夹行 = 移动到该文件夹
-      f.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; f.classList.add('drop-target'); });
-      f.addEventListener('dragleave', () => f.classList.remove('drop-target'));
+      /* ★★ 拖拽落点分三段 ✓（2026-10-19，用户报「无法移动顺序」）——
+         上 28% = 插到这一行**前面** ✓；下 28% = 插到**后面** ✓；中间 = 放进这个文件夹 ✓。
+         ⚠️ 原来整行都是「放进去」✗ → **同一层换顺序根本没有入口** ✗
+            （用户原话：「无法移动顺序」✓，截图就是项目树 ✓）。
+         ⚠️ 指示线用伪元素画 ✓（不占布局 ✓，不会把行高顶变 ✗）。 */
+      const dropPos = (e) => {
+        const rect = f.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        if (y < rect.height * 0.28) return 'before';
+        if (y > rect.height * 0.72) return 'after';
+        return 'into';
+      };
+      f.addEventListener('dragover', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        const pos = dropPos(e);
+        f.classList.toggle('drop-before', pos === 'before');
+        f.classList.toggle('drop-after', pos === 'after');
+        f.classList.toggle('drop-target', pos === 'into');
+      });
+      f.addEventListener('dragleave', () => { f.classList.remove('drop-target', 'drop-before', 'drop-after'); });
       f.addEventListener('drop', (e) => {
         e.preventDefault(); e.stopPropagation();
-        f.classList.remove('drop-target');
+        const pos = dropPos(e);
+        f.classList.remove('drop-target', 'drop-before', 'drop-after');
         const drag = readTreeDrag(e);
         if (!drag) return;
+        /* 同一层换顺序 ✓（上/下边缘）—— 只有文件夹支持 ✓（片段顺序按更新时间排 ✓） */
+        if (pos !== 'into' && drag.type === 'folder' && !resourceFolder) {
+          return reorderProjectFolder(drag.value, node.path, pos);
+        }
         if (drag.type === 'snippet') return moveSnippet(drag.value, node.path);
         if (drag.type === 'folder') {
           if (resourceFolder) return setStatus('err', '项目文件夹不能放入资源目录');
@@ -1286,15 +1357,7 @@ if (officeListHost) officeListHost.addEventListener('contextmenu', (e) => {
 const drawListHost = $('draw-list');
 if (drawListHost) drawListHost.addEventListener('contextmenu', (e) => {
   const folder = e.target.closest('.draw-frow');
-  if (folder) {
-    const dir = folder.dataset.path || '';
-    showContextMenu(e, [
-      rowOpenItem(folder),
-      { icon: '＋', label: '在此新建绘图', run: () => { window.__DRAW_ND_CUR = dir; openDrawNewDialog('drawing'); } },
-      { icon: '▣', label: '在此新建文件夹', run: () => { window.__DRAW_ND_CUR = dir; openDrawNewDialog('folder'); } },
-    ]);
-    return;
-  }
+  if (folder) return window.__drawFolderMenu(e, folder, { rowOpenItem, showContextMenu, openDrawNewDialog, openConfirm, renderDrawList, setStatus });
   const row = e.target.closest('.draw-row');
   if (row) return rowContextMenu(e, row, [rowOpenItem(row)], '.draw-ren, .draw-del');
   showContextMenu(e, [
@@ -1369,6 +1432,8 @@ function openEditDialog() {
   $('new-dialog').classList.add('open');
   $('nd-name').focus();
 }
+/* ⚠️ 同上：`openNewDialog` 也在闭包里 ✓ → 顶层菜单直接调会 ReferenceError ✗ */
+window.__openNewDialog = openNewDialog;
 
 function renderNdTags() {
   const box = $('nd-tags');
@@ -1474,7 +1539,7 @@ function openConfirm(opt) {
   const withInput = !!CD_INPUT_REQ || opt.inputValue != null;
   inp.style.display = withInput ? '' : 'none';
   inp.value = opt.inputValue != null ? String(opt.inputValue) : '';
-  inp.placeholder = opt.inputPlaceholder || (CD_INPUT_REQ ? '请输入名称确认' : '');
+  inp.placeholder = opt.inputPlaceholder || (CD_INPUT_REQ ? ('请输入「' + CD_INPUT_REQ + '」确认') : '');
   // 普通输入（如重命名）不是破坏性操作，不该用红色的确定按钮，也不再要求先删空才能提交。
   $('cd-ok').textContent = opt.okLabel || '确定';
   $('cd-ok').classList.toggle('safe', withInput && !CD_INPUT_REQ && !opt.danger);
@@ -1526,7 +1591,7 @@ function wireNewDialog() {
   $('new-dialog').addEventListener('click', (e) => { if (e.target === $('new-dialog')) $('new-dialog').classList.remove('open'); });
   $('cd-cancel').onclick = () => finishConfirm(false);
   $('cd-ok').onclick = () => { if (!$('cd-ok').disabled) finishConfirm(true); };
-  $('cd-input').addEventListener('input', () => { $('cd-ok').disabled = CD_INPUT_REQ !== '' && $('cd-input').value.trim() !== CD_INPUT_REQ; });
+  $('cd-input').addEventListener('input', () => { const norm = (v) => String(v || '').trim().replace(/\.(?:excalidraw|drawio|xmind|canvas)$/i, ''); $('cd-ok').disabled = CD_INPUT_REQ !== '' && norm($('cd-input').value) !== norm(CD_INPUT_REQ); });
   $('confirm-dialog').addEventListener('click', (e) => { if (e.target === $('confirm-dialog')) finishConfirm(false); });
   $('cd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('cd-ok').disabled) $('cd-ok').click(); });
   // Esc 关闭：键盘用户也能随时退出（原来只有鼠标/回车两条路）。
@@ -1586,6 +1651,13 @@ function wireNewDialog() {
     });
   }
   window.__deleteFolder = deleteFolderFlow;
+  /* ★★ 重命名 / 新建 也要挂出来 ✓✓（2026-10-19 用户报「文件夹无法重命名」）——
+     ⚠️ 根因 ✗：`renameProjectFolder` / `openNewDialog` 都定义在**这个闭包里** ✓，
+        而右键菜单 `showFolderContextMenu()` 是**顶层函数** ✓ →
+        它直接调 `renameProjectFolder(...)` 就是 `ReferenceError: renameProjectFolder is not defined` ✗
+        （实测：点「重命名」什么都不发生，控制台才有一行红字 ✗）。
+        「删除文件夹」没坏 ✓，就是因为它当初多写了一行 `window.__deleteFolder = …` ✓。
+     ⇒ 统一挂到 window 上 ✓，菜单那边走 `window.__xxx` ✓（缺了会变成「点了没反应」而不是崩 ✗）。 */
   async function renameProjectFolder(folder, name) {
     const next = String(await askText({ title:'重命名文件夹', message:'文件夹新名称', value:name, okLabel:'重命名' }) || '').trim();
     if (!next || next === name) return;
@@ -1608,6 +1680,9 @@ function wireNewDialog() {
     renderList(); renderMain();
     setStatus('ok', '文件夹已重命名为「' + next + '」');
   }
+  window.__renameFolder = renameProjectFolder;
+  /* ⚠️ 同 `renameProjectFolder` ✓ —— 它也在闭包里 ✓，而片段行的右键菜单是顶层函数 ✗ */
+  window.__deleteSnippetRow = deleteSnippetRow;
   function deleteSnippetRow(s) {
     if (!s) return;
     openConfirm({
@@ -1658,9 +1733,37 @@ function officeWelcome(){OFFICE_WORKBOOK=null;OFFICE_SHEET='';OFFICE_WORD_HTML='
 async function loadOffice(silent=false){const result=await api('/api/office/tree');if(!result.ok){if(!silent)officeStatus(result.error,true);return;}OFFICE_TREE=result.root;$('office-count').textContent=result.total?String(result.total):'';renderOfficeList();}
 function renderOfficeList(){const box=$('office-list');if(!box||!OFFICE_TREE)return;box.replaceChildren();const build=(node,host)=>{for(const item of node.children||[]){const row=document.createElement('div');row.className='office-row'+(OFFICE_CURRENT===item.path?' on':'');row.draggable=true;row.dataset.path=item.path;row.dataset.type=item.type;row.title=item.path+(item.type==='folder'?' · 拖放文档或文件夹到这里':' · 点击打开；可拖入文件夹整理');
       row.addEventListener('dragstart',(event)=>{if(event.target.closest('button')){event.preventDefault();return;}event.dataTransfer.setData('application/x-codescope-office',JSON.stringify({path:item.path,type:item.type}));event.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));
-      const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent=item.type==='folder'?(OFFICE_DIR_OPEN.has(item.path)?'▾':'▸'):'';const mark=document.createElement('span');mark.className='office-type '+(item.type==='folder'?'folder':item.kind);mark.textContent=item.type==='folder'?'▰':officeTypeMark(item.kind);const name=document.createElement('span');name.className='name';name.textContent=item.name;const meta=document.createElement('span');meta.className='meta';meta.textContent=item.type==='folder'?String(item.count||0):(item.size<1024?'1 KB':formatCapacity(item.size));const ren=document.createElement('button');ren.className='office-action';ren.textContent='✎';ren.title='重命名';ren.onclick=(event)=>{event.stopPropagation();renameOfficeNode(item);};const del=document.createElement('button');del.className='office-action';del.textContent='×';del.title='删除';del.onclick=(event)=>{event.stopPropagation();deleteOfficeNode(item);};row.append(arrow,mark,name,meta,ren,del);host.appendChild(row);
-      if(item.type==='folder'){row.onclick=()=>{OFFICE_TARGET_FOLDER=item.path;OFFICE_DIR_OPEN.has(item.path)?OFFICE_DIR_OPEN.delete(item.path):OFFICE_DIR_OPEN.add(item.path);officePersistDirs();renderOfficeList();};row.addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();event.stopPropagation();row.classList.add('drop-target');}});row.addEventListener('dragleave',()=>row.classList.remove('drop-target'));row.addEventListener('drop',async(event)=>{event.preventDefault();event.stopPropagation();row.classList.remove('drop-target');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}if(!value||value.path===item.path)return;const result=await api('/api/office/move',{path:value.path,toFolder:item.path});if(!result.ok)return officeStatus(result.error,true);OFFICE_DIR_OPEN.add(item.path);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});if(OFFICE_DIR_OPEN.has(item.path)){const children=document.createElement('div');children.className='office-children';host.appendChild(children);build(item,children);}}
+      const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent=item.type==='folder'?(OFFICE_DIR_OPEN.has(item.path)?'▾':'▸'):'';const mark=document.createElement('span');mark.className='office-type '+(item.type==='folder'?'folder':item.kind);mark.textContent=item.type==='folder'?'▰':officeTypeMark(item.kind);const name=document.createElement('span');name.className='name';name.textContent=item.name;const meta=document.createElement('span');meta.className='meta';meta.textContent=item.type==='folder'?String(item.count||0):(item.size<1024?'1 KB':formatCapacity(item.size));const ren=document.createElement('button');ren.className='office-action';ren.innerHTML=csGlyphIcon('✎');ren.title='重命名';ren.onclick=(event)=>{event.stopPropagation();renameOfficeNode(item);};const del=document.createElement('button');del.className='office-action';del.textContent='×';del.title='删除';del.onclick=(event)=>{event.stopPropagation();deleteOfficeNode(item);};row.append(arrow,mark,name,meta,ren,del);host.appendChild(row);
+      if(item.type==='folder'){row.onclick=()=>{OFFICE_TARGET_FOLDER=item.path;OFFICE_DIR_OPEN.has(item.path)?OFFICE_DIR_OPEN.delete(item.path):OFFICE_DIR_OPEN.add(item.path);officePersistDirs();renderOfficeList();};/* ★ 三分落点 ✓（2026-10-19）—— 上/下边缘 = 插到前/后（同一层换顺序 ✓），中间 = 放进文件夹 ✓ */
+if(OFFICE_DIR_OPEN.has(item.path)){const children=document.createElement('div');children.className='office-children';host.appendChild(children);build(item,children);}}
       else row.onclick=()=>openOffice(item.path);
+    /* ★★ 三分落点 ✓✓（2026-10-19 修）——
+       ⚠️ 原来这三行**写在 `if(item.type==='folder')` 里面** ✗ → 只有文件夹行能当落点 ✓，
+          **文档行拖上去毫无反应** ✗（实测：`drop-before` 类根本加不上 ✗）。
+       现在所有行都是落点 ✓：文件夹支持「前/后/放进去」✓，文档只支持「前/后」✓
+       （文档不能装东西 ✗，中间落点按「插到前面」处理 ✓）。 */
+    const officeIsFolder = item.type === 'folder';
+    row.addEventListener('dragover', (event) => {
+      if (!event.dataTransfer || !event.dataTransfer.types.includes('application/x-codescope-office')) return;
+      event.preventDefault(); event.stopPropagation();
+      const zone = dropZoneOf(row, event);
+      paintDropZone(row, (!officeIsFolder && zone === 'inside') ? 'before' : zone);
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-target', 'drop-before', 'drop-after'));
+    row.addEventListener('drop', async (event) => {
+      event.preventDefault(); event.stopPropagation();
+      const raw = dropZoneOf(row, event);
+      const zone = (!officeIsFolder && raw === 'inside') ? 'before' : raw;
+      row.classList.remove('drop-target', 'drop-before', 'drop-after');
+      let value; try { value = JSON.parse(event.dataTransfer.getData('application/x-codescope-office')); } catch (_) { return; }
+      if (!value || value.path === item.path) return;
+      if (zone !== 'inside') { reorderOffice(value.path, item.path, zone); return; }
+      const result = await api('/api/office/move', { path: value.path, toFolder: item.path });
+      if (!result.ok) return officeStatus(result.error, true);
+      OFFICE_DIR_OPEN.add(item.path);
+      if (OFFICE_CURRENT === value.path) OFFICE_CURRENT = result.path;
+      await loadOffice();
+    });
     }};build(OFFICE_TREE,box);if(!OFFICE_TREE.children.length)box.innerHTML='<div class="office-empty">尚无 Office 文档。点击“＋文档”新建，或“导入”加入已有的 DOCX、XLSX、XLS、CSV、PPTX。</div>';}
 function destroyOnlyOffice(){if(OFFICE_DOC_EDITOR&&typeof OFFICE_DOC_EDITOR.destroyEditor==='function'){try{OFFICE_DOC_EDITOR.destroyEditor();}catch(_){}}OFFICE_DOC_EDITOR=null;}
 function ensureOnlyOfficeApi(base){if(window.DocsAPI&&window.DocsAPI.DocEditor)return Promise.resolve();if(OFFICE_ONLYOFFICE_LOADER)return OFFICE_ONLYOFFICE_LOADER;OFFICE_ONLYOFFICE_LOADER=new Promise((resolve,reject)=>{const old=document.getElementById('codescope-onlyoffice-api');if(old)old.remove();const script=document.createElement('script');script.id='codescope-onlyoffice-api';script.src=String(base||'').replace(/\/$/,'')+'/web-apps/apps/api/documents/api.js';script.onload=()=>window.DocsAPI&&window.DocsAPI.DocEditor?resolve():reject(new Error('ONLYOFFICE 编辑 API 未注册'));script.onerror=()=>reject(new Error('无法连接 ONLYOFFICE Docs'));document.head.appendChild(script);}).catch((error)=>{OFFICE_ONLYOFFICE_LOADER=null;throw error;});return OFFICE_ONLYOFFICE_LOADER;}
@@ -1874,7 +1977,7 @@ function readingRoleLabel(item){return item.role==='original'?'原版':item.role
 function readingKindIcon(item){return item.kind==='pdf'?'▤':item.kind==='markdown'?'M↓':item.kind==='docx'?'W':item.kind==='sheet'?'X':item.kind==='slides'?'P':item.kind==='web'?'↗':item.kind==='html'?'H':'</>';}
 function hideReadingPagination(els){els.view.style.display='none';els.page.style.display='none';els.pages.style.display='none';els.col.querySelector('.reading-prev').style.display='none';els.col.querySelector('.reading-next').style.display='none';}
 function readingAssetShell(els,fragment){
-  const shell=document.createElement('div');shell.className='reading-asset-shell '+fragment.kind;const toolbar=document.createElement('div');toolbar.className='reading-asset-toolbar';const kind=document.createElement('span');kind.className='kind';kind.textContent=readingRoleLabel(fragment);const title=document.createElement('span');title.className='title';title.textContent=readingBase(fragment.name);const minus=document.createElement('button'),value=document.createElement('button'),plus=document.createElement('button');minus.type=value.type=plus.type='button';minus.textContent='−';plus.textContent='＋';value.className='zoom-value';const minZoom=fragment.kind==='web'||fragment.kind==='html'?40:60,maxZoom=fragment.kind==='web'||fragment.kind==='html'?240:180,zoomListeners=new Set();let zoom=100;try{zoom=Math.max(minZoom,Math.min(maxZoom,Number(localStorage.getItem('mc-reading-asset-zoom:'+fragment.path))||100));}catch(_){}const setZoom=(next,persist=true)=>{zoom=Math.max(minZoom,Math.min(maxZoom,Math.round(Number(next)||100)));shell.style.setProperty('--reading-asset-zoom',String(zoom/100));value.textContent=zoom+'%';for(const listener of zoomListeners)listener(zoom);if(persist)try{localStorage.setItem('mc-reading-asset-zoom:'+fragment.path,String(zoom));}catch(_){}};minus.title='缩小';plus.title='放大';value.title='恢复 100%';minus.onclick=()=>setZoom(zoom-10);plus.onclick=()=>setZoom(zoom+10);value.onclick=()=>setZoom(100);const download=document.createElement('a');download.href='/api/readings/file?download=1&path='+encodeURIComponent(fragment.path);download.textContent='下载原文件';download.title='下载原始资料文件';const stage=document.createElement('div');stage.className='reading-asset-stage';toolbar.append(kind,title,minus,value,plus);if(fragment.kind!=='web')toolbar.append(download);shell.append(toolbar,stage);stage.addEventListener('wheel',(event)=>{if(!(event.ctrlKey||event.metaKey))return;event.preventDefault();setZoom(zoom+(event.deltaY<0?10:-10));},{passive:false});setZoom(zoom,false);els.body.appendChild(shell);return{shell,toolbar,stage,title,setZoom,getZoom:()=>zoom,onZoom:(listener)=>{zoomListeners.add(listener);listener(zoom);return()=>zoomListeners.delete(listener);}};
+  const shell=document.createElement('div');shell.className='reading-asset-shell '+fragment.kind;const toolbar=document.createElement('div');toolbar.className='reading-asset-toolbar';const kind=document.createElement('span');kind.className='kind';kind.textContent=readingRoleLabel(fragment);const title=document.createElement('span');title.className='title';title.textContent=readingBase(fragment.name);const minus=document.createElement('button'),value=document.createElement('button'),plus=document.createElement('button');minus.type=value.type=plus.type='button';minus.innerHTML=csGlyphIcon('−');plus.innerHTML=csGlyphIcon('＋');value.className='zoom-value';const minZoom=fragment.kind==='web'||fragment.kind==='html'?40:60,maxZoom=fragment.kind==='web'||fragment.kind==='html'?240:180,zoomListeners=new Set();let zoom=100;try{zoom=Math.max(minZoom,Math.min(maxZoom,Number(localStorage.getItem('mc-reading-asset-zoom:'+fragment.path))||100));}catch(_){}const setZoom=(next,persist=true)=>{zoom=Math.max(minZoom,Math.min(maxZoom,Math.round(Number(next)||100)));shell.style.setProperty('--reading-asset-zoom',String(zoom/100));value.textContent=zoom+'%';for(const listener of zoomListeners)listener(zoom);if(persist)try{localStorage.setItem('mc-reading-asset-zoom:'+fragment.path,String(zoom));}catch(_){}};minus.title='缩小';plus.title='放大';value.title='恢复 100%';minus.onclick=()=>setZoom(zoom-10);plus.onclick=()=>setZoom(zoom+10);value.onclick=()=>setZoom(100);const download=document.createElement('a');download.href='/api/readings/file?download=1&path='+encodeURIComponent(fragment.path);download.textContent='下载原文件';download.title='下载原始资料文件';const stage=document.createElement('div');stage.className='reading-asset-stage';toolbar.append(kind,title,minus,value,plus);if(fragment.kind!=='web')toolbar.append(download);shell.append(toolbar,stage);stage.addEventListener('wheel',(event)=>{if(!(event.ctrlKey||event.metaKey))return;event.preventDefault();setZoom(zoom+(event.deltaY<0?10:-10));},{passive:false});setZoom(zoom,false);els.body.appendChild(shell);return{shell,toolbar,stage,title,setZoom,getZoom:()=>zoom,onZoom:(listener)=>{zoomListeners.add(listener);listener(zoom);return()=>zoomListeners.delete(listener);}};
 }
 const READING_WEB_READERS=new Map();
 function readingWebUrlKey(value){try{const url=new URL(value);return url.origin+url.pathname.replace(/(?:index)?\.html$/i,'').replace(/\/$/,'')+url.search;}catch(_){return String(value||'');}}
@@ -1905,7 +2008,7 @@ async function renderReadingAsset(slot,els,fragment){
       const doc=await ensureReadingDoc(fragment.path);
       const first=await api('/api/readings/web?path='+encodeURIComponent(fragment.path));if(!first.ok)throw new Error(first.error||'网页加载失败');
       const back=document.createElement('button'),forward=document.createElement('button'),navToggle=document.createElement('button'),chapterPrev=document.createElement('button'),chapterNext=document.createElement('button'),chapterPos=document.createElement('span'),fit=document.createElement('button'),zoomRange=document.createElement('input'),clip=document.createElement('button'),note=document.createElement('button'),open=document.createElement('a');
-      back.type=forward.type=navToggle.type=chapterPrev.type=chapterNext.type=fit.type=clip.type=note.type='button';back.textContent='←';back.title='后退';forward.textContent='→';forward.title='前进';navToggle.textContent='☰ 目录';navToggle.title='显示或收起整站章节目录';chapterPrev.textContent='‹ 上一章';chapterNext.textContent='下一章 ›';chapterPos.className='reading-web-chapter-pos';fit.textContent='适宽';fit.title='让整张网页适合当前阅读栏宽度';zoomRange.className='reading-web-zoom-range';zoomRange.type='range';zoomRange.min='40';zoomRange.max='240';zoomRange.step='5';zoomRange.title='自由缩放整张网页（40%–240%）';clip.className='reading-web-action';clip.textContent='✂ 摘录';clip.title='选择网页文字后保存高亮摘录';note.className='reading-web-action';note.textContent='＋ 笔记';note.title='选择网页文字后创建可编辑笔记';open.target='_blank';open.rel='noopener noreferrer';open.textContent='打开原网页';ui.toolbar.append(back,forward,navToggle,chapterPrev,chapterPos,chapterNext,fit,zoomRange,clip,note,open);
+      back.type=forward.type=navToggle.type=chapterPrev.type=chapterNext.type=fit.type=clip.type=note.type='button';back.textContent='←';back.title='后退';forward.textContent='→';forward.title='前进';navToggle.textContent='☰ 目录';navToggle.title='显示或收起整站章节目录';chapterPrev.innerHTML=csGlyphIcon('‹') + ' 上一章';chapterNext.textContent='下一章 ›';chapterPos.className='reading-web-chapter-pos';fit.textContent='适宽';fit.title='让整张网页适合当前阅读栏宽度';zoomRange.className='reading-web-zoom-range';zoomRange.type='range';zoomRange.min='40';zoomRange.max='240';zoomRange.step='5';zoomRange.title='自由缩放整张网页（40%–240%）';clip.className='reading-web-action';clip.textContent='✂ 摘录';clip.title='选择网页文字后保存高亮摘录';note.className='reading-web-action';note.innerHTML=csGlyphIcon('＋') + ' 笔记';note.title='选择网页文字后创建可编辑笔记';open.target='_blank';open.rel='noopener noreferrer';open.textContent='打开原网页';ui.toolbar.append(back,forward,navToggle,chapterPrev,chapterPos,chapterNext,fit,zoomRange,clip,note,open);
       const layout=document.createElement('div'),navShell=document.createElement('aside'),navHead=document.createElement('div'),navTitle=document.createElement('strong'),navProgress=document.createElement('span'),navFilter=document.createElement('input'),navTree=document.createElement('nav'),content=document.createElement('div'),article=document.createElement('article');
       layout.className='reading-web-layout';navShell.className='reading-web-nav-shell';navHead.className='reading-web-nav-head';navTitle.textContent='网站目录';navProgress.className='reading-web-nav-progress';navProgress.textContent='正在建立站点目录…';navFilter.type='search';navFilter.placeholder='筛选章节…';navFilter.setAttribute('aria-label','筛选网站目录');navTree.className='reading-web-nav';content.className='reading-web-content';article.className='reading-web-article';navHead.append(navTitle,navProgress,navFilter);navShell.append(navHead,navTree);content.appendChild(article);layout.append(navShell,content);ui.stage.replaceChildren(layout);
       const history=[],pageCache=new Map(),webRanges=new Map(),markName='codescope-web-marks-'+slot;let historyIndex=-1,currentUrl='',lastSelection=null,prefetchToken=0;const sizePage=()=>article.style.setProperty('--reading-web-page-width',Math.max(320,Math.min(920,content.clientWidth-56))+'px'),pageResize=typeof ResizeObserver==='function'?new ResizeObserver(sizePage):null;if(pageResize)pageResize.observe(content);sizePage();
@@ -2442,7 +2545,7 @@ function replaceReadingLiveBlock(block,replacement){if(block.tagName!=='LI'){blo
 function transformReadingLiveBlock(block,command){if(!block||!command)return null;const text=readingBlockText(block),made=createReadingLiveBlock(command,text);replaceReadingLiveBlock(block,made.node);if(made.appendParagraph){const paragraph=document.createElement('p');paragraph.appendChild(document.createElement('br'));made.node.after(paragraph);return paragraph;}return made.focus;}
 function insertReadingLiveBlockAfter(editor,block){const paragraph=document.createElement('p');paragraph.appendChild(document.createElement('br'));if(!block){editor.appendChild(paragraph);focusReadingBlock(paragraph);return paragraph;}const list=block.tagName==='LI'?block.parentElement:/^(UL|OL)$/.test(block.tagName)?block:null;if(list){const next=document.createElement('li'),task=block.tagName==='LI'?block.classList.contains('md-task'):!!list.querySelector('li.md-task');if(task){next.className='md-task';const check=document.createElement('input');check.type='checkbox';check.disabled=true;const text=document.createElement('span');text.appendChild(document.createElement('br'));next.append(check,text);block.tagName==='LI'?block.after(next):list.appendChild(next);focusReadingBlock(text);}else{next.appendChild(document.createElement('br'));block.tagName==='LI'?block.after(next):list.appendChild(next);focusReadingBlock(next);}return next;}block.after(paragraph);focusReadingBlock(paragraph);return paragraph;}
 function readingBlockFirstLineRect(block){if(!block)return null;const walker=document.createTreeWalker(block,NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode())){const text=String(node.textContent||''),start=text.search(/\S/);if(start<0)continue;const parent=node.parentElement;if(parent&&parent.closest('.callout-remove'))continue;try{const range=document.createRange();range.setStart(node,start);range.setEnd(node,Math.min(text.length,start+1));const rect=range.getClientRects()[0]||range.getBoundingClientRect();if(rect&&(rect.width||rect.height))return rect;}catch(_){}}return block.getBoundingClientRect();}
-function setupReadingLiveBlocks(editor,workbench,slot){let current=null,dragBlock=null,dropTarget=null,dropAfter=false,hideTimer=0,overTools=false,pointerId=null,startX=0,startY=0,lastX=0,lastY=0,dragging=false,suppressClick=false,ghost=null,scrollFrame=0;const tools=document.createElement('div');tools.className='reading-block-tools';tools.contentEditable='false';const add=document.createElement('button');add.type='button';add.className='reading-block-tool';add.textContent='＋';add.title='在下方添加区块';add.setAttribute('aria-label',add.title);const handle=document.createElement('button');handle.type='button';handle.className='reading-block-tool handle';handle.textContent='⠿';handle.title='拖动区块；点击转换；Alt+↑/↓ 移动';handle.setAttribute('aria-label',handle.title);const marker=document.createElement('div');marker.className='reading-block-drop-marker';tools.append(add,handle);workbench.append(tools,marker);
+function setupReadingLiveBlocks(editor,workbench,slot){let current=null,dragBlock=null,dropTarget=null,dropAfter=false,hideTimer=0,overTools=false,pointerId=null,startX=0,startY=0,lastX=0,lastY=0,dragging=false,suppressClick=false,ghost=null,scrollFrame=0;const tools=document.createElement('div');tools.className='reading-block-tools';tools.contentEditable='false';const add=document.createElement('button');add.type='button';add.className='reading-block-tool';add.innerHTML=csGlyphIcon('＋');add.title='在下方添加区块';add.setAttribute('aria-label',add.title);const handle=document.createElement('button');handle.type='button';handle.className='reading-block-tool handle';handle.textContent='⠿';handle.title='拖动区块；点击转换；Alt+↑/↓ 移动';handle.setAttribute('aria-label',handle.title);const marker=document.createElement('div');marker.className='reading-block-drop-marker';tools.append(add,handle);workbench.append(tools,marker);
   const clearDrop=()=>{dropTarget=null;marker.classList.remove('on');};const hide=()=>{clearTimeout(hideTimer);tools.classList.remove('on');};const scheduleHide=()=>{clearTimeout(hideTimer);hideTimer=setTimeout(()=>{if(!overTools&&!tools.matches(':hover')&&!dragging)hide();},320);};const show=(block)=>{clearTimeout(hideTimer);if(!block)return scheduleHide();current=block;const rect=block.getBoundingClientRect(),host=workbench.getBoundingClientRect(),lineRect=readingBlockFirstLineRect(block)||rect;if(rect.bottom<host.top||rect.top>host.bottom)return hide();tools.classList.add('on');const toolWidth=tools.offsetWidth||50,toolHeight=tools.offsetHeight||26,gap=block.tagName==='LI'?30:14;tools.style.left=Math.max(6,rect.left-host.left-toolWidth-gap)+'px';tools.style.top=Math.max(3,lineRect.top-host.top+(lineRect.height-toolHeight)/2)+'px';};
   const targetAt=(x,y)=>{let target=readingLiveBlock(document.elementFromPoint(x,y),editor);if(target===dragBlock)target=null;if(!target){const rect=editor.getBoundingClientRect();if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom){const blocks=readingOrderedBlocks(editor).filter((block)=>block!==dragBlock);if(blocks.length){target=y<blocks[0].getBoundingClientRect().top?blocks[0]:blocks[blocks.length-1];}}}return target;};
   const placeMarker=(target,after)=>{if(!target)return clearDrop();dropTarget=target;dropAfter=after;const rect=target.getBoundingClientRect(),host=workbench.getBoundingClientRect(),editorRect=editor.getBoundingClientRect();marker.style.left=Math.max(14,editorRect.left-host.left+10)+'px';marker.style.width=Math.max(30,editorRect.right-editorRect.left-20)+'px';marker.style.top=Math.max(2,(after?rect.bottom:rect.top)-host.top-1)+'px';marker.classList.add('on');};
@@ -2500,18 +2603,18 @@ function renderReadingList() {
   const host=$('reading-list');host.replaceChildren();
   host.ondragover=(e)=>{if(e.dataTransfer.types.includes('application/x-codescope-reading-node')){e.preventDefault();host.classList.add('root-drop');}};host.ondragleave=(e)=>{if(e.target===host)host.classList.remove('root-drop');};host.ondrop=(e)=>{e.preventDefault();host.classList.remove('root-drop');moveReadingNode(readingNodePayload(e),'');};
   if(!READING_TREE||!READING_TREE.children.length){const empty=document.createElement('div');empty.className='draw-empty';empty.textContent='还没有阅读项目：点击 ＋ 创建项目';host.appendChild(empty);return;}
-  const action=(text,title,handler,danger=false)=>{const button=document.createElement('button');button.textContent=text;button.title=title;button.setAttribute('aria-label',title);if(danger)button.className='danger';button.onclick=(event)=>{event.stopPropagation();handler();};return button;};
+  const action=(text,title,handler,danger=false)=>{const button=document.createElement('button');button.dataset.glyph=text;button.textContent=text;button.title=title;button.setAttribute('aria-label',title);if(danger)button.className='danger';button.onclick=(event)=>{event.stopPropagation();handler();};return button;};
   const drawNodes=(nodes,parent)=>{const __list=nodes||[];for(let __i=0;__i<__list.length;__i++){const node=__list[__i],__next=__list[__i+1]||null;
     if(node.type==='folder'){
-      const open=READING_DIR_OPEN.has(node.path),knowledge=!!node.knowledge,row=document.createElement('div');row.className='reading-folder reading-library-folder'+(knowledge?' knowledge-folder':'');row.draggable=!node.knowledgeRoot;const arrow=document.createElement('span');arrow.textContent=open?'▾':'▸';const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup(open?'folderOpen':'folder');const name=document.createElement('span');name.className='name';name.textContent=node.name;const count=document.createElement('span');count.className='meta';count.textContent=String(node.count||0);count.title=(node.count||0)+(knowledge?' 篇文档':' 个项目');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';
-      if(knowledge){if(node.knowledgeRoot)actions.append(action('▣+','新建知识分类',()=>createKnowledgeCategoryInFolder(node.path)));else actions.append(action('P+','在此分类新建知识项目',()=>createKnowledgeProjectInFolder(node.path)),action('▣+','新建子分类',()=>createKnowledgeCategoryInFolder(node.path)),action('✎','重命名知识分类',()=>renameReadingFolder(node)),action('×','删除知识分类',()=>deleteReadingFolder(node),true));}
-      else actions.append(action('＋','在此文件夹新建阅读项目',()=>createReadingProject(node.path)),action('▣+','新建子文件夹',()=>createReadingFolder(node.path)),action('✎','重命名文件夹',()=>renameReadingFolder(node)),action('×','删除文件夹',()=>deleteReadingFolder(node),true));
+      const open=READING_DIR_OPEN.has(node.path),knowledge=!!node.knowledge,row=document.createElement('div');row.className='reading-folder reading-library-folder'+(knowledge?' knowledge-folder':'');row.dataset.path=node.path;row.draggable=!node.knowledgeRoot;const arrow=document.createElement('span');arrow.innerHTML=open? csGlyphIcon('▾') : csGlyphIcon('▸');const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup(open?'folderOpen':'folder');const name=document.createElement('span');name.className='name';name.textContent=node.name;const count=document.createElement('span');count.className='meta';count.textContent=String(node.count||0);count.title=(node.count||0)+(knowledge?' 篇文档':' 个项目');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';
+      if(knowledge){if(node.knowledgeRoot)actions.append(action('▣+','新建知识分类',()=>createKnowledgeCategoryInFolder(node.path)));else actions.append(action('P+','新建知识项目',()=>createKnowledgeProjectInFolder(node.path)),action('▣+','新建子分类',()=>createKnowledgeCategoryInFolder(node.path)),action('✎','重命名',()=>renameReadingFolder(node)),action('×','删除',()=>deleteReadingFolder(node),true));}
+      else actions.append(action('＋','新建阅读项目',()=>createReadingProject(node.path)),action('▣+','新建文件夹',()=>createReadingFolder(node.path)),action('✎','重命名',()=>renameReadingFolder(node)),action('×','删除',()=>deleteReadingFolder(node),true));
       row.append(arrow,icon,name,count,actions);row.onclick=()=>{open?READING_DIR_OPEN.delete(node.path):READING_DIR_OPEN.add(node.path);saveReadingDirs();renderReadingList();};
       if(!node.knowledgeRoot){row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'folder',path:node.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));wireReadingRowDrop(row,node,__next);   /* ★ 统一接线。知识库**根**不能移（VitePress 配置指向它），里面的分类可以 ✓ */}
       parent.appendChild(row);if(open){const children=document.createElement('div');children.className='reading-library-children';parent.appendChild(children);drawNodes(node.children,children);}continue;
     }
-    if(node.type==='fragment'&&node.knowledge){const row=document.createElement('div');row.className='reading-folder reading-knowledge-page'+(node.path===READING_CURRENT?' on':'');const icon=document.createElement('span');icon.className='side-glyph';icon.textContent='M↓';const name=document.createElement('span');name.className='name';name.textContent=node.path==='知识库/index.md'?'知识库首页':readingBase(node.name);const meta=document.createElement('span');meta.className='meta';meta.textContent=readingSize(node.size);const actions=document.createElement('span');actions.className='reading-row-actions';if(node.path!=='知识库/index.md')actions.append(action('✎','重命名文档',()=>renameReadingFragment(node)),action('×','删除文档',()=>deleteReadingFragment(node),true));row.append(icon,name,meta,actions);row.onclick=()=>openReading(node.path,0);parent.appendChild(row);continue;}
-    const project=node,row=document.createElement('div');row.className='reading-folder reading-project'+(project.path===READING_PROJECT_CURRENT?' on':'');row.draggable=true;const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup('book');const copy=document.createElement('div');copy.className='reading-project-copy';const name=document.createElement('span');name.className='name';name.textContent=project.name;copy.appendChild(name);const desc=document.createElement('span');desc.className='reading-project-desc'+(project.description?'':' empty');desc.textContent=project.description||'暂无说明 · 点击 ⓘ 完善';copy.appendChild(desc);const tags=document.createElement('span');tags.className='reading-project-tags';if(project.tags&&project.tags.length){for(const value of project.tags.slice(0,3)){const tag=document.createElement('span');tag.className='reading-project-tag';tag.textContent=value;tags.appendChild(tag);}}else{const tag=document.createElement('span');tag.className='reading-project-tag empty';tag.textContent='＋ 标签';tag.onclick=(e)=>{e.stopPropagation();editReadingProjectMeta(project);};tags.appendChild(tag);}copy.appendChild(tags);const count=document.createElement('span');count.className='meta';count.textContent=String(project.count||0);count.title=(project.count||0)+(project.knowledge?' 篇 Markdown':' 个片段');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';actions.append(action(project.knowledge?'M+':'＋',project.knowledge?'新建 Markdown 片段':'添加项目片段',project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project)),action('ⓘ','编辑项目说明和标签',()=>editReadingProjectMeta(project)),action('✎','重命名阅读项目',()=>renameReadingProject(project)),action('×','删除整个阅读项目',()=>deleteReadingProject(project),true));row.append(icon,copy,count,actions);row.onclick=()=>openReadingProject(project);if(!project.knowledge){row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'project',path:project.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));wireReadingRowDrop(row,node,__next);}parent.appendChild(row);
+    if(node.type==='fragment'&&node.knowledge){const row=document.createElement('div');row.className='reading-folder reading-knowledge-page'+(node.path===READING_CURRENT?' on':'');row.dataset.path=node.path;const icon=document.createElement('span');icon.className='side-glyph';icon.textContent='M↓';const name=document.createElement('span');name.className='name';name.textContent=node.path==='知识库/index.md'?'知识库首页':readingBase(node.name);const meta=document.createElement('span');meta.className='meta';meta.textContent=readingSize(node.size);const actions=document.createElement('span');actions.className='reading-row-actions';if(node.path!=='知识库/index.md')actions.append(action('✎','重命名',()=>renameReadingFragment(node)),action('×','删除',()=>deleteReadingFragment(node),true));row.append(icon,name,meta,actions);row.onclick=()=>openReading(node.path,0);parent.appendChild(row);continue;}
+    const project=node,row=document.createElement('div');row.className='reading-folder reading-project'+(project.path===READING_PROJECT_CURRENT?' on':'');row.dataset.path=project.path;row.draggable=true;const icon=document.createElement('span');icon.className='side-glyph';icon.innerHTML=sideGlyphMarkup('book');const copy=document.createElement('div');copy.className='reading-project-copy';const name=document.createElement('span');name.className='name';name.textContent=project.name;copy.appendChild(name);const desc=document.createElement('span');desc.className='reading-project-desc'+(project.description?'':' empty');desc.textContent=project.description||'暂无说明 · 点击 ⓘ 完善';copy.appendChild(desc);const tags=document.createElement('span');tags.className='reading-project-tags';if(project.tags&&project.tags.length){for(const value of project.tags.slice(0,3)){const tag=document.createElement('span');tag.className='reading-project-tag';tag.textContent=value;tags.appendChild(tag);}}else{const tag=document.createElement('span');tag.className='reading-project-tag empty';tag.innerHTML=csGlyphIcon('＋') + ' 标签';tag.onclick=(e)=>{e.stopPropagation();editReadingProjectMeta(project);};tags.appendChild(tag);}copy.appendChild(tags);const count=document.createElement('span');count.className='meta';count.textContent=String(project.count||0);count.title=(project.count||0)+(project.knowledge?' 篇 Markdown':' 个片段');count.setAttribute('aria-label',count.title);const actions=document.createElement('span');actions.className='reading-row-actions';actions.append(action(project.knowledge?'M+':'＋',project.knowledge?'新建 Markdown 片段':'添加项目片段',project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project)),action('ⓘ','项目说明与标签',()=>editReadingProjectMeta(project)),action('✎','重命名',()=>renameReadingProject(project)),action('×','删除项目',()=>deleteReadingProject(project),true));row.append(icon,copy,count,actions);row.onclick=()=>openReadingProject(project);if(!project.knowledge){row.addEventListener('dragstart',(e)=>{if(e.target.closest('button'))return e.preventDefault();e.dataTransfer.setData('application/x-codescope-reading-node',JSON.stringify({type:'project',path:project.path}));e.dataTransfer.effectAllowed='move';row.classList.add('dragging');});row.addEventListener('dragend',()=>row.classList.remove('dragging'));wireReadingRowDrop(row,node,__next);}parent.appendChild(row);
   }};drawNodes(READING_TREE.children,host);
 }
 async function createKnowledgePageInProject(projectPath){const name=await askText({ title:'新建 Markdown 片段', message:'Markdown 片段名称', value:'新文档.md', okLabel:'新建' });if(!name)return;const base=String(projectPath||'').replace(/^知识库\/?/,'');let rel=base+'/'+name.trim();if(!/\.md$/i.test(rel))rel+='.md';const result=await api('/api/knowledge/page',{path:rel,title:name.replace(/\.md$/i,'')});if(!result.ok)return setStatus('err', result.error);await loadReadings();READING_PROJECT_CURRENT=projectPath;openReading(result.readingPath,READING_ACTIVE_SLOT);}
@@ -2543,7 +2646,7 @@ function renderReadingProjectTabs(){
     ]));
     tab.onclick=()=>openReading(item.path,READING_ACTIVE_SLOT);tab.addEventListener('dragstart',(e)=>{tab.classList.add('dragging');$('reading-columns').classList.add('fragment-dragging');e.dataTransfer.setData('application/x-codescope-reading',item.path);e.dataTransfer.effectAllowed='copy';});tab.addEventListener('dragend',()=>{tab.classList.remove('dragging');$('reading-columns').classList.remove('fragment-dragging');});host.appendChild(tab);
   }
-  const add=document.createElement('button');add.id='reading-project-add';add.textContent=project.knowledge?'＋ Markdown':'＋ 片段';add.title=project.knowledge?'在当前知识项目中新建 Markdown 片段':'新建或导入 PDF、Markdown、代码片段';add.onclick=project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project);host.appendChild(add);
+  const add=document.createElement('button');add.id='reading-project-add';add.innerHTML=csGlyphText(project.knowledge?'＋ Markdown':'＋ 片段');add.title=project.knowledge?'在当前知识项目中新建 Markdown 片段':'新建或导入 PDF、Markdown、代码片段';add.onclick=project.knowledge?()=>createKnowledgePageInProject(project.path):()=>addReadingProjectFragment(project);host.appendChild(add);
 }
 async function ensureReadingDoc(path) {
   let doc=READING_DOCS.get(path);if(doc)return doc;
@@ -2632,7 +2735,7 @@ async function renderReadingSlot(slot) {
       els.col.classList.add('reading-col-md');els.name.title=els.name.textContent||'';if(els.name.parentElement!==toolbar)toolbar.insertBefore(els.name,toolbar.firstChild);
       const modeDefs=[['edit','✎ 源码'],['live','▦ 区块编辑'],['preview','▤ 阅读']],modeButtons=new Map();
       for(const [mode,label] of modeDefs){const button=document.createElement('button');button.type='button';button.className='reading-md-mode';button.dataset.mode=mode;button.textContent=label;button.setAttribute('role','tab');button.onclick=()=>applyMode(mode,true);modeButtons.set(mode,button);modes.appendChild(button);}
-      const zoomTools=document.createElement('div');zoomTools.className='reading-md-zoom';zoomTools.setAttribute('aria-label','Markdown 缩放');const zoomOut=document.createElement('button'),zoomValueButton=document.createElement('button'),zoomIn=document.createElement('button');zoomOut.type=zoomValueButton.type=zoomIn.type='button';zoomOut.textContent='−';zoomOut.title='缩小（⌘/Ctrl+-）';zoomValueButton.className='value';zoomValueButton.title='恢复 100%（⌘/Ctrl+0）';zoomIn.textContent='＋';zoomIn.title='放大（⌘/Ctrl++）';zoomTools.append(zoomOut,zoomValueButton,zoomIn);const outlineToggle=document.createElement('button');outlineToggle.type='button';outlineToggle.className='reading-md-outline-toggle';outlineToggle.textContent='☷ 大纲';outlineToggle.title='显示或隐藏文档大纲';toolbar.append(kind,zoomTools,outlineToggle,modes);
+      const zoomTools=document.createElement('div');zoomTools.className='reading-md-zoom';zoomTools.setAttribute('aria-label','Markdown 缩放');const zoomOut=document.createElement('button'),zoomValueButton=document.createElement('button'),zoomIn=document.createElement('button');zoomOut.type=zoomValueButton.type=zoomIn.type='button';zoomOut.innerHTML=csGlyphIcon('−');zoomOut.title='缩小（⌘/Ctrl+-）';zoomValueButton.className='value';zoomValueButton.title='恢复 100%（⌘/Ctrl+0）';zoomIn.innerHTML=csGlyphIcon('＋');zoomIn.title='放大（⌘/Ctrl++）';zoomTools.append(zoomOut,zoomValueButton,zoomIn);const outlineToggle=document.createElement('button');outlineToggle.type='button';outlineToggle.className='reading-md-outline-toggle';outlineToggle.textContent='☷ 大纲';outlineToggle.title='显示或隐藏文档大纲';toolbar.append(kind,zoomTools,outlineToggle,modes);
       /* Markdown 模式把整行栏头隐藏了（文档名并进工具栏），栏头里那个「关闭此栏」的 × 也跟着没了 ——
          于是 Markdown 栏根本关不掉：双栏并排时想关掉右边那栏，找不到任何入口。
          这里把关闭入口补到工具栏最右侧，和栏头那个 × 走同一个 closeReadingColumn。 */
@@ -2640,7 +2743,7 @@ async function renderReadingSlot(slot) {
       const workbench=document.createElement('div');workbench.className='reading-md-workbench';const source=document.createElement('textarea');source.className='reading-md-source';source.spellcheck=false;source.value=record.content||'';source.placeholder='# 从这里开始写 Markdown…\n\n输入 / 可插入标题、列表、引用与提示块';source.setAttribute('aria-label','Markdown 源码编辑器');
       const live=document.createElement('div');live.className='reading-md-block';live.dataset.readingPath=path;live.setAttribute('aria-label','Markdown 区块编辑器');
       const preview=document.createElement('div');preview.className='reading-md-editor reading-md-preview';preview.dataset.readingPath=path;preview.setAttribute('aria-label','Markdown 阅读视图');
-      const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlinePath=document.createElement('div');outlinePath.className='reading-md-outline-path';const outlinePathParent=document.createElement('span');outlinePathParent.className='seg parent';const outlinePathSep=document.createElement('span');outlinePathSep.className='sep';outlinePathSep.textContent='›';const outlinePathCurrent=document.createElement('span');outlinePathCurrent.className='seg current';outlinePath.append(outlinePathParent,outlinePathSep,outlinePathCurrent);const outlineProgress=document.createElement('div');outlineProgress.className='reading-md-outline-progress';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineList.__path={box:outlinePath,parent:outlinePathParent,current:outlinePathCurrent};/* ③ 正文宽度切换：**已按用户要求移除**（试了五版都没能让它稳定生效，用户说「算了去掉这个」）。
+      const outline=document.createElement('aside');outline.className='reading-md-outline';outline.setAttribute('aria-label','Markdown 文档大纲');const outlineHead=document.createElement('div');outlineHead.className='reading-md-outline-head';const outlineTitle=document.createElement('span');outlineTitle.className='reading-md-outline-title';outlineTitle.textContent='文档大纲';const outlineCount=document.createElement('span');outlineCount.className='reading-md-outline-count';const outlinePath=document.createElement('div');outlinePath.className='reading-md-outline-path';const outlinePathParent=document.createElement('span');outlinePathParent.className='seg parent';const outlinePathSep=document.createElement('span');outlinePathSep.className='sep';outlinePathSep.innerHTML=csGlyphIcon('›');const outlinePathCurrent=document.createElement('span');outlinePathCurrent.className='seg current';outlinePath.append(outlinePathParent,outlinePathSep,outlinePathCurrent);const outlineProgress=document.createElement('div');outlineProgress.className='reading-md-outline-progress';const outlineList=document.createElement('nav');outlineList.className='reading-md-outline-list';outlineList.__path={box:outlinePath,parent:outlinePathParent,current:outlinePathCurrent};/* ③ 正文宽度切换：**已按用户要求移除**（试了五版都没能让它稳定生效，用户说「算了去掉这个」）。
    教训见 .workbuddy-ai/memory 2026-10-12：不要赌 DOM 类名，够不着的界面早点要 class。 */outline.append(outlineHead,outlineList);
 /* ★ ② 大纲拖拽条 ✓（用户：「大纲无法自由左右拖动」）——
    大纲宽度原来是**写死的 252px** ✗，现在走 CSS 变量 ✓。
@@ -2678,11 +2781,11 @@ const jumpOutlineActive=(index)=>{live.__outlineTargetIndex=index;setReadingMark
       /* 相对层级：作者漏写中间层（例如 h2 直接跳 h4）时把跳级收敛成一级，
          否则会出现空轨道 + 大幅缩进，白白吃掉横向空间。 */
       let runningDepth=0;
-      outlineEntries.forEach((entry,index)=>{const hasChildren=index+1<outlineEntries.length&&outlineEntries[index+1].level>entry.level;const button=document.createElement('button');button.type='button';button.className='reading-md-outline-item'+(hasChildren?' has-children':'');{const relative=Math.max(0,entry.level-base),depth=index===0?relative:Math.min(relative,runningDepth+1);runningDepth=depth;button.style.setProperty('--outline-depth',String(depth));}button.dataset.level=String(entry.level);button.title=entry.text;const label=document.createElement('span');label.className='label';label.textContent=entry.text;button.appendChild(label);{const copyRef=document.createElement('span');copyRef.className='reading-md-outline-ref';copyRef.setAttribute('role','button');copyRef.tabIndex=0;copyRef.title='复制引用链接 [[md-ref:…]]（可粘到任意笔记里跳转）';copyRef.setAttribute('aria-label','复制引用链接');copyRef.textContent='↗';button.appendChild(copyRef);}{const copy=document.createElement('span');copy.className='reading-md-outline-copy';copy.setAttribute('role','button');copy.tabIndex=0;copy.title='复制指向此标题的链接';copy.setAttribute('aria-label','复制链接');copy.textContent='⧉';button.appendChild(copy);}if(hasChildren){const more=document.createElement('span');more.className='reading-md-outline-more';more.setAttribute('role','button');more.tabIndex=0;more.title='折叠 / 展开这一节';more.textContent='▾';
+      outlineEntries.forEach((entry,index)=>{const hasChildren=index+1<outlineEntries.length&&outlineEntries[index+1].level>entry.level;const button=document.createElement('button');button.type='button';button.className='reading-md-outline-item'+(hasChildren?' has-children':'');{const relative=Math.max(0,entry.level-base),depth=index===0?relative:Math.min(relative,runningDepth+1);runningDepth=depth;button.style.setProperty('--outline-depth',String(depth));}button.dataset.level=String(entry.level);button.title=entry.text;const label=document.createElement('span');label.className='label';label.textContent=entry.text;button.appendChild(label);{const copyRef=document.createElement('span');copyRef.className='reading-md-outline-ref';copyRef.setAttribute('role','button');copyRef.tabIndex=0;copyRef.title='复制引用链接 [[md-ref:…]]（可粘到任意笔记里跳转）';copyRef.setAttribute('aria-label','复制引用链接');copyRef.textContent='↗';button.appendChild(copyRef);}{const copy=document.createElement('span');copy.className='reading-md-outline-copy';copy.setAttribute('role','button');copy.tabIndex=0;copy.title='复制指向此标题的链接';copy.setAttribute('aria-label','复制链接');copy.textContent='⧉';button.appendChild(copy);}if(hasChildren){const more=document.createElement('span');more.className='reading-md-outline-more';more.setAttribute('role','button');more.tabIndex=0;more.title='折叠 / 展开这一节';more.innerHTML=csGlyphIcon('▾');
   /* ★ 折叠：CSS 和「按 data-folded 隐藏更深层级」的逻辑早就有了 ✓，
      但触发按钮被设成 pointer-events:none ✗ —— 点不动 ✓，所以一直折不了 ✓。
      这里把点击接上 ✓：只切自己的 data-folded ✓，不动别人的 ✓（默认展开 ✓）。 */
-  const toggle=(e)=>{e.preventDefault();e.stopPropagation();const f=button.getAttribute('data-folded')==='1';button.setAttribute('data-folded',f?'0':'1');more.textContent=f?'▾':'▸';button.setAttribute('aria-expanded',f?'true':'false');};
+  const toggle=(e)=>{e.preventDefault();e.stopPropagation();const f=button.getAttribute('data-folded')==='1';button.setAttribute('data-folded',f?'0':'1');more.innerHTML=f? csGlyphIcon('▾') : csGlyphIcon('▸');button.setAttribute('aria-expanded',f?'true':'false');};
   more.onclick=toggle;more.onkeydown=(e)=>{if(e.key==='Enter'||e.key===' ')toggle(e);};
   button.appendChild(more);button.setAttribute('aria-expanded','true');}button.onclick=()=>focusOutlineEntry(entry,index);outlineList.appendChild(button);});
       refreshFold();setOutlineActive(0);};setMarkdownZoom(markdownZoom,false);setOutlineOpen(outlineOpen,false);outlineToggle.onclick=()=>setOutlineOpen(!outlineOpen);
@@ -2784,7 +2887,10 @@ const jumpOutlineActive=(index)=>{live.__outlineTargetIndex=index;setReadingMark
         flashReadingMarkdownHeading(()=>readingMarkdownAnchorTarget(container,raw,isPreview));
       },true);
       workbench.addEventListener('keydown',(e)=>{if(!(e.metaKey||e.ctrlKey))return;if(e.key==='0'){e.preventDefault();setMarkdownZoom(100);return;}if(e.key==='+'||e.key==='='){e.preventDefault();setMarkdownZoom(markdownZoom+10);return;}if(e.key==='-'||e.key==='_'){e.preventDefault();setMarkdownZoom(markdownZoom-10);} },true);
-      const previewClick=async(e)=>{const remove=e.target.closest&&e.target.closest('.callout-remove');if(remove){e.preventDefault();e.stopPropagation();const quote=remove.closest('blockquote'),ref=quote&&quote.querySelector('.reading-pdf-ref'),start=Number(quote&&quote.dataset.mdStart),end=Number(quote&&quote.dataset.mdEnd);if(quote&&Number.isFinite(start)&&Number.isFinite(end)){remove.disabled=true;const nextContent=removeReadingMarkdownBlock(record.content,start,end),linked=await removeReadingLinkedPdfFragment(ref);if(!linked.ok){remove.disabled=false;readingStatus('PDF 摘录删除失败：'+(linked.error||'未知错误'),true);return;}const saved=await api('/api/readings/text-fragment',{path,content:nextContent});if(!saved.ok){await restoreReadingLinkedPdfFragment(linked);remove.disabled=false;readingStatus('Markdown 引用删除失败，PDF 摘录已恢复：'+(saved.error||'未知错误'),true);return;}clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.delete(path);record.content=nextContent;record.savedContent=nextContent;source.value=record.content;renderLive(false);renderPreview();foot.textContent='已保存 · '+record.content.length+' 字符';loadReadings(true);readingStatus(linked.removed?'引用、PDF 摘录与页内标记已同步删除':'引用已从 Markdown 笔记中移除');}return;}const ref=e.target.closest&&e.target.closest('.reading-pdf-ref');if(!ref)return;e.preventDefault();e.stopPropagation();locateReadingMarkdownRef(ref,slot);};live.addEventListener('click',previewClick);preview.addEventListener('click',previewClick);
+      const previewClick=async(e)=>{const remove=e.target.closest&&e.target.closest('.callout-remove');if(remove){e.preventDefault();e.stopPropagation();const quote=remove.closest('blockquote'),ref=quote&&quote.querySelector('.reading-pdf-ref'),start=Number(quote&&quote.dataset.mdStart),end=Number(quote&&quote.dataset.mdEnd);if(quote&&Number.isFinite(start)&&Number.isFinite(end)){remove.disabled=true;const nextContent=removeReadingMarkdownBlock(record.content,start,end),linked=await removeReadingLinkedPdfFragment(ref);if(!linked.ok){remove.disabled=false;readingStatus('PDF 摘录删除失败：'+(linked.error||'未知错误'),true);return;}const saved=await api('/api/readings/text-fragment',{path,content:nextContent});if(!saved.ok){await restoreReadingLinkedPdfFragment(linked);remove.disabled=false;readingStatus('Markdown 引用删除失败，PDF 摘录已恢复：'+(saved.error||'未知错误'),true);return;}clearTimeout(READING_TEXT_SAVE_TIMERS.get(path));READING_TEXT_SAVE_TIMERS.delete(path);record.content=nextContent;record.savedContent=nextContent;source.value=record.content;/* ⚠️ 原来是 `renderLive(false)` ✗ —— 那个函数**全项目不存在** ✓ → 删 callout 引用时
+   抛 `ReferenceError` ✓，后面的 `renderPreview()` / 状态更新全被跳过 ✗。
+   live 面板现在是**块编辑器** ✓，重挂载走 `applyMode('live')` ✓（见 applyMode 定义 ✓）。 */
+if(shell.dataset.mdMode==='live')applyMode('live',false);renderPreview();foot.textContent='已保存 · '+record.content.length+' 字符';loadReadings(true);readingStatus(linked.removed?'引用、PDF 摘录与页内标记已同步删除':'引用已从 Markdown 笔记中移除');}return;}const ref=e.target.closest&&e.target.closest('.reading-pdf-ref');if(!ref)return;e.preventDefault();e.stopPropagation();locateReadingMarkdownRef(ref,slot);};live.addEventListener('click',previewClick);preview.addEventListener('click',previewClick);
       renderPreview();workbench.append(source,live,preview,outline);shell.append(toolbar,workbench,foot);els.body.__readingBlockDestroy=destroyBlockEditor;applyMode(loadReadingMarkdownMode(path),false);
       /* 窄栏里大纲是覆盖层（absolute），会压住正文 —— 两种时刻要主动收起：
          ① 挂载时：这份「展开」偏好往往是在宽栏时留下的，一进来就把正文盖住；
@@ -2940,7 +3046,11 @@ function selectedReadingText(){
   const sel=window.getSelection();if(!sel||sel.isCollapsed)return '';const node=sel.anchorNode&&(sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode);if(!node)return '';
   /* .reading-md-preview-content / .reading-md-block 分别是 Markdown 的阅读视图与区块编辑器 */
   if(node.closest&&node.closest('.reading-paper,.reading-web-article,.reading-md-preview-content,.reading-md-block'))return String(sel.toString()).trim();
-  const layer=node.closest&&node.closest('.pdf-text-layer');if(layer){const v=window.__readingPdfViewer;if(!v||!v.alive||!v.alive())return '';const selected=selectedRectsIn(layer);return selected?selected.text:'';}return '';}
+  const layer=node.closest&&node.closest('.pdf-text-layer');if(layer){const v=window.__readingPdfViewer;if(!v||!v.alive||!v.alive())return '';/* ⚠️ 原来是裸调 `selectedRectsIn(layer)` ✗ —— 那个函数在 app-pdf.js 的 **IIFE 里** ✓，
+   根本没暴露成全局 ✓ → PDF 里划词取文本时抛 ReferenceError ✗
+   （「加生词 / 翻译 / 摘录」在 PDF 上就全断了 ✗，而且报错在控制台，界面只说「请先划选」✗）。
+   app-pdf.js 第 21 行**专门**导出了 `window.__pdfSelectedRectsIn` ✓，用它 ✓。 */
+const selected=window.__pdfSelectedRectsIn?window.__pdfSelectedRectsIn(layer):null;return selected?selected.text:'';}return '';}
 async function requireSelectableReadingText(action){
   const text=selectedReadingText();if(text)return text;const els=readingSlotElements(READING_ACTIVE_SLOT),fragment=readingFragment(READING_SLOTS[READING_ACTIVE_SLOT]);
   if(fragment&&fragment.kind==='markdown'){readingStatus('请先在 Markdown 正文（区块编辑或阅读视图）里划选要'+action+'的文字',true);return '';}
@@ -3093,7 +3203,7 @@ function renderReadingFragments() {
     if(item.translation){const zh=document.createElement('div');zh.className='zh';zh.textContent=item.translation;card.appendChild(zh);}
     const actions=document.createElement('div');actions.className='actions';const go=document.createElement('button');go.textContent='定位';go.onclick=async()=>{if(web){const reader=READING_WEB_READERS.get(doc.path);if(reader&&await reader.locate(item))return;readingStatus('网页定位信息已失效，可重新选择原文建立定位',true);return;}if(markdown){if(locateReadingMarkdownExcerpt(doc,item)){readingStatus('已定位到摘录位置');return;}readingStatus('原文里已经找不到这段摘录，可能已被改写',true);return;}if(!window.locateReadingFragment||!(await window.locateReadingFragment(doc,item)))setReadingPage(READING_ACTIVE_SLOT,item.page);};
     const cite=document.createElement('button');cite.textContent='↗ 引用';cite.title='引用到项目 Markdown 阅读笔记，并保留原文来源';cite.onclick=async()=>{try{await appendReadingQuoteToNote(doc,item);}catch(error){readingStatus(error.message,true);}};
-    const note=document.createElement('button');note.textContent=item.note?'✎ 笔记':'＋ 笔记';note.onclick=()=>startFragNoteEdit(card,doc,item);
+    const note=document.createElement('button');note.innerHTML=csGlyphText(item.note?'✎ 笔记':'＋ 笔记');note.onclick=()=>startFragNoteEdit(card,doc,item);
     const del=document.createElement('button');del.textContent='删除';del.onclick=async()=>{doc.meta.fragments=items.filter(v=>v.id!==item.id);await saveReadingDoc(doc);renderReadingFragments();if(web)READING_WEB_READERS.get(doc.path)?.refreshMarks();if(window.refreshFragmentMarksAll)window.refreshFragmentMarksAll();};actions.append(go,cite,note,del);
     if(item.note){const n=document.createElement('div');n.className='frag-note zh md';n.title='点击编辑笔记（支持 Markdown 排版）';const pre=document.createElement('span');pre.className='fn-pre';pre.textContent='✎ ';const box=document.createElement('div');box.className='fn-md';box.innerHTML=renderMd(item.note)||'';n.append(pre,box);n.onclick=()=>startFragNoteEdit(card,doc,item);card.appendChild(n);}card.appendChild(actions);host.appendChild(card);
   }
@@ -3153,6 +3263,7 @@ window.addEventListener('DOMContentLoaded',wireReadingPanel);
 
 /* ------------------------- 绘图（Excalidraw / Draw.io，文件存于 vault/drawings/） ------------------------- */
 let DRAWINGS = [];            // [{name,size,updated}]
+let DRAW_API = null;          // 绘图引擎实例（原来只赋值没声明 ✗：非严格模式静默建全局，严格模式直接抛）
 let DRAW_FILE = null;         // 当前打开的绘图文件名
 let DRAW_KIND = null;         // excalidraw | drawio | xmind
 let DRAW_PENDING = null;      // 待保存的最新 Excalidraw 场景、{xml} 或 {workbook}
@@ -3167,8 +3278,8 @@ let DRAW_OPEN = (() => { try { return localStorage.getItem('mc-draw-open') !== '
 let DRAW_DIR_OPEN = (() => { try { return new Set(JSON.parse(localStorage.getItem('mc-draw-open-dirs') || '[]')); } catch (_) { return new Set(); } })();
 let DRAW_ND_KIND = 'drawing';
 function saveDrawDirs() { try { localStorage.setItem('mc-draw-open-dirs', JSON.stringify([...DRAW_DIR_OPEN])); } catch (_) {} }
-function drawKind(n) { const value=String(n||'');return /\.drawio$/i.test(value)?'drawio':(/\.xmind$/i.test(value)?'xmind':'excalidraw'); }
-function drawBase(n) { return String(n).split('/').pop().replace(/\.(?:excalidraw|drawio|xmind)$/i, ''); }   // 显示名：路径 → 文件名（不含扩展）
+function drawKind(n) { const value=String(n||'');return /\.drawio$/i.test(value)?'drawio':(/\.xmind$/i.test(value)?'xmind':(/\.canvas$/i.test(value)?'canvas':'excalidraw')); }
+function drawBase(n) { return String(n).split('/').pop().replace(/\.(?:excalidraw|drawio|xmind|canvas)$/i, ''); }   // 显示名：路径 → 文件名（不含扩展）
 /* ---- 库（Library）：与本绘图共享同一套编辑器，库文件存于 vault/libraries/*.excalidrawLibrary ---- */
 let LIB_SAVE_T = 0;            // 库改动防抖定时器
 let LIB_POLL_T = 0;            // 文件夹轮询定时器
@@ -3456,7 +3567,7 @@ function xmindEditorTheme(id){
     paper:{type:'light',palette:['#9b6d32','#607d3b','#517792','#985b68','#8064a2'],root:'#f0dfbf',rootBorder:'#9b6d32',main:'#fffaf0',bg:'#f5f0e5',color:'#382e24'},
     spectrum:{type:'dark',palette:['#ff7b72','#7ee787','#7dd3fc','#d2a8ff','#ffa657'],root:'#405d91',rootBorder:'#7dd3fc',main:'#171f2e',bg:'#0c1018',color:'#eef4ff'}
   },t=themes[id]||themes.midnight;
-  return{name:'CodeScope '+id,type:t.type,palette:t.palette,cssVar:{'--node-gap-x':'34px','--node-gap-y':'12px','--main-gap-x':'72px','--main-gap-y':'30px','--root-radius':'12px','--main-radius':'9px','--root-color':t.type==='light'?'#29231c':'#ffffff','--root-bgcolor':t.root,'--root-border-color':t.rootBorder,'--main-color':t.color,'--main-bgcolor':t.main,'--main-bgcolor-transparent':t.main,'--topic-padding':'6px 10px','--color':t.color,'--bgcolor':t.bg,'--selected':t.rootBorder,'--accent-color':t.rootBorder,'--panel-color':t.color,'--panel-bgcolor':t.main,'--panel-border-color':t.rootBorder,'--map-padding':'48px 64px'}};
+  return{name:'CodeScope '+id,type:t.type,palette:t.palette,cssVar:{'--node-gap-x':'32px','--node-gap-y':'10px','--main-gap-x':'62px','--main-gap-y':'24px','--root-radius':'14px','--main-radius':'11px','--root-color':t.type==='light'?'#29231c':'#ffffff','--root-bgcolor':t.root,'--root-border-color':t.rootBorder,'--main-color':t.color,'--main-bgcolor':t.main,'--main-bgcolor-transparent':t.main,'--topic-padding':'7px 12px','--color':t.color,'--bgcolor':t.bg,'--selected':t.rootBorder,'--accent-color':t.rootBorder,'--panel-color':t.color,'--panel-bgcolor':t.main,'--panel-border-color':t.rootBorder,'--map-padding':'48px 64px'}};
 }
 function xmindEditorDirection(ME){const structure=String(xmindRootTopic()?.structureClass||'');return /org-chart|org\.xmind\.ui\.org/i.test(structure)?ME.DOWN:/logic\.left/i.test(structure)?ME.LEFT:/logic\.right/i.test(structure)?ME.RIGHT:ME.SIDE;}
 function xmindDefaultFloatingPosition(index,total){const order=index===0?0:(index%2?Math.ceil(index/2):-Math.ceil(index/2));return{x:330+Math.floor(index/6)*90,y:order*190-(total>1?0:20)};}
@@ -3496,7 +3607,7 @@ function renderXmindOutline(){
   const box=$('xmind-outline');if(!box||DRAW_KIND!=='xmind')return;box.innerHTML='';const root=xmindRootTopic();if(!root)return;
   const walk=(topic,parent,depth,isDetached=false,host=box)=>{
     const group=document.createElement('div');group.className='xmind-tree-group';group.dataset.topicId=topic.id;const row=document.createElement('div');row.className='xmind-row'+(isDetached?' floating':'')+(topic.id===XMIND_SELECTED?' selected':'');row.dataset.id=topic.id;row.dataset.depth=String(depth);row.draggable=topic!==root;
-    const toggle=document.createElement('button');toggle.className='xmind-toggle'+(xmindChildren(topic).length?'':' empty');toggle.textContent=XMIND_COLLAPSED.has(topic.id)?'▸':'▾';toggle.title=XMIND_COLLAPSED.has(topic.id)?'展开子主题':'收起子主题';toggle.onclick=(event)=>{event.stopPropagation();if(XMIND_COLLAPSED.has(topic.id))XMIND_COLLAPSED.delete(topic.id);else XMIND_COLLAPSED.add(topic.id);renderXmindOutline();};
+    const toggle=document.createElement('button');toggle.className='xmind-toggle'+(xmindChildren(topic).length?'':' empty');toggle.innerHTML=XMIND_COLLAPSED.has(topic.id)? csGlyphIcon('▸') : csGlyphIcon('▾');toggle.title=XMIND_COLLAPSED.has(topic.id)?'展开子主题':'收起子主题';toggle.onclick=(event)=>{event.stopPropagation();if(XMIND_COLLAPSED.has(topic.id))XMIND_COLLAPSED.delete(topic.id);else XMIND_COLLAPSED.add(topic.id);renderXmindOutline();};
     const grip=document.createElement('button');grip.className='xmind-grip';grip.textContent='⠇';grip.title=topic===root?'中心主题':(isDetached&&!parent?'拖动自由导图':'拖拽调整层级或顺序');grip.disabled=topic===root;
     const input=document.createElement('textarea');input.rows=1;input.className='xmind-title';input.value=topic.title||'';input.setAttribute('aria-label','主题名称');input.onfocus=()=>{XMIND_SELECTED=topic.id;renderXmindOutlineSelection();};input.oninput=()=>{topic.title=input.value;xmindResizeTitle(input);DRAW_PENDING={workbook:xmindClone(XMIND_WORKBOOK)};scheduleDrawSave();scheduleXmindPreview();xmindQueueRecord();};input.onblur=xmindRecord;
     const level=document.createElement('span');level.className='xmind-depth';level.textContent=isDetached?(depth===0?'自由':'F'+depth):(depth===0?'中心':'L'+depth);
@@ -3590,6 +3701,7 @@ async function openDrawing(name) {
     renderDrawList();
     return;
   }
+  if (DRAW_KIND === 'canvas') { DRAW_LOAD_FAILED=false; $('draw-lib-note').textContent='canvas · tldraw 白板'; $('draw-lib-note').title='无限画布，基于 tldraw（开源白板）'; $('draw-ai-btn').style.display='none'; $('draw-xml-btn').style.display='none'; window.__openCanvasEditor(name); setDrawStatus('就绪',''); renderDrawList(); return; }
   $('drawio-root').style.display='none';
   $('excal-root').style.display='block';
   $('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
@@ -3654,6 +3766,7 @@ async function closeDrawEditor(flush) {
   $('drawio-root').innerHTML = '';
   $('drawio-root').style.display = 'none';
   $('xmind-root').style.display = 'none';
+  if (window.__closeCanvasEditor) window.__closeCanvasEditor();   // canvas 白板 iframe 也要拆（内部先 flush 再销毁）
   $('draw-ai-btn').style.display='none';$('draw-xml-btn').style.display='none';
   $('draw-tool-dialog').classList.remove('open');
   renderDrawList();
@@ -3761,7 +3874,7 @@ function openDrawNewDialog(kind) {
   $('draw-nd-title').textContent = DRAW_ND_KIND === 'folder' ? '新建绘图文件夹' : '新建绘图';
   $('draw-nd-hint').textContent = DRAW_ND_KIND === 'folder'
     ? '名称可含 / 嵌套创建（如 工作/架构图），可放在任意层级下'
-    : 'Excalidraw 适合草图；Draw.io 适合流程图与 UML；XMind 适合可拖拽的层级思维导图';
+    : 'Excalidraw 适合草图；Draw.io 适合流程图与 UML；XMind 适合层级思维导图；canvas 适合自由白板（便签、连接线、图片）';
   $('draw-nd-name').value = '';
   $('draw-nd-name').placeholder = DRAW_ND_KIND === 'folder' ? '我的文件夹' : 'Untitled';
   $('draw-nd-name-label').textContent = DRAW_ND_KIND === 'folder' ? '文件夹名称' : '绘图名称';
@@ -3772,7 +3885,7 @@ function openDrawNewDialog(kind) {
   typeLabel.style.display = choosingType ? '' : 'none';
   typeSelect.style.display = choosingType ? '' : 'none';
   if (choosingType) {
-    try { const saved=localStorage.getItem('mc-draw-new-kind');typeSelect.value=['excalidraw','drawio','xmind'].includes(saved)?saved:'excalidraw'; }
+    try { const saved=localStorage.getItem('mc-draw-new-kind');typeSelect.value=['excalidraw','drawio','xmind','canvas'].includes(saved)?saved:'excalidraw'; }
     catch (_) { typeSelect.value = 'excalidraw'; }
   }
   // 位置下拉：递归收集绘图文件夹
@@ -3845,7 +3958,7 @@ async function submitDrawNewDialog() {
   } else {
     if (DRAW_FILE || DRAW_ROOT) await closeDrawEditor(true);
     const selectedKind=$('draw-nd-type').value;
-    const kind = ['drawio','xmind'].includes(selectedKind) ? selectedKind : 'excalidraw';
+    const kind = ['drawio','xmind','canvas'].includes(selectedKind) ? selectedKind : 'excalidraw';
     try { localStorage.setItem('mc-draw-new-kind', kind); } catch (_) {}
     const r = await api('/api/drawings/new', { dir, name, kind });
     if (!r.ok) { setStatus('err', '新建绘图失败：' + (r.error || '')); await renderDrawList(); return; }
@@ -3871,6 +3984,45 @@ function deleteDrawing(name) {
   });
 }
 
+/* ★★ 拖拽落点三分 ✓（2026-10-19，和项目树对齐）——
+   上 28% = 插到前面 ✓ / 下 28% = 插到后面 ✓ / 中间 = 放进这个文件夹 ✓。
+   ⚠️ 绘图、Office 两棵树共用这一个判定 ✗（别再各写一份，改一处漏一处 ✗）。 */
+function dropZoneOf(el, event) {
+  const r = el.getBoundingClientRect();
+  const y = event.clientY - r.top;
+  if (y < r.height * 0.28) return 'before';
+  if (y > r.height * 0.72) return 'after';
+  return 'inside';
+}
+function paintDropZone(el, zone) {
+  el.classList.toggle('drop-before', zone === 'before');
+  el.classList.toggle('drop-after', zone === 'after');
+  el.classList.toggle('drop-target', zone === 'inside');
+}
+async function reorderDrawings(name, target, position) {
+  if (!name || !target || name === target) return;
+  const parentOf = (v) => (v.includes('/') ? v.slice(0, v.lastIndexOf('/')) : '');
+  if (parentOf(name) !== parentOf(target)) {
+    setStatus('err', '只能在同一层里调整顺序；要换到别的文件夹，请拖到那一行中间');
+    return;
+  }
+  const r = await api('/api/drawings/reorder', { name, target, position });
+  if (!r || !r.ok) { setStatus('err', (r && r.error) || '调整顺序失败'); return; }
+  await renderDrawList();          /* ⚠️ 绘图树的加载函数叫 renderDrawList（它自己会重新拉树 ✓），不是 loadDrawings ✗ */
+  setStatus('ok', '已把「' + drawBase(name) + '」移到「' + drawBase(target) + '」' + (position === 'after' ? '后面' : '前面'));
+}
+async function reorderOffice(path, target, position) {
+  if (!path || !target || path === target) return;
+  const parentOf = (v) => (v.includes('/') ? v.slice(0, v.lastIndexOf('/')) : '');
+  if (parentOf(path) !== parentOf(target)) {
+    officeStatus('只能在同一层里调整顺序；要换到别的文件夹，请拖到那一行中间', true);
+    return;
+  }
+  const r = await api('/api/office/reorder', { path, target, position });
+  if (!r || !r.ok) { officeStatus((r && r.error) || '调整顺序失败', true); return; }
+  await loadOffice(true);
+  officeStatus('已把「' + officeBase(path) + '」移到「' + officeBase(target) + '」' + (position === 'after' ? '后面' : '前面'));
+}
 async function moveDrawing(name, toDir) {
   const r = await api('/api/drawings/move', { name, toDir });
   if (!r.ok) { setStatus('err', '移动失败：' + (r.error || '')); await renderDrawList(); return; }
@@ -3912,21 +4064,30 @@ async function renderDrawList() {
         const f = document.createElement('div');
         f.className = 'draw-frow' + (open ? ' open' : '');
         f.title = c.path + '（' + c.count + ' 个绘图）　点击展开/收起';
-        const ar = document.createElement('span'); ar.className = 'draw-arrow'; ar.textContent = open ? '▾' : '▸';
+        const ar = document.createElement('span'); ar.className = 'draw-arrow'; ar.innerHTML = open ? csGlyphIcon('▾') : csGlyphIcon('▸');
         const ic = document.createElement('span'); ic.className = 'draw-ic side-glyph'; ic.innerHTML = sideGlyphMarkup(open ? 'folderOpen' : 'folder');
         const nm = document.createElement('span'); nm.className = 'draw-fname'; nm.textContent = c.name;
         const n = document.createElement('span'); n.className = 'draw-fcount'; n.textContent = String(c.count || 0); n.title = (c.count || 0) + ' 个绘图';
         f.appendChild(ar); f.appendChild(ic); f.appendChild(nm); f.appendChild(n);
         f.dataset.path = c.path;   // 右键菜单需要用它预选「在此新建」的目标位置
         f.onclick = () => { if (open) DRAW_DIR_OPEN.delete(c.path); else DRAW_DIR_OPEN.add(c.path); saveDrawDirs(); renderDrawList(); };
-        // 拖放：绘图行拖到文件夹行 = 移动绘图
-        f.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; f.classList.add('drop-target'); });
-        f.addEventListener('dragleave', () => f.classList.remove('drop-target'));
+        /* ★ 拖放三分 ✓（2026-10-19）——
+           上/下边缘 = 插到这一行前/后（同一层换顺序 ✓），中间 = 放进这个文件夹 ✓（原行为）。 */
+        f.addEventListener('dragover', (e) => {
+          if (!e.dataTransfer || !e.dataTransfer.types.includes('application/x-drawing')) return;
+          e.preventDefault(); e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          paintDropZone(f, dropZoneOf(f, e));
+        });
+        f.addEventListener('dragleave', () => f.classList.remove('drop-target', 'drop-before', 'drop-after'));
         f.addEventListener('drop', (e) => {
           e.preventDefault(); e.stopPropagation();
-          f.classList.remove('drop-target');
+          const zone = dropZoneOf(f, e);
+          f.classList.remove('drop-target', 'drop-before', 'drop-after');
           const df = e.dataTransfer.getData('application/x-drawing');
-          if (df) moveDrawing(df, c.path);
+          if (!df) return;
+          if (zone === 'inside') return moveDrawing(df, c.path);
+          reorderDrawings(df, c.path, zone);
         });
         container.appendChild(f);
         if (open) {
@@ -3939,7 +4100,7 @@ async function renderDrawList() {
         const row = document.createElement('div');
         row.className = 'draw-row' + (DRAW_FILE === c.path ? ' on' : '');
         const kind = drawKind(c.path);
-        const kindLabel=kind==='drawio'?'Draw.io 在线编辑器':(kind==='xmind'?'XMind 本地思维导图编辑器':'Excalidraw 编辑器');
+        const kindLabel=kind==='drawio'?'Draw.io 在线编辑器':(kind==='xmind'?'XMind 本地思维导图编辑器':(kind==='canvas'?'canvas 白板':'Excalidraw 编辑器'));
         row.title = c.path + '　点击打开（' + kindLabel + '，改动自动保存）；拖到文件夹行可移动';
         row.draggable = true;
         row.addEventListener('dragstart', (e) => {
@@ -3948,29 +4109,45 @@ async function renderDrawList() {
           row.classList.add('dragging');
         });
         row.addEventListener('dragend', () => row.classList.remove('dragging'));
+        /* ★ 文件行也是落点 ✓（只有前/后，没有「放进去」）—— 同一层换顺序 ✓ */
+        row.addEventListener('dragover', (e) => {
+          if (!e.dataTransfer || !e.dataTransfer.types.includes('application/x-drawing')) return;
+          e.preventDefault(); e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          paintDropZone(row, dropZoneOf(row, e) === 'inside' ? 'before' : dropZoneOf(row, e));
+        });
+        row.addEventListener('dragleave', () => row.classList.remove('drop-before', 'drop-after'));
+        row.addEventListener('drop', (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const zone = dropZoneOf(row, e) === 'after' ? 'after' : 'before';
+          row.classList.remove('drop-before', 'drop-after');
+          const df = e.dataTransfer.getData('application/x-drawing');
+          if (df) reorderDrawings(df, c.path, zone);
+        });
         const nm = document.createElement('span');
         nm.className = 'draw-name';
         nm.textContent = drawBase(c.path);
         const fileIcon = document.createElement('span');
         fileIcon.className = 'draw-file-ic';
-        fileIcon.textContent = kind === 'drawio' ? '▦' : (kind === 'xmind' ? '◉' : '◇');
-        fileIcon.title = kind === 'drawio' ? 'Draw.io' : (kind === 'xmind' ? 'XMind' : 'Excalidraw');
+        fileIcon.innerHTML = `<svg class="cs-ico" aria-hidden="true"><use href="#i-${kind}"/></svg>`;
+        fileIcon.title = kind === 'drawio' ? 'Draw.io' : (kind === 'xmind' ? 'XMind' : (kind === 'canvas' ? 'canvas' : 'Excalidraw'));
         const typeBadge = document.createElement('span');
         // 不直接使用 `.excalidraw` 类名，避免与编辑器自带的全局样式冲突。
         typeBadge.className = 'draw-type draw-type--' + kind;
         typeBadge.dataset.kind = kind;
-        typeBadge.textContent = kind === 'drawio' ? 'Draw.io' : (kind === 'xmind' ? 'XMind' : 'Excalidraw');
+        typeBadge.textContent = kind === 'drawio' ? 'Draw.io' : (kind === 'xmind' ? 'XMind' : (kind === 'canvas' ? 'canvas' : 'Excalidraw'));
         typeBadge.title = kind === 'drawio'
           ? '类型：Draw.io（流程图、架构图、UML）'
-          : (kind === 'xmind' ? '类型：XMind（层级思维导图）' : '类型：Excalidraw（手绘草图、白板）');
+          : (kind === 'xmind' ? '类型：XMind（层级思维导图）'
+            : (kind === 'canvas' ? '类型：canvas（无限白板 · 便签 / 连线 / 手绘）' : '类型：Excalidraw（手绘草图）'));
         const ren = document.createElement('button');
         ren.className = 'draw-ren';
-        ren.textContent = '✎';
+        ren.innerHTML = csGlyphIcon('✎');
         ren.title = '重命名绘图';
         ren.onclick = (e) => { e.stopPropagation(); openDrawRenameDialog(c.path); };
         const del = document.createElement('button');
         del.className = 'draw-del';
-        del.textContent = '✕';
+        del.innerHTML = csGlyphIcon('✕');
         del.title = '删除绘图';
         del.onclick = (e) => { e.stopPropagation(); deleteDrawing(c.path); };
         row.appendChild(fileIcon); row.appendChild(nm); row.appendChild(typeBadge); row.appendChild(ren); row.appendChild(del);
@@ -4278,6 +4455,24 @@ async function moveSnippet(file, toFolder) {
   setStatus('ok', '已移动到 ' + (toFolder || '根目录'));
 }
 
+/* ★ 同一层里调整文件夹顺序 ✓（2026-10-19）——
+   服务端只改 `.meta.yaml` 的 `orderIndex`（不动磁盘目录 ✓），前端重拉一次树即可 ✓。 */
+async function reorderProjectFolder(folder, target, position) {
+  if (!folder || !target || folder === target) return;
+  const parentOf = (v) => (v.includes('/') ? v.slice(0, v.lastIndexOf('/')) : '');
+  if (parentOf(folder) !== parentOf(target)) {
+    setStatus('err', '只能在同一层里调整顺序；要换到别的文件夹，请拖到那一行**中间**');
+    return;
+  }
+  if (!(await waitForPendingSave())) { setStatus('err', '当前代码保存失败，已取消调整顺序'); return; }
+  setStatus('idle', '调整文件夹顺序…');
+  const result = await api('/api/fs/reorder-folder', { folder, target, position });
+  if (!result || !result.ok) { setStatus('err', (result && result.error) || '调整顺序失败'); return; }
+  await refresh();
+  renderList();
+  setStatus('ok', '已把「' + path0Name(folder) + '」移到「' + path0Name(target) + '」' + (position === 'after' ? '后面' : '前面'));
+}
+function path0Name(v) { return String(v || '').split('/').pop(); }
 async function moveProjectFolder(folder, toFolder) {
   if (!folder || folder === toFolder || toFolder.startsWith(folder + '/')) {
     setStatus('err', '不能把项目文件夹移动到自身内部'); return;
@@ -4765,7 +4960,7 @@ async function mergeTag(tag) {
 function renderTagHead() {
   const head = $('tag-head');
   head.classList.toggle('collapsed', tagsHidden);
-  $('tag-head-arrow').textContent = '▾';   // 箭头始终 ▾，收拢态由 CSS rotate(-90deg) 呈现（与 Git 面板一致）
+  $('tag-head-arrow').innerHTML = csGlyphIcon('▾');   // 箭头始终 ▾，收拢态由 CSS rotate(-90deg) 呈现（与 Git 面板一致）
   $('tag-count').textContent = TAGS.length ? String(TAGS.length) : '';
   $('tag-count').title = TAGS.length ? TAGS.length + ' 个标签' : '';
   const names = TAGS.filter(t => activeTags.has(t.id)).map(t => '#' + t.name);
@@ -5395,6 +5590,14 @@ function readingContext() {
   if(active){const before=active.input.value.slice(0,active.input.selectionStart||0),rows=before.split('\n');return{snippet:active.ref.snippet,index:active.ref.index,fragment:active.ref.frag,code:active.input.value,line:rows.length,column:(rows[rows.length-1]||'').length+1};}
   if(!CURRENT||!CURRENT.fragments||!CURRENT.fragments[CINDEX])return null;
   const fragment=CURRENT.fragments[CINDEX],ta=$('code-edit');let line=1,column=1,code=fragment.code||'';
+  /* ★ 代码来源必须是**用户眼前那一份** ✓（2026-10-20）——
+     默认编辑器是 Monaco ✓，它的内容可能已经改过但还没保存 ✓，
+     而 `fragment.code` 只是「载入时 / 上次保存」的快照 ✗。
+     原来这里只读 `fragment.code` → 诊断（徽章、悬停、跳转、弹层）描述的
+     全是另一份文本 ✓，于是「编辑器里明明有错、上面说没有诊断」✓。 */
+  if(typeof monacoMainActive==='function'&&monacoMainActive()){
+    try{ if(MONACO_EDITOR) code=MONACO_EDITOR.getValue(); }catch(_){}
+  }
   if(EDITING&&ta&&ta.style.display!=='none'){code=ta.value;const rows=ta.value.slice(0,ta.selectionStart||0).split('\n');line=rows.length;column=(rows[rows.length-1]||'').length+1;}
   else {const cw=$('code-wrap'),lh=parseFloat(getComputedStyle($('code')).lineHeight)||20,pad=parseFloat(getComputedStyle($('code')).paddingTop)||0;line=Math.max(1,Math.floor((cw.scrollTop+cw.clientHeight*CODE_FOCUS_RATIO-pad)/lh)+1);}
   return{snippet:CURRENT,index:CINDEX,fragment,code,line,column};
@@ -5408,11 +5611,15 @@ function updateCodeContextBar(forcedLine) {
   const type=enclosing('type'),fn=enclosing('fn');
   const parts=[{label:context.snippet.name,line:1},{label:fragmentDisplayName(context.fragment,'片段 '+(context.index+1)),line:1}];
   if(type)parts.push({label:'▣ '+type.name,line:type.line});if(fn)parts.push({label:'ƒ '+fn.name,line:fn.line});
-  parts.forEach((part,index)=>{if(index){const sep=document.createElement('span');sep.className='sep';sep.textContent='›';crumbs.appendChild(sep);}const button=document.createElement('button');button.textContent=part.label;button.title=part.label;button.onclick=()=>goToLocation({snippet:context.snippet,frag:context.index,line:part.line});crumbs.appendChild(button);});
+  parts.forEach((part,index)=>{if(index){const sep=document.createElement('span');sep.className='sep';sep.innerHTML=csGlyphIcon('›');crumbs.appendChild(sep);}const button=document.createElement('button');button.textContent=part.label;button.title=part.label;button.onclick=()=>goToLocation({snippet:context.snippet,frag:context.index,line:part.line});crumbs.appendChild(button);});
   scope.textContent=fn?symbolSignature(fn):(type?symbolSignature(type):'第 '+line+' 行');scope.title=scope.textContent;
   position.textContent='Ln '+line+', Col '+(forcedLine?1:(context.column||1));position.title='当前光标位置：第 '+line+' 行，第 '+(forcedLine?1:(context.column||1))+' 列';
 }
 function renderLspProblems() {
+  /* ★ 诊断一变，「问题」tab 的角标和面板一起刷新 ✓（2026-10-19）——
+     ⚠️ 必须放在**函数开头**，不能放结尾 ✗ —— 下面「没有诊断」那条会 `return` ✓，
+        放结尾的话「本来有错、改完没错了」这一下角标就永远清不掉 ✓。 */
+  syncProblemTabHint();
   const box=$('lsp-problems');box.replaceChildren();
   if(!LSP_DIAGNOSTICS.length){const empty=document.createElement('div');empty.className='ol-empty';empty.textContent='当前文件没有语言服务器诊断';box.appendChild(empty);return;}
   const context=readingContext();LSP_DIAGNOSTICS.forEach(item=>{const row=document.createElement('button'),severity=Number(item.severity)||3,line=diagnosticLine(item);row.className='lsp-problem '+(severity===1?'error':'');const icon=document.createElement('span');icon.className='sev';icon.textContent=severity===1?'●':'▲';const message=document.createElement('span');message.className='msg';message.textContent=String(item.message||'诊断信息');const where=document.createElement('span');where.className='where';where.textContent=':'+line;row.append(icon,message,where);if(item.source||item.code){const source=document.createElement('span');source.className='source';source.textContent=[item.source,item.code].filter(Boolean).join(' · ');row.appendChild(source);}row.onclick=()=>{box.classList.add('hidden');if(context)goToLocation({snippet:context.snippet,frag:context.index,line});};box.appendChild(row);});
@@ -5584,7 +5791,7 @@ function applyDockMode() {
   } else {
     map.ai.removeAttribute('draggable');
     map.ai.classList.remove('collapsed');
-    $('ai-pane-fold').textContent = '▾';
+    $('ai-pane-fold').innerHTML = csGlyphIcon('▾');
     map.ai.style.height = '';
     $('outline-body').after(map.ai); // AI 留在横向标签组的共享内容位置
   }
@@ -5712,7 +5919,7 @@ function initStackStrip() {
         pane.style.height = Math.max(paneMinHeight(id), Number(pane.dataset.openHeight) || (id === 'ai' ? 340 : id === 'relation' ? 320 : 220)) + 'px';
       }
       pane.style.flex = 'none';
-      pane.classList.toggle('collapsed', collapsing); fold.textContent = collapsing ? '▸' : '▾'; return;
+      pane.classList.toggle('collapsed', collapsing); fold.innerHTML = collapsing ? csGlyphIcon('▸') : csGlyphIcon('▾'); return;
     }
   });
   /* 独立窗口排序：按住上方标题栏直接上下移动，不依赖 HTML5 原生拖放。 */
@@ -5973,7 +6180,7 @@ function wireAiPanel() {
     try { await navigator.clipboard.writeText(txt); ok = true; } catch (_) {}
     if (!ok) { try { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (_) {} }
     const old = b.textContent;
-    b.textContent = ok ? '✓ 已复制' : '✕ 复制失败';
+    b.innerHTML = ok ? '✓ 已复制' : csGlyphText('✕ 复制失败');
     b.classList.add('on');
     setTimeout(() => { b.textContent = old; b.classList.remove('on'); }, 1400);
   });
@@ -6047,7 +6254,7 @@ function showAiChatList() {
     row.className = 'ai-chat-row' + (c.key === curKey ? ' on' : '');
     const nm = document.createElement('span'); nm.className = 'nm'; nm.title = c.key; nm.textContent = c.name;
     const cnt = document.createElement('span'); cnt.className = 'cnt'; cnt.textContent = c.count + ' 条';
-    const rn = document.createElement('button'); rn.textContent = '✎'; rn.title = '重命名对话';
+    const rn = document.createElement('button'); rn.innerHTML = csGlyphIcon('✎'); rn.title = '重命名对话';
     rn.onclick = async (e) => {
       e.stopPropagation();
       const name = await askText({ title:'重命名对话', message:'对话名称：', value:c.name, okLabel:'重命名' });
@@ -6167,7 +6374,7 @@ function showAiSelNote() {
   const sp = document.createElement('span');
   sp.textContent = AI_SEL ? '已选中 ' + AI_SEL.length + ' 字作为 AI 指示' : '';
   const x = document.createElement('button');
-  x.textContent = '✕ 取消指示';
+  x.innerHTML = csGlyphIcon('✕') + ' 取消指示';
   x.onclick = hideAiSelNote;
   n.appendChild(sp); n.appendChild(x);
 }
@@ -7582,7 +7789,7 @@ function fileTreeNode(body, file, depth, dir, ancestry, root) {
   children.forEach(ch => fileTreeNode(body, ch, depth + 1, dir, next, false));
 }
 function relationButton(box, label, active, onclick) {
-  const b = document.createElement('button'); b.textContent = label; b.classList.toggle('on', active); b.onclick = onclick; box.appendChild(b);
+  const b = document.createElement('button'); b.innerHTML = csGlyphText(label); b.classList.toggle('on', active); b.onclick = onclick; box.appendChild(b);
 }
 let REL_GRAPH_OBSERVER = null, REL_GRAPH_SEQ = 0;
 /* 判断一个符号是「类 / 方法 / 函数 / 变量」—— 关系图里要能一眼分清，
@@ -7900,7 +8107,7 @@ function openLogicZoom(svgEl, title) {
   name.textContent = '逻辑图 · ' + (title || '');
   const spacer = document.createElement('span'); spacer.className = 'sp';
   const mkBtn = (text, hint, onclick) => {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = hint;
+    const b = document.createElement('button'); b.type = 'button'; b.innerHTML = csGlyphText(text); b.title = hint;
     b.onclick = onclick; return b;
   };
   const stage = document.createElement('div'); stage.className = 'logic-zoom-stage';
@@ -8277,7 +8484,7 @@ function buildLogicFlowEditable(body, graph, rerender) {
     bodyEl.appendChild(kindEl); bodyEl.appendChild(labelEl);
     const tools = document.createElement('span'); tools.className = 'logic-node-tools';
     const mkTool = (text, hint, onclick) => {
-      const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = hint;
+      const b = document.createElement('button'); b.type = 'button'; b.innerHTML = csGlyphText(text); b.title = hint;
       b.onclick = (event) => { event.stopPropagation(); onclick(); };
       return b;
     };
@@ -8900,7 +9107,7 @@ function renderDocGraphForce(host, graph) {
     /* 缩放按钮（和参考图一样放右侧） */
     const tools = document.createElement('div'); tools.className = 'dg-force-tools';
     const mkBtn = (text, hint, onclick) => {
-      const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = hint; b.onclick = onclick; return b;
+      const b = document.createElement('button'); b.type = 'button'; b.innerHTML = csGlyphText(text); b.title = hint; b.onclick = onclick; return b;
     };
     tools.appendChild(mkBtn('＋', '放大', () => svg.transition().duration(200).call(zoom.scaleBy, 1.3)));
     tools.appendChild(mkBtn('－', '缩小', () => svg.transition().duration(200).call(zoom.scaleBy, 1 / 1.3)));
@@ -10894,7 +11101,7 @@ function saveWorkspaceSnapshot(){const target=currentWorkspaceTarget();if(!targe
 async function restoreWorkspaceSnapshot(){let snapshot=null;try{snapshot=JSON.parse(localStorage.getItem(WORKSPACE_SNAPSHOT_KEY)||'null');}catch(_){}if(!snapshot||!snapshot.target){setStatus('err','还没有保存工作台快照');return;}const target=snapshot.target;if(snapshot.theme)applyAppTheme(snapshot.theme);if(snapshot.sideWidth)$('side').style.width=snapshot.sideWidth+'px';if(snapshot.outlineWidth)$('outline-panel').style.width=snapshot.outlineWidth+'px';if(snapshot.outputHeight)$('output').style.height=snapshot.outputHeight+'px';if(snapshot.readingFragmentsWidth)$('reading-stage').style.setProperty('--reading-fragments-width',snapshot.readingFragmentsWidth+'px');if(target.kind==='drawing')await openDrawing(target.path);else if(target.kind==='office')await openOffice(target.path);else if(target.kind==='pdf'){await openReading(target.path,0);await setReadingPage(0,target.page||1);}else if(target.kind==='note'&&target.openPath)await openReading(target.openPath,0);else{const snippet=SNIPPETS.find((item)=>item.file===(target.file||target.path));if(snippet)goToLocation({snippet,frag:Number(target.fragment)||0,line:Number(target.line)||1});else{setStatus('err','快照中的内容已移动或不存在');return;}}workspaceSnapshotStatus('ok','已恢复工作台快照 · '+(target.label||target.path));}
 async function goToLinePrompt(){const context=readingContext();if(!context)return;const value=await askText({ title:'跳转到行', message:'跳转到行：', value:String(context.line||1), okLabel:'跳转' });if(value===null)return;const line=Math.max(1,Number.parseInt(value,10)||1);if(activeSplitContext())activateOpenSplitLocation(SPLIT_EDITORS.findIndex(item=>splitKey(item.file,item.fragment)===ACTIVE_SPLIT_KEY),line);else jumpToLine(line);}
 function commandPaletteItems(){return[
-  {name:'工作台：快速打开代码、阅读资料、Office 或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'Office：新建文档',key:'',run:()=>openOfficeDialog('document')},{name:'Office：导入文档',key:'',run:()=>$('office-file-input').click()},{name:'工作台：保存当前快照',key:'',run:saveWorkspaceSnapshot},{name:'工作台：恢复最近快照',key:'',run:restoreWorkspaceSnapshot},{name:'引用：复制当前内容链接',key:'',run:copyCurrentWorkspaceLink},{name:'引用：查看当前内容的反向链接',key:'',run:showBacklinks},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>setOutputTab('term')}
+  {name:'工作台：快速打开代码、阅读资料、Office 或绘图',key:'Ctrl/⌘+P',run:()=>openSymModal('file')},{name:'Office：新建文档',key:'',run:()=>openOfficeDialog('document')},{name:'Office：导入文档',key:'',run:()=>$('office-file-input').click()},{name:'工作台：保存当前快照',key:'',run:saveWorkspaceSnapshot},{name:'工作台：恢复最近快照',key:'',run:restoreWorkspaceSnapshot},{name:'引用：复制当前内容链接',key:'',run:copyCurrentWorkspaceLink},{name:'引用：查看当前内容的反向链接',key:'',run:showBacklinks},{name:'搜索：全文搜索代码与阅读资料',key:'Ctrl/⌘+Shift+F',run:()=>openSymModal('text')},{name:'导航：跳转到行',key:'Ctrl/⌘+G',run:goToLinePrompt},{name:'导航：跳转到定义',key:'F12',run:()=>goToFocusedDefinition()},{name:'导航：查找所有引用',key:'Shift+F12',run:()=>{const sym=focusedSymbol();if(sym){SYM_SEL=sym;setSymMode('symbol');}}},{name:'重构：重命名符号',key:'F2',run:renameFocusedSymbol},{name:'重构：快速修复',key:'Ctrl/⌘+.',run:requestCodeActions},{name:'问题：下一个问题',key:'F8',run:()=>nextLspProblem(1)},{name:'问题：上一个问题',key:'Shift+F8',run:()=>nextLspProblem(-1)},{name:'编辑：格式化当前文件',key:'',run:doFormat},{name:'编辑：查找和替换',key:'Ctrl/⌘+H',run:()=>openEditorFind(true)},{name:'编辑：切换只读/编辑',key:'',run:toggleEdit},{name:'视图：切换自动换行',key:'Alt+Z',run:toggleEditorWordWrap},{name:'视图：切换大纲',key:'',run:toggleOutline},{name:'视图：关闭其它编辑栏',key:'',run:resetSplitEditors},{name:'工程：运行当前文件',key:'',run:doRun},{name:'工程：检查当前文件',key:'',run:doCheck},{name:'工程：打开构建与健康工具',key:'',run:()=>{$('project-panel').classList.add('open');projectTab('tasks');}},{name:'终端：显示集成终端',key:'',run:()=>showTerminal()}
 ];}
 function renderCommandResults(query){const box=$('sym-modal-res');box.replaceChildren();const q=String(query||'').trim(),items=commandPaletteItems().map(item=>({item,score:q?fuzzyScore(q,item.name+' '+item.key):0})).filter(row=>!q||row.score>=0).sort((a,b)=>b.score-a.score);for(const {item} of items){const row=searchResultRow('›',item.name,'',item.key,()=>{closeSymModal();item.run();});row.classList.add('command-result');box.appendChild(row);}SYM_ACTIVE=0;if(items.length)box.firstElementChild.classList.add('active');else box.innerHTML='<span class="ol-empty">没有匹配的命令</span>';$('sym-modal-status').textContent=items.length+' 个命令 · Ctrl/⌘+Shift+P';}
 function textSearchMatcher(query) {
@@ -11463,7 +11670,7 @@ function renderEditorDropSlots() {
   for(let index=0;index<count;index++){
     const slot=document.createElement('div');slot.className='editor-drop-slot'+(index===SPLIT_EDITORS.length+1?' new':'');slot.dataset.slot=String(index);
     const existing=index===0?(CURRENT&&CURRENT.fragments&&CURRENT.fragments[CINDEX]):(SPLIT_EDITORS[index-1]&&splitRef(SPLIT_EDITORS[index-1].file,SPLIT_EDITORS[index-1].fragment));
-    const title=document.createElement('strong');title.textContent=index===SPLIT_EDITORS.length+1?'＋ 新建第 '+(index+1)+' 栏':'第 '+(index+1)+' 栏';
+    const title=document.createElement('strong');title.innerHTML=index===SPLIT_EDITORS.length+1?csGlyphIcon('＋')+' 新建第 '+(index+1)+' 栏':'第 '+(index+1)+' 栏';
     const note=document.createElement('span');note.textContent=existing?(index===0?fragmentDisplayName(existing,CURRENT.name):splitName(existing)):'拖到这里';slot.append(title,note);
     slot.addEventListener('dragover',(event)=>{event.preventDefault();event.stopPropagation();slot.classList.add('over');if(event.dataTransfer)event.dataTransfer.dropEffect='copy';});
     slot.addEventListener('dragleave',()=>slot.classList.remove('over'));
@@ -11511,6 +11718,24 @@ function renderCode() {
   $('snippet-desc').textContent = s.description;
   $('snippet-desc').title = s.description || '';
   const tabs = $('tabs'); tabs.innerHTML = '';
+  /* 「全部」按钮是 #tabs 的**兄弟节点**，`tabs.innerHTML=''` 清不到它 ✗ ——
+     renderMain 每次重画都会再挂一个，不先删就会越叠越多（点一下弹出好几个菜单）✗ */
+  const tabsRow = $('tabs-row');
+  if (tabsRow) tabsRow.querySelectorAll('.tabs-all').forEach((n) => n.remove());
+  /* ★ 分片一多就换「紧凑标签」（> 8 个）：隐藏语言 chip、收紧内边距 ——
+     实测 20 个分片原来要 2906px 宽，紧凑后约 1700px，横向少滚一半 ✓。
+     语言信息没丢：并进 title 悬停可见，「全部」菜单里也照样显示 ✓。 */
+  tabs.classList.toggle('tabs-compact', s.fragments.length > 8);
+  /* 打开某个分片：标签点击和「全部」菜单共用这一条（两处各写一遍必然走偏 ✗）。
+     并排编辑组已开着就提升它，否则正常切换（含未保存确认 ✓）。 */
+  const openFrag = (i) => {
+    const openGroup = SPLIT_EDITORS.findIndex((entry) => entry.file === s.file && entry.fragment === i);
+    if (openGroup >= 0) { promoteSplitEditor(openGroup); return; }
+    if (!confirmLeaveEdit()) return;
+    rememberMarkdownCaret(); hideCodeReferenceBar(); rememberNavigation({ snippet: s, frag: i, line: 1 });
+    CINDEX = i; rememberWorkspaceRecent('code', s.file + ':' + i);
+    SYM_SEL = null; REL_ROOT = null; REL_EXPANDED.clear(); renderMain();
+  };
   s.fragments.forEach((f, i) => {
     const t = document.createElement('button');
     t.className = 'tab' + (i === CINDEX ? ' active' : '');
@@ -11531,12 +11756,8 @@ function renderCode() {
       { type: 'separator' },
       { icon: '×', label: '删除片段', danger: true, run: () => deleteFragment(s.file, f.id, i, f.label || ('片段 ' + (i + 1))) },
     ]));
-    t.title = '文件: ' + f.filename + '\n右键：修改类型 / 重命名 / 删除\n拖到编辑区可并排打开' + (s.fragments.length > 1 ? '\n拖到其他标签可调整片段顺序' : '');
-    t.onclick = () => {
-      const openGroup=SPLIT_EDITORS.findIndex((entry)=>entry.file===s.file&&entry.fragment===i);
-      if(openGroup>=0){promoteSplitEditor(openGroup);return;}
-      if (!confirmLeaveEdit()) return; rememberMarkdownCaret();hideCodeReferenceBar();rememberNavigation({snippet:s,frag:i,line:1});CINDEX = i;rememberWorkspaceRecent('code',s.file+':'+i); SYM_SEL = null; REL_ROOT = null; REL_EXPANDED.clear(); renderMain();
-    };
+    t.title = '文件: ' + f.filename + '\n类型: ' + (f.language || 'plain_text') + '\n右键：修改类型 / 重命名 / 删除\n拖到编辑区可并排打开' + (s.fragments.length > 1 ? '\n拖到其他标签可调整片段顺序' : '');
+    t.onclick = () => openFrag(i);
     t.draggable = true;
     t.classList.add('draggable-tab');
     t.addEventListener('dragstart', (e) => {
@@ -11559,15 +11780,96 @@ function renderCode() {
   // 新增片段按钮（massCode 式：当前文件末尾追加一个代码分片）
   const addB = document.createElement('button');
   addB.className = 'tab add-frag-tab';
-  addB.textContent = '＋ 片段';
+  addB.innerHTML = csGlyphIcon('＋') + ' 片段';
   addB.title = '新增片段：在当前文件末尾追加一个代码分片';
   addB.onclick = () => { if (!confirmLeaveEdit()) return; openNewDialog('frag'); };
   tabs.appendChild(addB);
+  /* ★★ 「全部分片」按钮（用户：「片段太多，后面的无法选择」）★★
+     标签栏横向溢出时，后面的分片被切在右边缘；macOS 的滚动条又是**悬浮式**的，
+     不滚就不显示 → 用户根本不知道右边还有东西，等于选不到 ✗。
+     这个按钮常驻在标签栏**右端独立一栏**（`#tabs-row` 的第二个孩子，不参与横滚 ✓），
+     点开是**全部分片的列表**，所以不管多少分片、窗口多窄，任何一个都点得到 ✓。
+     ⚠️ 必须挂在 #tabs-row 上、不能挂 #tabs：放进横滚容器里就只能 sticky 浮着 ——
+        浮着会盖住最后一个标签 ✗；给它留白又会空出一条 ✗（两种都试过）。 */
+  /* ⚠️ 只在**真的需要**时才挂：分片 > 5 个，或者这一栏确实已经溢出（窄窗口 + 长文件名）——
+     2~3 个分片的片段本来一屏就放得下，硬挂一个「全部」按钮纯属添乱 ✗。
+     `scrollWidth` 会强制同步布局，读到的就是刚 append 完的真实宽度 ✓。 */
+  if (s.fragments.length > 1 && (s.fragments.length > 5 || tabs.scrollWidth > tabs.clientWidth + 2)) {
+    const allB = document.createElement('button');
+    allB.type = 'button';
+    allB.className = 'tabs-all';
+    allB.innerHTML = csGlyphIcon('▾') + ' 全部 <b>' + s.fragments.length + '</b>';
+    allB.title = '列出全部 ' + s.fragments.length + ' 个分片：标签栏放不下时从这里选';
+    allB.onclick = (ev) => showContextMenu(ev, [
+      ...s.fragments.map((f, i) => ({
+        icon: i === CINDEX ? '●' : '○',
+        label: f.label || ('片段 ' + (i + 1)),
+        hint: f.language || 'plain_text',
+        run: () => openFrag(i),
+      })),
+      /* 分片多到要开这个菜单时，「＋ 片段」早就被滚出可视区了 ✗ —— 顺手在末尾补一个入口 */
+      { type: 'separator' },
+      { icon: '＋', label: '新增片段', run: () => { if (confirmLeaveEdit()) openNewDialog('frag'); } },
+    ], { search: true });
+    if (tabsRow) tabsRow.appendChild(allB);
+  }
+  /* ★ 溢出提示：左右边缘渐隐（CSS 见 #tabs.more-left / .more-right）。
+     ⚠️ 为什么不靠滚动条：`::-webkit-scrollbar` 只在 `overflow:scroll` 下生效，
+        而那会**永远**占掉 6~9px，39px 的标签栏被压扁 ✗（详见 app.css 里 ① 那段）。
+        渐隐不占位、滚到哪提示到哪 ✓。 */
+  const syncTabsHint = () => {
+    const max = tabs.scrollWidth - tabs.clientWidth;
+    const canScroll = max > 2;
+    tabs.classList.toggle('more-left', tabs.scrollLeft > 2);
+    tabs.classList.toggle('more-right', canScroll && tabs.scrollLeft < max - 2);
+    /* ★ 左右滚动按钮：**溢出才出现**（没溢出时这两个按钮纯属占地方 ✗），
+       滚到两端就置灰（不是隐藏 —— 隐藏会让布局左右跳一下 ✗）✓ */
+    const prev = $('tabs-prev'), next = $('tabs-next');
+    if (prev) { prev.hidden = !canScroll; prev.disabled = tabs.scrollLeft <= 2; }
+    if (next) { next.hidden = !canScroll; next.disabled = tabs.scrollLeft >= max - 2; }
+  };
+  /* 竖向滚轮 → 横向滚标签栏（触控板/鼠标都顺手）。只在**真的溢出**时才接管，
+     否则会把正常的滚轮滚动吃掉 ✗；passive:false 才能 preventDefault。
+     ⚠️ 这个元素是复用的（renderMain 每次都重画子节点，但 #tabs 本身不换），
+     所以用 dataset 打标记，只挂一次 —— 否则每次渲染叠一个监听器，滚一格跳 N 倍 ✗。 */
+  if (!tabs.dataset.wheelWired) {
+    tabs.dataset.wheelWired = '1';
+    tabs.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      if (tabs.scrollWidth <= tabs.clientWidth + 2) return;
+      e.preventDefault();
+      tabs.scrollLeft += e.deltaY;
+    }, { passive: false });
+    tabs.addEventListener('scroll', syncTabsHint, { passive: true });
+    /* 左右按钮：一次翻 80% 可视宽度（留 20% 当参照，用户能看出「接着往哪走」）✓。
+       ⚠️ 用 scrollBy + behavior:'smooth'：这是**用户主动点的**，平滑滚动不会像
+          「每帧跟随高亮」那样互相打断（见阅读大纲那段踩过的坑）✓ */
+    const pageBy = (dir) => {
+      try { tabs.scrollBy({ left: dir * Math.max(160, tabs.clientWidth * 0.8), behavior: 'smooth' }); }
+      catch (_) { tabs.scrollLeft += dir * Math.max(160, tabs.clientWidth * 0.8); }
+    };
+    const prevB = $('tabs-prev'), nextB = $('tabs-next');
+    if (prevB) prevB.onclick = () => pageBy(-1);
+    if (nextB) nextB.onclick = () => pageBy(1);
+  }
+  /* ★ 分片多的时候标签栏会横向溢出（实测 20 个分片 ≈ 2900px，1440 宽的窗口只有 766px 可视）——
+     切到靠后的分片后，标签本身留在屏幕外，用户既看不到当前在哪、也没法快速切回去 ✗
+     → 渲染完把 active 拉回可视区。inline:'nearest' 是**幂等**的：
+     已经在可视区就什么都不做 ✓（所以每次 renderMain 都调也不会乱跳）；
+     block:'nearest' 保证它**不会顺带把页面竖直滚动** ✗（不然点个标签整页往上跳）。 */
+  const activeTab = tabs.querySelector('.tab.active');
+  if (activeTab) { try { activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {} }
+  syncTabsHint();
   const multi = s.fragments.length > 1;
   if (multi) {
     const badge = $('multi-badge');
     badge.style.display = '';
-    const isC = s.fragments.every(f => ['c_cpp', 'c'].includes(f.language));
+    /* ⚠️ 「能不能一起编译」只看**代码分片** ✗✗ —— 原来对**所有**分片 every()，
+       而 C++ 工程里放一个 README.md 太正常了，markdown 一进来 every() 立刻 false
+       → 徽章永远显示「运行共享目录」（用户看到的正是这个，误导）✗。
+       文档类分片不参与编译，也不影响「一起编译」这个结论 ✓。 */
+    const codeFrags = s.fragments.filter(f => !['markdown', 'plain_text', 'text', 'txt', 'md'].includes(f.language));
+    const isC = codeFrags.length > 0 && codeFrags.every(f => ['c_cpp', 'c'].includes(f.language));
     const long = isC ? ' · 运行将一起编译（.cpp/.hpp）' : ' · 运行共享目录';
     /* ⚠️ 长的那半句要包在 .mb-long 里：窄屏（≤1600px）工具栏本来就紧，
        这一条能占到 161px，会把**最后的「自动保存」开关挤出可视区**（被裁掉、点不到）。
@@ -13628,14 +13930,14 @@ async function runKernelCell(code) {
   $('elapsed').textContent = ms;
   if (!r || r.ok === false) {
     setStatus('err', '内核出错');
-    showOut(String((r && r.error) || '未知错误'), '', false);
+    showOut(String((r && r.error) || '未知错误'), '', false, null, runMeta(ms, r));
     return;
   }
   const out = String(r.stdout || '');
   const err = String(r.stderr || '');
-  if (!out && !err) { setStatus('ok', '这一格没有输出 · ' + ms); showOut('（这一格没有输出）', '', true); return; }
+  if (!out && !err) { setStatus('ok', '这一格没有输出 · ' + ms); showOut('（这一格没有输出）', '', true, null, runMeta(ms, r)); return; }
   setStatus(err ? 'err' : 'ok', (err ? '有报错' : '完成') + ' · ' + ms);
-  showOut(out + (err ? (out ? '\n\n' : '') + err : ''), '', !err);
+  showOut(out + (err ? (out ? '\n\n' : '') + err : ''), '', !err, null, runMeta(ms, r));
 }
 
 async function doRun(options) {
@@ -13666,21 +13968,22 @@ async function doRun(options) {
         硬塞一段进去会和磁盘内容对不上 ✓。 */
   if (EDITING) body.code = (options && options.code != null) ? String(options.code) : editText(); // 运行编辑框里的内容（未保存也先跑）
   const r = await api('/api/run', body);
-  $('elapsed').textContent = ((performance.now() - t0) / 1000).toFixed(2) + 's';
-  if (r.unsupported) { setStatus('err', '不支持'); showOut(r.reason, '', false); return; }
-  if (r.noEntry) { setStatus('idle', '仅编译'); showOut(r.reason, '', true); return; }
+  const elapsed = (performance.now() - t0) / 1000;   // 秒（给「运行历史」记耗时 ✓）
+  $('elapsed').textContent = elapsed.toFixed(2) + 's';
+  if (r.unsupported) { setStatus('err', '不支持'); showOut(r.reason, '', false, null, runMeta(elapsed, r)); return; }
+  if (r.noEntry) { setStatus('idle', '仅编译'); showOut(r.reason, '', true, null, runMeta(elapsed, r)); return; }
   if (!r.ok) {
     if (r.timedOut) {
       setStatus('err', 'timeout');
-      showOut(r.stdout, r.stderr, false, r.images);
+      showOut(r.stdout, r.stderr, false, r.images, runMeta(elapsed, r));
       if (!inp) showInputInOutput('程序运行超时，可能正在等待标准输入。填写输入后可以直接重新运行。', true);
     } else {
       setStatus('err', '退出码 ' + (r.code ?? '?'));
-      showOut(r.stdout, r.stderr, false, r.images);
+      showOut(r.stdout, r.stderr, false, r.images, runMeta(elapsed, r));
     }
     return;
   }
-  setStatus('ok', '成功'); showOut(r.stdout, r.stderr, true, r.images);
+  setStatus('ok', '成功'); showOut(r.stdout, r.stderr, true, r.images, runMeta(elapsed, r));
 }
 
 async function doCheck() {
@@ -13970,7 +14273,7 @@ function renderRunImages(images) {
             不是「像 MATLAB 图窗那样随便点」✗（那需要 GUI ✓，本项目给不了 ✓）。 */
       if (/\.fig$/i.test(String(img.name || ''))) {
         const ed = document.createElement('button');
-        ed.textContent = '✎ 编辑图形';
+        ed.innerHTML = csGlyphIcon('✎') + ' 编辑图形';
         ed.title = '改标题 / 线宽 / 网格等，然后重新出图';
         ed.addEventListener('click', () => openFigEditor(img, list));
         ph.appendChild(ed);
@@ -14028,7 +14331,7 @@ function openFigEditor(figItem, allItems) {
     bar.className = 'fig-editor-bar';
     bar.innerHTML = '<b>✎ 编辑图形</b><span class="hint">改完点「应用」重新出图</span>';
     const close = document.createElement('button');
-    close.textContent = '✕'; close.title = '关闭';
+    close.innerHTML = csGlyphIcon('✕'); close.title = '关闭';
     bar.appendChild(close);
     const body = document.createElement('div');
     body.className = 'fig-editor-body';
@@ -14137,11 +14440,11 @@ function openImagePopup(images, startIndex) {
     const hintEl = document.createElement('span');
     hintEl.className = 'hint';
     hintEl.textContent = '拖标题栏移动 · 右下角缩放 · Esc 关闭';
-    const prev = document.createElement('button'); prev.textContent = '‹'; prev.title = '上一张';
-    const next = document.createElement('button'); next.textContent = '›'; next.title = '下一张';
+    const prev = document.createElement('button'); prev.innerHTML = csGlyphIcon('‹'); prev.title = '上一张';
+    const next = document.createElement('button'); next.innerHTML = csGlyphIcon('›'); next.title = '下一张';
     const dl = document.createElement('a');
     const close = document.createElement('button');
-    close.textContent = '✕'; close.title = '关闭';
+    close.innerHTML = csGlyphIcon('✕'); close.title = '关闭';
     bar.appendChild(nameEl); bar.appendChild(hintEl);
     if (list.length > 1) { bar.appendChild(prev); bar.appendChild(next); }
     bar.appendChild(dl); bar.appendChild(close);
@@ -14202,7 +14505,56 @@ function openImagePopup(images, startIndex) {
   } catch (_) {}
 }
 
-function showOut(stdout, stderr, isOk, images) {
+/* ══ 输出行的轻量着色（2026-10-19）════════════════════════════════════════════
+   用户原话：「这种输出是否又些空荡，没有颜色高亮，等等，行分割也不清」✓
+
+   ⚠️ 老代码其实**有** ln-err / ln-warn / ln-loc 三档 ✓，但它们只认
+      `error:` / `warning:` / `at line N` 这几种**前缀** ✗ ——
+      而实际输出长这样：`[INFO] demo start` / `add(2,3) = 5` / `1 2 5 6 9`
+      一条都不命中 ✓ → 整屏纯白 ✓，看着就是「没有高亮」✓。
+
+   ⚠️ 铁律：**一个字都不改** ✗✗ —— 输出是程序的真实结果 ✓，改了复制出去就对不上 ✓。
+      所以全部着色都是**包 span** ✓，文本原样 ✓；行号走 CSS 的 `::before`
+      （伪元素不在 DOM 里 ✓，复制时不会带上 ✓）。
+   ⚠️ 用 innerHTML 就必须先转义 ✓ —— 输出是程序吐出来的，里面完全可能有 `<` `&` ✓。 */
+const OUT_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const outEsc = (s) => String(s).replace(/[&<>"']/g, (c) => OUT_ESC[c]);
+/* 行内 token：① 引号字符串 ② 数字 ③ 布尔/空值
+   ⚠️ `[TAG]` **不在这里匹配** ✗ —— 见 outLineHtml 里的说明（只有行首的才算标签）✓ */
+const OUT_TOKEN = /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|(\b\d+(?:\.\d+)*\b)|(\b(?:true|false|null|None|nil|NaN)\b)/g;
+/* 行首的 `[LEVEL]` 标签：必须带冒号/空格/行尾收尾，且只认**行首** ✓ */
+const OUT_TAG_HEAD = /^(\s*)(\[[A-Za-z][A-Za-z0-9_]{1,14}\])(\s*[:：\-]?\s*)/;
+function outTagClass(tag) {
+  if (/^(err|error|fatal|fail)/i.test(tag)) return 'tk-err';
+  if (/^(warn|warning)/i.test(tag)) return 'tk-warn';
+  if (/^(info|ok|done|success|ready|pass)/i.test(tag)) return 'tk-info';
+  if (/^(debug|trace|verbose)/i.test(tag)) return 'tk-dim';
+  return 'tk-tag';
+}
+function outLineHtml(line) {
+  let html = '', rest = line;
+  /* ★ `[TAG]` 只认**行首**（2026-10-19 实测修）——
+     原来把「任意 `[单词]`」都当标签 ✗，于是 `trim(  hi  ) = [hi]` 里的 `[hi]`
+     被染成蓝色标签 ✓，看着像 bug ✓。日志级别本来就只出现在行首 ✓，
+     这样 `[myapp] started` 这种自定义前缀照样有色，行内的 `[hi]` / `[1]` 保持原样 ✓。 */
+  const head = OUT_TAG_HEAD.exec(line);
+  if (head) {
+    html += outEsc(head[1]) + '<span class="' + outTagClass(head[2].slice(1, -1)) + '">' + outEsc(head[2]) + '</span>' + outEsc(head[3]);
+    rest = line.slice(head[0].length);
+  }
+  let last = 0, m;
+  OUT_TOKEN.lastIndex = 0;
+  while ((m = OUT_TOKEN.exec(rest)) !== null) {
+    html += outEsc(rest.slice(last, m.index));
+    if (m[1]) html += '<span class="tk-str">' + outEsc(m[0]) + '</span>';
+    else if (m[2]) html += '<span class="tk-num">' + outEsc(m[0]) + '</span>';
+    else html += '<span class="tk-bool">' + outEsc(m[0]) + '</span>';
+    last = m.index + m[0].length;
+  }
+  return html + outEsc(rest.slice(last));
+}
+
+function showOut(stdout, stderr, isOk, images, meta) {
   const b = $('out-body'); b.innerHTML = '';
   const pre = document.createElement('pre');
   /* ⚠️⚠️ 用 trim 判断「有没有内容」✗（2026-10-10 修）——
@@ -14223,17 +14575,30 @@ function showOut(stdout, stderr, isOk, images) {
         · `stopped in … at line N` / `> file(N)` / `Breakpoint N` → 停在哪 ✓
         · `error:` / `warning:` → 红 / 黄（stdout 里也可能有 ✓）
         · `at line N` / `in file …` → 位置信息，压暗 ✓（次要 ✓） */
+  /* 行号跨 stdout / stderr 连续编（stderr 接在 stdout 后面 ✓） */
+  let outLn = 0;
+  /* ⚠️ 超长输出（> 3000 行）**不做 token 着色** ✓ —— 几千个 span 会把渲染拖慢，
+     而那种量级本来也没人在输出区里逐行读 ✓（行号、行级配色照旧 ✓）。 */
+  const tooMany = String(stdout == null ? '' : stdout).split('\n').length > 3000;
   if (hasOut) {
     const outText = String(stdout);
     for (const line of outText.split('\n')) {
+      outLn += 1;
       const div = document.createElement('div');
+      div.className = 'out-line';
+      div.dataset.ln = String(outLn);
       const t = line.trim();
-      if (/^(debug>|\(Pdb\)|\(gdb\))/.test(t)) div.className = 'ln-prompt';
-      else if (/^(stopped in\b|Breakpoint \d+)/.test(t) || /^>\s+\S+\(\d+\)/.test(t)) div.className = 'ln-stop';
-      else if (/^(error|错误)[:\s]/i.test(t)) div.className = 'ln-err';
-      else if (/^(warning|警告)[:\s]/i.test(t)) div.className = 'ln-warn';
-      else if (/^at line\s+\d+/.test(t) || /\bat line \d+ column \d+/.test(t)) div.className = 'ln-loc';
-      div.textContent = line;
+      let lineCls = '';
+      if (/^(debug>|\(Pdb\)|\(gdb\))/.test(t)) lineCls = 'ln-prompt';
+      else if (/^(stopped in\b|Breakpoint \d+)/.test(t) || /^>\s+\S+\(\d+\)/.test(t)) lineCls = 'ln-stop';
+      else if (/^(error|错误)[:\s]/i.test(t)) lineCls = 'ln-err';
+      else if (/^(warning|警告)[:\s]/i.test(t)) lineCls = 'ln-warn';
+      else if (/^at line\s+\d+/.test(t) || /\bat line \d+ column \d+/.test(t)) lineCls = 'ln-loc';
+      if (lineCls) div.classList.add(lineCls);
+      /* 整行已经按语义上色的（错误 / 断点 / 调试提示）就**不再拆 token** ✓ ——
+         否则行内的数字会被染成琥珀色，反而把「这一行是错误」这个信息冲淡 ✓ */
+      if (tooMany || lineCls) div.textContent = line;
+      else div.innerHTML = outLineHtml(line);
       pre.appendChild(div);
     }
   }
@@ -14257,14 +14622,20 @@ function showOut(stdout, stderr, isOk, images) {
     pre.appendChild(head);
     const body = document.createElement('div');
     body.className = 'out-stderr-body ' + kind.cls;
-    /* 逐行上色：前缀行加粗、位置行压暗 ✓ */
+    /* 逐行上色：前缀行加粗、位置行压暗 ✓（行号沿用 stdout 的计数 ✓） */
     for (const line of errText.split('\n')) {
+      outLn += 1;
       const span = document.createElement('div');
+      span.className = 'out-line';
+      span.dataset.ln = String(outLn);
       const t = line.trim();
-      if (/^(error|错误)[:\s]/i.test(t)) span.className = 'ln-err';
-      else if (/^(warning|警告)[:\s]/i.test(t)) span.className = 'ln-warn';
-      else if (/^(at |called from|in file |\s*$)/i.test(t) || /at line \d+/i.test(t)) span.className = 'ln-loc';
-      span.textContent = line;
+      let lineCls = '';
+      if (/^(error|错误)[:\s]/i.test(t)) lineCls = 'ln-err';
+      else if (/^(warning|警告)[:\s]/i.test(t)) lineCls = 'ln-warn';
+      else if (/^(at |called from|in file |\s*$)/i.test(t) || /at line \d+/i.test(t)) lineCls = 'ln-loc';
+      if (lineCls) span.classList.add(lineCls);
+      if (tooMany || lineCls) span.textContent = line;
+      else span.innerHTML = outLineHtml(line);
       body.appendChild(span);
     }
     pre.appendChild(body);
@@ -14283,7 +14654,28 @@ function showOut(stdout, stderr, isOk, images) {
      ⚠️ 输出区里**照样保留** ✓ —— 用户关掉弹窗后还能在下面看 / 复制 ✓。 */
   const pics = (Array.isArray(images) ? images : []).filter((x) => x && x.data && /^image\//.test(String(x.mime || '')));
   if (pics.length) setTimeout(() => openImagePopup(pics, 0), 260);
-  b.scrollTop = b.scrollHeight;
+  /* ★ 跑完把输出**回到开头** ✓✓（2026-10-19，用户：「这个运行输出，显示有些问题，
+     怎么不是从开头显示，的而是从底的」）——
+     ⚠️ 原来这里是 `b.scrollTop = b.scrollHeight`（顶到底部 ✓，抄的是终端的习惯 ✗）。
+        终端那样做是因为它**一直在流式输出**，底部永远是最新的 ✓；
+        而这里是**一次性**拿到整段结果（/api/run 不是流 ✓）→ 顶到底部等于
+        把开头那段（版本号、第一行结果、第一条报错）直接藏起来 ✗，
+        用户第一眼看到的是尾巴，还得自己往上滚 ✓。
+     ⚠️ 输入卡片那处（showInputInOutput）**保持顶到底** ✗ —— 它是**追加**在已有输出后面的，
+        用户要看的就是刚出现的那个框 ✓，两处的场景不一样，别一起改 ✓。 */
+  b.scrollTop = 0;
+  /* ★ 有 meta 才记历史 ✓（2026-10-19）——
+     `showOut` 还被「回看旧结果」「语法检查」调用 ✓，那些**不该再记一条** ✗。
+     所以不是「谁调 showOut 都记」，而是「跑完的那一刻显式传 meta」✓。 */
+  if (meta && window.CS_RUNS) {
+    window.CS_RUNS.push(Object.assign({
+      stdout: String(stdout == null ? '' : stdout),
+      stderr: String(stderr == null ? '' : stderr),
+      ok: !!isOk,
+    }, meta));
+    updateRunsBadge();
+    if (OUT_TAB === 'runs') renderRunPanel();
+  }
 }
 
 function doPreview() {
@@ -14323,7 +14715,7 @@ function algoMakeTabs(host,active,onSelect){
 function renderAlgoCases(){
   const host=$('algo-cases');if(!host)return;algoLoadForCurrent();host.innerHTML='';
   const toolbar=document.createElement('div');toolbar.className='algo-toolbar';
-  const add=document.createElement('button');add.textContent='＋ 用例';add.onclick=()=>{ALGO_CASES.push(algoDefaultCase(ALGO_CASES.length));ALGO_ACTIVE=ALGO_CASES.length-1;algoSave();renderAlgoCases();};
+  const add=document.createElement('button');add.innerHTML=csGlyphIcon('＋') + ' 用例';add.onclick=()=>{ALGO_CASES.push(algoDefaultCase(ALGO_CASES.length));ALGO_ACTIVE=ALGO_CASES.length-1;algoSave();renderAlgoCases();};
   const duplicate=document.createElement('button');duplicate.textContent='复制';duplicate.onclick=()=>{const source=ALGO_CASES[ALGO_ACTIVE]||algoDefaultCase();ALGO_CASES.splice(ALGO_ACTIVE+1,0,{...source,id:algoId(),name:'Case '+(ALGO_CASES.length+1)});ALGO_ACTIVE++;algoSave();renderAlgoCases();};
   const remove=document.createElement('button');remove.textContent='删除';remove.disabled=ALGO_CASES.length===1;remove.onclick=()=>{const removed=ALGO_CASES.splice(ALGO_ACTIVE,1)[0];ALGO_RESULTS=ALGO_RESULTS.filter(result=>result.id!==removed.id);ALGO_ACTIVE=Math.max(0,Math.min(ALGO_ACTIVE,ALGO_CASES.length-1));algoSave();renderAlgoCases();renderAlgoResults();};
   const spacer=document.createElement('span');spacer.className='sp';
@@ -14342,7 +14734,7 @@ function renderAlgoResults(){
   const host=$('algo-results');if(!host)return;algoLoadForCurrent();host.innerHTML='';
   if(!ALGO_RESULTS.length){host.innerHTML='<div class="algo-result-empty">尚未运行测试用例<br>在“测试用例”中填写输入与期望输出后，点击运行全部</div>';return;}
   const asserted=ALGO_RESULTS.filter(result=>result.asserted),passed=asserted.filter(result=>result.pass).length,failed=ALGO_RESULTS.filter(result=>result.error||result.asserted&&!result.pass).length,totalMs=ALGO_RESULTS.reduce((sum,result)=>sum+(result.durationMs||0),0);
-  const summary=document.createElement('div');summary.className='algo-result-summary';const headline=document.createElement('strong');headline.className=failed?'fail':asserted.length&&passed===asserted.length?'pass':'';headline.textContent=failed?'未通过':asserted.length?'通过':'运行完成';const detail=document.createElement('span');detail.textContent=(asserted.length?passed+' / '+asserted.length+' 个断言通过 · ':'')+'执行用时 '+Math.round(totalMs)+' ms';const spacer=document.createElement('span');spacer.className='sp';const back=document.createElement('button');back.textContent='编辑用例';back.onclick=()=>switchOutTab('cases');const rerun=document.createElement('button');rerun.className='algo-run';rerun.textContent='↻ 再次运行';rerun.disabled=ALGO_RUNNING;rerun.onclick=()=>runAlgoTests(ALGO_CASES.map((_,index)=>index));summary.append(headline,detail,spacer,back,rerun);host.appendChild(summary);
+  const summary=document.createElement('div');summary.className='algo-result-summary';const headline=document.createElement('strong');headline.className=failed?'fail':asserted.length&&passed===asserted.length?'pass':'';headline.textContent=failed?'未通过':asserted.length?'通过':'运行完成';const detail=document.createElement('span');detail.textContent=(asserted.length?passed+' / '+asserted.length+' 个断言通过 · ':'')+'执行用时 '+Math.round(totalMs)+' ms';const spacer=document.createElement('span');spacer.className='sp';const back=document.createElement('button');back.textContent='编辑用例';back.onclick=()=>switchOutTab('cases');const rerun=document.createElement('button');rerun.className='algo-run';rerun.innerHTML=csGlyphIcon('↻') + ' 再次运行';rerun.disabled=ALGO_RUNNING;rerun.onclick=()=>runAlgoTests(ALGO_CASES.map((_,index)=>index));summary.append(headline,detail,spacer,back,rerun);host.appendChild(summary);
   ALGO_RESULT_ACTIVE=Math.max(0,Math.min(ALGO_RESULT_ACTIVE,ALGO_CASES.length-1));algoMakeTabs(host,ALGO_RESULT_ACTIVE,index=>{ALGO_RESULT_ACTIVE=index;renderAlgoResults();});
   const item=ALGO_CASES[ALGO_RESULT_ACTIVE],result=item&&algoResultFor(item.id);if(!result){const empty=document.createElement('div');empty.className='algo-result-empty';empty.textContent='这个用例尚未运行';host.appendChild(empty);return;}
   const grid=document.createElement('div');grid.className='algo-result-grid';
@@ -14395,12 +14787,500 @@ $('term-restart').onclick = () => {
   }
   requestAnimationFrame(() => { termFit(); requestAnimationFrame(termFit); });
 }
+/* ★ 打开集成终端 ✓（2026-10-19）—— 命令面板「显示集成终端」和「项目调试」都调它 ✓。
+   ⚠️ 原来这两处写的是 `setOutputTab('term')` ✗ —— 那个函数**根本不存在** ✓ →
+      点命令面板那一条**毫无反应** ✗；项目调试更惨：面板关掉了、命令也没发出去 ✗。
+   正常打开终端的姿势见下面三行 ✓（和「远程 SSH 连上」「环境部署」用的是同一套 ✓）。 */
+function showTerminal() {
+  $('output').style.display = 'flex';
+  $('split-h').style.display = '';
+  switchOutTab('term');
+}
+/* ══════════════════════════════════════════════════════════════════════════════
+   ★★ 底部面板：运行历史 / 问题（2026-10-19）★★
+   用户原话：「帮我看看这个下面是否还可以多开发几个功能，tab 标签」✓
+
+   ① 运行历史：原来每次运行 `showOut()` 第一行就是 `innerHTML=''` ✓ →
+      **上一次输出直接没了** ✗，改一行代码想看「输出变了没」只能靠记忆 ✓。
+      → 每次运行入环形缓冲（`assets/run-history.js`，纯数据 ✓），
+        点一条回看，还能**与上一次做行级 diff** ✓。
+   ② 问题：诊断结果原来只在点「LSP」徽章时弹一个浮动小框 ✓、点一下就没了 ✗，
+      而且**只覆盖当前分片** ✗ —— 20 个分片的多文件工程，根本不知道别处有没有错 ✓。
+      → 做成面板：既能看当前分片 ✓，也能**扫整个片段** ✓。
+   ══════════════════════════════════════════════════════════════════════════════ */
+let RUN_PANEL_MODE = 'list';   // list | diff
+let RUN_DIFF_ID = 0;
+let PROBLEM_SCOPE = 'frag';    // frag（当前文件，用现成的 LSP_DIAGNOSTICS）| all（扫全部文件）
+let PROBLEM_ITEMS = [];
+let PROBLEM_SCANNING = false;
+let PROBLEM_PROGRESS = { done: 0, total: 0 };
+let PROBLEM_AT = 0;
+let PROBLEM_NOTE = '';
+let PROBLEM_HIDDEN = 0;        // 被过滤掉的「未使用头文件」类提示条数 ✓（不装作没有 ✓）
+let PROBLEM_STALE = false;     // 页面里的副本和磁盘不一致（扫的是磁盘最新内容 ✓）
+
+function runMeta(ms, r) {
+  const f = CURRENT && CURRENT.fragments[CINDEX];
+  const secs = typeof ms === 'string' ? parseFloat(ms) : Number(ms);
+  return {
+    at: Date.now(),
+    ms: Number.isFinite(secs) ? Math.round(secs * 1000) : 0,
+    code: r && r.code != null ? r.code : null,
+    ok: !!(r && r.ok),
+    timedOut: !!(r && r.timedOut),
+    unsupported: !!(r && r.unsupported),
+    file: CURRENT ? CURRENT.file : '',
+    fragment: CINDEX,
+    label: f ? (f.label || ('片段 ' + (CINDEX + 1))) : '',
+    language: f ? (f.language || '') : '',
+    input: $('input-box') ? $('input-box').value : '',
+    imageCount: r && Array.isArray(r.images) ? r.images.length : 0,
+  };
+}
+function runClock(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+function updateRunsBadge() {
+  const tab = $('tab-runs');
+  if (!tab) return;
+  const n = window.CS_RUNS ? window.CS_RUNS.list().length : 0;
+  tab.textContent = n ? '↺ 运行历史 ' + n : '↺ 运行历史';
+}
+function renderRunPanel() {
+  const host = $('run-panel');
+  if (!host) return;
+  /* 角标和列表**同源** ✓ —— 不管谁往缓冲里塞了记录，只要面板一画，角标就跟着对 ✓
+     （否则「面板说 4 次、角标说 2 次」这种不一致，用户只会觉得是 bug ✓）。 */
+  updateRunsBadge();
+  const runs = window.CS_RUNS ? window.CS_RUNS.list() : [];
+  host.replaceChildren();
+  if (RUN_PANEL_MODE === 'diff') { renderRunDiff(host); return; }
+
+  const head = document.createElement('div');
+  head.className = 'out-panel-head';
+  const title = document.createElement('span');
+  title.className = 'op-title';
+  title.textContent = runs.length ? '最近 ' + runs.length + ' 次运行' : '还没有运行记录';
+  head.appendChild(title);
+  const sp = document.createElement('span'); sp.className = 'sp'; head.appendChild(sp);
+  const clear = document.createElement('button');
+  clear.type = 'button'; clear.textContent = '清空';
+  clear.disabled = !runs.length;
+  clear.onclick = () => { window.CS_RUNS.clear(); RUN_PANEL_MODE = 'list'; updateRunsBadge(); renderRunPanel(); };
+  head.appendChild(clear);
+  host.appendChild(head);
+
+  if (!runs.length) {
+    const empty = document.createElement('div');
+    empty.className = 'op-empty';
+    empty.textContent = '跑一次代码，这里会记下时间、退出码、耗时和输出摘要；可以回看，也可以和上一次对比。';
+    host.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'run-list';
+  runs.forEach((r, index) => {
+    const row = document.createElement('div');
+    row.className = 'run-row' + (r.ok ? ' ok' : ' err');
+    const dot = document.createElement('span'); dot.className = 'run-dot';
+    const idx = document.createElement('span'); idx.className = 'run-idx'; idx.textContent = '#' + (runs.length - index);
+    const time = document.createElement('span'); time.className = 'run-time'; time.textContent = runClock(r.at);
+    const lang = document.createElement('span'); lang.className = 'run-lang'; lang.textContent = r.language || '—';
+    const cost = document.createElement('span'); cost.className = 'run-cost'; cost.textContent = (r.ms / 1000).toFixed(2) + 's';
+    const sum = document.createElement('span'); sum.className = 'run-sum';
+    sum.textContent = window.CS_RUNS.summarize(r.stdout) || (r.ok ? '(无输出)' : '(没有 stdout)');
+    sum.title = sum.textContent;
+    row.append(dot, idx, time, lang, cost, sum);
+
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'run-open'; open.textContent = '回看';
+    open.title = '在「输出」里显示这一次的完整结果';
+    open.onclick = (ev) => { ev.stopPropagation(); openRunOutput(r.id); };
+    const diff = document.createElement('button');
+    diff.type = 'button'; diff.className = 'run-diff-btn'; diff.textContent = '对比';
+    diff.title = '与上一次运行做行级对比';
+    diff.disabled = !window.CS_RUNS.previousOf(r.id);
+    diff.onclick = (ev) => { ev.stopPropagation(); RUN_PANEL_MODE = 'diff'; RUN_DIFF_ID = r.id; renderRunPanel(); };
+    row.append(open, diff);
+    row.onclick = () => openRunOutput(r.id);
+    list.appendChild(row);
+  });
+  host.appendChild(list);
+}
+function openRunOutput(id) {
+  const r = window.CS_RUNS && window.CS_RUNS.get(id);
+  if (!r) return;
+  /* ⚠️ 这里**不能**传 meta ✗ —— 回看旧结果不该再记一条历史 ✓ */
+  showOut(r.stdout, r.stderr, r.ok, null);
+  switchOutTab('out');
+  setStatus(r.ok ? 'ok' : 'err', '回看 #' + id + ' · ' + runClock(r.at));
+}
+function renderRunDiff(host) {
+  const cur = window.CS_RUNS.get(RUN_DIFF_ID);
+  const prev = cur ? window.CS_RUNS.previousOf(RUN_DIFF_ID) : null;
+  const head = document.createElement('div');
+  head.className = 'out-panel-head';
+  const back = document.createElement('button');
+  back.type = 'button'; back.textContent = '← 返回列表';
+  back.onclick = () => { RUN_PANEL_MODE = 'list'; renderRunPanel(); };
+  head.appendChild(back);
+  const sp = document.createElement('span'); sp.className = 'sp'; head.appendChild(sp);
+  const note = document.createElement('span'); note.className = 'op-note';
+  head.appendChild(note);
+  host.appendChild(head);
+
+  if (!cur || !prev) {
+    note.textContent = '没有可对比的上一次运行';
+    return;
+  }
+  const d = window.CS_RUNS.diffLines(prev.stdout, cur.stdout);
+  note.textContent = d.same
+    ? 'stdout 完全一致'
+    : '相比上一次：+' + d.added + ' 行 / −' + d.removed + ' 行' + (d.truncated ? '（输出过长，只比了前 800 行）' : '');
+  note.classList.toggle('same', d.same);
+
+  const box = document.createElement('div');
+  box.className = 'run-diff';
+  /* 上下文折叠：连续相同的行只留前后各 2 行 ✓（不然 200 行输出里改 1 行要滚半天 ✓） */
+  const rows = d.rows;
+  /* ⚠️ 初值必须是 -1 而不是 -99 ✗✗（2026-10-19 探针抓到）——
+     用 -99 时**第一行**就会算出 `0 - (-99) > 1` ✓ → 顶上凭空多一条
+     「⋯ 98 行相同」✗（其实前面什么都没有 ✓）。`lastShown < 0` 表示「还没显示过」✓。 */
+  let lastShown = -1;
+  rows.forEach((row, i) => {
+    const changed = row.type !== 'same';
+    const nearChanged = rows.slice(Math.max(0, i - 2), i + 3).some((x) => x.type !== 'same');
+    if (!changed && !nearChanged) return;
+    if (lastShown >= 0 && i - lastShown > 1) {
+      const gap = document.createElement('div');
+      gap.className = 'diff-gap';
+      gap.textContent = '⋯ ' + (i - lastShown - 1) + ' 行相同';
+      box.appendChild(gap);
+    }
+    lastShown = i;
+    const line = document.createElement('div');
+    line.className = 'diff-row ' + row.type;
+    const mark = document.createElement('span'); mark.className = 'diff-mark';
+    mark.textContent = row.type === 'add' ? '+' : (row.type === 'del' ? '−' : ' ');
+    const no = document.createElement('span'); no.className = 'diff-no';
+    no.textContent = row.a != null ? String(row.a) : (row.b != null ? String(row.b) : '');
+    const text = document.createElement('span'); text.className = 'diff-text';
+    text.textContent = row.text === '' ? ' ' : row.text;
+    line.append(mark, no, text);
+    box.appendChild(line);
+  });
+  /* 尾部剩下的相同行也给一句提示 ✓（不然最后突然断掉，像「后面没内容了」✗） */
+  if (lastShown >= 0 && lastShown < rows.length - 1) {
+    const tail = document.createElement('div');
+    tail.className = 'diff-gap';
+    tail.innerHTML = csGlyphIcon('⋯') + ' 后面还有 ' + (rows.length - 1 - lastShown) + ' 行相同';
+    box.appendChild(tail);
+  }
+  host.appendChild(box);
+}
+
+/* ── 问题面板 ─────────────────────────────────────────────────────────────── */
+/* 当前文件的诊断 → 面板条目 ✓（顺手把 unused-includes 这类噪音滤掉，并记下滤了几条 ✓） */
+function problemCollectCurrent() {
+  const f = CURRENT && CURRENT.fragments[CINDEX];
+  const items = [];
+  let hidden = 0;
+  for (const d of (LSP_DIAGNOSTICS || [])) {
+    if (isNoiseDiagnostic(d.code)) { hidden += 1; continue; }
+    items.push({
+      frag: CINDEX,
+      label: f ? (f.label || ('片段 ' + (CINDEX + 1))) : '',
+      severity: Number(d.severity) || 3,
+      message: String(d.message || '诊断信息'),
+      line: diagnosticLine(d),
+      source: [d.source, d.code].filter(Boolean).join(' · '),
+    });
+  }
+  return { items: items.sort((a, b) => a.line - b.line), hidden };
+}
+/* 拉一份**磁盘上的最新内容** ✓（用户报「报错了，是真问题吗」→ 是假红：扫的是页面里那份旧副本 ✗）——
+   `CURRENT.fragments` 是**打开页面那一刻**的快照 ✓，之后磁盘被改过（时间线恢复 / 外部编辑 / 另一个窗口）
+   它不会自己更新 ✗ → 扫出来的错误早就修好了 ✓，用户却以为代码有问题 ✓。
+   ⚠️ 只用来**扫描**，不写回 `CURRENT` ✗ —— 页面里可能还有没保存的编辑 ✓，
+      偷偷替换掉会让编辑器内容突变 ✓。 */
+async function freshFragmentsFor(file) {
+  try {
+    const d = await api('/api/snippets');
+    const hit = (d && d.snippets || []).find((s) => s.file === file);
+    return hit && Array.isArray(hit.fragments) ? hit.fragments : null;
+  } catch (_) { return null; }
+}
+/* 「未使用的头文件」这类提示**不是问题** ✓ —— clangd 的 unused-includes 在多文件工程里必然满屏
+   （头文件库本来就只用到一部分 ✓）。默认不显示，但在头部标出隐藏了几条 ✓，不装作没有 ✓。 */
+function isNoiseDiagnostic(code) {
+  return /^unused/i.test(String(code || ''));
+}
+async function scanAllProblems() {
+  if (PROBLEM_SCANNING || !CURRENT) return;
+  PROBLEM_SCANNING = true;
+  PROBLEM_SCOPE = 'all';
+  PROBLEM_NOTE = '';
+  PROBLEM_HIDDEN = 0;
+  PROBLEM_STALE = false;
+  PROBLEM_PROGRESS = { done: 0, total: 0 };
+  PROBLEM_ITEMS = [];
+  renderProblemPanel();
+
+  const fresh = await freshFragmentsFor(CURRENT.file);
+  const list = (fresh && fresh.length ? fresh : CURRENT.fragments);
+  /* 页面里的副本和磁盘不一致 → 标一下，用户就知道「面板里的内容可能比编辑器新」✓
+     ⚠️ 只比**别的文件** ✗ —— 当前这个正在编辑的文件本来就可能和磁盘不同（没保存 ✓），
+        拿它比的话每敲一个字都会提示「副本是旧的」✓，纯噪音 ✓。 */
+  if (fresh && fresh.length === CURRENT.fragments.length) {
+    PROBLEM_STALE = fresh.some((f, i) => i !== CINDEX && String(f.code || '') !== String((CURRENT.fragments[i] || {}).code || ''));
+  }
+  const targets = list
+    .map((f, i) => ({ f, i }))
+    .filter((x) => LSP_LANGUAGES.has(x.f.language));
+  PROBLEM_PROGRESS = { done: 0, total: targets.length };
+  renderProblemPanel();
+
+  const found = [];
+  let hidden = 0;
+  let cursor = 0;
+  /* ⚠️ 并发 3 而不是全并发 ✗ —— 每个请求都要过语言服务器 ✓，
+     20 个分片一起打过去只会让服务器排队、界面更久才出结果 ✓。 */
+  const worker = async () => {
+    while (cursor < targets.length) {
+      const { f, i } = targets[cursor]; cursor += 1;
+      /* 当前分片用**编辑器里真实的内容** ✓（未保存的改动也该被检查 ✓）
+         ⚠️ 判断条件里必须带上 `monacoMainActive()` ✗✗（2026-10-20）——
+            编辑器默认走 Monaco ✓，那时 `EDITING` 是 false ✓，
+            于是这里拿的是**磁盘/载入时的副本** `f.code` ✓，
+            而用户眼前是 Monaco 里可能改过的文本 ✓ → 两边算的不是同一份代码 ✓。 */
+      const live = i === CINDEX && typeof editText === 'function'
+        && (EDITING || (typeof monacoMainActive === 'function' && monacoMainActive()));
+      const code = live ? editText() : f.code;
+      try {
+        const r = await api('/api/lsp/query', { file: CURRENT.file, fragment: i, code, action: 'diagnostics', line: 1, column: 1 });
+        if (r && r.ok && Array.isArray(r.diagnostics)) {
+          for (const d of r.diagnostics) {
+            if (isNoiseDiagnostic(d.code)) { hidden += 1; continue; }
+            found.push({
+              frag: i, label: f.label || ('片段 ' + (i + 1)),
+              severity: Number(d.severity) || 3,
+              message: String(d.message || '诊断信息'),
+              line: diagnosticLine(d),
+              source: [d.source, d.code].filter(Boolean).join(' · '),
+              /* 留一份**原始诊断** ✓ —— 扫描完要把它回填给编辑器的 LSP_DIAGNOSTICS，
+                 回填时直接用原文，不用把 `source · code` 这串再拆回去 ✓ */
+              raw: d,
+            });
+          }
+        } else if (r && !r.ok && i === targets[0].i) {
+          PROBLEM_NOTE = String(r.error || '语言服务器不可用');
+        }
+      } catch (_) { /* 单个分片失败不影响整体 ✓ */ }
+      PROBLEM_PROGRESS.done += 1;
+      if (OUT_TAB === 'problems') renderProblemPanel();
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  PROBLEM_ITEMS = found.sort((a, b) => a.frag - b.frag || a.line - b.line);
+  PROBLEM_HIDDEN = hidden;
+  PROBLEM_SCANNING = false;
+  PROBLEM_AT = Date.now();
+  adoptScanForCurrent();
+  renderProblemPanel();
+  updateProblemsBadge();
+}
+/* ★ 扫描完，把「当前文件」的结果**回填**给编辑器的诊断 ✓（2026-10-20）
+   用户原话：「怎么不同步，下面扫描出错误了，怎么上面还是显示没有错误问题」✓
+   根因：上下是**两条链路**，各算各的 ✗ ——
+   · 上面（徽章 / 点开的弹层 / 行内标记）只认 `LSP_DIAGNOSTICS`，
+     它只在**编辑器触发**的那次 debounce 请求里被赋值 ✓；
+   · 下面（问题面板）在「全部文件」模式下认 `PROBLEM_ITEMS`，来自扫描 ✓。
+   一旦内容不是「在编辑器里改的」（外部改文件、自动保存回写、换了个窗口），
+   上面的请求根本不会重跑 ✓ → 上面永远停在旧结论、下面却是新的 ✓。
+   所以扫描结束必须**把当前文件那一份写回去**，让两边只有一个真相 ✓。 */
+function adoptScanForCurrent() {
+  if (!CURRENT) return;
+  /* 语言服务器整个不可用时**不要**回填 ✓ —— 否则会把「没查到」当成「没问题」✗，
+     徽章从「本地索引」变成「✓ 无问题」，等于把故障说成健康 ✓ */
+  if (PROBLEM_NOTE) return;
+  const mine = PROBLEM_ITEMS.filter((x) => x.frag === CINDEX);
+  LSP_DIAGNOSTICS = mine.map((x) => x.raw || {
+    severity: x.severity,
+    message: x.message,
+    range: { start: { line: Math.max(0, (x.line || 1) - 1), character: 0 }, end: { line: Math.max(0, (x.line || 1) - 1), character: 1 } },
+  });
+  const badge = $('lsp-diagnostics');
+  if (badge) {
+    const errors = LSP_DIAGNOSTICS.filter((d) => Number(d.severity) === 1).length;
+    badge.textContent = LSP_DIAGNOSTICS.length
+      ? (errors ? '● ' + errors + ' 错误' : '▲ ' + LSP_DIAGNOSTICS.length + ' 警告')
+      : '✓ 无问题';
+    badge.className = errors ? 'error' : (LSP_DIAGNOSTICS.length ? 'warn' : 'ok');
+    badge.title = '语言服务器诊断（当前文件，含「全部文件」扫描的结果）';
+  }
+  renderLspProblems();
+  renderDiagnosticMarkers();
+}
+function problemCounts(items) {
+  let e = 0, w = 0;
+  for (const x of items) { if (x.severity === 1) e += 1; else if (x.severity === 2) w += 1; }
+  return { errors: e, warnings: w };
+}
+function updateProblemsBadge() {
+  const tab = $('tab-problems');
+  if (!tab) return;
+  const { items } = PROBLEM_SCOPE === 'all' ? { items: PROBLEM_ITEMS } : problemCollectCurrent();
+  const { errors, warnings } = problemCounts(items);
+  /* 角标只报**错误**数 ✓ —— 警告不算「问题」，否则角标永远是红的、就没人当回事了 ✗ */
+  tab.textContent = errors ? '⚠ 问题 ' + errors : '⚠ 问题';
+  tab.classList.toggle('has-error', errors > 0);
+}
+function renderProblemPanel() {
+  const host = $('problem-panel');
+  if (!host) return;
+  const cur = PROBLEM_SCOPE === 'all' ? { items: PROBLEM_ITEMS, hidden: PROBLEM_HIDDEN } : problemCollectCurrent();
+  const items = cur.items;
+  const { errors, warnings } = problemCounts(items);
+  host.replaceChildren();
+
+  const head = document.createElement('div');
+  head.className = 'out-panel-head';
+  /* ★ 按钮文案用「文件」而不是「分片」✓（用户：「命名又些怪，合理命名」）——
+     编辑器里的标签页写的全是文件名（main.cpp / error.hpp）✓，
+     多文件徽章也说「20 个文件」✓ —— 那就统一叫「文件」✓。
+     原来「当前分片 / 扫描整个片段」把**文件**和**片段**两个词混着用 ✓，
+     看的人要停下来想「分片是啥、片段又是啥」✗。 */
+  const fragBtn = document.createElement('button');
+  fragBtn.type = 'button'; fragBtn.textContent = '当前文件';
+  fragBtn.title = '只看正在编辑的这个文件';
+  fragBtn.className = PROBLEM_SCOPE === 'frag' ? 'on' : '';
+  fragBtn.onclick = () => { PROBLEM_SCOPE = 'frag'; PROBLEM_NOTE = ''; renderProblemPanel(); updateProblemsBadge(); };
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button'; allBtn.textContent = '全部文件';
+  allBtn.title = '逐个文件检查（要过语言服务器，稍慢）';
+  allBtn.className = PROBLEM_SCOPE === 'all' ? 'on' : '';
+  allBtn.disabled = PROBLEM_SCANNING;
+  allBtn.onclick = () => scanAllProblems();
+  head.append(fragBtn, allBtn);
+  const sp = document.createElement('span'); sp.className = 'sp'; head.appendChild(sp);
+  const note = document.createElement('span'); note.className = 'op-note';
+  if (PROBLEM_SCANNING) note.textContent = '扫描中 ' + PROBLEM_PROGRESS.done + ' / ' + PROBLEM_PROGRESS.total + '…';
+  else if (items.length) {
+    /* 「全部文件」时把**文件数**带上 ✓ —— 否则右上角只写「3 错误」，
+       和下面那张卡片的「main.cpp 3 错误」完全重复、一点新信息都没有 ✗ */
+    const bits = [];
+    if (PROBLEM_SCOPE === 'all') bits.push(new Set(items.map((x) => x.frag)).size + ' 个文件');
+    if (errors) bits.push(errors + ' 错误');
+    if (warnings) bits.push(warnings + ' 警告');
+    note.textContent = bits.join(' · ');
+  }
+  else note.textContent = PROBLEM_NOTE || '没有发现问题';
+  head.appendChild(note);
+  host.appendChild(head);
+
+  /* 被过滤掉的噪音、以及「页面副本比磁盘旧」这两件事都要**说出来** ✓ ——
+     悄悄少显示几条，用户会以为检查不全 ✗。 */
+  if (!PROBLEM_SCANNING && (cur.hidden || (PROBLEM_SCOPE === 'all' && PROBLEM_STALE))) {
+    const tips = [];
+    if (cur.hidden) tips.push('已隐藏 ' + cur.hidden + ' 条「未使用的头文件」提示');
+    if (PROBLEM_SCOPE === 'all' && PROBLEM_STALE) tips.push('按磁盘最新内容检查（编辑器里的是旧副本，刷新页面可同步）');
+    const bar = document.createElement('div');
+    bar.className = 'prob-tip';
+    bar.textContent = tips.join(' · ');
+    host.appendChild(bar);
+  }
+
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'op-empty';
+    empty.textContent = PROBLEM_SCANNING
+      ? '正在逐个文件检查…'
+      : (PROBLEM_SCOPE === 'all'
+        ? '全部文件没有发现问题（共检查了 ' + PROBLEM_PROGRESS.total + ' 个文件）。'
+        : '当前文件没有诊断信息。要看全部文件，点「全部文件」。');
+    host.appendChild(empty);
+    return;
+  }
+
+  const byFrag = new Map();
+  for (const item of items) {
+    if (!byFrag.has(item.frag)) byFrag.set(item.frag, []);
+    byFrag.get(item.frag).push(item);
+  }
+  /* ★ 每个文件一张「卡片」（2026-10-20 用户：「行级分割不清楚」）——
+     原来行高只有 26px、背景全透明、**行与行之间没有任何分隔线** ✗，
+     三条一模一样的消息看起来就是一整块 ✓；行号还被塞在**消息右边**（`:39`），
+     长短不齐、对不齐，也就没有「这是第几行」的纵向基准 ✗。
+     现在：行号提到**最左的固定列**（右对齐、等宽数字）✓、行间加细分割线 ✓、
+     隔行浅底 ✓ —— 三件事一起才让「一行」在视觉上真的成行 ✓。 */
+  for (const [frag, group] of byFrag) {
+    const c = problemCounts(group);
+    const box = document.createElement('div');
+    box.className = 'prob-group' + (c.errors ? ' has-error' : (c.warnings ? ' has-warn' : ''));
+    const gh = document.createElement('div');
+    gh.className = 'prob-head';
+    const dot = document.createElement('span');
+    dot.className = 'gdot';
+    const name = document.createElement('b');
+    name.textContent = group[0].label || ('片段 ' + (frag + 1));
+    const cnt = document.createElement('span');
+    cnt.className = 'gcnt';
+    cnt.textContent = (c.errors ? c.errors + ' 错误' : '') + (c.errors && c.warnings ? ' · ' : '') + (c.warnings ? c.warnings + ' 警告' : '');
+    gh.append(dot, name, cnt);
+    box.appendChild(gh);
+    for (const item of group) {
+      const kind = item.severity === 1 ? 'error' : (item.severity === 2 ? 'warn' : 'info');
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'prob-row ' + kind;
+      /* 行号在最左 ✓ —— 所有消息因此共用同一条起始线，扫读时不用左右横跳 ✓ */
+      const where = document.createElement('span');
+      where.className = 'where';
+      where.textContent = String(item.line || '');
+      const sev = document.createElement('span'); sev.className = 'sev';
+      sev.textContent = item.severity === 1 ? '●' : (item.severity === 2 ? '▲' : '·');
+      const msg = document.createElement('span'); msg.className = 'msg'; msg.textContent = item.message;
+      row.append(where, sev, msg);
+      if (item.source) {
+        /* `clang · ovl_no_viable_function…` 这串里**有信息量的是规则名** ✓，
+           `clang` 每行都一样、纯占位 ✗ → 只留最后一段，完整串放 title ✓。
+           没有规则名（只剩 `clang` 一个词）就**整个 chip 不画** ✓ ——
+           一排「clang clang clang」除了添噪音没有任何作用 ✗ */
+        const parts = String(item.source).split(' · ');
+        if (parts.length > 1) {
+          const src = document.createElement('span');
+          src.className = 'src';
+          src.textContent = parts[parts.length - 1];
+          src.title = item.source;
+          row.appendChild(src);
+        }
+      }
+      row.title = '跳到 ' + (item.label || '') + ' 第 ' + item.line + ' 行\n' + item.message;
+      row.onclick = () => {
+        if (!CURRENT) return;
+        goToLocation({ snippet: CURRENT, frag: item.frag, line: item.line });
+      };
+      box.appendChild(row);
+    }
+    host.appendChild(box);
+  }
+}
+function syncProblemTabHint() {
+  updateProblemsBadge();
+  if (OUT_TAB === 'problems') renderProblemPanel();
+}
+
 function switchOutTab(which) {
-  OUT_TAB = ['cases','results','out','term'].includes(which) ? which : 'out';
+  OUT_TAB = ['cases','results','out','term','runs','problems'].includes(which) ? which : 'out';
   TERM_TAB_OPEN = which === 'term';
   $('tab-cases').classList.toggle('on', which === 'cases');
   $('tab-results').classList.toggle('on', which === 'results');
   $('tab-out').classList.toggle('on', which === 'out');
+  $('tab-runs').classList.toggle('on', which === 'runs');
+  $('tab-problems').classList.toggle('on', which === 'problems');
   $('tab-term').classList.toggle('on', which === 'term');
   /* ★ MATLAB 标签页**跟着一起高亮** ✓✓（2026-10-10）——
      用户原话：「为什么是终端按钮高亮不是 matlab」✓。
@@ -14416,11 +15296,16 @@ function switchOutTab(which) {
   $('algo-cases').classList.toggle('hidden', which !== 'cases');
   $('algo-results').classList.toggle('hidden', which !== 'results');
   $('out-body').classList.toggle('hidden', which !== 'out');
+  $('run-panel').classList.toggle('hidden', which !== 'runs');
+  $('problem-panel').classList.toggle('hidden', which !== 'problems');
   $('input-area').classList.add('hidden');
   $('term-wrap').classList.toggle('hidden', which !== 'term');
-  if (which === 'cases' || which === 'results') {
+  if (which === 'cases' || which === 'results' || which === 'runs' || which === 'problems') {
     if ($('output').getBoundingClientRect().height < 300) $('output').style.height = Math.min(430, Math.round(window.innerHeight * .42)) + 'px';
-    if (which === 'cases') renderAlgoCases(); else renderAlgoResults();
+    if (which === 'cases') renderAlgoCases();
+    else if (which === 'results') renderAlgoResults();
+    else if (which === 'runs') renderRunPanel();
+    else renderProblemPanel();
   }
   if (which === 'term') {
     if (!term) initTerm();
@@ -14464,6 +15349,19 @@ async function termConnect() {
   try {
     const resp = await fetch('/api/term/stream');
     if (!resp.ok || !resp.body) { throw new Error('stream ' + resp.status); }
+    /* ★★ 「服务端还是旧版本」要**说清楚**（2026-10-19）★★ ——
+       用户原话：「还是没有修复好」✓，截图里终端只有一句「终端启动失败」重复两遍 ✓，
+       而真正的原因是**那个 node 进程还是改动之前的代码** ✓（改了 server.js / lib/**
+       必须重启进程才生效 ✗，刷新页面不够 ✗）。
+       `X-CodeScope-Terminal-Replay` 是**新版本才有的头** ✓ —— 老版本要么回一句
+       「终端启动失败」✓、要么直接把连接掐掉 ✓，两种都到这里 ✓。
+       与其让用户对着「连接断开」猜，不如直接告诉他该重启 ✓。 */
+    if (resp.headers.get('X-CodeScope-Terminal-Replay') !== '1') {
+      st.textContent = '需重启服务'; st.className = 'pill err';
+      if (term) term.write('\r\n\x1b[33m[终端] 服务端还是旧版本，重启一次 CodeScope 才能用（只刷新页面不够）。\x1b[0m\r\n');
+      termConnecting = false;
+      return;
+    }
     // 服务端会重放当前会话缓存；先清空本地屏幕，避免断线重连或多标签抢流产生重复内容。
     if (resp.headers.get('X-CodeScope-Terminal-Replay') === '1') { try { term.reset(); } catch (_) {} }
     st.textContent = '已连接'; st.className = 'pill ok';
@@ -14486,7 +15384,23 @@ async function termConnect() {
         pushDebugOut(chunk);
       } catch (_) {}
     }
-  } catch (_) { st.textContent = '连接断开'; st.className = 'pill err'; }
+  } catch (_) {
+    /* ★ 连不上要**分清是哪一种**（2026-10-19）——
+       ① 服务真没了（端口不通）→ 800ms 后自动重连是**有用**的 ✓
+       ② 服务在、但这条路不通（老版本代码把流掐了）→ 重连**没用** ✗，
+          只会每 800ms 往终端里再写一遍同样的错误 ✓（用户截图里
+          「终端启动失败终端启动失败」就是这么刷出来的 ✓）。
+       ⇒ 用 `/api/version` 探一下：活着就直接给「需重启服务」并**停止重试** ✓。 */
+    let alive = false;
+    try { const probe = await fetch('/api/version', { cache: 'no-store' }); alive = !!probe.ok; } catch (_) {}
+    if (alive) {
+      st.textContent = '需重启服务'; st.className = 'pill err';
+      if (term) term.write('\r\n\x1b[33m[终端] 服务端还是旧版本，重启一次 CodeScope 才能用（只刷新页面不够）。\x1b[0m\r\n');
+      termConnecting = false;
+      return;
+    }
+    st.textContent = '连接断开'; st.className = 'pill err';
+  }
   termConnecting = false;
   // SSH 远端主动退出时及时把顶部状态与终端标题恢复为真实会话状态。
   loadRemoteStatus();
@@ -14495,6 +15409,8 @@ async function termConnect() {
 $('tab-cases').onclick = () => switchOutTab('cases');
 $('tab-results').onclick = () => switchOutTab('results');
 $('tab-out').onclick = () => switchOutTab('out');
+$('tab-runs').onclick = () => switchOutTab('runs');
+$('tab-problems').onclick = () => switchOutTab('problems');
 $('tab-term').onclick = () => switchOutTab('term');
 $('term-clear').onclick = () => { if (term) term.clear(); };
 $('term-hide').onclick = () => switchOutTab('out');
@@ -15052,7 +15968,7 @@ async function runProjectTest(test,button){button.disabled=true;const out=$('tes
 async function loadProjectDebug(force=false){if(!PROJECT_DATA.debug||force)PROJECT_DATA.debug=await api('/api/project/debug');const list=$('debug-list'),data=PROJECT_DATA.debug;list.replaceChildren();for(const adapter of (data.adapters||[])){const row=document.createElement('div');row.className='task-row';const info=document.createElement('div'),title=document.createElement('b'),cmd=document.createElement('code');title.textContent=(adapter.available?'✓ ':'○ ')+adapter.name;cmd.textContent=adapter.available?adapter.command:'未安装';info.append(title,cmd);row.appendChild(info);list.appendChild(row);}}
 function shellQuote(value){return "'"+String(value||'').replace(/'/g,"'\\''")+"'";}
 function parseDebugArgs(value){const input=String(value||'').trim(),args=[];let token='',quote='',escaped=false;for(const char of input){if(escaped){token+=char;escaped=false;continue;}if(char==='\\'&&quote!=="'"){escaped=true;continue;}if(quote){if(char===quote)quote='';else token+=char;continue;}if(char==='"'||char==="'"){quote=char;continue;}if(/\s/.test(char)){if(token){args.push(token);token='';}}else token+=char;}if(escaped)token+='\\';if(quote)throw new Error('调试参数中的引号没有闭合');if(token)args.push(token);return args;}
-async function startProjectDebug(){const adapter=$('debug-adapter').value,program=$('debug-program').value.trim(),rawArgs=$('debug-args').value.trim();if(!program||/[\r\n]/.test(program+rawArgs)){setStatus('err','请输入合法的程序或脚本路径');return;}let args;try{args=parseDebugArgs(rawArgs);}catch(error){setStatus('err',error.message);return;}const prefix={node:'node inspect',python:'python -m pdb',lldb:'lldb --',gdb:'gdb --args'}[adapter]||adapter,command=[prefix,shellQuote(program),...args.map(shellQuote)].join(' ');$('project-panel').classList.remove('open');setOutputTab('term');await api('/api/term/input',{data:command+'\n'});setStatus('run','已在集成终端启动 '+adapter+' 调试');}
+async function startProjectDebug(){const adapter=$('debug-adapter').value,program=$('debug-program').value.trim(),rawArgs=$('debug-args').value.trim();if(!program||/[\r\n]/.test(program+rawArgs)){setStatus('err','请输入合法的程序或脚本路径');return;}let args;try{args=parseDebugArgs(rawArgs);}catch(error){setStatus('err',error.message);return;}const prefix={node:'node inspect',python:'python -m pdb',lldb:'lldb --',gdb:'gdb --args'}[adapter]||adapter,command=[prefix,shellQuote(program),...args.map(shellQuote)].join(' ');$('project-panel').classList.remove('open');showTerminal();await api('/api/term/input',{data:command+'\n'});setStatus('run','已在集成终端启动 '+adapter+' 调试');}
 async function loadProjectTasks(force = false) {
   if (PROJECT_DATA.tasks && !force) return renderProjectTasks(PROJECT_DATA.tasks);
   $('task-list').textContent = '正在检测构建入口…';
@@ -16109,9 +17025,20 @@ async function syncPanelAction(kind){
   }catch(error){if(note)note.textContent=String((error&&error.message)||error);}
   await loadSyncPanel(true);
 }
+let DSH_PROXY_PORT=3081;
 function dshLaunchUrl(service){
   const local=['127.0.0.1','localhost','::1'].includes(location.hostname);
-  return local ? service.url : (service.publicUrl||service.url);
+  if(local)return service.url;
+  /* ⚠️ 不能直接信 publicUrl ✗ —— 这台机器上它是个 **Tailscale 的 ts.net 地址** ✓，
+     局域网设备没装 Tailscale 就解析不了 → 打不开 ✓（用户反馈的正是这个）
+     ⇒ 优先走**同主机的反代端口**：能打开 CodeScope 就一定能打开它 ✓
+     只有页面本身就在 ts.net 上时（从外网访问）才用 publicUrl ✓ */
+  if(/\.ts\.net$/i.test(location.hostname)&&service.publicUrl)return service.publicUrl;
+  /* ⚠️ 局域网不能直接给 service.url ✗ —— DSH 以 `--host 127.0.0.1` 启动，
+     直连会让**对方设备**去连它自己的 3080 端口 ✓ 必然打不开。
+     ⇒ 走 CodeScope 在同一个主机上起的反代端口（lib/dsh-proxy.js），token 原样带上 ✓ */
+  const u=String(service.url||'');const q=u.indexOf('?');
+  return (location.protocol==='https:'?'https:':'http:')+'//'+location.hostname+':'+DSH_PROXY_PORT+'/'+(q>=0?u.slice(q):'');
 }
 let DSH_SERVICE=null;
 /* VS Code 代理端口：以服务端返回的为准，这里只是启动前的占位。 */
@@ -16293,7 +17220,7 @@ async function openVSCode(folder){
     const response=await api('/api/integrations/code-server',{action:'open'});
     const service=response.service||{};
     if(service.proxyPort)VSCODE_PROXY_PORT=service.proxyPort;
-    if(!service.available)throw new Error(service.message||service.hint||(/Not Found|404/.test(String(response.error||''))?'VS Code 接口未生效：服务端可能是旧进程，重启一次 CodeScope 就好':(response.error||'VS Code 未能启动')));
+    if(!service.available)throw new Error(service.message||service.hint||(/Not Found|404/.test(String(service.error||''))?'VS Code 接口未生效：服务端可能是旧进程，重启一次 CodeScope 就好':(service.error||'VS Code 未能启动')));
     if(!service.proxyListening)throw new Error('VS Code 代理端口未就绪（'+VSCODE_PROXY_PORT+'）');
     if(document.body.classList.contains('study-mode')&&window.CodeScopeStudy)window.CodeScopeStudy.close();
     if(document.body.classList.contains('office-mode')&&typeof window.closeOffice==='function')await window.closeOffice();
@@ -16317,7 +17244,7 @@ async function openVSCodeExternal(){
   try{
     const service=(await api('/api/integrations/code-server',{action:'open'})).service||{};
     if(service.proxyPort)VSCODE_PROXY_PORT=service.proxyPort;
-    if(!service.available)throw new Error(service.message||service.hint||(/Not Found|404/.test(String(response.error||''))?'VS Code 接口未生效：服务端可能是旧进程，重启一次 CodeScope 就好':(response.error||'VS Code 未能启动')));
+    if(!service.available)throw new Error(service.message||service.hint||(/Not Found|404/.test(String(service.error||''))?'VS Code 接口未生效：服务端可能是旧进程，重启一次 CodeScope 就好':(service.error||'VS Code 未能启动')));
     window.open(vscodeProxyUrl(''),'codescope-vscode-external','noopener');
   }catch(error){setStatus('err', 'VS Code 打开失败：'+(error.message||error));}
 }

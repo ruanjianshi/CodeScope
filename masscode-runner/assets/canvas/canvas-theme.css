@@ -1,0 +1,755 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   canvas 主题层 —— 把 tldraw 的默认配色换成 CodeScope 的石墨灰
+   -----------------------------------------------------------------------
+   tldraw 自带深色主题是「近黑 + 冷紫」（bg hsl(240,5%,6.5%)），
+   和 CodeScope 的 #15171c / #1c1f26 差了整整一档 → 面板里像贴了块黑布。
+   这里只覆盖 --tl-color-* 变量（30 个）+ 我们自己加的组件样式，不动结构。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.tl-theme__dark,
+.tl-theme__light {
+  /* ── 表面：和 ui-kit.css 的 --cs-* 对齐 ── */
+  --tl-color-background: #15171c;
+  --tl-color-low: #1a1d23;
+  --tl-color-low-border: #2e333d;
+  --tl-color-panel: #1c1f26;
+  --tl-color-panel-contrast: #2a2f38;
+  --tl-color-panel-overlay: rgba(28, 31, 38, .94);
+  --tl-color-panel-transparent: rgba(28, 31, 38, 0);
+  --tl-color-divider: #2e333d;
+  --tl-color-overlay: rgba(8, 10, 14, .55);
+
+  /* ── 点阵网格（isGridMode）── */
+  --tl-color-grid: #2b3038;
+
+  /* ── 选中 / 焦点：用 CodeScope 主色 ── */
+  --tl-color-selected: #5b93ff;
+  --tl-color-selected-contrast: #ffffff;
+  --tl-color-selection-fill: rgba(91, 147, 255, .16);
+  --tl-color-selection-stroke: #5b93ff;
+  --tl-color-focus: #8fb5ff;
+  --tl-color-primary: #5b93ff;
+
+  /* ── 文字 ── */
+  --tl-color-text: #e7eaf0;
+  --tl-color-text-disabled: #6b7688;
+  --tl-color-text-shadow: #0e1014;
+  --tl-color-tooltip: #e7eaf0;
+  --tl-color-hint: rgba(231, 234, 240, .07);
+  --tl-color-muted-none: rgba(231, 234, 240, 0);
+
+  /* ── 语义色 ── */
+  --tl-color-success: #3fb950;
+  --tl-color-info: #5b93ff;
+  --tl-color-warning: #d9a441;
+  --tl-color-danger: #f0616d;
+}
+
+/* 画布底色和 CodeScope 一致（tldraw 用 .tl-background 铺底） */
+.tl-background { background-color: #15171c !important; }
+
+/* 面板圆角统一到 10px，和 ui-kit 的 --cs-r-md 接近 */
+.tlui-panel,
+.tlui-menu,
+.tlui-popover-content {
+  border-radius: 10px !important;
+}
+.tlui-panel { box-shadow: 0 8px 24px rgba(0, 0, 0, .34) !important; }
+
+/* ═══ PDF 卡片（pdfcard）：一张卡里翻页看 ═══ */
+.cs-pdf {
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1b1f26;
+  border: 1px solid rgba(255, 255, 255, .075);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .36);
+  font: 11px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: grab;
+}
+.cs-pdf__bar {
+  height: 30px; flex: none;
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 6px 0 9px;
+  background: #232830;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+  color: #9aa4b4;
+}
+.cs-pdf__ico { width: 13px; height: 13px; flex: none; fill: none; stroke: #e0674f; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.cs-pdf__title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #c2cbd9; }
+.cs-pdf__num { font-size: 11px; color: #8b95a5; padding: 0 2px; min-width: 34px; text-align: center; }
+.cs-pdf__btn {
+  width: 22px; height: 22px; flex: none;
+  display: grid; place-items: center;
+  border: 0; border-radius: 5px;
+  background: transparent; color: #9aa4b4;
+  font: 14px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer; text-decoration: none;
+}
+.cs-pdf__btn:hover:not(:disabled) { background: rgba(255, 255, 255, .09); color: #e7eaf0; }
+.cs-pdf__btn:disabled { opacity: .28; cursor: default; }
+.cs-pdf__body {
+  flex: 1; min-height: 0; position: relative;
+  background: #ffffff;
+  overflow: auto;                 /* 连续滚动 ✓ */
+  pointer-events: auto;           /* 要滚动就必须吃鼠标（拖卡片改抓顶栏）✓ */
+  scrollbar-width: thin;
+}
+.cs-pdf__body::-webkit-scrollbar { width: 10px; height: 10px; }
+.cs-pdf__body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, .22); border-radius: 6px; }
+.cs-pdf__body::-webkit-scrollbar-track { background: transparent; }
+/* 每页一张图，竖着排，中间留一道缝（像正常 PDF 阅读器）*/
+.cs-pdf__page {
+  display: block; height: auto; max-width: none;
+  background: #ffffff;
+  margin: 0 auto 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+}
+.cs-pdf__page:last-of-type { margin-bottom: 0; }
+.cs-pdf__empty { position: absolute; inset: 0; display: grid; place-items: center; color: #8b95a5; font-size: 12px; }
+/* 缩放条：浮在卡片右下角，不随内容滚走 ✓ */
+.cs-pdf__zoom {
+  position: absolute; right: 10px; bottom: 10px;
+  display: flex; align-items: center; gap: 1px;
+  padding: 2px;
+  background: rgba(21, 23, 28, .84);
+  border-radius: 7px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+.cs-pdf__zoom button {
+  min-width: 24px; height: 22px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 5px;
+  background: transparent; color: #c2cbd9;
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.cs-pdf__zoom button:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+.cs-pdf__zoom .cs-pdf__pct { min-width: 40px; font-size: 11px; }
+
+/* ═══ 便签（sticky 自定义图形）：自由缩放的小纸片 ═══ */
+.cs-sticky {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #6b5a22;
+  color: #fbf3c9;
+  font: 13px/1.6 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .32);
+  overflow: hidden;
+  cursor: grab;
+  word-break: break-word;
+}
+.cs-sticky__text { width: 100%; text-align: center; white-space: pre-wrap; }
+.cs-sticky__edit {
+  width: 100%; height: 100%;
+  box-sizing: border-box; margin: 0; padding: 0;
+  background: transparent; border: 0; outline: none; resize: none;
+  color: inherit; font: inherit; text-align: center;
+  cursor: text;
+}
+.cs-sticky--black { background: #2b313b; color: #dfe6ef; }
+.cs-sticky--grey { background: #3a414d; color: #e4eaf2; }
+.cs-sticky--yellow { background: #6b5a22; color: #fbf3c9; }
+.cs-sticky--orange { background: #7a4f1f; color: #ffe3c2; }
+.cs-sticky--red { background: #743434; color: #ffd9d9; }
+.cs-sticky--light-red { background: #8c4a4a; color: #ffe4e4; }
+.cs-sticky--green { background: #2f5741; color: #d3f2df; }
+.cs-sticky--light-green { background: #3d6b52; color: #dcf6e6; }
+.cs-sticky--blue { background: #26496d; color: #d6e8ff; }
+.cs-sticky--light-blue { background: #35618c; color: #e0efff; }
+.cs-sticky--violet { background: #4a3770; color: #e8dcff; }
+.cs-sticky--light-violet { background: #5f4a8c; color: #eee4ff; }
+
+/* ═══ 去掉重复入口：媒体插入左侧功能条已经有了，tldraw 工具栏那个重复 ═══ */
+.tlui-toolbar [data-testid="tools.asset"],
+.tlui-toolbar [data-testid="tools.media"],
+/* tldraw 的便签没有 w/h、尺寸自动算、拖不动大小 ✗ → 换成我们自己的 sticky ✓ */
+.tlui-toolbar [data-testid="tools.note"] { display: none !important; }
+
+/* ═══ 左侧功能条（我们自己的，不塞进 tldraw 的菜单树）═══ */
+#cs-rail {
+  position: fixed;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  z-index: 800;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px;
+  background: rgba(28, 31, 38, .94);
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .42);
+  backdrop-filter: blur(10px);
+}
+#cs-rail button {
+  position: relative;
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: #b6c0cf;
+  cursor: pointer;
+  transition: background .13s, color .13s;
+}
+#cs-rail button:hover { background: rgba(255, 255, 255, .08); color: #eef2f8; }
+#cs-rail button:active { transform: translateY(1px); }
+#cs-rail button.on { background: rgba(91, 147, 255, .16); color: #5b93ff; }
+#cs-rail button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+#cs-rail .cs-sep { height: 1px; margin: 3px 4px; background: #2e333d; }
+/* 悬停提示 */
+#cs-rail button::after {
+  content: attr(data-tip);
+  position: absolute; left: calc(100% + 10px); top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 4px 9px;
+  background: #2a2f38; color: #e7eaf0;
+  font: 11px/1.4 -apple-system, "PingFang SC", sans-serif;
+  border: 1px solid #3a414d; border-radius: 6px;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .12s, transform .12s;
+}
+#cs-rail button:hover::after { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+/* ═══ 面包屑（进子白板后出现在顶部中间）═══ */
+#cs-crumb {
+  position: fixed; top: 10px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;
+  display: none; align-items: center; gap: 6px;
+  padding: 5px 6px 5px 10px;
+  background: rgba(28, 31, 38, .94);
+  border: 1px solid #2e333d; border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .34);
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
+  color: #9aa4b4;
+  max-width: 62vw;
+}
+#cs-crumb.on { display: flex; }
+#cs-crumb a {
+  color: #9aa4b4; text-decoration: none; cursor: pointer;
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px 4px; border-radius: 5px;
+}
+#cs-crumb a:hover { background: rgba(255, 255, 255, .07); color: #e7eaf0; }
+#cs-crumb .cs-crumb-now { color: #e7eaf0; font-weight: 600; padding: 2px 4px; }
+#cs-crumb .cs-crumb-sep { color: #4a515e; }
+
+/* ═══ 子白板卡片（自定义 shape 的渲染体）═══ */
+.cs-sb {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #20242d 0%, #191c23 100%);
+  border: 1px solid #313742;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .34);
+  overflow: hidden;
+  color: #e7eaf0;
+  font: 13px/1.4 -apple-system, "PingFang SC", sans-serif;
+  user-select: none;
+}
+.cs-sb__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .055);
+}
+.cs-sb__ico { width: 15px; height: 15px; flex: none; fill: none; stroke: #5b93ff; stroke-width: 1.8; stroke-linecap: round; }
+.cs-sb__title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-sb__body { flex: 1; position: relative; }
+.cs-sb__dots {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(231, 234, 240, .13) 1px, transparent 1px);
+  background-size: 12px 12px;
+  opacity: .6;
+}
+.cs-sb__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11px; color: #9aa4b4;
+  border-top: 1px solid rgba(255, 255, 255, .055);
+}
+.cs-sb__enter { color: #5b93ff; }
+
+/* ═══ 网页卡片（webcard 自定义图形的渲染体）═══ */
+.cs-web {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #313742;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .38);
+  font: 11px/1 -apple-system, "PingFang SC", sans-serif;
+}
+.cs-web__bar {
+  height: 30px; flex: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 6px 0 9px;
+  background: #1c1f26;
+  border-bottom: 1px solid #2e333d;
+  color: #9aa4b4;
+  cursor: grab;
+}
+.cs-web__ico { width: 13px; height: 13px; flex: none; fill: none; stroke: #5b93ff; stroke-width: 1.7; stroke-linecap: round; }
+.cs-web__host { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.cs-web__btn {
+  width: 22px; height: 22px; flex: none;
+  display: grid; place-items: center;
+  border: 0; border-radius: 5px;
+  background: transparent; color: #9aa4b4;
+  cursor: pointer; text-decoration: none;
+}
+.cs-web__btn:hover { background: rgba(255, 255, 255, .08); color: #e7eaf0; }
+.cs-web__btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.cs-web__body { flex: 1; position: relative; background: #ffffff; min-height: 0; }
+.cs-web__frame { display: block; width: 100%; height: 100%; border: 0; background: #ffffff; }
+.cs-web__mask { position: absolute; inset: 0; display: grid; place-items: end center; padding-bottom: 10px; pointer-events: none; }
+.cs-web__mask span {
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(21, 23, 28, .82); color: #c2cbd9;
+  font: 11px/1.4 -apple-system, "PingFang SC", sans-serif;
+  opacity: 0; transition: opacity .15s;
+}
+.cs-web:hover .cs-web__mask span { opacity: 1; }
+
+/* ═══ 分组框（tldraw frame）：做成 FlexNote 那种「容器」观感 ═══
+   frame 的填充是写死的 #0c0c0c（比画布还黑，像个洞 ✗）——
+   CSS 的 fill 能盖掉 SVG 的 presentation attribute ✓ */
+/* 分组框：从「一圈细线」变成真正的**容器** —— 圆角 + 主色微光 + 内阴影 */
+.tl-frame__body {
+  fill: rgba(91, 147, 255, .035) !important;
+  stroke: rgba(91, 147, 255, .26) !important;
+  stroke-dasharray: none !important;
+  rx: 14px;
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, .28));
+}
+/* 标题做成一颗胶囊，压在框左上角 */
+.tl-frame-heading-hit-area {
+  background: linear-gradient(180deg, #2a3444, #222a37) !important;
+  border: 1px solid rgba(91, 147, 255, .38) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+  padding: 3px 9px !important;
+}
+.tl-frame-label {
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: .3px;
+  color: #cfe0ff !important;
+}
+
+/* ═══ 笔记卡片（card 自定义图形）：彩色标题栏 + Markdown 正文 ═══ */
+.cs-card {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b1f26;
+  border: 1px solid rgba(255, 255, 255, .075);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .36);
+  color: #ccd5e1;
+  font: 13px/1.7 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  cursor: grab;              /* 整块都能拖（正文是 pointer-events:none，光标由这里给） */
+  transition: border-color .13s, box-shadow .13s;
+}
+.cs-card:hover { border-color: rgba(255, 255, 255, .14); box-shadow: 0 10px 28px rgba(0, 0, 0, .46); }
+.cs-card__head {
+  height: 32px; flex: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 6px 0 13px;
+  background: #2a2f38;
+  color: #f4f7fb;
+  font-size: 12.5px; font-weight: 650;
+  letter-spacing: .2px;
+  cursor: grab;
+}
+.cs-card__title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 标题栏右侧的「插入图片」小按钮：平时不抢眼，悬停才显形 */
+.cs-card__act {
+  width: 22px; height: 22px; flex: none;
+  display: grid; place-items: center;
+  border: 0; border-radius: 5px;
+  background: transparent; color: rgba(255, 255, 255, .62);
+  cursor: pointer; opacity: 0; transition: opacity .12s, background .12s;
+}
+.cs-card:hover .cs-card__act { opacity: 1; }
+.cs-card__act:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+.cs-card__act svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.cs-card__body {
+  flex: 1; min-height: 0;
+  padding: 10px 13px 14px;
+  overflow: hidden;
+  /* 不编辑时不吃鼠标 → 卡片能整块拖动/框选 ✓ */
+  pointer-events: none;
+}
+.cs-card__edit {
+  flex: 1; min-height: 0;
+  width: 100%; box-sizing: border-box;
+  margin: 0; padding: 10px 12px;
+  background: #12151a;
+  border: 0; outline: none; resize: none;
+  color: #dfe6ef;
+  font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+/* ── 标题栏配色：跟 tldraw 的 color style 一一对应 ── */
+.cs-card--black   .cs-card__head { background: #2a2f38; }
+.cs-card--grey    .cs-card__head { background: #3a414d; }
+.cs-card--orange  .cs-card__head { background: #a96c22; }
+.cs-card--yellow  .cs-card__head { background: #8d7420; }
+.cs-card--violet  .cs-card__head { background: #6a4d99; }
+.cs-card--light-violet .cs-card__head { background: #8568bb; }
+.cs-card--blue    .cs-card__head { background: #2c6aa1; }
+.cs-card--light-blue   .cs-card__head { background: #4787bd; }
+.cs-card--green   .cs-card__head { background: #3b7550; }
+.cs-card--light-green  .cs-card__head { background: #56946a; }
+.cs-card--red     .cs-card__head { background: #984848; }
+.cs-card--light-red    .cs-card__head { background: #bb6666; }
+
+
+/* 卡片：顶部一层极淡的本色渐变（约 13% → 0），让 12 种配色都能读出差别又不刺眼 */
+.cs-card--black       { background: linear-gradient(180deg, rgba(90, 100, 118, .10) 0, rgba(27,31,38,0) 120px), #1b1f26; }
+.cs-card--grey        { background: linear-gradient(180deg, rgba(140, 152, 170, .10) 0, rgba(27,31,38,0) 120px), #1b1f26; }
+.cs-card--orange      { background: linear-gradient(180deg, rgba(169, 108, 34, .16) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--yellow      { background: linear-gradient(180deg, rgba(141, 116, 32, .15) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--violet      { background: linear-gradient(180deg, rgba(106, 77, 153, .18) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--light-violet{ background: linear-gradient(180deg, rgba(133, 104, 187, .17) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--blue        { background: linear-gradient(180deg, rgba(44, 106, 161, .18) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--light-blue  { background: linear-gradient(180deg, rgba(71, 135, 189, .16) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--green       { background: linear-gradient(180deg, rgba(59, 117, 80, .17) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--light-green { background: linear-gradient(180deg, rgba(86, 148, 106, .16) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--red         { background: linear-gradient(180deg, rgba(152, 72, 72, .17) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+.cs-card--light-red   { background: linear-gradient(180deg, rgba(187, 102, 102, .16) 0, rgba(27,31,38,0) 130px), #1b1f26; }
+
+/* ── 正文里的 markdown ── */
+.cs-card__md > *:first-child { margin-top: 0; }
+.cs-card__md > *:last-child { margin-bottom: 0; }
+.cs-card__md h1, .cs-card__md h2, .cs-card__md h3, .cs-card__md h4 {
+  margin: 14px 0 6px; color: #eef3f9; line-height: 1.4; font-weight: 650;
+  letter-spacing: .1px;
+}
+.cs-card__md h1 { font-size: 15.5px; }
+.cs-card__md h2 { font-size: 14.5px; }
+.cs-card__md h3 { font-size: 13.5px; }
+.cs-card__md h4 { font-size: 13px; color: #dbe3ee; }
+.cs-card__md p { margin: 7px 0; }
+.cs-card__md ul, .cs-card__md ol { margin: 7px 0; padding-left: 19px; }
+.cs-card__md li { margin: 4px 0; }
+.cs-card__md li::marker { color: #6b7688; }
+.cs-card__md a { color: #6fa2ff; text-decoration: none; }
+.cs-card__md a:hover { text-decoration: underline; }
+.cs-card__md strong { color: #f2f6fb; font-weight: 650; }
+.cs-card__md em { color: #d8e1ec; }
+.cs-card__md code {
+  padding: 1.5px 5px; border-radius: 4px;
+  background: rgba(255, 255, 255, .075);
+  color: #e6cd92;
+  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cs-card__md pre {
+  margin: 9px 0; padding: 10px 12px;
+  background: #14171d; border: 1px solid rgba(255, 255, 255, .055); border-radius: 8px;
+  overflow: auto;
+}
+.cs-card__md pre code { padding: 0; background: none; color: #cfd8e4; }
+.cs-card__md blockquote {
+  margin: 9px 0; padding: 3px 0 3px 11px;
+  border-left: 3px solid rgba(91, 147, 255, .45); color: #9aa4b4;
+}
+.cs-card__md img { max-width: 100%; border-radius: 8px; margin: 8px 0; display: block; }
+.cs-card__md hr { border: 0; border-top: 1px solid rgba(255, 255, 255, .07); margin: 12px 0; }
+.cs-card__md table { border-collapse: collapse; margin: 9px 0; font-size: 12px; }
+.cs-card__md th, .cs-card__md td { border: 1px solid rgba(255, 255, 255, .08); padding: 5px 9px; }
+.cs-card__md th { background: rgba(255, 255, 255, .045); font-weight: 600; }
+
+/* ═══ 大纲面板（右侧，列所有卡片，点击跳转）═══ */
+#cs-outline {
+  position: fixed; right: 12px; top: 50%;
+  transform: translateY(-50%) translateX(8px);
+  z-index: 810;
+  width: 240px; max-height: 64vh; overflow: auto;
+  padding: 6px;
+  background: rgba(28, 31, 38, .97);
+  border: 1px solid #2e333d; border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .42);
+  font: 12px/1.4 -apple-system, "PingFang SC", sans-serif;
+  opacity: 0; pointer-events: none;
+  transition: opacity .12s, transform .12s;
+}
+#cs-outline.on { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); }
+#cs-outline .cs-ol-head {
+  padding: 4px 8px 8px; color: #6b7688; font-size: 11px;
+  display: flex; justify-content: space-between;
+}
+#cs-outline .cs-ol-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px;
+  color: #9aa4b4; cursor: pointer;
+}
+#cs-outline .cs-ol-row:hover { background: rgba(255, 255, 255, .06); color: #e7eaf0; }
+#cs-outline .cs-ol-row--group { color: #c2cbd9; font-weight: 600; }
+#cs-outline .cs-ol-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+#cs-outline .cs-ol-txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#cs-outline .cs-ol-n { color: #6b7688; font-size: 11px; flex: none; }
+/* 悬浮出现的小按钮：上移 / 下移 / 移出分组 */
+#cs-outline .cs-ol-acts { display: none; gap: 2px; flex: none; }
+#cs-outline .cs-ol-row:hover .cs-ol-acts { display: flex; }
+#cs-outline .cs-ol-acts button {
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 4px;
+  background: transparent; color: #8b95a5;
+  font: 11px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+#cs-outline .cs-ol-acts button:hover { background: rgba(255, 255, 255, .12); color: #e7eaf0; }
+#cs-outline .cs-ol-empty { padding: 10px 8px; color: #6b7688; font-size: 11.5px; line-height: 1.6; }
+
+/* ═══ 对齐参考线：拖动时实时显示（自己算，不依赖 tldraw 的 snap 指示器）═══ */
+#cs-guides { position: fixed; inset: 0; pointer-events: none; z-index: 700; }
+#cs-guides .cs-guide { position: absolute; background: #ff5f7a; box-shadow: 0 0 0 .5px rgba(255, 95, 122, .35); }
+#cs-guides .cs-guide--v { width: 1px; }
+#cs-guides .cs-guide--h { height: 1px; }
+#cs-guides .cs-guide-dot {
+  position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%; background: #ff5f7a;
+}
+
+
+/* ═══ 思维导图窗口（mindcard）：卡片里嵌 Mind Elixir 编辑器 ═══ */
+.cs-mindw {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #15171c;
+  border: 1px solid rgba(255, 255, 255, .085);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .36);
+  cursor: grab;
+  transition: border-color .13s, box-shadow .13s;
+}
+.cs-mindw:hover { border-color: rgba(91, 147, 255, .32); box-shadow: 0 10px 30px rgba(0, 0, 0, .44); }
+.cs-mindw__bar {
+  height: 30px; flex: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 6px 0 10px;
+  background: linear-gradient(180deg, #242b36, #1f2530);
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.cs-mindw__ico { width: 13px; height: 13px; flex: none; fill: none; stroke: #5b93ff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.cs-mindw__title {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif; color: #c2cbd9; font-weight: 550;
+}
+.cs-mindw__btn {
+  height: 20px; padding: 0 9px;
+  border: 0; border-radius: 5px;
+  background: rgba(255, 255, 255, .07); color: #9aa4b4;
+  font: 11px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.cs-mindw__btn:hover { background: rgba(91, 147, 255, .2); color: #cfe0ff; }
+.cs-mindw__body { flex: 1; min-height: 0; position: relative; }
+.cs-mindw__frame { display: block; width: 100%; height: 100%; border: 0; background: #15171c; }
+.cs-mindw__hint {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(21, 23, 28, .84); color: #8b95a5;
+  font: 11px/1.4 -apple-system, "PingFang SC", sans-serif;
+  pointer-events: none; opacity: 0; transition: opacity .15s;
+}
+.cs-mindw:hover .cs-mindw__hint { opacity: 1; }
+
+/* ═══ 思维导图节点（mnode）═══ */
+.cs-mn {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 13px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #2a2f38;
+  border: 1px solid rgba(255, 255, 255, .10);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .30);
+  color: #eef3f9;
+  font: 13px/1.2 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  font-weight: 550;
+  cursor: grab;
+  overflow: hidden;
+  transition: border-color .12s, box-shadow .12s;
+}
+.cs-mn:hover { border-color: rgba(255, 255, 255, .22); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
+.cs-mn__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-mn__text--ph { color: rgba(255, 255, 255, .42); }
+.cs-mn__edit {
+  width: 100%; height: 100%;
+  margin: 0; padding: 0;
+  background: transparent; border: 0; outline: none; resize: none;
+  color: inherit; font: inherit; text-align: center;
+  cursor: text;
+}
+.cs-mn--violet { background: #4a3770; border-color: rgba(168, 138, 255, .35); }
+.cs-mn--blue { background: #26496d; border-color: rgba(110, 170, 240, .35); }
+.cs-mn--green { background: #2f5741; border-color: rgba(110, 210, 160, .32); }
+.cs-mn--grey { background: #333a45; border-color: rgba(255, 255, 255, .12); }
+.cs-mn--orange { background: #7a4f1f; border-color: rgba(240, 180, 110, .32); }
+.cs-mn--red { background: #743434; border-color: rgba(240, 130, 130, .32); }
+.cs-mn--yellow { background: #6b5a22; border-color: rgba(240, 220, 120, .3); }
+
+/* ═══ 思维导图节点工具条 ═══ */
+#cs-mind {
+  position: fixed; left: 50%; bottom: 74px;
+  transform: translateX(-50%) translateY(6px);
+  z-index: 800;
+  display: none; align-items: center; gap: 2px;
+  padding: 4px;
+  background: rgba(28, 31, 38, .94);
+  border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .42);
+  backdrop-filter: blur(10px);
+  opacity: 0; transition: opacity .13s, transform .13s;
+}
+#cs-mind.on { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+#cs-mind button {
+  position: relative;
+  height: 28px; padding: 0 10px;
+  display: inline-flex; align-items: center;
+  border: 0; border-radius: 7px;
+  background: transparent; color: #b6c0cf;
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+#cs-mind button:hover { background: rgba(255, 255, 255, .08); color: #eef2f8; }
+#cs-mind .cs-sep { width: 1px; height: 16px; margin: 0 3px; background: rgba(255, 255, 255, .1); }
+#cs-mind button::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(3px);
+  padding: 4px 9px;
+  background: #2a2f38; color: #e7eaf0;
+  font: 11px/1.4 -apple-system, "PingFang SC", sans-serif;
+  border: 1px solid #3a414d; border-radius: 6px;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .12s, transform .12s;
+}
+#cs-mind button:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ═══ 对齐工具条：选中 ≥2 个图形时出现在底部 ═══ */
+#cs-align {
+  position: fixed; left: 50%; bottom: 74px;
+  transform: translateX(-50%) translateY(6px);
+  z-index: 800;
+  display: none; align-items: center; gap: 2px;
+  padding: 5px;
+  background: rgba(28, 31, 38, .94);
+  border: 1px solid #2e333d; border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .42);
+  backdrop-filter: blur(10px);
+  opacity: 0; transition: opacity .13s, transform .13s;
+}
+#cs-align.on { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+#cs-align button {
+  position: relative;
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 7px;
+  background: transparent; color: #b6c0cf;
+  cursor: pointer; transition: background .12s, color .12s;
+}
+#cs-align button:hover { background: rgba(255, 255, 255, .08); color: #eef2f8; }
+#cs-align button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#cs-align .cs-sep { width: 1px; height: 18px; margin: 0 4px; background: #2e333d; }
+#cs-align button::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(3px);
+  padding: 4px 9px;
+  background: #2a2f38; color: #e7eaf0;
+  font: 11px/1.4 -apple-system, "PingFang SC", sans-serif;
+  border: 1px solid #3a414d; border-radius: 6px;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .12s, transform .12s;
+}
+#cs-align button:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ═══ 插入用的轻量弹窗（不引第三方组件库）═══ */
+#cs-dialog {
+  position: fixed; inset: 0; z-index: 1200;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, .6);
+}
+#cs-dialog.on { display: flex; }
+#cs-dialog .cs-dlg {
+  width: 420px; max-width: 88vw;
+  background: #1c1f26;
+  border: 1px solid #2e333d; border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+  font: 13px/1.5 -apple-system, "PingFang SC", sans-serif;
+  color: #e7eaf0;
+  overflow: hidden;
+}
+.cs-dlg__title { padding: 14px 16px 6px; font-weight: 600; font-size: 13px; }
+.cs-dlg__body { padding: 4px 16px 12px; color: #9aa4b4; font-size: 12px; }
+.cs-dlg__body input {
+  width: 100%; margin-top: 8px; box-sizing: border-box;
+  height: 32px; padding: 0 10px;
+  background: #15171c; color: #e7eaf0;
+  border: 1px solid #2e333d; border-radius: 7px;
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
+  outline: none;
+}
+.cs-dlg__body input:focus { border-color: #5b93ff; box-shadow: 0 0 0 3px rgba(91, 147, 255, .16); }
+.cs-dlg__foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; }
+.cs-dlg__foot button {
+  height: 30px; padding: 0 14px;
+  border-radius: 7px; border: 1px solid #2e333d;
+  background: transparent; color: #9aa4b4;
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.cs-dlg__foot button:hover { color: #e7eaf0; border-color: #3a414d; }
+.cs-dlg__foot button.primary { background: #5b93ff; border-color: #5b93ff; color: #fff; font-weight: 600; }
+.cs-dlg__foot button.primary:hover { background: #6f9fff; }
+
+/* ═══ 页面列表（子白板导航）═══ */
+#cs-pages {
+  position: fixed; left: 58px; top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  z-index: 810;
+  width: 218px; max-height: 56vh; overflow: auto;
+  padding: 6px;
+  background: rgba(28, 31, 38, .97);
+  border: 1px solid #2e333d; border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .42);
+  font: 12px/1.4 -apple-system, "PingFang SC", sans-serif;
+  opacity: 0; pointer-events: none;
+  transition: opacity .12s, transform .12s;
+}
+#cs-pages.on { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); }
+#cs-pages .cs-pg {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 6px;
+  color: #9aa4b4; cursor: pointer;
+}
+#cs-pages .cs-pg:hover { background: rgba(255, 255, 255, .06); color: #e7eaf0; }
+#cs-pages .cs-pg.now { background: rgba(91, 147, 255, .14); color: #5b93ff; }
+#cs-pages .cs-pg-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#cs-pages .cs-pg-n { color: #6b7688; font-size: 11px; }
+#cs-pages .cs-pg-indent { width: 10px; flex: none; }
+#cs-pages .cs-pg-ico { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; opacity: .7; }
+
+/* 拖入文件的整页高亮 */
+body.cs-dragover::after {
+  content: '松开即可放入画布';
+  position: fixed; inset: 10px; z-index: 1300;
+  display: grid; place-items: center;
+  border: 2px dashed #5b93ff; border-radius: 14px;
+  background: rgba(91, 147, 255, .08);
+  color: #8fb5ff; font: 13px/1 -apple-system, "PingFang SC", sans-serif;
+  pointer-events: none;
+}

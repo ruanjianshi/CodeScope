@@ -59,7 +59,7 @@
 #study-workspace { display:none; position:absolute; inset:0; z-index:75; min-height:0; flex-direction:column; overflow:hidden; background:#0b1119; }
 body.study-mode #study-workspace { display:flex; }
 body.study-mode #side,body.study-mode #split-v,body.study-mode #split-v2,body.study-mode #outline-panel { display:none !important; }
-body.study-mode #toolbar,body.study-mode #tabs,body.study-mode #document-mode-tools,body.study-mode #code-context-bar,body.study-mode #draw-editor,body.study-mode #office-workspace,body.study-mode #reading-workspace,body.study-mode #edit-split,body.study-mode #resource-viewer,body.study-mode #preview,body.study-mode #input-area,body.study-mode #split-h,body.study-mode #output { display:none !important; }
+body.study-mode #toolbar,body.study-mode #tabs-row,body.study-mode #document-mode-tools,body.study-mode #code-context-bar,body.study-mode #draw-editor,body.study-mode #office-workspace,body.study-mode #reading-workspace,body.study-mode #edit-split,body.study-mode #resource-viewer,body.study-mode #preview,body.study-mode #input-area,body.study-mode #split-h,body.study-mode #output { display:none !important; }
 body.study-mode #main { flex:1; min-width:0; }
 
 #study-head { min-height:48px; display:flex; align-items:center; gap:7px; padding:7px 10px; border-bottom:1px solid #283344; background:linear-gradient(180deg,#151d28,#111821); }

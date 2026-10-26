@@ -16,7 +16,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { clearStaleCredentialLock } = require('../lib/dsh-service.js');
+const { clearStaleCredentialLock, clearStaleProfileLocks } = require('../lib/dsh-service.js');
 
 let pass = 0;
 const fails = [];
@@ -95,6 +95,68 @@ console.log('\n── DSH 残留凭据锁 ──');
 /* ⑥ 目录都不存在 → 不抛异常 ✓ */
 {
   ck('目录不存在 → 返回空、不抛', clearStaleCredentialLock('/tmp/codescope-绝不存在-' + Date.now()) === '');
+}
+
+/* ── profile 目录里的残留写锁（2026-10-21 用户报「保存模型配置报 atomic-write 超时」）──
+   ⚠️ 和凭据锁同一套判据：**锁里的 PID 死了才删** ✓；
+      活锁一律不动 ✓（删了 = 两个进程同时写 package.json ✓）。 */
+console.log('\n── DSH profile 残留写锁 ──');
+function makeProfiles(spec) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codescope-dshprof-'));
+  for (const [name, lockName, content] of spec) {
+    const dir = path.join(home, '.dsh', 'profiles', name);
+    fs.mkdirSync(dir, { recursive: true });
+    if (lockName) fs.writeFileSync(path.join(dir, lockName), String(content));
+  }
+  return home;
+}
+
+/* ① 死锁（PID 早就不在了）→ 删掉并报告 ✓ */
+{
+  const home = makeProfiles([['web', 'package.json.lock', 98615]]);
+  const note = clearStaleProfileLocks(home);
+  const gone = !fs.existsSync(path.join(home, '.dsh', 'profiles', 'web', 'package.json.lock'));
+  ck('死锁 → 删掉', gone && /已清掉 1 个/.test(note), note);
+}
+
+/* ② 活锁（用当前进程的 PID）→ **绝不能动** ✓✓ */
+{
+  const home = makeProfiles([['web', 'package.json.lock', process.pid]]);
+  const note = clearStaleProfileLocks(home);
+  const still = fs.existsSync(path.join(home, '.dsh', 'profiles', 'web', 'package.json.lock'));
+  ck('活锁 → 不动', still && note === '', note);
+}
+
+/* ③ 内容不是 PID（空文件 / 乱码）→ 不动 ✓ */
+{
+  const home = makeProfiles([['web', 'package.json.lock', 'not-a-pid']]);
+  const note = clearStaleProfileLocks(home);
+  const still = fs.existsSync(path.join(home, '.dsh', 'profiles', 'web', 'package.json.lock'));
+  ck('内容不是 PID → 不动', still && note === '', note);
+}
+
+/* ④ 多个 profile：只清死的、留下活的 ✓ */
+{
+  const home = makeProfiles([
+    ['web', 'package.json.lock', 98615],
+    ['tui', 'package.json.lock', process.pid],
+    ['rescue', 'other.lock', 98615],
+  ]);
+  const note = clearStaleProfileLocks(home);
+  const webGone = !fs.existsSync(path.join(home, '.dsh', 'profiles', 'web', 'package.json.lock'));
+  const tuiKept = fs.existsSync(path.join(home, '.dsh', 'profiles', 'tui', 'package.json.lock'));
+  ck('多 profile → 死锁清掉、活锁保留', webGone && tuiKept && /已清掉 2 个/.test(note), note);
+}
+
+/* ⑤ 没有 .lock → 返回空、不抛 ✓ */
+{
+  const home = makeProfiles([['web', 'package.json', '{}']]);
+  ck('没有锁 → 返回空', clearStaleProfileLocks(home) === '');
+}
+
+/* ⑥ 目录不存在 → 返回空、不抛 ✓ */
+{
+  ck('profiles 目录不存在 → 不抛', clearStaleProfileLocks('/tmp/codescope-绝不存在-' + Date.now()) === '');
 }
 
 console.log('');

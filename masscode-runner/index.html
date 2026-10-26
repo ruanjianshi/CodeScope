@@ -46,10 +46,75 @@
 <script type="module" src="/lib/en-sources.js"></script>
 <script type="module" src="/lib/roots.js"></script>
 <script src="/assets/code-guide.js" defer></script>
-<script src="/assets/life-workbench.js" defer></script>
+<script src="/assets/cs-lan-chip.js" defer></script>
+<!-- 界面缩放：低像素密度大屏默认由 ui-kit.css 的 media query 收到 0.88；
+     想手动微调就在控制台执行 localStorage.setItem('cs-ui-scale','0.92')（1 = 不缩放），
+     内联 zoom 优先级更高，会覆盖样式表里的规则 ✓ -->
+<script>
+  (function () {
+    try {
+      var v = parseFloat(localStorage.getItem('cs-ui-scale'));
+      if (v > 0.5 && v <= 1.5) document.documentElement.style.zoom = v;
+    } catch (_) {}
+  })();
+</script>
+<!-- ★ 工作台是自挂载 IIFE，但会拖 276KB JS + 3.5MB store ✗ ——
+     不放在首屏关键路径上：等首屏画完、浏览器空闲了再加载 ✓（用户点开工作台前肯定已经就绪） -->
+<script>
+  (function () {
+    function loadWorkbench() {
+      if (document.getElementById('lw-script')) return;
+      var s = document.createElement('script');
+      s.id = 'lw-script';
+      s.src = '/assets/life-workbench.js';
+      s.defer = true;
+      document.body.appendChild(s);
+    }
+    /* 先等 1.5s（用户不可能这么快点开工作台），再等空闲 —— 保证不在首屏关键路径上 ✓ */
+    setTimeout(function () {
+      if ('requestIdleCallback' in window) requestIdleCallback(loadWorkbench, { timeout: 2000 });
+      else loadWorkbench();
+    }, 1500);
+  })();
+</script>
 <link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/ui-kit.css">
 </head>
 <body>
+<!-- 统一图标 sprite：线性、1em、currentColor。用 <svg class="cs-ico"><use href="#i-xxx"/></svg> 引用 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.6v.1"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z"/></symbol>
+  <symbol id="i-rows" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/></symbol>
+  <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v17H7.5A3.5 3.5 0 0 0 4 21V5.5Z"/><path d="M20 5.5A3.5 3.5 0 0 0 16.5 2H13v17h3.5A3.5 3.5 0 0 1 20 21V5.5Z"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-.9 4.6"/><path d="M20 5v6h-6"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 0 12"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 7 5 5-5 5"/><path d="M20 12h-9a6 6 0 0 0 0 12"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M12 11.5v5M9.5 14h5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="m6.5 6.5 2.5 2.5M15 15l2.5 2.5M17.5 6.5 15 9M9 15l-2.5 2.5"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="m4 20 4-1 10-10a2.1 2.1 0 0 0-3-3L5 16l-1 4Z"/><path d="m14 6 4 4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-excalidraw" viewBox="0 0 24 24"><path d="M5.4 5.2c1.7 2.7 3.8 5.1 6.2 7.3 1.3 1.2 2.4 2.6 3.1 4.2"/><path d="M15.8 5.4c-1.7 2.7-3.8 5.1-6.2 7.3-1.3 1.2-2.4 2.6-3.1 4.2"/></symbol>
+  <symbol id="i-drawio" viewBox="0 0 24 24"><rect x="3" y="3.5" width="7.5" height="5.5" rx="1.6"/><rect x="13.5" y="15" width="7.5" height="5.5" rx="1.6"/><path d="M10.5 6.25h2v11.5h1"/></symbol>
+  <symbol id="i-xmind" viewBox="0 0 24 24"><rect x="2.6" y="9" width="6.2" height="6" rx="1.6"/><circle cx="18" cy="5.4" r="1.9"/><circle cx="18" cy="12" r="1.9"/><circle cx="18" cy="18.6" r="1.9"/><path d="M8.8 12h2.7M11.5 12l4.6-6.6M11.5 12h4.6M11.5 12l4.6 6.6"/></symbol>
+  <symbol id="i-canvas" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.6"/><rect x="6.4" y="7.6" width="5.2" height="5.2" rx="1.2"/><path d="M14.6 8.6h3.4M14.6 11.6h2.6M6.4 16.4h11.6"/></symbol>
+</defs></svg>
 <header>
   <div id="header-left">
   <h1 title="码境 · 工程代码工作台"><span class="brand-mark"><img src="/assets/codescope.svg" alt=""></span><span class="brand-name">码境</span><span class="brand-edition">CodeScope</span><span class="brand-version" id="brand-version">v2.0.0</span><a class="brand-github" href="https://github.com/ruanjianshi/massCode" target="_blank" rel="noopener noreferrer" title="打开 CodeScope GitHub 远程仓库" aria-label="CodeScope GitHub 远程仓库"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a><a class="brand-github brand-manual" id="btn-manual" href="/manual/" target="codescope-manual" rel="noopener" title="打开 CodeScope 使用手册" aria-label="CodeScope 使用手册"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5A3.5 3.5 0 0 1 8 3h3v16H8a3.5 3.5 0 0 0-3.5 2V5.5Z"/><path d="M19.5 5.5A3.5 3.5 0 0 0 16 3h-3v16h3a3.5 3.5 0 0 1 3.5 2V5.5Z"/></svg></a></h1>
@@ -58,9 +123,9 @@
   <div id="header-center" aria-label="学习与网址">
     <div id="workspace-launch">
       <button class="header-action" id="btn-vscode" aria-pressed="false" title="打开编辑工作台：浏览器版 VS Code，可打开本机任意文件夹"><span>编辑工作台</span></button>
-      <button id="workspace-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="workspace-launch-menu" title="其他工作台">⌄</button>
+      <button id="workspace-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="workspace-launch-menu" title="其他工作台"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-chevron"/></svg></button>
       <div id="workspace-launch-menu" role="menu" hidden>
-        <button type="button" id="workspace-launch-study" role="menuitem"><i>▤</i><b>学习工作台</b><small>网页、视频、代码与笔记自由分屏</small></button>
+        <button type="button" id="workspace-launch-study" role="menuitem"><i><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-rows"/></svg></i><b>学习工作台</b><small>网页、视频、代码与笔记自由分屏</small></button>
       </div>
     </div>
     <!-- 学习工作台的按钮本体留在这里（隐藏）：welcome 页等地方仍然靠 $('btn-study').click() 打开它。 -->
@@ -69,24 +134,24 @@
     <button class="header-action" id="btn-dsh-restart" title="在 CodeScope 内打开 opencode 的 Web 界面"><span>opencode</span></button>
     <div id="knowledge-launch">
       <button id="btn-knowledge-launch" type="button" title="在 CodeScope 内嵌阅读生成后的知识库"><span>知识库</span></button>
-      <button id="knowledge-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="knowledge-launch-menu" title="选择知识库打开方式">⌄</button>
+      <button id="knowledge-launch-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="knowledge-launch-menu" title="选择知识库打开方式"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-chevron"/></svg></button>
       <div id="knowledge-launch-menu" role="menu" hidden>
-        <button type="button" id="knowledge-launch-embed" role="menuitem"><i>▣</i><b>内嵌阅读</b><small>在 CodeScope 内打开完整知识站</small></button>
-        <button type="button" id="knowledge-launch-split" role="menuitem"><i>▥</i><b>分栏学习</b><small>与代码、笔记、资料自由分屏</small></button>
-        <button type="button" id="knowledge-launch-external" role="menuitem"><i>↗</i><b>外部打开</b><small>在独立浏览器标签中阅读</small></button>
-        <button type="button" id="knowledge-launch-manage" role="menuitem"><i>⚙</i><b>管理知识库</b><small>新建分类、项目和 Markdown 片段</small></button>
+        <button type="button" id="knowledge-launch-embed" role="menuitem"><i><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-book"/></svg></i><b>内嵌阅读</b><small>在 CodeScope 内打开完整知识站</small></button>
+        <button type="button" id="knowledge-launch-split" role="menuitem"><i><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-columns"/></svg></i><b>分栏学习</b><small>与代码、笔记、资料自由分屏</small></button>
+        <button type="button" id="knowledge-launch-external" role="menuitem"><i><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-external"/></svg></i><b>外部打开</b><small>在独立浏览器标签中阅读</small></button>
+        <button type="button" id="knowledge-launch-manage" role="menuitem"><i><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-gear"/></svg></i><b>管理知识库</b><small>新建分类、项目和 Markdown 片段</small></button>
       </div>
     </div>
     <div id="site-menu">
-      <button id="site-menu-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="site-menu-panel" title="按分类选择常用网址"><span class="site-menu-trigger-icon" aria-hidden="true">⌘</span><span>常用网址</span><small id="site-menu-count">0</small><span class="site-menu-chevron" aria-hidden="true">⌄</span></button>
+      <button id="site-menu-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="site-menu-panel" title="按分类选择常用网址"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-grid"/></svg><span>常用网址</span><small id="site-menu-count">0</small><svg class="cs-ico cs-ico-sm site-menu-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></button>
       <section id="site-menu-panel" class="hidden" role="dialog" aria-label="常用网址分类选择">
         <div class="site-menu-head">
           <div><strong>网址导航</strong><span>选择分类，或搜索名称与域名</span></div>
-          <button id="site-menu-add-category" type="button" title="新建网址分类">＋分类</button>
-          <button id="site-menu-add-site" type="button" title="添加常用网址">＋网址</button>
-          <button id="site-menu-close" type="button" aria-label="关闭网址导航">×</button>
+          <button id="site-menu-add-category" type="button" title="新建网址分类"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-plus"/></svg>分类</button>
+          <button id="site-menu-add-site" type="button" title="添加常用网址"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-plus"/></svg>网址</button>
+          <button id="site-menu-close" type="button" aria-label="关闭网址导航"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-close"/></svg></button>
         </div>
-        <div class="site-menu-search-wrap"><span aria-hidden="true">⌕</span><input id="site-menu-search" type="search" placeholder="搜索全部网址…" autocomplete="off" spellcheck="false"></div>
+        <div class="site-menu-search-wrap"><svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-search"/></svg><input id="site-menu-search" type="search" placeholder="搜索全部网址…" autocomplete="off" spellcheck="false"></div>
         <div class="site-menu-body">
           <nav id="site-menu-categories" aria-label="网址分类"></nav>
           <section class="site-menu-results-wrap"><div id="site-menu-result-summary"></div><div id="quick-sites" aria-live="polite"></div></section>
@@ -209,7 +274,7 @@
           <label id="draw-nd-name-label" for="draw-nd-name">名称</label>
           <input type="text" id="draw-nd-name" placeholder="Untitled" autocomplete="off">
           <label id="draw-nd-type-label" for="draw-nd-type">绘图类型</label>
-          <select id="draw-nd-type"><option value="excalidraw">Excalidraw（手绘风格）</option><option value="drawio">Draw.io（流程图 / 架构图）</option><option value="xmind">XMind（思维导图）</option></select>
+          <select id="draw-nd-type"><option value="excalidraw">Excalidraw（手绘风格）</option><option value="drawio">Draw.io（流程图 / 架构图）</option><option value="xmind">XMind（思维导图）</option><option value="canvas">canvas（白板）</option></select>
           <label id="draw-nd-dir-label" for="draw-nd-dir">位置</label>
           <select id="draw-nd-dir"></select>
           <div class="nd-btns">
@@ -344,7 +409,17 @@
       <span id="nav-notice" role="status" aria-live="polite"></span>
       <button type="button" id="autosave-hint" title="自动保存：代码修改后自动保存到 vault（点击切换为手动保存）">自动保存</button>
     </div>
-    <div id="tabs"></div>
+    <!-- 分片标签栏 = 两栏：左边可横滚的标签区 + 右边常驻的「全部分片」按钮。
+         ⚠️ 按钮**不能**放进 #tabs 里（sticky 会盖住最后一个标签 / 留白又会空一条），
+         必须作为它的兄弟节点，各占一栏。见 assets/app.css 里「分片标签栏」那段。
+         ★ 左右两个 ‹ › 是**滚动按钮**（用户：「怎么不支持滚动」）——
+           滚轮其实一直是通的，但界面上**看不到任何能滚的东西**，等于没支持 ✓。
+           溢出时才显示，到两端时置灰，见 app.js 的 syncTabsHint()。 -->
+    <div id="tabs-row">
+      <button type="button" id="tabs-prev" class="tabs-nav" title="向左滚动标签栏" aria-label="向左滚动标签栏" hidden>‹</button>
+      <div id="tabs"></div>
+      <button type="button" id="tabs-next" class="tabs-nav" title="向右滚动标签栏" aria-label="向右滚动标签栏" hidden>›</button>
+    </div>
     <div id="document-mode-tools" aria-label="文档视图模式">
       <button type="button" data-doc-mode="source" title="只显示源码编辑器">源码</button>
       <button type="button" data-doc-mode="split" title="左侧编辑、右侧实时渲染">分栏</button>
@@ -364,6 +439,7 @@
       </div>
       <div id="excal-root"></div>
       <div id="drawio-root" aria-label="Draw.io 编辑器"></div>
+      <div id="canvas-root" aria-label="canvas 白板"></div>
       <div id="xmind-root" aria-label="XMind 编辑器">
         <div class="codescope-xmind-toolbar">
           <select id="xmind-sheet-select" aria-label="选择 XMind 画布"></select>
@@ -452,7 +528,7 @@
       </div>
     </section>
     <div id="edit-split">
-      <div id="code-wrap" class="editor-column"><div id="workspace-welcome" aria-label="CodeScope 快速开始"><div class="welcome-mark"><img src="/assets/codescope.svg" alt=""><span>码境工作台</span></div><h2>从一个目标开始</h2><p>代码、AI、资料、Office 文档与绘图都在同一个工作区。选择左侧内容，或从下面进入完整工具。</p><div class="welcome-actions"><button id="welcome-search" class="primary"><b>⌘</b><span><strong>查找内容</strong><small>搜索项目与片段</small></span></button><button id="welcome-study"><b>◫</b><span><strong>学习工作台</strong><small>网页、视频与笔记分屏</small></span></button><button id="welcome-dsh" data-tone="ai"><b>AI</b><span><strong>DeepSeek Harness</strong><small>在当前工作区使用 AI 编程</small></span></button><button id="welcome-reading"><b>▤</b><span><strong>阅读资料</strong><small>PDF、Word 与网页</small></span></button><button id="welcome-office" data-tone="office"><b>W</b><span><strong>Office 文档</strong><small>Word、Excel 与 PPT</small></span></button><button id="welcome-draw"><b>◇</b><span><strong>绘图设计</strong><small>导图、白板与架构图</small></span></button><button id="welcome-project" data-tone="project"><b>⚙</b><span><strong>工程工具</strong><small>构建、诊断与任务管理</small></span></button><button id="welcome-remote" data-tone="remote"><b>⌁</b><span><strong>远程开发</strong><small>SSH 终端与远程桌面</small></span></button></div><div class="welcome-more-title">更多能力</div><div class="welcome-actions more"><button id="welcome-code"><b>⌘</b><span><strong>代码工作区</strong><small>运行、语法检查、格式化、LSP 补全</small></span></button><button id="welcome-symbols"><b>ƒ</b><span><strong>符号与关系</strong><small>跳定义、查引用、调用关系图</small></span></button><button id="welcome-codegraph"><b>🕸</b><span><strong>代码图谱</strong><small>把整篇文档画成力导向网络图</small></span></button><button id="welcome-logicgraph"><b>⇉</b><span><strong>逻辑图</strong><small>当前函数的控制流，可编辑后生成代码</small></span></button><button id="welcome-blockly"><b>🧩</b><span><strong>积木编程</strong><small>把函数拆成积木，拖拽改完再生成代码</small></span></button><button id="welcome-latex" data-tone="office"><b>📕</b><span><strong>LaTeX 工程</strong><small>建工程、右侧实时编译 PDF</small></span></button><button id="welcome-knowledge"><b>▤</b><span><strong>知识库</strong><small>把 Markdown 生成可浏览的知识站点</small></span></button><button id="welcome-mindmap"><b>◇</b><span><strong>思维导图</strong><small>把当前 Markdown 文档转成导图</small></span></button><button id="welcome-vscode" data-tone="ai"><b>🖥</b><span><strong>编辑工作台</strong><small>内嵌浏览器版 VS Code，可开任意文件夹</small></span></button><button id="welcome-system"><b>▤</b><span><strong>本机管家</strong><small>CPU / 内存 / 磁盘、进程、软件与缓存清理</small></span></button><button id="welcome-history"><b>🕘</b><span><strong>本地时间线</strong><small>每次自动保存前的版本，可预览差异并恢复</small></span></button><button id="welcome-manual"><b>?</b><span><strong>使用手册</strong><small>21 个章节，讲清每个模块怎么用</small></span></button></div><div class="welcome-shortcuts"><span><kbd>⌘ P</kbd> 快速打开</span><span><kbd>⌘ ⇧ F</kbd> 全文搜索</span><span><kbd>⌘ ⇧ P</kbd> 命令面板</span><span><kbd>⌘ K</kbd> 命令面板</span><span><kbd>⌘ ⇧ N</kbd> 快速捕捉</span></div></div><div id="primary-group-bar"><span class="tag">主编辑栏</span><button type="button" class="name split-name-pick" id="primary-group-name" title="点击切换主编辑栏显示的片段"></button><span class="lang" id="primary-group-lang"></span><span class="sp"></span><span class="hint">点击任意栏，右侧面板随光标切换</span></div><div id="ln"></div><div id="fold-gutter"></div><canvas id="indent-guides"></canvas><pre id="code"></pre><textarea id="code-edit" spellcheck="false" style="display:none"></textarea><div id="monaco-main" aria-label="VS Code 编辑器；按住 Ctrl 或 Command 并滚动缩放"></div><div id="comp-pop"></div><div id="signature-help" role="status" aria-live="polite"></div><div id="code-actions-pop" role="menu" aria-label="代码操作"></div><div id="editor-find" class="hidden" role="dialog" aria-label="代码查找和替换"><div class="editor-find-row"><button id="editor-find-toggle" type="button" title="展开或收起替换">▸</button><input id="editor-find-query" aria-label="查找内容" placeholder="查找（Enter 下一个）" spellcheck="false"><span id="editor-find-count">0/0</span><button id="editor-find-prev" type="button" title="上一个（Shift+Enter）">↑</button><button id="editor-find-next" type="button" title="下一个（Enter）">↓</button><button id="editor-find-close" type="button" title="关闭（Esc）">×</button></div><div id="editor-find-replace-row" class="editor-find-row editor-find-replace hidden"><button id="editor-find-case" type="button" title="区分大小写">Aa</button><input id="editor-find-replacement" aria-label="替换内容" placeholder="替换为" spellcheck="false"><button id="editor-find-one" type="button">替换</button><button id="editor-find-all" type="button">全部替换</button><span id="editor-find-status"></span></div></div></div>
+      <div id="code-wrap" class="editor-column"><div id="workspace-welcome" aria-label="CodeScope 快速开始"><div class="welcome-mark"><img src="/assets/codescope.svg" alt=""><span>码境工作台</span></div><h2>从一个目标开始</h2><p>代码、AI、资料、Office 文档与绘图都在同一个工作区。选择左侧内容，或从下面进入完整工具。</p><div class="welcome-actions"><button id="welcome-search" class="primary"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-search"/></svg></b><span><strong>查找内容</strong><small>搜索项目与片段</small></span></button><button id="welcome-study"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-columns"/></svg></b><span><strong>学习工作台</strong><small>网页、视频与笔记分屏</small></span></button><button id="welcome-dsh" data-tone="ai"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-spark"/></svg></b><span><strong>DeepSeek Harness</strong><small>在当前工作区使用 AI 编程</small></span></button><button id="welcome-reading"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-book"/></svg></b><span><strong>阅读资料</strong><small>PDF、Word 与网页</small></span></button><button id="welcome-office" data-tone="office"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-file"/></svg></b><span><strong>Office 文档</strong><small>Word、Excel 与 PPT</small></span></button><button id="welcome-draw"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-pen"/></svg></b><span><strong>绘图设计</strong><small>导图、白板与架构图</small></span></button><button id="welcome-project" data-tone="project"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-gear"/></svg></b><span><strong>工程工具</strong><small>构建、诊断与任务管理</small></span></button><button id="welcome-remote" data-tone="remote"><b><svg class="cs-ico" aria-hidden="true"><use href="#i-terminal"/></svg></b><span><strong>远程开发</strong><small>SSH 终端与远程桌面</small></span></button></div><div class="welcome-more-title">更多能力</div><div class="welcome-actions more"><button id="welcome-code"><b>⌘</b><span><strong>代码工作区</strong><small>运行、语法检查、格式化、LSP 补全</small></span></button><button id="welcome-symbols"><b>ƒ</b><span><strong>符号与关系</strong><small>跳定义、查引用、调用关系图</small></span></button><button id="welcome-codegraph"><b>🕸</b><span><strong>代码图谱</strong><small>把整篇文档画成力导向网络图</small></span></button><button id="welcome-logicgraph"><b>⇉</b><span><strong>逻辑图</strong><small>当前函数的控制流，可编辑后生成代码</small></span></button><button id="welcome-blockly"><b>🧩</b><span><strong>积木编程</strong><small>把函数拆成积木，拖拽改完再生成代码</small></span></button><button id="welcome-latex" data-tone="office"><b>📕</b><span><strong>LaTeX 工程</strong><small>建工程、右侧实时编译 PDF</small></span></button><button id="welcome-knowledge"><b>▤</b><span><strong>知识库</strong><small>把 Markdown 生成可浏览的知识站点</small></span></button><button id="welcome-mindmap"><b>◇</b><span><strong>思维导图</strong><small>把当前 Markdown 文档转成导图</small></span></button><button id="welcome-vscode" data-tone="ai"><b>🖥</b><span><strong>编辑工作台</strong><small>内嵌浏览器版 VS Code，可开任意文件夹</small></span></button><button id="welcome-system"><b>▤</b><span><strong>本机管家</strong><small>CPU / 内存 / 磁盘、进程、软件与缓存清理</small></span></button><button id="welcome-history"><b>🕘</b><span><strong>本地时间线</strong><small>每次自动保存前的版本，可预览差异并恢复</small></span></button><button id="welcome-manual"><b>?</b><span><strong>使用手册</strong><small>21 个章节，讲清每个模块怎么用</small></span></button></div><div class="welcome-shortcuts"><span><kbd>⌘ P</kbd> 快速打开</span><span><kbd>⌘ ⇧ F</kbd> 全文搜索</span><span><kbd>⌘ ⇧ P</kbd> 命令面板</span><span><kbd>⌘ K</kbd> 命令面板</span><span><kbd>⌘ ⇧ N</kbd> 快速捕捉</span></div></div><div id="primary-group-bar"><span class="tag">主编辑栏</span><button type="button" class="name split-name-pick" id="primary-group-name" title="点击切换主编辑栏显示的片段"></button><span class="lang" id="primary-group-lang"></span><span class="sp"></span><span class="hint">点击任意栏，右侧面板随光标切换</span></div><div id="ln"></div><div id="fold-gutter"></div><canvas id="indent-guides"></canvas><pre id="code"></pre><textarea id="code-edit" spellcheck="false" style="display:none"></textarea><div id="monaco-main" aria-label="VS Code 编辑器；按住 Ctrl 或 Command 并滚动缩放"></div><div id="comp-pop"></div><div id="signature-help" role="status" aria-live="polite"></div><div id="code-actions-pop" role="menu" aria-label="代码操作"></div><div id="editor-find" class="hidden" role="dialog" aria-label="代码查找和替换"><div class="editor-find-row"><button id="editor-find-toggle" type="button" title="展开或收起替换">▸</button><input id="editor-find-query" aria-label="查找内容" placeholder="查找（Enter 下一个）" spellcheck="false"><span id="editor-find-count">0/0</span><button id="editor-find-prev" type="button" title="上一个（Shift+Enter）">↑</button><button id="editor-find-next" type="button" title="下一个（Enter）">↓</button><button id="editor-find-close" type="button" title="关闭（Esc）">×</button></div><div id="editor-find-replace-row" class="editor-find-row editor-find-replace hidden"><button id="editor-find-case" type="button" title="区分大小写">Aa</button><input id="editor-find-replacement" aria-label="替换内容" placeholder="替换为" spellcheck="false"><button id="editor-find-one" type="button">替换</button><button id="editor-find-all" type="button">全部替换</button><span id="editor-find-status"></span></div></div></div>
       <div id="edit-split-v" title="拖动调整编辑 / 预览宽度"></div>
       <div id="edit-preview"></div>
       <div id="md-view" class="md-doc"></div>
@@ -596,6 +672,7 @@
           <button id="tab-cases" class="otab" title="编辑当前代码片段的算法测试用例">▣ 测试用例</button>
           <button id="tab-results" class="otab" title="查看最近一次测试结果">⌁ 测试结果</button>
           <button id="tab-out" class="otab on" title="程序运行输出">⚙ 输出</button>
+          <button id="tab-problems" class="otab" title="代码诊断：当前分片 / 整个片段">⚠ 问题</button>
           <button id="tab-term" class="otab" title="交互式终端（shell）">>_ 终端</button>
           <!-- ★ MATLAB / Octave 命令窗口 ✓✓（2026-10-10）——
                用户原话：「这个命令窗口，应该不需要按钮，应该放到 [底部面板]」✓。
@@ -605,8 +682,17 @@
                   放工具栏上反而让人以为它是个「一次性动作」✓。
                ⚠️ 只在 .m 片段时显示 ✓（和原来工具栏按钮的显隐规则一致 ✓）。 -->
           <button id="tab-mconsole" class="otab" title="MATLAB / Octave 命令窗口（可直接输入指令）" style="display:none">▮ MATLAB</button>
+          <!-- ★ 「运行历史」挪到**最后** ✓（2026-10-20 用户：「把运行历史，移动到最后，终端之后」）——
+               ⚠️ 放在 `tab-mconsole` **之后**，而不是「终端」正后面 ✗ ——
+                  MATLAB 那个标签平时 `display:none` ✓、写 .m 片段时才出现 ✓，
+                  放在它前面的话，写 MATLAB 时它会插在「终端」和「运行历史」中间 ✓，
+                  就不是「最后一个」了 ✓。
+               ⚠️ 顺序只由 DOM 决定 ✓ —— `switchOutTab()` 是按 id 逐个 toggle 的 ✓，
+                  没有任何按位置/下标取标签的逻辑 ✓，所以挪位置不用改 JS ✓。 -->
+          <button id="tab-runs" class="otab" title="最近几次运行的记录：可回看、可与上一次对比">↺ 运行历史</button>
         </div>
         <span class="sp"></span>
+        <span class="pill idle" id="cs-lan-chip" title="正在读取局域网地址…">局域网 —</span>
         <span class="pill idle" id="save-tick">已保存</span>
         <span class="pill idle" id="status">空闲</span>
         <!-- ★ 个人数据同步的心跳点 ✓（2026-10-09）——
@@ -622,6 +708,8 @@
       <div id="algo-cases" class="algo-panel hidden"></div>
       <div id="algo-results" class="algo-panel hidden"></div>
       <div id="out-body"><span class="empty">选择片段并点击「运行」查看输出</span></div>
+      <div id="run-panel" class="out-panel hidden"></div>
+      <div id="problem-panel" class="out-panel hidden"></div>
       <div id="term-wrap" class="hidden">
         <div id="term-box"></div>
         <div id="term-bar" title="拖动空白处可上下调整终端高度">
@@ -956,6 +1044,10 @@
      ⚠️ **必须在 app.js 之前** ✗✓：app.js 启动时就会调 showDbgBar() /
         scanDebugOutput()，那两个是函数声明（有提升），先加载才调得到。 -->
 <script src="/assets/debug-panel.js"></script>
+<script src="/assets/run-history.js"></script>
+<script src="/assets/cs-icons.js"></script>
+<script src="/assets/draw-folder.js"></script>
+<script src="/assets/draw-canvas-embed.js"></script>
 <script src="/assets/app.js"></script>
 <!-- ★ 架构视图（2026-10-11 从 app.js 抽出来的 409 行）——
      抽出来是因为棘轮（app.js ≤ 16581 行）顶到了：重写走线涨了 156 行 → 测试红。

@@ -61,6 +61,7 @@ function pickArray(cfgFrom, scope, input) {
 /* ── 单条元素的 scope ✓（列表节点逐条跑表达式时用 ✓）───────────────────── */
 function itemScope(base, item, i) {
   return Object.assign({}, base, {
+
     json: item,
     input: item,
     $index: i,
@@ -83,6 +84,81 @@ function fmtDate(ts, fmt) {
 }
 
 /* ── 单节点执行 ✓ ─────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   多模型提供商 ✓（2026-10-18 新增）
+   ──────────────────────────────────────────────────────────────────────────
+   用户原话：「如果我要做视频生成工作流，用豆包来做，生成视频，deepseek 来做文本」✓。
+   原来只有**一个**全局 AI 配置 ✗（`localStorage['mc-ai-cfg']` ✓，{url,key,model} ✓）——
+   一张图里想「DeepSeek 写文案 + 豆包出视频」根本做不到 ✗。
+
+   ⇒ 现在前端把**一整套提供商**随请求带上来 ✓（`providers` ✓），
+     每个 AI 节点自己选 `provider` + `model` ✓，引擎按节点解析 ✓。
+
+   ⚠️ Key 只在**这一次请求**里过一遍 ✗ —— 服务端不落盘、不打日志 ✓
+      （和原来 `/api/ai/chat` 的做法一致 ✓）。
+   ⚠️ 老配置必须还能跑 ✗ —— 没选 provider 时退回 `ctx.ai`（原来那套 ✓），
+      不然用户已经搭好的图会一夜之间全红 ✗。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 把 baseUrl 和路径拼起来 ✓ —— 用户填的 baseUrl 常常已经带 `/v1` 或 `/api/v3` ✓，
+   也可能结尾多个斜杠 ✓，这几种都得拼对 ✓（拼错就是 404 ✗，很难自查 ✗）。 */
+function joinUrl(base, path) {
+  const b = String(base || '').trim().replace(/\/+$/, '');
+  const p = String(path || '').replace(/^\/+/, '');
+  if (!b) return '';
+  if (b.endsWith('/' + p)) return b;      /* 用户直接把完整地址填进了 baseUrl ✓ */
+  return b + '/' + p;
+}
+
+/* 按节点配置解析出「这一次要用哪个服务 / 哪个模型」✓ */
+function resolveAI(ctx, cfg) {
+  const pid = String((cfg && cfg.provider) || '').trim();
+  const provs = (ctx && ctx.providers) || {};
+  const p = pid ? provs[pid] : null;
+  if (p && p.baseUrl) {
+    const model = String((cfg && cfg.model) || '').trim()
+      || (Array.isArray(p.models) && p.models[0]) || '';
+    return { kind: p.kind === 'ark' ? 'ark' : 'openai', baseUrl: p.baseUrl, key: p.key || '', model, name: p.name || pid };
+  }
+  /* ── 退回老的那一套 ✓（全局 AI 配置）── */
+  const a = (ctx && ctx.ai) || {};
+  if (a.url && (a.model || (cfg && cfg.model))) {
+    return { kind: 'openai', baseUrl: a.url, key: a.key || '', model: String((cfg && cfg.model) || a.model), name: '默认模型' };
+  }
+  throw new Error('没配 AI ✗ —— 点工作流工具栏的「🔑 模型」加一个（DeepSeek / 豆包 / 任意 OpenAI 兼容）；'
+    + '或者去 CodeScope 的 AI 面板配一次默认模型 ✓（老图会自动复用它 ✓）');
+}
+
+/* 发一个 JSON 请求 + 拿到 JSON 回来 ✓（生成类接口全是这个套路 ✓） */
+async function postJson(ctx, url, key, body, timeoutMs) {
+  const r = await ctx.fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: 'Bearer ' + key } : {}) },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(Math.max(5000, Math.min(300000, timeoutMs || 120000))),
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error('接口返回 ' + r.status + '：' + text.slice(0, 300));
+  try { return JSON.parse(text); } catch (_) { throw new Error('接口返回的不是 JSON：' + text.slice(0, 200)); }
+}
+
+/* 从各种「图片生成」响应里挖 URL ✓ —— 各家字段不太一样 ✗，能挖的都挖一遍 ✓ */
+function imageUrls(data) {
+  const out = [];
+  const arr = (data && (data.data || data.images || data.result)) || [];
+  (Array.isArray(arr) ? arr : []).forEach((x) => {
+    if (typeof x === 'string') out.push(x);
+    else if (x && x.url) out.push(String(x.url));
+    else if (x && x.b64_json) out.push('data:image/png;base64,' + x.b64_json);
+  });
+  if (data && typeof data.url === 'string') out.push(data.url);
+  return out.filter(Boolean);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+
+/* ── 跑一个节点 ✓ ────────────────────────────────────────────────────────
+   `ctx` 里有：fetch / now / ai / aiChat / providers / saveRemote（可选 ✓） */
 async function execNode(node, vars, input, ctx, scope) {
   const cfg = node.cfg || {};
   const t = String(node.type || '');
@@ -138,13 +214,33 @@ async function execNode(node, vars, input, ctx, scope) {
       return { out: R(cfg.text), port: 0 };
 
     case 'data.json': {
+      const path = String(cfg.path || '').trim();
       /* ⚠️ 输入里带 json（HTTP 节点给的 ✓）就以它为根 ✓ ——
          这样「取 data.list[0].title」这种路径能直接用 ✓，
          不用让用户写 json.data.list[0].title ✗。 */
       let obj = input;
       if (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.json !== undefined) obj = obj.json;
-      if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch (_) { /* 不是 JSON 就按原样 ✓ */ } }
-      const path = String(cfg.path || '').trim();
+      /* ★ 从一段文本里抠 JSON ✓（2026-10-18）——
+         AI 节点的输出是 `{ text: '…' }` ✓，而模型常常**直接吐一个 JSON 字符串** ✓
+         （尤其开了「只回 JSON」✓）。不认的话用户还得先接个「文本模板」再回来 ✗，白折腾一步 ✓。
+         ⚠️ 模型爱把 JSON 包在 ```json 围栏里 ✗ —— 顺手剥掉 ✓。 */
+      const parseMaybe = (v) => {
+        if (typeof v !== 'string') return null;
+        let t = v.trim();
+        const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(t);
+        if (fence) t = fence[1].trim();
+        if (!/^[[{]/.test(t)) return null;
+        try { return JSON.parse(t); } catch (_) { return null; }
+      };
+      if (typeof obj === 'string') {
+        const p = parseMaybe(obj);
+        if (p) obj = p;
+      } else if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.text === 'string') {
+        const p = parseMaybe(obj.text);
+        /* ⚠️ 只在「原对象上取不到这个路径」时才换根 ✗ ——
+           不然 `{{x.text}}` 这种**本来就该取 text** 的会突然变成别的 ✗。 */
+        if (p && path && getPath(obj, path) === undefined) obj = p;
+      }
       const v = path ? getPath(obj, path) : obj;
       return { out: v === undefined ? null : v, port: 0 };
     }
@@ -359,15 +455,204 @@ async function execNode(node, vars, input, ctx, scope) {
 
     /* ══ AI ════════════════════════════════════════════════════════════ */
     case 'ai.chat': {
-      const ai = ctx.ai || {};
-      if (!ai.url || !ai.model) throw new Error('没配 AI ✗ —— 先去 CodeScope 的 AI 面板配一次模型（工作流会自动复用 ✓）');
+      /* ★ 每个 AI 节点**自己选服务** ✓（2026-10-18）—— 一张图里可以
+         「DeepSeek 写文案 → 豆包出图 → 豆包出视频」✓。
+         ⚠️ 没选 provider 时 `resolveAI` 会退回老的全局配置 ✓（老图不会红 ✗）。 */
       const sys = R(cfg.system).trim();
       const user = R(cfg.prompt);
       const messages = [];
       if (sys) messages.push({ role: 'system', content: sys });
       messages.push({ role: 'user', content: user || toText(input) });
-      const text = await ctx.aiChat(ai, messages);
-      return { out: { text }, port: 0 };
+      /* ⚠️ **老路先走** ✗ —— 没选 provider、且调用方给了 `aiChat` 回调时，
+         仍然走原来那套 ✓（服务端那条路把 Key 留在服务端 ✓，老图 / 老单测都不受影响 ✓）。 */
+      if (!String(cfg.provider || '').trim() && typeof ctx.aiChat === 'function'
+        && ctx.ai && ctx.ai.url && ctx.ai.model) {
+        const text = await ctx.aiChat({ url: ctx.ai.url, key: ctx.ai.key || '', model: ctx.ai.model }, messages);
+        return { out: { text, model: ctx.ai.model, provider: '默认模型' }, port: 0 };
+      }
+      const ai = resolveAI(ctx, cfg);
+      const temp = Number(cfg.temperature);
+      const body = {
+        model: ai.model,
+        messages,
+        stream: false,
+        temperature: Number.isFinite(temp) ? Math.max(0, Math.min(2, temp)) : 0.3,
+      };
+      /* JSON 模式 ✓ —— 让模型只回一个 JSON ✓，下游接「JSON 取值」就不用跟格式搏斗 ✓。
+         ⚠️ 各家叫法一致（OpenAI 的 `response_format` ✓，DeepSeek / 豆包都兼容 ✓），
+            但**不是所有模型都支持** ✗ —— 不支持时接口会 400 ✓，报错里能看出来 ✓。 */
+      if (String(cfg.json || '') === 'on') body.response_format = { type: 'json_object' };
+      const data = await postJson(ctx, joinUrl(ai.baseUrl, 'chat/completions'), ai.key, body,
+        Math.max(10000, Math.min(180000, Number(cfg.timeout) || 120000)));
+      const content = data && data.choices && data.choices[0] && data.choices[0].message
+        && data.choices[0].message.content;
+      if (typeof content !== 'string') throw new Error('AI 响应里没有 choices[0].message.content');
+      return {
+        out: {
+          text: content, model: ai.model, provider: ai.name,
+          usage: (data && data.usage) || null,
+        },
+        port: 0,
+      };
+    }
+
+    /* ══ 图像生成 ✓（同步：一次请求直接回图 ✓）════════════════════════════
+       豆包 Seedream / OpenAI Images 都是 `POST {base}/images/generations` ✓，
+       响应里 `data[].url` ✓（要 base64 就给 `b64_json` ✓）。 */
+    case 'ai.image': {
+      const ai = resolveAI(ctx, cfg);
+      const prompt = (R(cfg.prompt) || '').trim() || toText(input);
+      if (!prompt) throw new Error('提示词是空的 ✗');
+      const body = { model: ai.model, prompt, response_format: 'url' };
+      const size = String(cfg.size || '').trim();
+      if (size) body.size = size;
+      const n = Math.max(1, Math.min(4, Number(V(cfg.n)) || 1));
+      body.n = n;
+      if (String(cfg.watermark || '') === 'on') body.watermark = true;
+      /* 图生图 / 参考图 ✓ —— 豆包用 `image`（URL 或 base64 ✓），OpenAI 用 `image`（多张时是数组 ✓） */
+      const ref = String(R(cfg.image) || '').trim();
+      if (ref) body.image = ref;
+      const data = await postJson(ctx, joinUrl(ai.baseUrl, 'images/generations'), ai.key, body,
+        Math.max(15000, Math.min(300000, Number(cfg.timeout) || 180000)));
+      const urls = imageUrls(data);
+      if (!urls.length) throw new Error('接口没回图片地址 ✗：' + JSON.stringify(data).slice(0, 240));
+      return { out: { url: urls[0], urls, count: urls.length, model: ai.model, provider: ai.name }, port: 0 };
+    }
+
+    /* ══ 视频生成 ✓（异步：建任务 → 轮询 ✓）════════════════════════════════
+       豆包 Seedance：`POST {base}/contents/generations/tasks` 拿 id ✓，
+       再 `GET {base}/contents/generations/tasks/{id}` 轮询 ✓。
+       ⚠️ 视频要跑几十秒到几分钟 ✗ —— 所以节点里**自带轮询** ✓，
+          不让用户自己拼「HTTP + 等待 + 条件分支」那七八步 ✗。
+       ⚠️ 出来的 URL **24 小时失效** ✗ —— 要留档就再接一个「下载文件」节点 ✓
+          （提示里也写了 ✓）。 */
+    case 'ai.video': {
+      const ai = resolveAI(ctx, cfg);
+      const prompt = (R(cfg.prompt) || '').trim() || toText(input);
+      if (!prompt) throw new Error('提示词是空的 ✗');
+      /* ⚠️ 豆包视频的参数是**顶层字段** ✗ —— 不是塞进 prompt 的 `--ratio 16:9` ✗
+         （那是老写法 ✓，新接口走顶层 ✓，塞进去反而不生效 ✗）。 */
+      const body = { model: ai.model, content: [{ type: 'text', text: prompt }] };
+      const ref = String(R(cfg.image) || '').trim();
+      if (ref) body.content.push({ type: 'image_url', image_url: { url: ref } });
+      const ratio = String(cfg.ratio || '').trim();
+      if (ratio) body.ratio = ratio;
+      const dur = Number(V(cfg.duration)) || 0;
+      if (dur > 0) body.duration = Math.max(1, Math.min(20, Math.round(dur)));
+      const res = String(cfg.resolution || '').trim();
+      if (res) body.resolution = res;
+      if (String(cfg.audio || '') === 'on') body.generate_audio = true;
+      if (String(cfg.watermark || '') === 'on') body.watermark = true;
+      const seed = Number(V(cfg.seed));
+      if (Number.isFinite(seed) && seed > 0) body.seed = Math.round(seed);
+
+      const created = await postJson(ctx, joinUrl(ai.baseUrl, 'contents/generations/tasks'), ai.key, body, 60000);
+      const taskId = String((created && (created.id || created.task_id)) || '').trim();
+      if (!taskId) throw new Error('没拿到任务 id ✗：' + JSON.stringify(created).slice(0, 240));
+
+      /* 轮询 ✓ —— 上限默认 5 分钟（`timeout` 秒 ✓，封顶 15 分钟 ✓） */
+      const budget = Math.max(30, Math.min(900, Number(cfg.timeout) || 300)) * 1000;
+      const t0 = Date.now();
+      let last = null;
+      let state = 'queued';
+      while (Date.now() - t0 < budget) {
+        await sleep(ctx.pollMs);
+        const r = await ctx.fetch(joinUrl(ai.baseUrl, 'contents/generations/tasks/' + encodeURIComponent(taskId)), {
+          method: 'GET',
+          headers: ai.key ? { Authorization: 'Bearer ' + ai.key } : {},
+          signal: AbortSignal.timeout(30000),
+        });
+        const text = await r.text();
+        if (!r.ok) throw new Error('查任务失败 ' + r.status + '：' + text.slice(0, 240));
+        try { last = JSON.parse(text); } catch (_) { throw new Error('查任务返回的不是 JSON'); }
+        state = String((last && last.status) || '').toLowerCase();
+        if (state === 'succeeded' || state === 'success') break;
+        if (state === 'failed' || state === 'cancelled' || state === 'canceled') {
+          const why = (last && (last.error && (last.error.message || last.error.code))) || state;
+          throw new Error('生成失败 ✗：' + String(why).slice(0, 240));
+        }
+      }
+      if (state !== 'succeeded' && state !== 'success') {
+        throw new Error('等超时了 ✗（' + Math.round(budget / 1000) + ' 秒还没出片 ✓）—— 任务 id 是 ' + taskId
+          + '，可以稍后去控制台看；也可以把「最长等多久」调大 ✓');
+      }
+      const content = (last && last.content) || {};
+      const videoUrl = String(content.video_url || content.url || (last && last.video_url) || '').trim();
+      if (!videoUrl) throw new Error('任务成功了但没给视频地址 ✗：' + JSON.stringify(last).slice(0, 240));
+      return {
+        out: {
+          url: videoUrl, video_url: videoUrl, task_id: taskId, status: state,
+          ms: Date.now() - t0, model: ai.model, provider: ai.name,
+          /* 顺手把封面 / 时长带上 ✓（有就带 ✓，没有也不影响 ✓） */
+          cover_url: String(content.cover_url || '') || undefined,
+          duration: Number(content.duration) || undefined,
+        },
+        port: 0,
+      };
+    }
+
+    /* ══ 下载文件 ✓ —— 把 URL 存成本地文件 ✓ ══════════════════════════════
+       ⚠️ 生成类接口给的地址**会过期** ✗（豆包视频 24 小时 ✓），
+          要长期留就得落盘 ✓。存到 `<数据目录>/flow-files/` ✓，
+          返回的 `url` 是**本机可访问**的地址 ✓（`/api/life/flowfile/...` ✓），
+          面板里能直接点开看 ✓。 */
+    case 'media.download': {
+      const url = String(R(cfg.url) || '').trim();
+      if (!url) throw new Error('没填要下载的地址 ✗（比如 {{n5.video_url}} ✓）');
+      if (!/^https?:\/\//i.test(url)) throw new Error('只认 http/https 地址 ✗');
+      if (typeof ctx.saveRemote !== 'function') throw new Error('这个运行环境不支持存文件 ✗');
+      const name = String(R(cfg.name) || '').trim();
+      const r = await ctx.saveRemote(url, name);
+      return {
+        out: {
+          url: r.url, path: r.path, name: r.name, bytes: r.bytes, type: r.type || '',
+          /* 方便下游判断是图还是视频 ✓ */
+          kind: /^image\//.test(r.type || '') ? 'image' : (/^video\//.test(r.type || '') ? 'video' : 'file'),
+        },
+        port: 0,
+      };
+    }
+
+    /* ══ 网页版 ✓（2026-10-18）════════════════════════════════════════════
+       用户原话：「我说的是，打开网页版的 deepseek，和豆包进行文本，视频生成等那种」✓
+       —— 他要的不是 API ✓，是**让工作流去点网页** ✓（用已登录的账号 ✓、不花 Key ✓）。
+
+       ⚠️ 这两条**跑在本机的真浏览器里** ✗（服务端注入 `ctx.browser` ✓）——
+          所以它们**只能在这台机器上跑** ✓，云端部署那种跑不了 ✗。
+       ⚠️ 网页版**比 API 脆** ✗ —— 人家改版就可能失效 ✓，
+          所以每个节点都留了「选择器」两个高级项 ✓，改版了用户自己能救 ✓。
+       ⚠️ 登录是**人做的** ✗ —— 没登录会报「还没登录…」✓，并告诉他在哪登录 ✓。 */
+    case 'web.chat': {
+      if (!ctx.browser || typeof ctx.browser.chat !== 'function') {
+        throw new Error('这个运行环境不支持网页版 ✗（要跑在本机服务上）');
+      }
+      const prompt = (R(cfg.prompt) || '').trim() || toText(input);
+      if (!prompt) throw new Error('提示词是空的 ✗');
+      const r = await ctx.browser.chat({
+        site: String(cfg.site || 'deepseek'),
+        prompt,
+        inputSel: String(cfg.inputSel || ''),
+        replySel: String(cfg.replySel || ''),
+        sendMode: String(cfg.sendMode || 'enter'),
+        timeoutMs: Math.max(10000, Math.min(900000, (Number(cfg.timeout) || 180) * 1000)),
+      });
+      return { out: { text: r.text, site: r.site, url: r.url }, port: 0 };
+    }
+    case 'web.video': {
+      if (!ctx.browser || typeof ctx.browser.video !== 'function') {
+        throw new Error('这个运行环境不支持网页版 ✗（要跑在本机服务上）');
+      }
+      const prompt = (R(cfg.prompt) || '').trim() || toText(input);
+      if (!prompt) throw new Error('提示词是空的 ✗');
+      const r = await ctx.browser.video({
+        site: String(cfg.site || 'jimeng'),
+        prompt,
+        inputSel: String(cfg.inputSel || ''),
+        videoSel: String(cfg.videoSel || ''),
+        sendMode: String(cfg.sendMode || 'button'),
+        timeoutMs: Math.max(30000, Math.min(1800000, (Number(cfg.timeout) || 600) * 1000)),
+      });
+      return { out: { url: r.url, video_url: r.url, site: r.site, ms: r.ms }, port: 0 };
     }
 
     /* ══ 工具 ══════════════════════════════════════════════════════════ */
@@ -414,6 +699,15 @@ async function runFlow(graph, options) {
     fetch: opts.fetch || (typeof fetch === 'function' ? fetch : null),
     ai: opts.ai || null,
     aiChat: opts.aiChat || null,
+    /* ★ 多提供商 ✓（2026-10-18）—— 形如 { deepseek: {baseUrl,key,models:[…],kind} } ✓ */
+    providers: opts.providers || null,
+    /* ★ 存远程文件 ✓（可选 ✓）—— 服务端注进来 ✓；单测里不注也能跑（只是「下载文件」节点会报错 ✓） */
+    saveRemote: typeof opts.saveRemote === 'function' ? opts.saveRemote : null,
+    /* ★ 轮询间隔 ✓ —— 只为**单测**能跑快 ✓（不注入就是 3 秒 ✓，用户看到的行为不变 ✓） */
+    pollMs: Number(opts.pollMs) > 0 ? Math.max(0, Number(opts.pollMs)) : 3000,
+    /* ★ 网页版自动化 ✓（可选 ✓）—— 服务端注入 { chat, video } ✓；
+       没注入时那两个节点会**明确报错** ✓（不是静默返回空 ✗） */
+    browser: opts.browser || null,
   };
   /* ★ 进度回调 ✓ —— 用户原话：「执行，也没有执行到哪的显示」✓。
      一次跑十几秒（AI 节点 30 秒 ✗）而界面**一动不动** ✗，用户只能干等 ✗。

@@ -74,6 +74,25 @@ const TEXT = SENT.join(' ');
   };
   const wordsBefore = new Set((d0.words || []).map((w) => w && w.id));
   const madeWords = [];
+  /* ★★ 探针要「加一个新词」→ 但用户库里可能**已经有**那几个候选 ✓（2026-10-19）——
+     用户把整本六级词书灌进生词本之后（4611 词 ✓），
+     `microbiome / forage / striking / antibiotics` 大概率都在 ✓ →
+     `epWordAdd` 撞到已存在的词只弹提示、不新增 ✓ → 后面整条链全红 ✓，
+     而**功能其实是好的** ✓（假红比不测更糟 ✗）。
+     ⇒ 开跑前把这几个**借走** ✓（按 `w` 精确匹配 ✓，只动这几条 ✓），
+       收尾按 id 原样还回去 ✓。 */
+  /* ⚠️ `hadza` 也要算进来 ✗ —— ⑨ 那段用 `EARLY='hadza'` 验「按原文顺序排」✓，
+     它同样可能在用户库里 ✓（用户那本词书里就有 ✓）→ 不借走的话那条断言也是假红 ✗。 */
+  const BORROW = ['microbiome', 'forage', 'striking', 'antibiotics', 'hadza'];
+  const borrowedWords = [];
+  {
+    const hit = (d0.words || []).filter((w) => w && BORROW.indexOf(String(w.w || '').toLowerCase()) >= 0);
+    if (hit.length) {
+      borrowedWords.push.apply(borrowedWords, hit);
+      d0.words = (d0.words || []).filter((w) => hit.indexOf(w) < 0);
+      console.log('借走已存在的 ' + hit.length + ' 个测试词（收尾会还）：' + hit.map((w) => w.w).join(','));
+    }
+  }
   d0.articles = (d0.articles || []).concat([{
     id: artId, title: MARK + '肠道菌群', site: 'probe', url: '',
     text: TEXT, level: 'B2', words: 120, minutes: 1, done: {},
@@ -906,6 +925,11 @@ const TEXT = SENT.join(' ');
       d.articles = (d.articles || []).filter((a) => a && a.id !== artId && String(a.title).indexOf(MARK) < 0);
       /* ★ 探针自己加的生词也要按 id 删掉 ✓（不然污染用户的生词本 ✓）*/
       d.words = (d.words || []).filter((w) => w && madeWords.indexOf(w.id) < 0);
+      /* ★ 借走的用户词**原样还回去** ✓（按 id 去重 ✓） */
+      if (borrowedWords.length) {
+        const have = new Set((d.words || []).map((w) => w && w.id));
+        borrowedWords.forEach((w) => { if (w && !have.has(w.id)) d.words.push(w); });
+      }
       /* 原样还原 ✓（只动自己造的那篇 ✓） */
       if (keep.epArt !== undefined) d.epArt = keep.epArt; else delete d.epArt;
       if (keep.readMode !== undefined) d.readMode = keep.readMode; else delete d.readMode;

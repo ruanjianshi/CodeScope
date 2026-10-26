@@ -15,17 +15,17 @@
 ```
 浏览器
   index.html          1,072 行  ← 已抽外链（原 1,771 行）
-  assets/app.js      16,356 行  ← ★ 曾是 17,142 行，2026-10-11 抽出调试面板 + 架构视图
+  assets/app.js      17,453 行  ← ★ 曾是 17,142 行，2026-10-11 抽出调试面板 + 架构视图
   assets/debug-panel.js  879 行  ← ★ 抽出来的（断点 / 单步 / 变量表）
   assets/arch-layout.js     481 行  ← ★ 抽出来的（架构图**布局 + 走线**，纯数据不碰 DOM）
   assets/arch-graph-svg.js  132 行  ← ★ 抽出来的（把布局数据画成 SVG）
   assets/arch-view.js    137 行  ← ★ 抽出来的（架构图面板集成 + 缩放平移）
-  assets/app.css      4,287 行
+  assets/app.css      4,828 行
   src/                 9,485 行  ← 10 个独立视图
         │  HTTP / SSE
         ▼
 服务端
-  server.js           8,386 行  ← 215 个端点 / 22 组
+  server.js           8,822 行  ← 215 个端点 / 22 组
         │  函数调用
         ▼
 领域服务 lib/        17,154 行  ← 35 个模块
@@ -37,6 +37,140 @@
 
 **源证据**：`wc -l server.js assets/app.js assets/app.css index.html lib/*.js src/*.js`；
 端点数 `grep -oE "'/api/[a-z0-9-]+" server.js | sort -u | wc -l`。
+
+### 无限画布（`canvas`）· 移植 tldraw 5.5.2
+
+绘图面板的第四种类型，`.canvas` 文件，内嵌在面板里（**不新开窗口**，和 Draw.io 同套路）。
+
+| 文件 | 作用 |
+|---|---|
+| `assets/canvas/index.html` | 宿主页：`?file=` → 读 vault；改动防抖 1.2s 存盘；**关闭前 `sendBeacon` 兜底** |
+| `assets/canvas/canvas-theme.css` | 主题层：把 tldraw 的「近黑 + 冷紫」换成 CodeScope 石墨灰（30 个 `--tl-color-*`）+ 左侧功能条 / 面包屑 / 子白板卡片样式 |
+| `assets/canvas/canvas-ext.js` | 功能层：插入 图片 / 视频 / 网页 / PDF、子白板、页面导航、一键绑定连线 |
+| `assets/draw-canvas-embed.js` | 把宿主页以 iframe 嵌进 `#canvas-root`，并和其它编辑器互斥 |
+| `assets/vendor/tldraw.bundle.js` | esbuild 打的 IIFE（React 19 + tldraw），必须 `--jsx=automatic` |
+| `assets/vendor/tldraw-assets/` | **自托管**图标 sprite / 字体 / 翻译 / 嵌入图标（84 个文件，2.75 MB） |
+| `assets/pdfjs/` | PDF 渲染（含 **cmaps** —— 没有它中文 PDF 整片空白） |
+| `lib/drawings-asset.js` | 图片 / PDF 页 / 视频落盘：`<vault>/.canvas-assets/<sha1>.<ext>` |
+| `assets/vendor/tldraw.LICENSE.md` | 授权原文（分发需附带；**水印不得移除**） |
+
+四条关键决定：
+
+- **不用 `persistenceKey`** ✓：vault 里的 `.canvas` 是唯一真相源 ✓。tldraw 自带 localStorage
+  会再写一份 ✓，换文件时残留内容串味、删掉的文件还能复活 ✗。
+- **静态资源必须自托管** ✓：tldraw 的图标是 CSS `mask: url(<cdn>/…svg#id)` ✓，
+  `cdn.tldraw.com` 不通时工具栏**只剩高亮方块**（没有图标）✗ —— 用
+  `setDefaultUiAssetUrls()` / `setDefaultEditorAssetUrls()` 改指本地 ✓。
+- **二进制不进 .canvas** ✓：tldraw 默认 `inlineBase64AssetStore` ✗ —— 一页 A4 渲染成 PNG
+  约 880KB（base64 后），24 页 PDF 会把画布撑到 20MB+ ✓，而且每次防抖保存都要
+  `JSON.stringify` 整张画布 ✗。改成 `assets={{ upload, resolve }}` 存盘后，同样一页只剩 **3KB** ✓。
+- **子白板 = page + `meta.parentId`** ✓：`props.pageId` 指向子页，子页 `meta.parentId` 指回父页 ✓，
+  两边都存 → 卡片能往下跳、面包屑能往上走 ✓，可无限嵌套 ✓。
+- **网页用自己写的 `webcard` 图形，不用 tldraw 的 `embed`** ✓：tldraw 只对白名单站点
+  （YouTube / Figma / CodePen…）真内嵌 ✓，其它 URL 一律退化成 bookmark 链接卡片 ✗
+  （就是「只剩一行裸网址」那种）；就算硬塞进 `embed`，没匹配到定义时用的是
+  `unknownEmbedShapePermissionOverrides`（`allow-same-origin: false`）✗ → 页面白屏。
+  `webcard` 自己定沙箱 ✓、顶栏带「重载 / 浏览器打开」✓、双击进交互态（不交互时
+  `pointer-events: none` 让图形可拖）✓。**顶栏不能吞 `pointerdown`** ✗ —— 吞了 tldraw
+  收不到双击，永远进不了交互态 ✓。
+- **分组 / 包含关系直接用 tldraw 的 `frame`** ✓：frame 天生是容器 —— 拖进去自动变成它的
+  child ✓、拖出来自动解除 ✓、frame 还能套 frame（无限嵌套）✓，不用自己造树结构 ✓。
+  「组合」= 建一个 frame 盖住选区 + `reparentShapes()` ✓（它会保持**页面绝对位置**，
+  换爹不会跳位 ✓）；「解组」= 先把孩子 `reparentShapes` 回 page ✓ **再**删框 ✗
+  （直接删框会把孩子一起带走）。
+  侧栏大纲按 `getSortedChildIdsForParent()` 递归画成树 ✓；行内 ↑↓ 交换兄弟的
+  `x/y + index` ✓（画布上看得见的那种调顺序）。
+  ⚠️ frame 的填充是**写死的 `#0c0c0c`** ✗（比画布还黑，像个洞）—— 用 CSS
+  `.tl-frame__body { fill: … !important }` 盖掉 SVG 的 presentation attribute ✓。
+- **分组框自适应**：tldraw 的 frame **不会**跟着孩子长大/缩小 ✗ —— 拖进去一张卡片，
+  框还是原来那么大，卡片就戳到框外面。补了一个 `fitFrame()`：
+  ①只在**子节点变化**时触发 ✓（用户手动拉大框不会被抢回去）；
+  ②拖动/缩放**过程中不动** ✓（中途改孩子的相对坐标会和 tldraw 的临时变换打架），
+  等操作停了（`select.translating` 退出）再贴；
+  ③框往左上长时**同步反补孩子的相对坐标** ✓ —— 孩子的**页面位置保持不动**；
+  ④打开旧画布时只**撑大**不缩小 ✓（`growOnly`），且 `loadSnapshot` 期间要屏蔽 ✗
+  （一次换整个 store 会被当成"用户挪了孩子"，把所有框缩回去）。
+
+- **对齐：自己画参考线，不指望 tldraw 的 snap 指示器** ✓。实测 tldraw 的 `isSnapMode`
+  只对**网格**生效（拖到 x≈3 吸到 0、x≈9 吸到 10），形状之间的对齐参考线在这个嵌入环境里
+  `editor.snaps.getIndicators()` 恒为 0、屏幕上什么都没有 ✗。所以自己算：
+  拖动中（`editor.isIn('select.translating')`）拿被选图形的 **左/中/右 × 上/中/下** 和
+  其它图形的同三条边比，差在 6 屏幕像素内就画一条红线 ✓；**松手时**再把位置吸过去（4px 内）✓。
+  ⚠️ `pointerup` 里必须先判 `isIn('select.translating')` ✗ —— 单击选中也会走 pointerup，
+  不判断的话点一下就把图形悄悄挪 4px ✓（实测：单击 420→420 不动、拖动 →0 ✓）。
+  另外补了**对齐工具条**（选中 ≥2 个出现）：六个方向 + 水平/垂直等距；
+  选中分组框时出现「整理」= 按大纲顺序竖排 + 自动贴合 ✓。
+
+- **★ 保存必须有「载入完成」闸门**（`assets/canvas/index.html` 的 `ready` / `loadFailed`）：
+  `window.__tldrawSnapshot` 在 `onMount` 就有了，而 `load()` 还要等 `fetch` ✓ ——
+  这中间如果切文件/关面板触发 `flush()`，就会拿**一张空画布**把磁盘上的文件覆盖掉 ✗
+  （2026-10-25 真的发生了一次，整块板被清空）。所以：`save()` 和 `flush()` 都必须
+  `if (!ready || loadFailed) return;` ✓，读取失败时**永久停用保存**并提示 ✓ ——
+  读不出来就不该写回去。服务端再补一道：写入前把旧文件复制成 `<name>.canvas.bak` ✓。
+
+- **★ 三层防「空覆盖」**（缺一层都会重演）：
+  ① `__tldrawLoad` 必须**返回成败** ✓ —— 以前把异常吞了，上层会把「载入失败」当成
+  「载入成功（空画布）」，然后拿空画布覆盖文件；
+  ② 客户端记住载入时的图形数 `loadedShapes`，`save()`/`flush()` 里只要
+  「原来有、现在 0」就拒绝写入 ✓；
+  ③ **服务端** `lib/drawings-asset.js` 的 `canSaveCanvas()` 再拦一道 ✓ ——
+  浏览器可能还跑着旧版前端（没刷新），只有服务端拦得住 ✓。
+
+- **画布内思维导图**：节点是自定义图形 `mnode`（`props { w, h, text, color }`），
+  父子关系存在 **`shape.meta.mmParent`** ✓（不占 props，改结构不用迁移 ✓）。
+  连线**不用绑定箭头** ✗ —— 位置由布局算死，绑定没意义；每次 `mmLayout()` 后
+  删掉所有 `meta.mmLink` 的箭头再重建 ✓。
+  布局是向右生长的整齐树：先递归量每个**子树高度**，再把子节点块垂直居中到父节点 ✓；
+  框往左长不动、只往右长，所以父节点位置稳定 ✓。
+  操作：`Tab` 加子节点 / `Enter` 加同级 / 节点工具条（＋子节点、＋同级、排版、删除）。
+  ⚠️ **节点默认文本必须为空** ✗ —— 带默认文字的话进编辑态光标在末尾，
+  打字会**追加**成「中心主题项目规划」✓（改成空文本 + 灰色占位符）。
+  ⚠️ **选中状态在 `session` 作用域** ✗（`instance_page_state`）—— 只监听
+  `{scope:'document'}` 的话，取消选中后工具条不会消失 ✓（要再挂一个 session 监听）。
+
+- **PDF 用一张 `pdfcard`，**连续滚动**阅读（不是一页一页翻）** ✓：最早是把每页渲染成
+  图片铺在画布上 ✗（3 页原理图 = 3 张巨型图）；后来改成一张卡里 `‹ ›` 翻页，用户还是要滚动 ✓；
+  现在所有页**竖着排在同一个滚动区**里 ✓，滚到哪页标题栏就显示 `2/3` ✓，
+  右下角浮 `− 100% +` 缩放条（不随内容滚走）✓。
+  所有页都上传成文件 ✓，卡片里只存 URL（`props.pages` 用 `\n` 拼）✓。
+  **分辨率必须 1800px 宽、PNG 无损** ✓ —— 900px 在视网膜屏上要放大 1.5 倍才填满卡片，
+  看着糊；WebP 有损压缩会把原理图那种细线压发虚。
+  **正文层要 `pointer-events: auto` + `overflow: auto`** ✓ 才能滚 —— 代价是拖卡片得抓顶栏
+  （所以顶栏不能吞 `pointerdown`）；图片加 `loading="lazy"`，几十页也不会一次全解码 ✓。
+  ⚠️ **光有 `overflow:auto` 滚不动** ✗：tldraw 在画布上监听 `wheel` 做平移/缩放，
+  指针明明在 PDF 正文上，滚轮照样把画布平移了（实测：`scrollTop` 不变、`camera.y` 直接 -400）。
+  必须在 **`window` 捕获阶段**把事件抢下来 ✓ —— 比画布上的监听更早，
+  `preventDefault + stopPropagation` 之后**自己改 `scrollTop`**（默认滚动也被 prevent 掉了）。
+  内容不溢出时放行 ✓，画布缩放/平移不受影响。
+
+- **便签 `sticky`（自定义）**：tldraw 自带的 `note` **props 里没有 w/h**（只有
+  `size` / `growY` / `scale`），尺寸自动算、`hideResizeHandles()` 恒为 true ✗ ——
+  选中没有缩放把手、拖不动大小。所以自己写一个带 `w/h` 的 `sticky` ✓（自由缩放 ✓、
+  双击改字 ✓、颜色走 `DefaultColorStyle` ✓），并把工具栏的 `tools.note` 隐藏 ✓，
+  避免两个"便签"并存。
+- **入口不重复**：媒体插入放在左侧功能条，tldraw 工具栏的 `tools.asset`（媒体）用 CSS 隐藏 ✓。
+- **卡片标题不重复**：正文渲染前先用 `bodyMarkdownOf()` 摘掉开头那个 `# 标题` ✗ ——
+  它已经显示在彩色标题栏里了，不摘就是同一行标题出现两次 ✓。
+
+- **笔记卡片 `card`**：彩色标题栏 + Markdown 正文（`marked` + 手写消毒）✓，标题取正文里
+  第一个 `# 标题` ✓（只维护一份内容），颜色复用 tldraw 的 `DefaultColorStyle` ✓
+  （右上角样式面板的色板直接能改 ✓）。正文按内容**只增不减**地自动长高 ✓。
+  图片进卡片有三条路：**拖文件到卡片上 / 编辑时粘贴 / 标题栏的插图按钮** ✓，
+  三条路都落到 `![](<url>)`（上传到 `.canvas-assets/`，不塞 base64）✓。
+  拖放那条必须用**捕获阶段**的 `window` 监听 ✗ 否则 tldraw 先在画布上建一个图片图形，
+  图片就跑到卡片旁边去了 ✓。
+  两个坑：①自动长高必须量**内层内容** `.cs-card__md` ✗ 不能量 `flex:1` 的容器
+  （它的 `scrollHeight` 恒等于自身高度 → 每帧 +58 → 无限自增 → tldraw 白屏）✓；
+  ②只靠 textarea 的 `autoFocus` 不行 ✗，tldraw 随后会把焦点收回 `.tl-container`，
+  必须 `requestAnimationFrame` 里手动 `focus()` ✓，并且**输入即提交**（tldraw 退出编辑态
+  是直接卸载组件，`onBlur` 不保证先到）✓。图片是异步加载的，`img.onload` 之后要**再量一次**
+  高度 ✓，否则图会被裁掉。
+- **`createShapeId('xxx')` 会返回固定 id** ✗（`shape:xxx`）—— 第二次调用就撞车：
+  第二张卡片建不出来、第二条连线把绑定全叠到同一条箭头上 ✓。一律无参调用 ✓。
+
+⚠️ **v5 的 `createShape` / `createPage` / `createBindings` / `createShapesForAssets` 都返回
+`editor` 本身**（链式）✗ —— 拿不到新建的记录 ✓，必须用 `createShapeId()` 显式给 id，
+或者用「前后 id 差集」反查 ✓。
 
 ### 已做的拆分（棘轮在往下走）
 
@@ -99,10 +233,10 @@
 
 | 文件 | 现状 | 问题 |
 |---|---|---|
-| `assets/app.js` | **16,538 行 / 14,639 行代码 / 1.2 MB**（原 17,142） | 改任何一处都要**通读**；`git blame` 失效；无法按需加载 |
-| `server.js` | **8,386 行 / 7,176 行代码 / 215 端点**（原 9,084） | 还留着一批端点没归组；加一组新 API 仍要动同一个文件 |
+| `assets/app.js` | **17,465 行 / 15,329 行代码 / 1.2 MB**（原 17,142） | 改任何一处都要**通读**；`git blame` 失效；无法按需加载 |
+| `server.js` | **8,826 行 / 7,461 行代码 / 223 端点**（原 9,084） | 还留着一批端点没归组；加一组新 API 仍要动同一个文件 |
 | `assets/life-workbench.js` | **14,111 行 / 926 KB** | 生活工作台整块；下一个该拆的 |
-| `assets/app.css` | **4,356 行 / 3,901 行代码** | 样式也很大；按面板拆成几个文件是下一步 |
+| `assets/app.css` | **4,828 行 / 4,212 行代码** | 样式也很大；按面板拆成几个文件是下一步 |
 
 #### ★ 棘轮的度量换成了「代码行数」（2026-10-11）
 

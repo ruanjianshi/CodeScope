@@ -61,6 +61,13 @@ class LspSession {
     this.ready = null;
     this.openDocs = new Map();
     this.diagnostics = new Map();
+    /* ★ 诊断「第几次推送」的计数器 ✓（2026-10-20）——
+       clangd 的 publishDiagnostics 是**异步**的 ✓：didOpen/didChange 发出去之后，
+       它要过一会儿才推第一版诊断 ✓。原来这里发完 sync 就立刻读 `this.diagnostics` ✗ →
+       **新内容必然读到空数组** ✓ → 界面上就是「刚敲完错误，一个都不报」✓。
+       计数器 + 等待者：谁在等，就等「这个 uri 又推了一次」再返回 ✓。 */
+    this.diagStamp = new Map();
+    this.diagWaiters = [];
     this.lastUsed = Date.now();
   }
 
@@ -145,6 +152,9 @@ class LspSession {
         else pending.resolve(message.result);
       } else if (message.method === 'textDocument/publishDiagnostics' && message.params) {
         this.diagnostics.set(message.params.uri, message.params.diagnostics || []);
+        this.diagStamp.set(message.params.uri, (this.diagStamp.get(message.params.uri) || 0) + 1);
+        /* 叫醒所有等待者 ✓ —— 它们自己会判断「是不是我要的那个 uri、有没有新版本」✓ */
+        if (this.diagWaiters.length) for (const waiter of this.diagWaiters.slice()) { try { waiter(); } catch (_) {} }
       }
     }
   }
@@ -154,16 +164,44 @@ class LspSession {
     this.pending.clear(); this.child = null; this.ready = null; this.openDocs.clear();
   }
 
+  /* 返回「有没有真的发出去改动」✓ —— 没变就别等诊断（clangd 不会重推，白等到超时）✓ */
   sync(uri, language, text) {
     const previous = this.openDocs.get(uri);
     if (!previous) {
       this.openDocs.set(uri, { version: 1, text });
       this.notify('textDocument/didOpen', { textDocument: { uri, languageId: language, version: 1, text } });
-    } else if (previous.text !== text) {
+      this.lastUsed = Date.now();
+      return true;
+    }
+    if (previous.text !== text) {
       const version = previous.version + 1; this.openDocs.set(uri, { version, text });
       this.notify('textDocument/didChange', { textDocument: { uri, version }, contentChanges: [{ text }] });
+      this.lastUsed = Date.now();
+      return true;
     }
     this.lastUsed = Date.now();
+    return false;
+  }
+
+  /* 等这个 uri 的**下一版**诊断 ✓（或超时）——
+     ⚠️ 必须按 uri 计数 ✗：一次 didChange 可能让 clangd 连推好几个文件的诊断（头文件被包含）✓，
+        只等「任意一次推送」会在**别的文件**推过来时就返回 ✓，拿到的还是这个文件的旧结论 ✗。 */
+  waitDiagnostics(uri, ms) {
+    const before = this.diagStamp.get(uri) || 0;
+    if (!this.child) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.diagWaiters = this.diagWaiters.filter((w) => w !== wake);
+        resolve(ok);
+      };
+      const wake = () => { if ((this.diagStamp.get(uri) || 0) > before) finish(true); };
+      const timer = setTimeout(() => finish(false), Math.max(200, Number(ms) || 1500));
+      this.diagWaiters.push(wake);
+    });
   }
 
   close() {
@@ -266,7 +304,10 @@ function createLspService(options = {}) {
     if (!session) { session = new LspSession(config, workspace.root); session.signature = workspace.signature; sessions.set(sessionKey, session); }
     try {
       await session.start();
-      for (const file of workspace.files) session.sync(file.uri, languageId(file.language, file.filename), file.code);
+      let synced = false;
+      for (const file of workspace.files) {
+        if (session.sync(file.uri, languageId(file.language, file.filename), file.code)) synced = true;
+      }
       const position = { line: Math.max(0, Number(input.line) - 1 || 0), character: Math.max(0, Number(input.column) - 1 || 0) };
       const params = { textDocument: { uri: workspace.selected.uri }, position };
       const action = String(input.action || 'hover');
@@ -332,7 +373,13 @@ function createLspService(options = {}) {
         return { ok:true, available:true, server:config.id, actions };
       }
       if (action === 'diagnostics') {
-        await new Promise((resolve) => setTimeout(resolve, 220));
+        /* ⚠️⚠️ 原来是 `await sleep(220)` —— 固定猜 220ms ✗（2026-10-20）
+           实测：**内容一变，第一版诊断必然读成空数组** ✓ ——
+           会话刚重建 / didChange 刚发出，clangd 还在解析 ✓，220ms 远远不够 ✓ →
+           界面表现为「刚敲出来的错误一个都不报」✓，而且下一次请求又因为内容没变、
+           不再重推诊断，于是**永远补不回来** ✓。
+           改成等「这个 uri 的下一版诊断」✓：快就快回、慢最多等 1.6s ✓。 */
+        if (synced) await session.waitDiagnostics(workspace.selected.uri, 1600);
         return { ok: true, available: true, server: config.id, diagnostics: session.diagnostics.get(workspace.selected.uri) || [] };
       }
       return { ok: false, available: true, error: '不支持的 LSP 操作' };

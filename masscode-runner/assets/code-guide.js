@@ -587,21 +587,46 @@
     if (/timeout|超时|abort/i.test(s)) return '等太久了（模型没在时限内回）—— 再点一次试试 ✓';
     return s;
   }
+  /* ★ 超时不再「一次判死」✓（2026-10-22 用户截图：「等太久了（模型没在时限内回）」）——
+     ⚠️ 他配的是**魔搭 ModelScope** 的推理接口 ✓，那家的免费推理是**排队**的 ✓：
+        冷启动 / 高峰期几十秒到几分钟都正常 ✓，一次 120s 没回不代表模型坏了 ✓。
+     所以：
+     ① 默认时限 120s → **180s** ✓（和别的面板 150~300s 对齐 ✓）；
+     ② **只在「超时」时自动重试一次** ✓（时限翻倍、封顶 300s ✓）——
+        401/404/429 这类错误重试没用，不浪费 ✓；
+     ③ 报错里带上**模型名 + 实际等了多少秒** ✓ —— 原来只说「等太久了」✗，
+        用户根本不知道是哪个模型、等了多久 ✓。 */
   async function cgAi(system, user, timeoutMs) {
     const cfg = cgAiCfg();
     if (!cfg || !cfg.url || !cfg.model) {
       throw new Error('还没配 AI —— 去右侧「AI」面板填一下模型和 Key（这里会自动复用 ✓）');
     }
-    const r = await fetch('/api/ai/chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: cfg.url, key: cfg.key, model: cfg.model,
-        timeoutMs: timeoutMs || 120000,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-      }),
-    });
-    const d = await r.json();
-    if (!d || !d.ok) throw new Error(cgAiErr((d && d.error) || 'AI 请求失败'));
+    const first = timeoutMs || 180000;
+    const call = async (ms) => {
+      const r = await fetch('/api/ai/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: cfg.url, key: cfg.key, model: cfg.model,
+          timeoutMs: ms,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        }),
+      });
+      return r.json();
+    };
+    let d = await call(first);
+    let waited = first;
+    if (d && !d.ok && d.timeout) {
+      /* 排队模型：再给一次更长的机会 ✓ */
+      waited = Math.min(300000, first * 2);
+      d = await call(waited);
+    }
+    if (!d || !d.ok) {
+      const msg = cgAiErr((d && d.error) || 'AI 请求失败');
+      const secs = Math.round(waited / 1000);
+      throw new Error(d && d.timeout
+        ? `等太久了（模型 ${cfg.model} 在 ${secs} 秒内没回，已自动重试一次）—— 魔搭这类免费推理会排队，换个更快的模型或过一会儿再试 ✓`
+        : msg);
+    }
     return String(d.content || '');
   }
   /* 从模型回复里抠出 JSON ✓（剥 ```json 围栏 + 前后废话 ✓，和别处同一套 ✓）*/

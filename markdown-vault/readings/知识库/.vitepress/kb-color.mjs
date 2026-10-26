@@ -10,10 +10,15 @@ function kbColorPlugin(md) {
     /* {红|文字} —— 0x7b 是 {，写成码点免得和外层模板字符串的花括号混淆 */
     if (ch === 0x7b) {
       const key = src[start + 1]
-      if (!key || KEYS.indexOf(key) < 0 || src[start + 2] !== '|') return false
-      const end = src.indexOf('}', start + 3)
+      if (!key || KEYS.indexOf(key) < 0) return false
+      /* 分隔符接受 | 也接受 | —— 在 Markdown 表格里，裸的 | 会被当成列分隔符把整行切开
+         （表格先按 | 切列，再解析行内语法），所以表格里必须写 |。这里两种都认，
+         用户就不用记「正文用 |、表格用 |」这条规矩了。 */
+      const barLen = src[start + 2] === '|' ? 1 : (src[start + 2] === '\\' && src[start + 3] === '|' ? 2 : 0)
+      if (!barLen) return false
+      const end = src.indexOf('}', start + 2 + barLen)
       if (end < 0) return false
-      const body = src.slice(start + 3, end)
+      const body = src.slice(start + 2 + barLen, end)
       if (!body || body.indexOf('\n') >= 0) return false
       if (!silent) {
         state.push('html_inline', '', 0).content =

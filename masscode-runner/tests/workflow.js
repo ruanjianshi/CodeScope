@@ -528,6 +528,222 @@ const run = (nodes, edges, extra) => W.runFlow({ nodes, edges }, Object.assign({
     ok('★ 不传回调时不炸（向后兼容）', r.ok === true && r.vars.b.x === 1, JSON.stringify(r.vars.b));
   }
 
+  /* ══ 多提供商 + 生成类节点 ✓（2026-10-18）════════════════════════════════
+     用户原话：「如果我要做视频生成工作流，用豆包来做，生成视频，deepseek 来做文本」✓。
+     ⚠️ 这一节**全部用 mock fetch** ✗ —— 单测不许联网 ✓（慢 + 要 Key + 会花钱 ✗）。 */
+  console.log('\n── ㉑ 多提供商：每个节点自己选服务 ──');
+  const PROVS = {
+    deepseek: { id: 'deepseek', name: 'DeepSeek', kind: 'openai', baseUrl: 'https://api.deepseek.com', key: 'sk-ds', models: ['deepseek-flash'] },
+    ark: { id: 'ark', name: '豆包', kind: 'ark', baseUrl: 'https://ark.test/api/v3', key: 'ark-key', models: ['doubao-seedance-2-0-fast-260128'] },
+  };
+  {
+    const calls = [];
+    const fetchMock = async (url, opt) => {
+      calls.push({ url, auth: (opt && opt.headers && opt.headers.Authorization) || '', body: JSON.parse((opt && opt.body) || '{}') });
+      return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'DeepSeek 写的' } }] }) };
+    };
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('a', 'ai.chat', { provider: 'deepseek', prompt: '写一句' })],
+      edges: [edge('t', 0, 'a')],
+    }, { fetch: fetchMock, providers: PROVS });
+    eq('★ 选了 DeepSeek 就打 DeepSeek 的地址', calls[0] && calls[0].url, 'https://api.deepseek.com/chat/completions');
+    eq('★ 用的是**这个服务的** Key', calls[0] && calls[0].auth, 'Bearer sk-ds');
+    eq('★ 模型取这个服务的第一个（没填时）', calls[0] && calls[0].body.model, 'deepseek-flash');
+    eq('结果进 vars', r.vars.a.text, 'DeepSeek 写的');
+    eq('输出里带上是哪个服务', r.vars.a.provider, 'DeepSeek');
+  }
+  {
+    /* 同一张图里**两个不同的服务** ✓ —— 这才是用户要的那件事 ✓ */
+    const seen = [];
+    const fetchMock = async (url) => {
+      seen.push(url);
+      return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'ok' } }] }) };
+    };
+    await W.runFlow({
+      nodes: [
+        node('t', 'trigger.manual'),
+        node('a', 'ai.chat', { provider: 'deepseek', prompt: '文案' }),
+        node('b', 'ai.chat', { provider: 'ark', model: 'doubao-seed-1-6', prompt: '{{a.text}}' }),
+      ],
+      edges: [edge('t', 0, 'a'), edge('a', 0, 'b')],
+    }, { fetch: fetchMock, providers: PROVS });
+    eq('★ 一张图里能同时用两个服务', seen, ['https://api.deepseek.com/chat/completions', 'https://ark.test/api/v3/chat/completions']);
+  }
+  {
+    let threw = '';
+    try {
+      await W.runFlow({ nodes: [node('t', 'trigger.manual'), node('a', 'ai.chat', { provider: 'nope', prompt: 'x' })], edges: [edge('t', 0, 'a')] },
+        { fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }) });
+    } catch (e) { threw = e.message; }
+    ok('选了一个不存在的服务 → 报错要说清楚（不是静默用默认）', /没配 AI/.test(threw), threw);
+  }
+
+  console.log('\n── ㉒ AI 生图 ──');
+  {
+    let body = null;
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('g', 'ai.image', { provider: 'ark', model: 'doubao-seedream-5-0-pro-260628', prompt: '一只猫', size: '1024x1024', n: 2 })],
+      edges: [edge('t', 0, 'g')],
+    }, {
+      providers: PROVS,
+      fetch: async (url, opt) => {
+        body = JSON.parse(opt.body);
+        return { ok: true, status: 200, text: async () => JSON.stringify({ data: [{ url: 'https://img/1.png' }, { url: 'https://img/2.png' }] }) };
+      },
+    });
+    eq('打到 /images/generations', body && body.model, 'doubao-seedream-5-0-pro-260628');
+    eq('尺寸传下去了', body && body.size, '1024x1024');
+    eq('张数传下去了', body && body.n, 2);
+    eq('★ 第一张进 url', r.vars.g.url, 'https://img/1.png');
+    eq('全部进 urls', r.vars.g.urls, ['https://img/1.png', 'https://img/2.png']);
+  }
+
+  console.log('\n── ㉓ AI 生视频（建任务 → 轮询）──');
+  {
+    const urls = [];
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('v', 'ai.video', { provider: 'ark', prompt: '海浪', ratio: '9:16', duration: 5 })],
+      edges: [edge('t', 0, 'v')],
+    }, {
+      providers: PROVS, pollMs: 0,
+      fetch: async (url, opt) => {
+        urls.push((opt && opt.method) || 'GET' + ' ' + url);
+        if ((opt && opt.method) === 'POST') {
+          return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'cgt-1' }) };
+        }
+        /* 第一次还在跑 ✓，第二次成功 ✓ —— 轮询这条链要真的走到 ✓ */
+        const n = urls.filter((u) => u.indexOf('GET') === 0).length;
+        return {
+          ok: true, status: 200,
+          text: async () => JSON.stringify(n < 2
+            ? { status: 'running' }
+            : { status: 'succeeded', content: { video_url: 'https://v/1.mp4' } }),
+        };
+      },
+    });
+    eq('★ 先 POST 建任务', urls[0] && urls[0].indexOf('POST') === 0, true);
+    ok('★ 之后 GET 轮询（至少两次）', urls.filter((u) => u.indexOf('GET') === 0).length >= 2, JSON.stringify(urls));
+    eq('★ 轮询到 succeeded 才返回地址', r.vars.v.video_url, 'https://v/1.mp4');
+    eq('任务 id 带出来了', r.vars.v.task_id, 'cgt-1');
+  }
+  {
+    let threw = '';
+    try {
+      await W.runFlow({
+        nodes: [node('t', 'trigger.manual'), node('v', 'ai.video', { provider: 'ark', prompt: 'x' })],
+        edges: [edge('t', 0, 'v')],
+      }, {
+        providers: PROVS, pollMs: 0,
+        fetch: async (url, opt) => ((opt && opt.method) === 'POST'
+          ? { ok: true, status: 200, text: async () => JSON.stringify({ id: 'cgt-2' }) }
+          : { ok: true, status: 200, text: async () => JSON.stringify({ status: 'failed', error: { message: '内容不合规' } }) }),
+      });
+    } catch (e) { threw = e.message; }
+    ok('★ 任务失败时**立刻**报错（不傻等到超时）', /生成失败/.test(threw) && /内容不合规/.test(threw), threw);
+  }
+
+  console.log('\n── ㉔ 下载文件 ──');
+  {
+    let asked = null;
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('d', 'media.download', { url: 'https://x/1.mp4', name: '片子' })],
+      edges: [edge('t', 0, 'd')],
+    }, {
+      fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }),
+      saveRemote: async (url, name) => { asked = { url, name }; return { url: '/api/life/flowfile/f1.mp4', path: '/x/f1.mp4', name: 'f1.mp4', bytes: 1024, type: 'video/mp4' }; },
+    });
+    ok('存文件回调被调用了', !!asked, '没调用');
+    eq('地址原样传下去了', asked && asked.url, 'https://x/1.mp4');
+    eq('★ 拿到的是本机地址', r.vars.d.url, '/api/life/flowfile/f1.mp4');
+    eq('顺手标出是图还是视频', r.vars.d.kind, 'video');
+  }
+  {
+    let threw = '';
+    try {
+      await W.runFlow({ nodes: [node('t', 'trigger.manual'), node('d', 'media.download', { url: 'https://x/1.mp4' })], edges: [edge('t', 0, 'd')] },
+        { fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }) });
+    } catch (e) { threw = e.message; }
+    ok('没有存文件能力时**明确报错**（不是静默返回空）', /不支持存文件/.test(threw), threw);
+  }
+
+  console.log('\n── ㉕ JSON 取值：AI 吐的 JSON 能直接取 ──');
+  {
+    /* ★ 用户搭「AI 写分镜 → 取 image → 出图」时一定会撞上这条 ✓ ——
+       模型回的是**一段文本** ✓，里面才是 JSON ✓（还常包着 ```json 围栏 ✗）。 */
+    const r = await W.runFlow({
+      nodes: [
+        node('t', 'trigger.manual'),
+        node('a', 'ai.chat', { provider: 'deepseek', prompt: 'x' }),
+        node('j', 'data.json', { path: 'image' }),
+      ],
+      edges: [edge('t', 0, 'a'), edge('a', 0, 'j')],
+    }, {
+      providers: PROVS,
+      fetch: async () => ({
+        ok: true, status: 200,
+        text: async () => JSON.stringify({ choices: [{ message: { content: '```json\n{"shot":"推近","image":"雨夜霓虹街道"}\n```' } }] }),
+      }),
+    });
+    eq('★ 文本里的 JSON 会被当成根（围栏也剥掉）', r.vars.j, '雨夜霓虹街道');
+  }
+  {
+    /* ⚠️ 反向保护：`{{x.text}}` 这种**本来就该取 text** 的不能被换根 ✗ */
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('j', 'data.json', { path: 'text' })],
+      edges: [edge('t', 0, 'j')],
+    }, {
+      fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }),
+      /* 直接喂一个「文本里也像 JSON」的对象 ✓ */
+    });
+    ok('普通对象照旧（不炸）', r.ok === true, JSON.stringify(r.vars));
+  }
+
+  /* ══ 网页版 ✓（2026-10-18）══════════════════════════════════════════════
+     用户原话：「打开网页版的 deepseek，和豆包进行文本，视频生成等那种」✓。
+     ⚠️ 这里**不真开浏览器** ✗ —— 单测里只验「参数传对了、结果取回来了」✓，
+        真开浏览器是探针（tests/life-flow.js）和用户自己跑的事 ✓。 */
+  console.log('\n── ㉖ 网页版节点（用已登录的网页，不走 API）──');
+  {
+    let seen = null;
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('w', 'web.chat', { site: 'doubao', prompt: '说一句话', timeout: 90 })],
+      edges: [edge('t', 0, 'w')],
+    }, {
+      fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }),
+      browser: { chat: async (o) => { seen = o; return { text: '网页版的回答', site: '豆包 网页版', url: 'https://www.doubao.com/chat/' }; } },
+    });
+    eq('★ 站点传下去了', seen && seen.site, 'doubao');
+    eq('★ 提示词传下去了', seen && seen.prompt, '说一句话');
+    eq('★ 超时按秒换算成毫秒', seen && seen.timeoutMs, 90000);
+    eq('网页版的回答进 vars', r.vars.w.text, '网页版的回答');
+  }
+  {
+    const r = await W.runFlow({
+      nodes: [node('t', 'trigger.manual'), node('v', 'web.video', { site: 'jimeng', prompt: '海浪' })],
+      edges: [edge('t', 0, 'v')],
+    }, {
+      fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }),
+      browser: { video: async () => ({ url: 'https://x/1.mp4', site: '即梦（视频生成）', ms: 42000 }) },
+    });
+    eq('★ 视频地址取回来了', r.vars.v.url, 'https://x/1.mp4');
+    eq('★ url 和 video_url 都有（下游怎么写都能取到）', r.vars.v.video_url, 'https://x/1.mp4');
+  }
+  {
+    let threw = '';
+    try {
+      await W.runFlow({ nodes: [node('t', 'trigger.manual'), node('w', 'web.chat', { prompt: 'x' })], edges: [edge('t', 0, 'w')] },
+        { fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }) });
+    } catch (e) { threw = e.message; }
+    ok('没有浏览器能力时**明确报错**（不是静默返回空）', /不支持网页版/.test(threw), threw);
+  }
+  {
+    /* 登录判断 ✓ —— 这是「没登录」报错的依据 ✓，判错了会一直报「还没登录」✗ */
+    const BA = require('../lib/browser-agent.js');
+    ok('DeepSeek 的登录页能认出来', BA._isLoginUrl('https://chat.deepseek.com/sign_in', BA.SITES.deepseek) === true);
+    ok('登录之后（对话页）不误判', BA._isLoginUrl('https://chat.deepseek.com/a/chat/s/xxx', BA.SITES.deepseek) === false);
+    ok('豆包登录页能认出来', BA._isLoginUrl('https://www.doubao.com/login', BA.SITES.doubao) === true);
+  }
+
   console.log('\n' + (failed ? '失败 ' + failed + ' 项 / 共 ' + (passed + failed) : '工作流引擎：' + passed + ' 项通过 ✓'));
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.log('✗ 异常: ' + e.message); process.exit(1); });

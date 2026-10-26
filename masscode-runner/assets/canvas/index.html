@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- 引擎：tldraw 5.5.2（授权见 assets/vendor/tldraw.LICENSE.md）——
+     仅本机自用（非 Production 部署）；右下角授权水印按条款**不得移除**。 -->
+<title>canvas · 无限画布</title>
+<link rel="stylesheet" href="/assets/vendor/tldraw.bundle.css">
+<!-- 公式（KaTeX）与代码高亮（hljs）：本地文件，不走 CDN -->
+<link rel="stylesheet" href="/assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="/assets/hljs-theme.css">
+<link rel="stylesheet" href="/assets/canvas/canvas-theme.css">
+<style>
+  html, body { height: 100%; margin: 0; background: #15171c; overflow: hidden; }
+  #tldraw-host { position: fixed; inset: 0; }
+  /* 右下角保存状态（tldraw 自己的 UI 之外，低调一点） */
+  #cs-status {
+    position: fixed; right: 12px; bottom: 8px; z-index: 900;
+    font: 11px/1.4 -apple-system, "PingFang SC", sans-serif;
+    color: #8b95a5; background: rgba(21,23,28,.78);
+    padding: 3px 8px; border-radius: 6px; pointer-events: none;
+    transition: opacity .2s; opacity: 0;
+  }
+  #cs-status.on { opacity: 1; }
+  #cs-status.err { color: #f0616d; }
+</style>
+</head>
+<body>
+<div id="tldraw-host"></div>
+
+<!-- ═══ 左侧功能条：插入 / 子白板 / 页面 / 连线 ═══ -->
+<div id="cs-rail">
+  <button data-act="card" data-tip="新建笔记卡片（Markdown）">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M7 13h7M7 16.5h10"/></svg>
+  </button>
+  <button data-act="sticky" data-tip="新建便签（可自由拖拽大小）">
+    <svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5V14l-6 6H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 14h-4.5A1.5 1.5 0 0 0 14 15.5V20"/></svg>
+  </button>
+  <div class="cs-sep"></div>
+  <button data-act="image" data-tip="插入图片">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M21 16l-5-5-6 6-3-3-4 4"/></svg>
+  </button>
+  <button data-act="web" data-tip="嵌入网页 / 链接卡片">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18"/></svg>
+  </button>
+  <button data-act="pdf" data-tip="嵌入 PDF（连续滚动阅读）">
+    <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+  </button>
+  <button data-act="video" data-tip="插入视频">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.5l5 2.5-5 2.5z"/></svg>
+  </button>
+  <div class="cs-sep"></div>
+  <button data-act="subboard" data-tip="新建子白板">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 9v12"/></svg>
+  </button>
+  <button data-act="mind" data-tip="新建思维导图">
+    <svg viewBox="0 0 24 24"><rect x="2.6" y="9" width="6.2" height="6" rx="1.6"/><circle cx="18" cy="5.4" r="1.9"/><circle cx="18" cy="12" r="1.9"/><circle cx="18" cy="18.6" r="1.9"/><path d="M8.8 12h2.7M11.5 12l4.6-6.6M11.5 12h4.6M11.5 12l4.6 6.6"/></svg>
+  </button>
+  <button data-act="group" data-tip="组合 / 解组（选中多个图形后）">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="10" rx="2"/><rect x="11" y="11" width="10" height="10" rx="2"/><path d="M17 3h4v4M7 21H3v-4" opacity=".55"/></svg>
+  </button>
+  <button data-act="link" data-tip="连线（选中两个图形后点这里）">
+    <svg viewBox="0 0 24 24"><path d="M9.5 14.5l5-5"/><path d="M8 12l-1.5 1.5a3.5 3.5 0 0 0 5 5L13 17"/><path d="M16 12l1.5-1.5a3.5 3.5 0 0 0-5-5L11 7"/></svg>
+  </button>
+  <div class="cs-sep"></div>
+  <button data-act="pages" data-tip="页面 / 子白板导航">
+    <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg>
+  </button>
+  <button data-act="outline" data-tip="大纲（所有卡片）">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/></svg>
+  </button>
+</div>
+
+<!-- ═══ 面包屑：进子白板后出现 ═══ -->
+<div id="cs-crumb"></div>
+
+<!-- ═══ 页面列表 ═══ -->
+<div id="cs-pages"></div>
+
+<!-- ═══ 大纲（所有卡片，按阅读顺序）═══ -->
+<div id="cs-outline"></div>
+
+<!-- ═══ 轻量弹窗（插入网页用）═══ -->
+<div id="cs-dialog">
+  <div class="cs-dlg">
+    <div class="cs-dlg__title" id="cs-dlg-title">嵌入网页</div>
+    <div class="cs-dlg__body">
+      <span id="cs-dlg-hint">粘贴网址：能内嵌的站点直接显示页面，其余生成链接卡片。</span>
+      <input id="cs-dlg-input" type="text" placeholder="https://" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="cs-dlg__foot">
+      <button id="cs-dlg-cancel">取消</button>
+      <button id="cs-dlg-alt">链接卡片</button>
+      <button id="cs-dlg-ok" class="primary">内嵌网页</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 对齐参考线：拖动时实时画 ═══ -->
+<div id="cs-guides"></div>
+
+<!-- ═══ 对齐工具条：选中 ≥2 个图形时出现 ═══ -->
+<div id="cs-align">
+  <button data-align="left" data-tip="左对齐"><svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="8" height="4" rx="1"/></svg></button>
+  <button data-align="hcenter" data-tip="水平居中"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="5" y="6" width="14" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/></svg></button>
+  <button data-align="right" data-tip="右对齐"><svg viewBox="0 0 24 24"><path d="M20 3v18"/><rect x="5" y="6" width="12" height="4" rx="1"/><rect x="9" y="14" width="8" height="4" rx="1"/></svg></button>
+  <button data-align="top" data-tip="顶对齐"><svg viewBox="0 0 24 24"><path d="M3 4h18"/><rect x="6" y="7" width="4" height="12" rx="1"/><rect x="14" y="7" width="4" height="8" rx="1"/></svg></button>
+  <button data-align="vcenter" data-tip="垂直居中"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="8" width="4" height="8" rx="1"/></svg></button>
+  <button data-align="bottom" data-tip="底对齐"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="6" y="5" width="4" height="12" rx="1"/><rect x="14" y="9" width="4" height="8" rx="1"/></svg></button>
+  <div class="cs-sep"></div>
+  <button data-align="hdist" data-tip="水平等距（≥3 个）"><svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16"/><rect x="9" y="7" width="6" height="10" rx="1"/></svg></button>
+  <button data-align="vdist" data-tip="垂直等距（≥3 个）"><svg viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="7" y="9" width="10" height="6" rx="1"/></svg></button>
+  <div class="cs-sep" id="cs-align-tidy-sep" style="display:none"></div>
+  <button data-align="tidy" data-tip="整理分组（按顺序竖排）" id="cs-align-tidy" style="display:none">
+    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 10h16M4 15h10M4 20h10"/></svg>
+  </button>
+</div>
+
+<!-- ═══ 思维导图节点工具条：选中一个节点时出现 ═══ -->
+<div id="cs-mind">
+  <button data-mm="child" data-tip="添加子节点（Tab）">＋ 子节点</button>
+  <button data-mm="sibling" data-tip="添加同级（Enter）">＋ 同级</button>
+  <div class="cs-sep"></div>
+  <button data-mm="layout" data-tip="重新排版">排版</button>
+  <button data-mm="delete" data-tip="删除节点及其子节点">删除</button>
+</div>
+
+<div id="cs-status"></div>
+
+<script src="/assets/highlight.min.js"></script>
+<script src="/assets/vendor/tldraw.bundle.js"></script>
+<script src="/assets/canvas/canvas-ext.js"></script>
+<script>
+/* ── vault 同步：把 tldraw 的 snapshot 存进 drawings/xxx.canvas ──────────────
+   引擎是 **tldraw**（授权见 assets/vendor/tldraw.LICENSE.md）✓ ——
+   不是 Excalidraw ✗：两者定位不同，Excalidraw 偏"手绘草图"，
+   tldraw 才是"白板"（便签、框选、连接、富文本、多页面）✓。 */
+(function () {
+  const FILE = new URLSearchParams(location.search).get('file') || '';
+  const statusEl = document.getElementById('cs-status');
+  let timer = 0, lastSaved = '';
+  /* ★ 数据安全闸门 ——
+     载入**没完成之前绝不允许保存** ✗。`window.__tldrawSnapshot` 在 onMount 就有了，
+     而 load() 还要等 fetch；这中间如果切文件/关面板触发 flush()，
+     就会拿**一张空画布**把磁盘上的文件覆盖掉 ✓（2026-10-25 真的发生过，丢了整块板）
+     读取失败时也永久停用保存 ✓ —— 读不出来就不该写回去。 */
+  let ready = false;        // 载入成功（含"文件本来就是空"）之后才为 true
+  let loadFailed = false;
+  let loadedShapes = 0;     // 载入完成时文件里有多少个图形
+
+  function status(text, kind) {
+    statusEl.textContent = text;
+    statusEl.className = 'on' + (kind ? ' ' + kind : '');
+    clearTimeout(status._t);
+    statusEl._t = setTimeout(() => { statusEl.className = kind === 'err' ? 'err' : ''; }, 1800);
+  }
+  window.__csStatus = status;
+
+  async function load() {
+    if (!FILE) { ready = true; return; }                 // 没有文件 → 不需要存
+    if (!window.__tldrawLoad) { loadFailed = true; return; }
+    try {
+      const r = await fetch('/api/drawings/get?name=' + encodeURIComponent(FILE)).then((x) => x.json());
+      if (!r.ok) { loadFailed = true; return status('读取失败，已停用自动保存（不会覆盖原文件）', 'err'); }
+      const snap = r.canvas || r.snapshot || null;
+      if (snap && snap.document) {
+        /* 载入期间别让分组框自动贴合跑起来 ✗ —— loadSnapshot 会一次性换掉整个 store，
+           那一堆变更会被当成"子节点动了"，把用户手动拉大的框全部缩回去 ✓ */
+        window.__csLoading = true;
+        const ok = window.__tldrawLoad(snap);
+        setTimeout(() => { window.__csLoading = false; }, 400);
+        if (ok === false) { loadFailed = true; return status('载入失败，已停用自动保存（不会覆盖原文件）', 'err'); }
+        /* ★ 记住载入时有多少图形 —— 之后如果变成 0，说明画布被清空了，绝不许落盘 ✓ */
+        loadedShapes = Object.values(snap.document.store || {}).filter((r) => r && r.typeName === 'shape').length;
+        status('已载入');
+      }
+      ready = true;                                       // 到这里才算"可以存了"
+    } catch (_) { loadFailed = true; status('读取失败，已停用自动保存（不会覆盖原文件）', 'err'); }
+  }
+
+  /* ★ 空画布覆盖拦截：原来有内容，现在一个图形都没有 → 一律不写 ✓
+     （真要清空，删文件重建即可，不该由一次误操作完成） */
+  function isEmptyOverwrite(snap) {
+    if (!loadedShapes) return false;
+    const n = Object.values((snap && snap.document && snap.document.store) || {}).filter((r) => r && r.typeName === 'shape').length;
+    return n === 0;
+  }
+
+  async function save() {
+    if (!FILE || !window.__tldrawSnapshot) return;
+    if (!ready || loadFailed) return;                     // 没载入成功就不许写 ✓
+    const snap = window.__tldrawSnapshot();
+    if (isEmptyOverwrite(snap)) return status('画布是空的，已阻止覆盖原文件', 'err');
+    const text = JSON.stringify(snap);
+    if (text === lastSaved) return;
+    try {
+      const r = await fetch('/api/drawings/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: FILE, data: { canvas: snap } }),
+      }).then((x) => x.json());
+      if (r.ok) { lastSaved = text; status('已保存'); }
+      else status('保存失败：' + (r.error || ''), 'err');
+    } catch (_) { status('保存失败（连不上本机服务）', 'err'); }
+  }
+
+  window.addEventListener('tldraw-ready', () => {
+    load().then(() => {
+      if (!FILE || !ready) return;
+      /* 画布有改动就防抖存盘 ✓（tldraw 的 store 会频繁变，1.2s 合并一次 ✓） */
+      window.__tldraw.store.listen(() => {
+        clearTimeout(timer);
+        timer = setTimeout(save, 1200);
+      }, { scope: 'document' });
+    });
+  });
+
+  /* ⌘S 手动存 */
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+  });
+
+  /* ★ 关闭面板/切走前的兜底存盘 ✓ ——
+     防抖窗口内（<1.2s）关掉 iframe 会丢最后几笔 ✗。
+     用 sendBeacon：浏览器保证在文档被销毁后仍把请求发出去 ✓；
+     父窗口销毁 iframe 前也会主动调一次 __canvasFlush ✓。 */
+  function flush() {
+    if (!FILE || !window.__tldrawSnapshot) return;
+    if (!ready || loadFailed) return;                     // ★ 空画布绝不落盘 ✓
+    const snap = window.__tldrawSnapshot();
+    if (isEmptyOverwrite(snap)) return;                   // ★ 同样拦一道 ✓
+    const text = JSON.stringify({ name: FILE, data: { canvas: snap } });
+    if (text === lastSaved) return;
+    lastSaved = text;
+    try { navigator.sendBeacon('/api/drawings/save', new Blob([text], { type: 'application/json' })); } catch (_) {}
+  }
+  window.__canvasFlush = flush;
+  window.addEventListener('pagehide', flush);
+  window.addEventListener('beforeunload', flush);
+})();
+</script>
+</body>
+</html>

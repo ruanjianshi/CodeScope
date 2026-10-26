@@ -50,6 +50,15 @@ const FAKE_JSON = {
   egZh: '手机如今在日常生活中无处不在。',
   mnem: 'ubique（到处）+ -ous（…的）→ 到处都在的 → 无处不在的。',
   scene: '地铁车厢里几乎每个人都低头看着手机，一眼望去全是亮着的屏幕。',
+  /* ★ 词根词缀拆解 ✓ —— 用户要「全部词都要有拆解」✗ → **新加的词也得有** ✓。
+     ⚠️ 这里**故意把前缀写成原形**（`ad-` 那一类 ✓）来验归一 ✓：
+       模型十有八九这么答 ✓，而单词里是**同化形** ✓ —— 前端必须自己把它掰成
+       词里实际出现的字母 ✓，否则「一排胶囊连起来就是这个单词」就断了 ✗。 */
+  rd: {
+    parts: [['词根', 'ubiquit', '到处'], ['后缀', '-ous', '…的']],
+    gloss: '到处都在的 → 无处不在的',
+    note: '同族：ubiquity 无处不在',
+  },
 };
 
 (async () => {
@@ -188,6 +197,162 @@ const FAKE_JSON = {
     ck('★ 例句中文对照在', (await txt('.lw-wd-eg-zh')).length > 6, await txt('.lw-wd-eg-zh'));
     ck('★ 巧记是**高亮框**（不是输入框）', /ubique/.test(await txt('.lw-wd-tipbox.mnem')), await txt('.lw-wd-tipbox.mnem'));
     ck('★ 场景是**高亮框**', (await txt('.lw-wd-tipbox.scene')).length > 8, await txt('.lw-wd-tipbox.scene'));
+
+    /* ══ ③a 词根词缀 ✓ ═══════════════════════════════════════════════════════
+       ★ 用户原话：「帮我给单词，补充词根词缀的说明，那种，全部词都要，
+         新增词根词缀说明拆解等，合理布局」✓。
+
+       ⚠️⚠️ 这一节最核心的判据**不是「区块在不在」** ✗ —— 而是
+          「**胶囊上的字母连起来就是这个单词**」✓。那正是「拆解」的全部意义 ✓：
+          用户要一眼看出「哪块是前缀、哪块是词根、哪块是后缀」✓。
+          只验「有 .lw-wd-rd 这个类」是**假通过** ✗ —— 类在 ✓、
+          但字母拼不回原词照样能画出来 ✓（模型给的前缀原形 `ad-` vs 词里 `ac-` ✓，
+           第一版就是这么错的 ✓）。 */
+    console.log('\n── ③a 词根词缀：拆解胶囊连起来必须是这个词 ──');
+    const rdInfo = await p.evaluate(() => {
+      const sec = [...document.querySelectorAll('.lw-wd-sec')].find((x) => x.textContent.indexOf('词根词缀') >= 0);
+      if (!sec) return null;
+      const chips = [...sec.querySelectorAll('.lw-wd-rd .pc')];
+      return {
+        n: chips.length,
+        parts: chips.map((c) => ({
+          k: (c.querySelector('.k') || {}).textContent || '',
+          s: (c.querySelector('.s') || {}).textContent || '',
+          m: (c.querySelector('.m') || {}).textContent || '',
+        })),
+        gloss: (sec.querySelector('.lw-wd-rd .gloss') || {}).textContent || '',
+        note: (sec.querySelector('.lw-wd-rd .note') || {}).textContent || '',
+        base: (sec.querySelector('.lw-wd-rd .base') || {}).textContent || '',
+        /* 部件的配色是不是真的按类型分了 ✓（全一个颜色 = 白做 ✓）*/
+        colors: chips.map((c) => getComputedStyle(c).color),
+      };
+    });
+    console.log('    拆解: ' + JSON.stringify(rdInfo && rdInfo.parts));
+    ck('★★ 卡片上有「词根词缀」区块', !!rdInfo);
+    ck('★★ 画出了部件胶囊（不是一行字符串）', !!rdInfo && rdInfo.n >= 2, rdInfo && ('胶囊 ' + rdInfo.n));
+    ck('★★★ 胶囊上的字母**连起来就是这个单词**（这才是「拆解」的意义）',
+      !!rdInfo && rdInfo.parts.map((x) => x.s.replace(/-/g, '')).join('') === WORD,
+      rdInfo && (rdInfo.parts.map((x) => x.s.replace(/-/g, '')).join('') + ' vs ' + WORD));
+    ck('★ 每个胶囊都标了类型（前缀 / 词根 / 后缀 / 词干 / 词尾）',
+      !!rdInfo && rdInfo.parts.every((x) => /^(前缀|词根|后缀|词干|词尾)$/.test(x.k)),
+      rdInfo && JSON.stringify(rdInfo.parts.map((x) => x.k)));
+    ck('★ 连字符用法对：前缀带**尾**横、后缀/词尾带**首**横、词根/词干不带',
+      !!rdInfo && rdInfo.parts.every((x) => (x.k === '前缀' ? /-$/.test(x.s)
+        : (x.k === '后缀' || x.k === '词尾') ? /^-/.test(x.s)
+          : !/^-|-$/.test(x.s))),
+      rdInfo && JSON.stringify(rdInfo.parts.map((x) => x.k + x.s)));
+    ck('★ 部件颜色按类型分开了（不是一片同色）',
+      !!rdInfo && new Set(rdInfo.colors).size >= 2, rdInfo && JSON.stringify(rdInfo.colors));
+    ck('★ 拼出来的意思在（「→ …」那一行）', !!rdInfo && rdInfo.gloss.length > 4, rdInfo && rdInfo.gloss);
+    ck('★ 说明在（同族 / 易混 / 词源）', !!rdInfo && rdInfo.note.length > 3, rdInfo && rdInfo.note);
+
+    /* ⚠️ 全库覆盖 ✓ —— 用户要的是「**全部词都要**」✗，
+       所以加词那条路（AI 补全 ✓）也必须带上拆解 ✓，不能只有老词书那批有 ✗。 */
+    {
+      const all = (await store()).words || [];
+      const withRd = all.filter((x) => x && x.rd && ((x.rd.parts || []).length || String(x.rd.note || '').length));
+      const bad = all.filter((x) => {
+        const p = (x && x.rd && x.rd.parts) || [];
+        if (!p.length) return false;
+        return p.map((q) => String(q[1] || '').replace(/-/g, '')).join('') !== String(x.w || '').toLowerCase();
+      });
+      const rate = all.length ? (withRd.length / all.length) : 0;
+      console.log('    全库: ' + withRd.length + '/' + all.length + ' 有拆解（'
+        + Math.round(rate * 100) + '%），其中部件拼不回原词的 ' + bad.length + ' 条');
+      ck('★★ 全库**绝大多数词都有拆解**（新加的词也得有 —— 加词那条路要带上）',
+        rate >= 0.95, Math.round(rate * 100) + '%');
+      ck('★★ 全库**没有一条**「胶囊拼不回原词」（拼不回去就是在骗人）',
+        bad.length === 0, bad.slice(0, 5).map((x) => x.w).join(', '));
+    }
+
+    /* ══ ③a2 排布 ✓ ═══════════════════════════════════════════════════════════
+       ★ 用户原话：「重新合理排布，目前排布不合理」✓。
+
+       ⚠️⚠️ 这条守的是**真实的那个 bug** ✗：上一版按「哪块放哪栏」**手写分组** ✓，
+          而每个词的区块数量和长度都不一样 ✓ → 实测**左栏比右栏高 335~568px** ✗
+          （右下角一大片空白 ✓，截图一眼就看出来 ✓）。
+         手写分组**不可能对所有词都平衡** ✗ —— 所以改成了 CSS 多栏（自动平衡 ✓）。
+       ⚠️ 判据必须是**量出来的高度差** ✗ —— 「有 .lw-wd-cols 这个类」是假通过 ✓
+          （类在 ✓，两栏照样能差 500px ✓）。 */
+    console.log('\n── ③a2 排布：词根词缀填进「配图左边那块空白」+ 栏数跟着卡片宽度 + 两栏不许差太多 ──');
+    /* ★ 用户原话：「图片左边，有一大块空白，这是可以把词根词缀放这空白处，合理放置」✓。
+       ⚠️ 那块空白是「短内容撑不满宽列」造成的 ✓ —— 例句 48 字只用 225px、
+          列宽 719px ✗（实测 1920 视口）。所以判据是**几何**：词根词缀要
+          **在文本列右边、配图左边、而且和文本列在同一行**（竖直有重叠 ✓）。
+       ⚠️ 只验「有 .lw-wd-hero-rd 这个类」是**假通过** ✗（类在 ✓，照样可能掉到下一行 ✓）。 */
+    /* ⚠️ 先量**窄卡片**下的栏数 ✓（探针默认视口 1500 → 卡片 625 ✓），
+       再把视口拉宽到 1920 ✓ 量「填空白」和「两栏平衡」✓（这两条在 625 下会走另一套布局 ✓）。
+       量完还原视口 ✓。 */
+    const cn = await p.evaluate(() => {
+      const card = document.querySelector('.lw-wd-detail');
+      const cols = document.querySelector('.lw-wd-cols');
+      if (!card || !cols) return null;
+      return { cardW: Math.round(card.getBoundingClientRect().width), n: getComputedStyle(cols).columnCount };
+    });
+    console.log('    窄卡片栏数: ' + JSON.stringify(cn));
+    /* ⚠️ 判断依据必须是**卡片宽度** ✗ 不是视口 ✗ —— 词表侧栏固定 419px ✓，
+       1200px 的窗口卡片只有 325px ✓，硬分两栏就是每栏 150px ✓（字全挤成一列一个 ✓）。 */
+    ck('★★ 栏数跟着**卡片宽度**走（窄卡片退回单栏，不硬挤成两栏）',
+      !!cn && ((cn.cardW < 700 && cn.n === '1') || (cn.cardW >= 700 && cn.n === '2')), JSON.stringify(cn));
+
+    const cn2 = await p.evaluate(() => {
+      const card = document.querySelector('.lw-wd-detail');
+      return card ? Math.round(card.getBoundingClientRect().width) : 0;
+    });
+    if (cn2 && cn2 < 700) {
+      await p.setViewportSize({ width: 1920, height: 1000 });
+      await p.waitForTimeout(700);
+    }
+    const band = await p.evaluate(() => {
+      const card = document.querySelector('.lw-wd-detail');
+      if (!card) return null;
+      const sec = [...card.querySelectorAll('.lw-wd-sec')].find((x) => x.textContent.indexOf('词根词缀') >= 0);
+      if (!sec) return null;
+      const hero = card.querySelector('.lw-wd-hero');
+      const a = card.querySelector('.lw-wd-hero-a');
+      const im = card.querySelector('.lw-wd-hero-b');
+      const cols = card.querySelector('.lw-wd-cols');
+      const cb = card.getBoundingClientRect();
+      const sb = sec.getBoundingClientRect();
+      const ab = a ? a.getBoundingClientRect() : null;
+      const ib = im ? im.getBoundingClientRect() : null;
+      return {
+        inHero: !!(hero && hero.contains(sec)),
+        inCols: !!(cols && cols.contains(sec)),
+        left: Math.round(sb.left - cb.left), right: Math.round(sb.right - cb.left),
+        w: Math.round(sb.width),
+        aRight: ab ? Math.round(ab.right - cb.left) : 0,
+        imgLeft: ib ? Math.round(ib.left - cb.left) : 0,
+        vOverlapText: ab ? Math.round(Math.min(sb.bottom, ab.bottom) - Math.max(sb.top, ab.top)) : 0,
+      };
+    });
+    console.log('    词根词缀位置: ' + JSON.stringify(band));
+    ck('★★ 词根词缀在 **hero 里**（不是挤在下面两栏里）', !!band && band.inHero && !band.inCols, JSON.stringify(band));
+    ck('★★ 它夹在「释义/例句」和「配图」之间（正是那块空白的位置）',
+      !!band && band.left >= band.aRight - 3 && band.right <= band.imgLeft + 3, JSON.stringify(band));
+    ck('★★ 而且和释义/例句**在同一行**（竖直重叠 > 40px —— 这才叫「填进那块空白」）',
+      !!band && band.vOverlapText > 40, band && ('重叠 ' + band.vOverlapText + 'px'));
+
+    /* ⚠️ 视口已经在上面拉宽到 1920 了 ✓（卡片 ≈1045 → 真的两栏 ✓），这里直接量 ✓。 */
+    const bal = await p.evaluate(() => {
+      const card = document.querySelector('.lw-wd-detail');
+      const cols = document.querySelector('.lw-wd-cols');
+      if (!card || !cols) return null;
+      if (getComputedStyle(cols).columnCount === '1') return { single: true, gap: 0 };
+      const cb = card.getBoundingClientRect(); const mid = cb.width / 2;
+      const secs = [...cols.querySelectorAll('.lw-wd-sec')].map((s) => {
+        const r = s.getBoundingClientRect();
+        return { left: r.left - cb.left, bottom: r.bottom - cb.top };
+      });
+      const L = secs.filter((s) => s.left < mid); const R = secs.filter((s) => s.left >= mid);
+      const h = (a) => (a.length ? Math.max.apply(null, a.map((s) => s.bottom)) : 0);
+      return { single: false, gap: Math.round(Math.abs(h(L) - h(R))), nL: L.length, nR: R.length };
+    });
+    console.log('    两栏: ' + JSON.stringify(bal));
+    ck('★★ 两栏高度差 ≤ 300px（旧版手写分组是 335~568px —— 右下一大片空白）',
+      !!bal && (bal.single || bal.gap <= 300), JSON.stringify(bal));
+    /* 量完还原视口 ✓ —— 后面几条（配图并排等）是按 1500 的宽度定的 ✓。 */
+    if (cn2 && cn2 < 700) { await p.setViewportSize({ width: 1500, height: 1000 }); await p.waitForTimeout(500); }
     ck('★ 复习区块在（遗忘曲线看得见）', /下次复习/.test(panel), panel.slice(0, 60));
     /* ⚠️ 新词阶段**三档会重合** ✗（学习步是「10 分钟 → 1 天」✓）——
        四个数字里三个一样 ✓，光看图只会觉得「这几个按钮有啥区别」✗ →
@@ -390,13 +555,65 @@ const FAKE_JSON = {
     /* ⚠️ 输入框**默认藏着** ✗ —— 得先点「✏️ 编辑」才摸得到 ✓（④ 换图重绘过，编辑态是关的 ✓）。 */
     if (await p.locator('#lw-wd-mnem').count() === 0) { await p.click('#lw-wd-edit'); await p.waitForTimeout(800); }
     ck('  编辑态就位（输入框摸得到了）', await p.locator('#lw-wd-mnem').count() === 1);
-    await p.locator('#lw-wd-mnem').fill('我自己写的巧记');
-    await p.locator('#lw-wd-scene').fill('我自己写的场景');
-    await p.locator('#lw-wd-def').click();       /* 失焦触发保存 ✓ */
-    await p.waitForTimeout(900);
+    /* ⚠️⚠️ **不能**连续 fill 两个框 ✗✗ —— `fill()` 会先 focus ✓，
+       填第二个框时第一个框**失焦** ✓ → `epWordSave()` → `epSave()` → `render()` ✓
+       → DOM 被整块换掉 ✓ → 第二个 fill 写到了**已被替换的节点**上 ✓
+       → 值没了 ✓ → 假失败（2026-10-17 卡片变高之后必现 ✓）。
+       → 两个框**先在 DOM 里赋值** ✓，最后统一失焦一次 ✓。
+         验的还是「失焦时把**所有**字段一起存」✓，只是不跟重绘抢时序 ✓。 */
+    await p.evaluate(() => {
+      const a = document.querySelector('#lw-wd-mnem'); if (a) a.value = '我自己写的巧记';
+      const b = document.querySelector('#lw-wd-scene'); if (b) b.value = '我自己写的场景';
+    });
+    /* ⚠️ 用**显式 blur** 触发保存 ✗ 不用「点另一个输入框」✓ ——
+       卡片现在很高（底部还有词群导图 ✓），点另一个框会**先滚动** ✓，
+       偶尔滚动和重绘撞上 ✓ → 值被冲掉 ✓ → **假失败**（2026-10-17 实测偶发 ✓）。
+       `blur()` 走的是**同一个 onblur 绑定** ✓，验的还是「失焦自动存」那条路 ✓。 */
+    const blurSave = async (sel) => {
+      /* ⚠️⚠️ 必须 **先 focus 再 blur** ✗✗ —— `blur()` 只在**元素有焦点时**才派发
+         blur 事件 ✓；直接调 `blur()` 是**空操作** ✓（不报错、也不保存 ✓）。
+         第一版就漏了 focus ✓ → 存了个寂寞 ✓ → 「改完存上了」两条全红 ✓（2026-10-17 实测 ✓）。 */
+      await p.evaluate((s) => {
+        const el = document.querySelector(s);
+        if (el) { el.focus(); el.blur(); }
+      }, sel);
+    };
+    await blurSave('#lw-wd-mnem');
+    /* ⚠️ 900 → 2200ms ✗ —— `epSave()` 是**整份 store 回写** ✓（现在 13MB ✓），
+       慢的时候 900ms 还没落盘 ✓ → 读到的还是旧值 ✓ → 假失败（实测偶发 ✓）。 */
+    await p.waitForTimeout(2200);
     const st5 = (await store()).words.find((x) => x.id === w1[0].id);
     ck('★ 巧记改完存上了', st5 && st5.mnem === '我自己写的巧记', st5 && st5.mnem);
     ck('★ 场景改完存上了', st5 && st5.scene === '我自己写的场景', st5 && st5.scene);
+    /* ★ 词根词缀那三个框 ✓ —— 它**不走 `epWordSave()` 里那张普通字符串 map** ✗
+       （是结构化的 parts + gloss + note ✓，单独解析回结构 ✓）。
+       ⚠️ 所以它**必须单独验** ✗ —— 只验巧记/场景的话，这条路坏掉了也发现不了 ✓。 */
+    if (await p.locator('#lw-wd-rdn').count() === 1) {
+      await p.locator('#lw-wd-rdn').fill('同族：ubiquity（探针改的）');
+      await blurSave('#lw-wd-rdn');
+      await p.waitForTimeout(2200);
+      const st5b = (await store()).words.find((x) => x.id === w1[0].id);
+      ck('★★ 词根词缀的**说明**改完也存上了（它走的是单独那条解析路）',
+        st5b && st5b.rd && /探针改的/.test(String(st5b.rd.note)), st5b && JSON.stringify(st5b.rd));
+      ck('★★ 只改说明，**部件没被清掉**（结构没被写坏）',
+        st5b && st5b.rd && (st5b.rd.parts || []).length >= 2, st5b && JSON.stringify((st5b.rd || {}).parts));
+    } else {
+      ck('  编辑态里有词根词缀那三个输入框', false, '找不到 #lw-wd-rdn');
+    }
+
+    /* ★ 给探针词补上 `group` / `freq` ✓ —— 它们是**词书字段** ✓，AI 补全那条路不写 ✓
+       （所以探针词本来没有 ✓）。这里手动塞进去 ✓，好验「词群 / 六级考频 并进释义」那条 ✓。
+       ⚠️ `group` 用**书里真实存在的组名** ✓（「偏见」✓）—— 顺带把「词群导图」那条也验了 ✓；
+          用假组名的话 `STORE.wordMaps` 里没有 ✓ → 导图区块根本不渲染 ✓ → 断言空转 ✗。 */
+    {
+      const d0 = await store();
+      const c0 = d0.words.find((x) => x.id === w1[0].id);
+      if (c0) {
+        c0.group = '词以群记「偏见」相关';
+        c0.freq = '高频 · 六级阅读常考';
+        await put(d0);
+      }
+    }
 
     console.log('\n── ⑤b 改完**刷新还在**（不是只改在内存里）──');
     /* ⚠️ 这条守着「失焦绑定那张表和 `epWordSave()` 里那张表漂移」✗✗ ——
@@ -416,6 +633,134 @@ const FAKE_JSON = {
     ck('★★ 刷新后场景还在', /我自己写的场景/.test(await txt('.lw-wd-tipbox.scene')), await txt('.lw-wd-tipbox.scene'));
     ck('  刷新后仍然是**词典态**（编辑态不跟着落盘 —— 开关是临时的）',
       await p.locator('.lw-wd-detail input, .lw-wd-detail textarea').count() === 0);
+    ck('★★ 刷新后词根词缀的说明也还在（结构真的落盘了，不是只改在内存里）',
+      /探针改的/.test(await txt('.lw-wd-rd .note')), await txt('.lw-wd-rd .note'));
+    ck('★★ 刷新后拆解胶囊照样拼得回这个词',
+      await p.evaluate((word) => {
+        const chips = [...document.querySelectorAll('.lw-wd-rd .pc .s')];
+        return chips.map((c) => c.textContent.replace(/-/g, '')).join('') === word;
+      }, WORD));
+
+    /* ★★ 词群 / 六级考频 **并进释义右边** ✓（用户：「直接标注在释义那边右侧空白不就行，
+       本身就是简短说明，没必要放下面占用空间」✓）。
+       ⚠️ 判据两条，缺一不可 ✗：
+         ① 卡片里**没有**独立的「词群」「六级考频」区块 —— 不然等于没搬 ✓；
+         ② 释义区里**真的有** `.lw-wd-meta`、内容对得上、而且**贴着释义区右边** ✓
+            （只验「有 meta 这个类」是假通过 ✗ —— 它可能被塞在左边 ✓）。 */
+    const metaInfo = await p.evaluate(() => {
+      const card = document.querySelector('.lw-wd-detail');
+      if (!card) return null;
+      const heads = [...card.querySelectorAll('.lw-wd-sec .hd')].map((h) => h.textContent.trim());
+      const sec = [...card.querySelectorAll('.lw-wd-sec')].find((s) => {
+        const hd = s.querySelector('.hd');
+        return hd && hd.textContent.indexOf('释义') >= 0;
+      });
+      const m = card.querySelector('.lw-wd-meta');
+      if (!sec || !m) return { heads, hasMeta: false };
+      const sb = sec.getBoundingClientRect(); const mb = m.getBoundingClientRect();
+      return {
+        heads, hasMeta: true, txt: m.textContent.replace(/\s+/g, ' ').trim(),
+        rightGap: Math.round(sb.right - mb.right), w: Math.round(mb.width),
+      };
+    });
+    console.log('    释义区小标签: ' + JSON.stringify(metaInfo));
+    ck('★★ 卡片里**没有**独立的「词群」「六级考频」区块（搬走了，不再占下面两栏）',
+      /* ⚠️ 必须排除「词群导图」✗ —— 它的标题里**也含「词群」两字** ✓，
+         不排除的话这条会**假失败** ✓（2026-10-17 实测：加了导图区块之后当场红 ✓）。 */
+      !!metaInfo && !metaInfo.heads.some((h) => h.indexOf('词群导图') < 0
+        && (h.indexOf('词群') >= 0 || h.indexOf('考频') >= 0)),
+      metaInfo && JSON.stringify(metaInfo.heads));
+    ck('★★ 词群 / 考频 变成了**释义区里的小标签**（内容对得上）',
+      !!metaInfo && metaInfo.hasMeta && /偏见/.test(metaInfo.txt) && /高频/.test(metaInfo.txt),
+      metaInfo && metaInfo.txt);
+    ck('★★ 而且**贴着释义区右边**（不是塞在左边）',
+      !!metaInfo && metaInfo.hasMeta && Math.abs(metaInfo.rightGap) <= 2,
+      metaInfo && ('右留白 ' + metaInfo.rightGap + 'px'));
+
+    /* ══ ⑤c 词群导图 ✓ ═══════════════════════════════════════════════════════
+       ★ 用户原话：「每个词群开头，不是都有一副思维导图吗，我需要你给我加上，
+         对于每个属于该词群的单词，的最下方，需要放上该词群的导图」✓。
+
+       ⚠️⚠️ 判据四条，缺一不可 ✗：
+         ① 区块存在，而且是**最后一个**（「最下方」✓）；
+         ② 图**真的加载出来了**（`naturalWidth > 0` ✓）—— 只验 `<img>` 存在是假通过 ✗
+            （404 的时候 img 元素照样在 ✓，只是空白 ✓）；
+         ③ 点图能**放大**（覆盖层 `.on` ✓ + z-index 够高 ✓）；
+         ④ 再点一下能关 ✓。
+       ⚠️ 图是 `/api/life/wordmap/<文件>` 发的 ✓ —— 文件名由 `STORE.wordMaps[组名]` 查 ✓。 */
+    console.log('\n── ⑤c 词群导图：在最下方、真加载了、点得开放得大 ──');
+    const mapInfo = await p.evaluate(() => {
+      const card = document.querySelector('.lw-wd-detail');
+      if (!card) return null;
+      const secs = [...card.querySelectorAll('.lw-wd-sec')];
+      const sec = secs.find((s) => {
+        const hd = s.querySelector('.hd');
+        return hd && hd.textContent.indexOf('词群导图') >= 0;
+      });
+      const img = document.querySelector('#lw-wd-mapimg');
+      if (!sec || !img) return { hasSec: !!sec, hasImg: !!img, isLast: false };
+      return {
+        hasSec: true, hasImg: true, isLast: secs[secs.length - 1] === sec,
+        natural: img.naturalWidth, natH: img.naturalHeight,
+        complete: img.complete,
+        src: String(img.getAttribute('src') || ''),
+        w: Math.round(img.getBoundingClientRect().width),
+      };
+    });
+    console.log('    导图: ' + JSON.stringify(mapInfo));
+    ck('★★ 词卡里有「词群导图」区块，而且排在**最后**（用户要的「最下方」）',
+      !!mapInfo && mapInfo.hasSec && mapInfo.isLast, JSON.stringify(mapInfo));
+    ck('★★★ 图**真的加载出来了**（只验 img 存在是假通过 —— 404 时元素也在）',
+      !!mapInfo && mapInfo.hasImg && mapInfo.natural > 200 && mapInfo.complete,
+      mapInfo && (mapInfo.natural + '×' + mapInfo.natH));
+    /* ⚠️ 允许带 `?v=N` ✗ —— 导图重出之后文件名不变 ✓，靠版本号让浏览器别用旧缓存 ✓。 */
+    ck('★ 走的是导图路由（`/api/life/wordmap/`，可带 ?v=N）',
+      !!mapInfo && /^\/api\/life\/wordmap\/g[0-9a-f]{12}\.jpg(\?v=\d+)?$/.test(mapInfo.src),
+      mapInfo && mapInfo.src);
+    ck('★ 图按卡片宽度铺开（不是缩成一小块）', !!mapInfo && mapInfo.w > 400, mapInfo && ('显示宽 ' + mapInfo.w));
+    await p.click('#lw-wd-mapimg');
+    await p.waitForTimeout(500);
+    const zOn = await p.evaluate(() => {
+      const o = document.getElementById('lw-map-zoom');
+      if (!o) return null;
+      return { on: o.classList.contains('on'), hasImg: !!o.querySelector('img'),
+        z: Number(getComputedStyle(o).zIndex) };
+    });
+    ck('★★ 点图能**放大**（覆盖层打开，而且 z-index 盖过面板 8800）',
+      !!zOn && zOn.on && zOn.hasImg && zOn.z > 8800, JSON.stringify(zOn));
+    await p.click('#lw-map-zoom');
+    await p.waitForTimeout(350);
+    const zOff = await p.evaluate(() => {
+      const o = document.getElementById('lw-map-zoom');
+      return o ? o.classList.contains('on') : null;
+    });
+    ck('★ 再点一下关得掉（不是只能刷新页面）', zOff === false, String(zOff));
+
+    /* ══ ⑤d 标记：四种，各自切换 ✓ ═════════════════════════════════════════
+       ★ 用户原话：「左侧我的标记，多增加几个」✓。
+       ⚠️ 原来只有**一个按钮三态循环** ✓（未标 → 不熟悉 → 完全不记得 ✓）——
+          加到四种就变成五态循环 ✗，点一下要转半圈才知道到哪 ✓
+          ⇒ 改成**四个独立按钮、各自切换** ✓。
+       ⚠️ 判据必须是「**点一下变它、再点一下取消**」✗ ——
+          只验「按钮在」是假通过 ✓（四个都在、点了没反应照样过 ✓）。 */
+    console.log('\n── ⑤d 标记：四种，各自切换（不是循环）──');
+    const markKeys = await p.evaluate(() => [...document.querySelectorAll('#lw-wd-marks button[data-mark]')]
+      .map((b) => b.getAttribute('data-mark')));
+    ck('★★ 卡片上有**四种**标记按钮', JSON.stringify(markKeys) === JSON.stringify(['fuzzy', 'blank', 'confuse', 'trap']),
+      JSON.stringify(markKeys));
+    const leftMarkN = await p.evaluate(() => [...document.querySelectorAll('.lw-rd-row')]
+      .filter((x) => /不熟悉|完全不记得|易混淆|高频易错/.test(x.textContent)).length);
+    ck('★★ 左侧「我的标记」也列出**四条**', leftMarkN === 4, '条数 ' + leftMarkN);
+    for (const k of ['confuse', 'trap', 'fuzzy', 'blank']) {
+      await p.click('#lw-wd-marks button[data-mark="' + k + '"]');
+      await p.waitForTimeout(1500);
+      const on = (await store()).words.find((x) => x.id === w1[0].id);
+      ck('  ★ 点「' + k + '」→ 存成 ' + k, !!on && on.mark === k, on && on.mark);
+      await p.click('#lw-wd-marks button[data-mark="' + k + '"]');
+      await p.waitForTimeout(1500);
+      const off = (await store()).words.find((x) => x.id === w1[0].id);
+      ck('  ★ 再点同一个 → **取消**（不是循环到下一个）', !!off && !off.mark, off && off.mark);
+    }
 
     console.log('\n── ⑥ 遗忘曲线提醒 ──');
     /* 造一个**已到期**的词 ✓（due 设成过去 ✓） */

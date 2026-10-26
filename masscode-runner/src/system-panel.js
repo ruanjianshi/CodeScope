@@ -707,6 +707,47 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 }
 
 /* 状态/标签：淡色底代替描边，小尺寸下更像「标记」而不是小方框。 */
+  /* ★ 运行状态卡 ✓（2026-10-18）—— 概览侧栏里一眼看完「服务 / 容器 / 对外端口」。
+     ⚠️ 数据由 loadOverviewExtras **一次性**拿 ✓（它本来就并发拉 processes/services/apps ✓，
+        docker 顺手搭车 ✓）—— 不进 1.5 秒的刷新环 ✗（那会把概览页拖卡 ✗）。
+        代价是容器状态最多滞后到下次进概览页 ✓ —— 换来的是不卡 ✓，值 ✓。 */
+  #system-workspace .sp-rt-row{display:flex;align-items:center;gap:9px;padding:7px 2px;
+    border-bottom:1px solid var(--sp-hair);cursor:pointer;}
+  #system-workspace .sp-rt-row:last-child{border-bottom:0;}
+  #system-workspace .sp-rt-row:hover .sp-rt-name{color:var(--accent);}
+  #system-workspace .sp-rt-row .sp-rt-name{font-size:var(--sp-fs-sm);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #system-workspace .sp-rt-row .sp-rt-val{margin-left:auto;font-size:var(--sp-fs-xs);color:var(--dim);
+    font-variant-numeric:tabular-nums;white-space:nowrap;}
+  #system-workspace .sp-rt-row .sp-rt-val b{color:var(--text);}
+  #system-workspace .sp-rt-row .sp-rt-val.bad b{color:var(--sp-danger);}
+  #system-workspace .sp-rt-row .sp-rt-val.warn b{color:var(--sp-warn);}
+  /* ★ 健康总评条 ✓（2026-10-18）—— 运维面板的第一眼：
+     不是「CPU 12%」，是「这台机器现在有没有事」✓。
+     ⚠️ 状态色**只用**已有的三枚 token（--ok / --sp-warn / --sp-danger）✓，
+        不另起一套颜色 —— 要不然和状态标签 / 圆环水位对不上 ✗。 */
+  #system-workspace .sp-health{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:10px 14px;border:1px solid var(--sp-hair);border-radius:var(--sp-r-md);background:var(--sp-card);}
+  #system-workspace .sp-health.crit{border-color:color-mix(in srgb, var(--sp-danger) 45%, transparent);
+    background:color-mix(in srgb, var(--sp-danger) 8%, var(--sp-card));}
+  #system-workspace .sp-health.warn{border-color:color-mix(in srgb, var(--sp-warn) 45%, transparent);
+    background:color-mix(in srgb, var(--sp-warn) 8%, var(--sp-card));}
+  #system-workspace .sp-hdot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--ok);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent);}
+  #system-workspace .sp-hdot.warn{background:var(--sp-warn);box-shadow:0 0 0 3px color-mix(in srgb, var(--sp-warn) 18%, transparent);}
+  #system-workspace .sp-hdot.crit{background:var(--sp-danger);box-shadow:0 0 0 3px color-mix(in srgb, var(--sp-danger) 18%, transparent);
+    animation:sp-hdot-pulse 1.6s ease-in-out infinite;}
+  @keyframes sp-hdot-pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+  @media (prefers-reduced-motion:reduce){#system-workspace .sp-hdot.crit{animation:none;}}
+  #system-workspace .sp-health b{font-size:var(--sp-fs-md);}
+  #system-workspace .sp-health .sum{color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
+  #system-workspace .sp-health-issues{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+  #system-workspace .sp-hissue{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
+    border-radius:999px;border:1px solid var(--sp-hair-strong);background:transparent;color:var(--text);
+    font-size:var(--sp-fs-xs);cursor:pointer;}
+  #system-workspace .sp-hissue:hover{border-color:var(--accent);color:var(--accent);}
+  #system-workspace .sp-hissue i{font-style:normal;font-size:10px;}
+  #system-workspace .sp-hissue.crit i{color:var(--sp-danger);}
+  #system-workspace .sp-hissue.warn i{color:var(--sp-warn);}
 #system-workspace .sp-state{font-size:var(--sp-fs-xs);padding:2px 7px;border-radius:var(--sp-r-xs);border:0;color:var(--dim);
   background:var(--sp-tint);white-space:nowrap;}
 #system-workspace .sp-state.ok{color:var(--ok);background:color-mix(in srgb, var(--ok) 15%, transparent);}
@@ -989,10 +1030,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-viz-bar{display:flex;gap:2px;height:14px;border-radius:7px;overflow:hidden;background:var(--sp-tint);}
 #system-workspace .sp-viz-seg{display:block;min-width:3px;transition:width 420ms cubic-bezier(.22,.61,.36,1);}
 #system-workspace .sp-viz-seg.warn{background:var(--sp-warn);}
+#system-workspace .sp-viz-seg.bad{background:color-mix(in srgb, var(--sp-danger) 78%, transparent);}
+#system-workspace .sp-viz-seg.dim{background:color-mix(in srgb, var(--dim) 45%, transparent);}
 #system-workspace .sp-viz-seg.ok{background:color-mix(in srgb, var(--ok) 72%, transparent);}
 #system-workspace .sp-viz-key{display:flex;gap:20px;flex-wrap:wrap;margin-top:9px;font-size:var(--sp-fs-sm);color:var(--dim);}
 #system-workspace .sp-viz-key i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;font-style:normal;}
 #system-workspace .sp-viz-key i.warn{background:var(--sp-warn);}
+#system-workspace .sp-viz-key i.bad{background:color-mix(in srgb, var(--sp-danger) 78%, transparent);}
+#system-workspace .sp-viz-key i.dim{background:color-mix(in srgb, var(--dim) 45%, transparent);}
 #system-workspace .sp-viz-key i.ok{background:color-mix(in srgb, var(--ok) 72%, transparent);}
 #system-workspace .sp-viz-key b{color:var(--text);font-variant-numeric:tabular-nums;}
 
@@ -1474,8 +1519,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     { id: 'home', group: '查看', label: '概览', icon: '◎', note: '这台电脑现在怎么样：CPU、内存、磁盘、温度', views: [['overview', '概览']] },
     { id: 'monitor', group: '查看', label: '性能', icon: '◈', note: '谁在吃 CPU 和内存，按占用从高到低排', views: [['processes', '进程']] },
     { id: 'files', group: '查看', label: '文件', icon: '▤', note: '浏览、搜索、整理你的文件；以及哪些目录受保护', views: [['files', '文件浏览'], ['files-organize', '整理归类'], ['files-trash', '回收站'], ['safety', '安全管理']] },
-    { id: 'storage', group: '查看', label: '存储', icon: '◍', note: '磁盘容量、空间被什么占了、能清出多少', views: [['storage', '磁盘与清理'], ['files-usage', '空间分析'], ['scan', '全盘扫描']] },
-    { id: 'atlas', group: '查看', label: '文件全景', icon: '⌗', note: '整机文件按"能不能动"分五级：系统级只读、缓存可清、用户内容只归类', views: [['atlas', '分级总览']] },
+    /* ★「文件全景」并进「存储」✓（2026-10-18，用户确认的重复项）——
+       它和「空间分析 / 全盘扫描」都在回答「空间被什么占了」，三个入口摆在一起，
+       用户不知道该点哪个 ✗。分级总览是三者里最"总"的那个 ✓，
+       放在存储分区最后一个子页 ✓：先看磁盘、再看占用、要细究才看分级 ✓。
+       ⚠️ 视图本身**原样保留** ✓（atlasView 的渲染与 isAtlasView 分支都不动 ✓），
+          只动导航入口 ✓。 */
+    { id: 'storage', group: '查看', label: '存储', icon: '◍', note: '磁盘容量、空间被什么占了、能清出多少', views: [['storage', '磁盘与清理'], ['files-usage', '空间分析'], ['scan', '全盘扫描'], ['atlas', '分级总览']] },
     { id: 'runtime', group: '管理', label: '系统', icon: '⚙', note: '后台服务、开机启动项、端口、容器、开发环境', views: [['services', '服务与端口'], ['docker', '容器'], ['dev', '开发环境'], ['env', '环境与更新'], ['sync', '远程同步'] ] },
     { id: 'software', group: '管理', label: '软件', icon: '⤓', note: '装了哪些应用、哪些包可以升级', views: [['apps', '已安装'], ['software', '更新与安装']] },
     { id: 'settings', group: '管理', label: '设置', icon: '⌥', note: '面板自己的行为与安全选项', views: [['settings', '设置']] },
@@ -1811,6 +1861,24 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         '<div class="sp-actions" style="margin:12px 0 0">' +
           '<button class="sp-btn" id="system-settings-refresh" type="button">刷新全部数据</button>' +
         '</div></div>' +
+        /* ★ AI 模型 ✓（2026-10-19）—— 生词自动补全 / 文章翻译 / 词根拆解 / 长难句
+           在没配 AI 时会说「去『本机管家 → AI』填一下」✓，而那个入口**早就不在了** ✗
+           （面板只剩 7 个分区 ✓，设置里也没有 AI ✗）→ 用户被指到一个不存在的地方 ✗。
+           现在把入口补回来 ✓，并且和主界面**共用同一份配置** ✓
+           （localStorage 的 mc-ai-cfg + 服务端 /api/ai/config ✓，不另起一套 ✗）。 */
+        '<div class="sp-band"><h3>AI 模型<span class="sp-hint">生词补全 / 翻译 / 拆句都用这份配置</span></h3>' +
+          '<div class="sp-kv" style="grid-template-columns:76px minmax(0,1fr)">' +
+            '<span class="k">API 地址</span><span><input class="sp-input" id="system-ai-url" style="width:100%" placeholder="https://api.deepseek.com/v1/chat/completions"></span>' +
+            '<span class="k">模型</span><span><input class="sp-input" id="system-ai-model" style="width:100%" placeholder="deepseek-chat"></span>' +
+            '<span class="k">API Key</span><span><input class="sp-input" id="system-ai-key" type="password" style="width:100%" placeholder="sk-…（只存本机与服务端，不外传）"></span>' +
+          '</div>' +
+          '<div class="sp-actions" style="margin:10px 0 0">' +
+            '<button class="sp-btn primary" id="system-ai-save" type="button">保存</button>' +
+            '<button class="sp-btn" id="system-ai-test" type="button">测试连通</button>' +
+            '<span class="muted" id="system-ai-status" style="font-size:var(--sp-fs-sm)"></span>' +
+          '</div>' +
+          '<p class="sp-note">和主界面右侧的 AI 助手是同一份配置：这里改完那边立刻生效，换机器也不用重填（同时存了服务端一份）。</p>' +
+        '</div>' +
         '<div class="sp-band"><h3>重启 CodeScope</h3>' +
           '<p class="sp-note">改了后端代码（lib/**、server.js）后需要重启一次才生效。重启只换进程，不动你的文件和设置。</p>' +
           '<div class="sp-actions" style="margin:10px 0 0"><button class="sp-btn danger" id="system-settings-restart" type="button">重启 CodeScope</button></div>' +
@@ -1824,6 +1892,76 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     };
     const refreshAll = $('system-settings-refresh');
     if (refreshAll) refreshAll.onclick = () => { state.caches = []; refresh(true); toast('ok', '已刷新'); };
+    /* ── AI 配置 ✓ ── */
+    const aiUrl = $('system-ai-url'), aiModel = $('system-ai-model'), aiKey = $('system-ai-key');
+    const aiStatus = $('system-ai-status');
+    const readAiCfg = () => {
+      try { return JSON.parse(localStorage.getItem('mc-ai-cfg') || 'null') || {}; } catch (_) { return {}; }
+    };
+    const aiSay = (text, cls) => {
+      if (!aiStatus) return;
+      aiStatus.textContent = text;
+      aiStatus.style.color = cls === 'ok' ? 'var(--ok)' : cls === 'err' ? 'var(--sp-danger)' : 'var(--dim)';
+    };
+    const fillAi = (cfg) => {
+      if (!cfg) return;
+      if (aiUrl && cfg.url) aiUrl.value = cfg.url;
+      if (aiModel && cfg.model) aiModel.value = cfg.model;
+      if (aiKey && cfg.key) aiKey.value = cfg.key;
+    };
+    const localAi = readAiCfg();
+    fillAi(localAi);
+    /* 本地没有就去服务端那份要 ✓ —— 和主界面 hydrateAiCfgFromServer 同一套规则 ✓（本地优先 ✓） */
+    if (!localAi.url) {
+      fetch('/api/ai/config', { cache: 'no-cache' }).then((r) => r.json())
+        .then((d) => { if (d && d.config && d.config.url && !aiUrl.value) fillAi(d.config); })
+        .catch(() => {});
+    }
+    /* URL 规范化和主界面一致 ✓：允许只填 base，自动补 /chat/completions ✓ */
+    const normAiUrl = (raw) => {
+      let u = String(raw || '').trim();
+      if (!u) return '';
+      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+      u = u.replace(/\/+$/, '');
+      if (!/\/chat\/completions$/i.test(u)) u += '/chat/completions';
+      return u;
+    };
+    const collectAi = () => ({
+      url: normAiUrl(aiUrl ? aiUrl.value : ''),
+      model: aiModel ? aiModel.value.trim() : '',
+      key: aiKey ? aiKey.value.trim() : '',
+    });
+    const saveAi = async () => {
+      const next = Object.assign({}, readAiCfg(), collectAi());
+      try { localStorage.setItem('mc-ai-cfg', JSON.stringify(next)); } catch (_) {}
+      try {
+        await fetch('/api/ai/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: next }),
+        });
+        aiSay('已保存（本机 + 服务端）', 'ok');
+      } catch (_) { aiSay('已存本机，但写服务端失败（离线？）', 'err'); }
+      if (aiUrl) aiUrl.value = next.url;
+    };
+    const aiSaveBtn = $('system-ai-save');
+    if (aiSaveBtn) aiSaveBtn.onclick = () => { saveAi().catch(() => {}); };
+    const aiTestBtn = $('system-ai-test');
+    if (aiTestBtn) aiTestBtn.onclick = async () => {
+      const cfg = collectAi();
+      if (!cfg.url || !cfg.model) return aiSay('先填 API 地址和模型', 'err');
+      aiSay('测试中…', '');
+      try {
+        const r = await fetch('/api/ai/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: cfg.url, key: cfg.key, model: cfg.model,
+            messages: [{ role: 'user', content: 'ping' }] }),
+        });
+        const d = await r.json().catch(() => null);
+        if (d && d.ok) aiSay('连接成功：' + String(d.content || '').slice(0, 40), 'ok');
+        else aiSay('✗ ' + String((d && d.error) || ('HTTP ' + r.status)), 'err');
+      } catch (e) { aiSay('✗ ' + String((e && e.message) || e), 'err'); }
+    };
+
     const restart = $('system-settings-restart');
     if (restart) restart.onclick = async () => {
       if (readOnlyMode()) return toast('err', READONLY_NOTE);
@@ -2005,24 +2143,30 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   /* 概述数字 + 常用应用：三个接口都要跑命令（ps / lsof / 扫 /Applications），
      放在首屏之后异步取，拿到谁填谁 —— 不阻塞概览渲染，也不整页重绘。 */
   async function loadOverviewExtras() {
-    const [proc, svc, apps] = await Promise.all([
+    const [proc, svc, apps, docker] = await Promise.all([
       /* limit=3 而不是 1：除了总数，还要拿占用最高的那个进程名给概述卡当副标题 */
       api('/processes?limit=3').catch(() => null),
       api('/services').catch(() => null),
       api('/apps').catch(() => null),
+      /* ★ 概览的「运行状态」卡要用 ✓ —— 搭这趟车 ✓，不进 1.5s 刷新环 ✓（见 .sp-rt-row 的注释 ✓） */
+      api('/docker').catch(() => null),
     ]);
+    /* ⚠️ 派生值必须放在**函数作用域** ✗ —— 下面「运行状态卡」也要用同一批
+       （brew / ports / agents / exposed / failedAgents）✓；
+       第一版写在 `if (row)` 里面 ✗，卡填到一半 ReferenceError ✗
+       → stat-row 有值、运行状态卡永远「读取中」✗（实测就是这样 ✗）。 */
+    const topProc = proc && Array.isArray(proc.list) ? proc.list[0] : null;
+    const brew = (svc && svc.brew) || [];
+    const ports = (svc && svc.ports) || [];
+    const agents = (svc && svc.agents) || [];
+    /* bind 是 * / 0.0.0.0 / :: 的才叫「对外」—— 只听 127.0.0.1 的出了这台机器也连不上 */
+    const exposed = ports.filter((item) => ['*', '0.0.0.0', '::'].includes(String(item.bind))).length;
+    const failedAgents = agents.filter((item) => item.failed).length;
+    const favorites = apps && Array.isArray(apps.favorites) ? apps.favorites.length : 0;
     const row = $('system-stat-row');
     if (row) {
       /* 每张卡除了数字，再挂一行「所以呢」的真实数据 —— 光有 450 / 24 / 20 这些数字
          看不出好坏，补上「最高占用是谁」「有几个端口对外」「启动项有没有异常」才有用。 */
-      const topProc = proc && Array.isArray(proc.list) ? proc.list[0] : null;
-      const brew = (svc && svc.brew) || [];
-      const ports = (svc && svc.ports) || [];
-      const agents = (svc && svc.agents) || [];
-      /* bind 是 * / 0.0.0.0 / :: 的才叫「对外」—— 只听 127.0.0.1 的出了这台机器也连不上 */
-      const exposed = ports.filter((item) => ['*', '0.0.0.0', '::'].includes(String(item.bind))).length;
-      const failedAgents = agents.filter((item) => item.failed).length;
-      const favorites = apps && Array.isArray(apps.favorites) ? apps.favorites.length : 0;
 
       const stats = [
         ['进程', proc && Number(proc.total),
@@ -2042,6 +2186,34 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         '<b>' + (Number.isFinite(triple[1]) ? triple[1] : '—') + '</b>' +
         '<span>' + triple[0] + '</span>' +
         '<em>' + esc(triple[2] || '') + '</em></div>').join('');
+    }
+    /* ★ 运行状态卡 ✓ —— 每行「状态点 + 名字 + 数值」，整行可点、跳到能处理它的分区 ✓。
+       ⚠️ 状态判据和各自分区页**完全一致** ✓（Docker 看 st.available ✓、启动项看 failed ✓、
+          对外端口看 bind ✓）—— 两处说法不一致比没有这张卡更糟 ✗。 */
+    const rt = $('system-runtimes');
+    if (rt) {
+      const st = (docker && docker.state) || {};
+      const containers = (docker && docker.containers) || [];
+      const dockerRunning = !!st.available;
+      const dockerUp = containers.filter((item) => item.running).length;
+      const rows = [
+        { name: 'Docker', val: dockerRunning
+          ? (containers.length ? '<b>' + dockerUp + '</b>/' + containers.length + ' 容器运行' : '运行中')
+          : '未运行', cls: dockerRunning ? '' : 'bad', goto: 'docker' },
+        { name: '开机启动项', val: failedAgents
+          ? '<b>' + failedAgents + '</b> 个异常'
+          : (agents.length ? '全部正常' : '—'), cls: failedAgents ? 'bad' : '', goto: 'services' },
+        { name: '对外端口', val: exposed
+          ? '<b>' + exposed + '</b>/' + ports.length + ' 可被局域网访问'
+          : (ports.length ? '全部仅本机' : '—'), cls: exposed ? 'warn' : '', goto: 'services' },
+      ];
+      rt.innerHTML = rows.map((row2) =>
+        '<div class="sp-rt-row" data-rtgoto="' + row2.goto + '" title="点一下去处理">'
+        + '<span class="sp-rt-name">' + esc(row2.name) + '</span>'
+        + '<span class="sp-rt-val ' + row2.cls + '">' + row2.val + '</span></div>').join('');
+      rt.querySelectorAll('[data-rtgoto]').forEach((row2) => {
+        row2.onclick = () => setView(row2.dataset.rtgoto);
+      });
     }
     const list = $('system-app-list');
     if (list && apps && Array.isArray(apps.apps)) {
@@ -2624,6 +2796,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   function patchOverview(body) {
     const data = state.overview;
     if (!data || !body) return;
+    patchHealth(body);
     const cpu = data.cpu || {};
     const memory = data.memory || {};
     const disk = data.primaryDisk;
@@ -2724,6 +2897,66 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     }
   }
 
+  /* ── 健康总评 ✓（2026-10-18）────────────────────────────────────────────
+     运维面板和监控面板的区别就在这一条：监控给数字 ✓，运维要**先给结论** ✓ ——
+     「这台机器现在有没有事、事在哪」，点一下就能跳去处理 ✓。
+     ⚠️ 阈值和圆环的水位色**保持同一套** ✓（圆环 70 warn / 85 crit ✓），
+        不然「圆环黄的、总评说正常」就见鬼了 ✗。
+     ⚠️ 只用 `state.overview` 里**已有**的数据 ✓，不发新请求 ✓
+        （1.5 秒一轮的刷新里再加请求，卡的就是这一页 ✗）。 */
+  function healthOf(data) {
+    const cpu = data.cpu || {};
+    const memory = data.memory || {};
+    const disk = data.primaryDisk;
+    const thermal = data.thermal || {};
+    const load1 = (cpu.loadPercent || [])[0] || 0;
+    const issues = [];
+    const push = (level, text, goto) => issues.push({ level: level, text: text, goto: goto });
+    if (disk && Number(disk.capacity) >= 90) push('crit', '主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%', 'storage');
+    else if (disk && Number(disk.capacity) >= 85) push('warn', '主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%', 'storage');
+    if (Number(memory.usage) >= 92) push('crit', '内存已用 ' + Number(memory.usage).toFixed(0) + '%', 'processes');
+    else if (Number(memory.usage) >= 85) push('warn', '内存已用 ' + Number(memory.usage).toFixed(0) + '%', 'processes');
+    if (thermal && thermal.available && thermal.celsius != null) {
+      if (Number(thermal.celsius) >= 85) push('crit', '温度 ' + Number(thermal.celsius).toFixed(0) + '℃', 'overview');
+      else if (Number(thermal.celsius) >= 70) push('warn', '温度 ' + Number(thermal.celsius).toFixed(0) + '℃', 'overview');
+    }
+    if (cpu.cores && load1 >= 95) push('warn', '负载跑满（每核 ' + load1.toFixed(0) + '%）', 'processes');
+    if (data.battery && !data.battery.charging && Number(data.battery.percent) <= 15) {
+      push('warn', '电量只剩 ' + data.battery.percent + '%', 'overview');
+    }
+    const crit = issues.filter((x) => x.level === 'crit').length;
+    return { level: crit ? 'crit' : (issues.length ? 'warn' : 'ok'), issues: issues };
+  }
+  function healthHtml(data) {
+    const h = healthOf(data);
+    const cpu = data.cpu || {};
+    const memory = data.memory || {};
+    const disk = data.primaryDisk;
+    const thermal = data.thermal || {};
+    const tempTxt = thermal && thermal.available && thermal.celsius != null ? Number(thermal.celsius).toFixed(0) + '℃' : '—';
+    const title = h.level === 'ok' ? '一切正常' : h.issues.length + ' 项' + (h.level === 'crit' ? '需要处理' : '要注意');
+    const sum = 'CPU ' + (Number(cpu.usage) || 0).toFixed(0) + '% · 内存 ' + (Number(memory.usage) || 0).toFixed(0)
+      + '% · 磁盘 ' + (disk ? Number(disk.capacity).toFixed(0) : '—') + '% · 温度 ' + tempTxt;
+    const chips = h.issues.map((it) =>
+      '<button type="button" class="sp-hissue ' + it.level + '" data-hgoto="' + esc(it.goto) + '"><i>●</i>' + esc(it.text) + '</button>').join('');
+    return '<div class="sp-health ' + h.level + '" id="system-health">'
+      + '<span class="sp-hdot ' + h.level + '"></span><b>' + esc(title) + '</b>'
+      + '<span class="sum">' + esc(sum) + '</span>'
+      + (chips ? '<span class="sp-health-issues">' + chips + '</span>' : '')
+      + '</div>';
+  }
+  function bindHealth(body) {
+    body.querySelectorAll('.sp-hissue[data-hgoto]').forEach((button) => {
+      button.onclick = () => setView(button.dataset.hgoto);
+    });
+  }
+  function patchHealth(body) {
+    const host = body.querySelector('#system-health');
+    if (!host || !state.overview) return;
+    host.outerHTML = healthHtml(state.overview);
+    bindHealth(body);
+  }
+
   function renderOverview(body) {
     const data = state.overview;
     if (!data) { body.innerHTML = '<div class="sp-empty">正在读取…</div>'; return; }
@@ -2776,7 +3009,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
     body.innerHTML = `
       <div class="sp-ov">
-        <section class="sp-sec sp-overview">
+        ${healthHtml(data)}
+        <section class="sp-sec sp-overview">">
           <div class="sp-stat-row" id="system-stat-row">
             <div class="sp-stat"><i>◈</i><b>—</b><span>进程</span><em></em></div>
             <div class="sp-stat"><i>⚙</i><b>—</b><span>常驻服务</span><em></em></div>
@@ -2812,9 +3046,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               ${tempCell}
               ${extCell}
             </div>
-            <div id="system-disk-warn">${disk && Number(disk.capacity) >= 90
-              ? '<p class="sp-note sp-warn">主磁盘已用 ' + Number(disk.capacity).toFixed(0) + '%，去「存储」清理一下缓存与大文件。</p>'
-              : ''}</div>
+            <div id="system-disk-warn"></div>
           </section>
 
           <div class="sp-gtip" id="system-gauge-tip" hidden></div>
@@ -2871,6 +3103,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             <div class="sp-applist" id="system-app-list"><div class="sp-empty">读取中…</div></div>
           </section>
           <section class="sp-sec">
+            <h3>运行状态<span class="sp-hint">进本页时取一次</span></h3>
+            <div id="system-runtimes"><div class="sp-empty">读取中…</div></div>
+          </section>
+          <section class="sp-sec">
             <h3>快捷操作</h3>
             <div class="sp-actions sp-actions-stack">
               <button class="sp-btn primary" data-goto="storage"><i class="gi">◍</i>去清理磁盘 / 缓存</button>
@@ -2883,6 +3119,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       </div>`;
     body.querySelectorAll('button[data-goto]').forEach((button) => { button.onclick = () => setView(button.dataset.goto); });
     body.querySelectorAll('button[data-reveal]').forEach((button) => { button.onclick = () => reveal(button.dataset.reveal); });
+    bindHealth(body);
     bindGaugeTips();
     /* 高度不再用 JS 计算：改用 CSS flex 让 .sp-ov 撑满内容区（见概览布局的 CSS 注释）。
        fitOverviewHeight 保留但不再调用 —— 它读 scrollHeight 的方式会正反馈。 */
@@ -2952,7 +3189,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
           <h3>按应用合并<span class="sp-hint">同一个 App 的多个进程算在一起</span></h3>
           <div class="sp-plist">${groups.slice(0, 12).map((item) => {
             const note = describeProcess(item.app, item.app);
-            const pct = Math.max(1, Math.min(100, byMemory ? item.rss / 17179869184 * 100 : item.cpu));
+            /* ⚠️ 内存条的满格 = **这台机器的实际内存** ✓ —— 原来写死 16GB ✗，
+               32GB / 64GB 的机器上 8GB 的进程条只走一半 ✓，看着像「才用一半」✗。 */
+            const memTotal = (state.overview && state.overview.memory && state.overview.memory.total) || 17179869184;
+            const pct = Math.max(1, Math.min(100, byMemory ? item.rss / memTotal * 100 : item.cpu));
             return `
             <div class="sp-pitem">
               <div class="sp-pmain">
@@ -3025,6 +3265,34 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     }, 0);
   }
 
+  /* ★ 缓存构成的可视化 ✓（2026-10-18）—— 和端口暴露那条同一套 sp-viz 语言 ✓：
+     一条按比例分段的横条 + 图例，一眼看出「能清的空间主要在哪几项」✓。
+     ⚠️ 段的颜色 = **风险等级** ✓（低=绿 / 中=黄 / 高=红）—— 顺便回答了
+        「最大的那块能不能放心删」✓；第 7 名往后合成一段「其他」✓，
+        不然 20 项的图例比表格还长 ✗。 */
+  function cacheVizHtml(caches, total) {
+    const withSize = caches.filter((item) => Number(item.size) > 0)
+      .sort((a, b) => Number(b.size) - Number(a.size));
+    if (!withSize.length || !(total > 0)) return '';
+    const TOP = 6;
+    const shown = withSize.slice(0, TOP);
+    const restSize = withSize.slice(TOP).reduce((acc, item) => acc + Number(item.size), 0);
+    const segCls = { low: 'ok', medium: 'warn', high: 'bad' };
+    const segs = shown.map((item) =>
+      '<span class="sp-viz-seg ' + (segCls[item.risk] || 'dim') + '" style="width:'
+      + Math.max(0.4, Number(item.size) / total * 100).toFixed(2) + '%"></span>').join('');
+    const keys = shown.map((item) =>
+      '<span><i class="' + (segCls[item.risk] || 'dim') + '"></i>' + esc(item.label)
+      + ' <b>' + fmtBytes(item.size) + '</b></span>').join('');
+    return '<div class="sp-viz" style="margin:10px 0 2px">'
+      + '<div class="sp-viz-bar">' + segs
+      + (restSize > 0 ? '<span class="sp-viz-seg dim" style="width:' + (restSize / total * 100).toFixed(2) + '%"></span>' : '')
+      + '</div>'
+      + '<div class="sp-viz-key">' + keys
+      + (restSize > 0 ? '<span><i class="dim"></i>其他 ' + (withSize.length - TOP) + ' 项 <b>' + fmtBytes(restSize) + '</b></span>' : '')
+      + '</div></div>';
+  }
+
   function renderStorage(body) {
     const data = state.overview;
     const disks = (data && data.disks) || [];
@@ -3032,6 +3300,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const total = dedupedSize(caches);
     const picked = caches.filter((item) => item.selected);
     const pickedSize = dedupedSize(picked);
+    const cacheViz = cacheVizHtml(caches, total);
     body.innerHTML = `
       <div class="sp-cards">
         ${disks.slice(0, 3).map((item) => `
@@ -3047,6 +3316,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       <div class="sp-band">
         <h3>缓存与可回收空间${state.cacheScanAt ? ' <span class="muted">· 统计于 ' + esc(relTime(state.cacheScanAt)) + '</span>' : ''}</h3>
         <p class="sp-note">${caches.length ? '合计约 <b id="system-cache-total" data-bytes="' + total + '">' + fmtBytes(total) + '</b>（父子目录已去重，不会把同一块空间算两遍）；已勾选 <b>' + picked.length + '</b> 项，约 <b id="system-cache-picked" data-bytes="' + pickedSize + '">' + fmtBytes(pickedSize) + '</b>。' : '还没有统计过。点「统计占用」会真实遍历这些目录（大目录可能要几十秒，会显示在这里）。'}</p>
+        ${cacheViz}
         <div class="sp-actions">
           <button class="sp-btn" data-scan="1">统计占用</button>
           <button class="sp-btn" data-clean-dry="1"${picked.length ? '' : ' disabled'}>预览清理（不删东西）</button>
@@ -3710,7 +3980,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     if (swapped) {
       CORE.at = Date.now();
       toast('ok', 'CodeScope 已重启，新进程 PID ' + CORE.pid);
-      setStatus('CodeScope 已重启（PID ' + CORE.pid + '）');
+      /* ⚠️ 原来是 `setStatus(...)` ✗ —— 这个包里根本没有 `setStatus` ✓，
+         状态提示的辅助函数叫 `toast(kind, text)` ✓（它内部才去调 window.setStatus ✓）。
+         于是「重启成功」这条路上会抛 ReferenceError ✓ →
+         后面的 refreshCoreCard / retryBackend **全被跳过** ✗，面板一直停在「重启中」✗。 */
+      toast('ok', 'CodeScope 已重启（PID ' + CORE.pid + '）');
       await refreshCoreCard();
       /* 面板后端此刻也活了：把之前那个「后端还没生效」的横幅收掉。 */
       if (document.body.classList.contains(MODE)) await retryBackend();

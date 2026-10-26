@@ -1,4 +1,8 @@
 :root {
+  /* ★ 侧栏宽度：由右下角那条拖拽条写这个变量 ✓（默认 272 = VitePress 原值 ✓）。
+     ⚠️ 直接改 --vp-sidebar-width ✗ 会连 VitePress 自己的布局一起动 ✓，
+     所以用我们自己的变量 + 下面显式覆盖 ✓。 */
+  --kb-sidebar-w:272px;
   --vp-c-brand-1:#5b8cff;
   --vp-c-brand-2:#79a4ff;
   --vp-c-brand-3:#3d6fd6;
@@ -101,6 +105,29 @@ body {
    没有大纲就整条收掉，并把容器收窄让正文居中（有大纲时行为完全不变）。 */
 html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container > .aside.aside { display:none; }
 html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:calc(var(--kb-content-max) + 80px)!important; }
+/* ★★ 让「版心」真正生效 ✗✗ ——
+   VitePress 默认给 .content-container 加了 max-width:688px ✓（有右侧目录时 ✓），
+   把这里设的 --kb-content-max（默认 900px ✓）**整个盖住** ✗
+   → 表现为「版心选择器调了没反应」✗，正文只有 588px ✓，长图被压得很小 ✓
+   （用户：「知识库打开是这个样子的，而 markdown 是这个样子的」✓）。
+   ⚠️ 必须 !important ✗ —— VitePress 那条也是 .VPDoc.has-aside 里的具体值 ✓。 */
+/* ⚠️⚠️ 光给 max-width 不够 ✗✗ —— 实测 .content-container 的 flex 是 0 1 auto
+   （**不长** ✓），而 .aside 是 1 1 auto（**会长** ✗）→ 多余空间全被右侧目录吃掉 ✓
+   → 正文只有 588px ✓、长图被压到 496px ✓（图自然宽 1696px ✓）。
+   ⇒ 正文要 flex-grow:1 ✓、右侧目录要 flex:0 0 auto ✓（别抢空间 ✓）。 */
+/* ⚠️⚠️ 再补一刀 ✗✗ —— 实测 .container 有 1164px 可用，
+   但 .content 只吃到 652px（.content-container 588 ✓）。
+   光写 max-width 和 flex 都不够 ✓（.content 的 flex 已是 1 1 auto 却没长 ✓），
+   所以这里**直接把宽度撑到版心** ✓：min-width 用版心值 ✓，上限也用版心值 ✓。
+   右侧目录 .aside 固定不抢空间 ✓（原来是 1 1 auto，会跟正文抢 ✓）。 */
+html .VPDoc.VPDoc > .container.container > .content > .content-container.content-container {
+  flex:1 1 auto!important;
+  width:min(var(--kb-content-max), 100%)!important;
+  max-width:var(--kb-content-max)!important;
+  margin-left:auto; margin-right:auto; }
+html .VPDoc.VPDoc > .container.container > .content { flex:1 1 auto!important; max-width:none!important; }
+html .VPDoc.VPDoc > .container.container > .aside { flex:0 0 auto!important; }
+html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-content-max) + 320px)!important; }
 .vp-doc { counter-reset:kb-h2;color:color-mix(in srgb,var(--vp-c-text-1) 89%,var(--vp-c-text-2));font-size:16px;line-height:1.82; }
 .vp-doc > :first-child { margin-top:0; }
 .vp-doc h1,.vp-doc h2,.vp-doc h3,.vp-doc h4 { color:var(--kb-heading);letter-spacing:-.025em;scroll-margin-top:90px; }
@@ -117,7 +144,7 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
    用户看到的「行间距变了」就是这个：同一篇里段间距不均匀。
    现在统一成和普通段落一样的间距，整篇节奏一致（阅读器那边也是均匀的）。 */
 .vp-doc h1 + p { max-width:760px;margin:0 0 14px;color:var(--vp-c-text-2);font-size:1.06em;line-height:1.86; }
-.vp-doc h2 { counter-increment:kb-h2;display:flex;align-items:center;gap:11px;margin-top:2.55em;padding-top:1.05em;border-top:1px solid color-mix(in srgb,var(--vp-c-brand-1) 16%,var(--vp-c-divider));font-size:1.5rem; }
+.vp-doc h2 { counter-increment:kb-h2;display:flex;align-items:center;gap:11px;margin-top:1.75em;margin-bottom:9px;padding-top:.85em;border-top:1px solid color-mix(in srgb,var(--vp-c-brand-1) 16%,var(--vp-c-divider));font-size:1.5rem; }
 .vp-doc h2::before { content:counter(kb-h2,decimal-leading-zero);display:inline-grid;place-items:center;min-width:30px;height:24px;padding:0 5px;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 34%,var(--vp-c-divider));border-radius:7px;background:var(--vp-c-brand-soft);color:var(--vp-c-brand-1);font:750 11px/1 var(--vp-font-family-mono);letter-spacing:0; }
 .vp-doc h3 { position:relative;margin-top:1.85em;padding-left:14px;font-size:1.16rem; }
 .vp-doc h3::before { content:'';position:absolute;left:0;top:.42em;width:4px;height:1em;border-radius:99px;background:var(--vp-c-brand-1);box-shadow:0 0 12px var(--vp-c-brand-soft); }
@@ -139,7 +166,78 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
 .vp-doc a:hover { text-decoration-thickness:2px; }
 .vp-doc strong { color:color-mix(in srgb,var(--vp-c-brand-1) 56%,var(--vp-c-text-1));font-weight:720; }
 .vp-doc :not(pre) > code { padding:.16em .42em;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 18%,var(--vp-c-divider));border-radius:6px;background:color-mix(in srgb,var(--vp-c-brand-soft) 72%,var(--vp-c-bg-soft));color:color-mix(in srgb,var(--vp-c-brand-1) 76%,var(--vp-c-text-1));font-size:.88em; }
-.vp-doc div[class*="language-"] { overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
+.vp-doc div[class*="language-"] { margin:11px 0; overflow:hidden;border:1px solid color-mix(in srgb,var(--vp-c-brand-1) 14%,var(--vp-c-divider));border-radius:13px;background:color-mix(in srgb,var(--vp-code-block-bg) 97%,var(--vp-c-brand-1));box-shadow:0 14px 38px rgba(0,0,0,.12); }
+/* ── 右侧「本页目录」的层次感 ✓ ────────────────────────────────────────────
+   用户：「知识库右侧的目录，层次感太差，美化，优化一下」✓。
+   VitePress 默认所有层级**字号颜色几乎一样** ✗ → 看着是一坨 ✓。
+   按层级给「字号 / 字重 / 缩进 / 颜色」四档区分 ✓，并加一条层级竖线 ✓。 */
+/* 目录标题 ✓ */
+.VPDocAsideOutline .outline-title { font-size:10.5px; letter-spacing:.14em; color:var(--vp-c-text-3); margin:0 0 10px; }
+
+/* ⚠️ VitePress 的目录链接**只有 .outline-link 一个类** ✗（没有 level-2/3）——
+   层级靠 **DOM 嵌套深度**表达 ✓，所以这里按嵌套层数写 ✓。
+   ★ 强化层次的做法：顶层给「左侧品牌竖条 + 更大更粗 + 上方留白」✓，
+     二级给「连续导轨线 + 更小更淡 + 缩进」✓ —— 一眼能分出组 ✓。 */
+
+/* 顶层（h2：一、二、三…）✓ */
+.VPDocAsideOutline .outline-link { position:relative; display:block; padding:5px 6px 5px 12px; font-size:13px; line-height:1.45; color:var(--vp-c-text-1); font-weight:700; letter-spacing:-.01em; border-radius:6px; transition:color .14s ease, background .14s ease; }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li { margin-top:5px; }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li:first-child { margin-top:0; }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li > .outline-link::before {
+  content:''; position:absolute; left:2px; top:50%; width:3px; height:13px; margin-top:-6.5px; border-radius:2px;
+  background:color-mix(in srgb,var(--vp-c-brand-1) 42%,transparent); transition:background .14s ease, height .14s ease; }
+
+/* 二级 / 三级（h3、h4）✓ —— 连续导轨线 + 更小更淡 ✓ */
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem { margin:2px 0 2px 6px; padding-left:9px; border-left:1px solid color-mix(in srgb,var(--vp-c-brand-1) 22%,var(--vp-c-divider)); }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .outline-link { padding:3px 6px 3px 4px; font-size:11.5px; font-weight:500; color:var(--vp-c-text-2); letter-spacing:0; }
+.VPDocAsideOutline .VPDocOutlineItem .VPDocOutlineItem .VPDocOutlineItem .outline-link { font-size:11px; font-weight:450; color:var(--vp-c-text-3); }
+
+/* 悬停 / 当前 ✓ */
+.VPDocAsideOutline .outline-link:hover { color:var(--vp-c-brand-1); background:color-mix(in srgb,var(--vp-c-brand-1) 8%,transparent); }
+.VPDocAsideOutline .outline-link.active { color:var(--vp-c-brand-1); font-weight:700; background:color-mix(in srgb,var(--vp-c-brand-1) 13%,transparent); }
+.VPDocAsideOutline > .outline > .VPDocOutlineItem.root > li > .outline-link.active::before { height:17px; margin-top:-8.5px; background:var(--vp-c-brand-1); }
+
+/* ── 标题与内容之间的间距收紧 ✓ ────────────────────────────────────────
+   用户：「这个标题、图片之间的间距也太宽了」✓。
+   实测：h2 底部到代码块 **88px** ✗ —— 拆开看是
+     h2 下边距 16 + 中间那个 <p> 的上下边距 28 + 代码块上边距 16 + 行高 ✓。
+   ⚠️ 顺带把 h2 的 margin-top 从 2.55em 收到 1.75em ✓（上一节标题到下一节标题空太多 ✓）。 */
+.vp-doc h2 + p, .vp-doc h2 + div[class*="language-"] { margin-top:5px; }
+.vp-doc p + div[class*="language-"] { margin-top:7px; }
+.vp-doc div[class*="language-"] + p { margin-top:7px; }
+.vp-doc h2 + table, .vp-doc p + table { margin-top:7px; }
+
+/* ── 长内容要能横向滚 ✓（用户：「内容太长了，缺少横向的拖动条，被遮挡掉了」）──────
+   ⚠️ 上面那行 overflow:hidden 是**为了裁圆角** ✓（不裁的话代码会溢出圆角 ✗），
+      但它同时把**横向滚动条也吃掉了** ✗ → 长行直接看不见 ✓。
+   ⇒ 外层继续 hidden ✓（圆角照裁 ✓），把滚动**下放到内层 pre** ✓。 */
+/* ★ 代码块顶部不留空 ✓（用户：「代码向导上面怎么有一段空白」）──────
+   ⚠️ VitePress 给 pre 留了 **34px 上内边距** ✗ —— 那是给右上角那个语言标签
+      （.lang）腾位置的 ✓；但这个标签**经常是空的** ✓（没写语言 ✓）→ 白留一段 ✗。
+   ⇒ 标签为空时把上边距收到 16px ✓；有标签时保留一点 ✓。 */
+/* ⚠️⚠️ 必须 !important ✗✗ —— VitePress 自己的选择器带 .vp-doc 前缀
+   （带 .vp-doc 前缀 ✓，优先级比这里高 ✗），实测不加的话 padding-top 还是 34px ✓。 */
+/* ⚠️ 必须是 scroll 而不是 auto ✗ —— MDN：::-webkit-scrollbar 只在 overflow:scroll 下显示；
+   写 auto 时下面那套滚动条样式**根本不显示** ✓（和区块编辑器是同一个坑 ✓）。 */
+.vp-doc div[class*="language-"] > pre { overflow-x:scroll;overflow-y:hidden;padding-top:16px !important;padding-bottom:16px !important; }
+.vp-doc div[class*="language-"]:has(> .lang:not(:empty)) > pre { padding-top:30px !important; }
+.vp-doc div[class*="language-"] > .lang:empty { display:none !important; }
+.vp-doc div[class*="language-"] > pre > code { display:block;width:max-content;min-width:100%; }
+/* 横向滚动条**常显** ✓ —— macOS 默认是覆盖式的（不滚就不显示 ✓），
+   用户根本不知道右边还有内容 ✓。这里给它一个细一点的常显样式 ✓。 */
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar { height:9px; }
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar-track { background:transparent; }
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar-thumb {
+  background:color-mix(in srgb,var(--vp-c-brand-1) 34%,transparent);border-radius:5px; }
+.vp-doc div[class*="language-"] > pre::-webkit-scrollbar-thumb:hover {
+  background:color-mix(in srgb,var(--vp-c-brand-1) 62%,transparent); }
+/* 表格同理 ✓（原来也是 overflow:hidden ✗）：包一层可滚的壳 ✓ */
+.vp-doc .kb-table-wrap { overflow-x:scroll; }
+.vp-doc .kb-table-wrap > table { margin:0; }
+.vp-doc .kb-table-wrap::-webkit-scrollbar { height:9px; }
+.vp-doc .kb-table-wrap::-webkit-scrollbar-thumb {
+  background:color-mix(in srgb,var(--vp-c-brand-1) 34%,transparent);border-radius:5px; }
+
 .vp-doc div[class*="language-"]::before { content:'●  ●  ●';position:absolute;left:16px;top:10px;z-index:2;color:color-mix(in srgb,var(--vp-c-text-3) 66%,var(--vp-c-brand-1));font-size:9px;letter-spacing:2px; }
 .vp-doc div[class*="language-"] pre { padding-top:34px; }
 .vp-doc blockquote { margin:22px 0;padding:14px 18px;border-left:4px solid var(--vp-c-brand-1);border-radius:0 10px 10px 0;background:var(--vp-c-brand-soft);color:var(--vp-c-text-2); }
@@ -290,3 +388,64 @@ html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.contain
   .kb-doc-meta span:last-child { display:inline-flex; }
 }
 @media (prefers-reduced-motion:reduce) { .VPFeature,.VPSidebarItem .text,.VPDocAsideOutline .outline-link { transition:none; } }
+/* ── 图片居中 ✓ ────────────────────────────────────────────────────────────
+   ⚠️ 原来**一条 img 规则都没有** ✗ —— 图片按内联元素排 ✓，自然靠左 ✓
+   （用户报「为什么图片不居中显示」✓）。
+   只对「独占一段的图」生效 ✓ —— 行内小徽章（badge / 表情）不受影响 ✗。 */
+/* ⚠️ 必须 !important ✗✗ —— VitePress 默认主题给 .vp-doc img 也定了 margin ✓，
+   优先级比这里的 .vp-doc p > img:only-child 高不了多少 ✓，实测被盖成 margin:0 ✗
+   （display:block 生效了、margin-left 还是 0 ✓）。 */
+.vp-doc p > img:only-child,
+.vp-doc figure img,
+.vp-doc img.kb-block {
+  display:block !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+  margin-top:1.15em; margin-bottom:1.15em;
+  max-width:100%;
+}
+.vp-doc figure { margin:1.15em 0; text-align:center; }
+.vp-doc figcaption { margin-top:.5em; font-size:.86em; color:var(--vp-c-text-2); }
+/* 图注（紧跟图片的斜体段）也居中 ✓ */
+.vp-doc p > img:only-child + em,
+.vp-doc p > em:only-child { display:block; text-align:center; }
+
+/* ── 侧栏宽度可拖 ✓ ────────────────────────────────────────────────────────
+   ⚠️ 覆盖 VitePress 自己的 --vp-sidebar-width ✓（custom.css 在主题之后加载 ✓，
+   但为稳妥还是加 !important ✗ —— 这个值只该由拖拽条决定 ✓）。 */
+/* ⚠️⚠️ VitePress 的侧栏样式是 **scoped** 的 ✗✗（.VPSidebar[data-v-xxxx] ✓），
+   比 .VPSidebar 高一个属性选择器 ✓ —— 光加 !important 也未必稳 ✓。
+   所以：CSS 这里写一份兜底 ✓，**真正生效靠 JS 写行内样式** ✓
+   （行内 + !important 一定赢 ✓，见 SidebarResizer 的 applyWidth ✓）。 */
+:root { --vp-sidebar-width: var(--kb-sidebar-w) !important; }
+html body .VPSidebar[class] { width: var(--kb-sidebar-w) !important; min-width:0 !important; }
+html body .VPContent.has-sidebar[class] { padding-left: var(--kb-sidebar-w) !important; }
+.VPNavBar.has-sidebar .curtain,
+.VPNavBar.has-sidebar .content-body { left: 0; }
+@media (min-width: 960px) {
+  .VPContent.has-sidebar { padding-left: var(--kb-sidebar-w) !important; }
+}
+/* 拖拽条：贴在侧栏右边缘 ✓，只在桌面端显示 ✓ */
+.kb-sidebar-resizer {
+  display:none;
+  /* ⚠️ left 由 JS 按侧栏**真实右边缘**写 ✓（不能写 left:var(--kb-sidebar-w) ✗ ——
+     实测侧栏起点不在 0 ✓，用变量定位会偏 47px ✗）。这里给个兜底值 ✓。 */
+  position:fixed; top:0; bottom:0; left:272px;
+  width:9px; margin-left:-4px; z-index:60;
+  cursor:col-resize;
+  background:transparent;
+  transition:background .15s;
+}
+@media (min-width: 960px) { .kb-sidebar-resizer { display:block; } }
+.kb-sidebar-resizer::after {
+  content:''; position:absolute; inset:0 3px; border-radius:2px;
+  /* ⚠️ 原来这里是**全透明**的 ✗ —— 用户根本找不到拖拽条 ✓（实测报「我怎么看没变」✓）。
+     改成一条**常显的淡竖线** ✓，悬停/拖动时变主题色 ✓。 */
+  background:color-mix(in srgb,var(--vp-c-brand-1) 22%,transparent);
+  transition:background .15s;
+}
+.kb-sidebar-resizer:hover::after,
+.kb-sidebar-resizer.kb-dragging::after { background:var(--vp-c-brand-1); }
+body.kb-resizing { cursor:col-resize !important; user-select:none; }
+body.kb-resizing iframe { pointer-events:none; }
+

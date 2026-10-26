@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const zlib = require('zlib');
+const zlib = require('zlib'); const { brotliStaticFile } = require('./lib/static-compress'); const drawingsFolder = require('./lib/drawings-folder'); const drawingsAsset = require('./lib/drawings-asset');
 const { StringDecoder } = require('string_decoder');
 const { Transform } = require('stream');
 const { spawn, exec, execFile, execFileSync } = require('child_process');
@@ -30,6 +30,7 @@ const { createLspService } = require('./lib/lsp-service');
 const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
 const { createOfficeEngine } = require('./lib/office-engine');
 const { createDshService } = require('./lib/dsh-service');
+const { createVncAuthFilter } = require('./lib/vnc-auth-filter');
 const { createOpencodeService } = require('./lib/opencode-service');
 const { createCodeServerService } = require('./lib/code-server-service');
 const { createCodeServerProxy } = require('./lib/code-server-proxy');
@@ -74,6 +75,8 @@ const MAIL_IMAP = require('./lib/imap-client');
 const MAIL_MIME = require('./lib/mime');
 const MAIL_LIST = require('./lib/mail-list');
 const WORKFLOW = require('./lib/workflow');
+/* ★ 网页版自动化 ✓（2026-10-18）—— 按需 require ✓（没装 playwright-core 也不该让整个服务起不来 ✗） */
+const BROWSER_AGENT = require('./lib/browser-agent');
 const HOT = require('./lib/hot');
 const EN_TEXT = require('./lib/en-text.js');   /* 外刊精读：抽正文 / 分句 / 取词（纯逻辑 ✓） */
 const SRS = require('./lib/srs.js');           /* 外刊精读：遗忘曲线复习调度（纯逻辑 ✓） */
@@ -106,6 +109,9 @@ const Ruff = require('@astral-sh/ruff-wasm-nodejs');
 applyPortableToolPath();
 const APP_VERSION = require('./package.json').version;
 const APP_MODE = process.env.CODESCOPE_APP_MODE === 'desktop' ? 'desktop' : 'web';
+
+/* 网页版自动化的 profile 目录 ✓ —— 放数据目录下 ✓（跟着数据一起备份 / 换机器搬走 ✓） */
+try { BROWSER_AGENT.setProfileDir(path.join(applicationDataRoot(), 'browser-profile')); } catch (_) {}
 
 function applicationDataRoot() {
   if (process.env.CODESCOPE_DATA_HOME) return path.resolve(process.env.CODESCOPE_DATA_HOME);
@@ -350,8 +356,7 @@ async function wereadByKey(apiKey) {
   }
   if (apiKey.length > 200) return { ok: false, error: 'API Key 太长（不该超过 200 个字符）' };
   try {
-    const j = await wereadGateway(apiKey, '/shelf/sync');
-    const code = Number(j.errcode || 0);
+    const j = await wereadGateway(apiKey, '/shelf/sync'); const code = Number(j.errcode || 0);
     if (code) {
       const msg = String(j.errmsg || j.errMsg || '');
       let why = '';
@@ -379,8 +384,7 @@ async function wereadByKey(apiKey) {
       }
       return { ok: false, error: why };
     }
-    const rawBooks = Array.isArray(j.books) ? j.books : [];
-    const rawAlbums = Array.isArray(j.albums) ? j.albums : [];
+    const rawBooks = Array.isArray(j.books) ? j.books : []; const rawAlbums = Array.isArray(j.albums) ? j.albums : [];
     if (!rawBooks.length && !rawAlbums.length && !j.mp) {
       return { ok: false, error: '连上了，但书架是空的 —— 确认一下这个 Key 对应的账号里有没有书' };
     }
@@ -405,8 +409,7 @@ async function wereadByKey(apiKey) {
     /* 专辑 = 有声书 ✓（官方文档专门强调：它和 `books` **完全独立** ✗，
        算「书架里有多少本」时必须一起算 ✓，否则用户会觉得「少了好几本」✗）。 */
     const albums = rawAlbums.map((a) => {
-      const info = (a && a.albumInfo) || {};
-      const name = String(info.name || '').trim();
+      const info = (a && a.albumInfo) || {}; const name = String(info.name || '').trim();
       if (!name) return null;
       return {
         title: name,
@@ -569,6 +572,85 @@ function trimFlowOut(v) {
   } catch (_) { return String(v).slice(0, 2000); }
   return v;
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   工作流「下载文件」✓（2026-10-18）
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️ 生成类接口给的地址**会过期** ✗（豆包视频 24 小时 ✓、临时签名 URL 更短 ✗）——
+      所以要留档就必须**落到本地** ✓。
+
+   存到 `<数据目录>/flow-files/` ✓，返回一个**本机可访问**的地址 ✓
+   （`/api/life/flowfile/<名字>` ✓），面板里能直接点开 ✓。
+
+   ⚠️ 三条硬限制，缺一不可 ✗：
+      ① **只认 http/https** ✓（`file://` / `data:` 一律拒 ✓，不然就是个读文件的口子 ✗）；
+      ② **大小上限 300MB** ✓（`Content-Length` 先拦一道 ✓，读流时再数一遍 ✓）；
+      ③ **文件名由服务端生成** ✓（`f<时间戳36><随机>.<扩展名>` ✓）——
+         用户给的名字只取扩展名 ✓，绝不拼进路径 ✗（`../` 那种口子 ✓）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const FLOW_FILE_DIR = () => path.join(applicationDataRoot(), 'flow-files');
+const FLOW_FILE_MAX = 300 * 1024 * 1024;
+const FLOW_FILE_RE = /^f[0-9a-z]{6,}\.[a-z0-9]{1,5}$/;
+const FLOW_FILE_MIME = {
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  svg: 'image/svg+xml', pdf: 'application/pdf',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', json: 'application/json', txt: 'text/plain; charset=utf-8',
+};
+function flowFileExt(type, hint) {
+  const t = String(type || '').toLowerCase();
+  const byType = {
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+    'image/svg+xml': 'svg', 'application/pdf': 'pdf',
+    'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/mp4': 'm4a',
+  };
+  if (byType[t]) return byType[t];
+  const m = /\.([a-z0-9]{1,5})$/i.exec(String(hint || '').trim());
+  if (m && FLOW_FILE_MIME[m[1].toLowerCase()]) return m[1].toLowerCase();
+  return 'bin';
+}
+async function saveFlowRemote(url, hint) {
+  const u = String(url || '').trim();
+  if (!/^https?:\/\//i.test(u)) throw new Error('只认 http/https 地址 ✗');
+  const r = await fetch(u, { signal: AbortSignal.timeout(180000), redirect: 'follow' });
+  if (!r.ok) throw new Error('下载失败 ' + r.status + '：' + u.slice(0, 160));
+  const len = Number(r.headers.get('content-length') || 0);
+  if (len > FLOW_FILE_MAX) throw new Error('文件太大 ✗（' + Math.round(len / 1048576) + 'MB，上限 300MB）');
+  const type = String(r.headers.get('content-type') || '').split(';')[0].trim();
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > FLOW_FILE_MAX) throw new Error('文件太大 ✗（上限 300MB）');
+  if (!buf.length) throw new Error('下回来是空的 ✗');
+  const dir = FLOW_FILE_DIR();
+  fs.mkdirSync(dir, { recursive: true });
+  const name = 'f' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex')
+    + '.' + flowFileExt(type, hint || u);
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, buf);
+  return { url: '/api/life/flowfile/' + name, path: file, name, bytes: buf.length, type };
+}
+
+/* 把提供商数组收成一张表 ✓ —— ⚠️ **白名单化** ✗：只留这几个字段 ✓，
+   其它一律丢掉 ✓（前端传来的东西不能原样信 ✓）。 */
+function flowProvidersFromStore(store) {
+  const arr = (store && Array.isArray(store.flowProviders)) ? store.flowProviders : [];
+  const out = {};
+  arr.slice(0, 20).forEach((p) => {
+    if (!p || !p.id) return;
+    const id = String(p.id).slice(0, 40);
+    const baseUrl = String(p.baseUrl || '').trim().slice(0, 2048);
+    if (!/^https?:\/\//i.test(baseUrl)) return;
+    out[id] = {
+      id,
+      name: String(p.name || id).slice(0, 60),
+      kind: p.kind === 'ark' ? 'ark' : 'openai',
+      baseUrl,
+      key: String(p.key || '').slice(0, 4000),
+      models: (Array.isArray(p.models) ? p.models : []).slice(0, 30).map((m) => String(m).slice(0, 120)),
+    };
+  });
+  return out;
+}
+
 async function flowScheduleTick() {
   if (FLOW_TICK_BUSY) return;                 /* ★ 上一轮还没跑完就跳过 ✓（别叠 ✗） */
   FLOW_TICK_BUSY = true;
@@ -596,6 +678,11 @@ async function flowScheduleTick() {
           executionId: 's' + at.toString(36),
           ai: st.ai && st.ai.url && st.ai.model ? st.ai : null,
           aiChat: st.ai && st.ai.url && st.ai.model ? makeAiChat(st.ai) : null,
+          /* ★ 定时跑也要能用**多提供商** ✓（2026-10-18）——
+             `flowProviders` 存在 STORE 里 ✓（前端管 ✓），这里读一份 ✓。
+             ⚠️ 没有也不影响 ✗ —— 会退回上面那个老的全局配置 ✓。 */
+          providers: flowProvidersFromStore(store),
+          saveRemote: saveFlowRemote,
         });
       } catch (error) { err = String((error && error.message) || error); }
       st.seq += 1;
@@ -734,6 +821,8 @@ const ONLYOFFICE_CONTAINER_NAME = /^[A-Za-z0-9_.-]+$/.test(String(process.env.CO
    注意别用 `npm start` 直接起 —— 那条路径不带环境变量，仍是只本机。 */
 const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
 const DSH = createDshService({ projectRoot:__dirname, dataRoot:applicationDataRoot() });
+/* DSH 只绑回环（--host 127.0.0.1）→ 局域网必须经这个代理访问（详见 lib/dsh-proxy.js 文件头）✓ */
+const DSH_PROXY = require('./lib/dsh-proxy').createDshProxy({ listenHost: HOST, isAllowed: trustedHttpOrigin, getPort: () => (DSH.status() || {}).port || 3080 });
 const OPENCODE = createOpencodeService({});
 
 /* ── 浏览器版 VS Code（code-server）──
@@ -1205,7 +1294,7 @@ async function resticTargetStatus(target) {
   const env = Object.assign({}, process.env);
   if (target.passwordFile) env.RESTIC_PASSWORD_FILE = target.passwordFile;
   if (target.passwordCommand) env.RESTIC_PASSWORD_COMMAND = target.passwordCommand;
-  const run = await syncRun(binary, ['-r', target.repository, 'snapshots', '--json'], { timeout: 20000, env });
+  const run = await syncRun(binary, ['-r', target.repository, 'snapshots', '--json'], { timeout: 4000, env });
   if (!run.ok) return Object.assign(base, { issue: run.error || 'restic snapshots 失败' });
   let list;
   try { list = JSON.parse(run.stdout || '[]'); }
@@ -2048,7 +2137,15 @@ function stringifyFrontmatter(fm) {
    单次操作要同步读十几 MB。这里按「文件 mtimeMs + size」缓存解析结果（写入必然改 mtime，
    且应用本来就以同一指纹判定数据变化），返回时对片段对象做浅拷贝，避免调用方改到缓存。 */
 const SNIPPET_FILE_CACHE = new Map();
-const SNIPPET_FILE_CACHE_MAX = 2000;
+/* ⚠️⚠️ 2026-10-19 实测：这个上限**低于片段总数**时会变成「每次请求全量重解析」✗✗ ——
+   下面那句是 `if (SNIPPET_FILE_CACHE.size > MAX) SNIPPET_FILE_CACHE.clear();` ✓：
+   5000 个片段 → 每次塞到 5001 就整表清空 ✓ → 下一次又是全冷 ✓ →
+   `/api/snippets` **每次 11 秒**（5000 个文件全读全解析 ✓），页面首屏 12 秒 ✗。
+   实测对照：2000 个片段时 80ms ✓（刚好没超上限 ✓）。
+   ⇒ 上限提到 20000 ✓（一个片段解析后约 1KB ✓，2 万个 ≈ 20MB ✓，可接受 ✓）；
+      真超了也不整表清空，只按「死文件」清理 ✓（下面那个 else 分支本来就在做 ✓）。
+   ⚠️ 别指望「用户不会有那么多片段」✗ —— 一次导入整本词书/整个项目就上千 ✓。 */
+const SNIPPET_FILE_CACHE_MAX = 20000;
 function walkSnippets() {
   const vault = vaultPath();
   const codeRoot = path.join(vault, 'code');
@@ -3401,6 +3498,11 @@ function termSpawn(spec = {}) {
     const targetCommand = spec.command || shell;
     const targetArgs = Array.isArray(spec.args) ? spec.args : (process.platform === 'win32' ? ['-NoLogo', '-NoProfile'] : ['-i']);
     const command = py ? py : targetCommand;
+    /* ⚠️ 这里**不能**靠 `-W ignore` 去压终端里的那坨红字 ✗（试过，没用 ✓）——
+       实测 `RequestsDependencyWarning` 是**用户 zsh 启动脚本**里某个 python 打的 ✓
+       （`/bin/zsh -f -i` 干净、带 rc 就有 ✓），跟我们这个 python 进程无关 ✓，
+       `-W` 只作用于**本进程** ✓。要消掉得修 conda 里的 requests/urllib3 版本 ✓，
+       那是环境的事，不该在代码里假装看不见 ✗。 */
     const args = py ? ['-u', bridge, '--', targetCommand, ...targetArgs] : targetArgs;
     const child = spawn(command, args, { cwd: __dirname, env: { ...process.env, SHELL: shell }, stdio: ['pipe', 'pipe', 'pipe', 'pipe'] });
     const session = {
@@ -3418,10 +3520,18 @@ function termSpawn(spec = {}) {
       for (const client of session.clients) { try { client.end(); } catch (_) {} }
       session.clients.clear();
     });
-    return true;
+    /* ★★ 返回 **session 本身**（不是 `true`）✓✓（2026-10-19 实测修）——
+       调用方 `lib/routes/term.js` 里拿到的是 **ctx 里拷过去的旧 TERM** ✗：
+       `termSpawn()` 改的是 server.js 的模块级变量 ✓，而 handle 里解构出来的
+       `const { TERM } = ctx` 是**当时的值** ✓ → spawn 成功后它**还是 null** ✗ →
+       于是永远走 `res.end('终端启动失败')` ✓（用户截图就是这个 ✓），
+       而且**每来一次请求就多开一个 shell** ✓（泄漏 ✓）。
+       ⇒ 把 session 返回出去，调用方用返回值判断 ✓（对象是 truthy ✓，
+         remote.js 那句 `if (!termSpawn(spec))` 照旧成立 ✓）。 */
+    return session;
   } catch (e) {
     TERM = null;
-    return false;
+    return null;
   }
 }
 
@@ -4223,18 +4333,17 @@ function streamStatic(req, res, root, relative, options = {}) {
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
     const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
     const cacheControl = options.cacheControl || 'no-cache';
-    const canGzip = /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(req.headers['accept-encoding'] || ''))
-      && stat.size >= STATIC_GZIP_MIN_BYTES && STATIC_GZIP_TYPES.test(type);
+    const accepts = String(req.headers['accept-encoding'] || ''); const compressible = stat.size >= STATIC_GZIP_MIN_BYTES && STATIC_GZIP_TYPES.test(type);
+    const canGzip = compressible && /(?:^|,)\s*gzip\s*(?:,|$)/i.test(accepts); const canBr = compressible && /(?:^|,)\s*br\s*(?:,|$)/i.test(accepts);
     if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { ETag:etag, 'Cache-Control':cacheControl, ...(canGzip ? { Vary:'Accept-Encoding' } : {}) });
+      res.writeHead(304, { ETag:etag, 'Cache-Control':cacheControl, ...(compressible ? { Vary:'Accept-Encoding' } : {}) });
       return res.end();
     }
-    const finish = (compressed) => {
-      if (compressed) {
+    const finish = (compressed, encoding) => { if (compressed) {
         res.writeHead(200, {
           'Content-Type': type,
           'Content-Length': compressed.length,
-          'Content-Encoding': 'gzip',
+          'Content-Encoding': encoding || 'gzip',
           'Cache-Control': cacheControl,
           ETag: etag,
           Vary: 'Accept-Encoding',
@@ -4248,7 +4357,7 @@ function streamStatic(req, res, root, relative, options = {}) {
         'Content-Length': stat.size,
         'Cache-Control': cacheControl,
         ETag: etag,
-        ...(canGzip ? { Vary: 'Accept-Encoding' } : {}),
+        ...(compressible ? { Vary: 'Accept-Encoding' } : {}),
         'X-Content-Type-Options': 'nosniff',
       });
       if (req.method === 'HEAD') return res.end();
@@ -4256,7 +4365,8 @@ function streamStatic(req, res, root, relative, options = {}) {
       input.on('error', () => { if (!res.headersSent) send(res, 500, { ok:false, error:'读取静态资源失败' }); else res.destroy(); });
       input.pipe(res);
     };
-    if (canGzip) gzipStaticFile(file, stat, finish); else finish(null);
+    const fallbackGzip = () => (canGzip ? gzipStaticFile(file, stat, (g) => finish(g, 'gzip')) : finish(null));
+    if (canBr) brotliStaticFile(file, stat, (b) => (b ? finish(b, 'br') : fallbackGzip())); else fallbackGzip();
   });
   return true;   /* 发了就算吃掉 ✓ */
 }
@@ -5211,12 +5321,78 @@ function officeKind(value) {
   if (ext === '.pptx') return 'slides';
   return 'unknown';
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ 目录内自定义顺序（`.order.json`）✓✓（2026-10-19）
+   用户原话：「还有其他模块的文件，文件夹操作，也需要可以自由移动，移动顺序，等等和项目的对齐」。
+   ⚠️ 原来只有**项目树**能换顺序（靠每个文件夹 `.meta.yaml` 的 `orderIndex`）✓；
+      绘图 / Office 两棵树是**纯按名字排** ✓ → 拖拽只能「放进文件夹」✗，换不了位置 ✗。
+   ⇒ 这两棵树没有 per-item 元数据文件 ✓（一个是 .excalidraw/.drawio/.xmind，
+      一个是 .docx/.xlsx/.pptx ✓），**不能**往用户文件里塞字段 ✗
+      → 改成每个目录一个隐藏的 `.order.json` ✓：`{ "order": ["名字", …] }` ✓。
+      · 只影响**同一层**的先后 ✓，不影响任何文件内容 ✓；
+      · 列表里没有的名字（新加的 ✓）按原来的规则（目录优先、再按名字）排在后面 ✓；
+      · 文件不存在 / 解析失败 → 当作没有自定义顺序 ✓（绝不因为一个坏文件让整棵树打不开 ✗）。
+   ══════════════════════════════════════════════════════════════════════════ */
+function readDirOrder(dir) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(dir, '.order.json'), 'utf8'));
+    return raw && Array.isArray(raw.order) ? raw.order.map(String) : [];
+  } catch (_) { return []; }
+}
+function sortEntriesByOrder(entries, dir) {
+  const order = readDirOrder(dir);
+  if (!order.length) return entries;
+  const idx = new Map(order.map((name, i) => [name, i]));
+  return entries.slice().sort((a, b) => {
+    const ia = idx.has(a.name) ? idx.get(a.name) : Number.MAX_SAFE_INTEGER;
+    const ib = idx.has(b.name) ? idx.get(b.name) : Number.MAX_SAFE_INTEGER;
+    if (ia !== ib) return ia - ib;
+    if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+    return a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
+  });
+}
+function writeDirOrder(dir, names) {
+  writeFileAtomicSync(path.join(dir, '.order.json'), JSON.stringify({ order: names }));
+}
+/* 通用「同一层换顺序」✓ —— 绘图 / Office 共用 ✓
+   ⚠️ 只重排**同一层** ✗；跨层移动各自有 move 接口 ✓（/api/drawings/move、/api/office/move）。
+   ⚠️ `accept(name)` 决定「这一层里哪些**文件**算同一层的成员」✗（绘图只认绘图文件 ✓、
+      Office 只认 Office 扩展名 ✓），目录永远算 ✓。 */
+function reorderInDir(rootDir, relPath, targetRel, position, accept) {
+  const norm = (v) => String(v || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const src = norm(relPath), dst = norm(targetRel);
+  if (!src || !dst) return { ok: false, error: '路径不合法' };
+  if (src === dst) return { ok: true, unchanged: true };
+  const parentOf = (v) => (v.includes('/') ? v.slice(0, v.lastIndexOf('/')) : '');
+  if (parentOf(src) !== parentOf(dst)) return { ok: false, error: '只能在同一层里调整顺序（跨层请拖进目标文件夹）' };
+  const root = path.resolve(rootDir);
+  const dir = parentOf(src) ? path.resolve(root, parentOf(src)) : root;
+  if (dir !== root && !dir.startsWith(root + path.sep)) return { ok: false, error: '路径越界' };
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+  catch (e) { return { ok: false, error: '读目录失败: ' + e.message }; }
+  entries = entries.filter((e) => !e.name.startsWith('.') && (e.isDirectory() || accept(e.name)));
+  entries = sortEntriesByOrder(entries, dir);
+  const names = entries.map((e) => e.name);
+  const from = names.indexOf(path.posix.basename(src));
+  if (from < 0) return { ok: false, error: '项目不存在（可能刚被改名/移动）' };
+  const targetName = path.posix.basename(dst);
+  if (names.indexOf(targetName) < 0) return { ok: false, error: '目标不存在（可能刚被改名/移动）' };
+  names.splice(from, 1);
+  const at = names.indexOf(targetName) + (position === 'after' ? 1 : 0);
+  names.splice(at, 0, path.posix.basename(src));
+  try { writeDirOrder(dir, names); } catch (e) { return { ok: false, error: '写顺序失败: ' + e.message }; }
+  return { ok: true, order: names };
+}
 function officeTree() {
   const root = { type:'folder', name:'', path:'', children:[], count:0 };
   const walk = (node, absolute) => {
     let entries = [];
     try { entries = fs.readdirSync(absolute, { withFileTypes:true }); } catch (_) {}
-    entries = entries.filter((entry) => !entry.name.startsWith('.')).sort((a, b) => {
+    /* ★ 先按 `.order.json`（用户拖出来的顺序 ✓），没有才回落到「目录优先 + 名字」✓ */
+    entries = sortEntriesByOrder(entries.filter((entry) => !entry.name.startsWith('.')), absolute).sort((a, b) => {
+      const hasOrder = readDirOrder(absolute).length > 0;
+      if (hasOrder) return 0;                       /* 已有自定义顺序 → 保持 sortEntriesByOrder 的结果 ✓ */
       if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
       return a.name.localeCompare(b.name, 'zh-CN', { numeric:true });
     });
@@ -5347,14 +5523,38 @@ async function saveOfficeWordHtml(file, value) {
    虽然已经 stringify 过 ✓（见 `lifeStoreJson` ✓），但内容仍然是 JSON ✓ →
    要显式声明 `application/json` ✓（客户端 `r.json()` 其实不挑 ✓，
    但响应头写错会误导调试工具和其它调用方 ✗）。 */
-function send(res, code, obj, type) {
+function send(res, code, obj, type, extra) {
   if (res.writableEnded || res.destroyed) return false;
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
-  res.writeHead(code, {
+  const headers = {
     'Content-Type': type || (typeof obj === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8'),
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
-  });
+  };
+  if (extra) Object.assign(headers, extra);
+  /* ★★ 大响应 gzip ✓✓（2026-10-17）——
+     ⚠️ 原来 gzip **只用在 index.html** 上 ✗（`indexAsset()` 里那份 ✓），
+        API 的 JSON 一律明文 ✗ → `GET /api/life/store` 一次 **11.1 MB** ✗ →
+        局域网 / Wi-Fi 上要好幾秒 ✓（本机 57ms 看不出来 ✓）。
+     gzip 之后约 **1.5 MB** ✓（词条 JSON 字段高度重复 ✓，压缩率很高 ✓）。
+     ⚠️ 只压 **> 64KB** 的 ✗ —— 小响应压了反而更慢 ✓（压缩开销 + 多几个头 ✓）。
+     ⚠️ 必须看 `Accept-Encoding` ✗：不带时不能压 ✓，否则客户端拿到乱码 ✗。
+     ⚠️ 压了要带 `Vary: Accept-Encoding` ✓ —— 不然中间缓存会把「压过的」发给不支持的客户端 ✗。
+     ⚠️ 用 `Z_BEST_SPEED` 而不是默认级别 ✓ —— 11MB 用默认级别要 ~150ms 卡住事件循环 ✗，
+        最快级别 ~30ms ✓、体积只差几个百分点 ✓。 */
+  const ae = String((res.__req && res.__req.headers['accept-encoding']) || '');
+  if (body.length > 65536 && /\bgzip\b/.test(ae)) {
+    try {
+      const buf = zlib.gzipSync(Buffer.from(body, 'utf8'), { level: zlib.constants.Z_BEST_SPEED });
+      headers['Content-Encoding'] = 'gzip';
+      headers['Vary'] = 'Accept-Encoding';
+      headers['Content-Length'] = buf.length;
+      res.writeHead(code, headers);
+      res.end(buf);
+      return true;
+    } catch (_) { /* 压不了就发原样 ✓ —— 不能因为省流量把功能弄挂 ✗ */ }
+  }
+  res.writeHead(code, headers);
   res.end(body);
   return true;
 }
@@ -5468,6 +5668,9 @@ function armRequestGuard(req, res, pathname) {
 }
 
 const server = http.createServer(async (req, res) => {
+  /* ★ 把 req 挂到 res 上 ✓ —— `send()` 只拿到 res ✗，但它要看 `Accept-Encoding` 决定压不压 ✓。
+     改 `send()` 的签名要动**几百个调用点** ✗，挂一个字段最省 ✓。 */
+  res.__req = req;
   let u;
   try { u = new URL(req.url, 'http://' + HOST + ':' + PORT); }
   catch (_) { return send(res, 400, { ok:false, error:'请求地址不合法' }); }
@@ -5482,7 +5685,7 @@ const server = http.createServer(async (req, res) => {
     if ((req.method === 'GET' || req.method === 'HEAD') && u.pathname.startsWith('/assets/')) {
       const assetsRoot = path.join(__dirname, 'assets');
       const rel = u.pathname.slice('/assets/'.length);
-      return streamStatic(req, res, assetsRoot, rel, { cacheControl:'no-cache' });
+      return streamStatic(req, res, assetsRoot, rel, { cacheControl: /^vendor\/tldraw-assets\//.test(rel) ? 'public, max-age=31536000, immutable' : 'no-cache' });
     }
     /* ★ 把**共享的纯逻辑**暴露给浏览器 ✓ —— 只开白名单里那几个文件 ✗（不是把整个 lib/ 敞开 ✗）。
        它们是**双栖**的 ✓（Node 里 require ✓ / 浏览器里挂 window.LW_xxx ✓），
@@ -5687,7 +5890,31 @@ const server = http.createServer(async (req, res) => {
          ⚠️ `file` 变量**还要留着** ✗ —— 下面写盘（`writeFileSync(file, …)`）和
             备份轮转（`rotateStoreBackup(file)`）都要用它 ✓。 */
       const read = readLifeStore;
-      if (req.method === 'GET') return send(res, 200, LIFE_STORE.json(), 'application/json; charset=utf-8');
+      /* ★★ ETag + 304 ✓✓（2026-10-17）——
+         前端每次打开生活工作台都要拉**整份 store** ✓（11MB ✗）；
+         没改过就回 **304**（几十字节 ✓）→ 局域网里「第二次打开」几乎瞬时 ✓。
+         ⚠️ 必须配 `Cache-Control: no-cache` ✗（不是 no-store ✓）——
+            `no-store` 会让浏览器**根本不缓存** ✓ → 每次都是全量 11MB ✗；
+            `no-cache` 是「可以缓存、但每次要回来问一声」✓ → 带 `If-None-Match` ✓ → 304 ✓。
+         ⚠️ ETag 用**文件的 size + mtimeMs** ✓ —— 写完盘 mtime 必变 ✓，
+            比对内容做哈希便宜得多 ✓（11MB 每次算 md5 要 30ms+ ✗）。 */
+      if (req.method === 'GET') {
+        /* ⚠️ ETag 必须覆盖**两个文件** ✗（2026-10-19 拆分之后）——
+           只认主文件的话：改词库时主文件**没变** ✓ → 浏览器拿 304 ✓ →
+           界面上的词库**永远是旧的** ✗（而且不会报错 ✗）。
+           `LIFE_STORE.version()` = 主文件 size+mtime | 词库文件 size+mtime ✓。 */
+        let tag = '';
+        try {
+          const v = LIFE_STORE.version();
+          if (v !== '-|-') tag = 'W/"' + v.replace('|', '-') + '"';
+        } catch (_) { }
+        if (tag && req.headers['if-none-match'] === tag) {
+          res.writeHead(304, { ETag: tag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding' });
+          return res.end();
+        }
+        return send(res, 200, LIFE_STORE.json(), 'application/json; charset=utf-8',
+          tag ? { ETag: tag, 'Cache-Control': 'no-cache' } : null);
+      }
       if (req.method === 'POST' || req.method === 'PUT') {
         try {
           /* ★ 上限 4MB → **32MB** ✓（2026-10-15）——
@@ -5700,6 +5927,22 @@ const server = http.createServer(async (req, res) => {
                 体积凭空涨 15%+ ✓（3.4MB → 4.1MB ✗ 正好越过上限 ✓）。 */
           const body = await readBody(req, 32 * 1024 * 1024);
           const next = body && typeof body === 'object' ? body : {};
+          /* ★★ `__keepWords`：客户端说「词库这次没变」✓（2026-10-19）——
+             背景：store 8.5MB，`words` 独占 9MB（4611 词 ✓），改一个字的备忘录
+             也要把它原样再传一遍 ✓ → 本机 POST 291ms、局域网 ≈1.4s、
+             服务端还要重写 12.8MB 盘 ✓。
+             客户端比对「序列化后的 words」与上次**成功**发出去的那份 ✓，
+             一致就只发 `{__keepWords:true}` ✓ → 这里用磁盘上现有的补齐 ✓。
+             ⚠️ 补齐必须发生在**任何校验之前** ✗ —— 后面「键数不到一半就拒收」的护栏
+                要按补齐后的键数算 ✓，否则只剩十几个键会被误判成不完整副本 ✗。
+             ⚠️ 拿不到现有 words（文件损坏 / 首次）→ 忽略这个标记 ✓，
+                让它落成一次「没有 words 的写入」比 500 好 ✓（前面的护栏还会兜一层 ✓）。 */
+          /* ⚠️ **不要**把现有 words 拷进 `next` ✗✗ —— 第一版就是这么写的 ✓，
+             `JSON.stringify(9MB)` 要跑**两遍**（一次拷进来、一次跟磁盘比）✓ →
+             实测仍然 **63~69ms** ✗，等于白拆 ✗。
+             「词库没变」的正确语义就是**这次不碰词库文件** ✓ ——
+             什么都不做就是最省的做法 ✓（词库文件本来就在那儿 ✓）。 */
+          if (next.__keepWords === true) delete next.__keepWords;
           /* ★★ 凭据防覆盖 ✓ —— 见 GUARDED_STORE_KEYS 上面那段注释 ✓。
              ⚠️ 要删就显式带 `__drop: [...]` ✗ —— 不然「断开连接」也删不掉 ✓。
              ⚠️ 判据是「**incoming 里没有**」✗，不是「incoming 里是空串」✗：
@@ -5743,13 +5986,83 @@ const server = http.createServer(async (req, res) => {
              只能眼睁睁看着用户数据丢 ✗。所以留一层安全网：
              最多 5 分钟一份、保留 6 份（≈ 半小时窗口）✓，
              只存本机同目录（life-workbench.bak.0..5.json）✓，不外传 ✓。 */
+          /* ★★ 词库拆到 `life-words.json` ✓✓（2026-10-19）——
+             ⚠️ 拆之前：每次保存都要 `JSON.stringify(12.8MB)` + `writeFileSync(12.8MB)` ✓，
+                实测 **66~72ms 同步阻塞** ✗（客户端已经只传 83KB 了 ✓，瓶颈全在服务端 ✓）。
+             现在：主文件只剩几十 KB ✓，词库**内容没变就不写** ✓（逐字节比较 ✓）。
+             ⚠️ 比较用**序列化后的字符串** ✗ 不要用 mtime / 长度 ——
+                长度相同、内容不同的改法（改一个字母）会漏 ✗。
+             ⚠️ 写词库之前先留一份上一版 ✓（`life-words.prev.json` ✓）——
+                9MB 的轮转备份太贵 ✗，但「写坏了回不去」更不能接受 ✗。 */
+          let wordsJson = null;
+          if (Array.isArray(next.words)) { wordsJson = JSON.stringify(next.words); delete next.words; }
           try { rotateStoreBackup(file); } catch (_) {}
           try { dailyStoreBackup(file); } catch (_) {}
-          fs.writeFileSync(file, JSON.stringify(next, null, 2));
+          /* ⚠️ 紧凑写（不再 2 空格缩进）✗ —— 12.8MB → 8.5MB ✓，
+             同时省掉一次大字符串的生成 ✓。这个文件是**程序管**的 ✓，
+             没有人会去手改 4611 个词的 JSON ✓（真要看得用工具 ✓）。 */
+          fs.writeFileSync(file, JSON.stringify(next));
+          if (wordsJson) {
+            const cur = LIFE_STORE.readWordsRaw();
+            const curJson = cur ? JSON.stringify(cur.words) : '';
+            if (curJson !== wordsJson) {
+              const wordsFile = LIFE_STORE.wordsFileOf();
+              try { if (fs.existsSync(wordsFile)) fs.copyFileSync(wordsFile, path.join(path.dirname(wordsFile), 'life-words.prev.json')); } catch (_) {}
+              fs.writeFileSync(wordsFile, '{"words":' + wordsJson + '}');
+            }
+          }
           return send(res, 200, { ok: true });
         } catch (error) {
           return send(res, 400, { ok: false, error: String((error && error.message) || error) });
         }
+      }
+    }
+    /* ★★ 词群导图 ✓（2026-10-17）—— 书里每个词群开头那张**思维导图** ✓，
+       裁好放在 `<数据目录>/wordmaps/` 下 ✓，这里按文件名直接发 ✓。
+       ⚠️ 文件名**必须白名单校验** ✗ —— 这是「把用户给的名字拼进路径」的典型口子 ✓
+          （`../` 就能读到数据目录外面去 ✗）。只认 `g<12位十六进制>.jpg` ✓。
+       ⚠️ 用 `res.writeHead + res.end(buf)` ✗ 不能走 `send()` ✓ ——
+          `send()` 只会发字符串 ✓（Buffer 会被 JSON.stringify 成 `{"type":"Buffer",…}` ✗）。 */
+    if (u.pathname.indexOf('/api/life/wordmap/') === 0) {
+      let name = '';
+      try { name = path.basename(decodeURIComponent(u.pathname.slice('/api/life/wordmap/'.length))); } catch (_) {}
+      if (!/^g[0-9a-f]{12}\.jpg$/.test(name)) return send(res, 400, { ok: false, error: '文件名不合法' });
+      try {
+        const buf = fs.readFileSync(path.join(applicationDataRoot(), 'wordmaps', name));
+        res.writeHead(200, {
+          'Content-Type': 'image/jpeg',
+          'Content-Length': buf.length,
+          'Cache-Control': 'public, max-age=604800',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        return res.end(buf);
+      } catch (_) {
+        return send(res, 404, { ok: false, error: '没有这张导图' });
+      }
+    }
+    /* 工作流「下载文件」的存取 ✓（2026-10-18）——
+       ⚠️ 文件名是**服务端生成**的 ✓（`f<时间戳36><随机>.<ext>` ✓），
+          这里仍然**白名单校验** ✗ —— 防的是「路径穿越」那道口子 ✓（`../` ✗）。
+       ⚠️ Content-Type 必须按扩展名给 ✗ —— 视频要能被 `<video>` 直接播 ✓，
+          一律 `application/octet-stream` 的话浏览器只会下载 ✗。 */
+    if (u.pathname.indexOf('/api/life/flowfile/') === 0) {
+      let name = '';
+      try { name = path.basename(decodeURIComponent(u.pathname.slice('/api/life/flowfile/'.length))); } catch (_) {}
+      if (!FLOW_FILE_RE.test(name)) return send(res, 400, { ok: false, error: '文件名不合法' });
+      try {
+        const buf = fs.readFileSync(path.join(FLOW_FILE_DIR(), name));
+        const ext = name.split('.').pop().toLowerCase();
+        res.writeHead(200, {
+          'Content-Type': FLOW_FILE_MIME[ext] || 'application/octet-stream',
+          'Content-Length': buf.length,
+          'Cache-Control': 'public, max-age=604800',
+          'X-Content-Type-Options': 'nosniff',
+          /* 视频要能拖进度条 ✓ —— 没有它浏览器只能整段下完才播 ✗ */
+          'Accept-Ranges': 'bytes',
+        });
+        return res.end(buf);
+      } catch (_) {
+        return send(res, 404, { ok: false, error: '没有这个文件' });
       }
     }
     /* 论文检索：arXiv API（免费、无需 key）。
@@ -5931,7 +6244,11 @@ const server = http.createServer(async (req, res) => {
         u.pathname === '/api/life/en/wordimg' || u.pathname === '/api/life/ebook/import' ||
         u.pathname === '/api/life/ebook/chapter' || u.pathname === '/api/life/ebook/meta' ||
         u.pathname === '/api/life/ebook' || u.pathname === '/api/life/ebook/search' ||
-        u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends') {
+        u.pathname === '/api/life/flow/run' || u.pathname === '/api/life/trends' ||
+        /* ⚠️ 这三个**必须加进白名单** ✗ —— 这段是个大 if，没列进来就是 404 ✗
+           （实测：加了路由没加这里 → 「Not Found: /api/life/browser/status」✗） */
+        u.pathname === '/api/life/browser/status' || u.pathname === '/api/life/browser/open' ||
+        u.pathname === '/api/life/browser/close') {
       const readCfg = () => {
         try { return JSON.parse(fs.readFileSync(path.join(applicationDataRoot(), 'life-mail.json'), 'utf8')) || {}; } catch (_) { return {}; }
       };
@@ -6480,6 +6797,30 @@ const server = http.createServer(async (req, res) => {
            ⚠️ AI 节点的配置由**前端随请求带上来** ✓（和 /api/ai/chat 一样 ✓），
               服务端不存 Key ✓、不打日志 ✓。
            ⚠️ 节点数 / 单次运行时长都要有上限 ✗ —— 不然一张大图能把服务挂住 ✗。 */
+        /* ══ 网页版自动化 ✓（2026-10-18）════════════════════════════════════
+           用户原话：「打开网页版的 deepseek，和豆包进行文本，视频生成等那种」✓。
+           ⚠️ 登录**只能人来** ✗ —— 这里只负责「把窗口开出来」✓，
+              登录动作是用户在**那个窗口**里自己做 ✓（Cookie 留在独立 profile 里 ✓）。
+           ⚠️ 必须挂在**本机**语义上 ✓：浏览器是这台机器上的进程 ✓，
+              局域网里的手机点「打开」会弹在这台 Mac 上 ✓（能用但别指望看到 ✓）。 */
+        if (u.pathname === '/api/life/browser/status') {
+          try { return send(res, 200, { ok: true, data: await BROWSER_AGENT.status() }); }
+          catch (e) { return send(res, 200, { ok: false, error: String((e && e.message) || e) }); }
+        }
+        if (u.pathname === '/api/life/browser/open') {
+          if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          const b = await readBody(req);
+          try {
+            const r = await BROWSER_AGENT.openSite(String((b && b.site) || 'deepseek'));
+            return send(res, 200, { ok: true, data: r });
+          } catch (e) { return send(res, 200, { ok: false, error: String((e && e.message) || e) }); }
+        }
+        if (u.pathname === '/api/life/browser/close') {
+          if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+          try { return send(res, 200, { ok: true, data: await BROWSER_AGENT.closeBrowser() }); }
+          catch (e) { return send(res, 200, { ok: false, error: String((e && e.message) || e) }); }
+        }
+
         if (u.pathname === '/api/life/flow/run') {
           if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
           const graph = (postBody && postBody.graph) || null;
@@ -6532,6 +6873,13 @@ const server = http.createServer(async (req, res) => {
           try {
             const r = await WORKFLOW.runFlow(graph, {
               ai: aiCfg, aiChat, fetch: fetch, now: Date.now(),
+              /* ★ 多提供商 ✓（2026-10-18）—— 前端把 `STORE.flowProviders` 原样带上来 ✓，
+                 这里白名单化之后交给引擎 ✓（每个 AI 节点自己选哪个 ✓）。 */
+              providers: flowProvidersFromStore({ flowProviders: (postBody && postBody.providers) || [] }),
+              /* ★ 「下载文件」节点用 ✓ —— 存到 `<数据目录>/flow-files/` ✓ */
+              saveRemote: saveFlowRemote,
+              /* ★ 「网页版」节点用 ✓（2026-10-18）—— 真正去开浏览器点网页 ✓ */
+              browser: { chat: BROWSER_AGENT.chat, video: BROWSER_AGENT.video },
               /* ★ 表达式里要用到这几个 ✓（`$workflow.name` / `$execution.id` ✓）——
                  不传的话用户写 `{{ $workflow.name }}` 会得到空串 ✗。 */
               workflowName: String((postBody && postBody.flowName) || '').slice(0, 120),
@@ -6862,7 +7210,7 @@ const server = http.createServer(async (req, res) => {
       /* ★ version 路由抽到 lib/routes/version.js（2026-10-11）*/
       if (await versionRoute.handle(req, res, u, { send, APP_VERSION, APP_MODE }) || res.writableEnded) return;
       /* ★ office 路由抽到 lib/routes/office.js（2026-10-11）*/
-      if (await officeRoute.handle(req, res, u, { officeTree, send, officeDir, officePath, path, streamStatic, onlyOfficeHealth, publicOnlyOfficeConnection, onlyOfficeServiceStatus, readBody, controlOnlyOfficeService, saveOnlyOfficeConnection, OFFICE_ENGINE, officeKind, fs, onlyOfficeDocumentType, ONLYOFFICE_CONNECTION, onlyOfficeBrowserUrl, onlyOfficeConfig, onlyOfficeTokenValid, saveOnlyOfficeResult, officeWordToHtml, saveOfficeWordHtml, officeSafeFolder, uniqueOfficeTarget, createOfficeDocument, OFFICE_EXTS, XLSX, crypto, officeStreamToFile, validateOfficeFile }) || res.writableEnded) return;
+      if (await officeRoute.handle(req, res, u, { officeTree, send, officeDir, officePath, path, streamStatic, onlyOfficeHealth, publicOnlyOfficeConnection, onlyOfficeServiceStatus, readBody, controlOnlyOfficeService, saveOnlyOfficeConnection, OFFICE_ENGINE, officeKind, fs, onlyOfficeDocumentType, ONLYOFFICE_CONNECTION, onlyOfficeBrowserUrl, onlyOfficeConfig, onlyOfficeTokenValid, saveOnlyOfficeResult, officeWordToHtml, saveOfficeWordHtml, officeSafeFolder, uniqueOfficeTarget, createOfficeDocument, OFFICE_EXTS, XLSX, crypto, officeStreamToFile, validateOfficeFile, reorderInDir }) || res.writableEnded) return;
     if (req.method === 'GET' && u.pathname === '/api/readings/tree') {
       fs.mkdirSync(readingsDir(), { recursive:true });
       const root = readingTree();
@@ -7137,6 +7485,7 @@ const server = http.createServer(async (req, res) => {
       /* ★ integrations 路由抽到 lib/routes/integrations.js（2026-10-11）*/
       if (await integrationsRoute.handle(req, res, u, { send, DSH, readBody, server, codeServerStatus, VSCODE_PROXY, VSCODE, OPENCODE }) || res.writableEnded) return;
       /* ★ env 路由抽到 lib/routes/env.js（2026-10-11）*/
+      if (await require('./lib/routes/lan').handle(req, res, u, { send, vaultPath })) return;
       if (await envRoute.handle(req, res, u, { ONLYOFFICE_CONNECTION, readOnlyOfficeConnection, getEnv, runtimeReadiness, onlyOfficeHealth, XLSX, path, Document, DSH, installHint, platformInfo, send, APP_VERSION, APP_MODE, deploymentInfo, vaultPath }) || res.writableEnded) return;
       /* ★ latex 路由抽到 lib/routes/latex.js（2026-10-11）——
          样板见那个文件的文件头。 */
@@ -7217,8 +7566,26 @@ const server = http.createServer(async (req, res) => {
           st.folderIdByPath[subRel] = fid;
           st.folderUi[fid] = { isOpen: 1 };
         }
+        /* ★ 新文件夹排到**最后** ✓（2026-10-19）——
+           ⚠️ 原来一律写 `orderIndex: 0` ✓：树是「orderIndex 优先、其次按名字」✓，
+              一旦用户手动排过序（0..n-1 ✓），新文件夹的 0 会跟第一个撞上 ✓ →
+              变成「按名字插在中间」✗，看着像没排上 ✗。
+           ⇒ 取同级最大值 +1 ✓（同级都还是 0 的时候也自然成立 ✓）。 */
+        let nextOrder = 0;
+        try {
+          const parentDir = path.dirname(metaPath);
+          for (const sib of fs.readdirSync(parentDir, { withFileTypes: true })) {
+            if (!sib.isDirectory() || sib.name.startsWith('.')) continue;
+            const sibMeta = path.join(parentDir, sib.name, '.meta.yaml');
+            if (sibMeta === metaPath) continue;
+            try {
+              const mm = /^orderIndex:\s*(-?\d+)/m.exec(fs.readFileSync(sibMeta, 'utf8'));
+              if (mm) nextOrder = Math.max(nextOrder, Number(mm[1]) + 1);
+            } catch (_) { }
+          }
+        } catch (_) { }
         writeFileAtomicSync(metaPath,
-          `id: ${fid}\ncreatedAt: ${now}\ndefaultLanguage: ${i === segs.length - 1 ? defaultLanguage : 'plain_text'}\nicon: null\nname: ${segs[i]}\norderIndex: 0\nupdatedAt: ${now}\n`, 'utf8');
+          `id: ${fid}\ncreatedAt: ${now}\ndefaultLanguage: ${i === segs.length - 1 ? defaultLanguage : 'plain_text'}\nicon: null\nname: ${segs[i]}\norderIndex: ${nextOrder}\nupdatedAt: ${now}\n`, 'utf8');
       }
       writeState(st);
       return send(res, 200, { ok: true, folder: rel, id: st.folderIdByPath[rel] });
@@ -7361,6 +7728,69 @@ const server = http.createServer(async (req, res) => {
       st.folderIdByPath = mapped;
       writeState(st);
       return send(res, 200, { ok: true, folder: targetRel, from: folder });
+    }
+    /* ★★ 调整文件夹顺序 ✓（2026-10-19，用户报「无法移动顺序」）——
+       ⚠️ 原来只能「拖进另一个文件夹」（改父级 ✓），**同一层里换位置**完全没入口 ✗：
+          树是按 `.meta.yaml` 里的 `orderIndex` 排的 ✓，而新建文件夹一律写 `orderIndex: 0` ✓
+          → 全为 0 时退回按名字排 ✓ → 用户怎么拖都不会变 ✗。
+       ⇒ 这里只做**同一层重排** ✓：把 `folder` 插到 `target` 前面/后面 ✓，
+          然后把这一层所有兄弟的 `orderIndex` 重写成 0..n-1 ✓（不搞增量，简单且不会算错 ✓）。
+       ⚠️ 跨层移动**不走这里** ✗ —— 那是 `/api/fs/move-folder` 的活 ✓（它会改父级 ✓）。 */
+    if (req.method === 'POST' && u.pathname === '/api/fs/reorder-folder') {
+      const b = await readBody(req);
+      const norm = (v) => String(v || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      const folder = norm(b.folder);
+      const target = norm(b.target);
+      const position = b.position === 'after' ? 'after' : 'before';
+      const badSeg = (value) => !value || value.split('/').some((seg) => !seg || seg === '.' || seg === '..');
+      if (badSeg(folder) || badSeg(target)) return send(res, 400, { ok: false, error: '文件夹路径不合法' });
+      if (folder === target) return send(res, 200, { ok: true, unchanged: true });
+      const parentOf = (value) => (value.includes('/') ? value.slice(0, value.lastIndexOf('/')) : '');
+      if (parentOf(folder) !== parentOf(target)) return send(res, 400, { ok: false, error: '只能在同一层里调整顺序（跨层请拖进目标文件夹）' });
+      const codeRoot = path.resolve(path.join(vaultPath(), 'code'));
+      const dir = parentOf(folder) ? path.resolve(codeRoot, parentOf(folder)) : codeRoot;
+      if (dir !== codeRoot && !dir.startsWith(codeRoot + path.sep)) return send(res, 400, { ok: false, error: '路径越界' });
+      /* 读这一层的真实顺序（和前端同一套规则：orderIndex 优先，其次按名字） */
+      const siblings = [];
+      try {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (!e.isDirectory() || e.name.startsWith('.')) continue;
+          const full = path.join(dir, e.name);
+          let orderIndex = 0;
+          try {
+            const m = fs.readFileSync(path.join(full, '.meta.yaml'), 'utf8');
+            const mm = /^orderIndex:\s*(.+)$/m.exec(m);
+            if (mm) orderIndex = Number(mm[1]) || 0;
+          } catch (_) { }
+          siblings.push({ name: e.name, full, orderIndex });
+        }
+      } catch (e) { return send(res, 500, { ok: false, error: '读文件夹失败: ' + e.message }); }
+      siblings.sort((a, b2) => (a.orderIndex ?? 0) - (b2.orderIndex ?? 0) || a.name.localeCompare(b2.name, 'zh'));
+      const from = siblings.findIndex((x) => x.name === path.posix.basename(folder));
+      const to = siblings.findIndex((x) => x.name === path.posix.basename(target));
+      if (from < 0 || to < 0) return send(res, 404, { ok: false, error: '文件夹不存在（可能刚被改名/移动）' });
+      const [moved] = siblings.splice(from, 1);
+      const insertAt = (() => {
+        const idx = siblings.findIndex((x) => x.name === path.posix.basename(target));
+        return position === 'after' ? idx + 1 : idx;
+      })();
+      siblings.splice(insertAt, 0, moved);
+      /* 把顺序写回每个兄弟的 .meta.yaml ✓（缺文件就建一个最小的 ✓） */
+      let written = 0;
+      for (let i = 0; i < siblings.length; i++) {
+        const metaPath = path.join(siblings[i].full, '.meta.yaml');
+        try {
+          let text = '';
+          try { text = fs.readFileSync(metaPath, 'utf8'); } catch (_) { }
+          if (!text) text = 'name: ' + siblings[i].name + '\n';
+          const next = /^orderIndex\s*:/m.test(text)
+            ? text.replace(/^orderIndex\s*:.*$/m, 'orderIndex: ' + i)
+            : text.replace(/\s*$/, '\n') + 'orderIndex: ' + i + '\n';
+          if (next !== text) writeFileAtomicSync(metaPath, next, 'utf8');
+          written++;
+        } catch (_) { }
+      }
+      return send(res, 200, { ok: true, order: siblings.map((x) => x.name), written });
     }
     // 编辑片段信息：名称/类型(语言)/标签/说明（fragmentId 指定要改语言的分片，默认第一个）
     if (req.method === 'POST' && u.pathname === '/api/fs/update') {
@@ -7630,12 +8060,12 @@ const server = http.createServer(async (req, res) => {
       if (base.indexOf('\\') >= 0) return null;
       if (/(^|\/)\.{1,2}(\/|$)|^\/|\/\/|^[A-Za-z]:/.test(base)) return null;   // 防穿越：拒绝 ..、前导 /、//、盘符
       if (!/^[A-Za-z0-9._\-\u00a0-\uffff /]+$/.test(base)) return null;          // 每段仅合法字符（保留中文/空格，分隔符允许 /）
-      if (!/\.(?:excalidraw|drawio|xmind)$/i.test(base)) return null;
+      if (!/\.(?:excalidraw|drawio|xmind|canvas)$/i.test(base)) return null;
       return base;
     }
     function drawingKind(name) {
       const value = String(name || '');
-      return /\.drawio$/i.test(value) ? 'drawio' : (/\.xmind$/i.test(value) ? 'xmind' : 'excalidraw');
+      return /\.drawio$/i.test(value) ? 'drawio' : (/\.xmind$/i.test(value) ? 'xmind' : (/\.canvas$/i.test(value) ? 'canvas' : 'excalidraw'));
     }
     function xmindId() { return crypto.randomUUID().replace(/-/g, '').slice(0, 26); }
     function newXmindWorkbook(title) {
@@ -7754,10 +8184,14 @@ const server = http.createServer(async (req, res) => {
       const walk = (node, abs) => {
         let entries = [];
         try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch (_) {}
-        entries.sort((a, b) => {
-          if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        });
+        /* ★ 同 Office：`.order.json` 优先 ✓，没有才「目录优先 + 名字」✓ */
+        entries = sortEntriesByOrder(entries.filter((e) => !e.name.startsWith('.')), abs);
+        if (!readDirOrder(abs).length) {
+          entries.sort((a, b) => {
+            if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        }
         let n = 0;
         for (const ent of entries) {
           if (ent.isDirectory()) {
@@ -7788,6 +8222,7 @@ const server = http.createServer(async (req, res) => {
         if (drawingKind(name) === 'xmind') return send(res, 200, { ok:true, name, kind:'xmind', ...readXmindFile(target) });
         const raw = fs.readFileSync(target, 'utf8');
         if (drawingKind(name) === 'drawio') return send(res, 200, { ok: true, name, kind: 'drawio', xml: raw });
+        if (drawingKind(name) === 'canvas') return send(res, 200, { ok: true, name, kind: 'canvas', canvas: JSON.parse(raw) });
         const scene = JSON.parse(raw);
         return send(res, 200, { ok: true, name, kind: 'excalidraw', ...scene });
       } catch (error) { return send(res, 200, { ok: false, error: '读取失败（文件不存在或绘图格式无效）：' + String(error && error.message || error).slice(0, 220) }); }
@@ -7798,8 +8233,7 @@ const server = http.createServer(async (req, res) => {
       return streamStatic(req, res, drawingsDir(), name, { cacheControl:'no-cache', notFound:'XMind 文件不存在' });
     }
     if (req.method === 'POST' && u.pathname === '/api/drawings/save') {
-      const b = await readBody(req);
-      const name = drawingName(b.name);
+      const b = await readBody(req); const name = drawingName(b.name);
       if (!name) return send(res, 200, { ok: false, error: '文件名不合法' });
       const data = b.data;
       const dir = drawingsDir();
@@ -7814,11 +8248,12 @@ const server = http.createServer(async (req, res) => {
         body = data && typeof data.xml === 'string' ? data.xml : '';
         const inspection = inspectDrawioXml(body);
         if (!inspection.ok) return send(res, 200, inspection);
+            } else if (drawingKind(name) === 'canvas') { body = JSON.stringify(data && data.canvas ? data.canvas : data); if (!drawingsAsset.canSaveCanvas(target, body)) return send(res, 200, { ok: false, error: '已阻止：不接受用空画布覆盖原文件' });
       } else {
         if (!data || typeof data !== 'object' || !Array.isArray(data.elements)) return send(res, 200, { ok: false, error: '缺少 Excalidraw 场景数据' });
         body = JSON.stringify({ type: 'excalidraw', version: 2, source: 'file://', elements: data.elements, appState: data.appState || {}, files: data.files || {} });
       }
-      try { writeFileAtomicSync(target, body); return send(res, 200, { ok: true, name, bytes: body.length }); }
+      try { try { if (fs.existsSync(target) && fs.statSync(target).size > 200) { try { if (fs.existsSync(target + '.bak')) fs.copyFileSync(target + '.bak', target + '.bak2'); } catch (_) {} fs.copyFileSync(target, target + '.bak'); } } catch (_) {} writeFileAtomicSync(target, body); return send(res, 200, { ok: true, name, bytes: body.length }); }
       catch (e) { return send(res, 200, { ok: false, error: '写入失败: ' + String((e && e.message) || e) }); }
     }
     if (req.method === 'POST' && u.pathname === '/api/drawings/validate') {
@@ -7829,9 +8264,9 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const sub = drawingDir2(b && b.dir);          // 目标目录（'' = 根）
       if (sub === null) return send(res, 200, { ok: false, error: '目录不合法' });
-      const kind = b && ['drawio', 'xmind'].includes(b.kind) ? b.kind : 'excalidraw';
-      const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : '.excalidraw');
-      const baseRaw = String((b && b.name) || '').replace(/\.(?:excalidraw|drawio|xmind)$/i, '').trim();
+      const kind = b && ['drawio', 'xmind', 'canvas'].includes(b.kind) ? b.kind : 'excalidraw';
+      const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : (kind === 'canvas' ? '.canvas' : '.excalidraw'));
+      const baseRaw = String((b && b.name) || '').replace(/\.(?:excalidraw|drawio|xmind|canvas)$/i, '').trim();
       const base = baseRaw || 'Untitled';
       if (!/^[A-Za-z0-9._\-\u00a0-\uffff ]+$/.test(base) || base === '.' || base === '..') return send(res, 200, { ok: false, error: '名称不合法' });
       const dirAbs = path.join(drawingsDir(), sub || '.');
@@ -7845,7 +8280,7 @@ const server = http.createServer(async (req, res) => {
       const full = sub ? sub + '/' + name : name;
       const scene = kind === 'drawio'
         ? '<mxfile host="CodeScope"><diagram id="page-1" name="Page-1"><mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>'
-        : (kind === 'xmind' ? newXmindWorkbook(base) : { type: 'excalidraw', version: 2, source: 'file://', elements: [], appState: {}, files: {} });
+        : (kind === 'xmind' ? newXmindWorkbook(base) : (kind === 'canvas' ? {} : { type: 'excalidraw', version: 2, source: 'file://', elements: [], appState: {}, files: {} }));
       try {
         if (kind === 'xmind') {
           const info = writeXmindFile(path.join(dirAbs, name), scene);
@@ -7862,12 +8297,11 @@ const server = http.createServer(async (req, res) => {
       const sub = drawingDir2(b && b.name);         // 新建目录名（可含 / 嵌套）
       if (!sub || sub === '.') return send(res, 200, { ok: false, error: '文件夹名称不合法' });
       const full = parent ? parent + '/' + sub : sub;
-      try {
-        fs.mkdirSync(path.join(drawingsDir(), full), { recursive: true });
-        return send(res, 200, { ok: true, path: full });
-      } catch (e) { return send(res, 200, { ok: false, error: '创建失败: ' + String((e && e.message) || e) }); }
+      try { fs.mkdirSync(path.join(drawingsDir(), full), { recursive: true }); return send(res, 200, { ok: true, path: full }); } catch (e) { return send(res, 200, { ok: false, error: '创建失败: ' + String((e && e.message) || e) }); }
     }
-    if (req.method === 'POST' && u.pathname === '/api/drawings/delete') {
+        if (req.method === 'POST' && u.pathname === '/api/drawings/folder-rename') { const b = await readBody(req); return send(res, 200, drawingsFolder.renameFolder(drawingsDir(), b && b.name, b && b.newName)); } if (req.method === 'POST' && u.pathname === '/api/drawings/folder-delete') { const b2 = await readBody(req); return send(res, 200, drawingsFolder.deleteFolder(drawingsDir(), b2 && b2.name)); }
+        if (req.method === 'POST' && u.pathname === '/api/drawings/asset') { const b3 = await readBody(req); return send(res, 200, drawingsAsset.saveDataUrl(drawingsDir(), b3 && b3.name, b3 && b3.dataUrl)); } if (req.method === 'GET' && u.pathname === '/api/drawings/asset') { const f = u.searchParams.get('f') || ''; if (!drawingsAsset.isAssetName(f)) return send(res, 404, { ok: false, error: '资源不存在' }); return streamStatic(req, res, drawingsAsset.assetsDir(drawingsDir()), f, { cacheControl: 'public, max-age=31536000, immutable' }); }
+if (req.method === 'POST' && u.pathname === '/api/drawings/delete') {
       const b = await readBody(req);
       const name = drawingName(b.name);
       if (!name) return send(res, 200, { ok: false, error: '文件名不合法' });
@@ -7881,7 +8315,7 @@ const server = http.createServer(async (req, res) => {
       const name = drawingName(b && b.name);
       if (!name) return send(res, 200, { ok: false, error: '文件名不合法' });
       const kind = drawingKind(name);
-      const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : '.excalidraw');
+      const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : (kind === 'canvas' ? '.canvas' : '.excalidraw'));
       const baseRaw = String((b && b.newName) || '').replace(/\.(?:excalidraw|drawio|xmind)$/i, '').trim();
       if (!baseRaw) return send(res, 200, { ok: false, error: '名称不合法' });
       if (!/^[A-Za-z0-9._\-\u00a0-\uffff ]+$/.test(baseRaw) || baseRaw === '.' || baseRaw === '..' || /[\\/]/.test(baseRaw)) return send(res, 200, { ok: false, error: '名称不合法（仅当前文件夹内命名）' });
@@ -7910,6 +8344,12 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true, name: full });
       } catch (_) { return send(res, 200, { ok: false, error: '重命名失败（文件不存在或已被占用）' }); }
     }
+    /* ★ 绘图：同一层换顺序 ✓（2026-10-19，和项目树对齐）—— 只写目录里的 `.order.json` ✓ */
+    if (req.method === 'POST' && u.pathname === '/api/drawings/reorder') {
+      const b = await readBody(req, 16 * 1024);
+      const r = reorderInDir(drawingsDir(), b.name, b.target, b.position, (n) => !!drawingName(n));
+      return send(res, r.ok ? 200 : 400, r);
+    }
     if (req.method === 'POST' && u.pathname === '/api/drawings/move') {
       const b = await readBody(req);
       const name = drawingName(b && b.name);
@@ -7924,7 +8364,7 @@ const server = http.createServer(async (req, res) => {
       let target = fromFile, i = 2;
       while (fs.existsSync(path.join(dirAbs, target)) && (toDir ? toDir + '/' + target : target) !== name) {
         const kind = drawingKind(fromFile);
-        const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : '.excalidraw');
+        const ext = kind === 'drawio' ? '.drawio' : (kind === 'xmind' ? '.xmind' : (kind === 'canvas' ? '.canvas' : '.excalidraw'));
         target = fromFile.replace(/\.(?:excalidraw|drawio|xmind)$/i, '') + '-' + i + ext; i += 1;
         if (i > 100000) return send(res, 200, { ok: false, error: '无法分配文件名' });
       }
@@ -8241,7 +8681,7 @@ VNC_WSS.on('connection', (ws, _req, target) => {
   tcp.setTimeout(10000, () => tcp.destroy());
   tcp.once('connect', () => tcp.setTimeout(0));
   ws.on('message', (data) => { if (!tcp.destroyed && tcp.writable) tcp.write(data); });
-  tcp.on('data', (data) => { if (ws.readyState === 1) ws.send(data, { binary: true }); });
+  tcp.pipe(createVncAuthFilter()).on('data', (data) => { if (ws.readyState === 1) ws.send(data, { binary: true }); });
   const closeWs = () => { if (ws.readyState === 0 || ws.readyState === 1) ws.close(); };
   tcp.on('error', closeWs);
   tcp.on('close', closeWs);

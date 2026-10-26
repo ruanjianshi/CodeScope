@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mind · 思维导图窗口</title>
+<link rel="stylesheet" href="/assets/vendor/mind-elixir/MindElixir.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #15171c; }
+  body { font: 13px/1.5 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+  #map { width: 100%; height: 100%; }
+  /* 只读态：整张图不吃鼠标（鼠标事件要留给外面的卡片拖动）*/
+  body:not(.editing) #map { pointer-events: none; }
+  /* Mind Elixir 自带的浮动工具条在只读态收起来 */
+  body:not(.editing) .mind-elixir-toolbar,
+  body:not(.editing) .context-menu,
+  body:not(.editing) .node-menu { display: none !important; }
+  /* 滚轮在只读态不要缩放（外面是画布） */
+  body:not(.editing) #map * { cursor: default !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="/assets/vendor/mind-elixir/MindElixir.iife.js"></script>
+<script>
+(function () {
+  const DEFAULT = {
+    nodeData: {
+      id: 'root', topic: '中心主题', root: true, expanded: true,
+      children: [
+        { id: 'c1', topic: '分支一', expanded: true, children: [] },
+        { id: 'c2', topic: '分支二', expanded: true, children: [] },
+      ],
+    },
+  };
+
+  const THEME = {
+    name: 'codescope', type: 'dark',
+    palette: ['#7dd3fc', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#60a5fa'],
+    cssVar: {
+      '--main-color': '#dbe4f0',
+      '--main-bgcolor': '#1e2531',
+      '--color': '#c9d2de',
+      '--bgcolor': '#15171c',
+      '--selected': '#5b93ff',
+      '--accent-color': '#5b93ff',
+      '--root-color': '#ffffff',
+      '--root-bgcolor': '#3d4f6b',
+      '--root-border-color': '#5b93ff',
+      '--panel-color': '#c9d2de',
+      '--panel-bgcolor': '#1e2531',
+      '--panel-border-color': '#5b93ff',
+      '--topic-padding': '6px 11px',
+      '--main-radius': '10px',
+      '--root-radius': '13px',
+      '--node-gap-x': '30px',
+      '--node-gap-y': '9px',
+      '--main-gap-x': '56px',
+      '--main-gap-y': '22px',
+      '--map-padding': '26px 34px',
+    },
+  };
+
+  /* ⚠️ IIFE 包把构造函数挂在 **default** 上 ✗ —— 全局 MindElixir 是个命名空间对象，
+     直接 `new MindElixir(...)` 会报「is not a constructor」✓ */
+  const ME = (MindElixir && MindElixir.default) ? MindElixir.default : MindElixir;
+  const DIR = (MindElixir && MindElixir.RIGHT != null) ? MindElixir.RIGHT : 1;
+
+  let me = null;
+  let editable = false;
+  let lastSent = '';
+  let timer = 0;
+
+  /* ★ 自适应：按**整张图的包围盒**居中缩放 ✓
+     ⚠️ 不能用 `me.toCenter()` ✗ —— 它是按**根节点**居中的，
+     向右生长的图会整块偏左、右侧被裁掉 ✓（用户截图就是这个）
+     ⚠️ 也不能只调 `me.scale()` —— 它只改缩放不改平移 ✓ */
+  function fit() {
+    const canvas = document.querySelector('#map .map-canvas');
+    const view = document.getElementById('map');
+    if (!canvas || !view) return;
+    const cW = canvas.offsetWidth, cH = canvas.offsetHeight;
+    const vW = view.clientWidth, vH = view.clientHeight;
+    if (!cW || !cH || !vW || !vH) return;
+    /* 留 8% 边距，最多放大到 1 倍（小图不硬撑） */
+    const s = Math.min(1, Math.min((vW * 0.92) / cW, (vH * 0.92) / cH));
+    const tx = (vW - cW * s) / 2;
+    const ty = (vH - cH * s) / 2;
+    canvas.style.transformOrigin = '0 0';
+    canvas.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + s + ')';
+    try { if (me && me.scaleVal != null) me.scaleVal = s; } catch (_) {}
+
+    /* 二次校正：`.map-canvas` 的盒子带内边距，和真实文字包围盒不完全一致 ✗ ——
+       按**实际节点的包围盒**再挪一次，才是视觉上的正中间 ✓ */
+    const texts = document.querySelectorAll('#map .text');
+    if (!texts.length) return;
+    const vb = view.getBoundingClientRect();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const t of texts) {
+      const q = t.getBoundingClientRect();
+      if (!q.width && !q.height) continue;
+      x0 = Math.min(x0, q.left); y0 = Math.min(y0, q.top);
+      x1 = Math.max(x1, q.right); y1 = Math.max(y1, q.bottom);
+    }
+    if (!Number.isFinite(x0)) return;
+    const dx = (vb.left + vb.right) / 2 - (x0 + x1) / 2;
+    const dy = (vb.top + vb.bottom) / 2 - (y0 + y1) / 2;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    canvas.style.transform = 'translate(' + (tx + dx) + 'px, ' + (ty + dy) + 'px) scale(' + s + ')';
+  }
+
+  /* 布局有延迟：连续补几次，最后一次一定是对的 ✓ */
+  function fitSoon() {
+    requestAnimationFrame(fit);
+    setTimeout(fit, 60);
+    setTimeout(fit, 180);
+    setTimeout(fit, 400);
+  }
+
+  function send() {
+    if (!me) return;
+    let data;
+    try { data = me.getData(); } catch (_) { return; }
+    const text = JSON.stringify(data);
+    if (text === lastSent) return;
+    lastSent = text;
+    parent.postMessage({ type: 'cs-mind-change', data }, '*');
+  }
+
+  function init(data) {
+    const el = document.getElementById('map');
+    el.innerHTML = '';
+    me = new ME({
+      el: el,
+      direction: DIR,
+      draggable: true,
+      contextMenu: true,
+      toolBar: false,
+      keypress: true,
+      theme: THEME,
+      scaleSensitivity: 40,
+    });
+    try { me.init(data && data.nodeData ? data : DEFAULT); } catch (_) { me.init(DEFAULT); }
+    /* 任何编辑 → 防抖 400ms 回传（不每次按键都写盘） */
+    try {
+      me.bus.on('operation', () => { clearTimeout(timer); timer = setTimeout(send, 400); });
+    } catch (_) {}
+    /* 布局稳定后再自适应一次 */
+    fitSoon();
+  }
+
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (d.type === 'cs-mind-set') { init(d.data); return; }
+    if (d.type === 'cs-mind-fit') { fitSoon(); return; }
+    if (d.type === 'cs-mind-edit') {
+      editable = !!d.on;
+      document.body.classList.toggle('editing', editable);
+      if (!editable) { send(); fitSoon(); }    // 退出编辑 → 存盘 + 自适应 ✓
+      return;
+    }
+  });
+
+  window.addEventListener('resize', () => { if (!editable) fitSoon(); });
+  parent.postMessage({ type: 'cs-mind-ready' }, '*');
+})();
+</script>
+</body>
+</html>

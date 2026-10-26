@@ -34,6 +34,14 @@
       "color": "#b31b1b",
       "category": "featured",
       "openMode": "internal"
+    },
+    {
+      "id": "site-1792314084964",
+      "label": "Everywhere",
+      "url": "https://github.com/DearVa/Everywhere",
+      "color": "#4f8cff",
+      "category": "custom",
+      "openMode": "external"
     }
   ],
   "categories": [],
@@ -186,5 +194,5 @@
     },
     "resolved": true
   },
-  "updatedAt": 1791728518175
+  "updatedAt": 1792389408909
 }

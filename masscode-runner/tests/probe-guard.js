@@ -26,26 +26,38 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-function storeFile() {
-  const dataRoot = process.env.CODESCOPE_DATA_HOME
+function dataRoot() {
+  return process.env.CODESCOPE_DATA_HOME
     || path.join(os.homedir(), 'Library', 'Application Support', 'CodeScope');
-  return path.join(dataRoot, 'life-workbench.json');
 }
+function storeFile() { return path.join(dataRoot(), 'life-workbench.json'); }
+
+/* ⚠️⚠️ 2026-10-19：词库拆到 `life-words.json` 之后，**必须一起保护** ✗✗ ——
+   不然「探针加词 → 只还原主文件」✓ → 词库里的探针词**永远留着** ✓，
+   一轮轮累积（实测踩过：`serendipity` / `ubiquitous` 一直堆 ✓），
+   而且下一轮探针又会因为「词已存在」假红 ✓（正是这次要修的那类问题 ✗）。
+   词库文件可能不存在（旧结构 / 临时 data home ✓）→ 那就只保护主文件 ✓。 */
+function wordsFile() { return path.join(dataRoot(), 'life-words.json'); }
 
 let snapshot = null;
+let wordsSnapshot = null;
+let wordsPath = '';
 let armed = false;
 let filePath = '';
 
 function arm() {
   if (armed) return true;
   filePath = storeFile();
+  wordsPath = wordsFile();
   try {
     snapshot = fs.readFileSync(filePath, 'utf8');
+    try { wordsSnapshot = fs.readFileSync(wordsPath, 'utf8'); } catch (_) { wordsSnapshot = null; }
     armed = true;
     return true;
   } catch (_) {
     /* 没有这个文件（探针用的临时 data home ✓）→ 不需要保护 ✓ */
     snapshot = null;
+    wordsSnapshot = null;
     armed = false;
     return false;
   }
@@ -54,13 +66,23 @@ function arm() {
 function disarm() {
   if (!armed || snapshot == null) return false;
   armed = false;
+  let restored = [];
   try {
     const now = fs.readFileSync(filePath, 'utf8');
-    if (now === snapshot) return false;                 /* 没被动过 ✓ */
-    fs.writeFileSync(filePath, snapshot);               /* 原样放回 ✓ */
-    console.log('  🔒 探针动过真实数据 —— 已按快照还原（life-workbench.json）');
+    if (now !== snapshot) { fs.writeFileSync(filePath, snapshot); restored.push('life-workbench.json'); }
+  } catch (_) { }
+  /* ★ 词库也还原 ✓ —— 快照时不存在（null）就不还原 ✗（别凭空造一个空词库 ✗） */
+  try {
+    if (wordsSnapshot != null) {
+      const nowW = fs.readFileSync(wordsPath, 'utf8');
+      if (nowW !== wordsSnapshot) { fs.writeFileSync(wordsPath, wordsSnapshot); restored.push('life-words.json'); }
+    }
+  } catch (_) { }
+  if (restored.length) {
+    console.log('  🔒 探针动过真实数据 —— 已按快照还原（' + restored.join(' + ') + '）');
     return true;
-  } catch (_) { return false; }
+  }
+  return false;
 }
 
 /* 兜底：探针崩了 / 被 Ctrl-C 也要还原 ✓ —— 不然"跑一次测试丢一次数据" ✓。 */
@@ -71,4 +93,4 @@ function installExitHooks() {
 }
 installExitHooks();
 
-module.exports = { arm, disarm, storeFile };
+module.exports = { arm, disarm, storeFile, wordsFile };

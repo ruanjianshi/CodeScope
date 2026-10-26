@@ -84,6 +84,27 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
     }
   }
 
+  /* ★★ 用户词库里**本来就有**探针用的这两个词 → 先「借走」✓，收尾再还 ✓✓（2026-10-19）
+     ⚠️ 为什么 ✗：`epWordAdd` 撞到已存在的词**只会弹提示、不会新增** ✓ ——
+        用户把整本六级词书灌进生词本之后（4611 个词 ✓），`serendipity` / `ubiquitous`
+        大概率已经在里面 ✓ → 「划词 → 加生词」这条链**永远测不到** ✗，
+        探针一直红 ✓，而**功能其实是好的** ✓。
+     ⚠️ 假红比不测更糟 ✗ —— 真的坏了也看不出来 ✓（红灯常态化 = 没有信号 ✗）。
+     ⇒ 只借**同名**的那几条 ✓（按 `w` 精确匹配 ✓，不动别的词 ✓），
+       收尾时按 id 放回去 ✓（用户那份原样还 ✓，不覆盖 ✓）。 */
+  const SHADOW = ['serendipity', 'ubiquitous'];
+  const shadowedWords = [];
+  {
+    const d = await store();
+    const hit = (d.words || []).filter((w) => w && SHADOW.indexOf(String(w.w || '').toLowerCase()) >= 0);
+    if (hit.length) {
+      shadowedWords.push.apply(shadowedWords, hit);
+      d.words = (d.words || []).filter((w) => hit.indexOf(w) < 0);
+      await put(d);
+      console.log('借走已存在的 ' + hit.length + ' 个词（收尾会还）：' + hit.map((w) => w.w).join(','));
+    }
+  }
+
   /* ⚠️⚠️ 阅读偏好（`ebFont` 那一组）**必须一起备份还原** ✗✗ ——
      它们**落盘**（`STORE.ebFont` 等 ✓，见 `rdEbPref` ✓），而 ④ / ⑨ 会去改它们 ✓。
      实测踩过（2026-10-08 ✓）：探针每轮净 +1 字号 ✓、**从不还原** ✗ →
@@ -509,6 +530,11 @@ fs.writeFileSync(EPUB, makeEpub(MARK + '书', '探针作者', 5));
          ⚠️ `keep` 只用来还原**标量**（bookSel / readMode / wordSel ✓）。 */
       d.books = (d.books || []).filter((x) => x && madeBooks.indexOf(x.id) < 0);
       d.words = (d.words || []).filter((w) => w && madeWords.indexOf(w.id) < 0);
+      /* ★ 把借走的用户词**原样还回去** ✓（按 id 去重 ✓，不覆盖探针刚造的那几条 ✓） */
+      if (shadowedWords.length) {
+        const have = new Set((d.words || []).map((w) => w && w.id));
+        shadowedWords.forEach((w) => { if (w && !have.has(w.id)) d.words.push(w); });
+      }
       /* ⚠️ ⑨ 那段会**划线**（写进 `bookNotes` ✓）→ 也得清 ✗，
          不然用户的笔记里会多一条「第二段，用来验段落分隔。」✓。 */
       d.bookNotes = (d.bookNotes || []).filter((n) => n && madeNotes.indexOf(n.id) < 0);

@@ -226,13 +226,26 @@ const put = async (d) => fetch(BASE + '/api/life/store', { method: 'POST', heade
     await p.locator('[data-rmtype="all"]').click(); await p.waitForTimeout(600);
     await p.locator('[data-rmpick="spec"]').click(); await p.waitForTimeout(900);
     ck('★ 导图里的例词节点能点', await p.locator('[data-rmword]').count() >= 3, String(await p.locator('[data-rmword]').count()));
-    const pickWord = await p.locator('[data-rmword]').nth(2).getAttribute('data-rmword');
-    await p.locator('[data-rmword]').nth(2).click(); await p.waitForTimeout(2600);
-    const st3 = await store();
-    const nw = (st3.words || []).filter((w) => w && !wordsBefore.has(w.id));
-    nw.forEach((w) => madeWords.push(w.id));
-    console.log('    点了例词: ' + JSON.stringify(pickWord) + ' · 新增生词: ' + JSON.stringify(nw.map((x) => x.w)));
-    ck('★★ 例词真的进了生词本', nw.length === 1 && nw[0].w === pickWord, JSON.stringify(nw.map((x) => x.w)));
+    /* ★★ 挑一个**用户库里还没有**的例词 ✓✓（2026-10-19）——
+       ⚠️ 原来固定点 `nth(2)` ✗：用户把整本六级词书灌进生词本之后（4611 词 ✓），
+          导图里的例词**基本都已经在库里** ✓ → `epWordAdd` 撞到已存在的词
+          只弹提示、不新增 ✓ → 「新增了 1 个」永远不成立 ✗ →
+          探针一直红 ✓，而**功能其实是好的** ✓（假红比不测更糟 ✗）。
+       ⇒ 在导图节点里挑**第一个库里没有的** ✓；全都已有就**明确跳过** ✓（不假装通过 ✓）。 */
+    const cands = await p.evaluate(() => [...document.querySelectorAll('[data-rmword]')]
+      .map((x) => x.getAttribute('data-rmword')).filter(Boolean));
+    const haveWords = new Set(((await store()).words || []).map((w) => String(w.w || '').toLowerCase()));
+    const pickWord = cands.find((w) => !haveWords.has(String(w).toLowerCase())) || '';
+    if (!pickWord) {
+      console.log('  · 跳过：导图里的例词用户库里都已经有了（' + cands.length + ' 个候选），不误报');
+    } else {
+      await p.locator('[data-rmword="' + pickWord + '"]').first().click(); await p.waitForTimeout(2600);
+      const st3 = await store();
+      const nw = (st3.words || []).filter((w) => w && !wordsBefore.has(w.id));
+      nw.forEach((w) => madeWords.push(w.id));
+      console.log('    点了例词: ' + JSON.stringify(pickWord) + ' · 新增生词: ' + JSON.stringify(nw.map((x) => x.w)));
+      ck('★★ 例词真的进了生词本', nw.length === 1 && nw[0].w === pickWord, JSON.stringify(nw.map((x) => x.w)));
+    }
 
     console.log('\n── ⑪ 刷新之后还在（模式 + 标记）──');
     await p.reload({ waitUntil: 'domcontentloaded' });

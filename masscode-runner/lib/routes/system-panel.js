@@ -22,7 +22,17 @@ async function handle(req, res, u, ctx) {
 
     if (u.pathname === '/api/system-panel' || u.pathname.startsWith('/api/system-panel/')) {
     try {
-      if (await SYSTEM_PANEL.handle(req, res, u)) return;
+      /* ★★ 这里必须 `return true` ✗✗（2026-10-19）——
+         ⚠️ 原来是 `if (await ...) return;` ✓ —— 裸 `return` 返回的是 **undefined** ✓，
+            而调用方写的是 `if (await route.handle(...) || res.writableEnded) return;` ✓
+            → undefined 是**假值** ✓ → 当成「没处理」→ 继续往下走 ✓ →
+            撞到 404 兜底 → 对**已经写了响应头**的 res 再 writeHead ✗ → 抛错 → 连接被销毁 ✗✗。
+         ⚠️ 为什么平时看不出来 ✗：普通接口 `send()` 已经把响应**结束**了 ✓，
+            调用方的 `|| res.writableEnded` 兜住了 ✓ —— 只有**流式**响应（SSE）没结束 ✓，
+            于是只有「本机管家的任务进度流」会挂 ✗：
+            浏览器里 `ERR_EMPTY_RESPONSE` ✓、进度日志一条都不显示 ✓、任务结果靠 onerror 兜底补查 ✓。
+            （实测：统计缓存占用 / 清理 / 软件升级 / Docker 操作全受影响 ✓） */
+      if (await SYSTEM_PANEL.handle(req, res, u)) return true;
     } catch (error) {
       return send(res, 500, { ok:false, error:String((error && error.message) || error) });
     }

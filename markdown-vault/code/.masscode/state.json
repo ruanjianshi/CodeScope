@@ -1,34 +1,37 @@
 {
   "counters": {
-    "contentId": 170,
-    "folderId": 31,
-    "snippetId": 114,
-    "tagId": 34
+    "contentId": 173,
+    "folderId": 34,
+    "snippetId": 115,
+    "tagId": 36
   },
   "folderIdByPath": {
     "ROS端开发": 17,
     "Test": 1,
-    "嵌入式开发Linux": 3,
-    "嵌入式开发MCU": 2,
-    "嵌入式开发规范": 12,
+    "嵌入式开发/嵌入式开发Linux": 3,
+    "嵌入式开发/嵌入式开发MCU": 2,
+    "嵌入式开发/嵌入式开发MCU/嵌入式开发规范": 12,
     "数据结构算法": 9,
     "ROS端开发/ROS1开发(noetic)": 20,
     "ROS端开发/ROS2开发(humble)": 19,
-    "Test/latex": 25,
+    "Latex文档/latex简历": 25,
     "Test/多文件示例": 4,
-    "Test/手搓代码": 13,
+    "Test/手搓工程/手搓代码": 13,
     "Test/手搓工程": 14,
     "Test/测试代码示例": 11,
-    "嵌入式开发Linux/应用层开发": 7,
-    "嵌入式开发Linux/驱动层开发": 8,
-    "嵌入式开发MCU/GD32系列": 6,
-    "嵌入式开发MCU/STM32系列": 5,
+    "嵌入式开发/嵌入式开发Linux/应用层开发": 7,
+    "嵌入式开发/嵌入式开发Linux/驱动层开发": 8,
+    "嵌入式开发/嵌入式开发MCU/GD32系列": 6,
+    "嵌入式开发/嵌入式开发MCU/STM32系列": 5,
     "数据结构算法/C++系列算法": 10,
-    "Test/latex/data": 26,
-    "Test/latex/figures": 27,
-    "Test/latex/fonts": 28,
+    "Latex文档/latex简历/data": 26,
+    "Latex文档/latex简历/figures": 27,
+    "Latex文档/latex简历/fonts": 28,
     "数据结构算法/嵌入式常考手撕代码": 29,
-    "Test/Matlab": 31
+    "数值计算/Matlab": 31,
+    "嵌入式开发": 32,
+    "数值计算": 33,
+    "Latex文档": 34
   },
   "folderUi": {
     "1": {
@@ -99,11 +102,20 @@
     },
     "31": {
       "isOpen": 1
+    },
+    "32": {
+      "isOpen": 1
+    },
+    "33": {
+      "isOpen": 1
+    },
+    "34": {
+      "isOpen": 1
     }
   },
   "snippets": [
     {
-      "filePath": "嵌入式开发MCU/STM32系列/IIC通信驱动.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/STM32系列/IIC通信驱动.md",
       "id": 12,
       "meta": {
         "contents": [
@@ -130,7 +142,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发MCU/STM32系列/串口通信驱动.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/STM32系列/串口通信驱动.md",
       "id": 13,
       "meta": {
         "contents": [
@@ -169,12 +181,12 @@
         "description": "简单可用的 UART 驱动：统一 open/read/write/close，支持 Linux termios、STM32 HAL 中断接收和可选具名设备管理。",
         "isDeleted": 0,
         "isFavorites": 0,
-        "mtimeMs": 1788516027317.8123,
+        "mtimeMs": 1792636826362,
         "name": "串口通信驱动",
-        "size": 33880,
+        "size": 33882,
         "tags": [
-          4,
           2,
+          4,
           5,
           6,
           10,
@@ -185,11 +197,12 @@
           17,
           22
         ],
-        "updatedAt": 1788187561000
+        "updatedAt": 1792636826362,
+        "language": "c_cpp"
       }
     },
     {
-      "filePath": "嵌入式开发MCU/STM32系列/通用接口管理.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/STM32系列/通用接口管理.md",
       "id": 17,
       "meta": {
         "contents": [
@@ -274,7 +287,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/00-阅读导航与适用范围.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/00-阅读导航与适用范围.md",
       "id": 26,
       "meta": {
         "contents": [
@@ -299,7 +312,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/01-架构分层与依赖规则.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/01-架构分层与依赖规则.md",
       "id": 27,
       "meta": {
         "contents": [
@@ -325,7 +338,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/02-C设备模型与驱动接口.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/02-C设备模型与驱动接口.md",
       "id": 28,
       "meta": {
         "contents": [
@@ -353,7 +366,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/03-初始化生命周期与错误处理.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/03-初始化生命周期与错误处理.md",
       "id": 29,
       "meta": {
         "contents": [
@@ -380,7 +393,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/04-中断并发与实时性.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/04-中断并发与实时性.md",
       "id": 30,
       "meta": {
         "contents": [
@@ -409,7 +422,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/05-内存栈DMA与Cache安全.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/05-内存栈DMA与Cache安全.md",
       "id": 31,
       "meta": {
         "contents": [
@@ -436,7 +449,7 @@
       }
     },
     {
-      "filePath": "嵌入式开发规范/06-代码评审与发布检查清单.md",
+      "filePath": "嵌入式开发/嵌入式开发MCU/嵌入式开发规范/06-代码评审与发布检查清单.md",
       "id": 32,
       "meta": {
         "contents": [
@@ -463,7 +476,7 @@
       }
     },
     {
-      "filePath": "Test/手搓代码/接口化最小代码实现.md",
+      "filePath": "Test/手搓工程/手搓代码/接口化最小代码实现.md",
       "id": 33,
       "meta": {
         "contents": [
@@ -578,7 +591,7 @@
       }
     },
     {
-      "filePath": "Test/latex/main.md",
+      "filePath": "Latex文档/latex简历/main.md",
       "id": 38,
       "meta": {
         "contents": [
@@ -596,19 +609,29 @@
             "id": 159,
             "label": "singleresume.bak",
             "language": "latex"
+          },
+          {
+            "id": 171,
+            "label": "resume-mech",
+            "language": "latex"
+          },
+          {
+            "id": 173,
+            "label": "resume-embed-v2",
+            "language": "latex"
           }
         ],
         "createdAt": 1788511095111,
         "description": "LaTeX 工程：latex",
         "isDeleted": 0,
         "isFavorites": 0,
-        "mtimeMs": 1789447648132,
+        "mtimeMs": 1792646901838,
         "name": "main",
-        "size": 33255,
+        "size": 56284,
         "tags": [
           28
         ],
-        "updatedAt": 1789447648132
+        "updatedAt": 1792646901838
       }
     },
     {
@@ -772,7 +795,7 @@
       }
     },
     {
-      "filePath": "Test/Matlab/test.md",
+      "filePath": "数值计算/Matlab/test.md",
       "id": 113,
       "meta": {
         "contents": [
@@ -783,21 +806,23 @@
           }
         ],
         "createdAt": 1791605870994,
-        "description": null,
+        "description": "基于matlab/octave的数值计算运行示例",
         "folderId": 31,
         "isDeleted": 0,
         "isFavorites": 0,
-        "mtimeMs": 1791605870994,
+        "mtimeMs": 1791732384179,
         "name": "test",
-        "size": 240,
+        "size": 2249,
         "tags": [
-          33
+          33,
+          36
         ],
-        "updatedAt": 1791605870994
+        "updatedAt": 1791732384179,
+        "language": "matlab"
       }
     },
     {
-      "filePath": "Test/Matlab/testpy.md",
+      "filePath": "数值计算/Matlab/testpy.md",
       "id": 114,
       "meta": {
         "contents": [
@@ -808,17 +833,47 @@
           }
         ],
         "createdAt": 1791606042982,
-        "description": null,
+        "description": "基于jupyter类型的段运行测试示例",
         "folderId": 31,
         "isDeleted": 0,
         "isFavorites": 0,
-        "mtimeMs": 1791606042982,
+        "mtimeMs": 1791732370950,
         "name": "testpy",
-        "size": 246,
+        "size": 1261,
         "tags": [
-          34
+          34,
+          35
         ],
-        "updatedAt": 1791606042982
+        "updatedAt": 1791732370950,
+        "language": "python"
+      }
+    },
+    {
+      "filePath": "嵌入式开发/嵌入式开发MCU/STM32系列/环形缓冲实现.md",
+      "id": 115,
+      "meta": {
+        "contents": [
+          {
+            "id": 172,
+            "label": "环形缓冲实现",
+            "language": "c_cpp"
+          }
+        ],
+        "createdAt": 1792636889446,
+        "description": "实现手搓简单工程的环形缓冲区",
+        "folderId": 5,
+        "isDeleted": 0,
+        "isFavorites": 0,
+        "mtimeMs": 1792636889446,
+        "name": "环形缓冲实现",
+        "size": 338,
+        "tags": [
+          1,
+          2,
+          4,
+          5
+        ],
+        "updatedAt": 1792636889446
       }
     }
   ],
@@ -1014,6 +1069,18 @@
       "id": 34,
       "name": "python",
       "updatedAt": 1791606042981
+    },
+    {
+      "createdAt": 1791732370951,
+      "id": 35,
+      "name": "jupyter",
+      "updatedAt": 1791732370951
+    },
+    {
+      "createdAt": 1791732384179,
+      "id": 36,
+      "name": "octave",
+      "updatedAt": 1791732384179
     }
   ],
   "version": 3

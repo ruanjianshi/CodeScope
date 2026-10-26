@@ -70,6 +70,38 @@
     justify-content:center; font-size:16px; }
   .lw-h1 { font-size:13px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; line-height:1.15; }
   .lw-h1 small { display:block; font-size:9px; letter-spacing:2.4px; color:${T.dim}; font-weight:400; margin-top:2px; }
+  /* 数据读取失败的横幅 ✓ —— 贴在顶栏下面、整宽 ✓ */
+  .lw-storebar { display:flex; align-items:center; gap:10px; margin:0 14px 10px; padding:10px 14px;
+    border-radius:10px; border:1px solid rgba(232,177,0,.45); background:rgba(232,177,0,.10); }
+  .lw-storebar.bad { border-color:rgba(229,83,75,.5); background:rgba(229,83,75,.10); }
+  .lw-storebar .ic { font-size:15px; flex:none; }
+  .lw-storebar .tx { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+  .lw-storebar .tx b { font-size:12px; color:${T.text}; }
+  .lw-storebar .tx span { font-size:11px; color:${T.dim}; line-height:1.5; }
+  .lw-storebar button { flex:none; padding:5px 12px; font-size:11px; border-radius:7px; cursor:pointer;
+    border:1px solid ${T.lineDim}; background:${T.card2}; color:${T.text}; }
+  .lw-storebar button:hover { border-color:${T.accent}; }
+  /* ★ 保存失败的浮层 ✓ —— 类名**故意**不叫 lw-toast ✗：
+     那个名字已经被「新邮件提醒」占了 ✓（mailShowToast 用同一个 id + class ✓），
+     两边抢同一个元素会互相覆盖 ✗（实测：我的红框被邮件那条的 2px 金色描边盖掉了 ✗）。 */
+  .lw-savetoast { position:fixed; right:22px; bottom:22px; z-index:9600; max-width:420px;
+    display:none; padding:12px 14px; border-radius:11px; font-size:12px; line-height:1.6;
+    border:1px solid rgba(229,83,75,.55); background:#2a1c1b; color:#f2e8e6;
+    box-shadow:0 12px 34px rgba(0,0,0,.45); }
+  .lw-savetoast.on { display:block; animation:lwSaveToastIn .16s ease-out; }
+  @keyframes lwSaveToastIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .lw-savetoast .tx { margin-top:5px; color:#e3cfcb; word-break:break-word; }
+  .lw-savetoast .acts { display:flex; gap:8px; margin-top:10px; }
+  .lw-savetoast .acts button { padding:4px 12px; font-size:11.5px; border-radius:7px; cursor:pointer;
+    border:1px solid rgba(229,83,75,.6); background:rgba(229,83,75,.18); color:#ffd9d4; }
+  .lw-savetoast .acts button:hover { background:rgba(229,83,75,.30); }
+  .lw-savetoast .acts button.ghost { border-color:rgba(255,255,255,.22); background:transparent; color:#c9c2bf; }
+  @media (prefers-reduced-motion: reduce) { .lw-savetoast.on { animation:none; } }
+  /* 状态栏里的行内小按钮（「重试」✓）—— 不能撑高顶栏 ✗ */
+  .lw-inline-btn { margin-left:4px; padding:1px 8px; font-size:10.5px; line-height:1.6;
+    border-radius:6px; border:1px solid currentColor; background:transparent; color:inherit;
+    cursor:pointer; vertical-align:baseline; }
+  .lw-inline-btn:hover { background:rgba(255,255,255,.08); }
   .lw-sub2 { font-size:10.5px; color:${T.dim}; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
     letter-spacing:.4px; text-transform:uppercase; }
   .lw-btn { height:30px; padding:0 13px; border-radius:0; border:2px solid ${T.line}; background:transparent;
@@ -177,6 +209,22 @@
   .lw-nav .foot { margin-top:auto; padding-top:14px; border-top:1px solid ${T.lineDim};
     font-size:9.5px; letter-spacing:1.4px; color:${T.faint}; text-transform:uppercase; line-height:1.9; }
   .lw-nav .foot b { color:${T.ok}; font-weight:600; }
+  /* ★★ 窄屏：左栏改成**顶部横条** ✓✓（2026-10-18）——
+     ⚠️ 实测 430px（手机浏览器走局域网打开 ✓）：左栏固定 196px ✓ + 内容区只剩 **234px** ✓
+        → 卡片全被挤成一列、表格横着滚 ✗，等于手机上没法用 ✗。
+     ⇒ 窄屏把导航摊成一行**可横滑的胶囊** ✓，内容占满整宽 ✓。
+     ⚠️ 只改**布局方向** ✗，不动任何交互 / 结构 ✓（桌面宽度完全不受影响 ✓）。 */
+  @media (max-width: 820px) {
+    .lw-body2 { flex-direction:column; }
+    .lw-nav { width:auto; flex:none; flex-direction:row; align-items:center; gap:6px;
+      padding:8px 10px; border-right:0; border-bottom:2px solid ${T.line};
+      overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
+    .lw-nav::-webkit-scrollbar { display:none; }
+    .lw-nav .grp, .lw-nav .foot { display:none; }
+    .lw-nav button { width:auto; flex:none; height:32px; margin-bottom:0; padding:0 10px; gap:6px; }
+    .lw-nav .badge { margin-left:4px; }
+    .lw-main { padding:12px 12px 24px; }
+  }
   .lw-main { flex:1; min-width:0; overflow:auto; padding:16px 18px 28px; }
   .lw-main::-webkit-scrollbar { width:10px; } .lw-main::-webkit-scrollbar-thumb { background:#2a2a26; }
   /* ★★★ 「全高面板」必须**真正填满内容区** ✗✗ ——
@@ -555,6 +603,7 @@
   .lw-nt-bar .sp { flex:1; }
   .lw-nt-bar .st { font-size:10px; color:${T.faint}; }
   .lw-nt-bar .st.ok { color:${T.ok}; }
+  .lw-nt-bar .st.bad { color:${T.red}; }
   /* 格式菜单（浮层） */
   .lw-nt-menu { position:absolute; z-index:20; width:186px; background:#151513; border:2px solid ${T.line};
     box-shadow:0 12px 32px rgba(0,0,0,.6); }
@@ -1119,6 +1168,23 @@
   .lw-fl-tools button.pri { border-color:${T.accent}; color:${T.accent}; }
   .lw-fl-tools button.pri:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-fl-tools .hint { font-size:9.5px; color:${T.faint}; margin-left:auto; }
+  /* 「模型与密钥」面板 ✓（右栏 302px 宽 ✓，一家服务一张卡 ✓） */
+  .lw-fl-prov { margin:0 14px 12px; padding:10px 10px 6px; border:1px solid ${T.lineDim}; border-radius:8px;
+    background:${T.card2}; }
+  .lw-fl-prov .hd { display:flex; align-items:center; gap:6px; margin-bottom:8px; font-size:11px; }
+  .lw-fl-prov .hd b { font-size:11.5px; color:${T.text}; }
+  .lw-fl-prov .hd .ok { font-size:9px; color:${T.ok}; }
+  .lw-fl-prov .hd .no { font-size:9px; color:${T.warn}; }
+  .lw-fl-prov .hd button { margin-left:auto; padding:2px 7px; font-size:10px; }
+  .lw-fl-prov .hd button + button { margin-left:0; }
+  /* 「网页版」面板里每个站点一行 ✓ */
+  .lw-fl-web-row { display:flex; align-items:center; gap:8px; margin:0 14px 8px; padding:8px 10px;
+    border:1px solid ${T.lineDim}; border-radius:8px; background:${T.card2}; }
+  .lw-fl-web-row .nm { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .lw-fl-web-row .nm b { font-size:11.5px; color:${T.text}; }
+  .lw-fl-web-row .nm .ok { font-size:9px; color:${T.ok}; }
+  .lw-fl-web-row .nm .no { font-size:9px; color:${T.warn}; }
+  .lw-fl-web-row button { margin-left:auto; padding:4px 9px; font-size:10.5px; flex:none; }
   .lw-fl-plane { position:relative; }
   .lw-fl-node { position:absolute; width:170px; height:56px; box-sizing:border-box;
     border:2px solid ${T.line}; background:${T.card}; cursor:move; user-select:none; }
@@ -1169,6 +1235,11 @@
   .lw-fl-port.out { right:-8px; }
   .lw-fl-port.out.p1 { top:36px; }
   .lw-fl-port.armed { background:${T.warn}; border-color:${T.warn}; }
+  /* 多出口圆点旁边的小标签 ✓ —— 底色用**画布底色** ✓，让它把连线「切断」✓，
+     不然字压在线上糊成一团 ✗。 */
+  .lw-fl-plabel { position:absolute; right:-9px; transform:translateX(100%); z-index:3;
+    font-size:9px; line-height:1; color:${T.faint}; background:${T.bg}; padding:1px 3px;
+    pointer-events:none; }
   .lw-fl-svg { position:absolute; left:0; top:0; pointer-events:none; z-index:1; }
   /* ⚠️ 颜色用 faint ✗ 不用 lineDim ✗ —— lineDim(#3a382f) 压在底色(#0b0b0b)上
      对比度只有 **1.67:1** ✗（WCAG 非文本最低要 3:1 ✗），连线基本看不见 ✗
@@ -2084,7 +2155,12 @@
      → 抄外刊精读正文面板那套 ✓（.lw-ep-body 就是 flex:1 + min-height:0 + overflow:auto ✓）。
      ⚠️ 别去动 .lw-rd-read ✗ —— 那个类名被**四个模式共用** ✓
         （电子书 / 外刊 / 词根 / 生词本 ✓），动它等于一次改四处 ✗。 */
-  .lw-wd-detail { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; padding:0 0 20px; }
+  /* ★ container-type:inline-size ✓ —— 让下面那个「几栏」的判断看**卡片自己的宽度** ✗，
+     而不是视口宽度 ✗（2026-10-17 实测：词表侧栏是**固定 419px** ✓，
+     卡片宽度 = 视口 − 875px ✓ → 1200px 的窗口卡片只有 **325px** ✓，
+     两栏各 150px ✓，字全被挤成一列一个 ✓。视口断点根本对不上 ✓）。 */
+  .lw-wd-detail { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; padding:0 0 20px;
+    container-type:inline-size; }
   /* 编辑区那个标题复用了侧栏的 .lw-rd-hd ✓ —— 它自带 13px 左右边距 ✗，
      跟词卡的 16px 基准线差 3px ✓（单独看不出来 ✓，和下面的输入框并排就露馅 ✗）→ 在卡里覆盖掉 ✓。 */
   .lw-wd-detail .lw-rd-hd { padding-left:16px; padding-right:16px; }
@@ -2099,12 +2175,17 @@
   /* ★ 熟练度星标 ✓ —— 三态：未标（灰）→ 不熟悉（黄）→ 完全不记得（红）✓。
      颜色**硬编码** ✗（不走主题变量 ✓）—— 「警告黄 / 危险红」是有语义的 ✓，
      跟着主题色变反而看不出严重程度 ✗。 */
-  .lw-wd-title .mark { flex:none; width:36px; height:28px; border:1px solid ${T.lineDim}; border-radius:8px;
-    background:transparent; color:${T.faint}; cursor:pointer; font-size:13px; line-height:1;
-    display:flex; align-items:center; justify-content:center; }
+  /* ⚠️ 四个按钮**挤在一起** ✓（外面那个 span 负责 gap ✓）—— 单个按钮缩到 30px ✓，
+     不然加上单词 / 发音 / 编辑，标题栏会被撑爆 ✗。 */
+  .lw-wd-title .lw-wd-marks { flex:none; display:flex; gap:3px; }
+  .lw-wd-title .mark { flex:none; min-width:30px; height:28px; padding:0 3px; border:1px solid ${T.lineDim};
+    border-radius:8px; background:transparent; color:${T.faint}; cursor:pointer; font-size:12px;
+    line-height:1; display:flex; align-items:center; justify-content:center; }
   .lw-wd-title .mark:hover { border-color:${T.accent}; }
   .lw-wd-title .mark.on-fuzzy { color:#e8b100; border-color:rgba(232,177,0,.6); background:rgba(232,177,0,.12); }
   .lw-wd-title .mark.on-blank { color:#e5534b; border-color:rgba(229,83,75,.6); background:rgba(229,83,75,.12); }
+  .lw-wd-title .mark.on-confuse { color:#7aa2f7; border-color:rgba(122,162,247,.6); background:rgba(122,162,247,.12); }
+  .lw-wd-title .mark.on-trap { color:#ff8a3d; border-color:rgba(255,138,61,.6); background:rgba(255,138,61,.12); }
   .lw-wd-title .sp { flex:1; }
   .lw-wd-title .ed { flex:none; height:26px; padding:0 10px; border:1px solid ${T.lineDim};
     background:transparent; color:${T.faint}; font:10.5px ${UI}; cursor:pointer; }
@@ -2154,11 +2235,16 @@
      ⚠️ 「复习」放**右栏** ✗ 而不是全宽 ✗ —— 右栏本来就短 ✓，
         把它放进去两栏自然就齐了 ✓✓，**不用碰 column-span / 跨栏** ✗✓。
      ⚠️ align-items:start 不能省 ✗ —— 否则两栏被拉成等高 ✓，短的那栏底下留空白 ✗。 */
-  .lw-wd-cols { display:grid; grid-template-columns:1fr 1fr; align-items:start; column-gap:22px; }
-  @media (max-width:1100px) { .lw-wd-cols { grid-template-columns:1fr; } }
-  /* 右栏第一块要**顶到和左栏同一水平线** ✗（它自带 20px 顶距 ✓）→ 抹掉 ✓。 */
-  .lw-wd-col-b > .lw-wd-sec:first-child { padding-top:0; }
-  .lw-wd-sec { padding:20px 16px 0; }
+  .lw-wd-cols { columns:2; column-gap:22px; }
+  /* ⚠️ 判断依据是**卡片宽度** ✓ 不是视口 ✗ —— 见 .lw-wd-detail 上那段 ✓。
+     700px 是实测出来的：两栏各 ~330px 才够读 ✓（600px 的卡片两栏各 290 ✓ 勉强 ✓，
+     425px 的卡片两栏各 200 ✓ 就挤成一列一个字了 ✗）。 */
+  @container (max-width: 700px) { .lw-wd-cols { columns:1; } }
+  /* 兜底 ✓ —— 不支持容器查询的老浏览器按视口退回单栏 ✓（1560 是实测的拐点 ✓）。 */
+  @media (max-width: 1560px) { .lw-wd-cols { columns:1; } }
+  /* ⚠️ break-inside:avoid 必须有 ✗ —— 不然一个区块会被从中间劈到两栏 ✓
+     （标题在这栏、内容在那栏 ✓，完全没法读 ✓）。 */
+  .lw-wd-sec { padding:20px 16px 0; break-inside:avoid; }
   /* ★ 排版改进 ✓ —— 用户原话：「内容深度不够，排版不好」✓。
      ⚠️ 原来区块标题是 10px + faint 色 ✗ —— 又小又淡 ✓，
         十几个区块排下来整页像一锅粥 ✗，找不到「释义在哪、例句在哪」✗。
@@ -2179,6 +2265,18 @@
   .lw-wd-defs li i { position:absolute; left:0; top:0; font-style:normal; font-size:11px;
     color:${T.faint}; line-height:2.5; }
   .lw-wd-defs.one { font-size:15px; line-height:1.85; color:${T.text}; }
+  /* ★ 释义 + 右边的小标签（词群 / 六级考频）✓（2026-10-17）——
+     用户原话：「直接标注在释义那边右侧空白不就行，本身就是简短说明」✓。
+     ⚠️ margin-left:auto 把它推到**右边** ✓；窄的时候 flex-wrap 让它掉到释义**下面** ✓，
+        仍然右对齐 ✓（一行脚注，比两个区块省 150px 以上 ✓）。 */
+  .lw-wd-defrow { display:flex; flex-wrap:wrap; align-items:flex-start; gap:5px 18px; }
+  .lw-wd-defcol { flex:1 1 auto; min-width:0; }
+  .lw-wd-meta { flex:0 0 auto; margin-left:auto; display:flex; flex-direction:column;
+    gap:4px; align-items:flex-end; text-align:right; max-width:340px; }
+  .lw-wd-meta .lw-wd-mt { font-size:11px; line-height:1.75; color:${T.dim}; }
+  .lw-wd-meta .lw-wd-mt i { font-style:normal; color:${T.faint}; margin-right:5px; }
+  .lw-wd-meta .lw-wd-mt.freq i { margin-right:0; }
+  .lw-wd-meta .lw-wd-badge { margin-right:6px; }
   .lw-wd-miss { font-size:12px; color:${T.faint}; line-height:1.8; }
   /* 例句：英文 + 中文对照 ✓，**本词高亮** ✓ */
   .lw-wd-eg-en { font-size:13.5px; line-height:1.85; color:${T.text}; padding-left:10px;
@@ -2209,6 +2307,8 @@
   .lw-rd-grps .lw-rd-row { padding-left:22px; font-size:10.5px; }
   .lw-wd-mk.fuzzy { color:#e8b100; }
   .lw-wd-mk.blank { color:#e5534b; }
+  .lw-wd-mk.confuse { color:#7aa2f7; }
+  .lw-wd-mk.trap { color:#ff8a3d; }
   /* ★ 考频徽章 ✓ —— 「高频」要一眼看见 ✓，平铺成一行文字就淹了 ✗。
      颜色**硬编码** ✗（红/黄/灰 = 严重程度 ✓，跟主题色变就失去意义 ✗）。 */
   .lw-wd-badge { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px;
@@ -2222,6 +2322,47 @@
   .lw-wd-tags span { padding:2px 10px; border-radius:6px; font-size:12px; line-height:1.75;
     background:color-mix(in srgb, ${T.accent} 11%, transparent); color:${T.text}; }
   .lw-wd-tags.ant span { background:color-mix(in srgb, #e5534b 11%, transparent); }
+  /* ★★ 词根词缀拆解 ✓ —— 用户原话：「帮我给单词，补充词根词缀的说明，那种，
+     全部词都要，新增词根词缀说明拆解等，合理布局」✓。
+
+     读法：一排**部件胶囊**，中间的加号把它们串起来 ✓。
+     胶囊上的字母**连起来就是这个单词** ✓（前缀带尾横、后缀带首横 ✓）——
+     学习者一眼就能看到「哪一块是词根、哪一块是前后缀」✓。
+
+     ⚠️ 颜色按类型分 ✗：前缀橙 / 词根黄（主角）/ 后缀绿 / 词干灰 / 词尾淡灰 ✓。
+        这套颜色和「巧记（黄）· 场景（绿）」是一脉的 ✓，不引入新色 ✓。
+     ⚠️ 这一段在 **CSS 模板字符串** 里 ✗✗ —— 注释里**一个反引号都不能有** ✗。 */
+  /* ★★ 词根词缀：**全宽横排** ✓（2026-10-17 重排，用户：「重新合理排布，目前排布不合理」✓）——
+     胶囊一行排开 ✓，「→ 拼出来的意思 / 同族」跟在**右边** ✓，
+     放不下时 flex-wrap 自己折行 ✓（窄屏就变成上下的老样子 ✓，不用写媒体查询 ✓）。 */
+  .lw-wd-rd { display:flex; flex-wrap:wrap; align-items:center; gap:10px 22px; }
+  .lw-wd-rd .chips { display:flex; flex-wrap:wrap; align-items:stretch; gap:7px; }
+  /* ⚠️ 加号和胶囊包成一个 unit ✗ —— 不然窄一点加号会孤零零留在上一行 ✓（截图见过 ✓）。 */
+  .lw-wd-rd .unit { display:flex; align-items:stretch; gap:7px; flex:none; }
+  /* ★ 意思 + 说明**横排**（放不下自己折行 ✓）—— 竖排会多占一行高度 ✓，
+     横排还能把整条撑得宽一点 ✓，右侧不至于空一大截 ✓。 */
+  .lw-wd-rd .tail { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 20px;
+    min-width:0; flex:1 1 320px; }
+  .lw-wd-rd .pc { display:flex; flex-direction:column; justify-content:center; gap:1px;
+    padding:7px 12px 8px; border-radius:8px; border:1px solid; min-width:0; max-width:230px; }
+  .lw-wd-rd .pc .k { font-size:8.5px; letter-spacing:.8px; opacity:.85; line-height:1.2; }
+  .lw-wd-rd .pc .s { font-family:${MONO}; font-size:15px; font-weight:600; line-height:1.3;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lw-wd-rd .pc .m { font-size:10.5px; line-height:1.45; opacity:.92; }
+  .lw-wd-rd .pc.pre { color:${T.warn}; border-color:color-mix(in srgb, ${T.warn} 36%, transparent);
+    background:color-mix(in srgb, ${T.warn} 9%, transparent); }
+  .lw-wd-rd .pc.root { color:${T.accent}; border-color:color-mix(in srgb, ${T.accent} 44%, transparent);
+    background:color-mix(in srgb, ${T.accent} 11%, transparent); }
+  .lw-wd-rd .pc.suf { color:${T.ok}; border-color:color-mix(in srgb, ${T.ok} 36%, transparent);
+    background:color-mix(in srgb, ${T.ok} 9%, transparent); }
+  .lw-wd-rd .pc.stem { color:${T.dim}; border-color:${T.lineDim}; background:${T.bg2}; }
+  .lw-wd-rd .pc.end { color:${T.faint}; border-color:${T.lineDim}; background:transparent; }
+  .lw-wd-rd .plus { align-self:center; flex:none; color:${T.faint}; font-size:13px; line-height:1; }
+  .lw-wd-rd .gloss { font-size:12.5px; line-height:1.85; color:${T.text}; }
+  .lw-wd-rd .gloss b { color:${T.accent}; font-weight:600; }
+  .lw-wd-rd .note { font-size:11.5px; line-height:1.8; color:${T.dim}; }
+  .lw-wd-rd .base { align-self:flex-start; padding:3px 10px; border-radius:6px; font-size:11px;
+    line-height:1.7; color:${T.dim}; background:${T.lineDim}; }
   .lw-wd-src { font-size:12px; color:${T.dim}; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .lw-wd-pv { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; font-size:10.5px; color:${T.faint}; }
   .lw-wd-pv b { color:${T.dim}; font-weight:400; }
@@ -2271,9 +2412,30 @@
      ⚠️ 图片列**要有上限** ✗（max-width ✓）：不给的话横图会撑到半屏 ✓，
         把释义挤成一条 ✓；也不写死像素 ✗（窄窗口会溢出 ✓）。
      ⚠️ 没释义时**不并排** ✗（那就只放图 ✓，别留一个空列 ✓）。 */
-  .lw-wd-hero { display:flex; gap:14px; align-items:flex-start; padding:0 16px; }
-  .lw-wd-hero-a { flex:1 1 auto; min-width:0; }
-  .lw-wd-hero-b { flex:0 0 38%; min-width:140px; max-width:280px; }
+  /* ★★ 释义 / 词根词缀 / 配图 **三列** ✓（2026-10-17 第二次重排 ✓）——
+     用户原话：「图片左边，有一大块空白，这是可以把词根词缀放这空白处」✓。
+     ⚠️ 空白是「短内容撑不满宽列」造成的 ✓（例句 48 字只用 225px，列宽 719px ✗），
+        所以让词根词缀去填 ✓，而不是把列改窄 ✗。
+     ⚠️ 三列都用**明确的 flex-basis** ✗ —— 用 flex:1 让浏览器自己分的话，
+        长例句的词会被挤成一条 ✓（bacterial 315 字的例句在 380px 下要排十几行 ✗）。 */
+  .lw-wd-hero { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-start; padding:0 16px; }
+  /* ⚠️ 文本列的 basis 用 **300** 不是 380 ✗ —— 380 时 380+260（配图）已经 654 ✓，
+     比窄卡片（625 的卡片里可用 593）还宽 ✓ → 换行规则按 basis 算 ✓，
+     于是「释义」和「配图」被拆到两行 ✗（老用户明确要过「释义和配图并排」✗）。
+     300 + 260 + 14 = 574 ≤ 593 ✓ → 窄卡片里它俩**先并排** ✓，
+     词根那一列再掉到下一行 ✓（变成整宽一条 ✓）。 */
+  .lw-wd-hero-a { flex:1 1 300px; min-width:0; order:1; }
+  .lw-wd-hero-rd { flex:1 1 300px; min-width:0; max-width:360px; order:2; }
+  .lw-wd-hero-b { flex:0 0 260px; min-width:140px; max-width:280px; order:3; }
+  /* 三列挤不下（300+300+260+28 = 888 → 卡片 < 920）时 ✓：
+     ① 词根那一列**独占整行** ✓（不然它只有 360 宽 ✓，右边空一截 ✓，等于把刚填掉的空白又造出来 ✗）；
+     ② 配图**排到词根前面** ✓ —— ⚠️ 换行是**按 order 之后的顺序**算的 ✗，
+        DOM 顺序是「文本 / 词根 / 配图」✓，不调的话窄卡片会变成「文本」+「词根+配图」✗，
+        「释义和配图并排」那条就没了 ✗（实测当场红过 ✓）。 */
+  @container (max-width: 920px) {
+    .lw-wd-hero-rd { max-width:none; order:3; }
+    .lw-wd-hero-b { order:2; }
+  }
   /* 并排之后，内边距由**外层**统一给 ✓（子元素再给就是双重缩进 ✗）*/
   .lw-wd-hero .lw-wd-sec { padding-left:0; padding-right:0; }
   .lw-wd-hero .lw-wd-imgwrap { margin:14px 0 0; }
@@ -2288,6 +2450,18 @@
   .lw-wd-img { display:block; width:100%; max-height:260px; object-fit:contain; }
   /* ⚠️ 图挂了要**收起来** ✗（破图标很难看 ✗）—— 「onerror」 加 .bad ✓ */
   .lw-wd-imgwrap.bad { display:none; }
+  /* ★★ 词群导图 ✓（2026-10-17）—— 从 PDF 裁出来的**白底**页面图 ✓，
+     放在深色卡上会是一块刺眼的白 ✓ → 给它一圈「纸」的边框 + 圆角 ✓，
+     看起来像「把书页贴上来」✓，不像「图片没加载完」✗。 */
+  .lw-wd-map img { display:block; width:100%; max-height:480px; object-fit:contain;
+    background:#fff; border:1px solid ${T.lineDim}; border-radius:8px; padding:8px; cursor:zoom-in; }
+  .lw-wd-map .cap { margin-top:6px; font-size:10.5px; color:${T.faint}; text-align:center; }
+  .lw-wd-map.bad { display:none; }
+  /* 点图放大 ✓ —— 导图字小 ✓，卡片里 480px 高根本看不清 ✓ */
+  .lw-map-zoom { position:fixed; inset:0; z-index:9900; display:none; align-items:center;
+    justify-content:center; padding:22px; background:rgba(0,0,0,.9); cursor:zoom-out; }
+  .lw-map-zoom.on { display:flex; }
+  .lw-map-zoom img { max-width:100%; max-height:100%; object-fit:contain; background:#fff; }
   .lw-wd-imgwrap .cap { font-size:9.5px; color:${T.faint}; padding:4px 8px; border-top:1px solid ${T.lineDim}; }
   /* 「来自哪句话」✓ —— 给这个词一个上下文 ✓（也方便回忆是在哪儿遇到的 ✓） */
   .lw-wd-sent { font-size:11px; line-height:1.85; color:${T.dim}; margin:8px 0 0;
@@ -2338,6 +2512,40 @@
   .lw-ml-tr .pane.trans .p:last-child { border-bottom:0; }
   .lw-ml-tr .pane.trans .pending { color:${T.faint}; }
   .lw-btn.on { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
+
+  /* ══ ★★ 窄屏（手机 / 分屏窄栏）收尾覆盖 ✓✓（2026-10-18）══════════════════
+     ⚠️ 必须放在**整个样式表最后** ✗ —— 上面 266 行还有 .lw-g12 的基础规则 ✓，
+        放在它前面会被盖掉 ✓（第一版就是这么白改的 ✗）。
+     ⚠️ 三个都要压 ✓：
+        ① 12 栏网格 → 单栏 ✓（430px 下 12 栏每栏只剩 18px ✓，卡片根本放不下 ✗）
+        ② 卡片的**内联 span** ✓（内联写 grid-column:span 3 ✓，内联优先级最高 → !important ✓）
+        ③ 卡片被用户**拖过大小**后带的内联 width / height ✓
+           （实测：87×122 的卡片在手机上只剩一条 ✓）→ 窄屏一律回到自适应 ✓。
+     ⚠️ 桌面宽度**完全不受影响** ✗（用户拖出来的大小仍然记得 ✓）。 */
+  /* ⚠️ 断点 **1200** 不是 820 ✗✗ —— 12 栏里跨 3 栏的卡片最小要 240px ✓，
+     一栏 = (内容区 - 11×16) / 12 ✓ → 内容区 < 968px 时 3 栏就不到 240 ✓
+     （实测 900px 视口：内容区 704 ✓ → 每栏 176 ✓ → 卡片被切掉一半 ✗）。
+     内容区 ≈ 视口 - 196（左栏）- 36（内边距）✓ → 视口 < 1250 一律单栏 ✓
+     （实测 1200 还差 22px ✓、1280 才刚好 ✓）。 */
+  @media (max-width: 1249px) {
+    .lw-g12 { grid-template-columns:1fr; gap:12px; }
+    .lw-g12 > .lw-c { grid-column:1 / -1 !important; width:auto !important; min-width:0;
+      height:auto !important; min-height:120px; }
+  }
+  /* ★ 中等宽度（分屏 / 小笔记本）用**两列** ✓（2026-10-19）——
+     ⚠️ 全单列在 900~1249 太浪费 ✗（KPI 卡只有一百多字 ✓，占满 900px 全是空白 ✗）。
+     判据用 data-span 属性 ✓（bind() 里打的 ✓）：
+       · 跨 1~5 栏的窄卡（KPI / 列表卡 ✓）→ 两列 ✓
+       · 跨 6 及以上的宽卡（表格 / 长列表 ✓）→ 整行 ✓（挤成半宽会横着滚 ✗）
+     ⚠️ 只改**布局** ✗，不改任何卡片的渲染与交互 ✓。 */
+  @media (min-width: 821px) and (max-width: 1249px) {
+    .lw-g12 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .lw-g12 > .lw-c { grid-column:span 1 !important; }
+    .lw-g12 > .lw-c[data-span="6"], .lw-g12 > .lw-c[data-span="7"],
+    .lw-g12 > .lw-c[data-span="8"], .lw-g12 > .lw-c[data-span="9"],
+    .lw-g12 > .lw-c[data-span="10"], .lw-g12 > .lw-c[data-span="11"],
+    .lw-g12 > .lw-c[data-span="12"] { grid-column:1 / -1 !important; }
+  }
   `;
 
   const NAV = [
@@ -2536,18 +2744,133 @@
     /* ── AI：复用 CodeScope 里配好的模型 ✓ ── */
     'ai.chat': {
       e: '🤖', n: 'AI 对话', g: 'AI', in: 1, out: 1,
-      cfg: [['system', '系统提示', 'area', '', '定角色 / 定语气 / 定输出格式；留空则只有用户提示'], ['prompt', '用户提示', 'area', '', '把数据塞进去，例如「总结下面内容：{{n3}}」']],
+      /* ★ 每个节点**自己选服务** ✓（2026-10-18）—— 一张图里可以
+         「DeepSeek 写文案 → 豆包出图 → 豆包出视频」✓。
+         「用哪个服务」留空 = 用 CodeScope 里配的默认模型 ✓（老图照旧跑 ✓）。 */
+      cfg: [
+        ['provider', '用哪个服务', 'provider', '', '留空＝用默认模型'],
+        ['model', '模型', 'model', '', '留空＝用这个服务的第一个模型'],
+        ['system', '系统提示', 'area', '', '定角色 / 定语气 / 定输出格式；留空则只有用户提示'],
+        ['prompt', '用户提示', 'area', '', '把数据塞进去，例如「总结下面内容：{{n3}}」'],
+        ['temperature', '温度', 'number', 0.3, '0＝稳、1＝放；写文案 0.7~0.9，抽取 / 分类 0~0.2'],
+        ['json', '只回 JSON', 'select', 'off', 'off / on'],
+        ['timeout', '最长等多久（秒）', 'number', 120, '推理模型慢，可以调到 300'],
+      ],
       d: '把上游的内容交给大模型，换回一段回答。',
-      how: '复用 CodeScope 里已经配好的模型（不用在这里再填一遍 key）。<b>系统提示</b>写「你是谁、怎么输出」，<b>用户提示</b>里用 {{}} 把数据塞进去。',
-      o: 'text（模型的回答）—— 引用要写 {{id.text}}',
+      how: '每个节点<b>自己选服务</b> ✓ —— 文本用 DeepSeek、画面描述用豆包，互不影响 ✓。'
+        + '第一次用要先点工具栏的「🔑 模型」把 Key 填进去 ✓。'
+        + '<b>系统提示</b>写「你是谁、怎么输出」，<b>用户提示</b>里用 {{}} 把数据塞进去 ✓。'
+        + '要下游接「JSON 取值」的话，把「只回 JSON」打开 ✓，模型就只吐一个 JSON ✓。',
+      o: 'text（模型的回答）、model、provider、usage —— 引用要写 {{id.text}}',
+    },
+    /* ══ 图像生成 ✓（2026-10-18 新增）══════════════════════════════════════
+       ⚠️ 图片是**同步**的 ✓（一次请求直接回地址 ✓），和视频那种「建任务 + 轮询」
+          完全是两种节奏 ✗ —— 所以做成两个节点 ✓，不硬塞进一个 ✓。 */
+    'ai.image': {
+      e: '🖼', n: 'AI 生图', g: 'AI', in: 1, out: 1,
+      cfg: [
+        ['provider', '用哪个服务', 'provider', '', '豆包（Seedream）/ OpenAI 兼容都行'],
+        ['model', '模型', 'model', '', '如 doubao-seedream-5-0-pro-260628'],
+        ['prompt', '画面描述', 'area', '', '写清主体 / 风格 / 光线 / 构图；可用 {{}}'],
+        ['size', '尺寸', 'select', '2048x2048', '1024x1024 / 2048x2048 / 1280x720 / 720x1280 / 1792x1024'],
+        ['n', '出几张', 'number', 1, '1~4；多张时用 {{id.urls[1]}} 取第二张'],
+        ['image', '参考图（可选）', 'text', '', '图生图：填图片地址或 {{上游.url}}'],
+        ['watermark', '水印', 'select', 'off', 'off / on'],
+        ['timeout', '最长等多久（秒）', 'number', 180, ''],
+      ],
+      d: '给一句话，出一张图。',
+      how: '豆包走 Seedream ✓，OpenAI 兼容的走 Images 接口 ✓（同一套参数 ✓）。'
+        + '<b>参考图</b>填了就变成「图生图」✓（拿它当底图改 ✓）。'
+        + '出来的地址<b>会过期</b> ✗ —— 要留档就接一个「下载文件」节点 ✓。',
+      o: 'url（第一张）、urls（全部）、count、model',
+    },
+    /* ══ 视频生成 ✓（2026-10-18 新增）══════════════════════════════════════
+       ⚠️ 视频是**异步**的 ✗：先建任务拿 id ✓，再轮询到 succeeded ✓（几十秒到几分钟 ✓）。
+          所以节点里**自带轮询** ✓ —— 不让用户自己拼「HTTP + 等待 + 条件分支」那七八步 ✗。 */
+    'ai.video': {
+      e: '🎬', n: 'AI 生视频', g: 'AI', in: 1, out: 1,
+      cfg: [
+        ['provider', '用哪个服务', 'provider', '', '豆包（Seedance）'],
+        ['model', '模型', 'model', '', '如 doubao-seedance-2-0-fast-260128'],
+        ['prompt', '画面描述', 'area', '', '写清镜头怎么动 / 主体做什么 / 氛围；可用 {{}}'],
+        ['image', '首帧图（可选）', 'text', '', '填图片地址 = 图生视频（让它从这张图开始动）'],
+        ['ratio', '比例', 'select', '16:9', '16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9 / adaptive'],
+        ['duration', '时长（秒）', 'number', 5, '常见 3 / 5 / 10'],
+        ['resolution', '分辨率', 'select', '720p', '480p / 720p / 1080p'],
+        ['audio', '生成音效', 'select', 'off', 'off / on'],
+        ['watermark', '水印', 'select', 'off', 'off / on'],
+        ['seed', '随机种子', 'text', '', '留空＝每次都不一样；填同一个数可以复现同一条'],
+        ['timeout', '最长等多久（秒）', 'number', 300, '视频一般 30~180 秒；上限 900'],
+      ],
+      d: '给一句话，出一条视频（图生视频也行）。',
+      how: '节点会<b>自己等</b>到出片为止 ✓（每 3 秒问一次 ✓），不用你手动查任务 ✓。'
+        + '<b>首帧图</b>填了就变成「图生视频」✓ —— 常见套路是「AI 生图 → 拿它的 url 当首帧 → 生视频」✓。'
+        + '⚠️ 出来的地址 <b>24 小时失效</b> ✗ —— 后面接一个「下载文件」节点就能长期留着 ✓。',
+      o: 'url / video_url（视频地址）、task_id、status、ms、cover_url',
     },
     /* ── 工具 ── */
+    /* ══ 网页版 ✓（2026-10-18 新增）════════════════════════════════════════
+       ★ 用户原话：「我说的是，打开网页版的 deepseek，和豆包进行文本，视频生成等那种」✓
+       ⚠️ 和上面的 `ai.chat` 是**两条路** ✗：
+          · `ai.chat` 走 **API** ✓（要 Key ✓、稳 ✓、能定时 ✓、快 ✓）
+          · `web.chat` 走**网页版** ✓（用已登录的账号 ✓、不花钱 ✓，但慢 + 脆 ✓）
+         两条都留着 ✓ —— 让用户自己按场景挑 ✓，不要替他决定 ✗。 */
+    'web.chat': {
+      e: '🌐', n: '网页版对话', g: '网页', in: 1, out: 1,
+      cfg: [
+        ['site', '哪个网站', 'site', 'deepseek', ''],
+        ['prompt', '说什么', 'area', '', '把上游内容塞进去：{{n1.text}}'],
+        ['sendMode', '怎么发出去', 'select', 'enter', 'enter / ctrl+enter / button'],
+        ['timeout', '最长等多久（秒）', 'number', 180, '网页版慢，别给太小'],
+        ['inputSel', '输入框选择器（改版了才要动）', 'text', '', '留空＝自动找最大的那个'],
+        ['replySel', '回答选择器（改版了才要动）', 'text', '', '留空＝自动找'],
+      ],
+      d: '打开网页版，把话发出去，等它答完，把回答取回来。',
+      how: '用的是你已经登录的网页版 ✓ —— 不填 Key、不花 API 钱 ✓。'
+        + '第一次要在工具栏「🌐 网页版」里把窗口开出来、**在里面登录一次** ✓（之后会记住 ✓）。'
+        + '⚠️ 它靠「文本不再变化」判断 AI 说完没有 ✓，所以比 API 慢一些 ✓；'
+        + '网页改版可能失效 ✗ —— 那时把「选择器」两个高级项改一下就能救 ✓。',
+      o: 'text（网页版给的回答）、site、url',
+    },
+    'web.video': {
+      e: '🎥', n: '网页版生视频', g: '网页', in: 1, out: 1,
+      cfg: [
+        ['site', '哪个网站', 'site', 'jimeng', ''],
+        ['prompt', '画面描述', 'area', '', '写清镜头 / 主体 / 氛围'],
+        ['sendMode', '怎么发出去', 'select', 'button', 'button / enter / ctrl+enter'],
+        ['timeout', '最长等多久（秒）', 'number', 600, '网页版要排队，别给太小'],
+        ['inputSel', '输入框选择器（改版了才要动）', 'text', '', '留空＝自动找'],
+        ['videoSel', '视频地址选择器（改版了才要动）', 'text', '', '留空＝找 video[src] / 指向 .mp4 的链接'],
+      ],
+      d: '在网页版里点一次「生成」，等视频出来，把地址取回来。',
+      how: '网页版生成视频要**排队** ✓，所以默认等 10 分钟 ✓（可以在「最长等多久」里改 ✓）。'
+        + '取回来的是网页上的地址 ✓ —— 后面接「下载文件」就能长期留着 ✓（网页地址会过期 ✗）。'
+        + '⚠️ 网页版多数要**点一下「生成」按钮**才真的开始 ✓，所以默认「怎么发出去」是 button ✓。',
+      o: 'url / video_url（视频地址）、site、ms',
+    },
+
     'util.delay': {
       e: '⏳', n: '等待', g: '工具', in: 1, out: 1,
       cfg: [['ms', '毫秒', 'number', 1000, '上限 30 秒']],
       d: '停一会儿再往下走。',
       how: '单位是毫秒，最多 30 秒。用来给接口留反应时间，或者别把人家 API 打太频。',
       o: 'waited（等了多久）—— 一般用不到',
+    },
+    /* ══ 下载文件 ✓（2026-10-18 新增）══════════════════════════════════════
+       ⚠️ 生成类接口给的地址**会过期** ✗（豆包视频 24 小时 ✓、签名 URL 更短 ✗）——
+          要长期留就必须落盘 ✓。落盘之后 `url` 是**本机地址** ✓（`/api/life/flowfile/…` ✓），
+          面板里点得开、`<video>` 也放得出来 ✓。 */
+    'media.download': {
+      e: '⬇', n: '下载文件', g: '工具', in: 1, out: 1,
+      cfg: [
+        ['url', '文件地址', 'text', '', '填 {{上游.url}} —— 视频 / 图片都行'],
+        ['name', '存成什么名字', 'text', '', '只用来猜扩展名（.mp4 / .png）；真正的文件名由服务端生成'],
+      ],
+      d: '把一个远程地址存成本机文件（图片 / 视频 / 音频 / 文本都行）。',
+      how: '生成类节点的地址<b>会过期</b> ✗，用它落个盘最稳 ✓。'
+        + '存到数据目录的 flow-files 文件夹 ✓，上限 300MB ✓。'
+        + '出来的 <b>url</b> 是本机地址 ✓ —— 备忘录里用图片语法引用它就能显示 ✓。',
+      o: 'url（本机地址）、path（磁盘路径）、name、bytes、type、kind',
     },
     /* 便签 ✓（n8n 的 Sticky Note ✓）—— **不参与执行** ✗，只是画布上的一块说明 ✓ */
     'note.sticky': {
@@ -2597,7 +2920,7 @@
       o: 'queued（子流程的输出由前端接着往下带 ✓）',
     },
   };
-  const FLOW_GROUPS = ['触发', '数据', '列表', '逻辑', 'AI', '工具', '输出'];
+  const FLOW_GROUPS = ['触发', '数据', '列表', '逻辑', 'AI', '网页', '工具', '输出'];
   const FLOW_W = 170, FLOW_H = 56;
   const FLOW_UI = {
     sel: '', node: '', arm: '', armPort: 0, steps: null, err: '', busy: false, help: false,
@@ -2614,6 +2937,14 @@
     running: '',
     /* ★ 剪贴板 ✓（复制粘贴节点 ✓） */
     clip: null,
+    /* ★ 右栏显示「模型与密钥」而不是节点设置 ✓（2026-10-18） */
+    keys: false,
+    keysMsg: '',
+    /* ★ 右栏显示「网页版」面板 ✓（2026-10-18）—— 状态 / 打开窗口 / 登录提示 */
+    web: false, webData: null, webBusy: '', webMsg: '',
+    /* ★ 刚拖完一条线的时间戳 ✓ —— 用来**吞掉**拖动之后浏览器补的那个 click ✓
+       （不吞的话拖完会立刻变成「已武装」状态 ✗，看着像没连上 ✓） */
+    dragEnded: 0,
   };
   const FLOW_UNDO_MAX = 60, FLOW_RUN_MAX = 20;
 
@@ -2915,6 +3246,9 @@
      `render()` 末尾要调 `paintStatus()` ✓，而 `render()` 有可能在模块求值期间被碰到 ✓。
      消息记在模块作用域 → 整屏 render() 之后能重画 ✓（`#lw-sub` 每次 render 都会被重建 ✗）。 */
   let STATUS_HTML = '', STATUS_UNTIL = 0, STATUS_UNDO = null;
+  /* 状态栏里那颗「重试」的 onclick ✓ —— 和 `STATUS_UNDO` 一样：
+     `#lw-sub` 每次 render 都被重建 ✗ → 必须在 paintStatus 里重挂 ✓。 */
+  let STATUS_RETRY = null;
   /* ⚠️ 到期复位的定时器要**单例** ✗（每次 setStatus 先 clear ✓） */
   let STATUS_TIMER = 0;
   let MAIL_MOVE_BUSY = '';      /* 同一个移动在途时去重 ✓（拖放监听器曾重复挂载 ✗） */
@@ -3219,10 +3553,27 @@
   const STORE_TTL = 3000;
   let STORE_FETCH = null;      /* { at, p } ✓ */
   let STORE_DIRTY = false;     /* 本地刚存过盘 → 缓存作废 ✓ */
+  /* ★★ 读取失败**不能当成空数据** ✓✓（2026-10-18）——
+     ⚠️ 原来：`STORE = (store && store.data) || {}` ✗ ——
+        服务没起来 / 网断了 / 服务端 500 时，`store` 是 null ✓ →
+        `STORE` 变成**空对象** ✓ → 界面上「0 条备忘录 · 0 个单词」✓
+        → 用户以为**数据全丢了** ✓，然后随手改一个字 ✓ → `saveStore()` 拿空壳去覆盖 ✗✗。
+        服务端那道「键数不到一半就拒收」的护栏**救了这一次** ✓，
+        但拒收是**静默**的（前端 `.catch(() => {})` ✗）→ 用户以为存上了 ✓。
+     ⇒ 两个标记：`STORE_READY` 决定**能不能存盘** ✓，
+        `STORE_LAST_ERROR` 决定**界面上说不说** ✓。 */
+  let STORE_READY = false;
+  let STORE_LAST_ERROR = '';
   function fetchStoreShared() {
     const now = Date.now();
     if (!STORE_DIRTY && STORE_FETCH && (now - STORE_FETCH.at) < STORE_TTL) return STORE_FETCH.p;
-    const p = fetch('/api/life/store', { cache: 'no-store' })
+    /* ★★ `no-store` → `no-cache` ✓✓（2026-10-17）——
+       ⚠️ `no-store` 是「**根本不缓存**」✗ → 每次都把整份 store 重新拉一遍 ✗
+          （11MB ✗，gzip 后 3.4MB ✓，局域网里还是要一秒多 ✗）。
+       `no-cache` 是「可以缓存、但每次回来问一声」✓ → 服务端比对 ETag ✓ →
+          没改过就回 **304**（几十字节 ✓）→ 打开面板几乎瞬时 ✓。
+       ⚠️ 语义没变 ✗：`no-cache` 一样保证「拿到的一定是最新的」✓（每次都验证过 ✓）。 */
+    const p = fetch('/api/life/store', { cache: 'no-cache' })
       .then((r) => r.json())
       .catch(() => { STORE_FETCH = null; return null; });   /* 挂了就清缓存 ✓，让下次重试 ✓ */
     STORE_FETCH = { at: now, p };
@@ -3245,11 +3596,23 @@
       (async () => {
         const shared = await fetchStoreShared();
         if (shared && shared.data) return shared;
-        return j('/api/life/store', { cache: 'no-store' });
+        return j('/api/life/store', { cache: 'no-cache' });
       })(),
     ]);
     if (idx && idx.ok) DATA = idx;
-    STORE = (store && store.data) || {};
+    /* ★ 只有**真的拿到 data** 才算读到 ✓（`data` 是对象，哪怕是空的 ✓）——
+       ⚠️ 判 `store && store.data` 而不是 `store.ok` ✗：老版本接口没 `ok` 字段 ✓。 */
+    if (store && store.data && typeof store.data === 'object') {
+      STORE = store.data;
+      STORE_READY = true;
+      STORE_LAST_ERROR = '';
+      /* ⚠️ 换了内存里那份 → 上次发出去的基线**作废** ✗（不然可能误判「没变」✗） */
+      LAST_WORDS_JSON = null; PENDING_WORDS_JSON = null;
+    } else {
+      /* 读失败：**保留上一次的 STORE** ✓（有的话），绝不拿空壳顶替 ✗ */
+      STORE_LAST_ERROR = String((store && (store.error || store.message)) || '连不上本机服务（服务没起来 / 网络断了）');
+      if (!STORE) STORE = {};
+    }
     if (STORE.city) CITY = STORE.city;
     LOADING = false;
     render();
@@ -3269,6 +3632,128 @@
         ⚠️ 发**成功之后**才清掉这个标记 ✗ —— 发失败还清掉的话，
            「断开」就变成「界面上断了、磁盘上还连着」✗（刷新一下又回来了 ✓）。 */
   let SAVE_TIMER = 0, SAVE_PENDING = false;
+  /* ★★ 保存失败的**可见性** ✓✓（2026-10-18）——
+     ⚠️ 原来 `post()` 只有 `.catch(() => { })` ✗ ——
+        服务端 409（「这次只提交了 N 个键，疑似不完整副本」✓）、
+        500、网络断了，前端**一个字都不说** ✗ →
+        用户以为存上了 ✓，关掉页面就真没了 ✗。
+     ⇒ 失败必须：① 顶栏红字说清原因 ✓ ② 给一个「重试」✓
+        ③ **不清** `__drop` ✓（清了「断开连接」就变成假断开 ✗）
+        ④ 不把 `STORE_DIRTY` 置真 ✓（没写成就不算写过 ✓）。
+     重试：退避 3 次（1s / 3s / 8s ✓）后停手等用户点 ✓ ——
+     无限重试在 409 那种「payload 本身有问题」的情况下只会刷屏 ✗。 */
+  let SAVE_FAIL = 0, SAVE_RETRY_TIMER = 0;
+  /* ★★ 词库没变就**不传** ✓✓（2026-10-19 体检）——
+     实测：整份 store 8.5MB，其中 `words` 独占 9MB（4611 个词 ✓），
+     而改一个字的备忘录也要把它**原样再传一遍** ✓ → 本机 POST 291ms ✓、
+     局域网 20Mbps 上 ≈1.4 秒 ✓，服务端还要把 12.8MB 重写一遍盘 ✓。
+     ⇒ `storePayload()` 里比对「这次序列化出来的 words」和「上一次**成功**发出去的那份」✓：
+        完全一致就不传 ✓，改传 `__keepWords: true` ✓，服务端用磁盘上现有的 words 补齐 ✓。
+     ⚠️ 必须用**序列化后逐字节比较** ✗ 不能自己维护 dirty 标记 ✗ ——
+        词条会在十几处被改（补全 / 复习 / 标记 / 导入 / 词根…），漏一处就是**静默丢改动** ✗。
+     ⚠️ `LAST_WORDS_JSON` 只在**保存成功之后**才更新 ✗ ——
+        失败还更新的话，下一次就会带着 keepWords 发出去 ✓，
+        而服务端根本没收到那次改动 ✗ → 词库回退 ✗。 */
+  let LAST_WORDS_JSON = null, PENDING_WORDS_JSON = null;
+  /* ★ 保存状态 ✓（'idle' / 'saving' / 'saved' / 'failed'）——
+     ⚠️ 备忘录右上角那个「✓ 已保存」原来是**改完就写死**的 ✗
+        （`flushMemo` 里调完 `saveStore()` 立刻写 ✓，而 `saveStore` 是 300ms 防抖 + 异步 ✗）
+        → 服务端 409 / 断网时，界面上照样是「✓ 已保存」✗✗
+        → 用户关掉页面，改动就真没了 ✓。现在由**真实结果**驱动 ✓。 */
+  let SAVE_STATE = 'idle';
+  let TOAST_TIMER = 0;
+  function setSaveState(st) {
+    SAVE_STATE = st;
+    paintSaveState();
+  }
+  function paintSaveState() {
+    const el = document.getElementById('lw-memo-status');
+    if (!el) return;
+    if (SAVE_STATE === 'saving') { el.textContent = '保存中…'; el.className = 'st'; }
+    else if (SAVE_STATE === 'saved') { el.textContent = '✓ 已保存'; el.className = 'st ok'; }
+    else if (SAVE_STATE === 'failed') { el.textContent = '✗ 没存上'; el.className = 'st bad'; }
+  }
+  /* ★ 悬浮提示 ✓（2026-10-18）——
+     ⚠️ 为什么不用顶栏 `#lw-sub` ✗：它是 `white-space:nowrap` + `ellipsis` ✓，
+        宽度只有一百多像素 ✓ → 服务端那句「这次只提交了 3 个键，而现有数据有 40 个」
+        会被截成「✗ 没存上：拒绝保存：这次只…」✗，用户看不到**原因** ✓。
+     ⚠️ 为什么不用整屏横幅 ✗：那要走 `render()` ✓ → 正在打字时会把光标弄丢 ✗。
+     ⇒ 固定在**右下角**的浮层 ✓：不碰面板 DOM ✓、多长都读得完 ✓、带「重试」✓。 */
+  function toast(html, ttl, kind) {
+    let el = document.getElementById('lw-savetoast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'lw-savetoast';
+      el.setAttribute('role', 'alert');
+      document.body.appendChild(el);
+    }
+    if (!html) { el.classList.remove('on'); return el; }
+    el.className = 'lw-savetoast' + (kind ? ' ' + kind : '');
+    el.innerHTML = html;
+    el.classList.add('on');
+    clearTimeout(TOAST_TIMER);
+    if (ttl) TOAST_TIMER = setTimeout(() => el.classList.remove('on'), ttl);
+    return el;
+  }
+  /* ★★ 全局错误兜底 ✓✓（2026-10-19）——
+     ⚠️ 这个项目里 `.catch(() => {})` 有 **54 处** ✓（多数是「可选功能失败不打扰用户」✓，
+        合理 ✓）。但代价是：**真正**的错误也会被吞掉 ✓ →
+        表现是「某个按钮点了没反应」「某块一直显示读取中」✓，而**控制台以外没有任何信号** ✗
+        （今天就连踩两次：运行状态卡 ReferenceError 被吞、保存失败静默 ✗）。
+     ⇒ 兜底只做两件事：① 记进 `window.__CS_ERRORS`（最近 20 条，调试用 ✓）
+        ② 右下角弹一次（**8 秒内只弹一次** ✗ —— 一个循环报错会刷屏 ✗）。
+     ⚠️ **资源加载失败不报** ✗（`ev.message` 为空 ✓）—— 一张图 404 不该弹窗 ✓。 */
+  let ERR_TOAST_AT = 0;
+  function reportClientError(kind, detail) {
+    const msg = String(detail || '未知错误').slice(0, 220);
+    try {
+      window.__CS_ERRORS = window.__CS_ERRORS || [];
+      window.__CS_ERRORS.push({ at: Date.now(), kind: kind, msg: msg });
+      if (window.__CS_ERRORS.length > 20) window.__CS_ERRORS.shift();
+    } catch (_) { }
+    try { console.warn('[codescope] ' + kind + '：' + msg); } catch (_) { }
+    if (Date.now() - ERR_TOAST_AT < 8000) return;
+    ERR_TOAST_AT = Date.now();
+    const el = toast('⚠ <b>有个功能出错了</b><div class="tx">' + esc(msg) + '</div>'
+      + '<div class="acts"><button id="lw-errd-close" class="ghost">知道了</button></div>', 0, 'bad');
+    const close = el && el.querySelector('#lw-errd-close');
+    if (close) close.onclick = () => toast('', 0);
+  }
+  try {
+    window.addEventListener('error', (ev) => {
+      if (!ev || !ev.message) return;                 /* 资源加载失败没有 message ✓ */
+      reportClientError('脚本错误', ev.message
+        + (ev.filename ? '（' + String(ev.filename).split('/').pop() + ':' + (ev.lineno || 0) + '）' : ''));
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+      const reason = ev && ev.reason;
+      reportClientError('未处理的异步错误', (reason && (reason.message || String(reason))) || '未知');
+    });
+  } catch (_) { }
+
+  function saveFailed(msg) {
+    SAVE_FAIL += 1;
+    setSaveState('failed');
+    const retry = () => {
+      SAVE_FAIL = 0;
+      clearTimeout(SAVE_RETRY_TIMER);
+      setSaveState('saving');
+      saveStore(true);
+    };
+    STATUS_RETRY = retry;
+    setStatus('✗ <b>没存上</b> <button class="lw-inline-btn" id="lw-save-retry">重试</button>', 0);
+    const el = toast('✗ <b>这次改动没存上</b><div class="tx">' + esc(msg) + '</div>'
+      + '<div class="acts"><button id="lw-savetoast-retry">重试</button>'
+      + '<button id="lw-savetoast-close" class="ghost">知道了</button></div>', 0, 'bad');
+    const rb = el && el.querySelector('#lw-savetoast-retry');
+    if (rb) rb.onclick = retry;
+    const cb = el && el.querySelector('#lw-savetoast-close');
+    if (cb) cb.onclick = () => toast('', 0);
+    if (SAVE_FAIL <= 3) {
+      clearTimeout(SAVE_RETRY_TIMER);
+      SAVE_RETRY_TIMER = setTimeout(retry, [1000, 3000, 8000][SAVE_FAIL - 1] || 8000);
+    }
+  }
   function storePayload() {
     const b = Object.assign({}, STORE || {});
     /* ══ ★★★★ 上传前丢掉**孤儿运行记录** ✗✗（2026-10-08 性能体检）══════════
@@ -3293,18 +3778,59 @@
     }
     const drop = (STORE && Array.isArray(STORE.__drop)) ? STORE.__drop : null;
     if (drop && drop.length) b.__drop = drop.slice();
+    /* ★ 词库没变 → 不传（见 LAST_WORDS_JSON 的注释）✓ */
+    try {
+      const wordsJson = JSON.stringify(b.words || []);
+      if (LAST_WORDS_JSON !== null && wordsJson === LAST_WORDS_JSON) {
+        delete b.words;
+        b.__keepWords = true;
+      } else {
+        PENDING_WORDS_JSON = wordsJson;
+      }
+    } catch (_) { PENDING_WORDS_JSON = null; }
     return JSON.stringify(b);
   }
   function saveStore(now) {
     const post = () => {
+      /* ★★ 没读到数据就**不许存** ✗✗ ——
+         拿空壳 / 旧壳去覆盖，等于把用户的备忘录、日记、单词一起抹掉 ✓
+         （这个项目真出过一次「82 个键只剩 27 个」✗）。
+         宁可这次改动丢了 ✓，也不能让整份数据没了 ✓。 */
+      if (!STORE_READY) {
+        saveFailed(STORE_LAST_ERROR
+          ? ('本机数据还没读出来（' + STORE_LAST_ERROR + '），这次改动没有保存。先点右上角「↻ 刷新」')
+          : '本机数据还没读出来，这次改动没有保存。先点右上角「↻ 刷新」');
+        return;
+      }
+      setSaveState('saving');
       fetch('/api/life/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: storePayload() })
-        .then((r) => {
-          if (r && r.ok && STORE) delete STORE.__drop;
-          /* ★ 本地刚写过 → 共享缓存**立刻作废** ✓✗（否则紧接着的 load() 会读到旧数据 ✗） */
-          STORE_DIRTY = true;
-          STORE_FETCH = null;
+        .then(async (r) => {
+          if (r && r.ok) {
+            SAVE_FAIL = 0;
+            STATUS_RETRY = null;
+            clearTimeout(SAVE_RETRY_TIMER);
+            setSaveState('saved');
+            toast('', 0);
+            /* ★ 只有**发成功**才认这份 words ✓（失败还认的话，下次 keepWords 会把改动丢掉 ✗） */
+            if (PENDING_WORDS_JSON !== null) { LAST_WORDS_JSON = PENDING_WORDS_JSON; PENDING_WORDS_JSON = null; }
+            if (STORE) delete STORE.__drop;
+            /* ★ 本地刚写过 → 共享缓存**立刻作废** ✓✗（否则紧接着的 load() 会读到旧数据 ✗） */
+            STORE_DIRTY = true;
+            STORE_FETCH = null;
+            /* 之前报过「没存上」→ 现在好了，把红字换回默认 ✓（不然一直挂着 ✗） */
+            if (STATUS_HTML && STATUS_HTML.indexOf('没存上') >= 0) setStatus('', 1);
+            return;
+          }
+          /* 服务端的拒绝理由**必须原样给用户看** ✓ ——
+             409 那句「只提交了 N 个键…」是他唯一能自救的线索 ✓。 */
+          let msg = '服务端返回 ' + (r ? r.status : '?');
+          try {
+            const d = await r.json();
+            if (d && d.error) msg = String(d.error);
+          } catch (_) { }
+          saveFailed(msg);
         })
-        .catch(() => { });
+        .catch((e) => saveFailed(String((e && e.message) || e || '网络断了')));
     };
     if (now) {
       clearTimeout(SAVE_TIMER);
@@ -3626,7 +4152,7 @@
   function render() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
-    if (!DATA) { host.innerHTML = headHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
+    if (!DATA) { host.innerHTML = headHtml() + storeBannerHtml() + '<div class="lw-main">' + skeleton() + '</div>'; bind(); return; }
     const scroll = lwSnapScroll();   /* ★ 换 DOM 前先记住滚动位置 ✓（见上面的注释 ✓） */
     CODE_SEQ = 0; KPI_SEQ = 0;   /* 每个视图的编码都从 01 开始 */
     const main = { today: viewToday, memo: viewMemo, journal: viewJournal, quote: viewQuote, tracks: viewTracks, paper: viewTracks, files: viewFiles, time: viewFiles, mail: viewMail, reading: viewReading, flow: viewFlow, trends: viewTrends }[TAB] || viewToday;
@@ -3644,11 +4170,18 @@
         : (n.badge && openTodo ? `<span class="badge">${openTodo}</span>` : `<span class="badge">${n.key || ''}</span>`);
       return `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span><span>${n.label}</span>` + badge + `</button>`;
     }).join('')).join('');
-    host.innerHTML = headHtml() + `<div class="lw-body2">
+    host.innerHTML = headHtml() + storeBannerHtml() + `<div class="lw-body2">
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
       <div class="lw-main${LW_FILL_TAB[TAB] ? ' fill' : ''}">${main()}</div></div>` + dlgHtml()
       + (MAIL_UI.compose ? mailComposeOverlay() : '');
     bind();
+    /* ★ 整屏 render 之后，词行只建了前 150 条 ✓ → 这里接着分片补 ✓
+       （`epWordRowsHtml` 已经把「还没建的」记在 `EP_FILL_ARR` 里 ✓）。
+       ⚠️ 必须在 `bind()` 之后 ✗ —— 先补的话，新行没有点击绑定 ✓。 */
+    if (TAB === 'reading') {
+      const wb = host.querySelector('.lw-wd-rows');
+      if (wb) epRunFill(wb);
+    }
     lwRestScroll(scroll);
     /* ⚠️ 同步设完还要**再补一帧** ✗ —— Chrome 的「滚动锚定」（scroll anchoring ✓）
        会在 DOM 替换后自己把位置调回去 ✓（实测：归零 0 被调成 22 = 新列表的最大值 ✓），
@@ -3819,14 +4352,24 @@
       lwGrab(el, {
         down: (ev) => {
           el.classList.add('on');
-          return { x: ev.clientX, w: target.getBoundingClientRect().width };
+          /* ★★ 方向**自动判** ✓✓（2026-10-18）——
+             ⚠️ 原来靠 spec 里手写 `dir:-1` ✗，而工作流右栏（`.lw-fl-cfg`）**漏写了** ✗
+                → 往右拖它反而**变宽** ✗（用户：「工作流右边的，自由拖动，方向是反的」✓）。
+                手写标记的毛病就是**漏一个就反一个** ✗，而且看不出来 ✗。
+             判据（永远成立 ✓）：**目标栏的中心在拖拽条哪一边** ✓
+               · 目标在**左** → 往右拖 = 变宽 ✓（dir +1 ✓）—— 左栏 / 中间列表 ✓
+               · 目标在**右** → 往右拖 = 变窄 ✓（dir -1 ✓）—— 右栏 / 右抽屉 ✓
+             ⚠️ 必须在这里量 ✗ 不能在 `move` 里量 ✓ ——
+                拖动过程中宽度在变 ✓，中心点会跟着漂 ✓，量到一半就翻向 ✗。
+             `sp.dir` 保留成**显式覆盖** ✓（将来真遇到特殊布局还能钉死 ✓）。 */
+          const gr = el.getBoundingClientRect();
+          const tr = target.getBoundingClientRect();
+          const autoDir = (tr.left + tr.width / 2) > (gr.left + gr.width / 2) ? -1 : 1;
+          const dir = (sp.dir === -1 || sp.dir === 1) ? sp.dir : autoDir;
+          return { x: ev.clientX, w: tr.width, dir };
         },
         move: (ev, sess) => {
-          /* ⚠️ `dir`：目标栏在拖拽条的**右边**时（外刊精读的「查词」栏 ✓），
-             往右拖 = **变窄** ✗ —— 不加这个的话手感完全颠倒 ✓
-             （往右拖它反而变宽 ✓，因为默认假设目标在**左边** ✓）。 */
-          const dir = sp.dir === -1 ? -1 : 1;
-          const w = Math.max(sp.min, Math.min(sp.max, sess.w + dir * (ev.clientX - sess.x)));
+          const w = Math.max(sp.min, Math.min(sp.max, sess.w + sess.dir * (ev.clientX - sess.x)));
           target.style.width = Math.round(w) + 'px';
           target.style.flex = 'none';
         },
@@ -4082,7 +4625,11 @@
     }
     el.onpointerdown = (ev) => {
       if (ev.button !== 0) return;               /* 只认左键 ✓ */
-      if (ev.target && ev.target.classList && ev.target.classList.contains('lw-fl-port')) return;
+      /* ⚠️ 默认**不在端口上开拖动会话** ✗ —— 端口有它自己的「点一下 = 连线」✓。
+         ★ 2026-10-18：加 `allowPort` ✓ —— 端口自己要把「按住拖到目标」也接上 ✓
+           （n8n 那种手感 ✓）；不加的话端口上的 pointerdown 会被这里直接吞掉 ✗。 */
+      if (!handlers.allowPort && ev.target && ev.target.classList
+        && ev.target.classList.contains('lw-fl-port')) return;
       end(null, true);                            /* 上一次没收干净 → 先收掉 ✓ */
       let sess2 = null;
       try { sess2 = handlers.down ? handlers.down(ev) : {}; } catch (_) { sess2 = null; }
@@ -4255,6 +4802,23 @@
 
   /* ★ 顶栏那句「日期 · 项目数」的默认文案 ✓ —— 抽出来是因为 `paintStatus()`
      过期后**要把它写回去** ✗（见下面那条注释 ✓）。 */
+  /* ★ 数据读取失败的**横幅** ✓（2026-10-18）——
+     ⚠️ 只靠顶栏一行小字不够 ✗：那是「状态提示」的语域 ✓，
+        而「你的数据没读出来」是**阻断级**的信息 ✓ ——
+        用户得先知道「现在看到的可能是空的 / 旧的」✓，才谈得上继续用 ✓。
+     ⚠️ 两种程度要分开说 ✗：
+        · 一次都没读到（硬失败）→ 红条 + 明说「改动不会保存」✓
+        · 之前读到过、这次没读到（软失败）→ 黄条 + 明说「显示的是上次的数据」✓ */
+  function storeBannerHtml() {
+    if (!STORE_LAST_ERROR) return '';
+    const hard = !STORE_READY;
+    return '<div class="lw-storebar' + (hard ? ' bad' : '') + '" role="alert">'
+      + '<span class="ic">' + (hard ? '⛔' : '⚠') + '</span>'
+      + '<div class="tx"><b>' + (hard ? '本机数据没读出来' : '这次没刷新成功，看到的是上次的数据') + '</b>'
+      + '<span>' + esc(STORE_LAST_ERROR)
+      + (hard ? ' · 现在做的改动不会保存（避免把空数据覆盖上去）' : '') + '</span></div>'
+      + '<button id="lw-store-retry">重试</button></div>';
+  }
   function subDefault() {
     const d = new Date();
     return DATA
@@ -4536,6 +5100,17 @@
   function bind() {
     const host = document.getElementById('lifework-view');
     if (!host) return;
+    /* ★ 把「本来跨几栏」记到 data-span 上 ✓（2026-10-19）——
+       ⚠️ 为什么 ✗：卡片宽度是**内联** `style="grid-column:span 3"` ✓，
+          CSS 选择器**读不到**内联值 ✗ → 中等宽度想做「两列」时没法区分
+          「窄卡（跨 3）」和「宽卡（跨 8 / 12）」✗，只能一律压成一列 ✓（密度很低 ✗）。
+       现在多挂一个 `data-span` ✓，CSS 就能写「窄卡两列、宽卡整行」✓。
+       ⚠️ 必须在每次 render 之后打 ✗ —— 卡片是 innerHTML 重建的 ✓，属性不会自己留着 ✓。 */
+    host.querySelectorAll('.lw-g12 > .lw-c').forEach((c) => {
+      if (c.dataset.span) return;
+      const m = /span\s+(\d+)/.exec(c.getAttribute('style') || '');
+      c.dataset.span = m ? m[1] : '12';
+    });
     /* ★ 对话框要**每次 render 都重绑** ✗ —— 它跟着 render 一起重建 ✓，
        所以绑在 `bind()` 里最稳 ✓（不用另外记着在哪重绑 ✓）。 */
     bindDlg(host);
@@ -4739,6 +5314,8 @@
       };
     });
     const rf = q('#lw-refresh'); if (rf) rf.onclick = () => load(true);
+    const sbr = q('#lw-store-retry');
+    if (sbr) sbr.onclick = () => { sbr.disabled = true; sbr.textContent = '重试中…'; load(true); };
     /* 顶栏的邮箱胶囊：点了直接进邮箱页 ✓ */
     const mb = q('#lw-mb');
     if (mb) mb.onclick = () => { JOURNAL_FLUSH(); TAB = 'mail'; render(); loadMailAccounts(true); ensureMailLoad(); };
@@ -4810,10 +5387,9 @@
         saveStore();
         return;
       }
+      /* ⚠️ 不再在这里写「✓ 已保存」✗ —— 见 `setSaveState` 的注释：
+         这一行原来让「没存上」也显示已保存 ✓。现在交给真实结果 ✓。 */
       STORE.memoSaved = true; saveStore();
-      const st = document.getElementById("lw-memo-status");
-      if (st) { st.textContent = "✓ 已保存"; st.classList.add("ok"); }
-      setTimeout(() => { STORE.memoSaved = false; }, 1500);
     };
     let memoBuf = 0;
     const autoSave = () => { clearTimeout(memoBuf); memoBuf = setTimeout(flushMemo, 600); };
@@ -7463,7 +8039,7 @@
 
   /* ── 对照翻译 ────────────────────────────────────────────────────────────
      走**已有的 AI 入口** ✓（和「逻辑图 · AI 解读」「PDF 翻译」同一个 `/api/ai/chat`），
-     配置也复用同一份（`localStorage['mc-ai-cfg']`，即「本机管家 → AI」里填的那个）✓
+     配置也复用同一份（`localStorage['mc-ai-cfg']`，即「本机管家 → 设置 → AI」里填的那个）✓
      —— 不另起一套配置，用户不用配两遍 ✓。
      做法：把正文切成段落 → 分批送模型 → 按**编号**对齐回原文 → 左右对照渲染 ✓。
      ★ 三件事必须有：① 缓存（同一封不重复请求）② 防重入 ③ 失败兜底提示 ✓。 */
@@ -7553,8 +8129,8 @@
     if (MAIL_UI.tr && MAIL_UI.tr.uid === m.uid && MAIL_UI.tr.pairs.length) return;
     const cfg = mailAiCfg();
     if (!cfg) {
-      if (s) s.textContent = '✗ 还没配置 AI —— 在「本机管家 → AI」里填 API URL 与模型';
-      MAIL_UI.tr = { uid: m.uid, pairs: [], err: '还没配置 AI（本机管家 → AI）', done: 0, total: 0 };
+      if (s) s.textContent = '✗ 还没配置 AI —— 在「本机管家 → 设置 → AI」里填 API URL 与模型';
+      MAIL_UI.tr = { uid: m.uid, pairs: [], err: '还没配置 AI（本机管家 → 设置 → AI）', done: 0, total: 0 };
       renderMailPane('read');
       return;
     }
@@ -8545,6 +9121,26 @@
     FLOW_UI.sel = ''; STORE.flowSel = '';
     saveStore(); render();
   }
+  /* ★ 连这条线会不会**绕成环** ✓（2026-10-18）——
+     ⚠️ 引擎在跑的时候才报「图里有环」✗ —— 那时用户已经连完了 ✓，
+        还得自己去找是哪一条 ✗（实测：探针就把 notify→delay 和 delay→notify 连成了环 ✓，
+        运行直接抛错 ✓，界面上完全看不出问题在哪 ✗）。
+     ⇒ 连之前就拦 ✓，并说清「不能这样连」✓。
+     判据：从**目标**顺着连线往下走，如果能走回**起点**，那就成环了 ✓。 */
+  function flowWouldCycle(f, fromId, toId) {
+    if (fromId === toId) return true;
+    const seen = new Set();
+    const stack = [toId];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (cur === fromId) return true;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      (f.edges || []).forEach((e) => { if (e.from === cur) stack.push(e.to); });
+    }
+    return false;
+  }
+
   function flowAddNode(type) {
     const f = flowCurrent(); if (!f) { setStatus(esc('先新建一个工作流 ✓'), 5000); return; }
     const meta = FLOW_NODES[type]; if (!meta) return;
@@ -8557,12 +9153,26 @@
     const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const cfg = {};
     (meta.cfg || []).forEach((c) => { cfg[c[0]] = c[3]; });
+    /* ★★ 加节点时**自动接到选中的那个后面** ✓✓（2026-10-18）——
+       用户原话：「目前的连接设计也不行」✓。
+       ⚠️ 原来加完节点要**自己拖到位置 + 再连一根线** ✗（两步 ✓），
+          而且新节点固定往右上角堆 ✗ → 图一大就乱 ✓。
+       ⇒ 选中了谁，就放在它**右边一格** ✓，并**自动连上**（port 0 ✓）。
+       ⚠️ 只接**第一个出口** ✗ —— 条件分支有两个口 ✓，接哪个是用户的意图 ✓，
+          不能替他猜 ✗（猜错比不接更烦 ✓）。 */
+    const src = FLOW_UI.node ? flowNodeById(f, FLOW_UI.node) : null;
+    const canAuto = !!(src && !meta.sticky && flowOutCount(src) > 0);
+    const pos = canAuto
+      ? { x: src.x + 210, y: src.y }
+      : { x: 40 + (n % perRow) * stepX, y: 40 + Math.floor(n / perRow) * stepY };
     f.nodes = (f.nodes || []).concat([{
       id, type,
-      x: 40 + (n % perRow) * stepX, y: 40 + Math.floor(n / perRow) * stepY, cfg,
+      x: Math.max(0, pos.x), y: Math.max(0, pos.y), cfg,
     }]);
+    if (canAuto) f.edges = (f.edges || []).concat([{ from: src.id, port: 0, to: id }]);
     f.at = Date.now();
     FLOW_UI.node = id; FLOW_UI.picked = [id]; FLOW_UI.sel = f.id; STORE.flowSel = f.id;
+    FLOW_UI.keys = false; FLOW_UI.web = false;
     saveStore(); render();
   }
   function flowDelNode(id) {
@@ -8662,6 +9272,14 @@
           + ' style="top:' + flowPortTop(n, i, cnt) + 'px"'
           + ' data-flout="' + n.id + '" data-flport="' + i + '"'
           + ' title="' + esc(flowOutLabel(n.type, i)) + '"></div>');
+        /* ★ 多出口的节点，每个圆点**配个小标签** ✓（2026-10-18）——
+           用户原话：「目前的连接设计也不行」✓。
+           ⚠️ 条件分支 / 多路分支有 2~4 个口 ✓，只靠 tooltip 要一个个悬停才知道哪个是哪个 ✗
+              （连错一次就得删了重连 ✗）。标签直接写在圆点右边 ✓，一眼就能对上 ✓。 */
+        if (cnt > 1) {
+          outs.push('<span class="lw-fl-plabel" style="top:' + (flowPortTop(n, i, cnt) - 1) + 'px">'
+            + esc(flowOutShort(n.type, i)) + '</span>');
+        }
       }
       return '<div class="' + cls + '" data-flnode="' + n.id + '" style="' + style + '" title="' + title + '">'
         + ((meta.in || 0) > 0 ? '<div class="lw-fl-port in" data-flin="' + n.id + '"></div>' : '')
@@ -8680,6 +9298,12 @@
       + '</div><div class="lw-fl-marquee" id="lw-fl-marquee" style="display:none"></div></div>';
   }
   /* 多口节点的每个口是干什么的 ✓ —— 悬停时说得清 ✓（不然 4 个圆点全靠猜 ✗） */
+  /* 圆点旁边那个**小标签** ✓（只对多口节点显示 ✓） */
+  function flowOutShort(type, i) {
+    if (type === 'logic.if') return i === 0 ? '是' : '否';
+    if (type === 'logic.switch') return i < 3 ? String(i + 1) : '其他';
+    return String(i + 1);
+  }
   function flowOutLabel(type, i) {
     if (type === 'logic.if') return i === 0 ? '成立时走这条' : '不成立时走这条';
     if (type === 'logic.switch') return i < 3 ? ('第 ' + (i + 1) + ' 种情况走这条') : '都没中时走这条';
@@ -8704,6 +9328,47 @@
         + (meta.cfg || []).map((c) => {
           const [k, label, type, def, tip] = c;
           const v = n.cfg && n.cfg[k] != null ? n.cfg[k] : (def == null ? '' : def);
+          /* ★ 「哪个网站」✓ —— 值用**英文 key** ✓（引擎里认 deepseek / doubao / jimeng ✓），
+             显示用中文 ✓。用普通 select 的话值和文字是同一个 ✗，引擎就得认中文 ✗（一改文案就废 ✓）。 */
+          if (type === 'site') {
+            const opts = [['deepseek', 'DeepSeek 网页版'], ['doubao', '豆包 网页版'], ['jimeng', '即梦（视频生成）']];
+            return '<div class="lw-fl-field"><label>' + esc(label) + '</label><select data-flcfg="' + esc(k) + '">'
+              + opts.map((o) => '<option value="' + o[0] + '"' + (String(v) === o[0] ? ' selected' : '') + '>'
+                + esc(o[1]) + '</option>').join('')
+              + '</select>' + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '') + '</div>';
+          }
+          /* ★★ 「用哪个服务」✓✓（2026-10-18）——
+             选项**来自 STORE.flowProviders** ✓，所以是动态的 ✗ 不能写成静态 select ✓。
+             没填 Key 的会标出来 ✓ —— 不然选了没反应，用户会以为坏了 ✗。 */
+          if (type === 'provider') {
+            const provs = flowProviders();
+            return '<div class="lw-fl-field"><label>' + esc(label) + '</label>'
+              + '<select data-flcfg="' + esc(k) + '">'
+              + '<option value=""' + (String(v) === '' ? ' selected' : '') + '>（默认模型）</option>'
+              + provs.map((pp) => '<option value="' + esc(pp.id) + '"'
+                + (String(v) === pp.id ? ' selected' : '') + '>'
+                + esc(pp.name || pp.id) + (String(pp.key || '').trim() ? '' : '（没填 Key）')
+                + '</option>').join('')
+              + '</select>'
+              + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '')
+              + '<div class="tip" style="margin-top:4px"><a href="javascript:void 0" id="lw-fl-keys"'
+              + ' style="color:' + T.accent + '">🔑 管理模型与密钥</a></div></div>';
+          }
+          /* ★ 模型名 ✓ —— 用 datalist 给「这个服务常见的几个」✓，
+             但**仍然可以手打** ✗（模型 ID 更新很快 ✓，写死下拉等于自断 ✓）。 */
+          if (type === 'model') {
+            const pid = String((n.cfg && n.cfg.provider) || '');
+            const pp = flowProviderById(pid);
+            const list = (pp && Array.isArray(pp.models)) ? pp.models : [];
+            const lid = 'lw-fl-mdl-' + esc(k);
+            return '<div class="lw-fl-field"><label>' + esc(label) + '</label>'
+              + '<input data-flcfg="' + esc(k) + '" list="' + lid + '" value="' + esc(v) + '"'
+              + ' placeholder="' + esc(list[0] || '填模型 ID') + '"/>'
+              + '<datalist id="' + lid + '">'
+              + list.map((m) => '<option value="' + esc(m) + '"></option>').join('')
+              + '</datalist>'
+              + (tip ? '<div class="tip">' + esc(tip) + '</div>' : '') + '</div>';
+          }
           if (type === 'area') {
             return '<div class="lw-fl-field"><label>' + esc(label) + '</label>'
               + '<textarea rows="4" data-flcfg="' + esc(k) + '">' + esc(v) + '</textarea>'
@@ -9067,6 +9732,70 @@
     saveStore(); render();
     setStatus(esc('✓ 示例搭好了 —— 点「▶ 运行」试试（AI 节点要先在 CodeScope 里配好模型）'), 12000);
   }
+  /* ★★ 「视频生成」示例 ✓（2026-10-18）——
+     用户原话：「如果我要做视频生成工作流，用豆包来做，生成视频，deepseek 来做文本」✓。
+     这条链就是那句话的**最小可运行版** ✓：
+       DeepSeek 写分镜 → 豆包出首帧 → 豆包拿首帧生视频 → 落盘 → 通知 ✓。
+     ⚠️ 默认**不填 Key** ✗ —— 用户点「🔑 模型」填完就能跑 ✓（没填会在运行时报清楚 ✓）。 */
+  function flowExampleVideo() {
+    const f = { id: 'w' + Date.now(), name: '示例：豆包视频生成', nodes: [], edges: [], at: Date.now() };
+    const mk = (type, x, y, over) => {
+      const meta = FLOW_NODES[type];
+      const cfg = {};
+      (meta.cfg || []).forEach((c) => { cfg[c[0]] = c[3]; });
+      Object.assign(cfg, over || {});
+      const id = 'n' + (f.nodes.length + 1);
+      f.nodes.push({ id, type, x, y, cfg });
+      return id;
+    };
+    /* ⚠️ 排成**两行** ✗ —— 七个节点一字排开有 1400px ✓，
+       画布才 1000 出头 ✓ → 得一直往右滚才看得全 ✗（第一版就是这样 ✓）。 */
+    const a = mk('trigger.manual', 20, 70);
+    const b = mk('ai.chat', 200, 70, {
+      provider: 'deepseek',
+      temperature: 0.8,
+      system: '你是短视频分镜师。只输出 JSON，不要解释。',
+      prompt: '给「雨夜里的霓虹街道」写一条 5 秒短视频的分镜。\n'
+        + '输出 JSON：{"shot":"一句话镜头怎么动","image":"首帧画面的详细描述（主体 / 光线 / 构图）"}',
+      json: 'on',
+    });
+    const c1 = mk('data.json', 380, 20, { path: 'image' });
+    const c2 = mk('data.json', 380, 150, { path: 'shot' });
+    const d = mk('ai.image', 560, 20, {
+      provider: 'ark',
+      model: 'doubao-seedream-5-0-pro-260628',
+      prompt: '{{' + c1 + '}}',
+      size: '1280x720',
+    });
+    const e = mk('ai.video', 560, 150, {
+      provider: 'ark',
+      model: 'doubao-seedance-2-0-fast-260128',
+      prompt: '{{' + c2 + '}}',
+      image: '{{' + d + '.url}}',
+      ratio: '16:9',
+      duration: 5,
+      resolution: '720p',
+    });
+    const g = mk('media.download', 740, 150, { url: '{{' + e + '.url}}' });
+    /* 通知放在**下面一行** ✓ —— 再往右就出画布了 ✗（画布才 1000 出头 ✓） */
+    const h = mk('out.notify', 740, 280, { text: '视频好了：{{' + g + '.url}}' });
+    f.edges = [
+      { from: a, port: 0, to: b },
+      { from: b, port: 0, to: c1 },
+      { from: b, port: 0, to: c2 },
+      { from: c1, port: 0, to: d },
+      { from: c2, port: 0, to: e },
+      /* ★ 视频要**两路**输入 ✓：首帧图来自生图 ✓，运镜描述来自 JSON 取值 ✓ */
+      { from: d, port: 0, to: e },
+      { from: e, port: 0, to: g },
+      { from: g, port: 0, to: h },
+    ];
+    STORE.flows = flowList().concat([f]);
+    FLOW_UI.sel = f.id; STORE.flowSel = f.id;
+    FLOW_UI.node = ''; FLOW_UI.arm = ''; FLOW_UI.steps = null; FLOW_UI.help = false;
+    saveStore(); render();
+    setStatus(esc('✓ 视频示例搭好了 —— 先点「🔑 模型」把 DeepSeek 和豆包的 Key 填上，再点「▶ 运行」'), 14000);
+  }
   function viewFlow() {
     const list = flowList();
     const f = flowCurrent();
@@ -9092,12 +9821,17 @@
       + '<button id="lw-fl-copy" title="复制选中的节点（⌘C）">⧉ 复制</button>'
       + '<button id="lw-fl-paste" title="粘贴（⌘V）"' + (FLOW_UI.clip && FLOW_UI.clip.nodes.length ? '' : ' disabled') + '>📋 粘贴</button>'
       + '<button id="lw-fl-tidy" title="按连线分层重新排列（Tidy Up）">▦ 整理</button>'
+      + '<button id="lw-fl-keys-btn" class="' + (FLOW_UI.keys ? 'pri' : '') + '"'
+      + ' title="填各家模型的 Key（DeepSeek / 豆包 / 任意 OpenAI 兼容）">🔑 模型</button>'
+      + '<button id="lw-fl-web-btn" class="' + (FLOW_UI.web ? 'pri' : '') + '"'
+      + ' title="用网页版跑（打开 DeepSeek / 豆包 / 即梦的窗口，登录一次就能被工作流调用）">🌐 网页版</button>'
       + '<button id="lw-fl-runs" title="看以前每次跑的结果">🕘 历史' + (FLOW_UI.runs.length ? ' ' + FLOW_UI.runs.length : '') + '</button>'
       + '<button id="lw-fl-sched" title="哪些工作流会自动跑、下次几点"'
       + (FLOW_UI.sched.length ? ' style="border-color:' + T.accent + ';color:' + T.accent + '"' : '') + '>⏰ 定时'
       + (FLOW_UI.sched.length ? ' ' + FLOW_UI.sched.length : '') + '</button>'
       + '<span class="sep"></span>'
       + '<button id="lw-fl-example" title="一键搭一个能跑的示例（B站热门 → AI 挑 5 条 → 写进备忘录）">✨ 示例</button>'
+      + '<button id="lw-fl-example-video" title="一键搭一条视频生成链：DeepSeek 写分镜 → 豆包出首帧 → 豆包生视频 → 落盘">🎬 视频示例</button>'
       + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">📖 说明</button>'
       + '<button id="lw-fl-clear">清空画布</button>'
       + '<button id="lw-fl-del">🗑 删工作流</button>'
@@ -9115,13 +9849,168 @@
       + (FLOW_UI.help ? flowHelpHtml()
         : f ? flowCanvasHtml(f) : '<div class="lw-fl-cv"><div class="lw-fl-empty">← 先新建一个工作流 ✓<br><span style="color:' + T.faint + '">或者从左边选一个已有的</span></div></div>')
       + '</div>' + paneGrip('cfg')
-      + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>' + flowCfgInnerHtml(f) + '</div></div>'
+      + '<div class="lw-fl-cfg"' + paneW('flowCfgW', 220) + '>'
+      + (FLOW_UI.web ? flowWebInnerHtml() : (FLOW_UI.keys ? flowKeysInnerHtml() : flowCfgInnerHtml(f)))
+      + '</div></div>'
       + (FLOW_UI.runOpen ? flowRunsHtml() : '')
       + (FLOW_UI.schedOpen ? flowSchedHtml() : '');
   }
   /* ── 运行 ✓ ────────────────────────────────────────────────────────────── */
   function flowAiCfg() {
     try { return JSON.parse(localStorage.getItem('mc-ai-cfg') || '{}') || {}; } catch (_) { return {}; }
+  }
+
+  /* ══ 多模型提供商 ✓✓（2026-10-18）════════════════════════════════════════
+     ★ 用户原话：「如果我要做视频生成工作流，用豆包来做，生成视频，deepseek 来做文本，
+       等，还有其他」✓。
+     ⚠️ 原来**只有一个**全局 AI 配置 ✗（`mc-ai-cfg` ✓，{url,key,model} ✓）——
+        一张图里「DeepSeek 写文案 + 豆包出视频」根本做不到 ✗。
+     ⇒ 现在有一张**提供商表** ✓（`STORE.flowProviders` ✓），
+       每个 AI 节点自己选 `provider` + `model` ✓，引擎按节点解析 ✓。
+
+     ⚠️ 为什么放 STORE 而不是 localStorage ✗：
+        STORE 本来就会同步到服务端 ✓（换浏览器 / 云端都能用 ✓）；
+        localStorage 那份是「老路径」✓，继续留着当**默认模型** ✓（老图不红 ✗）。
+     ⚠️ 预置三个但**都不带 Key** ✓ —— Key 要用户自己填 ✓（我们不可能有 ✓）。
+        没填 Key 的服务在节点下拉里会标「没填 Key」✓，选了一眼就知道 ✗ 不是没反应 ✓。 */
+  const FLOW_PROVIDER_DEFAULT = [
+    {
+      id: 'deepseek', name: 'DeepSeek', kind: 'openai',
+      baseUrl: 'https://api.deepseek.com', key: '',
+      models: ['deepseek-flash', 'deepseek-v4-pro'],
+    },
+    {
+      id: 'ark', name: '豆包 · 火山方舟', kind: 'ark',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', key: '',
+      /* ⚠️ 模型 ID 会变 ✗ —— 这里只是**常见值** ✓，以控制台里那个为准 ✓。
+         视频 / 图片是方舟的两个不同模型 ✓，别混用 ✗（混用会报「模型不支持该接口」✗）。 */
+      models: ['doubao-seedance-2-0-fast-260128', 'doubao-seedream-5-0-pro-260628'],
+    },
+    {
+      id: 'openai', name: 'OpenAI 兼容（任意）', kind: 'openai',
+      baseUrl: '', key: '', models: [],
+    },
+  ];
+  function flowProviders() {
+    if (!Array.isArray(STORE.flowProviders) || !STORE.flowProviders.length) {
+      STORE.flowProviders = JSON.parse(JSON.stringify(FLOW_PROVIDER_DEFAULT));
+    }
+    return STORE.flowProviders;
+  }
+  const flowProviderById = (id) => flowProviders().filter((p) => p && p.id === id)[0] || null;
+  /* 节点上「用哪个服务」的下拉 ✓ —— 空值 = 用默认模型 ✓（老的全局配置 ✓） */
+  const FLOW_PRESET_KEYS = { deepseek: 'DEEPSEEK_API_KEY', ark: 'ARK_API_KEY', openai: 'OPENAI_API_KEY' };
+
+  /* ── 「网页版」面板 ✓（2026-10-18）────────────────────────────────────────
+     ★ 用户原话：「我说的是，打开网页版的 deepseek，和豆包进行文本，视频生成等那种」✓。
+     ⚠️ 这里只做三件事 ✗：看状态 ✓、把窗口开出来 ✓、关掉 ✓ ——
+        **登录是用户在那个窗口里自己点的** ✓（我们拿不到也不该拿他的密码 ✗）。
+     ⚠️ 状态要**主动刷新** ✗：用户在那个窗口里登录完之后 ✓，面板不会自己知道 ✗
+        → 所以每次打开面板 / 点「打开」之后都重新拉一次 ✓，并给一个「刷新状态」按钮 ✓。 */
+  async function flowWebRefresh() {
+    try {
+      const r = await fetch('/api/life/browser/status', { cache: 'no-cache' });
+      const d = await r.json();
+      FLOW_UI.webData = (d && d.ok) ? d.data : { error: String((d && d.error) || '读不到状态') };
+    } catch (e) {
+      FLOW_UI.webData = { error: String(e.message || e) };
+    }
+    if (FLOW_UI.web) render();
+  }
+  async function flowWebOpen(site) {
+    FLOW_UI.webBusy = site;
+    FLOW_UI.webMsg = '正在打开…（会弹出一个浏览器窗口，第一次要慢几秒）';
+    render();
+    try {
+      const r = await fetch('/api/life/browser/open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site }),
+      });
+      const d = await r.json();
+      if (d && d.ok) {
+        FLOW_UI.webMsg = d.data && d.data.loggedIn
+          ? '✓ 已经是登录状态，可以直接用了'
+          : '窗口打开了 —— 请在「那个窗口」里登录（登录完点下面的「刷新状态」）';
+      } else {
+        FLOW_UI.webMsg = '✗ ' + String((d && d.error) || '打不开');
+      }
+    } catch (e) {
+      FLOW_UI.webMsg = '✗ ' + String(e.message || e);
+    }
+    FLOW_UI.webBusy = '';
+    await flowWebRefresh();
+  }
+  async function flowWebClose() {
+    FLOW_UI.webBusy = 'close';
+    try {
+      await fetch('/api/life/browser/close', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      FLOW_UI.webMsg = '浏览器关了（下次要跑会重新开）';
+    } catch (e) { FLOW_UI.webMsg = '✗ ' + String(e.message || e); }
+    FLOW_UI.webBusy = '';
+    await flowWebRefresh();
+  }
+  function flowWebInnerHtml() {
+    const d = FLOW_UI.webData || {};
+    const rows = ['deepseek', 'doubao', 'jimeng'].map((k) => {
+      const st = (d.sites && d.sites[k]) || {};
+      const name = st.name || ({ deepseek: 'DeepSeek 网页版', doubao: '豆包 网页版', jimeng: '即梦（视频生成）' })[k];
+      const badge = st.loggedIn === true ? '<span class="ok">已登录</span>'
+        : st.loggedIn === false ? '<span class="no">需要登录</span>'
+          : '<span class="no">没开</span>';
+      return '<div class="lw-fl-web-row">'
+        + '<div class="nm"><b>' + esc(name) + '</b>' + badge + '</div>'
+        + '<button class="lw-rd-chip" data-webopen="' + k + '"'
+        + (FLOW_UI.webBusy === k ? ' disabled' : '') + '>'
+        + (FLOW_UI.webBusy === k ? '打开中…' : '打开窗口') + '</button></div>';
+    }).join('');
+    return '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 6px">🌐 网页版</div>'
+      + '<div class="fhow" style="margin:0 14px 10px">工作流直接去点网页（用你已登录的账号，不花 API 钱）。'
+      + '第一次要在这里把窗口开出来、在里面登录一次，之后会记住。</div>'
+      + '<div class="lw-fl-field" style="margin:0 14px 10px">'
+      + '<div class="tip">浏览器：' + (d.error ? ('<span style="color:' + T.red + '">' + esc(d.error) + '</span>')
+        : (d.running ? '<span style="color:' + T.ok + '">已启动</span>' : '未启动（要跑的时候会自动开）')) + '</div></div>'
+      + rows
+      + '<div class="lw-fl-field" style="padding:4px 14px 16px;display:flex;gap:6px;flex-wrap:wrap">'
+      + '<button class="lw-rd-chip" id="lw-fl-webrefresh" style="padding:5px 10px">↻ 刷新状态</button>'
+      + '<button class="lw-rd-chip" id="lw-fl-webclose" style="padding:5px 10px"'
+      + (FLOW_UI.webBusy === 'close' ? ' disabled' : '') + '>关掉浏览器</button></div>'
+      + (FLOW_UI.webMsg ? '<div class="tip" style="margin:0 14px 16px">' + esc(FLOW_UI.webMsg) + '</div>' : '')
+      + '<div class="fhow" style="margin:0 14px 16px">'
+      + '为什么不能自动登录：DeepSeek 要手机验证码 / 微信扫码，豆包要手机号 / 抖音 —— '
+      + '这些只有你能做。窗口是独立的，不会动你日常用的 Chrome。</div>';
+  }
+
+  /* ── 「模型与密钥」面板 ✓（2026-10-18）────────────────────────────────────
+     ⚠️ 放**右栏**而不是弹窗 ✗ —— 右栏本来就有 302px 宽 ✓，
+        而且改完立刻能在节点里选中 ✓（弹窗关掉还要回来找 ✗）。
+     ⚠️ Key 用 `type=password` ✗ 不是不显示 ✓ —— 用户要能核对有没有粘错 ✓。 */
+  function flowKeysInnerHtml() {
+    const provs = flowProviders();
+    const fld = (p, k, label, ph, pw) => '<div class="lw-fl-field" style="margin:0 0 8px">'
+      + '<label style="font-size:10px">' + esc(label) + '</label>'
+      + '<input data-prov="' + esc(p.id) + '" data-pfield="' + esc(k) + '"'
+      + (pw ? ' type="password" autocomplete="new-password"' : '')
+      + ' value="' + esc(p[k] == null ? '' : p[k]) + '" placeholder="' + esc(ph || '') + '"/></div>';
+    return '<div class="lw-rd-sec" style="margin:0 14px 0;padding:14px 0 6px">🔑 模型与密钥</div>'
+      + '<div class="fhow" style="margin:0 14px 10px">Key 只存在你自己的数据里 ✓，不会上传到别处 ✓。'
+      + '文本 / 图片 / 视频<b>分别用哪个</b>，在每个 AI 节点里选 ✓。</div>'
+      + provs.map((p) => '<div class="lw-fl-prov">'
+        + '<div class="hd"><b>' + esc(p.name || p.id) + '</b>'
+        + (String(p.key || '').trim() ? '<span class="ok">已填 Key</span>' : '<span class="no">还没填 Key</span>')
+        + '<button class="lw-rd-chip" data-provtest="' + esc(p.id) + '" title="发一句话试试通不通">测</button>'
+        + '<button class="lw-rd-chip" data-provdel="' + esc(p.id) + '" title="删掉这个服务">🗑</button></div>'
+        + fld(p, 'name', '显示名字', 'DeepSeek')
+        + fld(p, 'baseUrl', '接口地址', 'https://api.deepseek.com')
+        + fld(p, 'key', 'API Key', 'sk-… / ark-…', true)
+        + '<div class="lw-fl-field" style="margin:0 0 4px"><label style="font-size:10px">常用模型（逗号分隔）</label>'
+        + '<input data-prov="' + esc(p.id) + '" data-pfield="models"'
+        + ' value="' + esc((p.models || []).join(', ')) + '" placeholder="deepseek-flash, deepseek-v4-pro"/></div>'
+        + '</div>').join('')
+      + '<div class="lw-fl-field" style="padding:2px 14px 16px">'
+      + '<button class="lw-rd-chip" id="lw-fl-provadd" style="padding:6px 10px">＋ 加一个服务</button>'
+      + '<div class="tip">任何 OpenAI 兼容的都能加 ✓：硅基流动 / OpenRouter / 通义 / 智谱 / 本地 ollama ✓'
+      + '—— 填「接口地址 + Key + 模型名」就能用 ✓。</div>'
+      + '<div class="tip" id="lw-fl-provmsg" style="margin-top:6px"></div></div>';
   }
   /* ★ 跑的时候**只重画、不丢滚动位置** ✗ ——
      整屏 render 会把画布滚回左上角 ✗，图一大就根本看不到正在跑的那个节点 ✗。 */
@@ -9147,6 +10036,8 @@
         body: JSON.stringify({
           graph: { nodes: f.nodes, edges: f.edges },
           ai: { url: ai.url || '', key: ai.key || '', model: ai.model || '' },
+          /* ★ 多提供商 ✓（2026-10-18）—— 每个 AI 节点自己选服务 ✓ */
+          providers: flowProviders(),
           /* ★ 表达式里 `$workflow.name` / `$execution.id` 要用 ✓ */
           flowName: f.name || '', flowId: f.id || '',
         }),
@@ -9288,6 +10179,7 @@
         body: JSON.stringify({
           graph: { nodes: sub.nodes, edges: sub.edges },
           ai: { url: ai.url || '', key: ai.key || '', model: ai.model || '' },
+          providers: flowProviders(),
           flowName: sub.name || '', flowId: sub.id || '',
         }),
       });
@@ -9354,6 +10246,98 @@
       };
     });
     qa('[data-fladd]').forEach((el) => { el.onclick = () => flowAddNode(el.dataset.fladd); });
+    const exv = q('#lw-fl-example-video');
+    if (exv) exv.onclick = () => flowExampleVideo();
+
+    /* ★★ 「模型与密钥」面板 ✓✓（2026-10-18）──────────────────────────────
+       ⚠️ 这里**不能**每敲一个字就 render ✗ —— 输入框会被换掉、焦点会丢 ✗
+          （踩过一次 ✓：改成「改完就重绘」，结果打一个字就要重新点 ✓）。
+          ⇒ 输入时只写数据 + 存盘 ✓，界面不动 ✓；要不要刷新等用户离开面板再说 ✓。 */
+    const keysBtn = q('#lw-fl-keys-btn');
+    if (keysBtn) keysBtn.onclick = () => {
+      FLOW_UI.keys = !FLOW_UI.keys;
+      if (FLOW_UI.keys) FLOW_UI.web = false;
+      render();
+      /* ⚠️ 切面板要**把右栏滚回顶部** ✗ —— 不然从「节点设置」滚到一半切过来 ✓，
+         面板标题会被切掉一半 ✓（实测截图就是这样 ✗）。 */
+      const c1 = q('.lw-fl-cfg'); if (c1) c1.scrollTop = 0;
+    };
+    /* ★ 「网页版」面板 ✓ —— 打开时**立刻拉一次状态** ✓（不然显示的是上次的 ✗） */
+    const webBtn = q('#lw-fl-web-btn');
+    if (webBtn) webBtn.onclick = () => {
+      FLOW_UI.web = !FLOW_UI.web;
+      if (FLOW_UI.web) { FLOW_UI.keys = false; FLOW_UI.webMsg = ''; }
+      render();
+      const c2 = q('.lw-fl-cfg'); if (c2) c2.scrollTop = 0;
+      if (FLOW_UI.web) flowWebRefresh();
+    };
+    qa('[data-webopen]').forEach((el) => { el.onclick = () => flowWebOpen(el.dataset.webopen); });
+    const webRe = q('#lw-fl-webrefresh'); if (webRe) webRe.onclick = () => flowWebRefresh();
+    const webCl = q('#lw-fl-webclose'); if (webCl) webCl.onclick = () => flowWebClose();
+    const keysLink = q('#lw-fl-keys');
+    if (keysLink) keysLink.onclick = () => { FLOW_UI.keys = true; render(); };
+    qa('[data-prov]').forEach((el) => {
+      el.oninput = () => {
+        const p = flowProviderById(el.dataset.prov); if (!p) return;
+        const k = el.dataset.pfield;
+        if (k === 'models') {
+          /* 逗号（中英文都认 ✓）拆开 ✓，去掉空项 ✓ */
+          p.models = String(el.value || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean).slice(0, 30);
+        } else {
+          p[k] = el.value;
+        }
+        saveStore();
+      };
+    });
+    qa('[data-provdel]').forEach((el) => {
+      el.onclick = async () => {
+        const p = flowProviderById(el.dataset.provdel); if (!p) return;
+        const okDel = await lwConfirm({
+          title: '删掉「' + (p.name || p.id) + '」？',
+          text: '用到它的节点会退回「默认模型」—— 不会坏，但可能跑不通。',
+          danger: true,
+        });
+        if (!okDel) return;
+        STORE.flowProviders = flowProviders().filter((x) => x.id !== p.id);
+        saveStore(); render();
+      };
+    });
+    const provAdd = q('#lw-fl-provadd');
+    if (provAdd) provAdd.onclick = () => {
+      const id = 'p' + Date.now().toString(36);
+      flowProviders().push({ id, name: '新服务', kind: 'openai', baseUrl: '', key: '', models: [] });
+      saveStore(); render();
+    };
+    /* 「测」：走服务端的 `/api/ai/chat` ✓ —— 浏览器直接打各家接口会被 CORS 挡 ✗，
+       服务端转一道最省 ✓，而且它本来就存在 ✓（AI 助手在用 ✓）。 */
+    qa('[data-provtest]').forEach((el) => {
+      el.onclick = async () => {
+        const p = flowProviderById(el.dataset.provtest); if (!p) return;
+        const msg = q('#lw-fl-provmsg');
+        const say = (t, color) => { if (msg) { msg.textContent = t; msg.style.color = color || T.dim; } };
+        if (!String(p.baseUrl || '').trim()) return say('先填接口地址', T.warn);
+        if (!String(p.key || '').trim()) return say('先填 API Key', T.warn);
+        const model = (p.models || [])[0] || '';
+        if (!model) return say('先填一个常用模型', T.warn);
+        say('正在试「' + (p.name || p.id) + ' / ' + model + '」…');
+        try {
+          const r = await fetch('/api/ai/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: String(p.baseUrl).replace(/\/+$/, '') + '/chat/completions',
+              key: p.key, model, timeoutMs: 30000,
+              messages: [{ role: 'user', content: '只回两个字：通了' }],
+            }),
+          });
+          const d = await r.json();
+          if (d && d.ok) say('✓ 通了 —— 它回了：' + String(d.content || '').slice(0, 40), T.ok);
+          else say('✗ ' + String((d && d.error) || '失败').slice(0, 200), T.red);
+        } catch (e) {
+          say('✗ ' + String(e.message || e).slice(0, 200), T.red);
+        }
+      };
+    });
+
     const nw = q('#lw-fl-new'); if (nw) nw.onclick = () => flowNew();
     const dl = q('#lw-fl-del'); if (dl) dl.onclick = () => flowDel();
     const rn = q('#lw-fl-run'); if (rn) rn.onclick = () => flowRun();
@@ -9424,6 +10408,9 @@
           FLOW_UI.picked = [id];
         }
         FLOW_UI.node = id; FLOW_UI.arm = ''; FLOW_UI.stepSel = -1;
+        /* ⚠️ 点节点就**退出**「模型与密钥」面板 ✓ —— 不然点了节点右栏还是密钥 ✓，
+           看着像「点了没反应」✗（用户会以为节点坏了 ✓）。 */
+        FLOW_UI.keys = false; FLOW_UI.web = false;
         render();
       };
       lwGrab(el, {
@@ -9497,11 +10484,79 @@
     qa('[data-flout]').forEach((el) => {
       el.onclick = (ev) => {
         ev.stopPropagation();
+        /* ⚠️ 拖动结束时浏览器还会补一个 click ✗ —— 不清掉标记的话，
+           刚拖完的那条会立刻又被「点一下」切成 arm 状态 ✗（看着像没连上 ✓）。
+           ⚠️ 用**时间窗**而不是布尔 ✗ —— 万一浏览器没补 click ✓，
+              那个标记会一直挂着 ✓ → 下一次**正常点击**被吞掉 ✗（更难查 ✗）。 */
+        if (FLOW_UI.dragEnded && Date.now() - FLOW_UI.dragEnded < 400) { FLOW_UI.dragEnded = 0; return; }
         const same = FLOW_UI.arm === el.dataset.flout && String(FLOW_UI.armPort) === String(el.dataset.flport);
         FLOW_UI.arm = same ? '' : el.dataset.flout;
         FLOW_UI.armPort = Number(el.dataset.flport) || 0;
         render();
       };
+      /* ★★ 按住拖到目标就连上 ✓✓（2026-10-18）——
+         用户原话：「目前的连接设计也不行」✓。
+         ⚠️ 原来只有「点输出口 → 再点输入口」✗ —— 两步 ✓ 而且中间那步没有任何提示 ✗，
+            连错了还得先删再点一遍 ✗。n8n / Dify 都是**按住拖** ✓，这里补上 ✓。
+         ⚠️ 拖动中的临时线画在**同一个 SVG** 里 ✓（别另起一层 ✗ ——
+            另起一层要自己算 plane 坐标 ✓，而且 z-index 容易压到节点上 ✗）。 */
+      lwGrab(el, {
+        allowPort: true,
+        down: (ev) => {
+          const f = flowCurrent(); if (!f) return null;
+          const from = flowNodeById(f, el.dataset.flout); if (!from) return null;
+          const cvEl = q('#lw-fl-cv'); if (!cvEl) return null;
+          const svgEl = q('.lw-fl-svg');
+          const port = Number(el.dataset.flport) || 0;
+          const p1 = flowPortXY(from, 'out', port, flowOutCount(from));
+          let temp = null;
+          if (svgEl) {
+            temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            temp.setAttribute('class', 'hot');
+            temp.setAttribute('stroke-dasharray', '5 4');
+            svgEl.appendChild(temp);
+          }
+          return {
+            f, from, port, temp,
+            r: cvEl.getBoundingClientRect(), sl: cvEl.scrollLeft, st: cvEl.scrollTop,
+            sx: ev.clientX, sy: ev.clientY, ax: p1.x, ay: p1.y, moved: false,
+          };
+        },
+        move: (ev, s) => {
+          const dx = ev.clientX - s.sx, dy = ev.clientY - s.sy;
+          if (!s.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+          s.moved = true;
+          if (!s.temp) return;
+          const bx = ev.clientX - s.r.left + s.sl;
+          const by = ev.clientY - s.r.top + s.st;
+          s.temp.setAttribute('d', flowEdgeD({ x: s.ax, y: s.ay }, { x: bx, y: by }));
+        },
+        up: (ev, s) => {
+          if (s.temp && s.temp.parentNode) s.temp.parentNode.removeChild(s.temp);
+          if (!s.moved || !ev) { if (s.moved) render(); return; }
+          /* 松手落在哪 ✓ —— `elementFromPoint` 不受 pointer capture 影响 ✓ */
+          const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+          const inPort = hit && hit.closest ? hit.closest('.lw-fl-port.in') : null;
+          const nodeEl = hit && hit.closest ? hit.closest('[data-flnode]') : null;
+          const toId = (inPort && inPort.dataset.flin) || (nodeEl && nodeEl.dataset.flnode) || '';
+          FLOW_UI.dragEnded = Date.now();
+          if (!toId || toId === s.from.id) { render(); return; }
+          const f = s.f;
+          if (flowWouldCycle(f, s.from.id, toId)) {
+            setStatus(esc('不能这样连 ✗ —— 会绕成一个环（工作流不能转圈）'), 5000);
+            render();
+            return;
+          }
+          if ((f.edges || []).some((e) => e.from === s.from.id && Number(e.port) === s.port && e.to === toId)) {
+            render(); return;                       /* 已经有这条了 ✓，别叠 ✗ */
+          }
+          flowPushUndo(f);
+          f.edges = (f.edges || []).concat([{ from: s.from.id, port: s.port, to: toId }]);
+          f.at = Date.now();
+          FLOW_UI.arm = ''; FLOW_UI.node = toId;
+          saveStore(); render();
+        },
+      });
     });
     qa('[data-flin]').forEach((el) => {
       el.onclick = (ev) => {
@@ -9511,6 +10566,12 @@
         if (!from) { setStatus(esc('先点左边节点的「右」圆点 ✓'), 4000); return; }
         if (from === to) { setStatus(esc('不能连到自己 ✓'), 4000); return; }
         const port = Number(FLOW_UI.armPort) || 0;
+        if (flowWouldCycle(f, from, to)) {
+          FLOW_UI.arm = '';
+          setStatus(esc('不能这样连 ✗ —— 会绕成一个环（工作流不能转圈）'), 5000);
+          render();
+          return;
+        }
         if ((f.edges || []).some((e) => e.from === from && Number(e.port) === port && e.to === to)) { FLOW_UI.arm = ''; render(); return; }
         flowPushUndo(f);
         f.edges = (f.edges || []).concat([{ from, port, to }]);
@@ -11979,7 +13040,7 @@
     if (EP_UI.anBusy) return;
     const cfg = mailAiCfg();
     if (!cfg) {
-      EP_UI.anErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key 就能拆句子';
+      EP_UI.anErr = '还没配置 AI —— 去「本机管家 → 设置 → AI」里填一下模型和 Key 就能拆句子';
       epRenderPanel();
       return;
     }
@@ -12200,6 +13261,20 @@
     return true;
     }).sort((a, b) => (Number(a.due) || 0) - (Number(b.due) || 0));
   }
+  /* ★★ 生词标记（2026-10-17 从 2 种扩到 4 种）——
+     ★ 用户原话：「左侧我的标记，多增加几个」✓。
+     ⚠️ 原来只有一个按钮**三态循环**（未标 → 不熟悉 → 完全不记得 ✓），
+        再加就变成五态循环了 ✓ —— 点一下要转半圈才知道到哪 ✗ → 改成**四个独立按钮** ✓。
+     ⚠️ 这些是**主观标记** ✗，**不碰 SRS 字段** ✓（不影响遗忘曲线排期 ✓，
+        否则「标一下」会把复习节奏打乱 ✗）。 */
+  const EP_MARKS = [
+    { k: 'fuzzy', ic: '⭐', nm: '不熟悉' },
+    { k: 'blank', ic: '⭐⭐', nm: '完全不记得' },
+    { k: 'confuse', ic: '🌀', nm: '易混淆' },
+    { k: 'trap', ic: '🔥', nm: '高频易错' },
+  ];
+  const epMarkOf = (k) => EP_MARKS.filter((m) => m.k === k)[0] || null;
+
   function epWordRowHtml(w) {
     const st = SRS ? SRS.stageOf(w) : 'fresh';
     const due = Number(w.due || 0);
@@ -12209,8 +13284,8 @@
     return '<div class="lw-wd-row' + (EP_UI.wordSel === w.id ? ' on' : '') + '" data-epword="' + esc(w.id) + '">'
       + '<span class="lw-wd-dot ' + st + '" title="' + ({ fresh: '新词', learning: '学习中', young: '年轻', mature: '已掌握' }[st] || '') + '"></span>'
     /* ★ 星标 ✓ —— 列表里就要看得见 ✗（不然得逐个点开才知道标过没有 ✗）。 */
-    + (w.mark === 'blank' ? '<span class="lw-wd-mk blank" title="完全不记得">⭐⭐</span>'
-      : (w.mark === 'fuzzy' ? '<span class="lw-wd-mk fuzzy" title="不熟悉">⭐</span>' : ''))
+    + (epMarkOf(w.mark) ? '<span class="lw-wd-mk ' + w.mark + '" title="' + epMarkOf(w.mark).nm + '">'
+      + epMarkOf(w.mark).ic + '</span>' : '')
     /* ★ 词群标记 ✓ —— 用户反馈「没看到词群」✗，因为他点的是**没有词群**的词 ✓。
        列表里给有词群的词挂个 ▤ ✓，一眼就知道该点哪个看词群 ✓。
        ⚠️⚠️ 这里**绝不能用 🗂（U+1F5C2）** ✗✗ —— 完整说明见 epWordSideHtml 里那段长注释 ✓：
@@ -12233,9 +13308,29 @@
      抽出来是为了「**只重绘词行**」✗：搜索框在 `.lw-rd-tools` 里 ✓，
      而 tools 和词行是**同一个** `.lw-rd-list` 的子节点 ✓ →
      整块重绘会把输入框也换掉 ✗（见 `epPaintWordRows` 的注释 ✓）。 */
+  /* ★★★ 词行**分批建** ✓✓（2026-10-18 性能体检）——
+     ⚠️ 实测：词库 4611 个词时，`arr.map(epWordRowHtml).join('')` 一次性生成
+        **2.26 MB HTML / 32100 个 DOM 节点** ✓ → 从点「生词」到列表出现要 **838ms** ✗，
+        而这段是**同步**跑的 ✓ → 主线程整个卡住 ✓（滚动条都拖不动 ✓）。
+     ⇒ 先同步建 **前 150 行** ✓（首屏够看 ✓），剩下的用 `setTimeout` **分片追加** ✓
+        （每片 ≤8ms ✓，切走页面就停 ✓）。
+     ⚠️ 为什么不是「只渲染可见区」✗：那要改滚动/选中/搜索三处逻辑 ✓，
+        风险大得多 ✓；分片追加**不改任何行为** ✓ —— 列表最终还是完整的 ✓
+        （探针按文字找词行也照旧找得到 ✓，只是晚几百毫秒 ✓）。
+     ⚠️ 分片状态放在模块级 ✗：`render()` 会重建 `.lw-wd-rows` ✓，
+        旧的分片必须**作废** ✓（否则会往已经不在文档里的节点上追加 ✓）。 */
+  const EP_ROWS_FIRST = 150;
+  let EP_FILL_ARR = null, EP_FILL_AT = 0, EP_FILL_TIMER = 0, EP_FILL_BOX = null;
+
   function epWordRowsHtml() {
     const arr = epFilteredWords();
-    if (arr.length) return arr.map(epWordRowHtml).join('');
+    if (arr.length) {
+      /* 记下「还没建的那部分」✓ —— 由 `epRunFill()` 分片补上 ✓ */
+      EP_FILL_ARR = arr.length > EP_ROWS_FIRST ? arr : null;
+      EP_FILL_AT = arr.length > EP_ROWS_FIRST ? EP_ROWS_FIRST : 0;
+      return arr.slice(0, EP_ROWS_FIRST).map(epWordRowHtml).join('');
+    }
+    EP_FILL_ARR = null;
     const q = String(EP_UI.wordQ || '').trim();
     /* ⚠️ 空态要分清「搜出来是空」和「真没有词」✗ —— 说成同一句会让人以为词丢了 ✓ */
     return '<div class="lw-rd-empty">' + (q
@@ -12255,6 +13350,38 @@
      → 这里用**更干净的办法** ✓：把词行单独包一层 `.lw-wd-rows` ✓，
         搜索时只换这一层 ✓，`.lw-rd-tools`（搜索框在里面 ✓）**原封不动** ✓
         → 焦点天然不丢 ✓，也不用每次重建一万多个节点 ✓。 */
+  /* 把「还没建的行」分片补进去 ✓ —— 每片 ≤8ms ✓，切走页面就停 ✓ */
+  function epRunFill(box) {
+    clearTimeout(EP_FILL_TIMER);
+    if (!box || !EP_FILL_ARR) return;
+    EP_FILL_BOX = box;
+    const arr = EP_FILL_ARR;
+    const tick = () => {
+      /* ⚠️ 节点已经不在文档里（换页 / 重新渲染过）→ **停手** ✗ */
+      if (!EP_FILL_BOX || EP_FILL_BOX !== box || !document.body.contains(box)) return;
+      const t0 = performance.now();
+      let html = '';
+      while (EP_FILL_AT < arr.length && performance.now() - t0 < 8) {
+        const end = Math.min(EP_FILL_AT + 80, arr.length);
+        html += arr.slice(EP_FILL_AT, end).map(epWordRowHtml).join('');
+        EP_FILL_AT = end;
+      }
+      /* ⚠️ 只给**这次新加的行**绑点击 ✗ —— 每片都 `querySelectorAll` 全量绑的话，
+         4611 行 × 58 片 ≈ 27 万次赋值 ✓（O(n²) ✓，白花 ✓）。
+         行是 `.lw-wd-rows` 的**直接子节点** ✓ → 从上次的 children.length 往后遍历 ✓。 */
+      const start = box.children.length;
+      if (html) box.insertAdjacentHTML('beforeend', html);
+      for (let k = start; k < box.children.length; k++) {
+        const el = box.children[k];
+        const id = el && el.getAttribute && el.getAttribute('data-epword');
+        if (id) el.onclick = () => epPickWord(id);
+      }
+      if (EP_FILL_AT < arr.length) EP_FILL_TIMER = setTimeout(tick, 0);
+      else { EP_FILL_ARR = null; EP_FILL_BOX = null; }
+    };
+    EP_FILL_TIMER = setTimeout(tick, 0);
+  }
+
   function epPaintWordRows() {
     const host = document.getElementById('lifework-view');
     const box = host && host.querySelector('.lw-wd-rows');
@@ -12266,6 +13393,7 @@
     box.querySelectorAll('[data-epword]').forEach((el) => {
       el.onclick = () => epPickWord(el.dataset.epword);
     });
+    epRunFill(box);
     return true;
   }
 
@@ -12366,8 +13494,8 @@
        ⚠️ 只列**已标**的两类 ✗ —— 不加「未标记」（那是「全部」的意思 ✓，
           列出来只会让这一栏变长 ✗）。 */
     + '<div class="lw-rd-hd">我的标记</div>'
-    + flt('mark:fuzzy', '⭐ 不熟悉', epWords().filter((x) => x.mark === 'fuzzy').length)
-    + flt('mark:blank', '⭐⭐ 完全不记得', epWords().filter((x) => x.mark === 'blank').length)
+    + EP_MARKS.map((m) => flt('mark:' + m.k, m.ic + ' ' + m.nm,
+      epWords().filter((x) => x.mark === m.k).length)).join('')
     + '<div class="lw-rd-hd">按阶段</div>'
     + flt('all', '全部', st.total)
       + flt('due', '⏰ 该复习了', st.due)
@@ -12385,6 +13513,152 @@
       + '<span style="color:' + T.faint + '">（艾宾浩斯曲线 → 简化 SM-2 ✓ 算法在 lib/srs.js）</span>'
       + '</div>';
   }
+  /* ══ 词根词缀拆解 ✓ ═══════════════════════════════════════════════════════
+     ★ 用户原话：「帮我给单词，补充词根词缀的说明，那种，全部词都要，
+       新增词根词缀说明拆解等，合理布局」✓。
+
+     数据结构（挂在词对象上 ✓）：
+       w.rd = { parts: [[类型, 形式, 含义], …], gloss: '…', note: '…' }
+       · 类型 ∈ 前缀 / 词根 / 后缀 / 词干 / 词尾 ✓
+       · 形式：前缀带**尾**连字符（in- ✓）、后缀带**首**连字符（-al ✓）、
+         词根 / 词干不带 ✓ —— 这样胶囊上的字母**连起来就是这个单词** ✓。
+       · `parts` 为空 = 这个词**拆不开** ✓（原生词 ✓），此时只显示 note ✓。
+
+     ⚠️ 为什么用结构化数据 ✗ 而不是一句字符串：老字段 `roots` 是一整句
+        「ab-（加强）+ und（波浪）→ 像波浪涌来」✗ —— 前后缀和词根**混在一行** ✓，
+        分不出哪块是词根 ✓，也没法按类型上色 ✓（用户这次要的正是「拆解 + 布局」✗）。
+        字符串版仍然**兜底渲染** ✓（万一某条没有 rd ✓）。
+     ⚠️ 这两个函数被**渲染路径**调用 ✗ → 必须写 `function` 声明 ✗（有提升 ✓），
+        不能写成 const 箭头 ✗（那是 TDZ ✓，整个面板会白屏 ✓，踩过 ✓）。 */
+  const RD_KIND_CLS = { 前缀: 'pre', 词根: 'root', 后缀: 'suf', 词干: 'stem', 词尾: 'end' };
+  function rdPartsOf(w) {
+    const rd = w && w.rd;
+    return rd && Array.isArray(rd.parts) ? rd.parts : [];
+  }
+  /* 拆解 → HTML ✓（一排胶囊 + 拼出来的意思 + 说明 ✓） */
+  function rdHtml(w) {
+    const rd = (w && w.rd) || null;
+    const parts = rdPartsOf(w);
+    const gloss = rd ? String(rd.gloss || '') : '';
+    const note = rd ? String(rd.note || '') : '';
+    if (!parts.length && !gloss && !note) {
+      /* ★ 老数据兜底 ✓ —— 没有 rd 但有老的 `roots` 字符串 ✓ → 照原样显示 ✓，
+         绝不因为「没升级到新结构」就把内容吞掉 ✗。 */
+      const old = String((w && w.roots) || '').trim();
+      return old ? '<div class="lw-wd-rd"><div class="gloss">' + esc(old) + '</div></div>' : '';
+    }
+    const chips = parts.map((p, i) => {
+      const k = String((p && p[0]) || '');
+      const s = String((p && p[1]) || '');
+      const m = String((p && p[2]) || '');
+      if (!s) return '';
+      /* ⚠️ 加号要**和它后面那个胶囊绑在一起** ✗ —— 第一版把加号做成独立元素 ✓，
+         窄一点就会「加号留在上一行、胶囊掉到下一行」✗（截图里就是这样 ✓）。
+         → 每个「加号 + 胶囊」包成一个 unit ✓，unit 内部不换行 ✓。 */
+      return '<span class="unit">'
+        + (i ? '<span class="plus">+</span>' : '')
+        + '<span class="pc ' + (RD_KIND_CLS[k] || 'stem') + '">'
+        + '<span class="k">' + esc(k || '部件') + '</span>'
+        + '<span class="s">' + esc(s) + '</span>'
+        + (m ? '<span class="m">' + esc(m) + '</span>' : '')
+        + '</span></span>';
+    }).join('');
+    /* ⚠️ 意思里**已经有箭头**的就别再补一个 ✗（「→ 不可再分的 → 个体」很怪 ✓）。 */
+    const arrow = /[→➔]|->/.test(gloss) ? '' : '→ ';
+    /* ★ 释义 + 说明包成 `.tail` ✓ —— 这一块现在是**全宽横排** ✓（2026-10-17 ✓）：
+       胶囊一行、`tail` 跟在右边 ✓；窄屏放不下时 `flex-wrap` 自己折到下一行 ✓，
+       不用写任何媒体查询 ✓。 */
+    const tail = (gloss ? '<div class="gloss"><b>' + arrow + '</b>' + esc(gloss) + '</div>' : '')
+      + (note ? '<div class="note">' + esc(note) + '</div>' : '');
+    return '<div class="lw-wd-rd">'
+      + '<div class="chips">' + (chips || '<span class="base">基础词 · 没有可拆的词根词缀</span>') + '</div>'
+      + (tail ? '<div class="tail">' + tail + '</div>' : '')
+      + '</div>';
+  }
+  /* 拆解 → 一行文字 ✓（编辑态那个输入框用的 ✓） */
+  function rdPartsText(rd) {
+    const parts = (rd && Array.isArray(rd.parts)) ? rd.parts : [];
+    return parts.map((p) => String((p && p[1]) || '') + (p && p[2] ? '（' + p[2] + '）' : ''))
+      .filter(Boolean).join(' + ');
+  }
+  /* 一行文字 → 拆解 ✓（用户在编辑态改完，失焦自动存 ✓）
+     ★ 类型**优先沿用原来那一条的** ✗ —— 用户多半只是改个错字 ✓，
+       不该把「词干」悄悄变成「词根」✗（那是语义判断 ✓，光看有没有连字符推不出来 ✗）。 */
+  function rdParseParts(text, old) {
+    const oldParts = (old && Array.isArray(old.parts)) ? old.parts : [];
+    const out = [];
+    String(text || '').split(/\s*\+\s*/).forEach((seg) => {
+      const s = String(seg || '').trim();
+      if (!s) return;
+      const m = /^(.*?)[（(]\s*([^）)]*?)\s*[）)]\s*$/.exec(s);
+      const form = String(m ? m[1] : s).trim();
+      const mean = String(m ? m[2] : '').trim();
+      if (!form) return;
+      let kind = '';
+      for (let i = 0; i < oldParts.length; i++) {
+        if (String((oldParts[i] && oldParts[i][1]) || '') === form) { kind = String(oldParts[i][0] || ''); break; }
+      }
+      if (!kind) {
+        if (/-$/.test(form)) kind = '前缀';
+        else if (/^-/.test(form)) kind = '后缀';
+        else kind = form.replace(/-/g, '').length >= 3 ? '词根' : '词干';
+      }
+      out.push([kind, form, mean]);
+    });
+    return out;
+  }
+  /* 编辑态三个输入框 → 结构 ✓（全空就返回 null ✓ = 把这条拆解删掉 ✓） */
+  function rdParseOne(partsText, glossText, noteText, old) {
+    const parts = rdParseParts(partsText, old);
+    const gloss = String(glossText == null ? '' : glossText).trim();
+    const note = String(noteText == null ? '' : noteText).trim();
+    if (!parts.length && !gloss && !note) return null;
+    return { parts: parts, gloss: gloss, note: note };
+  }
+  /* ★ 把部件的形式**归一到单词里实际出现的字母** ✗（AI 补全那条路用 ✓）。
+     为什么必须做 ✗：模型十有八九把前缀写成**原形** ✓（`ad-` ✓），
+     而单词里是**同化形** ✓（`accelerate` 里是 `ac-` ✓）→ 胶囊拼不回原词 ✗，
+     而「一排胶囊连起来就是这个单词」恰恰是这个区块的全部意义 ✗。
+     ⚠️ 归不了（有部件在词里找不到）就返回 null ✗ —— 上层**只保留说明、丢掉部件** ✓，
+        宁可少显示 ✓，也不能把拼不回去的部件画出来骗人 ✗。 */
+  function rdNorm(word, parts) {
+    const wd = String(word || '').toLowerCase();
+    if (!/^[a-z]+$/.test(wd) || !parts || !parts.length) return null;
+    const cores = parts.map((p) => String(p[1] || '').replace(/-/g, '').toLowerCase());
+    for (let i = 0; i < cores.length; i++) if (!cores[i]) return null;
+    const starts = [0];
+    for (let i = 1; i < cores.length; i++) {
+      const j = wd.indexOf(cores[i], starts[i - 1] + 1);
+      if (j <= starts[i - 1]) return null;
+      starts.push(j);
+    }
+    const out = [];
+    for (let i = 0; i < parts.length; i++) {
+      const a = starts[i];
+      const b = (i + 1 < parts.length) ? starts[i + 1] : wd.length;
+      const surf = wd.slice(a, b);
+      if (!surf || surf.length > 16) return null;
+      const f = String(parts[i][1] || '');
+      out.push([parts[i][0], (f.charAt(0) === '-' ? '-' : '') + surf + (/-$/.test(f) ? '-' : ''), parts[i][2]]);
+    }
+    return out;
+  }
+  /* 点词群导图 → 全屏看 ✓（卡片里按 480px 高显示，字太小 ✓）
+     ⚠️ 覆盖层挂在 `body` 上 ✗ 不是挂在面板里 ✓ —— 面板本身是 `overflow:hidden` ✓，
+        挂在里面会被裁掉 ✗。z-index 要比面板（8800）高 ✓。 */
+  function lwMapZoom(src) {
+    if (!src) return;
+    let ov = document.getElementById('lw-map-zoom');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'lw-map-zoom';
+      ov.className = 'lw-map-zoom';
+      ov.onclick = () => ov.classList.remove('on');
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = '<img src="' + esc(src) + '" alt="词群导图"/>';
+    ov.classList.add('on');
+  }
   function epWordDetailHtml() {
     const w = epWordById(EP_UI.wordSel);
     if (!w) {
@@ -12398,6 +13672,10 @@
     const pv = SRS ? SRS.gradePreviews(w, now) : [];
     const busy = EP_UI.enBusy === w.id;
     const imgBusy = EP_UI.imgBusy === w.id;
+    /* ★ 这个词所属词群的**思维导图**文件名 ✓（没有就是空串 ✓）——
+       映射在 `STORE.wordMaps`（词群名 → 文件名 ✓），图本身由
+       `/api/life/wordmap/<文件名>` 发 ✓（见 server.js 里那段注释 ✓）。 */
+    const wmap = String(((STORE && STORE.wordMaps) || {})[String(w.group || '')] || '');
     /* ★★ 词详情：**默认是「词典」** ✓，不是一张表单 ✗ ——
        用户原话：「这个词的详情，一般不需要我去修改，所以不用是这种输入框，
                   大概设计和字典那样就行，美化，优化一下布局和设计，
@@ -12456,7 +13734,13 @@
     + row('同义词', 'lw-wd-syn', w.syn, '如 plentiful / ample')
     + row('反义词', 'lw-wd-ant', w.ant, '如 scarce / deficient')
     + row('拓展', 'lw-wd-ext', w.ext, '派生词、同族词', 2)
-    + row('词根拆解', 'lw-wd-roots', w.roots, '如 ab-（加强）+ und（波浪）→ 像波浪涌来', 2)
+    /* ★ 词根词缀 ✓ —— 拆成**三个字段** ✗（拆解 / 拼出来的意思 / 说明 ✓），
+       而不是挤成一行 ✗：`→` 在「拆解」和「意思」里都会出现 ✓，一行切不干净 ✗。
+       ⚠️ 老字段 `roots` 那一个输入框**撤掉了** ✗ —— 它的内容已经并进这三项 ✓，
+          留着就是「同一件事写两处」✗（本项目栽过很多次 ✓）。 */
+    + row('词根拆解', 'lw-wd-rdp', rdPartsText(w.rd), '如 in-（不）+ divid（分）+ -ual（…的）', 2)
+    + row('拆解释义', 'lw-wd-rdg', (w.rd && w.rd.gloss) || '', '部件拼起来的意思，如 不可再分的 → 个体')
+    + row('拆解说明', 'lw-wd-rdn', (w.rd && w.rd.note) || '', '同族 / 易混 / 词源，一句话', 2)
     : '';
     /* ── 配图 ✓（用户要的「图片场景理解」✓）── */
     const imgBlock = w.img ? '<div class="lw-wd-imgwrap">'
@@ -12488,27 +13772,76 @@
      自然语言 ✓（用户确认过：不编具体次数 ✓，标高频/中频/低频 ✓）。
      这里把开头的频度词抽出来做成徽章 ✓，剩下的当说明 ✓。
      ⚠️ 抽不出来就**原样显示** ✗ —— 老数据 / 手填的内容不能因为格式不符就丢掉 ✗。 */
-  const freqHtml = (() => {
+  /* ★★ 词群 + 六级考频 → **压缩成释义右边的小标签** ✓✓（2026-10-17）
+     ★ 用户原话：「我感觉这个词群和六级考频，直接标注在释义那边右侧空白不就行，
+       本身就是简短说明，没必要放下面占用空间」✓。
+
+     ⚠️ 实测数据：词群 10~19 字 ✓、考频 10~19 字 ✓
+        （`词以群记「装修」相关` / `中频 · 阅读 + 写作` ✓）—— 真的就是一行小字 ✓，
+        单独占一个区块（标题 + 内边距 + 内容 ≈ **90px** ✗）太浪费 ✓，两个就是 180px ✗。
+     ⚠️ 它们**不再单独成块** ✗ —— 但**编辑表单里还留着** ✓（`lw-wd-freq` ✓），
+        只是展示时并进释义 ✓。
+     ⚠️ 用 `margin-left:auto` 推到**右边** ✓；窄的时候 `flex-wrap` 会掉到释义**下面** ✓，
+        仍然右对齐 ✓（挤不进右侧就变成一行脚注 ✓，一样比两个区块省地方 ✓）。 */
+  const metaHtml = (() => {
+    const bits = [];
+    if (w.group) {
+      bits.push('<span class="lw-wd-mt grp" title="词群"><i>▤</i>' + esc(w.group) + '</span>');
+    }
     const f = String(w.freq || '');
-    if (!f) return '';
-    const m = f.match(/高频|中频|低频/);
-    if (!m) return '<div class="lw-wd-tipbox">' + esc(f) + '</div>';
-    const cls = m[0] === '高频' ? 'hi' : (m[0] === '中频' ? 'mid' : 'lo');
-    const rest = f.replace(m[0], '').replace(/^[\s·、,，]+/, '');
-    return '<div class="lw-wd-tipbox"><span class="lw-wd-badge ' + cls + '">' + m[0] + '</span>'
-      + (rest ? esc(rest) : '') + '</div>';
+    if (f) {
+      const m = f.match(/高频|中频|低频/);
+      const cls = m ? (m[0] === '高频' ? 'hi' : (m[0] === '中频' ? 'mid' : 'lo')) : '';
+      const rest = m ? f.replace(m[0], '').replace(/^[\s·、,，]+/, '') : f;
+      bits.push('<span class="lw-wd-mt freq" title="六级考频">'
+        + (m ? '<b class="lw-wd-badge ' + cls + '">' + m[0] + '</b>' : '')
+        + (rest ? '<i>' + esc(rest) + '</i>' : '') + '</span>');
+    }
+    return bits.join('');
   })();
+  /* 释义区块 ✓（把小标签并进去 ✓）—— 两个 hero 分支都用这一份 ✓，别各写一遍 ✗。 */
+  const defSec = sec('📖', '释义',
+    '<div class="lw-wd-defrow"><div class="lw-wd-defcol">' + defHtml + '</div>'
+    + (metaHtml ? '<div class="lw-wd-meta">' + metaHtml + '</div>' : '')
+    + '</div>');
   /* ★ 标签云 ✓ —— 同义 / 反义 / 词形变化都是「一组词」✓，拆成标签排 ✓。 */
   const tagCloud = (s, cls) => '<div class="lw-wd-tags' + (cls ? ' ' + cls : '') + '">'
     + String(s).split(/[,，、\/]/).map((x) => x.trim()).filter(Boolean)
       .map((x) => '<span>' + esc(x) + '</span>').join('') + '</div>';
   const egSec = sec('💬', '例句', egHtml
       + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">🔊 读这句</button></div>' : ''));
+    /* ★★★ 词根词缀 → 放进 hero 的**中间列** ✓✓（2026-10-17 第二次重排）
+       ★ 用户原话：「图片左边，有一大块空白，这是可以把词根词缀放这空白处，合理放置」✓。
+
+       ⚠️⚠️ 那块空白是怎么来的 ✗：`.lw-wd-hero-a`（释义 + 例句）是 `flex:1 1 auto` ✓，
+          **总是撑满** ✓，而里面的文字**短的时候只占一半** ✓ ——
+          实测（1920 视口、卡片 1045）：例句 48 字时文字只用 **225px** ✓，
+          而列宽 **719px** ✓ → 右边空出 **490px** ✗（用户截图就是这块 ✓）。
+          ⚠️ 例句**长**的时候（bacterial 315 字 ✓）那列是**填满的** ✓（实测 691/719 ✓），
+             根本没有空白 ✓ —— 所以这不是「列太宽」的错 ✗，是「短内容撑不满宽列」✓。
+
+       ⇒ 让词根词缀去**填这块空白** ✓：
+         `[释义 + 例句] [词根词缀] [配图]` 三列 ✓，中间那列**定宽 320** ✓
+         （胶囊 2 排刚好 ✓，再宽就把例句挤窄了 ✗）。
+       ⚠️ 定宽而不是 `flex:1` ✗ —— 让浏览器自己分的话，长例句的词会被挤成一条 ✓
+          （bacterial 的 315 字例句在 380px 宽下要排十几行 ✗）。
+       ⚠️ 没有配图 / 没有释义时**不进 hero** ✗（那时 hero 是竖排的 ✓，
+          词根词缀直接接在例句后面 ✓，见下面那个三元表达式的 else 分支 ✓）。 */
+    const rdSec = rdHtml(w) ? sec('🧬', '词根词缀', rdHtml(w)) : '';
+    /* ⚠️ 例句**特别长**的词**不进 hero** ✗ —— 三列会把文本列压到 403px ✓，
+       315 字的例句要排 9 行 ✓，hero 被撑到 380 高 ✓，词根那块下面反而空出来 ✗。
+       ⚠️ 这种词**极少** ✓：实测全库 4610 词，例句中位 **48 字符** ✓，
+          ≤60 字符的占 **87%** ✓，≤140 字符的 **4608 个** ✓（只有 2 个超 ✗）。
+       ⇒ 用 140 当阈值 ✓：绝大多数的词走三列（把那块空白填掉 ✓），
+          极个别长句退回「整宽一条」✓。 */
+    const rdInHero = !!(w.img && defs.length) && String(w.eg || '').length <= 140;
     const hero = (w.img && defs.length)
       ? '<div class="lw-wd-hero">'
-        + '<div class="lw-wd-hero-a">' + sec('📖', '释义', defHtml) + egSec + '</div>'
+        + '<div class="lw-wd-hero-a">' + defSec + egSec + '</div>'
+        + (rdInHero && rdSec ? '<div class="lw-wd-hero-rd">' + rdSec + '</div>' : '')
         + '<div class="lw-wd-hero-b">' + imgBlock + '</div></div>'
-      : sec('📖', '释义', defHtml) + imgBlock + egSec;
+        + (rdInHero ? '' : rdSec)
+      : defSec + imgBlock + egSec + rdSec;
   /* ★★ 分栏容器的**开合标签**改成一对变量 ✓✓ ——
      用户原话：「复习最下面的，可以不需要左右排版，单行排布就行，填补右侧的空白」✓。
      ⚠️ 关键：`columns` 容器的高度 = **两栏中较高的那栏** ✗ ——
@@ -12522,16 +13855,51 @@
      结果**所有区块都被它包住、全部跨栏** ✓ → 整个卡片退回单栏 ✓
      （用户截图：「怎么布局退回去了」✓）。
      → 跨栏只包**「复习」那一块** ✓（见下面 fullOpen / fullClose ✓）。 */
-  /* ★ grid 手动分组 ✓ —— 三个变量：开左栏 / 切到右栏 / 全关 ✓。
-     左栏 = 怎么记 + 基础信息 · 右栏 = 参考资料 + 复习 ✓（见 CSS 那段注释 ✓）。 */
-  const colsOpen = edit ? '' : '<div class="lw-wd-cols"><div class="lw-wd-col-a">';
-  const colsSplit = edit ? '' : '</div><div class="lw-wd-col-b">';
-  const colsClose = edit ? '' : '</div></div>';
+  /* ★★ 分栏：**改成 CSS 多栏（自动平衡）** ✓✓✓ —— 2026-10-17 重排
+     ★ 用户原话：「重新合理排布，目前排布不合理」✓。
+
+     ⚠️⚠️ 为什么把 grid 换掉 ✗✗ —— 上一版是**手动分组** ✓
+       （左栏 = 怎么记 + 基础信息 · 右栏 = 参考资料 + 复习 ✓），
+       而「每个词哪栏长」**天生不一样** ✗：
+       实测 5 个词，**左栏比右栏高 335 ~ 568px** ✗（右下一大片空白 ✓，
+       截图一眼就看出来 ✓）。
+       而且**「词根词缀」搬进左栏之后更糟** ✗（它 ≈210px ✓，全压在左栏 ✓）。
+       ⇒ 手写分组**不可能对所有词都平衡** ✗ —— 词卡的区块是「有就显示、没有就不显示」✓，
+         长度还随内容浮动 ✓（巧记 / 场景 / 用法 都是长段落 ✓）。
+         只有**让浏览器按高度自己分**才可能齐 ✓。
+
+     ⚠️ 之前 columns 试过三版都不行 ✗，但**病根不是 columns** ✗ ——
+        那次是「复习」必须**跨栏**（`column-span` 不生效 ✓）才折腾的 ✓。
+        现在「复习」只是普通一块 ✓，放哪栏都行 ✓ → columns 正合适 ✓。
+     ⚠️ `break-inside:avoid` **必须有** ✗ —— 否则一个区块会被从中间劈到两栏 ✓
+        （标题在这栏、内容在那栏 ✓，完全没法读 ✓）。
+     ⚠️ 阅读顺序变成「先左栏到底、再右栏」✗ —— 对「并列的参考资料」没问题 ✓。
+     ⚠️ 窄屏退回单栏 ✗（见 CSS 里的媒体查询 ✓）。
+     ⚠️⚠️ 这一段在 **CSS 模板字符串** 里 ✗ —— 注释里**一个反引号都不能有** ✗。 */
+  /* ★ 三个变量保留 ✓（只改内容 ✗）——
+     `colsSplit` 现在恒为空串 ✓：不再手动切栏 ✓，
+     但**留着这个变量** ✓，免得动 `+` 拼接链的语义 ✗（本项目在拼接链上栽过 ✓）。 */
+  const colsOpen = edit ? '' : '<div class="lw-wd-cols">';
+  const colsSplit = '';
+  const colsClose = edit ? '' : '</div>';
   const body = edit
     ? editPane + imgBlock
-      /* ★★ 左右两栏 ✓ —— 用户：「是否可以考虑左右排布，不要把页面拉的很长」✓。
-         左栏 = 「怎么记」（巧记 / 场景 ✓）· 右栏 = 「查什么」（下面那 7 块 ✓）。 */
-      : hero + colsOpen
+      /* ★★ 左右两栏 ✓ —— 用户：「是否可以考虑左右排布，不要把页面拉的很长」✓。 */
+      : hero
+    /* ★★★ 词根词缀 → **全宽横排** ✓✓（2026-10-17 重排）——
+       用户原话：「重新合理排布，目前排布不合理」✓。
+
+       ⚠️ 上一版把它塞在左栏**第一个** ✗（我上一轮改的 ✓）→ 两个问题一起犯 ✗：
+         ① 它 ≈210px **全压在左栏** ✓ → 左栏比右栏高 457px ✗（absorb 实测 ✓）；
+         ② 它自己只有 2~4 个胶囊 ✓，挤在 600px 的窄栏里 ✓，
+            而右边 900px 空着 ✗。
+       ⇒ 提到**两栏容器外面** ✓，横跨整宽 ✓：
+         · 胶囊一行排开 ✓（窄屏自己换行 ✓，`flex-wrap` ✓）
+         · 「→ 拼出来的意思」和「同族 / 词源」**跟在同一行右边** ✓（放不下才折行 ✓）
+         · 左栏少 210px ✓，两栏更容易齐 ✓
+       ⚠️ 它仍然是 `.lw-wd-sec` ✓（标题样式和别的区块一致 ✓），
+          只是**不在** `.lw-wd-cols` 里面 ✓。 */
+    + colsOpen
     + (w.mnem ? sec('💡', '巧记', '<div class="lw-wd-tipbox mnem">' + esc(w.mnem) + '</div>') : '')
     + (w.scene ? sec('🎬', '场景', '<div class="lw-wd-tipbox scene">' + esc(w.scene) + '</div>') : '')
     /* ★★ 词书的「全方位拆解」区块 ✓ —— 用户原话：「还缺少对应的单词短语，等等，用法，
@@ -12548,8 +13916,6 @@
        congress / conquer / parliament / ambassador ✓）。
        ⚠️ 放在最前面 ✗ —— 它决定「这个词为什么和那几个词放一起」✓，
           先看到它再往下读词根拆解 ✓，逻辑才顺 ✓。 */
-    + (w.group ? sec('▤', '词群', '<div class="lw-wd-tipbox">' + esc(w.group) + '</div>') : '')
-    + (w.freq ? sec('📊', '六级考频', freqHtml) : '')
     + (w.forms ? sec('🔄', '词形变化', tagCloud(w.forms)) : '')
     + (w.phrase ? sec('🔗', '常用短语', '<div class="lw-wd-tipbox">' + esc(w.phrase) + '</div>') : '')
     + (w.usage ? sec('📝', '用法', '<div class="lw-wd-tipbox">' + esc(w.usage) + '</div>') : '')
@@ -12560,10 +13926,9 @@
         (w.syn ? '<div class="lw-wd-tipbox"><b style="color:' + T.dim + '">同义</b>' + tagCloud(w.syn) + '</div>' : '')
         + (w.ant ? '<div class="lw-wd-tipbox"><b style="color:' + T.dim + '">反义</b>' + tagCloud(w.ant, 'ant') + '</div>' : ''))
       : '')
-    + ((w.ext || w.roots)
-      ? sec('🌱', '拓展', (w.roots ? '<div class="lw-wd-tipbox mnem">' + esc(w.roots) + '</div>' : '')
-        + (w.ext ? '<div class="lw-wd-tipbox">' + esc(w.ext) + '</div>' : ''))
-      : '')
+    /* ★ 拓展 ✓ —— ⚠️ `roots`（词根拆解）**已经搬到左栏自己的区块**了 ✗
+       （见上面那个 🧬 ✓），这里**只留派生词 / 同族词** ✓，别再重复显示一遍 ✗。 */
+    + (w.ext ? sec('🌱', '拓展', '<div class="lw-wd-tipbox">' + esc(w.ext) + '</div>') : '')
     + '';   /* ⚠️ 这里**不闭合**分栏容器 ✗ —— 「复习」还要跨栏放进来 ✓（见下面 colsClose ✓） */
     return '<div class="lw-wd-detail' + (edit ? ' editing' : '') + '">'
       /* ── 头部：单词 + 音标 + 词性 + 状态 ✓ ── */
@@ -12575,9 +13940,11 @@
        三态循环：未标 → ⭐ 不熟悉（黄）→ ⭐⭐ 完全不记得（红）→ 未标 ✓。
        ⚠️ 和「记忆阶段」是**两回事** ✗：阶段由遗忘曲线算法算 ✓，星标是用户**主观**感受 ✓，
           两者互补（算法觉得你熟了、但你自己知道这词一考就懵 ✓）。 */
-    + '<button class="mark' + (w.mark === 'fuzzy' ? ' on-fuzzy' : (w.mark === 'blank' ? ' on-blank' : ''))
-    + '" id="lw-wd-mark" title="点一下循环：未标 → 不熟悉 → 完全不记得">'
-    + (w.mark === 'blank' ? '⭐⭐' : (w.mark === 'fuzzy' ? '⭐' : '☆')) + '</button>'
+    + '<span class="lw-wd-marks" id="lw-wd-marks">'
+    + EP_MARKS.map((m) => '<button class="mark' + (w.mark === m.k ? ' on-' + m.k : '')
+      + '" data-mark="' + m.k + '" title="' + m.nm + (w.mark === m.k ? '（再点取消）' : '') + '">'
+      + m.ic + '</button>').join('')
+    + '</span>'
     + '<button class="spk" id="lw-wd-say" title="读这个单词">🔊</button>'
       + '<button class="spk" id="lw-wd-say-slow" title="慢速读">🐢</button>'
       + '<span class="sp"></span>'
@@ -12641,6 +14008,25 @@
       + (w.artTitle ? sec('📍', '来自', '<div class="lw-wd-src">《' + esc(w.artTitle) + '》'
         + (w.artId ? ' <button id="lw-wd-src">回到原文</button>' : '') + '</div>'
         + (w.sent ? '<div class="lw-wd-sent">' + epHiWord(w.sent, w.w) + '</div>' : '')) : '')
+      /* ── 词群导图 ✓（2026-10-17）──
+         ★ 用户原话：「每个词群开头，不是都有一副思维导图吗，我需要你给我加上，
+           对于每个属于该词群的单词，的最下方，需要放上该词群的导图」✓。
+
+         ⚠️ 图是从 PDF 里裁出来的 ✓（`~/Desktop/codex/rd-work/build_maps.py` ✓），
+            放在 `<数据目录>/wordmaps/` ✓，由 `/api/life/wordmap/<文件>` 发 ✓；
+            词群名 → 文件名的映射存在 `STORE.wordMaps` ✓。
+         ⚠️ 放在**最下面** ✗（用户说的「最下方」✓）—— 它是一张参考大图 ✓，
+            不该把上面的释义 / 例句挤下去 ✓。
+         ⚠️ `onerror` 要**收起来** ✗（图缺了就整块不显示 ✓，别留一个破图标 ✓）。
+         ⚠️ 点图放大 ✓ —— 导图字小 ✓，卡片里按 480px 高显示根本看不清 ✓。 */
+      + (wmap ? sec('🗺', '词群导图', '<div class="lw-wd-map">'
+        /* ⚠️ 必须带**版本号** ✗ —— 服务端给导图设了 `Cache-Control: max-age=604800` ✓，
+   重出图之后文件名没变 ✓ → 浏览器**照样用旧的那张** ✗（用户会以为没修好 ✗）。
+   改图就把 v 加一 ✓。 */
+        + '<img id="lw-wd-mapimg" src="/api/life/wordmap/' + encodeURIComponent(wmap) + '?v=2"'
+        + ' alt="' + esc(w.group) + '" loading="lazy"'
+        + ' onerror="this.parentNode.classList.add(\'bad\')"/>'
+        + '<div class="cap">' + esc(w.group) + ' · 点图放大</div></div>') : '')
       /* ── 底部动作 ✓ ──
          ⚠️⚠️ 状态提示必须放在动作条**前面** ✗✗ ——
             动作条现在是 sticky（贴着滚动区底边 ✓），
@@ -13132,7 +14518,7 @@
      ★ 用户原话：「加入的单词，得自动解析好音标，词义和例句，以及巧记手段，等，
        最好还有对应图片场景理解」✓。
      ★ 复用**已有的 AI 入口** ✓（同一个 `/api/ai/chat` ✓）+ **同一份配置** ✓
-       （`mailAiCfg()` 读的就是「本机管家 → AI」那份 ✓）—— **不另起一套** ✗。
+       （`mailAiCfg()` 读的就是「本机管家 → 设置 → AI」那份 ✓）—— **不另起一套** ✗。
      ⚠️ 要**严格 JSON** ✗ —— 模型爱加 ```json 围栏 ✗、爱加「好的，这是…」前言 ✗，
         所以：① prompt 里明说只输出 JSON ✓ ② 解析时剥包装 ✓
         ③ **还解析不出来就报错** ✗ —— 别猜 ✓（猜出来的音标 / 释义是**错的** ✗，
@@ -13152,7 +14538,7 @@
     if (!w || EP_UI.enBusy) return;
     const cfg = mailAiCfg();
     if (!cfg) {
-      EP_UI.enErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key，就能自动补全音标 / 释义 / 例句 / 巧记';
+      EP_UI.enErr = '还没配置 AI —— 去「本机管家 → 设置 → AI」里填一下模型和 Key，就能自动补全音标 / 释义 / 例句 / 巧记';
       render();
       return;
     }
@@ -13175,7 +14561,18 @@
                 + '"eg":"一个地道的英文例句（如果用户给的那句话合适，就用它，别改写）",'
                 + '"egZh":"上面那句例句的简体中文翻译",'
                 + '"mnem":"巧记：优先拆词根词缀；没有词根就用具体可操作的联想或谐音。一到两句话，不要空话",'
-                + '"scene":"一句话描述一个能帮人记住这个词的具体画面（要可视化、有细节，用来配图理解）"}',
+                + '"scene":"一句话描述一个能帮人记住这个词的具体画面（要可视化、有细节，用来配图理解）",'
+                /* ★ 词根词缀拆解 ✓ —— 用户要「全部词都要有拆解」✗，
+                   那**新加的词也得有** ✓，不能只有老词书那批有 ✓。 */
+                + '"rd":{"parts":[["前缀","in-","不"],["词根","divid","分"],["后缀","-ual","…的"]],'
+                + '"gloss":"不可再分的 → 个体","note":"同族：divide / division"}}。'
+                + 'rd 的规则：parts 每项是 [类型, 形式, 含义] —— '
+                + '类型只用 前缀 / 词根 / 后缀 / 词干 / 词尾 这五个；'
+                + '前缀带尾连字符（in-）、后缀带首连字符（-al）、词根和词干不带；'
+                + '含义用中文，8 字以内。'
+                + '把 parts 的形式去掉连字符按顺序连起来，**必须正好等于这个单词**（例如 in + divid + ual = individual）。'
+                + '拿不准是不是拉丁词根就写「词干」；这个词根本拆不开（原生词、专有名词）就写 "parts":[]，'
+                + '并在 note 里说明「没有可拆的词根词缀」+ 给一个记忆点。**绝对不要编造词根**。',
             },
             { role: 'user', content: '单词：' + w.w + (sent ? ('\n它出现的句子：' + sent) : '') },
           ],
@@ -13190,6 +14587,22 @@
       const put = (k, v, max) => { const t = String(v == null ? '' : v).trim(); if (t) { w[k] = t.slice(0, max); return true; } return false; };
       put('ph', o.ph, 60); put('pos', o.pos, 24); put('def', o.def, 240);
       put('eg', o.eg, 400); put('egZh', o.egZh, 400); put('mnem', o.mnem, 400); put('scene', o.scene, 300);
+      /* ★ 词根词缀 ✓ —— 模型给的结构**必须过一遍归一** ✗：
+         它十有八九会把前缀写成原形（`ad-` ✓），而词里是同化形（`ac-` ✓）→
+         胶囊拼不回原词 ✓（而「胶囊连起来就是这个词」正是这个区块的意义 ✗）。
+         ⚠️ 归一失败就**只留说明、丢掉 parts** ✗ —— 宁可少显示 ✓，
+            也不能把拼不回去的部件画出来 ✗（那是在骗人 ✓）。 */
+      if (o.rd && typeof o.rd === 'object') {
+        const raw = Array.isArray(o.rd.parts)
+          ? o.rd.parts.filter((x) => Array.isArray(x) && x.length >= 2 && String(x[1] || '').trim())
+            .slice(0, 4)
+            .map((x) => [String(x[0] || '').trim() || '词干', String(x[1] || '').trim(), String(x[2] || '').trim().slice(0, 12)])
+          : [];
+        const gp = String(o.rd.gloss || '').trim().slice(0, 60);
+        const np = String(o.rd.note || '').trim().slice(0, 200);
+        const norm = rdNorm(w.w, raw);
+        if ((norm && norm.length) || gp || np) w.rd = { parts: norm || [], gloss: gp, note: np };
+      }
       w.enAt = Date.now(); w.edit = Date.now();
       epSave();
     } catch (e) {
@@ -13261,7 +14674,7 @@
        → 没配 AI 就**说实话** ✓，并告诉他去哪儿配 ✓。 */
     rdToast(mailAiCfg()
       ? ('已加入生词本：「' + w + '」✓ 正在自动补全…')
-      : ('已加入生词本：「' + w + '」✓ 想自动补音标 / 释义 / 巧记 → 去「本机管家 → AI」填一下模型和 Key'));
+      : ('已加入生词本：「' + w + '」✓ 想自动补音标 / 释义 / 巧记 → 去「本机管家 → 设置 → AI」填一下模型和 Key'));
     /* ★★ 加入就**自动补全** ✓ —— 用户原话「加入的单词，得自动解析好音标，词义和例句…」✓。
        ⚠️ **不 await** ✗（用户不用等着 ✓）：词卡立刻出现 ✓，字段一边补一边填 ✓。 */
     epWordEnrich(card);
@@ -13292,13 +14705,21 @@
     ['#lw-wd-phrase', 'phrase'], ['#lw-wd-usage', 'usage'],
     ['#lw-wd-cet6eg', 'cet6eg'],
     ['#lw-wd-syn', 'syn'], ['#lw-wd-ant', 'ant'],
-    ['#lw-wd-ext', 'ext'], ['#lw-wd-roots', 'roots'],
+    ['#lw-wd-ext', 'ext'],
   ];
     let ch = false;
     map.forEach(([sel, key]) => {
       const v = g(sel);
       if (v !== null && v !== String(w[key] || '')) { w[key] = v; ch = true; }
     });
+    /* ★ 词根词缀 ✓ —— 它不是普通字符串 ✗（是 {parts, gloss, note} 结构 ✓），
+       所以**不走上面那张 map** ✓，单独解析回结构 ✓。
+       ⚠️ 判据用「三个框都在」✗（不在编辑态时它们压根不存在 ✓，
+          `g()` 返回 null ✓ → 这里必须跳过 ✓，否则会把 rd 清掉 ✗）。 */
+    if (g('#lw-wd-rdp') !== null) {
+      const next = rdParseOne(g('#lw-wd-rdp'), g('#lw-wd-rdg'), g('#lw-wd-rdn'), w.rd);
+      if (JSON.stringify(next || null) !== JSON.stringify(w.rd || null)) { w.rd = next; ch = true; }
+    }
     if (ch) { w.edit = Date.now(); epSave(); }
   }
   function epNoteAdd() {
@@ -13337,8 +14758,8 @@
       return '连不上本机服务 —— 多半是 CodeScope 刚重启过（重启会掐断正在跑的请求）。等一下再点一次就好 ✓';
     }
     if (/timeout|超时|abort|等太久/i.test(s)) return '等太久了（模型没在时限内回）—— 句子多的时候先点「⇄ 译这句」试试 ✓';
-    if (/401|403|Unauthorized|invalid.*key|Incorrect API key/i.test(s)) return 'API Key 不对或没权限 —— 去「本机管家 → AI」检查一下 ✓';
-    if (/404/.test(s)) return 'API 地址不对（404）—— 去「本机管家 → AI」检查一下 ✓';
+    if (/401|403|Unauthorized|invalid.*key|Incorrect API key/i.test(s)) return 'API Key 不对或没权限 —— 去「本机管家 → 设置 → AI」检查一下 ✓';
+    if (/404/.test(s)) return 'API 地址不对（404）—— 去「本机管家 → 设置 → AI」检查一下 ✓';
     if (/429|rate.?limit/i.test(s)) return '被限流了（请求太频繁）—— 缓一会儿再试 ✓';
     if (/quota|insufficient|余额|额度/i.test(s)) return '额度不够了 —— 去模型服务商那边看看 ✓';
     return s;
@@ -13408,7 +14829,7 @@
     if (i >= EP_TR_MAX) { rdToast('这篇太长，只译前 ' + EP_TR_MAX + ' 句'); return; }
     const cfg = mailAiCfg();
     if (!cfg) {
-      EP_UI.trErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key 就能翻了';
+      EP_UI.trErr = '还没配置 AI —— 去「本机管家 → 设置 → AI」里填一下模型和 Key 就能翻了';
       render();
       return;
     }
@@ -13449,7 +14870,7 @@
     const cfg = mailAiCfg();
     if (!cfg) {
       EP_UI.trOn = true;
-      EP_UI.trErr = '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key 就能翻了';
+      EP_UI.trErr = '还没配置 AI —— 去「本机管家 → 设置 → AI」里填一下模型和 Key 就能翻了';
       render();
       return;
     }
@@ -13602,7 +15023,7 @@
     const cfg = mailAiCfg();
     ROOT_UI.ai = { word, busy: true, err: '', data: null };
     if (!cfg) {
-      ROOT_UI.ai = { word, busy: false, err: '还没配置 AI —— 去「本机管家 → AI」里填一下模型和 Key', data: null };
+      ROOT_UI.ai = { word, busy: false, err: '还没配置 AI —— 去「本机管家 → 设置 → AI」里填一下模型和 Key', data: null };
       render();
       return;
     }
@@ -14076,7 +15497,9 @@
     ['#lw-wd-ph', '#lw-wd-pos', '#lw-wd-def', '#lw-wd-eg', '#lw-wd-egzh', '#lw-wd-mnem', '#lw-wd-scene',
       /* ★ 词书字段 ✓ —— 必须和 `epWordSave()` 那张 map 表**逐条对应** ✗（见上面那段警告 ✓）。 */
       '#lw-wd-freq', '#lw-wd-forms', '#lw-wd-phrase', '#lw-wd-usage', '#lw-wd-cet6eg',
-      '#lw-wd-syn', '#lw-wd-ant', '#lw-wd-ext', '#lw-wd-roots']
+      '#lw-wd-syn', '#lw-wd-ant', '#lw-wd-ext',
+      /* ★ 词根词缀那三个框 ✓（必须和 `epWordSave()` 里单独处理的那一段对应 ✓）。 */
+      '#lw-wd-rdp', '#lw-wd-rdg', '#lw-wd-rdn']
       .forEach((sel) => {
         const el = q(sel);
         if (el) el.onblur = () => epWordSave();
@@ -14090,6 +15513,9 @@
     const ws1 = q('#lw-wd-say'); if (ws1) ws1.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
     const ws2 = q('#lw-wd-say-slow'); if (ws2) ws2.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w, { rate: 0.6 }); };
     const ws3 = q('#lw-wd-say-eg'); if (ws3) ws3.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w && w.eg) spkSay(w.eg); };
+    /* ★ 点词群导图 → 全屏看 ✓（卡片里字太小 ✓）*/
+    const wmimg = q('#lw-wd-mapimg');
+    if (wmimg) wmimg.onclick = () => lwMapZoom(wmimg.getAttribute('src'));
     /* ★ 词典态：点单词本身就能听 ✓（不用去找那个小喇叭 ✓）*/
     const wtitle = q('#lw-wd-titleword');
     if (wtitle) wtitle.onclick = () => { const w = epWordById(EP_UI.wordSel); if (w) spkSay(w.w); };
@@ -14100,12 +15526,16 @@
     /* ★ 熟练度星标 ✓ —— 三态循环，和左侧「⭐ 不熟悉 / ⭐⭐ 完全不记得」筛选配套 ✓。
        ⚠️ 只改 `mark` + `edit` ✗ —— 不碰 SRS 字段 ✗（星标是主观标记 ✓，
           不该影响遗忘曲线的排期 ✓，否则「标一下」会打乱复习节奏 ✗）。 */
-    const wmark = q('#lw-wd-mark');
-    if (wmark) wmark.onclick = () => {
-      const w = epWordById(EP_UI.wordSel); if (!w) return;
-      w.mark = w.mark === 'fuzzy' ? 'blank' : (w.mark === 'blank' ? '' : 'fuzzy');
-      w.edit = Date.now(); epSave(); render();
-    };
+    /* ⚠️ 四个按钮**各自切换** ✗（再点同一个就取消 ✓）—— 不再循环 ✓。 */
+    const wmarks = q('#lw-wd-marks');
+    if (wmarks) wmarks.querySelectorAll('button[data-mark]').forEach((btn) => {
+      btn.onclick = () => {
+        const w = epWordById(EP_UI.wordSel); if (!w) return;
+        const k = btn.getAttribute('data-mark');
+        w.mark = (w.mark === k ? '' : k);
+        w.edit = Date.now(); epSave(); render();
+      };
+    });
     /* ★ 「📍 回到原文」✓ —— 用户原话：「可以定位到原文位置等」✓ */
     const wsrc = q('#lw-wd-src');
     if (wsrc) wsrc.onclick = () => epGotoWordSource(epWordById(EP_UI.wordSel));
@@ -14408,6 +15838,11 @@
     s.innerHTML = STATUS_HTML || esc(subDefault());
     const u = document.getElementById('lw-ml-undo');
     if (u && STATUS_UNDO) u.onclick = STATUS_UNDO;
+    const rb = document.getElementById('lw-save-retry');
+    if (rb && STATUS_RETRY) rb.onclick = STATUS_RETRY;
+    /* `#lw-memo-status` 也会被 render 重建 ✗ → 状态跟着重画 ✓ */
+    if (SAVE_STATE === 'saved') setTimeout(() => { if (SAVE_STATE === 'saved') { SAVE_STATE = 'idle'; paintSaveState(); } }, 1600);
+    paintSaveState();
   }
   function mailSetStatus(html, ttl, undo) { setStatus(html, ttl, undo); }
   async function mailMove(uid, to, quiet, fromOverride) {
