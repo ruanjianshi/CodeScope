@@ -169,8 +169,11 @@
       preview: null, moved: false,
     };
     engine.classList.add('dragging-free');
-    try { engine.setPointerCapture(event.pointerId); } catch (_) {}
-    event.preventDefault();
+    /* ⚠️ 这里**既不能 preventDefault、也不能 setPointerCapture** ✗✗
+       · preventDefault → 把随后的 dblclick 一起取消
+       · setPointerCapture 到引擎 → 后续 click/dblclick 都被改派给引擎
+       两条都会让「双击自由主题进入编辑」永远不触发（实测 editable=false）✓
+       拖拽本来就走浮层上的 pointermove，不需要 capture ✓ */
     event.stopImmediatePropagation();
   }
 
@@ -198,9 +201,11 @@
     const finalPosition = drag.preview || { x: drag.ox, y: drag.oy };
     XMIND_FLOAT_DRAG = null;
     engine.classList.remove('dragging-free');
-    try { engine.releasePointerCapture(event.pointerId); } catch (_) {}
     if (targetId && targetId !== drag.id && xmindAttachFloating(drag.id, String(targetId))) return;
     if (!drag.moved && drag.collapse) selectOnly(drag.id);
+    /* ⚠️ 只是"点了一下"就别重画浮层 ✗✗ —— 重画会把节点元素换掉，
+       紧接着的 dblclick 目标就成了旧元素，双击进编辑永远不触发（实测）✓ */
+    if (!drag.moved) { paintSelection(); return; }
     if (drag.moved) {
       const hit = xmindFind(drag.id);
       if (hit) {
@@ -611,8 +616,17 @@
     });
   }
 
+  /* 是否正在编辑文字（引擎编辑框挂在 body 上、自由主题编辑在浮层里）✓ */
+  function isEditingText() {
+    const active = document.activeElement;
+    if (active && (active.isContentEditable || active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) return true;
+    const wrap = document.querySelector('.smm-node-edit-wrap, .smm-richtext-node-edit-wrap');
+    return !!wrap && wrap.offsetParent !== null;
+  }
+
   /* 进入编辑：树节点走引擎、自由主题走浮层 ✓ */
   function beginEditOnSelection() {
+    if (isEditingText()) return;
     const hit = xmindFind(XMIND_SELECTED);
     if (!hit) return;
     if (hit.isDetached) { xmindBeginFloatingEdit(); return; }
@@ -1319,7 +1333,8 @@
     const finish = (event) => {
       if (XMIND_FLOAT_DRAG && XMIND_FLOAT_DRAG.pointerId === event.pointerId) {
         finishFloatDrag(event, engine);
-        event.preventDefault();
+        /* ⚠️ 同样不能 preventDefault ✗ —— pointerup 上 preventDefault 会取消随后的
+           click / dblclick，自由主题就双击不进编辑了 ✓ */
         event.stopImmediatePropagation();
         return;
       }
@@ -1354,6 +1369,7 @@
     /* 空格松开 / 窗口失焦 → 退出临时抓手 ✓ */
     surface.addEventListener('keyup', (event) => {
       if (event.key !== ' ') return;
+      if (event.isComposing || event.keyCode === 229 || isEditingText()) return;
       const usedForPan = spaceUsedForPan;
       spaceHeld = false;
       spaceUsedForPan = false;
@@ -1417,6 +1433,11 @@
 
     surface.addEventListener('keydown', (event) => {
       if (!isEdit() || event.target.closest('[contenteditable]')) return;
+      /* ⚠️ 输入法组合中（打中文时按空格选词）**一律不接管** ✗✗
+         `isComposing` / keyCode 229 是标准判据 ✓
+         否则空格会被当成"进入编辑"，把正在输入的内容和选区冲掉（用户实测）✓ */
+      if (event.isComposing || event.keyCode === 229) return;
+      if (isEditingText()) return;
       if (event.key === ' ') {
         /* 空格两用（和 XMind 对齐）：
            · **按住拖** = 临时抓手平移 ✓
