@@ -104,7 +104,7 @@ async function startServer() {
   });
   child.stdout.on('data', (c) => output.push(String(c)));
   child.stderr.on('data', (c) => output.push(String(c)));
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 180; i++) {
     try {
       const r = await fetch(base + '/api/rev');
       if (r.ok) return;

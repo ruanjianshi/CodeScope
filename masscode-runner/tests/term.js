@@ -78,7 +78,7 @@ async function startServer() {
   });
   child.stdout.on('data', (c) => out.push(String(c)));
   child.stderr.on('data', (c) => out.push(String(c)));
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 180; i++) {
     try { const r = await fetch(base + '/api/version'); if (r.ok) return out; } catch (_) {}
     await new Promise((r) => setTimeout(r, 100));
   }

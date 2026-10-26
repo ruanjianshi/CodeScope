@@ -451,6 +451,129 @@
     applyField(id, 'tag', list.length ? list : null);
   }
 
+  /* ══ 分组框 / 边界（XMind 的 Boundary）═══════════════════════════════════
+     用户：「这选中分组，不应该框框还有可以写对应文字吗那种设计」✓
+
+     引擎其实有 OuterFrame 插件（`ADD_OUTER_FRAME`）：
+     把**选中的连续同级主题**框起来，框上带一行可写的标题 ✓ —— 正是 XMind 的边界 ✓
+     ⚠️ 它只能框**树节点**（要连续的兄弟），自由导图的浮动主题没有引擎节点 ✗
+     ⚠️ 数据是**挂在每个被框住的节点上**（`outerFrame: {text, groupId, …}`）✓
+        → 所以改文字要按 groupId 一起改 ✓，删也是 ✓ */
+  function frameColor() {
+    try {
+      const value = getComputedStyle(document.getElementById('xmind-preview') || document.body).getPropertyValue('--xm-accent');
+      if (value && value.trim()) return value.trim();
+    } catch (_) {}
+    return '#78a9ff';
+  }
+
+  /* 选中集里所有「能加框」的主题 → 按父级分组，返回 {container, from, to} 列表 */
+  function frameRanges(ids) {
+    const byParent = new Map();
+    (ids || []).forEach((id) => {
+      const hit = xmindFind(id);
+      if (!hit || !hit.container || hit.isDetached) return;
+      const key = hit.parent ? String(hit.parent.id) : '__root__';
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(hit);
+    });
+    const ranges = [];
+    byParent.forEach((hits) => {
+      const container = hits[0].container;
+      const indexes = hits.map((hit) => container.indexOf(hit.topic)).filter((index) => index >= 0);
+      if (!indexes.length) return;
+      ranges.push({ container, from: Math.min(...indexes), to: Math.max(...indexes) });
+    });
+    return ranges;
+  }
+
+  function currentFrameGroup(ids) {
+    for (const id of ids) {
+      const hit = xmindFind(id);
+      if (hit?.topic?.outerFrame?.groupId) return hit.topic.outerFrame.groupId;
+    }
+    return null;
+  }
+
+  function setFrameText(groupId, text) {
+    let changed = 0;
+    (function walk(topic) {
+      if (!topic) return;
+      if (topic.outerFrame && topic.outerFrame.groupId === groupId) {
+        topic.outerFrame = { ...topic.outerFrame, text };
+        changed += 1;
+      }
+      (xmindChildren(topic) || []).forEach(walk);
+    })(xmindRootTopic());
+    return changed;
+  }
+
+  function removeFrameGroup(groupId) {
+    let changed = 0;
+    (function walk(topic) {
+      if (!topic) return;
+      if (topic.outerFrame && topic.outerFrame.groupId === groupId) {
+        delete topic.outerFrame;
+        changed += 1;
+      }
+      (xmindChildren(topic) || []).forEach(walk);
+    })(xmindRootTopic());
+    return changed;
+  }
+
+  async function addGroupFrame(ids) {
+    const list = ids && ids.length ? ids : [...multi()];
+    const ranges = frameRanges(list);
+    if (!ranges.length) {
+      if (typeof setDrawStatus === 'function') setDrawStatus('分组框只能框树上的主题（自由导图不支持）', 'warn');
+      return;
+    }
+    const text = await askText('分组框标题', '分组', false);
+    if (text === null) return;
+    const color = frameColor();
+    const groupId = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    ranges.forEach(({ container, from, to }) => {
+      for (let index = from; index <= to; index += 1) {
+        const topic = container[index];
+        if (!topic) continue;
+        topic.outerFrame = {
+          text: String(text || '').trim(),
+          groupId,
+          radius: 10,
+          strokeWidth: 2,
+          strokeColor: color,
+          strokeDasharray: '6,4',
+          fill: 'color-mix(in srgb, ' + color + ' 8%, transparent)',
+        };
+      }
+    });
+    xmindChanged();
+    if (typeof setDrawStatus === 'function') setDrawStatus('已加分组框：双击框上的标题可以改名', 'ok');
+  }
+
+  async function editGroupFrame(ids) {
+    const groupId = currentFrameGroup(ids && ids.length ? ids : [...multi()]);
+    if (!groupId) { addGroupFrame(ids); return; }
+    let current = '';
+    (function walk(topic) {
+      if (current || !topic) return;
+      if (topic.outerFrame && topic.outerFrame.groupId === groupId) current = topic.outerFrame.text || '';
+      (xmindChildren(topic) || []).forEach(walk);
+    })(xmindRootTopic());
+    const text = await askText('分组框标题', current, false);
+    if (text === null) return;
+    setFrameText(groupId, String(text || '').trim());
+    xmindChanged();
+  }
+
+  function deleteGroupFrame(ids) {
+    const groupId = currentFrameGroup(ids && ids.length ? ids : [...multi()]);
+    if (!groupId) return false;
+    removeFrameGroup(groupId);
+    xmindChanged();
+    return true;
+  }
+
   /* ══ 节点右键菜单（XMind 的右键就是主入口）═══════════════════════════════ */
   function openNodeMenu(event, id) {
     const hit = xmindFind(id);
@@ -467,6 +590,11 @@
       { label: '选择分支（含子孙）', run: () => selectBranch(id) },
       { label: '选择同级主题', run: () => selectSiblings(id) },
       { label: '全选', hint: '⌘A', run: () => selectAllTopics() },
+      { type: 'separator' },
+      { type: 'separator' },
+      { label: '加分组框（边界）…', run: () => addGroupFrame([...multi()]) },
+      { label: '改分组框标题…', disabled: !currentFrameGroup([...multi()]), run: () => editGroupFrame([...multi()]) },
+      { label: '删除分组框', disabled: !currentFrameGroup([...multi()]), run: () => deleteGroupFrame([...multi()]) },
       { type: 'separator' },
       { label: '上移', hint: '⌥↑', run: () => { focus(); xmindReorder(-1); } },
       { label: '下移', hint: '⌥↓', run: () => { focus(); xmindReorder(1); } },
@@ -732,6 +860,8 @@
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();
+  window.__csXmindAddFrame = () => addGroupFrame([...multi()]);
+  window.__csXmindEditFrame = () => editGroupFrame([...multi()]);
   window.__csXmindMenu = (event, id) => openNodeMenu(event, id);
   window.__csXmindRepaintSelection = () => paintSelection();
 })();

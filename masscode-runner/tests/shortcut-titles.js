@@ -59,7 +59,8 @@ function freePort() {
   });
 }
 async function waitForServer(url) {
-  for (let i = 0; i < 80; i++) { try { if ((await fetch(url + '/api/version')).ok) return; } catch (_) {} await new Promise((r) => setTimeout(r, 100)); }
+  /* 启动等待放宽到 18s：本机仓库在 iCloud，冷启动实测 8.5~8.8s（2026-10-26）✓ */
+  for (let i = 0; i < 180; i++) { try { if ((await fetch(url + '/api/version')).ok) return; } catch (_) {} await new Promise((r) => setTimeout(r, 100)); }
   throw new Error('测试服务启动超时');
 }
 

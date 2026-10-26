@@ -42,7 +42,12 @@ async function freePort() {
 }
 
 async function waitForServer(baseUrl, output) {
-  for (let attempt = 0; attempt < 60; attempt++) {
+  /* ⚠️ 2026-10-26：60 次（6 秒）不够了 ✓ —— 本机仓库放在 iCloud 里，
+     冷启动要 8~9 秒（实测 8.5s / 8.8s，之前是 1s 左右）✓，
+     于是这条**启动等待**会把整个 smoke 判红 ✗（跟被测代码一点关系都没有）✗。
+     启动快慢本来就不该由这条断言来守（TTFB 有 perf-budget 那条单独的预算）✓
+     ⇒ 放宽到 180 次（18 秒）✓ */
+  for (let attempt = 0; attempt < 180; attempt++) {
     try {
       const response = await fetch(baseUrl + '/api/rev');
       if (response.ok) return;
