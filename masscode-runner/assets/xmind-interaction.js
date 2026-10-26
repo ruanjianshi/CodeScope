@@ -624,6 +624,45 @@
     return !!wrap && wrap.offsetParent !== null;
   }
 
+  /* ══ 方向键在节点间移动（XMind 同款）═════════════════════════════════════
+     ← 父级 ｜ → 第一个子级 ｜ ↑↓ 同级上一个 / 下一个 ✓
+     选中后如果节点在视野外，顺手把画布平移过去 ✓ */
+  function revealTopic(id) {
+    const el = document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(String(id)) + '"]')
+      || xmindSmmNode(id)?.group?.node;
+    const engine = engineEl();
+    if (!el || !engine) return;
+    const er = engine.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    const margin = 48;
+    let dx = 0;
+    let dy = 0;
+    if (r.left < er.left + margin) dx = er.left + margin - r.left;
+    else if (r.right > er.right - margin) dx = er.right - margin - r.right;
+    if (r.top < er.top + margin) dy = er.top + margin - r.top;
+    else if (r.bottom > er.bottom - margin) dy = er.bottom - margin - r.bottom;
+    if (dx || dy) xmindPanBy(dx, dy);
+  }
+
+  function navigateByKey(key) {
+    const hit = xmindFind(XMIND_SELECTED);
+    if (!hit) return false;
+    const siblings = hit.container || [];
+    const index = siblings.indexOf(hit.topic);
+    let next = null;
+    if (key === 'ArrowLeft') next = hit.parent;
+    else if (key === 'ArrowRight') next = (xmindChildren(hit.topic) || [])[0];
+    else if (key === 'ArrowUp' && index > 0) next = siblings[index - 1];
+    else if (key === 'ArrowDown' && index >= 0 && index < siblings.length - 1) next = siblings[index + 1];
+    if (!next) return false;
+    const id = String(next.id);
+    setSelection([id], id);
+    syncEngineSelection();
+    revealTopic(id);
+    return true;
+  }
+
   /* 进入编辑：树节点走引擎、自由主题走浮层 ✓ */
   function beginEditOnSelection() {
     if (isEditingText()) return;
@@ -1467,6 +1506,14 @@
         return;
       }
 
+      /* 方向键：树节点和自由主题都用同一套逻辑 ✓ */
+      if (!withMod && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        navigateByKey(event.key);
+        return;
+      }
+
       if (hit?.isDetached) {
         if (event.key === 'F2') { event.preventDefault(); event.stopImmediatePropagation(); xmindBeginFloatingEdit(); }
         else if (!withMod && event.key === 'Tab') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddChild(); }
@@ -1548,6 +1595,7 @@
   window.__csXmindToolbarState = () => scheduleToolbarState();
   window.__csXmindTaper = () => scheduleTaper();
   window.__csXmindEditSelection = () => beginEditOnSelection();
+  window.__csXmindNavigate = (k) => navigateByKey(k);
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();
