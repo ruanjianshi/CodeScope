@@ -776,3 +776,29 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   cursor: text;
 }
 .cs-free-frame-label:hover { background: color-mix(in srgb, var(--xm-accent, #78a9ff) 18%, var(--xm-control, #131a23)); }
+
+/* ═══ XMind 极简主题：暗底 + 每支一个淡色卡片 ═══════════════════════════════
+   用户：「我要复刻 xmind 软件同样的思维导图效果」✓
+   XMind ZEN 的观感 = 深灰底（带一点径向渐变）+ 浅色卡片 + 深色字 + 细彩色连线 ✓
+   卡片底色由数据层按**分支**给（node.data.fillColor），这里只管画布底和浮层 ✓ */
+#xmind-root[data-xmind-theme="zen"] #xmind-engine,
+#xmind-root[data-xmind-theme="zen"] #xmind-preview {
+  background:
+    radial-gradient(120% 90% at 50% 0%, #26262a 0%, #1e1e20 55%, #191919 100%) !important;
+}
+/* 自由主题（DOM 浮层）也跟着换成浅卡片 + 深色字，否则和引擎里的节点两个世界 ✗ */
+#xmind-root[data-xmind-theme="zen"] .xmind-floating-node {
+  background: color-mix(in srgb, var(--branch-color, #c9a227) 22%, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--branch-color, #c9a227) 55%, #ffffff) !important;
+  color: #23282f !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .38) !important;
+}
+#xmind-root[data-xmind-theme="zen"] .xmind-floating-node.selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--branch-color, #c9a227) 45%, transparent),
+              0 6px 18px rgba(0, 0, 0, .38) !important;
+}
+#xmind-root[data-xmind-theme="zen"] .xmind-floating-badge {
+  background: #1e1e20 !important;
+  color: color-mix(in srgb, var(--branch-color, #c9a227) 70%, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--branch-color, #c9a227) 45%, #1e1e20) !important;
+}
