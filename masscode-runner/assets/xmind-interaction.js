@@ -37,6 +37,7 @@
   /* 按住空格 = 临时抓手 ✓ —— 触控板没有中键、右键拖也别扭，
      空格+左键拖是 Figma / PS / ProcessOn 通用的「抓画布」手势 ✓ */
   let spaceHeld = false;
+  let spaceUsedForPan = false;
   /* 框选结算那一刻的完整选中 ✓ ——
      ⚠️ 不能指望「引擎补发 node_active 时 multi 还在」✗：
         app.js 自己的 node_active 回调里有个兜底
@@ -129,6 +130,7 @@
 
   /* ── 平移：手型工具 / 中键（引擎已接管右键与中键，这里只补手型工具）────── */
   function startPan(event, engine) {
+    if (spaceHeld) spaceUsedForPan = true;
     const view = xmindMapTranslation();
     const floating = event.target.closest?.('.xmind-floating-node');
     const treeTopic = floating ? null : xmindEngineTopic(event.target);
@@ -607,6 +609,15 @@
       taperRaf = 0;
       taperLines();
     });
+  }
+
+  /* 进入编辑：树节点走引擎、自由主题走浮层 ✓ */
+  function beginEditOnSelection() {
+    const hit = xmindFind(XMIND_SELECTED);
+    if (!hit) return;
+    if (hit.isDetached) { xmindBeginFloatingEdit(); return; }
+    const node = xmindSmmNode(XMIND_SELECTED);
+    if (node) xmindBeginEngineEdit(node);
   }
 
   /* ══ 工具栏的「可用/不可用」状态 ═════════════════════════════════════════
@@ -1261,6 +1272,9 @@
         const collapse = !mod(event) && multi().has(String(id)) && multi().size > 1;
         if (mod(event)) toggleOne(id);
         else if (!multi().has(String(id))) selectOnly(id);
+        /* ⚠️ 点自由主题要把焦点收回到引擎 ✗ —— 浮层是普通 DIV，点它不会聚焦，
+           焦点掉到 body 之后空格/F2 这些快捷键就全收不到了 ✓ */
+        try { engine.focus({ preventScroll: true }); } catch (_) {}
         startFloatDrag(event, engine, id);
         XMIND_FLOAT_DRAG.collapse = collapse;
         return;
@@ -1340,8 +1354,12 @@
     /* 空格松开 / 窗口失焦 → 退出临时抓手 ✓ */
     surface.addEventListener('keyup', (event) => {
       if (event.key !== ' ') return;
+      const usedForPan = spaceUsedForPan;
       spaceHeld = false;
+      spaceUsedForPan = false;
       engine.classList.remove('space-pan');
+      /* 只是"点了一下空格" → 进入编辑 ✓ */
+      if (!usedForPan) beginEditOnSelection();
     }, true);
     window.addEventListener('blur', () => { spaceHeld = false; engine.classList.remove('space-pan'); });
 
@@ -1400,8 +1418,12 @@
     surface.addEventListener('keydown', (event) => {
       if (!isEdit() || event.target.closest('[contenteditable]')) return;
       if (event.key === ' ') {
-        /* 空格 = 抓手修饰键（不再「空格进编辑」，编辑交给 F2 / 双击）✓ */
+        /* 空格两用（和 XMind 对齐）：
+           · **按住拖** = 临时抓手平移 ✓
+           · **轻按一下（没拖）= 进入编辑** ✓
+           靠 `spaceUsedForPan` 区分，在 keyup 里决定 ✓ */
         spaceHeld = true;
+        spaceUsedForPan = false;
         engine.classList.add('space-pan');
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1504,6 +1526,7 @@
   window.__csXmindMerging = () => Date.now() < mergeUntil;
   window.__csXmindToolbarState = () => scheduleToolbarState();
   window.__csXmindTaper = () => scheduleTaper();
+  window.__csXmindEditSelection = () => beginEditOnSelection();
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();
