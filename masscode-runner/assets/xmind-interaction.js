@@ -515,6 +515,73 @@
     }, true);
   }
 
+  /* ══ 分支线「渐细」（XMind 的「中等 · 线条渐细」）══════════════════════════
+     ⚠️ SVG 的 stroke 宽度是**常量** ✗ 没法直接做渐变粗细 ✓
+     ⇒ 做法：把引擎画的每条线**采样成多边形**（起点粗、末端细），
+        填成实心形状，再把引擎原来的描边藏掉 ✓
+     原路径不动（引擎还要用它算布局/命中），我们只在旁边叠一层 ✓ */
+  let taperRaf = 0;
+
+  function taperLines() {
+    const engine = engineEl();
+    if (!engine || !XMIND_MAP || XMIND_VIEW !== 'edit') return;
+    const container = engine.querySelector('.smm-line-container');
+    if (!container) return;
+    /* 只在「XMind 极简」主题下开（别的主题保持原来的等宽线） */
+    const on = (document.getElementById('xmind-root')?.dataset.xmindTheme || '') === 'zen';
+    let layer = container.querySelector('#cs-taper-layer');
+    if (!on) {
+      if (layer) layer.remove();
+      engine.classList.remove('cs-taper-on');
+      return;
+    }
+    engine.classList.add('cs-taper-on');
+    if (!layer) {
+      layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      layer.id = 'cs-taper-layer';
+      container.appendChild(layer);
+    }
+    layer.replaceChildren();
+    const paths = [...container.querySelectorAll(':scope > path')];
+    paths.forEach((path) => {
+      let len = 0;
+      try { len = path.getTotalLength(); } catch (_) { return; }
+      if (!len || len < 6) return;
+      const steps = Math.max(6, Math.min(22, Math.round(len / 26)));
+      const w0 = 3.6;   /* 靠父级一端 */
+      const w1 = 1.1;   /* 靠子级一端 */
+      const left = [];
+      const right = [];
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const dist = len * t;
+        const p = path.getPointAtLength(dist);
+        const ahead = path.getPointAtLength(Math.min(len, dist + 0.8));
+        const dx = ahead.x - p.x;
+        const dy = ahead.y - p.y;
+        const norm = Math.hypot(dx, dy) || 1;
+        const nx = -dy / norm;
+        const ny = dx / norm;
+        const half = (w0 + (w1 - w0) * t) / 2;
+        left.push((p.x + nx * half).toFixed(1) + ',' + (p.y + ny * half).toFixed(1));
+        right.push((p.x - nx * half).toFixed(1) + ',' + (p.y - ny * half).toFixed(1));
+      }
+      const shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      shape.setAttribute('points', left.concat(right.reverse()).join(' '));
+      shape.setAttribute('fill', path.getAttribute('stroke') || '#8fa6c9');
+      shape.setAttribute('opacity', path.getAttribute('stroke-opacity') || '1');
+      layer.appendChild(shape);
+    });
+  }
+
+  function scheduleTaper() {
+    if (taperRaf) return;
+    taperRaf = requestAnimationFrame(() => {
+      taperRaf = 0;
+      taperLines();
+    });
+  }
+
   /* ══ 工具栏的「可用/不可用」状态 ═════════════════════════════════════════
      用户：「有些需要选中才能用的，可以通过这种淡化显示，不可以用，需要选中，就高亮可以用」✓
      —— 和 XMind 一样：没选中就灰掉，选中了就亮起来 ✓ */
@@ -1098,9 +1165,14 @@
     }, 600);
 
     bindOutline(document.getElementById('xmind-outline'));
-    setTimeout(updateToolbarState, 0);
-    map.on('scale', () => { updateGroupBox(); renderFreeFrames(); updateToolbarState(); });
-    map.on('translate', () => { updateGroupBox(); renderFreeFrames(); updateToolbarState(); });
+    setTimeout(() => { updateToolbarState(); scheduleTaper(); }, 0);
+    map.on('scale', () => { refreshOverlay(); updateToolbarState(); scheduleTaper(); });
+    map.on('translate', () => { refreshOverlay(); updateToolbarState(); scheduleTaper(); });
+    /* ★ 概要/标记要跟着节点走 ✓ 拖节点时引擎只发 node_dragging，不会动浮层 ✗ */
+    map.on('node_dragging', () => { requestAnimationFrame(() => { renderSummaryBrackets(); renderMarkers(); }); });
+    map.on('node_dragend', () => { refreshOverlay(); scheduleTaper(); });
+    map.on('node_tree_render_end', () => { scheduleTaper(); requestAnimationFrame(renderSummaryBrackets); });
+    map.on('data_change', () => scheduleTaper());
 
     map.on('node_active', (node, list) => {
       if (muting) return;
@@ -1350,6 +1422,7 @@
   window.__csXmindClearSelection = () => clearSelection();
   window.__csXmindMerging = () => Date.now() < mergeUntil;
   window.__csXmindToolbarState = () => scheduleToolbarState();
+  window.__csXmindTaper = () => scheduleTaper();
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();

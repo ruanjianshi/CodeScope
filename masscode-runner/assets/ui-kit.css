@@ -943,3 +943,7 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 }
 .cs-free-frame:hover .cs-free-frame-kill { opacity: 1; }
 .cs-free-frame-kill:hover { color: #ff8a8a; border-color: #ff8a8a; background: rgba(255, 138, 138, .14); }
+
+/* 渐细线：引擎原来的描边藏掉，换成我们叠的那层实心多边形 ✓ */
+#xmind-engine.cs-taper-on .smm-line-container > path { stroke: transparent !important; }
+#cs-taper-layer { pointer-events: none; }
