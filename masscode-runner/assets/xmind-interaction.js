@@ -34,6 +34,9 @@
   /* 框选刚结算后的一小段时间内，引擎可能**再补发一次** node_active ✓
      → 这段时间里收到引擎的选中要**合并**而不是替换，否则刚选上的自由主题会被冲掉 ✗（实测） */
   let mergeUntil = 0;
+  /* 按住空格 = 临时抓手 ✓ —— 触控板没有中键、右键拖也别扭，
+     空格+左键拖是 Figma / PS / ProcessOn 通用的「抓画布」手势 ✓ */
+  let spaceHeld = false;
   /* 框选结算那一刻的完整选中 ✓ ——
      ⚠️ 不能指望「引擎补发 node_active 时 multi 还在」✗：
         app.js 自己的 node_active 回调里有个兜底
@@ -285,8 +288,12 @@
       if (!isEdit() || event.target.closest('[contenteditable]')) return;
       mergeUntil = 0;                       /* 用户又动手了 → 合并窗口立刻失效 ✓ */
       pendingMerge = null;
-      if (event.button === 0 && XMIND_TOOL_MODE === 'pan') { startPan(event, engine); return; }
-      /* 右键 / 中键：引擎自己会平移 ✓ 别抢 ✓ */
+      if (event.button === 0 && (XMIND_TOOL_MODE === 'pan' || spaceHeld)) { startPan(event, engine); return; }
+      /* ⚠️ 右键 / 中键平移**自己接管** ✗✗
+         引擎只在 `#xmind-engine` 上监听 mousedown ✓，而自由主题是预览区的 DIV ✗ →
+         从自由主题上按下右键，引擎收不到 → 画布纹丝不动（实测）✓
+         ⇒ 右键 / 中键一律走我们的 startPan，全区域一致 ✓ */
+      if (event.button === 1 || event.button === 2) { startPan(event, engine); return; }
       if (event.button !== 0) return;
 
       const floating = event.target.closest('.xmind-floating-node');
@@ -364,6 +371,14 @@
         else { clearSelection(); box = null; }
       }
     };
+    /* 空格松开 / 窗口失焦 → 退出临时抓手 ✓ */
+    surface.addEventListener('keyup', (event) => {
+      if (event.key !== ' ') return;
+      spaceHeld = false;
+      engine.classList.remove('space-pan');
+    }, true);
+    window.addEventListener('blur', () => { spaceHeld = false; engine.classList.remove('space-pan'); });
+
     surface.addEventListener('pointerup', finish, true);
     surface.addEventListener('pointercancel', finish, true);
 
@@ -400,6 +415,15 @@
       ro.observe(engine);
     } catch (_) {}
 
+    /* ⚠️ 右键拖要能平移，就必须先把原生右键菜单吃掉 ✗
+       引擎只在 **svg** 上 preventDefault ✓，而自由主题是 #xmind-preview 里的 DIV ✗ →
+       从自由主题上按下右键会弹浏览器菜单，平移直接断掉 ✓ */
+    surface.addEventListener('contextmenu', (event) => {
+      if (!isEdit()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+
     /* 双击空白：新建自由主题 ✓ */
     surface.addEventListener('dblclick', (event) => {
       if (!isEdit() || event.target.closest('.xmind-floating-node')) return;
@@ -409,12 +433,20 @@
 
     surface.addEventListener('keydown', (event) => {
       if (!isEdit() || event.target.closest('[contenteditable]')) return;
+      if (event.key === ' ') {
+        /* 空格 = 抓手修饰键（不再「空格进编辑」，编辑交给 F2 / 双击）✓ */
+        spaceHeld = true;
+        engine.classList.add('space-pan');
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       const hit = xmindFind(XMIND_SELECTED);
       const withMod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
 
       if (hit?.isDetached) {
-        if (event.key === 'F2' || event.key === ' ') { event.preventDefault(); event.stopImmediatePropagation(); xmindBeginFloatingEdit(); }
+        if (event.key === 'F2') { event.preventDefault(); event.stopImmediatePropagation(); xmindBeginFloatingEdit(); }
         else if (!withMod && event.key === 'Tab') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddChild(); }
         else if (!withMod && event.key === 'Enter') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddSibling(); }
         else if (!withMod && (event.key === 'Delete' || event.key === 'Backspace')) {
@@ -439,7 +471,7 @@
         else xmindResetZoom();
         return;
       }
-      if ((event.key === 'F2' || event.key === ' ') && XMIND_MAP.renderer?.activeNodeList?.[0]) {
+      if (event.key === 'F2' && XMIND_MAP.renderer?.activeNodeList?.[0]) {
         event.preventDefault();
         event.stopImmediatePropagation();
         xmindBeginEngineEdit(XMIND_MAP.renderer.activeNodeList[0]);

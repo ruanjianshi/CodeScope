@@ -685,3 +685,8 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   transform: translateY(-50%);
   margin: 0 !important;
 }
+
+/* 按住空格 = 临时抓手：光标要立刻变成手，否则用户不知道现在能抓 ✓ */
+#xmind-preview:has(#xmind-engine.space-pan),
+#xmind-preview:has(#xmind-engine.space-pan) .xmind-floating-node { cursor: grab !important; }
+#xmind-preview:has(#xmind-engine.space-pan):has(#xmind-engine.panning) { cursor: grabbing !important; }
