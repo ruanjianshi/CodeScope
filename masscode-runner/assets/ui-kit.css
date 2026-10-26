@@ -752,3 +752,27 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 /* 大纲里「自由导图 · N」这行点一下就选整组 → 得看得出能点 ✓ */
 #xmind-outline .xmind-outline-section { cursor: pointer; }
 #xmind-outline .xmind-outline-section:hover { color: var(--xm-text, #dbe4ef); }
+
+/* ═══ 自由导图的分组框（引擎的外框只认树节点，浮层只能自己画）═════════════════ */
+.cs-free-frame {
+  position: absolute;
+  pointer-events: none;
+  border: 2px dashed color-mix(in srgb, var(--xm-accent, #78a9ff) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--xm-accent, #78a9ff) 5%, transparent);
+}
+.cs-free-frame-label {
+  position: absolute;
+  left: 12px;
+  top: -11px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--xm-accent, #78a9ff) 62%, transparent);
+  background: var(--xm-control, #131a23);
+  color: var(--xm-accent, #78a9ff);
+  font: 600 11px/1.6 var(--font);
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: text;
+}
+.cs-free-frame-label:hover { background: color-mix(in srgb, var(--xm-accent, #78a9ff) 18%, var(--xm-control, #131a23)); }

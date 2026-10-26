@@ -64,6 +64,7 @@
       node.classList.toggle('selected', set.has(String(node.dataset.topicId || '')));
     });
     updateGroupBox();
+    renderFreeFrames();
   }
 
   function setSelection(ids, primary) {
@@ -264,6 +265,57 @@
     XMIND_MULTI = new Set();
     xmindChanged();
     return true;
+  }
+
+  /* ══ 自由导图的分组框：只能自己画 ✗ 引擎的外框只认树节点 ✓
+     数据仍然挂在组根上（`outerFrame`），渲染成 #xmind-float-overlay 里的一个盒子 ✓ */
+  let overlayBusy = false;
+
+  function renderFreeFrames() {
+    const overlay = document.getElementById('xmind-float-overlay');
+    const engine = engineEl();
+    if (!overlay || !engine) return;
+    overlayBusy = true;
+    try {
+      overlay.querySelectorAll('.cs-free-frame').forEach((el) => el.remove());
+      const er = engine.getBoundingClientRect();
+      (xmindDetached() || []).forEach((root) => {
+        const frame = root.outerFrame;
+        if (!frame) return;
+        const rects = collectSubtree(root, [])
+          .map((id) => document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(id) + '"]'))
+          .filter(Boolean)
+          .map((el) => el.getBoundingClientRect());
+        if (!rects.length) return;
+        const left = Math.min(...rects.map((r) => r.left)) - er.left - 18;
+        const top = Math.min(...rects.map((r) => r.top)) - er.top - 22;
+        const right = Math.max(...rects.map((r) => r.right)) - er.left + 18;
+        const bottom = Math.max(...rects.map((r) => r.bottom)) - er.top + 18;
+        const box = document.createElement('div');
+        box.className = 'cs-free-frame';
+        box.dataset.groupId = frame.groupId || '';
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+        box.style.width = Math.max(48, right - left) + 'px';
+        box.style.height = Math.max(36, bottom - top) + 'px';
+        const label = document.createElement('span');
+        label.className = 'cs-free-frame-label';
+        label.textContent = frame.text || '分组';
+        label.title = '双击改分组框标题';
+        label.ondblclick = async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const next = await askText('分组框标题', frame.text || '', false);
+          if (next === null) return;
+          setFrameText(frame.groupId, next.trim());
+          xmindChanged();
+        };
+        box.appendChild(label);
+        overlay.insertBefore(box, overlay.firstChild);
+      });
+    } finally {
+      setTimeout(() => { overlayBusy = false; }, 0);
+    }
   }
 
   /* ══ 「选中分组」的视觉：多选时在画布上画一个虚线包围框 ═══════════════════
@@ -487,66 +539,90 @@
     return ranges;
   }
 
+  function freeRootsOf(ids) {
+    const list = ids || [];
+    return (xmindDetached() || []).filter((root) => collectSubtree(root, []).some((id) => list.includes(id)));
+  }
+
   function currentFrameGroup(ids) {
     for (const id of ids) {
       const hit = xmindFind(id);
       if (hit?.topic?.outerFrame?.groupId) return hit.topic.outerFrame.groupId;
     }
+    for (const root of freeRootsOf(ids)) {
+      if (root.outerFrame?.groupId) return root.outerFrame.groupId;
+    }
     return null;
+  }
+
+  /* ⚠️ 分组框有两个位置：树上的（挂在被框的兄弟节点上）+ 自由导图的（挂在组根上）✗
+     → 遍历必须两边都走 ✓ */
+  function eachTopic(fn) {
+    (function walk(topic) {
+      if (!topic) return;
+      fn(topic);
+      (xmindChildren(topic) || []).forEach(walk);
+    })(xmindRootTopic());
+    (xmindDetached() || []).forEach((root) => {
+      (function walk(topic) {
+        if (!topic) return;
+        fn(topic);
+        (xmindChildren(topic) || []).forEach(walk);
+      })(root);
+    });
   }
 
   function setFrameText(groupId, text) {
     let changed = 0;
-    (function walk(topic) {
-      if (!topic) return;
+    eachTopic((topic) => {
       if (topic.outerFrame && topic.outerFrame.groupId === groupId) {
         topic.outerFrame = { ...topic.outerFrame, text };
         changed += 1;
       }
-      (xmindChildren(topic) || []).forEach(walk);
-    })(xmindRootTopic());
+    });
     return changed;
   }
 
   function removeFrameGroup(groupId) {
     let changed = 0;
-    (function walk(topic) {
-      if (!topic) return;
+    eachTopic((topic) => {
       if (topic.outerFrame && topic.outerFrame.groupId === groupId) {
         delete topic.outerFrame;
         changed += 1;
       }
-      (xmindChildren(topic) || []).forEach(walk);
-    })(xmindRootTopic());
+    });
     return changed;
   }
 
   async function addGroupFrame(ids) {
     const list = ids && ids.length ? ids : [...multi()];
     const ranges = frameRanges(list);
-    if (!ranges.length) {
-      if (typeof setDrawStatus === 'function') setDrawStatus('分组框只能框树上的主题（自由导图不支持）', 'warn');
+    const freeRoots = freeRootsOf(list);
+    if (!ranges.length && !freeRoots.length) {
+      if (typeof setDrawStatus === 'function') setDrawStatus('先选中要分组的主题（同级兄弟，或自由导图里的主题）', 'warn');
       return;
     }
     const text = await askText('分组框标题', '分组', false);
     if (text === null) return;
     const color = frameColor();
     const groupId = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const frame = {
+      text: String(text || '').trim(),
+      groupId,
+      radius: 10,
+      strokeWidth: 2,
+      strokeColor: color,
+      strokeDasharray: '6,4',
+      fill: 'color-mix(in srgb, ' + color + ' 8%, transparent)',
+    };
     ranges.forEach(({ container, from, to }) => {
       for (let index = from; index <= to; index += 1) {
         const topic = container[index];
-        if (!topic) continue;
-        topic.outerFrame = {
-          text: String(text || '').trim(),
-          groupId,
-          radius: 10,
-          strokeWidth: 2,
-          strokeColor: color,
-          strokeDasharray: '6,4',
-          fill: 'color-mix(in srgb, ' + color + ' 8%, transparent)',
-        };
+        if (topic) topic.outerFrame = { ...frame };
       }
     });
+    /* 自由导图：框挂在**组根**上，覆盖整组（子主题会跟着动，不用逐个挂 ✓） */
+    freeRoots.forEach((root) => { root.outerFrame = { ...frame, radius: 14 }; });
     xmindChanged();
     if (typeof setDrawStatus === 'function') setDrawStatus('已加分组框：双击框上的标题可以改名', 'ok');
   }
@@ -628,9 +704,25 @@
        → 挂在引擎上，点自由主题的 pointerdown 根本收不到（实测：dbg 为空）✗ */
     const surface = engine.parentElement || engine;
 
+    /* ⚠️ 浮层是 app.js 第一次渲染自由主题时才创建的 ✗ → 这里先建好，才能挂 MutationObserver ✓ */
+    let floatOverlay = document.getElementById('xmind-float-overlay');
+    if (!floatOverlay && engine.parentElement) {
+      floatOverlay = document.createElement('div');
+      floatOverlay.id = 'xmind-float-overlay';
+      engine.parentElement.appendChild(floatOverlay);
+    }
+    if (floatOverlay) {
+      try {
+        new MutationObserver(() => {
+          if (overlayBusy) return;
+          requestAnimationFrame(renderFreeFrames);
+        }).observe(floatOverlay, { childList: true });
+      } catch (_) {}
+    }
+
     bindOutline(document.getElementById('xmind-outline'));
-    map.on('scale', updateGroupBox);
-    map.on('translate', updateGroupBox);
+    map.on('scale', () => { updateGroupBox(); renderFreeFrames(); });
+    map.on('translate', () => { updateGroupBox(); renderFreeFrames(); });
 
     map.on('node_active', (node, list) => {
       if (muting) return;
