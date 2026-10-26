@@ -863,3 +863,61 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   pointer-events: none;
   z-index: 6;
 }
+
+/* ═══ 思维导图工具栏：图标 + 文字竖排，按 XMind 的样子分组 ═══════════════════
+   用户：「上方的工具栏目设计的不好，参考 xmind 设计，
+        有些需要选中才能用的，可以通过这种淡化显示，不可以用，需要选中，就高亮可以用」✓ */
+.codescope-xmind-toolbar .xmind-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.codescope-xmind-toolbar .xmind-tb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 50px;
+  height: 44px;
+  min-height: 44px;
+  padding: 3px 6px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #a7b6c9 !important;
+  font: 500 10.5px/1.2 var(--font) !important;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.codescope-xmind-toolbar .xmind-tb-ico { display: block; width: 17px; height: 17px; }
+.codescope-xmind-toolbar .xmind-tb-ico svg { display: block; width: 17px; height: 17px; }
+.codescope-xmind-toolbar .xmind-tb:hover:not(:disabled) {
+  background: rgba(255, 255, 255, .07) !important;
+  color: #e8eef7 !important;
+}
+.codescope-xmind-toolbar .xmind-tb:active:not(:disabled) { background: rgba(255, 255, 255, .12) !important; }
+/* ★ 不可用 = 淡化；可用 = 正常亮度（用户的诉求）*/
+.codescope-xmind-toolbar .xmind-tb:disabled {
+  opacity: .3 !important;
+  cursor: default !important;
+  filter: grayscale(.4);
+}
+.codescope-xmind-toolbar .xmind-tb-sep {
+  width: 1px;
+  height: 24px;
+  margin: 0 5px;
+  background: rgba(255, 255, 255, .09);
+  flex: none;
+}
+/* 工具条本身：矮一点、底部一条细分隔线，和 XMind 的顶栏观感一致 */
+.codescope-xmind-toolbar {
+  background: #14181e !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .07) !important;
+  padding: 3px 10px !important;
+  gap: 4px !important;
+}

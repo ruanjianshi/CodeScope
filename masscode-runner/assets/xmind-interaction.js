@@ -63,6 +63,7 @@
     document.querySelectorAll('.xmind-floating-node').forEach((node) => {
       node.classList.toggle('selected', set.has(String(node.dataset.topicId || '')));
     });
+    scheduleToolbarState();
     refreshOverlay();
   }
 
@@ -496,6 +497,41 @@
       else { toggleOne(id); outlineAnchor = id; }
       syncEngineSelection();
     }, true);
+  }
+
+  /* ══ 工具栏的「可用/不可用」状态 ═════════════════════════════════════════
+     用户：「有些需要选中才能用的，可以通过这种淡化显示，不可以用，需要选中，就高亮可以用」✓
+     —— 和 XMind 一样：没选中就灰掉，选中了就亮起来 ✓ */
+  /* ⚠️ 选中状态在一次操作里会**变好几次**（引擎的 node_active 会先清空再设回来）✗
+     直接同步算会把中间态留在按钮上 → 去抖 40ms，只认最终态 ✓ */
+  let toolbarTimer = 0;
+  function scheduleToolbarState() {
+    clearTimeout(toolbarTimer);
+    toolbarTimer = setTimeout(updateToolbarState, 40);
+  }
+
+  function updateToolbarState() {
+    const edit = typeof XMIND_VIEW !== 'undefined' && XMIND_VIEW === 'edit' && !!XMIND_MAP;
+    const ids = [...multi()];
+    const has = edit && ids.length > 0;
+    const rootId = String(xmindRootTopic()?.id || '');
+    /* ⚠️ 别用 xmindSmmNode ✗（它内部要递归整棵树，节点一多就爆栈）→ 用数据模型判断 ✓ */
+    const treeCount = ids.filter((id) => { const hit = xmindFind(id); return !!hit && !hit.isDetached; }).length;
+    const set = (id, ok) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !ok;
+    };
+    set('xmind-add-sibling', has);
+    /* 子主题没选中也能用 ✓（会挂到中心主题上，xmindAddChild 里有兜底） */
+    set('xmind-add-child', edit);
+    set('xmind-delete', has && !(ids.length === 1 && ids[0] === rootId));
+    set('xmind-summary', has && treeCount >= 2);
+    set('xmind-outer-frame', has);
+    set('xmind-marker', has);
+    set('xmind-select-branch', has);
+    set('xmind-select-siblings', has);
+    /* 联系还没做（引擎不渲染关联线）→ 一直灰着，别给假希望 ✓ */
+    set('xmind-assoc-line', false);
   }
 
   /* ══ 分组选择（用户：「缺少分组那种选择」）═══════════════════════════════
@@ -1015,8 +1051,9 @@
     }, 600);
 
     bindOutline(document.getElementById('xmind-outline'));
-    map.on('scale', () => { updateGroupBox(); renderFreeFrames(); });
-    map.on('translate', () => { updateGroupBox(); renderFreeFrames(); });
+    setTimeout(updateToolbarState, 0);
+    map.on('scale', () => { updateGroupBox(); renderFreeFrames(); updateToolbarState(); });
+    map.on('translate', () => { updateGroupBox(); renderFreeFrames(); updateToolbarState(); });
 
     map.on('node_active', (node, list) => {
       if (muting) return;
@@ -1250,6 +1287,7 @@
   window.__csXmindDeleteMulti = () => deleteSelection();
   window.__csXmindClearSelection = () => clearSelection();
   window.__csXmindMerging = () => Date.now() < mergeUntil;
+  window.__csXmindToolbarState = () => scheduleToolbarState();
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();
