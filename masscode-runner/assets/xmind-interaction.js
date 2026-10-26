@@ -522,6 +522,10 @@
      原路径不动（引擎还要用它算布局/命中），我们只在旁边叠一层 ✓ */
   let taperRaf = 0;
 
+  let taperSignature = '';
+  let extrasStamp = '';
+  let extrasCache = false;
+
   function taperLines() {
     const engine = engineEl();
     if (!engine || !XMIND_MAP || XMIND_VIEW !== 'edit') return;
@@ -535,6 +539,11 @@
       engine.classList.remove('cs-taper-on');
       return;
     }
+    /* ★ 签名缓存：路径的 d + 颜色都没变 → 直接跳过（布局没变时不该重画）✓ */
+    const sourcePaths = [...container.querySelectorAll(':scope > path')];
+    const signature = sourcePaths.map((p) => (p.getAttribute('d') || '') + '|' + (p.getAttribute('stroke') || '')).join(';');
+    if (signature === taperSignature && layer && layer.childElementCount) return;
+    taperSignature = signature;
     engine.classList.add('cs-taper-on');
     if (!layer) {
       layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -575,6 +584,21 @@
         layer.appendChild(seg);
       }
     });
+  }
+
+  function xmindHasExtras() {
+    const stamp = XMIND_WORKBOOK ? JSON.stringify(XMIND_SHEET_INDEX) + ':' + (XMIND_HISTORY_INDEX) + ':' + multi().size : '';
+    if (stamp === extrasStamp) return extrasCache;
+    extrasStamp = stamp;
+    extrasCache = false;
+    const scan = (topic) => {
+      if (!topic || extrasCache) return;
+      if (topic.outerFrame || topic.marker || topic.summary) { extrasCache = true; return; }
+      (xmindChildren(topic) || []).forEach(scan);
+    };
+    scan(xmindRootTopic());
+    (xmindDetached() || []).forEach(scan);
+    return extrasCache;
   }
 
   function scheduleTaper() {
@@ -941,7 +965,15 @@
 
   /* 概要括号：把「同一 groupId 的成员」右侧连起来，画一个 ] 形括号 + 文字 ✓ */
   /* 浮层统一刷新：选中框 / 分组框 / 标记 / 概要括号 ✓ */
+  let extrasVersion = 0;
+
   function refreshOverlay() {
+    /* ★ 快速通道：没有分组框/标记/概要，且选中数 <2 → 四个渲染函数全是空转 ✓
+       （平移时每帧都会调到这里，省掉 4 次全文档 querySelectorAll）✓ */
+    if (multi().size < 2
+      && !document.getElementById('cs-xmind-group-box')
+      && !document.querySelector('.cs-free-frame, .cs-node-marker, .cs-summary')
+      && !xmindHasExtras()) return;
     updateGroupBox();
     renderFreeFrames();
     renderMarkers();
@@ -1169,8 +1201,10 @@
 
     bindOutline(document.getElementById('xmind-outline'));
     setTimeout(() => { updateToolbarState(); scheduleTaper(); }, 0);
-    map.on('scale', () => { refreshOverlay(); updateToolbarState(); scheduleTaper(); });
-    map.on('translate', () => { refreshOverlay(); updateToolbarState(); scheduleTaper(); });
+    /* ⚠️ 平移/缩放**不要**重建渐细层 ✗ —— 它挂在被变换的容器里，本来就跟着动 ✓
+       每次平移重建 192 个 path 是纯浪费（拖一下画布就重建几十次）✓ */
+    map.on('scale', () => { refreshOverlay(); updateToolbarState(); });
+    map.on('translate', () => { refreshOverlay(); updateToolbarState(); });
     /* ★ 概要/标记要跟着节点走 ✓ 拖节点时引擎只发 node_dragging，不会动浮层 ✗ */
     map.on('node_dragging', () => { requestAnimationFrame(() => { renderSummaryBrackets(); renderMarkers(); }); });
     map.on('node_dragend', () => { refreshOverlay(); scheduleTaper(); });
