@@ -471,7 +471,7 @@
             <div class="xmind-more-menu">
               <div class="xmind-more-row"><span class="xmind-more-label">画布</span><input id="xmind-sheet-title" aria-label="XMind 画布名称" value="画布 1"><button id="xmind-add-sheet" title="新增画布">＋ 新建</button><button id="xmind-delete-sheet" title="删除当前画布">删除</button></div>
               <div class="xmind-more-row"><span class="xmind-more-label">结构</span><button id="xmind-add-parent" title="在选中主题上方插入父主题（Ctrl/⌘+Enter）">＋ 父级</button><button id="xmind-add-floating" title="新增可任意拖放的自由主题；也可双击画布空白处">＋ 自由主题</button><button id="xmind-to-floating" title="将选中的普通主题及其分支转换为自由主题">转为自由</button><button id="xmind-delete-single" title="只删除当前主题，保留并提升其子主题（Ctrl/⌘+Delete）">仅删当前</button></div>
-              <div class="xmind-more-row"><span class="xmind-more-label">操作</span><div class="xmind-tool-group" aria-label="画布交互模式"><button id="xmind-select-mode" class="on" title="选择模式：拖动主题调整层级；拖动空白处平移；Shift+拖动框选">⌖ 选择</button><button id="xmind-pan-mode" title="移动模式：按住并拖动画布任意位置">✋ 移动画布</button></div></div>
+              <div class="xmind-more-row"><span class="xmind-more-label">操作</span><div class="xmind-tool-group" aria-label="画布交互模式"><button id="xmind-select-mode" class="on" title="选择模式：单击选中，拖动空白框选多个，拖动主题调整层级；平移请用右键 / 中键 / ✋">⌖ 选择</button><button id="xmind-pan-mode" title="手型模式：左键拖动画布任意位置（触控板用户；平时用右键 / 中键拖动即可平移）">✋ 移动画布</button></div></div>
               <div class="xmind-more-row"><span class="xmind-more-label">浏览</span><button id="xmind-collapse-all" title="收拢全部主题（Ctrl/⌘+K, 0）">全部收拢</button><button id="xmind-expand-all" title="展开全部主题（Ctrl/⌘+K, =）">全部展开</button><button id="xmind-focus" title="仅查看选中分支，再次点击退出">专注分支</button></div>
               <div class="xmind-more-row"><span class="xmind-more-label">视图</span><div class="xmind-view-switch" role="group" aria-label="XMind 查看模式"><button id="xmind-view-native" title="离线显示 XMind 文件内置的原始画布快照">原貌</button><button id="xmind-view-official" title="使用 XMind 官方查看器加载全部画布（需要联网）">官方</button><button id="xmind-view-edit" title="切换到可编辑结构视图">编辑</button></div><span id="xmind-native-note"></span></div>
               <div class="xmind-more-row"><span class="xmind-more-label">帮助</span><button id="xmind-shortcuts-btn" title="查看 XMind 同款快捷键">⌨ 快捷键</button><span class="xmind-help">拖到节点上更换父级 · Ctrl/⌘+滚轮缩放</span></div>
@@ -485,7 +485,7 @@
         </div>
         <aside id="xmind-shortcuts" class="hidden" aria-label="XMind 快捷键">
           <div class="xmind-shortcut-head"><span>XMind 快捷操作</span><span class="sp"></span><button id="xmind-shortcuts-close">✕</button></div>
-          <div class="xmind-shortcut-grid"><kbd>双击画布空白</kbd><span>在该位置新建自由主题</span><kbd>拖动自由主题</kbd><span>任意摆放；拖到主题上可挂接为子主题</span><kbd>拖动普通主题</kbd><span>调整顺序、父级与层级；“转为自由”可脱离树</span><kbd>拖动空白</kbd><span>自由移动画布；Shift+拖动框选</span><kbd>单击 / 双击</kbd><span>选择主题 / 原位编辑</span><kbd>Ctrl/⌘ + 滚轮</kbd><span>以指针位置放大或缩小</span><kbd>Ctrl/⌘ + ＋－0</kbd><span>放大、缩小、恢复 100%</span><kbd>Enter</kbd><span>新建同级主题</span><kbd>Tab</kbd><span>新建子主题</span><kbd>Ctrl/⌘ + Enter</kbd><span>新建父主题</span><kbd>Shift + Tab</kbd><span>提升一级</span><kbd>Space / F2</kbd><span>原位编辑选中主题</span><kbd>Alt/⌥ + ↑↓</kbd><span>上下重排主题</span><kbd>Delete</kbd><span>删除主题及子级</span><kbd>Ctrl/⌘ + Delete</kbd><span>仅删除当前主题</span><kbd>Ctrl/⌘ + /</kbd><span>折叠/展开子主题</span><kbd>Ctrl/⌘ + R</kbd><span>回到中心主题</span><kbd>↑ ↓ ← →</kbd><span>在主题间导航</span><kbd>Ctrl/⌘ + Z</kbd><span>撤销；加 Shift 重做</span></div>
+          <div class="xmind-shortcut-grid"><kbd>双击画布空白</kbd><span>在该位置新建自由主题</span><kbd>拖动自由主题</kbd><span>任意摆放；拖到主题上可挂接为子主题</span><kbd>拖动普通主题</kbd><span>调整顺序、父级与层级；“转为自由”可脱离树</span><kbd>拖动空白</kbd><span>框选多个主题（含自由主题）</span><kbd>右键 / 中键拖动</kbd><span>平移画布（和 XMind 一致）</span><kbd>Shift / ⌘ + 单击</kbd><span>加选、减选主题</span><kbd>单击 / 双击</kbd><span>选择主题 / 原位编辑</span><kbd>Ctrl/⌘ + 滚轮</kbd><span>以指针位置放大或缩小</span><kbd>Ctrl/⌘ + ＋－0</kbd><span>放大、缩小、恢复 100%</span><kbd>Enter</kbd><span>新建同级主题</span><kbd>Tab</kbd><span>新建子主题</span><kbd>Ctrl/⌘ + Enter</kbd><span>新建父主题</span><kbd>Shift + Tab</kbd><span>提升一级</span><kbd>Space / F2</kbd><span>原位编辑选中主题</span><kbd>Alt/⌥ + ↑↓</kbd><span>上下重排主题</span><kbd>Delete</kbd><span>删除主题及子级</span><kbd>Ctrl/⌘ + Delete</kbd><span>仅删除当前主题</span><kbd>Ctrl/⌘ + /</kbd><span>折叠/展开子主题</span><kbd>Ctrl/⌘ + R</kbd><span>回到中心主题</span><kbd>↑ ↓ ← →</kbd><span>在主题间导航</span><kbd>Ctrl/⌘ + Z</kbd><span>撤销；加 Shift 重做</span></div>
         </aside>
         <div id="xmind-official-consent" class="hidden" role="dialog" aria-modal="true" aria-labelledby="xmind-consent-title"><div class="xmind-consent-card"><h3 id="xmind-consent-title">连接 XMind 官方查看器</h3><p>官方模式可按 XMind 原生引擎呈现全部画布、自由主题、边界、摘要和逐节点样式。</p><p>启用后，当前 <strong>.xmind</strong> 文件会发送给 XMind 中国区网页查看器进行渲染；CodeScope 不会自动启用，也不会保存此授权。</p><p class="xmind-consent-domain">目标：www.xmind.cn/embed-viewer</p><div class="xmind-consent-actions"><button id="xmind-consent-cancel">取消</button><button id="xmind-consent-ok" class="primary">同意并加载</button></div></div></div>
       </div>
@@ -1052,6 +1052,11 @@
 <script src="/assets/draw-folder.js"></script>
 <script src="/assets/draw-canvas-embed.js"></script>
 <script src="/assets/app.js"></script>
+<!-- ★ 思维导图交互层（2026-10-26 从 app.js 抽出来的鼠标/键盘/框选/平移）——
+     用户：「无法选中，怎么鼠标左边是移动画布，设计不合理，调研成熟的思维导图设计，重构」。
+     ⚠️ 必须在 app.js **之后** ✓：它直接用 app.js 的顶层绑定（XMIND_MAP / xmindFind / ...），
+        而且是 app.js 里 `window.__csXmindInteraction.bind(...)` 在运行时才去找它 ✓。 -->
+<script src="/assets/xmind-interaction.js"></script>
 <!-- ★ 架构视图（2026-10-11 从 app.js 抽出来的 409 行）——
      抽出来是因为棘轮（app.js ≤ 16581 行）顶到了：重写走线涨了 156 行 → 测试红。
      ⚠️ 放在 app.js **之后** ✓：它只声明函数，app.js 里是**调用时才找**

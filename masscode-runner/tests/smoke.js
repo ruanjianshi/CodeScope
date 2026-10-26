@@ -421,7 +421,9 @@ void bubbleSort(Array& values);
   const cssBundle = fs.readdirSync(path.join(projectRoot, 'assets')).filter((f) => f.endsWith('.css'))
     .map((f) => { try { return fs.readFileSync(path.join(projectRoot, 'assets', f), 'utf8'); } catch (_) { return ''; } })
     .join('\n');
-  const assetsBundle = ['app.js', 'life-workbench.js', 'system-panel.js', 'reading-block-editor.js', 'app-pdf.js', 'code-guide.js']
+  /* ⚠️ 2026-10-26 加上 xmind-interaction.js ✓ —— 思维导图的鼠标/键盘/框选/平移从 app.js
+     抽出去了 ✓，不加进来这些「功能存在性」断言会**假失败** ✓ */
+  const assetsBundle = ['app.js', 'xmind-interaction.js', 'life-workbench.js', 'system-panel.js', 'reading-block-editor.js', 'app-pdf.js', 'code-guide.js']
     .map((f) => { try { return fs.readFileSync(path.join(projectRoot, 'assets', f), 'utf8'); } catch (_) { return ''; } })
     .join('\n');
   const html = pageText + '\n' + assetsBundle + '\n' + cssBundle;
@@ -570,11 +572,11 @@ void bubbleSort(Array& values);
   assert(html.includes('rootPreview=XMIND_FLOAT_DRAG') && html.includes('origin=rootPreview||stored||fallback') && html.includes('codescopeFreeLayoutVersion!==4') && html.includes("node.style.setProperty('--free-scale',String(origin.scale))") && html.includes('const XMIND_SMM_LAYOUTS='), 'XMind 自由导图缺少一次性碰撞修复、位置隔离、统一缩放或新版结构引擎适配');
   assert(html.includes('id="xmind-view-native"') && html.includes('id="xmind-native-image"') && html.includes('setXmindView') && html.includes('XMind 原始画布'), 'XMind 缺少原貌快照与可编辑视图切换');
   assert(html.includes('id="xmind-view-official"') && html.includes('id="xmind-official-consent"') && html.includes('id="xmind-official-host"') && html.includes('openXmindOfficialView') && html.includes('/xmind-viewer/xmind-embed-viewer.js') && html.includes('www.xmind.cn'), 'XMind 缺少带隐私确认和隔离挂载容器的官方全画布查看器');
-  assert(html.includes('id="xmind-engine"') && html.includes('/simple-mind-map/simpleMindMap.esm.min.js') && html.includes('/simple-mind-map/simpleMindMap.esm.min.css') && html.includes('new MindMap({') && html.includes('enableFreeDrag:false') && html.includes('isDisableDrag:true') && html.includes("XMIND_MAP.on('data_change'") && html.includes('xmindSyncFromEditor') && html.includes("addEventListener('dblclick'"), 'XMind 编辑模式未接入 simple-mind-map 原生编辑、选择模式画布锁定、稳定结构拖拽或双向保存桥接');
+  assert(html.includes('id="xmind-engine"') && html.includes('/simple-mind-map/simpleMindMap.esm.min.js') && html.includes('/simple-mind-map/simpleMindMap.esm.min.css') && html.includes('new MindMap({') && html.includes('enableFreeDrag:false') && html.includes('isDisableDrag:false') && html.includes('useLeftKeySelectionRightKeyDrag:true') && html.includes('__csXmindInteraction') && html.includes("XMIND_MAP.on('data_change'") && html.includes('xmindSyncFromEditor') && html.includes("addEventListener('dblclick'"), 'XMind 编辑模式未接入 simple-mind-map 原生编辑、左键框选 + 右键平移的交互模型、稳定结构拖拽或双向保存桥接');
   assert(html.includes("XMIND_OFFICIAL=new ViewerCtor({el:mount") && html.indexOf("XMIND_OFFICIAL.addEventListener('map-ready'") < html.indexOf('XMIND_OFFICIAL.load(file)') && html.includes("retry.onclick=openXmindOfficialView"), 'XMind 官方查看器未先注册事件再加载文件，或缺少失败重试');
   assert(html.includes('森林 · 圆角') && html.includes('海洋 · 通透蓝') && html.includes('石墨 · 专业灰') && html.includes('id="xmind-line-style"') && html.includes('id="xmind-node-shape"'), 'XMind 主题、节点形状或连线风格预设不足');
   assert(['organizationStructure','catalogOrganization','treeTable','timeline','verticalTimeline','fishbone','rightFishbone'].every(layout=>html.includes('value="'+layout+'"')), 'XMind 缺少组织结构、括号、树表、时间轴或鱼骨图布局');
-  assert(html.includes("typeBadge.className = 'draw-type draw-type--' + kind") && html.includes("kind === 'xmind' ? 'XMind' : 'Excalidraw'"), '绘图列表缺少明确且隔离样式的类型标识');
+  assert(html.includes("typeBadge.className = 'draw-type draw-type--' + kind") && html.includes("kind === 'xmind' ? 'XMind'") && html.includes("kind === 'canvas' ? 'canvas'"), '绘图列表缺少明确且隔离样式的类型标识');
   assert(html.includes('id="draw-ai-btn"') && html.includes('id="draw-xml-source"') && html.includes('generateDrawioWithAi') && html.includes('validateDrawioXmlLocal'), 'Draw.io AI 绘图或 XML 编辑器缺失');
   assert(html.includes('timeoutMs:300000') && html.includes('复杂图可能需要 1–5 分钟') && serverSource.includes('Math.min(600000') && serverSource.includes("e.name === 'TimeoutError'"), 'Draw.io AI 绘图长耗时请求或超时提示缺失');
   assert(html.includes('networkError:true') && html.includes('后端返回了无法解析的响应') && serverSource.includes("require('saxes')"), '全局 API 错误处理或服务端 XML 解析器缺失');

@@ -575,3 +575,32 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   box-shadow: inset 2px 0 0 #5b93ff;
 }
 #xmind-outline .xmind-row.selected .xmind-title { color: #dce8ff; }
+
+/* ═══ 思维导图交互层：光标语义 + 选中可见性 ═══════════════════════════════════
+   用户：「还有无法选中，怎么鼠标左边是移动画布，设计不合理，调研成熟的思维导图设计，重构」✓
+
+   交互模型换成 XMind / ProcessOn 那一套（**左键 = 选，右键 / 中键 = 移**）之后，
+   光标得跟着说话 ✓ —— 否则用户还是不知道「现在这一下会选还是移动」✗ */
+/* 手型模式：画布和自由主题都变抓手（自由主题不在引擎里，得单独写一条 ✗） */
+#xmind-preview:has(#xmind-engine.pan-mode),
+#xmind-preview:has(#xmind-engine.pan-mode) .xmind-floating-node { cursor: grab !important; }
+#xmind-preview:has(#xmind-engine.panning),
+#xmind-preview:has(#xmind-engine.panning) .xmind-floating-node { cursor: grabbing !important; }
+/* 选择模式：空白处是箭头，拖出去就是框选 ✓ */
+#xmind-engine:not(.pan-mode) { cursor: default; }
+
+/* 多选时浮层节点的环要够明显 ✓（和引擎节点的 --selected 同一个色） */
+#xmind-floating-layer .xmind-floating-node.selected {
+  outline: 2px solid var(--xm-accent, #78a9ff) !important;
+  outline-offset: 3px;
+  background: color-mix(in srgb, var(--xm-accent, #78a9ff) 16%, var(--xm-control));
+}
+
+/* 框选矩形：引擎自己画的是一个硬编码蓝色的 polygon ✓（#0984e3 / 30% 填充）
+   → 跟主题对齐，细边 + 淡填充，别糊住底下的节点 ✓ */
+#xmind-engine > svg > polygon {
+  stroke: var(--xm-accent, #78a9ff) !important;
+  stroke-width: 1.5 !important;
+  stroke-dasharray: 4 3;
+  fill: color-mix(in srgb, var(--xm-accent, #78a9ff) 12%, transparent) !important;
+}
