@@ -413,30 +413,41 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 /* 搜索框右端的标签按钮 */
 #pane-tree { position: relative; }
 #search { padding-right: 32px !important; }
-#btn-tag-filter {
-  position: absolute; right: 16px; top: 15px;
-  width: 22px; height: 22px;
+/* 标签按钮：贴在搜索框右端，**不占视觉重量** ✓
+   ⚠️ 之前给"打开"状态加了一块蓝色底 ✗ —— 在输入框里像个贴上去的色块，很突兀 ✓
+      → 只改图标颜色，不加底 ✓ */
+#pane-tree > #btn-tag-filter {
+  position: absolute; right: 14px; top: 16px;
+  width: 20px !important; height: 20px !important;
+  padding: 0 !important; box-sizing: border-box;
+  min-height: 0 !important; min-width: 0 !important;
   display: grid; place-items: center;
-  border: 0; border-radius: 5px;
-  background: transparent; color: #7f8b9c;
+  border: 0; border-radius: 4px;
+  box-shadow: none !important;
+  background: transparent;
+  color: #7f8b9c;
+  cursor: pointer;
+  transition: color .13s, background .13s;
+}
+#btn-tag-filter .cs-ico { width: 12px; height: 12px; }
+#btn-tag-filter:hover { background: rgba(255, 255, 255, .06); color: #a8b3c2; }
+#btn-tag-filter[aria-expanded="true"] { background: transparent; color: #6fa2ff; }
+
+/* 顶栏 Git 按钮 */
+/* Git：只放一个图标 ✓ 和顶部 github / book 那几个小图标同规格
+   （用户：「git 给我同样做这种小图标放置就行」）*/
+#header-center > #btn-git-panel {
+  width: 26px !important; height: 26px !important;
+  padding: 0 !important; box-sizing: border-box;
+  min-height: 0 !important; min-width: 0 !important;
+  display: grid; place-items: center;
+  border: 0; border-radius: 6px;
+  box-shadow: none !important;
+  background: transparent;
+  color: #7f8b9c;
   cursor: pointer;
   transition: background .13s, color .13s;
 }
-#btn-tag-filter .cs-ico { width: 13px; height: 13px; }
-#btn-tag-filter:hover { background: rgba(255, 255, 255, .09); color: #cfd8e4; }
-#btn-tag-filter[aria-expanded="true"] { background: rgba(91, 147, 255, .20); color: #9ec2ff; }
-
-/* 顶栏 Git 按钮 */
-#btn-git-panel {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 26px; padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, .10);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, .04);
-  color: #b6c0cf;
-  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
-  cursor: pointer;
-  transition: background .13s, border-color .13s, color .13s;
-}
-#btn-git-panel:hover { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .2); color: #eef2f8; }
-#btn-git-panel[aria-expanded="true"] { background: rgba(91, 147, 255, .18); border-color: rgba(91, 147, 255, .45); color: #cfe0ff; }
+#btn-git-panel .cs-ico { width: 14px; height: 14px; }
+#btn-git-panel:hover { background: rgba(255, 255, 255, .08); color: #cfd8e4; }
+#btn-git-panel[aria-expanded="true"] { background: rgba(91, 147, 255, .16); color: #9ec2ff; }

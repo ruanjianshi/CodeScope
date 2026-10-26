@@ -32,7 +32,8 @@
   gitBtn.type = 'button';
   gitBtn.title = 'Git：查看改动 / 提交 / 推送 / 拉取 / 回退';
   gitBtn.setAttribute('aria-expanded', 'false');
-  gitBtn.innerHTML = '<svg class="cs-ico cs-ico-sm" aria-hidden="true"><use href="#i-git"/></svg><span>Git</span>';
+  /* 只放图标 ✓ —— 和顶部 github / book 那几个小图标一个规格（用户要求） */
+  gitBtn.innerHTML = '<svg class="cs-ico" aria-hidden="true"><use href="#i-git"/></svg>';
   if (siteMenu && siteMenu.parentNode) siteMenu.parentNode.insertBefore(gitBtn, siteMenu);
   else document.body.appendChild(gitBtn);
 
