@@ -555,8 +555,10 @@
       if (!len || len < 10) return;
       const color = path.getAttribute('stroke') || '#8fa6c9';
       const opacity = path.getAttribute('stroke-opacity') || '1';
-      const w0 = 2.8;
-      const w1 = 1.0;
+      /* 参考图里的线其实很**含蓄**：约 2px，只有一点点粗细变化 ✓
+         之前 2.8 → 1.0 落差太大，看着像"两头不一样粗的管子" ✗ */
+      const w0 = 2.4;
+      const w1 = 1.6;
       for (let i = 0; i < SEGMENTS; i += 1) {
         const from = (len * i) / SEGMENTS;
         const to = Math.min(len, (len * (i + 1)) / SEGMENTS + 0.6);   /* 稍微重叠，别留缝 */
@@ -1419,6 +1421,25 @@
       }
     }, true);
   }
+
+  /* 选「XMind 极简」时顺手把连线风格切成**曲线** ✓
+     参考图（用户给的 XMind 截图）就是平滑曲线，折线版永远不像 ✓
+     ⚠️ 只是**切一次**，用户之后在「外观 → 连线风格」里改回折线不会再被覆盖 ✓ */
+  (function wrapTheme() {
+    const original = typeof window.setXmindTheme === 'function' ? window.setXmindTheme : null;
+    if (!original) return;
+    window.setXmindTheme = function (id) {
+      const result = original.apply(this, arguments);
+      if (id === 'zen') {
+        const select = document.getElementById('xmind-line-style');
+        if (select && select.value !== 'curve') {
+          select.value = 'curve';
+          select.dispatchEvent(new Event('change'));
+        }
+      }
+      return result;
+    };
+  })();
 
   /* app.js 与其它模块的入口 */
   window.__csXmindInteraction = { bind, setSelection, paintSelection, deleteSelection };
