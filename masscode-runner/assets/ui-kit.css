@@ -816,3 +816,50 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 }
 /* 分组框按钮在窄屏时不必占太宽 */
 #xmind-outer-frame { padding: 4px 8px !important; }
+
+/* 分组框的四条边：可点选、可拖动（框内仍可正常操作节点）✓ */
+.cs-free-frame-edge {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+}
+.cs-free-frame-edge.t { left: 0; right: 0; top: -5px; height: 11px; }
+.cs-free-frame-edge.b { left: 0; right: 0; bottom: -5px; height: 11px; }
+.cs-free-frame-edge.l { top: 0; bottom: 0; left: -5px; width: 11px; }
+.cs-free-frame-edge.r { top: 0; bottom: 0; right: -5px; width: 11px; }
+.cs-free-frame-edge:hover { background: color-mix(in srgb, var(--xm-accent, #78a9ff) 22%, transparent); }
+
+/* ═══ 概要括号 & 节点标记（自绘，引擎不提供）═══════════════════════════════ */
+.cs-summary {
+  position: absolute;
+  width: 10px;
+  border: 2px solid #78a9ff;
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  pointer-events: none;
+}
+.cs-summary-label {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: var(--xm-control, #131a23);
+  font: 600 11px/1.6 var(--font);
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: text;
+}
+.cs-node-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--xm-control, #131a23);
+  border: 1px solid currentColor;
+  font: 700 9px/1.5 var(--font);
+  pointer-events: none;
+  z-index: 6;
+}

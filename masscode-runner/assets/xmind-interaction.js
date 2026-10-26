@@ -63,8 +63,7 @@
     document.querySelectorAll('.xmind-floating-node').forEach((node) => {
       node.classList.toggle('selected', set.has(String(node.dataset.topicId || '')));
     });
-    updateGroupBox();
-    renderFreeFrames();
+    refreshOverlay();
   }
 
   function setSelection(ids, primary) {
@@ -324,11 +323,103 @@
           xmindChanged();
         };
         box.appendChild(label);
+        /* ⚠️ 框本身 pointer-events:none（否则会挡住下面的节点）✗
+           → 只在**四条边**上放热区：能点中、能拖，框内照常操作节点 ✓ */
+        ['t', 'r', 'b', 'l'].forEach((pos) => {
+          const edge = document.createElement('div');
+          edge.className = 'cs-free-frame-edge ' + pos;
+          edge.dataset.groupId = frame.groupId || '';
+          box.appendChild(edge);
+        });
         overlay.insertBefore(box, overlay.firstChild);
       });
     } finally {
       setTimeout(() => { overlayBusy = false; }, 0);
     }
+  }
+
+  /* ══ 拖动分组框 = 整组平移（XMind 的边界也能拖）═══════════════════════════
+     ⚠️ 只能拖自由导图的成员 ✗ 树上的节点位置由布局算，拖不动 ✓ */
+  let frameDrag = null;
+
+  function membersOfGroup(groupId) {
+    const list = [];
+    (xmindDetached() || []).forEach((root) => {
+      (function walk(topic, depth) {
+        if (!topic) return;
+        if (topic.outerFrame && topic.outerFrame.groupId === groupId) list.push({ topic, depth, rootId: String(root.id) });
+        (xmindChildren(topic) || []).forEach((child) => walk(child, depth + 1));
+      })(root, 0);
+    });
+    return list;
+  }
+
+  function bindFrameDrag(overlay, engine) {
+    if (!overlay || overlay.dataset.csFrameBound === '1') return;
+    overlay.dataset.csFrameBound = '1';
+    overlay.addEventListener('pointerdown', (event) => {
+      const edge = event.target.closest('.cs-free-frame-edge');
+      if (!edge) return;
+      const groupId = edge.dataset.groupId;
+      if (!groupId) return;
+      const members = membersOfGroup(groupId);
+      if (!members.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setSelection(members.map((m) => String(m.topic.id)), String(members[0].topic.id));
+      syncEngineSelection();
+      frameDrag = {
+        pointerId: event.pointerId,
+        groupId,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        members: members.map((m) => ({
+          topic: m.topic,
+          depth: m.depth,
+          rootId: m.rootId,
+          position: m.topic.position ? { ...m.topic.position } : null,
+          offset: m.topic.codescopeOffset ? { ...m.topic.codescopeOffset } : { dx: 0, dy: 0 },
+        })),
+      };
+      try { overlay.setPointerCapture(event.pointerId); } catch (_) {}
+      engine.classList.add('dragging-free');
+    }, true);
+
+    overlay.addEventListener('pointermove', (event) => {
+      const drag = frameDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const scale = XMIND_MAP?.view?.scale || 1;
+      const dx = (event.clientX - drag.x) / scale;
+      const dy = (event.clientY - drag.y) / scale;
+      drag.moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 2;
+      const rootIds = new Set(drag.members.filter((m) => m.depth === 0).map((m) => String(m.topic.id)));
+      drag.members.forEach((member) => {
+        if (member.depth === 0 && member.position) {
+          member.topic.position = { x: member.position.x + dx, y: member.position.y + dy };
+        } else if (!rootIds.has(member.rootId)) {
+          /* ⚠️ 组根也在选中集里时，子节点**跟着根走**就对了 ✗ 再给偏移会走两倍 ✓ */
+          member.topic.codescopeOffset = { dx: member.offset.dx + dx, dy: member.offset.dy + dy };
+        }
+      });
+      xmindRenderFloatingTopics();
+      renderFreeFrames();
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+
+    const finish = (event) => {
+      const drag = frameDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      frameDrag = null;
+      engine.classList.remove('dragging-free');
+      try { overlay.releasePointerCapture(event.pointerId); } catch (_) {}
+      if (drag.moved) xmindChanged();
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    overlay.addEventListener('pointerup', finish, true);
+    overlay.addEventListener('pointercancel', finish, true);
   }
 
   /* ══ 「选中分组」的视觉：多选时在画布上画一个虚线包围框 ═══════════════════
@@ -674,6 +765,162 @@
     return true;
   }
 
+  /* ══ 概要（Summary）：选中一组同级主题 → 右侧括号 + 概要文字 ═══════════════
+     ⚠️ 引擎的 ADD_GENERALIZATION 在这个构建里**不生效**（实测：activeNodeList 有 2 个，
+        命令执行了但既没有节点也没有 DOM）✗
+     ⇒ 自己画：复用分组框那套数据（挂在成员上 + groupId），只是渲染成**括号** ✓ */
+  const SUMMARY_PRESETS = [
+    { label: '⭐ 重点', value: 'star' },
+    { label: '⚑ 待办', value: 'flag' },
+    { label: '✅ 完成', value: 'done' },
+    { label: '❓ 疑问', value: 'question' },
+    { label: '🔥 紧急', value: 'urgent' },
+    { label: '清除标记', value: '' },
+  ];
+
+  async function addSummary() {
+    const ids = [...multi()];
+    if (!ids.length) { if (typeof setDrawStatus === 'function') setDrawStatus('先选中要加概要的主题', 'warn'); return; }
+    const ranges = frameRanges(ids);
+    if (!ranges.length) { if (typeof setDrawStatus === 'function') setDrawStatus('概要只能加在树上的同级主题上', 'warn'); return; }
+    const text = await askText('概要文字', '概要', false);
+    if (text === null) return;
+    const color = frameColor();
+    const groupId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    ranges.forEach(({ container, from, to }) => {
+      for (let index = from; index <= to; index += 1) {
+        const topic = container[index];
+        if (topic) {
+          /* ⚠️ 用独立字段 `summary` ✗ 不能复用 outerFrame ✓
+             —— outerFrame 会被引擎画成一个虚线方框，概要要的是**右侧括号** ✓ */
+          topic.summary = { text: String(text || '').trim(), groupId, color };
+        }
+      }
+    });
+    xmindChanged();
+  }
+
+  /* 概要括号：把「同一 groupId 的成员」右侧连起来，画一个 ] 形括号 + 文字 ✓ */
+  /* 浮层统一刷新：选中框 / 分组框 / 标记 / 概要括号 ✓ */
+  function refreshOverlay() {
+    updateGroupBox();
+    renderFreeFrames();
+    renderMarkers();
+    renderSummaryBrackets();
+  }
+
+  function renderSummaryBrackets() {
+    const overlay = document.getElementById('xmind-float-overlay');
+    const engine = engineEl();
+    if (!overlay || !engine) return;
+    overlay.querySelectorAll('.cs-summary').forEach((el) => el.remove());
+    const er = engine.getBoundingClientRect();
+    const groups = new Map();
+    const collect = (topic) => {
+      if (!topic) return;
+      const info = topic.summary;
+      if (info && info.groupId) {
+        if (!groups.has(info.groupId)) groups.set(info.groupId, { info, ids: [] });
+        groups.get(info.groupId).ids.push(String(topic.id));
+      }
+      (xmindChildren(topic) || []).forEach(collect);
+    };
+    collect(xmindRootTopic());
+    (xmindDetached() || []).forEach(collect);
+    groups.forEach(({ info, ids }) => {
+      const rects = ids.map((id) => document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(id) + '"]') || xmindSmmNode(id)?.group?.node)
+        .filter(Boolean).map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0);
+      if (!rects.length) return;
+      const top = Math.min(...rects.map((r) => r.top)) - er.top;
+      const bottom = Math.max(...rects.map((r) => r.bottom)) - er.top;
+      const right = Math.max(...rects.map((r) => r.right)) - er.left;
+      const bracket = document.createElement('div');
+      bracket.className = 'cs-summary';
+      bracket.style.left = (right + 14) + 'px';
+      bracket.style.top = top + 'px';
+      bracket.style.height = Math.max(18, bottom - top) + 'px';
+      bracket.style.borderColor = info.color || '#78a9ff';
+      const label = document.createElement('span');
+      label.className = 'cs-summary-label';
+      label.textContent = info.text || '概要';
+      label.style.color = info.color || '#78a9ff';
+      label.title = '双击改概要文字';
+      label.ondblclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const next = await askText('概要文字', info.text || '', false);
+        if (next === null) return;
+        let changed = 0;
+        eachTopic((topic) => {
+          if (topic.summary && topic.summary.groupId === info.groupId) { topic.summary = { ...topic.summary, text: next.trim() }; changed += 1; }
+        });
+        if (changed) xmindChanged();
+      };
+      bracket.appendChild(label);
+      overlay.appendChild(bracket);
+    });
+  }
+
+  /* ══ 标记（Marker）：我们自己画一个小徽章 ✓
+     ⚠️ 引擎的 SET_NODE_ICON 能存数据但**渲染不出来**（这个构建没有图标清单）✗ */
+  const MARKER_STYLE = {
+    star: { glyph: '★', color: '#f5b93a' },
+    flag: { glyph: '⚑', color: '#f2705c' },
+    done: { glyph: '✓', color: '#3fa46a' },
+    question: { glyph: '?', color: '#5b93ff' },
+    urgent: { glyph: '!', color: '#e0574f' },
+  };
+
+  function renderMarkers() {
+    const overlay = document.getElementById('xmind-float-overlay');
+    const engine = engineEl();
+    if (!overlay || !engine) return;
+    overlay.querySelectorAll('.cs-node-marker').forEach((el) => el.remove());
+    const er = engine.getBoundingClientRect();
+    const place = (topic) => {
+      const marker = topic.marker;
+      if (!marker || !MARKER_STYLE[marker]) return;
+      const el = document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(String(topic.id)) + '"]')
+        || xmindSmmNode(topic.id)?.group?.node;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (!rect.width) return;
+      const style = MARKER_STYLE[marker];
+      const chip = document.createElement('span');
+      chip.className = 'cs-node-marker';
+      chip.textContent = style.glyph;
+      chip.style.left = (rect.right - er.left - 6) + 'px';
+      chip.style.top = (rect.top - er.top - 8) + 'px';
+      chip.style.color = style.color;
+      overlay.appendChild(chip);
+    };
+    (function walk(topic) {
+      if (!topic) return;
+      place(topic);
+      (xmindChildren(topic) || []).forEach(walk);
+    })(xmindRootTopic());
+    (xmindDetached() || []).forEach((root) => {
+      (function walk(topic) {
+        if (!topic) return;
+        place(topic);
+        (xmindChildren(topic) || []).forEach(walk);
+      })(root);
+    });
+  }
+
+  async function setMarker(marker) {
+    const ids = [...multi()];
+    if (!ids.length) return;
+    ids.forEach((id) => {
+      const hit = xmindFind(id);
+      if (!hit) return;
+      if (marker) hit.topic.marker = marker;
+      else delete hit.topic.marker;
+    });
+    xmindChanged();
+    renderMarkers();
+  }
+
   /* ══ 节点右键菜单（XMind 的右键就是主入口）═══════════════════════════════ */
   function openNodeMenu(event, id) {
     const hit = xmindFind(id);
@@ -692,7 +939,9 @@
       { label: '全选', hint: '⌘A', run: () => selectAllTopics() },
       { type: 'separator' },
       { type: 'separator' },
-      { label: '加分组框（边界）…', run: () => addGroupFrame([...multi()]) },
+      { label: '加分组框（外框）…', run: () => addGroupFrame([...multi()]) },
+      { label: '加概要（右侧括号）…', run: () => addSummary() },
+      { label: '标记 ▸', hint: '★ ⚑ ✓ ? !', run: () => markerMenu(event, id) },
       { label: '改分组框标题…', disabled: !currentFrameGroup([...multi()]), run: () => editGroupFrame([...multi()]) },
       { label: '删除分组框', disabled: !currentFrameGroup([...multi()]), run: () => deleteGroupFrame([...multi()]) },
       { type: 'separator' },
@@ -710,6 +959,16 @@
       { label: '仅删除当前主题', hint: '⌘Del', danger: true, run: () => { focus(); xmindDeleteSingle(); } },
     ];
     if (typeof showContextMenu === 'function') showContextMenu(event, items);
+  }
+
+  function markerMenu(event, id) {
+    const hit = xmindFind(id);
+    const current = hit?.topic?.marker || '';
+    if (typeof showContextMenu !== 'function') return;
+    showContextMenu(event, SUMMARY_PRESETS.map((preset) => ({
+      label: preset.label + (preset.value === current ? '  ✓' : ''),
+      run: () => setMarker(preset.value),
+    })));
   }
 
   /* 自由主题挂回中心主题（右键里「转为普通主题」）✓ */
@@ -735,11 +994,12 @@
       floatOverlay.id = 'xmind-float-overlay';
       engine.parentElement.appendChild(floatOverlay);
     }
+    bindFrameDrag(floatOverlay, engine);
     if (floatOverlay) {
       try {
         new MutationObserver(() => {
           if (overlayBusy) return;
-          requestAnimationFrame(renderFreeFrames);
+          requestAnimationFrame(() => { renderFreeFrames(); renderMarkers(); renderSummaryBrackets(); });
         }).observe(floatOverlay, { childList: true });
       } catch (_) {}
     }
@@ -808,6 +1068,9 @@
         }
         return;
       }
+
+      /* 分组框的四条边自己处理拖动 ✓ 别当成空白去框选 */
+      if (event.target.closest('.cs-free-frame-edge')) return;
 
       /* 空白处：不拦 ✓ 引擎左键拖 = 框选 ✓ 我们只记起点，用来补浮层节点 */
       box = {
@@ -991,6 +1254,9 @@
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();
   window.__csXmindAddFrame = () => addGroupFrame([...multi()]);
+  window.__csXmindAddSummary = () => addSummary();
+  window.__csXmindSetMarker = (m) => setMarker(m);
+  window.__csXmindMarkerMenu = (e, id) => markerMenu(e, id);
   window.__csXmindEditFrame = () => editGroupFrame([...multi()]);
   window.__csXmindMenu = (event, id) => openNodeMenu(event, id);
   window.__csXmindRepaintSelection = () => paintSelection();
