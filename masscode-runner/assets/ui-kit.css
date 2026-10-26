@@ -350,3 +350,93 @@ button:focus:not(:focus-visible) { outline: none; }
 }
 #cs-menu-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 #cs-menu-tip.bad { border-color: rgba(240, 120, 120, .5); color: #ffc9c9; }
+
+/* ═══ 左侧栏重构：Git 收进顶栏抽屉，标签收进搜索框 ═══════════════════════════
+   用户：「GIT 和标签，没必要占用左边的模块 —— git 一般只是用于查看和提交、回退等管理的；
+          标签用于检索的，应该和搜索那边挂钩」✓
+   ⚠️ 节点不能搬走 ✗ —— `applyPanelOrder()` 每次加载会把它们 append 回 #side ✓
+      所以只改**显示方式**：关着就 display:none，开着就 position:fixed 浮出来 ✓ */
+
+/* 侧栏里不再给这两块留位置（分隔条也一并隐藏）*/
+#side > #h-git { display: none !important; }
+#side > #pane-git, #side > #pane-tags { display: none !important; }
+
+/* 遮罩：点空白处收起 */
+#cs-panel-mask {
+  position: fixed; inset: 0; z-index: 880;
+  background: rgba(0, 0, 0, .42);
+  opacity: 0; pointer-events: none;
+  transition: opacity .15s;
+}
+body.git-open #cs-panel-mask,
+body.tags-open #cs-panel-mask { opacity: 1; pointer-events: auto; }
+
+/* ── Git：右侧抽屉（查看改动 / 提交 / 推送 / 拉取 / 回退都在里面）── */
+body.git-open #side > #pane-git {
+  display: flex !important;
+  position: fixed; z-index: 900;
+  top: 56px; right: 0; bottom: 0;
+  width: 400px; max-width: 92vw;
+  /* ⚠️ app.js 会给面板写死一个 height（拖拽调高度留下的）✗ —— 抽屉里必须让它撑满 ✓ */
+  height: auto !important;
+  background: #10151c;
+  border-left: 1px solid rgba(255, 255, 255, .09);
+  box-shadow: -14px 0 36px rgba(0, 0, 0, .48);
+  animation: cs-drawer-in .16s ease-out;
+}
+@keyframes cs-drawer-in { from { transform: translateX(18px); opacity: .55; } to { transform: none; opacity: 1; } }
+
+/* 提交/推送那条钉在抽屉底部 —— 文件多的时候不用滚到底才能提交 ✓ */
+body.git-open #pane-git .git-actions {
+  position: sticky; bottom: 0;
+  padding: 8px 6px 6px;
+  margin-top: 6px;
+  background: #10151c;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+/* ── 标签：搜索框下方的筛选弹层 ── */
+body.tags-open #side > #pane-tags {
+  display: flex !important;
+  position: fixed; z-index: 900;
+  /* 比侧栏底色亮一档 + 强阴影，才看得出是浮层 ✓（同色系会糊在一起 ✗）*/
+  background: #171e28;
+  border: 1px solid rgba(255, 255, 255, .15);
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, .62), 0 2px 8px rgba(0, 0, 0, .4);
+  max-height: 62vh;
+  overflow: hidden;
+}
+/* 弹层里不需要「显示/隐藏标签栏」那个头（点它会把自己收起来，容易懵）✓ */
+body.tags-open #pane-tags > #tag-head { display: none; }
+
+/* 搜索框右端的标签按钮 */
+#pane-tree { position: relative; }
+#search { padding-right: 32px !important; }
+#btn-tag-filter {
+  position: absolute; right: 16px; top: 15px;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 5px;
+  background: transparent; color: #7f8b9c;
+  cursor: pointer;
+  transition: background .13s, color .13s;
+}
+#btn-tag-filter .cs-ico { width: 13px; height: 13px; }
+#btn-tag-filter:hover { background: rgba(255, 255, 255, .09); color: #cfd8e4; }
+#btn-tag-filter[aria-expanded="true"] { background: rgba(91, 147, 255, .20); color: #9ec2ff; }
+
+/* 顶栏 Git 按钮 */
+#btn-git-panel {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .04);
+  color: #b6c0cf;
+  font: 12px/1 -apple-system, "PingFang SC", sans-serif;
+  cursor: pointer;
+  transition: background .13s, border-color .13s, color .13s;
+}
+#btn-git-panel:hover { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .2); color: #eef2f8; }
+#btn-git-panel[aria-expanded="true"] { background: rgba(91, 147, 255, .18); border-color: rgba(91, 147, 255, .45); color: #cfe0ff; }
