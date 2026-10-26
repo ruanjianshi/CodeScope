@@ -1417,9 +1417,11 @@
     }, true);
   }
 
-  /* 选「XMind 极简」时顺手把连线风格切成**曲线** ✓
-     参考图（用户给的 XMind 截图）就是平滑曲线，折线版永远不像 ✓
-     ⚠️ 只是**切一次**，用户之后在「外观 → 连线风格」里改回折线不会再被覆盖 ✓ */
+  /* 选「XMind 极简」时顺手把连线风格切成**圆角折线** ✓
+     ⚠️ 这里踩过一次：先切成「曲线」，结果 4 条线从根节点**各走各的**（呈放射状）✗
+        参考图里是**一根主干先出来，再分叉** ✓ —— 那是「圆角折线 + 大圆角」的效果 ✓
+        （`lineRadius` 在 zen 主题里给到 26，圆角才够大、像曲线）✓
+     ⚠️ 只是**切一次**，用户之后在外观里改了不会被反复覆盖 ✓ */
   (function wrapTheme() {
     const original = typeof window.setXmindTheme === 'function' ? window.setXmindTheme : null;
     if (!original) return;
@@ -1427,8 +1429,8 @@
       const result = original.apply(this, arguments);
       if (id === 'zen') {
         const select = document.getElementById('xmind-line-style');
-        if (select && select.value !== 'curve') {
-          select.value = 'curve';
+        if (select && select.value !== 'straight') {
+          select.value = 'straight';
           select.dispatchEvent(new Event('change'));
         }
       }
