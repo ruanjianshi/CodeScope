@@ -370,6 +370,25 @@
       }
     }, { capture: true, passive: false });
 
+    /* ⚠️ 面板从「隐藏」变「可见」时要重算一次 ✗✗
+       实测路径：编辑自由主题后焦点掉到 body → 后面的 Enter 走了**全局快捷键** →
+       直接退出绘图视图 ✓；再进来时面板还没布局（宽高 0）→
+       `xmindPlaceAll` 算的是 0×0 视口（内容停在右下角）、
+       `xmindRenderFloatingTopics` 拿不到原点（自由主题全不见）✗
+       ⇒ 尺寸从 0 变成有值时补一次「适应 + 重画浮层」✓ */
+    let lastWidth = 0;
+    try {
+      const ro = new ResizeObserver(() => {
+        if (!engine.clientWidth || !engine.clientHeight) { lastWidth = 0; return; }
+        if (lastWidth === 0 && XMIND_MAP) {
+          xmindPlaceAll(true);
+          xmindRenderFloatingTopics();
+        }
+        lastWidth = engine.clientWidth;
+      });
+      ro.observe(engine);
+    } catch (_) {}
+
     /* 双击空白：新建自由主题 ✓ */
     surface.addEventListener('dblclick', (event) => {
       if (!isEdit() || event.target.closest('.xmind-floating-node')) return;

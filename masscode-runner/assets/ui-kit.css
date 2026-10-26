@@ -604,3 +604,84 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   stroke-dasharray: 4 3;
   fill: color-mix(in srgb, var(--xm-accent, #78a9ff) 12%, transparent) !important;
 }
+
+/* ═══ 思维导图大纲 · 重做层级（用户：「左边大纲的参差感不行，太丑」）═══════════════
+
+   原状为什么「参差」✗
+     缩进是**嵌套 div 一层层加 margin + padding + border-left** 堆出来的 ✓：
+     · 每层 `.xmind-tree-children` 各画一段竖线 → 兄弟分组之间**断成一段一段** ✗
+     · 竖线的位置由「父级 padding」决定，和展开箭头的中心**对不上** ✗
+     · 每层 15 + 12 = 27px，层级一深，右边留给标题的宽度就没了 ✗
+     三层叠起来就是「参差不齐的括号 + 断掉的竖线」✓ —— 这是最典型的"手搓树"长相 ✗
+
+   改法（Notion / Workflowy / XMind 大纲的做法）
+     · 缩进**只由深度决定**：行自己用 `--cs-depth` 算 padding-left，嵌套容器不再加缩进 ✓
+     · 竖线**画在行自己身上**（repeating-linear-gradient），
+       每条线正好落在**对应层级的展开箭头中心** → 上下行首尾相接，是**连续**的 ✓
+     · 步长统一 15px，深度再深也不会挤没标题 ✓
+   ⚠️ hover / 选中只能用 `background-color` ✗ 不能用 `background` 简写 ✓
+      —— 简写会把 background-image（就是那些竖线）一起清掉 ✗（踩过一次） */
+#xmind-outline .xmind-tree-children,
+#xmind-outline .xmind-tree-group {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+#xmind-outline .xmind-row {
+  --cs-step: 15px;
+  padding-left: calc(6px + var(--cs-step) * var(--cs-depth, 0)) !important;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 13px,
+    rgba(255, 255, 255, .09) 13px 14.4px,
+    transparent 14.4px var(--cs-step)
+  );
+  background-size: calc(var(--cs-step) * var(--cs-depth, 0)) 100%;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+}
+/* 竖线只在「有子级」时才有意义 → 用不到的地方由 background-size 自然裁掉 ✓ */
+#xmind-outline .xmind-row:hover { background-color: rgba(255, 255, 255, .05) !important; }
+#xmind-outline .xmind-row.selected { background-color: rgba(91, 147, 255, .16) !important; }
+/* 展开箭头固定 15px 槽位，中心 = 6 + 7.5 + 15×depth ✓ 与竖线对齐 */
+#xmind-outline .xmind-toggle,
+#xmind-outline .xmind-grip { width: 15px !important; height: 15px !important; flex: 0 0 15px !important; }
+/* 标题左缘对齐，行高统一（多行标题才撑高）✓ */
+#xmind-outline .xmind-title {
+  margin-left: 5px !important;
+  line-height: 17px !important;
+  min-height: 17px !important;
+  text-align: left !important;
+}
+/* 右侧层级标签：定宽右对齐，别跟着标题长度抖 ✗ */
+#xmind-outline .xmind-depth {
+  flex: 0 0 26px !important;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+/* 分组标题（「自由导图 · 1」）也跟着缩进体系走，别再另起一套边距 */
+#xmind-outline .xmind-outline-section {
+  margin: 10px 0 4px !important;
+  padding-left: 6px !important;
+  border-top: 0 !important;
+}
+
+/* ── 大纲：把「参差」最后两根刺拔掉 ───────────────────────────────────────────
+   ① 行之间还有 margin（1px + depth=1 的 3px）→ 竖线在每行交界处**断开** ✗ → 归零 ✓
+   ② 拖拽手柄 ⠇ 夹在箭头和标题之间，白占 20px ✗ → 绝对定位到行右侧 ✓
+   ③ app.css 里 `.xmind-tree-children > .xmind-tree-group:last-child::after`
+      还在画一段 2px 的「收尾竖线」✓ —— 和新的行内竖线重复，去掉 ✓ */
+#xmind-outline .xmind-row {
+  margin: 0 !important;
+  border: 0 !important;
+  position: relative;
+}
+#xmind-outline .xmind-row[data-depth="1"] { margin-top: 0 !important; }
+#xmind-outline .xmind-tree-children > .xmind-tree-group:last-child::after { content: none !important; }
+#xmind-outline .xmind-grip {
+  position: absolute !important;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0 !important;
+}
