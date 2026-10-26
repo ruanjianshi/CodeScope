@@ -510,3 +510,7 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 #xmind-outline { background: #0c121a !important; padding: 8px 6px 24px !important; }
 .xmind-row { border-radius: 6px !important; }
 .xmind-depth { opacity: .42 !important; font-size: 9px !important; letter-spacing: 0 !important; }
+
+/* 自由主题的浮层：与 #xmind-engine 同尺寸同位置，但不在地图容器内部 ✓
+   （挂在里面会被引擎重渲染清掉，还会在 blur 回调里抛 NotFoundError）*/
+#xmind-float-overlay { position: absolute; inset: 0; z-index: 35; pointer-events: none; overflow: hidden; }
