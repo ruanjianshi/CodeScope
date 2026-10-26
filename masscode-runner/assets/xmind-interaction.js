@@ -1478,6 +1478,23 @@
     };
   })();
 
+  /* ══ 空闲时预加载思维导图引擎 ═══════════════════════════════════════════
+     引擎包 1.6MB，原来是「第一次打开绘图」才 import ✗ → 那一下要等 1~2 秒 ✓
+     ⇒ 首屏稳定后（requestIdleCallback）就悄悄拉下来 ✓
+       `ensureXmindEditorLib()` 内部有缓存，打开绘图时直接命中 ✓
+     ⚠️ 用 idle 回调 + 4s 超时兜底，不跟首屏抢带宽 ✓ */
+  (function warmEngine() {
+    const run = () => {
+      try {
+        if (typeof ensureXmindEditorLib === 'function') ensureXmindEditorLib().catch(() => {});
+      } catch (_) {}
+    };
+    try {
+      if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4000 });
+      else setTimeout(run, 2500);
+    } catch (_) { setTimeout(run, 2500); }
+  })();
+
   /* app.js 与其它模块的入口 */
   window.__csXmindInteraction = { bind, setSelection, paintSelection, deleteSelection };
   window.__csXmindSel = (id) => multi().has(String(id || ''));

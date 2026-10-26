@@ -3487,7 +3487,7 @@ async function generateDrawioWithAi(){
 }
 
 /* ---- XMind：标准 .xmind 工作簿 + 可拖拽大纲 + Mind Elixir 编辑器 ---- */
-let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set(),XMIND_THUMBNAIL='',XMIND_VIEW='edit',XMIND_SNAPSHOT_DIRTY=false,XMIND_NATIVE_SCALE=1,XMIND_NATIVE_X=0,XMIND_NATIVE_Y=0,XMIND_NATIVE_DRAG=null,XMIND_OFFICIAL=null,XMIND_OFFICIAL_LIB=null,XMIND_OFFICIAL_APPROVED=false,XMIND_EDITOR_LIB=null,XMIND_ENGINE_SYNCING=false,XMIND_TOOL_MODE='select',XMIND_CANVAS_PAN=null,XMIND_FLOAT_DRAG=null,XMIND_MULTI=new Set(),XMIND_FLOAT_RETRY=0;
+let XMIND_WORKBOOK=null,XMIND_SHEET_INDEX=0,XMIND_SELECTED=null,XMIND_HISTORY=[],XMIND_HISTORY_INDEX=-1,XMIND_HISTORY_T=0,XMIND_RENDER_T=0,XMIND_MAP=null,XMIND_DRAG=null,XMIND_FOCUS=null,XMIND_COLLAPSED=new Set(),XMIND_THUMBNAIL='',XMIND_VIEW='edit',XMIND_SNAPSHOT_DIRTY=false,XMIND_NATIVE_SCALE=1,XMIND_NATIVE_X=0,XMIND_NATIVE_Y=0,XMIND_NATIVE_DRAG=null,XMIND_OFFICIAL=null,XMIND_OFFICIAL_LIB=null,XMIND_OFFICIAL_APPROVED=false,XMIND_EDITOR_LIB=null,XMIND_ENGINE_SYNCING=false,XMIND_TOOL_MODE='select',XMIND_CANVAS_PAN=null,XMIND_FLOAT_DRAG=null,XMIND_MULTI=new Set(),XMIND_FLOAT_RETRY=0,XMIND_OUTLINE_SIG='';
 const XMIND_THEMES={zen:'XMind 极简',midnight:'深海下划线',classic:'经典卡片',forest:'森林圆角',sunset:'日落便签',violet:'紫罗兰胶囊',paper:'纸张手绘',spectrum:'彩虹分支',ocean:'海洋通透蓝',mint:'薄荷清新绿',rose:'蔷薇柔和粉',graphite:'石墨专业灰',solar:'日光暖金'};
 function xmindClone(value){return JSON.parse(JSON.stringify(value));}
 function xmindId(){return 'cs'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);}
@@ -3605,7 +3605,7 @@ function xmindStartPreviewEdit(id=XMIND_SELECTED){
 }
 function xmindResizeTitle(input){input.style.height='26px';input.style.height=Math.min(112,Math.max(26,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>112?'auto':'hidden';}
 function renderXmindOutline(){
-  const box=$('xmind-outline');if(!box||DRAW_KIND!=='xmind')return;box.innerHTML='';const root=xmindRootTopic();if(!root)return;
+  const box=$('xmind-outline');if(!box||DRAW_KIND!=='xmind')return;const root=xmindRootTopic();if(!root)return;const outlineSig=(()=>{const out=[String(XMIND_SHEET_INDEX)],walk=t=>{if(!t)return;out.push(t.id,t.title||'',XMIND_COLLAPSED.has(t.id)?'0':'1');(xmindChildren(t)||[]).forEach(walk);};walk(root);(xmindDetached()||[]).forEach(walk);return out.join('~');})();if(outlineSig===XMIND_OUTLINE_SIG)return;XMIND_OUTLINE_SIG=outlineSig;box.innerHTML='';
   const walk=(topic,parent,depth,isDetached=false,host=box)=>{
     const group=document.createElement('div');group.className='xmind-tree-group';group.dataset.topicId=topic.id;const row=document.createElement('div');row.className='xmind-row'+(isDetached?' floating':'')+(topic.id===XMIND_SELECTED?' selected':'');row.dataset.id=topic.id;row.dataset.depth=String(depth);row.style.setProperty('--cs-depth',String(depth));row.draggable=topic!==root;
     const toggle=document.createElement('button');toggle.className='xmind-toggle'+(xmindChildren(topic).length?'':' empty');toggle.innerHTML=XMIND_COLLAPSED.has(topic.id)? csGlyphIcon('▸') : csGlyphIcon('▾');toggle.title=XMIND_COLLAPSED.has(topic.id)?'展开子主题':'收起子主题';toggle.onclick=(event)=>{event.stopPropagation();if(XMIND_COLLAPSED.has(topic.id))XMIND_COLLAPSED.delete(topic.id);else XMIND_COLLAPSED.add(topic.id);renderXmindOutline();};
