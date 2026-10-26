@@ -26,16 +26,21 @@
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
 
   /* ── ① Git 抽屉：按钮挂在顶栏「常用网址」前面 ── */
-  var siteMenu = document.getElementById('site-menu');
   var gitBtn = document.createElement('button');
   gitBtn.id = 'btn-git-panel';
   gitBtn.type = 'button';
   gitBtn.title = 'Git：查看改动 / 提交 / 推送 / 拉取 / 回退';
   gitBtn.setAttribute('aria-expanded', 'false');
-  /* 只放图标 ✓ —— 和顶部 github / book 那几个小图标一个规格（用户要求） */
+  /* 只放图标 ✓ —— 和顶部 github / 手册那几个小图标一个规格（用户要求） */
   gitBtn.innerHTML = '<svg class="cs-ico" aria-hidden="true"><use href="#i-git"/></svg>';
-  if (siteMenu && siteMenu.parentNode) siteMenu.parentNode.insertBefore(gitBtn, siteMenu);
-  else document.body.appendChild(gitBtn);
+  /* 位置：紧跟「使用手册」那个书本图标后面 ✓（用户：「放到知识手册旁边」） */
+  var manual = document.getElementById('btn-manual');
+  if (manual && manual.parentNode) manual.parentNode.insertBefore(gitBtn, manual.nextSibling);
+  else {
+    var siteMenu = document.getElementById('site-menu');
+    if (siteMenu && siteMenu.parentNode) siteMenu.parentNode.insertBefore(gitBtn, siteMenu);
+    else document.body.appendChild(gitBtn);
+  }
 
   gitBtn.addEventListener('click', function () {
     var on = !document.body.classList.contains('git-open');
