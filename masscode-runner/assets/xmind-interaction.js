@@ -358,7 +358,23 @@
   function bindFrameDrag(overlay, engine) {
     if (!overlay || overlay.dataset.csFrameBound === '1') return;
     overlay.dataset.csFrameBound = '1';
+    /* ⚠️ 删除按钮必须用**事件委托** ✗ —— 浮层每次重画都会换掉元素，
+       绑在元素上的 onclick 会点空（实测：点了没反应）✓ */
+    overlay.addEventListener('click', (event) => {
+      const kill = event.target.closest('.cs-free-frame-kill');
+      if (!kill) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const groupId = kill.dataset.groupId;
+      if (!groupId) return;
+      const ids = membersOfGroup(groupId).map((m) => String(m.topic.id));
+      deleteGroupFrame(ids);
+    }, true);
+
     overlay.addEventListener('pointerdown', (event) => {
+      /* ⚠️ 这里**不能 preventDefault** ✗ —— 它会把后面的 click 一起取消，
+         删除按钮就永远收不到 click（实测点了没反应）✓ 只挡冒泡即可 ✓ */
+      if (event.target.closest('.cs-free-frame-kill')) { event.stopPropagation(); return; }
       const edge = event.target.closest('.cs-free-frame-edge');
       if (!edge) return;
       const groupId = edge.dataset.groupId;
@@ -734,7 +750,12 @@
     return changed;
   }
 
+  let frameBusyAt = 0;
+
   async function addGroupFrame(ids) {
+    /* ⚠️ 防重入：连点两下会建出**两个组**（实测：一个框变成两个，删一个还剩一个）✗ */
+    if (Date.now() - frameBusyAt < 700) return;
+    frameBusyAt = Date.now();
     const list = ids && ids.length ? ids : [...multi()];
     const ranges = frameRanges(list);
     const freeRoots = freeRootsOf(list);
@@ -794,10 +815,22 @@
   }
 
   function deleteGroupFrame(ids) {
-    const groupId = currentFrameGroup(ids && ids.length ? ids : [...multi()]);
-    if (!groupId) return false;
-    removeFrameGroup(groupId);
+    const list = ids && ids.length ? ids : [...multi()];
+    /* 选中主题上可能挂着不止一个 groupId（历史遗留 / 重复添加）→ 全删 ✓ */
+    const groupIds = new Set();
+    list.forEach((id) => {
+      const hit = xmindFind(id);
+      if (hit?.topic?.outerFrame?.groupId) groupIds.add(hit.topic.outerFrame.groupId);
+      if (hit?.topic?.summary?.groupId) groupIds.add(hit.topic.summary.groupId);
+    });
+    for (const root of freeRootsOf(list)) {
+      if (root.outerFrame?.groupId) groupIds.add(root.outerFrame.groupId);
+    }
+    if (!groupIds.size) return false;
+    groupIds.forEach((groupId) => removeFrameGroup(groupId));
     xmindChanged();
+    refreshOverlay();
+    if (typeof setDrawStatus === 'function') setDrawStatus('已删除分组框', 'ok');
     return true;
   }
 
@@ -1007,6 +1040,20 @@
     })));
   }
 
+  /* 分组框自己的菜单（右键点框的边）✓ */
+  function openFrameMenu(event, groupId) {
+    if (typeof showContextMenu !== 'function') return;
+    showContextMenu(event, [
+      { label: '改分组框标题…', run: () => editGroupFrame([...multi()]) },
+      { label: '选中组内主题', run: () => {
+        const members = membersOfGroup(groupId);
+        if (members.length) { setSelection(members.map((m) => String(m.topic.id)), String(members[0].topic.id)); syncEngineSelection(); }
+      } },
+      { type: 'separator' },
+      { label: '删除分组框', danger: true, run: () => deleteGroupFrame([...multi()]) },
+    ]);
+  }
+
   /* 自由主题挂回中心主题（右键里「转为普通主题」）✓ */
   function xmindAttachToRoot(id) {
     const root = xmindRootTopic();
@@ -1079,6 +1126,21 @@
          引擎只在 `#xmind-engine` 上监听 mousedown ✓，而自由主题是预览区的 DIV ✗ →
          从自由主题上按下右键，引擎收不到 → 画布纹丝不动（实测）✓
          ⇒ 右键 / 中键一律走我们的 startPan，全区域一致 ✓ */
+      /* 右键点分组框的边 → 弹「分组框菜单」（改标题 / 删除）✓
+         ⚠️ 必须放在 startPan 之前 ✗ 否则右键被当成平移吃掉（实测：框删不掉）✓ */
+      const frameEdge = event.button === 2 ? event.target.closest('.cs-free-frame') : null;
+      const frameGroupId = frameEdge ? (frameEdge.dataset.groupId || frameEdge.querySelector('.cs-free-frame-edge')?.dataset.groupId) : null;
+      if (frameEdge && frameGroupId) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const members = membersOfGroup(frameGroupId);
+        if (members.length) {
+          setSelection(members.map((m) => String(m.topic.id)), String(members[0].topic.id));
+          syncEngineSelection();
+        }
+        openFrameMenu(event, frameGroupId);
+        return;
+      }
       if (event.button === 1 || event.button === 2) { startPan(event, engine); return; }
       if (event.button !== 0) return;
 
@@ -1295,6 +1357,7 @@
   window.__csXmindAddSummary = () => addSummary();
   window.__csXmindSetMarker = (m) => setMarker(m);
   window.__csXmindMarkerMenu = (e, id) => markerMenu(e, id);
+  window.__csXmindFrameMenu = (e, gid) => openFrameMenu(e, gid);
   window.__csXmindEditFrame = () => editGroupFrame([...multi()]);
   window.__csXmindMenu = (event, id) => openNodeMenu(event, id);
   window.__csXmindRepaintSelection = () => paintSelection();
