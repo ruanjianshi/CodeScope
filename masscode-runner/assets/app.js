@@ -4308,7 +4308,7 @@ function xmindCurrentLayout(){
 function xmindSmmLayout(layout){return XMIND_SMM_LAYOUTS.has(layout)?layout:(layout==='treeTable'?'catalogOrganization':'mindMap');}
 function xmindUpdateStyleControls(){const style=xmindStyleState();if($('xmind-line-style'))$('xmind-line-style').value=style.lineStyle;if($('xmind-line-pattern'))$('xmind-line-pattern').value=style.linePattern;if($('xmind-node-shape'))$('xmind-node-shape').value=style.nodeShape;if($('xmind-layout-select'))$('xmind-layout-select').value=xmindCurrentLayout();}
 function xmindToEditorData(){
-  const palette=xmindThemePalette().palette,walk=(topic,depth,color)=>({data:{uid:String(topic.id||xmindId()),text:xmindPlainText(topic.title||'未命名主题'),richText:false,expand:depth===0||!XMIND_COLLAPSED.has(topic.id),...(depth?{lineColor:color}:{})},children:xmindChildren(topic).map((child,index)=>walk(child,depth+1,depth?color:palette[index%palette.length]))});
+  const palette=xmindThemePalette().palette,walk=(topic,depth,color)=>({data:{uid:String(topic.id||xmindId()),text:xmindPlainText(topic.title||'未命名主题'),richText:false,expand:depth===0||!XMIND_COLLAPSED.has(topic.id),...(depth?{lineColor:color}:{}),...(topic.note?{note:topic.note}:{}),...(topic.hyperlink?{hyperlink:topic.hyperlink}:{}),...(Array.isArray(topic.tag)&&topic.tag.length?{tag:topic.tag}:{}),...(Array.isArray(topic.icon)&&topic.icon.length?{icon:topic.icon}:{}),...(topic.image?{image:topic.image}:{})},children:xmindChildren(topic).map((child,index)=>walk(child,depth+1,depth?color:palette[index%palette.length]))});
   return walk(xmindRootTopic(),0,palette[0]);
 }
 function xmindSyncFromEditor(record=false,data=null){

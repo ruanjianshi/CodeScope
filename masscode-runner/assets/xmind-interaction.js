@@ -128,11 +128,16 @@
   /* ── 平移：手型工具 / 中键（引擎已接管右键与中键，这里只补手型工具）────── */
   function startPan(event, engine) {
     const view = xmindMapTranslation();
+    const floating = event.target.closest?.('.xmind-floating-node');
+    const treeTopic = floating ? null : xmindEngineTopic(event.target);
     XMIND_CANVAS_PAN = {
       pointerId: event.pointerId,
       x: event.clientX, y: event.clientY,
       tx: view.x, ty: view.y, scale: view.scale,
       moved: false,
+      button: event.button,
+      /* 右键「点一下不动」= 打开节点菜单 ✓（右键拖动仍然是平移 ✓ 和 XMind 一致） */
+      topicId: floating ? floating.dataset.topicId : (treeTopic ? xmindEngineTopicId(treeTopic) : null),
     };
     try { engine.setPointerCapture(event.pointerId); } catch (_) {}
     event.preventDefault();
@@ -260,6 +265,155 @@
     return true;
   }
 
+  /* ══ 分组选择（用户：「缺少分组那种选择」）═══════════════════════════════
+     XMind 的做法：右键主题 → 选择同级 / 选择分支；Ctrl+A 全选。
+     分支选择必须**连子孙一起选**，否则「删除分支」只能删一半 ✓ */
+  function collectSubtree(topic, out) {
+    if (!topic) return out;
+    out.push(String(topic.id));
+    (xmindChildren(topic) || []).forEach((child) => collectSubtree(child, out));
+    return out;
+  }
+
+  function selectBranch(id) {
+    const hit = xmindFind(id);
+    if (!hit) return;
+    setSelection(collectSubtree(hit.topic, []), String(id));
+    syncEngineSelection();
+  }
+
+  function selectSiblings(id) {
+    const hit = xmindFind(id);
+    if (!hit || !hit.container) { selectBranch(id); return; }
+    setSelection(hit.container.map((topic) => String(topic.id)), String(id));
+    syncEngineSelection();
+  }
+
+  function selectAllTopics() {
+    const root = xmindRootTopic();
+    if (!root) return;
+    const ids = collectSubtree(root, []);
+    (xmindDetached() || []).forEach((topic) => collectSubtree(topic, ids));
+    setSelection(ids, ids[0]);
+    syncEngineSelection();
+  }
+
+  /* ══ 一个够用的输入框（备注 / 超链接 / 标签）══════════════════════════════
+     ⚠️ 不用 window.prompt ✗：Electron 里它会把窗口冻住，而且样式完全失控 ✓ */
+  function askText(title, value, multiline) {
+    return new Promise((resolve) => {
+      const mask = document.createElement('div');
+      mask.className = 'cs-ask-mask';
+      const card = document.createElement('div');
+      card.className = 'cs-ask-card';
+      const head = document.createElement('div');
+      head.className = 'cs-ask-head';
+      head.textContent = title;
+      const input = document.createElement(multiline ? 'textarea' : 'input');
+      input.className = 'cs-ask-input';
+      input.value = value || '';
+      if (!multiline) input.type = 'text';
+      const foot = document.createElement('div');
+      foot.className = 'cs-ask-foot';
+      const cancel = document.createElement('button');
+      cancel.textContent = '取消';
+      const okBtn = document.createElement('button');
+      okBtn.className = 'primary';
+      okBtn.textContent = '确定';
+      foot.append(cancel, okBtn);
+      card.append(head, input, foot);
+      mask.appendChild(card);
+      document.body.appendChild(mask);
+      const done = (result) => { mask.remove(); resolve(result); };
+      cancel.onclick = () => done(null);
+      okBtn.onclick = () => done(input.value);
+      mask.onclick = (event) => { if (event.target === mask) done(null); };
+      input.onkeydown = (event) => {
+        event.stopPropagation();
+        if (event.key === 'Escape') { event.preventDefault(); done(null); }
+        if (event.key === 'Enter' && !multiline) { event.preventDefault(); done(input.value); }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); done(input.value); }
+      };
+      input.focus();
+      input.select();
+    });
+  }
+
+  /* 字段一律**先改数据模型再重渲染** ✓ ——
+     引擎的 SET_NODE_NOTE 之类只认树节点 ✗，自由主题没有引擎节点 ✓；
+     走模型这条路树节点和自由主题同一套代码 ✓ 而且天然存进 .xmind ✓ */
+  function applyField(id, field, value) {
+    const hit = xmindFind(id);
+    if (!hit) return;
+    if (value) hit.topic[field] = value;
+    else delete hit.topic[field];
+    xmindChanged();
+  }
+
+  async function editNote(id) {
+    const hit = xmindFind(id);
+    if (!hit) return;
+    const next = await askText('备注（支持多行）', hit.topic.note || '', true);
+    if (next !== null) applyField(id, 'note', next.trim());
+  }
+
+  async function editLink(id) {
+    const hit = xmindFind(id);
+    if (!hit) return;
+    const next = await askText('超链接地址', hit.topic.hyperlink || '', false);
+    if (next !== null) applyField(id, 'hyperlink', next.trim());
+  }
+
+  async function editTags(id) {
+    const hit = xmindFind(id);
+    if (!hit) return;
+    const current = Array.isArray(hit.topic.tag) ? hit.topic.tag.join(', ') : '';
+    const next = await askText('标签（用逗号分隔）', current, false);
+    if (next === null) return;
+    const list = next.split(/[,，]/).map((item) => item.trim()).filter(Boolean);
+    applyField(id, 'tag', list.length ? list : null);
+  }
+
+  /* ══ 节点右键菜单（XMind 的右键就是主入口）═══════════════════════════════ */
+  function openNodeMenu(event, id) {
+    const hit = xmindFind(id);
+    if (!hit) return;
+    const node = hit.isDetached ? null : xmindSmmNode(id);
+    const focus = () => setSelection([id], id);
+    const items = [
+      { label: '编辑主题', hint: 'F2', run: () => { focus(); if (hit.isDetached) xmindBeginFloatingEdit(id); else if (node) xmindBeginEngineEdit(node); } },
+      { type: 'separator' },
+      { label: '插入子主题', hint: 'Tab', run: () => { focus(); xmindAddChild(); } },
+      { label: '插入同级主题', hint: 'Enter', run: () => { focus(); xmindAddSibling(); } },
+      { label: '插入父主题', hint: '⌘↵', run: () => { focus(); xmindAddParent(); } },
+      { type: 'separator' },
+      { label: '选择分支（含子孙）', run: () => selectBranch(id) },
+      { label: '选择同级主题', run: () => selectSiblings(id) },
+      { label: '全选', hint: '⌘A', run: () => selectAllTopics() },
+      { type: 'separator' },
+      { label: '上移', hint: '⌥↑', run: () => { focus(); xmindReorder(-1); } },
+      { label: '下移', hint: '⌥↓', run: () => { focus(); xmindReorder(1); } },
+      { label: XMIND_COLLAPSED.has(id) ? '展开子主题' : '折叠子主题', run: () => { focus(); xmindToggleFold(); } },
+      { type: 'separator' },
+      { label: hit.topic.note ? '编辑备注…' : '添加备注…', run: () => editNote(id) },
+      { label: hit.topic.hyperlink ? '编辑超链接…' : '添加超链接…', run: () => editLink(id) },
+      { label: Array.isArray(hit.topic.tag) && hit.topic.tag.length ? '编辑标签…' : '添加标签…', run: () => editTags(id) },
+      { type: 'separator' },
+      { label: hit.isDetached ? '转为普通主题' : '转为自由主题', run: () => { focus(); if (hit.isDetached) { xmindAttachToRoot(id); } else xmindToFloating(); } },
+      { type: 'separator' },
+      { label: '删除主题及子主题', hint: 'Del', danger: true, run: () => { focus(); xmindDelete(); } },
+      { label: '仅删除当前主题', hint: '⌘Del', danger: true, run: () => { focus(); xmindDeleteSingle(); } },
+    ];
+    if (typeof showContextMenu === 'function') showContextMenu(event, items);
+  }
+
+  /* 自由主题挂回中心主题（右键里「转为普通主题」）✓ */
+  function xmindAttachToRoot(id) {
+    const root = xmindRootTopic();
+    if (!root || !xmindAttachFloating) return;
+    xmindAttachFloating(id, String(root.id));
+  }
+
   /* ── 事件绑定 ─────────────────────────────────────────────────────────── */
   function bind(engine, map) {
     if (engine.dataset.csXmindInteraction === '2') return;
@@ -350,11 +504,17 @@
         return;
       }
       if (XMIND_CANVAS_PAN && XMIND_CANVAS_PAN.pointerId === event.pointerId) {
+        const pan = XMIND_CANVAS_PAN;
         XMIND_CANVAS_PAN = null;
         try { engine.releasePointerCapture(event.pointerId); } catch (_) {}
         xmindUpdateViewportTools();
         event.preventDefault();
         event.stopImmediatePropagation();
+        /* 右键单击（没拖动）= 节点菜单 ✓ */
+        if (pan.button === 2 && !pan.moved && pan.topicId) {
+          setSelection([pan.topicId], pan.topicId);
+          openNodeMenu(event, pan.topicId);
+        }
         return;
       }
       if (box && box.active && box.pointerId === event.pointerId) {
@@ -463,6 +623,8 @@
         deleteSelection();
         return;
       }
+      if (withMod && key === 'a') { event.preventDefault(); event.stopImmediatePropagation(); selectAllTopics(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); clearSelection(); return; }
       if (withMod && (key === '+' || key === '=' || key === '-' || key === '0')) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -486,5 +648,9 @@
   window.__csXmindDeleteMulti = () => deleteSelection();
   window.__csXmindClearSelection = () => clearSelection();
   window.__csXmindMerging = () => Date.now() < mergeUntil;
+  window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
+  window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
+  window.__csXmindSelectAll = () => selectAllTopics();
+  window.__csXmindMenu = (event, id) => openNodeMenu(event, id);
   window.__csXmindRepaintSelection = () => paintSelection();
 })();

@@ -690,3 +690,51 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 #xmind-preview:has(#xmind-engine.space-pan),
 #xmind-preview:has(#xmind-engine.space-pan) .xmind-floating-node { cursor: grab !important; }
 #xmind-preview:has(#xmind-engine.space-pan):has(#xmind-engine.panning) { cursor: grabbing !important; }
+
+/* ═══ 思维导图：选中环只留**一圈** ═══════════════════════════════════════════
+   用户：「框选有问题，定位不准」—— 实际看到的是**两圈**：
+   节点自己的 2px 边框 + `.selected` 的 2px outline（offset 3px）叠在一起，
+   缩放到 50% 时两圈几乎贴住，看着像"选中的框没对准节点" ✗
+   ⇒ 选中时不画 outline，改成「边框变色 + 一圈光晕」，视觉上就一条线 ✓ */
+#xmind-floating-layer .xmind-floating-node.selected {
+  outline: 0 !important;
+  border-color: var(--xm-accent, #78a9ff) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--xm-accent, #78a9ff) 30%, transparent),
+              0 8px 24px rgba(0, 0, 0, .32) !important;
+}
+
+/* ═══ 备注 / 超链接 / 标签 的输入弹窗 ═══════════════════════════════════════ */
+.cs-ask-mask {
+  position: fixed; inset: 0; z-index: 9000;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, .42);
+  backdrop-filter: blur(2px);
+}
+.cs-ask-card {
+  width: min(440px, 84vw);
+  padding: 16px 18px 14px;
+  border: 1px solid var(--line, #2b3644);
+  border-radius: 12px;
+  background: var(--panel, #131a23);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cs-ask-head { font: 600 13px var(--font); color: var(--text, #e6edf6); }
+.cs-ask-input {
+  width: 100%; min-height: 34px; max-height: 40vh; resize: vertical;
+  padding: 8px 10px; box-sizing: border-box;
+  border: 1px solid var(--line, #2b3644); border-radius: 8px;
+  background: var(--input, #0d141c); color: var(--text, #e6edf6);
+  font: 13px/1.5 var(--font); outline: none;
+}
+.cs-ask-input:focus { border-color: var(--accent, #78a9ff); }
+.cs-ask-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.cs-ask-foot button {
+  min-width: 64px; height: 30px; padding: 0 12px;
+  border: 1px solid var(--line, #2b3644); border-radius: 8px;
+  background: transparent; color: var(--text, #e6edf6);
+  font: 12px var(--font); cursor: pointer;
+}
+.cs-ask-foot button.primary {
+  border-color: transparent; background: var(--accent, #78a9ff); color: #08111c; font-weight: 600;
+}
