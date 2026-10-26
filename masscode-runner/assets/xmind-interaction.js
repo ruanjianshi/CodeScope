@@ -543,40 +543,35 @@
     }
     layer.replaceChildren();
     const paths = [...container.querySelectorAll(':scope > path')];
-    /* ⚠️ 用「多边形描边」这条路是错的 ✗ —— 折角处内外偏移点会**自交**，
-       画出来一格一格的台阶（用户：「什么垃圾渐细」）✓
-       ⇒ 改成：把一条线切成 N 小段，**每段用不同的 stroke-width** 描边 ✓
-          · 每段都是沿原路径的真实描边 → 折角永远是干净的 ✓
-          · round 线帽 + 少量重叠 → 段与段之间无缝 ✓ */
-    const SEGMENTS = 18;
+    /* ★ 最终做法：**同一段贝塞尔曲线 + 不同线宽 + dash 切片** ✓
+       · 之前的"切成小折线"在高倍放大下会露出**多边形棱角**（曲线变折线）✗
+       · 这里每条切片都是**原曲线本身**，只靠 stroke-dasharray 截取其中一段 ✓
+         → 曲线永远光滑，宽度逐段递减 ✓ */
+    const SEGMENTS = 16;
     paths.forEach((path) => {
       let len = 0;
       try { len = path.getTotalLength(); } catch (_) { return; }
       if (!len || len < 10) return;
+      const d = path.getAttribute('d');
+      if (!d) return;
       const color = path.getAttribute('stroke') || '#8fa6c9';
       const opacity = path.getAttribute('stroke-opacity') || '1';
-      /* 参考图里的线其实很**含蓄**：约 2px，只有一点点粗细变化 ✓
-         之前 2.8 → 1.0 落差太大，看着像"两头不一样粗的管子" ✗ */
-      const w0 = 2.4;
-      const w1 = 1.6;
+      const w0 = 3.0;
+      const w1 = 1.2;
+      const slice = len / SEGMENTS;
       for (let i = 0; i < SEGMENTS; i += 1) {
-        const from = (len * i) / SEGMENTS;
-        const to = Math.min(len, (len * (i + 1)) / SEGMENTS + 0.6);   /* 稍微重叠，别留缝 */
         const t = (i + 0.5) / SEGMENTS;
         const width = w0 + (w1 - w0) * t;
-        const steps = 6;
-        const cmds = [];
-        for (let k = 0; k <= steps; k += 1) {
-          const p = path.getPointAtLength(from + ((to - from) * k) / steps);
-          cmds.push((k === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1));
-        }
         const seg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        seg.setAttribute('d', cmds.join(' '));
+        seg.setAttribute('d', d);
         seg.setAttribute('fill', 'none');
         seg.setAttribute('stroke', color);
         seg.setAttribute('stroke-width', width.toFixed(2));
-        seg.setAttribute('stroke-linecap', 'round');
         seg.setAttribute('stroke-opacity', opacity);
+        seg.setAttribute('stroke-linecap', 'butt');
+        /* 只显示 [i*slice, (i+1)*slice] 这一段；多给 0.5px 防止接缝发丝 */
+        seg.setAttribute('stroke-dasharray', (slice + 0.5).toFixed(2) + ' ' + (len + 2).toFixed(2));
+        seg.setAttribute('stroke-dashoffset', (-(i * slice)).toFixed(2));
         layer.appendChild(seg);
       }
     });
