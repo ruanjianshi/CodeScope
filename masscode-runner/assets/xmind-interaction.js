@@ -1408,6 +1408,12 @@
         deleteSelection();
         return;
       }
+      /* ⚠️ 树节点的 Tab / Enter 也**自己接管** ✗✗
+         引擎的 INSERT_CHILD_NODE / INSERT_NODE 在这个构建里**执行了但什么也没发生**
+         （实测：activeNodeList=1、readonly=false、命令返回 ok，节点数不变）✓
+         ⇒ 走我们自己的 xmindAddChild / xmindAddSibling（内部有模型兜底）✓ */
+      if (!withMod && event.key === 'Tab') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddChild(); return; }
+      if (!withMod && event.key === 'Enter') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddSibling(); return; }
       if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); clearSelection(); return; }
       if (event.key === 'F2' && XMIND_MAP.renderer?.activeNodeList?.[0]) {
         event.preventDefault();
