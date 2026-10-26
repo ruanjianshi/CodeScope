@@ -514,3 +514,64 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 /* 自由主题的浮层：与 #xmind-engine 同尺寸同位置，但不在地图容器内部 ✓
    （挂在里面会被引擎重渲染清掉，还会在 blur 回调里抛 NotFoundError）*/
 #xmind-float-overlay { position: absolute; inset: 0; z-index: 35; pointer-events: none; overflow: hidden; }
+
+/* ═══ 思维导图大纲：层级清晰 + 按钮不抢戏 ═══════════════════════════════════
+   用户：「这个大纲设计的太丑了，按钮太突兀了，层级也不够清晰」✓
+   原状：展开箭头和 ⋮ 按钮被通用 button 规则套上了灰底方块 ✗，一排排灰块非常吵；
+        层级靠虚线括号 + L1/L2 胶囊，视觉噪音大 ✓
+   改法：**箭头只留图形**、⋮ 只在悬停时出现、层级只靠**实线竖引导 + 缩进** ✓ */
+#xmind-outline .xmind-toggle,
+#xmind-outline .xmind-grip {
+  width: 18px !important; height: 18px !important;
+  min-height: 0 !important; min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: #6f7b8b !important;
+  display: inline-grid !important;
+  place-items: center;
+  transition: color .12s, background .12s, opacity .12s;
+}
+#xmind-outline .xmind-toggle .cs-ico,
+#xmind-outline .xmind-grip .cs-ico { width: 11px !important; height: 11px !important; }
+#xmind-outline .xmind-toggle:hover,
+#xmind-outline .xmind-grip:hover { background: rgba(255, 255, 255, .08) !important; color: #cfd8e4 !important; }
+#xmind-outline .xmind-toggle.empty { visibility: hidden; }
+
+/* ⋮ 平时不出现，行悬停才露出来 ✓ */
+#xmind-outline .xmind-grip { opacity: 0; }
+#xmind-outline .xmind-row:hover .xmind-grip { opacity: 1; }
+
+/* 层级：只靠**实线竖引导 + 缩进**，去掉虚括号和 L1/L2 胶囊 ✓ */
+#xmind-outline .xmind-tree-children {
+  margin-left: 15px !important;
+  padding-left: 12px !important;
+  border-left: 1px solid rgba(255, 255, 255, .07) !important;
+}
+#xmind-outline .xmind-tree-children > .xmind-tree-group > .xmind-row::before { content: none !important; }
+#xmind-outline .xmind-depth {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  font-size: 9px !important;
+  letter-spacing: .3px;
+  color: rgba(255, 255, 255, .22) !important;
+}
+
+/* 行本身：更紧凑、圆角、选中用左侧色条 */
+#xmind-outline .xmind-row {
+  min-height: 27px !important;
+  padding: 1px 6px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  gap: 3px !important;
+}
+#xmind-outline .xmind-row:hover { background: rgba(255, 255, 255, .05) !important; }
+#xmind-outline .xmind-row.selected {
+  background: rgba(91, 147, 255, .16) !important;
+  box-shadow: inset 2px 0 0 #5b93ff;
+}
+#xmind-outline .xmind-row.selected .xmind-title { color: #dce8ff; }
