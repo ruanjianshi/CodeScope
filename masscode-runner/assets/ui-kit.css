@@ -802,3 +802,17 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   color: color-mix(in srgb, var(--branch-color, #c9a227) 70%, #ffffff) !important;
   border-color: color-mix(in srgb, var(--branch-color, #c9a227) 45%, #1e1e20) !important;
 }
+
+/* ═══ 工具栏：挤不下就换行，别把撤销/重做挤到屏幕外 ═══════════════════════════
+   用户：「怎么没有撤销等按键」—— 加了「选分支/选同级/分组框」之后，
+   固定 46px 高、单行不换行 → 后面的 ↶ ↷ 直接被挤出可视区 ✗ */
+.codescope-xmind-toolbar {
+  flex-wrap: wrap !important;
+  height: auto !important;
+  min-height: 46px !important;
+  max-height: none !important;
+  row-gap: 6px !important;
+  align-content: center !important;
+}
+/* 分组框按钮在窄屏时不必占太宽 */
+#xmind-outer-frame { padding: 4px 8px !important; }

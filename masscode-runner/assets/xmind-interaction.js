@@ -279,10 +279,23 @@
     try {
       overlay.querySelectorAll('.cs-free-frame').forEach((el) => el.remove());
       const er = engine.getBoundingClientRect();
+      /* 自由导图：把「带同一个 groupId 的节点」聚成一组再画框 ✓ */
+      const groups = new Map();
       (xmindDetached() || []).forEach((root) => {
-        const frame = root.outerFrame;
-        if (!frame) return;
-        const rects = collectSubtree(root, [])
+        (function walk(topic, depth) {
+          if (!topic) return;
+          const groupId = topic.outerFrame && topic.outerFrame.groupId;
+          /* ⚠️ depth===0 = 挂在组根上的**旧数据**（上一版把框挂在组根 → 一选就全框）✗
+             不再渲染它，避免又冒出一个"整组被框"的框 ✓ */
+          if (groupId && depth > 0) {
+            if (!groups.has(groupId)) groups.set(groupId, { frame: topic.outerFrame, ids: [] });
+            groups.get(groupId).ids.push(String(topic.id));
+          }
+          (xmindChildren(topic) || []).forEach((child) => walk(child, depth + 1));
+        })(root, 0);
+      });
+      groups.forEach(({ frame, ids }) => {
+        const rects = ids
           .map((id) => document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(id) + '"]'))
           .filter(Boolean)
           .map((el) => el.getBoundingClientRect());
@@ -621,8 +634,19 @@
         if (topic) topic.outerFrame = { ...frame };
       }
     });
-    /* 自由导图：框挂在**组根**上，覆盖整组（子主题会跟着动，不用逐个挂 ✓） */
-    freeRoots.forEach((root) => { root.outerFrame = { ...frame, radius: 14 }; });
+    /* ⚠️ 自由导图：框挂在**选中的每一个**上 ✗ 不能挂组根 ✓
+       挂组根 = 整组被框住 —— 用户只选了两个节点却全被框了（实测反馈）✗ */
+    let freeCount = 0;
+    list.forEach((id) => {
+      const hit = xmindFind(id);
+      if (!hit || !hit.isDetached) return;
+      hit.topic.outerFrame = { ...frame, radius: 12 };
+      freeCount += 1;
+    });
+    if (!ranges.length && !freeCount) {
+      if (typeof setDrawStatus === 'function') setDrawStatus('先选中要分组的主题', 'warn');
+      return;
+    }
     xmindChanged();
     if (typeof setDrawStatus === 'function') setDrawStatus('已加分组框：双击框上的标题可以改名', 'ok');
   }
@@ -719,6 +743,16 @@
         }).observe(floatOverlay, { childList: true });
       } catch (_) {}
     }
+
+    /* 一次性迁移：上一版把分组框挂在**自由导图组根**上（导致"选两个框全组"）✗
+       → 这里直接清掉，别让它留在文件里 ✓ */
+    setTimeout(() => {
+      let cleaned = 0;
+      (xmindDetached() || []).forEach((root) => {
+        if (root.outerFrame) { delete root.outerFrame; cleaned += 1; }
+      });
+      if (cleaned) xmindChanged();
+    }, 600);
 
     bindOutline(document.getElementById('xmind-outline'));
     map.on('scale', () => { updateGroupBox(); renderFreeFrames(); });
@@ -906,6 +940,19 @@
       const withMod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
 
+      /* ⚠️ 带修饰键的快捷键必须放在 `hit.isDetached` **之前** ✗✗
+         那个分支处理完就 return ✓ —— 选中自由主题时，Ctrl+Z / Ctrl+A / 缩放全都走不到 ✓（实测） */
+      if (withMod && key === 'a') { event.preventDefault(); event.stopImmediatePropagation(); selectAllTopics(); return; }
+      if (withMod && key === 'z') { event.preventDefault(); event.stopImmediatePropagation(); xmindUndo(event.shiftKey ? 1 : -1); return; }
+      if (withMod && (key === '+' || key === '=' || key === '-' || key === '0')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (key === '+' || key === '=') xmindZoom(0.12);
+        else if (key === '-') xmindZoom(-0.12);
+        else xmindResetZoom();
+        return;
+      }
+
       if (hit?.isDetached) {
         if (event.key === 'F2') { event.preventDefault(); event.stopImmediatePropagation(); xmindBeginFloatingEdit(); }
         else if (!withMod && event.key === 'Tab') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddChild(); }
@@ -924,16 +971,7 @@
         deleteSelection();
         return;
       }
-      if (withMod && key === 'a') { event.preventDefault(); event.stopImmediatePropagation(); selectAllTopics(); return; }
       if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); clearSelection(); return; }
-      if (withMod && (key === '+' || key === '=' || key === '-' || key === '0')) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (key === '+' || key === '=') xmindZoom(0.12);
-        else if (key === '-') xmindZoom(-0.12);
-        else xmindResetZoom();
-        return;
-      }
       if (event.key === 'F2' && XMIND_MAP.renderer?.activeNodeList?.[0]) {
         event.preventDefault();
         event.stopImmediatePropagation();
