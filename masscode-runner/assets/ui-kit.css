@@ -453,3 +453,60 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 #btn-git-panel .cs-ico { width: 13px; height: 13px; }
 #btn-git-panel:hover { background: rgba(255, 255, 255, .08); color: #cfd8e4; }
 #btn-git-panel[aria-expanded="true"] { background: rgba(91, 147, 255, .16); color: #9ec2ff; }
+
+/* ═══ 思维导图编辑器（XMind 那套）视觉打磨 ═════════════════════════════════
+   用户：「xmind 设计和 UI，太丑了」✓
+   原状：工具栏每个按钮都带一圈描边 → 一排灰框，很吵 ✗
+   改成：**分组容器 + 幽灵按钮**（现代编辑器常见做法）——
+        按钮平时无边框、悬停才浮起来；同组功能收进一个浅底容器 ✓ */
+.codescope-xmind-toolbar {
+  flex: 0 0 42px !important;
+  height: 42px !important;
+  gap: 6px !important;
+  padding: 0 10px !important;
+  background: #0e141c !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .06) !important;
+}
+.codescope-xmind-toolbar button {
+  min-height: 26px !important;
+  padding: 3px 8px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: #93a0b1 !important;
+  font-size: 11.5px !important;
+  transition: background .12s, color .12s;
+}
+.codescope-xmind-toolbar button:hover { background: rgba(255, 255, 255, .07) !important; color: #e7ecf3 !important; }
+.codescope-xmind-toolbar button.on { background: rgba(91, 147, 255, .18) !important; color: #cfe0ff !important; }
+.codescope-xmind-toolbar button:disabled { opacity: .35 !important; }
+/* 同组按钮：一个浅底容器把它们连起来 */
+.xmind-tool-group {
+  padding: 2px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .045) !important;
+}
+.xmind-tool-group button:hover { background: rgba(255, 255, 255, .10) !important; }
+.xmind-tool-sep { background: rgba(255, 255, 255, .08) !important; height: 18px !important; }
+
+/* 下拉/输入类控件：统一成无边框 + 悬停显形，和幽灵按钮一套语言 */
+#xmind-layout-select, .xmind-style-select, #xmind-sheet-select, #xmind-sheet-title {
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #b6c2d2 !important;
+  font-size: 11.5px !important;
+}
+#xmind-layout-select:hover, .xmind-style-select:hover, #xmind-sheet-select:hover { background: rgba(255, 255, 255, .08) !important; }
+
+/* 画布：加一层很淡的点阵，空间感更明确 ✓ */
+#xmind-engine {
+  background-image: radial-gradient(rgba(255, 255, 255, .08) 1px, transparent 1px) !important;
+  background-size: 22px 22px !important;
+}
+
+/* 左侧大纲：行更紧凑，层级数字弱化，缩进用竖线引导 */
+#xmind-outline { background: #0c121a !important; padding: 8px 6px 24px !important; }
+.xmind-row { border-radius: 6px !important; }
+.xmind-depth { opacity: .42 !important; font-size: 9px !important; letter-spacing: 0 !important; }
