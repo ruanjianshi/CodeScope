@@ -20,3 +20,10 @@ markdown-vault/**/.vitepress/cache/
 
 # Octave 在项目目录里留下的工作区文件（调试时会生成，不该进版本库）
 **/octave-workspace
+
+# ── 运行时自动备份，不该进版本库 ──
+# .canvas 保存前留的上一版（.bak / .bak2）、片段编辑前的 .bak-<时间戳>
+# 这些是工具生成的安全网，跟着内容一起提交只会让仓库越来越胖
+markdown-vault/**/*.bak
+markdown-vault/**/*.bak2
+markdown-vault/**/*.bak-*
