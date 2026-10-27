@@ -481,11 +481,14 @@
     const page = editor.getPage(pageId);
     if (!page) { toast('子白板不存在（可能已被删除）', 'err'); return; }
     let switched = false;
-    try { editor.setCurrentPage(page); switched = true; } catch (_) {}
+    let err = '';
+    try { editor.setCurrentPage(page); switched = true; } catch (e1) { err = String(e1 && e1.message || e1); }
     if (!switched) {
-      try { editor.setCurrentPageId(page.id); switched = true; } catch (_) {}
+      try { editor.setCurrentPageId(page.id); switched = true; } catch (e2) { err += ' / ' + String(e2 && e2.message || e2); }
     }
-    if (!switched) { toast('切换子白板失败', 'err'); return; }
+    if (!switched) { toast('切换子白板失败：' + err, 'err'); return; }
+    /* 把"进入成功"也明示出来 ✓ —— 之前静默成功/失败都看不出来 ✓ */
+    toast('已进入「' + (page.name || '子白板') + '」');
     editor.setSelectedShapes([]);
     renderCrumb();
     renderPages();
@@ -1432,9 +1435,14 @@
         const h = Number(sh.props?.h || 0);
         return point.x >= sh.x && point.x <= sh.x + w && point.y >= sh.y && point.y <= sh.y + h;
       });
-      if (!hit || !hit.props?.pageId) return;
+      if (!hit || !hit.props?.pageId) {
+        /* 命中了画布但没命中子白板 → 也给一句，避免"点了没反应"的错觉 ✓ */
+        if (shapes.length) toast('双击位置没落在子白板上');
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
+      toast('双击命中「' + (hit.props.title || '子白板') + '」');
       enterPage(hit.props.pageId);
     }, true);
     /* 页面切换后刷新面包屑 / 列表 */
