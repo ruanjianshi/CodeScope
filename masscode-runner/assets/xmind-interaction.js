@@ -1475,6 +1475,8 @@
     });
     xmindChanged();
     renderMarkers();
+    /* 标记增减会改变节点尺寸 → 布局位移 → 选中框/概要要跟着重算 ✓ */
+    requestAnimationFrame(() => refreshOverlay());
   }
 
   /* ══ 节点右键菜单（XMind 的右键就是主入口）═══════════════════════════════ */
@@ -1614,7 +1616,14 @@
     map.on('node_dragging', () => { requestAnimationFrame(() => { renderSummaryBrackets(); renderMarkers(); }); });
     map.on('node_dragend', () => { refreshOverlay(); scheduleTaper(); });
     map.on('node_tree_render_end', () => { scheduleTaper(); requestAnimationFrame(renderSummaryBrackets); });
-    map.on('data_change', () => scheduleTaper());
+    /* ⚠️ 数据一变（加/删标记、改标题…）节点尺寸会变 → 布局位移 ✓
+       但浮层（选中框 / 概要 / 标记 / 分组框）只在选中变化时重画 ✗
+       → 选中框停在旧位置，看起来「框跑出去了」（用户实测：右键清除标记后）✓
+       ⇒ 数据变化后补一帧重画 ✓ */
+    map.on('data_change', () => {
+      scheduleTaper();
+      requestAnimationFrame(() => { if (!isInlineEditing()) refreshOverlay(); });
+    });
 
     map.on('node_active', (node, list) => {
       if (muting) return;
