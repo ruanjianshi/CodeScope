@@ -908,7 +908,23 @@
        （浮层的坐标系原点是「根节点中心」，比例尺要以它为准）✓ */
     const origin = typeof xmindFloatingOrigin === 'function' ? xmindFloatingOrigin() : null;
     const er = engineEl().getBoundingClientRect();
-    const realScale = origin && origin.scale ? origin.scale : scale;
+    /* ★ 真实比例尺用**根节点反推** ✓
+       浮层坐标 = origin + position * scale，所以拿任一有坐标的根节点：
+       scale = (根节点屏幕中心 - origin) / 根节点 position ✓
+       （`view.scale` 和渲染实际用的比例不一致，实测会差好几倍 ✗） */
+    let realScale = origin && origin.scale ? origin.scale : scale;
+    try {
+      const probeRoot = (xmindDetached() || []).find((r) => r.position && Math.abs(Number(r.position.x)) > 40);
+      if (probeRoot) {
+        const pel = document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(String(probeRoot.id)) + '"]');
+        if (pel && origin) {
+          const pr = pel.getBoundingClientRect();
+          const screenCx = pr.left + pr.width / 2 - er.left;
+          const derived = (screenCx - origin.x) / Number(probeRoot.position.x);
+          if (Number.isFinite(derived) && derived > 0.01 && derived < 20) realScale = derived;
+        }
+      }
+    } catch (_) {}
     const applied = new Map();
     let touched = 0;
     list.forEach((item) => {
@@ -920,26 +936,26 @@
       if (inherited) { dx -= inherited.dx; dy -= inherited.dy; }
       applied.set(String(item.topic.id), { dx, dy });
       if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
-      /* ★ 统一写**绝对位置并标记 fixed** ✓
-         子主题原来是自动布局排的（横向本来就齐、纵向由布局决定），
-         只改 `codescopeOffset` 会和布局打架 → 对齐看起来"没反应"（用户实测）✓
-         固定之后 `xmindFloatingItems` 会优先用 position，布局不再覆盖 ✓ */
-      const cur = item.topic.position && Number.isFinite(Number(item.topic.position.x))
-        ? { x: Number(item.topic.position.x), y: Number(item.topic.position.y) }
-        : { x: (item.rect.left + item.rect.width / 2 - er.left - (origin?.x || 0)) / realScale, y: (item.rect.top + item.rect.height / 2 - er.top - (origin?.y || 0)) / realScale };
-      /* ★ 记住**锚点**（父节点当时的位置）✓
-         否则拖动父节点时，被固定的子节点会留在原地不动（用户实测）✓
-         渲染时：实际位置 = 固定位置 + (父节点当前位置 - 锚点) ✓ */
-      let anchorX;
-      let anchorY;
-      if (item.parentId) {
-        const parentItem = xmindFloatingItems().find((entry) => String(entry.topic.id) === item.parentId);
-        if (parentItem && parentItem.position) {
-          anchorX = parentItem.position.x;
-          anchorY = parentItem.position.y;
+      /* ★ 改成写**相对偏移** `codescopeOffset` ✓
+         ⚠️ 之前写的是**绝对坐标 + fixed** ✗ —— 子节点一旦固定就脱离父节点，
+            拖父节点不跟随、反复对齐还会累积漂移（用户实测：越弄越乱）✓
+         相对偏移的好处：自动布局的槽位 + 偏移 = 最终位置，
+         父节点一动它自然跟着走，也不会漂 ✓ */
+      if (!item.parentId) {
+        const cur = item.topic.position && Number.isFinite(Number(item.topic.position.x))
+          ? { x: Number(item.topic.position.x), y: Number(item.topic.position.y) }
+          : { x: (item.rect.left + item.rect.width / 2 - er.left - (origin?.x || 0)) / realScale, y: (item.rect.top + item.rect.height / 2 - er.top - (origin?.y || 0)) / realScale };
+        item.topic.position = { x: cur.x + dx, y: cur.y + dy };
+      } else {
+        const off = item.topic.codescopeOffset || { dx: 0, dy: 0 };
+        item.topic.codescopeOffset = { dx: Number(off.dx || 0) + dx, dy: Number(off.dy || 0) + dy };
+        /* 顺便把历史上留下的 fixed 清掉 ✓（老数据自动修正） */
+        if (item.topic.position && item.topic.position.fixed) {
+          delete item.topic.position.fixed;
+          delete item.topic.position.anchorX;
+          delete item.topic.position.anchorY;
         }
       }
-      item.topic.position = { x: cur.x + dx, y: cur.y + dy, fixed: true, ...(Number.isFinite(anchorX) ? { anchorX, anchorY } : {}) };
       touched += 1;
     });
     if (!touched) return false;
@@ -969,6 +985,8 @@
           delete topic.position.anchorY;
           n += 1;
         }
+        /* 子主题的对齐偏移也要清掉，否则"恢复"了还是歪的 ✓ */
+        if (topic.codescopeOffset) { delete topic.codescopeOffset; n += 1; }
         (xmindChildren(topic) || []).forEach(walk);
       })(hit.topic);
     });
@@ -1668,7 +1686,7 @@
       { label: '加分组框（外框）…', run: () => addGroupFrame([...multi()]) },
       { label: '加概要（右侧括号）…', run: () => addSummary() },
       { label: '标记 ▸', hint: '★ ⚑ ✓ ? !', run: () => markerMenu(event, id) },
-      { label: '对齐与间距 ▸', hint: '选中 ≥2 个', run: () => alignMenu(event) },
+      { label: '恢复自动布局（修复错位）', hint: '清掉手动位置', run: () => resetAutoLayout([...multi()]) },
       { label: '改分组框标题…', disabled: !currentFrameGroup([...multi()]), run: () => editGroupFrame([...multi()]) },
       { label: '删除分组框', disabled: !currentFrameGroup([...multi()]), run: () => deleteGroupFrame([...multi()]) },
       { type: 'separator' },
@@ -1704,7 +1722,7 @@
     if (typeof showContextMenu !== 'function') return;
     const count = multi().size;
     showContextMenu(event, [
-      { label: '对齐与间距 ▸', hint: '已选 ' + count + ' 个', run: () => alignMenu(event) },
+      { label: '恢复自动布局（修复错位）', hint: '清掉手动位置', run: () => resetAutoLayout([...multi()]) },
       { type: 'separator' },
       { label: '加分组框（外框）…', run: () => addGroupFrame([...multi()]) },
       { label: '加概要（右侧括号）…', run: () => addSummary() },
