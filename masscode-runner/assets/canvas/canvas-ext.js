@@ -1412,66 +1412,6 @@
     bindGuides();
     bindDropHint();
     bindCardDrop();
-    /* ══ 子白板卡片：画一块**内容缩略图** ═══════════════════════════════════
-       ⚠️ 不去动 bundle ✗（上次重建把画布搞坏了）—— 这里直接在 DOM 上补一层 SVG ✓
-       卡片结构：.tl-shape[data-shape-id] > .cs-card > .cs-card__body */
-    const paintPreviews = () => {
-      try {
-        const editor2 = ed();
-        if (!editor2) return;
-        const shapes = (typeof editor2.getCurrentPageShapes === 'function' ? editor2.getCurrentPageShapes() : [])
-          .filter((sh) => sh && sh.type === 'subboard' && sh.props && sh.props.pageId);
-        shapes.forEach((sh) => {
-          const body = document.querySelector('.tl-shape[data-shape-id="' + sh.id + '"] .cs-card__body');
-          if (!body) return;
-          let all = [];
-          try {
-            all = editor2.store.allRecords().filter((r) => r.typeName === 'shape' && r.parentId === sh.props.pageId);
-          } catch (_) { all = []; }
-          let svg = body.querySelector('.cs-subboard-preview');
-          const hint = body.firstElementChild && body.firstElementChild.tagName === 'DIV' ? body.firstElementChild : null;
-          if (!all.length) {
-            if (svg) svg.remove();
-            if (hint) hint.style.display = '';
-            return;
-          }
-          if (!svg) {
-            svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('class', 'cs-subboard-preview');
-            /* ⚠️ 父容器要 `position:relative`，否则绝对定位会跑到外层去 ✗ */
-            body.style.position = 'relative';
-            svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
-            body.appendChild(svg);
-          }
-          if (hint) hint.style.display = 'none';   /* 有缩略图就藏掉"双击进入"占位 ✓ */
-          const W = body.clientWidth || sh.props.w;
-          const H = body.clientHeight || (sh.props.h - 40);
-          let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
-          all.forEach((r) => {
-            const rw = Number(r.props && (r.props.w || r.props.size)) || 120;
-            const rh = Number(r.props && (r.props.h || r.props.size)) || 80;
-            minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
-            maxX = Math.max(maxX, r.x + rw); maxY = Math.max(maxY, r.y + rh);
-          });
-          const cw = Math.max(1, maxX - minX);
-          const ch = Math.max(1, maxY - minY);
-          const k = Math.min((W - 16) / cw, (H - 16) / ch, 1);
-          const dx = (W - cw * k) / 2;
-          const dy = (H - ch * k) / 2;
-          svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-          svg.innerHTML = all.map((r) => {
-            const rw = Number(r.props && (r.props.w || r.props.size)) || 120;
-            const rh = Number(r.props && (r.props.h || r.props.size)) || 80;
-            return '<rect x="' + (dx + (r.x - minX) * k).toFixed(1) + '" y="' + (dy + (r.y - minY) * k).toFixed(1)
-              + '" width="' + Math.max(3, rw * k).toFixed(1) + '" height="' + Math.max(3, rh * k).toFixed(1)
-              + '" rx="2" fill="rgba(126,178,255,.28)" stroke="rgba(126,178,255,.6)" stroke-width="1"/>';
-          }).join('');
-        });
-      } catch (_) {}
-    };
-    setTimeout(paintPreviews, 800);
-    setInterval(paintPreviews, 1500);
-
     /* 双击子白板卡片 → 进入 */
     window.addEventListener('cs-enter-page', (e) => enterPage(e.detail));
     /* ⚠️ 兜底：**自己监听原生 dblclick** ✗
