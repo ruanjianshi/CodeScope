@@ -1823,9 +1823,27 @@
        但浮层（选中框 / 概要 / 标记 / 分组框）只在选中变化时重画 ✗
        → 选中框停在旧位置，看起来「框跑出去了」（用户实测：右键清除标记后）✓
        ⇒ 数据变化后补一帧重画 ✓ */
+    /* 记住上一次的根节点 id —— 它变了就说明**换了文件** ✓ */
+    let lastRootId = '';
+    try { lastRootId = String(xmindRootTopic()?.id || ''); } catch (_) {}
+
     map.on('data_change', () => {
       scheduleTaper();
-      requestAnimationFrame(() => { if (!isInlineEditing()) refreshOverlay(); });
+      requestAnimationFrame(() => {
+        if (!isInlineEditing()) refreshOverlay();
+        /* ⚠️ 切换文件时**自由主题层不会自动清掉** ✗
+           （用户实测：打开「两轮足机器人架构」，里面还显示 test1 的自由导图，
+             而该文件本身 detached 数为 0 ✓）
+           ⇒ 根节点 id 变了 = 换文件 → 强制重画浮层 ✓ */
+        try {
+          const rid = String(xmindRootTopic()?.id || '');
+          if (rid && rid !== lastRootId) {
+            lastRootId = rid;
+            if (typeof xmindRenderFloatingTopics === 'function') xmindRenderFloatingTopics();
+            requestAnimationFrame(() => { if (!isInlineEditing()) refreshOverlay(); });
+          }
+        } catch (_) {}
+      });
     });
 
     map.on('node_active', (node, list) => {
