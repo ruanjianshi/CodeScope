@@ -360,6 +360,40 @@ function SubBoardFace({ shape }) {
     return () => { alive = false; clearTimeout(t); };
   }, [editor, pageId, tick, w, h, shapes.length]);
 
+  /* HTML 类形状（导不出 SVG）→ 在预览上叠占位块 ✓ */
+  const htmlBoxes = useMemo(() => {
+    const HTML_TYPES = { mindcard: '思维导图', pdfcard: 'PDF', webcard: '网页', subboard: '子白板' };
+    const list = shapes.filter((sh) => HTML_TYPES[sh.type]);
+    if (!list.length) return [];
+    let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+    shapes.forEach((sh) => {
+      const sw = Number(sh.props && (sh.props.w || sh.props.size)) || 120;
+      const shh = Number(sh.props && (sh.props.h || sh.props.size)) || 80;
+      minX = Math.min(minX, sh.x); minY = Math.min(minY, sh.y);
+      maxX = Math.max(maxX, sh.x + sw); maxY = Math.max(maxY, sh.y + shh);
+    });
+    const pad = 8;
+    const boxW = Math.max(20, w - pad * 2);
+    const boxH = Math.max(20, h - 46);
+    const cw = Math.max(1, maxX - minX);
+    const ch = Math.max(1, maxY - minY);
+    const k = Math.min(boxW / cw, boxH / ch, 1);
+    const ox = pad + (boxW - cw * k) / 2;
+    const oy = 38 + (boxH - ch * k) / 2;
+    return list.map((sh) => {
+      const sw = Number(sh.props && (sh.props.w || sh.props.size)) || 120;
+      const shh = Number(sh.props && (sh.props.h || sh.props.size)) || 80;
+      return {
+        id: sh.id,
+        left: ox + (sh.x - minX) * k,
+        top: oy + (sh.y - minY) * k,
+        w: Math.max(10, sw * k),
+        h: Math.max(10, shh * k),
+        label: (sh.props && sh.props.title) || HTML_TYPES[sh.type],
+      };
+    });
+  }, [shapes, w, h]);
+
   const enter = (e) => {
     e.stopPropagation();
     if (!pageId) return;
@@ -376,8 +410,22 @@ function SubBoardFace({ shape }) {
         </div>
         <div className="cs-card__body" style={{ position: 'relative', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
           {previewUrl ? (
-            <img src={previewUrl} alt="" draggable={false}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
+            <>
+              <img src={previewUrl} alt="" draggable={false}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
+              {/* ⚠️ 思维导图 / PDF / 网页这些是 HTML 形状 ✗ getSvgString 导不出来 ✓
+                  → 给它们叠一层带名字的占位块，至少能看出"这里有个思维导图"✓ */}
+              {htmlBoxes.map((b) => (
+                <div key={b.id} style={{
+                  position: 'absolute', left: b.left, top: b.top, width: b.w, height: b.h,
+                  border: '1px dashed rgba(126,178,255,.5)', borderRadius: 4,
+                  background: 'rgba(126,178,255,.08)', pointerEvents: 'none',
+                  display: 'grid', placeItems: 'center', overflow: 'hidden',
+                }}>
+                  <span style={{ fontSize: 9, color: 'rgba(210,225,255,.75)', whiteSpace: 'nowrap' }}>{b.label}</span>
+                </div>
+              ))}
+            </>
           ) : (
             <div style={{ fontSize: 12, opacity: 0.55, textAlign: 'center', lineHeight: 1.6 }}>
               双击进入<br />在这里放一块独立的画布

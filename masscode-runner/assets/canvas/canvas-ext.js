@@ -1364,33 +1364,45 @@
       if (!files.length) return;
       const editor = ed();
       if (!editor) return;
-      let shape = null;
       let pt = null;
+      let shape = null;
       try {
         pt = editor.screenToPage({ x: e.clientX, y: e.clientY });
         shape = editor.getShapeAtPoint(pt, { hitInside: true, margin: 0 });
       } catch (_) { return; }
-      /* ⚠️ `getShapeAtPoint` 有时命中不到卡片（落在卡片的 DOM 子元素上）✗
-         → 再按**包围盒**兜底找一遍 ✓（用户实测：图片拖不进卡片） */
+      /* 命中不到就按包围盒再找一遍（卡片里有 DOM 子元素时会命中失败）✓ */
       if (!shape || shape.type !== 'card') {
         try {
           const all = typeof editor.getCurrentPageShapes === 'function' ? editor.getCurrentPageShapes() : [];
-          const cards = all.filter((sh) => sh && sh.type === 'card');
-          shape = cards.find((sh) => pt.x >= sh.x && pt.x <= sh.x + Number(sh.props.w || 0)
+          shape = all.filter((sh) => sh && sh.type === 'card').find((sh) => pt.x >= sh.x && pt.x <= sh.x + Number(sh.props.w || 0)
             && pt.y >= sh.y && pt.y <= sh.y + Number(sh.props.h || 0)) || shape;
         } catch (_) {}
       }
       if (!shape || shape.type !== 'card') {
         toast('这里不是卡片，图片会放到画布上');
-        return;   // 不在卡片上 → 放行，交给 tldraw 正常插图
+        return;
       }
       e.preventDefault();
       e.stopPropagation();
+      const readAsUrl = (f) => new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => reject(new Error('读取失败'));
+        fr.readAsDataURL(f);
+      });
       try {
         let md = shape.props.markdown || '';
         for (const f of files) {
-          const url = await lib().uploadDataUrl(f.name, await readAsDataUrl(f));
-          md += `\n\n![](${url})`;
+          let url = '';
+          /* 先试服务端上传（图小、可复用）；不行就退回 data URL ✓ */
+          try {
+            if (typeof lib === 'function' && lib() && lib().uploadDataUrl) {
+              url = await lib().uploadDataUrl(f.name, await readAsUrl(f));
+            }
+          } catch (_) { url = ''; }
+          if (!url) url = await readAsUrl(f);
+          if (!url) continue;
+          md += '\n\n![](' + url + ')';
         }
         editor.updateShape({ id: shape.id, type: 'card', props: { markdown: md } });
         toast('已把 ' + files.length + ' 张图片放进卡片');

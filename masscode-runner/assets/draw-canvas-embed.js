@@ -32,7 +32,7 @@
     root.innerHTML = '';
     const frame = document.createElement('iframe');
     frame.className = 'canvas-embed-frame';
-    frame.src = '/assets/canvas/index.html?v=20261027d&file=' + encodeURIComponent(name);
+    frame.src = '/assets/canvas/index.html?v=20261027e&file=' + encodeURIComponent(name);
     frame.setAttribute('title', '无限画布（tldraw）');
     root.appendChild(frame);
     window.__canvasFrame = frame;
