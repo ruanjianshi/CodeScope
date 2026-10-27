@@ -770,7 +770,7 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   border: 1px solid color-mix(in srgb, var(--xm-accent, #78a9ff) 62%, transparent);
   background: var(--xm-control, #131a23);
   color: var(--xm-accent, #78a9ff);
-  font: 600 11px/1.6 var(--font);
+  font: 600 calc(11px * var(--cs-ui, 1))/1.6 var(--font);
   white-space: nowrap;
   pointer-events: auto;
   cursor: text;
@@ -835,7 +835,8 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 /* ═══ 概要括号 & 节点标记（自绘，引擎不提供）═══════════════════════════════ */
 .cs-summary {
   position: absolute;
-  width: 10px;
+  /* 6px 宽：贴着成员组就能塞进最窄的缝隙 ✓（原来 10px 会压到子主题边框）*/
+  width: 6px;
   border: 2px solid #78a9ff;
   border-left: 0;
   border-radius: 0 8px 8px 0;
@@ -843,14 +844,17 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 }
 .cs-summary-label {
   position: absolute;
-  left: 14px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  padding: 1px 8px;
+  padding: 0 calc(6px * var(--cs-ui, 1));
   border-radius: 999px;
   border: 1px solid currentColor;
-  background: var(--xm-control, #131a23);
-  font: 600 11px/1.6 var(--font);
+  /* ⚠️ 布局没给概要预留空间 → 文字必然落在「成员组」和「子主题」之间的窄缝里 ✗
+     做成**小而半透明**的胶囊：字号跟随缩放、底透出来，不遮住节点文字 ✓ */
+  background: color-mix(in srgb, var(--xm-control, #131a23) 76%, transparent);
+  backdrop-filter: blur(2px);
+  font: 600 calc(9px * var(--cs-ui, 1))/1.5 var(--font);
   white-space: nowrap;
   pointer-events: auto;
   cursor: text;
@@ -862,7 +866,7 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   border-radius: 999px;
   background: var(--xm-control, #131a23);
   border: 1px solid currentColor;
-  font: 700 9px/1.5 var(--font);
+  font: 700 calc(9px * var(--cs-ui, 1))/1.5 var(--font);
   pointer-events: none;
   z-index: 6;
 }
@@ -962,4 +966,29 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   /* 放到括号**左边**：right = 100% + 4px（+4 是括号本身的 2px 描边+间隙）✓
      ⚠️ 写 `right:14px` 会让标签压在括号上 ✗ */
   right: calc(100% + 4px);
+}
+
+/* 概要括号的另外两个朝向（竖向布局用）✓ */
+.cs-summary.down {
+  height: 10px;
+  border: 2px solid #78a9ff;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+.cs-summary.up {
+  height: 10px;
+  border: 2px solid #78a9ff;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+.cs-summary.down .cs-summary-label,
+.cs-summary.up .cs-summary-label {
+  left: 50%;
+  top: auto;
+  transform: translateX(-50%);
+  bottom: calc(100% + 4px);
+}
+.cs-summary.up .cs-summary-label {
+  bottom: auto;
+  top: calc(100% + 4px);
 }

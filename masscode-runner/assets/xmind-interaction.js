@@ -1031,6 +1031,16 @@
   /* 浮层统一刷新：选中框 / 分组框 / 标记 / 概要括号 ✓ */
   let extrasVersion = 0;
 
+  /* ★ 浮层元素（概要文字、标记、分组框标题）要**跟着缩放** ✗
+     不然缩到 30% 时节点变小、文字还是 11px → 把节点全盖住（用户实测）✓ */
+  function syncOverlayScale() {
+    const overlay = document.getElementById('xmind-float-overlay');
+    if (!overlay) return;
+    const scale = XMIND_MAP?.view?.scale || 1;
+    const ui = Math.min(1.15, Math.max(0.62, scale));
+    if (overlay.style.getPropertyValue('--cs-ui') !== String(ui)) overlay.style.setProperty('--cs-ui', String(ui));
+  }
+
   function refreshOverlay() {
     /* ★ 快速通道：没有分组框/标记/概要，且选中数 <2 → 四个渲染函数全是空转 ✓
        （平移时每帧都会调到这里，省掉 4 次全文档 querySelectorAll）✓ */
@@ -1038,6 +1048,7 @@
       && !document.getElementById('cs-xmind-group-box')
       && !document.querySelector('.cs-free-frame, .cs-node-marker, .cs-summary')
       && !xmindHasExtras()) return;
+    syncOverlayScale();
     updateGroupBox();
     renderFreeFrames();
     renderMarkers();
@@ -1062,8 +1073,21 @@
     };
     collect(xmindRootTopic());
     (xmindDetached() || []).forEach(collect);
-    /* ⚠️ 向左逻辑图时子主题在父级**左边** ✗ —— 概要括号必须跟着镜像到左侧 ✓ */
-    const leftward = typeof xmindCurrentLayout === 'function' && xmindCurrentLayout() === 'logicalStructureLeft';
+    /* ★ 概要括号朝哪边，**按每一组自己算** ✗ 不能全局写死 ✓
+       判据：这组成员相对**它们的父节点**在哪一侧 ✓
+       · 在父级右边 → 括号画右侧（`]`）
+       · 在父级左边 → 括号画左侧（`[`）
+       · 在父级下方 → 括号画下方（`⊔`，组织结构图 / 时间轴这类竖向布局）✓ */
+    const parentRectOf = (ids) => {
+      const hit = xmindFind(ids[0]);
+      const parentId = hit?.parent?.id;
+      if (!parentId) return null;
+      const el = document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(String(parentId)) + '"]')
+        || xmindSmmNode(parentId)?.group?.node;
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width ? r : null;
+    };
     groups.forEach(({ info, ids }) => {
       const rects = ids.map((id) => document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(id) + '"]') || xmindSmmNode(id)?.group?.node)
         .filter(Boolean).map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0);
@@ -1072,11 +1096,64 @@
       const bottom = Math.max(...rects.map((r) => r.bottom)) - er.top;
       const right = Math.max(...rects.map((r) => r.right)) - er.left;
       const left = Math.min(...rects.map((r) => r.left)) - er.left;
+      const midY = (top + bottom) / 2;
+      const midX = (left + right) / 2;
+      const parentRect = parentRectOf(ids);
+      let side = 'right';
+      if (parentRect) {
+        const px = (parentRect.left + parentRect.right) / 2 - er.left;
+        const py = (parentRect.top + parentRect.bottom) / 2 - er.top;
+        const dx = midX - px;
+        const dy = midY - py;
+        if (Math.abs(dy) > Math.abs(dx) * 1.2) side = dy > 0 ? 'down' : 'up';
+        else side = dx < 0 ? 'left' : 'right';
+      } else if (typeof xmindCurrentLayout === 'function' && xmindCurrentLayout() === 'logicalStructureLeft') {
+        side = 'left';
+      }
+      /* ★ 括号要塞进「成员组」和**紧邻节点**之间的缝隙里 ✗ 不能写死偏移 ✓
+         否则密排布局下括号会压在子主题边框上（实测 9 种布局都有）✓ */
+      const allRects = [...document.querySelectorAll('#xmind-engine g.smm-node'), ...document.querySelectorAll('.xmind-floating-node')]
+        .map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0)
+        .map((r) => ({ left: r.left - er.left, right: r.right - er.left, top: r.top - er.top, bottom: r.bottom - er.top }));
+      const bandY = allRects.filter((r) => r.bottom > top + 2 && r.top < bottom - 2);
+      const bandX = allRects.filter((r) => r.right > left + 2 && r.left < right - 2);
+      const nearestRight = bandY.filter((r) => r.left > right + 2).map((r) => r.left);
+      const nearestLeft = bandY.filter((r) => r.right < left - 2).map((r) => r.right);
+      const nearestBelow = bandX.filter((r) => r.top > bottom + 2).map((r) => r.top);
+      const nearestAbove = bandX.filter((r) => r.bottom < top - 2).map((r) => r.bottom);
+      const gapAfter = nearestRight.length ? Math.min(...nearestRight) : right + 60;
+      const gapBefore = nearestLeft.length ? Math.max(...nearestLeft) : left - 60;
+      const gapBelow = nearestBelow.length ? Math.min(...nearestBelow) : bottom + 60;
+      const gapAbove = nearestAbove.length ? Math.max(...nearestAbove) : top - 60;
+      /* ⚠️ 竖向布局里「下方」的缝隙可能只有几像素 ✗ → 括号改挂到左右侧 ✓ */
+      if ((side === 'down' && gapBelow - bottom < 14) || (side === 'up' && top - gapAbove < 14)) {
+        const roomLeft = left - gapBefore;
+        const roomRight = gapAfter - right;
+        side = roomLeft >= roomRight ? 'left' : 'right';
+      }
+      const midRight = Math.min(right + 34, Math.max(right + 4, (right + gapAfter) / 2 - 3));
+      const midLeft = Math.max(left - 34, Math.min(left - 4, (left + gapBefore) / 2 + 3));
+      const midDown = Math.min(bottom + 34, Math.max(bottom + 4, (bottom + gapBelow) / 2 - 3));
+      const midUp = Math.max(top - 34, Math.min(top - 4, (top + gapAbove) / 2 + 3));
       const bracket = document.createElement('div');
-      bracket.className = 'cs-summary' + (leftward ? ' left' : '');
-      bracket.style.left = (leftward ? left - 24 : right + 14) + 'px';
-      bracket.style.top = top + 'px';
-      bracket.style.height = Math.max(18, bottom - top) + 'px';
+      bracket.className = 'cs-summary' + (side === 'right' ? '' : ' ' + side);
+      if (side === 'left') {
+        bracket.style.left = midLeft + 'px';
+        bracket.style.top = top + 'px';
+        bracket.style.height = Math.max(18, bottom - top) + 'px';
+      } else if (side === 'right') {
+        bracket.style.left = midRight + 'px';
+        bracket.style.top = top + 'px';
+        bracket.style.height = Math.max(18, bottom - top) + 'px';
+      } else if (side === 'down') {
+        bracket.style.left = left + 'px';
+        bracket.style.top = midDown + 'px';
+        bracket.style.width = Math.max(24, right - left) + 'px';
+      } else {
+        bracket.style.left = left + 'px';
+        bracket.style.top = midUp + 'px';
+        bracket.style.width = Math.max(24, right - left) + 'px';
+      }
       bracket.style.borderColor = info.color || '#78a9ff';
       const label = document.createElement('span');
       label.className = 'cs-summary-label';
@@ -1604,11 +1681,17 @@
           /* 等两帧让引擎把新布局摆完，再 fit ✓ */
           if (attempt < 3) { settle(attempt + 1); return; }
           try {
-            /* ⚠️ 用**引擎自己的 fit**（只算树）✗ 别用我们的 xmindPlaceAll ✓
-               我们的 fit 把自由主题也算进去 → 它们离得远，整图被缩到 20% 看不清 ✓
-               引擎的 fit 只看渲染树 → 树永远完整可见、缩放也合理 ✓ */
-            if (XMIND_MAP?.view?.fit) XMIND_MAP.view.fit();
-            else if (typeof xmindFitEditor === 'function') xmindFitEditor();
+            /* ★ 换完布局要把**全部内容**（树 + 自由主题）都收进视野 ✓
+               （只 fit 树的话自由主题会被切在画布外，用户实测过）✓
+               保底 25%：真离得太远时不至于缩成一个点 ✓ */
+            if (typeof xmindFitEditor === 'function') xmindFitEditor();
+            requestAnimationFrame(() => {
+              if (!XMIND_MAP || XMIND_MAP.view.scale >= 0.25) return;
+              const box = engineEl().getBoundingClientRect();
+              XMIND_MAP.view.setScale(0.25, box.width / 2, box.height / 2);
+              const rootId = String(xmindRootTopic()?.id || '');
+              if (rootId) setTimeout(() => revealTopic(rootId), 50);
+            });
           } catch (_) {}
         });
       };
