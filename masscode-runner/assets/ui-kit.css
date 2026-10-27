@@ -992,3 +992,13 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   bottom: auto;
   top: calc(100% + 4px);
 }
+
+/* 概要可点选：细条也能点中，选中态加一圈高亮 ✓ */
+.cs-summary { pointer-events: auto; cursor: pointer; }
+.cs-summary.selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--xm-accent, #78a9ff) 55%, transparent);
+  border-color: var(--xm-accent, #78a9ff) !important;
+}
+.cs-summary.selected .cs-summary-label {
+  background: color-mix(in srgb, var(--xm-accent, #78a9ff) 26%, var(--xm-control, #131a23));
+}

@@ -367,6 +367,24 @@
     overlay.dataset.csFrameBound = '1';
     /* ⚠️ 删除按钮必须用**事件委托** ✗ —— 浮层每次重画都会换掉元素，
        绑在元素上的 onclick 会点空（实测：点了没反应）✓ */
+    /* 概要：左键选中 / 右键菜单 ✓（同样用委托，浮层会重画） */
+    overlay.addEventListener('click', (event) => {
+      const sum = event.target.closest('.cs-summary');
+      if (!sum) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectSummary(sum.dataset.groupId || '');
+    }, true);
+    overlay.addEventListener('contextmenu', (event) => {
+      const sum = event.target.closest('.cs-summary');
+      if (!sum || !sum.dataset.groupId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      XMIND_SUMMARY_SELECTED = sum.dataset.groupId;
+      refreshOverlay();
+      summaryMenu(event, sum.dataset.groupId);
+    }, true);
+
     overlay.addEventListener('click', (event) => {
       const kill = event.target.closest('.cs-free-frame-kill');
       if (!kill) return;
@@ -1041,6 +1059,32 @@
     if (overlay.style.getPropertyValue('--cs-ui') !== String(ui)) overlay.style.setProperty('--cs-ui', String(ui));
   }
 
+  /* ★ 概要自己也是可选中/可删除的对象 ✓（用户：「概要无法选中删除」） */
+  let XMIND_SUMMARY_SELECTED = '';
+
+  function removeSummaryGroup(groupId) {
+    let changed = 0;
+    eachTopic((topic) => {
+      if (topic.summary && topic.summary.groupId === groupId) { delete topic.summary; changed += 1; }
+    });
+    if (changed) { XMIND_SUMMARY_SELECTED = ''; xmindChanged(); refreshOverlay(); }
+    return changed;
+  }
+
+  function selectSummary(groupId) {
+    XMIND_SUMMARY_SELECTED = groupId || '';
+    if (groupId) clearSelection();
+    refreshOverlay();
+  }
+
+  function summaryMenu(event, groupId) {
+    if (typeof showContextMenu !== 'function') return;
+    showContextMenu(event, [
+      { label: '改概要文字…', run: () => { XMIND_SUMMARY_SELECTED = groupId; editGroupFrame([...multi()]); } },
+      { label: '删除概要', danger: true, run: () => removeSummaryGroup(groupId) },
+    ]);
+  }
+
   function refreshOverlay() {
     /* ★ 快速通道：没有分组框/标记/概要，且选中数 <2 → 四个渲染函数全是空转 ✓
        （平移时每帧都会调到这里，省掉 4 次全文档 querySelectorAll）✓ */
@@ -1136,7 +1180,9 @@
       const midDown = Math.min(bottom + 34, Math.max(bottom + 4, (bottom + gapBelow) / 2 - 3));
       const midUp = Math.max(top - 34, Math.min(top - 4, (top + gapAbove) / 2 + 3));
       const bracket = document.createElement('div');
-      bracket.className = 'cs-summary' + (side === 'right' ? '' : ' ' + side);
+      bracket.className = 'cs-summary' + (side === 'right' ? '' : ' ' + side) + (XMIND_SUMMARY_SELECTED === info.groupId ? ' selected' : '');
+      bracket.dataset.groupId = info.groupId || '';
+      bracket.title = '单击选中，右键删除，双击文字改名';
       if (side === 'left') {
         bracket.style.left = midLeft + 'px';
         bracket.style.top = top + 'px';
@@ -1426,6 +1472,9 @@
 
       /* 分组框的四条边自己处理拖动 ✓ 别当成空白去框选 */
       if (event.target.closest('.cs-free-frame-edge')) return;
+      /* ⚠️ 概要也要放行 ✗ —— 空白分支会 `preventDefault()`，把随后的 click 一起取消，
+         概要就永远收不到点击（实测 selected 一直是 0）✓ */
+      if (event.target.closest('.cs-summary')) return;
 
       /* 空白处：不拦 ✓ 引擎左键拖 = 框选 ✓ 我们只记起点，用来补浮层节点 */
       box = {
@@ -1586,6 +1635,14 @@
         return;
       }
 
+      /* 选中概要时，Delete/Backspace 删概要（而不是删主题）✓ */
+      if (XMIND_SUMMARY_SELECTED && (event.key === 'Delete' || event.key === 'Backspace')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        removeSummaryGroup(XMIND_SUMMARY_SELECTED);
+        return;
+      }
+
       /* 方向键：树节点和自由主题都用同一套逻辑 ✓ */
       if (!withMod && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
         event.preventDefault();
@@ -1618,7 +1675,7 @@
          ⇒ 走我们自己的 xmindAddChild / xmindAddSibling（内部有模型兜底）✓ */
       if (!withMod && event.key === 'Tab') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddChild(); return; }
       if (!withMod && event.key === 'Enter') { event.preventDefault(); event.stopImmediatePropagation(); xmindAddSibling(); return; }
-      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); clearSelection(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); XMIND_SUMMARY_SELECTED = ''; clearSelection(); refreshOverlay(); return; }
       if (event.key === 'F2' && XMIND_MAP.renderer?.activeNodeList?.[0]) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1711,6 +1768,8 @@
   window.__csXmindTaper = () => scheduleTaper();
   window.__csXmindEditSelection = () => beginEditOnSelection();
   window.__csXmindNavigate = (k) => navigateByKey(k);
+  window.__csXmindSelectSummary = (gid) => selectSummary(gid);
+  window.__csXmindRemoveSummary = (gid) => removeSummaryGroup(gid);
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
   window.__csXmindSelectAll = () => selectAllTopics();
