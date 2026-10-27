@@ -697,6 +697,13 @@
   function taperLines() {
     const engine = engineEl();
     if (!engine || !XMIND_MAP || XMIND_VIEW !== 'edit') return;
+    try { taperLinesInner(engine); } catch (_) {
+      /* 出任何错都别把线藏起来 ✓ */
+      try { engine.classList.remove('cs-taper-on'); } catch (_) {}
+    }
+  }
+
+  function taperLinesInner(engine) {
     const container = engine.querySelector('.smm-line-container');
     if (!container) return;
     /* 只在「XMind 极简」主题下开（别的主题保持原来的等宽线） */
@@ -708,7 +715,7 @@
       return;
     }
     /* ★ 签名缓存：路径的 d + 颜色都没变 → 直接跳过（布局没变时不该重画）✓ */
-    const sourcePaths = [...container.querySelectorAll(':scope > path')];
+    const sourcePaths = [...container.querySelectorAll('path')];
     const signature = sourcePaths.map((p) => (p.getAttribute('d') || '') + '|' + (p.getAttribute('stroke') || '')).join(';');
     /* ⚠️ 还要检查 `layer.isConnected` ✗✗
        引擎重绘会**重建** `.smm-line-container` → 我们叠进去的 layer 跟着被销毁 ✗
@@ -722,7 +729,7 @@
       container.appendChild(layer);
     }
     layer.replaceChildren();
-    const paths = [...container.querySelectorAll(':scope > path')];
+    const paths = [...container.querySelectorAll('path')];
     /* ★ 最终做法：**同一段贝塞尔曲线 + 不同线宽 + dash 切片** ✓
        · 之前的"切成小折线"在高倍放大下会露出**多边形棱角**（曲线变折线）✗
        · 这里每条切片都是**原曲线本身**，只靠 stroke-dasharray 截取其中一段 ✓
@@ -755,6 +762,13 @@
         layer.appendChild(seg);
       }
     });
+    /* ⚠️ 一段都没画出来（路径结构变了 / getTotalLength 失败）✗
+       → **别藏引擎的线**，退回原始描边 ✓ 否则整张图一根线都没有 ✓ */
+    if (!layer.childElementCount) {
+      engine.classList.remove('cs-taper-on');
+      taperSignature = '';
+      if (layer.parentNode) layer.remove();
+    }
   }
 
   function xmindHasExtras() {
