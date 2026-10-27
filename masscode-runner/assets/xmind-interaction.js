@@ -222,7 +222,20 @@
         if (hit.isDetached && hit.parent) {
           /* ⚠️ 已经「手动固定」的子主题要改绝对位置 ✗ 不能再写偏移（渲染时会被忽略）✓ */
           if (hit.topic.position && hit.topic.position.fixed) {
-            hit.topic.position = { x: Number(hit.topic.position.x) + dx / (XMIND_MAP?.view?.scale || 1), y: Number(hit.topic.position.y) + dy / (XMIND_MAP?.view?.scale || 1), fixed: true };
+            /* ⚠️ 这里的位移量是 `finalPosition - drag.ox`（已经是**地图单位**）✗
+               之前写成 `dx / scale`，`dx` 在这个作用域根本不存在 → ReferenceError ✓ */
+            hit.topic.position = {
+              x: Number(hit.topic.position.x) + (finalPosition.x - drag.ox),
+              y: Number(hit.topic.position.y) + (finalPosition.y - drag.oy),
+              fixed: true,
+            };
+            xmindNormalize();
+            xmindRecord();
+            xmindMarkSnapshotDirty();
+            DRAW_PENDING = { workbook: xmindClone(XMIND_WORKBOOK) };
+            scheduleDrawSave();
+            xmindRenderFloatingTopics();
+            requestAnimationFrame(() => refreshOverlay());
             return;
           }
           const prev = hit.topic.codescopeOffset || { dx: 0, dy: 0 };
