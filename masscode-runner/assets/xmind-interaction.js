@@ -898,7 +898,19 @@
       const cur = item.topic.position && Number.isFinite(Number(item.topic.position.x))
         ? { x: Number(item.topic.position.x), y: Number(item.topic.position.y) }
         : { x: (item.rect.left + item.rect.width / 2 - er.left - (origin?.x || 0)) / realScale, y: (item.rect.top + item.rect.height / 2 - er.top - (origin?.y || 0)) / realScale };
-      item.topic.position = { x: cur.x + dx, y: cur.y + dy, fixed: true };
+      /* ★ 记住**锚点**（父节点当时的位置）✓
+         否则拖动父节点时，被固定的子节点会留在原地不动（用户实测）✓
+         渲染时：实际位置 = 固定位置 + (父节点当前位置 - 锚点) ✓ */
+      let anchorX;
+      let anchorY;
+      if (item.parentId) {
+        const parentItem = xmindFloatingItems().find((entry) => String(entry.topic.id) === item.parentId);
+        if (parentItem && parentItem.position) {
+          anchorX = parentItem.position.x;
+          anchorY = parentItem.position.y;
+        }
+      }
+      item.topic.position = { x: cur.x + dx, y: cur.y + dy, fixed: true, ...(Number.isFinite(anchorX) ? { anchorX, anchorY } : {}) };
       touched += 1;
     });
     if (!touched) return false;
