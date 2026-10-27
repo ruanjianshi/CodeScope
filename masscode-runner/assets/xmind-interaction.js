@@ -168,11 +168,24 @@
     const item = xmindFloatingItems().find((entry) => entry.topic.id === id);
     if (!item) return;
     XMIND_SELECTED = id;
+    /* 多选时把每个成员的**初始位置**记下来 ✓
+       → 拖动过程中按「初始值 + 总位移」写，**不做累加**（累加会漂）✓ */
+    const members = [...multi()].map((mid) => {
+      const hit = xmindFind(mid);
+      if (!hit) return null;
+      return {
+        topic: hit.topic,
+        parentId: hit.parent ? String(hit.parent.id) : '',
+        pos: hit.topic.position ? { x: Number(hit.topic.position.x), y: Number(hit.topic.position.y), fixed: !!hit.topic.position.fixed } : null,
+        off: hit.topic.codescopeOffset ? { dx: Number(hit.topic.codescopeOffset.dx || 0), dy: Number(hit.topic.codescopeOffset.dy || 0) } : null,
+      };
+    }).filter(Boolean);
     XMIND_FLOAT_DRAG = {
       pointerId: event.pointerId, id,
       x: event.clientX, y: event.clientY,
       ox: item.position.x, oy: item.position.y,
       preview: null, moved: false,
+      members,
     };
     engine.classList.add('dragging-free');
     /* ⚠️ 这里**既不能 preventDefault、也不能 setPointerCapture** ✗✗
@@ -183,6 +196,28 @@
     event.stopImmediatePropagation();
   }
 
+  /* 把增量位移分给所有选中节点（父子都选中时，子节点跟着父走，不重复加）✓ */
+  function moveSelectionBy(dxMap, dyMap) {
+    const members = [...multi()].map((id) => {
+      const hit = xmindFind(id);
+      if (!hit) return null;
+      return { topic: hit.topic, parentId: hit.parent ? String(hit.parent.id) : '' };
+    }).filter(Boolean);
+    const rootIds = new Set(members.filter((m) => !m.parentId).map((m) => String(m.topic.id)));
+    members.forEach((m) => {
+      if (m.parentId && rootIds.has(m.parentId)) return;   /* 跟着父节点走 ✓ */
+      if (!m.parentId) {
+        const p = m.topic.position || { x: 0, y: 0 };
+        m.topic.position = { x: Number(p.x || 0) + dxMap, y: Number(p.y || 0) + dyMap };
+      } else if (m.topic.position && m.topic.position.fixed) {
+        m.topic.position = { x: Number(m.topic.position.x) + dxMap, y: Number(m.topic.position.y) + dyMap, fixed: true };
+      } else {
+        const off = m.topic.codescopeOffset || { dx: 0, dy: 0 };
+        m.topic.codescopeOffset = { dx: Number(off.dx || 0) + dxMap, dy: Number(off.dy || 0) + dyMap };
+      }
+    });
+  }
+
   function moveFloatDrag(event) {
     const drag = XMIND_FLOAT_DRAG;
     const scale = XMIND_MAP?.view?.scale || 1;
@@ -190,6 +225,16 @@
     const dy = (event.clientY - drag.y) / scale;
     drag.moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 3;
     drag.preview = { x: drag.ox + dx, y: drag.oy + dy };
+    /* ★ 多选时拖任意一个 → **整组一起动** ✓（和 XMind 一致）
+       ⚠️ 用户实测：全选整组后拖节点，只有被拖的那个动 / 或者干脆不动 ✗
+       ⇒ 按增量把位移分给所有选中节点；子孙跟着父走，不重复加 ✓ */
+    if (drag.moved && multi().size > 1) {
+      /* ⚠️ 拖动过程中**不写模型** ✗ —— 每帧写会触发重排/碰撞整理，位置会漂 ✓
+         只在松手时一次性落库（见 finishFloatDrag）✓ */
+    } else if (drag.moved) {
+      const live = xmindFind(drag.id);
+      if (live && live.topic && !live.parent) live.topic.position = { ...drag.preview };
+    }
     xmindRenderFloatingTopics();
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -207,12 +252,55 @@
     const finalPosition = drag.preview || { x: drag.ox, y: drag.oy };
     XMIND_FLOAT_DRAG = null;
     engine.classList.remove('dragging-free');
-    if (targetId && targetId !== drag.id && xmindAttachFloating(drag.id, String(targetId))) return;
+    /* ⚠️ 松手时如果落在**自己的子孙**上，绝不能「挂接」✗
+       —— 拖整组时子节点就在旁边，一拖就变成"把根挂到自己孩子下面"，
+       结果根没了、整组也不动（用户实测：无法拖动整个自由导图）✓
+       ⇒ 目标是自己或自己的子孙 → 只移动、不挂接 ✓ */
+    const isSelfOrDescendant = (() => {
+      if (!targetId) return false;
+      if (String(targetId) === String(drag.id)) return true;
+      const dragged = xmindFind(drag.id)?.topic;
+      if (!dragged) return false;
+      let found = false;
+      (function walk(topic) {
+        if (!topic || found) return;
+        if (String(topic.id) === String(targetId)) { found = true; return; }
+        (xmindChildren(topic) || []).forEach(walk);
+      })(dragged);
+      return found;
+    })();
+    if (targetId && !isSelfOrDescendant && xmindAttachFloating(drag.id, String(targetId))) return;
     if (!drag.moved && drag.collapse) selectOnly(drag.id);
     /* ⚠️ 只是"点了一下"就别重画浮层 ✗✗ —— 重画会把节点元素换掉，
        紧接着的 dblclick 目标就成了旧元素，双击进编辑永远不触发（实测）✓ */
     if (!drag.moved) { paintSelection(); return; }
     if (drag.moved) {
+      /* ★ 多选：松手时**一次性**把总位移写进所有成员 ✓（绝对写，不累加） */
+      if (multi().size > 1 && drag.members && drag.members.length) {
+        const totalX = finalPosition.x - drag.ox;
+        const totalY = finalPosition.y - drag.oy;
+        const rootIds = new Set(drag.members.filter((m) => !m.parentId).map((m) => String(m.topic.id)));
+        drag.members.forEach((m) => {
+          if (m.parentId && rootIds.has(m.parentId)) return;   /* 跟着父走 ✓ */
+          if (!m.parentId) {
+            const base = m.pos || { x: 0, y: 0 };
+            m.topic.position = { x: base.x + totalX, y: base.y + totalY };
+          } else if (m.pos && m.pos.fixed) {
+            m.topic.position = { x: m.pos.x + totalX, y: m.pos.y + totalY, fixed: true };
+          } else {
+            const base = m.off || { dx: 0, dy: 0 };
+            m.topic.codescopeOffset = { dx: base.dx + totalX, dy: base.dy + totalY };
+          }
+        });
+        xmindNormalize();
+        xmindRecord();
+        xmindMarkSnapshotDirty();
+        DRAW_PENDING = { workbook: xmindClone(XMIND_WORKBOOK) };
+        scheduleDrawSave();
+        xmindRenderFloatingTopics();
+        requestAnimationFrame(() => refreshOverlay());
+        return;
+      }
       const hit = xmindFind(drag.id);
       if (hit) {
         /* ⚠️ 自由组里的**子主题**要单独处理 ✗✗
