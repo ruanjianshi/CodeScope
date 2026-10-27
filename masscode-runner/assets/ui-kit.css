@@ -952,7 +952,12 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 .cs-free-frame-kill:hover { color: #ff8a8a; border-color: #ff8a8a; background: rgba(255, 138, 138, .14); }
 
 /* 渐细线：引擎原来的描边藏掉，换成我们叠的那层实心多边形 ✓ */
-#xmind-engine.cs-taper-on .smm-line-container > path { stroke: transparent !important; }
+/* ⚠️ 只有「渐细层真的存在且非空」时才隐藏引擎原线 ✗✗
+   否则一旦图层被销毁/画空，引擎的线也被藏了 → 整图没有连线（踩过两次）✓
+   `:has()` 让这个判断变成**纯 CSS 兜底**，不依赖 JS 时序 ✓ */
+#xmind-engine.cs-taper-on:has(#cs-taper-layer:not(:empty)) .smm-line-container > path {
+  stroke: transparent !important;
+}
 #cs-taper-layer { pointer-events: none; }
 
 /* 概要括号：向左逻辑图时镜像到左侧（变成 [ 形，文字也在左边）✓ */
