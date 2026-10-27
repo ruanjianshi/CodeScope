@@ -220,6 +220,11 @@
            （实测：拖 新主题L2，它立刻从组里脱出来）—— 用户说的「移动怎么不对」就是这个 ✗
            ⇒ 记**相对父级的偏移** `codescopeOffset`：只挪它自己，组的层级关系不变 ✓ */
         if (hit.isDetached && hit.parent) {
+          /* ⚠️ 已经「手动固定」的子主题要改绝对位置 ✗ 不能再写偏移（渲染时会被忽略）✓ */
+          if (hit.topic.position && hit.topic.position.fixed) {
+            hit.topic.position = { x: Number(hit.topic.position.x) + dx / (XMIND_MAP?.view?.scale || 1), y: Number(hit.topic.position.y) + dy / (XMIND_MAP?.view?.scale || 1), fixed: true };
+            return;
+          }
           const prev = hit.topic.codescopeOffset || { dx: 0, dy: 0 };
           hit.topic.codescopeOffset = {
             dx: Number(prev.dx || 0) + (finalPosition.x - drag.ox),
@@ -729,13 +734,11 @@
         || xmindSmmNode(id)?.group?.node;
       const rect = el?.getBoundingClientRect();
       if (!rect || !rect.width) return null;
-      /* ⚠️ 只对**自由导图的根**做对齐 ✗ —— 子主题的横/纵位置是自动布局算出来的，
-         改 `codescopeOffset` 只会和布局打架（实测几乎不动）✓ */
-      if (!hit.isDetached || hit.parent) return null;
-      return { hit, topic: hit.topic, depth: 0, parentId: '', rect, detached: true };
+      if (!hit.isDetached) return null;
+      return { hit, topic: hit.topic, depth: hit.parent ? 1 : 0, parentId: hit.parent ? String(hit.parent.id) : '', rect, detached: true };
     }).filter(Boolean);
     if (list.length < 2) {
-      if (typeof setDrawStatus === 'function') setDrawStatus('先选中 2 个以上的**自由导图**（根节点）再对齐', 'warn');
+      if (typeof setDrawStatus === 'function') setDrawStatus('先选中 2 个以上的自由主题再对齐', 'warn');
       return false;
     }
     const t = alignTargets(list);
@@ -787,12 +790,14 @@
       if (inherited) { dx -= inherited.dx; dy -= inherited.dy; }
       applied.set(String(item.topic.id), { dx, dy });
       if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
-      if (item.depth === 0 && item.topic.position) {
-        item.topic.position = { x: Number(item.topic.position.x) + dx, y: Number(item.topic.position.y) + dy };
-      } else {
-        const off = item.topic.codescopeOffset || { dx: 0, dy: 0 };
-        item.topic.codescopeOffset = { dx: Number(off.dx || 0) + dx, dy: Number(off.dy || 0) + dy };
-      }
+      /* ★ 统一写**绝对位置并标记 fixed** ✓
+         子主题原来是自动布局排的（横向本来就齐、纵向由布局决定），
+         只改 `codescopeOffset` 会和布局打架 → 对齐看起来"没反应"（用户实测）✓
+         固定之后 `xmindFloatingItems` 会优先用 position，布局不再覆盖 ✓ */
+      const cur = item.topic.position && Number.isFinite(Number(item.topic.position.x))
+        ? { x: Number(item.topic.position.x), y: Number(item.topic.position.y) }
+        : { x: (item.rect.left + item.rect.width / 2 - er.left - (origin?.x || 0)) / realScale, y: (item.rect.top + item.rect.height / 2 - er.top - (origin?.y || 0)) / realScale };
+      item.topic.position = { x: cur.x + dx, y: cur.y + dy, fixed: true };
       touched += 1;
     });
     if (!touched) return false;
