@@ -480,10 +480,32 @@
     const editor = ed();
     const page = editor.getPage(pageId);
     if (!page) { toast('子白板不存在（可能已被删除）', 'err'); return; }
-    editor.setCurrentPage(page);
+    let switched = false;
+    try { editor.setCurrentPage(page); switched = true; } catch (_) {}
+    if (!switched) {
+      try { editor.setCurrentPageId(page.id); switched = true; } catch (_) {}
+    }
+    if (!switched) { toast('切换子白板失败', 'err'); return; }
     editor.setSelectedShapes([]);
     renderCrumb();
     renderPages();
+    /* ★ 进入后**居中显示**这块子白板的内容 ✓
+       （用户：「和导图一样去居中显示子白板的东西」）
+       子页面刚切过去时形状可能还没渲染完，等一帧再 fit ✓ */
+    const fit = (attempt) => {
+      requestAnimationFrame(() => {
+        try {
+          const e2 = ed();
+          if (!e2) return;
+          const shapes = e2.getCurrentPageShapes ? e2.getCurrentPageShapes() : [];
+          if (!shapes.length && attempt < 3) { setTimeout(() => fit(attempt + 1), 120); return; }
+          if (!shapes.length) return;          /* 真·空页面：保持默认视图 ✓ */
+          if (typeof e2.zoomToFit === 'function') e2.zoomToFit({ animation: { duration: 220 } });
+          else if (typeof e2.zoomToContent === 'function') e2.zoomToContent();
+        } catch (_) {}
+      });
+    };
+    fit(0);
   }
 
   /* ── 面包屑：沿 meta.parentId 往上走 ─────────────────────────────────── */
