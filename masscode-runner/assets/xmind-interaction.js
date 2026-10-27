@@ -953,11 +953,37 @@
     return true;
   }
 
+  /* 清掉「手动固定位置」→ 回到自动布局 ✓
+     （对齐/拖动会把子主题固定住，之后新增删除不会自动重排，用户需要一条退路）✓ */
+  function resetAutoLayout(ids) {
+    const list = ids && ids.length ? ids : [...multi()];
+    let n = 0;
+    list.forEach((id) => {
+      const hit = xmindFind(id);
+      if (!hit) return;
+      (function walk(topic) {
+        if (!topic) return;
+        if (topic.position && topic.position.fixed) {
+          delete topic.position.fixed;
+          delete topic.position.anchorX;
+          delete topic.position.anchorY;
+          n += 1;
+        }
+        (xmindChildren(topic) || []).forEach(walk);
+      })(hit.topic);
+    });
+    if (!n) { if (typeof setDrawStatus === 'function') setDrawStatus('这些主题本来就是自动布局', 'warn'); return; }
+    xmindChanged();
+    refreshOverlay();
+    if (typeof setDrawStatus === 'function') setDrawStatus('已恢复自动布局（' + n + ' 个主题）', 'ok');
+  }
+
   function alignMenu(event) {
     if (typeof showContextMenu !== 'function') return;
     showContextMenu(event, ALIGN_ITEMS.map((item) => (item.type === 'separator'
       ? { type: 'separator' }
-      : { label: item.label, run: () => alignSelection(item.mode) })));
+      : { label: item.label, run: () => alignSelection(item.mode) }))
+      .concat([{ type: 'separator' }, { label: '恢复自动布局', hint: '清掉手动位置', run: () => resetAutoLayout([...multi()]) }]));
   }
 
   /* 进入编辑：树节点走引擎、自由主题走浮层 ✓ */
@@ -2150,6 +2176,7 @@
   window.__csXmindNavigate = (k) => navigateByKey(k);
   window.__csXmindSelectSummary = (gid) => selectSummary(gid);
   window.__csXmindAlign = (mode) => alignSelection(mode);
+  window.__csXmindResetAutoLayout = (ids) => resetAutoLayout(ids);
   window.__csXmindSelectionMenu = (e) => openSelectionMenu(e);
   window.__csXmindRemoveSummary = (gid) => removeSummaryGroup(gid);
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);

@@ -321,14 +321,23 @@ class WebCardShape extends BaseBoxShapeUtil {
 function SubBoardFace({ shape }) {
   const editor = useEditor();
   const { w, h, title, pageId } = shape.props;
-  const count = useMemo(() => {
-    if (!pageId) return 0;
+  /* ★ 卡片里直接画**子页内容的缩略预览** ✓
+     用户：「主白板不显示子白板的东西」—— 原来卡片是静态占位文字 ✗
+     做法：从 store 里捞出该页所有 shape，按包围盒等比缩放进卡片 ✓ */
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
     try {
-      return editor.getPages().find((p) => p.id === pageId)
-        ? editor.getSortedChildIdsForParent(pageId).length
-        : 0;
-    } catch (_) { return 0; }
-  }, [editor, pageId]);
+      return editor.store.listen(() => setTick((n) => n + 1), { scope: 'document' });
+    } catch (_) { return undefined; }
+  }, [editor]);
+
+  const shapes = useMemo(() => {
+    if (!pageId) return [];
+    try {
+      return editor.store.allRecords().filter((r) => r.typeName === 'shape' && r.parentId === pageId);
+    } catch (_) { return []; }
+  }, [editor, pageId, tick]);
+  const count = shapes.length;
 
   const enter = (e) => {
     e.stopPropagation();
@@ -336,18 +345,59 @@ function SubBoardFace({ shape }) {
     window.dispatchEvent(new CustomEvent('cs-enter-page', { detail: pageId }));
   };
 
+  /* 预览：等比缩放到卡片内，留 10px 边距 */
+  const preview = useMemo(() => {
+    if (!shapes.length) return null;
+    const pad = 10;
+    const boxW = Math.max(20, w - pad * 2);
+    const boxH = Math.max(20, h - 44);
+    let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+    shapes.forEach((sh) => {
+      const sw = Number(sh.props && (sh.props.w || sh.props.size)) || 120;
+      const shh = Number(sh.props && (sh.props.h || sh.props.size)) || 80;
+      minX = Math.min(minX, sh.x); minY = Math.min(minY, sh.y);
+      maxX = Math.max(maxX, sh.x + sw); maxY = Math.max(maxY, sh.y + shh);
+    });
+    const cw = Math.max(1, maxX - minX);
+    const ch = Math.max(1, maxY - minY);
+    const k = Math.min(boxW / cw, boxH / ch, 1);
+    return { minX, minY, k, dx: pad + (boxW - cw * k) / 2, dy: 38 + (boxH - ch * k) / 2 };
+  }, [shapes, w, h]);
+
   return (
     <HTMLContainer style={{ width: w, height: h, pointerEvents: 'all' }}>
-      <div className="cs-card cs-card--blue" style={{ borderRadius: 12 }}
+      <div className="cs-card cs-card--blue" style={{ borderRadius: 12, overflow: 'hidden' }}
         onDoubleClick={enter} title={pageId ? '双击进入这块子白板' : '还没关联页面'}>
         <div className="cs-card__head">
           <span className="cs-card__title">{title || '子白板'}</span>
           <span style={{ fontSize: 11, opacity: 0.6 }}>{count ? count + ' 个图形' : '空'}</span>
         </div>
-        <div className="cs-card__body" style={{ display: 'grid', placeItems: 'center' }}>
-          <div style={{ fontSize: 12, opacity: 0.55, textAlign: 'center', lineHeight: 1.6 }}>
-            双击进入<br />在这里放一块独立的画布
-          </div>
+        <div className="cs-card__body" style={{ position: 'relative', display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+          {preview ? (
+            <svg width={w} height={Math.max(20, h - 40)} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+              {shapes.map((sh) => {
+                const sw = Number(sh.props && (sh.props.w || sh.props.size)) || 120;
+                const shh = Number(sh.props && (sh.props.h || sh.props.size)) || 80;
+                return (
+                  <rect
+                    key={sh.id}
+                    x={preview.dx + (sh.x - preview.minX) * preview.k}
+                    y={preview.dy + (sh.y - preview.minY) * preview.k}
+                    width={Math.max(3, sw * preview.k)}
+                    height={Math.max(3, shh * preview.k)}
+                    rx={Math.min(6, 4 * preview.k)}
+                    fill="rgba(126,178,255,.30)"
+                    stroke="rgba(126,178,255,.65)"
+                    strokeWidth={1}
+                  />
+                );
+              })}
+            </svg>
+          ) : (
+            <div style={{ fontSize: 12, opacity: 0.55, textAlign: 'center', lineHeight: 1.6 }}>
+              双击进入<br />在这里放一块独立的画布
+            </div>
+          )}
         </div>
       </div>
     </HTMLContainer>
