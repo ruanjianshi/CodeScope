@@ -1389,6 +1389,32 @@
     bindCardDrop();
     /* 双击子白板卡片 → 进入 */
     window.addEventListener('cs-enter-page', (e) => enterPage(e.detail));
+    /* ⚠️ 兜底：**自己监听原生 dblclick** ✗
+       bundle 里那个派发在某些情况下不触发（用户实测：双击卡片没反应），
+       这里直接按坐标命中 subboard 形状 → 进子画布 ✓ */
+    const host = document.querySelector('.tl-container') || document.body;
+    host.addEventListener('dblclick', (event) => {
+      const editor2 = ed();
+      if (!editor2) return;
+      let point;
+      try { point = editor2.screenToPage({ x: event.clientX, y: event.clientY }); } catch (_) { return; }
+      let all = [];
+      try {
+        all = (typeof editor2.getCurrentPageShapes === 'function' && editor2.getCurrentPageShapes())
+          || (typeof editor2.getCurrentPageRenderingShapes === 'function' && editor2.getCurrentPageRenderingShapes())
+          || [];
+      } catch (_) { all = []; }
+      const shapes = all.filter((sh) => sh && sh.type === 'subboard');
+      const hit = shapes.find((sh) => {
+        const w = Number(sh.props?.w || 0);
+        const h = Number(sh.props?.h || 0);
+        return point.x >= sh.x && point.x <= sh.x + w && point.y >= sh.y && point.y <= sh.y + h;
+      });
+      if (!hit || !hit.props?.pageId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      enterPage(hit.props.pageId);
+    }, true);
     /* 页面切换后刷新面包屑 / 列表 */
     const editor = ed();
     if (!editor) return;
