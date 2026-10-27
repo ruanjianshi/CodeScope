@@ -1365,11 +1365,25 @@
       const editor = ed();
       if (!editor) return;
       let shape = null;
+      let pt = null;
       try {
-        const pt = editor.screenToPage({ x: e.clientX, y: e.clientY });
+        pt = editor.screenToPage({ x: e.clientX, y: e.clientY });
         shape = editor.getShapeAtPoint(pt, { hitInside: true, margin: 0 });
       } catch (_) { return; }
-      if (!shape || shape.type !== 'card') return;   // 不在卡片上 → 放行，交给 tldraw 正常插图
+      /* ⚠️ `getShapeAtPoint` 有时命中不到卡片（落在卡片的 DOM 子元素上）✗
+         → 再按**包围盒**兜底找一遍 ✓（用户实测：图片拖不进卡片） */
+      if (!shape || shape.type !== 'card') {
+        try {
+          const all = typeof editor.getCurrentPageShapes === 'function' ? editor.getCurrentPageShapes() : [];
+          const cards = all.filter((sh) => sh && sh.type === 'card');
+          shape = cards.find((sh) => pt.x >= sh.x && pt.x <= sh.x + Number(sh.props.w || 0)
+            && pt.y >= sh.y && pt.y <= sh.y + Number(sh.props.h || 0)) || shape;
+        } catch (_) {}
+      }
+      if (!shape || shape.type !== 'card') {
+        toast('这里不是卡片，图片会放到画布上');
+        return;   // 不在卡片上 → 放行，交给 tldraw 正常插图
+      }
       e.preventDefault();
       e.stopPropagation();
       try {
