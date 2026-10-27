@@ -321,14 +321,16 @@
         const label = document.createElement('span');
         label.className = 'cs-free-frame-label';
         label.textContent = frame.text || '分组';
-        label.title = '双击改分组框标题';
-        label.ondblclick = async (event) => {
+        label.title = '双击直接改分组框标题（Enter 确认 / Esc 取消）';
+        label.ondblclick = (event) => {
           event.preventDefault();
           event.stopPropagation();
-          const next = await askText('分组框标题', frame.text || '', false);
-          if (next === null) return;
-          setFrameText(frame.groupId, next.trim());
-          xmindChanged();
+          startInlineEdit(label, frame.text || '', (next) => {
+            if (next === null) { refreshOverlay(); return; }
+            setFrameText(frame.groupId, next);
+            xmindChanged();
+            refreshOverlay();
+          });
         };
         box.appendChild(label);
         /* ⚠️ 框本身 pointer-events:none（否则会挡住下面的节点）✗
@@ -1059,6 +1061,53 @@
     if (overlay.style.getPropertyValue('--cs-ui') !== String(ui)) overlay.style.setProperty('--cs-ui', String(ui));
   }
 
+  /* ══ 就地编辑（用户：「怎么是这样弹框式输入，改成直接输入那种」）═════════
+     原来改概要/分组框标题都是 `askText()` 弹模态框 ✗
+     ⇒ 直接在文字上 contenteditable，Enter 提交、Esc 取消、失焦也算提交 ✓ */
+  let inlineEditEl = null;
+
+  function isInlineEditing() {
+    return !!inlineEditEl;
+  }
+
+  function startInlineEdit(el, current, commit) {
+    if (!el || inlineEditEl) return;
+    inlineEditEl = el;
+    const before = current || '';
+    el.contentEditable = 'true';
+    el.spellcheck = false;
+    el.textContent = before;
+    el.classList.add('editing');
+    try {
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (_) {}
+    const finish = (save) => {
+      if (inlineEditEl !== el) return;
+      inlineEditEl = null;
+      const value = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+      el.contentEditable = 'false';
+      el.classList.remove('editing');
+      el.removeEventListener('keydown', onKey, true);
+      el.removeEventListener('blur', onBlur, true);
+      if (!save) { el.textContent = before; commit(null); return; }
+      el.textContent = value || before;
+      commit(value);
+    };
+    const onKey = (event) => {
+      event.stopPropagation();
+      if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+      else if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finish(true); }
+    };
+    const onBlur = () => finish(true);
+    el.addEventListener('keydown', onKey, true);
+    el.addEventListener('blur', onBlur, true);
+  }
+
   /* ★ 概要自己也是可选中/可删除的对象 ✓（用户：「概要无法选中删除」） */
   let XMIND_SUMMARY_SELECTED = '';
 
@@ -1073,19 +1122,28 @@
 
   function selectSummary(groupId) {
     XMIND_SUMMARY_SELECTED = groupId || '';
-    if (groupId) clearSelection();
-    refreshOverlay();
+    /* ⚠️ 这里**不能重画浮层** ✗ —— 重画会换掉 DOM 元素，
+       紧接着的第二次点击（双击）就落在旧元素上 → 就地编辑永远进不去（实测）✓
+       ⇒ 只切换 class，元素保持不动 ✓ */
+    document.querySelectorAll('.cs-summary').forEach((el) => {
+      el.classList.toggle('selected', !!groupId && el.dataset.groupId === groupId);
+    });
   }
 
   function summaryMenu(event, groupId) {
     if (typeof showContextMenu !== 'function') return;
     showContextMenu(event, [
-      { label: '改概要文字…', run: () => { XMIND_SUMMARY_SELECTED = groupId; editGroupFrame([...multi()]); } },
+      { label: '改概要文字…', run: () => {
+        XMIND_SUMMARY_SELECTED = groupId;
+        const lab = document.querySelector('.cs-summary.selected .cs-summary-label') || document.querySelector('.cs-summary-label');
+        if (lab) lab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      } },
       { label: '删除概要', danger: true, run: () => removeSummaryGroup(groupId) },
     ]);
   }
 
   function refreshOverlay() {
+    if (isInlineEditing()) return;   /* 正在就地编辑 → 别重画，否则元素被换掉 ✗ */
     /* ★ 快速通道：没有分组框/标记/概要，且选中数 <2 → 四个渲染函数全是空转 ✓
        （平移时每帧都会调到这里，省掉 4 次全文档 querySelectorAll）✓ */
     if (multi().size < 2
@@ -1205,17 +1263,19 @@
       label.className = 'cs-summary-label';
       label.textContent = info.text || '概要';
       label.style.color = info.color || '#78a9ff';
-      label.title = '双击改概要文字';
-      label.ondblclick = async (event) => {
+      label.title = '双击直接改概要文字（Enter 确认 / Esc 取消）';
+      label.ondblclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const next = await askText('概要文字', info.text || '', false);
-        if (next === null) return;
-        let changed = 0;
-        eachTopic((topic) => {
-          if (topic.summary && topic.summary.groupId === info.groupId) { topic.summary = { ...topic.summary, text: next.trim() }; changed += 1; }
+        startInlineEdit(label, info.text || '', (next) => {
+          if (next === null) { refreshOverlay(); return; }
+          let changed = 0;
+          eachTopic((topic) => {
+            if (topic.summary && topic.summary.groupId === info.groupId) { topic.summary = { ...topic.summary, text: next }; changed += 1; }
+          });
+          if (changed) xmindChanged();
+          refreshOverlay();
         });
-        if (changed) xmindChanged();
       };
       bracket.appendChild(label);
       overlay.appendChild(bracket);
@@ -1336,7 +1396,11 @@
   function openFrameMenu(event, groupId) {
     if (typeof showContextMenu !== 'function') return;
     showContextMenu(event, [
-      { label: '改分组框标题…', run: () => editGroupFrame([...multi()]) },
+      { label: '改分组框标题…', run: () => {
+        const lab = document.querySelector('.cs-free-frame-label');
+        if (lab) lab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        else editGroupFrame([...multi()]);
+      } },
       { label: '选中组内主题', run: () => {
         const members = membersOfGroup(groupId);
         if (members.length) { setSelection(members.map((m) => String(m.topic.id)), String(members[0].topic.id)); syncEngineSelection(); }
@@ -1470,8 +1534,10 @@
         return;
       }
 
-      /* 分组框的四条边自己处理拖动 ✓ 别当成空白去框选 */
-      if (event.target.closest('.cs-free-frame-edge')) return;
+      /* 分组框（四条边 + 标题）自己处理 ✓ 别当成空白去框选
+         ⚠️ 必须覆盖整个 `.cs-free-frame` ✗ 只管边的话，点标题会走空白分支的
+         `preventDefault()`，把 click/dblclick 一起取消 → 标题双击改不了（实测）✓ */
+      if (event.target.closest('.cs-free-frame')) return;
       /* ⚠️ 概要也要放行 ✗ —— 空白分支会 `preventDefault()`，把随后的 click 一起取消，
          概要就永远收不到点击（实测 selected 一直是 0）✓ */
       if (event.target.closest('.cs-summary')) return;
@@ -1594,7 +1660,10 @@
 
     /* 双击空白：新建自由主题 ✓ */
     surface.addEventListener('dblclick', (event) => {
-      if (!isEdit() || event.target.closest('.xmind-floating-node')) return;
+      /* ⚠️ 概要 / 分组框标题的双击要留给它们自己（就地编辑）✗
+         否则这里会当成「空白处双击 = 新建自由主题」，凭空多一个节点 ✓ */
+      if (!isEdit() || event.target.closest('.xmind-floating-node')
+        || event.target.closest('.cs-summary') || event.target.closest('.cs-free-frame')) return;
       if (xmindEngineTopic(event.target) || event.target.closest('[contenteditable]')) return;
       xmindAddFloatingAt(event.clientX,event.clientY);
     }, true);

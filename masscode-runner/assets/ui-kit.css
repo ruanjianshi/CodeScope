@@ -1002,3 +1002,13 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 .cs-summary.selected .cs-summary-label {
   background: color-mix(in srgb, var(--xm-accent, #78a9ff) 26%, var(--xm-control, #131a23));
 }
+
+/* 就地编辑中的概要/分组框文字：给个明显的输入态 ✓ */
+.cs-summary-label.editing,
+.cs-free-frame-label.editing {
+  outline: 2px solid var(--xm-accent, #78a9ff);
+  outline-offset: 1px;
+  background: var(--xm-control, #131a23) !important;
+  cursor: text;
+  user-select: text;
+}
