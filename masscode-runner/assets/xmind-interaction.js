@@ -58,6 +58,12 @@
   /* ── 选中态：一处改，三处（引擎 / 浮层 / 大纲）一起变 ─────────────────── */
   function paintSelection() {
     const set = multi();
+    /* ⚠️ 选中了主题就要**取消概要的选中态** ✗
+       否则「节点亮着、概要也亮着」，删除时不知道该删谁（用户实测）✓ */
+    if (set.size && XMIND_SUMMARY_SELECTED) {
+      XMIND_SUMMARY_SELECTED = '';
+      document.querySelectorAll('.cs-summary').forEach((el) => el.classList.remove('selected'));
+    }
     document.querySelectorAll('.xmind-row').forEach((row) => {
       row.classList.toggle('selected', set.has(String(row.dataset.id || '')));
     });
