@@ -5,3 +5,6 @@ npm-debug.log*
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# 画布 bundle 的本地备份（git 历史里已有，别提交，2MB）
+assets/vendor/tldraw.bundle.backup.js
