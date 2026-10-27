@@ -8,7 +8,7 @@ OUT="../../assets/vendor/tldraw.bundle.js"
 npx esbuild entry.jsx \
   --bundle --format=iife --outfile="$OUT" \
   --loader:.jsx=jsx --jsx=automatic \
-  --define:process.env.NODE_ENV="production" \
+  --define:process.env.NODE_ENV='"production"' \
   --minify --legal-comments=none
 echo "已生成：$OUT"
 ls -lh "$OUT" | awk '{print "体积：" $5}'
