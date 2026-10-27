@@ -881,10 +881,10 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   align-items: center;
   justify-content: center;
   gap: 1px;
-  min-width: 50px;
+  min-width: 44px;
   height: 44px;
   min-height: 44px;
-  padding: 3px 6px !important;
+  padding: 3px 5px !important;
   border: 0 !important;
   border-radius: 8px !important;
   background: transparent !important;
@@ -910,7 +910,7 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 .codescope-xmind-toolbar .xmind-tb-sep {
   width: 1px;
   height: 24px;
-  margin: 0 5px;
+  margin: 0 3px;
   background: rgba(255, 255, 255, .09);
   flex: none;
 }
@@ -919,7 +919,7 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   background: #14181e !important;
   border-bottom: 1px solid rgba(255, 255, 255, .07) !important;
   padding: 3px 10px !important;
-  gap: 4px !important;
+  gap: 2px !important;
 }
 
 /* 分组框标题上的删除按钮：不用瞄准细边，点 ✕ 就删 ✓ */
