@@ -288,7 +288,12 @@ function WebFace({ shape }) {
           </a>
         </div>
         <div className="cs-web__body">
+          {/* ⚠️ 必须 sandbox ✗ 而且**不能给 allow-top-navigation** ✓
+              B站这类站点被嵌时会执行 `top.location = 自己` → 整个白板被跳走 ✗
+              （用户实测：每次刷新打开白板都自动跳去 B站）✓ */}
           <iframe className="cs-web__frame" src={url || 'about:blank'} title={title || host}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+            referrerPolicy="no-referrer"
             style={{ pointerEvents: isEditing ? 'auto' : 'none' }} />
           {!isEditing && <div className="cs-web__mask" />}
         </div>
