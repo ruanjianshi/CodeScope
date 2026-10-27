@@ -808,6 +808,9 @@ body.tags-open #pane-tags > #tag-head { display: none; }
    固定 46px 高、单行不换行 → 后面的 ↶ ↷ 直接被挤出可视区 ✗ */
 .codescope-xmind-toolbar {
   flex-wrap: wrap !important;
+  /* ⚠️ 原样式是 `flex:0 0 46px` ✗ —— 换行后高度超过 46px 就会**压到画布上** ✓
+     必须把 flex-basis 也放开，让它按内容撑高 ✓ */
+  flex: 0 0 auto !important;
   height: auto !important;
   min-height: 46px !important;
   max-height: none !important;

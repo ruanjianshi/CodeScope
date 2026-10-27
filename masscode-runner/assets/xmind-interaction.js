@@ -1585,6 +1585,35 @@
     } catch (_) { setTimeout(run, 2500); }
   })();
 
+  /* ══ 切换布局后自动「适应画布」══════════════════════════════════════════
+     用户：「切换逻辑图样式就有问题了」
+     原因：换结构后**根节点位置会变**（向左逻辑图把根挪到右边），
+          而自由主题的位置是**存在数据里的绝对坐标** → 整块被甩到画布外 ✗
+     ⇒ 换完布局等它渲染完再 fit 一次，保证所有内容都进视野 ✓ */
+  (function wrapLayout() {
+    const original = typeof window.xmindSetLayout === 'function' ? window.xmindSetLayout : null;
+    if (!original) return;
+    window.xmindSetLayout = function (value) {
+      const result = original.apply(this, arguments);
+      const settle = (attempt) => {
+        requestAnimationFrame(() => {
+          if (!XMIND_MAP) return;
+          /* 等两帧让引擎把新布局摆完，再 fit ✓ */
+          if (attempt < 3) { settle(attempt + 1); return; }
+          try {
+            /* ⚠️ 用**引擎自己的 fit**（只算树）✗ 别用我们的 xmindPlaceAll ✓
+               我们的 fit 把自由主题也算进去 → 它们离得远，整图被缩到 20% 看不清 ✓
+               引擎的 fit 只看渲染树 → 树永远完整可见、缩放也合理 ✓ */
+            if (XMIND_MAP?.view?.fit) XMIND_MAP.view.fit();
+            else if (typeof xmindFitEditor === 'function') xmindFitEditor();
+          } catch (_) {}
+        });
+      };
+      settle(0);
+      return result;
+    };
+  })();
+
   /* app.js 与其它模块的入口 */
   window.__csXmindInteraction = { bind, setSelection, paintSelection, deleteSelection };
   window.__csXmindSel = (id) => multi().has(String(id || ''));
