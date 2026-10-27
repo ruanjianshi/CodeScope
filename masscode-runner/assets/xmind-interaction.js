@@ -1524,6 +1524,21 @@
   }
 
   /* 分组框自己的菜单（右键点框的边）✓ */
+  /* 空白处右键 + 有选中 → 选区菜单 ✓ */
+  function openSelectionMenu(event) {
+    if (typeof showContextMenu !== 'function') return;
+    const count = multi().size;
+    showContextMenu(event, [
+      { label: '对齐与间距 ▸', hint: '已选 ' + count + ' 个', run: () => alignMenu(event) },
+      { type: 'separator' },
+      { label: '加分组框（外框）…', run: () => addGroupFrame([...multi()]) },
+      { label: '加概要（右侧括号）…', run: () => addSummary() },
+      { label: '标记 ▸', hint: '★ ⚑ ✓ ? !', run: () => markerMenu(event, XMIND_SELECTED) },
+      { type: 'separator' },
+      { label: '取消选择', hint: 'Esc', run: () => { clearSelection(); } },
+    ]);
+  }
+
   function openFrameMenu(event, groupId) {
     if (typeof showContextMenu !== 'function') return;
     showContextMenu(event, [
@@ -1710,10 +1725,19 @@
         xmindUpdateViewportTools();
         event.preventDefault();
         event.stopImmediatePropagation();
-        /* 右键单击（没拖动）= 节点菜单 ✓ */
-        if (pan.button === 2 && !pan.moved && pan.topicId) {
-          setSelection([pan.topicId], pan.topicId);
-          openNodeMenu(event, pan.topicId);
+        /* 右键单击（没拖动）= 菜单 ✓
+           ⚠️ 两个坑（用户实测）：
+           ① 在**已选中的节点**上右键，原来会 `setSelection([id])` 把多选清成单选 ✗
+              ⇒ 只有「点到的节点不在选中集里」才重置选中 ✓
+           ② 在**空白处**右键且有选中时，原来什么都不弹 ✗
+              ⇒ 弹「选区菜单」（对齐/分组框/概要/标记/取消选择）✓ */
+        if (pan.button === 2 && !pan.moved) {
+          if (pan.topicId) {
+            if (!multi().has(String(pan.topicId))) setSelection([pan.topicId], pan.topicId);
+            openNodeMenu(event, pan.topicId);
+          } else if (multi().size > 0) {
+            openSelectionMenu(event);
+          }
         }
         return;
       }
@@ -1970,6 +1994,7 @@
   window.__csXmindNavigate = (k) => navigateByKey(k);
   window.__csXmindSelectSummary = (gid) => selectSummary(gid);
   window.__csXmindAlign = (mode) => alignSelection(mode);
+  window.__csXmindSelectionMenu = (e) => openSelectionMenu(e);
   window.__csXmindRemoveSummary = (gid) => removeSummaryGroup(gid);
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
