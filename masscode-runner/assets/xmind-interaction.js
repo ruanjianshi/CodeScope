@@ -710,7 +710,10 @@
     /* ★ 签名缓存：路径的 d + 颜色都没变 → 直接跳过（布局没变时不该重画）✓ */
     const sourcePaths = [...container.querySelectorAll(':scope > path')];
     const signature = sourcePaths.map((p) => (p.getAttribute('d') || '') + '|' + (p.getAttribute('stroke') || '')).join(';');
-    if (signature === taperSignature && layer && layer.childElementCount) return;
+    /* ⚠️ 还要检查 `layer.isConnected` ✗✗
+       引擎重绘会**重建** `.smm-line-container` → 我们叠进去的 layer 跟着被销毁 ✗
+       但签名没变 → 直接 return → 引擎描边又被我们设成透明 → **线全没了**（用户实测）✓ */
+    if (signature === taperSignature && layer && layer.isConnected && layer.childElementCount) return;
     taperSignature = signature;
     engine.classList.add('cs-taper-on');
     if (!layer) {
