@@ -1012,3 +1012,16 @@ body.tags-open #pane-tags > #tag-head { display: none; }
   cursor: text;
   user-select: text;
 }
+
+
+/* ═══ 矮窗口保护：窗口高度 < 560px 时主工作区会被压成 0 高 ═══════════════════
+   用户实测：把窗口拉矮后「整个界面没了」，只剩顶栏 ✗
+   ⇒ 给 body 一个最小高度并允许纵向滚动，界面不再塌陷 ✓ */
+@media (max-height: 560px) {
+  html, body {
+    min-height: 520px !important;
+    height: auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+  }
+}
