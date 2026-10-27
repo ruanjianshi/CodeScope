@@ -1062,6 +1062,8 @@
     };
     collect(xmindRootTopic());
     (xmindDetached() || []).forEach(collect);
+    /* ⚠️ 向左逻辑图时子主题在父级**左边** ✗ —— 概要括号必须跟着镜像到左侧 ✓ */
+    const leftward = typeof xmindCurrentLayout === 'function' && xmindCurrentLayout() === 'logicalStructureLeft';
     groups.forEach(({ info, ids }) => {
       const rects = ids.map((id) => document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(id) + '"]') || xmindSmmNode(id)?.group?.node)
         .filter(Boolean).map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0);
@@ -1069,9 +1071,10 @@
       const top = Math.min(...rects.map((r) => r.top)) - er.top;
       const bottom = Math.max(...rects.map((r) => r.bottom)) - er.top;
       const right = Math.max(...rects.map((r) => r.right)) - er.left;
+      const left = Math.min(...rects.map((r) => r.left)) - er.left;
       const bracket = document.createElement('div');
-      bracket.className = 'cs-summary';
-      bracket.style.left = (right + 14) + 'px';
+      bracket.className = 'cs-summary' + (leftward ? ' left' : '');
+      bracket.style.left = (leftward ? left - 24 : right + 14) + 'px';
       bracket.style.top = top + 'px';
       bracket.style.height = Math.max(18, bottom - top) + 'px';
       bracket.style.borderColor = info.color || '#78a9ff';

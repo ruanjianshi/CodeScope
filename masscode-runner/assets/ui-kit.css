@@ -950,3 +950,16 @@ body.tags-open #pane-tags > #tag-head { display: none; }
 /* 渐细线：引擎原来的描边藏掉，换成我们叠的那层实心多边形 ✓ */
 #xmind-engine.cs-taper-on .smm-line-container > path { stroke: transparent !important; }
 #cs-taper-layer { pointer-events: none; }
+
+/* 概要括号：向左逻辑图时镜像到左侧（变成 [ 形，文字也在左边）✓ */
+.cs-summary.left {
+  border: 2px solid #78a9ff;
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+}
+.cs-summary.left .cs-summary-label {
+  left: auto;
+  /* 放到括号**左边**：right = 100% + 4px（+4 是括号本身的 2px 描边+间隙）✓
+     ⚠️ 写 `right:14px` 会让标签压在括号上 ✗ */
+  right: calc(100% + 4px);
+}
