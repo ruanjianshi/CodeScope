@@ -196,6 +196,25 @@
     event.stopImmediatePropagation();
   }
 
+  /* 把位移同步给**被固定的子孙** ✓
+     ⚠️ 固定位置是绝对坐标 ✗ —— 父节点一动，被固定过的子节点就留在原地
+     （用户实测：「拖动主节点，子节点不动」）⇒ 父节点移动时，把同样位移补给它们 ✓
+     老数据没有 anchorX（上一版才加），用这个办法一并修好 ✓ */
+  function shiftPinnedDescendants(topic, dx, dy) {
+    if (!topic || (!dx && !dy)) return;
+    (xmindChildren(topic) || []).forEach((child) => {
+      if (child.position && child.position.fixed) {
+        child.position = {
+          x: Number(child.position.x) + dx,
+          y: Number(child.position.y) + dy,
+          fixed: true,
+          ...(Number.isFinite(Number(child.position.anchorX)) ? { anchorX: Number(child.position.anchorX) + dx, anchorY: Number(child.position.anchorY) + dy } : {}),
+        };
+      }
+      shiftPinnedDescendants(child, dx, dy);
+    });
+  }
+
   /* 把增量位移分给所有选中节点（父子都选中时，子节点跟着父走，不重复加）✓ */
   function moveSelectionBy(dxMap, dyMap) {
     const members = [...multi()].map((id) => {
@@ -233,7 +252,14 @@
          只在松手时一次性落库（见 finishFloatDrag）✓ */
     } else if (drag.moved) {
       const live = xmindFind(drag.id);
-      if (live && live.topic && !live.parent) live.topic.position = { ...drag.preview };
+      if (live && live.topic && !live.parent) {
+        const prev = live.topic.position || { x: 0, y: 0 };
+        const stepX = drag.preview.x - Number(prev.x || 0);
+        const stepY = drag.preview.y - Number(prev.y || 0);
+        live.topic.position = { ...drag.preview };
+        /* ★ 被固定过的子孙跟着一起走 ✓（否则它们留在原地，看起来"子节点不动"） */
+        if (stepX || stepY) shiftPinnedDescendants(live.topic, stepX, stepY);
+      }
     }
     xmindRenderFloatingTopics();
     event.preventDefault();
@@ -291,6 +317,9 @@
             const base = m.off || { dx: 0, dy: 0 };
             m.topic.codescopeOffset = { dx: base.dx + totalX, dy: base.dy + totalY };
           }
+        });
+        drag.members.forEach((m) => {
+          if (!m.parentId) shiftPinnedDescendants(m.topic, totalX, totalY);
         });
         xmindNormalize();
         xmindRecord();
