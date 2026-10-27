@@ -689,6 +689,130 @@
     return true;
   }
 
+  /* ══ 对齐 / 等距分布（用户：「右键选择对齐，各种对齐，间距等等」）══════════
+     只对**自由主题**有意义（树节点的位置由布局算）✓
+     做法：按屏幕矩形算目标位置 → 换算成地图单位 → 写回 position / codescopeOffset ✓
+     ⚠️ 父子都被选中时，子节点会**继承**父节点的位移，必须减掉，否则会移动两次 ✓ */
+  const ALIGN_ITEMS = [
+    { label: '左对齐', mode: 'left' },
+    { label: '水平居中', mode: 'hcenter' },
+    { label: '右对齐', mode: 'right' },
+    { label: '顶部对齐', mode: 'top' },
+    { label: '垂直居中', mode: 'vcenter' },
+    { label: '底部对齐', mode: 'bottom' },
+    { type: 'separator' },
+    { label: '水平等距分布', mode: 'hdist' },
+    { label: '垂直等距分布', mode: 'vdist' },
+  ];
+
+  function alignTargets(list) {
+    const lefts = list.map((i) => i.rect.left);
+    const rights = list.map((i) => i.rect.right);
+    const tops = list.map((i) => i.rect.top);
+    const bottoms = list.map((i) => i.rect.bottom);
+    const minLeft = Math.min(...lefts);
+    const maxRight = Math.max(...rights);
+    const minTop = Math.min(...tops);
+    const maxBottom = Math.max(...bottoms);
+    const midX = (minLeft + maxRight) / 2;
+    const midY = (minTop + maxBottom) / 2;
+    return { minLeft, maxRight, minTop, maxBottom, midX, midY };
+  }
+
+  function alignSelection(mode) {
+    if (!XMIND_MAP) return false;
+    const scale = XMIND_MAP.view?.scale || 1;
+    const list = [...multi()].map((id) => {
+      const hit = xmindFind(id);
+      if (!hit) return null;
+      const el = document.querySelector('.xmind-floating-node[data-topic-id="' + CSS.escape(String(id)) + '"]')
+        || xmindSmmNode(id)?.group?.node;
+      const rect = el?.getBoundingClientRect();
+      if (!rect || !rect.width) return null;
+      /* ⚠️ 只对**自由导图的根**做对齐 ✗ —— 子主题的横/纵位置是自动布局算出来的，
+         改 `codescopeOffset` 只会和布局打架（实测几乎不动）✓ */
+      if (!hit.isDetached || hit.parent) return null;
+      return { hit, topic: hit.topic, depth: 0, parentId: '', rect, detached: true };
+    }).filter(Boolean);
+    if (list.length < 2) {
+      if (typeof setDrawStatus === 'function') setDrawStatus('先选中 2 个以上的**自由导图**（根节点）再对齐', 'warn');
+      return false;
+    }
+    const t = alignTargets(list);
+    const deltas = new Map();
+    if (mode === 'hdist' || mode === 'vdist') {
+      const horiz = mode === 'hdist';
+      const sorted = [...list].sort((a, b) => (horiz ? a.rect.left - b.rect.left : a.rect.top - b.rect.top));
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const span = horiz
+        ? (last.rect.left + last.rect.width) - first.rect.left
+        : (last.rect.top + last.rect.height) - first.rect.top;
+      const total = sorted.reduce((sum, i) => sum + (horiz ? i.rect.width : i.rect.height), 0);
+      const gap = (span - total) / (sorted.length - 1);
+      let cursor = horiz ? first.rect.left : first.rect.top;
+      sorted.forEach((i) => {
+        const size = horiz ? i.rect.width : i.rect.height;
+        deltas.set(String(i.topic.id), horiz
+          ? { dx: cursor - i.rect.left, dy: 0 }
+          : { dx: 0, dy: cursor - i.rect.top });
+        cursor += size + gap;
+      });
+    } else {
+      list.forEach((i) => {
+        let dx = 0;
+        let dy = 0;
+        if (mode === 'left') dx = t.minLeft - i.rect.left;
+        else if (mode === 'right') dx = t.maxRight - i.rect.right;
+        else if (mode === 'hcenter') dx = t.midX - (i.rect.left + i.rect.right) / 2;
+        else if (mode === 'top') dy = t.minTop - i.rect.top;
+        else if (mode === 'bottom') dy = t.maxBottom - i.rect.bottom;
+        else if (mode === 'vcenter') dy = t.midY - (i.rect.top + i.rect.bottom) / 2;
+        deltas.set(String(i.topic.id), { dx, dy });
+      });
+    }
+    /* ⚠️ 别直接用 `view.scale` 换算 ✗ —— 实测位移会放大好几倍
+       （浮层的坐标系原点是「根节点中心」，比例尺要以它为准）✓ */
+    const origin = typeof xmindFloatingOrigin === 'function' ? xmindFloatingOrigin() : null;
+    const er = engineEl().getBoundingClientRect();
+    const realScale = origin && origin.scale ? origin.scale : scale;
+    const applied = new Map();
+    let touched = 0;
+    list.forEach((item) => {
+      if (!item.detached) return;                 /* 树节点位置由布局决定，跳过 ✓ */
+      const d = deltas.get(String(item.topic.id)) || { dx: 0, dy: 0 };
+      let dx = d.dx / realScale;
+      let dy = d.dy / realScale;
+      const inherited = applied.get(item.parentId);
+      if (inherited) { dx -= inherited.dx; dy -= inherited.dy; }
+      applied.set(String(item.topic.id), { dx, dy });
+      if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
+      if (item.depth === 0 && item.topic.position) {
+        item.topic.position = { x: Number(item.topic.position.x) + dx, y: Number(item.topic.position.y) + dy };
+      } else {
+        const off = item.topic.codescopeOffset || { dx: 0, dy: 0 };
+        item.topic.codescopeOffset = { dx: Number(off.dx || 0) + dx, dy: Number(off.dy || 0) + dy };
+      }
+      touched += 1;
+    });
+    if (!touched) return false;
+    /* ⚠️ 不能走 `xmindChanged()` ✗ —— 它会触发整图重排（`xmindPlaceAll`），
+       刚对齐好的位置又被自动布局冲掉（实测：对齐后节点散成三列）✓
+       ⇒ 只重画浮层 + 记录历史 + 存盘 ✓ */
+    if (typeof xmindRenderFloatingTopics === 'function') xmindRenderFloatingTopics();
+    try { if (typeof xmindRecord === 'function') xmindRecord(); } catch (_) {}
+    if (typeof scheduleDrawSave === 'function') scheduleDrawSave();
+    refreshOverlay();
+    return true;
+  }
+
+  function alignMenu(event) {
+    if (typeof showContextMenu !== 'function') return;
+    showContextMenu(event, ALIGN_ITEMS.map((item) => (item.type === 'separator'
+      ? { type: 'separator' }
+      : { label: item.label, run: () => alignSelection(item.mode) })));
+  }
+
   /* 进入编辑：树节点走引擎、自由主题走浮层 ✓ */
   function beginEditOnSelection() {
     if (isEditingText()) return;
@@ -1369,6 +1493,7 @@
       { label: '加分组框（外框）…', run: () => addGroupFrame([...multi()]) },
       { label: '加概要（右侧括号）…', run: () => addSummary() },
       { label: '标记 ▸', hint: '★ ⚑ ✓ ? !', run: () => markerMenu(event, id) },
+      { label: '对齐与间距 ▸', hint: '选中 ≥2 个', run: () => alignMenu(event) },
       { label: '改分组框标题…', disabled: !currentFrameGroup([...multi()]), run: () => editGroupFrame([...multi()]) },
       { label: '删除分组框', disabled: !currentFrameGroup([...multi()]), run: () => deleteGroupFrame([...multi()]) },
       { type: 'separator' },
@@ -1844,6 +1969,7 @@
   window.__csXmindEditSelection = () => beginEditOnSelection();
   window.__csXmindNavigate = (k) => navigateByKey(k);
   window.__csXmindSelectSummary = (gid) => selectSummary(gid);
+  window.__csXmindAlign = (mode) => alignSelection(mode);
   window.__csXmindRemoveSummary = (gid) => removeSummaryGroup(gid);
   window.__csXmindSelectBranch = (id) => selectBranch(id || XMIND_SELECTED);
   window.__csXmindSelectSiblings = (id) => selectSiblings(id || XMIND_SELECTED);
