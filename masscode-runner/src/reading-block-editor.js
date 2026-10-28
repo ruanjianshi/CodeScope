@@ -15,16 +15,57 @@ import {
   setBlockTypeCommand,
   wrapInBlockTypeCommand,
 } from '@milkdown/kit/preset/commonmark'
-import { TextSelection } from '@milkdown/kit/prose/state'
+import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state'
+import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
 import { Fragment } from '@milkdown/kit/prose/model'
 import { imageBlockSchema } from '@milkdown/kit/component/image-block'
-import { insert } from '@milkdown/kit/utils'
+import { $prose, insert } from '@milkdown/kit/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 
 const REFERENCE_RE = /\[\[(pdf-ref|code-ref|note-ref):([^\]]+)\]\]/g
 const REFERENCE_LINK_RE = /\[([^\]]*)\]\(#codescope-ref-([A-Za-z0-9_-]+)\)/g
 const TABLE_LAYOUT_RE = /(?:\r?\n)*<!--\s*codescope-table-layout:([A-Za-z0-9_-]+)\s*-->\s*$/
+
+/* ── Callout 提示框（`> [!note] 标题`）──
+   区块编辑器（Milkdown）把 `[!note]` 当普通文本：既不上色，也不隐藏前缀，
+   用户看到的就是一坨「[!note] 笔记 记录值得留下的想法」✗（而阅读模式下它是正常的彩色卡片）。
+   这里用 ProseMirror 装饰器补上：
+     ① 给整个 blockquote 加 `md-callout <type>` 类 —— 样式直接复用 doc-theme.css 里那套；
+     ② 把首行的 `[!type]` 前缀视觉隐藏（文本仍留在文档里，存盘不丢）。
+   为什么不用 remark 插件改 schema：blockquote 的 attrs 是 Crepe 内置的，
+   改 schema 要连带改序列化逻辑，风险大；装饰器是只读的，不碰文档结构。 */
+const CALLOUT_PREFIX_RE = /^\[!([A-Za-z]+)\]\s*/
+/* ⚠️ 必须用 $prose 包一层：Editor.use() 收的是 **Milkdown 插件**，
+   直接传裸的 ProseMirror Plugin 会报 "r is not a function"（编辑器整个加载失败）。 */
+const calloutPlugin = $prose(() => new Plugin({
+  key: new PluginKey('codescope-callout'),
+  props: {
+    decorations(state) {
+      const decos = []
+      state.doc.descendants((node, pos) => {
+        if (node.type.name !== 'blockquote') return
+        const first = node.firstChild
+        if (!first) return
+        const match = CALLOUT_PREFIX_RE.exec(first.textContent)
+        if (!match) return
+        decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'md-callout ' + match[1].toLowerCase() }))
+        /* blockquote(pos) → 第一个 paragraph 从 pos+1 起 → 它的文字从 pos+2 起 */
+        decos.push(Decoration.inline(pos + 2, pos + 2 + match[0].length, { class: 'cc-callout-prefix' }))
+        /* 标题：从前缀之后到第一个 hardbreak —— Milkdown 把 `> 标题\n> 正文` 合成一个段落，
+           中间用 hardbreak 分隔。找不到 hardbreak 就一直标到段尾。 */
+        const titleStart = pos + 2 + match[0].length
+        let titleEnd = titleStart
+        first.forEach((child, offset) => {
+          if (child.type.name === 'hardbreak') { titleEnd = pos + 2 + offset; return false }
+          titleEnd = pos + 2 + offset + child.nodeSize
+        })
+        if (titleEnd > titleStart) decos.push(Decoration.inline(titleStart, titleEnd, { class: 'cc-callout-title' }))
+      })
+      return DecorationSet.create(state.doc, decos)
+    },
+  },
+}))
 
 const utf8ToBase64Url = (value) => {
   const bytes = new TextEncoder().encode(value)
@@ -514,6 +555,103 @@ const applyColorHref = (crepe, href) => {
   })
 }
 
+/* ── 提示框插入器 ──
+   工具栏加一个 ❝ 按钮，点开是 14 种语气，选一个就在光标处插入引用块。
+   为什么要做这个：callout 语法 `> [!note]` 得手打，14 种类型名没人记得住，
+   而且区块编辑器里 `>` 不是语法（WYSIWYG），用户根本不知道从哪下手。
+   ⚠️ 类型表必须和 app.js 的正则、doc-theme.css 的语气色表三处同步。 */
+const CALLOUT_TYPES = [
+  ['note', '笔记'], ['info', '信息'], ['todo', '待办'], ['tip', '提示'],
+  ['success', '成功'], ['question', '问题'], ['warning', '警告'], ['important', '重点'],
+  ['danger', '危险'], ['bug', '缺陷'], ['failure', '失败'], ['example', '示例'],
+  ['abstract', '摘要'], ['quote', '引用'],
+]
+
+const attachCalloutControls = (crepe, root) => {
+  const topBar = root.querySelector('.milkdown-top-bar')
+  if (!topBar) return () => {}
+  for (const stale of topBar.querySelectorAll(':scope > .codescope-callout-group')) stale.remove()
+
+  const group = document.createElement('div')
+  group.className = 'codescope-callout-group'
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'top-bar-item codescope-callout-trigger'
+  btn.title = '插入提示框'
+  btn.setAttribute('aria-label', '插入提示框')
+  btn.setAttribute('aria-haspopup', 'true')
+  btn.setAttribute('aria-expanded', 'false')
+  btn.innerHTML = '<span class="codescope-callout-glyph">❝</span>'
+  group.appendChild(btn)
+  /* 插到 .top-bar-inner 的最前面，而不是 append 到 topBar 末尾 ✗ ——
+     工具栏一行放不下时，末尾的元素会先被裁掉，❝ 就消失了。 */
+  const inner = topBar.querySelector('.top-bar-inner')
+  if (inner) inner.insertBefore(group, inner.firstChild)
+  else topBar.insertBefore(group, topBar.firstChild)
+
+  const panel = document.createElement('div')
+  panel.className = 'codescope-callout-menu'
+  panel.hidden = true
+  panel.setAttribute('role', 'menu')
+  panel.setAttribute('aria-label', '插入提示框')
+  panel.innerHTML = CALLOUT_TYPES
+    .map(([k, label]) => '<button type="button" data-callout="' + k + '"><i data-t="' + k + '"></i>' + label + '</button>')
+    .join('')
+  document.body.appendChild(panel)
+
+  const insert = (type, label) => {
+    try {
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        const { state } = view
+        const bq = blockquoteSchema.type(ctx)
+        const para = paragraphSchema.type(ctx)
+        const node = bq.create(null, para.create(null, state.schema.text('[!' + type + '] ' + label)))
+        const { from, to } = state.selection
+        view.dispatch(state.tr.replaceWith(from, to, node))
+        view.focus()
+      })
+    } catch (_) {}
+  }
+
+  const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false') }
+  const open = () => {
+    panel.hidden = false
+    btn.setAttribute('aria-expanded', 'true')
+    const r = btn.getBoundingClientRect()
+    const w = panel.offsetWidth, h = panel.offsetHeight
+    Object.assign(panel.style, {
+      left: Math.min(window.innerWidth - w - 10, Math.max(10, r.left - 4)) + 'px',
+      top: (r.bottom + h + 10 > window.innerHeight ? Math.max(10, r.top - h - 6) : r.bottom + 6) + 'px',
+    })
+  }
+
+  btn.addEventListener('pointerdown', (e) => e.preventDefault())
+  btn.addEventListener('click', () => { panel.hidden ? open() : close() })
+  panel.addEventListener('pointerdown', (e) => e.preventDefault())
+  panel.addEventListener('click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('button[data-callout]') : null
+    if (!b) return
+    close()
+    insert(b.dataset.callout, b.textContent.trim())
+  })
+  const onDocDown = (e) => {
+    if (panel.hidden) return
+    const t = e.target
+    if (t instanceof Element && (panel.contains(t) || group.contains(t))) return
+    close()
+  }
+  const onKey = (e) => { if (e.key === 'Escape') close() }
+  document.addEventListener('pointerdown', onDocDown, true)
+  document.addEventListener('keydown', onKey, true)
+
+  return () => {
+    document.removeEventListener('pointerdown', onDocDown, true)
+    document.removeEventListener('keydown', onKey, true)
+    group.remove(); panel.remove()
+  }
+}
+
 const attachColorControls = (crepe, root, options = {}) => {
   const topBar = root.querySelector('.milkdown-top-bar')
   if (!topBar) return () => {}
@@ -543,7 +681,10 @@ const attachColorControls = (crepe, root, options = {}) => {
      先清掉同层的旧色板：连续切换模式时旧实例可能把自己的色板挂进了这一份顶栏，
      不去重就会出现两排一模一样的按钮。 */
   for (const stale of topBar.querySelectorAll(':scope > .codescope-color-group')) stale.remove()
-  topBar.appendChild(group)
+  /* 也插到 inner 最前：append 到 topBar 末尾会让它在窄容器下被裁掉。 */
+  const innerHost = topBar.querySelector('.top-bar-inner')
+  if (innerHost) innerHost.insertBefore(group, innerHost.firstChild)
+  else topBar.appendChild(group)
 
   const panel = document.createElement('div')
   panel.className = 'codescope-color-menu'
@@ -603,6 +744,20 @@ const attachColorControls = (crepe, root, options = {}) => {
     if (!selection || selection.isCollapsed || !selection.rangeCount) return hideBar()
     const range = selection.getRangeAt(0), editor = root.querySelector('.ProseMirror')
     if (!editor || !editor.contains(range.startContainer) || !editor.contains(range.endContainer)) return hideBar()
+    /* ⚠️ 表格里点一下单元格，ProseMirror 会把它变成「整格选中」——
+       这时 DOM 的 isCollapsed 是 false、range 也有效，色板就凭空弹出来
+       （用户原话：「我都没有选中内容」）。
+       特征是：选区两端落在同一个 <td>/<th> 里，且选中的文字正好等于整格文字。
+       单元格里只选一部分文字时仍要显示，所以不能用「在表格里就一律不显示」这种粗暴判断。 */
+    const cellOf = (node) => {
+      const el = node && (node.nodeType === 1 ? node : node.parentElement)
+      return el && el.closest ? el.closest('td, th') : null
+    }
+    const startCell = cellOf(range.startContainer), endCell = cellOf(range.endContainer)
+    if (startCell && startCell === endCell) {
+      const picked = selection.toString().trim()
+      if (!picked || picked === startCell.textContent.trim()) return hideBar()
+    }
     const rects = range.getClientRects()
     const rect = rects.length ? rects[0] : range.getBoundingClientRect()
     if (!rect || (!rect.width && !rect.height)) return hideBar()
@@ -834,6 +989,7 @@ async function create(options = {}) {
   root.addEventListener('paste', onPaste, true)
   root.addEventListener('drop', onDrop, true)
   let tableResizers = null
+  crepe.editor.use(calloutPlugin)
   await crepe.create()
   tableResizers = attachTableColumnResizers(root, () => tableWidths, (nextWidths) => {
     tableWidths = nextWidths
@@ -847,6 +1003,7 @@ async function create(options = {}) {
     onInsertImages: typeof options.onImage === 'function' ? insertImages : null,
   })
   const detachColorControls = attachColorControls(crepe, root, options)
+  const detachCalloutControls = attachCalloutControls(crepe, root)
   ready = true
   root.dataset.editorReady = 'true'
   return {

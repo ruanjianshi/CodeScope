@@ -697,7 +697,7 @@ function mdSyntaxFromEditor(text){
       const payload=mdRefUnb64(encoded),cut=payload.indexOf('#'),target=cut<0?payload:payload.slice(0,cut),anchor=cut<0?'':payload.slice(cut+1);
       return target?'[[md-ref:'+encodeURIComponent(target)+'#'+encodeURIComponent(anchor)+'|'+label.replace(/\\([\\\[\]])/g,'$1')+']]':m;})
     .replace(/\[([^\]\n]+)\]\(#cc-hl(?:\s+"[^"]*")?\)/g,'==$1==')
-    .replace(/\[([^\]\n]+)\]\(#cc-fg-([a-z]+)(?:\s+"[^"]*")?\)/g,(m,body,key)=>'{'+(MD_COLOR_NAMES[key]||'红')+'|'+body.replace(/\\([\\\[\]])/g,'$1')+'}'));
+    .replace(/\[([^\]\n]+)\]\(#cc-fg-([a-z]+)(?:\s+"[^"]*")?\)/g,(m,body,key)=>'{'+(MD_COLOR_NAMES[key]||'红')+'|'+body.replace(/\\([\\\[\]])/g,'$1')+'}').replace(/\\\[!([A-Za-z]+)\]/g,'[!$1]'));
 }
 /* 标题 → 锚点 id。与 Crepe 给编辑区标题生成的 id 规则保持一致（空格转连字符，保留中日韩，去掉标点）。 */
 function readingMarkdownSlug(text){return String(text==null?'':text).trim().toLowerCase()

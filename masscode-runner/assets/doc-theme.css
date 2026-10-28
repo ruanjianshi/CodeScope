@@ -1,0 +1,787 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   CodeScope 文档主题 —— Phycat 视觉语言移植
+   -----------------------------------------------------------------------
+   配色取自 obsidian-theme-phycat 的预设（color-generator/palette-data.js）。
+   只移植了**深色**那 4 套：everforest / abyss / radiation / vampire。
+   亮色那 8 套（Cherry/Sky/Sakura…）需要整套反色（背景、边框、语法全要重算），
+   没做 —— 半套的亮色主题比没有更糟。
+
+   ★ 这套主题的"灵动感"不在颜色，而在**悬停时的微交互**：
+     · H1 底下是一条 40px 短线，悬停才展开成整行并加强光晕
+     · H2 左侧是两条错位的竖线，悬停时粗线变淡铺底、细线变粗发光（互换角色）
+     · 引用块的引号平时歪 30°，悬停回正并发光，整块微放大 1%
+     · 链接两侧的 [ ] 平时低调，悬停向左右弹开 4px
+   全部是伪元素 + transition，不需要 JS。曲线沿用原主题的
+   cubic-bezier(.34,1.56,.64,1)（带回弹）和 cubic-bezier(.4,0,.2,1)（平滑）。
+
+   为什么单独一个文件，而不是写进 app.css：
+     ① app.css 有 4213 行代码的棘轮上限（tests/architecture.js），
+        主题是纯视觉，不该挤占那个预算；
+     ② 和 ui-kit.css 同一个思路 —— 叠加层，出问题删掉这两个文件就恢复原样；
+     ③ 换配色只改这里，不用在 4800 行里翻。
+
+   ⚠️ 必须加载在 app.css **之后**（见 index.html），靠「同特异性 + 后出现」覆盖，
+      不要用 !important。
+   ⚠️ 知识库那份在 lib/knowledge-base.js 的 THEME_CSS 里（data-kb-theme="everforest"），
+      两边色值必须一致，否则同一篇笔记在阅读器和知识库里是两种绿。
+
+   作用范围：只影响**文档区**（阅读模块的笔记预览、代码区的 Markdown 预览），
+   不动侧栏 / 工具栏 / 代码编辑器 —— 那些继续跟随 App 的 5 个主题。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 主题变量：4 套深色，切换靠 <html data-doc-theme="…"> ────────────────
+   缺省（无该属性）= everforest，所以不写属性时就是暖绿森林。 */
+:root,
+html[data-doc-theme="everforest"] {
+  /* 背景从 Everforest 的 bg1(#2D353B) 降到 bg0(#272E33)：
+     大面积正文铺 bg1 会显得「泛白」，bg0 才是这套主题真正的纸色。 */
+  --doc-bg:#272E33; --doc-text:#D3C6AA; --doc-text-2:#9DA9A0; --doc-text-3:#859289;
+  --doc-strong:#EFEBD4; --doc-primary:#A7C080; --doc-secondary:#7FBBB3;
+  --doc-line:#414B50; --doc-select:#4C3743;
+  --doc-syn-keyword:#E67E80; --doc-syn-string:#A7C080; --doc-syn-comment:#859289;
+  --doc-syn-number:#D699B6; --doc-syn-title:#7FBBB3; --doc-syn-type:#DBBC7F;
+}
+html[data-doc-theme="abyss"] {
+  --doc-bg:#0F111A; --doc-text:#D6DEEB; --doc-text-2:#7E8C9F; --doc-text-3:#5A6478;
+  --doc-strong:#EAF0FA; --doc-primary:#00B7C0; --doc-secondary:#2E8BD6;
+  --doc-line:#1F2233; --doc-select:rgba(7,243,255,.445);
+  --doc-syn-keyword:#C792EA; --doc-syn-string:#ECC48D; --doc-syn-comment:#637777;
+  --doc-syn-number:#F78C6C; --doc-syn-title:#82AAFF; --doc-syn-type:#FFCB6B;
+}
+html[data-doc-theme="radiation"] {
+  --doc-bg:#1B1D1B; --doc-text:#E6E6E6; --doc-text-2:#99A699; --doc-text-3:#6B7A6B;
+  --doc-strong:#FFFFFF; --doc-primary:#4CD964; --doc-secondary:#FFC107;
+  --doc-line:#333933; --doc-select:rgba(76,217,100,.3);
+  --doc-syn-keyword:#FFCB6B; --doc-syn-string:#C3E88D; --doc-syn-comment:#546E7A;
+  --doc-syn-number:#F78C6C; --doc-syn-title:#4CD964; --doc-syn-type:#FFCB6B;
+}
+html[data-doc-theme="vampire"] {
+  --doc-bg:#282A36; --doc-text:#F8F8F2; --doc-text-2:#D0D0D0; --doc-text-3:#9AA0B5;
+  --doc-strong:#FFFFFF; --doc-primary:#FF5555; --doc-secondary:#BD93F9;
+  --doc-line:#44475A; --doc-select:rgba(255,16,16,.466);
+  --doc-syn-keyword:#FF79C6; --doc-syn-string:#F1FA8C; --doc-syn-comment:#6272A4;
+  --doc-syn-number:#BD93F9; --doc-syn-title:#50FA7B; --doc-syn-type:#FFCB6B;
+}
+/* 派生量：只跟上面那几个基础色走，换主题自动跟着变，不用逐套重写 */
+:root {
+  --doc-bg-dim:color-mix(in srgb,var(--doc-bg) 78%,#000);
+  --doc-bg-soft:color-mix(in srgb,var(--doc-bg) 88%,#fff);
+  --doc-glow:color-mix(in srgb,var(--doc-primary) 22%,transparent);
+  --doc-glow-text:0 0 14px color-mix(in srgb,var(--doc-primary) 50%,transparent);
+  --doc-pink:color-mix(in srgb,var(--doc-syn-number) 32%,transparent);
+  --doc-ease-back:cubic-bezier(.34,1.56,.64,1);
+  --doc-ease-smooth:cubic-bezier(.4,0,.2,1);
+}
+
+/* ── ① 阅读模块（笔记预览）：整套 --md-* 改指向文档主题 ──────────────────
+   原来这套是从 App 的 --ok/--accent/--text 派生的，切到「日光白」会变浅色，
+   主题就散了。这里固定下来。 */
+.reading-text-shell.markdown {
+  --md-accent:var(--doc-primary);
+  --md-accent-strong:color-mix(in srgb,var(--doc-primary) 78%,var(--doc-strong));
+  --md-link:var(--doc-secondary);
+  --md-page:var(--doc-bg);
+  --md-surface:var(--doc-bg-soft);
+  --md-surface-hover:color-mix(in srgb,var(--doc-primary) 7%,var(--doc-bg));
+  --md-text:var(--doc-text);
+  --md-muted:var(--doc-text-2);
+}
+
+/* ── ② 代码区的 Markdown 预览（.md-doc）：另有一套 --md-*，同样接过来 ── */
+#md-view.project-md-block {
+  --md-accent:var(--doc-primary);
+  --md-link:var(--doc-secondary);
+  --md-page:var(--doc-bg);
+  --md-surface:var(--doc-bg-soft);
+  --md-surface-hover:color-mix(in srgb,var(--doc-primary) 7%,var(--doc-bg));
+  --md-text:var(--doc-text);
+  --md-muted:var(--doc-text-2);
+}
+#md-view { background:var(--doc-bg); }
+/* ⚠️ #md-view 在 app.css:692 写的是 overflow:auto，但实测被压成了 hidden
+   —— 它同时带 .md-doc 类，被别的规则盖掉了。滚动容器不能滚，
+   右侧大纲的「点击跳转」自然全废（用户：「点击跳转怎么又失效了」）。
+   这里显式恢复，!important 是因为找不到是哪条规则压的。 */
+#md-view { overflow: auto !important; }
+.md-doc { background:var(--doc-bg); color:var(--doc-text); }
+/* 701 行把预览正文设成了 transparent，这里覆盖回来，否则文档底色会漏 */
+#edit-preview.preview-shell .edit-preview-body.md-doc { background:var(--doc-bg); }
+
+/* ── ③ H1：居中，底下一条 40px 短线，悬停展开成整行 ──────────────────── */
+.md-doc h1, .reading-md-editor h1, .reading-md-block h1, .reading-md-editor h1 {
+  display:table; width:auto; min-width:120px;
+  margin:2em auto 1.1em; padding-bottom:.5em;
+  border:0; text-align:center;
+  color:var(--doc-strong); position:relative;
+  transition:color .3s ease, text-shadow .3s ease;
+}
+.md-doc h1::after, .reading-md-editor h1::after, .reading-md-block h1::after, .reading-md-editor h1::after, .reading-md-block h1::after {
+  content:''; position:absolute; bottom:0; left:50%;
+  width:40px; height:4px; border-radius:4px;
+  background:var(--doc-primary);
+  box-shadow:0 0 5px color-mix(in srgb,var(--doc-primary) 20%,transparent);
+  transform:translateX(-50%);
+  transition:width .3s var(--doc-ease-smooth), box-shadow .3s ease;
+  pointer-events:none;
+}
+.md-doc h1:hover, .reading-md-editor h1:hover { text-shadow:var(--doc-glow-text); }
+.md-doc h1:hover::after, .reading-md-editor h1:hover::after { width:100%; box-shadow:0 0 15px var(--doc-primary); }
+
+/* ── ④ H2：两条错位竖线，悬停时互换角色（粗线铺底变淡 / 细线变粗发光）── */
+.md-doc h2, .reading-md-editor h2, .reading-md-block h2, .reading-md-editor h2 {
+  position:relative; display:block; width:100%;
+  /* ⚠️ padding-left 必须 !important：Crepe 的 h2 样式是 JS 运行时注入的，比本文件晚，
+     会把 20px 覆盖成它自己的值 → 左侧竖条直接压在第一个字上（用户截图「为什么」）。 */
+  padding:0 0 .12em 20px !important; margin:1.9em 0 .7em;
+  border:0; background:none; border-radius:0;
+  color:var(--doc-text);
+  transition:color .3s ease, text-shadow .3s ease;
+}
+.md-doc h2::before, .reading-md-editor h2::before, .reading-md-block h2::before, .reading-md-editor h2::before, .reading-md-block h2::before {
+  content:''; position:absolute; left:0; top:auto; margin-top:.2em;
+  width:5px; height:1em; border-radius:4px;
+  background:var(--doc-primary); opacity:.8;
+  box-shadow:0 0 8px color-mix(in srgb,var(--doc-primary) 50%,transparent);
+  transition:all .4s cubic-bezier(.25,.8,.25,1);
+}
+.md-doc h2::after, .reading-md-editor h2::after, .reading-md-block h2::after, .reading-md-editor h2::after, .reading-md-block h2::after {
+  content:''; position:absolute; left:8px; top:auto; margin-top:.4em;
+  width:2px; height:.6em; border-radius:2px;
+  background:var(--doc-secondary); opacity:.6;
+  transition:all .4s cubic-bezier(.25,.8,.25,1) .05s;
+}
+.md-doc h2:hover, .reading-md-editor h2:hover { color:var(--doc-primary); text-shadow:var(--doc-glow-text); }
+.md-doc h2:hover::before, .reading-md-editor h2:hover::before { margin-top:0; height:1.4em; opacity:.5; }
+.md-doc h2:hover::after, .reading-md-editor h2:hover::after {
+  margin-top:.15em; height:1.1em; width:4px; opacity:1;
+  background:var(--doc-primary); box-shadow:0 0 12px var(--doc-primary);
+}
+
+/* ── ⑤ H3~H6 ─────────────────────────────────────────────────────────── */
+.md-doc h3, .reading-md-editor h3, .reading-md-block h3, .reading-md-editor h3 { color:var(--doc-primary); transition:color .3s ease, text-shadow .3s ease; }
+.md-doc h3:hover, .reading-md-editor h3:hover { text-shadow:var(--doc-glow-text); }
+.md-doc h4, .reading-md-editor h4, .reading-md-block h4 { color:var(--doc-strong); }
+.md-doc h5, .reading-md-editor h5, .reading-md-block h5 { color:var(--doc-text-2); }
+.md-doc h6, .reading-md-editor h6, .reading-md-block h6 { color:var(--doc-text-3); }
+
+/* ── ⑥ 引用块：大圆角 + 歪着的引号，悬停回正发光 + 整块微放大 ────────── */
+.md-doc blockquote, .reading-md-editor blockquote {
+  position:relative; margin:20px 0; padding:18px 20px 18px 48px;
+  color:var(--doc-text-2);
+  background:color-mix(in srgb,var(--doc-bg) 60%,#000);
+  border:1px solid color-mix(in srgb,var(--doc-secondary) 30%,transparent);
+  border-radius:16px;
+  transition:all .3s ease;
+}
+.md-doc blockquote::before, .reading-md-editor blockquote::before {
+  content:'❝'; position:absolute; left:14px; top:14px;
+  font-size:20px; line-height:1; font-style:normal;
+  color:var(--doc-secondary); opacity:.8;
+  transform:rotate(30deg);
+  transition:all .3s var(--doc-ease-back);
+}
+.md-doc blockquote:hover, .reading-md-editor blockquote:hover {
+  border-color:var(--doc-primary);
+  background:color-mix(in srgb,var(--doc-primary) 6%,var(--doc-bg));
+  box-shadow:0 0 15px color-mix(in srgb,var(--doc-primary) 10%,transparent),
+             inset 0 0 10px color-mix(in srgb,var(--doc-primary) 5%,transparent);
+  transform:scale(1.01);
+}
+.md-doc blockquote:hover::before, .reading-md-editor blockquote:hover::before {
+  opacity:1; transform:rotate(0deg);
+  color:var(--doc-primary); text-shadow:0 0 10px var(--doc-primary);
+}
+
+/* ── ⑦ 链接：两侧 [ ] 平时低调，悬停向左右弹开 ────────────────────────
+   ⚠️ 必须排除 #cc- 开头的锚点 —— 那是 {红|文字} / ==高亮== 的行内标注，
+      给它们套方括号会变成乱码一样的显示。 */
+.md-doc a:not([href^="#cc-"]), .reading-md-editor a:not([href^="#cc-"]) {
+  color:var(--doc-secondary); text-decoration:none;
+  transition:all .3s ease;
+}
+.md-doc a:not([href^="#cc-"])::before, .reading-md-editor a:not([href^="#cc-"])::before {
+  content:'['; display:inline-block; margin-right:1px;
+  color:var(--doc-text-3); opacity:.7;
+  transition:transform .3s var(--doc-ease-back), color .3s, opacity .3s;
+}
+.md-doc a:not([href^="#cc-"])::after, .reading-md-editor a:not([href^="#cc-"])::after {
+  content:']'; display:inline-block; margin-left:1px;
+  color:var(--doc-text-3); opacity:.7;
+  transition:transform .3s var(--doc-ease-back), color .3s, opacity .3s;
+}
+.md-doc a:not([href^="#cc-"]):hover, .reading-md-editor a:not([href^="#cc-"]):hover {
+  color:var(--doc-primary); background:color-mix(in srgb,var(--doc-primary) 8%,transparent);
+}
+.md-doc a:not([href^="#cc-"]):hover::before, .reading-md-editor a:not([href^="#cc-"]):hover::before {
+  transform:translateX(-4px); color:var(--doc-primary); font-weight:bold; opacity:1;
+}
+.md-doc a:not([href^="#cc-"]):hover::after, .reading-md-editor a:not([href^="#cc-"]):hover::after {
+  transform:translateX(4px); color:var(--doc-primary); font-weight:bold; opacity:1;
+}
+
+/* ── ⑧ 正文元素 ─────────────────────────────────────────────────────── */
+/* 文本选中色：原主题的 select-text-bg-color */
+.md-doc ::selection, .reading-md-editor ::selection { background:var(--doc-select); color:var(--doc-strong); }
+/* 段落节奏：Phycat 比 CodeScope 默认更松一点，长文读起来不挤 */
+.md-doc p { margin:.8em 0; }
+.md-doc li { margin:.3em 0; }
+.md-doc strong { color:var(--doc-strong); }
+.md-doc em { color:var(--doc-secondary); }
+.md-doc del { color:var(--doc-text-3); }
+.md-doc mark { background:color-mix(in srgb,var(--doc-syn-type) 26%,transparent); color:var(--doc-strong);
+  padding:.04em .24em; border-radius:3px; transition:background .2s ease; }
+.md-doc mark:hover { background:color-mix(in srgb,var(--doc-syn-type) 40%,transparent); }
+.md-doc li::marker { color:var(--doc-primary); }
+.md-doc hr { border:none; height:1px; margin:1.6em 0;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--doc-primary) 42%,transparent),transparent); }
+
+/* 行内代码：悬停时底色提亮 */
+.md-doc code { background:color-mix(in srgb,var(--doc-text) 10%,transparent); color:var(--doc-strong);
+  border-radius:5px; transition:background .2s ease; }
+.md-doc code:hover { background:color-mix(in srgb,var(--doc-text) 18%,transparent); }
+
+/* 表格：行悬停高亮 */
+.md-doc th { background:color-mix(in srgb,var(--doc-primary) 12%,transparent); color:var(--doc-strong); }
+.md-doc th, .md-doc td { border-color:color-mix(in srgb,var(--doc-text) 10%,transparent); }
+.md-doc tr:nth-child(2n) td { background:color-mix(in srgb,var(--doc-text) 2%,transparent); }
+.md-doc tbody tr { transition:background .2s ease; }
+.md-doc tbody tr:hover td { background:color-mix(in srgb,var(--doc-primary) 7%,transparent); }
+
+/* 代码块：比正文深一档 + 左侧粉色描边；悬停时边框提亮 + 轻微上浮 */
+.md-doc .md-pre {
+  background:var(--doc-bg-dim); border:1px solid var(--doc-line); border-left:3px solid var(--doc-pink);
+  border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.18);
+  transition:border-color .3s ease, box-shadow .3s ease;
+}
+.md-doc .md-pre:hover { border-color:color-mix(in srgb,var(--doc-secondary) 45%,transparent); box-shadow:0 4px 18px rgba(0,0,0,.28); }
+.md-doc .md-pre code { background:none; color:var(--doc-text); }
+
+/* ── ⑨ 代码块里的语法高亮：改 --syntax-* 变量，别去写 .hljs-xxx 规则 ✗ ──
+   app.css 3433 行有 `html[data-theme] .hljs-keyword{color:var(--syntax-keyword)}`，
+   特异性 (0,2,1) 高于 `.md-doc .hljs-keyword` 的 (0,2,0)，写规则必然被它盖掉。
+   在文档容器上重定义变量，那套规则就会取到这里的新值，代码编辑器不受影响。 */
+.md-doc, .reading-text-shell.markdown {
+  --syntax-text:var(--doc-text); --syntax-comment:var(--doc-syn-comment);
+  --syntax-keyword:var(--doc-syn-keyword); --syntax-string:var(--doc-syn-string);
+  --syntax-number:var(--doc-syn-number); --syntax-title:var(--doc-syn-title);
+  --syntax-type:var(--doc-syn-type);
+}
+
+/* ── ⑩ 布局：平铺 / 卡片 ────────────────────────────────────────────────
+   平铺 = 文档铺满，无边框无圆角；
+   卡片 = **大纲和正文各自一张卡片**（不是整列一张），中间留 12px 缝隙。
+
+   ⚠️ 三个坑，都踩过：
+   ① 卡片不能做在 .reading-md-editor 上 ✗ —— 那个元素只在「阅读」模式可见，
+      区块编辑模式下尺寸是 0（实测 rect = [0,0,0,0]）。
+   ② app.css 给 .reading-col-md 设了 1px 边框 + 8px 圆角，**平铺时它本来就是一张"卡片"** ✗
+      —— 不清掉的话两个模式看起来一样（用户连着三次说「没区别」）。
+   ③ Crepe 给 .ProseMirror 自带 border-radius:16px + 边框 + 投影，同样要拍平，
+      且必须 !important：Crepe 的样式打包在 reading-block-editor.js 里，
+      运行时插到 head 末尾，比本文件晚，同特异性会赢 ✗。 */
+.reading-col-md {
+  background: var(--doc-bg);
+  border: 0;
+  border-radius: 0;
+}
+.reading-col-md .reading-md-workbench { background: var(--doc-bg); }
+.reading-col-md .ProseMirror {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* ── 卡片模式：大纲一块、正文一块 ── */
+html[data-doc-layout="cards"] #reading-columns {
+  /* ⚠️ 这里必须 0：整体（含顶部标签栏）**不能**缩
+     （用户：「缩错了，不是整体缩小，只是缩小大纲卡片和正文卡片」）。
+     间隙改由 .reading-md-workbench 的 padding 提供 —— 只影响两块卡片，不影响标签栏。 */
+  padding: 0;
+  background: color-mix(in srgb, var(--doc-bg) 42%, #000);
+}
+html[data-doc-layout="cards"] .reading-col-md { background: transparent; }
+html[data-doc-layout="cards"] .reading-md-workbench {
+  /* 只让两块卡片各自内缩 8px，标签栏不受影响 */
+  padding: 8px;
+  gap: 8px;
+  background: transparent;
+}
+/* 大纲卡片 + 正文卡片：同一套外观（圆角、细边、投影） */
+html[data-doc-layout="cards"] .reading-md-outline,
+html[data-doc-layout="cards"] .reading-md-block,
+html[data-doc-layout="cards"] .reading-md-editor {
+  /* 卡片用 --doc-bg(#272E33)：写死 #2D353B 会"泛白"（用户反馈）。
+     边界靠外围压黑 + 细边 + 内阴影来拉，不靠提亮卡片。 */
+  background: var(--doc-bg);
+  border: 1px solid color-mix(in srgb, var(--doc-line) 130%, transparent);
+  border-radius: 14px;
+  /* 贴边时外投影看不见，改用内阴影 + 一道亮边勾勒"纸"的边缘 */
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .045),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 0 0 1px rgba(0, 0, 0, .35);
+  /* ⚠️ 这里**绝对不能**设 overflow ✗ —— .reading-md-block 自己就是 overflow:auto 的滚动容器。
+     hidden 会锁死滚动（用户：「怎么无法滚动了」）；clip 也不提供滚动（实测 scrollTop 恒为 0）。
+     overflow:auto 的元素本来就会把内容裁到 border-radius 内，圆角不用额外处理。 */
+}
+html[data-doc-layout="cards"] .reading-md-outline { padding: 6px; border-right: 1px solid color-mix(in srgb, var(--doc-line) 75%, transparent); }
+
+/* ── ⑩b 大纲面板：按 Obsidian 文件树的样子重做 ────────────────────────────
+   原来的条目是「纯文字 + 靠 padding-left 缩进」，没有圆角也没有悬停反馈。
+   这里补成：圆角条目 / 悬停淡底 / 选中态主色底 + 主色文字。
+   ⚠️ 特异性必须到 (0,3,0) 才压得过 app.css 的
+      「.reading-md-workbench .reading-md-outline-item」，所以带 .reading-col-md 前缀。 */
+.reading-col-md .reading-md-outline { padding: 10px 10px; }
+.reading-col-md .reading-md-outline-item {
+  border-radius: 7px;
+  margin: 2px 0;
+  transition: background .15s ease, color .15s ease;
+}
+.reading-col-md .reading-md-outline-item:hover {
+  background: color-mix(in srgb, var(--doc-primary) 9%, transparent);
+  color: var(--doc-text);
+}
+.reading-col-md .reading-md-outline-item.active {
+  background: color-mix(in srgb, var(--doc-primary) 18%, transparent);
+  color: var(--doc-primary);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--doc-primary);
+}
+/* 层级：给二级以下的条目加一条细竖线，层级关系一眼看得出来（Obsidian 文件树的做法） */
+.reading-col-md .reading-md-outline-item[style*="padding-left: 40px"],
+.reading-col-md .reading-md-outline-item[style*="padding-left:40px"] {
+  position: relative;
+}
+.reading-col-md .reading-md-outline-item[style*="padding-left: 40px"]::before,
+.reading-col-md .reading-md-outline-item[style*="padding-left:40px"]::before {
+  content: '';
+  position: absolute;
+  left: 26px; top: 4px; bottom: 4px;
+  width: 1px;
+  background: color-mix(in srgb, var(--doc-line) 90%, transparent);
+}
+
+/* ── ⑪ 文档配色切换器（由 assets/doc-theme.js 注入到阅读器工具栏）─────── */
+.doc-theme-picker { display:inline-flex; align-items:center; gap:5px; margin-left:6px; padding:0 4px; }
+.doc-theme-picker .dtp-dot {
+  width:14px; height:14px; padding:0; min-height:0; border-radius:50%;
+  border:1px solid rgba(255,255,255,.22); cursor:pointer;
+  background:var(--dot); box-shadow:0 0 0 0 transparent;
+  transition:transform .18s var(--doc-ease-back), box-shadow .18s ease, border-color .18s ease;
+}
+.doc-theme-picker .dtp-dot:hover { transform:scale(1.22); border-color:rgba(255,255,255,.5); }
+.doc-theme-picker .dtp-dot[aria-pressed="true"] {
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--dot) 55%,transparent);
+  border-color:#fff;
+}
+/* 布局切换按钮：内块大小表示"卡片(小) / 平铺(大)" */
+.doc-theme-picker .dtp-layout {
+  width:18px; height:18px; padding:0; min-height:0; border-radius:5px;
+  display:grid; place-items:center; background:transparent; cursor:pointer;
+  border:1px solid rgba(255,255,255,.18); color:var(--doc-text-2);
+  transition:color .18s ease, border-color .18s ease;
+}
+.doc-theme-picker .dtp-layout::before {
+  content:''; width:10px; height:10px; border-radius:2px;
+  border:1px solid currentColor;
+  transition:width .18s var(--doc-ease-back), height .18s var(--doc-ease-back), border-radius .18s ease;
+}
+.doc-theme-picker .dtp-layout[aria-pressed="true"] {
+  color:var(--doc-primary);
+  border-color:color-mix(in srgb,var(--doc-primary) 60%,transparent);
+}
+.doc-theme-picker .dtp-layout[aria-pressed="true"]::before { width:6px; height:6px; border-radius:1px; }
+.doc-theme-picker .dtp-sep { width:1px; height:13px; background:rgba(255,255,255,.16); margin:0 2px; }
+
+/* ── ⑫ Callout 提示框：17 种语气 ──────────────────────────────────────
+   原版每种语气有 5 个 token（背景 / 标题色 / 悬停背景 / 水印 / 边框），
+   值取自 palette-data.js 的 everforest 预设（背景 10%、悬停 20%、边框 30%，
+   danger 系 40%）。这里每种只留一个 --co 语气色，其余按原版比例 color-mix 派生。
+   ★ 语气色**不跟文档配色变** —— 警告永远是暖黄、危险永远是红，这是语义，不是装饰。
+   ⚠️ 选择器必须带 `.reading-md-editor blockquote` 前缀 —— app.css:1597 就是这么写的，
+      只写 `.md-callout` 特异性不够，会被它整条盖掉。
+   ⚠️ 类型表必须和 app.js 里那段正则同步（两边都改，否则 [!!xxx] 解析不出来）。 */
+.reading-md-editor blockquote.md-callout,
+.md-doc blockquote.md-callout {
+  --co: var(--doc-primary);
+  position: relative; overflow: hidden;
+  margin: 1.1em 0; padding: 1rem 1.15rem .95rem;
+  background: color-mix(in srgb, var(--co) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--co) 30%, transparent);
+  border-radius: 12px;
+  color: var(--doc-text); box-shadow: none;
+  transition: background .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.reading-md-editor blockquote.md-callout:hover,
+.md-doc blockquote.md-callout:hover {
+  background: color-mix(in srgb, var(--co) 20%, transparent);
+  border-color: color-mix(in srgb, var(--co) 55%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--co) 12%, transparent);
+}
+/* 标题：◇ + 语气名，用语气色 */
+.reading-md-editor blockquote.md-callout .callout-title,
+.md-doc blockquote.md-callout .callout-title {
+  display: flex; align-items: center; gap: 7px;
+  color: var(--co); font-size: .92em; font-weight: 700; letter-spacing: .01em;
+}
+.reading-md-editor blockquote.md-callout .callout-title::before,
+.md-doc blockquote.md-callout .callout-title::before {
+  content: '◇'; font-size: .9em; opacity: .9;
+}
+/* 右下角水印：单色大字，低透明 + 微倾斜；悬停时稍微抬起来一点 */
+.reading-md-editor blockquote.md-callout::after,
+.md-doc blockquote.md-callout::after {
+  content: '✎';
+  position: absolute; right: 12px; bottom: 4px;
+  font-size: 46px; line-height: 1;
+  color: var(--co); opacity: .09;
+  transform: rotate(-14deg);
+  pointer-events: none;
+  transition: opacity .25s ease, transform .35s var(--doc-ease-back);
+}
+.reading-md-editor blockquote.md-callout:hover::after,
+.md-doc blockquote.md-callout:hover::after { opacity: .17; transform: rotate(-8deg) scale(1.06); }
+
+/* 区块编辑器里的 `[!type]` 前缀：由 reading-block-editor.js 的装饰器打上这个类，
+   视觉隐藏（文本仍在文档里，存盘不丢）。 */
+.cc-callout-prefix { display: none; }
+/* 区块编辑器里 callout 的标题（「笔记」「注意」那截）：语气色 + 粗体 */
+.cc-callout-title { color: var(--co); font-weight: 700; }
+/* Milkdown 把 callout 的「标题/正文」之间的换行渲染成 inline 的 hardbreak，
+   挤在同一行 —— 改成块级，标题才独占一行。 */
+blockquote.md-callout [data-type="hardbreak"] { display: block; height: 0; overflow: hidden; }
+
+/* 语气色表（括号内是别名，和 app.js 的正则一一对应）
+   ⚠️ 必须带 `blockquote.` 前缀，让特异性到 (0,2,1) ——
+      和上面基础规则同分，靠"后出现"取胜。只写 `.md-callout.note` 是 (0,2,0)，
+      会被基础规则的 `--co:var(--doc-primary)` 盖掉，17 种全变成一个颜色。 */
+blockquote.md-callout.note { --co:#D699B6; }
+blockquote.md-callout.info { --co:#7FBBB3; }
+blockquote.md-callout.todo { --co:#A7C080; }
+blockquote.md-callout.tip, blockquote.md-callout.hint { --co:#7FBBB3; }
+blockquote.md-callout.success, blockquote.md-callout.check, blockquote.md-callout.done { --co:#83C092; }
+blockquote.md-callout.question, blockquote.md-callout.help, blockquote.md-callout.faq { --co:#DBBC7F; }
+blockquote.md-callout.warning, blockquote.md-callout.caution, blockquote.md-callout.attention { --co:#DBBC7F; }
+blockquote.md-callout.important { --co:#E67E80; }
+blockquote.md-callout.danger, blockquote.md-callout.error { --co:#E67E80; }
+blockquote.md-callout.bug { --co:#E67E80; }
+blockquote.md-callout.failure, blockquote.md-callout.fail, blockquote.md-callout.missing { --co:#E69875; }
+blockquote.md-callout.example { --co:#D699B6; }
+blockquote.md-callout.abstract, blockquote.md-callout.summary, blockquote.md-callout.tldr { --co:#7FBBB3; }
+blockquote.md-callout.quote, blockquote.md-callout.cite { --co:#9DA9A0; }
+/* danger 系边框更实一点（原版 40%） */
+blockquote.md-callout.danger, blockquote.md-callout.error,
+blockquote.md-callout.bug, blockquote.md-callout.important {
+  border-color: color-mix(in srgb, var(--co) 40%, transparent);
+}
+
+/* 每种语气的水印字形 */
+blockquote.md-callout.note::after { content:'✎'; }
+blockquote.md-callout.info::after { content:'i'; font-family:Georgia,serif; font-style:italic; font-weight:700; }
+blockquote.md-callout.todo::after { content:'☑'; }
+blockquote.md-callout.tip::after, blockquote.md-callout.hint::after { content:'✦'; }
+blockquote.md-callout.success::after, blockquote.md-callout.check::after, blockquote.md-callout.done::after { content:'✔'; }
+blockquote.md-callout.question::after, blockquote.md-callout.help::after, blockquote.md-callout.faq::after { content:'?'; font-weight:700; }
+blockquote.md-callout.warning::after, blockquote.md-callout.caution::after, blockquote.md-callout.attention::after { content:'⚠'; }
+blockquote.md-callout.important::after { content:'❗'; }
+blockquote.md-callout.danger::after, blockquote.md-callout.error::after { content:'⚡'; }
+blockquote.md-callout.bug::after { content:'✹'; }
+blockquote.md-callout.failure::after, blockquote.md-callout.fail::after, blockquote.md-callout.missing::after { content:'✖'; }
+blockquote.md-callout.example::after { content:'✧'; }
+blockquote.md-callout.abstract::after, blockquote.md-callout.summary::after, blockquote.md-callout.tldr::after { content:'▤'; }
+blockquote.md-callout.quote::after, blockquote.md-callout.cite::after { content:'❝'; }
+
+/* ── ⑬ 无障碍：系统开了「减弱动态效果」就全部关掉 ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .md-doc *, .md-doc *::before, .md-doc *::after,
+  .reading-md-editor *, .reading-md-editor *::before, .reading-md-editor *::after,
+  .doc-theme-picker .dtp-dot, .doc-theme-picker .dtp-layout, .doc-theme-picker .dtp-layout::before,
+  .md-callout, .md-callout::after {
+    transition:none !important; animation:none !important;
+  }
+}
+
+
+/* ── ⑮ 块类型下拉（Heading 1-6）：重做成紧凑列表 ──────────────────────
+   Crepe 默认把每一项做成「带边框的圆角胶囊 + 大间距」，看起来像一排按钮堆着，
+   又笨又占地方。这里改成 Obsidian 那种：面板紧凑、每项只有 hover 底色、无边框。
+   ⚠️ 必须 !important：Crepe 的样式打包在 reading-block-editor.js 里，运行时插到 head 末尾。 */
+.milkdown .top-bar-heading-dropdown {
+  background: color-mix(in srgb, var(--doc-bg) 90%, #000) !important;
+  border: 1px solid color-mix(in srgb, var(--doc-line) 85%, transparent) !important;
+  border-radius: 10px !important;
+  padding: 5px !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .45) !important;
+  min-width: 148px !important;
+  gap: 0 !important;
+}
+.milkdown .top-bar-heading-option {
+  border: 0 !important;
+  border-radius: 6px !important;
+  margin: 0 !important;
+  padding: 5px 10px !important;
+  min-height: 0 !important;
+  height: auto !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  color: var(--doc-text-2) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background .12s ease, color .12s ease;
+}
+.milkdown .top-bar-heading-option:hover {
+  background: color-mix(in srgb, var(--doc-primary) 12%, transparent) !important;
+  color: var(--doc-text) !important;
+}
+.milkdown .top-bar-heading-option.active,
+.milkdown .top-bar-heading-option[data-active="true"],
+.milkdown .top-bar-heading-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--doc-primary) 18%, transparent) !important;
+  color: var(--doc-primary) !important;
+  font-weight: 600 !important;
+}
+/* 顶部那个按钮本身也收一收，别太厚 */
+.milkdown .top-bar-heading-button {
+  border-radius: 7px !important;
+  font-size: 13px !important;
+}
+
+
+/* ── ⑯ 提示框插入器（工具栏 ❝ 按钮 + 14 种语气面板）───────────────────
+   按钮由 src/reading-block-editor.js 的 attachCalloutControls 挂到 .milkdown-top-bar 上。
+   面板是 document.body 下的 fixed 层，所以这里不能用 .milkdown 前缀。 */
+.codescope-callout-group { display: inline-flex; align-items: center; }
+.codescope-callout-trigger { display: grid; place-items: center; }
+.codescope-callout-glyph { font-size: 15px; line-height: 1; color: var(--doc-text-2); transition: color .15s ease; }
+.codescope-callout-trigger:hover .codescope-callout-glyph,
+.codescope-callout-trigger[aria-expanded="true"] .codescope-callout-glyph { color: var(--doc-primary); }
+
+.codescope-callout-menu {
+  position: fixed; z-index: 320;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+  padding: 6px; min-width: 196px;
+  background: color-mix(in srgb, var(--doc-bg) 90%, #000);
+  border: 1px solid color-mix(in srgb, var(--doc-line) 85%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
+}
+.codescope-callout-menu button {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 9px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--doc-text-2);
+  font-size: 13px; line-height: 1.4; text-align: left; cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+.codescope-callout-menu button:hover {
+  background: color-mix(in srgb, var(--doc-primary) 12%, transparent);
+  color: var(--doc-text);
+}
+.codescope-callout-menu i {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--doc-primary);
+}
+.codescope-callout-menu i[data-t="note"] { background: #D699B6; }
+.codescope-callout-menu i[data-t="info"] { background: #7FBBB3; }
+.codescope-callout-menu i[data-t="todo"] { background: #A7C080; }
+.codescope-callout-menu i[data-t="tip"] { background: #7FBBB3; }
+.codescope-callout-menu i[data-t="success"] { background: #83C092; }
+.codescope-callout-menu i[data-t="question"] { background: #DBBC7F; }
+.codescope-callout-menu i[data-t="warning"] { background: #DBBC7F; }
+.codescope-callout-menu i[data-t="important"] { background: #E67E80; }
+.codescope-callout-menu i[data-t="danger"] { background: #E67E80; }
+.codescope-callout-menu i[data-t="bug"] { background: #E67E80; }
+.codescope-callout-menu i[data-t="failure"] { background: #E69875; }
+.codescope-callout-menu i[data-t="example"] { background: #D699B6; }
+.codescope-callout-menu i[data-t="abstract"] { background: #7FBBB3; }
+.codescope-callout-menu i[data-t="quote"] { background: #9DA9A0; }
+
+
+/* ── ⑰ 区块编辑器里的标题缩进（兜底）─────────────────────────────────
+   Crepe 的 h2 样式是 JS 运行时注入的，把 padding-left 压成了 0，
+   导致左侧竖条直接压在第一个字上（用户截图「为什么」）。
+   上面第 ④ 节虽然加了 !important 仍被压过，这里用 (0,2,1) + !important 兜底。 */
+.reading-md-block .ProseMirror h1 { padding-left: 0 !important; }
+.reading-md-block .ProseMirror h2 { padding-left: 20px !important; }
+.reading-md-block .ProseMirror h3 { padding-left: 14px !important; }
+
+
+/* ── ⑱ 两个收尾修复 ──────────────────────────────────────────────────── */
+
+/* ① 提示框面板「一直显示」：我给 .codescope-callout-menu 设了 display:grid，
+   把 hidden 属性自带的 display:none 盖掉了 ✗ —— 面板一直可见，
+   定位在 (0,0) 附近就跑到代码区左上角去了（用户：「这个怎么显示在这了」）。
+   必须显式让 [hidden] 赢。 */
+.codescope-callout-menu[hidden] { display: none !important; }
+
+/* ② 工具栏：要的是**一行放下**，不是变窄 ✗ ——
+   之前用 max-width:960px 反而把它挤成了两行（Heading 一行、格式按钮一行）。
+   改成 width:fit-content + nowrap：宽度跟着按钮走，永远一行，整体居中。 */
+.milkdown .milkdown-top-bar {
+  /* 最终方案：占满父容器 + 不换行 + 可横向滑动。
+     之前试过 fit-content / max-content / calc 各种宽度，都被 Crepe 的
+     margin:0 48px 和内部 wrapper 的实际宽度搞乱（698/722/806 三个数对不上）。
+     干脆不猜了：宽度交给容器，内容超了就横向滑，滚动条隐藏。 */
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+.milkdown .milkdown-top-bar > *:last-child { margin-left: 10px !important; }
+/* 换行其实发生在内层 .top-bar-inner 上（它才是真正的 flex 容器），
+   只压外层 .milkdown-top-bar 不管用 ✗ */
+.milkdown .milkdown-top-bar .top-bar-inner {
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  /* inner 的可见宽度只有 536（父容器 698），差的 162px 全被 padding 吃了，
+     导致内容 734px 溢出 74px、末尾按钮被裁。这里清零。 */
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  justify-content: flex-start !important;
+}
+/* 按钮太多，826px 的正文列装不下 20 个 → 右侧被父级裁掉。
+   把每个按钮收窄（padding / min-width），一行的总宽压到容器内。 */
+/* ⚠️ min-width:0 + padding 3px/5px 会让按钮比图标还窄 → 图标溢出互相重叠
+   （用户：「工具图标还重叠了」）。恢复最小宽度，靠 max-width + 横向滚动兜底。 */
+.milkdown .milkdown-top-bar .top-bar-item {
+  padding: 3px 5px !important;
+  min-width: 26px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  box-sizing: border-box !important;
+  flex: none !important;
+}
+.milkdown .milkdown-top-bar .top-bar-heading-button {
+  padding: 3px 9px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+}
+.milkdown .milkdown-top-bar .top-bar-divider {
+  margin: 0 2px !important;
+  height: 13px !important;
+  width: 1px !important;
+}
+/* 兜底：真放不下时横向滚动，而不是被裁掉看不见 */
+.milkdown .milkdown-top-bar {
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+.milkdown .milkdown-top-bar::-webkit-scrollbar { display: none !important; }
+
+
+/* ── ⑲ 文档区顶部按钮：3D 质感 ──────────────────────────────────────
+   原来每个按钮都是一块「平涂 + 硬边框」的方块，彼此散、没有层次。
+   3D 感的做法（macOS / Obsidian 那套）：
+     · 背景用 180° 渐变（上亮下暗），模拟受光面
+     · 顶部 1px 内高光（inset 0 1px 0 rgba(255,255,255,.09)）
+     · 底部投影（0 1px 2px rgba(0,0,0,.35)）
+     · 按下时反过来：内阴影 + 轻微下沉，模拟被按进去
+   色值全部从 --doc-* 派生，换配色自动跟随。 */
+.reading-md-mode,
+.reading-md-outline-toggle,
+.dtp-layout,
+.dtp-zoom,
+.dtp-zoom-btn,
+.reading-md-zoom,
+.reading-md-zoom-btn {
+  /* ⚠️ 底色必须**亮于**周围，否则看起来像挖进去的凹槽 ✗
+     （用户：「有种挖空填进去的感觉」）。凸起感 = 亮底 + 上亮下暗的渐变。 */
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--doc-bg) 88%, #fff) 0%,
+    color-mix(in srgb, var(--doc-bg) 74%, #fff) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, .07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 1px 2px rgba(0, 0, 0, .28) !important;
+  transition: background .15s ease, box-shadow .15s ease, transform .1s ease !important;
+}
+.reading-md-mode:hover,
+.reading-md-outline-toggle:hover,
+.dtp-layout:hover,
+.dtp-zoom:hover,
+.dtp-zoom-btn:hover,
+.reading-md-zoom:hover,
+.reading-md-zoom-btn:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--doc-bg) 96%, #fff) 0%,
+    color-mix(in srgb, var(--doc-bg) 92%, #fff) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 2px 5px rgba(0, 0, 0, .42) !important;
+}
+.reading-md-mode:active,
+.reading-md-outline-toggle:active,
+.dtp-layout:active,
+.dtp-zoom:active,
+.dtp-zoom-btn:active,
+.reading-md-zoom:active,
+.reading-md-zoom-btn:active {
+  background: color-mix(in srgb, var(--doc-bg) 76%, #fff) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35) !important;
+  transform: translateY(1px) !important;
+}
+/* 当前选中的模式（区块编辑/阅读）：**主色底 + 主色文字** ——
+   只加描边跟没选中几乎看不出区别（用户：「按下和不按下，没什么区别」）✗
+   选中态必须换底色，不能只换边框。 */
+.reading-md-mode.active,
+.reading-md-outline-toggle.active {
+  background: color-mix(in srgb, var(--doc-primary) 26%, var(--doc-bg)) !important;
+  color: var(--doc-primary) !important;
+  border-color: color-mix(in srgb, var(--doc-primary) 70%, transparent) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -1px 2px rgba(0, 0, 0, .12),
+    0 1px 2px rgba(0, 0, 0, .3) !important;
+}
+.reading-md-mode.active:hover,
+.reading-md-outline-toggle.active:hover {
+  background: color-mix(in srgb, var(--doc-primary) 32%, var(--doc-bg)) !important;
+}
+
+/* 缩放组的按钮（- / 100% / +）：容器 .reading-md-zoom，按钮没有类名，
+   原底色 #17202B 比文档底色还暗，所以看起来是「凹进去」的 ✗ */
+.reading-md-zoom > button {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--doc-bg) 88%, #fff) 0%,
+    color-mix(in srgb, var(--doc-bg) 74%, #fff) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, .07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 1px 2px rgba(0, 0, 0, .28) !important;
+  color: var(--doc-text) !important;
+  transition: background .15s ease, box-shadow .15s ease !important;
+}
+.reading-md-zoom > button:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--doc-bg) 98%, #fff) 0%,
+    color-mix(in srgb, var(--doc-bg) 82%, #fff) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 2px 5px rgba(0, 0, 0, .32) !important;
+}
+.reading-md-zoom > button:active {
+  background: color-mix(in srgb, var(--doc-bg) 76%, #fff) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .3) !important;
+}
+
+/* 配色圆点：球形质感（内高光 + 底部暗边 + 外投影） */
+.dtp-dot {
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, .38),
+    inset 0 -2px 3px rgba(0, 0, 0, .28),
+    0 1px 2px rgba(0, 0, 0, .45) !important;
+  transition: transform .12s ease, box-shadow .12s ease !important;
+}
+.dtp-dot:hover {
+  transform: translateY(-1px) !important;
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, .45),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    0 3px 6px rgba(0, 0, 0, .5) !important;
+}

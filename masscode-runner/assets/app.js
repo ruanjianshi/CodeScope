@@ -3951,10 +3951,10 @@ function renderMd(txt) {
       flush();
       const quoteStart=i,q = [];
       while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i].replace(/^>\s?/, '')), i++;
-      const callout = (q[0] || '').match(/^\[!(quote|cite|note|tip|warning|important)\]\s*(.*)$/i);
+      const callout = (q[0] || '').match(/^\[!(quote|cite|note|info|todo|tip|hint|success|check|done|question|help|faq|warning|caution|attention|failure|fail|missing|danger|error|bug|example|abstract|summary|tldr|important)\]\s*(.*)$/i);
       if (callout) {
-        const type=callout[1].toLowerCase(),defaults={quote:'PDF 原文引用',cite:'PDF 原文引用',note:'笔记',tip:'提示',warning:'注意',important:'重点'},caption=callout[2]||defaults[type]||'笔记';
-        html += '<blockquote class="md-callout '+type+'" data-callout="'+type+'" data-md-start="'+quoteStart+'" data-md-end="'+i+'"><button type="button" class="callout-remove" contenteditable="false" title="移除这个引用或提示块">×</button><strong class="callout-title">❝ ' + mdInline(caption) + '</strong><div class="callout-body">' + mdInline(q.slice(1).join('\n')) + '</div></blockquote>';
+        const type=callout[1].toLowerCase(),defaults={quote:'PDF 原文引用',cite:'PDF 原文引用',note:'笔记',info:'信息',todo:'待办',tip:'提示',hint:'提示',success:'成功',check:'完成',done:'完成',question:'问题',help:'问题',faq:'问答',warning:'注意',caution:'注意',attention:'注意',failure:'失败',fail:'失败',missing:'缺失',danger:'危险',error:'错误',bug:'缺陷',example:'示例',abstract:'摘要',summary:'摘要',tldr:'摘要',important:'重点'},caption=callout[2]||defaults[type]||'笔记';
+        html += '<blockquote class="md-callout '+type+'" data-callout="'+type+'" data-md-start="'+quoteStart+'" data-md-end="'+i+'"><button type="button" class="callout-remove" contenteditable="false" title="移除这个引用或提示块">×</button><strong class="callout-title">' + mdInline(caption) + '</strong><div class="callout-body">' + mdInline(q.slice(1).join('\n')) + '</div></blockquote>';
       } else html += '<blockquote data-md-start="'+quoteStart+'" data-md-end="'+i+'">' + mdInline(q.join('\n')) + '</blockquote>';
       continue;
     }

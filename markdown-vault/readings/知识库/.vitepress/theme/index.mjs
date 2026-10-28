@@ -7,7 +7,8 @@ const PALETTES = [
   ['ocean', '海洋蓝'],
   ['forest', '森林绿'],
   ['violet', '暮光紫'],
-  ['paper', '暖纸棕']
+  ['paper', '暖纸棕'],
+  ['everforest', '暖绿森林']
 ]
 const WIDTHS = [
   ['standard', '标准'],
@@ -22,15 +23,28 @@ const SIZES = [
 ]
 const ReaderControls = defineComponent({
   setup() {
-    const palette = ref('ocean')
+    const palette = ref('everforest')   /* 默认暖绿森林；用户在右上角「配色」里改过则以本地存储为准 */
     const width = ref('standard')
     const size = ref('normal')
+    let darkBefore = null   /* 选「暖绿森林」前的明暗状态，切走时还原（见 apply） */
     const apply = () => {
       if (typeof document === 'undefined') return
       const root = document.documentElement
       root.dataset.kbTheme = palette.value
       root.dataset.kbWidth = width.value
       root.dataset.kbSize = size.value
+      /* ★「暖绿森林」是**固定的深色主题**（背景 #2D353B），必须同时挂 .dark ——
+         否则 VitePress 会按亮色渲染导航栏、搜索框、侧栏这些原生组件，
+         深色正文配亮色边框，比不做还难看。
+         但不能简单 classList.add('dark')：那样用户切回海洋蓝时会一直停在暗色。
+         所以先记下切换前的状态，离开时还原。 */
+      if (palette.value === 'everforest') {
+        if (darkBefore === null) darkBefore = root.classList.contains('dark')
+        root.classList.add('dark')
+      } else if (darkBefore !== null) {
+        root.classList.toggle('dark', darkBefore)
+        darkBefore = null
+      }
     }
     const save = () => {
       apply()
@@ -51,9 +65,14 @@ const ReaderControls = defineComponent({
       } catch {}
       apply()
     })
+    /* ⚠️ 光给 <select> 传 value 不够 ✗ —— 选项是同时渲染的，DOM 建好后
+       浏览器按「第一个 option 没写 selected」就选它，下拉框会一直显示「海洋蓝」，
+       而实际生效的是 default（暖绿森林），用户看着以为没生效。所以每个 option
+       也要显式写 selected。 */
     const select = (label, model, options, onChange) => h('label', { class:'kb-reader-select', title:label }, [
       h('span', { class:'kb-reader-select-label' }, label),
-      h('select', { 'aria-label':label, value:model.value, onChange }, options.map(([value, text]) => h('option', { value }, text)))
+      h('select', { 'aria-label':label, value:model.value, onChange },
+        options.map(([value, text]) => h('option', { value, selected: value === model.value }, text)))
     ])
     return () => h('div', { class:'kb-reader-controls', 'aria-label':'阅读外观' }, [
       select('配色', palette, PALETTES, (event) => { palette.value = event.target.value; save() }),

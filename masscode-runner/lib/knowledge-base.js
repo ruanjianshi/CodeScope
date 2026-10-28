@@ -260,7 +260,8 @@ const PALETTES = [
   ['ocean', '海洋蓝'],
   ['forest', '森林绿'],
   ['violet', '暮光紫'],
-  ['paper', '暖纸棕']
+  ['paper', '暖纸棕'],
+  ['everforest', '暖绿森林']
 ]
 const WIDTHS = [
   ['standard', '标准'],
@@ -275,15 +276,28 @@ const SIZES = [
 ]
 const ReaderControls = defineComponent({
   setup() {
-    const palette = ref('ocean')
+    const palette = ref('everforest')   /* 默认暖绿森林；用户在右上角「配色」里改过则以本地存储为准 */
     const width = ref('standard')
     const size = ref('normal')
+    let darkBefore = null   /* 选「暖绿森林」前的明暗状态，切走时还原（见 apply） */
     const apply = () => {
       if (typeof document === 'undefined') return
       const root = document.documentElement
       root.dataset.kbTheme = palette.value
       root.dataset.kbWidth = width.value
       root.dataset.kbSize = size.value
+      /* ★「暖绿森林」是**固定的深色主题**（背景 #2D353B），必须同时挂 .dark ——
+         否则 VitePress 会按亮色渲染导航栏、搜索框、侧栏这些原生组件，
+         深色正文配亮色边框，比不做还难看。
+         但不能简单 classList.add('dark')：那样用户切回海洋蓝时会一直停在暗色。
+         所以先记下切换前的状态，离开时还原。 */
+      if (palette.value === 'everforest') {
+        if (darkBefore === null) darkBefore = root.classList.contains('dark')
+        root.classList.add('dark')
+      } else if (darkBefore !== null) {
+        root.classList.toggle('dark', darkBefore)
+        darkBefore = null
+      }
     }
     const save = () => {
       apply()
@@ -304,9 +318,14 @@ const ReaderControls = defineComponent({
       } catch {}
       apply()
     })
+    /* ⚠️ 光给 <select> 传 value 不够 ✗ —— 选项是同时渲染的，DOM 建好后
+       浏览器按「第一个 option 没写 selected」就选它，下拉框会一直显示「海洋蓝」，
+       而实际生效的是 default（暖绿森林），用户看着以为没生效。所以每个 option
+       也要显式写 selected。 */
     const select = (label, model, options, onChange) => h('label', { class:'kb-reader-select', title:label }, [
       h('span', { class:'kb-reader-select-label' }, label),
-      h('select', { 'aria-label':label, value:model.value, onChange }, options.map(([value, text]) => h('option', { value }, text)))
+      h('select', { 'aria-label':label, value:model.value, onChange },
+        options.map(([value, text]) => h('option', { value, selected: value === model.value }, text)))
     ])
     return () => h('div', { class:'kb-reader-controls', 'aria-label':'阅读外观' }, [
       select('配色', palette, PALETTES, (event) => { palette.value = event.target.value; save() }),
@@ -788,6 +807,17 @@ html:not(.dark)[data-kb-theme="paper"] {
   --vp-c-bg:#fbf8f1;--vp-c-bg-alt:#f3eee4;--vp-c-bg-soft:#f5f0e7;--vp-c-bg-elv:#fffdf8;
   --vp-c-divider:#ded5c7;--vp-c-gutter:#e9e1d5;--vp-c-text-1:#332d27;--vp-c-text-2:#6b6055;
 }
+/* ★ Everforest · 暖绿森林 —— 与 Markdown 文档区（app.css 的 --doc-*）同一套色值，
+   两边必须一致，否则同一篇笔记在阅读器和知识库里是两种绿。
+   这是唯一固定深色的配色：选它时 JS 会挂 .dark（见 ReaderControls.apply），
+   所以这里不用区分 html:not(.dark)，直接覆盖 VitePress 的暗色变量。 */
+html[data-kb-theme="everforest"] {
+  --vp-c-brand-1:#A7C080;--vp-c-brand-2:#B8CD96;--vp-c-brand-3:#7FBBB3;
+  --vp-c-brand-soft:rgba(167,192,128,.16);--kb-page-glow:rgba(167,192,128,.22);
+  --vp-c-bg:#2D353B;--vp-c-bg-alt:#272E33;--vp-c-bg-soft:#343F44;--vp-c-bg-elv:#343F44;
+  --vp-c-divider:#414B50;--vp-c-gutter:#272E33;
+  --vp-c-text-1:#D3C6AA;--vp-c-text-2:#9DA9A0;--vp-c-text-3:#859289;
+}
 body {
   background:
     radial-gradient(900px 520px at 64% -10%,var(--kb-page-glow),transparent 68%),
@@ -1267,7 +1297,49 @@ title: 笔记写法示例
 
 ## 二、提示框
 
-用三个冒号包起来，适合写「补充说明 / 坑点 / 危险操作 / 可折叠的长内容」。
+两种语法，看你写在哪。**笔记正文用 A**，知识库站点用 B。
+
+### A. 笔记正文 / 阅读器：\`> [!类型] 标题\`
+
+> [!note] 笔记
+> 记录值得留下的想法。
+
+> [!info] 信息
+> 补充一点背景，帮助理解上下文。
+
+> [!warning] 注意
+> 容易踩的坑写这里。
+
+> [!important] 重点
+> 必须记住的那一条。
+
+支持 17 种语气，每种颜色不同，右下角还有一个对应的浅色水印：
+
+| 类型 | 写法 | 用在 |
+| --- | --- | --- |
+| 笔记 | \`> [!note]\` | 记录想法 |
+| 信息 | \`> [!info]\` | 补充背景 |
+| 待办 | \`> [!todo]\` | 下一步做什么 |
+| 提示 | \`> [!tip]\` | 经验之谈 |
+| 成功 | \`> [!success]\` | 做对了 / 通过了 |
+| 问题 | \`> [!question]\` | 待确认的疑问 |
+| 警告 | \`> [!warning]\` | 容易踩的坑 |
+| 重点 | \`> [!important]\` | 必须记住 |
+| 危险 | \`> [!danger]\` | 不可撤销的操作 |
+| 缺陷 | \`> [!bug]\` | 已知问题 |
+| 失败 | \`> [!failure]\` | 跑不通的结果 |
+| 示例 | \`> [!example]\` | 举一个例子 |
+| 摘要 | \`> [!abstract]\` | 一段的总结 |
+| 引用 | \`> [!quote]\` | 原文照录 |
+
+别名也认：\`hint\` 同提示，\`check\` / \`done\` 同成功，\`caution\` / \`attention\` 同警告，\`error\` 同危险，\`summary\` / \`tldr\` 同摘要，\`cite\` 同引用。
+
+> [!tip] 标题可以自己写
+> \`> [!note] 随便什么标题\` —— 右方括号后面那截就是标题，不写就用默认的中文名。
+
+### B. 知识库站点：\`::: tip 标题\`
+
+知识库是 VitePress 渲染的，**暂时不认 \`> [!类型]\`**（会显示成普通引用），所以站点里用三冒号容器：
 
 ::: tip 小技巧
 \`::: tip\` 用来写补充说明、经验之谈。

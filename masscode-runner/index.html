@@ -78,8 +78,12 @@
     }, 1500);
   })();
 </script>
-<link rel="stylesheet" href="/assets/app.css?v=20261027f">
-<link rel="stylesheet" href="/assets/ui-kit.css?v=20261027f">
+<link rel="stylesheet" href="/assets/app.css?v=20261028a">
+<link rel="stylesheet" href="/assets/ui-kit.css?v=20261028a">
+<!-- 文档主题（Everforest · 暖绿森林）必须排在 app.css 之后：靠「同特异性 + 后出现」覆盖 -->
+<link rel="stylesheet" href="/assets/doc-theme.css?v=20261028E">
+<!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
+<script src="/assets/doc-theme.js?v=20261028d" defer></script>
 </head>
 <body>
 <!-- 统一图标 sprite：线性、1em、currentColor。用 <svg class="cs-ico"><use href="#i-xxx"/></svg> 引用 -->
