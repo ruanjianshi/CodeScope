@@ -229,10 +229,6 @@ print(r.run())
   fs.writeFileSync(path.join(readingProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Markdown block drag regression',tags:['markdown','drag']},null,2));
   const readingReference='[[code-ref:demo.cpp#fragment=0&line=1&end=2|demo.cpp:1–2]]';
   fs.writeFileSync(readingNotePath,'---\ntitle: Block Drag Demo\ntags: [markdown, drag]\n---\n# Block Drag Demo\n\n## Section A\n\nParagraph A.\n\n'+readingReference+'\n\n## Section B\n\n- alpha\n- beta\n- gamma\n\n| 维度 | 堆 | 自由存储区 |\n| --- | --- | --- |\n| 分配 | malloc | new |\n| 释放 | free | delete |\n','utf8');
-  const knowledgeImageProjectDir=path.join(vault,'readings','知识库','浏览器测试','图片项目'),knowledgeImageNotePath=path.join(knowledgeImageProjectDir,'图片插入.md');
-  fs.mkdirSync(knowledgeImageProjectDir,{recursive:true});
-  fs.writeFileSync(path.join(knowledgeImageProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Knowledge image insertion regression',tags:['image']},null,2));
-  fs.writeFileSync(knowledgeImageNotePath,'# 图片插入测试\n\n在此区块后插入图片。\n','utf8');
   const pdfProjectDir=path.join(vault,'readings','PDF Viewer Demo');
   fs.mkdirSync(pdfProjectDir,{recursive:true});
   fs.writeFileSync(path.join(pdfProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Official PDF.js viewer regression',tags:['pdf','viewer']},null,2));
@@ -245,9 +241,69 @@ print(r.run())
   fs.writeFileSync(path.join(universalProjectDir,'官方文档.url'),'[InternetShortcut]\nURL=https://example.com/guide\n','utf8');
   const readingHtmlPath=path.join(universalProjectDir,'导图.html');
   fs.writeFileSync(readingHtmlPath,'// 导图.html\n','utf8');
+  /* ══ 学习工作台「网址目录」夹具 ✗✗（2026-10-28 补）══════════════════════════════
+     ⚠️ 字段契约以 **server.js 的 readSiteCatalog()**（约 4772-4806）为准，
+        写入形状与 scripts/migrate-site-catalog.js 一致 ✓：
+        { featured:[{id,label,url,color}],
+          categories:[{id,label,icon,color,sites:[{label,url,description,stars}]}] }
+        服务端逐字段清洗：url 必须 http(s) ✓、分类 id 只留 [A-Za-z0-9._-] ✓、
+        label≤24 / description≤80 / stars≤12 ✓、分类≤64 / 每类站点≤200 / featured≤32 ✓；
+        空目录当「没有」→ 回退源码占位示例 ✓。
+        ⚠️ 这份契约以后若变，这个夹具必须跟着改 —— 否则它会静默退回占位示例
+           （只有 3 类 / 8 条），下面的数量断言就会莫名其妙地红 ✗。
+     ⚠️ 为什么需要它：网址目录已从源码搬进应用数据目录（site-catalog.json）✓，
+        临时数据目录里没有这份文件时，菜单里只有占位示例 ✗ —— 而下面要断言
+        「15+ 分类、120+ 站点、分类列可滚动、底栏不遮挡」✓，必须喂一份足够大的目录 ✓。
+     ⚠️ 地址只用**保留地址** 192.0.2.0/24（RFC 5737）✓，不许出现任何真实内网地址 ✗；
+        featured 的 4 条沿用占位示例里的公开站点 ✓ —— 工作台「常用网址」栏就是
+        FEATURED_SITES ✓，其中 B站 那条是 B站学习链路的入口（后面的断言要点它）✓。
+     覆盖：24 个分类（featured/我的收藏 + 22 个目录分类）✓、136 个唯一站点 ✓，
+        分类列高度必然超过可视区 → 滚动断言才有意义 ✓。 */
+  const siteCatalogCategories = Array.from({ length: 22 }, (_, index) => {
+    const serial = String(index + 1).padStart(2, '0');
+    return {
+      id: index === 0 ? 'docs' : 'fixture-' + serial,
+      label: '夹具分类 ' + serial,
+      icon: '◆',
+      color: '#70d6a3',
+      sites: Array.from({ length: 6 }, (_, slot) => ({
+        label: 'fixture-' + serial + '-' + (slot + 1),
+        url: 'https://192.0.2.' + (10 + (index % 200)) + '/fixture/' + serial + '/' + (slot + 1),
+        description: '回归夹具 · 保留地址',
+        stars: slot === 0 ? '★★★' : '',
+      })),
+    };
+  });
+  /* FreeRTOS 全局只能出现一次：搜索断言的命中范围是「名称 + 描述 + 地址 + 分类名」，
+     且要求唯一命中 ✓（所以别把这句话塞进分类名或描述里）✓ */
+  siteCatalogCategories[1].sites[0] = { label: 'FreeRTOS', url: 'https://example.com/freertos', description: '实时操作系统', stars: '★★★' };
+  fs.writeFileSync(path.join(tempRoot, 'data', 'site-catalog.json'), JSON.stringify({
+    version: 1,
+    featured: [
+      { id: 'bilibili', label: 'B站', url: 'https://www.bilibili.com/', color: '#fb7299' },
+      { id: 'github', label: 'GitHub', url: 'https://github.com/', color: '#8b949e' },
+      { id: 'arxiv', label: 'arXiv', url: 'https://arxiv.org/', color: '#b31b1b' },
+      { id: 'mdn', label: 'MDN', url: 'https://developer.mozilla.org/', color: '#62a0ea' },
+    ],
+    categories: siteCatalogCategories,
+  }, null, 2));
   const port=await freePort(),baseUrl='http://127.0.0.1:'+port;
   server=spawn(process.execPath,['server.js'],{cwd:projectRoot,env:{...process.env,CODESCOPE_HOST:'127.0.0.1',CODESCOPE_PORT:String(port),CODESCOPE_VAULT:vault,CODESCOPE_DATA_HOME:path.join(tempRoot,'data'),CODESCOPE_ONLYOFFICE_URL:'http://127.0.0.1:1',CODESCOPE_DSH_AUTOSTART:'0', CODESCOPE_DSH_PORT: '3099',CODESCOPE_AUTO_OFFICE:'0'},stdio:'ignore'});
   await waitForServer(baseUrl);
+  /* 知识库图片夹具**必须等服务起来之后再写** ✗✗（2026-10-28 修）——
+     `lib/knowledge-base.js` 的 `ensure()` 拿「知识库目录基本是空的」当首建判定
+     （firstRun ✓），只有首建才播种内置示例 `快速开始/使用指南/知识库使用指南.md` ✓；
+     `KNOWLEDGE.start()` 在 listen 回调里同步跑 ensure() ✓ → 服务一旦响应 /api/version，
+     播种就已经落盘 ✓。
+     ⚠️ 原来把夹具写在**起服务之前** ✗ → readings/知识库 已非空 → firstRun 不成立 →
+        示例没播 ✓ → 后面等指南页等到 404 超时 ✗（CHANGELOG 记过这一条：
+        「知识库内容变了，不是代码回归」✓）。
+     ⇒ 顺序改成「先起服务（空目录上播种 ✓）→ 再写自有夹具 ✓」，
+       内置示例和自有夹具最终都在站点里 ✓，断言一条都不用放宽 ✓。 */
+  const knowledgeImageProjectDir=path.join(vault,'readings','知识库','浏览器测试','图片项目'),knowledgeImageNotePath=path.join(knowledgeImageProjectDir,'图片插入.md');
+  fs.mkdirSync(knowledgeImageProjectDir,{recursive:true});
+  fs.writeFileSync(path.join(knowledgeImageProjectDir,'.codescope-project.json'),JSON.stringify({version:1,description:'Knowledge image insertion regression',tags:['image']},null,2));
+  fs.writeFileSync(knowledgeImageNotePath,'# 图片插入测试\n\n在此区块后插入图片。\n','utf8');
   const officeFixtures=[['word','Browser Word'],['sheet','Browser Sheet'],['slides','Browser Slides']];
   for(const [kind,name] of officeFixtures){
     const response=await fetch(baseUrl+'/api/office/new',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name,folder:''})});
@@ -311,8 +367,21 @@ print(r.run())
   await page.locator('#knowledge-close').click();
   const knowledgeBuild=await fetch(baseUrl+'/api/knowledge/build',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(response=>response.json());
   if(knowledgeBuild.phase!=='ready')throw new Error('浏览器回归中的知识库构建失败：'+JSON.stringify(knowledgeBuild));
-  /* 标签面板：标签多时显示筛选框、默认只列 8 个 + 「显示全部」，右键可管理 */
+  /* 标签面板：标签多时显示筛选框、默认只列 8 个 + 「显示全部」，右键可管理
+     ⚠️ 必须先点开标签入口 ✗✗（2026-10-28 修）——侧栏改版后（assets/cs-sidebar.js 顶部注释）
+        标签不再常驻左侧：`#side > #pane-tags` 平时就是 `display:none !important`
+        （assets/ui-kit.css:362 ✓），点搜索框右端的 `#btn-tag-filter` 才以浮层显示
+        （body.tags-open）✓。
+     ⚠️ 这条链**藏了很久** ✗：隐藏元素上 `textContent` 照样有值 ✓ →
+        下面几条纯文本断言在「面板没打开」时**也是绿的** ✓，
+        而 Playwright 点它是必超时 ✗（整棵子树 0×0 → element is not visible）。
+     ⇒ 所以除了点开入口，还补一条**真实可见性**断言（0×0 骗不过 isVisible ✓），
+        否则同样的过期还会再藏一次 ✓。 */
   {
+    if (!await page.locator('#btn-tag-filter').isVisible()) throw new Error('搜索框右端缺少标签入口按钮（#btn-tag-filter）');
+    await page.locator('#btn-tag-filter').click();
+    await page.locator('#pane-tags').waitFor({ state: 'visible' });
+    if (!await page.evaluate(() => document.body.classList.contains('tags-open'))) throw new Error('点标签入口后没有打开标签浮层（body.tags-open 未加上）');
     const tagCounts = await page.evaluate(() => {
       const tagChips = [...document.querySelectorAll('#tagbar .tchip')];
       return {
@@ -322,8 +391,19 @@ print(r.run())
         more: (document.querySelector('#tagbar .tchip-more') || {}).textContent || '',
       };
     });
-    if (!tagCounts.filterVisible) throw new Error('标签超过 8 个时应显示筛选框：' + JSON.stringify(tagCounts));
+    /* filterVisible 只证明「没挂 hidden 类」✗，不证明用户真能看见 ✓ → 两条都留
+       （只留类名判断的话，外层 display:none 时它照样是绿的 ✓，正是这条链藏起来的原因 ✗）。 */
+    if (!tagCounts.filterVisible || !await page.locator('#tag-filter').isVisible()) throw new Error('标签超过 8 个时应显示筛选框：' + JSON.stringify(tagCounts));
     if (tagCounts.tags !== 8 || tagCounts.total !== 10 || tagCounts.more !== '显示全部（9）') throw new Error('标签栏未折叠为 8 个 + 「显示全部」：' + JSON.stringify(tagCounts));
+    /* 文本对 ≠ 能点 ✗：浮层里还要确认它没被 #tagbar 的 max-height:38vh 裁掉
+       （裁掉时 Playwright 同样报 element is not visible ✓）。 */
+    if (!await page.locator('#tagbar .tchip-more').isVisible()) throw new Error('标签浮层里的「显示全部」不可见（0×0 或被容器裁掉）');
+    const moreClipped = await page.evaluate(() => {
+      const more = document.querySelector('#tagbar .tchip-more'), bar = document.getElementById('tagbar');
+      const rect = more.getBoundingClientRect(), box = bar.getBoundingClientRect();
+      return rect.width < 20 || rect.height < 20 || rect.top < box.top - 1 || rect.bottom > box.bottom + 1;
+    });
+    if (moreClipped) throw new Error('「显示全部」被 #tagbar 的内滚动裁掉了（max-height:38vh 不够高）');
     await page.locator('#tagbar .tchip-more').click();
     const expandedTags = await page.evaluate(() => ({
       tags: [...document.querySelectorAll('#tagbar .tchip')].filter((node) => !node.classList.contains('tchip-all') && !node.classList.contains('tchip-more')).length,
@@ -347,7 +427,12 @@ print(r.run())
     await openTagMenu();
     const tagMenu = await page.evaluate(() => [...document.querySelectorAll('#ctx-menu .ctx-item .ctx-label')].map((node) => node.textContent));
     if (!['重命名标签…', '合并到其他标签…', '删除标签'].every((text) => tagMenu.includes(text))) throw new Error('标签右键菜单缺少管理项：' + JSON.stringify(tagMenu));
+    /* Escape 会同时收起右键菜单和标签浮层（cs-sidebar.js 的 window keydown → closeAll ✓）。
+       ⚠️ 必须确认浮层**真的**收起了 ✗：留着的话 #cs-panel-mask（z-index 880，pointer-events:auto）
+       会盖住后面所有点击 ✓ —— 那样这里就变成「静默地埋一颗雷」✗。 */
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.body.classList.contains('tags-open'), null, { timeout: 5000 }).catch(() => {});
+    if (await page.evaluate(() => document.body.classList.contains('tags-open'))) throw new Error('标签浮层按 Escape 后没有收起（遮罩会挡住后续点击）');
   }
   const knowledgePage=await browser.newPage({viewport:{width:1280,height:800}});
   /* 站点根不再有落地页：/knowledge/ 直接跳到一篇文档，不该再看到 hero 和「开始阅读」。 */
@@ -377,13 +462,139 @@ print(r.run())
   await knowledgePage.locator('main h1').filter({hasText:'知识库使用指南'}).waitFor({state:'visible'});
   const kbDocLayout=await knowledgePage.evaluate(()=>{const h2=document.querySelector('.vp-doc h2'),list=document.querySelector('.vp-doc h3 + ul,.vp-doc h3 + ol'),context=document.querySelector('.kb-doc-context');return{context:!!context,progress:!!document.querySelector('.kb-reading-progress'),crumbs:context?.querySelector('.kb-breadcrumb')?.textContent||'',meta:context?.querySelector('.kb-doc-meta')?.textContent||'',section:getComputedStyle(h2,'::before').content,listBorder:list?getComputedStyle(list).borderTopWidth:''};});
   if(!kbDocLayout.context||!kbDocLayout.progress||!kbDocLayout.crumbs.includes('使用指南')||kbDocLayout.crumbs.includes('private›var')||!kbDocLayout.meta.includes('分钟阅读'))throw new Error('知识库正文缺少面包屑、阅读进度、预计阅读时间或路径清理：'+JSON.stringify(kbDocLayout));
-  const kbSidebarHierarchy=await knowledgePage.evaluate(()=>{const category=document.querySelector('.VPSidebarItem.level-0 > .item > .text'),project=document.querySelector('.VPSidebarItem.level-1 > .item > .text'),documentText=document.querySelector('.VPSidebarItem.level-2 > .item > .link > .text'),sidebar=document.querySelector('.VPSidebar');return{category:getComputedStyle(category,'::before').content,project:getComputedStyle(project,'::before').content,document:getComputedStyle(documentText,'::before').content,categoryLeft:category.getBoundingClientRect().left,projectLeft:project.getBoundingClientRect().left,documentLeft:documentText.getBoundingClientRect().left,sidebarWidth:sidebar.getBoundingClientRect().width,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
-  if(!kbSidebarHierarchy.category.includes('分类')||!kbSidebarHierarchy.project.includes('项目')||!kbSidebarHierarchy.document.includes('文')||!(kbSidebarHierarchy.categoryLeft<kbSidebarHierarchy.projectLeft&&kbSidebarHierarchy.projectLeft<kbSidebarHierarchy.documentLeft)||kbSidebarHierarchy.sidebarWidth<280||kbSidebarHierarchy.overflow>1)throw new Error('知识库侧栏分类、项目、文档层级不清晰或桌面宽度不足：'+JSON.stringify(kbSidebarHierarchy));
+  /* 侧栏的度量：调色板/版心/字号之外，这里再量「分类 / 项目 / 文档」三层和侧栏宽度 ✓
+     ⚠️ 量之前必须先把目录**展开** ✗✗（2026-10-28 修）——产品让左侧目录**默认折叠**
+        （lib/knowledge-base.js:431 ✓，用户要求 ✓），折叠时 level-1/2 是 display:none ✓，
+        getBoundingClientRect() 全是 0/0 ✓ → 层级断言会误报成「不清晰」✗。
+        原来这条只是**恰好**在折叠计时器（挂载后 120ms/900ms ✓）触发之前量到 ✓，
+        一旦后面多量几次（拖动/复位）就必露 ✗ —— 所以这里改成显式展开、并等它真的可见 ✓。
+        展开 = 点一下分类标题（与用户操作一致 ✓），不是测试专用的后门 ✓。 */
+  const expandKbSidebar = async () => {
+    await knowledgePage.evaluate(() => {
+      document.querySelectorAll('.VPSidebarItem.level-0.collapsible.collapsed > .item').forEach((item) => { try { item.click() } catch (_) {} });
+    });
+    await knowledgePage.waitForFunction(() => {
+      const el = document.querySelector('.VPSidebarItem.level-1 > .item > .text');
+      return !!el && el.getBoundingClientRect().width > 0;
+    }, null, { timeout: 5000 });
+  };
+  const measureKbSidebar = async () => {
+    await expandKbSidebar();
+    return knowledgePage.evaluate(() => {
+    const category=document.querySelector('.VPSidebarItem.level-0 > .item > .text'),project=document.querySelector('.VPSidebarItem.level-1 > .item > .text'),documentText=document.querySelector('.VPSidebarItem.level-2 > .item > .link > .text'),sidebar=document.querySelector('.VPSidebar');
+    const categoryLeft=category.getBoundingClientRect().left,projectLeft=project.getBoundingClientRect().left,documentLeft=documentText.getBoundingClientRect().left;
+    return {
+      category:getComputedStyle(category,'::before').content,
+      project:getComputedStyle(project,'::before').content,
+      document:getComputedStyle(documentText,'::before').content,
+      categoryLeft,projectLeft,documentLeft,
+      ordered:categoryLeft<projectLeft&&projectLeft<documentLeft,
+      sidebarWidth:sidebar.getBoundingClientRect().width,
+      /* 侧栏宽度的**唯一来源**是 --kb-sidebar-w（默认 272px，用户可拖动；lib/knowledge-base.js:351 ✓） */
+      sidebarVar:parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w')),
+      overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
+      storage:(()=>{try{return localStorage.getItem('codescope-kb-sidebar-w')}catch(_){return null}})(),
+    };
+    });
+  };
+  /* ★ 契约式断言（2026-10-28 修）——原来是写死的 `sidebarWidth<280` ✗：
+     那条魔数来自「侧栏固定 288px」时代 ✓，而提交 692c999 已把侧栏合法地改成
+     **可拖动 + 默认 272px**（lib/knowledge-base.js:351 ✓）→ 实测 1280/1440/4500 恒为 272px ✓，
+     于是老断言在产品默认值上**必红** ✓（不是布局回归 ✗）。
+     ⇒ 改成两条契约：
+       ① 实际宽度必须等于 --kb-sidebar-w 的实测值（±1px 取整误差 ✓）——侧栏是宽是窄由变量说了算 ✓；
+       ② 仍要求「桌面够宽」≥240px ✓。
+     为什么是 **240 而不是 280**：280 只是旧 288px 布局的近似值 ✗；
+     产品给拖动留的下限是 MIN=200（lib/knowledge-base.js:351 ✓），
+     240 能在「用户把侧栏拖到最窄」与「桌面布局塌成抽屉」之间报错，
+     又不会把默认值锁死 ✓ —— 以后调默认宽度不用再改这条测试 ✓。 */
+  const assertKbSidebar = (state, label) => {
+    const drift = Math.abs(state.sidebarWidth - state.sidebarVar);
+    if (!state.category.includes('分类') || !state.project.includes('项目') || !state.document.includes('文')
+      || !state.ordered
+      || !Number.isFinite(state.sidebarVar) || drift > 1
+      || !(state.sidebarWidth >= 240)
+      || state.overflow > 1) throw new Error(label + '：' + JSON.stringify(state));
+  };
+  const kbSidebarHierarchy = await measureKbSidebar();
+  assertKbSidebar(kbSidebarHierarchy, '知识库侧栏分类、项目、文档层级不清晰或桌面宽度不足');
+  /* 拖动后的情形也要覆盖 ✓（只断言「宽度等于变量」会被自证 —— 变量和宽度一起变也一样过 ✗）：
+     所以用**真拖拽**（手柄 pointer 事件 + setPointerCapture，lib/knowledge-base.js:348-427 ✓）拖宽 96px，
+     再断言「宽度真的跟着变 + 仍等于变量 + 层级/溢出不变 + 宽度落盘」✓；
+     最后双击复位（产品的 onDblclick→onReset ✓）回到拖动前，避免影响后面 4500px 的三栏断言 ✓。
+     ⚠️ 不用「只改 --kb-sidebar-w 变量」来模拟 ✗：产品的 setW() 还会给 .VPSidebar 写行内 !important 宽度
+        （lib/knowledge-base.js:362-367 ✓），只改变量侧栏纹丝不动 ✓ —— 那样测的是假拖拽 ✗。 */
+  const kbResizer = knowledgePage.locator('.kb-sidebar-resizer');
+  if (!await kbResizer.isVisible()) throw new Error('桌面宽度下缺少侧栏拖动手柄（.kb-sidebar-resizer）');
+  {
+    const handle = await kbResizer.boundingBox();
+    const before = kbSidebarHierarchy.sidebarWidth;
+    const startX = handle.x + handle.width / 2, startY = handle.y + Math.min(200, Math.max(1, handle.height / 2));
+    await knowledgePage.mouse.move(startX, startY);
+    await knowledgePage.mouse.down();
+    await knowledgePage.mouse.move(startX + 96, startY, { steps: 8 });
+    await knowledgePage.mouse.up();
+    const dragged = await measureKbSidebar();
+    assertKbSidebar(dragged, '拖动侧栏后分类、项目、文档层级或宽度契约被破坏');
+    if (!(dragged.sidebarWidth > before + 60)) throw new Error('拖动侧栏后宽度没有跟着变：' + JSON.stringify({ before, dragged }));
+    if (Math.abs(Number(dragged.storage) - dragged.sidebarWidth) > 1) throw new Error('拖动侧栏后宽度没有落盘到 localStorage：' + JSON.stringify(dragged));
+    await kbResizer.dblclick();
+    const reset = await measureKbSidebar();
+    assertKbSidebar(reset, '双击复位后分类、项目、文档层级或宽度契约被破坏');
+    if (Math.abs(reset.sidebarWidth - before) > 1) throw new Error('双击复位没有回到拖动前的宽度：' + JSON.stringify({ before, reset }));
+  }
   await knowledgePage.setViewportSize({width:4500,height:1200});await knowledgePage.waitForTimeout(150);
   const kbWideSidebar=await knowledgePage.evaluate(()=>{const sidebar=document.querySelector('.VPSidebar').getBoundingClientRect(),category=document.querySelector('.VPSidebarItem.level-0 > .item').getBoundingClientRect(),content=document.querySelector('.VPSidebar .nav').getBoundingClientRect();return{sidebar:sidebar.toJSON(),category:category.toJSON(),content:content.toJSON(),paddingLeft:getComputedStyle(document.querySelector('.VPSidebar')).paddingLeft,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
   if(kbWideSidebar.paddingLeft!=='24px'||kbWideSidebar.category.left<kbWideSidebar.sidebar.left||kbWideSidebar.category.right>kbWideSidebar.sidebar.right||kbWideSidebar.content.left<kbWideSidebar.sidebar.left||kbWideSidebar.overflow>1)throw new Error('知识库在 4500px 超宽屏下分类树被推出侧栏：'+JSON.stringify(kbWideSidebar));
   const kbWideGroup=await knowledgePage.evaluate(()=>{const sidebar=document.querySelector('.VPSidebar').getBoundingClientRect(),category=document.querySelector('.VPSidebarItem.level-0 > .item').getBoundingClientRect(),article=document.querySelector('.VPDoc > .container > .content').getBoundingClientRect(),aside=document.querySelector('.VPDoc > .container > .aside').getBoundingClientRect(),outline=document.querySelector('.VPDocAsideOutline').getBoundingClientRect();return{canvasCenter:window.innerWidth/2,articleCenter:(article.left+article.right)/2,sidebar:sidebar.toJSON(),category:category.toJSON(),article:article.toJSON(),aside:aside.toJSON(),outline:outline.toJSON(),contentPaddingLeft:getComputedStyle(document.querySelector('.VPContent')).paddingLeft};});
   if(Math.abs(kbWideGroup.canvasCenter-kbWideGroup.articleCenter)>2||Math.abs(kbWideGroup.sidebar.right-kbWideGroup.article.left)>2||Math.abs(kbWideGroup.aside.left-kbWideGroup.article.right)>2||Math.abs(kbWideGroup.category.top-kbWideGroup.outline.top)>2||kbWideGroup.contentPaddingLeft!=='0px')throw new Error('知识库在 4500px 超宽屏下左侧分类、正文与右侧大纲未形成对称三栏：'+JSON.stringify(kbWideGroup));
+  /* ★ 超宽屏的「拖到多宽就按多宽排」也要覆盖 ✓（2026-10-28，方案 B）——
+     只测默认 272px 的话，把「两侧写死 256」的旧实现换回来也照样绿 ✗：
+     那时默认宽度下的中心/间隙断言全绿 ✓，只有把侧栏拖宽后才暴露
+     「正文偏 136px、侧栏与正文间隙 216px」✗。
+     ⇒ 在 4500px 上真拖 60px：三栏必须仍然对称（中心与左右间隙 ≤2px）、宽度==变量 ✓；
+        拖完双击复位，别影响后面「正文宽度 / 居中」的断言 ✓。 */
+  const kbWideMeasure = () => knowledgePage.evaluate(() => {
+    const sb = document.querySelector('.VPSidebar').getBoundingClientRect();
+    const art = document.querySelector('.VPDoc > .container > .content').getBoundingClientRect();
+    const as = document.querySelector('.VPDoc > .container > .aside').getBoundingClientRect();
+    return {
+      canvasCenter: innerWidth / 2,
+      articleCenter: art.left + art.width / 2,
+      sidebarWidth: sb.width,
+      sidebarVar: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w')),
+      gapLeft: art.left - sb.right,
+      gapRight: as.left - art.right,
+      paddingLeft: getComputedStyle(document.querySelector('.VPContent')).paddingLeft,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  const assertKbWideSymmetric = (state, label) => {
+    if (Math.abs(state.canvasCenter - state.articleCenter) > 2
+      || Math.abs(state.gapLeft) > 2 || Math.abs(state.gapRight) > 2
+      || Math.abs(state.sidebarWidth - state.sidebarVar) > 1
+      || state.paddingLeft !== '0px' || state.overflow > 1) throw new Error(label + '：' + JSON.stringify(state));
+  };
+  {
+    const wideResizer = knowledgePage.locator('.kb-sidebar-resizer');
+    const wideBefore = await kbWideMeasure();
+    assertKbWideSymmetric(wideBefore, '4500px 默认宽度下左侧分类、正文与右侧大纲未形成对称三栏');
+    const wideHandle = await wideResizer.boundingBox();
+    const wideX = wideHandle.x + wideHandle.width / 2, wideY = wideHandle.y + Math.min(200, Math.max(1, wideHandle.height / 2));
+    await knowledgePage.mouse.move(wideX, wideY);
+    await knowledgePage.mouse.down();
+    await knowledgePage.mouse.move(wideX + 60, wideY, { steps: 8 });
+    await knowledgePage.mouse.up();
+    await knowledgePage.waitForTimeout(200);
+    const wideDragged = await kbWideMeasure();
+    assertKbWideSymmetric(wideDragged, '4500px 拖动侧栏后左侧分类、正文与右侧大纲未形成对称三栏');
+    if (!(wideDragged.sidebarWidth > wideBefore.sidebarWidth + 40)) throw new Error('4500px 拖动侧栏后三栏没有跟着变宽：' + JSON.stringify({ wideBefore, wideDragged }));
+    await wideResizer.dblclick();
+    await knowledgePage.waitForTimeout(250);
+    const wideReset = await kbWideMeasure();
+    assertKbWideSymmetric(wideReset, '4500px 双击复位后左侧分类、正文与右侧大纲未形成对称三栏');
+    if (Math.abs(wideReset.sidebarWidth - wideBefore.sidebarWidth) > 1) throw new Error('4500px 双击复位没有回到拖动前的宽度：' + JSON.stringify({ wideBefore, wideReset }));
+  }
   /* 超宽屏下正文必须随屏幕放宽：固定 900px 在 4500 的屏上只占五分之一，长句和代码都会折行。 */
   const kbWideContent=await knowledgePage.evaluate(()=>Math.round(document.querySelector('.vp-doc').getBoundingClientRect().width));
   if(!(kbWideContent>1000))throw new Error('知识库在 4500px 超宽屏下正文仍然过窄（未随屏幕放宽）：'+kbWideContent+'px');
@@ -680,6 +891,8 @@ print(r.run())
       attachments: [{ n: 0, index: 2, name: '报告.pdf', type: 'application/pdf', size: 1234 }], inline: [] },
     flagCalls: [],
   };
+  /* 已读回写用：同一封邮件只把未读数减一次 ✓（见 /api/life/mail/read 的注释） */
+  const mailStubReadUids = new Set();
   await page.route('**/api/life/mail**', async (route) => {
     const req = route.request();
     const p = new URL(req.url()).pathname;
@@ -723,7 +936,21 @@ print(r.run())
       if (onlyFlagged) rows = rows.filter((m) => m.flagged);
       return json({ ok: true, box: 'INBOX', total: MAIL_TOTAL, unseen: MAIL_UNREAD, mails: rows.slice(0, limit) });
     }
-    if (p === '/api/life/mail/read') return json(Object.assign({}, MAIL_STUB.read, { uid: Number(new URL(req.url()).searchParams.get('uid')) || MAIL_STUB.read.uid }));
+    if (p === '/api/life/mail/read') {
+      const uid = Number(new URL(req.url()).searchParams.get('uid')) || MAIL_STUB.read.uid;
+      /* ⚠️ 打开未读邮件 = 标已读 ⇒ 服务端的未读数**会少 1** ✗✗（2026-10-28 补）——
+         桩原来永远返回 MAIL_STUB.total=3 ✗，而产品「本地减 1 并把提醒基线一起下调」
+         （life-workbench.js:15711-15722 ✓，正是为了避免误报）→ 下一轮轮询拿到 3 > 基线 2 ✓
+         → 判成「来新邮件了」→ 弹一个**假的**提醒 ✗（实测就是这样：
+         「还没来新邮件就弹了提醒」✓）。
+         ⇒ 桩必须像真 IMAP 一样**把已读回写到未读数** ✓（同一封只减一次 ✓）。 */
+      if (!mailStubReadUids.has(uid)) {
+        mailStubReadUids.add(uid);
+        MAIL_STUB.total = Math.max(0, MAIL_STUB.total - 1);
+        MAIL_STUB.boxes.inbox.unseen = MAIL_STUB.total;
+      }
+      return json(Object.assign({}, MAIL_STUB.read, { uid }));
+    }
     if (p === '/api/life/mail/flag') {
       try { MAIL_STUB.flagCalls.push(JSON.parse(req.postData() || '{}')); } catch (_) {}
       return json({ ok: true });
@@ -1244,11 +1471,27 @@ print(r.run())
     const close=document.getElementById('btn-env-close');
     const cr=close.getBoundingClientRect();
     const chit=document.elementFromPoint(cr.left+cr.width/2,cr.top+cr.height/2);
-    return {面板内:!!(hit&&env.contains(hit)),命中:hit?(hit.id||hit.className||hit.tagName):null,关闭可点:!!(chit&&chit.id==='btn-env-close')};
+    /* 失败信息要能直接指出「是谁挡的」—— 只报 true/false 会让人再去猜一轮 */
+    const describe=(node)=>{const chain=[];let n=node;for(let i=0;i<4&&n;i++){chain.push((n.tagName||'')+(n.id?'#'+n.id:'')+(typeof n.className==='string'&&n.className?'.'+n.className.trim().split(/\s+/).slice(0,2).join('.'):''));n=n.parentElement;}return chain.join(' < ');};
+    const style=(node)=>node?{position:getComputedStyle(node).position,zIndex:getComputedStyle(node).zIndex,pointerEvents:getComputedStyle(node).pointerEvents,display:getComputedStyle(node).display,visibility:getComputedStyle(node).visibility}:null;
+    /* ⚠️ 「关闭可点」要判「命中点落在关闭按钮**或它的子孙**里」✗✗（2026-10-28 修）——
+       原来写的是 `chit.id==='btn-env-close'` ✗，而按钮里的图标是 <svg><use/> ✓，
+       elementFromPoint 命中的是那个 <use> ✓（实测 chain：use < svg < BUTTON#btn-env-close ✓）→
+       明明没被挡、点下去也能关，断言却红 ✗ —— 这是「图标化之后没跟着改」的过期判据 ✓。
+       真实的契约是：这个点上最上层的东西必须在按钮内部 ✓（被面板/遮罩盖住时不会在 ✓）。 */
+    return {面板内:!!(hit&&env.contains(hit)),命中:hit?(hit.id||hit.className||hit.tagName):null,关闭可点:!!(chit&&close.contains(chit)),
+      关闭命中:chit?describe(chit):null,关闭命中样式:style(chit),关闭矩形:cr.toJSON(),
+      envZ:getComputedStyle(env).zIndex, lifeView:!!document.getElementById('lifework-view'),
+      遮罩数:document.querySelectorAll('.cs-ask-mask, #cs-panel-mask, .lw-mask, [class$="-mask"]').length,
+      bodyClass:document.body.className};
   });
-  if(!drawerAbove.面板内)throw new Error('个人管理面板把环境检测挡住了（面板中心命中 '+drawerAbove.命中+'）');
-  if(!drawerAbove.关闭可点)throw new Error('环境检测的关闭按钮被个人管理面板挡住，点不到');
+  if(!drawerAbove.面板内)throw new Error('个人管理面板把环境检测挡住了：'+JSON.stringify(drawerAbove));
+  if(!drawerAbove.关闭可点)throw new Error('环境检测的关闭按钮被个人管理面板挡住，点不到：'+JSON.stringify(drawerAbove));
   await page.locator('#btn-env-close').click();
+  /* 「点得到」只是必要条件 ✓ —— 再确认真的关掉了：原来点完不验结果，
+     万一按钮被挡（或事件没接上）后面的邮箱断言会以「页签不存在」的形式误报 ✗。 */
+  await page.locator('#env-panel.open').waitFor({state:'hidden',timeout:5000}).catch(()=>{});
+  if(await page.locator('#env-panel.open').count())throw new Error('点「关闭」后环境检测抽屉没有收起');
   await page.waitForTimeout(500);
   /* ---- 邮箱配置：**从服务端读取** + 按地址自动识别服务商 ----
      ⚠️ 以前前端只 POST 不 GET ✗ —— 保存后一刷新就全变「未配置」，
@@ -1942,13 +2185,19 @@ print(r.run())
   await page.locator('#sym-modal.open').waitFor({state:'visible',timeout:10000});
   const paletteHit=await page.evaluate(()=>{
     const close=document.getElementById('sym-modal-close');
-    if(!close)return {命中:'(没有关闭按钮)'};
+    if(!close)return {命中:'(没有关闭按钮)',在按钮内:false};
     const r=close.getBoundingClientRect();
     const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
-    return {命中:hit?(hit.id||hit.className||hit.tagName):null};
+    /* ⚠️ 判据同环境检测那条（2026-10-28）：按钮图标是 <svg><use/> ✓，
+       中心点命中的是内部元素 ✓（className 是 SVGAnimatedString → 打印成 [object Object] ✗）。
+       真实契约是「这个点上最上层的东西在按钮**内部**」✓ —— 被浮层盖住时不会在 ✓。 */
+    return {命中:hit?(hit.id||hit.className||hit.tagName):null,在按钮内:!!(hit&&close.contains(hit))};
   });
-  if(paletteHit.命中!=='sym-modal-close')throw new Error('工作台打开时命令面板被盖住，关闭按钮点不到（命中：'+paletteHit.命中+'）');
+  if(!paletteHit.在按钮内)throw new Error('工作台打开时命令面板被盖住，关闭按钮点不到：'+JSON.stringify(paletteHit));
   await page.locator('#sym-modal-close').click();
+  /* 「点得到」是必要条件，点了要真的关掉 ✓（不然下一条断言会以别的形式误报 ✗） */
+  await page.locator('#sym-modal.open').waitFor({state:'hidden',timeout:5000}).catch(()=>{});
+  if(await page.locator('#sym-modal.open').count())throw new Error('点「关闭」后命令面板没有收起');
   await page.waitForTimeout(400);
   await page.locator('#btn-lifework').click();
   await page.locator('#lifework-view').waitFor({state:'detached',timeout:10000}).catch(()=>{});
@@ -2317,8 +2566,22 @@ print(r.run())
      回归 2：改成工具栏内浮层后会盖住「信息」等右侧按钮（文字重叠成“12:信息3 已保存”）。 */
   const saveStatusLayout=await idePage.evaluate(()=>{
     const bar=document.getElementById('toolbar'),tick=document.getElementById('save-tick'),split=document.getElementById('edit-split'),status=document.getElementById('status'),elapsed=document.getElementById('elapsed');
-    const toolbarButtons=[...document.querySelectorAll('#toolbar button')].filter((b)=>b.getBoundingClientRect().width>0);
-    const probe=toolbarButtons[toolbarButtons.length-1];
+    /* 只按 width>0 挑「最后一颗可见按钮」不够 ✗ —— 隐藏/被移出流的按钮照样有宽度 ✓。
+       这里按**真实可见**挑（display/visibility/opacity/尺寸都算 ✓），
+       并额外记下 probe 与命中点的几何，失败时能直接看出两回事 ✓。 */
+    const box=(el)=>{const r=el.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)];};
+    const visible=(el)=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&s.opacity!=='0'&&r.width>0&&r.height>0;};
+    const toolbarButtons=[...document.querySelectorAll('#toolbar button')].filter(visible);
+    /* 探针要挑「不用横向滚就能看到」的最后一颗按钮 ✓（2026-10-28 修）——
+       工具栏是 overflow:auto hidden：**可以横向滚动** ✓，按钮多了最后几颗会被滚出可视区 ✓。
+       那种情况下 elementFromPoint 命中的是别的东西（实测：autosave-hint 被推出工具栏外
+       1098..1126，正好落在 #outline-panel 的 #btn-run 上 ✓）→ 会把「溢出」误报成
+       「被提示层遮挡」✗。本条守的是「保存状态浮层不盖按钮」（见 2563 那段回归说明），
+       所以探针必须是一颗**真的在可视区内**的按钮 ✓（全被滚出时退回最后一颗 ✓）。 */
+    const barBox0=bar.getBoundingClientRect();
+    const inViewButtons=toolbarButtons.filter((b)=>{const r=b.getBoundingClientRect();return r.left>=barBox0.left-1&&r.right<=barBox0.right+1;});
+    const probe=inViewButtons[inViewButtons.length-1]||toolbarButtons[toolbarButtons.length-1];
+    const describe=(node)=>{const chain=[];let n=node;for(let i=0;i<3&&n;i++){chain.push((n.tagName||'')+(n.id?'#'+n.id:'')+(typeof n.className==='string'&&n.className?'.'+n.className.trim().split(/\s+/).slice(0,2).join('.'):''));n=n.parentElement;}return chain.join(' < ');};
     const read=()=>({
       barH:bar.getBoundingClientRect().height,
       splitTop:split.getBoundingClientRect().top,
@@ -2335,7 +2598,11 @@ print(r.run())
     const probeBox=probe.getBoundingClientRect();
     const probeHit=document.elementFromPoint(probeBox.left+probeBox.width/2,probeBox.top+probeBox.height/2);
     tick.classList.remove('show');
-    return {idle,shown,inToolbar:!!tick.closest('#toolbar'),inStatusBar:!!tick.closest('#status')?.parentElement||tick.parentElement.contains(status),position:getComputedStyle(tick).position,idleVisibility:getComputedStyle(tick).visibility,probeHitId:probeHit?probeHit.id:'',probeId:probe.id,probeText:(probe.textContent||'').trim()};
+    return {idle,shown,inToolbar:!!tick.closest('#toolbar'),inStatusBar:!!tick.closest('#status')?.parentElement||tick.parentElement.contains(status),position:getComputedStyle(tick).position,idleVisibility:getComputedStyle(tick).visibility,
+      probeHitId:probeHit?probeHit.id:'',probeId:probe.id,probeText:(probe.textContent||'').trim(),
+      probeBox:box(probe),probeHitBox:probeHit?box(probeHit):null,probeHitChain:probeHit?describe(probeHit):null,
+      probeHitInside:!!(probeHit&&probe.contains(probeHit)),probeStyle:(()=>{const s=getComputedStyle(probe);return {display:s.display,visibility:s.visibility,opacity:s.opacity,position:s.position,zIndex:s.zIndex};})(),
+      toolbarBox:box(bar),toolbarOverflow:getComputedStyle(bar).overflow,buttonCount:toolbarButtons.length};
   });
   if(saveStatusLayout.inToolbar)throw new Error('保存状态仍放在工具栏内，会挤压按钮：'+JSON.stringify(saveStatusLayout));
   if(saveStatusLayout.idle.tickW<=0)throw new Error('保存状态槽位宽度为 0：'+JSON.stringify(saveStatusLayout));
@@ -2344,7 +2611,17 @@ print(r.run())
   if(saveStatusLayout.shown.barH!==saveStatusLayout.idle.barH)throw new Error('保存状态出现会改变工具栏高度，导致编辑器上下跳动：'+JSON.stringify(saveStatusLayout));
   if(saveStatusLayout.shown.splitTop!==saveStatusLayout.idle.splitTop)throw new Error('保存状态出现会推动代码编辑器：'+JSON.stringify(saveStatusLayout));
   if(saveStatusLayout.shown.statusLeft!==saveStatusLayout.idle.statusLeft||saveStatusLayout.shown.elapsedLeft!==saveStatusLayout.idle.elapsedLeft)throw new Error('保存状态出现会挤动底部状态栏：'+JSON.stringify(saveStatusLayout));
-  if(saveStatusLayout.probeHitId!==saveStatusLayout.probeId)throw new Error('工具栏按钮被提示层遮挡：'+JSON.stringify(saveStatusLayout));
+  /* 契约：命中点必须落在按钮**或它的子孙**里（图标 <svg><use/> 会命中内部元素 ✓，
+     见环境检测 / 命令面板那两条同款判据 ✓）；被提示层盖住时不会落在内部 ✓。 */
+  if(!saveStatusLayout.probeHitInside)throw new Error('工具栏按钮被提示层遮挡：'+JSON.stringify(saveStatusLayout));
+  /* 「自动保存」开关可以被滚出可视区（工具栏本来就可横滚 ✓），
+     但**不能既看不见又滚不到** ✗ —— 那才是真的点不到 ✓。 */
+  const autosaveReach=await idePage.evaluate(()=>{
+    const bar=document.getElementById('toolbar'),hint=document.getElementById('autosave-hint');
+    const b=bar.getBoundingClientRect(),h=hint.getBoundingClientRect();
+    return {inView:h.left>=b.left-1&&h.right<=b.right+1,overflowX:getComputedStyle(bar).overflowX,scrollable:bar.scrollWidth>bar.clientWidth+1,hint:[Math.round(h.left),Math.round(h.width)]};
+  });
+  if(!autosaveReach.inView&&!autosaveReach.scrollable)throw new Error('「自动保存」按钮既不在可视区又滚不到：'+JSON.stringify(autosaveReach));
   await idePage.evaluate(()=>MONACO_EDITOR.setPosition({lineNumber:2,column:3}));
   await idePage.waitForFunction(()=>document.getElementById('editor-position').textContent==='Ln 2, Col 3');
   const proxySync=await idePage.evaluate(()=>{MONACO_EDITOR.setValue('int main(void) {\n  return 0;\n}');return document.getElementById('code-edit').value;});
@@ -2395,7 +2672,16 @@ print(r.run())
   if(snippetMenu.missingMenu)throw new Error('项目树没有右键菜单容器 #ctx-menu（增删改将无处可开）');
   if(snippetMenu.missing)throw new Error('项目树中没有片段行，无法校验右键菜单');
   if(snippetMenu.inlineButtons)throw new Error('片段行仍保留行内操作按钮：'+JSON.stringify(snippetMenu));
-  if(!snippetMenu.visible||snippetMenu.labels.join('|')!=='打开|编辑信息 / 重命名|删除片段')throw new Error('片段行右键菜单异常：'+JSON.stringify(snippetMenu));
+  /* ⚠️ 菜单内容不能再用「整串相等」比 ✗✗（2026-10-28 修）——
+     assets/cs-lan-chip.js 会给**所有模块**的右键菜单统一补「复制路径 / 下载到本地」✓
+     （局域网下载那个用户需求 ✓），于是这里的实际项变成 5 个 ✓，
+     而断言还写死 3 个 ✗ → 产品完全正常也必红 ✓。
+     ⇒ 改成「必选项必须在 + 除两枚全局扩展外不许出现意外项」✓：
+        既容忍这个跨模块特性 ✓，又仍然挡得住「菜单里混进没预期的东西」✓。 */
+  const snippetMenuRequired=['打开','编辑信息 / 重命名','删除片段'];
+  const menuGlobalExtras=['复制路径','下载到本地'];
+  const unexpectedSnippetItems=snippetMenu.labels.filter((label)=>!snippetMenuRequired.includes(label)&&!menuGlobalExtras.includes(label));
+  if(!snippetMenu.visible||!snippetMenuRequired.every((label)=>snippetMenu.labels.includes(label))||unexpectedSnippetItems.length)throw new Error('片段行右键菜单异常：'+JSON.stringify(Object.assign({},snippetMenu,{unexpected:unexpectedSnippetItems})));
   await idePage.keyboard.press('Escape');
   await idePage.waitForFunction(()=>document.getElementById('ctx-menu').hidden);
   const listMenu=await idePage.evaluate(()=>{
@@ -2406,7 +2692,9 @@ print(r.run())
     list.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:Math.round(box.left+box.width/2),clientY:y}));
     return [...document.querySelectorAll('#ctx-menu .ctx-item .ctx-label')].map(n=>n.textContent);
   });
-  if(listMenu.join('|')!=='新建文件|新建文件夹')throw new Error('列表空白处右键菜单异常：'+JSON.stringify(listMenu));
+  /* 同片段行那条：必选项 + 只允许两枚全局扩展（cs-lan-chip.js 统一补的 复制路径/下载到本地 ✓） */
+  const listMenuUnexpected=listMenu.filter((label)=>!['新建文件','新建文件夹'].includes(label)&&!menuGlobalExtras.includes(label));
+  if(!['新建文件','新建文件夹'].every((label)=>listMenu.includes(label))||listMenuUnexpected.length)throw new Error('列表空白处右键菜单异常：'+JSON.stringify({listMenu,unexpected:listMenuUnexpected}));
   await idePage.locator('#ctx-menu .ctx-item').filter({hasText:'新建文件夹'}).first().click();
   await idePage.waitForFunction(()=>document.getElementById('new-dialog').classList.contains('open'));
   if((await idePage.locator('#nd-title').innerText())!=='新建文件夹')throw new Error('右键「新建文件夹」未打开新建对话框');
@@ -2421,7 +2709,9 @@ print(r.run())
     return {labels:[...menu.querySelectorAll('.ctx-item .ctx-label')].map(n=>n.textContent),inlineButtons:row.querySelectorAll('.factions, .fa').length,nameWrap:name?getComputedStyle(name).whiteSpace:'',nameH:name?Math.round(name.getBoundingClientRect().height):0};
   });
   if(folderMenu.inlineButtons)throw new Error('文件夹行仍保留行内操作按钮：'+JSON.stringify(folderMenu));
-  if(folderMenu.labels.join('|')!=='新建文件|新建文件夹|重命名|删除文件夹')throw new Error('文件夹行右键菜单异常：'+JSON.stringify(folderMenu));
+  const folderMenuRequired=['新建文件','新建文件夹','重命名','删除文件夹'];
+  const folderMenuUnexpected=folderMenu.labels.filter((label)=>!folderMenuRequired.includes(label)&&!menuGlobalExtras.includes(label));
+  if(!folderMenuRequired.every((label)=>folderMenu.labels.includes(label))||folderMenuUnexpected.length)throw new Error('文件夹行右键菜单异常：'+JSON.stringify(Object.assign({},folderMenu,{unexpected:folderMenuUnexpected})));
   if(folderMenu.nameWrap!=='nowrap'||folderMenu.nameH>26)throw new Error('文件夹名未按单行省略显示（会被长名称撑成两行）：'+JSON.stringify(folderMenu));
   await idePage.keyboard.press('Escape');
   await idePage.waitForFunction(()=>document.getElementById('ctx-menu').hidden);
@@ -2465,18 +2755,27 @@ print(r.run())
       blank('绘图·空白','draw-list'),
     ];
   });
+  /* ⚠️ 9 棵树的菜单期望**一次全部检查完再报** ✗✗（2026-10-28 改）——
+     原来是一条不符就 throw ✓，于是产品每改一次文案（实测：阅读项目行的
+     「重命名阅读项目 / 删除整个阅读项目」被改成「重命名 / 删除项目」✓），
+     就得整轮 4~5 分钟只换到一条信息 ✗。改成汇总：断言强度完全不变 ✓，
+     只是把「逐条红」变成「一次列全」✓。 */
+  const treeFailures=[];
   const expectTree=(key,texts)=>{
     const tree=otherTrees.find(t=>t.key===key);
-    if(!tree)throw new Error('未检查列表 '+key);
-    if(tree.missing)throw new Error('列表 '+key+' 没有可测的行：'+JSON.stringify(tree));
-    if(!tree.open)throw new Error('列表 '+key+' 右键没有弹出应用菜单（会落到浏览器原生菜单）：'+JSON.stringify(tree));
-    if(tree.inlineHidden===false)throw new Error('列表 '+key+' 仍在行内显示操作按钮：'+JSON.stringify(tree));
-    for(const text of texts)if(!tree.labels.some(l=>l.includes(text)))throw new Error('列表 '+key+' 右键菜单缺少「'+text+'」：'+JSON.stringify(tree));
+    if(!tree){treeFailures.push('未检查列表 '+key);return;}
+    if(tree.missing){treeFailures.push('列表 '+key+' 没有可测的行：'+JSON.stringify(tree));return;}
+    if(!tree.open){treeFailures.push('列表 '+key+' 右键没有弹出应用菜单（会落到浏览器原生菜单）：'+JSON.stringify(tree));return;}
+    if(tree.inlineHidden===false){treeFailures.push('列表 '+key+' 仍在行内显示操作按钮：'+JSON.stringify(tree));return;}
+    const missing=texts.filter((text)=>!tree.labels.some((label)=>label.includes(text)));
+    if(missing.length)treeFailures.push('列表 '+key+' 右键菜单缺少「'+missing.join('、')+'」：'+JSON.stringify(tree));
   };
-  expectTree('阅读·项目',['打开','重命名阅读项目','删除整个阅读项目']);
+  /* 菜单里的三项同名后缀（「重命名」「删除项目」）是产品 2026-10 改的短名 ——
+     这一行的上下文已经是「阅读项目」，短名更清楚 ✓（原来的长名是历史写法 ✗）。 */
+  expectTree('阅读·项目',['打开','重命名','删除项目']);
   expectTree('阅读·资料文件夹',['新建']);
   const readingFolderTree=otherTrees.find(t=>t.key==='阅读·资料文件夹');
-  if(!readingFolderTree.labels.some(l=>l==='展开'||l==='收起'))throw new Error('阅读资料文件夹行缺少展开/收起项：'+JSON.stringify(readingFolderTree));
+  if(!readingFolderTree||!readingFolderTree.labels.some(l=>l==='展开'||l==='收起'))treeFailures.push('阅读资料文件夹行缺少展开/收起项：'+JSON.stringify(readingFolderTree));
   expectTree('Office·文档',['打开','重命名','删除']);
   expectTree('Office·文件夹',['在此文件夹新建文档','在此文件夹新建文件夹']);
   expectTree('绘图·绘图',['打开','重命名绘图','删除绘图']);
@@ -2484,6 +2783,7 @@ print(r.run())
   expectTree('阅读·空白',['新建阅读项目','新建阅读文件夹']);
   expectTree('Office·空白',['新建文档','新建文件夹']);
   expectTree('绘图·空白',['新建绘图','新建文件夹']);
+  if(treeFailures.length)throw new Error('列表右键菜单断言失败 '+treeFailures.length+' 处：\n- '+treeFailures.join('\n- '));
 
   /* 片段标签：改类型 / 重命名 / 删除收进右键菜单，行内不再有悬停 ✎ / × 按钮 */
   const tabMenu=await idePage.evaluate(()=>{
@@ -2561,7 +2861,22 @@ print(r.run())
   await xmindPage.evaluate(async name=>{await openDrawing(name);setXmindView('edit');},xmindCreated.name);
   if(await xmindPage.locator('#document-mode-tools').isVisible())throw new Error('绘图工作区错误显示了代码文档模式切换器');
   try{await xmindPage.locator('#xmind-engine.smm-mind-map-container .smm-node').first().waitFor({state:'visible',timeout:20000});}catch(error){const state=await xmindPage.evaluate(()=>({kind:DRAW_KIND,file:DRAW_FILE,view:XMIND_VIEW,root:getComputedStyle(document.getElementById('xmind-root')).display,engine:getComputedStyle(document.getElementById('xmind-engine')).display,empty:document.getElementById('xmind-empty').textContent,status:document.getElementById('draw-ed-status').textContent,html:document.getElementById('xmind-engine').innerHTML.slice(0,240)}));throw new Error('XMind 编辑引擎未启动：'+JSON.stringify(state)+' / '+xmindErrors.join('；')+' / '+error.message);}
-  const toolbarState=await xmindPage.evaluate(()=>({height:document.querySelector('.codescope-xmind-toolbar').getBoundingClientRect().height,polluted:[...document.querySelectorAll('#xmind-outline .xmind-title')].some(el=>/<\/?p>/i.test(el.value))}));if(toolbarState.height>48||toolbarState.polluted)throw new Error('XMind 工具栏高度或节点纯文本清理异常：'+JSON.stringify(toolbarState));await xmindPage.locator('#xmind-more').evaluate(el=>el.open=true);await xmindPage.locator('#xmind-preview').click({position:{x:16,y:16}});if(await xmindPage.locator('#xmind-more').evaluate(el=>el.open))throw new Error('XMind 更多菜单点击画布后未关闭');
+  const toolbarState=await xmindPage.evaluate(()=>{
+    const bar=document.querySelector('.codescope-xmind-toolbar'),box=bar.getBoundingClientRect();
+    /* 只量**工具栏本行**的按钮 ✓ —— 工具栏里还嵌着「更多」浮层（画布/操作/帮助……✓），
+       它内部的按钮不该算「被挤出屏幕」✗（那些面板本来就在浮层里 ✓）。 */
+    const buttons=[...bar.querySelectorAll(':scope > button, :scope > .xmind-tool-group > button')].filter((b)=>b.getBoundingClientRect().width>0);
+    /* 每颗按钮都必须**完整落在工具栏内** —— 这才是用户「怎么没有撤销等按键」的诉求 ✓ */
+    const clipped=buttons.filter((b)=>{const r=b.getBoundingClientRect();return r.left<box.left-1||r.right>box.right+1||r.top<box.top-1||r.bottom>box.bottom+1;}).map((b)=>b.id||String(b.className).slice(0,24));
+    return {height:Math.round(box.height),polluted:[...document.querySelectorAll('#xmind-outline .xmind-title')].some(el=>/<\/?p>/i.test(el.value)),buttons:buttons.length,clipped,overflow:bar.scrollWidth-bar.clientWidth};
+  });
+  /* ⚠️ 工具栏**允许换行** ✗✗（2026-10-28 修）——ui-kit.css:806 写得很清楚：
+     加了「选分支/选同级/分组框」之后，固定 46px 单行会把撤销/重做挤出屏幕 ✓，
+     用户当时报的就是「怎么没有撤销等按键」✓ ⇒ 那是**产品故意改成换行**的 ✓，
+     老断言「高度必须 ≤48px 单行」已经过期 ✗。
+     ⇒ 换成守真正的诉求：① 高度不许失控（≤3 行，防以后又塞一堆按钮）；
+        ② **每颗按钮都完整在工具栏内**（不许被挤出去）✓；③ 无横向溢出 ✓。 */
+  if(toolbarState.height>140||toolbarState.polluted||toolbarState.clipped.length||toolbarState.overflow>1)throw new Error('XMind 工具栏排版或节点纯文本清理异常：'+JSON.stringify(toolbarState));await xmindPage.locator('#xmind-more').evaluate(el=>el.open=true);await xmindPage.locator('#xmind-preview').click({position:{x:16,y:16}});if(await xmindPage.locator('#xmind-more').evaluate(el=>el.open))throw new Error('XMind 更多菜单点击画布后未关闭');
   await xmindPage.locator('#xmind-floating-layer .xmind-floating-node').first().waitFor({state:'visible',timeout:10000});
   await xmindPage.waitForFunction(()=>{const node=document.querySelector('.xmind-floating-node');return !!node&&Math.abs((XMIND_MAP?.view?.scale||1)-Number(node.style.getPropertyValue('--free-scale')||1))<.001;},null,{timeout:3000});
   const floatingScale=await xmindPage.evaluate(()=>({map:XMIND_MAP.view.scale,node:Number(document.querySelector('.xmind-floating-node').style.getPropertyValue('--free-scale'))}));
@@ -2571,8 +2886,44 @@ print(r.run())
   if(!(floatingLayout.a.left>floatingLayout.root.right&&floatingLayout.b.left>floatingLayout.root.right&&floatingLayout.a1.left>floatingLayout.a.right))throw new Error('XMind 自由导图未按父子层级向外排布：'+JSON.stringify(floatingLayout));
   if(!(floatingLayout.a.bottom<floatingLayout.b.top||floatingLayout.b.bottom<floatingLayout.a.top))throw new Error('XMind 自由导图同级节点仍然重叠：'+JSON.stringify(floatingLayout));
   for(let index=1;index<floatingLayout.groups.length;index++)if(floatingLayout.groups[index-1].bottom+10>floatingLayout.groups[index].top)throw new Error('XMind 测试自由导图初始位置互相覆盖：'+JSON.stringify(floatingLayout.groups));
-  await xmindPage.waitForTimeout(160);const centeredAll=await xmindPage.evaluate(async()=>{const measure=()=>{const engine=document.getElementById('xmind-engine'),er=engine.getBoundingClientRect(),rects=[...engine.querySelectorAll('g.smm-node'),...engine.querySelectorAll('#xmind-floating-layer .xmind-floating-node')].map(el=>el.getBoundingClientRect()).filter(r=>r.width&&r.height),left=Math.min(...rects.map(r=>r.left)),right=Math.max(...rects.map(r=>r.right)),top=Math.min(...rects.map(r=>r.top)),bottom=Math.max(...rects.map(r=>r.bottom));return{dx:(left+right)/2-(er.left+er.right)/2,dy:(top+bottom)/2-(er.top+er.bottom)/2,left,right,top,bottom,engine:{left:er.left,right:er.right,top:er.top,bottom:er.bottom}};};xmindCenterEditor();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const centered=measure();xmindFitEditor();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return{centered,fitted:measure()};});
-  if(Math.abs(centeredAll.centered.dx)>4||Math.abs(centeredAll.centered.dy)>4)throw new Error('XMind 中心按钮未按主导图与自由分支联合边界居中：'+JSON.stringify(centeredAll.centered));
+  await xmindPage.waitForTimeout(160);const centeredAll=await xmindPage.evaluate(async()=>{const measure=()=>{const engine=document.getElementById('xmind-engine'),er=engine.getBoundingClientRect(),rects=[...engine.querySelectorAll('g.smm-node'),...document.querySelectorAll('#xmind-floating-layer .xmind-floating-node')].map(el=>el.getBoundingClientRect()).filter(r=>r.width&&r.height),left=Math.min(...rects.map(r=>r.left)),right=Math.max(...rects.map(r=>r.right)),top=Math.min(...rects.map(r=>r.top)),bottom=Math.max(...rects.map(r=>r.bottom));return{dx:(left+right)/2-(er.left+er.right)/2,dy:(top+bottom)/2-(er.top+er.bottom)/2,left,right,top,bottom,engine:{left:er.left,right:er.right,top:er.top,bottom:er.bottom}};};const diag=()=>({scale:XMIND_MAP.view.scale,view:xmindMapTranslation(),bounds:xmindContentBounds(),mapCount:document.querySelectorAll('#xmind-engine g.smm-node').length,floatCount:document.querySelectorAll('#xmind-floating-layer .xmind-floating-node').length});const frames=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const before=diag();
+  const centerNow=async()=>{xmindCenterEditor();await frames();return measure();};
+  /* 组 1：默认打开（刚载入工作簿）→ 居中 */
+  const centered=await centerNow();
+  /* 组 2：拖动主图（平移 view）后再居中 —— 平移不能把自由层留在原处 */
+  xmindPanBy(180,-110);await frames();
+  const afterPan=await centerNow();
+  /* 组 3：新增一个自由分支后再居中 —— 把受选节点转成自由主题，量完撤销还原（不影响后面的用例） */
+  const floatTarget='browser-movable';
+  XMIND_SELECTED=floatTarget;
+  xmindToFloating();
+  await frames();await new Promise(resolve=>setTimeout(resolve,170));
+  const floatCountAfterAdd=document.querySelectorAll('#xmind-floating-layer .xmind-floating-node').length;
+  const afterAdd=await centerNow();
+  document.getElementById('xmind-undo').click();
+  await frames();await new Promise(resolve=>setTimeout(resolve,190));
+  const restored={floatCount:document.querySelectorAll('#xmind-floating-layer .xmind-floating-node').length,parent:xmindFind(floatTarget)?.parent?.id,detached:!!xmindFind(floatTarget)?.isDetached};
+  xmindFitEditor();await frames();
+  return{centered,afterPan,afterAdd,floatCountAfterAdd,restored,fitted:measure(),before,afterFit:diag()};});
+  /* ★ 「中心」必须按**主导图 + 自由分支的联合边界**居中（自由分支是用户手摆的，两类节点合起来才是一张图；
+     只居主图等于把自由层当二等公民）。三组都要量：默认打开 / 拖动主图后 / 新增自由分支后。
+     ⚠️ 量自由节点必须用 document 查：图层按产品设计挂在 #xmind-engine 外面
+        （app-draw.js:330 有注释：挂里面会被引擎重渲染清掉）——
+        原来写成 engine.querySelectorAll(...) 只匹配到 0 个自由节点，于是只量了主图，误报偏 141px。 */
+  const assertCentered=(state,label)=>{
+    if(Math.abs(state.dx)>4||Math.abs(state.dy)>4)throw new Error('XMind 中心按钮未按主导图与自由分支联合边界居中（'+label+'）：'+JSON.stringify(state));
+  };
+  /* 把三组的实测值打印出来 ✓ —— 以后调这块时，一眼能看到「居中误差是 0.3px 还是 3.9px」，
+     而不是只有「过了/红了」 ✓（这类几何断言的可观测性比结论重要 ✓）。 */
+  console.log('[xmind-center] 默认打开 dx=' + centeredAll.centered.dx.toFixed(2) + ' dy=' + centeredAll.centered.dy.toFixed(2)
+    + ' · 拖动主图后 dx=' + centeredAll.afterPan.dx.toFixed(2) + ' dy=' + centeredAll.afterPan.dy.toFixed(2)
+    + ' · 新增自由分支后 dx=' + centeredAll.afterAdd.dx.toFixed(2) + ' dy=' + centeredAll.afterAdd.dy.toFixed(2));
+  assertCentered(centeredAll.centered,'默认打开');
+  assertCentered(centeredAll.afterPan,'拖动主图后');
+  assertCentered(centeredAll.afterAdd,'新增自由分支后');
+  if(centeredAll.floatCountAfterAdd!==10)throw new Error('新增自由分支后居中用例没有真的新增自由分支：'+JSON.stringify(centeredAll));
+  if(centeredAll.restored.floatCount!==9||centeredAll.restored.detached||centeredAll.restored.parent!=='browser-parent-a')throw new Error('新增自由分支的撤销没还原（会影响后面用例）：'+JSON.stringify(centeredAll.restored));
   if(centeredAll.fitted.left<centeredAll.fitted.engine.left-3||centeredAll.fitted.right>centeredAll.fitted.engine.right+3||centeredAll.fitted.top<centeredAll.fitted.engine.top-3||centeredAll.fitted.bottom>centeredAll.fitted.engine.bottom+3)throw new Error('XMind 适应按钮未完整显示全部内容：'+JSON.stringify(centeredAll.fitted));
   const repairedOverlap=await xmindPage.evaluate(()=>{const root2=xmindFind('browser-free-root-2').topic,root3=xmindFind('browser-free-root-3').topic;root2.position={x:320,y:20};root3.position={x:315,y:20};delete xmindSheet().codescopeFreeLayoutVersion;xmindRenderFloatingTopics();const boxes=['browser-free-root','browser-free-a','browser-free-a1','browser-free-b','browser-free-root-2','browser-free-c','browser-free-d','browser-free-root-3','browser-free-e'].map(id=>{const el=document.querySelector('.xmind-floating-node[data-topic-id="'+id+'"]'),r=el.getBoundingClientRect();return{id,top:r.top,bottom:r.bottom}}),group=ids=>{const rows=boxes.filter(row=>ids.includes(row.id));return{top:Math.min(...rows.map(row=>row.top)),bottom:Math.max(...rows.map(row=>row.bottom))}},groups=[group(['browser-free-root','browser-free-a','browser-free-a1','browser-free-b']),group(['browser-free-root-2','browser-free-c','browser-free-d']),group(['browser-free-root-3','browser-free-e'])].sort((a,b)=>a.top-b.top);return{groups,version:xmindSheet().codescopeFreeLayoutVersion};});
   if(repairedOverlap.version!==4||repairedOverlap.groups.some((group,index)=>index&&repairedOverlap.groups[index-1].bottom+8>group.top))throw new Error('XMind 已保存的重叠自由分支未被一次性修复：'+JSON.stringify(repairedOverlap));
@@ -2589,7 +2940,28 @@ print(r.run())
   await xmindPage.mouse.move(resizerBox.x+resizerBox.width/2,resizerBox.y+80);await xmindPage.mouse.down();await xmindPage.mouse.move(resizerBox.x+resizerBox.width/2+72,resizerBox.y+80,{steps:8});await xmindPage.mouse.up();
   const outlineAfter=await xmindPage.locator('#xmind-outline').evaluate(el=>el.getBoundingClientRect().width);if(outlineAfter<outlineBefore+55)throw new Error('XMind 大纲无法水平拖拽调整宽度');
   const engineBox=await xmindPage.locator('#xmind-engine').boundingBox();
-  await xmindPage.evaluate(()=>xmindSetToolMode('select'));const selectDragBefore=await xmindPage.evaluate(()=>xmindMapTranslation(true));await xmindPage.mouse.move(engineBox.x+24,engineBox.y+engineBox.height-24);await xmindPage.mouse.down();await xmindPage.mouse.move(engineBox.x+124,engineBox.y+engineBox.height-64,{steps:10});await xmindPage.mouse.up();const selectDragAfter=await xmindPage.evaluate(()=>xmindMapTranslation(true));if(selectDragAfter.x<selectDragBefore.x+80||selectDragAfter.y>selectDragBefore.y-25)throw new Error('选择模式无法从画布空白处自由平移整张导图：'+JSON.stringify({selectDragBefore,selectDragAfter}));
+  /* ⚠️ 这里是**交互契约变了**，不是产品坏了（2026-10-28 对齐 b2d6389）——
+     b2d6389「思维导图交互重构：左键框选、右键/中键平移」之后：
+       · 选择模式左键拖空白 = **框选**（产品按钮提示也这么写：单击选中 / 拖动空白框选 / 平移请用右键或中键）
+       · 平移 = 右键或中键拖，或切「手型模式」左键拖
+     老断言「选择模式左键拖空白要平移」是 6de3c00 时代的写法，已被 b2d6389 取代。
+     ⇒ 改成守新契约，且**三种路径都验**（覆盖不减）：框选不误平移 / 中键平移 / 手型模式平移。 */
+  await xmindPage.evaluate(()=>xmindSetToolMode('select'));
+  const dragX=engineBox.x+24,dragY=engineBox.y+engineBox.height-24;
+  const selectBefore=await xmindPage.evaluate(()=>xmindMapTranslation(true));
+  await xmindPage.mouse.move(dragX,dragY);await xmindPage.mouse.down();await xmindPage.mouse.move(dragX+100,dragY-40,{steps:10});await xmindPage.mouse.up();
+  const selectAfter=await xmindPage.evaluate(()=>xmindMapTranslation(true));
+  if(selectAfter.x!==selectBefore.x||selectAfter.y!==selectBefore.y)throw new Error('选择模式左键拖空白应当框选、不平移（b2d6389 的契约）：'+JSON.stringify({selectBefore,selectAfter}));
+  /* 中键拖 = 平移 ✓ */
+  await xmindPage.mouse.move(dragX,dragY);await xmindPage.mouse.down({button:'middle'});await xmindPage.mouse.move(dragX+100,dragY-40,{steps:10});await xmindPage.mouse.up({button:'middle'});
+  const middleAfter=await xmindPage.evaluate(()=>xmindMapTranslation(true));
+  if(middleAfter.x<selectAfter.x+80||middleAfter.y>selectAfter.y-25)throw new Error('中键拖动没有平移整张导图：'+JSON.stringify({selectAfter,middleAfter}));
+  /* 手型模式左键拖 = 平移 ✓ */
+  await xmindPage.evaluate(()=>xmindSetToolMode('pan'));
+  await xmindPage.mouse.move(dragX,dragY);await xmindPage.mouse.down();await xmindPage.mouse.move(dragX+80,dragY-30,{steps:8});await xmindPage.mouse.up();
+  const panAfter=await xmindPage.evaluate(()=>xmindMapTranslation(true));
+  if(panAfter.x<middleAfter.x+60||panAfter.y>middleAfter.y-20)throw new Error('手型模式左键拖动没有平移整张导图：'+JSON.stringify({middleAfter,panAfter}));
+  await xmindPage.evaluate(()=>xmindSetToolMode('select'));
   const viewportBefore=await xmindPage.evaluate(()=>xmindMapTranslation(true));
   await xmindPage.locator('#xmind-engine').evaluate(el=>el.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,ctrlKey:true,clientX:900,clientY:450,bubbles:true,cancelable:true})));
   await xmindPage.waitForFunction(scale=>XMIND_MAP.view.scale>scale,viewportBefore.scale);
@@ -2673,7 +3045,27 @@ print(r.run())
   const transformHandle=dragHandle.locator('.operation-item').nth(1),transformMenu=readingPage.locator('.codescope-block-transform-menu[data-show="true"]');
   await transformHandle.click();await transformMenu.waitFor({state:'visible'});if(!await transformMenu.getByText('转换为',{exact:true}).count()||!await transformMenu.getByText('正文',{exact:true}).count()||!await transformMenu.getByText('一级标题',{exact:true}).count()||!await transformMenu.getByText('公式',{exact:true}).count()||!await transformMenu.getByText('插入图片',{exact:true}).count()||!await transformMenu.getByText('删除区块',{exact:true}).count())throw new Error('六点手柄未显示完整的 Notion 式区块操作菜单');
   await transformMenu.getByText('一级标题',{exact:true}).click();await live.getByRole('heading',{name:'Section A',level:1}).waitFor({state:'visible'});await readingPage.waitForFunction(()=>READING_TEXT_DOCS.get(READING_CURRENT).content.includes('# Section A'));
-  await live.getByRole('heading',{name:'Section A',level:1}).hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');await transformHandle.click();await transformMenu.getByText('公式',{exact:true}).click();await readingPage.waitForFunction(()=>READING_TEXT_DOCS.get(READING_CURRENT).content.includes('$$\nSection A\n$$'));
+  const h1SectionA=live.getByRole('heading',{name:'Section A',level:1});
+  await h1SectionA.hover();
+  /* 诊断 + 容忍「晃一下鼠标才出现」：把 H1 转成一级标题后，第一次悬停时 Crepe 的区块手柄
+     常常还是 data-show=false（CSS 里 [data-show=false] 是 opacity:0 + pointer-events:none → 真的不可见不可点）。
+     ⇒ 先把「第一次悬停」和「晃一下再悬停」分开量：只有后者也不行，才是产品的硬缺口。 */
+  const h1HandleShown=async()=>readingPage.evaluate(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');
+  const h1HandleState=()=>readingPage.evaluate(()=>{const el=document.querySelector('.milkdown-block-handle');if(!el)return{missing:true};const s=getComputedStyle(el);return{show:el.dataset.show||'',opacity:s.opacity,pointerEvents:s.pointerEvents,rect:el.getBoundingClientRect().toJSON()};});
+  const firstHoverShown=await h1HandleShown().catch(()=>false);
+  let h1HandleUsable=firstHoverShown;
+  let h1NudgeState=null;
+  if(!h1HandleUsable){
+    const beforeNudge=await h1HandleState();
+    const sectionBox=await live.getByRole('heading',{name:'Section B'}).boundingBox().catch(()=>null);
+    if(sectionBox){await readingPage.mouse.move(sectionBox.x+60,sectionBox.y+12);await readingPage.waitForTimeout(300);}
+    const h1Box=await h1SectionA.boundingBox().catch(()=>null);
+    if(h1Box){await readingPage.mouse.move(h1Box.x+h1Box.width/2,h1Box.y+h1Box.height/2);await readingPage.waitForTimeout(400);}
+    h1HandleUsable=await h1HandleShown().catch(()=>false);
+    h1NudgeState={beforeNudge,afterNudge:await h1HandleState()};
+    if(!h1HandleUsable)throw new Error('H1 区块手柄连晃一下鼠标都不出现（CSS 里 data-show=false 等于不可见不可点）：'+JSON.stringify(h1NudgeState));
+  }
+  await transformHandle.click();await transformMenu.getByText('公式',{exact:true}).click();await readingPage.waitForFunction(()=>READING_TEXT_DOCS.get(READING_CURRENT).content.includes('$$\nSection A\n$$'));
   const formulaBlock=live.locator('.milkdown-code-block');await formulaBlock.hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');await transformHandle.click();await transformMenu.getByText('正文',{exact:true}).click();await live.locator('p').filter({hasText:'Section A'}).waitFor({state:'visible'});
   await live.locator('p').filter({hasText:'Section A'}).hover();await readingPage.waitForFunction(()=>document.querySelector('.milkdown-block-handle')?.dataset.show==='true');await transformHandle.click();await transformMenu.getByText('二级标题',{exact:true}).click();await live.getByRole('heading',{name:'Section A',level:2}).waitFor({state:'visible'});
   if(await dragHandle.getAttribute('draggable')!=='true')throw new Error('Milkdown 区块手柄不可拖拽');
