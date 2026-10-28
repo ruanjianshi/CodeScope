@@ -358,6 +358,9 @@ const SIZE_CAP = [
   ['lib/code-server-proxy.js', 128],
   ['lib/dsh-proxy.js', 30],
   ['scripts/ensure-onlyoffice.js', 145],
+  /* 字符图标映射 + 渲染后扫描。2026-10-28 重写了扫描逻辑（见文件头）——
+     它挂在**每次 DOM 变动**的路径上，属于渲染高频代码，必须有上限。 */
+  ['assets/cs-icons.js', 74],
   ['assets/debug-panel.js', 530],
   ['lib/routes/dbg.js', 72],
   ['lib/routes/latex.js', 94],
