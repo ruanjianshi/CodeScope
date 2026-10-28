@@ -1,0 +1,313 @@
+/* ============================================================================
+   motion-dbg.css —— 调试面板（debug-panel.js）的微交互层
+
+   它管什么
+   ----------------------------------------------------------------------------
+   assets/debug-panel.js（888 行）自己**一行样式都不注入** ✓（实测
+   grep 「createElement('style') / appendChild(style) / insertRule / adoptedStyleSheets」
+   命中 0 处 ✓）—— 它的外观**全部**在 app.css:4195-4400（断点 / 调试条 / 变量表）
+   和 app.css:4698-4809（问题面板）里 ✓。所以这一层只补「手感」：
+   时长、曲线、悬停淡入、按压缩放；外观一个字不改 ✓。
+
+   加载顺序（重要）
+   ----------------------------------------------------------------------------
+   本文件必须排在 motion.css **之后**（由调度方在 index.html 里加一行
+   <link rel="stylesheet" href="/assets/motion-dbg.css">）。
+   前提：debug-panel.js 不注入 <style> ✓ → 不存在「运行时 <style> 永远排最后」
+   的抢占问题 ✓（这正是 motion-lw.css / motion-sp.css 必须用「重复类名」提权的原因 ✗，
+   本文件不需要 ✓）。
+
+   ⚠️ 但有两处**必须**提权，不能靠后加载赢 ✗（原因见各条注释）：
+      · #dbg-bar button         —— app.css 用的是 ID 选择器 (1,0,1)
+      · #problem-panel .prob-row —— app.css 自己写明要 (1,1,0) 才压得住
+        主题皮肤那条 html[data-theme] button (0,1,2)
+   两处都按「同特异性 + 后加载」处理 ✓，全文不使用 !important ✓（最后一段除外 ✓）。
+
+   一条贯穿全文件的产品判断（实测支撑，不是观感）
+   ----------------------------------------------------------------------------
+   ★ 这三个容器都是**整块重建**，所以一条入场动画都没有 ✓
+     （下面每个数字都是 MutationObserver 在真页面上数出来的，不是观感）：
+     · #var-panel .var-body：debug-panel.js:706/707/837 先 innerHTML = '' ✓
+       再 appendChild 新 <table> ✓ → 每次刷新（含单步后的自动刷新 ✓）整表换新 ✓
+       实测：3 次刷新（5.3s）＝ 移除 3 个 <table> / 新增 3 个 <table>（节点增删各 9 个）
+       ⇒ 行入场动画会每步闪一次 ✗
+     · #out-body：app.js:11944 先 b.innerHTML = '' 再逐行 append ✓ → 每次运行整块换新 ✓
+       实测：2 次运行 ＝ 移除 1 个 <pre> / 新增 2 个 <pre>（旧块整体被换掉）
+     · #problem-panel：app.js:12533 先 host.replaceChildren() 再重建 ✓ → 每次渲染整块换新 ✓
+     · 空状态 .var-empty 也不是「只出现一次」✗：2 次刷新里被新建 4 次 ✓
+       （「正在读取…」占位每轮都插一次 ✓）→ 所以它也**不做**淡入 ✓
+   给这三处的「行」加入场动画 = 每隔几秒整屏闪一下 ✗。
+   所以本文件只给**状态切换**做过渡（悬停 / 按下 / 焦点），不给**节点出现**做动画 ✓。
+
+   ★ 回弹（--mo-back）只出现在**人主动按下 / 悬停**的地方 ✓：
+     单步按钮的按压、变量面板标题栏按钮、类型徽标的悬停抬升。
+     状态同步（dbg-state 从「调试中 · 第 3 行」跳到「第 4 行」✓）走 --mo-out ✓ ——
+     它每单步都会发生 ✓，弹一下就成了「一直在抖」✗。
+   ============================================================================ */
+
+
+/* ═══════════════════════ 1. 单步工具条（#dbg-bar） ═══════════════════════ */
+
+/* 为什么这里必须写 ID 选择器 ✗：样式源是 app.css:4207 的 #dbg-bar button (1,0,1) ✓，
+   裸 button 的 (0,0,1) 压不过它 ✓。而它**没有声明 transition** ✗ ——
+   于是按钮的过渡实际来自 app.css:3288 的 html[data-theme] button (0,1,2)：
+   写死的背景 .16s / border-color .16s / color .16s / box-shadow .16s /
+   transform .18s cubic-bezier(.32,.72,0,1) ✓ —— 五条过渡三个值，且按下不回弹。
+   这里收成 3 档令牌 ✓：变色走 --mo-1（即时）✓、抬升/阴影走 --mo-2 ✓、
+   transform 用 --mo-back ✓ —— 单步是**最高频的人主动动作** ✓，
+   手指该在这里得到整个面板里唯一一处「弹回来」的反馈 ✓。 */
+#dbg-bar button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停提亮：app.css:4209 只换了描边和字色 ✓、底色仍是 transparent ✓；
+   主题层那条 hover 底色 (0,2,2) 被 #dbg-bar button 的 transparent (1,0,1) 挡住 ✗ ——
+   结果是「悬停时文字变蓝、底子一动不动」✓，读起来像纯文本链接、不像按钮 ✗。
+   给一层极淡的强调色底 ✓（14%：够看出「这块能按」✓，又不会抢掉字色 ✓）。
+   特异性 (1,2,1) 与 app.css:4209 完全相同 → 靠后加载赢 ✓。 */
+#dbg-bar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* 按下：保留下沉半像素（那属于 macOS 质感 ✓，见 app.css:3297 / motion.css:87），
+   只把缩放换成令牌 ✓。特异性 (1,2,1) 高于 motion.css 那条
+   html[data-theme] button:active:not(:disabled) (0,2,2)（ID 赢）✓，
+   所以这里写下的就是最终生效的那一版 ✓ —— 曲线由上面的 --mo-back 给 ✓。 */
+#dbg-bar button:active:not(:disabled) {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+/* 状态同步：文字从「调试中 · 第 3 行」跳到「第 4 行」✓ —— 这是**自动**变化 ✗，
+   不是人按出来的 ✓ → 只做颜色过渡（--mo-out 平滑），**绝不回弹** ✓。
+   showDbgBar()（debug-panel.js:44-94）只改 textContent / className ✓，
+   节点不换 ✓ → 过渡真的会跑 ✓（在整块重建的容器上做过渡是白写 ✗）。 */
+#dbg-bar .dbg-state {
+  transition: color var(--mo-2) var(--mo-out);
+}
+
+
+/* ═════════════════ 2. 变量面板标题栏按钮（.var-bar button） ═════════════════ */
+
+/* 刷新 / 靠右 / 关闭三颗按钮 ✓（debug-panel.js:612-631 创建 ✓）——
+   全是人主动按的 ✓。app.css:4278 的 .var-bar button 只给了边框和透明底 ✓，
+   底色实际由主题层 html[data-theme] button (0,1,2) 的渐变提供 ✓。
+   ⚠️ 要提权：主题层是 (0,1,2) ✓，.var-bar button 只有 (0,0,2) ✗ → 压不过 ✓。
+   写成 html[data-theme] .var-bar button 是 (0,2,2) ✓，稳过主题层 ✓，
+   也不去动它的渐变（只改悬停底色与位移）✓。 */
+html[data-theme] .var-bar button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停：标题栏是一条渐变横条 ✓，透明底 + 细边框的按钮在上面几乎看不出边界 ✗
+   → 给一点强调色底 + 抬起 1px ✓（--mo-lift 就是为「悬停抬升」定的 ✓）。
+   特异性 (0,3,2) > 主题层 hover (0,2,2) ✓。 */
+html[data-theme] .var-bar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  transform: translateY(var(--mo-lift));
+}
+
+/* 按下：这才是 --mo-back 该出现的地方 —— 手指按下去、松开弹回来 ✓。
+   不加 translateY(.5px)：这几颗是 1px 边框的小圆角钮 ✓，半像素下沉会让
+   12px 字号的文字基线发虚 ✗（单步按钮有 3px 内边距、是宽钮 ✓ 可以有那半像素 ✓）。 */
+html[data-theme] .var-bar button:active:not(:disabled) {
+  transform: scale(var(--mo-press));
+}
+
+
+/* ═══════════════════════ 3. 变量表（.var-table） ═══════════════════════ */
+
+/* ★ 行悬停淡入 ✓
+   app.css:4300 的 .var-table tbody tr:hover td 底色是**硬切**的 ✓（没有 transition ✗）——
+   鼠标在行间扫过去时每行都是「啪」一下变色 ✗，长表格里很吵 ✓。
+   过渡挂在 td 上而不是 tr ✗：斑马纹（app.css:4299）画在 td 上 ✓，
+   tr 自己的 background 会被 td 底色盖住 ✗ → 只有 td 上的过渡看得见 ✓。
+   ⚠️ 只过渡 background-color / color ✓ —— 不碰 width / padding / table-layout ✓，
+      所以宽表（横向滚动）的列宽一个像素都不会动 ✓。 */
+.var-table tbody tr > td {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 行号胶囊（可点 → 跳到源码那一行 ✓，debug-panel.js:761-775 ✓）：悬停换底也是硬切 ✗
+   → 补过渡 ✓。这里**不加位移**：胶囊在等宽表格里上下跳会带着整行文字一起抖 ✓，
+   而它离行基线只有 7px 内边距的余量 ✓，抬起来反而像没对齐 ✗。 */
+.var-table td.var-line span {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 值单元格（可点复制 ✓，debug-panel.js:798-824 ✓）：悬停换底同样是硬切 ✗ → 补过渡 ✓。
+   按下时给一圈内描边 ✓ —— 这是这面板里唯一「点中了哪一格」的确认 ✓
+   （复制成功的反馈在面板顶部状态条 ✓，调试时眼睛不在那儿 ✓）。
+   ⚠️ 用 box-shadow 而不是 border ✗：border 会改盒模型 ✓ → 固定列宽下整列抖 1px ✓。 */
+.var-table td.var-copyable {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-1) var(--mo-out);
+}
+.var-table td.var-copyable:active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+/* ★ 类型徽标悬停抬升 ✓（app.css:4317-4323 的 t-num / t-str / t-seq / t-fn / t-mod ✓）
+   为什么可以用 --mo-back 回弹 ✓：这是**人把鼠标移上去** ✓，不是渲染行为 ✓。
+   1px 就够 —— 徽标只有 11px 字号 ✓，2px 会让它在行里显得脱队 ✗。
+   只动 transform / box-shadow ✓，不改 padding / font-size ✓（行高不抖 ✓）。 */
+.var-table td.var-type span {
+  transition:
+    transform var(--mo-2) var(--mo-back),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.var-table td.var-type span:hover {
+  transform: translateY(var(--mo-lift));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .28);
+}
+
+/* 表头的列宽拖拽提示（app.css:4356-4359 ✓，人在表头右边缘 8px 内按下就开拖 ✓）：
+   那条 1px 竖线原本是「悬停瞬间出现」✗ → 给 transition，显形 / 消失都变渐变 ✓。
+   只是颜色过渡 ✓，没有位移 ✓ —— 拖拽要的是精确，不是手感 ✓。 */
+.var-table th.var-th-grip::after {
+  transition: border-right-color var(--mo-1) var(--mo-out);
+}
+
+/* 面板右下角缩放把手（app.css:4283-4284 ✓）：透明度 / 描边也是硬切 ✗ → 补过渡 ✓。
+   它和 app.css 里图片浮窗 / 代码向导的把手是同一套交互 ✓，手感该一致 ✓。 */
+.var-rs::after {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+
+/* 变量面板的横向滚动条（宽表才有 ✓）：全局 *::-webkit-scrollbar（app.css:3806 ✓）
+   给的是中性灰 ✓。这里**只染拇指颜色** ✗ —— 改宽度会改 .var-body 的可用宽度 ✓，
+   固定列宽的表会被迫重算 ✓（正是 brief 明令不许动的东西 ✗）。 */
+#var-panel .var-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+/* 选中文字：变量值经常要手动拖选复制 ✓，浏览器默认的亮蓝在深色面板上刺眼 ✓
+   → 用强调色 ✓（纯静态美化，不涉及动效 ✓）。 */
+#var-panel ::selection {
+  background: color-mix(in srgb, var(--accent) 36%, transparent);
+  color: var(--text);
+}
+
+
+/* ═══════════════════════ 4. 输出区（#out-body） ═══════════════════════ */
+
+/* ⚠️ 这里**故意没有任何入场动画** ✗（产品铁律第一条）——
+   app.js:11944 先 b.innerHTML = '' 再逐行 append 所有行 ✓：
+   每运行一次，整个输出区都是**一批新节点** ✓。给 .out-line 加入场动画 =
+   每次运行、每次调试输出刷新都整块闪一下 ✗（实测数字见报告）。
+   只做「鼠标扫过」这种**人主动**的过渡 ✓ —— 它只在指针移动时触发 ✓，
+   节点重建时不会自己播 ✓。 */
+#out-body pre .out-line {
+  transition: background-color var(--mo-1) var(--mo-out);
+}
+
+/* 悬停时把行号提亮一档 ✓（行号是 ::before 生成的 ✓，app.css:4247 ✓）——
+   长输出里眼睛靠行号定位 ✓，悬停给出「我指的是这一行」的锚 ✓。 */
+#out-body pre .out-line::before {
+  transition: color var(--mo-1) var(--mo-out);
+}
+#out-body pre .out-line:hover::before {
+  color: color-mix(in srgb, var(--accent) 78%, var(--dim));
+}
+
+/* 输出区选中文字 ✓（复制程序输出是这面板的主要用途之一 ✓）——
+   同样只染强调色，不改任何尺寸 ✓。 */
+#out-body ::selection {
+  background: color-mix(in srgb, var(--accent) 36%, transparent);
+  color: var(--text);
+}
+
+
+/* ═══════════════════════ 5. 问题面板（.prob-row） ═══════════════════════ */
+
+/* ★ 为什么必须带 #problem-panel 前缀 ✗：app.css:4726-4732 自己写明了原因 ——
+   主题皮肤 html[data-theme] button (0,1,2) 比 .prob-row (0,1,0) 更具体 ✓，
+   会把每一行画成一颗凸起按钮 ✓；app.css 用 #problem-panel .prob-row (1,1,0) 才压住 ✓。
+   **同一个坑会原样落到本文件的过渡上** ✓：.prob-row 是 <button> ✓，
+   它的 transition 实际来自主题层 (0,1,2)（.16s × 4 + transform .18s）✓ ——
+   本文件若只写 .prob-row (0,1,0) 就**完全不生效** ✗（实测 computed
+   transition-property 仍是被主题层那四条 ✓）。所以照抄 (1,1,0) ✓。 */
+#problem-panel .prob-row {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-top-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 行号列 / 规则名 chip 的提亮也是硬切的 ✓（app.css:4767 / :4799）→ 补过渡 ✓。
+   这里**不加位移**：.prob-row 是 4 列 grid ✓，抬升任何一列都会让整行看起来歪 ✓。 */
+#problem-panel .prob-row .where {
+  transition: color var(--mo-1) var(--mo-out);
+}
+#problem-panel .prob-row .src {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 异常标记（严重度：错误 ● / 警告 ▲ ✓，app.js:12629-12630 ✓）：
+   悬停整行时抬起来 1px ✓ —— 这是**人指到这一行**才发生 ✓，不是渲染行为 ✓。
+   .sev 是 grid 的直接子项 ✓（不是 inline ✓），transform 在这里确实生效 ✓。
+   只动 transform ✓，颜色仍归 app.css 管 ✓（错误红 / 警告黄是语义色 ✓，不抢 ✓）。 */
+#problem-panel .prob-row .sev {
+  transition: transform var(--mo-2) var(--mo-back);
+}
+#problem-panel .prob-row:hover .sev {
+  transform: translateY(var(--mo-lift));
+}
+
+
+/* ═════════════ 6. prefers-reduced-motion（文件最后一段） ═════════════ */
+
+/* 这一段的 !important 是必要的 ✓：上面每条都靠「同特异性 + 后加载」取胜 ✓，
+   而系统级降低动效必须**无条件**赢 ✓（用户开了这个开关，任何一点位移都可能不适 ✓）。
+   为什么过渡压到 .01ms 而不是 0s ✗：0s 在部分引擎里 transitionend 不触发 ✓，
+   .01ms 仍会触发 ✓（与 motion.css 的处理一致 ✓）。
+   —— 本文件**没有引入任何 @keyframes / animation** ✓，
+      下面那条 animation: none 只是把这一层「锁死」写明白 ✓，
+      免得日后有人往这里加入场动画时忘了它和「整块重建」相撞 ✗。 */
+@media (prefers-reduced-motion: reduce) {
+  #dbg-bar button,
+  #dbg-bar .dbg-state,
+  html[data-theme] .var-bar button,
+  .var-table tbody tr > td,
+  .var-table td.var-line span,
+  .var-table td.var-copyable,
+  .var-table td.var-type span,
+  .var-table th.var-th-grip::after,
+  .var-rs::after,
+  #out-body pre .out-line,
+  #out-body pre .out-line::before,
+  #problem-panel .prob-row,
+  #problem-panel .prob-row .where,
+  #problem-panel .prob-row .src,
+  #problem-panel .prob-row .sev {
+    transition: .01ms !important;
+    animation: none !important;
+  }
+  #dbg-bar button:hover:not(:disabled),
+  #dbg-bar button:active:not(:disabled),
+  html[data-theme] .var-bar button:hover:not(:disabled),
+  html[data-theme] .var-bar button:active:not(:disabled),
+  .var-table td.var-type span:hover,
+  #problem-panel .prob-row:hover .sev {
+    transform: none !important;
+  }
+}

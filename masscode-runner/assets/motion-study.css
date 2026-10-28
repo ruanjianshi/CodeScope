@@ -1,0 +1,383 @@
+/* ============================================================================
+   motion-study.css —— 「学习工作台」(study) 的微交互叠加层
+   （上游令牌层：assets/motion.css；本文件不定义任何令牌，只消费 --mo-*）
+
+   这个文件负责什么
+   ----------------------------------------------------------------------------
+   学习工作台是 CodeScope 里唯一「自建 DOM/CSS + golden-layout」的子系统：
+   源文件 src/study-workspace.js（1,072 行）→ esbuild 产物 assets/study-workspace.js，
+   样式是独立外链 assets/study-workspace.css（192 行，index.html:15 引入，**早于**
+   app.css:81）。所以本文件排在最后加载时，同特异性就够 ✓；
+   但**不把顺序当契约** ✗ —— 下面每条规则都靠「重复类名 / #workspace 祖先」把特异性
+   提到 (1,x,0) 以上，与插入顺序无关、也不必用 !important ✓。
+
+   ⚠️ 一个字母都不能碰的东西：golden-layout 的 lm_ 前缀类
+      （.lm_goldenlayout / .lm_stack / .lm_header / .lm_tab / .lm_splitter /
+        .lm_dropTargetIndicator / .lm_transition_indicator）。
+      那是库的行为层：tab 拖拽、分割线拖拽全靠它自己的 pointer 事件与几何计算，
+      在这里改 transition/transform 会让拖拽跟手位置漂移 ✗。本文件 0 条 lm_ 规则 ✓。
+
+   ★ 产品铁律：只有「人主动做的动作」才允许 --mo-back 回弹
+   ----------------------------------------------------------------------------
+   状态同步、轮询刷新、自动更新一律 --mo-out 平滑，绝不弹 ✓。
+   判断依据是**实测**，不是观感。隔离实例（CODESCOPE_PORT=4903 + Playwright + Chrome）
+   跑出来两组数字，本文件的每条 animation / transition 都由它们决定：
+
+   ① 空闲 12 秒窗口（覆盖 /api/system/status 的 6 次轮询）—— 元素身份追踪：
+        .study-pane      建 4 个 → 存活 4 个，移除 0、新增 0
+        .study-pdf-empty     1 → 1，移除 0、新增 0
+        .study-code-empty    1 → 1，移除 0、新增 0
+        .study-bookmark      4 → 4，移除 0、新增 0
+        .site-category      17 → 17，移除 0、新增 0
+        .quick-site          4 → 4，移除 0、新增 0
+        .study-note-head button 3 → 3，移除 0、新增 0
+      ⇒ 学习工作台**不随轮询重建** ✓（它只在打开工作台 / 加窗格 / 换内容时新建）。
+      同一个 10 秒窗口里 #study-layout 的 childList 计数也是 0 ✓。
+
+   ② 用户动作下的重建频率 —— 网址菜单搜索框敲 3 个字符：
+        #quick-sites 内 .quick-site 节点被新增 **54** 次。
+      ⇒ 列表是「每敲一个字整块重建」的 ✗。给 .quick-site / .site-category 加入场动画
+        会变成每敲一个字闪一次 ✓ —— 所以本文件**一条列表入场动画都没有** ✓。
+        （.study-bookmark 同理：renderBookmarks() 会在初始化、每次打开工作台、
+         每次 scheduleSave 后用 replaceChildren 整批换新，也不做入场 ✓。）
+
+   ⇒ 结论：入场动画只留给「一次会话里只出现一次」的空状态（第 5 节），
+      过渡只服务于人的悬停/按下/聚焦（第 1~4 节），状态类的变化一律 --mo-out（第 7 节）。
+   ============================================================================ */
+
+
+/* ═══════════ 1. 面板头与工具条：按钮已被全站接管，select 是缺口 ═══════════ */
+
+/* 先给结论，避免"两份真相"✓（motion.css 开头也立了同一条规矩）：
+   #study-head button（返回/＋网址/专注）与 .study-pane-toolbar / .study-note-head 里的
+   普通 <button>，**已经**被 motion.css 的 button 层接过手了 —— 实测（真实页面 readback）：
+     · 悬停：#study-back 底色 rgb(23,32,43) → rgb(32,45,59)、
+             transform 变 matrix(1,0,0,1,0,-1.03)（就是 --mo-lift 的 -1px）✓
+     · 按下：#study-focus transform = matrix(0.984…, 0, 0, 0.984…, 0, 0.59)（--mo-press）✓
+             #study-back 按下 = matrix(0.985, 0, 0, 0.985, 0, 0.5) ✓
+   ⇒ 本文件**不重写**这些按钮的底色/过渡（重复声明只会制造两份真相 ✗）。
+
+   真正的缺口是**两个 select**（＋添加内容 / 布局预设）：实测把它们悬停，
+   border-color 与 background-color **一个像素都不变**（rgb(39,50,65) → rgb(39,50,65)），
+   而 index.html:407/409 明确把「向布局添加内容」「选择布局预设」当按钮用。
+   这里补的就是这一条：边框与底色一起微提亮（--mo-1，比按钮的 180ms 更快一点：
+   下拉框打开是系统原生弹层，指针移上去的"我开得了"必须立刻确认 ✓）。
+   只改颜色，不动 padding / 高度 —— 头部是 48px 高、flex 换行敏感区 ✗。 */
+#study-workspace #study-head select {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+#study-workspace #study-head select:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, #273241);
+  background-color: color-mix(in srgb, var(--accent) 9%, #090f16);
+}
+
+/* 工具栏里的「视频工具组」按钮用 !important 钉死了紫/粉/金色皮肤
+   （study-workspace.css:119-123）。本文件不碰它们的颜色 —— 想提亮只能用 filter，
+   而 filter 已经在 motion.css 的通用过渡表里 ✓，所以这里**什么都不写** ✓。
+   （写 border-color 也压不过 !important，只会留下一段永远不生效的死规则 ✗。） */
+
+
+/* ═══════════ 2. 视图切换：编辑 / 阅读（笔记窗格头） ═══════════════════════ */
+
+/* 真实的「视图切换」只有一处：Markdown 笔记窗格头的「编辑 / 阅读」两个按钮
+   （src/study-workspace.js:431-432 建、:450 用 classList.toggle('on') 切）。
+   ⚠️ 选中态**已经存在**：app.css:3063 的 button.on 给了底色+描边+字色
+      （实测 .study-note-head button.on 底色 rgba(120,169,255,.13)、描边 #568aaf），
+      过渡也已被 motion.css 的 button 层覆盖（实测 0.12s / --mo-out）✓
+   ⇒ 所以这里不重做"选中长什么样"，只补一件它缺的事：**选中是哪一个**读得太弱
+      （只是底色深浅不同，两个 10px 字的小按钮并排时几乎分不出来 ✗）。
+      加一条 2px 的底部指示条：从中间"长出来"（scaleX .4→1 + 淡入）。
+      为什么用 transform/opacity 而不是 border-bottom：border 会参与布局，
+      按钮高度会跳 2px、整行工具条跟着抖 ✗；::after 绝对定位不占位 ✓。
+      曲线用 --mo-out **不是** --mo-back：点完切换，状态应该稳稳停住 ✓，
+      弹一下会让人以为还没结束 ✗（这正是铁律里"状态切换不许弹"的那一类）。 */
+.study-note-head button {
+  position: relative;
+}
+.study-note-head button::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 3px;
+  left: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;   /* 跟着按钮字色（选中时是 accent 系）✓ */
+  opacity: 0;
+  transform: scaleX(.4);
+  transition:
+    opacity var(--mo-2) var(--mo-out),
+    transform var(--mo-3) var(--mo-out);
+  pointer-events: none;       /* 只是指示条，绝不能吃掉按钮的点击 ✗ */
+}
+#study-workspace .study-note-head button.on::after {
+  opacity: .9;
+  transform: none;
+}
+
+
+/* ═══════════ 3. 列表项 / 卡片 ═════════════════════════════════════════════ */
+
+/* 本子系统真实存在的「列表项」只有三处（普查结论，不是猜的）：
+     · .quick-site      网址卡片（src/study-workspace.js:914 建，2 列网格）
+     · .site-category   网址分类行（:891 建，左侧 17 行）
+     · .study-readable-nav a  阅读视图的网页目录（:139 的 <a>）
+     · .study-bookmark  头部常用网址 chips（:697 建）
+   —— **一条入场动画都不给**。证据就是文件头那组实测：搜索框敲 3 个字符，
+      .quick-site 被新增 54 次 ✓ ⇒ 入场动画 = 每敲一个字闪一次 ✗。
+
+   3.1 .quick-site：子系统自己写了 transition（study-workspace.css:42）
+       transition:border-color .12s,background .12s,color .12s,transform .12s ——
+       实测 computed 是 "0.12s / ease ×4"：
+         ✗ 时长硬编码，没走令牌（本文件存在的理由之一）
+         ✗ 抬升用的是 ease，不是 --mo-back —— 悬停是人的主动动作 ✓ 该弹
+       用「重复类名」把特异性抬到 (0,2,0) 压过它，与加载顺序无关 ✓。 */
+.quick-site.quick-site {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+/* 卡片是 <div role="button">（:914）—— 全站的 button:active 规则**碰不到它** ✗，
+   所以按下时没有任何反馈。这里单独补：手指按住就陷 1.5%（--mo-press）✓。 */
+.quick-site.quick-site:active {
+  transform: translateY(0) scale(var(--mo-press));
+}
+
+/* 3.2 .site-category：悬停/按下已被 motion.css 的 button 层覆盖（它是 <button>），
+       实测悬停底色 rgb(23,32,43)→rgb(32,45,59)、按下 matrix(0.984…) ✓ ⇒ 不重写。
+       只补「选中左侧指示」：.on 现在的选中态只有一段渐变底（:32），在 17 行里
+       不算突出 ✗。加 2px 竖条，和 app.css:3094（.item.active::before）同一手法 ✓。
+       ⚠️ .site-category 是 display:grid（:30，4 列），::before 若当网格项会多占一格、
+          把图标挤歪 ✗ —— 所以 absolute + pointer-events:none，绝不参与布局 ✓。
+       ⚠️ opacity 过渡走 --mo-out：选中是状态，不是"人按住"那个瞬间 ✓。 */
+.site-category.site-category {
+  position: relative;
+}
+.site-category.site-category::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--mo-2) var(--mo-out);
+  pointer-events: none;
+}
+#site-menu-panel .site-category.on::before {
+  opacity: .95;
+}
+
+/* 3.3 .study-readable-nav a（网页目录）：子系统只在 :140 写了一句
+       a:hover{background:#182536}，但**没有任何 transition** ——
+       实测 computed transition 是 "all 0s" ⇒ 悬停是硬切 ✗。
+       这里补背景/字色的淡入。层级用 #study-workspace 祖先压过 (0,1,1) ✓。 */
+#study-workspace .study-readable-nav a {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════ 4. 输入区：只过渡 border-color / box-shadow ═════════════════ */
+
+/* 4.1 已经有的**不重写**（实测 focus 之后 420ms 回读）：
+        .study-url:focus          border rgb(39,50,65) → rgb(91,147,255)、
+                                  shadow → 0 0 0 2px rgba(79,140,255,.13) ✓
+        #study-title:focus        border → rgb(91,147,255)、底色 → rgb(13,20,30) ✓
+        .study-note-editor:focus  border → rgb(91,147,255)、shadow 2px ✓
+        三者都已有 0.12s/0.18s 过渡 ✓  ⇒ 本文件不动它们。
+
+   4.2 真缺口 A：网址菜单的搜索框外壳 .site-menu-search-wrap（:24-25 写了 focus-within
+       的描边 + 3px 光晕），但**没有 transition**（实测 "all 0s"）⇒ 聚焦时光晕是硬跳 ✗。
+       层级用 #site-menu-panel 祖先（它就是壳的父级，结构稳定）✓。 */
+#site-menu-panel .site-menu-search-wrap {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 4.3 真缺口 B：阅读视图的目录筛选框 .study-readable-filter（:135）**根本没有 focus 样式**
+       —— 实测 focus 前后 border/box-shadow 完全一致，打字时看不出光标在哪个框里 ✗。
+       补一条和 .study-url:focus (:107) 完全同款的环：border #5b91da + 2px 淡光晕，
+       保证同一屏里两个输入框的"聚焦长什么样"是一致的 ✓。
+       只写 border-color / box-shadow：**不许**动 width/height/padding，
+       .study-readable-view 是 grid（:131），尺寸一变左栏就会抖 ✗。 */
+#study-workspace .study-readable-filter:focus {
+  border-color: #5b91da;
+  box-shadow: 0 0 0 2px rgba(79, 140, 255, .13);
+}
+
+/* 4.4 .study-code-editor 常驻 disabled（没选代码片段时 src/study-workspace.js:502
+       会 editor.disabled = true），disabled 元素本来就不会 :focus ⇒ 不给它写焦点环 ✓，
+       写了也永远不生效 ✗。 */
+
+
+/* ═══════════ 5. 空状态 / 提示：只有"出现一次"的才淡入 ═════════════════════ */
+
+/* 实测（文件头 ① 组）：.study-code-empty / .study-pdf-empty / .study-web-failed
+   在 12 秒空闲窗口里 **移除 0、新增 0**，元素身份 1→1 存活 ✓。
+   它们只在「新建窗格 / 切换资料的失败与空集」时被建一次（:245 :556 :558 :568 :368），
+   之后不会随任何轮询复现 ⇒ 淡入一次成立 ✓。
+   曲线 --mo-out、时长 --mo-3：这是在说"这里现在没有内容"，不是人手按了什么 ✓，
+   所以绝不能 --mo-back（弹一下会像"操作成功了" ✗）。 */
+@keyframes mst-empty-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.study-code-empty,
+.study-pdf-empty,
+.study-web-failed {
+  animation: mst-empty-in var(--mo-3) var(--mo-out) both;
+}
+
+/* 故意**不**做的两处，附实测理由：
+   ✗ .site-menu-empty（:935，搜索无结果时出现）——它跟着 #quick-sites 一起重建，
+     实测敲 3 个字符整块新增 54 个节点 ⇒ 加淡入 = 每个字闪一次 ✗。
+   ✗ #study-empty（:80）——查明它 CSS 就是 display:none，永远不会出现，
+     给它写动画是一条永远不执行的死代码 ✗。 */
+
+/* 状态条 #study-status（:75-76）是**状态同步**的典型：
+   每载入一个网页、每次保存都会改文案与 .ok/.err 配色，实测 computed transition "all 0s"
+   ⇒ 颜色是硬跳的。这里只过渡 color（--mo-1 --mo-out），
+   并且**不给它任何 animation**：它每几秒就变一次，闪一下就是噪音 ✗。 */
+#study-workspace #study-status {
+  transition: color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════ 6. 抽屉 / 浮层：@starting-style 入场（不支持则退化为无动画） ═══ */
+
+/* 真缺口（实测）：#site-menu-panel / #study-bookmark-dialog / #study-category-dialog
+   打开时 getAnimations() 返回空数组、opacity 直接就是 1 ⇒ 现在是硬切 ✗。
+
+   ⚠️ 这两类浮层都是「display:none ↔ display:flex/grid」靠 class 切换的（:15 :182），
+      普通 transition 抓不到"从 display:none 变出来"的那一帧 ——
+      只有 @starting-style 能 ✓（与 motion.css §6/§7 同一手法）。
+      @starting-style 与 transition-behavior: allow-discrete 同批落地（Chromium 117+），
+      所以用后者当探针把整段包起来：不支持时整段被丢弃，
+      抽屉照旧瞬间出现，功能一点不变 ✓（"不能坏"是底线，动画是加分项）。
+
+   ⚠️⚠️ #site-menu-panel 的居中靠 transform:translateX(-50%) 且是 inline 计算出来的
+      （实测 computed transform = matrix(1,0,0,1,-409.996,0)，因为宽度是 min(820px,100vw-24px)）。
+      若在这里写 transform 做位移，会把居中一起吃掉 ✗✗。
+      ⇒ 位移一律用**独立的 translate 长手属性** ✓：它和 transform 叠加，不改 transform 的语义。
+
+   出场不做：两者都是 display:none 硬关（:15 :182），做出场得改 JS（延时移除 + 挡点击），
+   属于行为改动，不在本文件范围 —— 与 motion.css §7 的判断保持一致 ✓。 */
+@supports (transition-behavior: allow-discrete) {
+  #site-menu-panel {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+      opacity var(--mo-2) var(--mo-out),
+      translate var(--mo-3) var(--mo-out);
+  }
+  /* 8px 是"从上方掉下来一点点"的最小可感知距离；
+     再大就变成抽屉在飞，820px 宽的面板会显得不可控 ✗。 */
+  @starting-style {
+    #site-menu-panel:not(.hidden) {
+      opacity: 0;
+      translate: 0 -8px;
+    }
+  }
+
+  /* 两个网址对话框：遮罩淡入 + 卡片从 98% 缩放回来
+     （不是 .9：缩太多像缩略图弹开，太重 ✗，与 motion.css:353 同一取舍）。 */
+  #study-bookmark-dialog,
+  #study-category-dialog {
+    opacity: 1;
+    transition: opacity var(--mo-3) var(--mo-out);
+  }
+  #study-bookmark-dialog .study-dialog-card,
+  #study-category-dialog .study-dialog-card {
+    transition:
+      opacity var(--mo-3) var(--mo-out),
+      transform var(--mo-3) var(--mo-out);
+  }
+  @starting-style {
+    #study-bookmark-dialog.open,
+    #study-category-dialog.open {
+      opacity: 0;
+    }
+    #study-bookmark-dialog.open .study-dialog-card,
+    #study-category-dialog.open .study-dialog-card {
+      opacity: 0;
+      transform: scale(.98);
+    }
+  }
+}
+
+
+/* ═══════════ 7. 窗格焦点环：状态同步，只许平滑 ═════════════════════════════ */
+
+/* .study-pane.active（:102，由 pointerdown / focusin 挂上，src/study-workspace.js:111-118）
+   是「现在键盘/插入符在哪一格」的指示。它每点一下就换一格，属于**状态同步** ✓：
+   过渡 box-shadow（--mo-2 --mo-out），
+   ✗ 不加 transform / 不加 --mo-back —— 一块 700px 宽的窗格弹一下，整块内容都会跟着晃。
+   实测基线：.study-pane 的 computed transition 是 "all 0s"（硬切）⇒ 这条是真补漏 ✓。 */
+#study-workspace .study-pane {
+  transition: box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════ 8. 无障碍：reduced-motion ═════════════════════════════════════ */
+
+/* 前庭敏感的用户要的是"结果不变、过程别动" ✓。
+   这里做三件事，反过来任何一条漏掉都会让上面的动画绕过设置：
+     (1) 过渡压到 .01ms —— 状态照样到终态，但看不见过程 ✓
+         （不能用 none：removeClass 之后有些属性会停在起始值 ✗）
+     (2) 本文件引入的 animation 全部 none ✓，并把 opacity 复位到 1
+         （keyframes 用了 both，关掉动画会停在 from 帧的 opacity:0 ⇒ 内容消失 ✗✗）
+     (3) 我加的位移（按压缩放 / 选中指示条的 scaleX / 卡片 scale / 抽屉 translate）
+         全部归零 ✓
+   !important 只出现在这一节，和 motion.css / motion-sp.css 的做法一致 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  #study-workspace #study-head select,
+  #study-workspace #study-head select:hover,
+  #study-workspace .study-readable-nav a,
+  .study-note-head button::after,
+  .quick-site.quick-site,
+  .site-category.site-category::before,
+  #site-menu-panel .site-menu-search-wrap,
+  #study-workspace #study-status,
+  #study-workspace .study-pane,
+  #site-menu-panel,
+  #study-bookmark-dialog,
+  #study-category-dialog,
+  #study-bookmark-dialog .study-dialog-card,
+  #study-category-dialog .study-dialog-card {
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .study-code-empty,
+  .study-pdf-empty,
+  .study-web-failed {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .quick-site.quick-site:active,
+  .study-note-head button::after,
+  #study-bookmark-dialog .study-dialog-card,
+  #study-category-dialog .study-dialog-card {
+    transform: none !important;
+  }
+
+  /* ⚠️ 抽屉**只许**清掉 translate，绝不能写 transform:none ✗✗ ——
+     它的水平居中就是 transform:translateX(-50%)（实测 computed
+     matrix(1,0,0,1,-409.996,0)）。把 transform 一起归零，面板会整体右移半屏，
+    这属于"动画关掉了，界面也坏了"的那一类 ✗。 */
+  #site-menu-panel {
+    translate: none !important;
+  }
+}

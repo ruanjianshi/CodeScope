@@ -95,6 +95,15 @@
      放在这里只为统一管理；真正决定胜负的是特异性 ✓。 -->
 <link rel="stylesheet" href="/assets/motion-lw.css?v=20261028a">
 <link rel="stylesheet" href="/assets/motion-sp.css?v=20261028a">
+<!-- ★ 其余三个子系统的微交互（2026-10-28）：学习工作台 study-* / 代码指南浮层 cg-* /
+     调试面板 .var-*。三者机制不同，所以写法也不同（各自的文件头都写了理由）：
+       · 学习工作台：样式是**外链**且比 app.css 还早 ⇒ 我们最后加载就赢，用 #id 前缀兜住
+         app.css 里 html[data-theme] button 那条 (0,1,2)；
+       · 代码指南：运行时 createElement('style') 注入 ⇒ 必须靠重复类名提特异性；
+       · 调试面板：样式就在 app.css 里 ⇒ 同样靠后加载 + 局部提特异性。 -->
+<link rel="stylesheet" href="/assets/motion-study.css?v=20261028a">
+<link rel="stylesheet" href="/assets/motion-cg.css?v=20261028a">
+<link rel="stylesheet" href="/assets/motion-dbg.css?v=20261028a">
 <!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
 <script src="/assets/doc-theme.js?v=20261028d" defer></script>
 <!-- ★ 动效的行为层（2026-10-28）：CSS 做不到的三件事 —— 面板显隐的入场类、
