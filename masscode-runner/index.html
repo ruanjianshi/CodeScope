@@ -152,6 +152,13 @@
         位置与长度都在 token 里，颜色走 --doc-syn-* ⇒ 跟着文档配色一起变 ✓。
      ⚠️ 纯增强：拿不到 token 就什么都不挂 ✓，编辑器与没有本文件**完全一致** ✓。 -->
 <script src="/assets/semantic-decorations.js?v=20261028a" defer></script>
+<!-- ★ 代码高亮主题选择器（2026-10-28）：在**已有的**「主题」菜单里追加一段「代码高亮主题」，
+     12 套程序员常用主题 + 「跟随文档配色」，点一下即时切换并记住 ✓。
+     ⚠️ 为什么挂进那个菜单：用户的心智是「主题就一个入口」✓；
+        而 #theme-menu 是 index.html 的**静态标记** ✓，可以直接追加 DOM，
+        不必碰顶在 12,995 行上限的 app.js ✓。
+     ⚠️ 只追加、不改原有 5 个界面主题按钮 ✓。 -->
+<script src="/assets/code-theme-picker.js?v=20261028a" defer></script>
 </head>
 <body>
 <!-- 统一图标 sprite：线性、1em、currentColor。用 <svg class="cs-ico"><use href="#i-xxx"/></svg> 引用 -->

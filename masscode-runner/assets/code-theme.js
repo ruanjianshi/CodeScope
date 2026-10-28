@@ -26,12 +26,46 @@
     radiation:  { bg:'#1B1D1B', fg:'#E6E6E6', dim:'#6B7A6B', line:'#333933', sel:'#1F3B24', kw:'#FFCB6B', str:'#C3E88D', com:'#546E7A', num:'#F78C6C', fn:'#4CD964', type:'#FFCB6B', accent:'#4CD964' },
     vampire:    { bg:'#282A36', fg:'#F8F8F2', dim:'#9AA0B5', line:'#44475A', sel:'#53304A', kw:'#FF79C6', str:'#F1FA8C', com:'#6272A4', num:'#BD93F9', fn:'#50FA7B', type:'#FFCB6B', accent:'#FF5555' }
   };
-  var PREFIX = 'codescope-code-';
+  var PREFIX = 'codescope-code-';        /* 跟随文档配色的 4 套 */
+  var CODE_PREFIX = 'cs-code-';          /* 12 套常用主题 */
   var KEYS = Object.keys(PALETTES);
 
   function currentKey() {
     var k = document.documentElement.getAttribute('data-doc-theme');
     return KEYS.indexOf(k) >= 0 ? k : 'everforest';   /* 缺省即暖绿森林，与 doc-theme 一致 */
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     程序员常用编辑器主题（2026-10-28 追加）
+     -----------------------------------------------------------------------
+     ★ 需求：用户希望除了那 4 套「跟文档配色走」的方案外，还能直接选程序员
+       熟悉的经典主题，并且**自己随手切** ✓。
+     ★ 取舍：这些主题的颜色是**各家官方值**（逐个人工核对过），不跟 --doc-* 走 ✓ ——
+       它们的意义就是「稳定的、你熟悉的那套配色」✗，跟着文档变反而怪 ✓。
+     ⚠️ 新增主题只要往这个表里加一行 ✓：字段与 PALETTES 同形 ✓，
+        其余（defineTheme / 切换 / 持久化）全自动 ✓。
+     ═══════════════════════════════════════════════════════════════════════ */
+  var THEMES = [
+    { id: 'one-dark',       label: 'One Dark Pro',   bg:'#282C34', fg:'#ABB2BF', dim:'#5C6370', line:'#2C313A', sel:'#3E4451', kw:'#C678DD', str:'#98C379', com:'#5C6370', num:'#D19A66', fn:'#61AFEF', type:'#E5C07B', accent:'#61AFEF' },
+    { id: 'dracula',        label: 'Dracula',        bg:'#282A36', fg:'#F8F8F2', dim:'#6272A4', line:'#44475A', sel:'#44475A', kw:'#FF79C6', str:'#F1FA8C', com:'#6272A4', num:'#BD93F9', fn:'#50FA7B', type:'#8BE9FD', accent:'#BD93F9' },
+    { id: 'monokai',        label: 'Monokai',        bg:'#272822', fg:'#F8F8F2', dim:'#75715E', line:'#3E3D32', sel:'#49483E', kw:'#F92672', str:'#E6DB74', com:'#75715E', num:'#AE81FF', fn:'#A6E22E', type:'#66D9EF', accent:'#A6E22E' },
+    { id: 'github-dark',    label: 'GitHub Dark',    bg:'#0D1117', fg:'#C9D1D9', dim:'#8B949E', line:'#161B22', sel:'#264F78', kw:'#FF7B72', str:'#A5D6FF', com:'#8B949E', num:'#79C0FF', fn:'#D2A8FF', type:'#FFA657', accent:'#58A6FF' },
+    { id: 'tokyo-night',    label: 'Tokyo Night',    bg:'#1A1B26', fg:'#C0CAF5', dim:'#565F89', line:'#292E42', sel:'#33467C', kw:'#BB9AF7', str:'#9ECE6A', com:'#565F89', num:'#FF9E64', fn:'#7AA2F7', type:'#2AC3DE', accent:'#7AA2F7' },
+    { id: 'nord',           label: 'Nord',           bg:'#2E3440', fg:'#D8DEE9', dim:'#616E88', line:'#3B4252', sel:'#434C5E', kw:'#81A1C1', str:'#A3BE8C', com:'#616E88', num:'#B48EAD', fn:'#88C0D0', type:'#8FBCBB', accent:'#88C0D0' },
+    { id: 'solarized-dark', label: 'Solarized Dark', bg:'#002B36', fg:'#93A1A1', dim:'#586E75', line:'#073642', sel:'#0B4C5A', kw:'#859900', str:'#2AA198', com:'#586E75', num:'#D33682', fn:'#268BD2', type:'#B58900', accent:'#268BD2' },
+    { id: 'gruvbox-dark',   label: 'Gruvbox Dark',   bg:'#282828', fg:'#EBDBB2', dim:'#928374', line:'#3C3836', sel:'#504945', kw:'#FB4934', str:'#B8BB26', com:'#928374', num:'#D3869B', fn:'#83A598', type:'#FABD2F', accent:'#FABD2F' },
+    { id: 'catppuccin-mocha', label: 'Catppuccin Mocha', bg:'#1E1E2E', fg:'#CDD6F4', dim:'#6C7086', line:'#313244', sel:'#45475A', kw:'#CBA6F7', str:'#A6E3A1', com:'#6C7086', num:'#FAB387', fn:'#89B4FA', type:'#F9E2AF', accent:'#89B4FA' },
+    { id: 'vscode-dark-plus', label: 'VS Code 默认深色', bg:'#1E1E1E', fg:'#D4D4D4', dim:'#6A9955', line:'#2A2D2E', sel:'#264F78', kw:'#569CD6', str:'#CE9178', com:'#6A9955', num:'#B5CEA8', fn:'#DCDCAA', type:'#4EC9B0', accent:'#569CD6' },
+    { id: 'night-owl',      label: 'Night Owl',      bg:'#011627', fg:'#D6DEEB', dim:'#637777', line:'#0B2942', sel:'#1D3B53', kw:'#C792EA', str:'#ECC48D', com:'#637777', num:'#F78C6C', fn:'#82AAFF', type:'#FFCB6B', accent:'#82AAFF' },
+    { id: 'material-ocean', label: 'Material Ocean', bg:'#0F111A', fg:'#A6ACCD', dim:'#464B5D', line:'#1F2233', sel:'#1F2233', kw:'#C792EA', str:'#C3E88D', com:'#464B5D', num:'#F78C6C', fn:'#82AAFF', type:'#FFCB6B', accent:'#84FFFF' }
+  ];
+  var THEME_BY_ID = {};
+  THEMES.forEach(function (t) { THEME_BY_ID[t.id] = t; });
+
+  var STORE_KEY = 'codescope-code-theme';
+  /* 空字符串 = 跟随文档配色（默认行为）；否则是 THEMES 里的 id */
+  function explicitId() {
+    try { var v = localStorage.getItem(STORE_KEY) || ''; return THEME_BY_ID[v] ? v : ''; } catch (_) { return ''; }
   }
 
   /* token 规则：Monaco 用 TextMate 风格 token 名，前缀匹配即可覆盖各语言 */
@@ -157,10 +191,35 @@
          Monaco 内置的 vs/vs-dark 是 true，自定义主题默认不是 ✓。 */
       monaco.editor.defineTheme(PREFIX + k, { base: 'vs-dark', inherit: true, semanticHighlighting: true, rules: rulesOf(p), colors: colorsOf(p) });
     });
-    /* 拦截：app.js 只会传 vs / vs-dark；传 vs-dark 时改投到当前文档配色 */
+    /* 12 套程序员常用主题：同一个颜色表结构，同一套 rulesOf/colorsOf ✓ */
+    THEMES.forEach(function (t) {
+      monaco.editor.defineTheme(CODE_PREFIX + t.id, { base: 'vs-dark', inherit: true, semanticHighlighting: true, rules: rulesOf(t), colors: colorsOf(t) });
+    });
+
+    /* 当前该用哪个主题名 ✓：用户显式选过就用他选的 ✓，否则跟随文档配色 ✓ */
+    function activeThemeName() {
+      var id = explicitId();
+      return id ? (CODE_PREFIX + id) : (PREFIX + currentKey());
+    }
+
+    /* 对外 API（给 code-theme-picker.js 用）：列表 / 当前值 / 切换 */
+    window.__csCodeTheme = {
+      list: function () { return THEMES.map(function (t) { return { id: t.id, label: t.label, bg: t.bg, accent: t.accent, kw: t.kw, str: t.str, fn: t.fn }; }); },
+      current: function () { return explicitId(); },   /* 空 = 跟随文档配色 */
+      apply: function (id) {
+        try {
+          if (id && THEME_BY_ID[id]) localStorage.setItem(STORE_KEY, id);
+          else localStorage.removeItem(STORE_KEY);
+        } catch (_) {}
+        try { orig(activeThemeName()); } catch (_) {}
+        return activeThemeName();
+      }
+    };
+
+    /* 拦截：app.js 只会传 vs / vs-dark；传 vs-dark 时改投到当前选中的主题 */
     var orig = monaco.editor.setTheme.bind(monaco.editor);
     monaco.editor.setTheme = function (name) {
-      if (name === 'vs-dark') return orig(PREFIX + currentKey());
+      if (name === 'vs-dark') return orig(activeThemeName());
       return orig(name);
     };
     /* ★ 实测踩到的坑：app.js 把 theme:'vs-dark' 写进 monacoOptions() 的 options，
@@ -192,7 +251,7 @@
     monaco.editor.create = function () {
       var ed = origCreate.apply(this, arguments);
       try { patchEditor(ed); } catch (_) {}
-      try { orig(PREFIX + currentKey()); } catch (_) {}
+      try { orig(activeThemeName()); } catch (_) {}
       return ed;
     };
     /* 已有编辑器也要补补丁（install 可能晚于第一次 create） */
@@ -200,10 +259,10 @@
       (monaco.editor.getEditors ? monaco.editor.getEditors() : []).forEach(patchEditor);
     } catch (_) {}
     /* 立即应用一次（此时可能还没有编辑器，先定全局主题，后面创建的都会继承） */
-    orig(PREFIX + currentKey());
+    orig(activeThemeName());
     /* 跟着配色圆点走：doc-theme.js 改的是 html 上的 data-doc-theme */
     new MutationObserver(function () {
-      try { orig(PREFIX + currentKey()); } catch (_) {}
+      try { orig(activeThemeName()); } catch (_) {}
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-doc-theme'] });
   }
 

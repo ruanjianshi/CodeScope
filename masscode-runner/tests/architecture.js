@@ -369,7 +369,13 @@ const SIZE_CAP = [
   /* 代码编辑器语法配色：4 套 Phycat 调色板映射成 Monaco 主题 ✓。
      111 行里有一大段是注释——记着实测踩到的两个坑（options.theme 绕过包装、
      切标签走 updateOptions 而不是 setTheme），这两条比代码本身更值钱 ✓。 */
-  ['assets/code-theme.js', 145],   /* 含「底色压暗一档」的 deepen/mix 两个纯函数 ✓，
+  ['assets/code-theme.js', 185],   /* 含 12 套常用主题的颜色表（每套一行）✓、
+                                      「跟随文档配色 vs 显式选择」的优先级 ✓、对外 API ✓，
+                                      以及「底色压暗一档」的 deepen/mix 两个纯函数 ✓ */
+  /* 代码高亮主题选择器：往**已有的** #theme-menu 里追加一段（不动 app.js）✓。 */
+  ['assets/code-theme-picker.js', 63],
+  /* 下面这行的原注释保留（说明 code-theme.js 早期都放了什么）：
+     含「底色压暗一档」的 deepen/mix 两个纯函数 ✓，
                                       以及二期补的 15 条**语义角色**配色规则 ✓（形参/成员/方法/
                                       类/结构体/枚举/命名空间/类型参数/宏/装饰器/枚举值…）✓ */
   /* 代码区卡片质感（一期）+ 语义上色的 CSS 类（二期）。 */
