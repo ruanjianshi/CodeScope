@@ -1,0 +1,199 @@
+/* ============================================================================
+   motion-monaco.css —— Monaco 编辑器「外壳」的微交互层
+   （上游令牌层：assets/motion.css；本文件不定义任何令牌，只消费 --mo-*）
+
+   这个文件管哪一层
+   ----------------------------------------------------------------------------
+   Monaco 是第三方内核（node_modules/monaco-editor，经 /monaco/vs/ 由服务端同源
+   提供），我们**不动它的渲染层**：.view-lines / .view-line / .view-overlays 里
+   每一行都是它自己按视口重绘的，任何 transition/animation 都会让"打字→重排→动画"
+   三件事排队，卡顿是必然的 ✗（这正是任务书里点名不许碰的地方）。
+   能改的只有**外壳**：容器的分隔线、滚动条、小地图、右侧概览条，以及**产品自己写**
+   的编辑器工具条（index.html 的 #primary-group-bar / app.js:8967 建的
+   .split-editor-head）。
+
+   ⚠️ 加载顺序救不了这个文件 —— 必须靠特异性
+   ----------------------------------------------------------------------------
+   和 motion.css 的处境不同：Monaco 的 editor.main.css **不是**开头 <link> 进来的，
+   而是 AMD loader 在编辑器初始化时把 <style> 追加到 <head> **末尾**（实测
+   index.html 里只有 /monaco/vs/loader.js，样式表在编辑器建好后才出现在 head 最后）。
+   也就是说引擎样式永远排在本文件**之后** ✗ —— 同样特异性的规则，赢的是它 ✗。
+   ⇒ 本文件每条规则都带 :is(#monaco-main, .split-monaco-host, .reading-html-source)
+      前缀（三处**真实存在**的 Monaco 宿主：主编辑栏 / 分栏 / 阅读器的 HTML 源码），
+      特异性 (1,x,0) 起步，稳稳压过引擎那几条 (0,2,0)~(0,3,0) ✓，与加载顺序无关，
+      也不必用 !important（reduced-motion 段除外）。
+      （先例：assets/motion-lw.css 对同样"运行时注入样式"的子系统用了同一招 ✓。）
+
+   ★ 产品铁律（与 motion.css 一致）
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 刷新小地图 / 拖动分栏 / 布局切换）才允许 --mo-back
+   回弹；状态同步（保存提示、焦点变化）一律 --mo-out 平滑 ✓。
+   ============================================================================ */
+
+
+/* ═════════ 1. 外壳容器：只给 1px 分隔线做焦点提示，绝不动尺寸 ═════════ */
+
+/* app.css:2015 给 .monaco-editor .margin 加了 1px 右边框（编辑区和行号区之间的线）。
+   它是外壳里唯一"不参与重绘"的可动部件：颜色可以变，位置不能动 ✓。
+   聚焦时把这条线提成主色 —— 一像素的强调，比给整个编辑器加发光边框克制得多，
+   也不会在 .overflow-guard 的 overflow:hidden 里被裁掉 ✓。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .margin {
+  transition: border-color var(--mo-2) var(--mo-out);
+}
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor:focus-within .margin {
+  border-right-color: color-mix(in srgb, var(--accent) 52%, transparent);
+}
+
+/* ⚠️ 为什么不给 .monaco-editor / .overflow-guard 写 transition ✗ ——
+   它们的 width/height 是 Monaco 的 automaticLayout 用 ResizeObserver 一帧一帧
+   写内联样式的（实测 inline="width: 748px; height: 505px;"）。给它们加尺寸过渡，
+   等于让"指针拖动分栏"和"编辑器重新排版"之间插一段插值：文字会追不上分栏线，
+   拖完还要再滑一下 ✗。外壳的宽度必须**立刻**等于布局给的值。 */
+
+
+/* ═════════ 2. 滚动条：只加时长，颜色仍归 Monaco 的主题变量 ═════════ */
+
+/* Monaco 的 sliders 已经自带 hover/active 三档颜色：
+     .monaco-scrollable-element>.scrollbar>.slider{background:var(--vscode-scrollbarSlider-background)}
+     ...>.slider:hover{background:var(--vscode-scrollbarSlider-hoverBackground)}
+   这三档来自编辑器主题（产品用的是 vs-dark + 自己的 --vscode-* 注入），
+   本文件**一个颜色都不写** ✓ —— 写了就是"两份真相"，主题一换这里立刻不跟。
+   唯一的缺口是它们**没有过渡**（实测 computed transition 是默认的 all 0s）⇒
+   悬停提亮是硬切。这里只补时长与曲线 ✓。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .scrollbar > .slider {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* ⚠️ 滚动条的「出现/消失」不归这里管 ✗ ——
+   Monaco 用 .visible / .invisible(.fade) 类切换控制 opacity，并自己写了
+   .1s / .8s 两档（editor.main.css）。那是引擎的状态机：覆盖 opacity 过渡会让
+   "滚动时浮现"和 JS 加类的时机错位（滑条晚到、或该消失时还挂着）✗。
+   这里只动「已经出现之后，鼠标放上去」的那一下 ✓。 */
+
+
+/* ═════════ 3. 右侧概览条（decorationsOverviewRuler）：透明度归 CSS ═════════ */
+
+/* 实测（隔离实例 · 真实 Monaco）它的内联样式**只有**几何：
+     position/transform/contain/top/right/width/height/display + canvas 尺寸，
+   opacity 从头到尾没有被 JS 写过 ✓ —— 所以这一项可以放心用 CSS 接管。
+   用途：不聚焦时把错误/修改标记压到 72%（"这排标记在那儿，但不抢戏"），
+   光标进编辑器时放到 100%（"你现在就在这排标记里"）✓。
+   这是**焦点状态同步**，不是人按出来的动作 ⇒ 用 --mo-out，不回弹 ✓。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .decorationsOverviewRuler {
+  opacity: .72;
+  transition: opacity var(--mo-2) var(--mo-out);
+}
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor:focus-within .decorationsOverviewRuler {
+  opacity: 1;
+}
+
+
+/* ═════════ 4. 小地图：0.5s 是全场最慢的一次淡入，收回令牌 ═════════ */
+
+/* 这个产品的 Monaco 开着 minimap.autohide（实测 class="minimap slider-mouseover autohide"，
+   computed opacity:0）⇒ 小地图平时是隐形的，鼠标移进去才浮出来。
+   引擎给的入场时长是 **0.5s**（editor.main.css: .minimap.autohide{transition:opacity .5s}）——
+   比本套令牌最慢的 --mo-4(400ms) 还慢，在"移过去→想看清"的场景里就是没反应 ✗。
+   ⇒ 只改时长/曲线，**不改 opacity 的 0/1 两个值**（那是引擎 .autohide:hover 决定的行为，
+     覆盖它会让小地图永远不出来 / 永远占着位置，属于"修好动画、弄坏功能" ✗）。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .minimap.autohide {
+  transition: opacity var(--mo-3) var(--mo-out);
+}
+/* 小地图上的「当前视口」滑块：引擎写的是 .1s linear。
+   linear 在 100ms 这个尺度上看不出减速，但换成 --mo-out 后"进出"会更轻 ✓；
+   时长保持 --mo-1 档 —— 它跟手，不能比指针慢。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .minimap.slider-mouseover .minimap-slider {
+  transition: opacity var(--mo-1) var(--mo-out);
+}
+
+
+/* ═════════ 5. 产品自加的编辑器工具条（不是 Monaco 的 UI）═════════ */
+
+/* 先说清楚**哪些不写**，避免制造两份真相 ✓：
+   · #primary-group-bar .name.split-name-pick / .split-editor-head .name.split-name-pick
+     是产品做的"片段下拉按钮"。实测（真实页面 readback）它们的 computed transition
+     **已经**是 motion.css 那一套了 ——
+       background-color/border-color/color/filter 120ms --mo-out + box-shadow/transform 180ms --mo-back
+     ⇒ 本文件不重复声明 ✓。
+     而且 app.css:2077/2087 明确写了 .split-name-pick:active { transform: none }：
+     产品主动**否决**了这颗按钮的按压缩放（它在 32px 栏头里，缩小会让文件名跟着抖）。
+     这是既有产品判断，motion 层不该翻案 ⇒ 这里也不补 :active ✗。
+   · .tag / .lang / .hint 是纯标签，没有交互 ⇒ 不写。
+
+   真正缺的是下面三处： */
+
+/* ① 主编辑栏头（#primary-group-bar）：它只在「多栏编辑」时出现（app.css:2060
+   #code-wrap.split-primary #primary-group-bar{display:flex}），原来是硬切出现。
+   一次会话里只在"切换单栏/多栏"时发生一次 ⇒ 允许一次性入场 ✓。
+   ⚠️ 只动 opacity，不动 transform：这条栏是 position:absolute 贴顶、靠
+      border-bottom 和编辑器衔接，transform 会给它建立新的包含块，
+      里面绝对定位的子元素（下拉指示 ::after 等）定位基准会变 ✗。 */
+@keyframes mo-monaco-bar-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+#code-wrap.split-primary #primary-group-bar {
+  animation: mo-monaco-bar-in var(--mo-3) var(--mo-out) both;
+}
+
+/* ② 分栏栏头的保存提示（.split-editor-head .saved）：文字内容在"已保存"等状态之间
+   跳变是**状态同步**，不是人按出来的 ⇒ 颜色/透明度走 --mo-2 平滑，绝不弹 ✓。
+   注意只过渡颜色：这个 span 的文本会变长变短（"已保存"/"保存中"/空），
+   给宽度做过渡会让栏头里的文件名跳位 ✗。 */
+.split-editor-head .saved {
+  transition:
+    color var(--mo-2) var(--mo-out),
+    opacity var(--mo-2) var(--mo-out);
+}
+
+/* ③ 分栏之间的拖动把手（.editor-group-divider::after）：app.css:3965 写死了
+   .14s ease —— 全站唯一还活着的非令牌时长（motion.css 的分隔条清单里有
+   #split-v / #split-h / #split-v2 / .hsplit / #edit-split-v，**独独漏了
+   .editor-group-divider**）。它是编辑器的栏间把手，属于这一层 ✓。
+   ⚠️ 必须带 html[data-theme] 前缀：app.css 那条就是 (1,1,1) 的
+      html[data-theme] .editor-group-divider::after，裸 .editor-group-divider::after
+      是 (0,1,1)，压不过它 ✗（motion.css 头部记过同一个坑）。 */
+html[data-theme] .editor-group-divider::after {
+  transition:
+    width var(--mo-2) var(--mo-out),
+    background var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════ 6. 无障碍：reduced-motion ═══════════════ */
+
+/* app.css:3817 有一条全局兜底，但它对 animation 只是压到 .01ms（动画还在跑）✗，
+   而本文件引入的 @keyframes 必须自己关 ✓。Monaco 的引擎样式不在那条兜底的
+   选择器范围内，所以上面几条过渡也要在这里显式压掉。 */
+@media (prefers-reduced-motion: reduce) {
+  #code-wrap.split-primary #primary-group-bar {
+    animation: none !important;
+  }
+
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .margin,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .scrollbar > .slider,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .decorationsOverviewRuler,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .minimap.autohide,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .minimap.slider-mouseover .minimap-slider,
+  .split-editor-head .saved,
+  html[data-theme] .editor-group-divider::after {
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  /* 概览条的 72% 也是"压低可见度"的一种动效，reduced-motion 下直接给满 ——
+     诊断标记本来就该始终可读 ✓ */
+  :is(#monaco-main, .split-monaco-host, .reading-html-source)
+    .monaco-editor .decorationsOverviewRuler {
+    opacity: 1 !important;
+  }
+}

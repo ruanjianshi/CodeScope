@@ -104,6 +104,12 @@
 <link rel="stylesheet" href="/assets/motion-study.css?v=20261028a">
 <link rel="stylesheet" href="/assets/motion-cg.css?v=20261028a">
 <link rel="stylesheet" href="/assets/motion-dbg.css?v=20261028a">
+<!-- ★ Monaco 外壳微交互（2026-10-28）：只做外壳（滚动条 / overview ruler / 工具条）。
+     ⚠️ 绝不碰 .view-lines / .view-line ✗ —— Monaco 自己会重绘，给那里加任何过渡/动画
+        都会变成逐帧抖动（实测体感比没有动效差得多）✗。
+     注：画布那份 motion-canvas.css 不在这里引入 ✓ —— 画布是独立 iframe，
+         由 assets/canvas/index.html 自己引 ✓。 -->
+<link rel="stylesheet" href="/assets/motion-monaco.css?v=20261028a">
 <!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
 <script src="/assets/doc-theme.js?v=20261028d" defer></script>
 <!-- ★ 动效的行为层（2026-10-28）：CSS 做不到的三件事 —— 面板显隐的入场类、

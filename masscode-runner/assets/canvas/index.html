@@ -11,6 +11,12 @@
 <link rel="stylesheet" href="/assets/vendor/katex/katex.min.css">
 <link rel="stylesheet" href="/assets/hljs-theme.css">
 <link rel="stylesheet" href="/assets/canvas/canvas-theme.css">
+<!-- ★ 画布微交互层：必须排在 canvas-theme.css **之后**（同特异性 + 后出现才覆盖得掉
+     主题里写死的 .12s/.13s/.15s）。⚠️ 画布是**独立 iframe 文档**，拿不到父页面的
+     --mo-*（自定义属性不跨文档继承），所以 motion-canvas.css 里自带一份同名令牌。
+     ⚠️ 它不碰 .tl-canvas / .tl-container / .tl-shape —— 那是 tldraw 的相机矩阵与
+      shape 几何，动了就漂移。理由写在文件头。 -->
+<link rel="stylesheet" href="/assets/motion-canvas.css?v=20261028a">
 <style>
   html, body { height: 100%; margin: 0; background: #15171c; overflow: hidden; }
   #tldraw-host { position: fixed; inset: 0; }

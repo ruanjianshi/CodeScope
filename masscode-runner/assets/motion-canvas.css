@@ -1,0 +1,440 @@
+/* ============================================================================
+   motion-canvas.css —— 「无限画布」iframe 内的微交互层
+
+   为什么单独一个文件、而且要重新定义令牌
+   ----------------------------------------------------------------------------
+   画布是 **独立文档**：assets/canvas/index.html 在 <iframe> 里跑，与父页面
+   （index.html + assets/motion.css）不是同一个 document。CSS 自定义属性**不跨文档
+   继承** ✗ —— iframe 的 :root 拿不到父页面的 --mo-*，引用 var(--mo-1) 会直接
+   invalid at computed-value time（整条 transition 声明作废，而且是**静默**的，
+   看代码完全像生效了）✓。
+   ⇒ 所以这里**重新定义同名同值的 --mo-***：同名字符串、不同文档 ✓。
+      这是"同一套语言的两份拷贝"，不是两套令牌 —— 值必须与 assets/motion.css:40-52
+      逐字一致；父页面那份改了，这里要跟着改（画布 iframe 无法插进父页面的层叠里，
+      没有"继承"这条捷径可走 ✗）。
+
+   引擎是第三方，但这一层是我们自己的
+   ----------------------------------------------------------------------------
+   tldraw bundle（assets/vendor/tldraw.bundle.js）不许动 ✓，可它的图形**渲染体**是
+   我们自己写的类名（bundle 里的 webcard/sticky/pdfcard/mnode/subboard 组件渲染出
+   .cs-web / .cs-sticky / .cs-pdf / .cs-mn / .cs-card），外壳（左侧功能条、面包屑、
+   页面列表、大纲、对齐条、弹窗）更是纯自建 DOM ✓。本文件只覆盖这两块。
+
+   ★ 一条绝对不能碰的边界：画布本体
+   ----------------------------------------------------------------------------
+   tldraw 的缩放/平移**就是**给 .tl-canvas / .tl-container 写 transform（相机矩阵），
+   给它们加 transition 等于把"每帧一次"的相机写成"每帧一次 + 插值"，画面会持续
+   追着手指漂移、松手后还在滑 ✗。给 .tl-shape 加 transform 同样不行 —— shape 的
+   data-shape-id / 包围盒 / 选中框都按 store 里的几何算，DOM 位移不会反馈回去，
+   内容和选中框会错位 ✗。
+   ⇒ 本文件对 .tl-canvas / .tl-container / .tl-shape / .tl-html-container **零条**规则 ✓
+     （只把 data-shape-type 当**祖先选择器**用来框住我们自己的渲染体，不改它的任何属性）。
+     按下/悬停的"浮起"一律用 box-shadow + border-color 表达 ✓ —— 阴影不参与几何，
+     tldraw 的命中测试和选中框完全不受影响 ✓。
+
+   加载顺序
+   ----------------------------------------------------------------------------
+   在 assets/canvas/index.html 里排在 canvas-theme.css **之后** ✓：canvas-theme.css 给
+   #cs-rail button / .cs-card / .cs-mn 等写死了 .12s/.13s/.15s，这里靠"同特异性 +
+   后出现"把它们收编成四档令牌，不用 !important（reduced-motion 段除外）✓。
+
+   产品判断（与 motion.css 同一条）
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 按下 / 打开弹窗 / 进子白板）才允许回弹或位移动效 ✓；
+   状态同步（.cs-pg.now / #cs-rail button.on / 保存状态气泡）只过渡颜色，不弹 ✓。
+   ============================================================================ */
+
+
+/* ═════════════════════ 1. 令牌（同名字符串、不同文档）═════════════════════ */
+
+/* 值与 assets/motion.css:40-52 逐字相同 —— iframe 是独立文档，拿不到父页面的
+   :root 继承，只能各自声明一份 ✓。四档时长 / 三条曲线 / 两个位移量，别在这里
+   加第五档：档位一多，节奏就糊了（motion.css 头部已说明理由）✗。 */
+:root {
+  --mo-1: 120ms;   /* 即时反馈：变色、描边 */
+  --mo-2: 180ms;   /* 常规：阴影、边框、按压缩放 */
+  --mo-3: 260ms;   /* 位移 / 展开：工具条入场、弹窗 */
+  --mo-4: 400ms;   /* 大块进出 */
+
+  --mo-out: cubic-bezier(.2, .8, .2, 1);       /* 平滑减速：默认曲线 */
+  --mo-back: cubic-bezier(.34, 1.56, .64, 1);  /* 带回弹：只给人的主动动作 ✓ */
+  --mo-in-out: cubic-bezier(.4, 0, .2, 1);     /* 两头都慢：遮罩淡入 */
+
+  --mo-lift: -1px;
+  --mo-press: .985;
+}
+
+
+/* ═══════════ 2. 产品自有图形：悬停是"浮起"，按下是"压下" ═══════════ */
+
+/* 为什么这四类图形的反馈**不用 transform**（与 motion.css 的按钮层不同）：
+   · 它们挂在 .tl-shape 里，几何由 tldraw store 决定 —— DOM 位移后，选中框、
+     缩放手柄、箭头吸附点仍在原位，视觉上"框和内容对不上" ✗；
+   · 其中三类的内部是 <iframe>（网页 / PDF / 导图），filter 或 transform 会把
+     iframe 提升为独立合成层，滚动时发虚、缩放时重新栅格化，卡且糊 ✗。
+   ⇒ 浮起用 box-shadow（模糊半径变大 + 更深的黑）、压下用阴影收回 + border 收紧：
+     两者都**不参与布局也不参与几何**，tldraw 完全感知不到 ✓。
+     这是"手上有反应"和"引擎别乱"之间唯一安全的交点。 */
+
+/* ── 网页卡片（webcard）：.cs-web ── */
+/* canvas-theme.css:278 起的 .cs-web 本来没有任何 transition —— 悬停时 .cs-web__btn
+   底色是硬切（跳），卡片本体除了角落的提示胶囊外毫无反应 ✗。 */
+.cs-web {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+/* 悬停：边框透出主色（"这张卡是活的"），阴影从 24px 抬到 30px（浮起 3px 的观感，
+   但不真的移动 1px —— 见本节开头）。 */
+.cs-web:hover {
+  border-color: rgba(91, 147, 255, .34);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+}
+/* 按下：阴影收回（贴回画布）＋ 边框收紧到主色半亮 —— 这是"抓住了"的确认，
+   不是缩小：整块 scaled 会让 iframe 里的网页再排一次版 ✗。 */
+.cs-web:active {
+  border-color: rgba(91, 147, 255, .52);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .44);
+}
+/* 卡片里的小按钮（打开/刷新/去掉）：原来只有 :hover 硬切底色 */
+.cs-web__btn {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+/* 按下用 --mo-press 而不是位移：这些按钮在 30px 高的顶栏里（.cs-web__bar），
+   位移 1px 会让图标和文字一起"掉出"栏的中线 ✗；缩放只在原地。 */
+.cs-web__btn:active {
+  transform: scale(var(--mo-press));
+}
+/* 底部"可滚动/可交互"提示胶囊：主题里已经是 opacity .15s 硬曲线，收编到 --mo-2 */
+.cs-web__mask span {
+  transition: opacity var(--mo-2) var(--mo-out);
+}
+
+/* ── PDF 卡片（pdfcard）：.cs-pdf ── */
+/* 与 webcard 同一套浮起/压下语言：两者都是"内容区里嵌了第三方渲染"的窗口，
+   手感必须一致，否则用户会以为 PDF 卡是另一种控件 ✓。 */
+.cs-pdf {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.cs-pdf:hover {
+  border-color: rgba(224, 103, 79, .34);   /* 用 PDF 图标那个橙红（canvas-theme.css:80），
+                                              让"这是 PDF"和"它醒了"是同一个颜色 ✓ */
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+}
+.cs-pdf:active {
+  border-color: rgba(224, 103, 79, .5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .44);
+}
+/* 翻页按钮 + 右下角缩放条：都是手指要碰的目标，必须"按下有回弹" ✓ */
+.cs-pdf__btn,
+.cs-pdf__zoom button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    opacity var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cs-pdf__btn:active:not(:disabled),
+.cs-pdf__zoom button:active {
+  transform: scale(var(--mo-press));
+}
+/* 滚动的 PDF 页：滚动条 thumb 悬停提亮（Safari/Chrome 的 ::-webkit-scrollbar
+   也认 transition，这里只过渡背景，不动宽度 —— 变宽会改布局、把页面重新排版 ✗） */
+.cs-pdf__body::-webkit-scrollbar-thumb {
+  transition: background var(--mo-1) var(--mo-out);
+}
+.cs-pdf__body:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, .34);
+}
+
+/* ── 便签（sticky）：.cs-sticky ── */
+/* 便签是纯色纸片、里面没有 iframe，所以这里可以安全地用 filter 提亮 ——
+   比"再加一层阴影"更像"纸被手指按住了" ✓。位移仍然不做（理由见本节开头）。 */
+.cs-sticky {
+  transition:
+    filter var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.cs-sticky:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 9px 24px rgba(0, 0, 0, .42);
+}
+/* 按下：压暗 + 阴影几乎收没（纸贴到桌面上）—— 这是唯一能表达"按下"而
+   不移动纸片本身的手段 ✓ */
+.cs-sticky:active {
+  filter: brightness(.96);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .36);
+}
+
+/* ── 思维导图节点（mnode）：.cs-mn ── */
+/* 主题里已有 border-color/box-shadow .12s，这里只做两件事：
+   ① 换成令牌；② 补按下（原来按下完全没反应 ✗）。 */
+.cs-mn {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    filter var(--mo-1) var(--mo-out);
+}
+.cs-mn:hover {
+  filter: brightness(1.08);
+}
+/* 按下压暗到 .94：节点小（默认 130×40），1px 的位移看不出来，亮度变化看得见 ✓ */
+.cs-mn:active {
+  filter: brightness(.94);
+}
+
+/* ── 笔记卡片（card）与子白板卡片（subboard）── */
+/* canvas-theme.css:357 的 .cs-card 已有 .13s 过渡，收编到 --mo-1/--mo-2；
+   ★ 子白板**用的就是 .cs-card.cs-card--blue**（bundle 里的 subboard 组件渲染的
+   是 cs-card cs-card--blue，见 assets/vendor/tldraw.bundle.js 的 IVe），
+   不是 canvas-theme.css:243 那套 .cs-sb —— 那组规则是历史残留，bundle 和
+   canvas-ext.js 里都搜不到 .cs-sb，属于死代码（本文件**不**为它写任何规则，
+   写了也永远不会命中 ✓）。 */
+.cs-card {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.cs-card:hover {
+  border-color: rgba(255, 255, 255, .14);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .46);
+}
+/* 子白板卡片唯一的"可进入"暗示：双击进页面这件事没有任何可见提示 ✗。
+   悬停时加一圈主色内描边（看起来像"门框"），不位移、不改尺寸 ✓ */
+.cs-card.cs-card--blue:hover {
+  border-color: rgba(91, 147, 255, .42);
+  box-shadow:
+    inset 0 0 0 1px rgba(91, 147, 255, .22),
+    0 10px 28px rgba(0, 0, 0, .46);
+}
+/* 标题栏右侧的插入图片小按钮：主题里是 opacity/background .12s，收编并对齐按下 */
+.cs-card__act {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cs-card__act:active {
+  transform: scale(var(--mo-press));
+}
+/* 导图窗口（mindcard）：内部是 Mind Elixir 的 iframe，同 webcard 的处理 ——
+   只动边框/阴影，绝不 filter/transform ✓ */
+.cs-mindw {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.cs-mindw__btn {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cs-mindw__btn:active {
+  transform: scale(var(--mo-press));
+}
+.cs-mindw__hint {
+  transition: opacity var(--mo-2) var(--mo-out);
+}
+
+
+/* ═════════════ 3. 左侧功能条：这里可以放心用回弹（纯自建 DOM）═════════════ */
+
+/* #cs-rail button 原来只有 background/color .13s，按下是**写死的** translateY(1px)、
+   而且是瞬变（没有 transform 过渡，跳一下）✗。
+   这一层不在 .tl-shape 里、也不含 iframe ⇒ 可以享受和主站按钮完全相同的手感：
+   按下 translateY(1px) + scale(--mo-press)，松手用 --mo-back 弹回 ✓。 */
+#cs-rail button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+#cs-rail button:active {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+/* 悬停提示（::after 胶囊）：原来 .12s 线性 —— 把曲线也换成 --mo-out，
+   否则"从 -4px 滑到位"会显得生硬 ✓ */
+#cs-rail button::after {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    transform var(--mo-1) var(--mo-out);
+}
+
+
+/* ═════════════ 4. 面包屑：进子白板时的一次出现 ═════════════ */
+
+/* 面包屑的 .on 只做 display:none → flex，**没有过渡可用** ✗（display 不可动画）。
+   这里用一次性的 opacity 淡入表达"层级变了"。
+   ⚠️ 只动 opacity，**不动 transform**：#cs-crumb 的水平居中就是
+      transform: translateX(-50%)（canvas-theme.css:221）—— 动画里写 transform
+      会把它覆盖掉，面包屑整体右移半屏 ✗（motion-study.css 尾部踩过同一个坑）。 */
+@keyframes mo-crumb-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+#cs-crumb.on {
+  animation: mo-crumb-in var(--mo-3) var(--mo-out) both;
+}
+/* 路径上的每一段都是可点的：主题里只有 :hover 硬切背景，补过渡 */
+#cs-crumb a {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+
+/* ══════════ 5. 侧边面板（页面 / 大纲）：行悬停是人的动作，行状态是同步 ══════════ */
+
+/* #cs-pages / #cs-outline 的显隐已经在主题里带 .12s，收编到 --mo-3（位移 6~8px，
+   属于"要看清过程"那一档）；行悬停 120ms、当前项 .now 是**状态同步**，
+   只过渡颜色不弹 ✓。 */
+#cs-pages,
+#cs-outline {
+  transition:
+    opacity var(--mo-2) var(--mo-out),
+    transform var(--mo-3) var(--mo-out);
+}
+#cs-pages .cs-pg,
+#cs-outline .cs-ol-row {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+#cs-outline .cs-ol-acts button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+#cs-outline .cs-ol-acts button:active {
+  transform: scale(var(--mo-press));
+}
+
+
+/* ══════════ 6. 底部工具条（对齐 / 导图节点）：入场 + 按钮回弹 ══════════ */
+
+/* 这两条工具条是"选中 ≥2 个图形"时从下方 6px 滑出来的 —— 主题里已有
+   transition .13s，但拿位移当"出现"却用 130ms，快得像闪 ✗。位移需要看清过程，
+   改用 --mo-3 ✓；透明度跟着一起走 --mo-2（先看见、再就位）。
+   ⚠️ 只改时长，**不改**它们的 transform 本身：两条都靠 translateX(-50%) 居中，
+      写 transform 会把居中覆盖掉 ✗。 */
+#cs-align,
+#cs-mind {
+  transition:
+    opacity var(--mo-2) var(--mo-out),
+    transform var(--mo-3) var(--mo-out);
+}
+#cs-align button,
+#cs-mind button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+#cs-align button:active,
+#cs-mind button:active {
+  transform: scale(var(--mo-press));
+}
+/* 工具条上的悬停提示（::after）：与左侧功能条同一套，收编到 --mo-1 */
+#cs-align button::after,
+#cs-mind button::after {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    transform var(--mo-1) var(--mo-out);
+}
+
+
+/* ══════════ 7. 插入弹窗：遮罩淡入 + 卡片就位 ══════════ */
+
+/* 弹窗原来是 display:none → flex 硬切出现 ✗。它一次会话里只出现几次，
+   而且一定是人按出来的（插入网页/链接卡片）⇒ 允许一次性入场 ✓。
+   遮罩只淡入（--mo-in-out：两头都慢，符合"整个界面压暗"的性质）；
+   卡片从 98% 放大到 100%，用 --mo-out 不用 --mo-back：弹窗是"落位"不是"弹出"，
+   回弹会把一个 420px 的方框抖成气球 ✗。 */
+@keyframes mo-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes mo-dlg-in {
+  from { opacity: 0; transform: scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+#cs-dialog.on {
+  animation: mo-overlay-in var(--mo-2) var(--mo-in-out) both;
+}
+#cs-dialog .cs-dlg {
+  animation: mo-dlg-in var(--mo-3) var(--mo-out) both;
+}
+/* 弹窗底部的三个按钮：主题里只有 :hover 变色，补过渡与按下。
+   主按钮（.primary）用 --mo-back —— 它是"确认"，是全场最该有回弹的一颗 ✓ */
+.cs-dlg__foot button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cs-dlg__foot button:active {
+  transform: scale(var(--mo-press));
+}
+/* 输入框：只统一过渡，不动边框粗细/颜色（主题里那两个值是有意区分的） */
+.cs-dlg__body input {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 8. 无障碍：reduced-motion ═══════════════════ */
+
+/* iframe 是独立文档：父页面 app.css:3817 的全局兜底**管不到这里** ✗，
+   所以画布这一层必须自己关 ✓。规则与 motion.css 尾部同构：
+   动画置 none、过渡压到不可见、位移归零。 */
+@media (prefers-reduced-motion: reduce) {
+  #cs-crumb.on,
+  #cs-dialog.on,
+  #cs-dialog .cs-dlg {
+    animation: none !important;
+  }
+
+  .cs-web, .cs-web__btn, .cs-web__mask span,
+  .cs-pdf, .cs-pdf__btn, .cs-pdf__zoom button, .cs-pdf__body::-webkit-scrollbar-thumb,
+  .cs-sticky, .cs-mn, .cs-card, .cs-card__act, .cs-card.cs-card--blue,
+  .cs-mindw, .cs-mindw__btn, .cs-mindw__hint,
+  #cs-rail button, #cs-rail button::after,
+  #cs-crumb a,
+  #cs-pages, #cs-outline, #cs-pages .cs-pg, #cs-outline .cs-ol-row,
+  #cs-outline .cs-ol-acts button,
+  #cs-align, #cs-mind, #cs-align button, #cs-mind button,
+  #cs-align button::after, #cs-mind button::after,
+  .cs-dlg__foot button, .cs-dlg__body input {
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  /* 位移与提亮一并取消：前庭敏感的用户受不了任何"浮起/按下/缩放"，
+     而 filter 的亮度跳变对光敏感人群也是刺激源 ✓ */
+  #cs-rail button:active,
+  #cs-align button:active,
+  #cs-mind button:active,
+  #cs-outline .cs-ol-acts button:active,
+  .cs-web__btn:active,
+  .cs-pdf__btn:active:not(:disabled),
+  .cs-pdf__zoom button:active,
+  .cs-card__act:active,
+  .cs-mindw__btn:active,
+  .cs-dlg__foot button:active {
+    transform: none !important;
+  }
+  .cs-sticky:hover, .cs-sticky:active,
+  .cs-mn:hover, .cs-mn:active {
+    filter: none !important;
+  }
+}
