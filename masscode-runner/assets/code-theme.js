@@ -51,8 +51,17 @@
       { token: 'predefined', foreground: p.type.slice(1) },
       { token: 'function', foreground: p.fn.slice(1) },
       { token: 'identifier.function', foreground: p.fn.slice(1) },
-      { token: 'delimiter', foreground: p.fg.slice(1) },
-      { token: 'operator', foreground: p.kw.slice(1) },
+      /* ★ 一期（2026-10-28）：标点与运算符**主动后退**成次要色。
+         用户拿 Phycat 生成器的示例代码做对比：那边括号/逗号/分号是暗灰的，
+         主体（关键字、字符串、函数）才跳出来。原来这里标点用正文色，
+         整屏密度一样，看着就「平」。实测 Monaco 的 C++ 词法会给 delimiter.cpp /
+         delimiter.curly.cpp / delimiter.parenthesis.cpp，都吃 delimiter 这条前缀规则。 */
+      { token: 'delimiter', foreground: p.dim.slice(1) },
+      { token: 'operator', foreground: p.dim.slice(1) },
+      /* 预处理指令给一个明确色（#include / #define 那类）—— 它们成排出现，
+         和正文同色会让文件头「糊成一片」。用关键字的色，但不像关键字那么抢。 */
+      { token: 'keyword.directive', foreground: p.kw.slice(1) },
+      { token: 'string.include.identifier', foreground: p.str.slice(1) },
       { token: 'tag', foreground: p.kw.slice(1) },
       { token: 'attribute.name', foreground: p.fn.slice(1) },
       { token: 'attribute.value', foreground: p.str.slice(1) },

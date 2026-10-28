@@ -185,7 +185,12 @@ const SIZE_CAP = [
      16750 行附近直接把这些函数**对象**取去做点击接线 ✓ → 两个新文件必须排在 app.js
      **之前** ✓；反过来两块顶层只有 let/const 字面量初始化 + addEventListener ✓。
      两个新文件的上限都记成**拆完实测值**，不留余量 ✓。 */
-  ['assets/app.js', 12993],
+  /* 2026-10-28 上调（12993 → 12995，+2）：修一个**真回归** ✓ ——
+     cs-icons 把 ▸/▾ 换成 <svg><use/> 之后，`rowOpenItem()` 只读 textContent 拿到空串 ✗，
+     文件夹行的右键菜单首项从「展开/收起」退化成「打开」✗（browser-smoke 报的正是这个 ✓）。
+     修法是按 use 的 href 兜底判字形 ✓（+2 行代码、+3 行注释）——
+     这不是长胖，是把被图标化打断的行为补回来 ✓。 */
+  ['assets/app.js', 12995],
   ['assets/app-reading.js', 1229],
   ['assets/app-draw.js', 1101],
   /* ★ 2026-10-28 新登记：文档主题（Phycat 移植）。
@@ -364,7 +369,9 @@ const SIZE_CAP = [
   /* 代码编辑器语法配色：4 套 Phycat 调色板映射成 Monaco 主题 ✓。
      111 行里有一大段是注释——记着实测踩到的两个坑（options.theme 绕过包装、
      切标签走 updateOptions 而不是 setTheme），这两条比代码本身更值钱 ✓。 */
-  ['assets/code-theme.js', 111],
+  ['assets/code-theme.js', 113],
+  /* 代码区卡片质感（一期）：圆角/细边/投影/内高光，颜色走 --doc-*。 */
+  ['assets/editor-chrome.css', 17],
   ['assets/debug-panel.js', 530],
   ['lib/routes/dbg.js', 72],
   ['lib/routes/latex.js', 94],

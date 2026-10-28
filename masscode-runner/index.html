@@ -110,6 +110,12 @@
      注：画布那份 motion-canvas.css 不在这里引入 ✓ —— 画布是独立 iframe，
          由 assets/canvas/index.html 自己引 ✓。 -->
 <link rel="stylesheet" href="/assets/motion-monaco.css?v=20261028a">
+<!-- ★ 代码区卡片质感（2026-10-28，一期）：圆角 + 细边 + 投影 + 内高光，颜色走 --doc-*，
+     换文档配色时外框跟着变 ✓。
+     ⚠️ 刻意**不给** #code-wrap 加 overflow:hidden ✓ —— Monaco 的补全/hover/参数提示
+        都渲染在编辑器 DOM 内部，裁切会把它们切一半 ✗（只在圆角附近出现，很难查）✓。
+     必须排在 motion-monaco.css 之后 ✓：那里给外壳写过过渡与描边，这里要在它之上落最终外观 ✓。 -->
+<link rel="stylesheet" href="/assets/editor-chrome.css?v=20261028a">
 <!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
 <script src="/assets/doc-theme.js?v=20261028d" defer></script>
 <!-- ★ 动效的行为层（2026-10-28）：CSS 做不到的三件事 —— 面板显隐的入场类、

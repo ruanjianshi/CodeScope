@@ -1,0 +1,43 @@
+/* 代码区「卡片质感」（2026-10-28，一期）
+   -----------------------------------------------------------------------
+   ★ 背景：用户拿 Phycat 配色生成器里那块示例代码做对比，觉得「没它好看」✓。
+     量下来差别不在配色 ✓（同一套调色板），而在三点 ✓：
+       ① 颜色角色数（需要语义高亮，二期）；
+       ② **外框质感** —— 示例是卡片：圆角 + 细边 + 投影 + 内高光 ✓；
+       ③ 标点主动后退 ✓（见 code-theme.js 的 delimiter / operator 规则）✓。
+     本文件负责 ② ✓。
+
+   ⚠️ 为什么**不**给 #code-wrap 加 overflow:hidden ✗：
+     圆角需要裁切 ✗，但 Monaco 的补全弹窗 / hover 卡片 / 参数提示都渲染在
+     编辑器 DOM **内部** ✓ —— 一旦父级 overflow:hidden ✓，这些浮层会被裁掉一半 ✗
+     （表现为「补全框突然被切掉」✓，而且只在圆角附近发生 ✓，很难查 ✓）。
+     ⇒ 只给外层画边/圆角/投影 ✓，裁切交给内层 .monaco-editor / .overflow-guard 自己的圆角 ✓。
+
+   ⚠️ 颜色全部走 --doc-* 变量 ✓：换文档配色时外框跟着变 ✓，不会出现
+      「暖绿森林的代码配紫黑的边框」✗。 */
+
+#code-wrap {
+  border: 1px solid color-mix(in srgb, var(--doc-line) 82%, transparent);
+  border-radius: 11px;
+  /* 外投影拉出「浮在纸面之上」的感觉 ✓；内高光模拟玻璃边缘 ✓（和 doc-theme 的卡片同一语言） */
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .055);
+  background: var(--doc-bg);
+  /* ⚠️ 不加 overflow ✗ —— 理由见文件头 */
+}
+
+/* 内层自己收圆角：这样滚动条、minimap 的直角不会戳出外层圆角 */
+#code-wrap .monaco-editor,
+#code-wrap .overflow-guard { border-radius: 10px; }
+
+/* 分栏编辑时每一栏各自是一张卡片（左右并排时边界才看得清） */
+#code-wrap.split-primary #primary-group,
+#code-wrap .split-editor-host { border-radius: 10px; }
+
+/* 只读预览（Markdown 的代码块区）也用同一套卡片语言 */
+#md-view {
+  border: 1px solid color-mix(in srgb, var(--doc-line) 82%, transparent);
+  border-radius: 11px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
