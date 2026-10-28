@@ -785,3 +785,149 @@ blockquote.md-callout.quote::after, blockquote.md-callout.cite::after { content:
     inset 0 -2px 3px rgba(0, 0, 0, .3),
     0 3px 6px rgba(0, 0, 0, .5) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ⑳ 任务列表 · 动效 · 玻璃浮层 · 滚动条（2026-10-28 补）
+   -----------------------------------------------------------------------
+   补齐原主题 phycat 里剩下的四样「手感」，也是之前 19 节里唯一没覆盖的部分。
+   放在**文件末尾**是有意的 ✓：同特异性下「后出现者胜」✓，
+   所以下面每一步都不需要用 !important 去和上面的节抢 ✓。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── ⑳a 任务列表：自己画复选框 ──────────────────────────────────────────
+   ⚠️ 为什么非画不可 ✗：`li.md-task` 里的 `<input type="checkbox" disabled>`
+     是**浏览器原生控件** ✓ —— 深色主题下它永远是白底黑勾的白方块 ✗，
+     四套配色下长得一模一样 ✓（实测），和满屏暖绿/霓虹完全不是一路 ✓。
+     数据来源：app.js:3975 渲染 `<li class="md-task"><input type="checkbox" disabled …>`。
+   ⚠️ 为什么画在 li 上、而不是 input 上 ✗：input 是**替换元素** ✓，
+     ::before/::after 在它身上不渲染 ✗，所以视觉挂 li ✓、状态用 `:has()` 从 input 取 ✓
+     （Electron/Chromium 105+ 原生支持 ✓，本项目 canvas 连线也在用 ✓）。
+   ⚠️ 为什么 input 用 clip 藏、而不是 display:none ✗：
+     它是「已完成 / 未完成」唯一的**语义**来源 ✓，display:none 会让读屏软件也读不到 ✗。 */
+.md-doc .md-task,
+.reading-md-editor .md-task {
+  list-style: none; position: relative; padding-left: 1.6em;
+  border-radius: 6px; transition: background .18s ease;
+}
+.md-doc .md-task:hover { background: color-mix(in srgb, var(--doc-primary) 7%, transparent); }
+.md-doc .md-task input[type="checkbox"],
+.reading-md-editor .md-task input[type="checkbox"] {
+  position: absolute; left: 0; top: .42em;
+  width: 13px; height: 13px; margin: 0; padding: 0;
+  clip-path: inset(50%);   /* 视觉隐藏，语义保留 ✓ */
+  pointer-events: none;    /* 阅读视图只读，别让它骗到点击 ✗ */
+}
+.md-doc .md-task::before,
+.reading-md-editor .md-task::before {
+  content: ''; position: absolute; left: 0; top: .42em;
+  width: 13px; height: 13px; box-sizing: border-box; border-radius: 50%;
+  border: 1.6px solid color-mix(in srgb, var(--doc-primary) 55%, transparent);
+  background: transparent;
+  transition: background .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.md-doc .md-task:hover::before { border-color: var(--doc-primary); }
+/* 已完成：实心主色 + 内圈压一道底色做出「对勾底」的质感，不引任何外部图片 */
+.md-doc .md-task:has(input:checked)::before,
+.reading-md-editor .md-task:has(input:checked)::before {
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+  box-shadow: inset 0 0 0 2px var(--doc-bg), inset 0 0 8px var(--doc-glow);
+  animation: doc-task-pulse .42s var(--doc-ease-back) both;
+}
+.md-doc .md-task:has(input:checked) { color: var(--doc-text-3); }
+.md-doc .md-task:has(input:checked) > :not(input) {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--doc-primary) 45%, transparent);
+}
+
+/* ── ⑳b 动效一：斜体波纹流动（对应原主题 phycatItalicWaveFlow）────────
+   ★ 原理：文字**由渐变自己画出来** ✓ —— `color:transparent` + `background-clip:text`，
+     所以渐变的每一段都必须是不透明色 ✗：写 transparent 会让那一段的字直接消失 ✗
+     （渐变一旦透明，字就是透明的，页面上只剩一片空 ✓ 这个坑很容易踩 ✓）。
+   ⚠️ 只给 `em` ✓：铺到整段正文会让大片文字每帧重绘 ✗，滚动立刻掉帧 ✓。
+   ⚠️ 用 @supports 兜一层 ✗：万一引擎不认 background-clip:text，透明字=看不见 ✗，
+     包起来就自动退回 ⑧ 节的实色斜体 ✓（降级后只是没有波纹，不会坏 ✓）。 */
+@keyframes doc-italic-wave {
+  from { background-position-x: 0; }
+  to   { background-position-x: 16px; }
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .md-doc em,
+  .reading-md-editor em {
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(100deg,
+      var(--doc-secondary) 0 38%,
+      color-mix(in srgb, var(--doc-secondary) 45%, #fff) 50%,
+      var(--doc-secondary) 62% 100%);
+    background-size: 16px 100%;
+    background-repeat: repeat-x;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: doc-italic-wave 1.1s linear infinite;
+  }
+  /* 选中时退回实色 —— 渐变字被选中后会整段看不见 ✓ */
+  .md-doc em::selection,
+  .reading-md-editor em::selection {
+    color: var(--doc-strong); -webkit-text-fill-color: var(--doc-strong);
+    background: var(--doc-select);
+  }
+}
+
+/* ── ⑳c 动效二：勾选脉冲（对应原主题 task-pulse）────────────────────── */
+@keyframes doc-task-pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); box-shadow: 0 0 0 4px color-mix(in srgb, var(--doc-primary) 18%, transparent); }
+  100% { transform: scale(1); }
+}
+
+/* ── ⑳d 玻璃拟态：只给**浮在正文之上**的层 ────────────────────────────
+   ★ 这一条是照抄原主题的取舍，不是省事 ✗：
+     `backdrop-filter` 模糊的是**元素背后**的内容 ✓。正文里的引用块/代码块背后
+     是平面的 --doc-bg ✓ —— 糊一片纯色**什么也看不出来** ✗，白付一次 GPU 合成 ✗。
+     原主题 16 处 backdrop-filter 全在弹窗 / 侧栏卡片上 ✓，正文一处没有 ✓，就是这个道理 ✓。
+   → 所以：真玻璃只给**底下压着正文**的浮层 ✓（提示框面板、标题块类型下拉）；
+     正文内的块改用「顶部高光 + 半透明提亮 + 软投影」做视觉等效 ✓，零 GPU 成本 ✓。 */
+.codescope-callout-menu,
+.milkdown .top-bar-heading-dropdown {
+  background: color-mix(in srgb, var(--doc-bg) 62%, transparent) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid color-mix(in srgb, var(--doc-line) 80%, transparent) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .07) !important;
+}
+/* 正文内块的「假玻璃」：一道顶部高光边，看起来像一层薄玻璃压在纸上 */
+.md-doc blockquote:not(.md-callout),
+.md-doc .md-pre {
+  background-image: linear-gradient(180deg,
+    color-mix(in srgb, var(--doc-text) 5%, transparent) 0%,
+    transparent 42%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .055);
+}
+
+/* ── ⑳e 滚动条：跟文档配色走 ──────────────────────────────────────────
+   app.css 有一套滚动条样式 ✓，但它跟的是 **App 的 5 个主题** ✗ ——
+   切文档配色（比如到 abyss 深渊）时滚动条还是原样 ✓，很出戏 ✓。 */
+#md-view::-webkit-scrollbar,
+.md-doc::-webkit-scrollbar,
+.reading-md-block::-webkit-scrollbar,
+.reading-md-editor::-webkit-scrollbar { width: 10px; height: 10px; }
+#md-view::-webkit-scrollbar-track,
+.md-doc::-webkit-scrollbar-track,
+.reading-md-block::-webkit-scrollbar-track,
+.reading-md-editor::-webkit-scrollbar-track { background: transparent; }
+#md-view::-webkit-scrollbar-thumb,
+.md-doc::-webkit-scrollbar-thumb,
+.reading-md-block::-webkit-scrollbar-thumb,
+.reading-md-editor::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--doc-text) 16%, transparent);
+  border-radius: 999px; border: 2px solid transparent; background-clip: padding-box;
+}
+#md-view::-webkit-scrollbar-thumb:hover,
+.md-doc::-webkit-scrollbar-thumb:hover,
+.reading-md-block::-webkit-scrollbar-thumb:hover,
+.reading-md-editor::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--doc-primary) 42%, transparent);
+  background-clip: padding-box;
+}
+
