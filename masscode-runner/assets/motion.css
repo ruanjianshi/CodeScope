@@ -1,0 +1,515 @@
+/* ============================================================================
+   motion.css —— 码境 CodeScope 的「全站微交互层」
+
+   为什么要有这个文件
+   ----------------------------------------------------------------------------
+   动效原本散在 app.css 的 4800 行里：77 条 transition 用了 .12/.13/.14/.15/.16/.18
+   六种几乎一样的时长，曲线是 ease×59、linear×6、自定义 cubic-bezier 只有 4 处。
+   结果不是"动效太多"，而是**所有动作都挤在同一档快慢里**——悬停、按下、展开、弹窗
+   谁也听不出节拍。这里把时长收成四档、曲线收成三条、位移收成两个，再用同一套语言
+   去接管手指能碰到的每一个控件。
+
+   加载顺序（重要）
+   ----------------------------------------------------------------------------
+   必须排在 app.css / ui-kit.css / doc-theme.css **之后**（调度方在 index.html 里加
+   一行 <link rel="stylesheet" href="/assets/motion.css">）。
+   本文件**不用 !important 抢外观**（reduced-motion 段除外），靠"同特异性 + 后加载"
+   取胜。凡是 app.css 用 ID 选择器钉死的外观（#tree-head 的毛玻璃按钮、.ctx-menu 的
+   聚焦底色、弹窗输入框的 1px 环），这里只接管过渡，一个字不动它们的样子。
+
+   一条贯穿全文件的产品判断
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 按下 / 拖拽 / 打开菜单）才允许 --mo-back 回弹；
+   状态同步、轮询刷新、自动重绘一律走 --mo-out 平滑。
+   理由很实在：这个编辑器每 3 秒轮询一次并整块重建列表。任何"每次渲染都会发生"的
+   动画（行入场、列表淡入、计数跳动）都会变成连续抽筋 ✗。
+   所以本文件里**没有一条**规则给"行出现"做动画，只给"状态切换"做过渡 ✓。
+   ============================================================================ */
+
+
+/* ═══════════════════════════ 1. 令牌层 ═══════════════════════════════════ */
+
+/* 时长四档：不是拍脑袋，是把现有那堆值"收编"出来的 ——
+     .12s / .13s（悬停变色、按键底色）            → --mo-1 120ms   即时反馈
+     .14s / .15s / .16s（1px 抬升、边框、阴影）    → --mo-2 180ms   常规
+     .18s ～ doc-theme 的 .3s（位移、展开）        → --mo-3 260ms   需要看清过程
+     （弹窗/菜单入场原本根本没有时长，是硬切 ✗）   → --mo-4 400ms   大块进出
+   六个近似值压成四档的理由：人眼在 120~180ms 之间分辨不出 20ms 的差别，混用只会让
+   节奏糊掉 ✗；细分到 320ms 以上又会让"快反馈"变拖沓 ✗。
+   档与档之间保持 ~1.5x 的间隔，这样"哪个更重"是听得出、也感受得到的 ✓。 */
+:root {
+  --mo-1: 120ms;   /* 即时反馈：变色、描边 */
+  --mo-2: 180ms;   /* 常规：1px 抬升、按压缩放、阴影 */
+  --mo-3: 260ms;   /* 位移 / 展开：下划线生长、面板入场 */
+  --mo-4: 400ms;   /* 大块进出：脉冲、一次性提示 */
+
+  --mo-out: cubic-bezier(.2, .8, .2, 1);       /* 平滑减速：默认曲线，99% 场景用它 */
+  --mo-back: cubic-bezier(.34, 1.56, .64, 1);  /* 带回弹：**只给人主动的动作** ✓ */
+  --mo-in-out: cubic-bezier(.4, 0, .2, 1);     /* 两头都慢：原地性质变化（遮罩淡入） */
+
+  --mo-lift: -1px;   /* 悬停抬升：再多就"飘"，再少看不见 */
+  --mo-press: .985;  /* 按下缩到 98.5%：真正"按下去"的手感就在这 1.5% 里 */
+}
+
+
+/* ═══════════════════════════ 2. 按钮 ═════════════════════════════════════ */
+
+/* 裸 button：先统一时长与曲线，再补"按下去"和统一焦点环。
+   这里**不重写外观**（底色渐变、hover 提亮）——app.css:3284-3299 已经写得比这里好，
+   重复声明只会制造两份真相 ✗，日后改一处漏一处。
+   覆盖范围：app.css 里所有没有自带 transition 的按钮，包括 .btn-run（:39/:2877）、
+   #nd-submit（:475）、.header-action（:3704）、.side-icon（:3615）—— 它们只换了
+   皮肤，手感应该和别的按钮一致 ✓。
+
+   ⚠️ 必须带 html[data-theme] 前缀（实测）：app.css:3284 的 `html[data-theme] button`
+   是**真正生效的基础按钮层**，特异性 (0,1,2)，它自己写死了 [.16s × 4 + transform .18s]。
+   裸 button 只有 (0,0,1)，写了也压不过它 ✗。所以下面两条选择器并列：裸的那条管
+   "data-theme 还没设上"的一瞬，带主题前缀的那条才是日常生效的那条 ✓。 */
+button,
+html[data-theme] button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    filter var(--mo-1) var(--mo-out),      /* #nd-submit:hover 的 brightness(1.1) 走这条 */
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);  /* 回弹只服务于"按下→松开"这一下 */
+}
+
+/* 按下：手指按住时是"陷下去"，松开靠 --mo-back 弹回原位 ✓。
+   1.5% 的缩放足够被手指"感觉到"，又不会让按钮里的文字抖到读不清 ✗。
+   保留 app.css:3297 那半像素的下沉（translateY(.5px)）—— 它属于这层 macOS 质感的一部分，
+   我只把写死的 .985 换成令牌，不改观感 ✓。
+   同样要带 html[data-theme]：app.css:3296 的 `html[data-theme] button:active` 是 (1,2,1)，
+   裸 button:active 的 (0,2,1) 压不过它 ✗。 */
+button:active:not(:disabled),
+html[data-theme] button:active:not(:disabled) {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+/* ★ 补一刀（2026-10-28 实测）：上面那条 html[data-theme] button 是 (0,1,2) ✓，
+   但 ui-kit.css 给工具栏这类容器用的是 **#toolbar > button (1,0,1)** ✗ —— id 级选择器
+   压得过属性级 ✓，而它只过渡 background/color/border-color ✓、**不含 transform** ✗。
+   结果：这些按钮按下时 scale() 是**瞬变**（跳一下），而不是弹一下 ✓。
+   实测证据：真实页面里 #toolbar button 的 computed transition-property 只有
+   background/color/border-color ✓（原本该有的 transform 被 id 规则吃掉了 ✓）。
+   ⚠️ 为什么只能逐个列容器 ✗：要压过 (1,0,1) 就得用同等或更高的特异性 ✓，
+      没有别的写法（!important 会连外观一起抢 ✓，项目里明确不许 ✓）。
+      下面每一个都是从普查清单里抄的**真实存在**的选择器，不写推测的 ✗。 */
+#toolbar > button, #toolbar > .header-action,
+#tabs-row button, #tabs-row .tabs-nav,
+#out-tabs button, #out-tabs .otab,
+#tree-head button, #tree-head .side-icon, .side-head-actions button,
+#header-center > .header-action, #workspace-launch > .header-action,
+#btn-knowledge-launch, #knowledge-launch-more, #workspace-launch-more,
+#outline-actions button, #ai-head button, #ai-cfg-btns button, #ai-quick button,
+#ai-sel-bar button, #code-ref-bar button, #cg-toolbar button, .fg-btn {
+  transition:
+    background var(--mo-1) var(--mo-out),     /* 用 background 而不是 background-color：
+                                                 原规则过渡的就是 background ✓，改成
+                                                 color 会让渐变类的悬停彻底不动 ✗ */
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    filter var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);      /* ← 就是补回来的这一条 */
+}
+
+/* 焦点环统一：原来全站三套 —— app.css:3411（2px / offset 2）、:3446（2px / offset 1）、
+   各弹窗里的 :focus（1px outline）。统一成一种后，键盘用户看到的"选中了哪里"一致 ✓。
+   用 outline 而不是 box-shadow 做环：outline **不参与布局**，offset 也不会把排版挤动 ✓；
+   box-shadow 在 overflow:hidden 的容器里会被裁掉 ✗（侧栏、标签栏都是这种容器）。 */
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 78%, #fff);
+  outline-offset: 2px;
+}
+
+/* 输入框：**只统一过渡，不动 border / 尺寸 / 环的粗细**（brief 明确要求）。
+   原因：那些差异对应两种密度——密集表单（弹窗里 1px 环）和独立控件（筛选框 2px 环），
+   强行抹平会更糟 ✗。我们只保证"颜色变化是渐变的，不是跳的"。 */
+input, select, textarea {
+  transition:
+    box-shadow var(--mo-2) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    outline-color var(--mo-1) var(--mo-out);
+}
+
+/* 侧栏头部那排"毛玻璃按钮"（app.css:3587-3617）自带三层高光 + 按压位移（.18s +
+   cubic-bezier(.32,.72,0,1)）。外观一个字不动，只把时长曲线收进令牌 ✓。
+   用 :is() 把 4 个面板 ID 合成一条：:is() 的特异性取最高项，与原来逐条写 ID 完全相同
+   （1,1,1），所以"同特异性 + 后加载"就能覆盖 ✓，不需要 !important。 */
+:is(#tree-head, #draw-head, #office-head, #reading-head) .side-head-actions button {
+  transition:
+    background-color var(--mo-2) var(--mo-out),
+    border-color var(--mo-2) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 标签栏左右滚动按钮（app.css:4581，原 .15s ease）→ 收进 --mo-1。
+   specificity 与它相同（1,1,0），靠后加载覆盖 ✓。 */
+#tabs-row .tabs-nav {
+  transition:
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    background-color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════════════════════ 3. 标签 chip ═══════════════════════════════ */
+
+/* .tchip（app.js:2251 用 span 生成，不是 button）原本**一条 transition 都没有** ✗——
+   悬停描边提亮、选中整块换色全是硬切，这是全站最该补的一处。
+   前缀 #tagbar 是为了压过 app.css:450 / :2894 / :3106 三层同名的 .tchip
+   （(1,1,0) > (0,2,0)，ID 赢）✓。 */
+#tagbar .tchip {
+  transition:
+    background-color var(--mo-2) var(--mo-out),
+    border-color var(--mo-2) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停：上浮 1px + 描边提亮。原来只有描边变色、没有"浮起来"——chip 是可选中的
+   对象，给一点位移它才像"能按的东西" ✓（transform 不触发重排，20 个 chip 同时
+   悬停也不会把 grid 挤动 ✓）。 */
+#tagbar .tchip:hover {
+  transform: translateY(var(--mo-lift));
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  box-shadow: 0 3px 10px -4px rgba(0, 0, 0, .55);
+}
+
+/* 选中态：底色 / 描边 / 计数的**过渡**由上面那条 transition 接管（原来是硬切）。
+   这里只补一圈内描边让"已选"更实 —— 用 inset box-shadow 而不是 border 加宽：
+   border 会改变盒模型宽度，选中瞬间整排 chip 会重新排布 ✗。 */
+#tagbar .tchip.on {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* 按下：chip 是 span，拿不到 button 的按压，必须单独给 ✓ */
+#tagbar .tchip:active {
+  transform: translateY(0) scale(var(--mo-press));
+}
+
+
+/* ═══════════════════════════ 4. 树行 ════════════════════════════════════ */
+
+/* .fnode（文件夹行）/ .item（片段行）：**只给状态加过渡，绝不给"行出现"加动画**。
+   列表每 3 秒整块重建（见文件头），行入场动画会变成连续抽动 ✗。
+   原来 .fnode 是 .14s（app.css:3666）、.item 是 .13s（:2885）—— 两个值干同一件事，
+   这里并成一条 180ms ✓。 */
+.item, .fnode {
+  transition:
+    background-color var(--mo-2) var(--mo-out),
+    border-color var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    color var(--mo-2) var(--mo-out),
+    opacity var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-out);
+}
+
+/* 选中行的左侧指示条已经由 app.css:3661 的 inset box-shadow（3px accent）提供，
+   上面把 box-shadow 纳入过渡就够了 —— 它现在会"淡入"而不是"闪出来" ✓。
+   ⚠️ 不在这里新建 ::before 画条：.tree-children 的连接线（app.css:3164）和
+   .item.active::before（:2888）已经占了伪元素位，再插一个会打架 ✗。 */
+
+/* 拖拽中的行：app.css 给的是 opacity .45（:518/:530），这里叠一个极轻的倾斜 +
+   0.2% 收缩，让"我把它抓起来了"在视觉上成立 ✓。
+   倾斜用 --mo-out 而不是 --mo-back：正在被拖的行如果回弹，会跟着鼠标一起抖 ✗。 */
+#list .item.dragging,
+#list .fnode.dragging {
+  transform: rotate(-.4deg) scale(.998);
+}
+
+/* 落点指示线（.drop-before / .drop-after）：app.css:536 已经把 2px 线画好了，缺的只是
+   "它是什么时候出现的"——硬切出来会像渲染故障。给一条 120ms 的 scaleX 生长，告诉眼睛
+   "线是从这里长出来的" ✓（伪元素用 animation 而不是 transition：元素是新建的，
+   没有 before-change style，transition 抓不到 ✗）。 */
+#list .fnode.drop-before::before,
+#list .fnode.drop-after::after {
+  transform-origin: left center;
+  animation: mo-drop-line var(--mo-1) var(--mo-out) both;
+}
+@keyframes mo-drop-line {
+  from { transform: scaleX(.2); opacity: .35; }
+  to   { transform: scaleX(1);  opacity: 1; }
+}
+
+/* 放进文件夹的落点（.drop-target）：保留 app.css:531 的虚线 outline，再加一圈内描边 ——
+   "会插到哪"（线）和"会放进哪"（面）是两种操作，必须一眼分得开 ✓。 */
+#list .fnode.drop-target {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+
+/* ═══════════════════════════ 5. 标签页 ══════════════════════════════════ */
+
+/* 三种 tab：代码片段 .tab（是 button）、输出 .otab、阅读项目 .reading-project-tab。
+   统一过渡；.tab 原本是 .16s/.18s 混搭（app.css:3509），这里收成 --mo-1/--mo-2。
+   ⚠️ 同样要带 html[data-theme]：.tab 是 button，会被 app.css:3288 的
+   `html[data-theme] button` (0,1,2) 盖掉 —— 实测时 .tab 拿到的正是那条的
+   [.16s × 4 + transform .18s]，app.css:3509 自己其实也是死的 ✗。
+   带前缀后 (0,2,1) 才真正生效 ✓。 */
+.tab, .otab, .reading-project-tab,
+html[data-theme] .tab, html[data-theme] .otab, html[data-theme] .reading-project-tab {
+  transition:
+    background-color var(--mo-2) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* ↓ 下划线用 transform: scaleX() 生长，而不是改 width ——
+   width 会触发重排，一排 tab 同时改 width 会整排抖 ✗；transform 只走合成层 ✓。
+   位置/圆角/颜色沿用 app.css:3417 的既有定义，这里只补"从 0 长到 1"。
+   ⚠️ 关键：::after 在**未选中时也必须存在**（scaleX(0)，content 照给），否则每次选中
+   都是"新建一个伪元素"，浏览器不会给它做过渡 ✗。 */
+.tab::after {
+  content: '';
+  position: absolute;
+  left: 9px; right: 9px; bottom: 0;
+  height: 2px; border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--mo-2) var(--mo-out), opacity var(--mo-1) var(--mo-out);
+}
+.tab.active::after { transform: scaleX(1); }
+
+/* 与 motion.js 的共存约定（读它的源码确认过，不是猜的）：
+   它做"单条指示条跨 tab 滑动"时会给自己那条 bar 盖上 #tabs[data-mo-sliding]
+   （滑动窗口 = 时长 + 80ms），并要求 CSS 把静态下划线藏掉 ——
+   不藏就是"新标签立刻亮一条 + 旧标签滑走"，同一时刻两条线 ✗。
+   静止时故意**不藏**：共享条 z-index:2 正好盖在上面，万一它没对齐，露出的是原来那条线，
+   而不是一片空白 ✓。带 120ms 淡出，避免"亮一下又消失"的闪。
+   特异性 (1,2,1) 天然压过 .tab.active::after (0,2,0)，不需要 !important ✓ */
+#tabs[data-mo-sliding] .tab.active::after { opacity: 0; }
+#tabs[data-mo-sliding] .tab.active { box-shadow: none; }
+
+/* 阅读项目 tab：同一个手法。.on::after 的几何在 app.css:957，这里只给 base 补一条
+   不可见的线 + 生长过渡 ✓。 */
+.reading-project-tab::after {
+  content: '';
+  position: absolute;
+  left: 10px; right: 10px; bottom: 0;
+  height: 2px; border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--mo-3) var(--mo-out);
+}
+.reading-project-tab.on::after { transform: scaleX(1); }
+
+
+/* ═══════════════════════════ 6. 右键菜单 ════════════════════════════════ */
+
+/* #ctx-menu 是单元素，靠 [hidden] 属性 + JS 定位显示（app.js:861-931）。
+   普通 transition 抓不到"从 display:none 变出来"的那一帧 —— 只有 @starting-style 能 ✓。
+   ⚠️ @starting-style 与 transition-behavior: allow-discrete 同批落地（Chromium 117+），
+   所以用后者当探针把这段包起来；不支持时整段被浏览器丢弃 → 菜单照旧瞬间出现，
+   功能完全不受影响 ✓（"不能坏"是底线，动画是加分项）。 */
+@supports (transition-behavior: allow-discrete) {
+  .ctx-menu {
+    opacity: 1;
+    transform: none;
+    transform-origin: center top;   /* 从菜单顶部（鼠标点下去的那侧）长出来 */
+    transition:
+      opacity var(--mo-1) var(--mo-out),
+      transform var(--mo-1) var(--mo-out);
+  }
+  /* 只给"变成可见"时提供起始值：opacity 0 + 缩到 96% + 下移 4px。
+     4px 是"从指针位置弹出来"的最小可感知距离，再大就是弹窗而不是菜单了 ✗。 */
+  @starting-style {
+    .ctx-menu:not([hidden]) {
+      opacity: 0;
+      transform: translateY(4px) scale(.96);
+    }
+  }
+}
+
+/* 菜单项：app.css:505 原本是 .12s ease，收进 --mo-1。悬停底色属于"人主动"，
+   但 28px 高的行做缩放会让人追不准目标 ✗ —— 所以这里只过渡颜色，不加位移 ✓。 */
+.ctx-menu .ctx-item {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════════════════════ 7. 对话框 ══════════════════════════════════ */
+
+/* 全站没有统一 modal 组件，是逐个 id；而且**四种显示方式混着用**：
+     .open（#new-dialog / #confirm-dialog / #reading-new-dialog / #office-ndialog）
+     .on（#backlink-dialog）
+     移除 .hidden（#review-dialog）
+     inline display（#draw-ndialog，app-draw.js:628）
+   所以下面按"显示后必然匹配"的选择器分别挂，一个都不漏 ✓。
+   入场 = 遮罩淡入 + 面板从 98% 缩放回来（不是 0.9：缩太多像缩略图弹开，太重 ✗）。
+   出场不做：这些弹窗都是 display:none 硬关，做出场要改 JS（allow-discrete + 延时移除），
+   属于行为改动，不在本文件范围；也避免退场期间那一层挡住点击 ✗。 */
+@supports (transition-behavior: allow-discrete) {
+  :is(#new-dialog.open, #confirm-dialog.open, #reading-new-dialog.open,
+      #office-ndialog.open, #backlink-dialog.on, #review-dialog:not(.hidden),
+      #draw-ndialog) {
+    opacity: 1;
+    transition: opacity var(--mo-3) var(--mo-out);
+  }
+  :is(#new-dialog, #confirm-dialog, #reading-new-dialog, #office-ndialog, #draw-ndialog) .nd-panel,
+  #backlink-panel,
+  #review-dialog .review-panel {
+    transition:
+      opacity var(--mo-3) var(--mo-out),
+      transform var(--mo-3) var(--mo-out);
+  }
+  @starting-style {
+    :is(#new-dialog.open, #confirm-dialog.open, #reading-new-dialog.open,
+        #office-ndialog.open, #backlink-dialog.on, #review-dialog:not(.hidden),
+        #draw-ndialog) {
+      opacity: 0;
+    }
+    :is(#new-dialog, #confirm-dialog, #reading-new-dialog, #office-ndialog, #draw-ndialog) .nd-panel,
+    #backlink-panel,
+    #review-dialog .review-panel {
+      opacity: 0;
+      transform: scale(.98);
+    }
+  }
+}
+
+
+/* ═══════════════════════════ 8. 分隔条 ══════════════════════════════════ */
+
+/* #split-v / #split-h / #split-v2 / .hsplit / #edit-split-v 是**拖拽锚点**：
+   反馈不足时人会以为没抓住，然后重复点、拖着试 ✗。
+   app.css 目前只在 ::after 上换色，而且 .hsplit 的 .active 与 :hover 同色 —— 看不出
+   "正在拖"。这里：常态线条淡入，拖拽中（.active，app.js:8932 / :13544 会挂）加宽发光 ✓。
+   只过渡颜色/阴影——7px 的命中区**宽度不许动**，一改就会让鼠标跟手位置漂移 ✗。 */
+:is(#split-v, #split-h, #split-v2, .hsplit, #edit-split-v) {
+  transition: background-color var(--mo-1) var(--mo-out);
+}
+:is(#split-v, #split-h, #split-v2, .hsplit, #edit-split-v)::after {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-1) var(--mo-out);
+}
+:is(#split-v, #split-h, #split-v2, .hsplit, #edit-split-v).active {
+  background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+:is(#split-v, #split-h, #split-v2, .hsplit, #edit-split-v).active::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+
+/* ═══════════════════════════ 9. 状态提示 ════════════════════════════════ */
+
+/* #status（.pill，index.html:724，由 setStatus 写）：
+   - 常态：kind 切换（idle→ok→err→warn）的颜色走 180ms 平滑。这是**状态同步**，
+     按产品判断绝对不能弹 ✓ —— 它每几秒就会变一次，弹一下就是噪音。
+   - 内容刷新：motion.js 在内容真正变化时挂 .mo-flash，这里只定义脉冲本身 ✓。
+     用 box-shadow 向外扩散而不是缩放：缩放会让 pill 里的字跟着抖，正在读数的人会丢焦点 ✗。 */
+#status, .pill {
+  transition:
+    background-color var(--mo-2) var(--mo-out),
+    color var(--mo-2) var(--mo-out);
+}
+/* 脉冲本体见第 9.5 节：.mo-flash 的 keyframes 必须和 motion.js 的兜底同名
+   （mo-status-glow），否则"有 motion.css / 没 motion.css"两种情况下动的是两条不同的动画 ✗ */
+
+
+/* ═══════════ 9.5 与 motion.js 的分工（它只决定"何时"，视觉归这里） ══════════ */
+
+/* ⚠️ 这一节是**契约**，不是风格选择（2026-10-28 与 assets/motion.js 逐行对齐过）：
+   motion.js 的兜底样式**永远注入**，插在 <head> 第一个子节点，只写"看得见的最小集"，
+   并在注释里显式把这些归给 motion.css：面板入场 / 逐项入场 / 指示条滑动期间的静态线。
+   两条链因此必须对齐三件事：
+     ① 类名 / 属性名一致：.mo-enter、.mo-stagger、.mo-flash、#tabs[data-mo-sliding]
+     ② keyframes 同名同义：mo-enter / mo-enter-fade / mo-stagger-in / mo-status-glow
+        （同名 @keyframes 后加载者胜 —— 本文件在，动的是我的曲线；本文件缺，兜底的
+        240ms 顶上 ✓，不会"类挂上了却没反应"）
+     ③ 令牌共享：motion.js 用 cssMs('--mo-3') 读动画时长，这一档一改它就自动跟 ✓
+   为什么还要重复定义：兜底是"没有本文件时"的下限，不是替代品 ——
+   它只有 240ms + 一条通用曲线，没有四档节奏，也没有 reduced-motion 里的位移归零 ✓。
+
+     .mo-enter    面板由隐藏变可见（只在那一次）
+     .mo-stagger  列表"首次出现"逐项入场（0→N；不是每 3 秒重建的那次）
+     .mo-flash    #status 文字真的变了时的脉冲
+     #tabs[data-mo-sliding]  共享指示条滑动期间藏静态下划线（见第 5 节）
+
+   三者都是"状态里发生的事件"，不是人按的按钮 ⇒ 一律 --mo-out，不许回弹 ✗。
+   motion.js 读 --mo-3 当动画时长（cssMs('--mo-3')），所以这里的 260ms 它会跟着用 ✓。 */
+@keyframes mo-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+/* #code-wrap 里有 Monaco 和几层绝对定位（行高亮 / 折叠装订线 / 缩进参考线）：
+   transform 会新建包含块，虽然不改布局，但没必要在这一块上冒险 → 只淡入 ✓ */
+@keyframes mo-enter-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+/* 逐项入场只上移 3px：它是"这批行是新的"的提示，不是表演；位移再大就成了列表在跳 ✗ */
+@keyframes mo-stagger-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+/* 状态脉冲：向外扩散一圈强调色，而不是缩放 pill —— 缩放会让里面的字跟着抖，
+   正在读"空闲/已保存"的人会丢焦点 ✗ */
+@keyframes mo-status-glow {
+  0%   { box-shadow: 0 0 0 0 transparent; }
+  28%  { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.mo-enter { animation: mo-enter var(--mo-3) var(--mo-out) both; }
+#code-wrap.mo-enter { animation-name: mo-enter-fade; }
+.mo-stagger { animation: mo-stagger-in var(--mo-3) var(--mo-out) both; }
+/* 640ms 是 motion.js 的约定（它在 720ms 时摘掉类，留 80ms 余量）——
+   改短会显得没发生，改长会被它提前掐断 ✗ */
+.mo-flash { animation: mo-status-glow 640ms var(--mo-out) 1; }
+
+
+/* ═══════════════════ 10. 无障碍：reduced-motion ═════════════════════════ */
+
+/* app.css:3817 已有一条全局兜底，但它只压 transition-duration；animation 只是被压到
+   .01ms（等于还在跑）✗ —— 本文件引入的 animation 必须自己关 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  /* 本文件引入的全部 animation：motion.js 的三个类（面板入场 / 逐项入场 / 状态脉冲）
+     + 落点线生长。app.css:3817 的全局兜底管不到这些（它只压 duration，动画还在跑）✗ */
+  .mo-enter,
+  .mo-stagger,
+  .mo-flash,
+  #list .fnode.drop-before::before,
+  #list .fnode.drop-after::after {
+    animation: none !important;
+  }
+
+  /* 过渡压到不可见（!important 只出现在这一段，用来和 app.css 的全局兜底同层级） */
+  button, input, select, textarea, [tabindex],
+  .item, .fnode, .tchip, #tagbar .tchip,
+  .tab, .otab, .reading-project-tab, .tab::after, .reading-project-tab::after,
+  .ctx-menu, .ctx-menu .ctx-item,
+  .nd-panel, #backlink-panel, .review-panel,
+  #split-v, #split-h, #split-v2, .hsplit, #edit-split-v,
+  #split-v::after, #split-h::after, #split-v2::after, .hsplit::after, #edit-split-v::after,
+  #status, .pill {
+    transition-duration: .01ms !important;
+  }
+
+  /* 位移本身也取消：前庭敏感的用户受不了"上浮/按压缩放/拖拽倾斜"，哪怕只有 1px。
+     ⚠️ 这里不要写 .tab::after { transform: none } —— 那会让 scaleX(0) 的下划线
+     变成满宽常驻 ✗；伪元素的生长交给上面的 .01ms 就够了。 */
+  #tagbar .tchip:hover,
+  #tagbar .tchip:active,
+  button:active:not(:disabled),
+  html[data-theme] button:active:not(:disabled),
+  #list .item.dragging,
+  #list .fnode.dragging {
+    transform: none !important;
+  }
+}

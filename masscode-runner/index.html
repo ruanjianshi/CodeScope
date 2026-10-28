@@ -82,8 +82,19 @@
 <link rel="stylesheet" href="/assets/ui-kit.css?v=20261028a">
 <!-- 文档主题（Everforest · 暖绿森林）必须排在 app.css 之后：靠「同特异性 + 后出现」覆盖 -->
 <link rel="stylesheet" href="/assets/doc-theme.css?v=20261028E">
+<!-- ★ 全站微交互层（2026-10-28）：动效令牌 + 按钮/标签/树行/菜单/弹窗/分隔条。
+     ⚠️ 必须排在 app.css / ui-kit.css / doc-theme.css **之后** ✓：这里大量规则靠
+        「同特异性 + 后出现」覆盖 ✓，挪到前面会整片失效 ✗。
+        实测：app.css:3284 的 html[data-theme] button 特异性是 (0,1,2)，
+        裸 button 的 (0,0,1) 压不过它 —— motion.css 必须带同样的前缀才生效 ✓。 -->
+<link rel="stylesheet" href="/assets/motion.css?v=20261028a">
 <!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
 <script src="/assets/doc-theme.js?v=20261028d" defer></script>
+<!-- ★ 动效的行为层（2026-10-28）：CSS 做不到的三件事 —— 面板显隐的入场类、
+     跨 tab 滑动的共享指示条、列表 stagger。全部用 MutationObserver 旁挂 ✓，
+     不改 app.js 一行 ✓（它正顶在 12,993 行代码的棘轮上限）。
+     ⚠️ 纯渐进增强 ✓：这个脚本失效时页面与没有它**完全一致** ✓。 -->
+<script src="/assets/motion.js?v=20261028a" defer></script>
 </head>
 <body>
 <!-- 统一图标 sprite：线性、1em、currentColor。用 <svg class="cs-ico"><use href="#i-xxx"/></svg> 引用 -->
