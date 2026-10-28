@@ -18,7 +18,7 @@
  */
 
 async function handle(req, res, u, ctx) {
-  const { send, readStudyConfig, saveStudyConfig, readBody, studySafeName, studyNoteFile, fs, path, writeFileAtomicSync, studyAssetFile, streamStatic, readRawBody, isStudyImage, crypto, parsedReadingWebUrl, fetchReadableWebPage } = ctx;
+  const { send, readStudyConfig, saveStudyConfig, readBody, studySafeName, studyNoteFile, fs, path, writeFileAtomicSync, studyAssetFile, streamStatic, readRawBody, isStudyImage, crypto, parsedReadingWebUrl, fetchReadableWebPage, readSiteCatalog } = ctx;
 
     if (u.pathname === '/api/study/config') {
     if (req.method === 'GET') return send(res, 200, { ok:true, config:readStudyConfig() });
@@ -26,6 +26,13 @@ async function handle(req, res, u, ctx) {
       try { return send(res, 200, { ok:true, config:saveStudyConfig(await readBody(req, 2 * 1024 * 1024)) }); }
       catch (error) { return send(res, error.statusCode || 400, { ok:false, error:String(error.message || error) }); }
     }
+    }
+    /* 网址目录（私有数据）✓ —— 数据在应用数据目录的 site-catalog.json 里，
+       不在源码仓库里 ✗（那里有一批内网地址与端口表，详见 server.js 的 readSiteCatalog）。
+       ✓ 读不到就 catalog:null，前端回退源码里的占位示例 —— 菜单不会空 ✗ 空的。 */
+    if (req.method === 'GET' && u.pathname === '/api/study/site-catalog') {
+      const { catalog, source } = readSiteCatalog();
+      return send(res, 200, { ok:true, catalog, source, file:'site-catalog.json' });
     }
     if (u.pathname === '/api/study/note') {
     const id = studySafeName(u.searchParams.get('id'));

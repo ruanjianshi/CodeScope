@@ -12,7 +12,10 @@
    但前端 `dshLaunchUrl()` 在非本机访问时返回的是 `service.url`（= http://127.0.0.1:3080/?token=…）
    → 局域网设备打开会**指到它自己身上** ✓ 必然打不开 ✗
    ⇒ 由这里转发到 127.0.0.1:3080，前端改指 `http://<当前主机名>:<代理端口>/?token=…` ✓
-   ⚠️ 同源校验（isAllowed）照搬 CodeScope 的 trustedHttpOrigin，不额外开门 ✓ */
+   ⚠️ 同源校验（isAllowed）照搬 CodeScope 的 trustedHttpOrigin，不额外开门 ✓
+   ★ 鉴权（authorize）也照搬 ✓（2026-10-28）——这个代理同样**自己 createServer** ✗，
+     不经过 /api 中间件 ✓，局域网直连 3081 就能用上整个智能体 ✓（能跑命令 ✓）。
+     判据与主服务**同一份** ✓（见 server.js 的 proxyAuthGate ✓），这里只负责透传 ✓。 */
 
 const { createCodeServerProxy } = require('./code-server-proxy');
 
@@ -29,6 +32,7 @@ function createDshProxy(options = {}) {
     targetHost: '127.0.0.1',
     targetPort: initial,
     isAllowed: options.isAllowed,
+    authorize: options.authorize,
     onNotice: options.onNotice || ((message) => console.log('[DSH 代理] ' + message)),
   });
 

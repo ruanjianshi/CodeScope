@@ -1,3 +1,16 @@
+# ★★ ONLYOFFICE Document Server（CodeScope 的 Office 编辑内核）★★
+# ⚠️ 这个文件里的两个变量**故意不写默认值** ✗✗（2026-10-28）：
+#    `${VAR:?消息}` 在变量缺失时会让 `docker compose up` **直接失败** ✓，
+#    而不是「静默地不签名跑起来」✗ —— 后者才是最危险的：
+#    容器健康、页面能开、编辑器能用 ✓，但**任何人**（同机任何进程、局域网任何设备 ✓）
+#    都能用任意 config 打开并覆盖同一份文档 ✗，而且**没有任何报错** ✗。
+#    正常路径不用手填 ✓：`node scripts/ensure-onlyoffice.js`（npm 的 prestart ✓、
+#    以及 CodeScope 启动时自己会补一次 ✓）会从
+#    `<应用数据目录>/onlyoffice-jwt-secret` 读密钥并作为环境变量传进来 ✓。
+# ⚠️ 真要退回不签名模式（比如在排查一个跟 JWT 有关的白屏 ✓）：
+#    `JWT_ENABLED=false JWT_SECRET=<任意非空串> docker compose -f docker-compose.onlyoffice.yml up -d` ✓
+#    —— JWT_ENABLED=false 时容器不会用这个密钥 ✓，但依然**必须显式给** ✓：
+#    强迫用户「说清楚自己在关安全」✓，而不是随手复制一条命令就关掉了 ✓。
 services:
   codescope-onlyoffice:
     image: onlyoffice/documentserver:9.4.0.1
@@ -8,7 +21,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      JWT_ENABLED: "false"
+      # ⚠️ 从环境变量读 ✓（原来写死 "false" ✗）——见文件头那段理由 ✓。
+      JWT_ENABLED: "${JWT_ENABLED:?缺少 JWT_ENABLED：请用 node scripts/ensure-onlyoffice.js 启动（它会生成密钥并自动传入），或显式 export JWT_ENABLED=true JWT_SECRET=...}"
+      JWT_SECRET: "${JWT_SECRET:?缺少 JWT_SECRET：先运行 node scripts/ensure-onlyoffice.js 生成密钥（<应用数据目录>/onlyoffice-jwt-secret，0600），或显式 export JWT_SECRET=<密钥>}"
       ALLOW_PRIVATE_IP_ADDRESS: "true"
       ALLOW_META_IP_ADDRESS: "false"
       EXAMPLE_ENABLED: "false"

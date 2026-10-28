@@ -28,7 +28,9 @@ const mammoth = require('mammoth');
 const htmlToDocx = require('@turbodocx/html-to-docx');
 const { createLspService } = require('./lib/lsp-service');
 const { applyPortableToolPath, bundledGopls, nodeTool, packageVersion } = require('./lib/tool-runtime');
-const { createOfficeEngine } = require('./lib/office-engine');
+/* ★ JWT 原语与密钥文件也在 office-engine 里 ✓（2026-10-28）——
+   和 scripts/ensure-onlyoffice.js 用的是**同一个模块** ✓，两边绝不会各拿一把密钥 ✓。 */
+const { createOfficeEngine, ensureOnlyOfficeJwtSecret, signOnlyOfficeJwt, onlyOfficeJwtSecretFile } = require('./lib/office-engine');
 const { createDshService } = require('./lib/dsh-service');
 const { createVncAuthFilter } = require('./lib/vnc-auth-filter');
 const { createOpencodeService } = require('./lib/opencode-service');
@@ -872,6 +874,93 @@ function cleanServiceUrl(value) {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('ONLYOFFICE 地址必须使用 http/https，且不能包含账号密码');
   return url.toString().replace(/\/$/, '');
 }
+/* ══ ★★★★ ONLYOFFICE JWT 密钥：自动生成 + 可降级 ✓✓（2026-10-28）══════════
+   为什么 ✗：compose 里 JWT_ENABLED 一直是 false ✗ → Document Server（映射在 8088 ✓）
+     接受**任何人**递来的任意 config ✓，同机任何进程、局域网任何设备都能打开/覆盖文档 ✗。
+   规矩 ✓：
+     · 密钥只有一份 ✓：`<数据目录>/onlyoffice-jwt-secret`（0600 ✓，不进仓库 ✗）。
+       容器由 scripts/ensure-onlyoffice.js 用**同一份**密钥起 ✓（JWT_SECRET ✓）；
+       这里用**同一份**签发 config token ✓（HS256 ✓）。
+     · 外部 Document Server（用户填了别的地址 ✓）**不用这把** ✗ ——
+       它的密钥在它自己那边 ✓，拿本机文件去签必然校验失败（症状：编辑器一直白屏）✗。
+     · **必须可降级** ✓：密钥拿不到 ✓、或容器还是旧配置（JWT_ENABLED≠true）✓
+       → 记一条警告 + 退回不签名模式 ✓，Office 不崩 ✓（用户至少还能编辑文档 ✓）。
+   状态要对用户可见 ✓：`/api/office/connection` 的 `jwt` 字段 ✓（enabled / source / degraded / warning ✓）。 */
+const ONLYOFFICE_JWT_FILE = onlyOfficeJwtSecretFile(applicationDataRoot());
+const ONLYOFFICE_JWT = { probe: { state: 'unknown', at: 0 }, busy: false, warned: new Set() };
+function onlyOfficeJwtWarnOnce(key, message) {
+  if (ONLYOFFICE_JWT.warned.has(key)) return;
+  ONLYOFFICE_JWT.warned.add(key);
+  console.warn(message);
+}
+/* 本机托管实例的判据 ✓ —— 和 scripts/ensure-onlyoffice.js 的 isManagedLocalUrl 同一个口径 ✓
+   （端口写死 8088 是 compose 里的映射 ✓，不猜 ✓）。 */
+function isManagedOnlyOfficeUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return ['127.0.0.1', 'localhost', '::1'].includes(url.hostname) && Number(url.port || 80) === 8088;
+  } catch (_) { return false; }
+}
+/* ⚠️ 只读地看一眼容器现在是不是真的开着 JWT ✓（docker 不在 / 容器不在 → 'unknown' ✓ 不报错 ✓）。
+   读的是 `Config.Env` ✓：容器名和镜像都没变 ✓，但 env 可能是很久以前那份 ✗ ——
+   那种情况下我们签的 token 它根本不看 ✓，用户却以为「开了 JWT」✓。
+   缓存 60 秒 ✓（docker inspect 是起进程 ✓，别在每次开面板时都问一遍 ✗）。 */
+function probeOnlyOfficeJwtContainer(force) {
+  const stale = (Date.now() - ONLYOFFICE_JWT.probe.at) > 60000;
+  if (!force && !stale) return ONLYOFFICE_JWT.probe.state;
+  if (ONLYOFFICE_JWT.busy) return ONLYOFFICE_JWT.probe.state;
+  ONLYOFFICE_JWT.busy = true;
+  execFileText('docker', ['inspect', '--format', '{{json .Config.Env}}', ONLYOFFICE_CONTAINER_NAME], 5000)
+    .then((out) => {
+      const env = JSON.parse(String(out || '[]').trim());
+      const line = Array.isArray(env) ? env.find((item) => String(item).startsWith('JWT_ENABLED=')) : '';
+      const value = line ? String(line).slice('JWT_ENABLED='.length).trim().toLowerCase() : '';
+      ONLYOFFICE_JWT.probe = { state: !line ? 'unset' : (value === 'true' ? 'enabled' : 'disabled'), at: Date.now() };
+    })
+    .catch(() => { ONLYOFFICE_JWT.probe = { state: 'unknown', at: Date.now() }; })
+    .then(() => {
+      ONLYOFFICE_JWT.busy = false;
+      const state = ONLYOFFICE_JWT.probe.state;
+      if ((state === 'disabled' || state === 'unset') && ONLYOFFICE_CONNECTION.jwtSecret) {
+        onlyOfficeJwtWarnOnce('container', '[ONLYOFFICE] 容器 ' + ONLYOFFICE_CONTAINER_NAME
+          + ' 当前 ' + (state === 'unset' ? '没有设置 JWT_ENABLED' : 'JWT_ENABLED≠true')
+          + ' → 已退回**不签名模式**（Office 仍可用，但同机任何进程都能打开/覆盖文档）。'
+          + '启用：docker compose -f docker-compose.onlyoffice.yml up -d --force-recreate（会重建容器）');
+      }
+    });
+  return ONLYOFFICE_JWT.probe.state;
+}
+/* ★ 签发用的密钥 ✓ —— **只有容器确认是旧配置时**才返回 '' ✓（退回不签名 ✓）。
+   ⚠️ 反过来做会更糟 ✗：容器开着 JWT、我们却不签名 → 编辑器直接打不开（缺 token）✗；
+      容器关着 JWT、我们签了 → 它忽略 token ✓（无害 ✓）。所以降级只往「确定不安全」那一侧走 ✓。 */
+function onlyOfficeJwtSecret() {
+  const secret = ONLYOFFICE_CONNECTION.jwtSecret;
+  if (!secret) return '';
+  const state = ONLYOFFICE_JWT.probe.state;
+  if (state === 'disabled' || state === 'unset') return '';
+  return secret;
+}
+/* 对外的 JWT 状态 ✓（/api/office/connection 与 providers/v1 都带它 ✓，不含密钥、不含路径 ✓）*/
+function onlyOfficeJwtStatus() {
+  const secret = ONLYOFFICE_CONNECTION.jwtSecret;
+  const managed = isManagedOnlyOfficeUrl(ONLYOFFICE_CONNECTION.publicUrl);
+  if (managed) probeOnlyOfficeJwtContainer(false);
+  const state = managed ? ONLYOFFICE_JWT.probe.state : 'unknown';
+  const containerUnsafe = state === 'disabled' || state === 'unset';
+  const active = !!secret && !containerUnsafe;
+  return {
+    enabled: active,
+    configured: !!secret,
+    source: ONLYOFFICE_CONNECTION.jwtSource || 'none',
+    container: state,
+    degraded: !!secret && containerUnsafe,
+    warning: !secret
+      ? (ONLYOFFICE_CONNECTION.jwtError || '没有可用的 JWT 密钥：ONLYOFFICE 以不签名模式运行（同机任何进程都能打开/覆盖文档）')
+      : (containerUnsafe
+        ? '容器仍是旧配置（' + (state === 'unset' ? '没有设置 JWT_ENABLED' : 'JWT_ENABLED≠true') + '）：已退回不签名模式，需 --force-recreate 才能生效'
+        : ''),
+  };
+}
 function readOnlyOfficeConnection() {
   let saved = {};
   try { saved = JSON.parse(fs.readFileSync(ONLYOFFICE_CONNECTION_FILE, 'utf8')); } catch (_) {}
@@ -880,10 +969,39 @@ function readOnlyOfficeConnection() {
   let publicUrl = '', callbackBase = '';
   try { publicUrl = cleanServiceUrl(rawPublic); } catch (_) {}
   try { callbackBase = cleanServiceUrl(rawCallback); } catch (_) {}
+  const explicitSecret = String(process.env.CODESCOPE_ONLYOFFICE_JWT_SECRET || saved.jwtSecret || '').trim();
+  const managed = isManagedOnlyOfficeUrl(publicUrl);
+  let jwtSecret = '', jwtSource = 'none', jwtError = '';
+  /* ★ 本机托管（或还没配置地址 ✓）→ 用**容器真正拿到的那把** ✓（见上面那段） */
+  if (!publicUrl || managed) {
+    const ensured = ensureOnlyOfficeJwtSecret(applicationDataRoot());
+    if (ensured.secret) { jwtSecret = ensured.secret; jwtSource = 'auto'; }
+    else { jwtError = ensured.error || '无法生成 JWT 密钥文件'; }
+    if (ensured.secret && explicitSecret && explicitSecret !== ensured.secret) {
+      onlyOfficeJwtWarnOnce('mismatch', '[ONLYOFFICE] 显式配置的 JWT 密钥与容器实际使用的密钥不同（'
+        + ONLYOFFICE_JWT_FILE + '）→ 已改用文件里的那份，否则 Document Server 必然校验失败。');
+    }
+  }
+  if (!jwtSecret && explicitSecret) {
+    jwtSecret = explicitSecret;
+    jwtSource = process.env.CODESCOPE_ONLYOFFICE_JWT_SECRET ? 'environment' : 'saved';
+  }
+  if (!jwtSecret && !jwtError) jwtError = '尚未配置 JWT 密钥';
+  /* ⚠️ 降级必须**喊出来** ✓（2026-10-28）——「服务能用」会让人以为已经加固过了 ✗。
+     只 warn 一次 ✓：readOnlyOfficeConnection 每次存配置 / 子进程结束都会跑一遍 ✓，
+     每次都喊就等于没喊 ✓（日志刷屏 ✗）。 */
+  if (!jwtSecret) {
+    onlyOfficeJwtWarnOnce('no-secret', '[ONLYOFFICE] 没有可用的 JWT 密钥（' + (jwtError || '尚未配置') + '）'
+      + '：签发的 config 不带 token，Office 退回**不签名模式** —— 同机任何进程都能打开/覆盖同一份文档。'
+      + (publicUrl ? '' : '密钥本应由启动流程自动生成：' + ONLYOFFICE_JWT_FILE));
+  }
   return {
     publicUrl,
     callbackBase,
-    jwtSecret:String(process.env.CODESCOPE_ONLYOFFICE_JWT_SECRET || saved.jwtSecret || ''),
+    jwtSecret,
+    jwtExplicit: explicitSecret,
+    jwtSource,
+    jwtError,
     source:process.env.CODESCOPE_ONLYOFFICE_URL ? 'environment' : (saved.publicUrl ? 'saved' : 'none'),
   };
 }
@@ -892,12 +1010,16 @@ let OFFICE_ENGINE = createOfficeEngine({
   appVersion:APP_VERSION,
   onlyOfficeUrl:ONLYOFFICE_CONNECTION.publicUrl,
   managedManifest:process.env.CODESCOPE_OFFICE_PROVIDER_MANIFEST,
+  jwtSecret:ONLYOFFICE_CONNECTION.jwtSecret,
+  jwtStatus:onlyOfficeJwtStatus,
 });
 function refreshOfficeEngine() {
   OFFICE_ENGINE = createOfficeEngine({
     appVersion:APP_VERSION,
     onlyOfficeUrl:ONLYOFFICE_CONNECTION.publicUrl,
     managedManifest:process.env.CODESCOPE_OFFICE_PROVIDER_MANIFEST,
+    jwtSecret:ONLYOFFICE_CONNECTION.jwtSecret,
+    jwtStatus:onlyOfficeJwtStatus,
   });
 }
 function publicOnlyOfficeConnection() {
@@ -905,8 +1027,13 @@ function publicOnlyOfficeConnection() {
     publicUrl:ONLYOFFICE_CONNECTION.publicUrl,
     callbackBase:ONLYOFFICE_CONNECTION.callbackBase,
     configured:!!ONLYOFFICE_CONNECTION.publicUrl,
+    /* ⚠️ 只报「有没有密钥」✓，**绝不带密钥本身** ✗（这个是给浏览器看的 ✓，
+       局域网设备也能拿到它 ✓ —— 见 tests/smoke.js 那条脱敏断言 ✓）。 */
     jwtConfigured:!!ONLYOFFICE_CONNECTION.jwtSecret,
     source:ONLYOFFICE_CONNECTION.source,
+    /* ★ JWT 链路状态 ✓（2026-10-28）：enabled / configured / source / container / degraded / warning ✓
+       —— 「服务可用」和「开着 JWT」是两件事 ✓，必须能分别看见 ✓。 */
+    jwt: onlyOfficeJwtStatus(),
   };
 }
 function saveOnlyOfficeConnection(input) {
@@ -919,20 +1046,21 @@ function saveOnlyOfficeConnection(input) {
   }
   const jwtSecret = String(input && input.jwtSecret || '').trim();
   if (jwtSecret && jwtSecret.length < 16) throw new Error('JWT 密钥至少需要 16 个字符');
-  const currentSecret = ONLYOFFICE_CONNECTION.jwtSecret;
-  ONLYOFFICE_CONNECTION = {
-    publicUrl,
-    callbackBase,
-    jwtSecret:jwtSecret || (input && input.keepJwtSecret ? currentSecret : ''),
-    source:'saved',
-  };
+  /* ⚠️ 这里**只持久化用户显式给的那份** ✓（外部 Document Server 用它自己的密钥 ✓）——
+      本机托管的自动密钥在 <数据目录>/onlyoffice-jwt-secret ✓，
+      两边各存一份必然出现「改了一个忘了另一个」✗（见 lib/office-engine.js 文件头 ✓）。
+      ⚠️ 而且不再手拼 ONLYOFFICE_CONNECTION ✗：存完重新走一遍 readOnlyOfficeConnection ✓，
+         自动密钥 / 外部密钥 / 环境变量三条路只有**一份**解析逻辑 ✓。 */
+  const keepExplicit = input && input.keepJwtSecret ? String(ONLYOFFICE_CONNECTION.jwtExplicit || '') : '';
   fs.mkdirSync(path.dirname(ONLYOFFICE_CONNECTION_FILE), { recursive:true });
   writeFileAtomicSync(ONLYOFFICE_CONNECTION_FILE, JSON.stringify({
-    publicUrl:ONLYOFFICE_CONNECTION.publicUrl,
-    callbackBase:ONLYOFFICE_CONNECTION.callbackBase,
-    jwtSecret:ONLYOFFICE_CONNECTION.jwtSecret,
+    publicUrl,
+    callbackBase,
+    jwtSecret: jwtSecret || keepExplicit,
   }, null, 2) + '\n', { encoding:'utf8', mode:0o600 });
   try { fs.chmodSync(ONLYOFFICE_CONNECTION_FILE, 0o600); } catch (_) {}
+  /* ★ 存完**重新解析** ✓（自动密钥会在这时补上 / 换地址后自动密钥该不该用也在这一处判 ✓）*/
+  ONLYOFFICE_CONNECTION = readOnlyOfficeConnection();
   refreshOfficeEngine();
   return publicOnlyOfficeConnection();
 }
@@ -953,7 +1081,11 @@ const ONLYOFFICE_CONTAINER_NAME = /^[A-Za-z0-9_.-]+$/.test(String(process.env.CO
 const HOST = process.env.CODESCOPE_HOST || process.env.MASSCODE_RUNNER_HOST || '127.0.0.1';
 const DSH = createDshService({ projectRoot:__dirname, dataRoot:applicationDataRoot() });
 /* DSH 只绑回环（--host 127.0.0.1）→ 局域网必须经这个代理访问（详见 lib/dsh-proxy.js 文件头）✓ */
-const DSH_PROXY = require('./lib/dsh-proxy').createDshProxy({ listenHost: HOST, isAllowed: trustedHttpOrigin, getPort: () => (DSH.status() || {}).port || 3080 });
+/* ⚠️ authorize = 「访问码闸门」✓（proxyAuthGate，定义在下面的鉴权段落里 ✓ —— 函数声明会提升 ✓，
+   调用发生在请求到来时，那时鉴权常量早已初始化 ✓）。两个代理**自己 createServer** ✗、
+   请求不过 /api 中间件 ✓ —— 不给它们同一份判据，局域网直连 3081 / 4878 就绕过访问码 ✓
+   （4878 后面是整台机器的终端 ✗）。 */
+const DSH_PROXY = require('./lib/dsh-proxy').createDshProxy({ listenHost: HOST, isAllowed: trustedHttpOrigin, authorize: proxyAuthGate, getPort: () => (DSH.status() || {}).port || 3080 });
 const OPENCODE = createOpencodeService({});
 
 /* ── 浏览器版 VS Code（code-server）──
@@ -977,6 +1109,7 @@ const VSCODE_PROXY = createCodeServerProxy({
   targetHost: '127.0.0.1',
   targetPort: VSCODE_INTERNAL_PORT,
   isAllowed: trustedHttpOrigin,
+  authorize: proxyAuthGate,
   onNotice: (message) => console.log('[VS Code] ' + message),
 });
 /* 代理状态要合进 service：前端得知道 iframe 该指向哪个端口，以及代理是否已就绪。 */
@@ -4627,6 +4760,50 @@ function sortByReadingOrder(rows, parentRel) {
 
 function studyDir() { return path.join(vaultPath(), '.codescope', 'study'); }
 function studyConfigFile() { return path.join(studyDir(), 'workspace.json'); }
+/* ── 学习工作台的网址目录（私有数据）─────────────────────────────────────────
+   ✗ 这份目录里有内网 / NAT 地址与端口表，而本仓库是公开的 —— 以前直接写在
+      src/study-sites.js 里，等于把家里的服务端口表一起公开 ✗（2026-10 收口）。
+   ✓ 现在只放应用数据目录：跟 life-workbench.json / mail-credentials.json 同一套规矩 ✓
+      —— 跟着数据一起备份、换机器一起搬走 ✓，不进版本库 ✓。
+   ✓ 读不到就返回 null，前端回退源码里的占位示例（192.0.2.x / example.com 保留地址）✓。
+   ⚠️ 这个文件是**给人手改**的 ✓，所以这里逐字段清洗：写坏一个字段不该让整块菜单废掉 ✗。 */
+const SITE_CATALOG_FILE = path.join(applicationDataRoot(), 'site-catalog.json');
+const SITE_CATALOG_MAX_SITES = 200;
+function readSiteCatalog() {
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(SITE_CATALOG_FILE, 'utf8')); }
+  catch (_) { return { catalog:null, source:'missing' }; }
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const text = (value, limit, fallback) => String(value == null ? '' : value).trim().slice(0, limit) || fallback;
+  const color = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
+  /* ✓ 只放行浏览器打得开的 http(s)（这是这份目录从第一天起的规矩，现在落到代码里） */
+  const site = (item) => {
+    const url = String(item && item.url || '').trim();
+    if (!/^https?:\/\//i.test(url)) return null;
+    return { label:text(item && item.label, 24, '网址'), url, description:text(item && item.description, 80, ''), stars:text(item && item.stars, 12, '') };
+  };
+  const seen = new Set();  // 重复分类 id 会让站点在菜单里渲染两遍 ✗
+  const categories = (Array.isArray(source.categories) ? source.categories : []).slice(0, 64).map((item, index) => {
+    const id = String(item && item.id || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 48) || 'category-' + index;
+    if (seen.has(id)) return null;
+    seen.add(id);
+    return {
+      id,
+      label:text(item && item.label, 24, '网址分类'),
+      icon:text(item && item.icon, 4, '◆'),
+      color:color(item && item.color, '#70d6a3'),
+      sites:(Array.isArray(item && item.sites) ? item.sites : []).map(site).filter(Boolean).slice(0, SITE_CATALOG_MAX_SITES),
+    };
+  }).filter(Boolean);
+  const featured = (Array.isArray(source.featured) ? source.featured : []).slice(0, 32).map((item) => {
+    const url = String(item && item.url || '').trim();
+    if (!/^https?:\/\//i.test(url)) return null;
+    return { id:String(item && item.id || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 32), label:text(item && item.label, 24, '常用网址'), url, color:color(item && item.color, '#4f8cff') };
+  }).filter(Boolean);
+  // ✗ 空目录当作「没有」：让前端走占位示例，别把菜单渲染成空的 ✗
+  if (!categories.length && !featured.length) return { catalog:null, source:'empty' };
+  return { catalog:{ featured, categories }, source:'file' };
+}
 function studySafeName(value, fallback) {
   const name = String(value || '').trim().replace(/[^A-Za-z0-9._-]/g, '').slice(0, 96);
   return name || fallback || '';
@@ -5331,6 +5508,10 @@ function runOfficeEnsure(reason) {
       // 代管流程刚写好配置时必须重建引擎：否则探测用的仍是启动时那个空地址，
       // 面板会一直显示「尚未配置」，只能靠重启应用才恢复。
       try { refreshOfficeEngine(); } catch (_) {}
+      /* ★ 子进程可能刚生成了密钥 / 刚重建了容器 ✓（2026-10-28）——
+         容器到底是不是 JWT_ENABLED=true，只能问 docker ✓（见 probeOnlyOfficeJwtContainer ✓）；
+         强制刷一次 ✓，不然面板会一直拿着启动时那个 'unknown' ✓。 */
+      try { probeOnlyOfficeJwtContainer(true); } catch (_) {}
       console.log('ONLYOFFICE 自动准备结束（退出码 ' + code + '）：' + (ONLYOFFICE_CONNECTION.publicUrl || '仍未配置服务地址'));
       OFFICE_ENSURE_RUNNING = false;
     });
@@ -5340,6 +5521,9 @@ function runOfficeEnsure(reason) {
 function ensureOnlyOfficeWhenNeeded() {
   if (String(process.env.CODESCOPE_AUTO_OFFICE || '') === '0') return;
   if (!ONLYOFFICE_CONNECTION.publicUrl) return runOfficeEnsure('尚未配置服务地址');
+  /* ★ 本机托管实例：顺手对一下容器到底有没有开着 JWT ✓（只读、失败不报错 ✓）。
+     ⚠️ 只读不改 ✗：旧容器要用户自己 --force-recreate ✓（自动重建会打断正在编辑的人 ✓）。 */
+  if (isManagedOnlyOfficeUrl(ONLYOFFICE_CONNECTION.publicUrl)) { try { probeOnlyOfficeJwtContainer(true); } catch (_) {} }
   onlyOfficeHealth()
     .then((health) => { if (!health || !health.ok) runOfficeEnsure('健康检查未通过：' + ((health && health.error) || '无响应')); })
     .catch(() => runOfficeEnsure('健康检查异常'));
@@ -5367,16 +5551,14 @@ async function onlyOfficeCommand(command) {
 function onlyOfficeDocumentType(kind) {
   return kind === 'word' ? 'word' : kind === 'sheet' ? 'cell' : kind === 'slides' ? 'slide' : '';
 }
-function base64Url(value) {
-  return Buffer.from(value).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
+/* ★ 签发 config token ✓ —— 实现在 lib/office-engine.js ✓（2026-10-28）：
+   和 scripts/ensure-onlyoffice.js 传给容器的密钥**同一份** ✓、签名算法**同一份** ✓。
+   ⚠️ 原来这里自己拼 base64url + HMAC ✗：再加一处「谁在签」就必然有两份算法 ✓，
+      而 JWT 的错一个字符都表现为「编辑器白屏」✗，根本查不出来 ✗。
+   ⚠️ 密钥从 onlyOfficeJwtSecret() 取（不是直接读字段 ✗）：
+      容器确认是旧配置（JWT_ENABLED≠true）时它会返回 '' ✓ → 退回不签名模式 ✓（可降级 ✓）。 */
 function signOnlyOfficeConfig(payload) {
-  const secret = ONLYOFFICE_CONNECTION.jwtSecret;
-  if (!secret) return '';
-  const header = base64Url(JSON.stringify({ alg:'HS256', typ:'JWT' }));
-  const body = base64Url(JSON.stringify(payload));
-  const signature = crypto.createHmac('sha256', secret).update(header + '.' + body).digest('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  return header + '.' + body + '.' + signature;
+  return signOnlyOfficeJwt(payload, onlyOfficeJwtSecret());
 }
 function onlyOfficeConfig(rel, file) {
   const stat = fs.statSync(file), ext = path.extname(rel).slice(1).toLowerCase(), kind = officeKind(rel);
@@ -5944,11 +6126,37 @@ function authIsAuthed(req) {
    ⚠️ 只拦 `/api/*` ✗：静态资源要放行 ✓（见上面那段 ✓）；
       `/api/auth/*` 两个例外见 AUTH_OPEN_PATHS ✓。 */
 function authNeedsCode(req, pathname) {
-  if (authDisabled()) return false;
   if (!pathname.startsWith('/api/')) return false;
   if (AUTH_OPEN_PATHS.has(pathname)) return false;
+  return authChallenges(req);
+}
+/* ★★ 两个**独立监听的代理**（4878 VS Code / 3081 DSH）也要过同一道闸 ✓✓（2026-10-28）
+   ⚠️ 为什么单拎出来 ✗：它们各自 createServer ✓（lib/code-server-proxy.js ✓），
+      请求**根本不经过**上面这个中间件 ✗ —— 上一轮加的访问码对它们**完全不生效** ✗，
+      局域网里直连 4878 就是整台机器的终端 ✓、直连 3081 就是整个智能体 ✓。
+   ⇒ 判据**只写这一份** ✓：`authChallenges` = 「回环放行 / 要码」✓，三处（/api 中间件、
+      4878、3081）都调它 ✓ —— 复制第二份必然在某次改动后走偏 ✗（改一处漏一处 ✓）。
+   ⇒ 形态照现有的 isAllowed 回调 ✓：返回 null = 放行 ✓，返回对象 = 由**代理自己**写回状态码 ✓
+      （见 lib/code-server-proxy.js 的 denialOf ✓ —— 不能转给后端 ✗，后端不认识这个 401 ✗）。
+   ⚠️ 这里是**同步**的 ✓：鉴权只做 HMAC 常量比较 ✓、不查库不发请求 ✓，没有阻塞风险 ✓。 */
+function authChallenges(req) {
+  if (authDisabled()) return false;
   if (isLoopbackRequest(req)) return false;
   return !authIsAuthed(req);
+}
+function proxyAuthGate(req) {
+  try {
+    if (!authChallenges(req)) return null;
+    return {
+      status: 401,
+      message: '这个端口需要访问码：先在 CodeScope 主界面（' + PORT + ' 端口）用访问码登录一次，'
+        + '浏览器会把 cookie 一起带到这里；命令行可以带 X-CS-Auth 请求头。'
+        + '（在运行 CodeScope 的那台机器上访问 127.0.0.1 不需要访问码。）',
+    };
+  } catch (_) {
+    /* ⚠️ 启动早期（鉴权常量还没初始化）宁可拒绝 ✗ 也不放行 ✓ —— 见 lib/code-server-proxy.js 的 denialOf ✓ */
+    return { status: 401, message: '鉴权状态尚未就绪，请稍后重试' };
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -7584,7 +7792,7 @@ const server = http.createServer(async (req, res) => {
       /* ★ system-panel 路由抽到 lib/routes/system-panel.js（2026-10-11）*/
       if (await systemPanelRoute.handle(req, res, u, { SYSTEM_PANEL, send }) || res.writableEnded) return;
       /* ★ study 路由抽到 lib/routes/study.js（2026-10-11）*/
-      if (await studyRoute.handle(req, res, u, { send, readStudyConfig, saveStudyConfig, readBody, studySafeName, studyNoteFile, fs, path, writeFileAtomicSync, studyAssetFile, streamStatic, readRawBody, isStudyImage, crypto, parsedReadingWebUrl, fetchReadableWebPage }) || res.writableEnded) return;
+      if (await studyRoute.handle(req, res, u, { send, readStudyConfig, saveStudyConfig, readBody, studySafeName, studyNoteFile, fs, path, writeFileAtomicSync, studyAssetFile, streamStatic, readRawBody, isStudyImage, crypto, parsedReadingWebUrl, fetchReadableWebPage, readSiteCatalog }) || res.writableEnded) return;
       /* ★ snippets 路由抽到 lib/routes/snippets.js（2026-10-11）*/
       if (await snippetsRoute.handle(req, res, u, { send, vaultPath, computeRev, readTagRegistry, walkFolders, walkLatexResources, walkSnippets }) || res.writableEnded) return;
       /* ★ rev 路由抽到 lib/routes/rev.js（2026-10-11）*/
@@ -9062,6 +9270,60 @@ if (req.method === 'POST' && u.pathname === '/api/drawings/delete') {
 });
 
 const VNC_WSS = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: 64 * 1024 * 1024 });
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ VNC 隧道白名单 ✓✓（2026-10-28）
+   ══════════════════════════════════════════════════════════════════════════
+   痛点 ✗：`/api/vnc/ws` 原来只校验 host / port 的**字符是否合法** ✓
+     （remoteHost 的正则 + remotePort 的 1..65535 ✓），然后就 `net.createConnection` ✗ ——
+     等于给**页面里任意一段 JS** 开了一个「任意 host:port 的裸 TCP 隧道」✗✗：
+     指向 22 / 3306 / 5432 / 云厂商元数据口 ✓，把 WS 当 socket 用 ✓。
+     上一轮的访问码只管得住「谁能连这个页面」✗，管不住「连到哪」✗ —— 两件事 ✓。
+   ⇒ 保守方案（用户定的 ✓）：
+     ① 默认只放行 **5900-5999** ✓ —— VNC 的显示号段（:0=5900、:1=5901…）；
+        macOS 屏幕共享 / TigerVNC / x11vnc / RealVNC 默认全都落在这段 ✓；
+     ② 逃生口 `CODESCOPE_VNC_ALLOW` ✓：逗号分隔的 `host:port` / `:port` / `*` ✓；
+     ③ 拒绝 = **403** + 一句人话原因 ✓ + `console.warn` **一次/每个目标** ✓。
+   ⚠️ 为什么必须留逃生口 ✗：用户走 SSH 隧道（`ssh -L 5555:127.0.0.1:5900` ✓）时，
+      浏览器连的是 **5555** ✓ —— 那不是 VNC 端口号，是**隧道入口** ✗；
+      云厂商的 VNC 控制台、NoMachine 之类也一样是任意端口 ✓。
+      一刀切会把它们全砍掉 ✗ → 所以拒绝文案里**直接给出该写什么变量** ✓（用户不用查文档 ✓）。
+   ⚠️ 为什么 warn 要按目标去重 ✗：noVNC 断线重连会反复打同一行 ✓，
+      几十行同样的告警会把启动日志里真正有用的那几行冲掉 ✗；
+      换了目标就要再喊一次 ✓（那说明是另一种用法 ✓）。
+   ⚠️ 判据里 **host 只做「可选限定」** ✓：`:5901` 就是「任何主机的 5901」✓ ——
+      用户真正在意的是「别开任意端口」✓，不是「别连别的机器」✓
+      （连哪台机器本来就由用户自己填 ✓，硬限主机只会让他多配一遍 ✓）。 */
+const VNC_PORT_MIN = 5900;
+const VNC_PORT_MAX = 5999;
+const VNC_ALLOW_RAW = String(process.env.CODESCOPE_VNC_ALLOW || '').trim();
+const VNC_ALLOW_ANY = VNC_ALLOW_RAW === '*';
+const VNC_ALLOW_LIST = VNC_ALLOW_ANY ? [] : VNC_ALLOW_RAW.split(',')
+  .map((item) => item.trim()).filter(Boolean)
+  .map((item) => {
+    const at = item.lastIndexOf(':');
+    const port = Number(at >= 0 ? item.slice(at + 1) : item);
+    const host = at >= 0 ? item.slice(0, at).trim().toLowerCase() : '';
+    return { host, port: Number.isInteger(port) && port > 0 && port <= 65535 ? port : 0 };
+  })
+  .filter((entry) => entry.port);
+const VNC_DENY_WARNED = new Set();
+function vncTargetAllowed(host, port) {
+  if (VNC_ALLOW_ANY) return { ok:true };
+  if (port >= VNC_PORT_MIN && port <= VNC_PORT_MAX) return { ok:true };
+  const key = String(host).toLowerCase() + ':' + port;
+  if (VNC_ALLOW_LIST.some((entry) => entry.port === port && (!entry.host || entry.host === String(host).toLowerCase()))) return { ok:true };
+  if (!VNC_DENY_WARNED.has(key)) {
+    VNC_DENY_WARNED.add(key);
+    console.warn('[VNC] 已拒绝目标 ' + key + '：默认只允许 ' + VNC_PORT_MIN + '-' + VNC_PORT_MAX + ' 端口。'
+      + '如果这是你自己的机器（SSH 隧道 / 云厂商 VNC 控制台），设 CODESCOPE_VNC_ALLOW=' + key + '（逗号分隔可写多个，* = 不限制）后重启 CodeScope。');
+  }
+  return {
+    ok:false,
+    reason:'VNC 目标 ' + key + ' 不在允许范围内：默认只允许 ' + VNC_PORT_MIN + '-' + VNC_PORT_MAX + ' 端口。'
+      + '如果这是你自己的机器（比如 SSH 隧道转发的入口端口），请设置环境变量 CODESCOPE_VNC_ALLOW=' + key
+      + '（逗号分隔可写多个，* 表示不限制）后重启 CodeScope。',
+  };
+}
 server.on('upgrade', (req, socket, head) => {
   let u;
   try { u = new URL(req.url, 'http://' + (req.headers.host || HOST + ':' + PORT)); }
@@ -9071,9 +9333,10 @@ server.on('upgrade', (req, socket, head) => {
      ⚠️ `upgrade` 事件**不走** `http.createServer` 那个回调 ✗（它是另一条路径 ✓），
         所以上面那道中间件对 VNC **完全无效** ✗ —— 漏了这一处，等于给局域网留了一扇
         「直通 5900 端口」的后门 ✓（VNC 能控整台桌面 ✓）。
-     判据与 HTTP 完全一致 ✓：回环放行 ✓ / 远端要 cookie 或 `X-CS-Auth` ✓ / `CODESCOPE_AUTH=off` 时关 ✓。
+     判据与 HTTP 完全一致 ✓：回环放行 ✓ / 远端要 cookie 或 `X-CS-Auth` ✓ / `CODESCOPE_AUTH=off` 时关 ✓
+     —— 而且**调的就是同一个 authChallenges** ✓（这里再手写一遍条件 = 第三份判据 ✗）。
      ⚠️ 浏览器建 WS 时**只能**带 cookie ✗（不能自定义头 ✓），所以 cookie 是必走的那条 ✓。 */
-  if (!authDisabled() && !isLoopbackRequest(req) && !authIsAuthed(req)) {
+  if (authChallenges(req)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
   }
   const origin = String(req.headers.origin || '');
@@ -9088,6 +9351,17 @@ server.on('upgrade', (req, socket, head) => {
   const port = remotePort(u.searchParams.get('port'), 5900);
   if (!host || !port) {
     socket.write('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
+  }
+  /* ★ 目标白名单 ✓（见上面那段 ✓）—— 放在**鉴权之后** ✓：
+     没凭据的人不该先拿到「这个端口不许连」这种内部语义 ✓。 */
+  const target = vncTargetAllowed(host, port);
+  if (!target.ok) {
+    const body = Buffer.from(JSON.stringify({ ok:false, error:target.reason }), 'utf8');
+    socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: application/json; charset=utf-8\r\n'
+      + 'Content-Length: ' + body.length + '\r\nX-CS-VNC-Reason: ' + encodeURIComponent(target.reason).slice(0, 900)
+      + '\r\nConnection: close\r\n\r\n');
+    socket.write(body);
+    socket.destroy(); return;
   }
   VNC_WSS.handleUpgrade(req, socket, head, (ws) => VNC_WSS.emit('connection', ws, req, { host, port }));
 });

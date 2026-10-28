@@ -1,203 +1,165 @@
-// 学习工作台网址目录。数据来自用户的 SunPanel 分类表；仅保留可由浏览器打开的 http(s) 地址。
-// 私密查询参数不会写入源码，局域网地址会按原样保留，离开对应网络时自然不可达。
-const category = (id, label, icon, color, sites) => ({ id, label, icon, color, sites });
-const site = (label, url, description = '', stars = '') => ({ label, url, description, stars });
+// 学习工作台网址目录。
+// ---------------------------------------------------------------------------
+// ⚠️ 这份目录里有一批内网 / NAT 地址与端口表（形如 http://192.0.2.x:端口）——
+//    本仓库是公开的（README 链到 github.com/ruanjianshi/massCode），写进源码
+//    ✗ 等于把家里的服务端口表一起公开 ✗（2026-10 收口时从源码挪走了）。
+//
+// ✓ 现在数据只放本机私有目录：<应用数据目录>/site-catalog.json
+//    · 应用数据根目录的取法与 server.js 的 applicationDataRoot() 完全一致
+//      （macOS 是 ~/Library/Application Support/CodeScope；设了 CODESCOPE_DATA_HOME 就用它）
+//    · 浏览器侧读不到磁盘，所以由服务端 GET /api/study/site-catalog 转出来
+//      （见 lib/routes/study.js + server.js 的 readSiteCatalog）
+//    · ✓ 跟着应用数据一起备份、换机器一起搬走；✗ 不进版本库
+//
+// ✓ 源码只留一份占位示例：192.0.2.0/24 与 example.com 都是 RFC 2606 / RFC 5737
+//    的保留地址，永远不会指向任何真实主机。读不到私有 JSON 时用它兜底，
+//    保证 UI 不空 ✓（只是条目少，功能都在）。
+//
+// ✓ 一次性迁移：node scripts/migrate-site-catalog.js
+//    （从 git HEAD 里的旧 src/study-sites.js 把真实条目原样搬进私有 JSON）
 
-export const SITE_CATEGORIES = [
-  category('nat', 'NAT 服务器', '🖥️', '#6aa2ff', [
-    site('1Panel', 'http://120.220.73.237:10231/xiaoqi', '服务器管理面板'),
-    site('青龙面板', 'http://120.220.73.237:57000/', '脚本自动化'),
-    site('Open WebUI', 'http://120.220.73.237:30000/', '在线 AI'),
-    site('OpenList', 'http://120.220.73.237:52440/', '在线网盘'),
-    site('n8n', 'http://120.220.73.237:56780/', '自动化智能体'),
-    site('LobeChat', 'http://120.220.73.237:40247/', 'AI 客户端'),
-    site('MaxKB', 'http://120.220.73.237:38080/', '企业级智能体'),
-    site('微信 Markdown', 'http://120.220.73.237:18081/', 'Markdown 排版'),
-    site('code-server', 'http://120.220.73.237:29090/?folder=/xiaoq', '在线 VS Code'),
-  ]),
-  category('fnnas', 'fnNAS', '🗄️', '#70d6a3', [
-    site('碎碎恋', 'http://100.66.1.1:8090/', 'MYWORLD', '★★★★★'),
-    site('思源笔记', 'http://100.66.1.1:6806/', '个人笔记库', '★★★'),
-    site('飞牛 OS', 'http://100.66.1.1:5666/', 'fnOS', '★★★★★'),
-    site('酒馆', 'http://100.66.1.1:8181/', 'SillyTavern', '★★'),
-    site('音乐库', 'http://100.66.1.1:4533/', 'Navidrome', '★'),
-    site('Draw.io', 'http://100.66.1.1:8080/', 'Visio 平替', '★★'),
-    site('影视', 'http://100.66.1.1:3000/', 'MoonTV', '★★'),
-    site('思维导图', 'http://100.66.1.1:8092/', 'WiseMapping', '★★'),
-    site('PanelHelper', 'http://100.66.1.1:33002/', '导航站面板', '★★★'),
-    site('MaxKB', 'http://100.66.1.1:8099/', 'AI 知识库', '★★★'),
-    site('Quick Reference', 'http://100.66.1.1:13005/', '技术栈速查', '★★★'),
-    site('n8n', 'http://100.66.1.1:5678/', '本地工作流', '★★★★★'),
-    site('AList', 'http://100.66.1.1:5244/', '在线网盘', '★★★★'),
-  ]),
-  category('dev', 'IT 乐园', '💻', '#79adff', [
-    site('GitHub', 'https://github.com/', '开源代码平台'),
-    site('CSDN', 'https://www.csdn.net/', '中文开发者社区'),
-    site('稀土掘金', 'https://juejin.cn/', '中文开发者社区'),
-    site('Gitee', 'https://gitee.com/', '代码托管平台'),
-    site('博客园', 'https://www.cnblogs.com/', '中文技术社区'),
-    site('LeetCode', 'https://leetcode.cn/', '算法练习'),
-    site('Docker', 'https://app.docker.com/', '容器管理'),
-    site('Stack Overflow', 'https://stackoverflow.com/', '开发问答'),
-    site('GitBook', 'https://www.gitbook.com/', '在线文档'),
-    site('Road 2 Coding', 'https://www.r2coding.com/', '编程自学路线'),
-    site('编程导航', 'https://www.codefather.cn/', '编程资源导航'),
-    site('GitCode', 'https://gitcode.com/', '开源社区'),
-  ]),
-  category('research', '科研论文', '🔬', '#b996ff', [
-    site('中国知网', 'https://www.cnki.net/', '中文学术资料'),
-    site('电子图书馆', 'https://wust.metaersp.cn/personalIndex', '学校电子资源'),
-    site('科研废物导航', 'https://yanweb.top/', '科研工具导航'),
-    site('赛特新思', 'https://www.citexs.com/', '学术平台'),
-    site('X-MOL', 'https://www.x-mol.com/', '学术平台'),
-    site('ResearchFlow', 'https://rflow.ai/zh/dashboard', 'AI 研究工作流'),
-    site('知乎直答', 'https://zhida.zhihu.com/', 'AI 知识问答'),
-    site('谷歌学术镜像', 'https://xs.xasa.top/', '学术搜索'),
-  ]),
-  category('embedded', '嵌入式', '🔌', '#ffb65c', [
-    site('嘉立创', 'https://u.lceda.cn/', 'EDA 与 PCB'),
-    site('树莓派', 'https://shumeipai.nxez.com/', '树莓派社区'),
-    site('半导小芯', 'https://www.semiee.com/', '芯片资料'),
-    site('PCB 联盟网', 'https://www.pcbbar.com/thread-3016-1-1.html', 'PCB 论坛'),
-    site('面包板', 'https://mbb.eet-china.com/', '电子工程社区'),
-  ]),
-  category('docs', '文档订阅', '📚', '#55c7d9', [
-    site('维基百科', 'https://zh.wikipedia.org/', '自由百科全书'),
-    site('鱼香 ROS', 'http://fishros.com/', 'ROS 学习'),
-    site('菜鸟教程', 'https://www.runoob.com/', '编程教程'),
-    site('FreeRTOS', 'https://www.freertos.org/zh-cn-cmn-s/Documentation/01-FreeRTOS-quick-start/01-Beginners-guide/00-Overview', '官方文档'),
-    site('野火产品', 'http://products.embedfire.com/', '野火开发资料'),
-    site('赵虚左 ROS', 'http://www.autolabor.com.cn/book/ROSTutorials/', 'ROS 1 教程'),
-    site('Hello Algo', 'https://www.hello-algo.com/', '数据结构与算法'),
-    site('动手学习深度学习', 'https://zh-v2.d2l.ai/', '深度学习教材'),
-    site('Ultralytics YOLO', 'https://docs.ultralytics.com/zh', '视觉模型文档'),
-    site('MATLAB', 'https://ww2.mathworks.cn/help/matlab/', '官方手册'),
-    site('Xiihoo', 'http://www.xiihoo.com/#', '机器人 SLAM'),
-    site('极客侠', 'https://docs.geeksman.com/esp32/', 'ESP32 文档'),
-    site('OpenMV', 'https://book.openmv.cc/project/zhui-xiao-qiu-de-xiao-8f665d28-project-pan-tilt-md.html', 'OpenMV 教程'),
-    site('太极创客', 'http://www.taichi-maker.com/homepage/arduino-tutorial-structure/', 'Arduino 教程'),
-    site('OpenCV', 'https://opencv-python-tutorials.readthedocs.io/zh/latest/', 'OpenCV 文档'),
-    site('ROS Index', 'https://index.ros.org/#noetic', 'ROS 包索引'),
-    site('n8n 社区', 'https://community.n8n.io/', '自动化社区'),
-  ]),
-  category('ai', 'AI 助手', '🤖', '#8ca7ff', [
-    site('Gemini Playground', 'https://xq-gemini-playground.deno.dev/', '语音对话 AI'),
-    site('DeepSeek', 'https://chat.deepseek.com/', 'AI 助手'),
-    site('ChatGPT', 'https://chatgpt.com/', 'AI 助手'),
-    site('讯飞星火', 'https://xinghuo.xfyun.cn/desk', 'AI 助手'),
-    site('Kimi', 'https://kimi.moonshot.cn/', 'AI 助手'),
-    site('Ollama', 'https://ollama.com/', '本地模型工具'),
-    site('Raphael AI', 'https://raphael.app/zh', 'AI 图片生成'),
-    site('Coze', 'https://www.coze.cn/', 'AI 工作流'),
-    site('BLACKBOX', 'https://www.blackbox.ai/', '编程 AI'),
-    site('Gemini', 'https://gemini.google.com/', 'AI 助手'),
-    site('深度 AI 学术', 'https://scholar.aisciresgo.com/', '学术搜索 AI'),
-    site('code2ai', 'https://prompt.code2ai.top/prompt', '提示词管理'),
-    site('Cubox', 'https://cubox.cc/', '收藏与阅读'),
-    site('NotebookLM', 'https://notebooklm.google.com/', 'AI 笔记'),
-  ]),
-  category('mechanical', '机械', '🔧', '#f08f72', [
-    site('3DSource', 'https://www.3dsource.cn/', 'SolidWorks 零件库'),
-    site('迪威模型', 'https://www.3dwhere.com/', '模型库'),
-    site('爱给网', 'https://www.aigei.com/mach/sw/biao_zhun_3/', '机械模型资源'),
-    site('TraceParts', 'https://www.traceparts.cn/zh', '3D 零件库'),
-    site('嘉立创 3D 零件库', 'https://www.fa-part.com/', '标准零件库'),
-  ]),
-  category('cloud', '应用与云', '☁️', '#72b7ff', [
-    site('路由器', 'http://192.168.10.1/', 'NAS 专属网络'),
-    site('和风天气', 'https://console.qweather.com/', '天气 API'),
-    site('阿里云', 'https://ecs.console.aliyun.com/', '云服务器'),
-    site('七牛云', 'https://portal.qiniu.com/home', '对象存储'),
-    site('大东云计算', 'https://dadongyun.com/clientarea', '云服务'),
-    site('OpenAI 接口', 'https://openai-hk.com/', '第三方接口'),
-    site('Cloudflare', 'https://www.cloudflare-cn.com/', '网络与域名'),
-    site('ClouDNS', 'https://www.cloudns.net/', 'DNS 管理'),
-    site('魔戒', 'https://按量计费.com/', '网络服务'),
-    site('硅基流动', 'https://cloud.siliconflow.cn/', '模型 API'),
-    site('XQ Research', 'https://ruanjianshi.github.io/XQ_BLOG/#/', '个人文档'),
-    site('明月浩空网', 'https://myhkw.cn/', '音乐接口'),
-    site('智谱 AI', 'https://www.bigmodel.cn/', '模型 API'),
-    site('OpenRouter', 'https://openrouter.ai/', '模型 API'),
-    site('微信公众号', 'https://mp.weixin.qq.com/', '公众号后台（已移除登录令牌）'),
-  ]),
-  category('tools', '工具', '🛠️', '#f3c969', [
-    site('工具猫', 'https://www.toolmao.com/#term-103', 'IT 工具'),
-    site('虫部落', 'https://search.chongbuluo.com/', '搜索导航'),
-    site('程序员盒子', 'https://www.coderutil.com/', '开发工具集'),
-    site('iLovePDF', 'https://www.ilovepdf.com/zh-cn', 'PDF 工具'),
-    site('无限邮', 'https://www.2925.com/#/mailList', '邮箱工具'),
-    site('沉浸式翻译', 'https://app.immersivetranslate.com/', '翻译工具'),
-    site('AI 工具集', 'https://ai-bot.cn/', 'AI 导航'),
-    site('Doc2X', 'https://doc2x.noedgeai.com/', '文档识别'),
-    site('ProcessOn', 'https://www.processon.com/', '在线图表'),
-    site('Quick Reference', 'https://quickref.cn/', '技术速查'),
-    site('Raspberry Pi Connect', 'https://connect.raspberrypi.com/', '树莓派远程连接'),
-    site('offer IN', 'https://app.offerin.cn/', '面试辅助'),
-    site('飞书', 'https://ncnmx5tyitrz.feishu.cn/', '在线文档'),
-    site('Notion', 'https://www.notion.so/', '在线笔记'),
-    site('DeepL', 'https://www.deepl.com/translator', '翻译'),
-    site('QuillBot', 'https://quillbot.com/', '语法润色'),
-    site('Grammarly', 'https://www.grammarly.com/', '语法检查'),
-    site('Firecrawl', 'https://www.firecrawl.dev/app', '网页转 Markdown'),
-    site('OmniBox', 'https://www.omnibox.pro/J4xdaZ/chat', '资料收集'),
-    site('Smart Excalidraw', 'https://smart-excalidraw.aizhi.site/', 'AI 绘图'),
-  ]),
-  category('resources', '资源', '📦', '#d89cff', [
-    site('中国大学 MOOC', 'https://www.icourse163.org/', '在线课程'),
-    site('我要自学网', 'https://www.51zxw.net/', '自学课程'),
-    site('壁纸汇', 'https://www.bizhihui.com/', '壁纸资源'),
-    site('Ubuntu MATE', 'https://releases.ubuntu-mate.org/archived/', '系统镜像'),
-    site('网易公开课', 'https://open.163.com/cuvocw/', '公开课程'),
-    site('Z-Library 导航', 'https://www.tboxn.com/560.html', '电子图书导航'),
-    site('英语真题在线', 'https://zhenti.burningvocabulary.cn/', '英语试卷'),
-    site('哲风壁纸', 'https://haowallpaper.com/', '壁纸'),
-    site('意法半导体', 'https://www.st.com.cn/', 'ST 官网'),
-  ]),
-  category('video', '影视视频', '🎬', '#fb7299', [
-    site('哔哩哔哩', 'https://www.bilibili.com/', '视频与课程'),
-    site('抖音', 'https://www.douyin.com/?recommend=1', '短视频'),
-    site('腾讯视频', 'https://v.qq.com/', '在线视频'),
-    site('YouTube', 'https://www.youtube.com/', '在线视频'),
-    site('Omofuns', 'https://www.omofuns.com/', '动漫'),
-    site('可可影视', 'https://www.keke1.app/', '影视'),
-    site('风车动漫', 'https://fengchedmp.com/index.php/label/hot.html', '动漫'),
-    site('樱之空', 'https://www.sakuramau.com/', '动漫'),
-    site('girigiri 爱动漫', 'https://bgm.girigirilove.com/', '动漫'),
-  ]),
-  category('reading', '阅读', '📖', '#67d6b0', [
-    site('微信读书', 'https://weread.qq.com/', '在线阅读'),
-    site('文字站', 'https://www.wenzizhan.com/', '文字阅读'),
-    site('小鱼速读', 'http://www.xysudu.com/', '速读'),
-    site('知乎', 'https://www.zhihu.com/', '知识社区'),
-    site('Linux Do', 'https://linux.do/', '技术社区'),
-    site('语鲸', 'https://lingowhale.com/home', 'AI 阅读'),
-  ]),
-  category('github', 'GitHub 项目', '💾', '#aebbd0', [
-    site('BiliNote', 'https://github.com/JefferyHcool/BiliNote', 'AI 视频笔记'),
-    site('TrendRadar', 'https://github.com/sansan0/TrendRadar', 'AI 热点阅读'),
-    site('微舆', 'https://github.com/666ghj/BettaFish', '多 Agent 舆情分析'),
-    site('build-your-own-x', 'https://github.com/codecrafters-io/build-your-own-x', '从零构建项目'),
-    site('OmniBox', 'https://github.com/import-ai/omnibox', '资料收集整理'),
-    site('Everywhere', 'https://github.com/DearVa/Everywhere', '桌面 AI'),
-    site('Smart Excalidraw', 'https://github.com/liujuntao123/smart-excalidraw-next', 'AI 绘图'),
-    site('Microsoft Activation', 'https://github.com/massgravel/Microsoft-Activation-Scripts', 'Windows 激活脚本'),
-    site('GPT-SoVITS', 'https://github.com/RVC-Boss/GPT-SoVITS', 'AI 音色克隆'),
-  ]),
-  category('entertainment', '娱乐', '🎮', '#ff8a9c', [
-    site('种子音乐', 'https://zz123.com/', '在线音乐'),
-    site('虎牙直播', 'https://www.huya.com/', '直播'),
-    site('BYRUTOR', 'https://byrutgame.org/', '游戏资源'),
-    site('Gamer520', 'https://www.gamer520.com/', '游戏资源'),
-    site('潮玩迷导航', 'https://chaowanmi.com/', '娱乐导航'),
-    site('Koyso', 'https://koyso.com/', '游戏资源'),
-  ]),
-];
+const CATALOG_URL = '/api/study/site-catalog';
+// 手写 JSON 写崩 UI 的成本很低（几百条就翻不动了 ✓ 实测），服务端和浏览器侧各挡一道 ✓
+const MAX_SITES_PER_CATEGORY = 200;
 
-export const FEATURED_SITES = [
-  { id:'bilibili', label:'B站', url:'https://www.bilibili.com/', color:'#fb7299' },
-  { id:'github', label:'GitHub', url:'https://github.com/', color:'#8b949e' },
-  { id:'arxiv', label:'arXiv', url:'https://arxiv.org/', color:'#b31b1b' },
-  { id:'mdn', label:'MDN', url:'https://developer.mozilla.org/', color:'#62a0ea' },
-];
+/* 占位示例：只用保留地址 ✓ —— 这些条目**不是**用户的真实数据，别往里填内网地址 ✗。
+   ✗ 为什么不用空数组：读不到私有 JSON 时站点菜单会整块空掉，用户会以为功能坏了 ✗。 */
+const PLACEHOLDER_CATALOG = {
+  featured: [
+    { id:'bilibili', label:'B站', url:'https://www.bilibili.com/', color:'#fb7299' },
+    { id:'github', label:'GitHub', url:'https://github.com/', color:'#8b949e' },
+    { id:'arxiv', label:'arXiv', url:'https://arxiv.org/', color:'#b31b1b' },
+    { id:'mdn', label:'MDN', url:'https://developer.mozilla.org/', color:'#62a0ea' },
+  ],
+  categories: [
+    { id:'placeholder-nat', label:'NAT 服务器（占位）', icon:'🖥️', color:'#6aa2ff', sites:[
+      { label:'1Panel', url:'http://192.0.2.10:10231/', description:'占位示例 · 面板' },
+      { label:'青龙面板', url:'http://192.0.2.10:57000/', description:'占位示例 · 定时任务' },
+      { label:'Open WebUI', url:'http://192.0.2.10:30000/', description:'占位示例 · 在线 AI' },
+    ] },
+    { id:'placeholder-nas', label:'NAS（占位）', icon:'🗄️', color:'#70d6a3', sites:[
+      { label:'导航站', url:'http://192.0.2.11:8090/', description:'占位示例 · 导航' },
+      { label:'笔记库', url:'http://192.0.2.11:6806/', description:'占位示例 · 笔记', stars:'★★★' },
+      { label:'网盘', url:'http://192.0.2.11:5244/', description:'占位示例 · 网盘' },
+    ] },
+    { id:'placeholder-docs', label:'示例站点', icon:'📚', color:'#55c7d9', sites:[
+      { label:'Example 官网', url:'https://example.com/', description:'占位示例 · 保留域名' },
+      { label:'Example 文档', url:'https://example.org/docs', description:'占位示例 · 保留域名' },
+    ] },
+  ],
+};
 
-export const SITE_COUNT = SITE_CATEGORIES.reduce((count, item) => count + item.sites.length, 0);
+/* ⚠️ 三个导出都必须是**同址可变**的（const 数组 / let 计数）——
+   study-workspace.js 在模块求值阶段就抓了引用（`const DEFAULT_BOOKMARKS = FEATURED_SITES`）✓，
+   所以私有目录读回来之后只能**原地增删** ✓；重新赋值一个新数组的话，
+   早就被抓走的那份引用还停在占位数据上 ✗（这类 bug 在 UI 上表现为「菜单有数据、常用栏没数据」）。 */
+export const SITE_CATEGORIES = [];
+export const FEATURED_SITES = [];
+export let SITE_COUNT = 0;
+
+/* 目录当前来源 ✓ —— 'file' = 读到私有 JSON，'placeholder' = 兜底。
+   排障时不用猜「菜单里为什么是 192.0.2.x」✓。 */
+export const SITE_CATALOG_STATE = { mode:'placeholder', sites:0 };
+
+const cleanText = (value, limit, fallback) => String(value == null ? '' : value).trim().slice(0, limit) || fallback;
+const cleanColor = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback);
+
+function normalizeSite(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const url = String(raw.url || '').trim();
+  // ✓ 只收浏览器打得开的 http(s) 地址（老规矩 ✓，写在注释里的那条规则现在落到代码里）
+  if (!/^https?:\/\//i.test(url)) return null;
+  return {
+    label: cleanText(raw.label, 24, '网址'),
+    url,
+    description: cleanText(raw.description, 80, ''),
+    stars: cleanText(raw.stars, 12, ''),
+  };
+}
+
+function normalizeFeatured(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const url = String(raw.url || '').trim();
+  if (!/^https?:\/\//i.test(url)) return null;
+  return {
+    id: cleanText(raw.id, 32, ''),
+    label: cleanText(raw.label, 24, '常用网址'),
+    url,
+    color: cleanColor(raw.color, '#4f8cff'),
+  };
+}
+
+function normalizeCatalog(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const seen = new Set();
+  const categories = [];
+  for (const item of Array.isArray(source.categories) ? source.categories : []) {
+    if (!item || typeof item !== 'object') continue;
+    const id = String(item.id || '').trim().replace(/[^A-Za-z0-9._-]/g, '').slice(0, 48) || 'category-' + categories.length;
+    if (seen.has(id)) continue;  // 重复分类 id 会让站点被渲染两遍 ✗
+    seen.add(id);
+    categories.push({
+      id,
+      label: cleanText(item.label, 24, '网址分类'),
+      icon: cleanText(item.icon, 4, '◆'),
+      color: cleanColor(item.color, '#70d6a3'),
+      sites: (Array.isArray(item.sites) ? item.sites : []).map(normalizeSite).filter(Boolean).slice(0, MAX_SITES_PER_CATEGORY),
+    });
+  }
+  return {
+    featured: (Array.isArray(source.featured) ? source.featured : []).map(normalizeFeatured).filter(Boolean),
+    categories,
+  };
+}
+
+function applyCatalog(raw) {
+  const next = normalizeCatalog(raw);
+  // ✗ 空目录不要：宁可留着现有内容，也不要让菜单整块空掉 ✗
+  if (!next.categories.length && !next.featured.length) return false;
+  SITE_CATEGORIES.splice(0, SITE_CATEGORIES.length, ...next.categories);
+  FEATURED_SITES.splice(0, FEATURED_SITES.length, ...next.featured);
+  SITE_COUNT = SITE_CATEGORIES.reduce((total, item) => total + item.sites.length, 0);
+  SITE_CATALOG_STATE.sites = SITE_COUNT;
+  return true;
+}
+
+/* 为什么用**同步** XHR：study-workspace.js 在模块求值阶段就把 FEATURED_SITES 抓进
+   DEFAULT_BOOKMARKS 了 ✓，异步拿回来只能改到「以后新建的」引用 ✗。
+   同步读发生在 import 阶段、任何渲染之前 ✓，代价是本地一次往返（同源、毫秒级）✓。
+   ✗ 换成异步 fetch 的代价：常用栏第一次渲染永远是占位数据 ✗。 */
+function loadCatalogSync() {
+  if (typeof XMLHttpRequest !== 'function') return null;  // Node 里 import 这个模块时不该炸 ✗
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', CATALOG_URL, false);
+    xhr.send(null);
+    if (xhr.status !== 200) return null;
+    const parsed = JSON.parse(xhr.responseText);
+    return parsed && parsed.catalog ? parsed.catalog : null;
+  } catch (_) { return null; }  // 读不到就走占位 ✓（离线 / 旧服务端 / JSON 写坏）
+}
+
+/* 兜底路径：某些环境会禁掉主线程同步 XHR ✓ —— 这时异步补一次，
+   下一次渲染（打开站点菜单 / 重开工作台）就能看到私有目录 ✓。 */
+function loadCatalogAsync() {
+  if (typeof fetch !== 'function') return;
+  fetch(CATALOG_URL, { cache:'no-store' })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((parsed) => { if (parsed && parsed.catalog && applyCatalog(parsed.catalog)) SITE_CATALOG_STATE.mode = 'file'; })
+    .catch(() => {});
+}
+
+applyCatalog(PLACEHOLDER_CATALOG);
+const privateCatalog = loadCatalogSync();
+if (privateCatalog && applyCatalog(privateCatalog)) SITE_CATALOG_STATE.mode = 'file';
+else if (!privateCatalog) loadCatalogAsync();
+
+/* 排障 / 自测用句柄 ✓（不参与业务逻辑）：window.CodeScopeSiteCatalog.state.mode */
+try {
+  if (typeof window !== 'undefined') {
+    window.CodeScopeSiteCatalog = {
+      state: SITE_CATALOG_STATE,
+      reload() { const raw = loadCatalogSync(); if (raw && applyCatalog(raw)) SITE_CATALOG_STATE.mode = 'file'; return SITE_CATALOG_STATE; },
+    };
+  }
+} catch (_) { }

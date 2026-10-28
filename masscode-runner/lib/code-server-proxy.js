@@ -10,7 +10,17 @@
    为什么必须经代理、不能把 code-server 直接暴露出去：
    code-server 自己那套鉴权只有「一个密码」这一档，而 CodeScope 服务端目前没有任何鉴权、
    只有同源校验。如果直接把 4899 端口开到局域网上，等于绕开 CodeScope 直接给整台机器开门。
-   所以 code-server 只绑 127.0.0.1，对外只经这个代理，并把 CodeScope 的同源校验照搬过来。 */
+   所以 code-server 只绑 127.0.0.1，对外只经这个代理，并把 CodeScope 的同源校验照搬过来。
+
+   ★★ 光有同源校验不够 ✗✗（2026-10-28）——
+   这个代理**自己 createServer** ✓，请求**根本不过** CodeScope 的 `/api/*` 鉴权中间件 ✗。
+   主服务加了访问码之后，局域网里随便一台设备直连这个端口 ✓ 就能拿到整台机器的终端 ✗，
+   等于把刚装上的锁从旁边那扇门绕过去了 ✗。
+   ⇒ 复用**同一份**判据 ✓（`authorize` 回调，形态照 `isAllowed` ✓，实现见 server.js 的 proxyAuthGate ✓）：
+     ① 回环放行 ✓（本机那套用法零变化 ✓）；
+     ② 非回环要有效 cookie / X-CS-Auth ✓，否则 **401** ✓；
+     ③ ⚠️ 拒绝由**代理自己**写回 ✗ 不转给后端 ✓ —— 后端是 code-server / DSH ✓，
+        它们不认识这个 401 ✓，真转过去只会变成一个看不懂的 502 或白屏 ✗。 */
 
 const http = require('http');
 const net = require('net');
@@ -52,6 +62,10 @@ function createCodeServerProxy(options = {}) {
   const listenPort = Number(options.listenPort) || 0;
   const targetHost = options.targetHost || '127.0.0.1';
   const isAllowed = typeof options.isAllowed === 'function' ? options.isAllowed : () => true;
+  /* 鉴权回调（可选）✓：返回 null = 放行 ✓，返回 { status, message } = 拦住 ✓（见文件头那段）。
+     ⚠️ 和 isAllowed 分开 ✗：那个是「同源校验」（防跨站 ✓），这个是「你是谁」（防局域网 ✓）——
+        两件事混进一个回调，以后想单独关掉其中一个就没法关了 ✓。 */
+  const authorize = typeof options.authorize === 'function' ? options.authorize : null;
   const onNotice = typeof options.onNotice === 'function' ? options.onNotice : () => {};
   let targetPort = Number(options.targetPort) || 0;
   let upstreamHost = `${targetHost}:${targetPort}`;
@@ -68,8 +82,25 @@ function createCodeServerProxy(options = {}) {
     onNotice(`VS Code 代理目标已切换：${upstreamHost}`);
   }
 
+  /* ★ 拒绝判据**只此一处** ✓（HTTP 路径与 WS 升级共用 ✓）——
+     原来两处各内联一句 `if (!isAllowed(req)) → 403` ✗，再叠一层鉴权就会变成「改一处漏一处」✗。
+     ⚠️ authorize 抛异常时**一律拒绝** ✗（fail closed ✓）——
+        启动早期鉴权常量还没初始化、或配置读失败时，「放行」= 门开着且没人知道 ✗。 */
+  function denialOf(req) {
+    if (!isAllowed(req)) return { status: 403, message: '已拒绝跨站请求' };
+    if (!authorize) return null;
+    try {
+      const denied = authorize(req);
+      if (!denied) return null;
+      return { status: Number(denied.status) || 401, message: String(denied.message || denied.error || '需要访问码') };
+    } catch (_) {
+      return { status: 401, message: '鉴权状态尚未就绪，请稍后重试' };
+    }
+  }
+
   function forward(req, res) {
-    if (!isAllowed(req)) return res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('已拒绝跨站请求');
+    const denied = denialOf(req);
+    if (denied) return res.writeHead(denied.status, { 'content-type': 'text/plain; charset=utf-8' }).end(denied.message);
     const upstream = http.request({ host: targetHost, port: targetPort, method: req.method, path: req.url, headers: Object.fromEntries(copyHeaders(req.rawHeaders, upstreamHost).map((line) => { const at = line.indexOf(':'); return [line.slice(0, at), line.slice(at + 1).trim()]; })) }, (upstreamRes) => {
       const headers = upstreamRes.headers;
       const type = String(headers['content-type'] || '');
@@ -98,7 +129,15 @@ function createCodeServerProxy(options = {}) {
   }
 
   function onUpgrade(req, socket, head) {
-    if (!isAllowed(req)) { socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
+    /* ⚠️ WS 升级走 'upgrade' 事件 ✗ —— 它**不经过** forward ✓，必须再判一次 ✓
+       （但判据仍是同一个 denialOf ✓，不是第二份逻辑 ✓）。
+       浏览器建 WS **不能自定义请求头** ✗ → 远端只能靠 cookie ✓（cookie 不按端口隔离 ✓）。 */
+    const denied = denialOf(req);
+    if (denied) {
+      const text = denied.status === 401 ? 'Unauthorized' : denied.status === 403 ? 'Forbidden' : 'Error';
+      socket.write('HTTP/1.1 ' + denied.status + ' ' + text + '\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+      socket.destroy(); return;
+    }
     const upstream = net.connect(targetPort, targetHost, () => {
       const lines = [`${req.method} ${req.url} HTTP/1.1`];
       for (const line of copyHeaders(req.rawHeaders, upstreamHost)) lines.push(line);

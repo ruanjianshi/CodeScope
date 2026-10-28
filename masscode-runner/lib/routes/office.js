@@ -38,6 +38,15 @@ async function handle(req, res, u, ctx) {
     }
     if (req.method === 'GET' && u.pathname === '/api/office/connection') {
     const health = await onlyOfficeHealth();
+    /* ★ JWT 链路状态在 `connection.jwt` 里 ✓（2026-10-28）——
+       和编辑器配置用的是**同一把密钥** ✓（server.js 的 signOnlyOfficeConfig →
+       lib/office-engine.js 的 signOnlyOfficeJwt ✓，密钥来自 <数据目录>/onlyoffice-jwt-secret ✓）。
+       ⚠️ 为什么必须单独暴露 ✗：`health.ok` 只说明「服务在」✓，不说明「开着 JWT」✗ ——
+         容器还是旧配置时会**降级成不签名模式** ✓（Office 不崩 ✓，但同机任何进程都能开文档 ✓），
+         这种状态必须在面板上看得见 ✓，否则用户会以为已经加固过了 ✓。
+       ⚠️ 不含密钥、不含文件路径 ✓（这个接口局域网设备也能拿到 ✓）。
+       ⚠️ 不再多拼一个顶层 `jwt` 字段 ✗：`connection.jwt` 就是它 ✓，
+          而且这个文件头顶着代码行棘轮（169 行 ✓），多一行就红 ✓。 */
     return send(res, 200, { ok:true, connection:publicOnlyOfficeConnection(), health });
     }
     if (req.method === 'GET' && u.pathname === '/api/office/service') {
@@ -64,6 +73,7 @@ async function handle(req, res, u, ctx) {
     }
     }
     if (req.method === 'GET' && u.pathname === '/api/office/onlyoffice/status') {
+    /* ⚠️ 这里同样带着 connection.jwt ✓（见上面 /api/office/connection 那段 ✓）*/
     const health = await onlyOfficeHealth();
     return send(res, health.ok ? 200 : 503, { ...health, engine:'ONLYOFFICE Docs', connection:publicOnlyOfficeConnection(), editable:['docx','xlsx','xls','csv','pptx','pdf'] });
     }

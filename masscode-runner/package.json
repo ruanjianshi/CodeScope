@@ -31,6 +31,7 @@
     "test:unit": "node tests/dsh-lock.js && node tests/architecture.js && node tests/arch-geom.js && node tests/arch-ai.js && node tests/mime.js && node tests/imap-search.js && node tests/mail-list.js && node tests/workflow.js && node tests/expr.js && node tests/flow-schedule.js && node tests/hot.js && node tests/en-text.js && node tests/en-sources.js && node tests/srs.js && node tests/ebook.js && node tests/ebook-real.js && node tests/roots.js && node tests/mail-failfast.js && node tests/file-atlas-core.js && node tests/file-atlas-catalog.js && node tests/remote-sync-guards.js && node tests/system-files-guards.js && node tests/shortcut-docs.js && node tests/shortcut-titles.js && node tests/smoke.js && node tests/platform-sim.js",
     "test:perf": "node tests/perf-budget.js",
     "test:browser": "node tests/browser-smoke.js",
+    "migrate:site-catalog": "node scripts/migrate-site-catalog.js",
     "test:run": "node tests/run.js",
     "test:term": "node tests/term.js",
     "test:runs": "node tests/run-history.js",
