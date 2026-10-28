@@ -36,6 +36,20 @@ jobs:
     defaults:
       run:
         working-directory: masscode-runner
+    # ★ 跑 npm test 前必须先有一个「隔离实例」✗→✓：
+    #   tests/perf-budget.js:45 默认打 http://127.0.0.1:4877/（本机实例）✗，
+    #   而打包机上前台根本没有服务 ✗。macOS / Windows 的 GitHub runner 自带 Chrome ✓，
+    #   所以这个测试**不会 skip**，会在 catch 里 exit(1) 把发版卡死 ✗。
+    #   整套环境指到 runner 临时目录 + 回环地址，跑完收掉 ✓（清理见 Stop isolated instance）。
+    env:
+      CODESCOPE_HOST: 127.0.0.1
+      CODESCOPE_PORT: '4978'
+      CODESCOPE_VAULT: ${{ runner.temp }}/codescope-ci/vault
+      CODESCOPE_DATA_HOME: ${{ runner.temp }}/codescope-ci/data
+      CODESCOPE_TEST_URL: http://127.0.0.1:4978/
+      CODESCOPE_DSH_AUTOSTART: '0'
+      CODESCOPE_AUTO_OFFICE: '0'
+      CODESCOPE_ONLYOFFICE_URL: http://127.0.0.1:1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -58,10 +72,110 @@ jobs:
         env:
           CODESCOPE_TARGET_PLATFORM: ${{ runner.os == 'Windows' && 'win32' || runner.os == 'macOS' && 'darwin' || 'linux' }}
           CODESCOPE_TARGET_ARCH: ${{ matrix.arch }}
+      # ★ 为什么 bash / pwsh 各写一份 ✓：
+      #   run 步骤在每个 OS 上的默认 shell 不同（Windows 是 pwsh）✗，
+      #   而「后台起进程 + 轮询就绪」没有跨 shell 的写法 ✗。多一段总比在 Windows 上静默错 ✗ 强。
+      - name: Start isolated instance
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p "$CODESCOPE_VAULT" "$CODESCOPE_DATA_HOME"
+          node server.js > "$CODESCOPE_DATA_HOME/server.log" 2>&1 &
+          echo $! > "$CODESCOPE_DATA_HOME/server.pid"
+          for attempt in $(seq 1 90); do
+            if curl -fsS "${CODESCOPE_TEST_URL}api/version" > /dev/null 2>&1; then
+              echo "隔离实例已就绪：$CODESCOPE_TEST_URL (pid $(cat "$CODESCOPE_DATA_HOME/server.pid"))"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "隔离实例 90s 未就绪，服务端日志尾部："
+          tail -80 "$CODESCOPE_DATA_HOME/server.log" || true
+          exit 1
+      - name: Start isolated instance (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:CODESCOPE_VAULT, $env:CODESCOPE_DATA_HOME | Out-Null
+          $proc = Start-Process -FilePath node -ArgumentList 'server.js' -PassThru -NoNewWindow -RedirectStandardOutput "$env:CODESCOPE_DATA_HOME/server.log" -RedirectStandardError "$env:CODESCOPE_DATA_HOME/server.err"
+          Set-Content -Path "$env:CODESCOPE_DATA_HOME/server.pid" -Value $proc.Id
+          for ($attempt = 1; $attempt -le 90; $attempt++) {
+            try {
+              if ((Invoke-WebRequest -UseBasicParsing "$env:CODESCOPE_TEST_URL/api/version" -TimeoutSec 2).StatusCode -eq 200) {
+                Write-Host "隔离实例已就绪：$env:CODESCOPE_TEST_URL (pid $($proc.Id))"
+                exit 0
+              }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "隔离实例 90s 未就绪，服务端日志尾部："
+          Get-Content "$env:CODESCOPE_DATA_HOME/server.log" -Tail 80
+          exit 1
+      # ★ 跑 test:unit 而不是 npm test ✓（理由同 ci.yml）：
+      #   tests/perf-budget.js 的基线来自**真实 vault** ✗，临时空 vault 上必定
+      #   waitForFunction 60s 超时 ✗（本机实测）。它是本地基线回归 ✓，不做发版闸门 ✓。
       - name: Verify portable runtime
-        run: npm test
+        run: npm run test:unit
         env:
           CODESCOPE_REQUIRE_BUNDLED_GOPLS: '1'
+      - name: Show server log
+        if: failure()
+        shell: bash
+        run: tail -120 "$CODESCOPE_DATA_HOME/server.log" || true
+      # 无条件清理（if: always()）✓：失败时也要收掉 node server.js，
+      # 否则 runner 会挂到 job 超时，而 4978 在窗口期一直被占 ✗。
+      - name: Stop isolated instance
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ -f "$CODESCOPE_DATA_HOME/server.pid" ]; then
+            pid=$(cat "$CODESCOPE_DATA_HOME/server.pid")
+            kill "$pid" 2>/dev/null || true
+            sleep 2
+            kill -9 "$pid" 2>/dev/null || true
+            echo "已停止隔离实例 pid=$pid"
+          fi
+      - name: Stop isolated instance (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:CODESCOPE_DATA_HOME/server.pid") {
+            $serverPid = Get-Content "$env:CODESCOPE_DATA_HOME/server.pid"
+            Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
+            Write-Host "已停止隔离实例 pid=$serverPid"
+          }
+      # ★ 签名 / 公证是**可选**的 ✓（forge.config.js:32 `identity: macSigningIdentity || '-' `）：
+      #   缺 secret 时 forge 打 ad-hoc 包 —— 能跑 ✓，但首次打开要在
+      #   「系统设置 → 隐私与安全性」手动放行，且不能用于自动更新 ✗。
+      #   所以这里把降级**显式喊出来** ✓：宁可 workflow 里挂一条 warning，
+      #   也不要静默产出一个"看起来正常"的未签名包 ✗。
+      #   secrets 清单（都配齐才走 Developer ID + 公证）：
+      #     CODESCOPE_MAC_SIGN_IDENTITY   例：Developer ID Application: Xxx (TEAMID)
+      #     APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarytool 凭据
+      - name: Prepare macOS signing
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          SIGN_IDENTITY: ${{ secrets.CODESCOPE_MAC_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$SIGN_IDENTITY" ]; then
+            echo "::warning::缺少 CODESCOPE_MAC_SIGN_IDENTITY secret → 本次产出为 ad-hoc 签名包（identity '-'）：产物可运行，但用户首次打开需手动在「隐私与安全性」放行，且不支持自动更新。"
+            exit 0
+          fi
+          echo "CODESCOPE_MAC_SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            PROFILE="codescope-notary"
+            xcrun notarytool store-credentials "$PROFILE" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+            echo "CODESCOPE_MAC_NOTARY_PROFILE=$PROFILE" >> "$GITHUB_ENV"
+            echo "::notice::已启用 Developer ID 签名 + notarytool 公证（keychain profile: $PROFILE）"
+          else
+            echo "::warning::有签名身份但缺 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID → 只签名不公证，Gatekeeper 仍会提示「无法验证开发者」。"
+          fi
+      # 顺序要紧 ✗→✓：forge 在 `make:desktop` **期间**读 CODESCOPE_MAC_SIGN_IDENTITY /
+      # CODESCOPE_MAC_NOTARY_PROFILE（见 forge.config.js:9-10），所以签名准备必须排在打包**之前** ✓。
       - name: Build desktop packages
         run: npm run make:desktop -- --arch=${{ matrix.arch }}
       - name: Verify macOS application signature
@@ -71,6 +185,9 @@ jobs:
           app_path="out/CodeScope-darwin-${{ matrix.arch }}/CodeScope.app"
           codesign --verify --deep --strict --verbose=2 "$app_path"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")" = "com.codescope.desktop"
+          # ad-hoc 也必须是**有效**签名 ✓（forge.config.js:26-32：不签名 macOS 会注册成过期/被 translocate 的副本 ✗）。
+          # 这里把实际身份打出来：Developer ID 还是 Signature=adhoc，一眼能看出来 ✓。
+          codesign -dv --verbose=2 "$app_path" 2>&1 | grep -E 'Identifier=|Signature=|Authority=' || true
       - uses: actions/upload-artifact@v6
         with:
           name: codescope-${{ matrix.id }}

@@ -1,4 +1,4 @@
-# 码境 CodeScope v2.2
+# 码境 CodeScope v3.1.0
 
 面向代码阅读、编写、工程文档、论文研究与可视化的一体化本地工作台。CodeScope 把代码编辑器、Markdown 知识库、PDF 阅读笔记、Office 文档与多种绘图工具放进同一个可组合界面，数据仍保存在用户自己的 `markdown-vault` 中。
 
@@ -8,7 +8,7 @@ CodeScope 采用“单内核、双入口”架构：Web 端与桌面端共用界
 
 前往 [GitHub Releases](https://github.com/ruanjianshi/massCode/releases/latest) 下载当前系统的安装包：macOS 提供 Apple Silicon 与 Intel 的 DMG/ZIP，Windows 提供 x64 安装程序，Linux 提供 x64 的 DEB/RPM/ZIP。安装包已内置 Electron/Node 运行时、Prettier、Ruff Python 格式化、Pyright、TypeScript Language Server、TypeScript 以及对应平台的 gopls；安装后无需再执行 npm、pip 或 Go 安装命令。编译器、语言解释器和 LaTeX 仅在运行相应项目时按需使用。
 
-## v2.2 能做什么
+## v3.1.0 能做什么
 
 | 工作区 | 主要能力 |
 | --- | --- |
@@ -30,7 +30,12 @@ CodeScope 采用“单内核、双入口”架构：Web 端与桌面端共用界
 - Linux / WSL：运行 `chmod +x 启动码境.sh && ./启动码境.sh`
 - 命令行：进入 `masscode-runner` 后执行 `npm ci && npm start`
 
-默认地址为 `http://127.0.0.1:4877`，仅监听本机。需要可信局域网访问时显式设置 `CODESCOPE_HOST=0.0.0.0`。可用 `CODESCOPE_PORT`、`CODESCOPE_VAULT` 与 `CODESCOPE_DATA_HOME` 覆盖端口、资料库和应用数据目录。
+默认端口为 `4877`，但**默认监听地址在两个平台上并不一致**，请按实际使用的脚本判断：
+
+- `启动码境.sh`（Linux / WSL）与 `启动码境.bat`（Windows）：默认 `CODESCOPE_HOST=127.0.0.1`，**仅监听本机**。
+- `启动码境.command`（macOS 双击）：默认 `CODESCOPE_HOST=0.0.0.0`，**同时监听所有网卡**。也就是说，在 macOS 上双击启动后，同一局域网内的任何人都能打开 `http://<本机IP>:4877`，其中包含笔记、代码与已保存的凭据——只在可信网络使用；需要只监听本机时以 `CODESCOPE_HOST=127.0.0.1 ./启动码境.command` 启动，或在脚本第 11 行把默认值改回 `127.0.0.1`。
+
+需要可信局域网访问时显式设置 `CODESCOPE_HOST=0.0.0.0`（`.sh`/`.bat` 场景）。可用 `CODESCOPE_PORT`、`CODESCOPE_VAULT` 与 `CODESCOPE_DATA_HOME` 覆盖端口、资料库和应用数据目录。
 
 ### 桌面模式
 
@@ -60,10 +65,27 @@ AI 绘图和 ONLYOFFICE Document Server 是外部服务连接，而不是安装�
 ```bash
 cd masscode-runner
 npm ci
-npm test
-npm run test:browser
+npm test                 # = test:unit + test:perf
+npm run test:unit        # 26 个确定性用例，自起服务/临时目录，CI 跑的就是这个
+npm run test:perf        # 性能预算：基线取自真实 vault（本机跑，别当 CI 闸门）
+npm run test:browser     # 浏览器 E2E，自起服务 + 系统 Chrome/Chromium
 node preflight.js --json
 ```
+
+`test:perf`（`tests/perf-budget.js`）刻意不进 CI：它的阈值来自本机真实 vault 的量测基线，对着空的临时 vault 会卡在「等首屏出现片段」上直到 60s 超时；它的用途是**本地基线回归**，不是每次提交的闸门。CI 里用隔离实例做一次干净启动断言代替。
+
+CI：`.github/workflows/ci.yml` 在 push 到主分支（`main`/`master`）与 `pull_request` 时跑日常校验——先自起一个**隔离实例**（临时 `CODESCOPE_VAULT`/`CODESCOPE_DATA_HOME`、`CODESCOPE_HOST=127.0.0.1`、固定端口 4978，跑完清理），再用 `CODESCOPE_TEST_URL` 指向它跑 `npm run test:unit`（并断言 `/api/version` 与 `package.json` 版本一致），另有一个 job 跑浏览器 E2E（`tests/browser-smoke.js`，它自己起服务 + Chromium）。
+
+### 提交前的体积守卫
+
+`masscode-runner/scripts/hooks/pre-commit`（单文件体积守卫）**不随仓库分发**：Git 只认 `.git/hooks` 或 `core.hooksPath`，两者都属于本地状态，新克隆里默认只有 `*.sample`，守卫等于没装。在仓库根目录执行一次即可接管（本机当前已配置）：
+
+```bash
+git config core.hooksPath masscode-runner/scripts/hooks
+# 撤销：git config --unset core.hooksPath
+```
+
+用 `core.hooksPath` 而不是软链进 `.git/hooks`：钩子用 `$0` 的同目录去找 `pre-commit-size.js`，软链过去 `dirname "$0"` 会变成 `.git/hooks`，找不到脚本就只能空放行。
 
 更完整的操作说明见 [masscode-runner/README.md](masscode-runner/README.md)，版本变更见 [masscode-runner/CHANGELOG.md](masscode-runner/CHANGELOG.md)。
 

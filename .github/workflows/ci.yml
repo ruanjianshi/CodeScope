@@ -1,0 +1,156 @@
+name: CI
+
+# 日常校验（2026-10-28 补）✗→✓
+# ---------------------------------------------------------------
+# 之前只有 desktop-release.yml，而且只挂 "v*" tag ✓ ——
+# 也就是说：**平时提交根本不跑测试** ✗，谁把 tests/ 弄红了要等到发版才发现 ✗。
+# 这里把日常校验挪到每个 PR 和主分支 push 上 ✓；打包/发布仍在 desktop-release.yml ✓。
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+# 只读仓库：CI 不需要任何写权限 ✓（发布流程的 contents: write 只在 release workflow 里）
+permissions:
+  contents: read
+
+# 同一分支连续 push 时取消上一轮 ✓ —— 日常校验只要最新那次结果，省 runner 也省时间 ✓
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: masscode-runner
+    # ★ 为什么要一个「隔离实例」✓：
+    #   tests/perf-budget.js:45 默认打 http://127.0.0.1:4877/（本机实例）✗，
+    #   而 CI 上没有任何服务在跑 → 这个测试要么直接炸（catch 里 process.exit(1)），
+    #   要么对着空气测出一堆 0 ✗。所以先按下面这套环境起一个临时实例，
+    #   再用 CODESCOPE_TEST_URL 把它指给测试 ✓。
+    env:
+      # ① 只绑回环：CI 机器不对外监听 ✓
+      CODESCOPE_HOST: 127.0.0.1
+      # ② 固定端口：服务端与 CODESCOPE_TEST_URL 必须是同一个地址 ✓
+      CODESCOPE_PORT: '4978'
+      # ③ vault / 应用数据全在 runner 临时目录：跑完随 runner 一起消失，
+      #    绝不在仓库里留状态（也就不可能顺手改到真实 vault）✓
+      CODESCOPE_VAULT: ${{ runner.temp }}/codescope-ci/vault
+      CODESCOPE_DATA_HOME: ${{ runner.temp }}/codescope-ci/data
+      CODESCOPE_TEST_URL: http://127.0.0.1:4978/
+      # ④ CI 里不拉侧车：DSH 需要随包二进制、ONLYOFFICE 需要 docker，
+      #    拉起来只会让日常校验变成"环境问题大赏" ✗
+      CODESCOPE_DSH_AUTOSTART: '0'
+      CODESCOPE_AUTO_OFFICE: '0'
+      CODESCOPE_ONLYOFFICE_URL: http://127.0.0.1:1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: masscode-runner/package-lock.json
+      - name: Install reproducible dependencies
+        run: npm ci
+      - name: Start isolated instance
+        run: |
+          mkdir -p "$CODESCOPE_VAULT" "$CODESCOPE_DATA_HOME"
+          node server.js > "$CODESCOPE_DATA_HOME/server.log" 2>&1 &
+          echo $! > "$CODESCOPE_DATA_HOME/server.pid"
+          # 冷启动实测 8.5~8.8s（见 tests/browser-smoke.js 的注释），给到 90s 留足余量 ✓
+          for attempt in $(seq 1 90); do
+            if curl -fsS "${CODESCOPE_TEST_URL}api/version" > /dev/null 2>&1; then
+              echo "隔离实例已就绪：$CODESCOPE_TEST_URL (pid $(cat "$CODESCOPE_DATA_HOME/server.pid"))"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "隔离实例 90s 未就绪，服务端日志尾部："
+          tail -80 "$CODESCOPE_DATA_HOME/server.log" || true
+          exit 1
+      # ★ 干净实例启动断言（这一步是唯一消费上面那个实例的地方）✓：
+      #   /api/version 的版本号必须和 package.json 一致 —— 顺手抓住
+      #   "包版本改了但服务端没跟上" 这种发版级错误 ✓。
+      - name: Assert clean boot
+        run: |
+          node -e "
+          (async () => {
+            const pkg = require('./package.json');
+            const response = await fetch(process.env.CODESCOPE_TEST_URL + 'api/version');
+            const info = await response.json();
+            if (!info.ok || info.version !== pkg.version) {
+              throw new Error('版本不一致：api=' + info.version + ' package.json=' + pkg.version);
+            }
+            console.log('干净实例启动 OK：' + info.name + ' ' + info.version);
+          })().catch((error) => { console.error('失败：' + error.message); process.exit(1); });
+          "
+      # ★ 为什么是 test:unit 而不是 npm test ✓（2026-10-28 实测）：
+      #   npm test = test:unit + test:perf。而 tests/perf-budget.js 的量测基线
+      #   取自**真实 vault**（首屏要有片段 / 真实数据量）✗ ——
+      #   对着空的临时 vault 它会卡在 waitForFunction(SNIPPETS.length > 0) 上
+      #   60s 超时（本机对着 4978 空实例实测：TTFB/DCL/DOM 三项都过了，随后
+      #   "性能预算测试炸了：page.waitForFunction: Timeout 60000ms exceeded" ✗）。
+      #   ⇒ 它是「本地基线回归」，不适合当 CI 闸门 ✓；CI 要的是确定性 ✓。
+      #   而在没有这个实例之前，它会打 127.0.0.1:4877（别人机器上的实例）→ 更糟 ✗。
+      - name: Run unit and integration tests
+        run: npm run test:unit
+      - name: Show server log
+        if: failure()
+        run: tail -120 "$CODESCOPE_DATA_HOME/server.log" || true
+      # ★ 清理必须无条件跑（if: always()）✗→✓：
+      #   上面任何一步失败都要把 node server.js 收掉 ✓，否则 runner 会挂到 job 超时，
+      #   而窗口期里 4978 一直被占着 —— 下一轮 CI 会以"端口被占用"这种假失败收场 ✗。
+      - name: Stop isolated instance
+        if: always()
+        run: |
+          if [ -f "$CODESCOPE_DATA_HOME/server.pid" ]; then
+            pid=$(cat "$CODESCOPE_DATA_HOME/server.pid")
+            kill "$pid" 2>/dev/null || true
+            # 侧车是子进程，一并收掉 ✓
+            pkill -P "$pid" 2>/dev/null || true
+            sleep 2
+            kill -9 "$pid" 2>/dev/null || true
+            echo "已停止隔离实例 pid=$pid"
+          fi
+
+  browser:
+    name: Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: masscode-runner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: masscode-runner/package-lock.json
+      - name: Install reproducible dependencies
+        run: npm ci
+      # ★ 为什么先硬检查浏览器 ✓：
+      #   tests/browser-smoke.js:81 找不到 Chrome/Chromium 时**只打印 skipped 并 return** ✗，
+      #   退出码 0 → CI 绿着，E2E 其实一次都没跑过 ✗。
+      #   这种"静默跳过"比失败更糟，所以在这里显式失败 ✓。
+      - name: Ensure a Chromium binary exists
+        run: |
+          for candidate in google-chrome google-chrome-stable chromium chromium-browser; do
+            if command -v "$candidate" > /dev/null 2>&1; then
+              echo "使用 $candidate -> $(command -v "$candidate")"
+              exit 0
+            fi
+          done
+          echo "runner 上没有 Chrome/Chromium，browser-smoke 会静默跳过，判失败" >&2
+          exit 1
+      # tests/browser-smoke.js 自己起服务（临时 vault + 随机空闲端口 + 临时 DATA_HOME）✓，
+      # 不依赖上面的隔离实例，所以单独一个 job、并行跑 ✓。
+      - name: Run browser smoke
+        run: npm run test:browser
