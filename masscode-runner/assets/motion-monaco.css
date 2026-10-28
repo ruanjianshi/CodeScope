@@ -34,16 +34,16 @@
 /* ═════════ 1. 外壳容器：只给 1px 分隔线做焦点提示，绝不动尺寸 ═════════ */
 
 /* app.css:2015 给 .monaco-editor .margin 加了 1px 右边框（编辑区和行号区之间的线）。
-   它是外壳里唯一"不参与重绘"的可动部件：颜色可以变，位置不能动 ✓。
-   聚焦时把这条线提成主色 —— 一像素的强调，比给整个编辑器加发光边框克制得多，
-   也不会在 .overflow-guard 的 overflow:hidden 里被裁掉 ✓。 */
-:is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .margin {
-  transition: border-color var(--mo-2) var(--mo-out);
-}
-:is(#monaco-main, .split-monaco-host, .reading-html-source)
-  .monaco-editor:focus-within .margin {
-  border-right-color: color-mix(in srgb, var(--accent) 52%, transparent);
-}
+
+   ★★ 2026-10-28 撤掉「聚焦时把这根线提成主色」那条（用户反馈）✗：
+     原意是「一像素的强调，比给整个编辑器加发光边框克制」✓，听起来很合理 ✓ ——
+     但实际观感是「点一下代码，行号和正文之间就出现一条亮竖线」✓，
+     而且**只在聚焦后出现**（刚打开时没有）✓ ⇒ 用户第一反应是「这是不是坏了/接缝」✗，
+     而不是「哦编辑器被选中了」✗ —— 一个提示如果会被误读成故障，它就不该存在 ✓。
+
+   ⇒ 现在整条规则删除 ✓：分隔线保持 app.css 给的原始颜色（var(--border) 混 72%）✓，
+     不随焦点变化 ✓。**也不再有 border-color 过渡** ✓ —— 没有颜色变化就没有过渡可言，
+     留着只是一条空转的过渡声明 ✗。 */
 
 /* ⚠️ 为什么不给 .monaco-editor / .overflow-guard 写 transition ✗ ——
    它们的 width/height 是 Monaco 的 automaticLayout 用 ResizeObserver 一帧一帧
