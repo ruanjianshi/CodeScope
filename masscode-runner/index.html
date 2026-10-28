@@ -1071,6 +1071,25 @@
 <script src="/assets/cs-icons.js"></script>
 <script src="/assets/draw-folder.js"></script>
 <script src="/assets/draw-canvas-embed.js"></script>
+<!-- ★ 绘图 + XMind 渲染层（2026-10-28 从 app.js 抽出来的 1,178 行）——
+     ⚠️ **必须在 app.js 之前** ✓：它顶层声明 `let DRAW_* / XMIND_* / LIB_*`（不是 window 属性 ✗），
+        app.js 和 xmind-interaction.js 都在**运行时**读这些绑定 ✓ —— 先初始化才不会踩 TDZ ✓。
+        反过来看它自己的顶层：只有字面量初始化和 DOMContentLoaded 注册 ✓，
+        **没有一处立即调用 app.js 的函数** ✗（AST 自由变量表实测：顶层引用数 = 0）✓。 -->
+<script src="/assets/app-draw.js"></script>
+<!-- ★ 阅读文库 + 知识库（2026-10-28 从 app.js 抽出来的 1,446 行）——
+     ⚠️ 也必须在 app.js **之前** ✓，而且这一条是**硬约束**（不是偏好）：
+        app.js 顶层（16750 行附近）直接把这些函数**对象**取出来做点击接线
+        （`$('knowledge-launch-split').onclick = openKnowledgeSplit` ✓），
+        那些语句在 app.js 加载时就求值 → 后加载就是
+        `ReferenceError: openKnowledgeSplit is not defined` ✗（排列顺序写错的失败形态）。
+        反过来本文件顶层同样不调 app.js ✓（只初始化 let/const + 注册回调）✓。 -->
+<script src="/assets/app-reading.js"></script>
+<!-- ★ 访问码拦截（2026-10-28）：必须在 app.js **之前** ✓、且**不能加 defer** ✗ ——
+     app.js 是普通经典脚本 ✓，defer 会把它排到 app.js 之后执行 ✓，
+     那样首屏那批请求都拿不到 401 处理 ✓（用户看到的是"整页空白 + 一堆红字" ✗）。
+     本文件只包 window.fetch ✓，不依赖任何 app.js 的绑定 ✓。 -->
+<script src="/assets/cs-auth.js"></script>
 <script src="/assets/app.js"></script>
 <!-- ★ 思维导图交互层（2026-10-26 从 app.js 抽出来的鼠标/键盘/框选/平移）——
      用户：「无法选中，怎么鼠标左边是移动画布，设计不合理，调研成熟的思维导图设计，重构」。

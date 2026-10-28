@@ -428,7 +428,10 @@ void bubbleSort(Array& values);
     .join('\n');
   /* ⚠️ 2026-10-26 加上 xmind-interaction.js ✓ —— 思维导图的鼠标/键盘/框选/平移从 app.js
      抽出去了 ✓，不加进来这些「功能存在性」断言会**假失败** ✓ */
-  const assetsBundle = ['app.js', 'xmind-interaction.js', 'life-workbench.js', 'system-panel.js', 'reading-block-editor.js', 'app-pdf.js', 'code-guide.js']
+  /* ⚠️ 2026-10-28 再加速拆出去的两块 ✓（阅读文库/知识库 → app-reading.js、
+     绘图/XMind 渲染 → app-draw.js）—— 同理：断言问的是「功能在不在」✓，
+     不是「在哪个文件」✗，所以名单要跟着文件布局走 ✓。 */
+  const assetsBundle = ['app.js', 'app-reading.js', 'app-draw.js', 'xmind-interaction.js', 'life-workbench.js', 'system-panel.js', 'reading-block-editor.js', 'app-pdf.js', 'code-guide.js']
     .map((f) => { try { return fs.readFileSync(path.join(projectRoot, 'assets', f), 'utf8'); } catch (_) { return ''; } })
     .join('\n');
   const html = pageText + '\n' + assetsBundle + '\n' + cssBundle;

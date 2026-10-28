@@ -35,6 +35,15 @@ const FILES = [
   'assets/app.js',
   'assets/life-workbench.js',
   'assets/app-pdf.js',
+  /* ⚠️ 2026-10-28 app.js 拆出两块（阅读文库/知识库 + 绘图/XMind 渲染）✓ ——
+     新文件不进名单，app.js / app-pdf.js 里那些**跨文件**调用会被误报成「引用了没声明」✗
+     （实测：不加是 67 处假阳性 ✓，加完 0 处 ✓）。和上面 arch-* 六个文件同一条道理：
+     **要么全查，要么别查** ✗。 */
+  'assets/app-reading.js',
+  'assets/app-draw.js',
+  /* ⚠️ cs-icons.js 一直漏在名单外 ✗ —— csGlyphIcon / csGlyphOf / csGlyphText 由它声明 ✓，
+     不加进来这 3 个名字在任何文件里都解析不到 ✓（拆分之前就已经红的 3 处 ✓）。 */
+  'assets/cs-icons.js',
   /* ⚠️ 架构视图是**六个文件**拼起来的 ✓（index.html 按「布局 → 画图 → 面板」顺序加载 ✓）——
      只查 arch-view.js 会把它调 archGraphSvg / archAISvg / wireArchZoom 全报成「没声明」✗
      （第一版就是这样误报了 5 条 ✗）。要么全查，要么别查 ✗。 */
