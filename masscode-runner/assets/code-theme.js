@@ -67,6 +67,26 @@
       { token: 'attribute.value', foreground: p.str.slice(1) },
       { token: 'variable', foreground: p.fg.slice(1) },
       { token: 'variable.predefined', foreground: p.type.slice(1) },
+      /* ★ 二期：语义高亮的 token 类型（clangd / pyright 提供）。
+         Monaco 用「token 名 = semanticTokensProvider legend 里的类型名」来上色 ✓，
+         所以这里按**语义角色**给色，而不是按词法类别 ✓。
+         ⚠️ 这些只有在 semantic-tokens.js 注册了 provider 之后才会出现 ✓ ——
+            没有它时下面几条是「备而不用」，不会影响现有配色 ✓。 */
+      { token: 'parameter', foreground: p.type.slice(1) },        /* 形参：和金/黄系走 */
+      { token: 'property', foreground: p.fn.slice(1) },           /* 成员/字段：同函数系，弱一档 */
+      { token: 'method', foreground: p.fn.slice(1) },
+      { token: 'class', foreground: p.type.slice(1) },
+      { token: 'struct', foreground: p.type.slice(1) },
+      { token: 'enum', foreground: p.type.slice(1) },
+      { token: 'namespace', foreground: p.type.slice(1) },
+      { token: 'typeParameter', foreground: p.type.slice(1) },
+      { token: 'interface', foreground: p.type.slice(1) },
+      { token: 'macro', foreground: p.kw.slice(1) },              /* 宏：和预处理指令一个色系 */
+      { token: 'decorator', foreground: p.num.slice(1) },
+      { token: 'enumMember', foreground: p.num.slice(1) },        /* 枚举值：数字系（它本质是常量） */
+      { token: 'event', foreground: p.fn.slice(1) },
+      { token: 'modifier', foreground: p.kw.slice(1) },
+      { token: 'regexp', foreground: p.str.slice(1) },
       { token: 'invalid', foreground: 'FF5370' }
     ];
   }
@@ -130,7 +150,12 @@
     installed = true;
     KEYS.forEach(function (k) {
       var p = PALETTES[k];
-      monaco.editor.defineTheme(PREFIX + k, { base: 'vs-dark', inherit: true, rules: rulesOf(p), colors: colorsOf(p) });
+      /* ★★ semanticHighlighting: true 是**必须的**（2026-10-28 实测）：
+         自定义主题不写这个字段时，Monaco 会**忽略**所有语义 token ✓ ——
+         症状极具欺骗性：provider 注册成功 ✓、服务端返回 200 + 200 个 token ✓、
+         控制台零报错 ✓，但颜色**一个都不变** ✓（因为主题没声明它接受语义着色 ✓）。
+         Monaco 内置的 vs/vs-dark 是 true，自定义主题默认不是 ✓。 */
+      monaco.editor.defineTheme(PREFIX + k, { base: 'vs-dark', inherit: true, semanticHighlighting: true, rules: rulesOf(p), colors: colorsOf(p) });
     });
     /* 拦截：app.js 只会传 vs / vs-dark；传 vs-dark 时改投到当前文档配色 */
     var orig = monaco.editor.setTheme.bind(monaco.editor);

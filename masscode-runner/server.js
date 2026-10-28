@@ -9240,7 +9240,10 @@ if (req.method === 'POST' && u.pathname === '/api/drawings/delete') {
       if (!Number.isInteger(fragment) || fragment < 0 || fragment >= snippet.fragments.length) return send(res, 400, { ok:false, error:'片段索引无效' });
       const source = snippet.fragments[fragment];
       const action = String(b.action || 'hover');
-      if (!['hover', 'definition', 'references', 'diagnostics', 'completion', 'signature', 'highlights', 'rename', 'codeAction'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 LSP 操作' });
+      /* semanticTokens（2026-10-28，二期语义高亮）—— 加进白名单 ✓；
+         ⚠️ 只加 lib/lsp-service.js 的分支是不够的 ✗：这里是一道独立的动作白名单 ✓，
+            漏了它就 400（实测：provider 被调用了却一点颜色变化都没有，而且不报错）✓。 */
+      if (!['hover', 'definition', 'references', 'diagnostics', 'completion', 'signature', 'highlights', 'rename', 'codeAction', 'semanticTokens'].includes(action)) return send(res, 400, { ok:false, error:'不支持的 LSP 操作' });
       const code = typeof b.code === 'string' ? b.code : source.code;
       if (Buffer.byteLength(code, 'utf8') > 2 * 1024 * 1024) return send(res, 413, { ok:false, error:'LSP 文件内容超过 2 MB' });
       return send(res, 200, await LSP.query({ snippet, fragment, language:source.language, code, action, line:b.line, column:b.column, newName:b.newName, triggerKind:b.triggerKind, triggerCharacter:b.triggerCharacter, range:b.range, only:b.only }));

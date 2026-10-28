@@ -50,6 +50,40 @@ function completionKind(kind) {
   })[Number(kind)] || 'text';
 }
 
+/* ★ 二期（2026-10-28）：把 semantic tokens 从 relative 解码成绝对坐标 ✓。
+   textDocument/semanticTokens/full 返回 data: number[]，每 5 个一组 ——
+     [deltaLine, deltaStart, length, tokenType, tokenModifiers]
+   ⚠️ 最容易写错的一步 ✗：deltaLine > 0（换了行）时 start 要**重置**为 deltaStart ✓；
+      deltaLine === 0（同一行）时才是 start += deltaStart ✓。
+      写成无脑累加 ⇒ 第 2 行之后所有 token 的列号一路往后飘 ✓，
+      界面上是「颜色块错位到行尾」✓（不报错，最难查的那种 ✓）。
+   ⚠️ 为什么在**服务端**解、而不是让前端解 ✗：
+      前端要按 legend 名字做下标重映射，本来就得遍历一遍数组 ✓；
+      两边各写一份 delta 解码 = 同一个循环两处维护 ✓，错的概率翻倍 ✗。
+   ⚠️ length <= 0 的项直接丢 ✓，但**坐标必须先推进再丢** ✗ ——
+      否则丢一项就会让后面所有 token 的列号错位 ✓。 */
+function decodeSemanticTokens(data) {
+  const values = Array.isArray(data) ? data : [];
+  const tokens = [];
+  let line = 0, start = 0;
+  for (let index = 0; index + 4 < values.length; index += 5) {
+    const deltaLine = Number(values[index]) || 0;
+    const deltaStart = Number(values[index + 1]) || 0;
+    const length = Number(values[index + 2]) || 0;
+    if (deltaLine > 0) { line += deltaLine; start = deltaStart; }
+    else start += deltaStart;
+    if (length <= 0) continue;
+    tokens.push({
+      line,
+      start,
+      length,
+      type: Math.max(0, Number(values[index + 3]) || 0),
+      modifiers: Math.max(0, Number(values[index + 4]) || 0),
+    });
+  }
+  return tokens;
+}
+
 class LspSession {
   constructor(config, root) {
     this.config = config;
@@ -68,6 +102,13 @@ class LspSession {
        计数器 + 等待者：谁在等，就等「这个 uri 又推了一次」再返回 ✓。 */
     this.diagStamp = new Map();
     this.diagWaiters = [];
+    /* ★ 二期（2026-10-28）：initialize 的**结果**必须留下来 ✓。
+       语义高亮靠 legend（tokenTypes/tokenModifiers 的**名字与下标**）——
+       Monaco 要求我们编码用的下标和 legend 完全一致 ✓，而 legend 只出现在
+       initialize 响应的 capabilities.semanticTokensProvider 里 ✓。
+       原来 .then(() => …) 直接把 result 丢掉 ✗ → 服务端就算支持语义高亮，
+       我们也编不出合法下标 ✓（只能猜）✓。 */
+    this.capabilities = null;
     this.lastUsed = Date.now();
   }
 
@@ -100,12 +141,34 @@ class LspSession {
             rename: { prepareSupport: true },
             codeAction: { codeActionLiteralSupport: { codeActionKind: { valueSet: ['quickfix', 'refactor', 'source'] } } },
             documentHighlight: { dynamicRegistration: false },
+            /* ★ 二期（2026-10-28）：声明**消费**语义高亮 ✓。
+               ⚠️ tokenTypes/tokenModifiers 留空数组是**故意的** ✓：
+                  规范里「客户端上报自己认识的类型」只对「客户端想过滤」有意义 ✓，
+                  服务器始终按**自己的** legend 返回下标 ✓；真正的名字映射在
+                  assets/semantic-tokens.js 里做 ✓（各服务器 legend 不同 ✓）。
+               ⚠️ formats 只给 ['relative'] —— 这是规范里唯一被广泛实现的形式 ✓；
+                  解码在服务端 (decodeSemanticTokens) 做 ✓，前端拿绝对坐标 ✓。
+               ⚠️ delta:false —— 不做增量 ✓：增量要维护 resultId 与推送顺序，
+                  对「片段级、几百行」的体量没有收益 ✓，反而多一条容易错的路径 ✗。 */
+            semanticTokens: {
+              requests: { full: { delta: false }, range: false },
+              tokenTypes: [],
+              tokenModifiers: [],
+              formats: ['relative'],
+              overlappingTokenSupport: false,
+              multilineTokenSupport: false,
+            },
           },
           workspace: { workspaceFolders: true, applyEdit: true, workspaceEdit: { documentChanges: true } },
         },
         clientInfo: { name: 'CodeScope', version: '1.2.0' },
         initializationOptions: this.config.initializationOptions || {},
-      }, 12000).then(() => {
+      }, 12000).then((result) => {
+        /* ★ 二期（2026-10-28）：留住 initialize 的 capabilities ✓ ——
+           语义高亮的 legend 只在这里出现一次 ✓（见构造函数里的说明）。
+           ⚠️ 缺字段一律兜成 null ✓：后面的 action 用 capabilities.semanticTokensProvider
+              判定「服务器支不支持」✓，undefined 与 null 要一视同仁 ✓。 */
+        this.capabilities = (result && result.capabilities) || null;
         this.notify('initialized', {});
         resolve(this);
       }, reject);
@@ -371,6 +434,29 @@ function createLspService(options = {}) {
           command:item.command ? { title:String(item.command.title||''), command:String(item.command.command||'') } : null,
         }));
         return { ok:true, available:true, server:config.id, actions };
+      }
+      /* ★ 二期（2026-10-28）：语义高亮 ✓。
+         ⚠️ 「服务器没这个能力」回 available:false，不抛错 ✗：
+            前端把它当「继续用词法着色」✓（Monaco 就是这么降级的 ✓），
+            报错会让每次输入都在控制台刷一条错误 ✗。
+         ⚠️ **空 tokens 是成功** ✓：clangd 还在建索引时 full 会合法地回空数组 ✓，
+            判成「不支持」会让前端永久性关掉语义高亮 ✗。
+         ⚠️ 超时给 12s（比其他 action 宽）✓：首次 didOpen 之后 clangd 要先解析整份
+            翻译单元 + 头文件 ✓，索引期实测能到好几秒 ✓。 */
+      if (action === 'semanticTokens') {
+        const provider = session.capabilities && session.capabilities.semanticTokensProvider;
+        if (!provider) return { ok: true, available: false, server: config.id, reason: '该语言服务器不支持语义高亮' };
+        const result = await session.request('textDocument/semanticTokens/full', { textDocument: { uri: workspace.selected.uri } }, 12000);
+        const legend = (provider && typeof provider === 'object' && provider.legend) || {};
+        const tokenTypes = Array.isArray(legend.tokenTypes) ? legend.tokenTypes.map(String) : [];
+        const tokenModifiers = Array.isArray(legend.tokenModifiers) ? legend.tokenModifiers.map(String) : [];
+        return {
+          ok: true,
+          available: true,
+          server: config.id,
+          legend: { tokenTypes, tokenModifiers },
+          tokens: decodeSemanticTokens(result && result.data),
+        };
       }
       if (action === 'diagnostics') {
         /* ⚠️⚠️ 原来是 `await sleep(220)` —— 固定猜 220ms ✗（2026-10-20）

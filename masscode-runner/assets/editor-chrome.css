@@ -42,6 +42,24 @@ html[data-theme] #code-wrap,
 #code-wrap.split-primary #primary-group,
 #code-wrap .split-editor-host { border-radius: 10px; }
 
+/* ── 语义上色（2026-10-28，二期）──────────────────────────────────────────
+   由 semantic-decorations.js 往 token 上挂 inlineClassName ✓ ——
+   颜色全部走 --doc-syn-* ✓，所以**跟着文档配色一起变** ✓（不用改 Monaco 主题）。
+   ⚠️ 选择器必须带上 .view-line span 前缀（特异性 0,2,1）✗：Monaco 给每个 token
+      挂的 .mtkN 是 (0,1,0) ✓，裸写 .cs-sem-fn 同特异性时按加载顺序决定胜负 ✓ ——
+      而 Monaco 的样式是运行时注入到 head 末尾的 ✓，我们会输 ✗。
+      加前缀压过它，且**不必用 !important** ✓。 */
+.view-line span.cs-sem-fn    { color: var(--doc-syn-title); }    /* 函数 / 方法 */
+.view-line span.cs-sem-param { color: var(--doc-syn-type); }     /* 形参 */
+.view-line span.cs-sem-prop  { color: var(--doc-syn-title); }    /* 成员 / 字段 */
+.view-line span.cs-sem-var   { color: var(--doc-text); }         /* 局部变量：保持正文色 */
+.view-line span.cs-sem-type  { color: var(--doc-syn-type); }     /* 类 / 结构体 / 枚举 / 类型参数 */
+.view-line span.cs-sem-ns    { color: var(--doc-syn-type); }     /* 命名空间 */
+.view-line span.cs-sem-macro { color: var(--doc-syn-keyword); }  /* 宏 */
+.view-line span.cs-sem-const { color: var(--doc-syn-number); }   /* 枚举值 */
+.view-line span.cs-sem-kw    { color: var(--doc-syn-keyword); }
+.view-line span.cs-sem-com   { color: var(--doc-syn-comment); font-style: italic; }
+
 /* 只读预览（Markdown 的代码块区）也用同一套卡片语言 */
 #md-view {
   border: 1px solid color-mix(in srgb, var(--doc-line) 82%, transparent);

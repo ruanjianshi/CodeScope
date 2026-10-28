@@ -369,10 +369,17 @@ const SIZE_CAP = [
   /* 代码编辑器语法配色：4 套 Phycat 调色板映射成 Monaco 主题 ✓。
      111 行里有一大段是注释——记着实测踩到的两个坑（options.theme 绕过包装、
      切标签走 updateOptions 而不是 setTheme），这两条比代码本身更值钱 ✓。 */
-  ['assets/code-theme.js', 130],   /* 130 里含「底色压暗一档」的 deepen/mix 两个纯函数 ✓
-                                      以及为什么压暗的理由（App 面板 #0D131B vs 正文 #272E33）✓ */
-  /* 代码区卡片质感（一期）：圆角/细边/投影/内高光，颜色走 --doc-*。 */
-  ['assets/editor-chrome.css', 18],   /* 18 里含一条「为什么必须带 html[data-theme] 前缀」的实测注释 ✓ */
+  ['assets/code-theme.js', 145],   /* 含「底色压暗一档」的 deepen/mix 两个纯函数 ✓，
+                                      以及二期补的 15 条**语义角色**配色规则 ✓（形参/成员/方法/
+                                      类/结构体/枚举/命名空间/类型参数/宏/装饰器/枚举值…）✓ */
+  /* 代码区卡片质感（一期）+ 语义上色的 CSS 类（二期）。 */
+  ['assets/editor-chrome.css', 28],
+  /* 语义上色 · 装饰器实现（二期）。⚠️ 不用 Monaco 的 provider 是因为**实测这个构建
+     不跑那套贡献** —— provider 一次都不会被调用，详见文件头 ✓。 */
+  ['assets/semantic-decorations.js', 81],
+  /* LSP 客户端（2026-10-28 补登记）：它一直是「有实质体量却没人守」的文件 ✓，
+     这次二期往里加了 semanticTokens 的客户端能力声明与解码分支 ✓。 */
+  ['lib/lsp-service.js', 402],
   ['assets/debug-panel.js', 530],
   ['lib/routes/dbg.js', 72],
   ['lib/routes/latex.js', 94],

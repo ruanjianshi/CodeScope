@@ -130,6 +130,28 @@
      ⚠️ 必须排在 doc-theme.js **之后** ✓：要先有 data-doc-theme 才知道该用哪套 ✓。
      ⚠️ 删掉这一行 + 那个文件就回到 Monaco 内置主题 ✓（纯叠加，零侵入）✓。 -->
 <script src="/assets/code-theme.js?v=20261028a" defer></script>
+<!-- ★★ 语义高亮（2026-10-28，二期）：注册 Monaco 的 DocumentSemanticTokensProvider，
+     把语言服务器（clangd / pyright）的「这是函数、这是形参、这是成员」拿去上色 ✓。
+     ⚠️ 为什么非做不可 ✗：Monaco 内置 C++ 词法把函数名/变量名/类型名**全塞进 identifier.cpp** ✓，
+        词法层面最多 4 种颜色 ✓；语义信息只能从 LSP 拿 ✓。
+     ⚠️ 纯增强 ✓：服务器不支持 / 索引未就绪 / 超时 → provider 返回 null ✓，
+        Monaco 自动退回词法着色 ✓ —— 出问题时页面与没有这个脚本**完全一致** ✓。
+     ⚠️ 必须排在 code-theme.js **之后** ✓：主题里那些语义角色的颜色规则要先就位 ✓。 -->
+<!-- ⚠️ 这里原来引入的是 semantic-tokens.js（Monaco 的 DocumentSemanticTokensProvider 版本）✓，
+     2026-10-28 实测后**删除** ✗：本项目的 monaco-editor 0.52 min/vs 构建里注册 API 在、
+     消费侧不在 —— provider 一次都不会被调用（裸语言 id / 选择器对象 / 内置 vs-dark /
+     全新编辑器，四种组合调用数都是 0；连 editor.action.semanticTokens.refresh 都不存在）✓。
+     留着它就是一份**永远不会执行**的 400 行死代码 ✓，所以直接删掉，改用下面的装饰器实现 ✓。 -->
+<!-- ★★ 语义上色 · **装饰器实现**（2026-10-28）—— 这一份才是实际生效的。
+     ⚠️ 上面那个 provider 版本保留但不会生效：实测本项目的 monaco-editor 0.52 min/vs 构建里
+        "注册 API 在、消费侧不在" —— provider 一次都不会被调用（裸语言 id / 选择器对象 /
+        内置 vs-dark / 全新编辑器，四种组合调用数都是 0），连
+        editor.action.semanticTokens.refresh 都是 undefined。
+     ⇒ 改用 deltaDecorations + inlineClassName 自己上色 ✓：
+        服务端那条链路是通的（实测 clangd 返回 200 个 token / legend 25 类），
+        位置与长度都在 token 里，颜色走 --doc-syn-* ⇒ 跟着文档配色一起变 ✓。
+     ⚠️ 纯增强：拿不到 token 就什么都不挂 ✓，编辑器与没有本文件**完全一致** ✓。 -->
+<script src="/assets/semantic-decorations.js?v=20261028a" defer></script>
 </head>
 <body>
 <!-- 统一图标 sprite：线性、1em、currentColor。用 <svg class="cs-ico"><use href="#i-xxx"/></svg> 引用 -->
