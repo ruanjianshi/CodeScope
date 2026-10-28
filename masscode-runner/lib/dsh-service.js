@@ -239,19 +239,39 @@ function createDshService(options = {}) {
       appendLog(`\n[${new Date().toISOString()}] CodeScope starting DSH ${cli.version || ''}${lockNote}\n`);
       state = 'starting'; message = '正在启动 DSH…' + lockNote; tokenUrl = ''; lastExit = null;
       const args = [...cli.prefix, 'web', '--no-open', '--host', LOOPBACK, '--port', String(port)];
-      child = spawn(cli.command, args, { cwd:projectRoot, env:cleanChildEnv(), stdio:['ignore', 'pipe', 'pipe'], windowsHide:true });
+      /* ★★ 生命周期独立（2026-10-28 用户要求）★★
+         「CodeScope 重启/关闭不影响 DSH，但要能管理它的开启和关闭」✓
+         ⇒ `detached:true` 让它自成一个进程组 ✓ + `unref()` ✓
+         ⇒ 输出**直接写日志文件**（不再走管道 ✗）——
+           父进程一退管道就断 ✓，子进程写 stdout 会 EPIPE ✗ 甚至被带走 ✓
+         ⇒ 令牌地址改从**日志尾巴**里解析 ✓（原来读 stdout ✗） */
+      let logFd = null;
+      try {
+        fs.mkdirSync(logDir, { recursive:true });
+        logFd = fs.openSync(logPath, 'a');
+      } catch (_) { logFd = null; }
+      child = spawn(cli.command, args, {
+        cwd: projectRoot,
+        env: cleanChildEnv(),
+        detached: true,
+        stdio: logFd == null ? 'ignore' : ['ignore', logFd, logFd],
+        windowsHide: true,
+      });
+      if (logFd != null) { try { fs.closeSync(logFd); } catch (_) {} }
+      if (child && child.unref) child.unref();
       owned = true;
-      const consume = (chunk) => {
-        const text = String(chunk || '');
-        appendLog(text);
-        const match = text.match(/https?:\/\/127\.0\.0\.1:\d+\/?\?token=[^\s]+/);
-        if (match) tokenUrl = match[0];
-        /* 记下最后一行有内容的输出 ✓ —— 超时/退出时把它带进提示里，
-           用户不用去翻日志就知道卡在哪 ✓（原来只说「请查看运行日志」✗）。 */
-        const tail = text.split('\n').map((l) => l.trim()).filter(Boolean).pop();
-        if (tail) lastOutputLine = tail.slice(0, 160);
+      /* 从日志尾巴里找 token 行 ✓（子进程已经和我们解绑，读不到它的 stdout ✗） */
+      const tailLog = () => {
+        try {
+          const buf = fs.readFileSync(logPath, 'utf8');
+          const slice = buf.slice(-8000);
+          const match = slice.match(/https?:\/\/127\.0\.0\.1:\d+\/?\?token=[^\s]+/);
+          if (match) tokenUrl = match[0];
+          const tail = slice.split('\n').map((l) => l.trim()).filter(Boolean).pop();
+          if (tail) lastOutputLine = tail.slice(0, 160);
+        } catch (_) {}
       };
-      child.stdout.on('data', consume); child.stderr.on('data', consume);
+      tailLog();
       child.once('error', (error) => { state = 'error'; message = 'DSH 启动失败：' + error.message; appendLog(message + '\n'); });
       child.once('exit', (code, signal) => {
         lastExit = { code, signal, at:new Date().toISOString() };
@@ -274,6 +294,7 @@ function createDshService(options = {}) {
       const BLOCK_BUDGET_MS = 12000;
       let waited = 0;
       while (waited < READY_DEADLINE_MS) {
+        tailLog();
         if (tokenUrl || await tcpOpen(LOOPBACK, port, 250)) {
           state = 'running'; message = 'DSH 已由 CodeScope 托管运行';
           return status();
@@ -303,6 +324,7 @@ function createDshService(options = {}) {
     readyTimer = setInterval(async () => {
       if (state !== 'starting') { clearInterval(readyTimer); readyTimer = null; return; }
       if (!child || child.exitCode != null) { clearInterval(readyTimer); readyTimer = null; return; }
+      tailLog();
       if (await tcpOpen(LOOPBACK, port, 300)) {
         clearInterval(readyTimer); readyTimer = null;
         state = 'running';
@@ -322,13 +344,18 @@ function createDshService(options = {}) {
   async function stop() {
     if (child && owned && child.exitCode == null) {
       state = 'stopped'; message = 'DSH 已停止';
-      try { child.kill('SIGTERM'); } catch (_) {}
       const active = child;
+      const killTree = (signal) => {
+        /* detached → 它自成一个进程组 ✓ 杀组才能连它拉起的子进程一起收掉 ✓ */
+        try { process.kill(-active.pid, signal); return; } catch (_) {}
+        try { active.kill(signal); } catch (_) {}
+      };
+      killTree('SIGTERM');
       await Promise.race([
         new Promise((resolve) => active.once('exit', resolve)),
         new Promise((resolve) => setTimeout(resolve, 1800)),
       ]);
-      if (active.exitCode == null) try { active.kill('SIGKILL'); } catch (_) {}
+      if (active.exitCode == null) killTree('SIGKILL');
     } else if (externalPid) {
       /* ★ 端口上那个**不是这次 spawn 的**（孤儿 / 外部启动的）✓ ——
          ⚠️ 老逻辑在这儿**直接拒绝** ✗（「不由 CodeScope 管理，未将其关闭」✓），

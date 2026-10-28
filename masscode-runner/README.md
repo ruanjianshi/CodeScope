@@ -65,7 +65,7 @@ CodeScope 的 Web 端和 Electron 桌面端共用 `server.js`、`index.html`、�
 - 绘图工作区统一管理 Draw.io、Excalidraw 和 XMind；XMind 支持官方原貌查看、可编辑导图、节点重排、父子关系迁移、自由节点、缩放/平移与多布局。
 - Office 工作区只使用 ONLYOFFICE Docs，统一提供 DOCX/XLSX/PPTX 高保真编辑、审阅与多人协作；PDF 阅读工具栏也可直接进入 ONLYOFFICE PDF Editor，并通过独立令牌、自动保存回调和最近 5 份隐藏备份安全回写原 PDF。未连接时显示连接设置，不再使用内置兼容编辑器。
 - 环境检测扩展为运行基础、浏览器能力和项目工具链三层；三端启动脚本共用 `preflight.js` 检查 Node、端口、Vault 权限和依赖完整性。
-- DeepSeek Harness（DSH）已作为 CodeScope 正式依赖和托管服务集成：只需启动 CodeScope，DSH 会在本机回环地址自动启动；顶部可直接进入 Harness，环境面板提供状态、日志位置和重启入口，CodeScope 退出时仅回收自己创建的 DSH 进程。
+- DeepSeek Harness（DSH）已作为 CodeScope 正式依赖和托管服务集成：只需启动 CodeScope，DSH 会在本机回环地址自动启动；顶部可直接进入 Harness，环境面板提供状态、日志位置和重启入口，**DSH 的生命周期与 CodeScope 解耦**：CodeScope 启动 DSH 时让它脱离父进程（独立进程组），因此 CodeScope 重启或关闭都不会带走 DSH；再次打开 CodeScope 会自动接管正在运行的 DSH，环境面板里可以随时「启动 / 重启 / 关闭」它。
 - 桌面安装包新增完整离线编辑辅助工具链：Prettier + Shell 插件、Ruff Python 格式化器、Pyright、TypeScript/TypeScript Language Server 和按平台编译的 gopls；Finder 启动时也会识别 Homebrew、用户 Python 与 Go 的常见工具目录。
 
 远程仓库：[github.com/ruanjianshi/massCode](https://github.com/ruanjianshi/massCode)
