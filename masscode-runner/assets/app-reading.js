@@ -1125,17 +1125,15 @@ if(shell.dataset.mdMode==='live')applyMode('live',false);renderPreview();foot.te
          · 行号栏放源码框左边 ✓，行高/字号与 textarea 对齐 ✓（CSS 用同一套 ✓）
          · 输入时重算行数 ✓，滚动时同步 scrollTop ✓
          · pointer-events:none ✓，不挡选中文字 ✓ */
-      (function(){const gutter=document.createElement('div');gutter.className='reading-md-gutter';gutter.setAttribute('aria-hidden','true');
-       sourceWrap.insertBefore(gutter,source);
-       let lastCount=-1;
-       const paint=()=>{const n=source.value.split('\n').length;
-         if(n!==lastCount){lastCount=n;const frag=document.createDocumentFragment();
-           for(let i=1;i<=n;i++){const d=document.createElement('div');d.textContent=String(i);frag.appendChild(d);}
-           gutter.replaceChildren(frag);}
-         gutter.scrollTop=source.scrollTop;};
-       source.addEventListener('input',paint);
-       source.addEventListener('scroll',()=>{gutter.scrollTop=source.scrollTop;},{passive:true});
-       paint();})();
+      /* ⚠️ 这里原来挂了一段「markdown 源码行号栏」的 IIFE ✗✗（2026-10-28 删）——
+         它引用的是 **markdown 分支**的 source（textarea，本文件 948 行 ✓），
+         却被放进了 HTML 分支；而本函数后面（1196 行 ✓）还有一个 `const source`（PDF 页面文字）→
+         TDZ：`sourceWrap.insertBefore(gutter, source)` 抛
+         ReferenceError: Cannot access 'source' before initialization ✗
+         ⇒ **打开 HTML 阅读文档时整个渲染中断**（browser-smoke 实测卡在这里 ✓）。
+         HTML 分支用的是 Monaco（自带行号 ✓），本来就不需要这段 ✓。
+         行号栏若要真接上，应放进 markdown 源码分支、并给 textarea 套一层 flex 容器
+         （.reading-md-gutter 的样式已在 app.css ✓）—— 那是另一个功能任务 ✓。 */
       workbench.append(sourceWrap,divider,previewWrap);
       let monacoEditor=null,renderTimer=0,editorDisposed=false,resizeHandler=null;
       const getSource=()=>monacoEditor&&!editorDisposed?monacoEditor.getValue():record.content||'';

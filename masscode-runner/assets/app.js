@@ -957,7 +957,13 @@ function rowOpenItem(row) {
   // 文件夹行的箭头可能是 .arrow / .draw-arrow，阅读树的箭头 span 没有类名，因此再兜底看首个子元素；
   // 必须用箭头字形判断是否为文件夹：Office 文件行也有一个空的 .arrow 元素。
   const arrow = row.querySelector(':scope > .arrow, :scope > .draw-arrow, :scope > span:first-child');
-  const glyph = arrow ? (arrow.textContent || '').trim() : '';
+  /* ⚠️ 箭头现在可能已经是 <svg><use/></svg> 了 ✗✗（cs-icons 那轮把 ▸/▾ 换成了图标 ✓）——
+     只看 textContent 会拿到空串 ✓ → 文件夹行的首项退化成「打开」✗，
+     右键阅读资料/知识目录时**再也看不到「展开/收起」** ✓（browser-smoke 报的正是这个 ✓）。
+     ⇒ 兜底看 use 的 href ✓；纯文字字形那条路径照旧保留 ✓。 */
+  const arrowUse = arrow && arrow.querySelector('use');
+  const arrowHref = arrowUse ? (arrowUse.getAttribute('href') || arrowUse.getAttribute('xlink:href') || '') : '';
+  const glyph = arrow ? ((arrow.textContent || '').trim() || ({ '#i-chevron': '▾', '#i-chevron-right': '▸' })[arrowHref] || '') : '';
   if (glyph === '▾' || glyph === '▸') return { icon: glyph, label: glyph === '▾' ? '收起' : '展开', run: () => row.click() };
   return { icon: '▸', label: '打开', run: () => row.click() };
 }

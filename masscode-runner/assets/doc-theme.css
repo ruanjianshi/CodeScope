@@ -108,9 +108,16 @@ html[data-doc-theme="vampire"] {
 #edit-preview.preview-shell .edit-preview-body.md-doc { background:var(--doc-bg); }
 
 /* ── ③ H1：居中，底下一条 40px 短线，悬停展开成整行 ──────────────────── */
+/* ⚠️ H1 必须是**满宽块**，不能 display:table/width:auto ✗✗（2026-10-28 修）——
+   display:table 会让 h1 盒子缩到文字宽（实测 144px / 264px），而 Crepe 的区块手柄用
+   「编辑器中央列 + 指针 y」定位块（@milkdown/plugin-block 的 #mousemoveCallback：
+   posAtCoords + nodeDOM）→ 中央列落在窄盒子之外 → nodeDOM 拿不到 → data-show 恒 false
+   （Crepe 主题里 [data-show='false'] 是 opacity:0 + pointer-events:none → 手柄真的不可见不可点 ✗）。
+   改成满宽块后：文字仍靠 text-align:center 居中 ✓、40px 下划线是 ::after 绝对定位居中 ✓、
+   hover 展开成「整行」也才名副其实 ✓。 */
 .md-doc h1, .reading-md-editor h1, .reading-md-block h1, .reading-md-editor h1 {
-  display:table; width:auto; min-width:120px;
-  margin:2em auto 1.1em; padding-bottom:.5em;
+  display:block; width:100%; min-width:0;
+  margin:2em 0 1.1em; padding-bottom:.5em;
   border:0; text-align:center;
   color:var(--doc-strong); position:relative;
   transition:color .3s ease, text-shadow .3s ease;

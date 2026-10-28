@@ -349,10 +349,21 @@ const SidebarResizer = defineComponent({
   setup() {
     const KEY = 'codescope-kb-sidebar-w'
     const MIN = 200, MAX = 560, DEFAULT = 272
+    /* 拖到多宽算「离谱」✓（2026-10-28 加）——
+       超宽屏（≥1320px）里侧栏是 grid 的第一列 ✓，左右两列各占侧栏宽、
+       中间正文最小 640、两侧余量共 88 ⇒ 侧栏再宽就会把正文挤没 / 把三栏框挤出视口 ✗。
+       另外不允许超过视口 40% ✓（用户一拖就把正文挤没，同样是破版 ✗）。
+       ⚠️ 非三栏区间（<1320px）不套这个上限 ✓ —— 那里是 padding 让位，
+          侧栏宽一点只是正文窄一点，不会破版 ✓。 */
+    const widthCap = () => {
+      if (typeof window === 'undefined') return MAX
+      if (window.innerWidth < 1320) return MAX
+      return Math.max(MIN, Math.min(MAX, Math.floor(window.innerWidth * 0.4), Math.floor((window.innerWidth - 640 - 88) / 2)))
+    }
     const el = ref(null)
     let dragging = false
     const setW = (w) => {
-      const v = Math.max(MIN, Math.min(MAX, Math.round(w)))
+      const v = Math.max(MIN, Math.min(widthCap(), Math.round(w)))
       if (typeof document === 'undefined') return v
       document.documentElement.style.setProperty('--kb-sidebar-w', v + 'px')
       /* ⚠️⚠️ **行内 + !important** ✗✗ —— VitePress 的侧栏样式是 scoped 的
@@ -363,7 +374,14 @@ const SidebarResizer = defineComponent({
         try { el.style.setProperty('width', v + 'px', 'important') } catch (_) {}
       })
       document.querySelectorAll('.VPContent.has-sidebar').forEach((el) => {
-        try { el.style.setProperty('padding-left', v + 'px', 'important') } catch (_) {}
+        try {
+          /* ⚠️ 三栏区间（≥1320px）里正文靠 grid 居中 ✓ —— 行内 padding-left 会把三栏框顶偏 ✗
+             （实测：留着 272px 行内 padding，正文中心偏 136px ✓）。
+             所以那里必须**移除**行内 padding，交给
+             @media(max-width:1319.98px) 那条 CSS 在窄屏负责让位 ✓。 */
+          if (typeof window !== 'undefined' && window.innerWidth >= 1320) el.style.removeProperty('padding-left')
+          else el.style.setProperty('padding-left', v + 'px', 'important')
+        } catch (_) {}
       })
       place()
       return v
@@ -379,13 +397,17 @@ const SidebarResizer = defineComponent({
       if (r.width < 1) return
       h.style.setProperty('left', Math.round(r.right) + 'px', 'important')
     }
-    const offset = () => {
-      const sb = document.querySelector('.VPSidebar')
-      return sb ? sb.getBoundingClientRect().left : 0
-    }
+    /* ⚠️ 宽度必须按**位移增量**算，不能按「指针位置 − 侧栏左边缘」算 ✗✗（2026-10-28 修）——
+       超宽屏（≥1320px）里侧栏左边缘本身是「框左 = 50vw − 正文/2 − 侧栏宽」（会随宽度反向移动 ✓），
+       用绝对位置算就成了正反馈：每动一次宽度涨一次偏差量 ✗
+       （实测：在 4500px 上想把 272 拖到 332，松手变成 552 ✗）。
+       增量映射则与布局无关、无反馈 ✓：按下时记住起点宽度，之后 w = 起点宽度 + 指针位移 ✓。 */
+    let startW = 0, startX = 0
     const onDown = (e) => {
       /* 窄屏（侧栏是抽屉）不参与 ✓ */
       if (typeof window === 'undefined' || window.innerWidth < 960) return
+      startX = e.clientX
+      startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w'), 10) || DEFAULT
       dragging = true
       if (el.value && el.value.setPointerCapture) { try { el.value.setPointerCapture(e.pointerId) } catch {} }
       if (el.value) el.value.classList.add('kb-dragging')
@@ -394,8 +416,8 @@ const SidebarResizer = defineComponent({
     }
     const onMove = (e) => {
       if (!dragging) return
-      /* 宽度 = 指针位置 - 侧栏起点 ✓（侧栏起点不一定在 0 ✗） */
-      setW(e.clientX - offset())
+      /* 宽度 = 按下时的宽度 + 指针位移 ✓（增量映射，和侧栏左边缘怎么动无关 ✓） */
+      setW(startW + (e.clientX - startX))
       e.preventDefault()
     }
     const onUp = (e) => {
@@ -413,7 +435,12 @@ const SidebarResizer = defineComponent({
         setW(saved >= MIN && saved <= MAX ? saved : DEFAULT)
       } catch (_) { setW(DEFAULT) }
       setTimeout(place, 60); setTimeout(place, 600)
-      window.addEventListener('resize', place)
+      /* 视口变窄时（比如 4500 拖到 1300）之前存下的宽度可能已超出新的 widthCap ✓
+         → 必须重新钳一次，否则三栏框会被挤出屏幕 ✗（CSS 那边等宽变量也不会自己收 ✓） */
+      window.addEventListener('resize', () => {
+        setW(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w'), 10) || DEFAULT)
+        place()
+      })
     })
     return () => h('div', {
       ref: el,
@@ -1085,18 +1112,32 @@ html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-con
    regular desktop rules so the wide layout cannot be overwritten. */
 @media (min-width:1320px) {
   /* 三栏阅读框：左分类 / 中正文 / 右大纲，整体在页面里居中。
-     正文宽度自适应 —— 把两侧栏（256×2）和一点边距让出来，剩下的给正文，
-     上限跟版心设置成比例（再宽一行就太长）。
+     ⚠️ 两侧栏宽度必须**跟着 --kb-sidebar-w 走** ✗✗（2026-10-28 修）——
+        侧栏从 692c999 起可以拖动 ✓，但这里原来写死「256×2」✗ →
+        用户把侧栏拖宽后，三栏框仍按 256 算，实测正文中心偏 136px ✗
+        （--kb-content-max 同时决定 grid 的正文列宽和侧栏 left ✓，一处算错两处都歪）。
+     ⇒ 正文上限、grid 两侧列、侧栏 left **用同一个变量**算 ✓：拖到多宽就按多宽排 ✓，
+        拖动后三栏仍然对称 ✓（这正是 browser-smoke 里那条中心/间隙断言要守的不变量 ✓）。
+     上限仍然跟版心设置成比例（再宽一行就太长 ✓）。
      注意必须写 :root 而不是 html：:root 的特异性比 html 高，
      写 html 的话这条会被上面 :root 里的基础定义压住、完全不生效。 */
-  :root { --kb-content-max:clamp(560px, calc(100vw - 600px), min(calc(var(--kb-content-width) * 1.35), 1400px)); }
+  :root { --kb-content-max:clamp(560px, calc(100vw - (var(--kb-sidebar-w) * 2) - 88px), min(calc(var(--kb-content-width) * 1.35), 1400px)); }
   /* 「无大纲收栏」那条规则的特异性比上面的网格规则高（:not(:has(...)) 会被算进特异性），
      不在这里再压一次的话，容器会被它卡在 content+80px，三列网格拿不到该有的宽度。 */
   html .VPDoc.VPDoc:not(:has(.VPDocAsideOutline.has-outline)) > .container.container { max-width:none!important; }
+  /* ⚠️ 「有大纲」的情况还漏了一条 ✗✗（2026-10-28 修）——
+     .VPDoc.has-aside > .container 还带着 max-width:calc(--kb-content-max + 320px)!important
+     （旧「两侧固定 256」时代的算式 ✓），特异性 (0,5,0) 比上面那条 (0,4,1) 高 →
+     容器被卡在 contentMax+320，三栏框在**收缩后的容器**里居中 ✗，实测侧栏与正文间隙 112px ✗。
+     ⇒ 用同样的 :has() 特异性再压一次 ✓；容器撑满后「框左边缘 = 50vw − 正文/2 − 侧栏宽」才成立 ✓。 */
+  html .VPDoc.VPDoc:has(.VPDocAsideOutline.has-outline) > .container.container { max-width:none!important; }
   html .VPSidebar.VPSidebar {
     top:64px;
-    left:calc(50vw - (var(--kb-content-max) / 2) - 256px);
-    width:256px!important;
+    /* 左边缘 = 三栏框左边缘 = 50vw − 正文/2 − 侧栏宽（与 grid 第一列同一个变量 ✓） */
+    left:calc(50vw - (var(--kb-content-max) / 2) - var(--kb-sidebar-w));
+    /* ⚠️ 这里**不再写死 width** ✗ —— 宽度只由 --kb-sidebar-w 决定 ✓
+       （全局 html body .VPSidebar[class]{width:var(--kb-sidebar-w)!important} 那条 ✓）。
+       写死 256 会和拖拽规则靠特异性互相压 ✓ —— 那正是这次正文偏 136px 的根因 ✗。 */
     height:calc(100vh - 64px);
     padding:38px 20px 72px 24px;
     border-right:0;
@@ -1108,9 +1149,14 @@ html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-con
   }
   html .VPDoc.VPDoc > .container.container {
     display:grid;
-    grid-template-columns:256px minmax(640px,var(--kb-content-max)) 256px;
+    grid-template-columns:var(--kb-sidebar-w) minmax(640px,var(--kb-content-max)) var(--kb-sidebar-w);
     justify-content:center;
     align-items:start;
+    /* ⚠️ 必须显式撑满 ✗✗（2026-10-28 修）—— 容器原来会收缩到内容宽度 ✓，
+       于是 justify-content:center 是在**收缩后的窄容器**里居中 ✗：
+       三栏框左边缘和侧栏 left 的 calc 差 112px（实测 gapLeft 112）✓。
+       撑满之后「框左边缘 = 50vw − 正文/2 − 侧栏宽」这条才成立 ✓。 */
+    width:100%;
     max-width:none!important;
   }
   html .VPDoc.VPDoc > .container.container > .content.content {
@@ -1125,8 +1171,8 @@ html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-con
     display:block;
     grid-column:3;
     grid-row:1;
-    width:256px;
-    max-width:256px;
+    width:var(--kb-sidebar-w);
+    max-width:var(--kb-sidebar-w);
     padding-left:32px;
   }
 }
@@ -1178,10 +1224,16 @@ html .VPDoc.VPDoc.has-aside > .container.container { max-width:calc(var(--kb-con
    （行内 + !important 一定赢 ✓，见 SidebarResizer 的 applyWidth ✓）。 */
 :root { --vp-sidebar-width: var(--kb-sidebar-w) !important; }
 html body .VPSidebar[class] { width: var(--kb-sidebar-w) !important; min-width:0 !important; }
-html body .VPContent.has-sidebar[class] { padding-left: var(--kb-sidebar-w) !important; }
+/* ⚠️ 「用 padding 让出侧栏宽度」只在**非三栏区间**成立 ✗✗（2026-10-28 修）——
+   超宽屏（≥1320px）里侧栏是 grid 的第一列 ✓、正文靠 grid 居中 ✓，不再靠 padding 让位；
+   这条如果继续在超宽区生效（它 + 行内 !important 一起压掉 =0 的三栏规则），
+   正文中心会偏 136px ✗（实测）。 */
+@media (max-width:1319.98px) {
+  html body .VPContent.has-sidebar[class] { padding-left: var(--kb-sidebar-w) !important; }
+}
 .VPNavBar.has-sidebar .curtain,
 .VPNavBar.has-sidebar .content-body { left: 0; }
-@media (min-width: 960px) {
+@media (min-width: 960px) and (max-width: 1319.98px) {
   .VPContent.has-sidebar { padding-left: var(--kb-sidebar-w) !important; }
 }
 /* 拖拽条：贴在侧栏右边缘 ✓，只在桌面端显示 ✓ */
