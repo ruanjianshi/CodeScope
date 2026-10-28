@@ -96,10 +96,21 @@ const SidebarResizer = defineComponent({
   setup() {
     const KEY = 'codescope-kb-sidebar-w'
     const MIN = 200, MAX = 560, DEFAULT = 272
+    /* 拖到多宽算「离谱」✓（2026-10-28 加）——
+       超宽屏（≥1320px）里侧栏是 grid 的第一列 ✓，左右两列各占侧栏宽、
+       中间正文最小 640、两侧余量共 88 ⇒ 侧栏再宽就会把正文挤没 / 把三栏框挤出视口 ✗。
+       另外不允许超过视口 40% ✓（用户一拖就把正文挤没，同样是破版 ✗）。
+       ⚠️ 非三栏区间（<1320px）不套这个上限 ✓ —— 那里是 padding 让位，
+          侧栏宽一点只是正文窄一点，不会破版 ✓。 */
+    const widthCap = () => {
+      if (typeof window === 'undefined') return MAX
+      if (window.innerWidth < 1320) return MAX
+      return Math.max(MIN, Math.min(MAX, Math.floor(window.innerWidth * 0.4), Math.floor((window.innerWidth - 640 - 88) / 2)))
+    }
     const el = ref(null)
     let dragging = false
     const setW = (w) => {
-      const v = Math.max(MIN, Math.min(MAX, Math.round(w)))
+      const v = Math.max(MIN, Math.min(widthCap(), Math.round(w)))
       if (typeof document === 'undefined') return v
       document.documentElement.style.setProperty('--kb-sidebar-w', v + 'px')
       /* ⚠️⚠️ **行内 + !important** ✗✗ —— VitePress 的侧栏样式是 scoped 的
@@ -110,7 +121,14 @@ const SidebarResizer = defineComponent({
         try { el.style.setProperty('width', v + 'px', 'important') } catch (_) {}
       })
       document.querySelectorAll('.VPContent.has-sidebar').forEach((el) => {
-        try { el.style.setProperty('padding-left', v + 'px', 'important') } catch (_) {}
+        try {
+          /* ⚠️ 三栏区间（≥1320px）里正文靠 grid 居中 ✓ —— 行内 padding-left 会把三栏框顶偏 ✗
+             （实测：留着 272px 行内 padding，正文中心偏 136px ✓）。
+             所以那里必须**移除**行内 padding，交给
+             @media(max-width:1319.98px) 那条 CSS 在窄屏负责让位 ✓。 */
+          if (typeof window !== 'undefined' && window.innerWidth >= 1320) el.style.removeProperty('padding-left')
+          else el.style.setProperty('padding-left', v + 'px', 'important')
+        } catch (_) {}
       })
       place()
       return v
@@ -126,13 +144,17 @@ const SidebarResizer = defineComponent({
       if (r.width < 1) return
       h.style.setProperty('left', Math.round(r.right) + 'px', 'important')
     }
-    const offset = () => {
-      const sb = document.querySelector('.VPSidebar')
-      return sb ? sb.getBoundingClientRect().left : 0
-    }
+    /* ⚠️ 宽度必须按**位移增量**算，不能按「指针位置 − 侧栏左边缘」算 ✗✗（2026-10-28 修）——
+       超宽屏（≥1320px）里侧栏左边缘本身是「框左 = 50vw − 正文/2 − 侧栏宽」（会随宽度反向移动 ✓），
+       用绝对位置算就成了正反馈：每动一次宽度涨一次偏差量 ✗
+       （实测：在 4500px 上想把 272 拖到 332，松手变成 552 ✗）。
+       增量映射则与布局无关、无反馈 ✓：按下时记住起点宽度，之后 w = 起点宽度 + 指针位移 ✓。 */
+    let startW = 0, startX = 0
     const onDown = (e) => {
       /* 窄屏（侧栏是抽屉）不参与 ✓ */
       if (typeof window === 'undefined' || window.innerWidth < 960) return
+      startX = e.clientX
+      startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w'), 10) || DEFAULT
       dragging = true
       if (el.value && el.value.setPointerCapture) { try { el.value.setPointerCapture(e.pointerId) } catch {} }
       if (el.value) el.value.classList.add('kb-dragging')
@@ -141,8 +163,8 @@ const SidebarResizer = defineComponent({
     }
     const onMove = (e) => {
       if (!dragging) return
-      /* 宽度 = 指针位置 - 侧栏起点 ✓（侧栏起点不一定在 0 ✗） */
-      setW(e.clientX - offset())
+      /* 宽度 = 按下时的宽度 + 指针位移 ✓（增量映射，和侧栏左边缘怎么动无关 ✓） */
+      setW(startW + (e.clientX - startX))
       e.preventDefault()
     }
     const onUp = (e) => {
@@ -160,7 +182,12 @@ const SidebarResizer = defineComponent({
         setW(saved >= MIN && saved <= MAX ? saved : DEFAULT)
       } catch (_) { setW(DEFAULT) }
       setTimeout(place, 60); setTimeout(place, 600)
-      window.addEventListener('resize', place)
+      /* 视口变窄时（比如 4500 拖到 1300）之前存下的宽度可能已超出新的 widthCap ✓
+         → 必须重新钳一次，否则三栏框会被挤出屏幕 ✗（CSS 那边等宽变量也不会自己收 ✓） */
+      window.addEventListener('resize', () => {
+        setW(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-sidebar-w'), 10) || DEFAULT)
+        place()
+      })
     })
     return () => h('div', {
       ref: el,
