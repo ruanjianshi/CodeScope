@@ -361,6 +361,10 @@ const SIZE_CAP = [
   /* 字符图标映射 + 渲染后扫描。2026-10-28 重写了扫描逻辑（见文件头）——
      它挂在**每次 DOM 变动**的路径上，属于渲染高频代码，必须有上限。 */
   ['assets/cs-icons.js', 74],
+  /* 代码编辑器语法配色：4 套 Phycat 调色板映射成 Monaco 主题 ✓。
+     111 行里有一大段是注释——记着实测踩到的两个坑（options.theme 绕过包装、
+     切标签走 updateOptions 而不是 setTheme），这两条比代码本身更值钱 ✓。 */
+  ['assets/code-theme.js', 111],
   ['assets/debug-panel.js', 530],
   ['lib/routes/dbg.js', 72],
   ['lib/routes/latex.js', 94],

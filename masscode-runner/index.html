@@ -117,6 +117,13 @@
      不改 app.js 一行 ✓（它正顶在 12,993 行代码的棘轮上限）。
      ⚠️ 纯渐进增强 ✓：这个脚本失效时页面与没有它**完全一致** ✓。 -->
 <script src="/assets/motion.js?v=20261028a" defer></script>
+<!-- ★ 代码编辑器的语法配色（2026-10-28）：把 doc-theme.css 里那 4 套调色板映射成 Monaco 主题，
+     让「代码区 / 只读预览 / Markdown 文档」三处颜色一致 ✓。
+     ⚠️ 不动 app.js ✓（它顶在 12,993 行代码的棘轮上限）：这里**拦截** monaco.editor.setTheme，
+        app.js 传 'vs-dark' 时改投到当前 data-doc-theme 对应的主题 ✓。
+     ⚠️ 必须排在 doc-theme.js **之后** ✓：要先有 data-doc-theme 才知道该用哪套 ✓。
+     ⚠️ 删掉这一行 + 那个文件就回到 Monaco 内置主题 ✓（纯叠加，零侵入）✓。 -->
+<script src="/assets/code-theme.js?v=20261028a" defer></script>
 </head>
 <body>
 <!-- 统一图标 sprite：线性、1em、currentColor。用 <svg class="cs-ico"><use href="#i-xxx"/></svg> 引用 -->
