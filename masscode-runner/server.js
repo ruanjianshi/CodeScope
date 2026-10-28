@@ -189,7 +189,138 @@ function dailyStoreBackup(file) {
       合并会让**合法的删除**全部失效 ✓（删一条备忘录、清空筛选、删一本书 ✓），
       那是个大得多的坑 ✗。这里只护「丢了就得用户重新去官方页面申请一次」的东西 ✓。
    ══════════════════════════════════════════════════════════════════════════ */
-const GUARDED_STORE_KEYS = ['wereadKey', 'wereadCookie', 'wereadVia', 'wereadSyncAt', 'wereadCount'];
+const GUARDED_STORE_KEYS = [
+  'wereadKey', 'wereadCookie', 'wereadVia', 'wereadSyncAt', 'wereadCount',
+  /* ★ 2026-10-28 加 ✓：邮箱账号表（QQ / Gmail / 163… 的 host / port / user / imapHost ✓）。
+     ⚠️ 丢掉它的代价和 wereadKey 一样 ✓ —— 用户得把每个邮箱的服务器、端口、账号
+        重新填一遍 ✓（授权码已经搬走了 ✓ 见 MAIL_CREDS_FILE ✓，但那堆元数据不用重填 ✓）。
+     ⚠️ 它是**对象**不是字符串 ✗ → 顶层这层只能挡住「整份没带 mailAcc」✓，
+        账号里逐字段被清空要靠下面 guardStoreMailAccounts() 那道 ✓。 */
+  'mailAcc',
+];
+
+/* ══ 邮箱凭据（授权码 / 密码）搬出 STORE ✓✓（2026-10-28）══════════════════════════
+   现状（第一层护栏挡不住的那部分）✗：前端的邮箱配置是「两处都写」✓ ——
+     · `STORE.mailAcc` → 整份 POST 进 `life-workbench.json` ✓
+     · `POST /api/life/mail` → 服务端权威 `life-mail.json` ✓
+   所以用户在界面上填一次授权码，**明文会同时落在两处** ✓，而 life-workbench.json 是：
+     · 11MB 的整体文件 ✓，每 5 分钟轮转一份 / 每天再留一份 ✓ → 明文被复制成 N 份 ✗；
+     · 由前端**整份覆盖** ✓ → 任何拿着旧副本的标签页 / 脚本都能把 pass 写回任意值 ✗。
+   ⇒ 做法：STORE 里只留**账号元数据** ✓，密码搬到
+      `<数据目录>/mail-credentials.json`（0600 ✓，不进 vault ✓、不进 iCloud ✓）。
+   ⚠️ 三条硬要求（缺一条就别做 ✗✗）：
+      ① **绝不丢密码** ✓ —— 先把凭据文件写成功 ✓，**之后**才从 STORE 里删 ✓；
+         写失败就把明文原样留着 + 打一行日志 ✓（退化成旧行为 ✓，比丢密码强得多 ✓）。
+      ② **幂等 + 读时迁移** ✓ —— 老数据第一次被读到（GET /api/life/store ✓）就搬走 ✓，
+         第二次读到已经没有 pass 了 ✓（`stripStoreMailPasswords` 返回 0 ✓，不写盘 ✓）。
+      ③ `hasPass` 必须仍然正确 ✓ —— 前端就是靠它显示「已保存（留空不改）」✓
+         （`assets/life-workbench.js`: `hasPass: !!a.hasPass` ✓）；搬走时顺手把它写成 true ✓。
+   ⚠️ 为什么这次**不改前端** ✗：前端那几个文件正在被另一个任务改 ✓；
+      服务端把 `pass` 收走、补一个 `hasPass` 就够了 ✓（前端一行都不用动 ✓）。
+   ⚠️ 和 `life-mail.json` 的关系：那个文件继续是**发信 / 收信的权威** ✓（不动它 ✗）；
+      凭据文件是「STORE 里那份明文的去处 + 读不到 life-mail.json 时的兜底」✓。 */
+const MAIL_CREDS_FILE = path.join(applicationDataRoot(), 'mail-credentials.json');
+function readMailCreds() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(MAIL_CREDS_FILE, 'utf8'));
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  } catch (_) { return {}; }   /* 没有 / 半截 / 没权限 → 当成空 ✓（绝不能因此让保存失败 ✗） */
+}
+function writeMailCreds(map) {
+  fs.mkdirSync(path.dirname(MAIL_CREDS_FILE), { recursive: true });
+  /* ✓ 0600 + fsync：这是整台机器上唯一一份「能登进用户邮箱」的东西 ✓
+     （umask 通常是 022 ✓，所以不显式给 mode 就是 0644 ✗ —— 同机别的用户可读 ✗）。 */
+  writeFileAtomicDurableSync(MAIL_CREDS_FILE, JSON.stringify(map, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+  try { fs.chmodSync(MAIL_CREDS_FILE, 0o600); } catch (_) {}
+}
+function mailPassFromCreds(key) {
+  const hit = readMailCreds()[key];
+  return hit && typeof hit.pass === 'string' ? hit.pass : '';
+}
+/* 把 `store.mailAcc[*].pass` 搬进凭据文件，并从 store 里删掉 ✓ —— 返回搬走几个 ✓。
+   ⚠️ 顺序**不可换** ✗✗：写凭据文件 → 成功 → 才 delete ✓。反过来的话，
+      中途 throw（磁盘满 / 只读）就是「两边都没了」✗✗ —— 那正是这个函数最不能出的错 ✓。 */
+function stripStoreMailPasswords(store) {
+  const acc = store && store.mailAcc;
+  if (!acc || typeof acc !== 'object' || Array.isArray(acc)) return 0;
+  const pending = [];
+  for (const key of Object.keys(acc)) {
+    const item = acc[key];
+    if (!item || typeof item !== 'object') continue;
+    if (!Object.prototype.hasOwnProperty.call(item, 'pass')) continue;   /* 没带 pass = 已经搬过了 ✓ */
+    pending.push([key, item, String(item.pass == null ? '' : item.pass)]);
+  }
+  if (!pending.length) return 0;
+  const creds = readMailCreds();
+  let dirty = false;
+  for (const [key, , pass] of pending) {
+    if (!pass) continue;                       /* 空串 = 前端「留空不改」✓ 不是密码 ✓ */
+    const old = creds[key];
+    if (old && old.pass === pass) continue;    /* 同一把，不用重写 ✓（幂等 ✓） */
+    creds[key] = { pass, updatedAt: Date.now() };
+    dirty = true;
+  }
+  if (dirty) {
+    try { writeMailCreds(creds); }
+    catch (error) {
+      console.log('[mail-creds] 凭据迁移失败（密码保持原样，没丢）：' + String((error && error.message) || error));
+      return 0;                                /* ✗ 没写成功就**不删** ✓ */
+    }
+  }
+  for (const [key, item, pass] of pending) {
+    const kept = creds[key];
+    item.hasPass = !!pass || !!(kept && kept.pass);   /* ✓ 前端靠这个字段 ✓ */
+    delete item.pass;
+  }
+  return pending.length;
+}
+/* 读时迁移 ✓：把老数据里那份明文搬走（**只在真的还有明文时才写盘** ✓）。
+   ⚠️ 60 秒节流 ✗：`GET /api/life/store` 是高频请求 ✓（每次打开面板 + 每 300ms 的保存 ✓），
+      而「已经搬干净了」没法便宜地判出来 ✗（要么扫 11MB 要么解析一遍 ✓）→
+      每进程最多每 60 秒探一次 ✓；搬干净之后每次探测只是一次 indexOf ✓（<10ms ✓）。 */
+let MAIL_MIGRATE_AT = 0;
+const MAIL_MIGRATE_GAP = 60e3;
+function migrateStoreMailPasswords() {
+  if (Date.now() - MAIL_MIGRATE_AT < MAIL_MIGRATE_GAP) return 0;
+  MAIL_MIGRATE_AT = Date.now();
+  const file = path.join(applicationDataRoot(), 'life-workbench.json');
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch (_) { return 0; }
+  if (text.indexOf('"pass"') < 0) return 0;    /* 便宜的第一道筛 ✓ */
+  let store;
+  try { store = JSON.parse(text); } catch (_) { return 0; }
+  if (!store || typeof store !== 'object') return 0;
+  const moved = stripStoreMailPasswords(store);
+  if (!moved) return 0;
+  try {
+    writeFileAtomicDurableSync(file, JSON.stringify(store));
+    console.log('[mail-creds] 已把 ' + moved + ' 个邮箱密码从 life-workbench.json 搬到 mail-credentials.json');
+  } catch (error) {
+    console.log('[mail-creds] 凭据已搬走，但 life-workbench.json 重写失败（下次再试）：' + String((error && error.message) || error));
+  }
+  return moved;
+}
+/* 逐账号的护栏 ✓ —— 顶层 GUARDED_STORE_KEYS 只能挡「整份没带 mailAcc」✗，
+   挡不住「带了账号、但某个字段是 undefined / 空密码」✗（那才是最常发生的那种 ✓）。
+   ⚠️ 判据同上面那段注释 ✓：**字段不存在**才算「没带」→ 补回来 ✓；
+      给了空串算「用户主动清空」→ 尊重 ✓（前端清空密码时会明确发 '' ✓）。
+   ⚠️ 账号**整条不在** incoming 里 = 用户删了账号 ✓ → 不复活 ✗（那是合法删除 ✓）。 */
+const MAIL_ACCOUNT_FIELDS = ['host', 'port', 'user', 'imapHost', 'imapPort'];
+function guardStoreMailAccounts(next, cur) {
+  const curAcc = cur && cur.mailAcc;
+  if (!curAcc || typeof curAcc !== 'object' || Array.isArray(curAcc)) return;
+  const nextAcc = next && next.mailAcc;
+  if (!nextAcc || typeof nextAcc !== 'object' || Array.isArray(nextAcc)) return;
+  for (const key of Object.keys(curAcc)) {
+    const item = nextAcc[key], old = curAcc[key];
+    if (!item || typeof item !== 'object' || !old || typeof old !== 'object') continue;
+    for (const field of MAIL_ACCOUNT_FIELDS) {
+      if (item[field] === undefined && old[field] !== undefined) item[field] = old[field];
+    }
+    if (!item.pass && old.pass) item.pass = old.pass;                       /* 「留空不改」✓ */
+    if (item.hasPass === undefined && old.hasPass !== undefined) item.hasPass = old.hasPass;
+  }
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    工作流「定时触发」的服务端排期 ✓
@@ -2278,29 +2409,80 @@ function walkLatexResources() {
    裸 writeFileSync 在磁盘满/进程被强杀/iCloud 同步中断时会留下“半截文件”，而片段 .md 与
    .masscode/state.json 一旦被截断，用户代码与整个片段索引都会损坏（本仓库此前只有
    Office/XMind 少数几处用了 temp+rename 的写法）。 */
-function writeFileAtomicSync(file, data, options) {
+function writeFileAtomicSync(file, data, options) { return writeFileAtomicCore(file, data, options, false); }
+/* ★★ 抗掉电版原子写 ✓✓（2026-10-28）—— **只给关键文件用**，别拿去当默认 ✗✗
+   ⚠️ 上面那个只能保证「不会留下半截文件」✗ —— `rename` 的原子性说的是**目录项切换** ✓，
+      新写进去的数据块可能还躺在 page cache 里 ✓：断电 / 内核 panic / kill -9 之后，
+      完全可能看到「目录里是新文件、内容还是旧的」✗（APFS 与 ext4 都是这个语义 ✓）。
+   ⚠️ 那把 fsync 做成默认呢 ✗✗ —— `writeFileAtomicSync` 有 **30+ 处调用** ✓，
+      其中大量是热路径（每次保存片段正文 ✓、批量重写 orderIndex ✓、导出 Office ✓），
+      同步 fsync 每次都要等磁盘确认（本机实测量级 ms），而且它是**同步**的 ✗ →
+      整个事件循环跟着卡住 ✓（`/api/life/store` 那条 66ms 的老问题就是这么来的 ✗）。
+   ⇒ 代价必须**按文件**付 ✓。目前只开在这四个「丢了就是用户数据没了」的文件上：
+      · `<vault>/code/.masscode/state.json` —— 片段索引 ✓（massCode 也读它 ✓）
+      · `<数据目录>/life-workbench.json` —— 备忘录 / 日记 / 待办 ✓
+      · `<数据目录>/life-words.json` —— 词库 ✓
+      · `<数据目录>/mail-credentials.json` —— 邮箱授权码 ✓（低频写 ✓，见 MAIL_CREDS_FILE ✓）
+   ⚠️ 为什么是单独一个函数名、而不是加第 4 个参数 ✗：调用点上「这个文件要扛掉电」
+      必须一眼看得出来 ✓；而 `writeFileAtomicSync(f, d, opts, { sync:true })` 的第 4 个位
+      太容易传错位、也太容易被后面的人漏看 ✗。
+   ⚠️ 严格来说还差一步「写完再读回来校验」✗ —— 这里不做：fsync + rename 已经把
+      「内容不全」和「目录项没落盘」两种情况挡住了 ✓，再读一遍 12MB 反而更慢 ✗。 */
+function writeFileAtomicDurableSync(file, data, options) { return writeFileAtomicCore(file, data, options, true); }
+function writeFileAtomicCore(file, data, options, durable) {
   const dir = path.dirname(file);
   const tmp = path.join(dir, '.' + path.basename(file) + '.tmp-' + process.pid + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
   let mode;
   try { mode = fs.statSync(file).mode; } catch (_) {}
   fs.writeFileSync(tmp, data, options);
   if (mode !== undefined) { try { fs.chmodSync(tmp, mode); } catch (_) {} }
+  if (durable) {
+    /* ① 数据先落盘 ✓ —— 打不开 / 文件系统不支持（少数网络盘）就记一行日志继续 ✓：
+          「没 fsync 成功」不该让这次保存直接失败 ✗（那等于为了更强的保证把功能丢了 ✗）。 */
+    try { const fd = fs.openSync(tmp, 'r+'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
+    catch (error) { console.log('[fsync] 数据落盘失败（已继续写入）：' + String((error && error.message) || error)); }
+  }
   fs.renameSync(tmp, file);
+  if (durable) {
+    /* ② 目录项本身也要落盘 ✓ —— 只 fsync 文件的话，断电后可能出现
+          「文件内容是新的、目录里却还指着旧 inode」✗。打不开目录就跳过 ✓（Windows 不支持）。 */
+    try { const dfd = fs.openSync(dir, 'r'); try { fs.fsyncSync(dfd); } finally { fs.closeSync(dfd); } } catch (_) {}
+  }
   return file;
 }
 
 /* massCode 元数据库 .masscode/state.json：新建/移动片段与文件夹时需要登记，保证 massCode 识别 */
 const STATE_EMPTY = () => ({ version: 3, counters: { contentId: 1, folderId: 1, snippetId: 1, tagId: 1 }, folderIdByPath: {}, folderUi: {}, snippets: [], tags: [] });
+/* ★★ 把用户给的路径归一化到 `<vault>/code` 里面（越界返回 null）✓✓ —— 2026-10-28 修
+   ⚠️ 为什么单独抽出来 ✗✗：这 5 个接口（move / update / addfragment / delfragment / delete）
+      原来的写法是**先 `adoptSnippetFromDisk(…)`、再判越界** ✗，顺序反了 ✓。
+   ⚠️ 后果（`/api/fs/delete` 最典型，也是这次用户点出来的）：
+      `adopt` 自己内部**也**判一次越界 ✓（所以越界路径不会被登记进 state.json ✓），
+      于是外层那句「路径越界」**永远走不到** ✗ —— 越界请求拿到的是
+      「片段不存在或未登记（磁盘上没有该文件）」✗，看不出是越权还是手滑 ✓。
+      而 `move` 那边更实在：adopt 已经把片段写进 state.json 了 ✓，
+      紧接着「目标目录越界」才报错 ✗ → **state 被改脏，磁盘却一步没动** ✗。
+   ⇒ 规矩：**入口先归一化 + 判越界 ✓，不通过立刻拒绝 ✓，通过之后才允许调用 adopt ✓**
+      （adopt 内部那道检查保留 ✓：纵深防御，代价是一行 ✗ 不放 ✗）。
+   ⚠️ 注意 `codeRoot` 本身（不带文件名的根）算合法 ✓ —— 根目录的越界判断历来是
+      `full !== codeRoot && !full.startsWith(codeRoot + sep)` ✓，这里原样保留 ✓。 */
+function resolveInsideCodeRoot(file) {
+  const codeRoot = path.join(vaultPath(), 'code');
+  const full = path.resolve(codeRoot, String(file || ''));
+  if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return null;
+  return full;
+}
 /* 把「磁盘上确实存在、但状态库里没有」的片段补登记后再继续。
    state.json 只由 massCode 与本站的新建接口维护，所以另一台机器通过 iCloud 同步进来的
    .md（本项目的 vault 就放在 iCloud 里）、手工复制进来的文件、或 massCode 尚未同步的改动，
    都会「列表里看得到、一移动 / 重命名 / 删除就报片段不在状态库中」。
    调用它的 5 个接口（move / update / addfragment / delfragment / delete）本来就要写 state，
-   因此补登记不会引入额外的写入路径。 */
+   因此补登记不会引入额外的写入路径。
+   ⚠️ 调用方**必须先用 `resolveInsideCodeRoot()` 过一道** ✗ —— 见上面那段为什么。 */
 function adoptSnippetFromDisk(st, file) {
   const codeRoot = path.join(vaultPath(), 'code');
-  const full = path.resolve(codeRoot, String(file || ''));
-  if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return null;
+  const full = resolveInsideCodeRoot(file);
+  if (!full) return null;
   const hit = st.snippets.find((s) => path.resolve(codeRoot, s.filePath) === full);
   if (hit) return hit;
   let stat;
@@ -2361,7 +2543,10 @@ function readState() {
 function writeState(st) {
   const p = path.join(vaultPath(), 'code', '.masscode', 'state.json');
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  writeFileAtomicSync(p, JSON.stringify(st, null, 2), 'utf8');
+  /* ✓ 走抗掉电版（见 writeFileAtomicDurableSync 上面那段）：state.json 一断就是
+     「整个片段索引没了」✗；而它只在新建 / 移动 / 删除片段时写 ✓（一天几十次 ✓），
+     fsync 那点代价完全付得起 ✓，热路径上不放 ✗。 */
+  writeFileAtomicDurableSync(p, JSON.stringify(st, null, 2), 'utf8');
 }
 
 /* 按标签名解析为 id，不存在的自动新建（massCode 标签注册表） */
@@ -5667,15 +5852,170 @@ function armRequestGuard(req, res, pathname) {
   arm();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ `/api/*` 鉴权：本机零摩擦 + 局域网要访问码 ✓✓（2026-10-28）
+   ══════════════════════════════════════════════════════════════════════════
+   痛点 ✗：这个服务能开终端、能跑代码、能读写整个 vault ✓，而它**零认证** ✗ ——
+     谁能连上端口，谁就是这台机器的主人 ✓。`CODESCOPE_HOST=0.0.0.0` 一开
+     （项目自带的启动脚本默认就开 ✗），同网段任何设备（包括访客 Wi-Fi 上的手机 ✓）
+     都能直接调 `/api/term/*` / `/api/run/*` ✗。
+   ⇒ 规矩（用户定的 ✓）：
+     · **回环地址一律放行** ✓（127.0.0.1 / ::1 / ::ffff:127.0.0.1 ✓）——
+       用户本机那套用法（桌面壳、`start.command`、所有探针脚本 ✓）**零变化** ✓；
+     · 非回环（局域网 / 别的设备）访问 `/api/*` 要**访问码** ✓；
+     · 静态资源（页面本身 / CSS / JS ✓、`/lib/*` ✓、`/manual` ✓…）一律放行 ✓ ——
+       不放行远端连登录框都拿不到 ✗（它们本身不含用户数据 ✓）。
+   ⚠️ 码怎么让用户**在本机**看到 ✗：`GET /api/auth/status` **只在回环请求里**回明文码 ✓，
+      远端只拿到 `{authed:false}` ✓；启动日志只打「码存在哪个文件」✓，**不打码本身** ✓
+      （日志会被桌面壳转存 / 用户会贴出来 ✗）。
+   ⚠️ 码不写进 vault ✗：落在 `<数据目录>/access-code.json`（0600 ✓）。
+   ⚠️ Cookie 里**不放码本身** ✗：放 `HMAC-SHA256(码, 固定串)` ✓ —— 无状态（重启不掉线 ✓）、
+      不用维护 session 表 ✓、也不会把码写进浏览器头 / 历史 ✗。
+   ⚠️ 为什么非得有 cookie ✗：`EventSource`（`lib/system-panel.js` 那条 SSE ✓）
+      **没法自定义请求头** ✗ → 只能靠同源 cookie 自动带上 ✓。
+      自定义头 `X-CS-Auth` 作为第二重保险 ✓（前端 localStorage 里那份 ✓）。
+   ⚠️ WebSocket 升级也要过同一道 ✓（见 `server.on('upgrade')` ✓ —— 它**不走**这个中间件 ✗）。
+   ⚠️ 逃生开关：`CODESCOPE_AUTH=off` ✓（万一被锁在局域网外面，用户还有一条路 ✓）。 */
+const AUTH_FILE = path.join(applicationDataRoot(), 'access-code.json');
+const AUTH_COOKIE = 'cs_auth';
+const AUTH_COOKIE_MAX_AGE = 30 * 24 * 3600;
+const AUTH_TOKEN_SALT = 'codescope-api-auth-v1';
+/* ⚠️ 这两个必须放行 ✓：一个用来问「要不要码 / 码是多少」✓，一个用来登录 ✓。 */
+const AUTH_OPEN_PATHS = new Set(['/api/auth/status', '/api/auth/login']);
+let AUTH_CODE_CACHE = '';
+
+function authDisabled() { return String(process.env.CODESCOPE_AUTH || '').toLowerCase() === 'off'; }
+/* 回环判据 ✓ —— 注意 IPv4-mapped（`::ffff:127.0.0.1` ✓）和整个 127/8（Linux 上全算回环 ✓）。
+   ⚠️ 只看 socket 的 remoteAddress ✗，**不看** `X-Forwarded-For` ✓ ——
+      那个头是客户端随便写的 ✓，信它等于把鉴权直接送人 ✗。 */
+function isLoopbackRequest(req) {
+  const raw = String((req.socket && req.socket.remoteAddress) || '').toLowerCase();
+  if (!raw) return false;
+  const addr = raw.startsWith('::ffff:') ? raw.slice(7) : raw;
+  if (addr === '::1' || addr === 'localhost') return true;
+  return /^127\./.test(addr);
+}
+function authCode() {
+  if (AUTH_CODE_CACHE) return AUTH_CODE_CACHE;
+  let code = '';
+  try { const j = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8')); code = String((j && j.code) || '').trim(); } catch (_) {}
+  if (!code) {
+    /* 20 字节 base64url ≈ 27 个字符 ✓ —— 用户要在另一台设备上手敲一遍 ✓（太长没人愿意敲 ✗），
+       但对局域网 brute force 来说仍然猜不完 ✓。 */
+    code = crypto.randomBytes(20).toString('base64url');
+    try {
+      fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
+      writeFileAtomicDurableSync(AUTH_FILE, JSON.stringify({ code, createdAt: Date.now() }, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+      try { fs.chmodSync(AUTH_FILE, 0o600); } catch (_) {}
+      console.log('[鉴权] 已生成局域网访问码：' + AUTH_FILE + '（本机 127.0.0.1 访问不需要，打开 /api/auth/status 也能看到）');
+    } catch (error) {
+      /* ⚠️ 写不下去也得能跑 ✗：退化成「本进程内有效」✓，但**必须喊出来** ✓ ——
+         否则用户重启一次发现码变了，只会以为是自己记错 ✗。 */
+      console.log('[鉴权] 访问码存不进 ' + AUTH_FILE + '（仅本次运行有效，重启会换）：' + String((error && error.message) || error));
+    }
+  }
+  AUTH_CODE_CACHE = code;
+  return code;
+}
+function authToken() { return crypto.createHmac('sha256', authCode()).update(AUTH_TOKEN_SALT).digest('hex'); }
+/* ✓ 定长比较：先比长度（长度不同时 timingSafeEqual 会直接 throw ✗），再比内容 ✓ */
+function authEqual(a, b) {
+  const x = Buffer.from(String(a || ''), 'utf8'), y = Buffer.from(String(b || ''), 'utf8');
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+function requestCookie(req, name) {
+  const raw = String((req.headers && req.headers.cookie) || '');
+  for (const part of raw.split(';')) {
+    const at = part.indexOf('=');
+    if (at < 0 || part.slice(0, at).trim() !== name) continue;
+    try { return decodeURIComponent(part.slice(at + 1).trim()); } catch (_) { return part.slice(at + 1).trim(); }
+  }
+  return '';
+}
+function authIsAuthed(req) {
+  const token = authToken();
+  if (authEqual(requestCookie(req, AUTH_COOKIE), token)) return true;
+  const header = String((req.headers && req.headers['x-cs-auth']) || '');
+  /* ⚠️ 两种都认 ✓：前端 localStorage 里存的是**码本身** ✓（cookie 万一被清掉还能用 ✓）；
+     token 也认 ✓（同一个秘密派生出来的 ✓，两种情况都说明它知道码 ✓）。 */
+  return authEqual(header, authCode()) || authEqual(header, token);
+}
+/* 请求口的总闸 ✓ —— **只在这里判一次** ✓，绝不散落到几百个端点里 ✗。
+   ⚠️ 只拦 `/api/*` ✗：静态资源要放行 ✓（见上面那段 ✓）；
+      `/api/auth/*` 两个例外见 AUTH_OPEN_PATHS ✓。 */
+function authNeedsCode(req, pathname) {
+  if (authDisabled()) return false;
+  if (!pathname.startsWith('/api/')) return false;
+  if (AUTH_OPEN_PATHS.has(pathname)) return false;
+  if (isLoopbackRequest(req)) return false;
+  return !authIsAuthed(req);
+}
+
 const server = http.createServer(async (req, res) => {
   /* ★ 把 req 挂到 res 上 ✓ —— `send()` 只拿到 res ✗，但它要看 `Accept-Encoding` 决定压不压 ✓。
      改 `send()` 的签名要动**几百个调用点** ✗，挂一个字段最省 ✓。 */
   res.__req = req;
+  /* ★★ 安全响应头：**统一在入口挂一次** ✓✓（2026-10-28）——
+     ⚠️ 为什么挂在这里 ✗：`send()` 与 `streamStatic()` 各自 writeHead ✓，
+        但还有 304 / 图片 / 下载 / 401 这些分支 ✓ —— 想「每处都补一遍」必然漏 ✗。
+        在入口 `setHeader` 一次，后面所有 `writeHead` 都会带上 ✓（同名的以 writeHead 为准 ✓）。
+     · `X-Content-Type-Options: nosniff` ✓ —— 浏览器不许猜 MIME ✓；
+       本服务会发用户上传的任意文件 ✓（`.md` / 附件 / 导出物 ✓），猜错类型就可能把
+       一段 HTML 当脚本跑 ✓。这条原来只有 `send()` / `streamStatic()` 有 ✗，现在全覆盖 ✓。
+     · `Referrer-Policy: no-referrer` ✓ —— 页面里点出去的链接不带来源地址 ✓；
+       这个服务的 URL 里常带路径 / 文件名 ✓（`/api/life/flowfile/…` ✓），referrer 会把它
+       整条漏给外站 ✓。
+     ⚠️ **CSP 响应头这次不加** ✗✗ —— 它和 `index.html` 里的 meta CSP 是**取交集** ✓，
+        写错一条就是一大批页面白屏 ✓（内联脚本 / eval / blob: worker / data: 图片全在用 ✓）。
+        要加必须先把清单对齐，见交付报告里那段建议 ✓。 */
+  try {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+  } catch (_) { }
   let u;
   try { u = new URL(req.url, 'http://' + HOST + ':' + PORT); }
   catch (_) { return send(res, 400, { ok:false, error:'请求地址不合法' }); }
   armRequestGuard(req, res, u.pathname);
   try {
+    /* ★★ 鉴权总闸 ✓✓ —— 放在**所有路由之前** ✓（含静态资源判断 ✓，见 authNeedsCode ✓）。
+       ⚠️ 顺序：先鉴权、再判跨站写 ✗ —— 未认证的远端本来就该先看到 401 ✓，
+          不该先拿到「已拒绝跨站写入」这种内部语义 ✓。 */
+    if (authNeedsCode(req, u.pathname)) {
+      return send(res, 401, {
+        ok: false, needsAuth: true,
+        error: '这个地址需要访问码。在运行 CodeScope 的那台机器上打开 http://127.0.0.1:' + PORT + ' 即可看到/确认访问码（本机访问不需要访问码）。',
+      });
+    }
+    /* ★ 访问码相关两个端点 ✓ —— 必须放在鉴权闸门的**后面** ✓：
+       它们本身在 AUTH_OPEN_PATHS 里（放行 ✓），但仍然要走进来 ✓。 */
+    if (u.pathname === '/api/auth/status') {
+      const loopback = isLoopbackRequest(req);
+      return send(res, 200, {
+        ok: true,
+        authRequired: !authDisabled(),
+        lanMode: !loopback,
+        authed: loopback || authDisabled() || authIsAuthed(req),
+        /* ⚠️ **只有回环请求**才回明文码 ✓✓ —— 远端能读到码 = 鉴权白做 ✗ */
+        ...(loopback ? { code: authCode(), codeFile: AUTH_FILE } : {}),
+      });
+    }
+    if (u.pathname === '/api/auth/login') {
+      if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+      let body = {};
+      try { body = (await readBody(req, 8192)) || {}; } catch (_) { body = {}; }
+      const given = String((body && body.code) || '').trim();
+      if (!given) return send(res, 400, { ok: false, error: '请填写访问码' });
+      if (!authEqual(given, authCode())) {
+        /* ⚠️ 只说「不对」✗ —— 不提示差几位 / 不给提示 ✓；也不区分「码没生成」✓ */
+        return send(res, 401, { ok: false, needsAuth: true, error: '访问码不对' });
+      }
+      /* ✓ HttpOnly + SameSite=Lax + Path=/ ✓ —— 前端 fetch 与 EventSource 都是同源 ✓，
+         浏览器会自动带上 ✓；HttpOnly 让页面脚本读不到它 ✓（XSS 也拿不走 ✓）。
+         ⚠️ `Secure` 只在 https 时才加 ✗ —— 局域网是明文 http ✓，加了浏览器会直接丢掉 cookie ✗。 */
+      const secure = String(req.headers['x-forwarded-proto'] || '') === 'https';
+      res.setHeader('Set-Cookie', AUTH_COOKIE + '=' + authToken() + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + AUTH_COOKIE_MAX_AGE + (secure ? '; Secure' : ''));
+      return send(res, 200, { ok: true, expiresIn: AUTH_COOKIE_MAX_AGE });
+    }
     if (req.method !== 'GET' && u.pathname.startsWith('/api/') && !trustedHttpOrigin(req)) {
       return send(res, 403, { ok:false, error:'已拒绝跨站写入请求' });
     }
@@ -5899,6 +6239,15 @@ const server = http.createServer(async (req, res) => {
          ⚠️ ETag 用**文件的 size + mtimeMs** ✓ —— 写完盘 mtime 必变 ✓，
             比对内容做哈希便宜得多 ✓（11MB 每次算 md5 要 30ms+ ✗）。 */
       if (req.method === 'GET') {
+        /* ★★ 读时迁移邮箱密码 ✓✓（2026-10-28）——
+           ⚠️ 必须在**算 ETag / 取 json() 之前**调 ✗：
+              ① 迁移会重写文件 ✓ → mtime 变 ✓ → 下面拿到的 json() 是**搬干净之后**那份 ✓，
+                 响应里就不会再带明文 ✓（放在后面的话，这一次响应照样把明文发出去 ✗）；
+              ② 返回的 ETag 也必须对应新文件 ✓，否则浏览器拿着旧 tag 来要 304 ✓，
+                 界面会一直停在带明文的那份缓存上 ✓。
+           ⚠️ 它内部有 60 秒节流 ✓（见 migrateStoreMailPasswords 那段 ✓），
+              搬干净之后基本零成本 ✓。 */
+        try { migrateStoreMailPasswords(); } catch (_) { }
         /* ⚠️ ETag 必须覆盖**两个文件** ✗（2026-10-19 拆分之后）——
            只认主文件的话：改词库时主文件**没变** ✓ → 浏览器拿 304 ✓ →
            界面上的词库**永远是旧的** ✗（而且不会报错 ✗）。
@@ -5957,8 +6306,17 @@ const server = http.createServer(async (req, res) => {
               const old = cur[k];
               if (old !== undefined && old !== null && old !== '') next[k] = old;
             });
+            /* ✓ 邮箱账号**逐字段**再护一道（顶层那层只管「整份没带 mailAcc」✗）——
+               见 guardStoreMailAccounts() 上面那段注释 ✓。要删账号就带 `__drop:['mailAcc']` ✓。 */
+            if (drop.indexOf('mailAcc') < 0) guardStoreMailAccounts(next, cur);
           } catch (_) { }
           delete next.__drop;      /* 这个标记只用于本次请求 ✗，不许落盘 ✗ */
+          /* ★ 落盘前把邮箱密码搬到 mail-credentials.json ✓✓（2026-10-28）——
+             ⚠️ 位置很关键 ✗：必须在**上面那道护栏之后**（护栏要先把「留空不改」的旧 pass 补回来 ✓）、
+                在**下面这次写盘之前** ✓。搬完 `next.mailAcc[*].pass` 就没了 ✓，只剩 `hasPass` ✓ ——
+                明文不再进 life-workbench.json ✓，也不再进它的 6 份轮转 + 7 份按天快照 ✓。
+                搬失败时**不会删** ✓（明文留在原处，退化成旧行为 ✓，绝不丢密码 ✓）。 */
+          try { stripStoreMailPasswords(next); } catch (_) { }
           /* ★★ 拒绝「把有内容的仓库清空」✗✗（2026-10-12 实测，用户报「东西都丢失了」）——
              `flowRuns`（工作流运行日志）涨到 **36MB** ✗ → 超过本接口 4MB 的 body 上限 ✗ →
              之后任何一次保存都用**不完整的内存状态**把它覆盖掉 ✗ →
@@ -6001,14 +6359,27 @@ const server = http.createServer(async (req, res) => {
           /* ⚠️ 紧凑写（不再 2 空格缩进）✗ —— 12.8MB → 8.5MB ✓，
              同时省掉一次大字符串的生成 ✓。这个文件是**程序管**的 ✓，
              没有人会去手改 4611 个词的 JSON ✓（真要看得用工具 ✓）。 */
-          fs.writeFileSync(file, JSON.stringify(next));
+          /* ★★ 原子 + 抗掉电 ✓✓（2026-10-28）——
+             ⚠️ 原来是裸 `writeFileSync(file, JSON.stringify(next))` ✗：
+                磁盘满 / 断电 / 进程被强杀时留下**半截 JSON** ✓，而这个文件一截断，
+                备忘录 / 日记 / 待办 / 工作流**全部读不出来** ✗（它们在同一份 JSON 里 ✓）。
+             ⚠️ 轮转备份的两行**必须在写之前**（顺序不动 ✓）—— 备份拍的是「改动前」的状态 ✓，
+                先写再备份就等于备份成新的、等于没有备份 ✗。
+             ⚠️ 用 durable 版（fsync 数据 + 目录项 ✓）而不是普通 atomic ✗：
+                这个文件「写丢了就是用户数据没了」✓，而它只在用户点保存时写 ✓（不是热路径 ✓），
+                多等几毫秒磁盘确认完全付得起 ✓。30+ 处调用的 `writeFileAtomicSync`
+                保持不 fsync ✗（理由见 writeFileAtomicDurableSync 上面那段 ✓）。 */
+          writeFileAtomicDurableSync(file, JSON.stringify(next));
           if (wordsJson) {
             const cur = LIFE_STORE.readWordsRaw();
             const curJson = cur ? JSON.stringify(cur.words) : '';
             if (curJson !== wordsJson) {
               const wordsFile = LIFE_STORE.wordsFileOf();
+              /* ⚠️ `.prev` 必须**先**留好 ✓ 再写新文件 ✓ —— 顺序反了 .prev 就成了「这一版」✗，
+                 用户想回退上一版时拿到的是刚写坏的那份 ✗。用了原子写之后这个时序仍然有效 ✓
+                 （copy 走的是旧文件 ✓，rename 只替换新文件 ✓）。 */
               try { if (fs.existsSync(wordsFile)) fs.copyFileSync(wordsFile, path.join(path.dirname(wordsFile), 'life-words.prev.json')); } catch (_) {}
-              fs.writeFileSync(wordsFile, '{"words":' + wordsJson + '}');
+              writeFileAtomicDurableSync(wordsFile, '{"words":' + wordsJson + '}');
             }
           }
           return send(res, 200, { ok: true });
@@ -6141,7 +6512,13 @@ const server = http.createServer(async (req, res) => {
         const safe = {};
         Object.keys(cfg || {}).forEach((k) => {
           const v = cfg[k] || {};
-          safe[k] = { host: v.host || '', port: v.port || '', user: v.user || '', hasPass: !!v.pass, imapHost: v.imapHost || '', imapPort: v.imapPort || '' };
+          /* ✓ `hasPass` 要算上**搬走的那一份**（mail-credentials.json）✗ ——
+             只认 `v.pass` 的话：老数据被搬到凭据文件后 ✓，life-mail.json 里可能本来就没有
+             密码（用户是先在 STORE 里填的 ✓）→ 界面会显示「没存过授权码」✗，
+             然后收信那边又莫名其妙能连上 ✓（自相矛盾的提示 ✗）。 */
+          safe[k] = { host: v.host || '', port: v.port || '', user: v.user || '',
+            hasPass: !!v.pass || !!mailPassFromCreds(k),
+            imapHost: v.imapHost || '', imapPort: v.imapPort || '' };
         });
         return send(res, 200, { ok: true, accounts: safe });
       }
@@ -6171,6 +6548,9 @@ const server = http.createServer(async (req, res) => {
           });
           try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (_) {}
           fs.writeFileSync(file, JSON.stringify(next, null, 2));
+          /* ✓ 这个文件里同样是**明文授权码** ✗ —— 默认 umask(022) 会落成 0644 ✓，
+             同机别的用户可读 ✗。只调权限、不动内容 ✓（改内容的那一步在 /api/life/store 那边 ✓）。 */
+          try { fs.chmodSync(file, 0o600); } catch (_) {}
           return send(res, 200, { ok: true });
         } catch (error) {
           return send(res, 400, { ok: false, error: String((error && error.message) || error) });
@@ -6257,7 +6637,10 @@ const server = http.createServer(async (req, res) => {
         if (!raw) return null;
         return {
           host: String(raw.host || '').trim(), port: String(raw.port || '').trim(),
-          user: String(raw.user || '').trim(), pass: String(raw.pass || ''),
+          user: String(raw.user || '').trim(),
+          /* ⚠️ 回落到凭据文件 ✓ —— 老数据里密码只存在于 STORE 的那一份时，
+             搬走之后 life-mail.json 可能还是空的 ✓；不兜这一下，用户会突然发不出信 ✗。 */
+          pass: String(raw.pass || mailPassFromCreds(key) || ''),
           imapHost: String(raw.imapHost || '').trim(), imapPort: String(raw.imapPort || '').trim(),
         };
       };
@@ -6295,7 +6678,8 @@ const server = http.createServer(async (req, res) => {
           const cfg = readCfg();
           const keys = Object.keys(cfg).filter((k) => {
             const a = cfg[k] || {};
-            return String(a.imapHost || '').trim() && String(a.user || '').trim() && String(a.pass || '').trim();
+            /* ⚠️ 密码同样要算凭据文件那份 ✓（否则搬走之后这个账号就被当成「没配好」✗，顶栏未读数直接不显示 ✗） */
+            return String(a.imapHost || '').trim() && String(a.user || '').trim() && String(a.pass || mailPassFromCreds(k) || '').trim();
           });
           const results = await Promise.all(keys.map(async (k) => {
             const account = accountOf(k);
@@ -7654,17 +8038,22 @@ const server = http.createServer(async (req, res) => {
       const toFolder = String(b.toFolder || '').replace(/^\/+|\/+$/g, '');
       if (!file || toFolder.split('/').some((seg) => seg === '.' || seg === '..')) return send(res, 200, { ok: false, error: '参数不合法' });
       const codeRoot = path.join(vaultPath(), 'code');
-      const st = readState();
-      const snip = adoptSnippetFromDisk(st, file);
-      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
+      /* ✓ 所有校验**前置**（见 resolveInsideCodeRoot 上面那段）：越界、目标同名
+         都要在 adopt 之前拒掉 ✗ —— adopt 会往 state.json 里登记 ✓，
+         先登记再报错就成了「state 改了、磁盘一步没动」✗。 */
+      const fileFull = resolveInsideCodeRoot(file);
+      if (!fileFull) return send(res, 200, { ok: false, error: '路径越界' });
       const destDir = toFolder ? path.join(codeRoot, toFolder) : codeRoot;
       if (destDir !== codeRoot && !destDir.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
-      const fname = path.basename(snip.filePath);
-      const destFull = path.join(destDir, fname);
-      if (path.resolve(file) === path.resolve(destFull)) return send(res, 200, { ok: true, file, folder: toFolder }); // 没动
+      const destFull = path.join(destDir, path.basename(fileFull));
+      if (fileFull === path.resolve(destFull)) return send(res, 200, { ok: true, file, folder: toFolder }); // 没动
       if (fs.existsSync(destFull)) return send(res, 200, { ok: false, error: '目标位置已存在同名文件' });
+      const st = readState();
+      const snip = adoptSnippetFromDisk(st, fileFull);
+      if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
+      const fname = path.basename(snip.filePath);
       fs.mkdirSync(destDir, { recursive: true });
-      try { fs.renameSync(file, destFull); } catch (e) { return send(res, 200, { ok: false, error: '移动失败: ' + e.message }); }
+      try { fs.renameSync(fileFull, destFull); } catch (e) { return send(res, 200, { ok: false, error: '移动失败: ' + e.message }); }
       let fid = st.folderIdByPath[toFolder] || 0;
       if (toFolder && !fid) {
         fid = ++st.counters.folderId;
@@ -7796,8 +8185,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && u.pathname === '/api/fs/update') {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
+      /* ✓ 先判越界、再 adopt（见 resolveInsideCodeRoot 上面那段）；
+         顺带让越界请求拿到的是「路径越界」，而不是被兜成「片段不存在」✗。 */
+      const fileFull = resolveInsideCodeRoot(b.file);
+      if (!fileFull) return send(res, 200, { ok: false, error: '路径越界' });
       const st = readState();
-      const snip = adoptSnippetFromDisk(st, b.file);
+      const snip = adoptSnippetFromDisk(st, fileFull);
       if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       let full = path.resolve(codeRoot, snip.filePath);
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
@@ -7891,8 +8284,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && u.pathname === '/api/fs/addfragment') {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
+      /* ✓ 先判越界、再 adopt（见 resolveInsideCodeRoot 上面那段）；
+         顺带让越界请求拿到的是「路径越界」，而不是被兜成「片段不存在」✗。 */
+      const fileFull = resolveInsideCodeRoot(b.file);
+      if (!fileFull) return send(res, 200, { ok: false, error: '路径越界' });
       const st = readState();
-      const snip = adoptSnippetFromDisk(st, b.file);
+      const snip = adoptSnippetFromDisk(st, fileFull);
       if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       const full = path.resolve(codeRoot, snip.filePath);
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
@@ -7918,8 +8315,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && u.pathname === '/api/fs/delfragment') {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
+      /* ✓ 先判越界、再 adopt（见 resolveInsideCodeRoot 上面那段）；
+         顺带让越界请求拿到的是「路径越界」，而不是被兜成「片段不存在」✗。 */
+      const fileFull = resolveInsideCodeRoot(b.file);
+      if (!fileFull) return send(res, 200, { ok: false, error: '路径越界' });
       const st = readState();
-      const snip = adoptSnippetFromDisk(st, b.file);
+      const snip = adoptSnippetFromDisk(st, fileFull);
       if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
       const full = path.resolve(codeRoot, snip.filePath);
       if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
@@ -7990,11 +8391,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && u.pathname === '/api/fs/delete') {
       const b = await readBody(req);
       const codeRoot = path.join(vaultPath(), 'code');
+      /* ★★ 顺序修正（2026-10-28，用户点出来的那个真 bug）✓——
+         原来：`adoptSnippetFromDisk(st, full)` → `if (!snip)` → 才判越界 ✗。
+         ⇒ 现在：**先归一化 + 判越界 ✓，不通过直接回「路径越界」✓，通过之后才 adopt ✓**。
+         越界路径连 state.json 都不该被碰 ✓（adopt 会写 state ✓）；
+         而且用户看到的错误必须是「路径越界」而不是「片段不存在」✗
+         （后者会让人以为是自己手滑 ✗）。详见 `resolveInsideCodeRoot()` 上面那段 ✓。 */
+      const full = resolveInsideCodeRoot(b.file);
+      if (!full) return send(res, 200, { ok: false, error: '路径越界' });
       const st = readState();
-      const full = path.resolve(codeRoot, String(b.file || ''));
       const snip = adoptSnippetFromDisk(st, full);
       if (!snip) return send(res, 200, { ok: false, error: '片段不存在或未登记（磁盘上没有该文件）' });
-      if (full !== codeRoot && !full.startsWith(codeRoot + path.sep)) return send(res, 200, { ok: false, error: '路径越界' });
       // 从状态库移除
       st.snippets = st.snippets.filter((s) => s !== snip);
       // 清理不再被引用的标签
@@ -8660,6 +9067,15 @@ server.on('upgrade', (req, socket, head) => {
   try { u = new URL(req.url, 'http://' + (req.headers.host || HOST + ':' + PORT)); }
   catch (_) { socket.destroy(); return; }
   if (u.pathname !== '/api/vnc/ws') { socket.destroy(); return; }
+  /* ★★ WS 升级也要过鉴权 ✓✓（2026-10-28）——
+     ⚠️ `upgrade` 事件**不走** `http.createServer` 那个回调 ✗（它是另一条路径 ✓），
+        所以上面那道中间件对 VNC **完全无效** ✗ —— 漏了这一处，等于给局域网留了一扇
+        「直通 5900 端口」的后门 ✓（VNC 能控整台桌面 ✓）。
+     判据与 HTTP 完全一致 ✓：回环放行 ✓ / 远端要 cookie 或 `X-CS-Auth` ✓ / `CODESCOPE_AUTH=off` 时关 ✓。
+     ⚠️ 浏览器建 WS 时**只能**带 cookie ✗（不能自定义头 ✓），所以 cookie 是必走的那条 ✓。 */
+  if (!authDisabled() && !isLoopbackRequest(req) && !authIsAuthed(req)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
+  }
   const origin = String(req.headers.origin || '');
   if (origin) {
     try {
@@ -8711,8 +9127,27 @@ const AUTO_SYNC_MS = Number(process.env.CODESCOPE_AUTO_SYNC_INTERVAL_MS) || 1800
 let AUTO_SYNC_TIMER = null;
 let AUTO_SYNC_BUSY = false;
 let AUTO_SYNC_LAST = { at: 0, ok: null, note: '还没跑过' };
+/* ★★ 隔离实例不许碰用户的云端同步 ✓✓（2026-10-28，用户点出来的真隐患）
+   ⚠️ 原来只判两件事 ✗：脚本存在 + `CODESCOPE_AUTO_SYNC !== '0'` ✓。
+      可是那个脚本的路径**不受 `CODESCOPE_DATA_HOME` 影响** ✗ ——
+      它固定是 `~/.config/codescope/data-sync.sh` ✓，脚本里同步的是用户**真实**的数据目录 ✓。
+   ⇒ 后果（实测场景 ✓）：任何用 `CODESCOPE_DATA_HOME=<tmp>` 隔出来的实例 / 测试 / 探针 ✓，
+      只要活过 30 秒 ✓，就会把用户**真实的**备忘录 / 日记 / 邮箱配置双向同步到他的云服务器 ✓，
+      再被同步任务**拉回来覆盖** ✓ —— 测试数据污染真实数据 ✗✗，而且是从云上回来的 ✗。
+   ⇒ 判据：**显式设了 `CODESCOPE_DATA_HOME` = 用户自己声明「我不是正式实例」** ✓ → 默认不同步 ✓；
+      真要在一个隔离实例里同步，就显式写 `CODESCOPE_AUTO_SYNC=1` ✓（三个值都要能区分 ✓：
+      `0` 强制关 ✓ / `1` 强制开 ✓ / 未设 = 按上面判据 ✓）。
+   ⚠️ 为什么不反过来判「vault 是不是真实路径」✗：vault 可以被显式指到真实目录 ✓
+      （用户就是想用隔离的数据目录 + 真实 vault ✓），而 DATA_HOME 的语义最干净 ✓ ——
+      **用户亲口声明过**的隔离 ✓，不需要猜 ✓。
+   ⚠️ 对用户**正常启动的那个实例**零影响 ✓：它没设这个变量 ✓（`start.command` / 桌面壳都不设 ✓）。 */
+function autoSyncIsolated() {
+  return !!String(process.env.CODESCOPE_DATA_HOME || '').trim()
+    && String(process.env.CODESCOPE_AUTO_SYNC || '') !== '1';
+}
 function autoSyncEnabled() {
   if (process.env.CODESCOPE_AUTO_SYNC === '0') return false;
+  if (autoSyncIsolated()) return false;
   try { return fs.existsSync(AUTO_SYNC_SCRIPT); } catch (_) { return false; }
 }
 function autoSyncTick() {
@@ -8729,7 +9164,15 @@ function autoSyncTick() {
   });
 }
 function startAutoSync() {
-  if (AUTO_SYNC_TIMER || !autoSyncEnabled()) return;
+  if (AUTO_SYNC_TIMER) return;
+  if (!autoSyncEnabled()) {
+    /* ⚠️ 隔离实例要**明确说一句** ✓ —— 否则用户会以为「同步开着、只是还没跑」✗，
+       等半天发现云端没变 ✓。注意这句里不能出现「已启用」✗（日志检索会误判 ✓）。 */
+    if (autoSyncIsolated()) {
+      console.log('[自动同步] 已跳过（隔离实例：设置了 CODESCOPE_DATA_HOME；确实要同步请显式 CODESCOPE_AUTO_SYNC=1）');
+    }
+    return;
+  }
   /* 启动后**等 30 秒**再开始 ✓ —— 刚起来那会儿在扫索引 / 建知识库 ✓，
      这时候插一个要 ssh 出去的同步进去没必要 ✓。 */
   AUTO_SYNC_TIMER = setTimeout(() => {
@@ -8763,6 +9206,13 @@ server.listen(PORT, HOST, () => {
       if (row.family === 'IPv4' && !row.internal) addresses.push('http://' + row.address + ':' + PORT);
     }
     if (addresses.length) console.log('局域网访问: ' + addresses.join('  '));
+    /* ★ 局域网模式下**必须**把访问码这件事说清楚 ✓（2026-10-28）——
+       否则用户拿手机打开会看到一个 401 空页面 ✓（`assets/cs-auth.js` 还没接上时更糟 ✗），
+       根本猜不到「要访问码」这件事 ✓。
+       ⚠️ 这里只打**文件路径** ✓，不打码本身 ✗ —— 启动日志会被桌面壳转存 / 用户会贴出来 ✓。 */
+    if (!authDisabled()) {
+      console.log('⚠ 局域网访问 /api/* 需要访问码（回环地址不需要）。访问码：' + AUTH_FILE + '，本机打开 http://127.0.0.1:' + PORT + '/api/auth/status 也能看到。');
+    }
     console.log('⚠ 当前为局域网模式：终端、代码运行和文件修改接口可被同网段设备访问。');
   }
   try { console.log('Vault: ' + vaultPath()); } catch (e) { console.log('Vault: ' + e.message); }
