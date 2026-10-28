@@ -369,9 +369,10 @@ const SIZE_CAP = [
   /* 代码编辑器语法配色：4 套 Phycat 调色板映射成 Monaco 主题 ✓。
      111 行里有一大段是注释——记着实测踩到的两个坑（options.theme 绕过包装、
      切标签走 updateOptions 而不是 setTheme），这两条比代码本身更值钱 ✓。 */
-  ['assets/code-theme.js', 113],
+  ['assets/code-theme.js', 130],   /* 130 里含「底色压暗一档」的 deepen/mix 两个纯函数 ✓
+                                      以及为什么压暗的理由（App 面板 #0D131B vs 正文 #272E33）✓ */
   /* 代码区卡片质感（一期）：圆角/细边/投影/内高光，颜色走 --doc-*。 */
-  ['assets/editor-chrome.css', 17],
+  ['assets/editor-chrome.css', 18],   /* 18 里含一条「为什么必须带 html[data-theme] 前缀」的实测注释 ✓ */
   ['assets/debug-panel.js', 530],
   ['lib/routes/dbg.js', 72],
   ['lib/routes/latex.js', 94],

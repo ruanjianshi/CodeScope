@@ -71,19 +71,47 @@
     ];
   }
 
+  /* ★ 2026-10-28 修正「背景泛白」（用户反馈）：
+     原来编辑器底色直接用 --doc-bg（everforest = #272E33），而 App 面板是 #0D131B ——
+     代码区比周围**亮了两档**，看着就发白。正文用 #272E33 是对的（大面积文字要够亮才不刺眼），
+     但代码区是「嵌在深色界面里的一块板」，必须比正文再压一档才显得沉下去 ✓。
+     ⇒ 编辑器底色 = --doc-bg 混 22% 黑；正文（Markdown）仍用原色 ✓，两边各自合适 ✓。
+     ⚠️ 混黑而不是换色 ✓：色相不变 ✓，四套调色板的性格都保住 ✓。 */
+  function deepen(hex, amount) {
+    var n = parseInt(hex.slice(1), 16);
+    var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    var f = 1 - amount;
+    var h = function (v) { v = Math.round(v * f); return (v < 16 ? '0' : '') + v.toString(16); };
+    return '#' + h(r) + h(g) + h(b);
+  }
+
+  /* 两色混合：t=0 取 a，t=1 取 b（用来做「底色 + 一点点前景色」的弱化层） */
+  function mix(a, b, t) {
+    var pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    var ch = function (sh) {
+      var va = (pa >> sh) & 255, vb = (pb >> sh) & 255;
+      var v = Math.round(va + (vb - va) * t);
+      return (v < 16 ? '0' : '') + v.toString(16);
+    };
+    return '#' + ch(16) + ch(8) + ch(0);
+  }
+
   function colorsOf(p) {
     var o = {};
-    o['editor.background'] = p.bg;
+    var bgDeep = deepen(p.bg, 0.22);   /* 上下文栏 / 底色都压这一档 ✓ */
+    o['editor.background'] = bgDeep;
     o['editor.foreground'] = p.fg;
     o['editorLineNumber.foreground'] = p.dim;
     o['editorLineNumber.activeForeground'] = p.accent;
     o['editorCursor.foreground'] = p.accent;
     o['editor.selectionBackground'] = p.sel;
-    o['editor.lineHighlightBackground'] = p.line;
-    o['editorIndentGuide.background1'] = p.line;
-    o['editorIndentGuide.activeBackground1'] = p.dim;
-    o['editorGutter.background'] = p.bg;
-    o['editorWidget.background'] = p.bg;
+    /* 当前行高亮：原来用 p.line（#414B50），在压暗后的底色上会变成一条**亮带**，很扎眼。
+       改成「底色混入 7% 前景色」—— 只提一点点，像纸被光扫到。 */
+    o['editor.lineHighlightBackground'] = mix(bgDeep, p.fg, 0.07);
+    o['editorIndentGuide.background1'] = mix(bgDeep, p.fg, 0.10);
+    o['editorIndentGuide.activeBackground1'] = mix(bgDeep, p.dim, 0.35);
+    o['editorGutter.background'] = bgDeep;
+    o['editorWidget.background'] = bgDeep;
     o['editorWidget.border'] = p.line;
     o['editorOverviewRuler.border'] = p.line;
     /* 括号配对着色：原本用内置色盘，会和主题打架 → 换成主题内的一组同族色 */

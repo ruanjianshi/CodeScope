@@ -16,6 +16,10 @@
    ⚠️ 颜色全部走 --doc-* 变量 ✓：换文档配色时外框跟着变 ✓，不会出现
       「暖绿森林的代码配紫黑的边框」✗。 */
 
+/* ⚠️ 必须带 html[data-theme] 前缀（实测）：app.css:3320 写的是
+   `html[data-theme] #code-wrap { background: var(--theme-code) }`，特异性 (1,1,0)，
+   而裸 #code-wrap 只有 (1,0,0) —— 第一版的 background 就是被它吃掉的（测出来是面板色而不是文档色）。 */
+html[data-theme] #code-wrap,
 #code-wrap {
   border: 1px solid color-mix(in srgb, var(--doc-line) 82%, transparent);
   border-radius: 11px;
@@ -23,7 +27,10 @@
   box-shadow:
     0 6px 22px rgba(0, 0, 0, .28),
     inset 0 1px 0 rgba(255, 255, 255, .055);
-  background: var(--doc-bg);
+  /* 与编辑器底色**同一档**：code-theme.js 把 Monaco 底色压暗了 22%（混黑），
+     这里必须跟着混 —— 否则边框与圆角处会露出一圈比编辑器更亮的「亮边」。
+     用同一个比例而不是写死色值，换配色时两边一起变。 */
+  background: color-mix(in srgb, var(--doc-bg) 78%, #000);
   /* ⚠️ 不加 overflow ✗ —— 理由见文件头 */
 }
 
