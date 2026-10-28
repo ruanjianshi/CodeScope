@@ -146,6 +146,17 @@ function createDshService(options = {}) {
   const cli = resolveDshCli(projectRoot);
   const logDir = path.join(dataRoot, 'dsh');
   const logPath = path.join(logDir, 'dsh.log');
+  /* supervisor：让 DSH 脱离 CodeScope 但**保住 stdio 管道** ✓（见 lib/dsh-supervisor.js） */
+  const supervisorPath = path.join(__dirname, 'dsh-supervisor.js');
+  const statePath = path.join(logDir, 'supervisor.json');
+  const readState = () => {
+    try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch (_) { return null; }
+  };
+  const pidAlive = (pid) => {
+    if (!pid) return false;
+    try { process.kill(pid, 0); return true; }
+    catch (error) { return !!(error && error.code === 'EPERM'); }
+  };
   const publicUrl = discoverPublicUrl();
   let child = null;
   let owned = false;
@@ -218,6 +229,14 @@ function createDshService(options = {}) {
       }
       if (child && child.exitCode == null && !force) return status();
       if (await tcpOpen(LOOPBACK, port)) {
+        const st0 = readState();
+        if (st0 && pidAlive(st0.supervisorPid)) {
+          externalPid = st0.supervisorPid; owned = true;
+          tokenUrl = st0.tokenUrl || tokenUrl;
+          state = 'running';
+          message = `已接管此前遗留的 DSH（supervisor PID ${st0.supervisorPid}）`;
+          return status();
+        }
         /* ★ 先看是不是**我们自己的孤儿** ✓（详见上面 externalPid 的注释 ✓）——
            端口上那个进程的工作目录 == 本项目 → 认领它 ✓，这样「关闭」才点得动 ✓。 */
         const pid = pidOnPort(port);
@@ -245,28 +264,55 @@ function createDshService(options = {}) {
          ⇒ 输出**直接写日志文件**（不再走管道 ✗）——
            父进程一退管道就断 ✓，子进程写 stdout 会 EPIPE ✗ 甚至被带走 ✓
          ⇒ 令牌地址改从**日志尾巴**里解析 ✓（原来读 stdout ✗） */
-      let logFd = null;
-      try {
-        fs.mkdirSync(logDir, { recursive:true });
-        logFd = fs.openSync(logPath, 'a');
-      } catch (_) { logFd = null; }
-      child = spawn(cli.command, args, {
+      /* ⚠️⚠️ 必须是 **pipe** ✗ 不能把 stdio 重定向到日志文件 ✓
+         DSH 内部的 broker 子进程靠 **stdio 管道**通信 ✓
+         一旦 stdio 变成普通文件 → broker 写 EPIPE ✗ →
+         `workspace` 插件崩溃 ✗ → `workspaceRegistry` 起不来 ✗ →
+         工作区列表全空（用户实测「东西呢」）✓
+         ⇒ 保持 pipe ✓；脱离父进程的事交给 **supervisor** ✓ */
+      /* ⚠️ 不直接 spawn DSH ✗ —— 交给 supervisor ✓
+         · supervisor 自己 detach（stdio ignore）→ CodeScope 退出它照活 ✓
+         · supervisor 持有 DSH 的 stdio 管道并持续 drain ✓ → broker 不会 EPIPE ✓ */
+      const bin = cli.bundled ? cli.path : '';
+      child = spawn(process.execPath, [
+        supervisorPath,
+        '--command', cli.command,
+        '--bin', bin || cli.path,
+        '--cwd', projectRoot,
+        '--log', logPath,
+        '--state', statePath,
+        '--port', String(port),
+        '--',
+        ...(cli.bundled ? [] : []),
+        'web', '--no-open', '--host', LOOPBACK, '--port', String(port),
+      ], {
         cwd: projectRoot,
         env: cleanChildEnv(),
         detached: true,
-        stdio: logFd == null ? 'ignore' : ['ignore', logFd, logFd],
+        stdio: 'ignore',
         windowsHide: true,
       });
-      if (logFd != null) { try { fs.closeSync(logFd); } catch (_) {} }
       if (child && child.unref) child.unref();
       owned = true;
+      const consume = (chunk) => {
+        const text = String(chunk || '');
+        appendLog(text);
+        const match = text.match(/https?:\/\/127\.0\.0\.1:\d+\/?\?token=[^\s]+/);
+        if (match) tokenUrl = match[0];
+        const tail = text.split('\n').map((l) => l.trim()).filter(Boolean).pop();
+        if (tail) lastOutputLine = tail.slice(0, 160);
+      };
       /* 从日志尾巴里找 token 行 ✓（子进程已经和我们解绑，读不到它的 stdout ✗） */
       const tailLog = () => {
+        const st = readState();
+        if (st && st.tokenUrl) tokenUrl = st.tokenUrl;
         try {
           const buf = fs.readFileSync(logPath, 'utf8');
           const slice = buf.slice(-8000);
-          const match = slice.match(/https?:\/\/127\.0\.0\.1:\d+\/?\?token=[^\s]+/);
-          if (match) tokenUrl = match[0];
+          if (!tokenUrl) {
+            const match = slice.match(/https?:\/\/127\.0\.0\.1:\d+\/?\?token=[^\s]+/);
+            if (match) tokenUrl = match[0];
+          }
           const tail = slice.split('\n').map((l) => l.trim()).filter(Boolean).pop();
           if (tail) lastOutputLine = tail.slice(0, 160);
         } catch (_) {}
