@@ -1,0 +1,370 @@
+/* ============================================================================
+   motion-lw.css —— 「生活工作台」面板（life-workbench.js）的微交互叠加层
+
+   为什么要有这个文件
+   ----------------------------------------------------------------------------
+   assets/life-workbench.js（16,271 行）是顶栏的「生活工作台」面板：10 个互不相关的
+   页签、自建 DOM、自建 CSS。它自己的 CSS 在启动时**运行时注入**：
+       life-workbench.js:3392-3396  document.head.appendChild(<style id="lifework-style">)
+   也就是说，它永远出现在 <head> 里所有 <link> 的**后面** ✗。
+   同特异性下后出现者胜 ⇒ 想在这里加过渡，**不能靠"后加载"**，只能靠特异性 ✓。
+
+   本文件在 head 里是 <link>（排在 motion.css 之后、lifework-style 之前）。
+   于是这里的每一条规则都要先回答一个问题：
+       "我要动的这个属性，子系统自己写过吗？"
+     · 写过（transition 已在 .lw-nav button / .lw-btn / .lw-bk .ops / .lw-ep-art .ops 上）
+       → 它会用"同特异性 + 后出现"把我盖掉 ✗，必须靠**重复类名/加深祖先**把特异性抬上去 ✓。
+       → 同时还要压过 motion.css 里那层通用按钮/输入框规则（第 0 节有清单）。
+     · 没写过（绝大多数列表行、卡片、标签只换了 hover 的颜色，没有 transition）
+       → 没有任何竞争规则，普通特异性就够 ✓，不必无脑加倍 ✗（加倍会让日后的维护者
+         以为"这里一定在打架"，也会把无关属性的未来改动一起锁死）。
+
+   一条贯穿全文件的产品判断（和 motion.css 完全一致）
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 按下 / 点页签 / 打开菜单）才允许 --mo-back 回弹；
+   状态同步、轮询刷新、自动更新一律 --mo-out 平滑。
+   这个面板确实在定时刷新：CLOCK_TIMER 每 1s（:6302）、QUOTE_TIMER 每 20s（:6351）、
+   MAIL_STATUS_TIMER 每 75s（:7831）、备忘录列表 live 防抖 200ms 重建（:4254）。
+   ⇒ 本文件里**没有一条**"行入场 / 列表逐项出现"的动画 ✗；
+     给数据更新加动画会变成连续抽筋，这就是铁律本身。
+   ============================================================================ */
+
+
+/* ═══════════════════ 0. 先说清"跟谁抢"：竞争清单 ══════════════════════════
+
+   ① 子系统自己会抢的属性（必须抬特异性）
+        .lw-nav button        transition:all .12s              (0,1,1)
+        .lw-btn               transition:background/color .12s (0,1,0)
+        .lw-bk .ops           transition:opacity .12s          (0,2,0)
+        .lw-ep-art .ops       transition:opacity .12s          (0,2,0)
+        .lw-ep-art .ops       （同上，ops 容器）
+        .lw-c                 transition:border-color/box-shadow .14s (0,1,0)
+   ② motion.css 的通用层（load 更早，但特异性不低，同样会抢）
+        html[data-theme] button           (0,1,2)   ← 抢**每一个** <button> 的 transition
+        input, select, textarea           (0,0,1)
+   ③ 结论：对 <button> 想把 opacity 之类"motion.css 清单里没有"的属性加进 transition，
+      至少要到 (0,2,x) ✓ —— 这正是本文件里 .lw-mo-card .lw-mo-head button 那条的由来。
+
+   ⚠️ 不写规则的两个类（普查后发现是死代码 ✗）：
+      .lw-rd-empty、.lw-nt-menu 在 life-workbench.js 里**只有 CSS 定义、从未被创建**
+      （全仓 grep 只命中 CSS 行）。给它们写规则就是往仓库里种死代码 ✗。
+   也不重复写的：.lw-c 卡片 —— 子系统自己已经有 border-color/box-shadow 过渡 + hover 阴影，
+      再写一遍只会制造两份真相 ✗。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════ 1. 导航页签（10 个页签的那一条） ═══════════════════════ */
+
+/* 页签是 <button>（life-workbench.js:4174 的 .lw-nav 里）。子系统只写了
+   transition:all .12s（.lw-nav button，(0,1,1)），而 motion.css 的
+   html[data-theme] button 是 (0,1,2) —— 今天真正生效的其实是 motion.css 那层。
+   我用 .lw-inpanel .lw-nav button (0,2,1) 同时压过两者 ✓（与加载顺序无关 ✓）。
+
+   为什么写上 transform：motion.css 的按下反馈（translateY(.5px) scale(.985)）要靠
+   transition 里的 transform 才弹得回来 ✓。只抄 background/color 两条会把按压变成瞬变 ✗。
+   为什么用 background-color 而不是 background：子系统 .on 写的是 background 简写，
+   计算值落到 background-color 上，过渡长名才真的动 ✓。 */
+.lw-inpanel .lw-nav button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停：整条页签右移 2px。位移**不参与布局** ✓，也不会把右边的内容挤动 ✓。
+   曲线用 --mo-out 而不是 --mo-back：悬停是"状态跟随"，不是"人手按下去"，
+   每次掠过都回弹会像弹簧门 ✗。
+
+   ⚠️ 这里的 :not(:disabled) 不是为了禁用态，是为了**特异性**（实测踩过）：
+      app.css:3290 的 html[data-theme] button:hover:not(:disabled) 是 **(0,3,2)** ——
+      比裸的 .lw-inpanel .lw-nav button:hover (0,2,2) 高 ✗。第一版没带这个后缀，
+      实测页签悬停拿到的是 app.css 的 translateY(-1px)（整个按钮上浮），
+      我的 translateX(2px) 根本没生效 ✗。补上之后同为 (0,3,2)，
+      而本文件在 styleSheets 里的序号更大（实测 10 vs app.css 6）⇒ 后出现者胜 ✓。
+      （这条同样不需要 !important ✓） */
+.lw-inpanel .lw-nav button:hover:not(:disabled) { transform: translateX(2px); }
+
+/* 选中态（.on）原本是硬切：background:accent + color:accentInk 一帧跳过去 ✗。
+   上面那条 transition 已经把它变成 120ms 的淡入 ✓ —— 这就是"平滑选中态"，
+   不需要额外造一条指示条：普查确认 .lw-nav 里**没有任何** ::before/::after 指示条
+   （.lw-nav 的规则只有 button / .grp / .badge / .foot），凭空加一条会改变这个面板的
+   视觉语言，越权 ✗。
+   图标补一下手感：选中时放大 6%，给"我点中了这一项"一个落点 ✓。
+   --mo-back 在这里是允许的：选中态的变化**只**由人点页签触发 ✓。 */
+.lw-inpanel .lw-nav button .ic { transition: transform var(--mo-2) var(--mo-back); }
+.lw-inpanel .lw-nav button.on .ic { transform: scale(1.08); }
+
+
+/* ═══════════════════ 2. 列表行（书签/日记/文章/笔记/邮件/单词…） ══════════════ */
+
+/* 这十几类行都是 <div>，hover 只换背景色、没有任何 transition（普查逐条确认）⇒
+   没有任何竞争规则，普通特异性就够 ✓，所以这里**没有**加倍类名。
+
+   为什么统一到 --mo-1：这是"指针划过一整列"的高频反馈，必须比 --mo-2 更快，
+   否则快速扫视时一行行拖影 ✗。120ms 刚好在"看得见"和"跟不上手"之间。
+   为什么同时过渡 border-color：这些行的选中态全是左侧 2~3px 指示条
+   （.lw-rd-row.on / .lw-rm-row.on / .lw-fl-row.on / .lw-wd-row.on 用 border-left-color，
+    .lw-bk.on / .lw-hl-it.on 用 inset 阴影，.lw-ml-item.on 用 border-left）——
+   过渡颜色就能让指示条淡入 ✓。
+   ⚠️ 故意**不**过渡 border-left-width：宽度一变就是重排，行内的日期/计数会抖 ✗。
+   ⚠️ 故意不做任何"行入场"动画：这些列表会被 render*() 整块重建，入场动画会跟着
+      轮询/自动保存一遍遍重放 ✗（铁律）。 */
+.lw-rd-row,
+.lw-rm-row,
+.lw-fl-row,
+.lw-fl-pal,
+.lw-wd-row,
+.lw-hl-it,
+.lw-ml-item,
+.lw-ml-acct,
+.lw-ml-box,
+.lw-nt-row,
+.lw-nt-side .it,
+.lw-eb-tocrow,
+.lw-mrow,
+.lw-bk,
+.lw-hotrow,
+.lw-todo,
+.lw-jrow,
+.lw-ep-art,
+.lw-ep-s {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 3. 按钮族 ═════════════════════════════════════════════ */
+
+/* 主按钮 .lw-btn 的悬停是"底色整体反相"（background→accent，color→accentInk），
+   这层反相本身已经在淡入了（由上面第 0 节①的通用层提供），我再叠一条 6% 提亮，
+   让"手放上去"比"状态改变"多一点点光 ✓ —— 这就是"微提亮"。
+   子系统的 .lw-btn:hover 只写 background/color，没有 filter ⇒ 我这条没有对手 ✓，
+   不需要 .lw-btn.lw-btn 加倍 ✓。filter 的过渡时长也在通用层里（--mo-1）✓。 */
+.lw-btn:hover { filter: brightness(1.06); }
+
+/* 行内操作按钮（✎ / 🗑 / ⋯）：平时 opacity:0，悬停到**卡片或行**上才出现。
+   问题是淡入只有 opacity 一条属性，而 opacity 不在 motion.css 通用按钮的 transition
+   清单里 ⇒ 现在是"啪"地蹦出来 ✗（实测 base 值 0 → hover 1 是瞬变）。
+
+   要补 opacity 就必须压过 html[data-theme] button 的 (0,1,2) ✗ ——
+   这就是本文件唯一一处必须加倍祖先的地方：
+     .lw-mo-card .lw-mo-head button        (0,2,1) ✓ 压过 (0,1,2)
+     .lw-bk-card .ops / .lw-bk .ops / .lw-ep-art .ops 是**容器**，不是按钮，
+       通用层管不到它们，但其中 .lw-bk .ops / .lw-ep-art .ops 子系统自己写了
+       transition（(0,2,0)）⇒ 加 .lw-inpanel 前缀到 (0,3,0) 才盖得住 ✓。
+   ⚠️ 覆盖 transition 时必须把通用层原有的那几条一起抄回来，否则会把按压与变色
+      的过渡一起弄丢 ✗（只抄 opacity 是常见错法）。 */
+.lw-mo-card .lw-mo-head button {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.lw-bk-card .ops { transition: opacity var(--mo-1) var(--mo-out); }
+.lw-inpanel .lw-bk .ops { transition: opacity var(--mo-1) var(--mo-out); }
+.lw-inpanel .lw-ep-art .ops { transition: opacity var(--mo-1) var(--mo-out); }
+
+
+/* ═══════════════════ 4. 输入框 / 文本框 ════════════════════════════════════ */
+
+/* 只过渡 border-color 与 box-shadow ✓，**不动** border 宽度、圆角、尺寸、内边距 ✗ ——
+   这个面板里输入框有两种密度（工具条里 26px/1px 边框，邮件表单里 32px/2px 边框），
+   抹平会让密集表单瞬间变挤。
+   时长用 --mo-2（180ms）而不是通用层的 --mo-1：聚焦是"我现在要在这里打字"的
+   一次状态升级，比掠过式的悬停值得多 60ms ✓。
+   特异性 (0,3,1) 起步，稳稳压过通用层 input,select,textarea 的 (0,0,1) ✓。 */
+.lw-inpanel :is(.lw-rd-tools, .lw-hl-tools, .lw-rd-quick, .lw-nt-list .top,
+                .lw-memo-search, .lw-ep-add, .lw-mail-send, .lw-bk-write,
+                .lw-eb-drawer .find) :is(input, textarea, select) {
+  transition:
+    border-color var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 5. 空状态 ═════════════════════════════════════════════ */
+
+/* 空状态是"这一屏真的没有数据"，属于一次性的结果呈现 ⇒ 值得淡入 ✓（--mo-3 = 260ms）。
+   位移只有 3px：再大会像一块东西掉下来 ✗。
+
+   ⚠️ 这里刻意只挑**三处**，因为铁律比"好看"重要：
+     ✓ .lw-nt-empty  备忘录/笔记的空列表（:6554/:6642，只在数据或筛选变化时重画）
+     ✓ .lw-mo-empty  书签的空列表（:6700，同上）
+     ✓ .lw-fl-empty  文件画布的居中空提示（:1264，静态容器）
+     ✗ .lw-empty     它被当成"占位符"在用：天气加载中（:7110）、正在自动搜热点（:7201）
+                     —— 那是**定时刷新**会反复替换的内容，做入场动画就是每轮都闪 ✗
+     ✗ .lw-ml-empty  邮箱列表，MAIL_STATUS_TIMER 每 75s 轮询重画一次（:7831）✗
+
+   诚实标注：.lw-nt-empty 所在的备忘录列表有 200ms 的 live 防抖重建（:4254），
+   如果列表已经空着、用户又继续改数据，这次重建会让 260ms 淡入再放一次。
+   这是"空→空"的极窄场景，且每次只有 260ms，可以接受 ✓；换成"绝不重放"的唯一办法
+   是让 JS 记住"已经出现过"，而本任务不许改 JS ✗。 */
+@keyframes lw-motion-empty-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+.lw-nt-empty,
+.lw-mo-empty,
+.lw-fl-empty {
+  animation: lw-motion-empty-in var(--mo-3) var(--mo-out) both;
+}
+
+
+/* ═══════════════════ 6. 卡片 / 标签 / 分段控件 ═════════════════════════════ */
+
+/* 卡片：悬停只提亮描边（子系统已有 border-color 的 hover 值，只是没有过渡）⇒
+   我**不写**任何颜色值，只补过渡 ✓ —— 外观仍然由子系统唯一决定，这里不制造第二份真相。
+   180ms 是"描边亮度变化"的合适速度：比 --mo-1 缓，才看得出是"灯亮了"而不是"闪了"。 */
+.lw-mo-card,
+.lw-bk-card {
+  transition:
+    border-color var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 标签 / 分段控件 / 心情格 / 选择项：都是伪装成按钮的 <div>，motion.css 的通用按钮层
+   （选择器是 button）根本管不到它们 ⇒ 这里是**唯一**能给它们做按压缩放的地方 ✓。
+   把 transform 放进 transition 列表：按下用 --mo-back 弹回来 ✓（人手按的，合规 ✓）。
+   为什么 --mo-back 在这里是对的：这些控件没有"定时刷新"一说，它们的每一次变化都由人发起 ✓。 */
+.lw-rd-chip,
+.lw-chip,
+.lw-rd-modes .seg,
+.lw-moodpick div,
+.lw-ml-pick .it {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.lw-rd-chip:active,
+.lw-rd-modes .seg:active,
+.lw-moodpick div:active,
+.lw-ml-pick .it:active {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+
+
+/* ═══════════════════ 7. 浮层 / 抽屉 / 弹层 ═════════════════════════════════ */
+
+/* 三个真的会被动态创建-销毁的浮层：
+     .lw-moodpick    心情选择网格（:2224 生成，:3758/:3764 getElementById 后开关）
+     .lw-eb-drawer   阅读器的目录抽屉（:6259 生成，:9441 关掉）
+     .lw-ml-pickwrap + .lw-ml-pick  选账号的居中弹层（:13364 现建）
+   （.lw-nt-menu 不在列：普查发现它只有 CSS、从未被创建 ✗）
+
+   用 @starting-style 而不是 JS 加类 ✓：浮层是 innerHTML 现造现插的，
+   "入场前状态"只能由浏览器在元素第一次计算样式时提供 ✓。
+   ⚠️ 整段包在 @supports (transition-behavior: allow-discrete) 里：
+      不支持的环境下这些声明整块被忽略 ⇒ 退化成今天的"直接出现"，**不会坏** ✓。
+      这也是为什么可以放心把 display 写进过渡：只有支持离散过渡的浏览器才看得到这条。
+
+   曲线用 --mo-out（平滑）而不是 --mo-back：motion.js 对面板入场做过同样的判断
+   （面板是"状态变化"，不是"人点的按钮"），回弹留给页签图标与按压 ✓。 */
+@supports (transition-behavior: allow-discrete) {
+  .lw-moodpick,
+  .lw-eb-drawer,
+  .lw-ml-pickwrap,
+  .lw-ml-pick {
+    transition:
+      opacity var(--mo-2) var(--mo-out),
+      transform var(--mo-3) var(--mo-out),
+      display var(--mo-3) allow-discrete;
+  }
+  @starting-style {
+    .lw-moodpick { opacity: 0; transform: translateY(-4px); }
+    .lw-eb-drawer { opacity: 0; transform: translateX(-10px); }
+    .lw-ml-pickwrap { opacity: 0; }
+    .lw-ml-pick { opacity: 0; transform: translateY(6px) scale(.99); }
+  }
+}
+
+
+/* ═══════════════════ 8. 无障碍：prefers-reduced-motion ═════════════════════ */
+
+/* motion.css:481 那条 reduced-motion 只列了 .md-doc / .tab / #toolbar 等**主界面**的
+   类，一个 lw- 前缀都没有（全文件 grep "lw-" = 0 命中）⇒ 管不到本面板，必须自己写 ✓。
+
+   三条铁律（和 motion.css:481 那段的尺度完全一致）：
+     ① 我引入的全部 animation → none !important
+     ② 我引入的全部 transition → .01ms !important（保留声明，只是压到看不见；
+        直接删 transition 会让属性变化重新变成"硬切"，那不是减少动效而是换了种跳 ✗）
+     ③ 我加的全部 transform（页签右移、图标放大、标签按压、浮层入场位移）→ none !important
+   本文件其余地方**没有任何 !important** ✓（项目禁止用 !important 抢外观）。 */
+@media (prefers-reduced-motion: reduce) {
+  .lw-nt-empty,
+  .lw-mo-empty,
+  .lw-fl-empty {
+    animation: none !important;
+  }
+
+  .lw-inpanel .lw-nav button,
+  .lw-inpanel .lw-nav button .ic,
+  .lw-mo-card .lw-mo-head button,
+  .lw-bk-card .ops,
+  .lw-inpanel .lw-bk .ops,
+  .lw-inpanel .lw-ep-art .ops,
+  .lw-mo-card,
+  .lw-bk-card,
+  .lw-rd-row,
+  .lw-rm-row,
+  .lw-fl-row,
+  .lw-fl-pal,
+  .lw-wd-row,
+  .lw-hl-it,
+  .lw-ml-item,
+  .lw-ml-acct,
+  .lw-ml-box,
+  .lw-nt-row,
+  .lw-nt-side .it,
+  .lw-eb-tocrow,
+  .lw-mrow,
+  .lw-bk,
+  .lw-hotrow,
+  .lw-todo,
+  .lw-jrow,
+  .lw-ep-art,
+  .lw-ep-s,
+  .lw-rd-chip,
+  .lw-chip,
+  .lw-rd-modes .seg,
+  .lw-moodpick div,
+  .lw-ml-pick .it,
+  .lw-inpanel :is(.lw-rd-tools, .lw-hl-tools, .lw-rd-quick, .lw-nt-list .top,
+                  .lw-memo-search, .lw-ep-add, .lw-mail-send, .lw-bk-write,
+                  .lw-eb-drawer .find) :is(input, textarea, select),
+  .lw-moodpick,
+  .lw-eb-drawer,
+  .lw-ml-pickwrap,
+  .lw-ml-pick {
+    transition-duration: .01ms !important;
+  }
+
+  .lw-inpanel .lw-nav button:hover,
+  .lw-inpanel .lw-nav button.on .ic,
+  .lw-rd-chip:active,
+  .lw-rd-modes .seg:active,
+  .lw-moodpick div:active,
+  .lw-ml-pick .it:active {
+    transform: none !important;
+  }
+
+  /* @starting-style 里那几条位移同样要压掉：否则浮层会在
+     "位移 0 → 位移 0" 之间空跑 260ms，虽然看不见，但会和 display 的离散过渡叠出延迟 ✗。 */
+  @starting-style {
+    .lw-moodpick,
+    .lw-eb-drawer,
+    .lw-ml-pickwrap,
+    .lw-ml-pick {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

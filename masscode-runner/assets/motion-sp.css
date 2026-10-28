@@ -1,0 +1,290 @@
+/* ============================================================================
+   motion-sp.css —— 「系统面板 / 本机管家」的微交互叠加层
+   （上游令牌层：assets/motion.css；本文件不定义任何令牌，只消费 --mo-*）
+
+   ★ 这个文件为什么不能靠「后出现者胜」
+   ----------------------------------------------------------------------------
+   全站其它叠加层（motion.css）靠「同特异性 + 后加载」取胜 ✓，这一层不行 ✗：
+   系统面板的 CSS 是运行时注入的 —— src/system-panel.js:1292 injectStyle() 会
+   document.head.appendChild(<style id="codescope-system-panel-style">)，
+   它的插入位置在 index.html 的 <link href="/assets/motion-*.css"> 之后 ⇒
+   同特异性下永远是它赢 ✗，.sp-btn 的 transition 会被原样吃掉 ✓。
+   ⇒ 本文件只有一条出路：靠特异性取胜，与插入顺序无关 ✓、也不需要 !important ✓
+     （项目禁止用 !important 抢外观；本文件只在文末 reduced-motion 段出现 !important ✓）。
+
+   加倍写法：把同一个类名写两次 —— .sp-btn.sp-btn 的 (0,2,0) 压过 .sp-btn 的 (0,1,0) ✓。
+   重复类名不需要 HTML 里真写两次：复合选择器里两个 .x 都命中同一个 class 列表 ✓。
+   系统面板自带的选择器统一带 #system-workspace 祖先（少数浮层例外，见第 2 节），
+   所以这里的基线是 (1,1,0)，加倍后 (1,2,0) ✓；hover / focus 再 +1 层 (1,3,0) ✓。
+
+   ⚠️ 但不是所有规则都要加倍 ✗。判断标准只有一条：
+       —— 子系统有没有对同一个属性声明过 transition / 有没有同一个伪状态？
+     · 声明过（真冲突）→ 必须加倍，否则被覆盖 ✓  例：.sp-btn / .sp-input / .sp-viz-seg
+     · 没声明过（空位）→ 普通特异性就够 ✓，加倍只是噪声 ✗  例：.sp-table td / .sp-bar i / .sp-tag
+   逐条的判定结果写在对应规则上方，可对照复查。
+
+   ★ 本文件的产品铁律（写之前先读）
+   ----------------------------------------------------------------------------
+   刷新节奏（src/system-panel.js:2366 schedule()）：概览页 1.5 秒、其它视图 4 秒。
+   但两者的渲染方式完全不同，这一点决定了哪些动画能写、哪些不能：
+     · 概览：renderOverview() 首帧建结构，之后走 patchOverview()（:2796）就地改数值
+       —— 环弧 setAttribute('stroke-dashoffset')、条宽 style.width、曲线 points，
+       DOM 不重建 ✓（源码原话：「绝不能每 1.5 秒都重建 —— 那正是页面在闪的老毛病」）。
+       ⇒ 这里的数值过渡是真的在播 ✓，也是第 5 节那些 width / 弧长过渡的价值所在。
+     · 其它视图：refresh() 里直接 body.innerHTML = …（:3153 / :3304 / :3457 …）
+       整块重建 ✓（实测：存储页 5 秒窗口内 #system-body 移除了 18 个子节点，
+       打了标记的节点在 1081ms 后已是另一个对象）。
+   ⇒ 任何随重建重播的入场动画都会变成每隔几秒抖一下 ✗ —— 所以：
+     · 所有过渡只服务于人主动做的动作（悬停 / 按下 / 输入聚焦）✓，一律 --mo-out；
+     · 唯一一条 animation 只挂在 #system-body 的直接子元素加载态上（见第 7 节，
+       那是「整页正在读取…」，数据到手后被真内容替换，不会再随轮询复现）✓；
+     · body 内部那些「没有读到应用」式的 .sp-empty / .sp-note / .sp-hint 一条动画都没有 ✗
+       —— 它们每个轮询周期都会被重建，加淡入＝每 1.5 秒闪一次 ✓（证据见任务报告）；
+     · 数值条只过渡 width / stroke-dashoffset，不过渡 color / opacity ✗
+       —— 水位色是按阈值变的周期性数据，给它加过渡等于让颜色每 1.5 秒呼吸一次 ✗。
+   ============================================================================ */
+
+
+/* ═══════════════════ 1. 页签 / 分段控件 ═════════════════════════════════════ */
+
+/* 真实的「页签」是两处（普查结论，不是猜的）：
+     · #system-nav-list button   左侧分区（概览/性能/文件/存储/系统/软件/设置）
+     · #system-subnav   button   分区内的胶囊子视图
+   选中态都是 .on 类。两者子系统都写了 transition（各 100ms ease）⇒ 真冲突 ✗：
+     #system-nav-list button 、#system-subnav button 都是 (1,0,1)，transition: background, color
+   要压过它们只能再借一层祖先 → (2,0,1) ✓。借 #system-workspace 而不是 !important，
+   是因为子系统自己就是这么写祖先的，结构稳定（section#system-workspace 由 :1441 建一次）。
+   ⚠️ 只重定时长与曲线，不动任何背景/颜色 —— 悬停底色归子系统，本文件不抢外观 ✓。 */
+#system-workspace #system-nav-list button,
+#system-workspace #system-subnav button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+
+/* 页签里的图标（.nav 的 <i>）：子系统那条 (1,0,2) 规则里也写了
+   transition: background, color var(--sp-ease=100ms ease)（源码 :381-383，藏在一个跨行
+   声明的末尾，读源码时极易漏看 ✗）⇒ 真冲突。
+   ⚠️ 这是被实测纠正过的一处：最初按「看起来没写 transition」写成裸的
+      #system-nav-list button i，真实页面里读到的仍是 100ms ease（被子系统以同特异性
+      后置覆盖 ✗）。改成借一层祖先的 (2,0,2) 之后才真的生效 ✓。
+      教训：判定表以 computed style 为准，不以源码观感为准。 */
+#system-workspace #system-nav-list button i {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 选中态（.on）为什么这里没有过渡 ✗：renderNav()/renderSubnav() 是
+   list.innerHTML = …（:1566 / :1593）整段重建，新节点上没有「旧状态」可插值 ✓。
+   要做得出来就得改 JS 或换外观实现，超出「只新建一个文件」的边界 —— 记录为已知限制。 */
+
+
+/* ═══════════════════ 2. 按钮 ═════════════════════════════════════════════ */
+
+/* .sp-btn 自己就写了 transition（140ms ×4 + transform 90ms，且带 #system-workspace 祖先
+   =(1,1,0)）⇒ 真冲突 ✗，必须加倍。浮层里的按钮挂在 body 上（源码 :986 的
+   body .fsv-menu 是证据），不在 #system-workspace 里面，所以并列三条 (0,3,0) ✓。 */
+#system-workspace .sp-btn.sp-btn,
+.fsv-menu .sp-btn.sp-btn,
+.fsv-preview .sp-btn.sp-btn {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back),   /* 回弹只服务「按下→松开」这一下 ✓ */
+    filter var(--mo-1) var(--mo-out);       /* 见下一条：hover 提亮走 filter */
+}
+
+/* hover「微提亮」为什么必须另走 filter、不能靠 background 渐变：
+   子系统的 .sp-btn 底色是 linear-gradient，hover 时换成另一条 gradient；
+   渐变之间不可插值，所以它写的 transition: background 140ms 对提亮实际是空转 ✗，
+   提亮一直是硬切 ✓。filter: brightness() 可插值 ⇒ 这才是真的会淡入的提亮 ✓。
+   幅度取 1.04：子系统自己的 gradient 已经提亮约 10%，再叠同样的量会过曝 ✗。
+   只作用于按钮自身渲染，不改底色、不改布局，删除本文件即回到原样 ✓。 */
+#system-workspace .sp-btn.sp-btn:hover,
+.fsv-menu .sp-btn.sp-btn:hover,
+.fsv-preview .sp-btn.sp-btn:hover {
+  filter: brightness(1.04);
+}
+
+/* 按下：子系统 .sp-btn:active 是 translateY(1px)(1,2,0)；.sp-btn.primary:active 是
+   (1,3,0)。这里用 (1,4,0) 一次性压过两者，保留它们的 1px 下沉与内凹阴影（外观不动 ✓），
+   只补 1.5% 的 scale —— 真正的「按下去」手感在这 1.5% 里 ✓。
+   :not([disabled]) 是为了不和 .sp-btn[disabled]{transform:none} 打架 ✓。 */
+#system-workspace .sp-btn.sp-btn:active:not([disabled]),
+.fsv-menu .sp-btn.sp-btn:active:not([disabled]),
+.fsv-preview .sp-btn.sp-btn:active:not([disabled]) {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+
+/* 页头两颗按钮（← 返回 / ↻ 刷新）不是 .sp-btn，走的是 #system-head button (1,0,1)，
+   自带 transform 90ms 的短过渡 ⇒ 真冲突，同样借一层祖先压到 (2,0,1) ✓。 */
+#system-workspace #system-head button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+#system-workspace #system-head button:active:not([disabled]) {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+
+/* 行内按钮（.sp-rowbtn：鼠标进到这一行才浮出来）子系统写了 (1,2,0) 的
+   transition: opacity 100ms ⇒ 真冲突，加倍到 (1,3,0) ✓。
+   100ms → --mo-2 的理由：这是「一整行的次要动作浮现」，不是点按反馈，用它才会和
+   按钮族的 180ms 对齐；仍走 --mo-out —— 悬停是人的动作，但按钮本体没有位移，
+   给它回弹只会让按钮「弹出来」，反而吵 ✗。 */
+#system-workspace .sp-li .sp-rowbtn.sp-rowbtn,
+#system-workspace .sp-pitem .sp-rowbtn.sp-rowbtn {
+  transition: opacity var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 3. 表格行 ═══════════════════════════════════════════ */
+
+/* 系统面板最高频的交互：读表格时鼠标从上往下扫。
+   悬停底色写在 #system-workspace .sp-table tr:hover td（(1,2,2)）上，
+   但 td 本身没有任何 transition ⇒ 空位 ✓ → 普通特异性就够，不加倍（加倍的只是噪声 ✗）。
+   ⚠️ 为什么加到 td 而不是 tr：hover 规则改的是 td 的背景，过渡必须声明在同一个元素上，
+      写在 tr 上不生效 ✗（颜色是从 td 的 transparent 变到 tint）。
+   ⚠️ 刻意不做行入场动画：tbody 每个轮询周期整块重建，逐项淡入＝每秒抽筋一次 ✗。 */
+#system-workspace .sp-table td {
+  transition: background-color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════════════ 4. 输入框 ═══════════════════════════════════════════ */
+
+/* .sp-input 自带 transition: border-color, background var(--sp-ease=100ms ease) (1,1,0)
+   ⇒ 真冲突，加倍到 (1,2,0) ✓。
+   按要求只过渡 border-color / box-shadow ✓：主动去掉 background 的过渡 ✗
+   —— 聚焦时底色从 surface-2 切到 surface，那是一次性的状态变化、不是周期性数据，
+      硬切没有闪烁风险，而少一条过渡就少一条每帧要算的属性 ✓。 */
+#system-workspace .sp-input.sp-input {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 焦点环：子系统给按钮写了 :focus-visible，输入框却只有 1px 边框变色（浅色主题下很淡 ✗）。
+   这里补一圈柔光，用 box-shadow 而不是 outline —— 它不参与布局、不会把同行按钮挤动 ✓。
+   (1,3,0) 压过 .sp-input:focus 的 (1,2,0)；虽然那条没写 box-shadow，保持层级一致更安全 ✓。 */
+#system-workspace .sp-input.sp-input:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+
+/* ═══════════════════ 5. 进度条 / 占用率条 ════════════════════════════════ */
+
+/* ★ 这是「数据在动」的正确做法：平滑，不弹 ✓ —— 数值条一律 --mo-3 + --mo-out，
+   绝不 --mo-back（--mo-back 只属于人按下的那一下）✓。
+
+   (1) .sp-bar i（磁盘卷 / 缓存 / 内存占用条）：子系统没有 transition ⇒ 空位 ✓，
+      普通特异性即可。它的宽度是就地更新的 —— 实测 src/system-panel.js:2877
+      barFill.style.width = capacity + '%' 直接改已存在节点的 inline style，
+      所以这条过渡是真会动的 ✓（不是给重建节点看的摆设）。
+      这也是这里值得写的理由：不加的话，磁盘占用每 1.5 秒跳一格 ✗。 */
+#system-workspace .sp-bar i {
+  transition: width var(--mo-3) var(--mo-out);
+}
+
+/* (2) .sp-viz-seg（空间分析的占比条）
+   (3) .sp-temp .sp-tempbar i（温度条）
+   (4) .sp-gauge-ring .value（环形仪表弧长）
+   三个都自带 transition: … 420ms cubic-bezier(.22,.61,.36,1)
+   （各 (1,1,0) / (1,2,1) / (1,2,0)）⇒ 真冲突，逐个加倍压到 (1,2,0) / (1,3,1) / (1,3,0) ✓。
+   统一到 --mo-3 的理由：420ms 不在令牌表里，是全站唯一的超档散值 ✗；
+   数值变化属于「需要看清过程」的第三档（260ms）✓，再长就追不上 1.5 秒的刷新间隔。
+   ⚠️ 环弧这条不是摆设：patchOverview()（:2803 setGauge）每 1.5 秒对 circle.value
+      调一次 setAttribute('stroke-dashoffset', …)，走的就是这条过渡 ✓
+      —— 真实页面里读到 transition-duration 0.26s，且起了一条 stroke-dashoffset 过渡。
+   ⚠️ 温度条原本还过渡了 background ✗ —— 那是绿→黄→红的阈值切换，
+      属于周期性数据变化，按铁律去掉，只留 width ✓。 */
+#system-workspace .sp-viz-seg.sp-viz-seg,
+#system-workspace .sp-temp .sp-tempbar.sp-tempbar i {
+  transition: width var(--mo-3) var(--mo-out);
+}
+
+/* 环弧用 stroke-dashoffset 而不是 width（SVG 圆），单独一条以免被上面的 width 盖掉 ✓ */
+#system-workspace .sp-gauge-ring .value.value {
+  transition: stroke-dashoffset var(--mo-3) var(--mo-out);
+}
+
+/* 每核小条（.sp-core i）刻意不做过渡 ✗：它的高度只在整块重建时写入
+   （:2971 的 inline style），没有就地更新路径，加了也只是死规则 ✓。 */
+
+
+/* ═══════════════════ 6. 标签 / 徽标 ═════════════════════════════════════ */
+
+/* .sp-tag 子系统只写了静态外观（底色/圆角/水位配色），没有任何 :hover、也没有 transition
+   ⇒ 空位 ✓，普通特异性就够，不加倍 ✓。
+   hover 只抬 1px（--mo-lift）+ 一层极淡投影：标签是信息角标不是按钮，
+   抬太多会让人以为可点 ✗。用 --mo-back 是合规的 —— 悬停是人主动的动作 ✓。 */
+#system-workspace .sp-tag {
+  transition:
+    transform var(--mo-2) var(--mo-back),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+#system-workspace .sp-tag:hover {
+  transform: translateY(var(--mo-lift));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+
+/* ═══════════════════ 7. 空状态 / 提示 ═══════════════════════════════════ */
+
+/* 本文件唯一一条 animation，而且只给 #system-body 的直接子元素 ✓。
+   为什么必须是直接子元素：整页加载态是 body.innerHTML = '<div class="sp-empty">正在读取…</div>'
+   （:2962 / :3139 / :3446 / :3553 / :3669 / :3767）—— 它是 body 的唯一孩子；
+   数据一到就被真内容替换，之后再轮询也不会重现 ✓ ⇒「淡入一次」成立 ✓。
+   而 body 内部嵌套的 .sp-empty（「没有读到应用」:2245）、.sp-note、.sp-hint 每个轮询周期
+   都被重建，给它们加动画等于每 1.5 秒闪一次 ✗ —— 所以那三类故意一条动画都没有 ✓。
+   曲线用 --mo-out 不用 --mo-back：切页签时它在告诉人「正在取数」，不是人按下了什么 ✓。 */
+@keyframes msp-loading-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+#system-body > .sp-empty {
+  animation: msp-loading-in var(--mo-3) var(--mo-out) both;
+}
+
+/* 提示文本（.sp-note / .sp-hint）只做「不闪」的保底：它们没有任何动画与过渡，
+   连颜色变化都交给子系统（那是阈值触发的状态色，跟着数据走）✓。 */
+
+
+/* ═══════════════════ 8. 无障碍：reduced-motion ═══════════════════════════ */
+
+/* 前提（实测）：子系统自己在 CSS 末尾已有
+       @media (prefers-reduced-motion:reduce){ #system-workspace *{transition:none !important} … }
+   ⇒ #system-workspace 内部那堆过渡它已经全关了，这里不重复写一遍 ✗。
+   但有三个缺口必须由本文件补 ✓：
+     (1) #system-workspace * 管不到挂在 body 上的浮层（.fsv-menu / .fsv-preview，源码 :986）；
+     (2) 本文件引入的那条 animation 它管不到（它的段里只关 .sp-skel 的 pulse）；
+     (3) 本文件新加的位移（按压缩放 / 标签抬升）必须归零，否则前庭敏感的用户照样难受。
+   !important 只出现在这一节，而且是为了和子系统同层级的 *{…!important} 对齐 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  /* (1)(2) 关过渡与动画 */
+  .fsv-menu .sp-btn.sp-btn,
+  .fsv-preview .sp-btn.sp-btn,
+  #system-workspace #system-head button {
+    transition: none !important;
+  }
+  #system-body > .sp-empty {
+    animation: none !important;
+    opacity: 1 !important;      /* 动画关掉后不要停在 from 帧 ✓ */
+  }
+
+  /* (3) 位移归零：按压的 1.5%、标签的 1px 全部取消 */
+  #system-workspace .sp-btn.sp-btn:active:not([disabled]),
+  .fsv-menu .sp-btn.sp-btn:active:not([disabled]),
+  .fsv-preview .sp-btn.sp-btn:active:not([disabled]),
+  #system-workspace #system-head button:active:not([disabled]),
+  #system-workspace .sp-tag:hover {
+    transform: none !important;
+  }
+}

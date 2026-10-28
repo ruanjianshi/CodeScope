@@ -88,6 +88,13 @@
         实测：app.css:3284 的 html[data-theme] button 特异性是 (0,1,2)，
         裸 button 的 (0,0,1) 压不过它 —— motion.css 必须带同样的前缀才生效 ✓。 -->
 <link rel="stylesheet" href="/assets/motion.css?v=20261028a">
+<!-- ★ 子系统微交互（2026-10-28）：生活工作台 lw-* / 系统面板 sp-*。
+     ⚠️ 这两个文件**不能**靠「后加载」取胜 ✗：子系统在运行时把 <style> 追加到 head 末尾 ✓，
+        排在这两行之后，同特异性下它们赢 ✓。所以文件里用「重复类名」提升特异性
+        （.lw-btn.lw-btn → (0,2,0) 压 (0,1,0)），与加载顺序无关、也不必用 !important ✓。
+     放在这里只为统一管理；真正决定胜负的是特异性 ✓。 -->
+<link rel="stylesheet" href="/assets/motion-lw.css?v=20261028a">
+<link rel="stylesheet" href="/assets/motion-sp.css?v=20261028a">
 <!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
 <script src="/assets/doc-theme.js?v=20261028d" defer></script>
 <!-- ★ 动效的行为层（2026-10-28）：CSS 做不到的三件事 —— 面板显隐的入场类、
