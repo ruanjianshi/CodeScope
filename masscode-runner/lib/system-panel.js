@@ -239,17 +239,36 @@ async function memoryInfo() {
   return value;
 }
 
+/* Linux swap 解析抽成纯函数 ✓（原来它整段埋在 swapInfo 的 try/catch 里 ✗）。
+   为什么非抽不可 ✗：本机是 macOS ✓，这段 Linux 分支**平时一行都跑不到** ✓ ——
+   正则写错也照样「成功返回 null」✓，前端只是安静地显示没有交换区 ✓，没人会发现 ✓。
+   抽成「文本进、数字出」之后，macOS 上也能直接喂一段 /proc/meminfo 样本验证 ✓（见 tests/system-panel-swap.js）。
+   ✓ 保留 null 语义：没有 SwapTotal 行、或 SwapTotal 为 0（未启用 swap）一律返回 null ——
+   ✗ 不能返回 { total: 0 }：调用方靠 null 判断「本机无交换区」，给个 0 会让前端算出 0/0 的 NaN 百分比。 */
+function parseLinuxSwapMeminfo(raw) {
+  if (!raw) return null;
+  const pick = (name) => {
+    /* ✓ 必须写成 ':\\s+(\\d+)' —— 字符串里写双反斜杠，正则才拿得到真正的 \s 空白。
+       ✗ 单引号里只写一个反斜杠（\s 而不是 \\s）→ 字符串里退化成字母 s → 正则变成 SwapTotal:s+(\d+)s+kB → 永远匹配不到。 */
+    const match = new RegExp('^' + name + ':\\s+(\\d+)\\s+kB', 'mi').exec(raw);
+    return match ? Number(match[1]) * 1024 : 0;
+  };
+  const total = pick('SwapTotal');
+  const free = pick('SwapFree');
+  return total ? { total, free, used: total - free } : null;
+}
+
+/* ⚠️⚠️ 这个函数在本文件里曾经**定义了两遍**（旧的 :242 与 :577）✗ ——
+   JS 函数声明提升后**后写的那份静默覆盖前一份** ✓，而 :577 那份的正则写成了
+   new RegExp('^' + name + ':\s+(\\d+)\\s+kB', 'mi')（单引号）→ 第一个 \s 退化成字母 s →
+   实际正则是 SwapTotal:s+(\d+)s+kB → 永远匹配不到 /proc/meminfo →
+   **Linux 上 swap 恒为 null** ✓，且不抛错、不留日志，纯粹静默错 ✓。
+   修法是**删掉重复的那份**，✗ 不是在两处各改一遍：两份逻辑一字不差，留着只是把
+   「到底哪份生效」这个坑留给下一个改代码的人 ✓。见下方 HISTORY 段（原 :577 位置）的删除说明。 */
 async function swapInfo() {
   if (!IS_MAC) {
     try {
-      const info = fs.readFileSync('/proc/meminfo', 'utf8');
-      const pick = (name) => {
-        const match = new RegExp('^' + name + ':\\s+(\\d+)\\s+kB', 'mi').exec(info);
-        return match ? Number(match[1]) * 1024 : 0;
-      };
-      const total = pick('SwapTotal');
-      const free = pick('SwapFree');
-      return total ? { total, free, used: total - free } : null;
+      return parseLinuxSwapMeminfo(fs.readFileSync('/proc/meminfo', 'utf8'));
     } catch (_) { return null; }
   }
   const raw = await text('sysctl', ['-n', 'vm.swapusage'], 3000);
@@ -573,28 +592,11 @@ async function diskIo() {
    用户永远看不到「过去十分钟发生了什么」。5 秒一采样，保留 60 分钟（720 点）。
    定时器 unref，绝不阻止进程退出；采样只读、幂等、失败不抛。 */
 const HISTORY = { samples: [], interval: 5000, max: 720, timer: null, net: null };
-
-async function swapInfo() {
-  if (!IS_MAC) {
-    try {
-      const info = fs.readFileSync('/proc/meminfo', 'utf8');
-      const pick = (name) => {
-        const match = new RegExp('^' + name + ':\s+(\\d+)\\s+kB', 'mi').exec(info);
-        return match ? Number(match[1]) * 1024 : 0;
-      };
-      const total = pick('SwapTotal');
-      const free = pick('SwapFree');
-      return total ? { total, free, used: total - free } : null;
-    } catch (_) { return null; }
-  }
-  const raw = await text('sysctl', ['-n', 'vm.swapusage'], 3000);
-  const total = /total\s*=\s*([\d.]+)M/i.exec(raw);
-  const used = /used\s*=\s*([\d.]+)M/i.exec(raw);
-  if (!total) return null;
-  const totalBytes = Number(total[1]) * 1024 * 1024;
-  const usedBytes = used ? Number(used[1]) * 1024 * 1024 : 0;
-  return { total: totalBytes, used: usedBytes, free: Math.max(0, totalBytes - usedBytes) };
-}
+/* ⚠️ 这里原本还有**第二份** swapInfo（同文件重复定义）✗ —— 已删除 ✓，唯一的定义在上方 swapInfo 处。
+   为什么删的是这一份、不是上面那份 ✗：
+   ✓ 这一份的正则写成 ':\s+(\d+)\s+kB'（单引号）→ \s 退化成字母 s → 永远匹配不到 /proc/meminfo；
+   ✓ 它的位置本来也不对：夹在采样环 HISTORY 与 netCounters 之间，跟 swap 无关。
+   留这段说明，是因为代码里少一个函数时 diff 只显示删除行，「为什么删」必须写在原地 ✓。 */
 
 /* netstat -ib 的 Ibytes/Obytes 是 BSD/macOS 的列名，只有 macOS 的 netstat 有这套输出；
    其它平台上这条命令要么不存在、要么列名对不上，等于每次采样白跑一个子进程，所以先挡住。
@@ -2467,5 +2469,8 @@ module.exports = {
      不碰进程、不碰文件系统 —— 本机是 macOS，Windows 分支只能靠样本测试验收。 */
   _parsers: {
     parsePsOutput, parseTasklistCsv, parseNetstatListen, parseWindowsVolumes, parseDirSizeOutput, parseKbLabel, splitCsvLine,
+    /* Linux swap：这台机器是 macOS，跑不到 /proc/meminfo 分支 ✓ ——
+       只能把「样本文本」喂进来测，这是它唯一能被验收的方式 ✓（见 tests/system-panel-swap.js）。 */
+    parseLinuxSwapMeminfo,
   },
 };
