@@ -212,6 +212,12 @@ const SIZE_CAP = [
   ['assets/motion-study.css', 163],
   ['assets/motion-cg.css', 166],
   ['assets/motion-dbg.css', 136],
+  /* 画布（iframe 内，自带同名令牌）与 Monaco 外壳。
+     ⚠️ 这两个的规则密度高于别处 ✓：画布要逐图形写状态反馈，Monaco 每条规则都得
+        带 :is(#monaco-main,…) 前缀抬特异性（引擎把 CSS 运行时注入到 head 末尾）✓。
+        正因如此更要设上限 ✓。 */
+  ['assets/motion-canvas.css', 271],
+  ['assets/motion-monaco.css', 67],
   /* ⚠️ 2026-10-28 补登记：这 5 个文件一直是**巨型文件**却**没进棘轮** ✗ ——
      审计说得很准：棘轮只守名单里的文件 ✓，没登记就等于没人管 ✓（app.js 涨到 17,466 行
      这件事没人发现，就是这么来的 ✓）。
@@ -290,7 +296,17 @@ const SIZE_CAP = [
      WebSocket upgrade 同一校验 ✓、安全响应头统一在入口挂一次 ✓；
      顺带把 5 处 adopt 改成「先校验越界、后登记」✓，并给 state.json / 生活数据加 durable 写 ✓。
      ⚠️ 这是**安全能力**，不是顺手长胖 ✗ —— 真要拆，拆的是那批还没归组的端点 ✓。 */
-  ['server.js', 7691],
+  /* ⚠️ 2026-10-28 再一次上调（7691 → 7867）：**安全面最后三个缺口** ✓（+176 代码行）——
+     ① 两个独立监听的代理（code-server / DSH）纳入同一道闸门：判据只写一份 authChallenges(req)，
+        /api 中间件、VNC 升级、两个代理都调它；拒绝由代理自己回 401/403、不转给后端，
+        authorize 抛异常一律 fail-closed ✓。
+     ② VNC 白名单：默认只放行 5900-5999 ✓（原来等于给浏览器开任意 host:port 的裸 TCP 隧道 ✗），
+        逃生口 CODESCOPE_VNC_ALLOW，拒绝时 403 且文案直接说该写哪个变量 ✓。
+     ③ ONLYOFFICE JWT：密钥 0600 存应用数据目录 ✓、签发/校验与 ensure 脚本共用同一个函数 ✓、
+        compose 用 ${VAR:?} 让缺密钥**立刻报错**而不是静默不安全 ✓、拿不到密钥就降级不签名且不崩 ✓。
+     ⚠️ 同上一轮性质：**安全能力，不是长胖** ✓。下一步该拆的不是端点，而是把
+        office-JWT 状态机（约 90 行）与 VNC 白名单（约 40 行）挪进 lib/ ✓。 */
+  ['server.js', 7867],
   /* ⚠️ 2026-10-13 再上调一次（3886 → 3897）：修「代码块太宽、右边被遮挡，
      没有移动条」—— 根因是 overflow-x 写的 auto，而 ::-webkit-scrollbar
      只在 overflow:scroll 下显示（MDN），且 scrollbar-width 会让 Chrome
@@ -333,6 +349,15 @@ const SIZE_CAP = [
      而那个入口早就不在了 ✗（用户被指到不存在的地方 ✗）。+79 行（表单 + 保存 + 测试连通）。 */
   ['src/system-panel.js', 3412],
   ['lib/system-panel.js', 2097],
+  /* ★ 2026-10-28 补登记：这几个一直是「有实质体量、却从来没进棘轮」的文件 ✓。
+     ⚠️ 和之前补登记那 5 个巨型文件同一个理由 ✗：棘轮只守名单里的文件 ✓，
+        不在名单里 = 涨了没人知道 ✓。lib/knowledge-base.js 曾经 1,4xx 行且零上限 ✓，
+        比当初 app.js 涨到 17,466 行还糟（连告警都没有）✓。
+     上限一律取**登记时实测的代码行数**，只准往下调 ✓。 */
+  ['lib/office-engine.js', 136],
+  ['lib/code-server-proxy.js', 128],
+  ['lib/dsh-proxy.js', 30],
+  ['scripts/ensure-onlyoffice.js', 145],
   ['assets/debug-panel.js', 530],
   ['lib/routes/dbg.js', 72],
   ['lib/routes/latex.js', 94],
@@ -358,7 +383,10 @@ const SIZE_CAP = [
   ['lib/routes/run.js', 25],
   ['lib/routes/save.js', 31],
   ['lib/routes/snippets.js', 11],
-  ['lib/routes/study.js', 75],
+  /* 2026-10-28 上调（75 → 79）：新增 GET /api/study/site-catalog ✓ ——
+     站点目录从源码搬到私有 JSON 后浏览器读不到磁盘 ✓，必须由服务端转出来 ✓；
+     源码里只留 192.0.2.x 占位示例，真实内网地址不再进仓库 ✓。 */
+  ['lib/routes/study.js', 79],
   ['lib/routes/sync.js', 53],
   ['lib/routes/system-panel.js', 14],
   ['lib/routes/system.js', 10],
