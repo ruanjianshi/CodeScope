@@ -34,26 +34,38 @@
      整棵树的 attribute 变化每秒几十次（光标行号、脏标记、编辑器内部），
      observer 回调会把主线程吃掉 ✓。这里只盯"会整块显隐"的十几个容器 ✓。
      ⚠️ #list 不在这里：它的显隐由祖先 #pane-tree 决定，加进来会和 #pane-tree
-        同时触发一层嵌套淡入（视觉上重影）✗ —— 它归第 3 节的 stagger 负责 ✓。 */
+        同时触发一层嵌套淡入（视觉上重影）✗ —— 它归第 3 节的 stagger 负责 ✓。
+        本文件 :165 已按此判据加守卫，见该行注释。 */
   var PANEL_IDS = [
     'pane-tree', 'pane-git', 'pane-tags', 'pane-draw', 'pane-office', 'pane-reading',
-    'output', 'outline-panel', 'code-wrap', 'tagbar', 'attached-pane', 'tabs-row'
+    'output', 'outline-panel', 'tagbar', 'attached-pane', 'tabs-row'
+    /* ⚠️ #code-wrap **故意不在这里**（2026-10-28 移出）：切片段是每天上百次的动作 ✓，
+       给它挂 260ms 淡入 = 每次切都让用户等 260ms 才看见代码 ✗（AUDIT §1：
+       「100+ 次/天 → 永远不要动画」）。Monaco 内部换内容看不出「跳」✓，不需要淡入掩盖 ✓。
+       实测过：切 3 次片段，class 上确实出现过 .mo-enter（`sawMoEnter: true`）⇒ 它原本真的在跑。 */
   ];
 
   /* ── 要做 stagger 的"列表容器" ────────────────────────────────────────────
      只挑**行式列表**：给按钮/工具条做 stagger 纯属添乱 ✗。 */
   var LIST_IDS = ['list', 'outline-list', 'reading-list', 'office-list', 'draw-list', 'git-list'];
 
-  var STAGGER_MAX = 12;      /* 同一批最多延迟前 12 项 ✓ —— 长列表后面的 immediate
-                                （第 13 项等 delay 300ms 会显得应用卡住了 ✗） */
-  var STAGGER_STEP = 22;     /* 相邻两项的间隔。12 项 × 22ms = 264ms 正好一屏内走完 ✓ */
+  /* ⚠️ 数字口径（2026-10-28 校，别再按「n × step」算）：
+     第 i 项（从 0 计）的 delay = i × STAGGER_STEP ⇒ **最后一项的起始偏移 = (n-1) × step**；
+     波次窗口 = (n-1) × step + 单条动画时长。12 项 @32ms ⇒ 末项 352ms 起、612ms 止。 */
+  var STAGGER_MAX = 12;      /* 同一批最多延迟前 12 项 —— 长列表后半截立即出现，
+                                否则 13 项起每项再+32ms 会显得应用卡住了 ✗ */
+  var STAGGER_STEP = 32;     /* 相邻两项的间隔。落在 AUDIT §7 的 30–80ms 区间内。
+                                ⚠️ 实测 22ms 时：末项 242ms 才起步、而单条动画本身 260ms
+                                ⇒ 首末几乎同时到场，读不出「逐项」，只剩一层整体淡入 ✗。
+                                32ms 时末项 352ms 起、612ms 止，能看出先后 ✓。 */
 
   /* ⚠️ 兜底样式只在**没有 motion.css** 时注入 ✓（见 injectFallbackStyle）。
      分工：motion.css（若有）拥有视觉；本文件只保证"类加上了就看得见"。 */
   var FALLBACK_CSS = [
-    ':root{--mo-1:120ms;--mo-2:180ms;--mo-3:240ms;',
-    '--mo-ease:cubic-bezier(.22,.61,.36,1);--mo-back:cubic-bezier(.34,1.56,.64,1);}',
-    /* 面板入场：淡入 + 上移 4px。曲线用 --mo-ease（平滑）而**不是** --mo-back ✓：
+    ':root{--mo-1:120ms;--mo-2:180ms;--mo-3:260ms;',
+    '--mo-out:cubic-bezier(.2,.8,.2,1);--mo-back:cubic-bezier(.34,1.56,.64,1);--mo-in-out:cubic-bezier(.4,0,.2,1);',
+    '--mo-drawer:cubic-bezier(.32,.72,0,1);}',
+    /* 面板入场：淡入 + 上移 4px。曲线用 --mo-out（平滑）而**不是** --mo-back ✓：
        面板是"状态变化"，不是人点的按钮，回弹会显得廉价 ✗。 */
     '@keyframes mo-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}',
     /* #code-wrap 里有 Monaco 和几层 absolute 定位（行高亮 / 折叠装订线 / 缩进参考线）——
@@ -63,10 +75,10 @@
     '@keyframes mo-status-glow{0%{box-shadow:0 0 0 0 transparent}',
     '28%{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 32%,transparent)}',
     '100%{box-shadow:0 0 0 0 transparent}}',
-    '.mo-enter{animation:mo-enter var(--mo-3) var(--mo-ease) both}',
+    '.mo-enter{animation:mo-enter var(--mo-3) var(--mo-out) both}',
     '#code-wrap.mo-enter{animation-name:mo-enter-fade}',
-    '.mo-stagger{animation:mo-stagger-in var(--mo-3) var(--mo-ease) both}',
-    '.mo-flash{animation:mo-status-glow 640ms var(--mo-ease)}',
+    '.mo-stagger{animation:mo-stagger-in var(--mo-3) var(--mo-out) both}',
+    '.mo-flash{animation:mo-status-glow 640ms var(--mo-out)}',
     /* 指示条滑动期间隐藏标签自己的静态下划线（app.css 2906/3417 的 ::after 与
        3509 的 inset box-shadow）—— 不藏就会"新标签立刻亮一条 + 旧标签滑走"，
        同一时刻两条线，比硬跳更难看 ✗。静止时故意**不藏**：滑动条正好盖在上面，
@@ -140,7 +152,10 @@
   }
 
   function initPanels() {
-    var moMs = cssMs('--mo-3', 240);
+    /* 三处 cssMs('--mo-3', …) 的默认值一律 260（2026-10-28 修：原来写 240，与 motion.css 的
+       --mo-3 不一致）。它只在 CSS 读不到时生效，但那正是「兜底与真源漂移」的来源 ——
+       同一仓库里两个数，就是下一次困惑的开始。改这里时记得 :205 与 :397 同步。 */
+    var moMs = cssMs('--mo-3', 260);
     var els = PANEL_IDS.map(byId).filter(Boolean);
     if (!els.length) return;
 
@@ -162,7 +177,16 @@
           var now = isShown(e);
           if (now && !seen.get(e)) {       /* ★ 只在 不可见 → 可见 的那一次 ✓ */
             markEnter(e, moMs);
-            staggerListsInside(e);         /* 列表跟着面板一起出来时也要 stagger ✓ */
+            /* ★ 这里**不再**调 staggerListsInside(e)（2026-10-28 修，实测重影）✗✗
+               面板刚挂上 .mo-enter 时，它内部的行若同时挂 .mo-stagger，
+               两层 opacity 相乘 ⇒ 行在前 100ms 呈「灰而淡」的中间态（与 :36 注释矛盾）。
+               ⚠️ 为什么是**删除**而不是加守卫判 !contains('mo-enter')：
+                  markEnter() 要么因已含该类早退、要么刚 add 上它 ⇒ 返回后该类**必然存在**，
+                  守卫恒为 false，等于留一段永不执行的死代码（本仓不吃这套）✗。
+               ✅ 面板那层负责整块淡入；列表的 stagger 由两条**独立**路径负责：
+                  initLists 的首次可见（visMo）与 flushBatch 的「0 → N」首屏填充。
+               ⚠️ 已知窄口子：列表若在面板入场的**同一批结算**里恰好从 0 填到 N，
+                  flushBatch 那条路径不经此处，仍可能叠一层 —— 已记入 plans/README 残留项。 */
           }
           seen.set(e, now);
         }
@@ -201,7 +225,7 @@
     var frame = 0;
     var slideTimer = 0;
 
-    var moMs = cssMs('--mo-3', 240);
+    var moMs = cssMs('--mo-3', 260);
     var backCurve = cssValue('--mo-back', 'cubic-bezier(.34,1.56,.64,1)');
 
     function ensureIndicator() {
@@ -393,20 +417,17 @@
       nodes.push(k);
     }
     staggerNodes = nodes;
-    staggerTimer = setTimeout(clearStagger, (n - 1) * STAGGER_STEP + cssMs('--mo-3', 240) + 120);
+    staggerTimer = setTimeout(clearStagger, (n - 1) * STAGGER_STEP + cssMs('--mo-3', 260) + 120);
   }
 
-  /* 面板整体显隐带出来的列表 —— 面板自己的属性变了，列表自身没有 mutation ✗，
-     所以由 ① 的 observer 转告这里 ✓（两条路径都进 staggerList，节流保证不会双触发） */
-  function staggerListsInside(panel) {
-    try {
-      for (var i = 0; i < LIST_IDS.length; i++) {
-        var el = byId(LIST_IDS[i]);
-        if (!el) continue;
-        if (el === panel || (panel.contains && panel.contains(el))) staggerList(el);
-      }
-    } catch (_) {}
-  }
+  /* ~~staggerListsInside(panel)~~ —— **已删除**（2026-10-28）。
+     它原本在面板入场时顺手让内部列表也 stagger ✓，但那正是双层淡入的来源 ✗：
+     面板 .mo-enter（opacity 0→1）与子行 .mo-stagger（同属性）相乘 ⇒ 行前 100ms 发灰。
+     删掉调用点 :173 后它已无任何调用者，留着就是死函数 ✗（本仓不留「永不执行」的代码）。
+     ✅ 列表的 stagger 仍由两条**独立**路径负责：initLists 的首次可见（visMo）
+        与 flushBatch 的「0 → N」首屏填充 —— 都不是「跟着面板一起出现」的时刻。
+     ⚠️ 残留窄口子：若列表恰在面板入场的**同一批结算**里从 0 填到 N，flushBatch 那条
+        路径仍会叠一层，已记入 plans/README 的残留项，需另开计划在该处加判据。 */
 
   function flushBatch() {
     batchFrame = 0;

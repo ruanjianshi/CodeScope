@@ -462,6 +462,10 @@ function updateReadingMarkdownOutlineProgress(container,outlineList){
   const max=Math.max(0,(container.scrollHeight||0)-(container.clientHeight||0));
   const ratio=max>8?Math.min(1,Math.max(0,(container.scrollTop||0)/max)):0;
   outline.style.setProperty('--outline-progress',ratio.toFixed(4));
+  /* ⚠️ 进度条自己消费这个变量 ✗（写在祖先上 = 跨层驱动子元素 → 每帧重新解析 calc → 布局失效）。
+     祖先那行保留：别处可能读它，删了会连带失联。 */
+  const bar=outline.querySelector('.reading-md-outline-progress');
+  if(bar)bar.style.setProperty('--outline-progress',ratio.toFixed(4));
 }
 /* ⚠️ autoUnfold 只给「用户主动定位」用（点大纲条目 / 编辑时同步）——
    滚动跟随**绝不能**展开 ✗：用户手动折叠了章节，一滚到它下面就又被展开，

@@ -21,12 +21,16 @@
   .sm-label { color:#8290a3; font:10px/1 var(--mono); letter-spacing:.04em; }
   .sm-value { color:#dce6f4; font:600 10px/1 var(--mono); text-align:right; white-space:nowrap; }
   .sm-bar { grid-column:1 / -1; height:3px; overflow:hidden; border-radius:2px; background:#26303c; }
-  .sm-bar > i { display:block; width:0; height:100%; border-radius:inherit; background:#4f9a72; transition:width .45s ease,background .25s ease; }
+  .sm-bar > i { display:block; width:100%; height:100%; border-radius:inherit; background:#4f9a72; transform:scaleX(0); transform-origin:left center; transition:transform var(--mo-3) var(--mo-out), background var(--mo-2) var(--mo-out); }
   .sm-item.warn .sm-value { color:#eabf72; } .sm-item.warn .sm-bar > i { background:#d99a43; }
   .sm-item.crit .sm-value { color:#ff8c88; } .sm-item.crit .sm-bar > i { background:#e5534b; }
   .sm-item.offline { opacity:.5; }
   #sysmon-detail { display:none; position:absolute; z-index:260; right:0; top:40px; width:460px; max-width:calc(100vw - 24px); max-height:calc(100vh - 68px); overflow:auto; padding:13px 14px; border:1px solid #324054; border-radius:8px; background:#111821; box-shadow: 0px 16px 40px rgba(0,0,0,0.55); }
   #sysmon-detail.open { display:block; }
+  /* ③ 系统详情（460px、十余行）原本靠 display 硬切。从顶栏那颗 CPU 按钮向下展开：
+     正常 transition 抓不到「display 由 none 变出来」的那一帧，只有 @starting-style 能 ✓。
+     @supports 拿 allow-discrete 当探针：不支持时整段被丢弃 → 照旧瞬显，功能不受影响 ✓。 */
+  @supports (transition-behavior:allow-discrete) { #sysmon-detail { transform-origin:100% 0%; opacity:1; transform:none; transition:opacity var(--mo-1) var(--mo-out),transform var(--mo-2) var(--mo-out); } @starting-style { #sysmon-detail.open { opacity:0; transform:translateY(-4px) scale(.98); } } }
   .smd-title { display:flex; align-items:center; margin-bottom:9px; font-size:12px; font-weight:650; }
   .smd-title span { margin-left:auto; color:#667085; font:10px var(--mono); font-weight:400; }
   .smd-grid { display:grid; grid-template-columns:60px minmax(0,1fr); align-items:start; gap:8px 12px; font-size:11px; }
@@ -894,7 +898,7 @@
   #reading-head button { padding:1px 5px; border-color:transparent; background:transparent; color:var(--accent); font-size:13px; }
   #reading-list { flex:1; min-height:0; overflow:auto; padding:4px 7px 10px; background:var(--theme-deep,var(--bg)); }
   .reading-folder,.reading-file { display:flex; align-items:center; gap:6px; min-height:30px; padding:4px 7px; border-radius:6px; color:var(--dim); font-size:11px; }
-  .reading-folder { cursor:pointer; user-select:none; } .reading-folder:hover,.reading-file:hover { background:var(--panel2); color:var(--text); }
+  .reading-folder { position:relative; cursor:pointer; user-select:none; } .reading-folder:hover,.reading-file:hover { background:var(--panel2); color:var(--text); }
   .reading-project { margin-top:3px; border:1px solid transparent; font-weight:650; color:var(--text); }
   .reading-knowledge-page { min-height:34px; margin:1px 0; padding:4px 7px; border:1px solid transparent; border-radius:6px; color:var(--text); cursor:pointer; }
   .reading-knowledge-page:hover { border-color:var(--border); background:var(--panel2); }
@@ -1465,7 +1469,7 @@
   .reading-md-outline-path .sep { flex:none; color:color-mix(in srgb,var(--muted) 66%,transparent); font-family:var(--mono); font-size:9px; }
   /* 阅读进度：贴在头部下沿，随正文滚动增长 */
   .reading-md-outline-progress { grid-column:1 / -1; position:relative; height:2px; margin:8px -12px -8px; background:color-mix(in srgb,var(--border) 52%,transparent); }
-  .reading-md-outline-progress::after { content:''; position:absolute; top:0; bottom:0; left:0; width:calc(var(--outline-progress,0) * 100%); border-radius:0 2px 2px 0; background:linear-gradient(90deg,color-mix(in srgb,var(--md-accent) 48%,transparent),var(--md-accent)); transition:width .14s linear; }
+  .reading-md-outline-progress::after { content:''; position:absolute; top:0; bottom:0; left:0; width:100%; transform:scaleX(var(--outline-progress,0)); transform-origin:left center; border-radius:0 2px 2px 0; background:linear-gradient(90deg,color-mix(in srgb,var(--md-accent) 48%,transparent),var(--md-accent)); transition:transform .14s linear; }
   /* 列表：4 条逐级轨道线（顶层最亮），叠成树形骨架；第 5、6 层不再加线，靠缩进区分 */
   .reading-md-outline-list { position:relative; padding:12px 0 34px; --rail:color-mix(in srgb,var(--dim) 34%,transparent); }
   /* 条目：固定 9px 标记槽，保证各层级标签左边界严格对齐 */
@@ -2047,6 +2051,11 @@
   .definition-hover-foot { padding:5px 10px; color:var(--dim); border-top:1px solid var(--border); font-size:8px; }
   #code.definition-link, #code-edit.definition-modifier, .split-editor-input.definition-modifier { cursor:pointer; }
   #nav-notice { display:none; max-width:260px; overflow:hidden; padding:3px 8px; border:1px solid var(--border); border-radius:8px; color:var(--dim); text-overflow:ellipsis; white-space:nowrap; font:9px var(--mono); }
+  /* ★ 009 ④（2026-10-28 选型 B）：保留在流里（右边按钮仍会被推开），但**不再瞬时弹出** ✓。
+     ⚠️ 为什么不用绝对定位（计划原方案）：`#toolbar` 虽是 sticky、包含块现成，但绝对定位会让
+        提示**盖住「自动保存」按钮 2.6 秒** ✗ —— 用「新引入一个点击阻断」换「布局跳动」不划算。
+     审计原本抱怨的是「瞬时弹出」，不是挤动本身 ⇒ 只补起始样式即可 ✓。 */
+  @supports (transition-behavior:allow-discrete) { #nav-notice { opacity:1; transform:none; transition:opacity var(--mo-2) var(--mo-out),transform var(--mo-2) var(--mo-out); } @starting-style { #nav-notice.error { opacity:0; transform:translateX(6px); } } }
   #nav-notice.error { display:inline-flex; color:var(--err); border-color:color-mix(in srgb,var(--err) 55%,var(--border)); background:color-mix(in srgb,var(--err) 10%,transparent); }
   #btn-nav-back, #btn-nav-forward { width:30px; padding:4px; font-size:14px; }
   #btn-pair-switch { white-space:nowrap; }
@@ -3285,7 +3294,7 @@
     border:1px solid color-mix(in srgb,var(--border) 86%,#fff 6%); color:var(--text);
     background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.015) 52%,rgba(0,0,0,.10)),var(--control);
     box-shadow: inset 0 .5px 0 rgba(255,255,255,.11), inset 0 -1px 0 rgba(0,0,0,.18), 0px 1px 2px rgba(0,0,0,0.24);
-    transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .18s cubic-bezier(.32,.72,0,1);
+    transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .18s var(--mo-drawer);
   }
   html[data-theme] button:hover:not(:disabled) {
     border-color:color-mix(in srgb,var(--accent) 52%,var(--border));
@@ -3392,6 +3401,8 @@
   #theme-btn .theme-dot { width:10px; height:10px; border:2px solid var(--accent); border-radius:50%; background:var(--panel2); box-shadow: inset 0 0 0 2px var(--bg); }
   #theme-menu { position:absolute; z-index:120; top:calc(100% + 8px); right:0; width:224px; padding:7px; border:1px solid var(--border); border-radius:8px; background:var(--theme-elevated); box-shadow: var(--shadow); }
   #theme-menu.hidden { display:none; }
+  /* ② 主题菜单：从触发按钮下方「落下」（trigger 在上方，right:0 对齐）—— 原来靠 display 硬切。 */
+  @supports (transition-behavior:allow-discrete) { #theme-menu { transform-origin:100% 0%; opacity:1; transform:none; transition:opacity var(--mo-1) var(--mo-out),transform var(--mo-1) var(--mo-out); } @starting-style { #theme-menu:not(.hidden) { opacity:0; transform:translateY(-4px) scale(.96); } } }
   #theme-menu .theme-title { padding:4px 7px 7px; color:var(--dim); font-size:10px; }
   #theme-menu button { display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:8px; width:100%; min-height:38px; padding:5px 7px; border-color:transparent; background:transparent; text-align:left; }
   #theme-menu button.on { border-color:var(--accent); background:var(--accent-soft); }
@@ -3490,7 +3501,7 @@
     color:var(--ok); font-size:11px; font-weight:650;
   }
   /* 保存模式开关：可点击；手动模式改为琥珀色，有未保存修改时轻微脉动 */
-  html[data-theme] #autosave-hint { cursor:pointer; box-shadow:none; transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .18s cubic-bezier(.32,.72,0,1); }
+  html[data-theme] #autosave-hint { cursor:pointer; box-shadow:none; transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .18s var(--mo-drawer); }
   html[data-theme] #autosave-hint:hover { transform:translateY(-1px); box-shadow: 0px 6px 16px 0px rgba(0,0,0,0.55); }
   html[data-theme] #autosave-hint:active { transform:translateY(.5px) scale(.985); }
   html[data-theme] #autosave-hint.manual { border-color:color-mix(in srgb,var(--syntax-number,#d99a43) 42%,transparent); background:color-mix(in srgb,var(--syntax-number,#d99a43) 12%,transparent); color:var(--syntax-number,#d99a43); }
@@ -3506,7 +3517,7 @@
   .tab.active { color:var(--text); background:color-mix(in srgb,var(--panel2) 92%,transparent); box-shadow: inset 0 -2px 0 var(--accent); }
   /* ── 片段标签：squircle + 分层背景；语言改为 chip ──
      改类型已移到右键菜单，因此不再用虚线下划线暗示「可点击」。 */
-  .tab { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:7px 13px 8px; border-radius:8px 8px 0 0; border:1px solid color-mix(in srgb,var(--border) 74%,#fff 6%); border-bottom:0; background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)); box-shadow: inset 0 .5px 0 rgba(255,255,255,.08), 0px 1px 2px rgba(0,0,0,0.24); transition:color .16s ease,background .16s ease,border-color .16s ease,transform .18s cubic-bezier(.32,.72,0,1),box-shadow .18s ease; }
+  .tab { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:7px 13px 8px; border-radius:8px 8px 0 0; border:1px solid color-mix(in srgb,var(--border) 74%,#fff 6%); border-bottom:0; background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)); box-shadow: inset 0 .5px 0 rgba(255,255,255,.08), 0px 1px 2px rgba(0,0,0,0.24); transition:color .16s ease,background .16s ease,border-color .16s ease,transform .18s var(--mo-drawer),box-shadow .18s ease; }
   /* 悬停沿用统一的 button:hover:not(:disabled)（其特异性更高），这里只固定选中态 */
   .tab.active:not(.dragging) { color:#fff; border-color:color-mix(in srgb,var(--accent) 44%,var(--border)); background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 20%,var(--panel2)),color-mix(in srgb,var(--accent) 9%,var(--panel2))); box-shadow: inset 0 .5px 0 rgba(255,255,255,.16), inset 0 -2px 0 var(--accent); }
   .tab .frag-lang { display:inline-flex; align-items:center; height:17px; padding:0 7px; border:1px solid color-mix(in srgb,var(--border) 68%,transparent); border-radius:8px; background:color-mix(in srgb,var(--panel2) 80%,transparent); color:var(--dim); font-size:10px; line-height:1; cursor:default; }
@@ -3592,7 +3603,7 @@
     box-shadow: inset 0 .5px 0 rgba(255,255,255,.13), inset 0 -1px 0 rgba(0,0,0,.22), 0px 1px 2px rgba(0,0,0,0.32), 0px 6px 16px 0px rgba(0,0,0,0.55);
     color:var(--dim); font-size:10px; font-weight:600; line-height:1; white-space:nowrap;
     text-transform:none; letter-spacing:0;
-    transition:transform .18s cubic-bezier(.32,.72,0,1),box-shadow .18s ease,background .18s ease,border-color .18s ease,color .18s ease;
+    transition:transform .18s var(--mo-drawer),box-shadow .18s ease,background .18s ease,border-color .18s ease,color .18s ease;
   }
   #tree-head .side-head-actions button:hover,#draw-head .side-head-actions button:hover,#office-head .side-head-actions button:hover,#reading-head .side-head-actions button:hover {
     color:var(--text); border-color:color-mix(in srgb,var(--accent) 46%,var(--border));
@@ -3641,14 +3652,8 @@
     background:color-mix(in srgb,var(--accent) 11%,var(--panel2)); box-shadow: inset 3px 0 var(--accent);
   }
   .reading-library-folder>.meta,.reading-project>.meta { flex:none; white-space:nowrap; }
-  .reading-row-actions {
-    display:flex; align-items:center; gap:2px; flex:none; max-width:0; margin-left:-3px;
-    opacity:0; visibility:hidden; overflow:hidden; transform:translateX(4px);
-    transition:max-width .16s ease,margin .16s ease,opacity .12s ease,transform .16s ease,visibility .12s;
-  }
-  .reading-folder:hover>.reading-row-actions,.reading-folder:focus-within>.reading-row-actions {
-    max-width:116px; margin-left:1px; opacity:1; visibility:visible; overflow:visible; transform:none;
-  }
+  .reading-row-actions { position:absolute; right:4px; top:50%; display:flex; align-items:center; gap:2px; flex:none; padding-left:10px; border-radius:6px; background:linear-gradient(90deg,transparent,var(--panel) 26%); opacity:0; visibility:hidden; transform:translate(4px,-50%); transition:opacity var(--mo-1) var(--mo-out),transform var(--mo-2) var(--mo-out),visibility 0s var(--mo-1); }
+  .reading-folder:hover>.reading-row-actions,.reading-folder:focus-within>.reading-row-actions { opacity:1; visibility:visible; transform:translate(0,-50%); transition:opacity var(--mo-1) var(--mo-out),transform var(--mo-2) var(--mo-out),visibility 0s; }
   /* ── 侧栏列表行状态：悬停一层薄填充，选中用强调色渐变 + 左侧强调条 ── */
   /* 用面板 ID 级选择器：@container 里存在 #list .item:hover 这类 ID 规则，类选择器压不过它。
      :not() 排除拖拽态，保证拖放高亮不被悬停样式盖掉。 */
@@ -3768,11 +3773,17 @@
       linear-gradient(180deg,color-mix(in srgb,var(--panel2) 91%,var(--bg)),color-mix(in srgb,var(--bg) 94%,#000));
   }
   #workspace-welcome[hidden] { display:none; }
+  /* ① 欢迎工作台：整块淡入 + 轻微上移（它占满主区，**不做缩放** —— 缩放会露出背景 ✗）。 */
+  @supports (transition-behavior:allow-discrete) { #workspace-welcome { opacity:1; transform:none; transition:opacity var(--mo-3) var(--mo-out),transform var(--mo-3) var(--mo-out); } @starting-style { #workspace-welcome:not([hidden]) { opacity:0; transform:translateY(6px); } } }
   .welcome-mark { display:flex; align-items:center; gap:9px; margin-bottom:18px; color:var(--dim); font:700 11px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; }
   .welcome-mark img { width:28px; height:28px; border-radius:8px; box-shadow: 0 8px 24px color-mix(in srgb,var(--accent) 24%,transparent); }
   #workspace-welcome h2 { margin:0; color:var(--text); font-size:clamp(24px,2.6vw,36px); font-weight:760; letter-spacing:-.035em; }
   #workspace-welcome>p { max-width:620px; margin:12px auto 26px; color:var(--dim); font-size:13px; line-height:1.7; }
   .welcome-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; width:min(1040px,100%); }
+  /* 欢迎台入场：两组各前 8 个按钮 40ms 步进（末个 280ms）——共 20 个按钮，后 12 个不再延迟，避免「应用卡住」✓。
+     用的是 motion.css 已有的 mo-stagger-in 关键帧，不新增动画定义 ✓。 */
+#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(-n+8) { animation:mo-stagger-in var(--mo-3) var(--mo-out) both; }
+#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(2) { animation-delay:40ms; }#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(3) { animation-delay:80ms; }#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(4) { animation-delay:120ms; }#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(5) { animation-delay:160ms; }#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(6) { animation-delay:200ms; }#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(7) { animation-delay:240ms; }#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(8) { animation-delay:280ms; }
   /* ★ 第二组「更多能力」✓✓（2026-10-09）——
      用户说「工具介绍不够，功能都应该介绍上去」。
      加了一组次级入口，所以给它一个小标题 + 稍微收一点的视觉权重：
@@ -3961,8 +3972,8 @@
   html[data-theme] #xmind-outline-resizer::after,
   html[data-theme] #remote-resizer::after {
     content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; height: auto;
-    transform: translateX(-50%); border-radius:2px; background: var(--ui-divider);
-    transition: width .14s ease, background .14s ease, box-shadow .14s ease;
+    transform: translateX(-50%) scaleX(1); border-radius:2px; background: var(--ui-divider);
+    transition: transform var(--mo-1) var(--mo-out), background var(--mo-1) var(--mo-out), box-shadow var(--mo-1) var(--mo-out);
   }
   html[data-theme] #split-v:hover::after,
   html[data-theme] #split-v.active::after,
@@ -3978,7 +3989,7 @@
   html[data-theme] #xmind-outline-resizer.dragging::after,
   html[data-theme] #remote-resizer:hover::after,
   html[data-theme] #remote-resizer.active::after {
-    width: 2px; background: var(--accent);
+    transform: translateX(-50%) scaleX(2); background: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }
   /* ── 横向分割：上下窗格之间（拖动改变高度）── */
@@ -3996,8 +4007,8 @@
   html[data-theme] .pane-bottom-resizer::after,
   html[data-theme] #remote-resizer-y::after {
     content: ''; position: absolute; left: 0; right: 0; top: 50%; width: auto; height: 1px;
-    transform: translateY(-50%); border-radius:2px; background: var(--ui-divider);
-    transition: height .14s ease, background .14s ease, box-shadow .14s ease;
+    transform: translateY(-50%) scaleY(1); border-radius:2px; background: var(--ui-divider);
+    transition: transform var(--mo-1) var(--mo-out), background var(--mo-1) var(--mo-out), box-shadow var(--mo-1) var(--mo-out);
   }
   html[data-theme] .hsplit:hover::after,
   html[data-theme] .hsplit.active::after,
@@ -4009,7 +4020,7 @@
   html[data-theme] body.resizing .pane-bottom-resizer::after,
   html[data-theme] #remote-resizer-y:hover::after,
   html[data-theme] #remote-resizer-y.active::after {
-    height: 2px; background: var(--accent);
+    transform: translateY(-50%) scaleY(2); background: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }
   /* ── 片段标题栏：说明紧贴标题（原来标题被 flex 撑到 340px，把说明顶到中段显得突兀） ── */

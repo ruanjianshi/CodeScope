@@ -46,6 +46,7 @@
   --mo-out: cubic-bezier(.2, .8, .2, 1);       /* 平滑减速：默认曲线，99% 场景用它 */
   --mo-back: cubic-bezier(.34, 1.56, .64, 1);  /* 带回弹：**只给人主动的动作** ✓ */
   --mo-in-out: cubic-bezier(.4, 0, .2, 1);     /* 两头都慢：原地性质变化（遮罩淡入） */
+  --mo-drawer: cubic-bezier(.32, .72, 0, 1);   /* iOS 抽屉：app.css 原本手抄 4 遍的大块拖拽式进出 */
 
   --mo-lift: -1px;   /* 悬停抬升：再多就"飘"，再少看不见 */
   --mo-press: .985;  /* 按下缩到 98.5%：真正"按下去"的手感就在这 1.5% 里 */
@@ -213,6 +214,29 @@ input, select, textarea {
     transform var(--mo-2) var(--mo-out);
 }
 
+/* 按下反馈：树行是全站点击最频繁的目标，此前按下**零变化** —— 上面过渡列表里那条
+   transform 一直没有 :active 规则来用它，是一条死声明 ✓。
+   底色压深是主反馈（不移动文字），transform 只做 1% 的轻微收紧做辅助 ✓。
+   ⚠️ 不用 scale(.97) 或更小：行高只有 28~31px，2~3% 缩放会让行内 13px 文字重新
+      栅格化，观感是"抖一下"而不是"陷下去" ✗（§6 已对右键菜单行否决过同一做法）✓。
+   ⚠️ 必须带 #list 前缀（特异性 1,2,0）：按下时行必然**同时**处于 :hover，
+      而 .item:hover 是 (0,2,0)、app.css:3135 的 #list .item:hover 是 (1,2,0)
+      —— 裸 .item:active (0,1,1) 一条都压不过，写了也是永远看不见的死规则 ✗。
+   ⚠️ 回落用 --mo-out 不用 --mo-back：行是列表项，回弹会让列表"发飘" ✗。 */
+/* ⚠️⚠️ 还必须带这两个 :not()（2026-10-28 收口修正，实测发现的疏漏）——
+   app.css:3655 的悬停规则是 `#list .item:hover:not(.dragging):not(.drop-target)`，
+   特异性 (1,4,0)；而按下时行**必然同时处于 :hover** ⇒ 只写 (1,2,0) 会被它盖掉：
+   transform 仍生效（全文件只有下面这条给 .item 写 transform），但 background-color
+   看不见 ✗ —— 即「主反馈（底色压深）实际不存在」。
+   加同样两个 :not() 后打平 (1,4,0)，motion.css 后加载 ⇒ 赢 ✓；
+   副作用是拖拽中不显示按下底色，正好更干净 ✓。 */
+#list .item:active:not(.dragging):not(.drop-target),
+#list .fnode:active:not(.dragging):not(.drop-target) {
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+  transform: scale(0.99);
+  transition-duration: var(--mo-1);
+}
+
 /* 选中行的左侧指示条已经由 app.css:3661 的 inset box-shadow（3px accent）提供，
    上面把 box-shadow 纳入过渡就够了 —— 它现在会"淡入"而不是"闪出来" ✓。
    ⚠️ 不在这里新建 ::before 画条：.tree-children 的连接线（app.css:3164）和
@@ -318,7 +342,12 @@ html[data-theme] .tab, html[data-theme] .otab, html[data-theme] .reading-project
   .ctx-menu {
     opacity: 1;
     transform: none;
-    transform-origin: center top;   /* 从菜单顶部（鼠标点下去的那侧）长出来 */
+    /* ★ 原点由 app.js 的 showContextMenu() 按「是否真被右/下边界夹住」逐次写入 ✓ ——
+       菜单是按指针坐标定位并双向夹取的：未被夹 ⇒ 左上角就在光标上 ⇒ 从 0% 0% 长；
+       被右边界夹 ⇒ 向左展开 ⇒ 原点 100% 0%；被下边界夹 ⇒ 100%。
+       ⚠️ 兜底保持 center top（= 改造前的行为）：万一 JS 没跑到，宁可回到旧样子，
+          也不要变成从左上角长出来 ✗。 */
+    transform-origin: var(--ctx-origin, center top);
     transition:
       opacity var(--mo-1) var(--mo-out),
       transform var(--mo-1) var(--mo-out);
@@ -328,7 +357,9 @@ html[data-theme] .tab, html[data-theme] .otab, html[data-theme] .reading-project
   @starting-style {
     .ctx-menu:not([hidden]) {
       opacity: 0;
-      transform: translateY(4px) scale(.96);
+      /* 起始位移方向跟随「菜单实际朝哪边展开」：被下边界夹住时菜单是向上长的，
+         此时 4px 必须取负，否则位移方向与展开方向相反 ✗。变量由 app.js 写入。 */
+      transform: translateY(var(--ctx-start-y, 4px)) scale(.96);
     }
   }
 }
@@ -467,10 +498,16 @@ html[data-theme] .tab, html[data-theme] .otab, html[data-theme] .reading-project
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 .mo-enter { animation: mo-enter var(--mo-3) var(--mo-out) both; }
+/* 留作**显式退出记录**：004 已把 #code-wrap 移出 PANEL_IDS，所以这条不再被触发。
+   保留而不删的理由：后人若想把编辑区入场加回来，会先看到这条「当初刻意退出」的痕迹；
+   删掉它反而会让下一个改动顺利地重新引入 260ms 延迟 ✗。 */
 #code-wrap.mo-enter { animation-name: mo-enter-fade; }
 .mo-stagger { animation: mo-stagger-in var(--mo-3) var(--mo-out) both; }
 /* 640ms 是 motion.js 的约定（它在 720ms 时摘掉类，留 80ms 余量）——
-   改短会显得没发生，改长会被它提前掐断 ✗ */
+   改短会显得没发生，改长会被它提前掐断 ✗。
+   ⚠️ 所以这里**不**换成 --mo-4（400ms）：那是"四档叙事凑齐"的诱惑，但时长归
+   motion.js 的摘类定时器管，令牌改不到它 —— 两处同时对齐才有意义，单改一边
+   就是被提前掐断 ✗。 */
 .mo-flash { animation: mo-status-glow 640ms var(--mo-out) 1; }
 
 
@@ -509,7 +546,11 @@ html[data-theme] .tab, html[data-theme] .otab, html[data-theme] .reading-project
   button:active:not(:disabled),
   html[data-theme] button:active:not(:disabled),
   #list .item.dragging,
-  #list .fnode.dragging {
+  #list .fnode.dragging,
+  /* 按下反馈也用位移（scale .99）—— 按上面那条注释的统一口径一并取消 ✓。
+     ⚠️ 只取消 transform：底色的变化要保留（那是状态反馈，不是运动）✓ */
+  #list .item:active:not(.dragging):not(.drop-target),
+  #list .fnode:active:not(.dragging):not(.drop-target) {
     transform: none !important;
   }
 }

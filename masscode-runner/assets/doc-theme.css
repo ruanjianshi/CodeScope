@@ -69,8 +69,8 @@ html[data-doc-theme="vampire"] {
   --doc-glow:color-mix(in srgb,var(--doc-primary) 22%,transparent);
   --doc-glow-text:0 0 14px color-mix(in srgb,var(--doc-primary) 50%,transparent);
   --doc-pink:color-mix(in srgb,var(--doc-syn-number) 32%,transparent);
-  --doc-ease-back:cubic-bezier(.34,1.56,.64,1);
-  --doc-ease-smooth:cubic-bezier(.4,0,.2,1);
+  --doc-ease-back:var(--mo-back);
+  --doc-ease-smooth:var(--mo-in-out);
 }
 
 /* ── ① 阅读模块（笔记预览）：整套 --md-* 改指向文档主题 ──────────────────
@@ -149,18 +149,30 @@ html[data-doc-theme="vampire"] {
   width:5px; height:1em; border-radius:4px;
   background:var(--doc-primary); opacity:.8;
   box-shadow:0 0 8px color-mix(in srgb,var(--doc-primary) 50%,transparent);
-  transition:all .4s cubic-bezier(.25,.8,.25,1);
+  transform:scaleY(1);
+  /* ⚠️ origin 用 left center 而不是 center ✗（2026-10-28 收口修正）——
+     原写法 hover 时是 left 固定 + width/height 变大，即**左缘钉住向右长**；
+     用 center 会变成左右各长 1px，悬停过程中左缘先退后归位，是可见的错位。
+     left center 横向钉左缘、纵向仍以中心对称 ⇒ 与原行为逐像素一致。 */
+  transform-origin:left center;
+  /* 悬停类目标 100–200ms（AUDIT 判据）；原来是 .4s 过渡且属性写 all，全部超限 */
+  transition:transform var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out),
+              background var(--mo-2) var(--mo-out), box-shadow var(--mo-2) var(--mo-out);
 }
 .md-doc h2::after, .reading-md-editor h2::after, .reading-md-block h2::after, .reading-md-editor h2::after, .reading-md-block h2::after {
   content:''; position:absolute; left:8px; top:auto; margin-top:.4em;
   width:2px; height:.6em; border-radius:2px;
   background:var(--doc-secondary); opacity:.6;
-  transition:all .4s cubic-bezier(.25,.8,.25,1) .05s;
+  transform:scale(1, 1);
+  transform-origin:left center;   /* 同 ::before：左缘钉住向右长，才能与原 left:8px + width 2→4px 等价 */
+  transition:transform var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out),
+              background var(--mo-2) var(--mo-out), box-shadow var(--mo-2) var(--mo-out);
+  transition-delay:0ms; /* 原来手打 .05s 错峰；改由 --mo-2 + 下面 40ms 承担 */
 }
 .md-doc h2:hover, .reading-md-editor h2:hover { color:var(--doc-primary); text-shadow:var(--doc-glow-text); }
-.md-doc h2:hover::before, .reading-md-editor h2:hover::before { margin-top:0; height:1.4em; opacity:.5; }
+.md-doc h2:hover::before, .reading-md-editor h2:hover::before { transform:scaleY(1.4); opacity:.5; }
 .md-doc h2:hover::after, .reading-md-editor h2:hover::after {
-  margin-top:.15em; height:1.1em; width:4px; opacity:1;
+  transform:scale(2, 1.8333); transition-delay:40ms; opacity:1; /* 40ms 错峰：落在 AUDIT 的 30–80ms 区间内 */
   background:var(--doc-primary); box-shadow:0 0 12px var(--doc-primary);
 }
 

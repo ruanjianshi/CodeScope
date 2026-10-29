@@ -1,5 +1,11 @@
 
 const $ = (id) => document.getElementById(id);
+/* ★ 010：系统级「减少动态效果」偏好。只读，且**不缓存**结果（用户可能中途在系统设置里改）✓。
+   CSS 侧的降级是完整的（每个 motion-*.css 都有自己的 reduce 段），但 JS 驱动的位移
+   **完全绕开 CSS** ✗：规范里 behavior:'smooth' 显式覆盖 CSS 的 scroll-behavior ✗，
+   而 d3 transition 是逐帧改 transform、跟 CSS 动画无关 ✗。
+   容错式读取照仓库惯例（同一个 catch 风格，见 tabs 的 pageBy）✓。 */
+function prefersReducedMotion() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
 let SNIPPETS = [], TAGS = [], FOLDERS = [], RESOURCES = [], CURRENT = null, CINDEX = 0, lastRev = null;
 let RESOURCE_CURRENT = null, RESOURCE_UPLOAD_FOLDER = '';
 let RUN_INPUT_KEY = '';
@@ -697,9 +703,9 @@ function setSystemMetric(name, usage, warnAt, critAt) {
   const card = $('sm-' + name), value = $('sm-' + name + '-v'), bar = $('sm-' + name + '-b');
   const n = Number(usage), ok = Number.isFinite(n);
   card.classList.toggle('offline', !ok); card.classList.remove('warn', 'crit');
-  if (!ok) { value.textContent = '--%'; bar.style.width = '0'; return; }
+  if (!ok) { value.textContent = '--%'; bar.style.transform = 'scaleX(0)'; return; }
   const rounded = Math.max(0, Math.min(100, Math.round(n)));
-  value.textContent = rounded + '%'; bar.style.width = rounded + '%';
+  value.textContent = rounded + '%'; bar.style.transform = 'scaleX(' + (rounded / 100) + ')';
   if (rounded >= critAt) card.classList.add('crit'); else if (rounded >= warnAt) card.classList.add('warn');
 }
 async function loadSystemStatus() {
@@ -929,6 +935,17 @@ function showContextMenu(event, items, opts) {
   const pad = 6, box = menu.getBoundingClientRect();
   menu.style.left = Math.max(pad, Math.min(event.clientX, innerWidth - box.width - pad)) + 'px';
   menu.style.top = Math.max(pad, Math.min(event.clientY, innerHeight - box.height - pad)) + 'px';
+  /* ★ 008：缩放原点跟着「按住的那一点」走，而不是写死的中轴线 ✓。
+     判据 = **是否真的被右/下边界夹住**（被夹住 ⇒ 菜单向左/上展开 ⇒ 原点在对边）✓。
+     ⚠️ 别用 `left === clientX + 'px'` 那种字符串比较：左边界 pad 夹取也会命中，
+     会把「贴着屏幕左边」误判成「被右边界夹住」 ✗ —— 所以在这里重算夹取前的边界值，
+     与上面两行的 Math.max/Math.min 边界值完全相同（夹取逻辑本身没动）✓。
+     起始位移方向同理：被下边界夹住时菜单其实向上长，4px 起始位移必须取负，
+     否则位移方向与展开方向相反 ✗。两个值都经 CSS 变量交给 motion.css 第 6 节的
+     .ctx-menu 规则（--ctx-origin / --ctx-start-y，见该段注释）✓。 */
+  const farX = innerWidth - box.width - pad < event.clientX, farY = innerHeight - box.height - pad < event.clientY;
+  menu.style.setProperty('--ctx-origin', (farX ? '100%' : '0%') + ' ' + (farY ? '100%' : '0%'));
+  menu.style.setProperty('--ctx-start-y', farY ? '-4px' : '4px');
   /* 有筛选框就把焦点给它（直接打字就能筛）；否则按老规矩聚焦第一项 ✓ */
   const first = searchable ? menu.querySelector('.ctx-search') : menu.querySelector('.ctx-item:not([disabled])');
   if (first) first.focus({ preventScroll: true });
@@ -1853,7 +1870,7 @@ async function reorderProjectFolder(folder, target, position) {
   if (!folder || !target || folder === target) return;
   const parentOf = (v) => (v.includes('/') ? v.slice(0, v.lastIndexOf('/')) : '');
   if (parentOf(folder) !== parentOf(target)) {
-    setStatus('err', '只能在同一层里调整顺序；要换到别的文件夹，请拖到那一行**中间**');
+    setStatus('err', '只能在同一层里调整顺序；要换到别的文件夹，请拖到那一行「中间」');
     return;
   }
   if (!(await waitForPendingSave())) { setStatus('err', '当前代码保存失败，已取消调整顺序'); return; }
@@ -6489,7 +6506,10 @@ function renderDocGraphForce(host, graph) {
       const minY = Math.min.apply(null, ys) - pad, maxY = Math.max.apply(null, ys) + pad;
       const k = Math.min(3, 0.95 * Math.min(W / Math.max(1, maxX - minX), H / Math.max(1, maxY - minY)));
       const tx = W / 2 - k * (minX + maxX) / 2, ty = H / 2 - k * (minY + maxY) / 2;
-      svg.transition().duration(420).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+      /* ★ 010：「适应视图」的 420ms 整块画布缩放平移对前庭敏感用户最难受 ✗ ——
+         降级模式下直接跳到目标（duration(420) 的正常分支原样保留）✓。 */
+      if (prefersReducedMotion()) svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+      else svg.transition().duration(420).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
     }
     /* 拖拽节点 */
     node.call(d3.drag()
@@ -9237,7 +9257,7 @@ function renderCode() {
        ⚠️ 用 scrollBy + behavior:'smooth'：这是**用户主动点的**，平滑滚动不会像
           「每帧跟随高亮」那样互相打断（见阅读大纲那段踩过的坑）✓ */
     const pageBy = (dir) => {
-      try { tabs.scrollBy({ left: dir * Math.max(160, tabs.clientWidth * 0.8), behavior: 'smooth' }); }
+      try { tabs.scrollBy({ left: dir * Math.max(160, tabs.clientWidth * 0.8), behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); }
       catch (_) { tabs.scrollLeft += dir * Math.max(160, tabs.clientWidth * 0.8); }
     };
     const prevB = $('tabs-prev'), nextB = $('tabs-next');
@@ -14210,7 +14230,7 @@ $('welcome-dsh').onclick = () => $('btn-dsh').click();
 $('welcome-reading').onclick = () => {
   const head = $('reading-head');
   if (!READING_OPEN) head.click();
-  head.scrollIntoView({ behavior:'smooth', block:'center' });
+  head.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block:'center' });
 };
 $('welcome-office').onclick = () => { document.body.classList.add('office-mode'); officeWelcome(); };
 $('welcome-draw').onclick = () => $('draw-new-manual').click();

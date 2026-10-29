@@ -49,7 +49,7 @@
   --cs-shadow-3: 0 18px 48px rgba(0,0,0,.52);
 
   /* ── 动效 ── */
-  --cs-fast: 120ms cubic-bezier(.4,0,.2,1);
+  --cs-fast: var(--mo-1) var(--mo-in-out);
 }
 
 /* ── 图标：统一 1em 线性图标（配合 index.html 里的 sprite） ── */
@@ -317,7 +317,9 @@ button:focus:not(:focus-visible) { outline: none; }
   letter-spacing: .1px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background .13s, color .13s;
+  transition: background var(--mo-1) var(--mo-out),
+              color var(--mo-1) var(--mo-out),
+              transform var(--mo-1) var(--mo-out);
 }
 #cs-lan-chip::before {
   content: '';
@@ -326,7 +328,7 @@ button:focus:not(:focus-visible) { outline: none; }
   background: currentColor;
 }
 #cs-lan-chip:hover { background: rgba(60, 170, 110, .22); color: #a8f0c8; }
-#cs-lan-chip:active { transform: translateY(1px); }
+#cs-lan-chip:active { transform: translateY(1px) scale(var(--mo-press)); }
 /* 没有可用地址时降级成灰色，不要一片绿让人误以为能用 ✓ */
 #cs-lan-chip.is-empty { background: rgba(255, 255, 255, .05); color: #8b95a5; }
 
