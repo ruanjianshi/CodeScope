@@ -185,3 +185,39 @@ html[data-theme=ocean] .lw-inpanel, html[data-theme=midnight] .lw-inpanel, html[
 2. 浅色主题下：点顶栏「主题」→「日光白」后：`/tmp/pp-light-1600.png`。
 3. 两张都必须能看出：**至少三层厚度**（页面 / 卡片 / 抬起或浮层）、卡片有内高光、按下是凹进去的。
 4. 截图时鼠标**悬停在其中一张卡片上**（用 Playwright `hover()`），让抬起态可见。
+
+---
+
+## 9. 阶段 2（2026-10-29）：信息层级 + 线性图标
+
+### 9.1 图标：只换界面图标位，不碰内容
+
+文件里有 8,516 个 emoji（93 种），绝大多数在用户内容/导出图里。**只替换界面图标位**。
+
+替换写法（与主界面一致，sprite 已存在于 index.html）：
+
+```html
+<svg class='cs-ico'><use href='#i-book'/></svg>
+```
+
+**可用 sprite**：`i-chevron` `i-chevron-left` `i-chevron-right` `i-search` `i-grid` `i-info` `i-trash` `i-swap` `i-minus` `i-plus` `i-close` `i-external` `i-gear` `i-rows` `i-columns` `i-book` `i-terminal` `i-play` `i-refresh` `i-more` `i-undo` `i-redo` `i-folder` `i-folder-plus` `i-spark` `i-pen` `i-file` `i-git` `i-tag` `i-canvas` `i-excalidraw` `i-drawio` `i-xmind`。
+
+映射建议：今日=`i-spark` 备忘录=`i-pen` 日记=`i-book` 书签=`i-tag` 研究方向=`i-grid` 文件=`i-file` 阅读=`i-book` 热榜=`i-spark` 邮箱=`i-terminal` 工作流=`i-gear`。
+
+⚠️ sprite 里没有「邮箱 / 热榜 / 天气 / 心情」→ 允许在 `index.html` 的 sprite 里新增 `<symbol>`，风格必须与现有 35 个一致：`viewBox` 用 0 0 24 24、`stroke='currentColor'`、`fill='none'`、`stroke-width='1.6'`。**新增不超过 5 个**。
+⚠️ **不许批量替换内容里的 emoji**（用户笔记、导出图、统计文案里的是内容，不是图标）。报告里给出「还剩多少、分别在哪些函数里」。
+
+### 9.2 信息层级（只调权重与顺序，不改功能）
+
+- **KPI 行（K-01..K-04）降一档**：数字 26px 等宽、卡高压低、底色更淡 —— 它们是参考值，不该和待办/文件抢注意力。
+- **「最近在动的文件」与「文件构成」合并进一个 band**（左表格、右构成条），少一次视线跳转。
+- **文件构成**只显示前 4 项 + 「其他 17% ›」。
+- 区块标题统一：12.5px/650 + 左侧 3px 强调竖条（与本机管家同一语言）。
+
+### 9.3 验收
+
+- 截图：`/tmp/lw2-dark.png`、`/tmp/lw2-light.png`（1600×1000 dsf2）。
+- **图标清单**：每个位置换成哪个 `#i-xxx`，新增了哪几个 `<symbol>`。
+- **残留 emoji 报告**：数量 + 所在函数名（证明只换了界面位）。
+- `node --check` + `node tests/architecture.js` + `undefined-refs` 输出。
+- 结构清单打勾（左栏 5 组 14 项、KPI 4 张、待办/日记/14 天图、文件表格、文件构成）。

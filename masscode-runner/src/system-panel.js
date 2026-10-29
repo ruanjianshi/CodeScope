@@ -301,7 +301,7 @@
 /* 同一套设计令牌再声明一次在 :root 上：挂到 document.body 的浮层（右键菜单、预览、
    命令面板）不在 #system-workspace 里面，继承不到上面那份，否则圆角与投影会静默失效。 */
 :root{ --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err))); --sp-danger:var(--err); --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
-  --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent); --sp-r-lg:14px; --sp-r:11px; --sp-r-sm:8px; --sp-r-xs:6px;
+  --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent); --sp-r-lg:14px; --sp-r:10px; --sp-r-sm:8px; --sp-r-xs:6px;
   --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
   --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
   --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
@@ -800,6 +800,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-row .k{color:var(--dim);min-width:96px;}
 #system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:start;}
 #system-workspace .sp-cols>*{min-width:0;}
+/* ★ 设置页专用网格（2026-10-29 修）：原来复用 .sp-cols（auto-fit + align-items:start）⇒
+   4 张内容高度不同的卡宽度与高度都参差，右侧与下方留出大片空白 ✗。
+   设置项天然适合两列等宽：卡片撑满行高、动作按钮贴底，视觉上才是一张一张的卡片 ✓。 */
+#system-workspace .sp-settings{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
+#system-workspace .sp-settings>.sp-band{height:100%;display:flex;flex-direction:column;min-width:0;}
+#system-workspace .sp-settings>.sp-band>.sp-actions{margin-top:auto;}
+/* 窄屏一列：两列会把「API 地址」这种长输入框挤到无法输入 ✗ */
+@media (max-width:1100px){#system-workspace .sp-settings{grid-template-columns:1fr;}}
 #system-workspace .sp-band{min-width:0;}
 /* 表格过宽时在区块内横向滚动，而不是把整个面板顶出横向滚动条 */
 #system-workspace .sp-band:has(.sp-table){overflow-x:auto;}
@@ -813,9 +821,12 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-table{width:100%;border-collapse:collapse;font-size:var(--sp-fs);}
 #system-workspace .sp-table th{position:sticky;top:0;z-index:2;text-align:left;font-weight:600;color:var(--dim);background:var(--sp-surface);
   border-bottom:1px solid var(--sp-hair-strong);padding:8px 10px;font-size:var(--sp-fs-sm);white-space:nowrap;}
-#system-workspace .sp-table td{padding:7px 10px;border-bottom:1px solid var(--sp-hair);color:var(--text);vertical-align:middle;}
+/* ★ 9.1 行高统一 30px：height 在表格里是**最小**行高 ✓ —— 单行就是 30px，
+   存储里那种「项目 + 路径」两行的单元格会自然长高，不会被裁 ✓ */
+#system-workspace .sp-table td{height:30px;padding:0 10px;border-bottom:1px solid var(--sp-hair);color:var(--text);vertical-align:middle;line-height:1.45;}
 #system-workspace .sp-table tr:hover td{background:var(--sp-tint);}
-#system-workspace .sp-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+/* ★ 9.1 数字等宽 + tabular-nums + 右对齐（大小 / 端口 / 容量共用）✓ */
+#system-workspace .sp-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-family:var(--sp-mono);}
 #system-workspace .sp-table .mono{font-family:var(--sp-mono);font-size:var(--sp-fs-sm);}
 #system-workspace .sp-table .muted{color:var(--dim);}
 #system-workspace .sp-table .ellip{max-width:min(520px,36vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -852,7 +863,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-btn:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 60%, transparent);outline-offset:2px;}
 #system-workspace .sp-btn[disabled]{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none; background:var(--sp-tint);border-color:var(--sp-hair);color:var(--dim);}
 /* 危险：红调实体按钮，而不是只有红字 */
-#system-workspace .sp-btn.danger{color:color-mix(in srgb, var(--sp-danger) 88%, var(--text)); border-color:color-mix(in srgb, var(--sp-danger) 28%, var(--sp-hair-strong));}
+/* ★ 9.2「危险操作用 --sp-danger 区分视觉」：给红调**实体面**（原来的危险按钮只是红字，
+   和普通按钮太像）；⚠️ 只改样式，不新增任何确认逻辑 ✓ */
+#system-workspace .sp-btn.danger{color:color-mix(in srgb, var(--sp-danger) 88%, var(--text)); border-color:color-mix(in srgb, var(--sp-danger) 28%, var(--sp-hair-strong));
+  background:linear-gradient(180deg, color-mix(in srgb, var(--sp-surface-2) 88%, var(--sp-danger) 12%), color-mix(in srgb, var(--sp-surface-2) 96%, var(--sp-danger) 4%));}
 #system-workspace .sp-btn.danger:hover{ background:linear-gradient(180deg,
     color-mix(in srgb, var(--sp-surface-2) 74%, var(--sp-danger) 26%),
     color-mix(in srgb, var(--sp-surface-2) 88%, var(--sp-danger) 12%)); border-color:color-mix(in srgb, var(--sp-danger) 55%, transparent); color:var(--text);}
@@ -878,11 +892,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-input:focus{outline:none;border-color:color-mix(in srgb, var(--accent) 60%, transparent);background:var(--sp-surface);}
 #system-workspace .sp-note{font-size:var(--sp-fs-sm);color:var(--dim);line-height:1.65;margin:8px 0 0;}
 /* 区块（band）：和卡片同一套语言；上下用间距分节，不靠层层嵌套的框。 */
-#system-workspace .sp-band{background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:14px 16px;margin-bottom:var(--sp-gap-lg);}
-#system-workspace .sp-band h3{margin:0 0 10px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
+/* ★ 9.2「区块无层次」：和概览页的纸片用同一套厚度 —— 1px 细线 + 顶部内高光 + 双层柔和阴影 ✓
+   （原来只有一圈内描边，区块和页面底几乎同色，看不出是一块） */
+#system-workspace .sp-band{background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:var(--sp-r);padding:14px 16px;margin-bottom:var(--sp-gap-lg);}
+/* ★ 9.1 区块标题统一：11px / 650 / 字距 .04em + 左侧 2px 强调竖条（与概览页 .sp-sec h3 同一条规则）✓ */
+#system-workspace .sp-band h3{margin:0 0 10px;font-size:11px;color:var(--text);font-weight:650;display:flex;align-items:center;gap:7px;letter-spacing:.04em;}
+#system-workspace .sp-band h3::before{content:'';flex:none;width:2px;height:12px;border-radius:1px;background:var(--accent);}
+#system-workspace .sp-band h3 .sp-hint{margin-left:auto;}
 #system-workspace .sp-band > :last-child{margin-bottom:0;}
 #system-workspace .sp-list{display:flex;flex-direction:column;gap:8px;}
-#system-workspace .sp-li{display:flex;align-items:center;gap:10px;font-size:var(--sp-fs);color:var(--text);}
+/* ★ 9.2 列表行：30px 行高 + hover 底色（目录占用 / 大文件 / 开发目录共用同一条规则）✓ */
+#system-workspace .sp-li{display:flex;align-items:center;gap:10px;font-size:var(--sp-fs);color:var(--text);min-height:30px;padding:0 6px;border-radius:var(--sp-r-xs);transition:background var(--sp-ease);}
+#system-workspace .sp-li:hover{background:var(--sp-tint);}
 #system-workspace .sp-li .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-li .barwrap{width:190px;flex:none;}
 #system-workspace .sp-empty{color:var(--dim);font-size:var(--sp-fs);padding:18px 0;text-align:center;}
@@ -893,6 +914,33 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-li .num.cap{width:52px;text-align:right;font-variant-numeric:tabular-nums;}
 #system-workspace .sp-li .num.cap.warn{color:var(--sp-warn);}
 #system-workspace .sp-li .num.cap.crit{color:var(--sp-danger);}
+
+/* ── ★ 第 9 节：四个子页（文件 / 存储 / 系统 / 软件）对齐概览页 ──
+   ⚠️ 只**复用**第 8 节已经建立的令牌（--sp-r 10px / --sp-shadow / --sp-shadow-lift / --sp-inset /
+      --sp-hi / --sp-tint / --sp-tint-strong / 三档 75/90 / 30px 行高 / tabular-nums）✓，
+      不新造颜色、圆角、阴影 ✓；也不动任何 DOM 结构与信息 ✓（9.2「不删功能、不改信息结构」）。 */
+/* 9.3 排序：当前列 ↑ / ↓ + 强调色，非当前列灰 ⇅。
+   ⚠️ 文件页的表头箭头是模块自己拼进文字的 ▲ / ▼（不许改那个模块），所以那几列只统一亮度 ✓ */
+#system-workspace .sp-table th[data-skey]{cursor:pointer;user-select:none;transition:color var(--sp-ease),background var(--sp-ease);}
+#system-workspace .sp-table th[data-skey]::after{content:'⇅';margin-left:5px;font-size:10px;opacity:.4;}
+#system-workspace .sp-table th[data-skey]:hover{color:var(--text);background:var(--sp-tint);}
+#system-workspace .sp-table th.on{color:var(--text);}
+#system-workspace .sp-table th[data-skey].on::after{content:'↑';opacity:1;color:var(--accent);}
+#system-workspace .sp-table th[data-skey].desc::after{content:'↓';}
+/* 9.2 存储：占用条 12px 高 / 圆角 6px / 轨道 --sp-tint-strong / 正常态填充用**强调色**
+   （≥75 琥珀、≥90 红 —— 和概览页环形表同一套三档语义，正常态不再用绿）✓ */
+#system-workspace .sp-card .sp-bar, #system-workspace .sp-li .barwrap .sp-bar{height:12px;border-radius:6px;}
+#system-workspace .sp-card .sp-bar i, #system-workspace .sp-li .barwrap .sp-bar i{border-radius:6px;}
+#system-workspace .sp-card .sp-bar.ok i, #system-workspace .sp-li .barwrap .sp-bar.ok i{background:var(--accent);}
+/* 9.2 系统 / 软件：行尾主操作按钮固定在右侧同一列（定宽，升级 / 卸载永远在同一位置）✓；
+   可升级项用琥珀色 2px 左侧竖条标记（和「注意」同一枚 --sp-warn）✓ */
+#system-workspace .sp-table td.sp-actcol .sp-btn{min-width:62px;}
+#system-workspace .sp-table tr.up-row td:first-child{box-shadow:inset 2px 0 0 var(--sp-warn);}
+/* 9.3 加载 / 刷新：点击期间 disabled + 图标旋转（与页头刷新按钮共用 sp-spin，不再发明第二套）✓ */
+#system-workspace .sp-btn.sp-busy{cursor:progress;opacity:.62;}
+#system-workspace .sp-btn.sp-busy::before{content:'';display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:-1px;
+  border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp-spin 700ms linear infinite;}
+@media (prefers-reduced-motion:reduce){#system-workspace .sp-btn.sp-busy::before{animation:none;}}
 
 /* ── 结论条：每页先给一句「有没有事」的答案，再摊细节 ── */
 #system-workspace .sp-summary{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:0 0 14px;
@@ -938,7 +986,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* ── 文件视图（fsv-*）：模块只做结构与行为，皮肤全部在这里统一 ── */
 #system-workspace .fsv-root{display:flex;flex-direction:column;gap:10px;}
 #system-workspace .fsv-view{display:flex;flex-direction:column;gap:10px;}
-#system-workspace .fsv-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+#system-workspace .fsv-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 #system-workspace .fsv-crumbs{display:flex;align-items:center;gap:2px;flex-wrap:wrap;font-size:var(--sp-fs);}
 #system-workspace .fsv-crumb{background:transparent;border:0;color:var(--dim);border-radius:var(--sp-r-xs);padding:2px 6px;font-size:var(--sp-fs);cursor:pointer;}
 #system-workspace .fsv-crumb:hover{color:var(--text);background:var(--sp-tint);}
@@ -1290,12 +1338,17 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     cacheScanAt: 0,
     software: null,
     softwareQuery: '',
+    /* ★ 9.3 表格排序状态：viewKey → { key, dir }。只重排 DOM 行，不动数据（下面 applyTableSort）✓ */
+    sorts: {},
     showAllAgents: false,
     docker: null,
     dev: null,
     devRootInput: '',
     usageRoot: '',
     usage: null,
+    /* ★ 9.3 扫描按钮的忙碌态：存在 state 里，重绘后按钮仍然 disabled + 旋转 ✓ */
+    usageBusy: false,
+    largeBusy: false,
     largeRoot: '',
     large: null,
     eventSource: null,
@@ -1817,7 +1870,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         '<p class="sp-note">拦下的是：改名、移动、复制、删除、新建、归类整理、清理缓存、重启 CodeScope。' +
         '读操作（浏览、搜索、预览、统计）不受影响。这个开关存在本机浏览器里，不写服务器。</p>' +
       '</div>' +
-      '<div class="sp-cols">' +
+      '<div class="sp-cols sp-settings">' +
         '<div class="sp-band"><h3>这台电脑</h3><div class="sp-kv">' +
           [['主机名', identity.hostname], ['机型', identity.model], ['系统', (identity.osName || '') + ' ' + (identity.osVersion || '')],
            ['CPU', (identity.cpuModel || '') + ' · ' + (identity.cores || '?') + ' 核'], ['内存', fmtBytes(identity.totalMemory)],
@@ -3327,6 +3380,59 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       + '</div></div>';
   }
 
+  /* ---------------------------------------------------------------- 表格排序（9.3） */
+
+  /* 四个子页的表格共用这一份实现：点表头按该列升降序重排 tbody 的行。
+     ⚠️ 只重排**已有的行** ✗ 不碰 state 里的数据、不加删列、不改信息结构 ✓（9.2 的硬约束）；
+        排序键存在 state.sorts[view] 里，所以 1.5 秒轮询整页重绘之后排序仍然在 ✓。
+     取值优先用 td 上的 data-v（大小 / 端口这类数字要按数值排，不能按字符串 "9" > "10"）✓。 */
+  function cellValue(cell) {
+    if (!cell) return '';
+    if (cell.dataset && cell.dataset.v != null) return Number(cell.dataset.v);
+    return String(cell.textContent || '').trim().toLowerCase();
+  }
+
+  function applyTableSort(body, view) {
+    const sort = state.sorts[view];
+    body.querySelectorAll('table').forEach((table) => {
+      const head = Array.from(table.querySelectorAll('thead th'));
+      if (!head.some((th) => th.dataset.skey)) return;
+      head.forEach((th) => {
+        if (!th.dataset.skey) return;
+        const on = !!sort && sort.key === th.dataset.skey;
+        th.classList.toggle('on', on);
+        th.classList.toggle('desc', on && sort.dir < 0);
+        th.tabIndex = 0;
+        th.setAttribute('aria-sort', on ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+        const flip = () => {
+          const prev = state.sorts[view];
+          state.sorts[view] = prev && prev.key === th.dataset.skey ? { key: prev.key, dir: -prev.dir } : { key: th.dataset.skey, dir: 1 };
+          applyTableSort(body, view);
+        };
+        th.onclick = flip;
+        th.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); flip(); } };
+      });
+      const tbody = table.querySelector('tbody');
+      if (!sort || !tbody) return;
+      const index = head.findIndex((th) => th.dataset.skey === sort.key);
+      if (index < 0) return;
+      Array.from(tbody.children).filter((row) => row.children.length > 1)
+        .sort((a, b) => {
+          const va = cellValue(a.children[index]);
+          const vb = cellValue(b.children[index]);
+          return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
+        }).forEach((row) => tbody.appendChild(row));
+    });
+  }
+
+  /* ★ 9.3 加载 / 刷新按钮：点击期间 disabled + 图标旋转（和页头刷新按钮共用 .sp-busy）✓ */
+  async function busyButton(button, run) {
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    button.classList.add('sp-busy');
+    try { await run(); } finally { button.classList.remove('sp-busy'); button.disabled = false; }
+  }
+
   function renderStorage(body) {
     const data = state.overview;
     const disks = (data && data.disks) || [];
@@ -3358,15 +3464,15 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
           <button class="sp-btn" data-pick="low">只选低风险</button>
           <button class="sp-btn" data-pick="none">全不选</button>
         </div>
-        <table class="sp-table"><thead><tr><th style="width:34px"></th><th>项目</th><th>风险</th><th class="num">占用</th><th>说明</th><th></th></tr></thead>
+        <table class="sp-table"><thead><tr><th style="width:34px"></th><th data-skey="label">项目</th><th data-skey="risk">风险</th><th class="num" data-skey="size">占用</th><th>说明</th><th class="sp-actcol"></th></tr></thead>
         <tbody>${caches.map((item) => `
           <tr data-bytes="${Number(item.size) || 0}" data-path="${esc(item.path || '')}">
             <td><input type="checkbox" data-cache="${esc(item.id)}"${item.selected ? ' checked' : ''}></td>
-            <td>${esc(item.label)}<div class="muted mono ellip" title="${esc(item.path)}">${esc(item.path || '（官方清理命令）')}</div></td>
-            <td><span class="sp-tag ${esc(item.risk)}">${item.risk === 'low' ? '低' : item.risk === 'medium' ? '中' : '高'}</span></td>
-            <td class="num">${item.size == null ? '<span class="muted">' + (item.timedOut ? '统计超时' : item.exists === false ? '不存在' : '未统计') + '</span>' : fmtBytes(item.size)}</td>
+            <td data-v="${esc(item.label)}">${esc(item.label)}<div class="muted mono ellip" title="${esc(item.path)}">${esc(item.path || '（官方清理命令）')}</div></td>
+            <td data-v="${item.risk === 'high' ? 2 : item.risk === 'medium' ? 1 : 0}"><span class="sp-tag ${esc(item.risk)}">${item.risk === 'low' ? '低' : item.risk === 'medium' ? '中' : '高'}</span></td>
+            <td class="num" data-v="${Number(item.size) || 0}">${item.size == null ? '<span class="muted">' + (item.timedOut ? '统计超时' : item.exists === false ? '不存在' : '未统计') + '</span>' : fmtBytes(item.size)}</td>
             <td class="muted">${esc(item.note || '')}</td>
-            <td>${item.kind === 'dir' && item.exists ? '<button class="sp-btn" data-reveal="' + esc(item.path) + '">显示</button>' : ''}</td>
+            <td class="sp-actcol">${item.kind === 'dir' && item.exists ? '<button class="sp-btn" data-reveal="' + esc(item.path) + '">显示</button>' : ''}</td>
           </tr>`).join('') || '<tr><td colspan="6" class="sp-empty">尚未统计</td></tr>'}</tbody></table>
         <p class="sp-note">「官方清理命令」走软件自带的清理方式（brew cleanup -s、npm cache clean、pnpm store prune…），比直接删目录稳妥；「目录」类只删除上表里写死的那个绝对路径，接口不接受任意路径。</p>
       </div>
@@ -3375,7 +3481,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
           <h3>目录占用<span class="sp-hint">一级子目录</span></h3>
           <div class="sp-actions">
             <input class="sp-input" id="system-usage-root" value="${esc(state.usageRoot)}" placeholder="绝对路径，如 /Users/you" style="min-width:250px">
-            <button class="sp-btn" data-usage="1">开始扫描</button>
+            <button class="sp-btn${state.usageBusy ? ' sp-busy' : ''}" data-usage="1"${state.usageBusy ? ' disabled' : ''}>开始扫描</button>
           </div>
           <div class="sp-list">${((state.usage && state.usage.items) || []).map((item) => `
             <div class="sp-li">
@@ -3383,21 +3489,21 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               <span class="barwrap">${bar(state.usage.total ? item.size / state.usage.total * 100 : 0, '')}</span>
               <span class="num" style="width:84px;text-align:right">${fmtBytes(item.size)}</span>
               <button class="sp-btn" data-reveal="${esc(item.path)}">显示</button>
-            </div>`).join('') || '<div class="sp-empty">选一个目录扫描，看看空间去哪儿了</div>'}</div>
+            </div>`).join('') || ('<div class="sp-empty">' + (state.usageBusy ? '正在扫描…' : '选一个目录扫描，看看空间去哪儿了') + '</div>')}</div>
         </div>
         <div class="sp-band">
           <h3>大文件</h3>
           <div class="sp-actions">
             <input class="sp-input" id="system-large-root" value="${esc(state.largeRoot)}" placeholder="绝对路径" style="min-width:190px">
             <input class="sp-input" id="system-large-min" value="200" style="width:76px" title="只列大于多少 MB 的文件">
-            <button class="sp-btn" data-large="1">找出大文件</button>
+            <button class="sp-btn${state.largeBusy ? ' sp-busy' : ''}" data-large="1"${state.largeBusy ? ' disabled' : ''}>找出大文件</button>
           </div>
           <div class="sp-list">${((state.large && state.large.items) || []).map((item) => `
             <div class="sp-li">
               <span class="grow" title="${esc(item.path)}">${esc(item.name)}<span class="muted"> · ${esc(relTime(item.mtime))}</span></span>
               <span class="num" style="width:84px;text-align:right">${fmtBytes(item.size)}</span>
               <button class="sp-btn" data-reveal="${esc(item.path)}">显示</button>
-            </div>`).join('') || '<div class="sp-empty">还没有扫描</div>'}
+            </div>`).join('') || ('<div class="sp-empty">' + (state.largeBusy ? '正在查找…' : '还没有扫描') + '</div>')}
             ${state.large && state.large.truncated ? '<p class="sp-note sp-warn">目录太大，这次只扫描了一部分（' + state.large.scanned + ' 个条目）。</p>' : ''}
           </div>
         </div>
@@ -3410,12 +3516,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         renderStorage(body);
       };
     });
+    /* 9.3 动作按钮：点击期间 disabled + 旋转（统计占用 / 预览清理 / 立即清理 全接上） */
     const scan = body.querySelector('button[data-scan]');
-    if (scan) scan.onclick = () => startTask(() => api('/caches/scan', {}));
+    if (scan) scan.onclick = () => busyButton(scan, () => startTask(() => api('/caches/scan', {})));
     const dry = body.querySelector('button[data-clean-dry]');
-    if (dry) dry.onclick = () => startTask(() => api('/clean', { ids: selectedCacheIds(), dryRun: true }));
+    if (dry) dry.onclick = () => busyButton(dry, () => startTask(() => api('/clean', { ids: selectedCacheIds(), dryRun: true })));
     const clean = body.querySelector('button[data-clean]');
-    if (clean) clean.onclick = async () => {
+    if (clean) clean.onclick = () => busyButton(clean, async () => {
       const ids = selectedCacheIds();
       if (!ids.length) return;
       const risky = picked.filter((item) => item.risk !== 'low');
@@ -3426,21 +3533,24 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         okLabel: '开始清理', danger: true,
       });
       if (!ok) return;
-      startTask(() => api('/clean', { ids, dryRun: false }));
-    };
+      await startTask(() => api('/clean', { ids, dryRun: false }));
+    });
     const pickLow = body.querySelector('button[data-pick="low"]');
     if (pickLow) pickLow.onclick = () => { for (const item of state.caches) item.selected = item.risk === 'low'; renderStorage(body); };
     const pickNone = body.querySelector('button[data-pick="none"]');
     if (pickNone) pickNone.onclick = () => { for (const item of state.caches) item.selected = false; renderStorage(body); };
+    /* 扫描类按钮：重绘会换掉按钮节点，所以忙碌态存在 state 里，
+       重绘出来的新按钮一出生就带 .sp-busy + disabled（旋转一直转到结果回来） */
     const usage = body.querySelector('button[data-usage]');
     if (usage) usage.onclick = async () => {
       const input = $('system-usage-root');
       const root = (input && input.value.trim()) || '/';
       state.usageRoot = root;
-      state.usage = null;
+      state.usageBusy = true;
       renderStorage(body);
       try { state.usage = await api('/usage?path=' + encodeURIComponent(root) + '&limit=30&minBytes=10485760'); }
       catch (error) { toast('err', String(error.message || error)); }
+      state.usageBusy = false;
       renderStorage(body);
     };
     const large = body.querySelector('button[data-large]');
@@ -3449,12 +3559,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       const minInput = $('system-large-min');
       const root = (rootInput && rootInput.value.trim()) || '/';
       state.largeRoot = root;
-      state.large = null;
+      state.largeBusy = true;
       renderStorage(body);
       try { state.large = await api('/large-files?path=' + encodeURIComponent(root) + '&minMiB=' + encodeURIComponent((minInput && minInput.value) || '200') + '&limit=40&depth=4'); }
       catch (error) { toast('err', String(error.message || error)); }
+      state.largeBusy = false;
       renderStorage(body);
     };
+    applyTableSort(body, 'storage');
   }
 
   /* ---------------------------------------------------------------- 软件（Homebrew） */
@@ -3502,23 +3614,23 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       </div>
       <div class="sp-band">
         <h3>可升级（${outdated.length}）</h3>
-        ${outdated.length ? `<table class="sp-table"><thead><tr><th>包名</th><th>已装</th><th>最新</th><th></th></tr></thead><tbody>
-          ${outdated.map((item) => `<tr>
+        ${outdated.length ? `<table class="sp-table"><thead><tr><th data-skey="name">包名</th><th data-skey="installed">已装</th><th data-skey="latest">最新</th><th class="sp-actcol"></th></tr></thead><tbody>
+          ${outdated.map((item) => `<tr class="up-row">
             <td>${esc(item.name)}${item.pinned ? ' <span class="sp-tag">已锁定</span>' : ''}</td>
             <td class="muted mono">${versionCell(item.installed)}</td>
             <td class="mono">${esc(item.current || '')}</td>
-            <td><button class="sp-btn" data-brew-upgrade="${esc(item.name)}">升级</button></td>
+            <td class="sp-actcol"><button class="sp-btn" data-brew-upgrade="${esc(item.name)}">升级</button></td>
           </tr>`).join('')}</tbody></table>`
         : '<div class="sp-empty">' + (loading.outdated ? '正在检查更新…' : '全部都是最新的') + '</div>'}
       </div>
       <div class="sp-band">
         <h3>已安装（${installed.length}）</h3>
-        ${installed.length ? `<table class="sp-table"><thead><tr><th>包名</th><th>类型</th><th>版本</th><th></th></tr></thead><tbody>
+        ${installed.length ? `<table class="sp-table"><thead><tr><th data-skey="name">包名</th><th data-skey="kind">类型</th><th data-skey="version">版本</th><th class="sp-actcol"></th></tr></thead><tbody>
           ${installed.slice(0, 400).map((item) => `<tr>
             <td class="ellip">${esc(item.name)}</td>
-            <td><span class="sp-tag">${item.cask ? 'cask' : 'formula'}</span></td>
+            <td data-v="${item.cask ? 1 : 0}"><span class="sp-tag">${item.cask ? 'cask' : 'formula'}</span></td>
             <td class="muted mono">${versionCell(item.versions)}</td>
-            <td><button class="sp-btn danger" data-brew-uninstall="${esc(item.name)}" data-cask="${item.cask ? '1' : ''}">卸载</button></td>
+            <td class="sp-actcol"><button class="sp-btn danger" data-brew-uninstall="${esc(item.name)}" data-cask="${item.cask ? '1' : ''}">卸载</button></td>
           </tr>`).join('')}</tbody></table>
           ${installed.length > 400 ? '<p class="sp-note">只显示前 400 项，用搜索框过滤。</p>' : ''}`
         : '<div class="sp-empty">' + (loading.installed ? '正在读取…' : '没有读到已安装的包') + '</div>'}
@@ -3535,10 +3647,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       };
     }
     const upgradeAll = body.querySelector('button[data-brew-upgrade-all]');
-    if (upgradeAll) upgradeAll.onclick = async () => {
+    if (upgradeAll) upgradeAll.onclick = () => busyButton(upgradeAll, async () => {
       const ok = await askConfirm({ title: '升级全部可升级的包？', message: '共 ' + (data.outdated || []).length + ' 个（含 formula 与 cask）。\n\nbrew upgrade 会逐项下载安装，可能很久；期间可以用下方「取消」停止。', okLabel: '开始升级', danger: true });
-      if (ok) startTask(() => api('/software', { action: 'upgrade' }));
-    };
+      if (ok) await startTask(() => api('/software', { action: 'upgrade' }));
+    });
     body.querySelectorAll('button[data-brew-upgrade]').forEach((button) => {
       button.onclick = () => startTask(() => api('/software', { action: 'upgrade', name: button.dataset.brewUpgrade }));
     });
@@ -3550,16 +3662,17 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       };
     });
     const cleanup = body.querySelector('button[data-brew-cleanup]');
-    if (cleanup) cleanup.onclick = () => startTask(() => api('/software', { action: 'cleanup' }));
+    if (cleanup) cleanup.onclick = () => busyButton(cleanup, () => startTask(() => api('/software', { action: 'cleanup' })));
     const autoremove = body.querySelector('button[data-brew-autoremove]');
-    if (autoremove) autoremove.onclick = () => startTask(() => api('/software', { action: 'autoremove' }));
+    if (autoremove) autoremove.onclick = () => busyButton(autoremove, () => startTask(() => api('/software', { action: 'autoremove' })));
     const install = body.querySelector('button[data-soft-install]');
     if (install) install.onclick = () => {
       const field = $('system-soft-install');
       const name = (field && field.value.trim()) || '';
       if (!name) { toast('warn', '先填要安装的包名'); return; }
-      startTask(() => api('/software', { action: 'install', name }));
+      busyButton(install, () => startTask(() => api('/software', { action: 'install', name })));
     };
+    applyTableSort(body, 'software');
   }
 
   /* ---------------------------------------------------------------- 服务与端口 */
@@ -3630,12 +3743,12 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       <div class="sp-cols">
         <div class="sp-band">
           <h3>Homebrew 后台服务（${brew.length}）<span class="sp-hint">brew services 托管的常驻服务</span></h3>
-          ${brew.length ? `<table class="sp-table"><thead><tr><th>服务</th><th>状态</th><th>用户</th><th></th></tr></thead><tbody>
+          ${brew.length ? `<table class="sp-table"><thead><tr><th data-skey="name">服务</th><th data-skey="state">状态</th><th data-skey="user">用户</th><th class="sp-actcol"></th></tr></thead><tbody>
             ${brew.map((item) => `<tr>
               <td>${esc(item.name)}</td>
-              <td><span class="sp-tag ${item.running ? 'good' : ''}">${esc(item.status)}</span></td>
+              <td data-v="${item.running ? 1 : 0}"><span class="sp-tag ${item.running ? 'good' : ''}">${esc(item.status)}</span></td>
               <td class="muted">${esc(item.user || '')}</td>
-              <td>${item.running
+              <td class="sp-actcol">${item.running
                 ? '<button class="sp-btn" data-svc="restart" data-name="' + esc(item.name) + '">重启</button> <button class="sp-btn danger" data-svc="stop" data-name="' + esc(item.name) + '">停止</button>'
                 : '<button class="sp-btn" data-svc="start" data-name="' + esc(item.name) + '">启动</button>'}</td>
             </tr>`).join('')}</tbody></table>` : '<div class="sp-empty">没有通过 brew services 托管的服务</div>'}
@@ -3665,7 +3778,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             const bind = describeBind(item.address);
             const open = bind === '局域网可访问';
             return `<tr title="PID ${item.pid == null ? '—' : item.pid} · 绑定 ${esc(item.address || '')}">
-              <td class="num"><b>${item.port}</b></td>
+              <td class="num" data-v="${item.port}"><b>${item.port}</b></td>
               <td class="ellip">${esc(note || item.command || '未知服务')}${note && item.command ? '<span class="muted mono" style="font-size:10.5px"> ' + esc(item.command) + '</span>' : ''}</td>
               <td><span class="sp-state ${open ? 'warn' : ''}">${esc(bind || '—')}</span></td>
               <td class="sp-actcol">
@@ -3695,6 +3808,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     body.querySelectorAll('button[data-kill]').forEach((button) => {
       button.onclick = () => killPid(Number(button.dataset.kill), button.dataset.app || '');
     });
+    applyTableSort(body, 'services');
   }
   /* ---------------------------------------------------------------- Docker */
 

@@ -2230,6 +2230,47 @@
   .lw-inpanel .lw-nav button.on .badge { color:var(--pp-ink2); opacity:1; }
   .lw-inpanel .lw-nav .grp { letter-spacing:0; text-transform:none; color:var(--pp-ink2); }
   .lw-inpanel .lw-nav .foot { letter-spacing:0; text-transform:none; color:var(--pp-ink2); }
+  /* ═══ 阶段 2（规范 §9.1 / §9.2）：线性图标 + 信息层级 ═════════════════════════
+     ⚠️ 全部带 .lw-inpanel 前缀 ✓ —— 主界面那套 .cs-ico 在 ui-kit.css 里，一行没动 ✓；
+        这里的「降一档 / 合 band」也只在本面板成立 ✓，不外溢到别的视图 ✓。 */
+  /* ── 左栏分区图标：线性 sprite ✓（原来是 emoji / 几何字符 ✗）────────────── */
+  .lw-inpanel .lw-nav .ic { width:18px; color:var(--pp-ink2); font-size:15px; display:inline-flex; align-items:center; justify-content:center; }
+  .lw-inpanel .lw-nav .ic .cs-ico { stroke-width:1.6; }
+  .lw-inpanel .lw-nav button.on .ic { color:var(--pp-accent); }
+  /* ── 标题 / 按钮里的图标：跟文字一个基线，别把行高顶开 ✓ ─────────────────── */
+  .lw-inpanel .lw-c > h3 .cs-ico { font-size:13px; color:var(--pp-ink2); }
+  .lw-inpanel button .cs-ico, .lw-inpanel .act .cs-ico { vertical-align:-.16em; }
+  /* ★ 收藏 / 置顶的「亮 / 暗」两态：**同一份路径** ✗ 不新增 symbol ✓（§9.1 只允许 5 个 ✓）——
+     空心 = 未收藏 ✓，实心 = 已收藏 ✓（fill 当前色 ✓，描边不变 ✓）。 */
+  .lw-inpanel .cs-ico.is-on { fill:currentColor; }
+  /* ── KPI 降一档（§9.2）：它们是**参考值** ✓，不该和待办 / 文件抢注意力 ✗ ──── */
+  .lw-inpanel .lw-c.lw-kpi-c { background:color-mix(in srgb, var(--pp-sheet) 42%, var(--pp-page)); box-shadow:none; }
+  .lw-inpanel .lw-c.lw-kpi-c > h3 { background:transparent; }
+  .lw-inpanel .lw-c.lw-kpi-c:hover { transform:none; box-shadow:var(--pp-shadow), inset 0 1px 0 var(--pp-glow); }
+  .lw-inpanel .lw-kpi { padding:10px 13px 11px; }
+  .lw-inpanel .lw-kpi .row { gap:11px; }
+  .lw-inpanel .lw-kpi .ic { width:32px; height:32px; border-radius:8px; font-size:15px; color:var(--pp-ink2); background:transparent; }
+  .lw-inpanel .lw-kpi .num { font-size:26px; font-weight:600; letter-spacing:-.4px; }
+  .lw-inpanel .lw-kpi .num small { font-size:10px; color:var(--pp-ink2); margin-left:4px; }
+  .lw-inpanel .lw-kpi .lbl { margin-top:7px; color:var(--pp-ink2); }
+  .lw-inpanel .lw-kpi .cmp { margin-top:3px; font-size:10px; color:var(--pp-ink2); }
+  /* ── 文件 band：左表格 / 右构成条（同一张卡，少一次视线跳转 ✓）§9.2 ──────── */
+  .lw-band { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(240px,1fr); align-items:stretch; }
+  .lw-band-l { min-width:0; }
+  .lw-band-r { min-width:0; padding:12px 14px 14px; border-left:1px solid var(--pp-line); background:color-mix(in srgb, var(--pp-sheet2) 42%, transparent); }
+  .lw-band-h { display:flex; align-items:center; gap:8px; margin-bottom:11px; font-size:11px; font-weight:650; color:var(--pp-ink); }
+  .lw-band-h .sp { flex:1; }
+  .lw-band-h span:last-child { font:10px/1 var(--mono); color:var(--pp-ink2); }
+  .lw-kbt { margin-bottom:10px; }
+  .lw-kbt-h { display:flex; font-size:11px; color:var(--pp-ink2); margin-bottom:4px; }
+  .lw-kbt-h span:first-child { flex:1; }
+  .lw-kbt-h span:last-child { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .lw-kbt-bar { height:6px; border-radius:4px; background:color-mix(in srgb, var(--pp-ink) 9%, transparent); overflow:hidden; }
+  .lw-kbt-bar > i { display:block; height:100%; border-radius:4px; }
+  .lw-kbt-more { display:flex; align-items:center; gap:6px; margin-top:2px; padding-top:8px; border-top:1px solid var(--pp-line); font-size:11px; color:var(--pp-ink2); }
+  .lw-kbt-more > b { margin-left:auto; font:11px/1 var(--mono); font-weight:600; color:var(--pp-ink2); }
+  .lw-kbt-more .cs-ico { font-size:12px; opacity:.55; }
+  @media (max-width: 1249px) { .lw-band { grid-template-columns:1fr; } .lw-band-r { border-left:0; border-top:1px solid var(--pp-line); } }
   /* ── 行悬停：一层薄填充 ✓（原来整行刷强调色太狠 ✗，纸质里像涂了一块墨 ✗）── */
   .lw-inpanel .lw-tr:hover, .lw-inpanel .lw-todo:hover, .lw-inpanel .lw-note:hover, .lw-inpanel .lw-hotrow:hover, .lw-inpanel .lw-mrow:hover, .lw-inpanel .lw-link:hover, .lw-inpanel .lw-hotkw:hover, .lw-inpanel .lw-kw:hover, .lw-inpanel .lw-eb-pick:hover, .lw-inpanel .lw-ep-big:hover, .lw-inpanel .lw-jtpl button:hover { background:var(--pp-hover); color:var(--pp-ink); }
   /* ⚠️ 原来那批 hover 用 !important 把子元素刷成 accentInk（深底浅字 ✓）——
@@ -2280,17 +2321,22 @@
   }
   `;
 
+  /* ★ 图标位（规范 §9.1）：icon 存的是 **sprite id**（`#i-xxx` 的 xxx 部分）✗ 不再是字符 ✓。
+     ⚠️ 原来这里放的是 emoji / 几何字符（☀ ✎ ◈ ❝ ◇ ▦ 📖 ⚙ 🔥 ✉），
+        在纸感皮肤里大小与基线都跟正文字体走 ✗，和主界面那套线性图标**不是一套语言** ✗ ✓。
+     映射：今日 i-spark / 备忘录 i-pen / 日记 i-book / 书签 i-tag / 研究方向 i-grid /
+           文件 i-file / 阅读 i-book / 工作流 i-gear / 热榜 i-flame（新增）/ 邮箱 i-mail（新增）*/
   const NAV = [
-    { id: 'today', icon: '☀', label: '今日', grp: '面板', key: 'T-01' },
-    { id: 'memo', icon: '✎', label: '备忘录', grp: '面板', key: 'M-01', badge: true },
-    { id: 'journal', icon: '◈', label: '日记', grp: '面板', key: 'J-01' },
-    { id: 'quote', icon: '❝', label: '书签', grp: '面板', key: 'B-01' },
-    { id: 'tracks', icon: '◇', label: '研究方向', grp: '科研', key: 'F-01' },
-    { id: 'files', icon: '▦', label: '文件', grp: '科研', key: 'C-01' },
-    { id: 'reading', icon: '📖', label: '阅读', grp: '外部', key: 'R-01' },
-    { id: 'flow', icon: '⚙', label: '工作流', grp: '自动化', key: 'W-01' },
-    { id: 'trends', icon: '🔥', label: '热榜', grp: '外部', key: 'H-01' },
-    { id: 'mail', icon: '✉', label: '邮箱', grp: '外部', key: 'E-01' },
+    { id: 'today', icon: 'spark', label: '今日', grp: '面板', key: 'T-01' },
+    { id: 'memo', icon: 'pen', label: '备忘录', grp: '面板', key: 'M-01', badge: true },
+    { id: 'journal', icon: 'book', label: '日记', grp: '面板', key: 'J-01' },
+    { id: 'quote', icon: 'tag', label: '书签', grp: '面板', key: 'B-01' },
+    { id: 'tracks', icon: 'grid', label: '研究方向', grp: '科研', key: 'F-01' },
+    { id: 'files', icon: 'file', label: '文件', grp: '科研', key: 'C-01' },
+    { id: 'reading', icon: 'book', label: '阅读', grp: '外部', key: 'R-01' },
+    { id: 'flow', icon: 'gear', label: '工作流', grp: '自动化', key: 'W-01' },
+    { id: 'trends', icon: 'flame', label: '热榜', grp: '外部', key: 'H-01' },
+    { id: 'mail', icon: 'mail', label: '邮箱', grp: '外部', key: 'E-01' },
   ];
 
   /* ★★★ 哪些页签是「全高面板」（要真正填满内容区 ✓），哪些是「长列表」（撑高页面让它滚 ✓）
@@ -2988,6 +3034,12 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+  /* ── 界面图标：一律走 index.html 里那份 sprite ✓（`<use href="#i-xxx"/>`）──────
+     ⚠️ 只给**左栏分区 / 区块标题 / 按钮内**这三类**界面图标位**用 ✓ ——
+        用户笔记、导出图、统计文案里的 emoji 是**内容** ✗，一个都不批量替换 ✗（规范 §9.1 ✓）。
+     用法：普通字符串 `'↻ 刷新'` → `'' + ICO('refresh') + ' 刷新'` ✓
+          模板字符串 `${ICO('refresh')} 刷新` ✓ */
+  const ICO = (id, cls) => '<svg class="cs-ico' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + id + '"/></svg>';
   /* ★★ 选择器**别把整段绑定带崩** ✗✗ —— 这是实测踩到的 ✗：
      我给字号按钮起了个 `id="lw-eb-font+"` ✓，然后 `q('#lw-eb-font+')` ✗ ——
      而 `+` 在 CSS 里是**相邻兄弟选择器** ✗ → `querySelector` **直接抛错** ✗ →
@@ -3942,7 +3994,7 @@
       const badge = dueW
         ? `<span class="badge hot" title="有 ${dueW} 个生词该复习了">${dueW}</span>`
         : (n.badge && openTodo ? `<span class="badge">${openTodo}</span>` : `<span class="badge">${n.key || ''}</span>`);
-      return `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${n.icon}</span><span>${n.label}</span>` + badge + `</button>`;
+      return `<button data-tab="${n.id}" class="${n.id === TAB ? 'on' : ''}"><span class="ic">${ICO(n.icon)}</span><span>${n.label}</span>` + badge + `</button>`;
     }).join('')).join('');
     host.innerHTML = headHtml() + storeBannerHtml() + `<div class="lw-body2">
       <div class="lw-nav">${navHtml}<div class="foot">System <b>OK</b><br>本地运行 · 数据仅存本机<br><span title="面板前端资源的构建时间；如果改了代码没生效，先看这里是不是最新">面板资源 ${esc(buildStampText())}</span></div></div>
@@ -4616,7 +4668,7 @@
       wxHtml = `<div class="lw-wx"><span class="wi">🌡</span><div class="wc">天气不可用<br>${esc(String(WX.error).slice(0, 24))}</div></div>`;
     }
     return `<div class="lw-head">
-      <div class="lw-logo">🎯</div>
+      <div class="lw-logo">${ICO('grid')}</div>
       <div class="lw-h1">个人管理面板<small>Personal Console</small></div>
       ${clockHtml(d)}
       ${greetHtml(d)}
@@ -4624,7 +4676,7 @@
       <div class="lw-sub2" id="lw-sub" aria-live="polite">${esc(sub)}</div>
       ${wxHtml}
       <div id="lw-mbslot">${mailBadgeHtml()}</div>
-      <button class="lw-btn" id="lw-refresh">↻ 刷新</button></div>${stripHtml()}`;
+      <button class="lw-btn" id="lw-refresh">${ICO('refresh')} 刷新</button></div>${stripHtml()}`;
   }
 
   /* 左栏 + 中栏 的交互（筛选类操作用 render() 局部刷新 ✓）*/
@@ -6155,11 +6207,14 @@
     const code = (CODE_PREFIX[TAB] || 'N') + '-' + String(CODE_SEQ).padStart(2, '0');
     return `<div class="lw-c" style="${sp(n || 12)}"><h3><span class="code">${code}</span>${title}<span class="sp"></span>${act || ''}${extra ? `<em>${extra}</em>` : ''}</h3>${body}</div>`;
   };
+  /* ⚠️ `ic` 现在两种写法都收 ✓：纯小写字母 ⇒ 当 **sprite id** 走 `ICO()` ✓；
+     其它（Σ ◔ ↑ ◉ — …）⇒ 仍按原字符输出 ✓ —— 那些是**这个数字自己的语义符号** ✓，
+     sprite 里没有对应线性图标 ✓，硬凑一个反而更错 ✗（规范 §9.1 只允许新增 5 个 symbol ✓）。*/
   const kpiCard = (ic, num, unit, lbl, cmp, n) => {
     KPI_SEQ += 1;
     const code = 'K-' + String(KPI_SEQ).padStart(2, '0');
-    return `<div class="lw-c" style="${sp(n || 3)}"><h3><span class="code">${code}</span>${lbl}<span class="sp"></span></h3>
-      <div class="lw-kpi"><div class="row"><div class="ic">${ic}</div>
+    return `<div class="lw-c lw-kpi-c" style="${sp(n || 3)}"><h3><span class="code">${code}</span>${lbl}<span class="sp"></span></h3>
+      <div class="lw-kpi"><div class="row"><div class="ic">${/^[a-z][a-z-]*$/.test(ic) ? ICO(ic) : ic}</div>
       <div style="flex:1;min-width:0"><div class="num">${num}<small>${unit}</small></div></div></div>
       ${cmp ? `<div class="cmp">${cmp}</div>` : ''}</div></div>`;
   };
@@ -6201,10 +6256,10 @@
     }
 
     const kpis = [
-      kpiCard('▦', DATA.totals.projects, '个项目', '已纳管', `覆盖 ${(DATA.tracks || []).length} 个方向`, 3, 'sky'),
-      kpiCard('▤', DATA.totals.files, '个文件', `合计 ${DATA.totals.sizeText}`, `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, 3, 'lilac'),
-      kpiCard('✎', today.count, '个改动', '今天', diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), 3, 'mint'),
-      kpiCard('◈', streak, '天', '日记连续记录', journals.length ? `共 ${journals.length} 篇 · 待办 ${allTodos.filter((t) => !t.done).length} 项` : '还没写过日记', 3, 'lemon'),
+      kpiCard('grid', DATA.totals.projects, '个项目', '已纳管', `覆盖 ${(DATA.tracks || []).length} 个方向`, 3, 'sky'),
+      kpiCard('file', DATA.totals.files, '个文件', `合计 ${DATA.totals.sizeText}`, `近 14 天有 ${days.filter((x) => x.count).length} 天在动`, 3, 'lilac'),
+      kpiCard('pen', today.count, '个改动', '今天', diff === 0 ? '与昨天持平' : (diff > 0 ? `<b>+${diff}</b> 比昨天多` : `<b style="color:${T.warn}">${diff}</b> 比昨天少`), 3, 'mint'),
+      kpiCard('book', streak, '天', '日记连续记录', journals.length ? `共 ${journals.length} 篇 · 待办 ${allTodos.filter((t) => !t.done).length} 项` : '还没写过日记', 3, 'lemon'),
     ].join('');
 
     const todoBody = openTodos.length
@@ -6214,30 +6269,43 @@
     const todayBody = (todayJ || quotes.length)
       ? `<div>${todayJ ? `<div class="lw-note"><div class="h">今天的日记 · ${String(todayJ.text || '').length} 字</div>
           <div class="b">${esc(String(todayJ.text || '').replace(/^#{1,3}\s*/gm, '').replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/gm, '· ').slice(0, 150))}…</div></div>`
-        : `<div class="lw-empty" style="padding:16px"><span class="big">◈</span>今天还没写日记</div>`}
+        : `<div class="lw-empty" style="padding:16px"><span class="big">${ICO('book')}</span>今天还没写日记</div>`}
         ${quotes.map((q) => `<div class="lw-note"><div class="h">❝ 书签</div><div class="b">${esc(String(q.text || '').slice(0, 80))}${q.from ? `<span style="color:${T.faint}"> —— ${esc(String(q.from).slice(0, 20))}</span>` : ''}</div></div>`).join('')}</div>`
-      : `<div class="lw-empty"><span class="big">❝</span>还没有日记和书签</div>`;
+      : `<div class="lw-empty"><span class="big">${ICO('tag')}</span>还没有日记和书签</div>`;
 
+    /* ★ 文件构成只留**前 4 项** + 一行「其余」✓（规范 §9.2 ✓）——
+       kind 是**动态**的 ✓（vault 里有什么类型就出什么）✗，所以第 5 项以后合并成一行，
+       而不是写死一个「其他」✓。⚠️ 数据里本来就有个 kind 叫 `other`（显示为「其他」）✗，
+       它若排在前 4 ✓、剩下的又恰好只有 1 类 ✓，再写一次「其他」就会出现**两行同名** ✗
+       ⇒ 只剩 1 类时直接用那一类的名字 ✓，多类才合并叫「其他」✓。 */
+    const kinds = Object.entries(DATA.byKind || {}).sort((a, b) => b[1] - a[1]);
+    const kTop = kinds.slice(0, 4), kTail = kinds.slice(4);
+    const kPct = (v) => Math.round(v / (DATA.totals.files || 1) * 100);
+    const kBar = (k, v, pct, label) => `<div class="lw-kbt"><div class="lw-kbt-h"><span>${label}</span><span>${v} · ${pct}%</span></div>
+      <div class="lw-kbt-bar"><i style="width:${pct}%;background:${KIND_COLOR[k] || T.faint}"></i></div></div>`;
+    const kTailHtml = kTail.length
+      ? `<div class="lw-kbt-more" title="其余 ${kTail.length} 类：${kTail.map((x) => KIND_NAME[x[0]] || x[0]).join('、')}">`
+        + `<span>${kTail.length === 1 ? (KIND_NAME[kTail[0][0]] || kTail[0][0]) : '其他'}</span><b>${kTail.reduce((a, x) => a + kPct(x[1]), 0)}%</b>${ICO('chevron-right')}</div>`
+      : '';
+    /* ★ 「最近在动的文件」+「文件构成」合成**一个 band** ✓（规范 §9.2 ✓）——
+       原来是两张并排卡（跨 7 / 跨 5），视线要左右跳两次才能拼出「哪些文件在动、
+       它们都是什么类型」✗。现在左表格 / 右构成条，一个标题下读完 ✓。
+       ⚠️ 两块**都还在** ✓（结构清单要求保留文件表格与文件构成 ✓），只是换了容器 ✓。
+       ⚠️ 注释**不许写在模板串里面** ✗ —— 会被当成文本渲染到页面上（这一轮已踩过一次 ✗）。 */
     return `<div class="lw-g12">${kpis}
-      ${card('☑ 待办清单', allTodos.filter((t) => !t.done).length ? `${allTodos.filter((t) => !t.done).length} 项未完成` : '', todoBody, 4, '<span class="act" id="lw-goto-memo">去备忘录 →</span>')}
-      ${card('今日日记 · 书签', todayJ ? '今天已写' : '', todayBody, 4, '<span class="act" id="lw-goto-journal">去日记 →</span>')}
-      ${card('近 14 天改动', `共 ${days.reduce((a, x) => a + x.count, 0)} 个`,
+      ${card(ICO('check') + ' 待办清单', allTodos.filter((t) => !t.done).length ? `${allTodos.filter((t) => !t.done).length} 项未完成` : '', todoBody, 4, '<span class="act" id="lw-goto-memo">去备忘录 →</span>')}
+      ${card(ICO('book') + ' 今日日记 · 书签', todayJ ? '今天已写' : '', todayBody, 4, '<span class="act" id="lw-goto-journal">去日记 →</span>')}
+      ${card(ICO('grid') + ' 近 14 天改动', `共 ${days.reduce((a, x) => a + x.count, 0)} 个`,
         `<div class="lw-pad"><div class="lw-bars">${days.map((x) => `<div title="${x.date} · ${x.count}">
           <span class="v">${x.count || ''}</span><span class="b" style="height:${Math.max(3, Math.round(x.count / maxDay * 88))}px"></span>
           <span class="k">${x.label}</span></div>`).join('')}</div></div>`, 4)}
-      ${card('最近在动的文件', '点一行复制完整路径',
-        `<div class="lw-tbl">${hot.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
+      ${card(ICO('file') + ' 最近在动的文件', '点一行复制完整路径',
+        `<div class="lw-band"><div class="lw-band-l"><div class="lw-tbl">${hot.map((f) => `<div class="lw-tr" data-path="${esc(f.path)}">
           <span class="nm">${esc(f.name)} <i>${esc(String(f.path).replace(DATA.home, '~').replace(/\/[^/]+$/, ''))}</i></span>
           <span class="bd">${esc(f.ext || '—')}</span><span class="sz">${fmtBytes(f.size)}</span>
-          <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div>`, 7)}
-      ${card('文件构成', `${DATA.totals.files} 个文件`,
-        `<div class="lw-pad">${Object.entries(DATA.byKind || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
-          const pct = Math.round(v / (DATA.totals.files || 1) * 100);
-          return `<div style="margin-bottom:11px"><div style="display:flex;font-size:11px;color:${T.dim};margin-bottom:5px">
-            <span style="flex:1">${KIND_NAME[k] || k}</span><span style="font-variant-numeric:tabular-nums">${v} · ${pct}%</span></div>
-            <div style="height:7px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden">
-              <i style="display:block;height:100%;width:${pct}%;border-radius:5px;background:${KIND_COLOR[k] || T.faint}"></i></div></div>`;
-        }).join('')}</div>`, 5)}
+          <span class="tm">${ago(f.mtime)}</span></div>`).join('')}</div></div>
+          <div class="lw-band-r"><div class="lw-band-h"><span>文件构成</span><span class="sp"></span><span>${DATA.totals.files} 个文件</span></div>
+          ${kTop.map(([k, v]) => kBar(k, v, kPct(v), KIND_NAME[k] || k)).join('')}${kTailHtml}</div></div>`, 12)}
     </div>`;
   }
 
@@ -6315,7 +6383,7 @@
             行里会出现「Study note ▤ 备忘录」，看起来像「这条属于「备忘录」文件夹」✗
             （用户截图里就是这句，很容易和左边的文件夹列表搞混 ✗）。
             改成「笔记」✓，并且给真正的文件夹名加 ▤ 前缀和分隔符 ✓。 */
-      const extra = td.total ? ("☑ " + td.done + "/" + td.total) : ((String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : "笔记");
+      const extra = td.total ? (ICO('check') + " " + td.done + "/" + td.total) : ((String(m.text || "").match(/\|/g) || []).length > 3 ? "1 个表格" : "笔记");
       /* ⚠️ `▦ 全部列表` 视图下**显示所属文件夹** ✓ ——
          否则"文件夹视图"和"全部列表"看起来一模一样 ✗（用户反馈"这两个按钮没用"✗）。*/
       const folTag = (view === 'all' && (m.folder || '备忘录'))
@@ -6332,13 +6400,13 @@
 
     const tagKeys = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]);
     const side = '<div class="lw-nt-side">'
-      + '<div class="hd"><button data-mview="folder" class="' + ((STORE.memoView || 'folder') === 'folder' ? "on" : "") + '" title="文件夹视图">▤</button>'
-      + '<button data-mview="all" class="' + (STORE.memoView === 'all' ? "on" : "") + '" title="全部列表">▦</button></div>'
+      + '<div class="hd"><button data-mview="folder" class="' + ((STORE.memoView || 'folder') === 'folder' ? "on" : "") + '" title="文件夹视图">' + ICO('rows') + '</button>'
+      + '<button data-mview="all" class="' + (STORE.memoView === 'all' ? "on" : "") + '" title="全部列表">' + ICO('rows') + '</button></div>'
       + '<div class="grp">智能</div>'
-      + '<div class="it ' + (smart === 'todo' ? "on" : "") + '" data-msmart="todo">☑ 待办清单<span class="n">' + smartCount.todo + '</span></div>'
+      + '<div class="it ' + (smart === 'todo' ? "on" : "") + '" data-msmart="todo">' + ICO('check') + ' 待办清单<span class="n">' + smartCount.todo + '</span></div>'
       + '<div class="it ' + (smart === 'pin' ? "on" : "") + '" data-msmart="pin">☆ 置顶<span class="n">' + smartCount.pin + '</span></div>'
       + '<div class="it ' + (smart === 'today' ? "on" : "") + '" data-msmart="today">◔ 今天<span class="n">' + smartCount.today + '</span></div>'
-      + '<div class="it ' + (smart === 'trash' ? "on" : "") + '" data-msmart="trash">🗑 回收站<span class="n">' + smartCount.trash + '</span></div>'
+      + '<div class="it ' + (smart === 'trash' ? "on" : "") + '" data-msmart="trash">' + ICO('trash') + ' 回收站<span class="n">' + smartCount.trash + '</span></div>'
       + '<div class="grp">iCloud <span id="lw-nt-addfol" title="新建文件夹" style="float:right;cursor:pointer;color:' + T.accent + '">＋</span></div>'
       + '<div class="it ' + (!smart && !fol && !tagF ? "on" : "") + '" data-mfolder="" data-mname="iCloud 全部">▤ iCloud 全部<span class="n">' + raw.filter((m) => !m.trash).length + '</span></div>'
       + folders.map((f) => '<div class="it ' + (!smart && fol === f ? "on" : "") + '" data-mfolder="' + esc(f) + '" data-mname="' + esc(f) + '">▤ ' + esc(f) + '<span class="n">' + raw.filter((m) => !m.trash && (m.folder || "备忘录") === f).length + '</span></div>').join("")
@@ -6347,20 +6415,22 @@
       + (tagKeys.length ? tagKeys.map((t) => '<div class="it ' + (!smart && tagF === t ? "on" : "") + '" data-mtag="' + esc(t) + '" data-mname="#' + esc(t) + '"># ' + esc(t) + '<span class="n">' + tagCount[t] + '</span></div>').join("") : '<div class="it" style="color:var(--pp-ink2)">正文里写 #标签</div>')
       + '</div>';
 
-    const SMART_NAME = { todo: "☑ 待办清单", pin: "☆ 置顶", today: "◔ 今天", trash: "🗑 回收站" };
+    /* ⚠️ 智能视图标题要带**线性图标** ✓（原来是 emoji / 几何字符 ✗）——
+       这里存 [sprite id, 标题] ✓，非智能视图仍是一段纯文本 ✓（渲染时分开处理 ✓）。 */
+    const SMART_NAME = { todo: ["check", "待办清单"], pin: ["star", "置顶"], today: ["clock", "今天"], trash: ["trash", "回收站"] };
     /* ⚠️ 标题必须和**实际显示的内容**一致：
        「▦ 全部列表」视图下不按文件夹过滤（那一栏每条都带文件夹标签 ✓），
        所以标题不能再显示文件夹名 ✗ —— 否则会出现「标题写着「测试文件夹 · 3 个备忘录」、
        左边那个文件夹的计数却是 0」这种自相矛盾的画面（用户截图里就是这个，
        很容易让人以为「移进文件夹没生效」✗）。 */
-    const listTitle = smart ? (SMART_NAME[smart] || "全部")
-      : (view === "all" ? ("全部列表" + (fol ? "（不限文件夹）" : "")) : (fol ? fol : "iCloud 全部"));
+    const listTitle = view === "all" ? ("全部列表" + (fol ? "（不限文件夹）" : "")) : (fol ? fol : "iCloud 全部");
+    const listTitleHtml = (() => { const s = SMART_NAME[smart] || ["rows", "全部"]; return smart ? ICO(s[0]) + " " + esc(s[1]) : esc(listTitle); })();
     const todoSum = (() => {
       let open = 0, done = 0;
       all.forEach((m) => { const t = todoOf(m); open += t.open; done += t.done; });
       return { open, done };
     })();
-    const list = '<div class="lw-nt-list"><div class="top"><div class="t1">' + esc(listTitle) + '</div>'
+    const list = '<div class="lw-nt-list"><div class="top"><div class="t1">' + listTitleHtml + '</div>'
       + '<div class="t2">' + shown.length + ' 个备忘录'
       + (smart === 'todo' && todoSum.open + todoSum.done ? ' · 未完成 ' + todoSum.open + ' / 共 ' + (todoSum.open + todoSum.done) : '')
       + (smart === 'trash' ? ' · 右键可恢复' : '') + '</div>'
@@ -6380,16 +6450,16 @@
     const d = cur ? D(cur.edit || cur.at) : null;
     const meta = d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes())) : "";
     const editor = cur ? '<div class="lw-nt-bar">'
-      + '<button id="lw-memo-new" title="新建（⌘N）">✎ 新建</button>'
-      + '<button id="lw-memo-undo" title="撤销（⌘Z）"' + (canUndo() ? '' : ' disabled') + '>↶ 撤销</button>'
-      + '<button id="lw-memo-redo" title="重做（⌘⇧Z）"' + (canRedo() ? '' : ' disabled') + '>↷</button>'
+      + '<button id="lw-memo-new" title="新建（⌘N）">' + ICO('pen') + ' 新建</button>'
+      + '<button id="lw-memo-undo" title="撤销（⌘Z）"' + (canUndo() ? '' : ' disabled') + '>' + ICO('undo') + ' 撤销</button>'
+      + '<button id="lw-memo-redo" title="重做（⌘⇧Z）"' + (canRedo() ? '' : ' disabled') + '>' + ICO('redo') + '</button>'
       + '<button id="lw-nt-aa" class="' + ((STORE && STORE.memoMenu) ? "on" : "") + '" title="格式">Aa</button>'
-      + '<button id="lw-nt-check" title="插入清单项">☑</button>'
-      + '<button id="lw-nt-table" title="插入表格">▦</button>'
+      + '<button id="lw-nt-check" title="插入清单项">' + ICO('check') + '</button>'
+      + '<button id="lw-nt-table" title="插入表格">' + ICO('rows') + '</button>'
       + '<button id="lw-nt-live" class="' + (STORE.memoSource ? "on" : "") + '" title="显示全部源码（关掉则是实时渲染）">◫ 源码</button>'
       + '<span class="sp"></span>'
       + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status" aria-live="polite">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
-      + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "★" : "☆") + '</button>'
+      + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "" + ICO('star', 'is-on') + "" : "" + ICO('star') + "") + '</button>'
       + '<button id="lw-memo-export" title="导出 Markdown（.md）">导出</button>'
       + '<button id="lw-memo-image" title="导出为图片：把渲染后的内容存成 PNG（含标题与日期）">图片</button>'
       + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button></div>'
@@ -6416,7 +6486,7 @@
           + '</div>';
       })()
       + '</div>'
-      : '<div class="lw-nt-bar"><button id="lw-memo-new">✎ 新建</button></div><div class="lw-nt-empty"><span class="big">✎</span>选一条备忘录，或点「✎ 新建」</div>';
+      : '<div class="lw-nt-bar"><button id="lw-memo-new">' + ICO('pen') + ' 新建</button></div><div class="lw-nt-empty"><span class="big">' + ICO('pen') + '</span>选一条备忘录，或点「' + ICO('pen') + ' 新建」</div>';
 
     /* 三栏宽度可拖拽调整（记住到 STORE ✓，双击竖条恢复默认 ✓）*/
     const sideW = Number(STORE.memoSideW) || 0;
@@ -6467,14 +6537,14 @@
       + '<button id="lw-bk-add">记下 ⌘⏎</button></div>';
 
     const wall = shown.length ? '<div class="lw-bk-wall">' + shown.map((q) => '<div class="lw-bk-card ' + (q.pin ? 'pin' : '') + '">'
-      + '<div class="ops"><button data-bk-pin="' + q.id + '" title="置顶">' + (q.pin ? '★' : '☆') + '</button>'
-      + '<button data-bk-copy="' + q.id + '" title="复制">⧉</button>'
-      + '<button class="del" data-bk-del="' + q.id + '" title="删除">✕</button></div>'
+      + '<div class="ops"><button data-bk-pin="' + q.id + '" title="置顶">' + (q.pin ? '' + ICO('star', 'is-on') + '' : '' + ICO('star') + '') + '</button>'
+      + '<button data-bk-copy="' + q.id + '" title="复制">' + ICO('columns') + '</button>'
+      + '<button class="del" data-bk-del="' + q.id + '" title="删除">' + ICO('close') + '</button></div>'
       + '<div class="txt">' + esc(q.text) + '</div>'
       + '<div class="src">' + (q.from ? '—— ' + esc(q.from) : '')
       + '<span class="sp"></span>' + tagsOf(q).map((t) => '<span class="tg">#' + esc(t) + '</span>').join(' ')
       + '</div></div>').join('') + '</div>'
-      : '<div class="lw-mo-empty" style="padding:34px 0"><span class="big">❝</span>' + (kw || tagF ? '没有匹配的书签' : '还没有书签') + '</div>';
+      : '<div class="lw-mo-empty" style="padding:34px 0"><span class="big">' + ICO('tag') + '</span>' + (kw || tagF ? '没有匹配的书签' : '还没有书签') + '</div>';
 
     const tagBar = tagKeys.length ? '<div class="lw-mtags" style="padding:0 0 12px"><span data-bktag="" class="' + (tagF ? '' : 'on') + '">全部 ' + all.length + '</span>'
       + tagKeys.map((t) => '<span data-bktag="' + esc(t) + '" class="' + (tagF === t ? 'on' : '') + '">#' + esc(t) + ' ' + tagCount[t] + '</span>').join('') + '</div>' : '';
@@ -6489,9 +6559,9 @@
   /* ── 日记（按天一条 + 时间线）── */
   /* ── 日记模板（新建时自动套用，也可手动插入）── */
   const J_TPL = {
-    daily: { name: '日常', icon: '☀', text: '## 今天做了什么\n- \n\n## 卡在哪里\n- \n\n## 明天要做什么\n- \n\n## 心情 / 收获\n' },
-    research: { name: '科研', icon: '◈', text: '## 今日进展\n- \n\n## 实验 / 数据\n- 跑了什么：\n- 结果如何：\n- 异常现象：\n\n## 遇到的问题\n- \n\n## 下一步\n- \n\n## 文献 / 灵感\n- ' },
-    review: { name: '复盘', icon: '◔', text: '## 做得好的\n- \n\n## 做得不好的\n- \n\n## 学到了什么\n- \n\n## 明天改进\n- ' },
+    daily: { name: '日常', icon: 'spark', text: '## 今天做了什么\n- \n\n## 卡在哪里\n- \n\n## 明天要做什么\n- \n\n## 心情 / 收获\n' },
+    research: { name: '科研', icon: 'book', text: '## 今日进展\n- \n\n## 实验 / 数据\n- 跑了什么：\n- 结果如何：\n- 异常现象：\n\n## 遇到的问题\n- \n\n## 下一步\n- \n\n## 文献 / 灵感\n- ' },
+    review: { name: '复盘', icon: 'clock', text: '## 做得好的\n- \n\n## 做得不好的\n- \n\n## 学到了什么\n- \n\n## 明天改进\n- ' },
   };
 
   /* 就地实时渲染：**逐行 + 字符保留** ✓
@@ -6897,18 +6967,18 @@
       + (cur && catOf2(cur) ? ' <span style="color:' + T.accent + '">#' + esc(catOf2(cur)) + '</span>' : '')
       + (catF && (!cur || catOf2(cur) !== catF) ? ' <span style="color:' + T.faint + ';font-weight:400">（不在「' + esc(catF) + '」筛选内）</span>' : '')
       + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
-      + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + J_TPL[k].icon + ' ' + J_TPL[k].name + '</button>').join('')
+      + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + ICO(J_TPL[k].icon) + ' ' + J_TPL[k].name + '</button>').join('')
       + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
       + '<div class="lw-live-bar"><span class="brand">✎ 边写边渲染</span>'
 + '<span class="hint">光标行显示源码，其他行即时渲染</span>'
 + '<span class="sp"></span>'
 /* ★ 撤销 / 重做 ✓（2026-10-09 加 ✓）—— 和备忘录同一套快照机制 ✓ */
-+ '<button id="lw-j-undo" title="撤销（⌘Z）"' + (canJUndo() ? '' : ' disabled') + '>↶ 撤销</button>'
-+ '<button id="lw-j-redo" title="重做（⌘⇧Z）"' + (canJRedo() ? '' : ' disabled') + '>↷ 重做</button>'
++ '<button id="lw-j-undo" title="撤销（⌘Z）"' + (canJUndo() ? '' : ' disabled') + '>' + ICO('undo') + ' 撤销</button>'
++ '<button id="lw-j-redo" title="重做（⌘⇧Z）"' + (canJRedo() ? '' : ' disabled') + '>' + ICO('redo') + ' 重做</button>'
 + '<select id="lw-j-catsel">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf2(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
       + '<button id="lw-j-md" title="把当前行变成标题"># 标题</button>'
-      + '<button id="lw-j-ck" title="把当前行变成清单项">☐ 清单</button>'
+      + '<button id="lw-j-ck" title="把当前行变成清单项">' + ICO('check') + ' 清单</button>'
       + '</div>'
       + '<div class="lw-ce" id="lw-j-ce" contenteditable="true" spellcheck="false">' + ceHtml(cur ? cur.text : (STORE.journalAutoTpl === false ? '' : J_TPL.daily.text), 0) + '</div>'
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
@@ -6948,10 +7018,10 @@
 
     /* 顶部概览（原来一上来就是卡片墙 ✗，缺一个总览 ✗）*/
     const kpis = [
-      kpiCard('◈', tracks.length, '个方向', '研究方向', '按最近改动排序', 3, 'sky'),
-      kpiCard('▦', totalProjects, '个项目', '全部方向', `覆盖 ${totalFiles} 个文件`, 3, 'lilac'),
+      kpiCard('book', tracks.length, '个方向', '研究方向', '按最近改动排序', 3, 'sky'),
+      kpiCard('grid', totalProjects, '个项目', '全部方向', `覆盖 ${totalFiles} 个文件`, 3, 'lilac'),
       kpiCard('◉', hottest ? hottest.name : '—', '', '最活跃', hottest ? `${hottest.files} 文件 · ${hottest.sizeText}` : '—', 3, 'mint'),
-      kpiCard('🔥', ((STORE && STORE.hot) || {}).count || 0, '条', '网上热点', (STORE && STORE.hotQ) ? '关键词：' + esc(STORE.hotQ) : '下面点「搜热点」', 3, 'lemon'),
+      kpiCard('flame', ((STORE && STORE.hot) || {}).count || 0, '条', '网上热点', (STORE && STORE.hotQ) ? '关键词：' + esc(STORE.hotQ) : '下面点「搜热点」', 3, 'lemon'),
     ].join('');
 
     /* 🔥 网上热点 —— **自动推** ✓（不用手动搜 ✗）
@@ -6981,7 +7051,7 @@
             <div class="t"><a href="${esc(h.url)}" target="_blank" rel="noopener">${esc(h.title)}</a></div>
             <div class="m">▲ ${h.points} · 💬 ${h.comments} · ${esc(String(h.at).slice(0, 10))}</div></div>`).join('')
         : (hotRes && hotRes.error ? `<div class="lw-empty">${esc(hotRes.error)}</div>`
-          : '<div class="lw-empty"><span class="big">🔥</span>正在准备…</div>');
+          : '<div class="lw-empty"><span class="big">' + ICO('flame') + '</span>正在准备…</div>');
     const hotCard = `<div class="lw-c" style="${sp(6)}">
       <h3><span class="code">F-90</span>网上热点<span class="sp"></span>
         <em>${hotQ ? '按「' + esc(hotQ) + '」自动推' : '自动推'}</em></h3>
@@ -7023,7 +7093,7 @@
       </div>
       <div class="lw-hotlist" id="lw-ai-out">${(STORE && STORE.aiLoading) ? '<div class="lw-empty">AI 思考中…</div>'
         : (aiRes ? (aiRes.ok ? `<div class="lw-aiout">${esc(aiRes.text).replace(/\n/g, '<br>')}</div>` : `<div class="lw-empty">${esc(aiRes.error)}</div>`)
-          : '<div class="lw-empty"><span class="big">🤖</span>可以让 AI 帮你读热点、出选题</div>')}</div>
+          : '<div class="lw-empty"><span class="big">' + ICO('spark') + '</span>可以让 AI 帮你读热点、出选题</div>')}</div>
     </div>`;
 
     /* 🔍 联网搜索（复用 CodeScope 的 /api/ai/web-search ✓ —— Tavily / Brave ✓）*/
@@ -7033,7 +7103,7 @@
             <div class="t"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></div>
             <div class="m">${esc(String(r.content || r.snippet || '').slice(0, 150))}</div></div>`).join('')
         : (wsRes && wsRes.error ? `<div class="lw-empty">${esc(wsRes.error)}</div>`
-          : '<div class="lw-empty"><span class="big">🔍</span>输入问题，去网上搜一圈</div>');
+          : '<div class="lw-empty"><span class="big">' + ICO('search') + '</span>输入问题，去网上搜一圈</div>');
     const wsCard = `<div class="lw-c" style="${sp(12)}">
       <h3><span class="code">F-92</span>联网搜索<span class="sp"></span><em>复用 CodeScope · Tavily / Brave</em></h3>
       <div class="lw-pad" style="padding-bottom:10px">
@@ -7064,7 +7134,7 @@
             <div class="t"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
             <div class="m">${esc((p.authors || []).join(', '))} · ${esc(p.published)}</div>
             <div class="s">${esc(p.summary)}</div></div>`).join('')
-        : (res && res.error ? `<div class="lw-empty">${esc(res.error)}</div>` : '<div class="lw-empty"><span class="big">▤</span>输入关键词，或点一个推荐词</div>'));
+        : (res && res.error ? `<div class="lw-empty">${esc(res.error)}</div>` : '<div class="lw-empty"><span class="big">' + ICO('rows') + '</span>输入关键词，或点一个推荐词</div>'));
     return `<div class="lw-g12">
       <div class="lw-c" style="${sp(12)}">
         <h3><span class="code">P-01</span>论文检索<span class="sp"></span><em>arXiv 在线 + 本机库</em></h3>
@@ -7129,7 +7199,7 @@
       ${kpiCard('Σ', total, '个改动', '近 14 天', '日均 ' + (total / 14).toFixed(1) + ' 个', 3, 'rose')}
       ${kpiCard('◔', active, '天', '有改动', '共 14 天', 3, 'sky')}
       ${kpiCard('↑', max, '个', '单日峰值', peak.label || '—', 3, 'lilac')}
-      ${kpiCard('▦', DATA.totals.projects, '个', '在跟的项目', DATA.totals.sizeText, 3, 'mint')}
+      ${kpiCard('grid', DATA.totals.projects, '个', '在跟的项目', DATA.totals.sizeText, 3, 'mint')}
       ${card('改动趋势', '近 14 天', `<div class="lw-pad"><div style="padding:4px 0">${spark(days.map((x) => x.count), 460, 84, T.accent)}</div>
         <div style="display:flex;justify-content:space-between;font-size:10.5px;color:${T.faint};margin-top:6px">
           <span>${(days[0] || {}).label || ''}</span><span>${(days[days.length - 1] || {}).label || ''}</span></div></div>`, 6)}
@@ -7307,14 +7377,14 @@
     const label = (k) => ((acc[k] && acc[k].user) || k) + '（' + k + '）';
     if (!keys.length) {
       return '<div class="lw-mc-mask"><div class="lw-mc">'
-        + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">✕</button></div>'
+        + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">' + ICO('close') + '</button></div>'
         + '<div class="lw-mc-empty">还没有配好邮箱 ✗<br>先点右上角「⚙ 账号配置」填一个（要填<b>授权码</b>，不是登录密码）。</div>'
         + '</div></div>';
     }
     const cur = keys.indexOf(MAIL_UI.composeFrom) >= 0 ? MAIL_UI.composeFrom : keys[0];
     MAIL_UI.composeFrom = cur;
     return '<div class="lw-mc-mask"><div class="lw-mc">'
-      + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">✕</button></div>'
+      + '<div class="hd">写邮件<span class="sp"></span><button data-mcx="1" title="关闭">' + ICO('close') + '</button></div>'
       + '<label>发件邮箱<select id="lw-mc-from">'
       + keys.map((k) => '<option value="' + esc(k) + '"' + (k === cur ? ' selected' : '') + '>' + esc(label(k)) + '</option>').join('')
       + '</select></label>'
@@ -7463,16 +7533,16 @@
     /* ⚠️ `mailAcc` 还没读回来（undefined）时要显示「检查中」✗ 不能显示「未配置」✗ ——
        否则面板刚打开那 1 秒会闪一下错的提示，看起来像「我的配置丢了」✗。 */
     if (STORE && (STORE.mailAcc === undefined || STORE.mailAcc === null)) {
-      return '<div class="lw-mb" id="lw-mb" title="正在读取邮箱配置…"><span class="ic">✉</span>'
+      return '<div class="lw-mb" id="lw-mb" title="正在读取邮箱配置…"><span class="ic">' + ICO('mail') + '</span>'
         + '<div class="t">读取邮箱…</div></div>';
     }
     const keys = mailConfiguredKeys();
     if (!keys.length) {
-      return '<div class="lw-mb" id="lw-mb" title="还没有配置邮箱账号 —— 点这里去配置"><span class="ic">✉</span>'
+      return '<div class="lw-mb" id="lw-mb" title="还没有配置邮箱账号 —— 点这里去配置"><span class="ic">' + ICO('mail') + '</span>'
         + '<div class="t">邮箱未配置<br>点这里添加</div></div>';
     }
     if (!MAIL_STATUS) {
-      return '<div class="lw-mb" id="lw-mb" title="正在检查邮箱…"><span class="ic">✉</span><span class="n">·</span>'
+      return '<div class="lw-mb" id="lw-mb" title="正在检查邮箱…"><span class="ic">' + ICO('mail') + '</span><span class="n">·</span>'
         + '<div class="t">检查中…</div></div>';
     }
     const accts = MAIL_STATUS.accounts || [];
@@ -7484,14 +7554,14 @@
     if (!good.length) {
       const why = bad[0] ? String(bad[0].error || '连接失败').slice(0, 46) : '连接失败';
       return '<div class="lw-mb bad" id="lw-mb" title="' + esc(accts.map((a) => a.user + '：' + (a.ok ? '正常' : a.error)).join('\n')) + '">'
-        + '<span class="ic">✉</span><div class="t">收信失败 · ' + esc(why) + '</div></div>';
+        + '<span class="ic">' + ICO('mail') + '</span><div class="t">收信失败 · ' + esc(why) + '</div></div>';
     }
     const title = accts.map((a) => a.user + '：' + (a.ok ? (a.unseen + ' 封未读 / 共 ' + a.messages) : ('✗ ' + a.error))).join('\n');
     const tip = latest
       ? esc(String(latest.from || '').slice(0, 18)) + ' · ' + esc(String(latest.subject || '').slice(0, 40))
       : '没有未读邮件';
     return '<div class="lw-mb' + (total ? ' has' : '') + '" id="lw-mb" title="' + esc(title) + '">'
-      + '<span class="ic">✉</span>'
+      + '<span class="ic">' + ICO('mail') + '</span>'
       + (total ? '<span class="n">' + total + '</span>' : '')
       + '<div class="t">' + (total ? '未读 · ' + tip : '收件箱已读 · ' + tip) + '</div></div>';
   }
@@ -7526,11 +7596,11 @@
     el.className = 'lw-toast';
     el.id = 'lw-toast';
     el.title = '点这里打开邮箱';
-    el.innerHTML = '<div class="ic">✉</div><div class="bd">'
+    el.innerHTML = '<div class="ic">' + ICO('mail') + '</div><div class="bd">'
       + '<div class="t1">新邮件 · ' + delta + ' 封</div>'
       + '<div class="t2">' + esc(String((latest && latest.from) || '（未知发件人）').slice(0, 60)) + '</div>'
       + '<div class="t3">' + esc(String((latest && latest.subject) || '').slice(0, 70)) + '</div>'
-      + '</div><button class="x" title="关闭">✕</button>';
+      + '</div><button class="x" title="关闭">' + ICO('close') + '</button>';
     el.onclick = (ev) => {
       if (ev.target && ev.target.classList && ev.target.classList.contains('x')) { mailHideToast(); return; }
       mailHideToast();
@@ -7769,7 +7839,7 @@
     return '<div class="lw-ml-hd">账号</div>' + rows
       + (boxesHtml ? '<div class="lw-ml-hd">文件夹</div>' + boxesHtml : '')
       + '<div class="lw-ml-hd">设置</div>'
-      + '<div class="lw-ml-box' + (MAIL_UI.cfgOpen ? ' on' : '') + '" data-mcfg="1"><span>⚙ 账号配置</span></div>'
+      + '<div class="lw-ml-box' + (MAIL_UI.cfgOpen ? ' on' : '') + '" data-mcfg="1"><span>' + ICO('gear') + ' 账号配置</span></div>'
       + (MAIL_UI.key ? '<div class="lw-ml-box" id="lw-ml-readall"><span>✓ 本箱全部标为已读</span></div>' : '')
       + '<div class="lw-ml-box" data-mrefresh="1"><span>↻ 重新收信</span></div>';
   }
@@ -7785,9 +7855,9 @@
     const tools = '<div class="lw-ml-tools">'
       + '<input id="lw-ml-q" placeholder="筛选发件人 / 主题…" value="' + esc(MAIL_UI.q) + '"/>'
       + '<button id="lw-ml-unread" class="' + (MAIL_UI.unreadOnly ? 'on' : '') + '" title="只看未读">未读</button>'
-      + '<button id="lw-ml-star" class="' + (MAIL_UI.importantOnly ? 'on' : '') + '" title="只看重要（⭐）">⭐</button>'
-      + '<button id="lw-ml-compose" title="写邮件（可自选发件邮箱）" style="font-weight:700">✎ 写邮件</button>'
-      + '<button id="lw-ml-reload" title="重新收信">↻</button></div>';
+      + '<button id="lw-ml-star" class="' + (MAIL_UI.importantOnly ? 'on' : '') + '" title="只看重要（⭐）">' + ICO('star', 'is-on') + '</button>'
+      + '<button id="lw-ml-compose" title="写邮件（可自选发件邮箱）" style="font-weight:700">' + ICO('pen') + ' 写邮件</button>'
+      + '<button id="lw-ml-reload" title="重新收信">' + ICO('refresh') + '</button></div>';
 
     if (MAIL_UI.listLoading) return tools + '<div class="lw-ml-empty">正在收信…</div>';
     if (MAIL_UI.listErr) return tools + '<div class="lw-ml-empty" style="color:' + T.red + '">✗ ' + esc(MAIL_UI.listErr) + '</div>';
@@ -7991,7 +8061,7 @@
       + '<button class="lw-btn" data-mact="' + (m.flagged ? 'unflag' : 'flag') + '" data-muid="' + m.uid + '"'
       + ' title="重要（IMAP \\Flagged，其它邮件客户端也能看到）">' + (m.flagged ? '★ 已标重要' : '☆ 标为重要') + '</button>'
       /* ★ 分类管理：把邮件移到别的文件夹 ✓（也可以直接把列表里的邮件拖到左栏文件夹 ✓）*/
-      + '<button class="lw-btn" id="lw-ml-move" data-muid="' + m.uid + '" title="移到别的文件夹（也可以直接把左边列表里的邮件拖到文件夹上）">📁 移到…</button>'
+      + '<button class="lw-btn" id="lw-ml-move" data-muid="' + m.uid + '" title="移到别的文件夹（也可以直接把左边列表里的邮件拖到文件夹上）">' + ICO('folder') + ' 移到…</button>'
       + '<button class="lw-btn' + (tr ? ' on' : '') + '" id="lw-ml-tr">'
       + (MAIL_UI.trBusy ? '翻译中…' : (tr ? '⇄ 对照中' : '⇄ 对照翻译')) + '</button>'
       + '<button class="lw-btn" data-mact="' + (m.seen ? 'unread' : 'read') + '" data-muid="' + m.uid + '">'
@@ -8619,13 +8689,13 @@
        ⚠️ 保留原来那个「章节下拉」✗ —— 它跳章**很快** ✓（几十章的书 ✓），
           而目录抽屉适合**翻着看** ✓。两个都留 ✓（成熟阅读器也常常两个都有 ✓）。 */
     const bar = '<div class="lw-eb-bar">'
-      + '<button class="' + (RD_UI.ebToc ? 'on' : '') + '" id="lw-eb-toc" title="目录 / 搜索（⌘F 也行）">📑 目录</button>'
-      + '<button id="lw-eb-prev"' + (ch <= 0 ? ' disabled' : '') + ' title="上一章（←）">◀</button>'
+      + '<button class="' + (RD_UI.ebToc ? 'on' : '') + '" id="lw-eb-toc" title="目录 / 搜索（⌘F 也行）">' + ICO('rows') + ' 目录</button>'
+      + '<button id="lw-eb-prev"' + (ch <= 0 ? ' disabled' : '') + ' title="上一章（←）">' + ICO('chevron-left') + '</button>'
       + '<select id="lw-eb-jump" title="跳到某一章">'
       + (total ? meta.chapters.map((c, i) => '<option value="' + i + '"' + (i === ch ? ' selected' : '') + '>'
         + esc(String(i + 1) + '. ' + String(c.title || '')) + '</option>').join('') : '<option>（没有目录）</option>')
       + '</select>'
-      + '<button id="lw-eb-next"' + (total && ch >= total - 1 ? ' disabled' : '') + ' title="下一章（→）">▶</button>'
+      + '<button id="lw-eb-next"' + (total && ch >= total - 1 ? ' disabled' : '') + ' title="下一章（→）">' + ICO('play') + '</button>'
       + '<span class="lw-eb-prog" id="lw-eb-prog" title="点 / 拖一下跳章"><i style="width:' + pct + '%"></i></span>'
       + '<span class="n">' + (total ? ('第 ' + (ch + 1) + ' / ' + total + ' 章 · 全书 ' + (Number(b.prog) || 0) + '%') : '') + '</span>'
       + '<span class="sp"></span>'
@@ -8666,7 +8736,7 @@
     const chips = RD_ST_ORDER.map((k) => '<span class="lw-rd-chip' + (b.status === k ? ' on' : '') + '" data-rdset="' + k + '">' + RD_ST[k].e + ' ' + RD_ST[k].n + '</span>').join('')
       + Object.keys(RD_SRC).map((k) => '<span class="lw-rd-chip' + (b.src === k ? ' on' : '') + '" data-rdsrcset="' + k + '">' + RD_SRC[k].e + ' ' + RD_SRC[k].n + '</span>').join('')
       + [1, 2, 3, 4, 5].map((r) => '<span class="lw-rd-chip' + (Number(b.rating) === r ? ' on' : '') + '" data-rdrate="' + r + '" title="打 ' + r + ' 星">' + '★'.repeat(r) + '</span>').join('')
-      + '<span class="lw-rd-chip" data-act="del" id="lw-rd-del" title="删掉这本书和它的笔记">🗑 删除</span>';
+      + '<span class="lw-rd-chip" data-act="del" id="lw-rd-del" title="删掉这本书和它的笔记">' + ICO('trash') + ' 删除</span>';
     const log = ((STORE && STORE.readLog) || []).filter((x) => x && x.bookId === b.id);
     const totalMin = log.reduce((a, x) => a + (Number(x.min) || 0), 0);
     const totalPg = log.reduce((a, x) => a + (Number(x.pages) || 0), 0);
@@ -8705,7 +8775,7 @@
       + '<textarea id="lw-rd-notetx" placeholder="粘贴划线或写下想法…" style="flex:1;min-width:180px;height:64px;resize:vertical;border:1px solid ' + T.lineDim + ';background:' + T.card + ';color:' + T.text + ';font:11.5px/1.7 ' + UI + ';padding:8px;outline:none"></textarea>'
       + '</div>'
       + '<div class="lw-rd-quick">'
-      + '<button id="lw-rd-notequote">✏️ 存为划线</button><button id="lw-rd-noteidea">💭 存为想法</button>'
+      + '<button id="lw-rd-notequote">' + ICO('pen') + ' 存为划线</button><button id="lw-rd-noteidea">' + ICO('pen') + ' 存为想法</button>'
       + '<span style="font-size:9.5px;color:' + T.faint + '">按 ⌘/Ctrl+Enter 存为划线</span>'
       + '</div>'
       + (notes.length ? notes.map(rdNoteHtml).join('') : '<div class="lw-rd-empty" style="padding:22px">还没有笔记</div>')
@@ -9182,10 +9252,10 @@
         + '<button class="lw-rd-chip" id="lw-fl-nodedis" style="padding:5px 10px'
         + (n.disabled ? ';border-color:' + T.warn + ';color:' + T.warn : '') + '">'
         + (n.disabled ? '▶ 启用它' : '⏸ 禁用它') + '</button>'
-        + '<button class="lw-rd-chip" id="lw-fl-nodecopy" style="padding:5px 10px">⧉ 复制</button>'
-        + '<button class="lw-rd-chip" id="lw-fl-noderun" style="padding:5px 10px">▶ 执行到此</button>'
+        + '<button class="lw-rd-chip" id="lw-fl-nodecopy" style="padding:5px 10px">' + ICO('columns') + ' 复制</button>'
+        + '<button class="lw-rd-chip" id="lw-fl-noderun" style="padding:5px 10px">' + ICO('play') + ' 执行到此</button>'
         + '</div>'
-        + '<div class="lw-fl-field"><button class="lw-rd-chip" data-act="del" id="lw-fl-nodedel" style="border-color:' + T.lineDim + ';padding:5px 10px">🗑 删掉这个节点</button></div>';
+        + '<div class="lw-fl-field"><button class="lw-rd-chip" data-act="del" id="lw-fl-nodedel" style="border-color:' + T.lineDim + ';padding:5px 10px">' + ICO('trash') + ' 删掉这个节点</button></div>';
     }
     const steps = FLOW_UI.steps;
     const log = steps && steps.length
@@ -9590,28 +9660,28 @@
     const nPicked = FLOW_UI.picked.length;
     const tools = '<div class="lw-fl-tools">'
       + '<button id="lw-fl-new">＋ 新建</button>'
-      + '<button class="pri" id="lw-fl-run"' + (f && (f.nodes || []).length ? '' : ' disabled') + '>▶ 运行</button>'
+      + '<button class="pri" id="lw-fl-run"' + (f && (f.nodes || []).length ? '' : ' disabled') + '>' + ICO('play') + ' 运行</button>'
       + '<span class="sep"></span>'
-      + '<button id="lw-fl-undo" title="撤销（⌘Z）"' + (FLOW_UI.undo.length ? '' : ' disabled') + '>↶ 撤销</button>'
-      + '<button id="lw-fl-redo" title="重做（⌘⇧Z）"' + (FLOW_UI.redo.length ? '' : ' disabled') + '>↷ 重做</button>'
+      + '<button id="lw-fl-undo" title="撤销（⌘Z）"' + (FLOW_UI.undo.length ? '' : ' disabled') + '>' + ICO('undo') + ' 撤销</button>'
+      + '<button id="lw-fl-redo" title="重做（⌘⇧Z）"' + (FLOW_UI.redo.length ? '' : ' disabled') + '>' + ICO('redo') + ' 重做</button>'
       + '<span class="sep"></span>'
-      + '<button id="lw-fl-copy" title="复制选中的节点（⌘C）">⧉ 复制</button>'
-      + '<button id="lw-fl-paste" title="粘贴（⌘V）"' + (FLOW_UI.clip && FLOW_UI.clip.nodes.length ? '' : ' disabled') + '>📋 粘贴</button>'
-      + '<button id="lw-fl-tidy" title="按连线分层重新排列（Tidy Up）">▦ 整理</button>'
+      + '<button id="lw-fl-copy" title="复制选中的节点（⌘C）">' + ICO('columns') + ' 复制</button>'
+      + '<button id="lw-fl-paste" title="粘贴（⌘V）"' + (FLOW_UI.clip && FLOW_UI.clip.nodes.length ? '' : ' disabled') + '>' + ICO('rows') + ' 粘贴</button>'
+      + '<button id="lw-fl-tidy" title="按连线分层重新排列（Tidy Up）">' + ICO('rows') + ' 整理</button>'
       + '<button id="lw-fl-keys-btn" class="' + (FLOW_UI.keys ? 'pri' : '') + '"'
       + ' title="填各家模型的 Key（DeepSeek / 豆包 / 任意 OpenAI 兼容）">🔑 模型</button>'
       + '<button id="lw-fl-web-btn" class="' + (FLOW_UI.web ? 'pri' : '') + '"'
       + ' title="用网页版跑（打开 DeepSeek / 豆包 / 即梦的窗口，登录一次就能被工作流调用）">🌐 网页版</button>'
-      + '<button id="lw-fl-runs" title="看以前每次跑的结果">🕘 历史' + (FLOW_UI.runs.length ? ' ' + FLOW_UI.runs.length : '') + '</button>'
+      + '<button id="lw-fl-runs" title="看以前每次跑的结果">' + ICO('clock') + ' 历史' + (FLOW_UI.runs.length ? ' ' + FLOW_UI.runs.length : '') + '</button>'
       + '<button id="lw-fl-sched" title="哪些工作流会自动跑、下次几点"'
       + (FLOW_UI.sched.length ? ' style="border-color:' + T.accent + ';color:' + T.accent + '"' : '') + '>⏰ 定时'
       + (FLOW_UI.sched.length ? ' ' + FLOW_UI.sched.length : '') + '</button>'
       + '<span class="sep"></span>'
-      + '<button id="lw-fl-example" title="一键搭一个能跑的示例（B站热门 → AI 挑 5 条 → 写进备忘录）">✨ 示例</button>'
-      + '<button id="lw-fl-example-video" title="一键搭一条视频生成链：DeepSeek 写分镜 → 豆包出首帧 → 豆包生视频 → 落盘">🎬 视频示例</button>'
-      + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">📖 说明</button>'
+      + '<button id="lw-fl-example" title="一键搭一个能跑的示例（B站热门 → AI 挑 5 条 → 写进备忘录）">' + ICO('spark') + ' 示例</button>'
+      + '<button id="lw-fl-example-video" title="一键搭一条视频生成链：DeepSeek 写分镜 → 豆包出首帧 → 豆包生视频 → 落盘">' + ICO('play') + ' 视频示例</button>'
+      + '<button id="lw-fl-help" class="' + (FLOW_UI.help ? 'pri' : '') + '" title="每个节点是干什么的、怎么用">' + ICO('book') + ' 说明</button>'
       + '<button id="lw-fl-clear">清空画布</button>'
-      + '<button id="lw-fl-del">🗑 删工作流</button>'
+      + '<button id="lw-fl-del">' + ICO('trash') + ' 删工作流</button>'
       + '<span class="hint">' + (FLOW_UI.busy
         ? ('正在跑… ' + (FLOW_UI.steps || []).length + ' / ' + (f ? (f.nodes || []).filter((n) => !flowMetaOf(n).sticky).length : 0) + ' 步'
           + (FLOW_UI.running ? '（' + esc(flowMetaOf(flowNodeById(f, FLOW_UI.running)).n) + '）' : ''))
@@ -9748,7 +9818,7 @@
         : (d.running ? '<span style="color:' + T.ok + '">已启动</span>' : '未启动（要跑的时候会自动开）')) + '</div></div>'
       + rows
       + '<div class="lw-fl-field" style="padding:4px 14px 16px;display:flex;gap:6px;flex-wrap:wrap">'
-      + '<button class="lw-rd-chip" id="lw-fl-webrefresh" style="padding:5px 10px">↻ 刷新状态</button>'
+      + '<button class="lw-rd-chip" id="lw-fl-webrefresh" style="padding:5px 10px">' + ICO('refresh') + ' 刷新状态</button>'
       + '<button class="lw-rd-chip" id="lw-fl-webclose" style="padding:5px 10px"'
       + (FLOW_UI.webBusy === 'close' ? ' disabled' : '') + '>关掉浏览器</button></div>'
       + (FLOW_UI.webMsg ? '<div class="tip" style="margin:0 14px 16px">' + esc(FLOW_UI.webMsg) + '</div>' : '')
@@ -9775,7 +9845,7 @@
         + '<div class="hd"><b>' + esc(p.name || p.id) + '</b>'
         + (String(p.key || '').trim() ? '<span class="ok">已填 Key</span>' : '<span class="no">还没填 Key</span>')
         + '<button class="lw-rd-chip" data-provtest="' + esc(p.id) + '" title="发一句话试试通不通">测</button>'
-        + '<button class="lw-rd-chip" data-provdel="' + esc(p.id) + '" title="删掉这个服务">🗑</button></div>'
+        + '<button class="lw-rd-chip" data-provdel="' + esc(p.id) + '" title="删掉这个服务">' + ICO('trash') + '</button></div>'
         + fld(p, 'name', '显示名字', 'DeepSeek')
         + fld(p, 'baseUrl', '接口地址', 'https://api.deepseek.com')
         + fld(p, 'key', 'API Key', 'sk-… / ark-…', true)
@@ -10677,7 +10747,7 @@
   function trListHtml() {
     const tools = '<div class="lw-hl-tools">'
       + '<input id="lw-hl-q" placeholder="筛选标题…" value="' + esc(TR_UI.q) + '"/>'
-      + '<button class="pri" id="lw-hl-reload">' + (TR_UI.busy ? '拉取中…' : '↻ 刷新') + '</button>'
+      + '<button class="pri" id="lw-hl-reload">' + (TR_UI.busy ? '拉取中…' : '' + ICO('refresh') + ' 刷新') + '</button>'
       + '<button id="lw-hl-seenall">全部标为已读</button>'
       + '</div>';
     if (TR_UI.err) return tools + '<div class="lw-hl-err">✗ ' + esc(TR_UI.err) + '</div>';
@@ -10694,7 +10764,7 @@
         const r = trResults().find((z) => z.key === TR_UI.src);
         if (r && !r.ok) {
           return tools + '<div class="lw-hl-err">✗ 这个源这次没拉到：' + esc(r.error || '未知原因')
-            + '<div style="margin-top:10px"><button id="lw-hl-retry">↻ 再试一次</button></div></div>';
+            + '<div style="margin-top:10px"><button id="lw-hl-retry">' + ICO('refresh') + ' 再试一次</button></div></div>';
         }
       }
       return tools + '<div class="lw-rd-empty">没有符合条件的条目</div>';
@@ -10739,7 +10809,7 @@
   function trAiHtml() {
     const d = TR_UI.aiData;
     const head = '<div class="hd"><b>✳ AI 日报</b><span class="sp"></span>'
-      + '<button id="lw-hl-ai">' + (TR_UI.aiBusy ? '生成中…' : (d ? '↻ 重新生成' : '生成 AI 日报')) + '</button>'
+      + '<button id="lw-hl-ai">' + (TR_UI.aiBusy ? '生成中…' : (d ? '' + ICO('refresh') + ' 重新生成' : '生成 AI 日报')) + '</button>'
       + (TR_UI.ai && !TR_UI.aiBusy ? '<button class="ghost" id="lw-hl-aimemo" title="把这份日报存进备忘录（文件夹「热榜」）">存进备忘录</button>' : '')
       + '</div>';
     /* ★ 宽度可拖 ✓ —— 用户原话：「这个 AI 日报这里，窗口无法自由拖动」✓。
@@ -10764,9 +10834,9 @@
       + (x.hotText ? ' · ' + esc(x.hotText) : '') + (x.extra ? ' · ' + esc(x.extra) : '') + '</div>'
       + '<div class="acts">'
       + '<button id="lw-hl-open">↗ 用浏览器打开原文</button>'
-      + '<button id="lw-hl-star" class="' + (trIsStar(x.id) ? 'on' : '') + '">' + (trIsStar(x.id) ? '⭐ 已收藏' : '☆ 收藏') + '</button>'
+      + '<button id="lw-hl-star" class="' + (trIsStar(x.id) ? 'on' : '') + '">' + (trIsStar(x.id) ? '' + ICO('star', 'is-on') + ' 已收藏' : '' + ICO('star') + ' 收藏') + '</button>'
       + '<button id="lw-hl-notify">🔔 推送这条</button>'
-      + '<button id="lw-hl-copy">⧉ 复制标题</button>'
+      + '<button id="lw-hl-copy">' + ICO('columns') + ' 复制标题</button>'
       + '</div>'
       + (canFrame(x.url)
         ? '<iframe id="lw-hl-frame" sandbox="allow-same-origin" src="' + esc(x.url) + '" title="原文预览"></iframe>'
@@ -11167,7 +11237,7 @@
          这种结果**不算错**但很弱 ✓，用户多半想知道得更细一点 ✓。 */
       blocks.push('<div class="lw-rm-split">' + parts.join('<span class="plus">+</span>') + '</div>'
         + '<div class="lw-ep-tip" style="padding:2px 0 0">' + note
-        + (s.confidence === 'stem' ? ' <button id="lw-rm-ai">🪄 让 AI 再拆细一点</button>' : '')
+        + (s.confidence === 'stem' ? ' <button id="lw-rm-ai">' + ICO('spark') + ' 让 AI 再拆细一点</button>' : '')
         + '</div>');
     }
     /* ⚠️⚠️ AI 那段**不能塞在 `else` 里** ✗✗ —— 我第一版就是 `if (s) … else if (ai) …` ✓，
@@ -11184,9 +11254,9 @@
       blocks.push('<div class="lw-ep-tip" style="padding:10px">库里没有能拆《' + esc(word) + '》的词根 '
         + '<span style="color:' + T.faint + '">（英语本来就不是拼积木，很多词就是没有词根）</span><br>'
         + (ai && ai.err ? '<span style="color:' + T.red + '">✗ ' + esc(ai.err) + '</span><br>' : '')
-        + '<button id="lw-rm-ai">🪄 让 AI 拆一下（会标出来是 AI 说的）</button></div>');
+        + '<button id="lw-rm-ai">' + ICO('spark') + ' 让 AI 拆一下（会标出来是 AI 说的）</button></div>');
     }
-    return '<div class="lw-rm-card"><div class="hd">🔍 《' + esc(word) + '》怎么拆'
+    return '<div class="lw-rm-card"><div class="hd">' + ICO('search') + ' 《' + esc(word) + '》怎么拆'
       + '<span class="x" id="lw-rm-splitx">✕</span></div>' + blocks.join('') + '</div>';
   }
   function rootReadHtml() {
@@ -11205,7 +11275,7 @@
       + '<span class="fm" style="color:' + T.accent + '">' + esc(ROOTS.showAll(e)) + '</span>'
       + '<span class="tp">' + esc(ROOTS.typeName(e.t)) + '</span>'
       + '<span class="sp"></span>'
-      + '<button class="' + (marks.star ? 'on' : '') + '" id="lw-rm-star" title="收藏">⭐</button>'
+      + '<button class="' + (marks.star ? 'on' : '') + '" id="lw-rm-star" title="收藏">' + ICO('star', 'is-on') + '</button>'
       + '<button class="' + (marks.done ? 'on' : '') + '" id="lw-rm-done" title="标记已掌握">✓</button>'
       + '<button id="lw-rm-unfold">展开全部</button>'
       + '<button id="lw-rm-fold">折叠</button>'
@@ -11220,7 +11290,7 @@
             + '<div class="btns">'
             + '<button id="lw-rm-qok">✓ 记住了</button>'
             + '<button id="lw-rm-qno">✗ 再来</button>'
-            + '<button id="lw-rm-qnext">下一个 →</button>'
+            + '<button id="lw-rm-qnext">下一个 ' + ICO('chevron-right') + '</button>'
             + '</div>'
           : '<div class="btns"><button class="pri" id="lw-rm-qshow">显示答案</button></div>')
         + '<div class="tip">这一轮：答对 ' + quiz.right + ' / ' + quiz.n + ' 个</div>'
@@ -11853,8 +11923,8 @@
                 pick.innerHTML = '＋ 加生词「' + esc(w) + '」';
               } else {
                 pick.dataset.w = '';
-                pick.innerHTML = '<button data-ebpick="hl">✏️ 划线</button>'
-                  + '<button data-ebpick="idea">💭 写想法</button>';
+                pick.innerHTML = '<button data-ebpick="hl">' + ICO('pen') + ' 划线</button>'
+                  + '<button data-ebpick="idea">' + ICO('pen') + ' 写想法</button>';
               }
               pick.style.display = 'block';
               pick.style.left = Math.max(4, Math.min(Math.max(0, wrap.width - 190), r.left - wrap.left)) + 'px';
@@ -12425,7 +12495,7 @@
           而多数人**一开始就是没有链接** ✗（这才是这个功能的真正入口 ✓）。 */
     const tools = '<div class="lw-rd-tools">'
       + '<input id="lw-ep-q" placeholder="搜索标题 / 来源…" value="' + esc(EP_UI.q) + '"/>'
-      + '<button class="pri" id="lw-ep-src" title="从免费外刊源里挑一篇（公开 RSS，都是实测能抓正文的）">🌐 挑一篇</button>'
+      + '<button class="pri" id="lw-ep-src" title="从免费外刊源里挑一篇（公开 RSS，都是实测能抓正文的）">' + ICO('external') + ' 挑一篇</button>'
       + '<button id="lw-ep-imp" title="贴链接或正文，导入一篇外刊">＋ 导入</button>'
       + '</div>';
     if (!list.length) {
@@ -12440,7 +12510,7 @@
           + '也可以「＋ 导入」贴个链接或直接贴正文</span>')
         + (catFilter
           ? '<div style="margin-top:14px"><button class="lw-ep-big" data-epcat="' + esc(EP_CAT_ALL) + '">看全部文章</button></div>'
-          : '<div style="margin-top:14px"><button class="lw-ep-big" id="lw-ep-src2">🌐 看看有什么好文章</button></div>')
+          : '<div style="margin-top:14px"><button class="lw-ep-big" id="lw-ep-src2">' + ICO('external') + ' 看看有什么好文章</button></div>')
         + '</div>';
     }
     return tools + list.map((a) => {
@@ -12456,7 +12526,7 @@
         + '<div class="ops">'
         + '<button data-epartcat="' + esc(a.id) + '" title="' + (cat ? '分类：' + esc(cat) + '（点一下改）' : '归到某个分类') + '">'
         + (cat ? '📁' : '📂') + '</button>'
-        + '<button class="del" data-epartdel="' + esc(a.id) + '" title="删掉这篇文章（生词保留）">🗑</button>'
+        + '<button class="del" data-epartdel="' + esc(a.id) + '" title="删掉这篇文章（生词保留）">' + ICO('trash') + '</button>'
         + '</div>'
         + '<div class="ti">' + esc(a.title || '未命名') + '</div>'
         + '<div class="mt">'
@@ -12479,7 +12549,7 @@
         + '<span style="color:' + T.faint + '">' + (none
           ? '从推荐外刊源里挑一篇最快 ✓（免费公开源，正文自动抓下来）'
           : '或者再挑一篇新的') + '</span>'
-        + '<div style="margin-top:16px"><button class="lw-ep-big" id="lw-ep-src3">🌐 挑一篇外刊</button></div>'
+        + '<div style="margin-top:16px"><button class="lw-ep-big" id="lw-ep-src3">' + ICO('external') + ' 挑一篇外刊</button></div>'
         + '<div class="lw-ep-tip" style="margin-top:12px;text-align:left">'
         + '也可以「＋ 导入」自己贴链接 / 正文 ✓<br>'
         + '或者左边「📦 开源资源」看看别人整理的杂志归档 / 教材 / 资源清单 ✓'
@@ -12520,7 +12590,7 @@
       + '<span>精读 <b>' + epArtProg(a) + '%</b></span>'
       + '</div>'
       + '<div class="lw-ep-act" style="padding:10px 0 0">'
-      + '<button id="lw-ep-play" title="从第一句开始逐句朗读整篇">🔊 朗读全文</button>'
+      + '<button id="lw-ep-play" title="从第一句开始逐句朗读整篇">' + ICO('play') + ' 朗读全文</button>'
       + '<button id="lw-ep-stop" title="停止朗读">■ 停</button>'
       + '<button class="' + (trOn ? 'on' : '') + '" id="lw-ep-tr" title="'
       + (trOn ? '收起译文' : (tr ? '已经译过了 ✓ 点一下展开' : '用 AI 逐句译成中文，对照着读')) + '">'
@@ -12531,9 +12601,9 @@
       + '<button id="lw-ep-reset" title="清掉这篇的已懂标记">↺ 重置进度</button>'
       /* ★ 📁 分类 ✓（用户原话：「还有缺少分类管理」✓）—— 列表每行也有一个 ✓，
          这里再放一个是因为**读完一篇想顺手归档** ✓（那时手就在这一栏 ✓）。 */
-      + '<button id="lw-ep-artcat" title="把这篇文章归到某个分类">📁 '
+      + '<button id="lw-ep-artcat" title="把这篇文章归到某个分类">' + ICO('folder') + ' '
       + (epCatOf(a) ? esc(epCatOf(a)) : '分类') + '</button>'
-      + '<button id="lw-ep-delart" title="删掉这篇文章（生词保留）">🗑 删文章</button>'
+      + '<button id="lw-ep-delart" title="删掉这篇文章（生词保留）">' + ICO('trash') + ' 删文章</button>'
       + '</div>'
       + (EP_UI.trErr ? '<div class="lw-ep-tip" style="color:' + T.red + '">✗ 翻译失败：' + esc(EP_UI.trErr) + '</div>' : '')
       + '</div>'
@@ -12579,7 +12649,7 @@
            并在 `bindEnglish` 里挂上同一个 `mouseup` 抓选区 ✓。 */
       + '<div class="lw-ep-sent" id="lw-ep-sent">' + epMarkWords(s.text) + '</div>'
       + '<div class="lw-ep-act">'
-      + '<button id="lw-ep-say" title="朗读这一句">🔊 读这句</button>'
+      + '<button id="lw-ep-say" title="朗读这一句">' + ICO('play') + ' 读这句</button>'
       + '<button id="lw-ep-say-slow" title="慢速朗读（0.6 倍）">🐢 慢速</button>'
       + '<button id="lw-ep-trone" title="只把这一句译成中文（不用等整篇）">'
       + (trOne ? '翻译中…' : (dst ? '⇄ 重译这句' : '⇄ 译这句')) + '</button>'
@@ -12589,7 +12659,7 @@
       + '<button id="lw-ep-anbtn" title="按英语语法拆开这一句：骨架 / 成分 / 时态 / 为什么这么写">'
       + (anBusy ? '拆解中…' : (an ? '🧩 重新拆解' : '🧩 拆解这句')) + '</button>'
       + '<button id="lw-ep-ok" title="标成已懂 / 取消">' + ((a.done || {})[idx] ? '↺ 取消已懂' : '✓ 已懂') + '</button>'
-      + '<button id="lw-ep-copy" title="复制这一句">⧉ 复制</button>'
+      + '<button id="lw-ep-copy" title="复制这一句">' + ICO('columns') + ' 复制</button>'
       + '</div>'
       + (dst ? '<div class="lw-ep-senttr">' + esc(dst) + '</div>' : '')
       /* ⚠️ 报错要显示在**面板里** ✗，不能只弹个 toast ✓ ——
@@ -12854,7 +12924,7 @@
         + '<div class="df" style="color:' + T.faint + '">加进生词本就会自动查好音标 / 释义 / 例句 / 巧记 ✓</div>'
         + '<div class="lw-ep-act" style="padding:8px 0 0">'
         + '<button class="pri" id="lw-ep-peekadd">＋ 加进生词本</button>'
-        + '<button id="lw-ep-peeksay">🔊 先听一下</button>'
+        + '<button id="lw-ep-peeksay">' + ICO('play') + ' 先听一下</button>'
         + '</div></div>';
     }
     const busy = EP_UI.enBusy === w.id;
@@ -12871,10 +12941,10 @@
       + (w.egZh ? '<div class="egzh">' + esc(w.egZh) + '</div>' : '')
       + (w.mnem ? '<div class="mnem">💡 ' + esc(w.mnem) + '</div>' : '')
       + '<div class="lw-ep-act" style="padding:8px 0 0">'
-      + '<button id="lw-ep-peeksay">🔊 读</button>'
-      + '<button id="lw-ep-peekenrich">' + (busy ? '补全中…' : (w.enAt ? '🪄 重新补全' : '🪄 补全')) + '</button>'
+      + '<button id="lw-ep-peeksay">' + ICO('play') + ' 读</button>'
+      + '<button id="lw-ep-peekenrich">' + (busy ? '补全中…' : (w.enAt ? '' + ICO('spark') + ' 重新补全' : '' + ICO('spark') + ' 补全')) + '</button>'
       + (w.artId ? '<button id="lw-ep-peekgo" title="回到它出现的那篇文章 / 那一句">📍 回到原文</button>' : '')
-      + '<button id="lw-ep-peekopen" title="切到生词本看完整卡片">📕 去生词本</button>'
+      + '<button id="lw-ep-peekopen" title="切到生词本看完整卡片">' + ICO('book') + ' 去生词本</button>'
       + '</div></div>';
   }
   /* ★★ 这一句里**有没有这个词** ✓（容忍变形 ✓：`microbes` / `microbe` ✓）——
@@ -13586,7 +13656,7 @@
     + String(s).split(/[,，、\/]/).map((x) => x.trim()).filter(Boolean)
       .map((x) => '<span>' + esc(x) + '</span>').join('') + '</div>';
   const egSec = sec('💬', '例句', egHtml
-      + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">🔊 读这句</button></div>' : ''));
+      + (w.eg ? '<div class="lw-wd-secact"><button id="lw-wd-say-eg">' + ICO('play') + ' 读这句</button></div>' : ''));
     /* ★★★ 词根词缀 → 放进 hero 的**中间列** ✓✓（2026-10-17 第二次重排）
        ★ 用户原话：「图片左边，有一大块空白，这是可以把词根词缀放这空白处，合理放置」✓。
 
@@ -13722,7 +13792,7 @@
       + '" data-mark="' + m.k + '" title="' + m.nm + (w.mark === m.k ? '（再点取消）' : '') + '">'
       + m.ic + '</button>').join('')
     + '</span>'
-    + '<button class="spk" id="lw-wd-say" title="读这个单词">🔊</button>'
+    + '<button class="spk" id="lw-wd-say" title="读这个单词">' + ICO('play') + '</button>'
       + '<button class="spk" id="lw-wd-say-slow" title="慢速读">🐢</button>'
       + '<span class="sp"></span>'
       + '<button class="ed' + (edit ? ' on' : '') + '" id="lw-wd-edit" title="'
@@ -13820,7 +13890,7 @@
       + (w.img || w.imgs ? '<button class="' + (imgBusy ? 'on' : '') + '" id="lw-wd-img" title="换一张配图">'
         + (imgBusy ? '找图中…' : '🖼 换一张') + '</button>' : '')
       + '<span class="sp"></span>'
-      + '<button data-act="del" id="lw-wd-del" class="danger" title="从生词本删掉">🗑 删除</button>'
+      + '<button data-act="del" id="lw-wd-del" class="danger" title="从生词本删掉">' + ICO('trash') + ' 删除</button>'
       + '</div>'
       + '</div>';
   }
@@ -13980,7 +14050,7 @@
         : '<div class="ask">先在心里说出意思，再点下面</div>')
       + '</div>'
       + '<div class="lw-ep-act" style="justify-content:center;padding:12px 0 0">'
-      + '<button id="lw-rev-say">🔊 听发音</button>'
+      + '<button id="lw-rev-say">' + ICO('play') + ' 听发音</button>'
       + (EP_UI.revShown ? '' : '<button class="pri" id="lw-rev-show" style="border-color:' + T.accent + ';color:' + T.accent + '">显示答案</button>')
       + '</div>';
     /* ★ 四个按钮上**直接写下次间隔** ✓ —— 这就是把「遗忘曲线」摆到台面上 ✓ */
@@ -14087,7 +14157,7 @@
       + '<b>' + (meta.icon || '') + ' ' + esc(meta.name || '') + '</b>'
       + (meta.lv ? '<span class="lv">' + esc(meta.lv) + '</span>' : '')
       + '<span class="n">' + items.length + ' 篇</span>'
-      + '<button id="lw-epsrc-force" title="不走缓存，重新拉一次">↻ 刷新</button>'
+      + '<button id="lw-epsrc-force" title="不走缓存，重新拉一次">' + ICO('refresh') + ' 刷新</button>'
       + (meta.home ? '<a href="' + esc(meta.home) + '" target="_blank" rel="noopener">↗ 站点</a>' : '')
       + '</div>';
     return head + '<div class="lw-epsrc-list">' + items.map((x) => {
