@@ -567,7 +567,21 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-row .v{font-weight:600;font-variant-numeric:tabular-nums;}
 #system-workspace .sp-row{display:flex;align-items:center;gap:10px;font-size:var(--sp-fs);color:var(--text);}
 #system-workspace .sp-row .k{color:var(--dim);min-width:96px;}
-#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:start;}
+/* \u2605 2026-10-29 \u4FEE\u4E09\u5904\u300C\u4E00\u5927\u4E00\u5C0F + \u7A7A\u767D\u592A\u591A\u300D\uFF08\u5B9E\u6D4B\u5B9A\u4F4D\uFF0C\u4E0D\u662F\u8C03\u53C2\uFF09\uFF1A
+   \u2460 auto-fit minmax(320px,1fr) \u5728 1391px \u4E0B\u7B97\u51FA 4 \u6761\u8F68\u9053\uFF08computed 784/784/0/0\uFF09\uFF0C\u800C\u672C\u9875\u53EA\u6709 2 \u5F20\u5361 \u21D2 \u5BBD\u5EA6\u4E0D\u53EF\u63A7\uFF1B
+   \u2461 align-items:start \u8BA9\u4E24\u5F20\u5361\u5404\u81EA\u9876\u5BF9\u9F50\uFF08\u5B9E\u6D4B 507 / 553\uFF09\uFF1B
+   \u2462 .sp-band \u81EA\u5E26 margin-bottom:var(--sp-gap-lg)\uFF0C\u800C grid \u7684 gap \u5DF2\u5728\u505A\u95F4\u8DDD \u21D2 body \u5B9E\u6D4B 1080px \u6BD4\u53EF\u89C6\u533A 951px \u9AD8\u3001\u88AB overflow:hidden \u88C1\u6389\u3002 */
+#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:stretch;}
+#system-workspace .sp-cols:has(>.sp-band:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr));}
+#system-workspace .sp-cols>.sp-band{margin-bottom:0;height:100%;display:flex;flex-direction:column;min-height:0;}
+#system-workspace .sp-cols>.sp-band>:last-child{min-height:0;}
+/* \u2605 \u4E24\u5217\u9875\u9762\u6491\u6EE1\u5269\u4F59\u9AD8\u5EA6\uFF082026-10-29\uFF0C\u7528\u6237\u53CD\u9988\u300C\u7A7A\u767D\u592A\u591A\u300D\uFF09\u2014\u2014
+   \u5B9E\u6D4B\uFF1A\u6027\u80FD\u9875\u4E24\u5F20\u5361\u5404 690\xD7548\uFF0C\u800C\u53EF\u89C6\u533A\u8FD8\u6709 209px \u7A7A\u7740 \u21D2 \u9875\u9762\u663E\u5F97\u6CA1\u505A\u5B8C \u2717\u3002
+   \u8BA9 .sp-cols \u5403\u6389\u5269\u4F59\u9AD8\u5EA6\u3001\u884C\u9AD8 1fr\u3001\u5361\u5185\u5217\u8868\u533A flex:1 \u21D2 \u5361\u7247\u81EA\u7136\u957F\u5230\u5E95\uFF0C
+   \u5217\u8868\u4E5F\u56E0\u6B64\u80FD\u591A\u663E\u793A\u51E0\u884C\uFF08\u800C\u4E0D\u662F\u9760\u300C\u663E\u793A\u66F4\u591A\u300D\u6309\u94AE\uFF09\u2713\u3002 */
+#system-workspace .sp-cols{flex:1 1 auto;min-height:0;grid-auto-rows:1fr;}
+#system-workspace .sp-cols>.sp-band>.sp-list, 
+#system-workspace .sp-cols>.sp-band>.sp-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;}
 #system-workspace .sp-cols>*{min-width:0;}
 /* \u2605 \u8BBE\u7F6E\u9875\u4E13\u7528\u7F51\u683C\uFF082026-10-29 \u4FEE\uFF09\uFF1A\u539F\u6765\u590D\u7528 .sp-cols\uFF08auto-fit + align-items:start\uFF09\u21D2
    4 \u5F20\u5185\u5BB9\u9AD8\u5EA6\u4E0D\u540C\u7684\u5361\u5BBD\u5EA6\u4E0E\u9AD8\u5EA6\u90FD\u53C2\u5DEE\uFF0C\u53F3\u4FA7\u4E0E\u4E0B\u65B9\u7559\u51FA\u5927\u7247\u7A7A\u767D \u2717\u3002

@@ -798,7 +798,21 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-row .v{font-weight:600;font-variant-numeric:tabular-nums;}
 #system-workspace .sp-row{display:flex;align-items:center;gap:10px;font-size:var(--sp-fs);color:var(--text);}
 #system-workspace .sp-row .k{color:var(--dim);min-width:96px;}
-#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:start;}
+/* ★ 2026-10-29 修三处「一大一小 + 空白太多」（实测定位，不是调参）：
+   ① auto-fit minmax(320px,1fr) 在 1391px 下算出 4 条轨道（computed 784/784/0/0），而本页只有 2 张卡 ⇒ 宽度不可控；
+   ② align-items:start 让两张卡各自顶对齐（实测 507 / 553）；
+   ③ .sp-band 自带 margin-bottom:var(--sp-gap-lg)，而 grid 的 gap 已在做间距 ⇒ body 实测 1080px 比可视区 951px 高、被 overflow:hidden 裁掉。 */
+#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:stretch;}
+#system-workspace .sp-cols:has(>.sp-band:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr));}
+#system-workspace .sp-cols>.sp-band{margin-bottom:0;height:100%;display:flex;flex-direction:column;min-height:0;}
+#system-workspace .sp-cols>.sp-band>:last-child{min-height:0;}
+/* ★ 两列页面撑满剩余高度（2026-10-29，用户反馈「空白太多」）——
+   实测：性能页两张卡各 690×548，而可视区还有 209px 空着 ⇒ 页面显得没做完 ✗。
+   让 .sp-cols 吃掉剩余高度、行高 1fr、卡内列表区 flex:1 ⇒ 卡片自然长到底，
+   列表也因此能多显示几行（而不是靠「显示更多」按钮）✓。 */
+#system-workspace .sp-cols{flex:1 1 auto;min-height:0;grid-auto-rows:1fr;}
+#system-workspace .sp-cols>.sp-band>.sp-list, 
+#system-workspace .sp-cols>.sp-band>.sp-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;}
 #system-workspace .sp-cols>*{min-width:0;}
 /* ★ 设置页专用网格（2026-10-29 修）：原来复用 .sp-cols（auto-fit + align-items:start）⇒
    4 张内容高度不同的卡宽度与高度都参差，右侧与下方留出大片空白 ✗。
