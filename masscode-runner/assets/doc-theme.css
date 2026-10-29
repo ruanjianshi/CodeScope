@@ -634,7 +634,9 @@ blockquote.md-callout.quote::after, blockquote.md-callout.cite::after { content:
   margin: 0 !important;
   padding: 0 10px !important;
   flex-wrap: nowrap !important;
-  justify-content: flex-start !important;
+  /* 外层同样居中：.top-bar-inner 之外可能还有兄弟元素（例如右侧的 A / 主题切换 ✓），
+     内层居中了外层还 flex-start 的话，两者会各居各的、看起来像错位 ✗。 */
+  justify-content: safe center !important;
   gap: 0 !important;
   overflow-x: auto !important;
   scrollbar-width: none !important;
@@ -650,7 +652,15 @@ blockquote.md-callout.quote::after, blockquote.md-callout.cite::after { content:
   padding: 0 !important;
   margin: 0 !important;
   box-sizing: border-box !important;
-  justify-content: flex-start !important;
+  /* ★★ 居中（2026-10-28 用户要求）✓：
+     实测 .top-bar-inner 宽 989px、22 个按钮总宽 622px、justify:flex-start →
+     整条工具栏挤在最左边，右边空 367px ✓（用户：「帮我把工具栏改到居中显示」）✓。
+     ⚠️ 用 **safe center** 而不是裸 center ✗：
+       按钮放不下时（窄窗口 / 分栏），裸 center 会把内容往两边甩出去 ✓，
+       左边那半**滚不回来**（flex 居中的经典溢出坑）✗；
+       safe center 在溢出时自动退化成 start ✓ —— 放得下就居中，放不下就左对齐可滚 ✓。
+     （safe 对齐 Chrome 93+ 支持；本项目 Electron/Chrome 都远高于此 ✓） */
+  justify-content: safe center !important;
 }
 /* 按钮太多，826px 的正文列装不下 20 个 → 右侧被父级裁掉。
    把每个按钮收窄（padding / min-width），一行的总宽压到容器内。 */
