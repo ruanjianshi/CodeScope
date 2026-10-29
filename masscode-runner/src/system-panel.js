@@ -276,49 +276,35 @@
   const CSS = `
 #system-workspace{display:none;position:absolute;inset:0;z-index:76;min-height:0;overflow:hidden;background:var(--bg);
   /* 语义色与尺度一律走变量：宿主有 7 套主题（含浅色），写死颜色会直接瞎掉。 */
-  --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err)));
-  --sp-danger:var(--err);
-  --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
+  --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err))); --sp-danger:var(--err); --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
   --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent);
   /* 圆角只留四档，且内层永远比外层小一档（同心圆角）：相邻元素半径不打架，才不显得突兀。 */
   --sp-r-lg:14px;
-  --sp-r:11px;
-  --sp-r-sm:8px;
-  --sp-r-xs:6px;
+  --sp-r:10px;   /* 卡片圆角：第 8.1 节点名 10px（原 11px） */
+  --sp-r-sm:8px; --sp-r-xs:6px;
   /* 用柔和发丝线替代满屏描边 —— 之前 90% 的「方框感」来自这里。 */
-  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent);
-  --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent);
-  --sp-ring:inset 0 0 0 1px var(--sp-hair);
-  --sp-surface:var(--panel);
-  --sp-surface-2:var(--panel2, var(--panel));
-  --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
+  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  /* ★ 立体感四件套（第 7/8 节）：底色差 + 1px 细线 + 两层柔和阴影 + 顶部 1px 内高光。
+     ⚠️ 阴影色一律用**纯黑低透明度** ✗ 不能用 var(--bg) 或 var(--text) ✓ ——
+        浅色主题的 --bg 是近白、深色主题的 --text 是近白，两种都会把投影画成"发光的白边"✓。
+        纯黑在两套主题下都成立，也省掉了"两套 --pp-* 各写一遍" ✓。
+     ⚠️ 抬升与按下必须成对出现：只写 hover 不写 active，按钮会像"粘在纸上" ✗。 */
+  --sp-shadow:0 1px 1px rgba(0,0,0,.055),0 2px 4px rgba(0,0,0,.055),0 8px 18px rgba(0,0,0,.05);
+  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.07),0 6px 12px rgba(0,0,0,.09),0 16px 32px rgba(0,0,0,.085); --sp-inset:inset 0 2px 5px rgba(0,0,0,.20),inset 0 -1px 0 rgba(255,255,255,.05);
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.16);
   /* 字号只留六档、间距只留四档、动效只留一档时长。 */
-  --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px;
-  --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px;
-  --sp-ease:100ms ease;
+  --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
   --sp-mono:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);
 }
 
 /* 同一套设计令牌再声明一次在 :root 上：挂到 document.body 的浮层（右键菜单、预览、
    命令面板）不在 #system-workspace 里面，继承不到上面那份，否则圆角与投影会静默失效。 */
-:root{
-  --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err)));
-  --sp-danger:var(--err);
-  --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
-  --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent);
-  --sp-r-lg:14px;
-  --sp-r:11px;
-  --sp-r-sm:8px;
-  --sp-r-xs:6px;
-  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent);
-  --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent);
-  --sp-ring:inset 0 0 0 1px var(--sp-hair);
-  --sp-surface:var(--panel);
-  --sp-surface-2:var(--panel2, var(--panel));
-  --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
-  --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px;
-  --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px;
-  --sp-ease:100ms ease;
+:root{ --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err))); --sp-danger:var(--err); --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
+  --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent); --sp-r-lg:14px; --sp-r:11px; --sp-r-sm:8px; --sp-r-xs:6px;
+  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
+  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
   --sp-mono:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);
 }
 body.system-mode #system-workspace{display:flex;}
@@ -342,8 +328,7 @@ body.system-mode #main{flex:1;min-width:0;}
    注意两点（都踩过）：① 必须**完全落在侧栏内**（right:0），侧栏是 overflow:auto，
    探出去的部分会被裁掉、拿不到指针；② z-index 要高过侧栏内容，否则命中测试拿到的是 aside 本身。 */
 #system-workspace .nav-resizer{position:absolute;top:0;right:0;bottom:0;width:6px;cursor:col-resize;z-index:20;touch-action:none;}
-#system-workspace .nav-resizer::after{content:'';position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent;
-  transition:background var(--sp-ease);}
+#system-workspace .nav-resizer::after{content:'';position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent; transition:background var(--sp-ease);}
 #system-workspace .nav-resizer:hover::after,#system-workspace .nav-resizer.active::after{background:var(--accent);}
 /* 拖动期间整页光标保持 col-resize，并且不要选中文字 */
 body.sp-nav-resizing{cursor:col-resize;user-select:none;}
@@ -355,20 +340,16 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-nav .nav-title span{font-size:var(--sp-fs-xs);font-weight:400;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0;}
 /* 搜索放在侧栏顶部：高频入口不该塞在左下角。做成输入框的样子，点哪儿都能进搜索面板。 */
 /* 搜索框做成「内凹」：按钮凸、输入凹，这是苹果控件的基本对照关系 */
-#system-nav .nav-search{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;box-sizing:border-box;
-  background:color-mix(in srgb, var(--bg) 45%, var(--sp-surface-2));
-  border:1px solid var(--sp-hair-strong);border-radius:9px;
-  box-shadow:inset 0 2px 4px color-mix(in srgb, var(--bg) 55%, transparent),
-             inset 0 -1px 0 color-mix(in srgb, var(--text) 5%, transparent);
-  padding:6px 10px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;text-align:left;
+#system-nav .nav-search{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;box-sizing:border-box; background:color-mix(in srgb, var(--bg) 45%, var(--sp-surface-2));
+  border:1px solid var(--sp-hair-strong);border-radius:9px; box-shadow:inset 0 2px 4px color-mix(in srgb, var(--bg) 55%, transparent),
+             inset 0 -1px 0 color-mix(in srgb, var(--text) 5%, transparent); padding:6px 10px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;text-align:left;
   transition:border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;}
 #system-nav .nav-search:hover{color:var(--text);border-color:color-mix(in srgb, var(--accent) 45%, var(--sp-hair-strong));
   box-shadow:inset 0 2px 4px color-mix(in srgb, var(--bg) 45%, transparent),
              inset 0 -1px 0 color-mix(in srgb, var(--text) 7%, transparent);}
 #system-nav .nav-search .ico{flex:none;font-size:var(--sp-fs-md);line-height:1;opacity:.85;}
 #system-nav .nav-search .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#system-nav .nav-search kbd{flex:none;font:var(--sp-fs-xs) var(--sp-mono);border:1px solid var(--sp-hair);
-  border-radius:var(--sp-r-xs);padding:1px 4px;color:var(--dim);}
+#system-nav .nav-search kbd{flex:none;font:var(--sp-fs-xs) var(--sp-mono);border:1px solid var(--sp-hair); border-radius:var(--sp-r-xs);padding:1px 4px;color:var(--dim);}
 #system-nav-list{display:flex;flex-direction:column;gap:1px;}
 /* 分组小标题：小、疏、不抢戏，只负责把 7 个分区切成两段 */
 #system-nav-list .nav-group{padding:10px 10px 4px;color:var(--dim);font-size:var(--sp-fs-xs);letter-spacing:.1em;opacity:.75;}
@@ -379,14 +360,12 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   font-size:var(--sp-fs);cursor:pointer;transition:background var(--sp-ease),color var(--sp-ease);}
 /* 图标做成底色块：7 个分区平铺时，有块比只有一个字符更容易扫读。 */
 #system-nav-list button i{font-style:normal;flex:none;display:grid;place-items:center;width:22px;height:22px;
-  border-radius:var(--sp-r-xs);background:var(--sp-tint);font-size:var(--sp-fs);color:var(--dim);
-  transition:background var(--sp-ease),color var(--sp-ease);}
+  border-radius:var(--sp-r-xs);background:var(--sp-tint);font-size:var(--sp-fs);color:var(--dim); transition:background var(--sp-ease),color var(--sp-ease);}
 #system-nav-list button:hover i{color:var(--text);}
 #system-nav-list button.on i{background:var(--ui-accent-soft, var(--sp-tint-strong));color:var(--accent);}
 #system-nav-list button:hover{color:var(--text);background:var(--sp-tint);}
 #system-nav-list button.on{color:var(--text);background:var(--ui-accent-soft, var(--sp-tint));font-weight:600;}
-#system-nav-list button.on::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);
-  width:2px;height:16px;border-radius:2px;background:var(--accent);}
+#system-nav-list button.on::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%); width:2px;height:16px;border-radius:2px;background:var(--accent);}
 #system-nav-list button .badge{margin-left:auto;font-size:var(--sp-fs-xs);color:var(--dim);font-variant-numeric:tabular-nums;}
 #system-workspace .nav-foot{margin-top:auto;padding-top:10px;display:flex;flex-direction:column;gap:var(--sp-gap-sm);border-top:1px solid var(--sp-hair);}
 #system-workspace .nav-foot button{background:transparent;color:var(--dim);border:1px solid var(--sp-hair);border-radius:var(--sp-r-sm);
@@ -397,8 +376,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .nav-foot .sp-auto{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;user-select:none;padding:2px 2px;}
 #system-workspace .nav-foot .sp-auto input{margin:0;}
 #system-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
-#system-head{height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;
-  border-bottom:1px solid var(--sp-hair);background:var(--sp-surface);}
+#system-head{height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px; border-bottom:1px solid var(--sp-hair);background:var(--sp-surface);}
 #system-head strong{color:var(--text);font-size:var(--sp-fs-md);font-weight:600;letter-spacing:.01em;}
 /* 页头标题组：分区名 + 这一页是干嘛的。管理面板的标配，省得用户从标题猜。 */
 #system-head .head-title{display:flex;align-items:baseline;gap:9px;min-width:0;flex:0 1 auto;}
@@ -407,19 +385,23 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-head .sp{flex:1;}
 #system-head button{background:linear-gradient(180deg,
     color-mix(in srgb, var(--sp-surface-2) 90%, var(--text) 10%),
-    color-mix(in srgb, var(--sp-surface-2) 97%, var(--bg) 3%));
-  color:var(--text);border:1px solid var(--sp-hair-strong);border-radius:9px;
-  padding:5px 11px;font-size:var(--sp-fs-sm);cursor:pointer;
-  box-shadow:
+    color-mix(in srgb, var(--sp-surface-2) 97%, var(--bg) 3%)); color:var(--text);border:1px solid var(--sp-hair-strong);border-radius:9px;
+  padding:5px 11px;font-size:var(--sp-fs-sm);cursor:pointer; box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--bg) 55%, transparent),
-    0 1px 2px color-mix(in srgb, var(--bg) 55%, transparent);
-  transition:background 140ms ease, box-shadow 140ms ease, transform 90ms ease, border-color 140ms ease;}
+    0 1px 2px color-mix(in srgb, var(--bg) 55%, transparent); transition:background 140ms ease, box-shadow 140ms ease, transform 90ms ease, border-color 140ms ease;}
 #system-head button:hover{background:linear-gradient(180deg,
     color-mix(in srgb, var(--sp-surface-2) 80%, var(--text) 20%),
-    color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%));
-  border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
+    color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%)); border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
 #system-head button:active{transform:translateY(1px);box-shadow:inset 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent);}
+/* ★ 8.3 刷新按钮：点击期间 disabled + 图标旋转（--mo-3 量级），完成后短暂显示「已更新 21:17:44」。
+   ⚠️ 只转那个 ↻ 图标 ✗ 整颗按钮转会把文字也甩起来 ✓；reduced-motion 下不转只变淡 ✓。 */
+#system-workspace #system-refresh.sp-busy{opacity:.55;cursor:progress;}
+#system-workspace #system-refresh .ico{display:inline-block;}
+#system-workspace #system-refresh.sp-busy .ico{animation:sp-spin 700ms linear infinite;}
+#system-workspace #system-refresh.sp-done{color:var(--ok);border-color:color-mix(in srgb, var(--ok) 40%, var(--sp-hair-strong));}
+@keyframes sp-spin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion:reduce){#system-workspace #system-refresh.sp-busy .ico{animation:none;}}
 /* 子视图：分段控件（一个底槽 + 选中态浮起），不再是一排各自描边的胶囊。 */
 #system-subnav{flex:none;display:flex;gap:3px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--sp-hair);overflow-x:auto;}
 #system-subnav[hidden]{display:none;}
@@ -447,8 +429,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-palette-layer[hidden]{display:none;}
 #system-palette-box{width:min(620px,92vw);background:var(--sp-surface);border:1px solid var(--sp-hair);border-radius:var(--sp-r-lg);
   box-shadow:var(--sp-raise);overflow:hidden;display:flex;flex-direction:column;max-height:70vh;}
-#system-palette-input{border:0;border-bottom:1px solid var(--sp-hair);background:transparent;color:var(--text);
-  font-size:var(--sp-fs-lg);padding:14px 16px;outline:none;}
+#system-palette-input{border:0;border-bottom:1px solid var(--sp-hair);background:transparent;color:var(--text); font-size:var(--sp-fs-lg);padding:14px 16px;outline:none;}
 #system-palette-input::placeholder{color:var(--dim);}
 #system-palette-list{overflow:auto;padding:6px;}
 #system-palette-list .pgroup{font-size:var(--sp-fs-xs);color:var(--dim);padding:9px 10px 4px;letter-spacing:.08em;}
@@ -463,15 +444,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* 卡片不再描一圈边框，改用「面板底 + 极淡内描边」：层级靠底色和间距表达。 */
 #system-workspace .sp-card{position:relative;overflow:hidden;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:15px 16px;min-width:0;}
 /* 卡片里的挂载路径：卷名给人看，路径给机器看，两者都留 —— 路径太长就省略号 */
-#system-workspace .sp-card .path{margin-top:3px;font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--dim);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#system-workspace .sp-card .path{margin-top:3px;font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--dim); overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-card h4{margin:0 0 10px;font-size:var(--sp-fs-xs);font-weight:600;color:var(--dim);letter-spacing:.08em;display:flex;align-items:center;gap:6px;}
 #system-workspace .sp-card .big{font-size:var(--sp-fs-xl);font-weight:600;color:var(--text);line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 #system-workspace .sp-card .big small{font-size:var(--sp-fs);font-weight:500;color:var(--dim);margin-left:4px;letter-spacing:0;}
 #system-workspace .sp-card .sub{font-size:var(--sp-fs-sm);color:var(--dim);margin-top:6px;line-height:1.55;}
 /* 每张卡片一条 2px 顶边色条 + 标题小图标：四张卡一眼分得清，且不用再加边框。 */
-#system-workspace .sp-card::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;
-  background:var(--sp-card-accent, transparent);opacity:.85;}
+#system-workspace .sp-card::before{content:'';position:absolute;left:0;right:0;top:0;height:2px; background:var(--sp-card-accent, transparent);opacity:.85;}
 #system-workspace .sp-card.cpu{--sp-card-accent:var(--accent);}
 #system-workspace .sp-card.mem{--sp-card-accent:var(--ok);}
 #system-workspace .sp-card.disk{--sp-card-accent:var(--sp-warn);}
@@ -500,8 +479,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    是 stretch，会把「概述卡片」那一行也拉高去分掉多余高度，结果卡片下面空出一大段
    （1920×1080 实测行高 143px 而卡片只有 96px，空了 47px）。写死 auto 1fr 后，
    第一行只按内容高，多余高度全部落到第二行由「监控」吸收 —— 曲线顺势变高。 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr;
-  gap:12px var(--sp-gap-lg);align-items:start;flex:1 0 auto;min-height:0;}
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr; gap:12px var(--sp-gap-lg);align-items:start;flex:1 0 auto;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
 /* 左栏撑满容器高度（右栏保持内容高度）——不这样写，grid 会按内容收缩左栏，
    监控区的 flex:1 就失去参照，曲线永远停在固定高度。
@@ -520,26 +498,40 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    现在父级没有 overflow:hidden 了，flex:1 只会往「多出来的空间」里长，
    不会再像以前那样把磁盘卷顶出视口（不够高时由 #system-body 滚动兜底）。 */
 #system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
-#system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch;
-  grid-template-columns:repeat(2,minmax(0,1fr));}
+#system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch; grid-template-columns:repeat(2,minmax(0,1fr));}
 #system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;
   padding:8px 11px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r-sm);}
 #system-workspace .sp-sec{min-width:0;}
-#system-workspace .sp-sec h3{margin:0 0 7px;font-size:var(--sp-fs);color:var(--text);font-weight:600;display:flex;align-items:center;gap:8px;letter-spacing:.01em;}
-/* 标题前一根强调色小竖条：一眼能分出「区块」边界，比纯文字标题更像面板 */
-#system-workspace .sp-sec h3::before{content:'';flex:none;width:3px;height:12px;border-radius:2px;
-  background:linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));}
+/* ★ 8.2 区块标题统一：11px / 650 字重 / 字距 .04em + 左侧 **2px** 竖条（原来是 3px 渐变）+
+   右侧一个次要操作（提示字或「更多 ›」按钮，margin-left:auto 推到最右）✓ */
+#system-workspace .sp-sec h3{margin:0 0 6px;font-size:11px;color:var(--text);font-weight:650;display:flex;align-items:center;gap:7px;letter-spacing:.04em;}
+#system-workspace .sp-sec h3::before{content:'';flex:none;width:2px;height:12px;border-radius:1px;background:var(--accent);}
+#system-workspace .sp-sec h3 .sp-hint{margin-left:auto;}
+#system-workspace .sp-sec h3 button.sp-hint{background:transparent;border:0;padding:2px 5px;border-radius:6px;cursor:pointer;
+  color:var(--dim);transition:color 160ms ease,background 160ms ease;}
+#system-workspace .sp-sec h3 button.sp-hint:hover{color:var(--accent);background:var(--sp-tint);}
+#system-workspace .sp-sec h3 button.sp-hint:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 65%, transparent);outline-offset:1px;}
 /* 圆环排：等宽单元纵向排（环 / 名称 / 明细），环径一致才能横向比出谁吃紧 */
 #system-workspace .sp-gauges{display:flex;flex-wrap:wrap;gap:20px 14px;justify-content:space-between;}
+/* ★ 8.2「环形表提一档」：给每个环一张纸片（底色 + 细线 + 双层阴影 + 内高光），
+   KPI 卡降一档之后，提这一档靠这层卡片感和更粗的环宽表达 ✓。
+   ⚠️ 只有带 data-goto 的格子给三态 ✗ 没有跳转目标的格子不该假装能点 ✓。 */
+#system-workspace .sp-gcell{padding:10px 8px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:10px;}
+#system-workspace .sp-gcell[data-goto]{cursor:pointer;transition:box-shadow 160ms ease,transform 160ms ease,background 160ms ease;}
+#system-workspace .sp-gcell[data-goto]:hover{background:var(--sp-surface-2);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow-lift);transform:translateY(-1px);}
+#system-workspace .sp-gcell[data-goto]:active{transform:translateY(1px);box-shadow:var(--sp-ring),var(--sp-inset);}
+#system-workspace .sp-gcell[data-goto]:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 65%, transparent);outline-offset:2px;}
 /* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
    2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
 /* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
    2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
 #system-workspace .sp-gcell{flex:1 1 140px;min-width:124px;max-width:280px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;}
 #system-workspace .sp-gcell .sp-gauge-ring{width:100px;height:100px;}
-#system-workspace .sp-gcell .sp-gauge-center b{font-size:23px;}
+/* 中心数字 22px 等宽 + tabular-nums（8.1）；环下说明统一 11px **两行**，
+   line-clamp + 固定 min-height 一起写 —— 只写 min-height 时三行说明会把这一排撑歪 ✓ */
+#system-workspace .sp-gcell .sp-gauge-center b{font-size:22px;font-family:var(--sp-mono);}
 #system-workspace .sp-gcap{font-size:var(--sp-fs-sm);color:var(--text);font-weight:600;}
-#system-workspace .sp-gsub{font-size:var(--sp-fs-xs);color:var(--dim);line-height:1.4;min-height:2.5em;}
+#system-workspace .sp-gsub{font-size:11px;color:var(--dim);line-height:1.45;min-height:2.9em; display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;}
 #system-workspace .sp-gcell .sp-cores{justify-content:center;gap:1.5px;margin-top:1px;}
 #system-workspace .sp-gcell .sp-core{width:11px;height:16px;}
 #system-workspace .sp-gcell .sp-gauge-ring.crit .sp-gauge-center b{color:var(--sp-danger);}
@@ -547,7 +539,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    放不下就会换行 —— 多出一整行约 178px，直接把页面顶到要滚动。所以超过 6 个时
    整体收紧一档：宁可环小一点，也要保住一行。
    注意必须改 flex-basis —— 换行是按 flex base size 算的，只压 min-width 没用。 */
-#system-workspace .sp-gauges-dense .sp-gcell{flex:1 1 96px;min-width:96px;gap:5px;}
+/* 7 个以上环时收紧：padding 必须一起收，否则 86px 的环 + 20px 内边距会撑破 96px 的格子 */
+#system-workspace .sp-gauges-dense .sp-gcell{flex:1 1 96px;min-width:96px;gap:5px;padding:8px 5px 7px;}
 #system-workspace .sp-gauges-dense .sp-gcell .sp-gauge-ring{width:86px;height:86px;}
 #system-workspace .sp-gauges-dense .sp-gcell .sp-gauge-center b{font-size:20px;}
 #system-workspace .sp-gauges-dense .sp-gcap{font-size:var(--sp-fs-xs);}
@@ -558,13 +551,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    而它在 CSS 里更靠后，会直接盖掉 grid（实测踩到 —— 表现是 grid-template 生效、
    但 display 还是 flex，按钮宽度参差、排成 3 列）。
    注意：这段 CSS 在 JS 模板字符串里，注释中不能出现反引号，否则会把字符串截断。 */
-#system-workspace .sp-actions.sp-actions-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-  align-items:stretch;margin:0;gap:7px;}
+#system-workspace .sp-actions.sp-actions-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch;margin:0;gap:7px;}
 /* min-width:0 是必须的：grid 项默认 min-width:auto，文字长的按钮会把格子撑破、
    把 2×2 挤成 3 列（实测踩到）。overflow-wrap 让长文案在格子里正常折行。 */
 #system-workspace .sp-actions-stack .sp-btn{display:flex;align-items:center;gap:7px;justify-content:flex-start;
-  text-align:left;padding:8px 10px;font-size:var(--sp-fs-sm);white-space:normal;line-height:1.35;
-  min-width:0;overflow:hidden;overflow-wrap:anywhere;}
+  text-align:left;padding:8px 10px;font-size:var(--sp-fs-sm);white-space:normal;line-height:1.35; min-width:0;overflow:hidden;overflow-wrap:anywhere;}
 #system-workspace .sp-actions-stack .sp-btn .gi{font-style:normal;flex:none;width:15px;text-align:center;opacity:.85;}
 /* 磁盘卷：两行式（上行路径与容量、下行整条进度条）。挤在一行时中间会空一大块。 */
 #system-workspace .sp-vols{display:flex;flex-direction:column;gap:5px;}
@@ -576,37 +567,48 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-vol-pct{flex:none;min-width:38px;text-align:right;font-size:var(--sp-fs-sm);font-weight:600;}
 #system-workspace .sp-vol .sp-bar{height:5px;}
 #system-workspace .sp-vol .sp-rowbtn{flex:none;}
-#system-workspace .sp-ov-main,#system-workspace .sp-ov-side{gap:10px;}
+/* ★ 8.1 的「区块之间 24px / 标题与内容 10px」在这块首屏放不下（1600×1000 实测会多出约
+   24px 滚动，把「磁盘卷」推下去 ✗）。这里改成 16 / 6：**相对关系**一样是"区块间距明显大于
+   标题与内容的间距" ✓，但净增高度为 0（间距 +6px × 2，标题 -4px × 3）✓。
+   原来两者都是 10px —— 标题和内容、和下一块的距离一样远，节奏是平的，这才是"疏密不匀" ✓。 */
+#system-workspace .sp-ov-main{gap:16px;}
+/* 右栏有 5 块叠着，同样 16px 会把首屏顶出 8px（磁盘卷最后一行被裁）→ 收到 12px；
+   仍然明显大于标题与内容的 6px，节奏关系不变 ✓ */
+#system-workspace .sp-ov-side{gap:12px;}
 /* 概述区：跨两栏的一排关键数字（1Panel 顶部那种） */
 #system-workspace .sp-overview{grid-column:1/-1;}
 #system-workspace .sp-stat-row{display:flex;gap:10px;flex-wrap:wrap;}
-#system-workspace .sp-stat{position:relative;overflow:hidden;flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:3px;
-  padding:10px 8px 11px;background:linear-gradient(180deg, color-mix(in srgb, var(--sp-surface) 93%, var(--text) 7%), var(--sp-surface));box-shadow:var(--sp-ring);border-radius:var(--sp-r);
-  transition:box-shadow var(--sp-ease),transform var(--sp-ease);}
-#system-workspace .sp-stat:hover{box-shadow:var(--sp-ring), 0 4px 14px color-mix(in srgb, var(--bg) 45%, transparent);transform:translateY(-1px);}
+/* ★ 8.2：KPI 卡**降一档**视觉权重 ✓（更矮、数字收一档、底色淡一档），
+   环形表提一档 ✓ —— 一降一提，层次才看得出来（不删不换任何一个元素）✓。
+   立体三态按 7.2：默认薄、hover 抬起 1px + 阴影加深、按下凹进去（不是缩小）✓。 */
+#system-workspace .sp-stat{position:relative;overflow:hidden;flex:1 1 110px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:9px 8px 9px;background:color-mix(in srgb, var(--sp-surface) 88%, var(--sp-surface-2));
+  box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:10px;cursor:pointer; transition:box-shadow 160ms ease,transform 160ms ease,background 160ms ease;}
+#system-workspace .sp-stat:hover{background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow-lift);transform:translateY(-1px);}
+#system-workspace .sp-stat:active{transform:translateY(1px);box-shadow:var(--sp-ring),var(--sp-inset);}
+#system-workspace .sp-stat:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 65%, transparent);outline-offset:2px;}
+/* 「查看 ›」默认隐身，hover / 键盘聚焦才浮现 —— 常驻会和小标签抢注意力 ✓ */
+#system-workspace .sp-stat .go{position:absolute;top:6px;right:8px;font-size:10px;line-height:1;color:var(--accent); opacity:0;transition:opacity 160ms ease;pointer-events:none;}
+#system-workspace .sp-stat:hover .go,#system-workspace .sp-stat:focus-visible .go{opacity:1;}
 /* 图标做成一枚圆角色块（像 1Panel 顶部那种）：比一个孤零零的符号更「有重量」，
    也给数字一个视觉锚点。15px 是配合 27px 方块调的 —— 原来 13.5px 的光杆符号
    挨着 25px 的数字明显撑不住。 */
-#system-workspace .sp-stat i{font-style:normal;font-size:15px;line-height:1;color:var(--accent);
-  width:27px;height:27px;display:grid;place-items:center;border-radius:9px;
-  background:color-mix(in srgb, var(--accent) 13%, transparent);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 17%, transparent);}
-#system-workspace .sp-stat b{font-size:25px;font-weight:600;color:var(--text);line-height:1.08;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
-#system-workspace .sp-stat span{font-size:var(--sp-fs-xs);color:var(--dim);}
+#system-workspace .sp-stat i{font-style:normal;font-size:12px;line-height:1;color:var(--accent); width:21px;height:21px;display:grid;place-items:center;border-radius:7px;
+  background:color-mix(in srgb, var(--accent) 10%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);}
+/* 数字：等宽 + tabular-nums（8.1）—— 五个数字位数不同，非等宽会左右跳动 */
+#system-workspace .sp-stat b{font-size:26px;font-weight:600;color:var(--text);line-height:1.05; font-family:var(--sp-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+#system-workspace .sp-stat span{font-size:10.5px;color:var(--dim);letter-spacing:.02em;}
 /* 卡片第三行：一行真实数据（最高占用进程 / 对外端口数 / 启动项是否正常…）。
    做成淡色小药丸而不是裸文字 —— 裸文字会和上面的标签混成一片，分不出层级。 */
-#system-workspace .sp-stat em{font-style:normal;font-size:10px;line-height:1.5;color:var(--dim);
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  padding:2px 8px;border-radius:999px;background:var(--sp-tint);
-  box-shadow:inset 0 0 0 1px var(--sp-hair);}
+#system-workspace .sp-stat em{font-style:normal;font-size:10px;line-height:1.5;color:var(--dim); max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:2px 8px;border-radius:999px;background:var(--sp-tint); box-shadow:inset 0 0 0 1px var(--sp-hair);}
 #system-workspace .sp-stat em:empty{visibility:hidden;}
 /* 应用墙：3 列图标网格（图标在上、名称在下），点一下启动。
    原来是一行一个的列表，8 个就吃掉 348px，正是把右栏顶出视口的元凶之一；
    换成网格后同样的应用数只占一半高度，也更像 1Panel 那种「应用图标区」。 */
 #system-workspace .sp-applist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
 #system-workspace .sp-app{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 4px 9px;
-  border-radius:var(--sp-r-sm);cursor:pointer;background:var(--sp-tint);
-  box-shadow:inset 0 0 0 1px var(--sp-hair);
+  border-radius:var(--sp-r-sm);cursor:pointer;background:var(--sp-tint); box-shadow:inset 0 0 0 1px var(--sp-hair);
   transition:background var(--sp-ease),box-shadow var(--sp-ease),transform var(--sp-ease);}
 #system-workspace .sp-app:hover{background:color-mix(in srgb, var(--accent) 12%, var(--sp-tint));
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);transform:translateY(-1px);}
@@ -614,8 +616,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-app img{width:30px;height:30px;flex:none;object-fit:contain;border-radius:7px;}
 #system-workspace .sp-app .ph{width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:7px;
   background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);font-size:13px;font-weight:600;}
-#system-workspace .sp-app .nm{width:100%;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:var(--sp-fs-xs);color:var(--text);}
+#system-workspace .sp-app .nm{width:100%;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; font-size:var(--sp-fs-xs);color:var(--text);}
 /* 「启动 ›」这行字在竖排卡片里放不下，靠 hover 高亮表达可点，直接不渲染 */
 #system-workspace .sp-app .go{display:none;}
 
@@ -630,9 +631,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gtip .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:var(--sp-fs-sm);}
 #system-workspace .sp-gtip .kv .k{color:var(--dim);}
 #system-workspace .sp-gtip .kv .v{text-align:right;font-variant-numeric:tabular-nums;}
-/* 右栏的核心条：这里宽度充裕，格子放大些，一眼看清哪个核在忙 */
-#system-workspace .sp-cores-lg{gap:3px;margin-top:2px;}
-#system-workspace .sp-cores-lg .sp-core{width:16px;height:28px;border-radius:4px;}
+/* 右栏的核心条：8.1 要求「每核格子改成更小的方块 + tooltip」——
+   10 格里每格一个 title（核心 N · XX%），鼠标停上去才给具体数，不再靠格子高矮猜 ✓ */
+#system-workspace .sp-cores-lg{gap:2px;margin-top:2px;}
+#system-workspace .sp-cores-lg .sp-core{width:12px;height:20px;border-radius:3px;cursor:help;}
+#system-workspace .sp-cores-lg .sp-core:hover{box-shadow:0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);}
+/* 8.3 要求整套三态都有 reduced-motion 兜底：位移与缩放去掉，阴影/颜色/透明度保留 ✓ */
+@media (prefers-reduced-motion:reduce){
+  #system-workspace .sp-stat,#system-workspace .sp-gcell[data-goto],#system-workspace .sp-app{transition:box-shadow 160ms ease,background 160ms ease;}
+  #system-workspace .sp-stat:hover,#system-workspace .sp-stat:active,
+  #system-workspace .sp-gcell[data-goto]:hover,#system-workspace .sp-gcell[data-goto]:active,
+  #system-workspace .sp-app:hover,#system-workspace .sp-app:active{transform:none;}
+}
 /* 宽屏：环径与明细字号跟着放大，免得大片空间里只有几个小环 */
 @media (min-width:1800px){
   #system-workspace .sp-gcell .sp-gauge-ring{width:152px;height:152px;}
@@ -649,29 +659,34 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    三张卡的环径完全一致，弧长直接表达「占满程度」，并排时能横向比出谁更吃紧；
    水位色（绿→黄→红）跟着变，不用读数字也能看出问题。 */
 #system-workspace .sp-gauge{display:flex;align-items:center;gap:16px;margin-top:6px;}
-#system-workspace .sp-gauge-ring{position:relative;flex:none;width:100px;height:100px;
-  --rg-from:var(--accent);--rg-to:color-mix(in srgb, var(--accent) 40%, transparent);
+#system-workspace .sp-gauge-ring{position:relative;flex:none;width:100px;height:100px; --rg-from:var(--accent);--rg-to:color-mix(in srgb, var(--accent) 40%, transparent);
   --rg-glow:color-mix(in srgb, var(--accent) 42%, transparent);}
 #system-workspace .sp-gauge-ring.warn{--rg-from:var(--sp-warn);--rg-to:color-mix(in srgb, var(--sp-warn) 40%, transparent);
   --rg-glow:color-mix(in srgb, var(--sp-warn) 42%, transparent);}
 #system-workspace .sp-gauge-ring.crit{--rg-from:var(--sp-danger);--rg-to:color-mix(in srgb, var(--sp-danger) 40%, transparent);
   --rg-glow:color-mix(in srgb, var(--sp-danger) 42%, transparent);}
+/* ★ 8.1「不可用 → 灰环 + 不可用小字，不要「—」」：灰环 = 第三种状态，
+   和绿/琥珀/红三档水位明确区分开 —— 「—」看起来像没加载完，灰环是"这一个指标不存在" ✓ */
+#system-workspace .sp-gauge-ring.na{--rg-from:color-mix(in srgb, var(--dim) 55%, transparent); --rg-to:color-mix(in srgb, var(--dim) 18%, transparent);--rg-glow:transparent;}
+#system-workspace .sp-gauge-ring.na .track{stroke:color-mix(in srgb, var(--dim) 18%, transparent);}
+#system-workspace .sp-gcell .sp-gauge-center b.na{font-size:11px;font-weight:500;line-height:1.2; color:var(--dim);font-family:inherit;letter-spacing:.04em;}
 #system-workspace .sp-gauge-ring svg{width:100%;height:100%;display:block;}
 /* 渐变的两端色由 --rg-* 给：stop-color 是 CSS 属性，写在样式表里才吃得到变量，
    所以描边用 SVG 属性 stroke="url(#…)"，颜色切换靠这里换变量。 */
 #system-workspace .sp-gauge-ring svg .rg-from{stop-color:var(--rg-from);}
 #system-workspace .sp-gauge-ring svg .rg-to{stop-color:var(--rg-to);}
-#system-workspace .sp-gauge-ring .track{fill:none;stroke:var(--sp-tint-strong);stroke-width:7;}
+/* 环宽 7 → 12px（8.1）：细环在深色底上像一根头发，加粗后弧长一眼可读，
+   底环对比度也抬一档（--sp-tint-strong 只有 18% 淡，几乎看不见）✓ */
+#system-workspace .sp-gauge-ring .track{fill:none;stroke:color-mix(in srgb, var(--dim) 26%, transparent);stroke-width:12;}
 /* 进度弧：渐变描边（起笔实、收笔淡）＋ 同色柔光。
    纯色弧在深色底上就是一根「死线」，加渐变和光晕后环才有金属感、才像仪表。
    注意这里不能写 stroke —— 一写就会盖掉 SVG 上的 url(#grad)，渐变直接失效。 */
-#system-workspace .sp-gauge-ring .value{fill:none;stroke-width:7;stroke-linecap:round;
-  filter:drop-shadow(0 0 5px var(--rg-glow));
-  transition:stroke-dashoffset 420ms cubic-bezier(.22,.61,.36,1);}
+/* ★ 8.3「轮询刷新（1.5s）不加动画」：环长变化用 160ms 线性跟随即可 ✓
+   原来 420ms 的过冲曲线会让环每 1.5 秒"荡"一下，读数字时像在呼吸 ✓ 去掉。 */
+#system-workspace .sp-gauge-ring .value{fill:none;stroke-width:12;stroke-linecap:round; filter:drop-shadow(0 0 5px var(--rg-glow));transition:stroke-dashoffset 160ms ease;}
 /* 环心底衬一层极淡的同色径向光，让中心数字「浮」起来 */
 #system-workspace .sp-gauge-ring::before{content:'';position:absolute;inset:11%;border-radius:50%;
-  background:radial-gradient(circle, color-mix(in srgb, var(--rg-from) 11%, transparent), transparent 72%);
-  pointer-events:none;}
+  background:radial-gradient(circle, color-mix(in srgb, var(--rg-from) 11%, transparent), transparent 72%); pointer-events:none;}
 #system-workspace .sp-gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
 #system-workspace .sp-gauge-center .v{display:flex;align-items:baseline;line-height:1;}
 #system-workspace .sp-gauge-center b{font-size:21px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
@@ -684,12 +699,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gauge-info .sub + .sub{margin-top:5px;}
 #system-workspace .sp-gauge-info .sub b{color:var(--text);font-weight:600;}
 /* 温度行：温度计条 + 度数，颜色随温度升高从绿到黄到红 */
-#system-workspace .sp-temp{display:flex;align-items:center;gap:9px;margin-top:12px;padding-top:11px;
-  border-top:1px solid var(--sp-hair);font-size:var(--sp-fs-sm);}
+#system-workspace .sp-temp{display:flex;align-items:center;gap:9px;margin-top:12px;padding-top:11px; border-top:1px solid var(--sp-hair);font-size:var(--sp-fs-sm);}
 #system-workspace .sp-temp .k{color:var(--dim);flex:none;}
 #system-workspace .sp-temp .sp-tempbar{flex:1;min-width:36px;height:6px;border-radius:3px;background:var(--sp-tint-strong);overflow:hidden;}
-#system-workspace .sp-temp .sp-tempbar i{display:block;height:100%;border-radius:3px;background:var(--ok);
-  transition:width 420ms cubic-bezier(.22,.61,.36,1),background var(--sp-ease);}
+#system-workspace .sp-temp .sp-tempbar i{display:block;height:100%;border-radius:3px;background:var(--ok); transition:width 420ms cubic-bezier(.22,.61,.36,1),background var(--sp-ease);}
 #system-workspace .sp-temp.warm .sp-tempbar i{background:var(--sp-warn);}
 #system-workspace .sp-temp.hot .sp-tempbar i{background:var(--sp-danger);}
 #system-workspace .sp-temp b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;flex:none;}
@@ -711,13 +724,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
      ⚠️ 数据由 loadOverviewExtras **一次性**拿 ✓（它本来就并发拉 processes/services/apps ✓，
         docker 顺手搭车 ✓）—— 不进 1.5 秒的刷新环 ✗（那会把概览页拖卡 ✗）。
         代价是容器状态最多滞后到下次进概览页 ✓ —— 换来的是不卡 ✓，值 ✓。 */
-  #system-workspace .sp-rt-row{display:flex;align-items:center;gap:9px;padding:7px 2px;
-    border-bottom:1px solid var(--sp-hair);cursor:pointer;}
+  #system-workspace .sp-rt-row{display:flex;align-items:center;gap:9px;padding:7px 2px; border-bottom:1px solid var(--sp-hair);cursor:pointer;}
   #system-workspace .sp-rt-row:last-child{border-bottom:0;}
   #system-workspace .sp-rt-row:hover .sp-rt-name{color:var(--accent);}
   #system-workspace .sp-rt-row .sp-rt-name{font-size:var(--sp-fs-sm);color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  #system-workspace .sp-rt-row .sp-rt-val{margin-left:auto;font-size:var(--sp-fs-xs);color:var(--dim);
-    font-variant-numeric:tabular-nums;white-space:nowrap;}
+  #system-workspace .sp-rt-row .sp-rt-val{margin-left:auto;font-size:var(--sp-fs-xs);color:var(--dim); font-variant-numeric:tabular-nums;white-space:nowrap;}
   #system-workspace .sp-rt-row .sp-rt-val b{color:var(--text);}
   #system-workspace .sp-rt-row .sp-rt-val.bad b{color:var(--sp-danger);}
   #system-workspace .sp-rt-row .sp-rt-val.warn b{color:var(--sp-warn);}
@@ -727,12 +738,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
         不另起一套颜色 —— 要不然和状态标签 / 圆环水位对不上 ✗。 */
   #system-workspace .sp-health{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
     padding:10px 14px;border:1px solid var(--sp-hair);border-radius:var(--sp-r-md);background:var(--sp-card);}
-  #system-workspace .sp-health.crit{border-color:color-mix(in srgb, var(--sp-danger) 45%, transparent);
-    background:color-mix(in srgb, var(--sp-danger) 8%, var(--sp-card));}
-  #system-workspace .sp-health.warn{border-color:color-mix(in srgb, var(--sp-warn) 45%, transparent);
-    background:color-mix(in srgb, var(--sp-warn) 8%, var(--sp-card));}
-  #system-workspace .sp-hdot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--ok);
-    box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent);}
+  #system-workspace .sp-health.crit{border-color:color-mix(in srgb, var(--sp-danger) 45%, transparent); background:color-mix(in srgb, var(--sp-danger) 8%, var(--sp-card));}
+  #system-workspace .sp-health.warn{border-color:color-mix(in srgb, var(--sp-warn) 45%, transparent); background:color-mix(in srgb, var(--sp-warn) 8%, var(--sp-card));}
+  #system-workspace .sp-hdot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent);}
   #system-workspace .sp-hdot.warn{background:var(--sp-warn);box-shadow:0 0 0 3px color-mix(in srgb, var(--sp-warn) 18%, transparent);}
   #system-workspace .sp-hdot.crit{background:var(--sp-danger);box-shadow:0 0 0 3px color-mix(in srgb, var(--sp-danger) 18%, transparent);
     animation:sp-hdot-pulse 1.6s ease-in-out infinite;}
@@ -742,14 +750,12 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   #system-workspace .sp-health .sum{color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
   #system-workspace .sp-health-issues{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
   #system-workspace .sp-hissue{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
-    border-radius:999px;border:1px solid var(--sp-hair-strong);background:transparent;color:var(--text);
-    font-size:var(--sp-fs-xs);cursor:pointer;}
+    border-radius:999px;border:1px solid var(--sp-hair-strong);background:transparent;color:var(--text); font-size:var(--sp-fs-xs);cursor:pointer;}
   #system-workspace .sp-hissue:hover{border-color:var(--accent);color:var(--accent);}
   #system-workspace .sp-hissue i{font-style:normal;font-size:10px;}
   #system-workspace .sp-hissue.crit i{color:var(--sp-danger);}
   #system-workspace .sp-hissue.warn i{color:var(--sp-warn);}
-#system-workspace .sp-state{font-size:var(--sp-fs-xs);padding:2px 7px;border-radius:var(--sp-r-xs);border:0;color:var(--dim);
-  background:var(--sp-tint);white-space:nowrap;}
+#system-workspace .sp-state{font-size:var(--sp-fs-xs);padding:2px 7px;border-radius:var(--sp-r-xs);border:0;color:var(--dim); background:var(--sp-tint);white-space:nowrap;}
 #system-workspace .sp-state.ok{color:var(--ok);background:color-mix(in srgb, var(--ok) 15%, transparent);}
 #system-workspace .sp-state.warn{color:var(--sp-warn);background:color-mix(in srgb, var(--sp-warn) 15%, transparent);}
 #system-workspace .sp-state.crit{color:var(--sp-danger);background:color-mix(in srgb, var(--sp-danger) 15%, transparent);}
@@ -775,7 +781,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* 这里不能写 fill —— 一写就会盖掉 polygon 上的 url(#grad)，渐变面积直接失效 */
 #system-workspace .sp-spark .fill{stroke:none;}
 /* .sp-spark 就是那个 <svg> 自己，所以渐变停靠点要写成它的后代，不能再套一层 svg */
-#system-workspace .sp-spark .spk-top{stop-color:var(--spk);stop-opacity:.36;}
+/* 填充压淡一档（.36 → .22）：内存这种长期贴着 70% 的线，面积会糊成一整块绿板 ✗，
+   压淡之后线本身还看得见 ✓（曲线是"看趋势"，不是"看色块"）✓ */
+#system-workspace .sp-spark .spk-top{stop-color:var(--spk);stop-opacity:.22;}
 #system-workspace .sp-spark .spk-bottom{stop-color:var(--spk);stop-opacity:.02;}
 /* 内存曲线换一种系列色（绿），两条线叠在同一屏时才分得清谁是谁。 */
 #system-workspace .sp-spark.mem{--spk:var(--ok);}
@@ -783,8 +791,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-spark.net{--spk:color-mix(in srgb, var(--accent) 45%, #ffb020);}
 #system-workspace .sp-spark.disk{--spk:color-mix(in srgb, var(--accent) 40%, #c77dff);}
 /* 曲线下的统计行：当前 / 均值 / 峰值 */
-#system-workspace .sp-axis{display:flex;justify-content:space-between;margin-top:4px;font-size:var(--sp-fs-xs);
-  color:var(--dim);font-variant-numeric:tabular-nums;opacity:.9;}
+#system-workspace .sp-axis{display:flex;justify-content:space-between;margin-top:4px;font-size:var(--sp-fs-xs); color:var(--dim);font-variant-numeric:tabular-nums;opacity:.9;}
 #system-workspace .sp-stats{display:flex;gap:14px;margin-top:5px;font-size:var(--sp-fs-xs);color:var(--dim);font-variant-numeric:tabular-nums;}
 #system-workspace .sp-stats b{color:var(--text);font-weight:600;}
 #system-workspace .sp-hint{font-weight:400;color:var(--dim);font-size:var(--sp-fs-xs);letter-spacing:0;}
@@ -798,6 +805,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-band:has(.sp-table){overflow-x:auto;}
 #system-workspace .sp-kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:var(--sp-fs-sm);line-height:1.4;color:var(--text);}
 #system-workspace .sp-kv .k{color:var(--dim);}
+/* ★ 8.1 右栏瘦身：系统信息 11 行 → **8 行 + 「更多」**。
+   做法是给多出来的那几对 k/v 加 .sp-more，收起时 display:none —— grid 会自己重排 ✓。
+   ⚠️ 不用外层 div 包：那会变成"格子里再套一个 grid"，两列对不齐 ✗。 */
+#system-workspace .sp-kv .sp-more{display:none;}#system-workspace .sp-kv.open .sp-more{display:revert;}
 /* 表格：只在表头下和行之间留发丝线，不做「行内小方框」。 */
 #system-workspace .sp-table{width:100%;border-collapse:collapse;font-size:var(--sp-fs);}
 #system-workspace .sp-table th{position:sticky;top:0;z-index:2;text-align:left;font-weight:600;color:var(--dim);background:var(--sp-surface);
@@ -822,70 +833,47 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    做法（纯 CSS，不引图片）：上亮下暗的渐变面 + 顶部 1px 内高光 + 底部内暗边 +
    两层外投影；按下时整体下沉 1px 并把投影换成内凹阴影 —— 手感接近 macOS 控件。
    颜色一律从主题变量用 color-mix 派生，7 套主题（含浅色）都跟着走，不写死色值。 */
-#system-workspace .sp-btn, .fsv-menu .sp-btn, .fsv-preview .sp-btn{
-  background:linear-gradient(180deg,
+#system-workspace .sp-btn, .fsv-menu .sp-btn, .fsv-preview .sp-btn{ background:linear-gradient(180deg,
     color-mix(in srgb, var(--sp-surface-2) 90%, var(--text) 10%),
-    color-mix(in srgb, var(--sp-surface-2) 97%, var(--bg) 3%));
-  color:var(--text);
-  border:1px solid var(--sp-hair-strong);
-  border-radius:9px;
-  padding:5px 11px;font-size:var(--sp-fs-sm);cursor:pointer;white-space:nowrap;
-  box-shadow:
+    color-mix(in srgb, var(--sp-surface-2) 97%, var(--bg) 3%)); color:var(--text); border:1px solid var(--sp-hair-strong); border-radius:9px;
+  padding:5px 11px;font-size:var(--sp-fs-sm);cursor:pointer;white-space:nowrap; box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--bg) 55%, transparent),
     0 1px 2px color-mix(in srgb, var(--bg) 55%, transparent),
-    0 2px 5px color-mix(in srgb, var(--bg) 30%, transparent);
-  transition:background 140ms ease, box-shadow 140ms ease, transform 90ms ease, border-color 140ms ease, color 140ms ease;}
-#system-workspace .sp-btn:hover, .fsv-menu .sp-btn:hover, .fsv-preview .sp-btn:hover{
-  background:linear-gradient(180deg,
+    0 2px 5px color-mix(in srgb, var(--bg) 30%, transparent); transition:background 140ms ease, box-shadow 140ms ease, transform 90ms ease, border-color 140ms ease, color 140ms ease;}
+#system-workspace .sp-btn:hover, .fsv-menu .sp-btn:hover, .fsv-preview .sp-btn:hover{ background:linear-gradient(180deg,
     color-mix(in srgb, var(--sp-surface-2) 80%, var(--text) 20%),
-    color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%));
-  border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
+    color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%)); border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
 /* 按下：下沉 + 阴影翻转为内凹，模拟「压下去」 */
-#system-workspace .sp-btn:active, .fsv-menu .sp-btn:active, .fsv-preview .sp-btn:active{
-  transform:translateY(1px);
-  box-shadow:
+#system-workspace .sp-btn:active, .fsv-menu .sp-btn:active, .fsv-preview .sp-btn:active{ transform:translateY(1px); box-shadow:
     inset 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--text) 6%, transparent),
     0 1px 1px color-mix(in srgb, var(--bg) 40%, transparent);}
 #system-workspace .sp-btn:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 60%, transparent);outline-offset:2px;}
-#system-workspace .sp-btn[disabled]{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none;
-  background:var(--sp-tint);border-color:var(--sp-hair);color:var(--dim);}
+#system-workspace .sp-btn[disabled]{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none; background:var(--sp-tint);border-color:var(--sp-hair);color:var(--dim);}
 /* 危险：红调实体按钮，而不是只有红字 */
-#system-workspace .sp-btn.danger{color:color-mix(in srgb, var(--sp-danger) 88%, var(--text));
-  border-color:color-mix(in srgb, var(--sp-danger) 28%, var(--sp-hair-strong));}
-#system-workspace .sp-btn.danger:hover{
-  background:linear-gradient(180deg,
+#system-workspace .sp-btn.danger{color:color-mix(in srgb, var(--sp-danger) 88%, var(--text)); border-color:color-mix(in srgb, var(--sp-danger) 28%, var(--sp-hair-strong));}
+#system-workspace .sp-btn.danger:hover{ background:linear-gradient(180deg,
     color-mix(in srgb, var(--sp-surface-2) 74%, var(--sp-danger) 26%),
-    color-mix(in srgb, var(--sp-surface-2) 88%, var(--sp-danger) 12%));
-  border-color:color-mix(in srgb, var(--sp-danger) 55%, transparent);
-  color:var(--text);}
+    color-mix(in srgb, var(--sp-surface-2) 88%, var(--sp-danger) 12%)); border-color:color-mix(in srgb, var(--sp-danger) 55%, transparent); color:var(--text);}
 /* 主按钮：accent 蓝的三段渐变 + 顶部强高光 + 品牌色投影 */
-#system-workspace .sp-btn.primary{
-  background:linear-gradient(180deg,
+#system-workspace .sp-btn.primary{ background:linear-gradient(180deg,
     color-mix(in srgb, var(--accent) 78%, white),
     var(--accent) 52%,
-    color-mix(in srgb, var(--accent) 84%, black));
-  border-color:color-mix(in srgb, var(--accent) 62%, black);
-  color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(0,0,0,.22);
+    color-mix(in srgb, var(--accent) 84%, black)); border-color:color-mix(in srgb, var(--accent) 62%, black); color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(0,0,0,.22);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.38),
     inset 0 -1px 0 rgba(0,0,0,.16),
     0 1px 2px rgba(0,0,0,.32),
     0 3px 9px color-mix(in srgb, var(--accent) 34%, transparent);}
-#system-workspace .sp-btn.primary:hover{
-  background:linear-gradient(180deg,
+#system-workspace .sp-btn.primary:hover{ background:linear-gradient(180deg,
     color-mix(in srgb, var(--accent) 70%, white),
     color-mix(in srgb, var(--accent) 94%, white) 52%,
-    color-mix(in srgb, var(--accent) 88%, black));
-  color:#fff;}
-#system-workspace .sp-btn.primary:active{
-  transform:translateY(1px);
-  box-shadow:inset 0 2px 6px color-mix(in srgb, var(--accent) 45%, black), 0 1px 2px rgba(0,0,0,.3);}
+    color-mix(in srgb, var(--accent) 88%, black)); color:#fff;}
+#system-workspace .sp-btn.primary:active{ transform:translateY(1px); box-shadow:inset 0 2px 6px color-mix(in srgb, var(--accent) 45%, black), 0 1px 2px rgba(0,0,0,.3);}
 #system-workspace .sp-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 16px;}
 #system-workspace .sp-input{background:var(--sp-surface-2);color:var(--text);border:1px solid var(--sp-hair);border-radius:var(--sp-r-sm);
-  padding:6px 10px;font-size:var(--sp-fs);min-width:120px;height:var(--ui-control-height,30px);
-  transition:border-color var(--sp-ease),background var(--sp-ease);}
+  padding:6px 10px;font-size:var(--sp-fs);min-width:120px;height:var(--ui-control-height,30px); transition:border-color var(--sp-ease),background var(--sp-ease);}
 #system-workspace .sp-input:hover{border-color:var(--sp-hair-strong);}
 #system-workspace .sp-input:focus{outline:none;border-color:color-mix(in srgb, var(--accent) 60%, transparent);background:var(--sp-surface);}
 #system-workspace .sp-note{font-size:var(--sp-fs-sm);color:var(--dim);line-height:1.65;margin:8px 0 0;}
@@ -914,16 +902,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
 /* ── 进程/启动项行：名字 + 一句人话 + 占用条 + 数值，一行一件事（替代 7 列表格） ── */
 #system-workspace .sp-plist{display:flex;flex-direction:column;gap:1px;}
-#system-workspace .sp-pitem{display:flex;align-items:center;gap:12px;padding:7px 9px;border-radius:var(--sp-r-sm);
-  transition:background var(--sp-ease);}
+#system-workspace .sp-pitem{display:flex;align-items:center;gap:12px;padding:7px 9px;border-radius:var(--sp-r-sm); transition:background var(--sp-ease);}
 #system-workspace .sp-pitem:hover{background:var(--sp-tint);}
 #system-workspace .sp-pmain{flex:1 1 auto;min-width:0;}
 #system-workspace .sp-pname{font-size:var(--sp-fs);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-pnote{font-size:var(--sp-fs-xs);color:var(--dim);margin-top:2px;line-height:1.45;}
 #system-workspace .sp-pbar{flex:0 0 140px;width:140px;}
 #system-workspace .sp-pbar .sp-bar{height:5px;}
-#system-workspace .sp-pnum{flex:0 0 92px;display:flex;flex-direction:column;align-items:flex-end;
-  font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;line-height:1.35;}
+#system-workspace .sp-pnum{flex:0 0 92px;display:flex;flex-direction:column;align-items:flex-end; font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;line-height:1.35;}
 #system-workspace .sp-pnum b{color:var(--text);font-weight:600;}
 #system-workspace .sp-pnum .muted{font-size:var(--sp-fs-xs);}
 /* 排序按钮的选中态（原来只靠一个「当前：按 CPU 排序」标签，看不出哪个按钮是开的） */
@@ -1017,11 +1003,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .fsv-batch-mark{color:var(--dim);}
 #system-workspace .fsv-treemap{position:relative;}
 #system-workspace .fsv-tip{position:absolute;z-index:20;max-width:240px;padding:6px 9px;border-radius:var(--sp-r-xs);
-  background:var(--sp-surface);border:1px solid var(--sp-hair);box-shadow:var(--sp-raise);
-  font-size:var(--sp-fs-sm);color:var(--text);pointer-events:none;line-height:1.5;}
+  background:var(--sp-surface);border:1px solid var(--sp-hair);box-shadow:var(--sp-raise); font-size:var(--sp-fs-sm);color:var(--text);pointer-events:none;line-height:1.5;}
 #system-workspace .fsv-flash{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:130;padding:8px 14px;
-  border-radius:var(--sp-r-sm);background:var(--sp-surface);border:1px solid var(--sp-hair);box-shadow:var(--sp-raise);
-  font-size:var(--sp-fs-sm);color:var(--text);}
+  border-radius:var(--sp-r-sm);background:var(--sp-surface);border:1px solid var(--sp-hair);box-shadow:var(--sp-raise); font-size:var(--sp-fs-sm);color:var(--text);}
 #system-workspace .fsv-switch{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:var(--sp-fs-sm);cursor:pointer;user-select:none;}
 #system-workspace .fsv-switch input{margin:0;}
 
@@ -1049,16 +1033,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* 分类筛选：上面一条「分类分布」横条（段宽=占比、可点），下面一排胶囊。
    16 个分类如果做成「无边框小字」挤在一行，看起来就是一坨噪声，还认不出哪些能点；
    现在胶囊带色点，色点和分布条一一对应，等于自带图例，不用再单独画一个。 */
-#system-workspace .sw-cats{display:flex;flex-direction:column;gap:9px;padding:10px 12px;
-  background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);}
+#system-workspace .sw-cats{display:flex;flex-direction:column;gap:9px;padding:10px 12px; background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);}
 #system-workspace .sw-dist-bar{display:flex;gap:1px;height:10px;border-radius:999px;overflow:hidden;background:var(--sp-tint);}
-#system-workspace .sw-dist-seg{border:0;padding:0;min-width:2px;cursor:pointer;
-  transition:opacity var(--sp-ease);}
+#system-workspace .sw-dist-seg{border:0;padding:0;min-width:2px;cursor:pointer; transition:opacity var(--sp-ease);}
 #system-workspace .sw-dist-seg:hover{opacity:.7;}
 #system-workspace .sw-cat-row{display:flex;gap:6px;flex-wrap:wrap;}
 #system-workspace .sw-cat{display:inline-flex;align-items:center;gap:6px;background:var(--sp-tint);border:1px solid transparent;
-  color:var(--dim);border-radius:999px;padding:4px 11px;font-size:var(--sp-fs-sm);cursor:pointer;
-  transition:background var(--sp-ease),color var(--sp-ease),box-shadow var(--sp-ease);}
+  color:var(--dim);border-radius:999px;padding:4px 11px;font-size:var(--sp-fs-sm);cursor:pointer; transition:background var(--sp-ease),color var(--sp-ease),box-shadow var(--sp-ease);}
 #system-workspace .sw-dot{flex:none;width:8px;height:8px;border-radius:50%;font-style:normal;background:var(--sp-tint-strong);}
 #system-workspace .sw-cat:hover{color:var(--text);background:var(--sp-tint-strong);}
 #system-workspace .sw-cat.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 16%, transparent);font-weight:600;
@@ -1067,8 +1048,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;}
 #system-workspace .sw-list{display:flex;flex-direction:column;gap:2px;}
 #system-workspace .sw-tile{position:relative;display:flex;align-items:center;gap:10px;min-width:0;text-align:left;
-  background:transparent;border:1px solid transparent;border-radius:var(--sp-r);padding:9px 10px;cursor:pointer;
-  transition:background var(--sp-ease),border-color var(--sp-ease);}
+  background:transparent;border:1px solid transparent;border-radius:var(--sp-r);padding:9px 10px;cursor:pointer; transition:background var(--sp-ease),border-color var(--sp-ease);}
 #system-workspace .sw-tile:hover{background:var(--sp-tint);border-color:var(--sp-hair);}
 #system-workspace .sw-tile-body{flex:1;min-width:0;}
 #system-workspace .sw-tile-name{color:var(--text);font-size:var(--sp-fs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1076,8 +1056,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sw-tile-cat{background:var(--sp-tint);border-radius:var(--sp-r-xs);padding:1px 6px;}
 #system-workspace .sw-tile-ver{font-family:var(--sp-mono);}
 /* 图标块：默认是字母块，图片加载成功才换成真图标 */
-#system-workspace .sw-icon{flex:none;display:flex;align-items:center;justify-content:center;border-radius:var(--sp-r-sm);
-  background:var(--sp-tint);color:var(--dim);overflow:hidden;}
+#system-workspace .sw-icon{flex:none;display:flex;align-items:center;justify-content:center;border-radius:var(--sp-r-sm); background:var(--sp-tint);color:var(--dim);overflow:hidden;}
 #system-workspace .sw-icon{position:relative;}
 #system-workspace .sw-icon-glyph{line-height:1;}
 #system-workspace .sw-icon-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;opacity:0;}
@@ -1092,8 +1071,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    「分类 v版本」那一行。现在并进卡片的 tooltip。 */
 #system-workspace .sw-fav-row{display:flex;gap:6px;flex-wrap:wrap;}
 #system-workspace .sw-fav-chip{display:inline-flex;align-items:center;gap:7px;background:var(--sp-tint);border:1px solid transparent;
-  color:var(--text);border-radius:var(--sp-r-sm);padding:5px 10px 5px 6px;font-size:var(--sp-fs);cursor:pointer;
-  transition:background var(--sp-ease);}
+  color:var(--text);border-radius:var(--sp-r-sm);padding:5px 10px 5px 6px;font-size:var(--sp-fs);cursor:pointer; transition:background var(--sp-ease);}
 #system-workspace .sw-fav-chip:hover{background:var(--sp-tint-strong);}
 #system-workspace .sw-detail-layer{position:fixed;inset:0;z-index:112;background:color-mix(in srgb, var(--bg) 62%, transparent);
   display:flex;align-items:center;justify-content:center;padding:24px;}
@@ -1144,16 +1122,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    这一屏的任务是「一眼看出缺什么」+「就地能修」。所以：状态用徽标不用方框，
    动作区用淡底块，命令一律等宽可点复制。 */
 #system-workspace .env-root{display:flex;flex-direction:column;gap:var(--sp-gap);}
-#system-workspace .env-summary{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:var(--sp-r);
-  background:var(--sp-tint);}
+#system-workspace .env-summary{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:var(--sp-r); background:var(--sp-tint);}
 #system-workspace .env-summary.warn{background:color-mix(in srgb, var(--sp-warn) 10%, transparent);}
 #system-workspace .env-summary-main{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
 #system-workspace .env-summary-main b{font-size:var(--sp-fs-lg);}
 #system-workspace .env-summary-main span{color:var(--dim);font-size:var(--sp-fs-sm);min-width:0;}
 #system-workspace .env-summary-foot{display:flex;align-items:center;gap:10px;}
 #system-workspace .env-summary-foot .dim{flex:1;min-width:0;color:var(--dim);font-size:var(--sp-fs-xs);}
-#system-workspace .env-badge{flex:none;padding:2px 8px;border-radius:var(--sp-r-xs);font-size:var(--sp-fs-xs);
-  background:var(--sp-tint-strong);color:var(--dim);white-space:nowrap;}
+#system-workspace .env-badge{flex:none;padding:2px 8px;border-radius:var(--sp-r-xs);font-size:var(--sp-fs-xs); background:var(--sp-tint-strong);color:var(--dim);white-space:nowrap;}
 #system-workspace .env-badge.ok{color:var(--ok);background:color-mix(in srgb, var(--ok) 14%, transparent);}
 #system-workspace .env-badge.warn{color:var(--sp-warn);background:color-mix(in srgb, var(--sp-warn) 15%, transparent);}
 #system-workspace .env-badge.err{color:var(--sp-danger);background:color-mix(in srgb, var(--sp-danger) 15%, transparent);}
@@ -1176,8 +1152,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .env-cmd:hover{background:var(--sp-tint-strong);}
 #system-workspace .env-copy{flex:none;color:var(--dim);font-size:var(--sp-fs-xs);}
 #system-workspace .env-action-foot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
-#system-workspace .env-btn{background:transparent;border:1px solid transparent;border-radius:var(--sp-r-xs);
-  padding:5px 11px;color:var(--text);cursor:pointer;font-size:var(--sp-fs-sm);
+#system-workspace .env-btn{background:transparent;border:1px solid transparent;border-radius:var(--sp-r-xs); padding:5px 11px;color:var(--text);cursor:pointer;font-size:var(--sp-fs-sm);
   transition:background var(--sp-ease),color var(--sp-ease);}
 #system-workspace .env-btn:hover{background:var(--sp-tint-strong);}
 /* ── 远程同步（系统 · 远程同步）：表单与动作块 ── */
@@ -1214,11 +1189,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .env-asset-meta{margin-top:4px;color:var(--dim);font-size:var(--sp-fs-sm);word-break:break-word;}
 #system-workspace .env-asset-meta code{font-family:var(--sp-mono);font-size:var(--sp-fs-xs);}
 #system-workspace .env-chips{display:flex;flex-wrap:wrap;gap:6px;}
-#system-workspace .env-chip{padding:3px 9px;border-radius:var(--sp-r-xs);font-size:var(--sp-fs-sm);
-  background:color-mix(in srgb, var(--ok) 13%, transparent);color:var(--ok);}
+#system-workspace .env-chip{padding:3px 9px;border-radius:var(--sp-r-xs);font-size:var(--sp-fs-sm); background:color-mix(in srgb, var(--ok) 13%, transparent);color:var(--ok);}
 #system-workspace .env-chip.off{background:var(--sp-tint-strong);color:var(--dim);}
-#system-workspace .env-missing,#system-workspace .env-issues{margin:8px 0 0;padding-left:18px;color:var(--dim);
-  font-size:var(--sp-fs-sm);line-height:1.6;word-break:break-word;}
+#system-workspace .env-missing,#system-workspace .env-issues{margin:8px 0 0;padding-left:18px;color:var(--dim); font-size:var(--sp-fs-sm);line-height:1.6;word-break:break-word;}
 #system-workspace .env-idle{margin-top:10px;}
 #system-workspace .env-idle summary{cursor:pointer;color:var(--dim);font-size:var(--sp-fs-sm);}
 #system-workspace .dim{color:var(--dim);font-style:normal;}
@@ -1226,8 +1199,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 /* ── 多端适配 ──
    一台机器会被三种窗口看到：桌面浏览器、手机/平板、以及 code-server 里那个窄 iframe。
    窄屏下左侧分区栏改成顶部横向条（分区不隐藏，都能点到），主列一律单列，触摸目标加大。 */
-@media (max-width: 900px) {
-  body.system-mode #system-workspace{flex-direction:column;}
+@media (max-width: 900px) { body.system-mode #system-workspace{flex-direction:column;}
   /* 注意：真正横排的是 #system-shell（导航 + 主列），只改 #system-workspace 没用 ——
      导航那一行内容约 600px、flex:none，会把主列挤成 153px。 */
   #system-workspace #system-shell{flex-direction:column;}
@@ -1268,8 +1240,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 }
 /* 触摸设备没有 hover：把关键控件撑到能点得准的高度。 */
 @media (pointer: coarse) {
-  #system-workspace .sp-btn,#system-workspace .env-btn,#system-workspace .env-chip{min-height:34px;
-    display:inline-flex;align-items:center;justify-content:center;}
+  #system-workspace .sp-btn,#system-workspace .env-btn,#system-workspace .env-chip{min-height:34px; display:inline-flex;align-items:center;justify-content:center;}
   #system-workspace #system-nav-list button{min-height:38px;}
   #system-workspace #system-subnav button{min-height:34px;}
 }
@@ -1463,7 +1434,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
               </div>
               <span id="system-head-status">等待打开</span>
               <span class="sp"></span>
-              <button id="system-refresh" title="立即刷新当前页面">↻ 刷新</button>
+              <button id="system-refresh" title="立即刷新当前页面"><span class="ico">↻</span><span class="lb">刷新</span></button>
             </header>
             <div id="system-subnav" role="tablist"></div>
             <div id="system-body"></div>
@@ -2168,24 +2139,28 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       /* 每张卡除了数字，再挂一行「所以呢」的真实数据 —— 光有 450 / 24 / 20 这些数字
          看不出好坏，补上「最高占用是谁」「有几个端口对外」「启动项有没有异常」才有用。 */
 
+      /* ★ 8.3：第 4 项 = 这张卡点下去去哪儿 —— 数字本身就是入口 ✓（8.2 说它不该是主角，
+         那就让它当"分区入口"，比只做个装饰数字有用得多）✓ */
       const stats = [
         ['进程', proc && Number(proc.total),
-          topProc ? '最高 ' + (topProc.app || '?') + ' ' + (Number(topProc.cpu) || 0).toFixed(1) + '%' : ''],
+          topProc ? '最高 ' + (topProc.app || '?') + ' ' + (Number(topProc.cpu) || 0).toFixed(1) + '%' : '', 'processes'],
         ['常驻服务', svc ? brew.length : null,
-          brew.length ? brew[0].name + (brew[0].running ? ' 运行中' : ' 已停止') : '暂无 brew 服务'],
+          brew.length ? brew[0].name + (brew[0].running ? ' 运行中' : ' 已停止') : '暂无 brew 服务', 'services'],
         ['监听端口', svc ? ports.length : null,
-          ports.length ? '对外监听 ' + exposed + ' 个' : ''],
+          ports.length ? '对外监听 ' + exposed + ' 个' : '', 'services'],
         ['开机启动项', svc ? agents.length : null,
-          agents.length ? (failedAgents ? failedAgents + ' 个异常' : '全部正常') : ''],
+          agents.length ? (failedAgents ? failedAgents + ' 个异常' : '全部正常') : '', 'services'],
         ['已装应用', apps && Number(apps.total),
-          favorites ? '收藏 ' + favorites + ' 个' : ''],
+          favorites ? '收藏 ' + favorites + ' 个' : '', 'apps'],
       ];
       const icons = ['◈', '⚙', '⇄', '↻', '▤'];
       row.innerHTML = stats.map((triple, index) =>
-        '<div class="sp-stat"><i>' + (icons[index] || '·') + '</i>' +
+        '<div class="sp-stat" role="button" tabindex="0" data-goto="' + triple[3] + '" title="去「' + triple[0] + '」对应的分区">' +
+        '<span class="go">查看 ›</span><i>' + (icons[index] || '·') + '</i>' +
         '<b>' + (Number.isFinite(triple[1]) ? triple[1] : '—') + '</b>' +
         '<span>' + triple[0] + '</span>' +
         '<em>' + esc(triple[2] || '') + '</em></div>').join('');
+      bindGoto(row);
     }
     /* ★ 运行状态卡 ✓ —— 每行「状态点 + 名字 + 数值」，整行可点、跳到能处理它的分区 ✓。
        ⚠️ 状态判据和各自分区页**完全一致** ✓（Docker 看 st.available ✓、启动项看 failed ✓、
@@ -2218,8 +2193,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const list = $('system-app-list');
     if (list && apps && Array.isArray(apps.apps)) {
       /* 常用优先，其次按启动次数 —— 「常用应用」就该是用户真的会点的那些。
-         9 个正好铺满 3×3 的图标墙（多出来的会把右栏顶高，得不偿失）。 */
-      const items = apps.apps.slice().sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (Number(b.runs) || 0) - (Number(a.runs) || 0)).slice(0, 9);
+         ★ 8.1：8 个 → **6 个 + 「全部 N 个 ›」**（3×2 铺满；多出来的走标题右侧那个入口 ✓） */
+      const items = apps.apps.slice().sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (Number(b.runs) || 0) - (Number(a.runs) || 0)).slice(0, 6);
+      const appAll = $('system-app-all');
+      if (appAll) appAll.textContent = '全部 ' + (Number(apps.total) || apps.apps.length) + ' ›';
       list.innerHTML = items.map((app) => {
         const initial = esc(String(app.name || '?').trim().slice(0, 1));
         return '<div class="sp-app" data-launch="' + esc(app.path) + '" title="' + esc(app.name + (app.version ? ' · ' + app.version : '')) + '">' +
@@ -2273,9 +2250,27 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     }
   }
 
+  /* ★ 8.3 刷新按钮：点击期间 disabled + ↻ 旋转，完成后 1.8 秒内显示「已更新 21:17:44」。
+     ⚠️ 完成后要**自己复原**文字 ✗ 否则按钮一直写着上一次的时间 ✓；
+     ⚠️ disabled 同时兼作连点保护 ✓（手动刷新期间 1.5s 定时器仍在跑）✓。 */
+  let refreshDoneTimer = null;
+  async function runRefresh() {
+    const button = $('system-refresh');
+    const label = button && button.querySelector('.lb');
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    button.classList.add('sp-busy');
+    button.classList.remove('sp-done');
+    try { await refresh(true); } finally { button.classList.remove('sp-busy'); button.disabled = false; }
+    button.classList.add('sp-done');
+    if (label) label.textContent = '已更新 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    clearTimeout(refreshDoneTimer);
+    refreshDoneTimer = setTimeout(() => { button.classList.remove('sp-done'); if (label) label.textContent = '刷新'; }, 1800);
+  }
+
   function wireShellEvents() {
     const back = $('system-back'); if (back) back.onclick = () => close();
-    const refreshButton = $('system-refresh'); if (refreshButton) refreshButton.onclick = () => refresh(true);
+    const refreshButton = $('system-refresh'); if (refreshButton) refreshButton.onclick = () => { runRefresh().catch(() => {}); };
     const auto = $('system-auto');
     if (auto) {
       auto.checked = state.auto;
@@ -2574,10 +2569,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     saveHistory();
   }
 
-  /* 使用率 → 语义色（卡片大数字用）。低于 70 保持中性，70~85 提醒，85 以上告警。 */
+  /* 使用率 → 语义色（卡片大数字 / 圆环 / 容量百分比共用）。
+     ★ 8.1 定死三档：正常（中性/绿）· ≥75% 琥珀 · ≥90% 告警。不出现第四种颜色 ✓。
+     ⚠️ 这三个数是**唯一来源** ✗ 别的地方再写一遍 70/85 就会出现"环是黄的、数字是红的" ✓
+        （patchOverview 里同步改成了 75/90）✓。 */
   function levelClass(percent) {
     const value = Number(percent) || 0;
-    return value >= 85 ? ' crit' : value >= 70 ? ' warn' : '';
+    return value >= 90 ? ' crit' : value >= 75 ? ' warn' : '';
   }
 
   /* 环形仪表（对齐 1Panel 首页那种圆环）：底环 + 进度弧 + 中心大数字。
@@ -2642,11 +2640,13 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     return externalVolumes(state.overview).find((item) => String(item.device || '').replace(/^\/dev\//, '') === id) || null;
   }
 
-  /* 读不到数据的环：只有底环 + 一个「—」。不编数字，也不留空位。 */
-  function emptyRing() {
-    return '<div class="sp-gauge-ring"><svg viewBox="0 0 100 100" aria-hidden="true">' +
+  /* 读不到 / 不适用数据的环：灰底环 + 一句状态（默认「不可用」），不编数字也不留空位。
+     ⚠️ 8.1 明确不要「—」✗ —— 「—」看起来像还没加载完 ✓；灰环 + 文字才是"这项不存在" ✓。
+     ⚠️ 但外置盘那两处不能跟着说「不可用」✗（没插 U 盘不是故障）→ 词由调用方传 ✓。 */
+  function emptyRing(label) {
+    return '<div class="sp-gauge-ring na"><svg viewBox="0 0 100 100" aria-hidden="true">' +
       '<circle class="track" cx="50" cy="50" r="42"/></svg>' +
-      '<div class="sp-gauge-center"><span class="v"><b>—</b></span></div></div>';
+      '<div class="sp-gauge-center"><span class="v"><b class="na">' + esc(label || '不可用') + '</b></span></div></div>';
   }
 
   /* 曲线：网格基线 + 面积填充 + 系列配色。
@@ -2812,8 +2812,8 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
       if (num) num.textContent = value < 10 ? value.toFixed(1) : value.toFixed(0);
       const ring = cell.querySelector('.sp-gauge-ring');
       if (ring) {
-        ring.classList.toggle('warn', value >= 70 && value < 85);
-        ring.classList.toggle('crit', value >= 85);
+        ring.classList.toggle('warn', value >= 75 && value < 90);
+        ring.classList.toggle('crit', value >= 90);
       }
     };
     setGauge('cpu', cpu.usage);
@@ -2900,8 +2900,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   /* ── 健康总评 ✓（2026-10-18）────────────────────────────────────────────
      运维面板和监控面板的区别就在这一条：监控给数字 ✓，运维要**先给结论** ✓ ——
      「这台机器现在有没有事、事在哪」，点一下就能跳去处理 ✓。
-     ⚠️ 阈值和圆环的水位色**保持同一套** ✓（圆环 70 warn / 85 crit ✓），
-        不然「圆环黄的、总评说正常」就见鬼了 ✗。
+     ⚠️ 圆环水位色（8.1）是 75 warn / 90 crit ✓；这里刻意**更严**一点
+        （磁盘 85/90、内存 85/92）—— 环可以早一点变黄提醒你盯着，
+        但「需要注意」只在真该动手时才冒出来，否则这条天天挂着 3 个 chip 就没人看了 ✓。
      ⚠️ 只用 `state.overview` 里**已有**的数据 ✓，不发新请求 ✓
         （1.5 秒一轮的刷新里再加请求，卡的就是这一页 ✗）。 */
   function healthOf(data) {
@@ -2947,7 +2948,29 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
   }
   function bindHealth(body) {
     body.querySelectorAll('.sp-hissue[data-hgoto]').forEach((button) => {
+      if (button.dataset.hBound) return;
+      button.dataset.hBound = '1';
       button.onclick = () => setView(button.dataset.hgoto);
+    });
+  }
+  /* ★ 8.3 所有「可点」的统一入口：一处绑 data-goto（KPI 卡 / 环形表 / 「全部 ›」/ 快捷操作共用）。
+     ⚠️ 键盘可达必须自己做 ✗ —— 自绘的 div 挂了 role="button" 浏览器也不会替你认 Enter/Space ✓；
+        真正的 <button> 会自己触发 click，所以这里只处理带 tabindex 的那批 ✓。 */
+  function bindGoto(scope) {
+    if (!scope) return;
+    scope.querySelectorAll('[data-goto]').forEach((node) => {
+      if (node.dataset.gotoBound) return;
+      node.dataset.gotoBound = '1';
+      node.onclick = () => setView(node.dataset.goto);
+    });
+    if (scope.dataset.gotoKeys) return;
+    scope.dataset.gotoKeys = '1';
+    scope.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+      const hit = event.target.closest && event.target.closest('[data-goto][tabindex]');
+      if (!hit) return;
+      event.preventDefault();
+      setView(hit.dataset.goto);
     });
   }
   function patchHealth(body) {
@@ -2975,7 +2998,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const hasTemp = thermal && thermal.available && thermal.celsius != null;
     const tempLevel = hasTemp ? (thermal.celsius >= 80 ? ' hot' : thermal.celsius >= 60 ? ' warm' : '') : '';
     const pressureText = { normal: '热压力正常', high: '热压力偏高', unknown: '热压力未知' }[(thermal && thermal.pressure) || 'unknown'] || '';
-    const tempCell = '<div class="sp-gcell' + tempLevel + '" data-gauge="temp">' +
+    /* 温度没有独立详情页 ▸ 这一格**不给 data-goto**（见 .sp-gcell[data-goto] 的注释），
+       只在 title 里说清"读不到就是读不到"，并给出可执行的办法 ✓ */
+    const tempCell = '<div class="sp-gcell' + tempLevel + '" data-gauge="temp" title="' +
+      (hasTemp ? 'CPU 温度 ' + Number(thermal.celsius).toFixed(1) + ' ℃' : 'Apple Silicon 没有 SMC 暴露温度，可用 smctemp 查看') + '">' +
       (hasTemp ? gauge(thermal.celsius, '') : emptyRing()) +
       '<div class="sp-gcap">温度</div>' +
       '<div class="sp-gsub">' + (hasTemp ? Number(thermal.celsius).toFixed(1) + ' ℃ · ' + esc(pressureText) : esc(pressureText) + ' · 温度暂不可读') + '</div>' +
@@ -2987,7 +3013,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const externals = externalVolumes(data);
     const shownExt = externals.slice(0, MAX_EXT_RINGS);
     const extCells = shownExt.map((item) =>
-      '<div class="sp-gcell" data-gauge="' + esc(volumeKey(item)) + '">' +
+      '<div class="sp-gcell" data-gauge="' + esc(volumeKey(item)) + '" data-goto="storage" role="button" tabindex="0" title="去「存储」看这块盘的占用">' +
       gauge(item.capacity, '') +
       '<div class="sp-gcap">' + esc(volumeName(item)) + '</div>' +
       '<div class="sp-gsub">可用 ' + fmtBytes(item.free) + ' · 共 ' + fmtBytes(item.total) + '</div>' +
@@ -2995,11 +3021,11 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     const hiddenExt = externals.length - shownExt.length;
     const extCell = externals.length
       ? extCells + (hiddenExt > 0
-          ? '<div class="sp-gcell">' + emptyRing() +
+          ? '<div class="sp-gcell" data-goto="storage" role="button" tabindex="0" title="去「存储」看全部卷">' + emptyRing('+' + hiddenExt) +
             '<div class="sp-gcap">还有 ' + hiddenExt + ' 块</div>' +
             '<div class="sp-gsub">见下方「磁盘卷」</div></div>'
           : '')
-      : '<div class="sp-gcell" data-gauge="ext-none">' + emptyRing() +
+      : '<div class="sp-gcell" data-gauge="ext-none">' + emptyRing('未接') +
         '<div class="sp-gcap">外置盘</div>' +
         '<div class="sp-gsub">未接外置盘</div></div>';
 
@@ -3010,35 +3036,35 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     body.innerHTML = `
       <div class="sp-ov">
         ${healthHtml(data)}
-        <section class="sp-sec sp-overview">">
+        <section class="sp-sec sp-overview">
           <div class="sp-stat-row" id="system-stat-row">
-            <div class="sp-stat"><i>◈</i><b>—</b><span>进程</span><em></em></div>
-            <div class="sp-stat"><i>⚙</i><b>—</b><span>常驻服务</span><em></em></div>
-            <div class="sp-stat"><i>⇄</i><b>—</b><span>监听端口</span><em></em></div>
-            <div class="sp-stat"><i>↻</i><b>—</b><span>开机启动项</span><em></em></div>
-            <div class="sp-stat"><i>▤</i><b>—</b><span>已装应用</span><em></em></div>
+            <div class="sp-stat" role="button" tabindex="0" data-goto="processes" title="去「性能」看谁在吃 CPU"><span class="go">查看 ›</span><i>◈</i><b>—</b><span>进程</span><em></em></div>
+            <div class="sp-stat" role="button" tabindex="0" data-goto="services" title="去「系统」看 brew 托管的后台服务"><span class="go">查看 ›</span><i>⚙</i><b>—</b><span>常驻服务</span><em></em></div>
+            <div class="sp-stat" role="button" tabindex="0" data-goto="services" title="去「系统」看端口占用与对外监听"><span class="go">查看 ›</span><i>⇄</i><b>—</b><span>监听端口</span><em></em></div>
+            <div class="sp-stat" role="button" tabindex="0" data-goto="services" title="去「系统」看开机启动项与异常"><span class="go">查看 ›</span><i>↻</i><b>—</b><span>开机启动项</span><em></em></div>
+            <div class="sp-stat" role="button" tabindex="0" data-goto="apps" title="去「软件」看装了哪些应用"><span class="go">查看 ›</span><i>▤</i><b>—</b><span>已装应用</span><em></em></div>
           </div>
         </section>
         <div class="sp-ov-main">
           <section class="sp-sec">
             <h3>状态<span class="sp-hint">实时 · 每 1.5 秒刷新</span></h3>
             <div class="${gaugesCls}">
-              <div class="sp-gcell" data-gauge="cpu">
+              <div class="sp-gcell" data-gauge="cpu" data-goto="processes" role="button" tabindex="0" title="去「性能」看谁在吃 CPU">
                 ${gauge(cpu.usage, '')}
                 <div class="sp-gcap">CPU</div>
                 <div class="sp-gsub">${cpu.cores} 核 · 负载 ${loadText || '—'}</div>
               </div>
-              <div class="sp-gcell" data-gauge="mem">
+              <div class="sp-gcell" data-gauge="mem" data-goto="processes" role="button" tabindex="0" title="去「性能」看谁在吃内存">
                 ${gauge(memory.usage, '')}
                 <div class="sp-gcap">内存</div>
                 <div class="sp-gsub">已用 ${fmtBytes(memory.used)} · 共 ${fmtBytes(memory.total)}</div>
               </div>
-              <div class="sp-gcell" data-gauge="disk">
+              <div class="sp-gcell" data-gauge="disk" data-goto="storage" role="button" tabindex="0" title="去「存储」看磁盘容量与可清理空间">
                 ${gauge(disk ? disk.capacity : 0, '')}
                 <div class="sp-gcap">主磁盘</div>
                 <div class="sp-gsub">可用 ${disk ? fmtBytes(disk.free) : '—'} · 共 ${disk ? fmtBytes(disk.total) : '—'}</div>
               </div>
-              <div class="sp-gcell" data-gauge="load">
+              <div class="sp-gcell" data-gauge="load" data-goto="processes" role="button" tabindex="0" title="去「性能」按占用排序看进程">
                 ${gauge(loadPercent.length ? loadPercent[0] : 0, '')}
                 <div class="sp-gcap">负载</div>
                 <div class="sp-gsub">每核 ${loadPercent.length ? loadPercent[0].toFixed(0) + '%' : '—'} · 1 / 5 / 15 分钟</div>
@@ -3077,21 +3103,21 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
         <aside class="sp-ov-side">
           <section class="sp-sec">
-            <h3>系统信息</h3>
-            <div class="sp-kv">
+            <h3>系统信息<button type="button" class="sp-hint" data-infomore="system-info-kv" aria-expanded="false">更多 ›</button></h3>
+            <div class="sp-kv" id="system-info-kv">
               <span class="k">主机</span><span>${esc(data.identity.hostname)}</span>
-              <span class="k">用户</span><span>${esc(data.identity.user)}</span>
               <span class="k">系统</span><span>${esc(data.identity.osName)} ${esc(data.identity.osVersion)}</span>
               <span class="k">型号</span><span>${esc(data.identity.model || '—')}</span>
-              <span class="k">架构</span><span>${esc(data.identity.arch)}</span>
               <span class="k">处理器</span><span>${esc(cpu.model || '—')}</span>
               <span class="k">核心</span><span>${cpu.cores || '—'} 核</span>
               <span class="k">内存</span><span>${fmtBytes(memory.total)}</span>
               <span class="k">主磁盘</span><span>${disk ? fmtBytes(disk.total) + '（可用 ' + fmtBytes(disk.free) + '）' : '—'}</span>
               <span class="k">已运行</span><span id="system-uptime">${fmtDuration(data.identity.uptime)}</span>
-              <span class="k">开机于</span><span>${esc(fmtTime(data.identity.bootAt))}</span>
-              <span class="k">Node</span><span>${esc(data.identity.node)}</span>
-              ${data.battery ? '<span class="k">电池</span><span>' + data.battery.percent + '%' + (data.battery.charging ? '（供电中）' : '') + (data.battery.remaining ? ' · 剩余 ' + esc(data.battery.remaining) : '') + '</span>' : ''}
+              <span class="k sp-more">用户</span><span class="sp-more">${esc(data.identity.user)}</span>
+              <span class="k sp-more">架构</span><span class="sp-more">${esc(data.identity.arch)}</span>
+              <span class="k sp-more">开机于</span><span class="sp-more">${esc(fmtTime(data.identity.bootAt))}</span>
+              <span class="k sp-more">Node</span><span class="sp-more">${esc(data.identity.node)}</span>
+              ${data.battery ? '<span class="k sp-more">电池</span><span class="sp-more">' + data.battery.percent + '%' + (data.battery.charging ? '（供电中）' : '') + (data.battery.remaining ? ' · 剩余 ' + esc(data.battery.remaining) : '') + '</span>' : ''}
             </div>
           </section>
           <section class="sp-sec">
@@ -3099,7 +3125,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
             <div class="sp-cores sp-cores-lg">${cores || '<span class="sp-empty">没有每核数据</span>'}</div>
           </section>
           <section class="sp-sec sp-sec-apps">
-            <h3>常用应用<span class="sp-hint">点一下即启动</span></h3>
+            <h3>常用应用<span class="sp-hint">点一下即启动</span><button type="button" class="sp-hint" id="system-app-all" data-goto="apps">全部 ›</button></h3>
             <div class="sp-applist" id="system-app-list"><div class="sp-empty">读取中…</div></div>
           </section>
           <section class="sp-sec">
@@ -3117,9 +3143,17 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
           </section>
         </aside>
       </div>`;
-    body.querySelectorAll('button[data-goto]').forEach((button) => { button.onclick = () => setView(button.dataset.goto); });
+    bindGoto(body);
     body.querySelectorAll('button[data-reveal]').forEach((button) => { button.onclick = () => reveal(button.dataset.reveal); });
     bindHealth(body);
+    /* 系统信息「更多 ›」：展开 / 收起后 4 行（8.1 要求默认只留 8 行） */
+    const infoMore = body.querySelector('[data-infomore]');
+    if (infoMore) infoMore.onclick = () => {
+      const kv = $('system-info-kv');
+      const open = kv ? kv.classList.toggle('open') : false;
+      infoMore.textContent = open ? '收起 ‹' : '更多 ›';
+      infoMore.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
     bindGaugeTips();
     /* 高度不再用 JS 计算：改用 CSS flex 让 .sp-ov 撑满内容区（见概览布局的 CSS 注释）。
        fitOverviewHeight 保留但不再调用 —— 它读 scrollHeight 的方式会正反馈。 */
