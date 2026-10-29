@@ -52,16 +52,29 @@
   --sp-r:10px;   /* \u5361\u7247\u5706\u89D2\uFF1A\u7B2C 8.1 \u8282\u70B9\u540D 10px\uFF08\u539F 11px\uFF09 */
   --sp-r-sm:8px; --sp-r-xs:6px;
   /* \u7528\u67D4\u548C\u53D1\u4E1D\u7EBF\u66FF\u4EE3\u6EE1\u5C4F\u63CF\u8FB9 \u2014\u2014 \u4E4B\u524D 90% \u7684\u300C\u65B9\u6846\u611F\u300D\u6765\u81EA\u8FD9\u91CC\u3002 */
-  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
-  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent);
+  /* 1px \u5916\u63CF\u8FB9\uFF1A\u6BD4 --sp-hair \u5B9E\u4E00\u6863\uFF0870%\uFF09\uFF0C\u548C\u4E0B\u9762\u90A3\u5C42\u6295\u5F71\u4E00\u8D77\u628A\u5361\u7247\u300C\u4ECE\u5E95\u9762\u4E0A\u5207\u51FA\u6765\u300D\u3002 */
+  --sp-ring:inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel));
+  /* \u6D6E\u5C42\uFF08\u547D\u4EE4\u9762\u677F / \u53F3\u952E\u83DC\u5355 / \u60AC\u505C\u63D0\u793A\uFF09\u7528**\u6DF1\u6863**\uFF1A\u5B83\u4EEC\u79BB\u7EB8\u9762\u6700\u9AD8\uFF0C
+     \u5FC5\u987B\u4E00\u773C\u770B\u51FA\u300C\u6D6E\u5728\u9875\u9762\u4E4B\u4E0A\u300D\uFF0C\u800C\u4E0D\u662F\u548C\u5361\u7247\u4E00\u4E2A\u539A\u5EA6 \u2713\u3002 */
+  --sp-raise:var(--sp-shadow-float), var(--sp-ring);
   /* \u2605 \u7ACB\u4F53\u611F\u56DB\u4EF6\u5957\uFF08\u7B2C 7/8 \u8282\uFF09\uFF1A\u5E95\u8272\u5DEE + 1px \u7EC6\u7EBF + \u4E24\u5C42\u67D4\u548C\u9634\u5F71 + \u9876\u90E8 1px \u5185\u9AD8\u5149\u3002
      \u26A0\uFE0F \u9634\u5F71\u8272\u4E00\u5F8B\u7528**\u7EAF\u9ED1\u4F4E\u900F\u660E\u5EA6** \u2717 \u4E0D\u80FD\u7528 var(--bg) \u6216 var(--text) \u2713 \u2014\u2014
         \u6D45\u8272\u4E3B\u9898\u7684 --bg \u662F\u8FD1\u767D\u3001\u6DF1\u8272\u4E3B\u9898\u7684 --text \u662F\u8FD1\u767D\uFF0C\u4E24\u79CD\u90FD\u4F1A\u628A\u6295\u5F71\u753B\u6210"\u53D1\u5149\u7684\u767D\u8FB9"\u2713\u3002
         \u7EAF\u9ED1\u5728\u4E24\u5957\u4E3B\u9898\u4E0B\u90FD\u6210\u7ACB\uFF0C\u4E5F\u7701\u6389\u4E86"\u4E24\u5957 --pp-* \u5404\u5199\u4E00\u904D" \u2713\u3002
      \u26A0\uFE0F \u62AC\u5347\u4E0E\u6309\u4E0B\u5FC5\u987B\u6210\u5BF9\u51FA\u73B0\uFF1A\u53EA\u5199 hover \u4E0D\u5199 active\uFF0C\u6309\u94AE\u4F1A\u50CF"\u7C98\u5728\u7EB8\u4E0A" \u2717\u3002 */
-  --sp-shadow:0 1px 1px rgba(0,0,0,.055),0 2px 4px rgba(0,0,0,.055),0 8px 18px rgba(0,0,0,.05);
-  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.07),0 6px 12px rgba(0,0,0,.09),0 16px 32px rgba(0,0,0,.085); --sp-inset:inset 0 2px 5px rgba(0,0,0,.20),inset 0 -1px 0 rgba(255,255,255,.05);
-  --sp-hi:inset 0 1px 0 rgba(255,255,255,.16);
+  /* \u2605 2026-10-29 \u4E09\u6863**\u62C9\u5F00**\uFF1A\u539F\u6765\u4E09\u5C42 alpha \u53EA\u6709 .055/.055/.05\uFF0C\u8089\u773C\u5206\u4E0D\u51FA
+     \u300C\u9759\u6B62 / \u62AC\u8D77 / \u6D6E\u5C42\u300D\u4E09\u6863 \u2014\u2014 \u7B49\u4E8E\u53EA\u6709\u4E00\u5C42\u3002\u4E09\u6863\u7684**\u7B2C\u4E00\u5C42\u504F\u79FB\u4E0E alpha \u540C\u65F6\u653E\u5927**\uFF0C
+     \u773C\u775B\u624D\u6709\u300C\u79BB\u7EB8\u9762\u591A\u9AD8\u300D\u7684\u5224\u65AD\u4F9D\u636E\uFF08\u62AC\u5F97\u8D8A\u9AD8\uFF0C\u786C\u8FB9\u8D8A\u6563\u3001\u8D8A\u6DF1\uFF09\u3002 */
+  --sp-shadow:0 1px 1px rgba(0,0,0,.28), 0 4px 10px rgba(0,0,0,.22), 0 12px 28px rgba(0,0,0,.18);
+  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.30), 0 8px 18px rgba(0,0,0,.32), 0 22px 44px rgba(0,0,0,.28);
+  --sp-shadow-float:0 4px 8px rgba(0,0,0,.35), 0 16px 36px rgba(0,0,0,.40), 0 40px 80px rgba(0,0,0,.34);
+  /* \u6309\u4E0B\uFF1A\u5916\u6295\u5F71\u5168\u90E8\u64A4\u6389\uFF0C\u53EA\u7559**\u5185\u51F9** \u2014\u2014 2px \u504F\u79FB + .28 \u624D\u770B\u5F97\u51FA\u300C\u538B\u8FDB\u53BB\u4E86\u300D\uFF0C
+     \u539F\u6765 1px/.20 \u548C\u9759\u6B62\u6001\u51E0\u4E4E\u6CA1\u533A\u522B\u3002 */
+  --sp-inset:inset 0 2px 4px rgba(0,0,0,.28),inset 0 -1px 0 rgba(255,255,255,.05);
+  /* \u9876\u90E8 1px \u5185\u9AD8\u5149\uFF1A\u6DF1\u8272\u4E3B\u9898 .06\uFF08\u518D\u4EAE\u5C31\u6210\u767D\u8FB9\uFF09\uFF0C\u6D45\u8272\u4E3B\u9898\u5728\u4E0B\u9762\u5355\u72EC\u62AC\u5230 .7\u3002 */
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.06);
   /* \u5B57\u53F7\u53EA\u7559\u516D\u6863\u3001\u95F4\u8DDD\u53EA\u7559\u56DB\u6863\u3001\u52A8\u6548\u53EA\u7559\u4E00\u6863\u65F6\u957F\u3002 */
   --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
   --sp-mono:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);
@@ -71,10 +84,28 @@
    \u547D\u4EE4\u9762\u677F\uFF09\u4E0D\u5728 #system-workspace \u91CC\u9762\uFF0C\u7EE7\u627F\u4E0D\u5230\u4E0A\u9762\u90A3\u4EFD\uFF0C\u5426\u5219\u5706\u89D2\u4E0E\u6295\u5F71\u4F1A\u9759\u9ED8\u5931\u6548\u3002 */
 :root{ --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err))); --sp-danger:var(--err); --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
   --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent); --sp-r-lg:14px; --sp-r:10px; --sp-r-sm:8px; --sp-r-xs:6px;
-  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
-  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent);
+  --sp-ring:inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel));
+  --sp-raise:var(--sp-shadow-float), var(--sp-ring);
   --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
   --sp-mono:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);
+  /* \u4E09\u6863\u9634\u5F71 + \u5185\u9AD8\u5149\u4E5F\u8981\u5728 :root \u6709\u4E00\u4EFD \u2014\u2014 \u53F3\u952E\u83DC\u5355 / \u9884\u89C8 / \u547D\u4EE4\u9762\u677F\u6302\u5728 body \u4E0A\uFF0C
+     \u7EE7\u627F\u4E0D\u5230 #system-workspace \u90A3\u4EFD\uFF0C\u5426\u5219\u6D6E\u5C42\u4F1A\u9759\u9ED8\u9000\u56DE\u300C\u6CA1\u6709\u7ACB\u4F53\u611F\u300D\u3002 */
+  --sp-shadow:0 1px 1px rgba(0,0,0,.28), 0 4px 10px rgba(0,0,0,.22), 0 12px 28px rgba(0,0,0,.18);
+  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.30), 0 8px 18px rgba(0,0,0,.32), 0 22px 44px rgba(0,0,0,.28);
+  --sp-shadow-float:0 4px 8px rgba(0,0,0,.35), 0 16px 36px rgba(0,0,0,.40), 0 40px 80px rgba(0,0,0,.34);
+  --sp-inset:inset 0 2px 4px rgba(0,0,0,.28),inset 0 -1px 0 rgba(255,255,255,.05);
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.06);
+}
+/* \u6D45\u8272\u4E3B\u9898\uFF1A\u5361\u7247\u662F\u7EB8\u767D\uFF0C\u9876\u90E8\u5185\u9AD8\u5149\u5FC5\u987B**\u4EAE\u800C\u5B9E**\uFF08.06 \u5728\u7EB8\u4E0A\u5B8C\u5168\u770B\u4E0D\u89C1\uFF0C\u7B49\u4E8E\u6CA1\u5199\uFF09\uFF1B
+   \u6295\u5F71\u5219\u7EDF\u4E00\u6536\u7A84\u6210\u540C\u8272\u7CFB\u7684\u6DF1\u8910\uFF0C\u7EAF\u9ED1\u5728\u7EB8\u767D\u4E0A\u4F1A\u53D1\u7070\u3001\u663E\u5F97\u810F\u3002 */
+html[data-theme="light"], html[data-theme="light"] #system-workspace{
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.7);
+  --sp-shadow:0 1px 1px rgba(24,20,12,.10), 0 4px 10px rgba(24,20,12,.09), 0 12px 28px rgba(24,20,12,.08);
+  --sp-shadow-lift:0 2px 2px rgba(24,20,12,.12), 0 8px 18px rgba(24,20,12,.13), 0 22px 44px rgba(24,20,12,.11);
+  --sp-shadow-float:0 4px 8px rgba(24,20,12,.14), 0 16px 36px rgba(24,20,12,.16), 0 40px 80px rgba(24,20,12,.14);
+  --sp-inset:inset 0 2px 4px rgba(24,20,12,.20),inset 0 -1px 0 rgba(255,255,255,.6);
 }
 body.system-mode #system-workspace{display:flex;}
 /* \u515C\u5E95\uFF1A\u4E07\u4E00\u5BBF\u4E3B\u7684\u6309\u94AE\u6CA1\u88AB\u4E0A\u4E00\u6B21\u70B9\u51FB\u62E6\u5230\uFF0C\u53EA\u8981\u522B\u7684\u5185\u5D4C\u5DE5\u4F5C\u533A\u6A21\u5F0F\u8FD8\u5728\uFF0C
@@ -179,7 +210,44 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-subnav button:hover{color:var(--text);background:var(--sp-tint);}
 #system-subnav button.on{color:var(--text);background:var(--ui-accent-soft, var(--sp-tint-strong));font-weight:600;}
 #system-subnav .subnav-count{color:var(--dim);font-size:var(--sp-fs-sm);margin-left:auto;}
-#system-body{flex:1;min-height:0;overflow:auto;padding:16px 20px 30px;}
+#system-body{flex:1;min-height:0;overflow:auto;padding:16px 20px 30px;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
+/* \u2605\u2605 \u9875\u9762\u9AA8\u67B6\uFF082026-10-29 \u4ECE\u300C\u9010\u9875\u8865\u4E01\u300D\u6539\u6210\u300C\u4E00\u5904\u6839\u89C4\u5219\u300D\uFF09\u2605\u2605
+   \u7528\u6237\u53CD\u590D\u53CD\u9988\u300C\u7A97\u53E3\u4E00\u5927\u4E00\u5C0F\u3001\u7A7A\u767D\u592A\u591A\u300D\u3002\u6839\u56E0\u4E0D\u5728\u67D0\u51E0\u9875\uFF0C\u5728\u8FD9\u6761\u94FE\u8DEF\uFF1A
+     #system-workspace > body(#system-body) > \u9875\u9762\u5BB9\u5668 > \u6700\u540E\u4E00\u884C
+   #system-body \u539F\u6765\u662F**\u5757\u7EA7**\u5BB9\u5668 \u21D2 \u9875\u9762\u6BD4\u89C6\u53E3\u77EE\u65F6\uFF0C\u6700\u540E\u4E00\u884C\u5230\u5934\u5C31\u505C\u4E86\uFF0C
+   \u5E95\u4E0B\u90A3\u5757\u9AD8\u5EA6\u6CA1\u6709\u4EFB\u4F55\u5143\u7D20\u53BB\u8981 \u21D2 \u9875\u9762\u5E95\u90E8\u5FC5\u7136\u7559\u767D\uFF08\u5B9E\u6D4B \u8BBE\u7F6E 171px / \u5B58\u50A8 140px / \u6027\u80FD 56px\uFF09\u3002
+   \u21D2 \u6539\u6210 flex \u5217\uFF0C**\u6700\u540E\u4E00\u884C flex-grow**\uFF0C\u5BCC\u4F59\u9AD8\u5EA6\u5168\u90E8\u843D\u8FDB\u6700\u540E\u4E00\u884C\u3002
+   \u26A0\uFE0F \u987A\u5E26\u628A\u95F4\u8DDD\u6536\u6210**\u4E00\u6761 gap** \u2717 \u2014\u2014 flex \u91CC\u76F8\u90BB\u5916\u8FB9\u8DDD**\u4E0D\u518D\u5408\u5E76** \u2717\uFF0C
+      \u82E5\u7EE7\u7EED\u4FDD\u7559\u5404\u5143\u7D20\u81EA\u5DF1\u7684 margin-bottom\uFF0C\u95F4\u8DDD\u4F1A\u4ECE 16px \u53D8\u6210 16+16=32px \u2717
+      \uFF08\u8FD9\u6B63\u662F\u4E4B\u524D\u300C\u591A\u4E00\u4EFD\u5916\u8FB9\u8DDD\u300D\u90A3\u6761\u6839\u56E0\u7684\u540C\u65CF\u95EE\u9898 \u2713\uFF09\u3002
+   \u26A0\uFE0F \u6700\u540E\u4E00\u884C\u7528 flex:1 **0** auto\uFF08shrink=0\uFF09\u2717 \u4E0D\u662F 1 1 auto \u2713 \u2014\u2014
+      \u5185\u5BB9\u672C\u6765\u5C31\u6BD4\u89C6\u53E3\u9AD8\u7684\u9875\u9762\uFF08\u6587\u4EF6 / \u8F6F\u4EF6 / \u6982\u89C8\uFF09\u5FC5\u987B\u80FD**\u6EA2\u51FA\u540E\u7531 #system-body \u6EDA** \u2713\uFF1B
+      \u5141\u8BB8\u5B83\u6536\u7F29\u7684\u8BDD\uFF0C\u4F1A\u88AB\u786C\u538B\u8FDB\u5BB9\u5668\u3001\u5185\u5BB9\u76F4\u63A5\u88AB\u88C1\u6389\u4E14\u6EDA\u4E0D\u5230 \u2713\uFF08\u6982\u89C8\u9875\u7684\u8001\u5751 \u2713\uFF09\u3002
+      \u53EA\u6709 .sp-cols \u4F8B\u5916\uFF08\u4E0B\u9762\u5355\u72EC\u653E\u884C\u6536\u7F29 \u2713\uFF09\u2014\u2014 \u5B83\u5185\u90E8\u6BCF\u4E00\u5757\u90FD\u6709 .sp-list \u81EA\u6EDA \u2713\u3002 */
+#system-workspace #system-body > *{margin:0;flex:0 0 auto;min-width:0;}
+/* \u9ED8\u8BA4\uFF1A\u6700\u540E\u4E00\u884C**\u53EA\u957F\u4E0D\u7F29**\uFF081 0 auto\uFF09\u2713\u3002 */
+#system-workspace #system-body > :last-child{flex:1 0 auto;min-height:0;}
+/* \u4F8B\u5916\uFF1A\u6700\u540E\u4E00\u884C\u662F**\u7F51\u683C**\u6216**\u533A\u5757**\u65F6\uFF0C\u653E\u884C\u6536\u7F29\uFF081 1 auto\uFF09\u2713 \u2014\u2014
+   \u8FD9\u4E24\u7C7B\u7684\u5185\u90E8\u5DF2\u7ECF\u5404\u81EA\u6709\u6EDA\u52A8\u5BB9\u5668\uFF08\u5217\u8868 / \u8868\u683C\uFF09\uFF0C
+   \u88AB\u538B\u77EE\u53EA\u662F\u300C\u5C11\u663E\u793A\u51E0\u884C + \u81EA\u5DF1\u6EDA\u300D\u2713\uFF0C\u4E0D\u4F1A\u50CF\u6A21\u5757\u89C6\u56FE\u90A3\u6837\u628A\u5185\u5BB9\u88C1\u6389\u4E14\u6EDA\u4E0D\u5230 \u2717\u3002 */
+#system-workspace #system-body > :last-child.sp-cols,
+#system-workspace #system-body > :last-child.sp-band{flex:1 1 auto;}
+/* \u26A0\uFE0F\u26A0\uFE0F \u6982\u89C8\u9875**\u6545\u610F\u4E0D\u653E\u8FDB\u4E0A\u9762\u90A3\u6761\u653E\u884C\u540D\u5355** \u2717\u2717 \u2014\u2014 \u8BD5\u8FC7\uFF0C\u4EE3\u4EF7\u662F\u66F2\u7EBF\u88AB\u538B\u6241\uFF1A
+   1440\xD7900 \u4E0B\u76D1\u63A7\u533A scrollHeight 169 / clientHeight 73\uFF0C\u56DB\u5F20\u66F2\u7EBF\u53EA\u5269 19~20px \u9AD8 \u2713
+   \uFF08sparkline \u81EA\u5DF1\u7684 min-height 44px \u4E5F\u4FDD\u4E0D\u4F4F \u2713\uFF0C\u56E0\u4E3A\u88AB\u538B\u7684\u662F**\u5916\u5C42** .sp-cols \u2713\uFF09\uFF0C
+   \u7B49\u4E8E\u7528\u300C\u66F2\u7EBF\u770B\u4E0D\u89C1\u300D\u6362\u300C\u4E0D\u7559\u767D\u300D\u2717 \u2014\u2014 \u8FDD\u53CD\u672C\u9879\u76EE\u90A3\u6761\u300C\u5B81\u53EF\u6EDA\u52A8\uFF0C\u4E5F\u4E0D\u4E22\u5185\u5BB9\u300D\u2713\u3002
+   \u21D2 \u6982\u89C8\u9875\u4FDD\u6301 flex:1 0 auto \u2713\uFF1A\u5B83\u80FD\u4E00\u5C4F\u653E\u4E0B\u5C31\u957F\u6EE1\uFF081920\xD71080 \u5B9E\u6D4B gap 12px \u2713\uFF09\uFF0C
+      \u653E\u4E0D\u4E0B\u5C31\u7531 #system-body \u6EDA\uFF081440\xD7900 \u5B9E\u6D4B\u591A 60~90px \u2713\uFF09\uFF0C\u4E0D\u88C1\u4EFB\u4F55\u5185\u5BB9 \u2713\u3002
+   grep \u901F\u67E5\uFF1A.sp-ov \u7684 flex \u53EA\u5728\u4E0B\u6587\u300C\u6982\u89C8\u9875\u5E03\u5C40\u300D\u90A3\u4E00\u8282\u58F0\u660E\u4E00\u6B21 \u2713\uFF0C\u8FD9\u91CC\u4E0D\u91CD\u590D \u2713\u3002 */
+/* \u26A0\uFE0F \u53CD\u8FC7\u6765\uFF1A**\u4E0D\u662F\u6700\u540E\u4E00\u4E2A**\u7684 .sp-cols \u4FDD\u6301\u5185\u5BB9\u9AD8\u5EA6\uFF080 0 auto\uFF09\u2717 \u4E0D\u8BB8\u88AB\u538B\u6241 \u2713 \u2014\u2014
+   \u7CFB\u7EDF\u9875\u5C31\u662F\u8FD9\u79CD\u5F62\u72B6\uFF08\u4E24\u5217\u5361\u7247 + \u4E0B\u9762\u4E00\u6574\u4E2A\u7AEF\u53E3\u8868\uFF09\u2713\uFF1A
+   \u653E\u4EFB\u5B83\u6536\u7F29\u7684\u8BDD\uFF0C\u4E24\u5217\u4F1A\u88AB\u538B\u5230 116px\uFF08\u5B9E\u6D4B\uFF09\u2717\uFF0C\u8868\u683C\u53EA\u5269\u8868\u5934 \u2717\u3002 */
+#system-workspace #system-body > .sp-cols:not(:last-child){flex:0 0 auto;}
+/* \u5168\u5BBD\u7684\u6700\u540E\u4E00\u4E2A\u533A\u5757\uFF08\u7CFB\u7EDF\u9875\u7684\u300C\u76D1\u542C\u4E2D\u7684\u7AEF\u53E3\u300D\uFF09\u4E5F\u8981\u80FD\u957F\u9AD8\u3001\u4E14\u5185\u5BB9\u591A\u65F6**\u5361\u5185\u81EA\u6EDA**\uFF1A
+   \u26A0\uFE0F \u8868\u683C\u672C\u8EAB\u4E0D\u662F\u6EDA\u52A8\u5BB9\u5668 \u2717\uFF08<table> \u4E0A\u5199 overflow \u65E0\u6548 \u2713\uFF09\uFF0C
+      \u6240\u4EE5\u6EDA\u52A8\u4E0A\u4E0B\u6587\u843D\u5728**\u533A\u5757**\u4E0A \u2713 \u2014\u2014 \u8868\u5934 sticky \u624D\u6709\u53C2\u7167 \u2713\u3002 */
+#system-workspace #system-body > .sp-band{display:flex;flex-direction:column;overflow:auto;}
+#system-workspace #system-body > .sp-band > *{flex:0 0 auto;min-height:0;}
 #system-task{flex:none;border-top:1px solid var(--sp-hair);background:var(--sp-surface);max-height:34vh;display:flex;flex-direction:column;}
 #system-task[hidden]{display:none;}
 #system-task .task-head{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:var(--sp-fs-sm);color:var(--dim);}
@@ -209,9 +277,15 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
 /* \u2500\u2500 \u901A\u7528\u7EC4\u4EF6\uFF08\u7C7B\u540D\u4FDD\u6301\u4E0D\u53D8\uFF0C\u65E2\u6709\u6E32\u67D3\u51FD\u6570\u4E0D\u9700\u8981\u6539\uFF09\u2500\u2500 */
 #system-workspace .sp-grid{display:grid;gap:var(--sp-gap);}
-#system-workspace .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--sp-gap);margin-bottom:var(--sp-gap-lg);}
+/* KPI \u5361\u7247\uFF1A\u8FD9\u4E00\u6392\u7684**\u5F20\u6570\u968F\u673A\u5668\u53D8**\uFF08\u6982\u89C8 4 \u5F20\u3001\u5B58\u50A8 2~8 \u4E2A\u5377\uFF09\u21D2 \u8FD9\u91CC\u4FDD\u7559 auto-fit \u2713\uFF0C
+   \u4F46\u5FC5\u987B\u663E\u5F0F align-items:stretch\uFF08\u9ED8\u8BA4\u5C31\u662F stretch\uFF0C\u5199\u51FA\u6765\u662F\u4E3A\u4E86\u9632\u6B62\u4EE5\u540E\u53C8\u88AB\u4EBA\u6539\u6210 start\uFF09\u2713\uFF1B
+   auto-fit \u4F1A\u6298\u53E0\u7A7A\u8F68\u9053 \u2713\uFF0C\u6240\u4EE5\u300C2 \u5F20\u5361\u5C31\u5404\u5360\u4E00\u534A\u300D\u662F\u5BF9\u7684 \u2713\u3002 */
+#system-workspace .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--sp-gap);align-items:stretch;margin:0;}
 /* \u5361\u7247\u4E0D\u518D\u63CF\u4E00\u5708\u8FB9\u6846\uFF0C\u6539\u7528\u300C\u9762\u677F\u5E95 + \u6781\u6DE1\u5185\u63CF\u8FB9\u300D\uFF1A\u5C42\u7EA7\u9760\u5E95\u8272\u548C\u95F4\u8DDD\u8868\u8FBE\u3002 */
-#system-workspace .sp-card{position:relative;overflow:hidden;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:15px 16px;min-width:0;}
+/* \u2605 \u5361\u7247\u300C\u7ACB\u8D77\u6765\u300D\u7684\u56DB\u4EF6\u5957\uFF082026-10-29\uFF09\uFF1A1px \u5916\u63CF\u8FB9 + \u9876\u90E8 1px \u5185\u9AD8\u5149 + \u4E09\u6863\u6295\u5F71\u7684\u6D45\u6863\u3002
+   \u26A0\uFE0F \u539F\u6765\u8FD9\u91CC**\u53EA\u6709\u4E00\u5708\u5185\u63CF\u8FB9** \u2717 \u2014\u2014 \u5361\u7247\u548C\u9875\u9762\u5E95\u51E0\u4E4E\u540C\u8272 \u2713\uFF0C\u6240\u4EE5\u6574\u9875\u770B\u7740\u662F\u300C\u5E73\u7684\u300D\u2713
+      \uFF08\u7528\u6237\u8BF4\u7684\u300C\u7ACB\u4F53\u611F\u4E0D\u884C\u300D\u6709\u4E00\u534A\u6765\u81EA\u8FD9\u91CC \u2713\uFF0C\u4E0D\u662F\u9634\u5F71\u4E0D\u591F\u9ED1 \u2713\uFF09\u3002 */
+#system-workspace .sp-card{position:relative;overflow:hidden;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:var(--sp-r);padding:15px 16px;min-width:0;}
 /* \u5361\u7247\u91CC\u7684\u6302\u8F7D\u8DEF\u5F84\uFF1A\u5377\u540D\u7ED9\u4EBA\u770B\uFF0C\u8DEF\u5F84\u7ED9\u673A\u5668\u770B\uFF0C\u4E24\u8005\u90FD\u7559 \u2014\u2014 \u8DEF\u5F84\u592A\u957F\u5C31\u7701\u7565\u53F7 */
 #system-workspace .sp-card .path{margin-top:3px;font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--dim); overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-card h4{margin:0 0 10px;font-size:var(--sp-fs-xs);font-weight:600;color:var(--dim);letter-spacing:.08em;display:flex;align-items:center;gap:6px;}
@@ -248,7 +322,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    \u662F stretch\uFF0C\u4F1A\u628A\u300C\u6982\u8FF0\u5361\u7247\u300D\u90A3\u4E00\u884C\u4E5F\u62C9\u9AD8\u53BB\u5206\u6389\u591A\u4F59\u9AD8\u5EA6\uFF0C\u7ED3\u679C\u5361\u7247\u4E0B\u9762\u7A7A\u51FA\u4E00\u5927\u6BB5
    \uFF081920\xD71080 \u5B9E\u6D4B\u884C\u9AD8 143px \u800C\u5361\u7247\u53EA\u6709 96px\uFF0C\u7A7A\u4E86 47px\uFF09\u3002\u5199\u6B7B auto 1fr \u540E\uFF0C
    \u7B2C\u4E00\u884C\u53EA\u6309\u5185\u5BB9\u9AD8\uFF0C\u591A\u4F59\u9AD8\u5EA6\u5168\u90E8\u843D\u5230\u7B2C\u4E8C\u884C\u7531\u300C\u76D1\u63A7\u300D\u5438\u6536 \u2014\u2014 \u66F2\u7EBF\u987A\u52BF\u53D8\u9AD8\u3002 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr; gap:12px var(--sp-gap-lg);align-items:start;flex:1 0 auto;min-height:0;}
+/* \u6982\u89C8\u9875\u662F\u300C\u5DE6\u4E3B\u533A + 296px \u53F3\u680F\u300D\uFF0C\u5DE6\u53F3\u4E24\u680F\u90FD align-self:stretch\uFF08\u4E0B\u9762\u4E24\u6761\uFF09\uFF0C
+   \u6240\u4EE5\u8FD9\u91CC\u4E0D\u518D\u5199 align-items:start \u2713 \u2014\u2014 \u5199\u4E86\u4E5F\u4F1A\u88AB align-self \u76D6\u6389 \u2713\uFF0C\u7559\u7740\u53EA\u4F1A\u8BEF\u5BFC\u4E0B\u4E00\u4E2A\u4EBA \u2717\u3002 */
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr; gap:12px var(--sp-gap-lg);align-items:stretch;flex:1 0 auto;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
 /* \u5DE6\u680F\u6491\u6EE1\u5BB9\u5668\u9AD8\u5EA6\uFF08\u53F3\u680F\u4FDD\u6301\u5185\u5BB9\u9AD8\u5EA6\uFF09\u2014\u2014\u4E0D\u8FD9\u6837\u5199\uFF0Cgrid \u4F1A\u6309\u5185\u5BB9\u6536\u7F29\u5DE6\u680F\uFF0C
    \u76D1\u63A7\u533A\u7684 flex:1 \u5C31\u5931\u53BB\u53C2\u7167\uFF0C\u66F2\u7EBF\u6C38\u8FDC\u505C\u5728\u56FA\u5B9A\u9AD8\u5EA6\u3002
@@ -269,7 +345,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
 #system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch; grid-template-columns:repeat(2,minmax(0,1fr));}
 #system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;
-  padding:8px 11px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r-sm);}
+  padding:8px 11px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:var(--sp-r-sm);}
 #system-workspace .sp-sec{min-width:0;}
 /* \u2605 8.2 \u533A\u5757\u6807\u9898\u7EDF\u4E00\uFF1A11px / 650 \u5B57\u91CD / \u5B57\u8DDD .04em + \u5DE6\u4FA7 **2px** \u7AD6\u6761\uFF08\u539F\u6765\u662F 3px \u6E10\u53D8\uFF09+
    \u53F3\u4FA7\u4E00\u4E2A\u6B21\u8981\u64CD\u4F5C\uFF08\u63D0\u793A\u5B57\u6216\u300C\u66F4\u591A \u203A\u300D\u6309\u94AE\uFF0Cmargin-left:auto \u63A8\u5230\u6700\u53F3\uFF09\u2713 */
@@ -288,7 +364,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gcell{padding:10px 8px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:10px;}
 #system-workspace .sp-gcell[data-goto]{cursor:pointer;transition:box-shadow 160ms ease,transform 160ms ease,background 160ms ease;}
 #system-workspace .sp-gcell[data-goto]:hover{background:var(--sp-surface-2);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow-lift);transform:translateY(-1px);}
-#system-workspace .sp-gcell[data-goto]:active{transform:translateY(1px);box-shadow:var(--sp-ring),var(--sp-inset);}
+#system-workspace .sp-gcell[data-goto]:active{transform:translateY(1px);box-shadow:var(--sp-ring),var(--sp-inset),var(--sp-hi);}
 #system-workspace .sp-gcell[data-goto]:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 65%, transparent);outline-offset:2px;}
 /* \u5706\u73AF\u5355\u5143\u5E73\u5206\u6574\u884C\u5BBD\u5EA6\uFF08\u539F\u6765\u662F\u56FA\u5B9A 140px\uFF0C5 \u4E2A\u53EA\u5360 756px \u2014\u2014 1920 \u5BBD\u4E0B\u53F3\u4FA7\u7A7A 600+px\uFF0C
    2560 \u5BBD\u4E0B\u7A7A 1250px\uFF09\u3002min-width \u4FDD\u8BC1\u7A84\u5C4F\u65F6\u4E0D\u4F1A\u88AB\u538B\u6241\u3002 */
@@ -340,6 +416,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    24px \u6EDA\u52A8\uFF0C\u628A\u300C\u78C1\u76D8\u5377\u300D\u63A8\u4E0B\u53BB \u2717\uFF09\u3002\u8FD9\u91CC\u6539\u6210 16 / 6\uFF1A**\u76F8\u5BF9\u5173\u7CFB**\u4E00\u6837\u662F"\u533A\u5757\u95F4\u8DDD\u660E\u663E\u5927\u4E8E
    \u6807\u9898\u4E0E\u5185\u5BB9\u7684\u95F4\u8DDD" \u2713\uFF0C\u4F46\u51C0\u589E\u9AD8\u5EA6\u4E3A 0\uFF08\u95F4\u8DDD +6px \xD7 2\uFF0C\u6807\u9898 -4px \xD7 3\uFF09\u2713\u3002
    \u539F\u6765\u4E24\u8005\u90FD\u662F 10px \u2014\u2014 \u6807\u9898\u548C\u5185\u5BB9\u3001\u548C\u4E0B\u4E00\u5757\u7684\u8DDD\u79BB\u4E00\u6837\u8FDC\uFF0C\u8282\u594F\u662F\u5E73\u7684\uFF0C\u8FD9\u624D\u662F"\u758F\u5BC6\u4E0D\u5300" \u2713\u3002 */
+/* \u26A0\uFE0F \u7236\u7EA7\u5DF2\u7ECF\u6709 gap \u4E86 \u2717 \u2014\u2014 \u5B50\u5143\u7D20\u81EA\u5DF1\u7684 margin-bottom \u4F1A**\u518D\u53E0\u4E00\u4EFD** \u2713
+   \uFF08flex \u91CC\u5916\u8FB9\u8DDD\u4E0D\u5408\u5E76 \u2713\uFF09\u3002\u8FD9\u5C31\u662F\u300C\u591A\u4E00\u4EFD\u5916\u8FB9\u8DDD\u300D\u90A3\u6761\u6839\u56E0\u7684\u540C\u4E00\u65CF \u2713\uFF0C\u4E00\u5E76\u5728\u8FD9\u91CC\u6390\u6389 \u2713\u3002 */
+#system-workspace .sp-ov-main>.sp-band,#system-workspace .sp-ov-side>.sp-band,
+#system-workspace .sp-ov-main>.sp-sec,#system-workspace .sp-ov-side>.sp-sec{margin-bottom:0;}
 #system-workspace .sp-ov-main{gap:16px;}
 /* \u53F3\u680F\u6709 5 \u5757\u53E0\u7740\uFF0C\u540C\u6837 16px \u4F1A\u628A\u9996\u5C4F\u9876\u51FA 8px\uFF08\u78C1\u76D8\u5377\u6700\u540E\u4E00\u884C\u88AB\u88C1\uFF09\u2192 \u6536\u5230 12px\uFF1B
    \u4ECD\u7136\u660E\u663E\u5927\u4E8E\u6807\u9898\u4E0E\u5185\u5BB9\u7684 6px\uFF0C\u8282\u594F\u5173\u7CFB\u4E0D\u53D8 \u2713 */
@@ -567,25 +647,37 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-row .v{font-weight:600;font-variant-numeric:tabular-nums;}
 #system-workspace .sp-row{display:flex;align-items:center;gap:10px;font-size:var(--sp-fs);color:var(--text);}
 #system-workspace .sp-row .k{color:var(--dim);min-width:96px;}
-/* \u2605 2026-10-29 \u4FEE\u4E09\u5904\u300C\u4E00\u5927\u4E00\u5C0F + \u7A7A\u767D\u592A\u591A\u300D\uFF08\u5B9E\u6D4B\u5B9A\u4F4D\uFF0C\u4E0D\u662F\u8C03\u53C2\uFF09\uFF1A
-   \u2460 auto-fit minmax(320px,1fr) \u5728 1391px \u4E0B\u7B97\u51FA 4 \u6761\u8F68\u9053\uFF08computed 784/784/0/0\uFF09\uFF0C\u800C\u672C\u9875\u53EA\u6709 2 \u5F20\u5361 \u21D2 \u5BBD\u5EA6\u4E0D\u53EF\u63A7\uFF1B
-   \u2461 align-items:start \u8BA9\u4E24\u5F20\u5361\u5404\u81EA\u9876\u5BF9\u9F50\uFF08\u5B9E\u6D4B 507 / 553\uFF09\uFF1B
-   \u2462 .sp-band \u81EA\u5E26 margin-bottom:var(--sp-gap-lg)\uFF0C\u800C grid \u7684 gap \u5DF2\u5728\u505A\u95F4\u8DDD \u21D2 body \u5B9E\u6D4B 1080px \u6BD4\u53EF\u89C6\u533A 951px \u9AD8\u3001\u88AB overflow:hidden \u88C1\u6389\u3002 */
-#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:stretch;}
-#system-workspace .sp-cols:has(>.sp-band:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr));}
-#system-workspace .sp-cols>.sp-band{margin-bottom:0;height:100%;display:flex;flex-direction:column;min-height:0;}
-#system-workspace .sp-cols>.sp-band>:last-child{min-height:0;}
-/* \u2605 \u4E24\u5217\u9875\u9762\u6491\u6EE1\u5269\u4F59\u9AD8\u5EA6\uFF082026-10-29\uFF0C\u7528\u6237\u53CD\u9988\u300C\u7A7A\u767D\u592A\u591A\u300D\uFF09\u2014\u2014
-   \u5B9E\u6D4B\uFF1A\u6027\u80FD\u9875\u4E24\u5F20\u5361\u5404 690\xD7548\uFF0C\u800C\u53EF\u89C6\u533A\u8FD8\u6709 209px \u7A7A\u7740 \u21D2 \u9875\u9762\u663E\u5F97\u6CA1\u505A\u5B8C \u2717\u3002
-   \u8BA9 .sp-cols \u5403\u6389\u5269\u4F59\u9AD8\u5EA6\u3001\u884C\u9AD8 1fr\u3001\u5361\u5185\u5217\u8868\u533A flex:1 \u21D2 \u5361\u7247\u81EA\u7136\u957F\u5230\u5E95\uFF0C
-   \u5217\u8868\u4E5F\u56E0\u6B64\u80FD\u591A\u663E\u793A\u51E0\u884C\uFF08\u800C\u4E0D\u662F\u9760\u300C\u663E\u793A\u66F4\u591A\u300D\u6309\u94AE\uFF09\u2713\u3002 */
-#system-workspace .sp-cols{flex:1 1 auto;min-height:0;grid-auto-rows:1fr;}
-#system-workspace .sp-cols>.sp-band>.sp-list, 
-#system-workspace .sp-cols>.sp-band>.sp-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;}
+/* \u2605\u2605\u2605 \u7F51\u683C\u5217\u6570\uFF1A**\u663E\u5F0F\u58F0\u660E**\uFF0C\u4E0D\u518D\u8BA9 auto-fit \u53BB\u731C\uFF082026-10-29 \u5168\u7AD9\u6539\u6839\uFF09\u2605\u2605\u2605
+   \u4E3A\u4EC0\u4E48\u5FC5\u987B\u663E\u5F0F\uFF08\u8FD9\u662F\u300C\u7A97\u53E3\u4E00\u5927\u4E00\u5C0F\u300D\u7684\u76F4\u63A5\u539F\u56E0\uFF0C\u5B9E\u6D4B\u4E0D\u662F\u63A8\u6D4B\uFF09\uFF1A
+     auto-fit + minmax(320px,1fr) \u7684\u8F68\u9053\u6570\u7531**\u5BB9\u5668\u5BBD\u5EA6**\u51B3\u5B9A\uFF0C\u4E0D\u7531\u5361\u7247\u6570\u91CF\u51B3\u5B9A \u2717 \u2014\u2014
+     1391px \u5BBD\u65F6\u5B83\u7B97\u51FA **4 \u6761\u8F68\u9053**\uFF08computed 784/784/0/0\uFF09\u2713\uFF0C\u800C\u8FD9\u4E00\u9875\u53EA\u6709 2 \u5F20\u5361 \u2713
+     \u21D2 \u4E24\u5F20\u5361\u5404\u5360 1/4\u3001\u53F3\u8FB9\u7A7A\u4E00\u534A \u2713\uFF1B\u7A97\u53E3\u4E00\u7A84\u53C8\u53D8 2 \u8F68 \u2713 \u21D2 \u300C\u7A97\u53E3\u4E00\u5927\u4E00\u5C0F\u300D\u2713\u3002
+   \u21D2 \u89C4\u5219\u6539\u6210\u4E24\u6761\uFF1A
+     \xB7 \u8FD9\u4E00\u9875**\u56FA\u5B9A\u51E0\u5F20**\u5361 \u21D2 repeat(n,minmax(0,1fr))\uFF0Cn \u5199\u6B7B \u2713\uFF08\u5BBD\u5EA6\u6C38\u8FDC\u53EF\u7B97 \u2713\uFF09\uFF1B
+     \xB7 \u5361\u7247\u6570\u91CF**\u4E0D\u5B9A**\u3001\u9700\u8981\u81EA\u52A8\u6362\u884C \u21D2 \u624D\u4FDD\u7559 auto-fit\uFF0C\u5E76\u4E14\u5FC5\u987B align-items:stretch \u2713\u3002
+   \u26A0\uFE0F minmax(0,1fr) \u4E0D\u662F minmax(320px,1fr) \u2717 \u2014\u2014 0 \u4E0B\u9650\u8BA9\u683C\u5B50**\u4E0D\u4F1A**\u88AB\u5185\u5BB9\u9876\u5BBD \u2717\uFF0C
+      \u957F\u8DEF\u5F84 / \u957F\u547D\u4EE4\u540D\u56E0\u6B64\u4E0D\u4F1A\u628A\u4E24\u5F20\u5361\u6324\u6210\u4E00\u5927\u4E00\u5C0F \u2713\u3002
+   \u26A0\uFE0F \u539F\u6765\u90A3\u6761 :has() \u55C5\u63A2\uFF08> .sp-band:nth-child(2):last-child\uFF09\u5DF2\u7ECF\u5220\u6389 \u2717 \u2014\u2014
+      \u5B83\u662F\u300C\u7528\u9009\u62E9\u5668\u731C\u8FD9\u4E00\u9875\u6709\u51E0\u5F20\u5361\u300D\u2713\uFF0C\u672C\u8EAB\u5C31\u662F\u4E0D\u663E\u5F0F\u7684\u5199\u6CD5 \u2713\uFF0C\u73B0\u5728\u9ED8\u8BA4\u5C31\u662F 2 \u5217 \u2713\u3002 */
+#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-gap);align-items:stretch;flex:1 1 auto;min-height:0;grid-auto-rows:1fr;}
+/* n=1 / n=3 \u7684\u9875\u9762\u7528\u4FEE\u9970\u7C7B\u5199\u660E\uFF0C\u4E0D\u9760 auto-fit \u731C\u3002 */
+#system-workspace .sp-cols.sp-cols-1{grid-template-columns:minmax(0,1fr);}
+#system-workspace .sp-cols.sp-cols-3{grid-template-columns:repeat(3,minmax(0,1fr));}
 #system-workspace .sp-cols>*{min-width:0;}
-/* \u2605 \u8BBE\u7F6E\u9875\u4E13\u7528\u7F51\u683C\uFF082026-10-29 \u4FEE\uFF09\uFF1A\u539F\u6765\u590D\u7528 .sp-cols\uFF08auto-fit + align-items:start\uFF09\u21D2
-   4 \u5F20\u5185\u5BB9\u9AD8\u5EA6\u4E0D\u540C\u7684\u5361\u5BBD\u5EA6\u4E0E\u9AD8\u5EA6\u90FD\u53C2\u5DEE\uFF0C\u53F3\u4FA7\u4E0E\u4E0B\u65B9\u7559\u51FA\u5927\u7247\u7A7A\u767D \u2717\u3002
-   \u8BBE\u7F6E\u9879\u5929\u7136\u9002\u5408\u4E24\u5217\u7B49\u5BBD\uFF1A\u5361\u7247\u6491\u6EE1\u884C\u9AD8\u3001\u52A8\u4F5C\u6309\u94AE\u8D34\u5E95\uFF0C\u89C6\u89C9\u4E0A\u624D\u662F\u4E00\u5F20\u4E00\u5F20\u7684\u5361\u7247 \u2713\u3002 */
+/* \u2605 \u5361\u7247\u5185\u90E8\u5206\u6BB5\uFF1A\u6807\u9898\u56FA\u5B9A\u3001\u5217\u8868\u5403\u6EE1\u3001\u8868\u683C\u80FD\u6EDA\uFF082026-10-29\uFF09
+   \u26A0\uFE0F \u4E09\u4E2A\u9009\u62E9\u5668\u7F3A\u4E00\u4E0D\u53EF \u2713 \u2014\u2014 .sp-list\uFF08\u5B58\u50A8/\u5F00\u53D1\u73AF\u5883\uFF09/ .sp-plist\uFF08\u6027\u80FD/\u7CFB\u7EDF\uFF09/
+      .sp-table-wrap \u662F\u4E09\u79CD\u4E0D\u540C\u7684\u5217\u8868\u5BB9\u5668 \u2713\uFF0C\u53EA\u5199 .sp-list \u7684\u8BDD\u53E6\u5916\u4E24\u9875\u4F1A
+      \u300C\u5361\u7247\u6EE1\u4E86\u4F46\u5217\u8868\u53EA\u5360\u4E0A\u534A\u622A\u300D\u2717\uFF08\u6027\u80FD\u9875\u5B9E\u6D4B\u5C31\u662F\u8FD9\u6837 \u2717\uFF09\u3002 */
+#system-workspace .sp-cols>.sp-band{margin:0;height:100%;display:flex;flex-direction:column;min-height:0;overflow:auto;}
+#system-workspace .sp-cols>.sp-band>*{flex:0 0 auto;}
+#system-workspace .sp-cols>.sp-band>.sp-list,
+#system-workspace .sp-cols>.sp-band>.sp-plist,
+#system-workspace .sp-cols>.sp-band>.sp-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;}
+/* \u8868\u683C\u5728\u300C\u5361\u7247\u53EA\u80FD\u8FD9\u4E48\u9AD8\u300D\u65F6\u4E0D\u8BB8\u88AB\u538B\u6241\uFF1A\u7ED9\u5B83\u4E00\u4E2A\u81EA\u5DF1\u7684\u6EDA\u52A8\u4E0A\u4E0B\u6587\u3002
+   \u26A0\uFE0F <table> \u4E0A\u5199 overflow \u662F**\u65E0\u6548**\u7684 \u2717\uFF08table \u4E0D\u662F\u6EDA\u52A8\u5BB9\u5668 \u2713\uFF09\uFF0C
+      \u6240\u4EE5\u5305\u4E00\u5C42 .sp-table-wrap \u624D\u80FD\u6EDA \u2713\uFF1B\u6CA1\u5305\u7684\u8868\u683C\u5C31\u8BA9\u5361\u7247\u81EA\u5DF1\u6EDA \u2713\uFF08\u4E0A\u9762\u90A3\u6761\uFF09\u3002 */
+#system-workspace .sp-cols>.sp-band>.sp-table{flex:0 0 auto;}
+/* \u2605 \u8BBE\u7F6E\u9875\uFF1A4 \u5F20\u8BBE\u7F6E\u5361\u7B49\u5BBD\u7B49\u9AD8\uFF0C\u52A8\u4F5C\u6309\u94AE\u8D34\u5E95\uFF082\xD72 \u662F\u8FD9\u4E00\u9875\u56FA\u5B9A\u7684\u5F62\u72B6 \u2713\uFF09\u3002 */
 #system-workspace .sp-settings{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
 #system-workspace .sp-settings>.sp-band{height:100%;display:flex;flex-direction:column;min-width:0;}
 #system-workspace .sp-settings>.sp-band>.sp-actions{margin-top:auto;}
@@ -640,7 +732,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%)); border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
 /* \u6309\u4E0B\uFF1A\u4E0B\u6C89 + \u9634\u5F71\u7FFB\u8F6C\u4E3A\u5185\u51F9\uFF0C\u6A21\u62DF\u300C\u538B\u4E0B\u53BB\u300D */
 #system-workspace .sp-btn:active, .fsv-menu .sp-btn:active, .fsv-preview .sp-btn:active{ transform:translateY(1px); box-shadow:
-    inset 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent),
+    inset 0 2px 4px rgba(0,0,0,.28),
     inset 0 -1px 0 color-mix(in srgb, var(--text) 6%, transparent),
     0 1px 1px color-mix(in srgb, var(--bg) 40%, transparent);}
 #system-workspace .sp-btn:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 60%, transparent);outline-offset:2px;}
@@ -767,8 +859,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 @keyframes sp-pulse{0%,100%{opacity:.45}50%{opacity:.85}}
 
 /* \u2500\u2500 \u6587\u4EF6\u89C6\u56FE\uFF08fsv-*\uFF09\uFF1A\u6A21\u5757\u53EA\u505A\u7ED3\u6784\u4E0E\u884C\u4E3A\uFF0C\u76AE\u80A4\u5168\u90E8\u5728\u8FD9\u91CC\u7EDF\u4E00 \u2500\u2500 */
-#system-workspace .fsv-root{display:flex;flex-direction:column;gap:10px;}
-#system-workspace .fsv-view{display:flex;flex-direction:column;gap:10px;}
+/* \u2605 \u6587\u4EF6\u6D4F\u89C8\uFF1A\u6574\u9875\u586B\u6EE1\u89C6\u53E3\uFF0C\u6587\u4EF6\u8868**\u5728\u9875\u5185\u6EDA**\uFF082026-10-29\uFF09
+   \u5B9E\u6D4B\uFF1A\u65E7\u7248 .fsv-root \u53EA\u6709 flex-direction:column\uFF08\u6CA1\u6709\u9AD8\u5EA6\u7EA6\u675F\uFF09\u21D2 \u9AD8\u5EA6\u7531\u5185\u5BB9\u51B3\u5B9A \u21D2
+   749px \u7684\u89C6\u53E3\u91CC\u957F\u5230 853px \u21D2 \u9875\u9762\u88AB\u9876\u957F\u3001\u5E95\u90E8\u591A\u51FA 150px \u6EDA\u52A8 \u2713\u3002
+   \u73B0\u5728 root / view \u90FD\u5403\u6EE1\u5269\u4F59\u9AD8\u5EA6\uFF0C\u8868\u683C\u90A3\u4E00\u6BB5\u81EA\u5DF1\u6210\u4E3A\u6EDA\u52A8\u4E0A\u4E0B\u6587 \u2713
+   \uFF08<table> \u4E0A\u5199 overflow \u65E0\u6548 \u2717\uFF0C\u6240\u4EE5\u6EDA\u52A8\u653E\u5728**\u5916\u5C42 div** \u4E0A \u2713\uFF09\u3002 */
+/* \u26A0\uFE0F \u9009\u62E9\u5668\u5FC5\u987B\u5E26 #system-body \u2717 \u2014\u2014 \u4E0A\u9762\u90A3\u6761\u300C#system-body > :last-child{flex:1 0 auto}\u300D
+   \u662F (2,0,0)\uFF0C\u5355\u5199 .fsv-root \u7684 (1,1,0) \u76D6\u4E0D\u4F4F\u5B83 \u2713\uFF0C\u4F1A\u88AB\u9759\u9ED8\u6539\u56DE shrink:0 \u2713
+   \uFF08\u5B9E\u6D4B\u8E29\u5230\uFF1A\u5199\u4E86\u4F46\u9875\u9762\u8FD8\u662F 853px \u9AD8 \u2713\uFF09\u3002 */
+#system-workspace #system-body > .fsv-root{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;}
+#system-workspace .fsv-view{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;}
+#system-workspace .fsv-view:has(> .fsv-table){overflow:auto;}
+#system-workspace .fsv-view > .fsv-table{flex:0 0 auto;}
 #system-workspace .fsv-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 #system-workspace .fsv-crumbs{display:flex;align-items:center;gap:2px;flex-wrap:wrap;font-size:var(--sp-fs);}
 #system-workspace .fsv-crumb{background:transparent;border:0;color:var(--dim);border-radius:var(--sp-r-xs);padding:2px 6px;font-size:var(--sp-fs);cursor:pointer;}
@@ -824,7 +926,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .fsv-preview-text, .fsv-preview-text{margin:0;font:var(--sp-fs)/1.7 var(--sp-mono);color:var(--text);white-space:pre-wrap;word-break:break-word;}
 #system-workspace .fsv-selbar{position:sticky;top:0;z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   padding:8px 12px;background:var(--ui-accent-soft, var(--sp-tint));border-radius:var(--sp-r-sm);}
-#system-workspace .fsv-usage-cols, #system-workspace .fsv-organize-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--sp-gap);align-items:start;}
+/* \u7A7A\u95F4\u5206\u6790 / \u6574\u7406\u5F52\u7C7B\uFF1A\u5206\u7EC4\u6570\u968F\u5185\u5BB9\u53D8 \u21D2 \u4FDD\u7559 auto-fit \u2713\uFF0C\u4F46\u5FC5\u987B stretch \u2713
+   \uFF08start \u4F1A\u8BA9\u540C\u4E00\u884C\u7684\u51E0\u4E2A\u5206\u7EC4\u5404\u81EA\u6309\u5185\u5BB9\u9AD8 \u2713\uFF0C\u9AD8\u4F4E\u4E0D\u9F50 \u2713 \u2014\u2014 \u8FD9\u662F\u300C\u4E00\u5927\u4E00\u5C0F\u300D\u7684\u7B2C\u4E8C\u7C7B\u6765\u6E90 \u2713\uFF09\u3002 */
+#system-workspace .fsv-usage-cols, #system-workspace .fsv-organize-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--sp-gap);align-items:stretch;}
 #system-workspace .fsv-organize-group{background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:12px 14px;}
 #system-workspace .fsv-organize-group h4{margin:0 0 8px;font-size:var(--sp-fs-sm);color:var(--dim);font-weight:600;}
 #system-workspace .fsv-batch-head{position:sticky;top:0;z-index:4;padding:8px 12px;font-size:var(--sp-fs-sm);color:var(--dim);
@@ -876,7 +980,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sw-cat.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 16%, transparent);font-weight:600;
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);}
 #system-workspace .sw-info{display:flex;gap:14px;align-items:baseline;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
-#system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;}
+/* \u2605 \u8F6F\u4EF6\u9875\u540C\u7406\uFF1A\u5E94\u7528\u5899\u5728**\u9875\u5185**\u6EDA\uFF082026-10-29\uFF09
+   \u5B9E\u6D4B\u65E7\u7248\uFF1A.sw-root \u957F\u5230 1751px\uFF08\u89C6\u53E3 749\uFF09\u21D2 \u9875\u9762\u88AB\u9876\u957F 1018px \u2713\uFF0C\u5E95\u90E8\u4E00\u5C4F\u5168\u9760\u6EDA \u2713\u3002
+   \u73B0\u5728 .sw-root / .sw-root-body \u5403\u6EE1\u89C6\u53E3\uFF0C\u5E94\u7528\u5899\u81EA\u5DF1\u6EDA \u2713\u3002
+   \u26A0\uFE0F align-content:start \u5FC5\u987B\u5199 \u2717 \u2014\u2014 \u4E0D\u5199\u7684\u8BDD\u88AB\u538B\u77EE\u540E auto \u884C\u4F1A\u5404\u81EA\u62C9\u4F38 \u2713\uFF0C
+      \u56FE\u6807\u683C\u4E0A\u4E0B\u88AB\u6491\u5F00\u3001\u884C\u8DDD\u5FFD\u5927\u5FFD\u5C0F \u2713\u3002 */
+#system-workspace #system-body > .sw-root{flex:1 1 auto;min-height:0;}
+#system-workspace .sw-root-body{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;}
+#system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;flex:1 1 auto;min-height:0;overflow:auto;align-content:start;}
 #system-workspace .sw-list{display:flex;flex-direction:column;gap:2px;}
 #system-workspace .sw-tile{position:relative;display:flex;align-items:center;gap:10px;min-width:0;text-align:left;
   background:transparent;border:1px solid transparent;border-radius:var(--sp-r);padding:9px 10px;cursor:pointer; transition:background var(--sp-ease),border-color var(--sp-ease);}
@@ -927,7 +1038,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .scan-bar i.done{background:var(--ok);}
 #system-workspace .scan-line{display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
 #system-workspace .scan-current{margin-top:3px;color:var(--dim);font-size:var(--sp-fs-xs);font-family:var(--sp-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#system-workspace .scan-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;}
+/* \u7ED3\u679C\u5206\u7EC4\u6570\u91CF\u968F\u626B\u63CF\u7ED3\u679C\u53D8 \u21D2 auto-fit \u662F\u5BF9\u7684 \u2713\uFF0C\u4F46\u663E\u5F0F stretch \u5FC5\u987B\u5199 \u2713
+   \uFF08\u540C\u4E00\u4EFD\u7ED3\u679C\u91CC\u7684\u300C\u5927\u6587\u4EF6 / \u91CD\u590D\u6587\u4EF6 / \u65E7\u6587\u4EF6\u300D\u4E09\u7EC4\u8981\u7B49\u9AD8\uFF0C\u5426\u5219\u770B\u7740\u50CF\u4E09\u4EFD\u4E0D\u540C\u7684\u4E1C\u897F \u2713\uFF09\u3002 */
+#system-workspace .scan-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;align-items:stretch;}
 #system-workspace .scan-card{background:var(--sp-tint);border-radius:var(--sp-r);padding:11px 13px;}
 #system-workspace .scan-card h4{margin:0 0 8px;color:var(--text);font-size:var(--sp-fs-sm);font-weight:600;letter-spacing:.02em;}
 #system-workspace .scan-list{display:flex;flex-direction:column;}
@@ -942,7 +1055,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .scan-meter i{display:block;height:100%;background:var(--accent);opacity:.75;}
 #system-workspace .scan-ext .scan-name{flex:0 0 84px;}
 #system-workspace .scan-safety{background:var(--sp-tint);}
-#system-workspace .safe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;}
+#system-workspace .safe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;align-items:stretch;}
 #system-workspace .safe-paths{display:flex;flex-direction:column;gap:3px;max-height:190px;overflow:auto;}
 #system-workspace .safe-paths code{font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--text);opacity:.9;word-break:break-all;}
 #system-workspace .safe-rules{margin:0;padding-left:20px;color:var(--dim);font-size:var(--sp-fs-sm);line-height:1.75;}

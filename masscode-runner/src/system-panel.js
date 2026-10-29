@@ -283,16 +283,29 @@
   --sp-r:10px;   /* 卡片圆角：第 8.1 节点名 10px（原 11px） */
   --sp-r-sm:8px; --sp-r-xs:6px;
   /* 用柔和发丝线替代满屏描边 —— 之前 90% 的「方框感」来自这里。 */
-  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
-  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent);
+  /* 1px 外描边：比 --sp-hair 实一档（70%），和下面那层投影一起把卡片「从底面上切出来」。 */
+  --sp-ring:inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel));
+  /* 浮层（命令面板 / 右键菜单 / 悬停提示）用**深档**：它们离纸面最高，
+     必须一眼看出「浮在页面之上」，而不是和卡片一个厚度 ✓。 */
+  --sp-raise:var(--sp-shadow-float), var(--sp-ring);
   /* ★ 立体感四件套（第 7/8 节）：底色差 + 1px 细线 + 两层柔和阴影 + 顶部 1px 内高光。
      ⚠️ 阴影色一律用**纯黑低透明度** ✗ 不能用 var(--bg) 或 var(--text) ✓ ——
         浅色主题的 --bg 是近白、深色主题的 --text 是近白，两种都会把投影画成"发光的白边"✓。
         纯黑在两套主题下都成立，也省掉了"两套 --pp-* 各写一遍" ✓。
      ⚠️ 抬升与按下必须成对出现：只写 hover 不写 active，按钮会像"粘在纸上" ✗。 */
-  --sp-shadow:0 1px 1px rgba(0,0,0,.055),0 2px 4px rgba(0,0,0,.055),0 8px 18px rgba(0,0,0,.05);
-  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.07),0 6px 12px rgba(0,0,0,.09),0 16px 32px rgba(0,0,0,.085); --sp-inset:inset 0 2px 5px rgba(0,0,0,.20),inset 0 -1px 0 rgba(255,255,255,.05);
-  --sp-hi:inset 0 1px 0 rgba(255,255,255,.16);
+  /* ★ 2026-10-29 三档**拉开**：原来三层 alpha 只有 .055/.055/.05，肉眼分不出
+     「静止 / 抬起 / 浮层」三档 —— 等于只有一层。三档的**第一层偏移与 alpha 同时放大**，
+     眼睛才有「离纸面多高」的判断依据（抬得越高，硬边越散、越深）。 */
+  --sp-shadow:0 1px 1px rgba(0,0,0,.28), 0 4px 10px rgba(0,0,0,.22), 0 12px 28px rgba(0,0,0,.18);
+  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.30), 0 8px 18px rgba(0,0,0,.32), 0 22px 44px rgba(0,0,0,.28);
+  --sp-shadow-float:0 4px 8px rgba(0,0,0,.35), 0 16px 36px rgba(0,0,0,.40), 0 40px 80px rgba(0,0,0,.34);
+  /* 按下：外投影全部撤掉，只留**内凹** —— 2px 偏移 + .28 才看得出「压进去了」，
+     原来 1px/.20 和静止态几乎没区别。 */
+  --sp-inset:inset 0 2px 4px rgba(0,0,0,.28),inset 0 -1px 0 rgba(255,255,255,.05);
+  /* 顶部 1px 内高光：深色主题 .06（再亮就成白边），浅色主题在下面单独抬到 .7。 */
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.06);
   /* 字号只留六档、间距只留四档、动效只留一档时长。 */
   --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
   --sp-mono:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);
@@ -302,10 +315,28 @@
    命令面板）不在 #system-workspace 里面，继承不到上面那份，否则圆角与投影会静默失效。 */
 :root{ --sp-warn:var(--warn,color-mix(in srgb, var(--ok) 45%, var(--err))); --sp-danger:var(--err); --sp-tint:color-mix(in srgb, var(--dim) 10%, transparent);
   --sp-tint-strong:color-mix(in srgb, var(--dim) 18%, transparent); --sp-r-lg:14px; --sp-r:10px; --sp-r-sm:8px; --sp-r-xs:6px;
-  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent); --sp-ring:inset 0 0 0 1px var(--sp-hair);
-  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel)); --sp-raise:var(--ui-shadow, 0 12px 34px color-mix(in srgb, var(--bg) 72%, transparent));
+  --sp-hair:color-mix(in srgb, var(--border) 50%, transparent); --sp-hair-strong:color-mix(in srgb, var(--border) 78%, transparent);
+  --sp-ring:inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  --sp-surface:var(--panel); --sp-surface-2:var(--panel2, var(--panel));
+  --sp-raise:var(--sp-shadow-float), var(--sp-ring);
   --sp-fs-xs:10.5px; --sp-fs-sm:11.5px; --sp-fs:12.5px; --sp-fs-md:13.5px; --sp-fs-lg:15px; --sp-fs-xl:22px; --sp-gap-sm:6px; --sp-gap:12px; --sp-gap-lg:16px; --sp-ease:100ms ease;
   --sp-mono:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);
+  /* 三档阴影 + 内高光也要在 :root 有一份 —— 右键菜单 / 预览 / 命令面板挂在 body 上，
+     继承不到 #system-workspace 那份，否则浮层会静默退回「没有立体感」。 */
+  --sp-shadow:0 1px 1px rgba(0,0,0,.28), 0 4px 10px rgba(0,0,0,.22), 0 12px 28px rgba(0,0,0,.18);
+  --sp-shadow-lift:0 2px 2px rgba(0,0,0,.30), 0 8px 18px rgba(0,0,0,.32), 0 22px 44px rgba(0,0,0,.28);
+  --sp-shadow-float:0 4px 8px rgba(0,0,0,.35), 0 16px 36px rgba(0,0,0,.40), 0 40px 80px rgba(0,0,0,.34);
+  --sp-inset:inset 0 2px 4px rgba(0,0,0,.28),inset 0 -1px 0 rgba(255,255,255,.05);
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.06);
+}
+/* 浅色主题：卡片是纸白，顶部内高光必须**亮而实**（.06 在纸上完全看不见，等于没写）；
+   投影则统一收窄成同色系的深褐，纯黑在纸白上会发灰、显得脏。 */
+html[data-theme="light"], html[data-theme="light"] #system-workspace{
+  --sp-hi:inset 0 1px 0 rgba(255,255,255,.7);
+  --sp-shadow:0 1px 1px rgba(24,20,12,.10), 0 4px 10px rgba(24,20,12,.09), 0 12px 28px rgba(24,20,12,.08);
+  --sp-shadow-lift:0 2px 2px rgba(24,20,12,.12), 0 8px 18px rgba(24,20,12,.13), 0 22px 44px rgba(24,20,12,.11);
+  --sp-shadow-float:0 4px 8px rgba(24,20,12,.14), 0 16px 36px rgba(24,20,12,.16), 0 40px 80px rgba(24,20,12,.14);
+  --sp-inset:inset 0 2px 4px rgba(24,20,12,.20),inset 0 -1px 0 rgba(255,255,255,.6);
 }
 body.system-mode #system-workspace{display:flex;}
 /* 兜底：万一宿主的按钮没被上一次点击拦到，只要别的内嵌工作区模式还在，
@@ -410,7 +441,44 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-subnav button:hover{color:var(--text);background:var(--sp-tint);}
 #system-subnav button.on{color:var(--text);background:var(--ui-accent-soft, var(--sp-tint-strong));font-weight:600;}
 #system-subnav .subnav-count{color:var(--dim);font-size:var(--sp-fs-sm);margin-left:auto;}
-#system-body{flex:1;min-height:0;overflow:auto;padding:16px 20px 30px;}
+#system-body{flex:1;min-height:0;overflow:auto;padding:16px 20px 30px;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
+/* ★★ 页面骨架（2026-10-29 从「逐页补丁」改成「一处根规则」）★★
+   用户反复反馈「窗口一大一小、空白太多」。根因不在某几页，在这条链路：
+     #system-workspace > body(#system-body) > 页面容器 > 最后一行
+   #system-body 原来是**块级**容器 ⇒ 页面比视口矮时，最后一行到头就停了，
+   底下那块高度没有任何元素去要 ⇒ 页面底部必然留白（实测 设置 171px / 存储 140px / 性能 56px）。
+   ⇒ 改成 flex 列，**最后一行 flex-grow**，富余高度全部落进最后一行。
+   ⚠️ 顺带把间距收成**一条 gap** ✗ —— flex 里相邻外边距**不再合并** ✗，
+      若继续保留各元素自己的 margin-bottom，间距会从 16px 变成 16+16=32px ✗
+      （这正是之前「多一份外边距」那条根因的同族问题 ✓）。
+   ⚠️ 最后一行用 flex:1 **0** auto（shrink=0）✗ 不是 1 1 auto ✓ ——
+      内容本来就比视口高的页面（文件 / 软件 / 概览）必须能**溢出后由 #system-body 滚** ✓；
+      允许它收缩的话，会被硬压进容器、内容直接被裁掉且滚不到 ✓（概览页的老坑 ✓）。
+      只有 .sp-cols 例外（下面单独放行收缩 ✓）—— 它内部每一块都有 .sp-list 自滚 ✓。 */
+#system-workspace #system-body > *{margin:0;flex:0 0 auto;min-width:0;}
+/* 默认：最后一行**只长不缩**（1 0 auto）✓。 */
+#system-workspace #system-body > :last-child{flex:1 0 auto;min-height:0;}
+/* 例外：最后一行是**网格**或**区块**时，放行收缩（1 1 auto）✓ ——
+   这两类的内部已经各自有滚动容器（列表 / 表格），
+   被压矮只是「少显示几行 + 自己滚」✓，不会像模块视图那样把内容裁掉且滚不到 ✗。 */
+#system-workspace #system-body > :last-child.sp-cols,
+#system-workspace #system-body > :last-child.sp-band{flex:1 1 auto;}
+/* ⚠️⚠️ 概览页**故意不放进上面那条放行名单** ✗✗ —— 试过，代价是曲线被压扁：
+   1440×900 下监控区 scrollHeight 169 / clientHeight 73，四张曲线只剩 19~20px 高 ✓
+   （sparkline 自己的 min-height 44px 也保不住 ✓，因为被压的是**外层** .sp-cols ✓），
+   等于用「曲线看不见」换「不留白」✗ —— 违反本项目那条「宁可滚动，也不丢内容」✓。
+   ⇒ 概览页保持 flex:1 0 auto ✓：它能一屏放下就长满（1920×1080 实测 gap 12px ✓），
+      放不下就由 #system-body 滚（1440×900 实测多 60~90px ✓），不裁任何内容 ✓。
+   grep 速查：.sp-ov 的 flex 只在下文「概览页布局」那一节声明一次 ✓，这里不重复 ✓。 */
+/* ⚠️ 反过来：**不是最后一个**的 .sp-cols 保持内容高度（0 0 auto）✗ 不许被压扁 ✓ ——
+   系统页就是这种形状（两列卡片 + 下面一整个端口表）✓：
+   放任它收缩的话，两列会被压到 116px（实测）✗，表格只剩表头 ✗。 */
+#system-workspace #system-body > .sp-cols:not(:last-child){flex:0 0 auto;}
+/* 全宽的最后一个区块（系统页的「监听中的端口」）也要能长高、且内容多时**卡内自滚**：
+   ⚠️ 表格本身不是滚动容器 ✗（<table> 上写 overflow 无效 ✓），
+      所以滚动上下文落在**区块**上 ✓ —— 表头 sticky 才有参照 ✓。 */
+#system-workspace #system-body > .sp-band{display:flex;flex-direction:column;overflow:auto;}
+#system-workspace #system-body > .sp-band > *{flex:0 0 auto;min-height:0;}
 #system-task{flex:none;border-top:1px solid var(--sp-hair);background:var(--sp-surface);max-height:34vh;display:flex;flex-direction:column;}
 #system-task[hidden]{display:none;}
 #system-task .task-head{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:var(--sp-fs-sm);color:var(--dim);}
@@ -440,9 +508,15 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 
 /* ── 通用组件（类名保持不变，既有渲染函数不需要改）── */
 #system-workspace .sp-grid{display:grid;gap:var(--sp-gap);}
-#system-workspace .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--sp-gap);margin-bottom:var(--sp-gap-lg);}
+/* KPI 卡片：这一排的**张数随机器变**（概览 4 张、存储 2~8 个卷）⇒ 这里保留 auto-fit ✓，
+   但必须显式 align-items:stretch（默认就是 stretch，写出来是为了防止以后又被人改成 start）✓；
+   auto-fit 会折叠空轨道 ✓，所以「2 张卡就各占一半」是对的 ✓。 */
+#system-workspace .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--sp-gap);align-items:stretch;margin:0;}
 /* 卡片不再描一圈边框，改用「面板底 + 极淡内描边」：层级靠底色和间距表达。 */
-#system-workspace .sp-card{position:relative;overflow:hidden;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:15px 16px;min-width:0;}
+/* ★ 卡片「立起来」的四件套（2026-10-29）：1px 外描边 + 顶部 1px 内高光 + 三档投影的浅档。
+   ⚠️ 原来这里**只有一圈内描边** ✗ —— 卡片和页面底几乎同色 ✓，所以整页看着是「平的」✓
+      （用户说的「立体感不行」有一半来自这里 ✓，不是阴影不够黑 ✓）。 */
+#system-workspace .sp-card{position:relative;overflow:hidden;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:var(--sp-r);padding:15px 16px;min-width:0;}
 /* 卡片里的挂载路径：卷名给人看，路径给机器看，两者都留 —— 路径太长就省略号 */
 #system-workspace .sp-card .path{margin-top:3px;font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--dim); overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #system-workspace .sp-card h4{margin:0 0 10px;font-size:var(--sp-fs-xs);font-weight:600;color:var(--dim);letter-spacing:.08em;display:flex;align-items:center;gap:6px;}
@@ -479,7 +553,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    是 stretch，会把「概述卡片」那一行也拉高去分掉多余高度，结果卡片下面空出一大段
    （1920×1080 实测行高 143px 而卡片只有 96px，空了 47px）。写死 auto 1fr 后，
    第一行只按内容高，多余高度全部落到第二行由「监控」吸收 —— 曲线顺势变高。 */
-#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr; gap:12px var(--sp-gap-lg);align-items:start;flex:1 0 auto;min-height:0;}
+/* 概览页是「左主区 + 296px 右栏」，左右两栏都 align-self:stretch（下面两条），
+   所以这里不再写 align-items:start ✓ —— 写了也会被 align-self 盖掉 ✓，留着只会误导下一个人 ✗。 */
+#system-workspace .sp-ov{display:grid;grid-template-columns:minmax(0,1fr) 296px;grid-template-rows:auto 1fr; gap:12px var(--sp-gap-lg);align-items:stretch;flex:1 0 auto;min-height:0;}
 #system-workspace .sp-ov-main,#system-workspace .sp-ov-side{min-width:0;display:flex;flex-direction:column;gap:var(--sp-gap-lg);}
 /* 左栏撑满容器高度（右栏保持内容高度）——不这样写，grid 会按内容收缩左栏，
    监控区的 flex:1 就失去参照，曲线永远停在固定高度。
@@ -500,7 +576,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-sec-monitor{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
 #system-workspace .sp-sec-monitor .sp-cols{flex:1 1 auto;min-height:0;align-items:stretch; grid-template-columns:repeat(2,minmax(0,1fr));}
 #system-workspace .sp-sec-monitor .sp-cols > div{display:flex;flex-direction:column;min-height:0;
-  padding:8px 11px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r-sm);}
+  padding:8px 11px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:var(--sp-r-sm);}
 #system-workspace .sp-sec{min-width:0;}
 /* ★ 8.2 区块标题统一：11px / 650 字重 / 字距 .04em + 左侧 **2px** 竖条（原来是 3px 渐变）+
    右侧一个次要操作（提示字或「更多 ›」按钮，margin-left:auto 推到最右）✓ */
@@ -519,7 +595,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-gcell{padding:10px 8px 9px;background:var(--sp-surface);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow);border-radius:10px;}
 #system-workspace .sp-gcell[data-goto]{cursor:pointer;transition:box-shadow 160ms ease,transform 160ms ease,background 160ms ease;}
 #system-workspace .sp-gcell[data-goto]:hover{background:var(--sp-surface-2);box-shadow:var(--sp-ring),var(--sp-hi),var(--sp-shadow-lift);transform:translateY(-1px);}
-#system-workspace .sp-gcell[data-goto]:active{transform:translateY(1px);box-shadow:var(--sp-ring),var(--sp-inset);}
+#system-workspace .sp-gcell[data-goto]:active{transform:translateY(1px);box-shadow:var(--sp-ring),var(--sp-inset),var(--sp-hi);}
 #system-workspace .sp-gcell[data-goto]:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 65%, transparent);outline-offset:2px;}
 /* 圆环单元平分整行宽度（原来是固定 140px，5 个只占 756px —— 1920 宽下右侧空 600+px，
    2560 宽下空 1250px）。min-width 保证窄屏时不会被压扁。 */
@@ -571,6 +647,10 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
    24px 滚动，把「磁盘卷」推下去 ✗）。这里改成 16 / 6：**相对关系**一样是"区块间距明显大于
    标题与内容的间距" ✓，但净增高度为 0（间距 +6px × 2，标题 -4px × 3）✓。
    原来两者都是 10px —— 标题和内容、和下一块的距离一样远，节奏是平的，这才是"疏密不匀" ✓。 */
+/* ⚠️ 父级已经有 gap 了 ✗ —— 子元素自己的 margin-bottom 会**再叠一份** ✓
+   （flex 里外边距不合并 ✓）。这就是「多一份外边距」那条根因的同一族 ✓，一并在这里掐掉 ✓。 */
+#system-workspace .sp-ov-main>.sp-band,#system-workspace .sp-ov-side>.sp-band,
+#system-workspace .sp-ov-main>.sp-sec,#system-workspace .sp-ov-side>.sp-sec{margin-bottom:0;}
 #system-workspace .sp-ov-main{gap:16px;}
 /* 右栏有 5 块叠着，同样 16px 会把首屏顶出 8px（磁盘卷最后一行被裁）→ 收到 12px；
    仍然明显大于标题与内容的 6px，节奏关系不变 ✓ */
@@ -798,25 +878,37 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sp-row .v{font-weight:600;font-variant-numeric:tabular-nums;}
 #system-workspace .sp-row{display:flex;align-items:center;gap:10px;font-size:var(--sp-fs);color:var(--text);}
 #system-workspace .sp-row .k{color:var(--dim);min-width:96px;}
-/* ★ 2026-10-29 修三处「一大一小 + 空白太多」（实测定位，不是调参）：
-   ① auto-fit minmax(320px,1fr) 在 1391px 下算出 4 条轨道（computed 784/784/0/0），而本页只有 2 张卡 ⇒ 宽度不可控；
-   ② align-items:start 让两张卡各自顶对齐（实测 507 / 553）；
-   ③ .sp-band 自带 margin-bottom:var(--sp-gap-lg)，而 grid 的 gap 已在做间距 ⇒ body 实测 1080px 比可视区 951px 高、被 overflow:hidden 裁掉。 */
-#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--sp-gap);align-items:stretch;}
-#system-workspace .sp-cols:has(>.sp-band:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr));}
-#system-workspace .sp-cols>.sp-band{margin-bottom:0;height:100%;display:flex;flex-direction:column;min-height:0;}
-#system-workspace .sp-cols>.sp-band>:last-child{min-height:0;}
-/* ★ 两列页面撑满剩余高度（2026-10-29，用户反馈「空白太多」）——
-   实测：性能页两张卡各 690×548，而可视区还有 209px 空着 ⇒ 页面显得没做完 ✗。
-   让 .sp-cols 吃掉剩余高度、行高 1fr、卡内列表区 flex:1 ⇒ 卡片自然长到底，
-   列表也因此能多显示几行（而不是靠「显示更多」按钮）✓。 */
-#system-workspace .sp-cols{flex:1 1 auto;min-height:0;grid-auto-rows:1fr;}
-#system-workspace .sp-cols>.sp-band>.sp-list, 
-#system-workspace .sp-cols>.sp-band>.sp-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;}
+/* ★★★ 网格列数：**显式声明**，不再让 auto-fit 去猜（2026-10-29 全站改根）★★★
+   为什么必须显式（这是「窗口一大一小」的直接原因，实测不是推测）：
+     auto-fit + minmax(320px,1fr) 的轨道数由**容器宽度**决定，不由卡片数量决定 ✗ ——
+     1391px 宽时它算出 **4 条轨道**（computed 784/784/0/0）✓，而这一页只有 2 张卡 ✓
+     ⇒ 两张卡各占 1/4、右边空一半 ✓；窗口一窄又变 2 轨 ✓ ⇒ 「窗口一大一小」✓。
+   ⇒ 规则改成两条：
+     · 这一页**固定几张**卡 ⇒ repeat(n,minmax(0,1fr))，n 写死 ✓（宽度永远可算 ✓）；
+     · 卡片数量**不定**、需要自动换行 ⇒ 才保留 auto-fit，并且必须 align-items:stretch ✓。
+   ⚠️ minmax(0,1fr) 不是 minmax(320px,1fr) ✗ —— 0 下限让格子**不会**被内容顶宽 ✗，
+      长路径 / 长命令名因此不会把两张卡挤成一大一小 ✓。
+   ⚠️ 原来那条 :has() 嗅探（> .sp-band:nth-child(2):last-child）已经删掉 ✗ ——
+      它是「用选择器猜这一页有几张卡」✓，本身就是不显式的写法 ✓，现在默认就是 2 列 ✓。 */
+#system-workspace .sp-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-gap);align-items:stretch;flex:1 1 auto;min-height:0;grid-auto-rows:1fr;}
+/* n=1 / n=3 的页面用修饰类写明，不靠 auto-fit 猜。 */
+#system-workspace .sp-cols.sp-cols-1{grid-template-columns:minmax(0,1fr);}
+#system-workspace .sp-cols.sp-cols-3{grid-template-columns:repeat(3,minmax(0,1fr));}
 #system-workspace .sp-cols>*{min-width:0;}
-/* ★ 设置页专用网格（2026-10-29 修）：原来复用 .sp-cols（auto-fit + align-items:start）⇒
-   4 张内容高度不同的卡宽度与高度都参差，右侧与下方留出大片空白 ✗。
-   设置项天然适合两列等宽：卡片撑满行高、动作按钮贴底，视觉上才是一张一张的卡片 ✓。 */
+/* ★ 卡片内部分段：标题固定、列表吃满、表格能滚（2026-10-29）
+   ⚠️ 三个选择器缺一不可 ✓ —— .sp-list（存储/开发环境）/ .sp-plist（性能/系统）/
+      .sp-table-wrap 是三种不同的列表容器 ✓，只写 .sp-list 的话另外两页会
+      「卡片满了但列表只占上半截」✗（性能页实测就是这样 ✗）。 */
+#system-workspace .sp-cols>.sp-band{margin:0;height:100%;display:flex;flex-direction:column;min-height:0;overflow:auto;}
+#system-workspace .sp-cols>.sp-band>*{flex:0 0 auto;}
+#system-workspace .sp-cols>.sp-band>.sp-list,
+#system-workspace .sp-cols>.sp-band>.sp-plist,
+#system-workspace .sp-cols>.sp-band>.sp-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;}
+/* 表格在「卡片只能这么高」时不许被压扁：给它一个自己的滚动上下文。
+   ⚠️ <table> 上写 overflow 是**无效**的 ✗（table 不是滚动容器 ✓），
+      所以包一层 .sp-table-wrap 才能滚 ✓；没包的表格就让卡片自己滚 ✓（上面那条）。 */
+#system-workspace .sp-cols>.sp-band>.sp-table{flex:0 0 auto;}
+/* ★ 设置页：4 张设置卡等宽等高，动作按钮贴底（2×2 是这一页固定的形状 ✓）。 */
 #system-workspace .sp-settings{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
 #system-workspace .sp-settings>.sp-band{height:100%;display:flex;flex-direction:column;min-width:0;}
 #system-workspace .sp-settings>.sp-band>.sp-actions{margin-top:auto;}
@@ -871,7 +963,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
     color-mix(in srgb, var(--sp-surface-2) 92%, var(--text) 8%)); border-color:color-mix(in srgb, var(--accent) 40%, var(--sp-hair-strong));}
 /* 按下：下沉 + 阴影翻转为内凹，模拟「压下去」 */
 #system-workspace .sp-btn:active, .fsv-menu .sp-btn:active, .fsv-preview .sp-btn:active{ transform:translateY(1px); box-shadow:
-    inset 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent),
+    inset 0 2px 4px rgba(0,0,0,.28),
     inset 0 -1px 0 color-mix(in srgb, var(--text) 6%, transparent),
     0 1px 1px color-mix(in srgb, var(--bg) 40%, transparent);}
 #system-workspace .sp-btn:focus-visible{outline:2px solid color-mix(in srgb, var(--accent) 60%, transparent);outline-offset:2px;}
@@ -998,8 +1090,18 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 @keyframes sp-pulse{0%,100%{opacity:.45}50%{opacity:.85}}
 
 /* ── 文件视图（fsv-*）：模块只做结构与行为，皮肤全部在这里统一 ── */
-#system-workspace .fsv-root{display:flex;flex-direction:column;gap:10px;}
-#system-workspace .fsv-view{display:flex;flex-direction:column;gap:10px;}
+/* ★ 文件浏览：整页填满视口，文件表**在页内滚**（2026-10-29）
+   实测：旧版 .fsv-root 只有 flex-direction:column（没有高度约束）⇒ 高度由内容决定 ⇒
+   749px 的视口里长到 853px ⇒ 页面被顶长、底部多出 150px 滚动 ✓。
+   现在 root / view 都吃满剩余高度，表格那一段自己成为滚动上下文 ✓
+   （<table> 上写 overflow 无效 ✗，所以滚动放在**外层 div** 上 ✓）。 */
+/* ⚠️ 选择器必须带 #system-body ✗ —— 上面那条「#system-body > :last-child{flex:1 0 auto}」
+   是 (2,0,0)，单写 .fsv-root 的 (1,1,0) 盖不住它 ✓，会被静默改回 shrink:0 ✓
+   （实测踩到：写了但页面还是 853px 高 ✓）。 */
+#system-workspace #system-body > .fsv-root{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;}
+#system-workspace .fsv-view{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;}
+#system-workspace .fsv-view:has(> .fsv-table){overflow:auto;}
+#system-workspace .fsv-view > .fsv-table{flex:0 0 auto;}
 #system-workspace .fsv-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 #system-workspace .fsv-crumbs{display:flex;align-items:center;gap:2px;flex-wrap:wrap;font-size:var(--sp-fs);}
 #system-workspace .fsv-crumb{background:transparent;border:0;color:var(--dim);border-radius:var(--sp-r-xs);padding:2px 6px;font-size:var(--sp-fs);cursor:pointer;}
@@ -1055,7 +1157,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .fsv-preview-text, .fsv-preview-text{margin:0;font:var(--sp-fs)/1.7 var(--sp-mono);color:var(--text);white-space:pre-wrap;word-break:break-word;}
 #system-workspace .fsv-selbar{position:sticky;top:0;z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   padding:8px 12px;background:var(--ui-accent-soft, var(--sp-tint));border-radius:var(--sp-r-sm);}
-#system-workspace .fsv-usage-cols, #system-workspace .fsv-organize-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--sp-gap);align-items:start;}
+/* 空间分析 / 整理归类：分组数随内容变 ⇒ 保留 auto-fit ✓，但必须 stretch ✓
+   （start 会让同一行的几个分组各自按内容高 ✓，高低不齐 ✓ —— 这是「一大一小」的第二类来源 ✓）。 */
+#system-workspace .fsv-usage-cols, #system-workspace .fsv-organize-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--sp-gap);align-items:stretch;}
 #system-workspace .fsv-organize-group{background:var(--sp-surface);box-shadow:var(--sp-ring);border-radius:var(--sp-r);padding:12px 14px;}
 #system-workspace .fsv-organize-group h4{margin:0 0 8px;font-size:var(--sp-fs-sm);color:var(--dim);font-weight:600;}
 #system-workspace .fsv-batch-head{position:sticky;top:0;z-index:4;padding:8px 12px;font-size:var(--sp-fs-sm);color:var(--dim);
@@ -1107,7 +1211,14 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .sw-cat.on{color:var(--accent);background:color-mix(in srgb, var(--accent) 16%, transparent);font-weight:600;
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);}
 #system-workspace .sw-info{display:flex;gap:14px;align-items:baseline;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
-#system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;}
+/* ★ 软件页同理：应用墙在**页内**滚（2026-10-29）
+   实测旧版：.sw-root 长到 1751px（视口 749）⇒ 页面被顶长 1018px ✓，底部一屏全靠滚 ✓。
+   现在 .sw-root / .sw-root-body 吃满视口，应用墙自己滚 ✓。
+   ⚠️ align-content:start 必须写 ✗ —— 不写的话被压矮后 auto 行会各自拉伸 ✓，
+      图标格上下被撑开、行距忽大忽小 ✓。 */
+#system-workspace #system-body > .sw-root{flex:1 1 auto;min-height:0;}
+#system-workspace .sw-root-body{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;}
+#system-workspace .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:6px;flex:1 1 auto;min-height:0;overflow:auto;align-content:start;}
 #system-workspace .sw-list{display:flex;flex-direction:column;gap:2px;}
 #system-workspace .sw-tile{position:relative;display:flex;align-items:center;gap:10px;min-width:0;text-align:left;
   background:transparent;border:1px solid transparent;border-radius:var(--sp-r);padding:9px 10px;cursor:pointer; transition:background var(--sp-ease),border-color var(--sp-ease);}
@@ -1158,7 +1269,9 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .scan-bar i.done{background:var(--ok);}
 #system-workspace .scan-line{display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;color:var(--dim);font-size:var(--sp-fs-sm);font-variant-numeric:tabular-nums;}
 #system-workspace .scan-current{margin-top:3px;color:var(--dim);font-size:var(--sp-fs-xs);font-family:var(--sp-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-#system-workspace .scan-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;}
+/* 结果分组数量随扫描结果变 ⇒ auto-fit 是对的 ✓，但显式 stretch 必须写 ✓
+   （同一份结果里的「大文件 / 重复文件 / 旧文件」三组要等高，否则看着像三份不同的东西 ✓）。 */
+#system-workspace .scan-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;align-items:stretch;}
 #system-workspace .scan-card{background:var(--sp-tint);border-radius:var(--sp-r);padding:11px 13px;}
 #system-workspace .scan-card h4{margin:0 0 8px;color:var(--text);font-size:var(--sp-fs-sm);font-weight:600;letter-spacing:.02em;}
 #system-workspace .scan-list{display:flex;flex-direction:column;}
@@ -1173,7 +1286,7 @@ body.sp-nav-resizing{cursor:col-resize;user-select:none;}
 #system-workspace .scan-meter i{display:block;height:100%;background:var(--accent);opacity:.75;}
 #system-workspace .scan-ext .scan-name{flex:0 0 84px;}
 #system-workspace .scan-safety{background:var(--sp-tint);}
-#system-workspace .safe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;}
+#system-workspace .safe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;align-items:stretch;}
 #system-workspace .safe-paths{display:flex;flex-direction:column;gap:3px;max-height:190px;overflow:auto;}
 #system-workspace .safe-paths code{font-family:var(--sp-mono);font-size:var(--sp-fs-xs);color:var(--text);opacity:.9;word-break:break-all;}
 #system-workspace .safe-rules{margin:0;padding-left:20px;color:var(--dim);font-size:var(--sp-fs-sm);line-height:1.75;}

@@ -85,9 +85,9 @@
         A 块 = 深色默认值 + App 语义令牌映射；B 块 = 浅色主题只换值 ✓。
         因为 A 块的选择器在**任何**主题下都命中同一个元素 ✓，
         --pp-* 的延迟求值保证 B 块换值后映射自动跟上 ✓，不用复制整套样式 ✓。 */
-  .lw-inpanel, #lw-toast, #lw-savetoast, #lw-ctx, #lw-map-zoom, #lw-ml-pick { /* 深色：哑光墨纸 */ --pp-page:#14120f;   --pp-sheet:#1c1a16;   --pp-sheet2:#232019; --pp-ink:#ece7db;    --pp-ink2:#a49d8e;    --pp-line:rgba(236,231,219,.12); --pp-accent:#d8c9a3; --pp-on-accent:#17140f; --pp-ok:#8fbf8a;     --pp-warn:#d3a24a;    --pp-err:#e0796a; --pp-glow:rgba(255,255,255,.05);   /* 内高光：深色纸很轻，不然发灰 */ --pp-shadow:0 1px 0 rgba(0,0,0,.45), 0 6px 16px rgba(0,0,0,.42); --pp-shadow-lift:0 2px 0 rgba(0,0,0,.45), 0 10px 26px rgba(0,0,0,.55); --pp-shadow-float:0 2px 0 rgba(0,0,0,.45), 0 12px 30px rgba(0,0,0,.55), 0 24px 60px rgba(0,0,0,.45); --pp-inset:inset 0 1px 2px rgba(0,0,0,.55); --pp-scrim:rgba(8,7,5,.62); --pp-hover:rgba(236,231,219,.07); /* App 的语义令牌一起改 ✓ —— 面板里的 <button>/<input> 吃的是 html[data-theme] 那层全局皮肤（app.css:3293-3309 渐变+内高光+抬起/按下）✓， 把这几个值换成纸色，它们就自动变成纸感控件 ✓，不用逐条重写 ✓。 */ --bg:var(--pp-page); --panel:var(--pp-sheet); --panel2:var(--pp-sheet2); --border:var(--pp-line); --text:var(--pp-ink); --dim:var(--pp-ink2); --accent:var(--pp-accent); --ok:var(--pp-ok); --err:var(--pp-err); --control:var(--pp-sheet2); --control-hover:color-mix(in srgb, var(--pp-sheet2) 88%, var(--pp-ink) 12%); --surface-hover:color-mix(in srgb, var(--pp-sheet2) 92%, var(--pp-ink) 8%); --accent-soft:color-mix(in srgb, var(--pp-accent) 14%, transparent); --theme-header:var(--pp-sheet); --theme-side:var(--pp-page); --theme-sub:var(--pp-page); --theme-deep:var(--pp-page); --theme-elevated:var(--pp-sheet); --theme-code:var(--pp-sheet2); --theme-overlay:var(--pp-scrim); }
+  .lw-inpanel, #lw-toast, #lw-savetoast, #lw-ctx, #lw-map-zoom, #lw-ml-pick { /* 深色：哑光墨纸 */ --pp-page:#14120f;   --pp-sheet:#1c1a16;   --pp-sheet2:#232019; --pp-ink:#ece7db;    --pp-ink2:#a49d8e;    --pp-line:rgba(236,231,219,.12); --pp-accent:#d8c9a3; --pp-on-accent:#17140f; --pp-ok:#8fbf8a;     --pp-warn:#d3a24a;    --pp-err:#e0796a; --pp-glow:rgba(255,255,255,.05);   /* 内高光：深色纸很轻，不然发灰 */ --pp-shadow:0 1px 1px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.42), 0 12px 28px rgba(0,0,0,.38); --pp-shadow-lift:0 2px 2px rgba(0,0,0,.45), 0 8px 18px rgba(0,0,0,.55), 0 22px 44px rgba(0,0,0,.50); --pp-shadow-float:0 4px 8px rgba(0,0,0,.45), 0 16px 36px rgba(0,0,0,.55), 0 40px 80px rgba(0,0,0,.50); --pp-inset:inset 0 2px 4px rgba(0,0,0,.55); --pp-scrim:rgba(8,7,5,.62); --pp-hover:rgba(236,231,219,.07); /* App 的语义令牌一起改 ✓ —— 面板里的 <button>/<input> 吃的是 html[data-theme] 那层全局皮肤（app.css:3293-3309 渐变+内高光+抬起/按下）✓， 把这几个值换成纸色，它们就自动变成纸感控件 ✓，不用逐条重写 ✓。 */ --bg:var(--pp-page); --panel:var(--pp-sheet); --panel2:var(--pp-sheet2); --border:var(--pp-line); --text:var(--pp-ink); --dim:var(--pp-ink2); --accent:var(--pp-accent); --ok:var(--pp-ok); --err:var(--pp-err); --control:var(--pp-sheet2); --control-hover:color-mix(in srgb, var(--pp-sheet2) 88%, var(--pp-ink) 12%); --surface-hover:color-mix(in srgb, var(--pp-sheet2) 92%, var(--pp-ink) 8%); --accent-soft:color-mix(in srgb, var(--pp-accent) 14%, transparent); --theme-header:var(--pp-sheet); --theme-side:var(--pp-page); --theme-sub:var(--pp-page); --theme-deep:var(--pp-page); --theme-elevated:var(--pp-sheet); --theme-code:var(--pp-sheet2); --theme-overlay:var(--pp-scrim); }
   /* 浅色 App 主题（light）→ 暖白纸；只换值 ✓ */
-  html[data-theme="light"] .lw-inpanel, html[data-theme="light"] #lw-toast, html[data-theme="light"] #lw-savetoast, html[data-theme="light"] #lw-ctx, html[data-theme="light"] #lw-map-zoom, html[data-theme="light"] #lw-ml-pick { --pp-page:#f4f1e8;   --pp-sheet:#fdfbf6;   --pp-sheet2:#f7f3e9; --pp-ink:#221f1b;    --pp-ink2:#6c6659;    --pp-line:rgba(34,31,27,.12); --pp-accent:#2f5d46; --pp-on-accent:#fdfbf6; --pp-ok:#3f7a4f;     --pp-warn:#9a6b1f;    --pp-err:#a23b2a; --pp-glow:rgba(255,255,255,.72); --pp-shadow:0 1px 1px rgba(28,24,16,.05), 0 2px 4px rgba(28,24,16,.06), 0 8px 18px rgba(28,24,16,.05); --pp-shadow-lift:0 2px 2px rgba(28,24,16,.06), 0 6px 12px rgba(28,24,16,.10), 0 16px 32px rgba(28,24,16,.08); --pp-shadow-float:0 2px 2px rgba(28,24,16,.06), 0 10px 24px rgba(28,24,16,.12), 0 24px 60px rgba(28,24,16,.22); --pp-inset:inset 0 1px 2px rgba(28,24,16,.16); --pp-scrim:rgba(34,31,27,.34); --pp-hover:rgba(34,31,27,.06); }
+  html[data-theme="light"] .lw-inpanel, html[data-theme="light"] #lw-toast, html[data-theme="light"] #lw-savetoast, html[data-theme="light"] #lw-ctx, html[data-theme="light"] #lw-map-zoom, html[data-theme="light"] #lw-ml-pick { --pp-page:#f4f1e8;   --pp-sheet:#fdfbf6;   --pp-sheet2:#f7f3e9; --pp-ink:#221f1b;    --pp-ink2:#6c6659;    --pp-line:rgba(34,31,27,.12); --pp-accent:#2f5d46; --pp-on-accent:#fdfbf6; --pp-ok:#3f7a4f;     --pp-warn:#9a6b1f;    --pp-err:#a23b2a; --pp-glow:rgba(255,255,255,.72); --pp-shadow:0 1px 1px rgba(28,24,16,.10), 0 4px 10px rgba(28,24,16,.09), 0 12px 28px rgba(28,24,16,.08); --pp-shadow-lift:0 2px 2px rgba(28,24,16,.13), 0 8px 18px rgba(28,24,16,.14), 0 22px 44px rgba(28,24,16,.12); --pp-shadow-float:0 4px 8px rgba(28,24,16,.16), 0 16px 36px rgba(28,24,16,.18), 0 40px 80px rgba(28,24,16,.16); --pp-inset:inset 0 2px 4px rgba(28,24,16,.20); --pp-scrim:rgba(34,31,27,.34); --pp-hover:rgba(34,31,27,.06); }
   /* 独立面板：铺满顶栏以下的整个主区域 */
   .lw-inpanel { position:fixed; left:0; right:0; bottom:0; top:44px; z-index:8800; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden; font-family:inherit; color:${T.text}; font-size:12.5px; letter-spacing:.2px; }
   /* 顶栏 */
@@ -265,9 +265,33 @@
   /* 备忘录：面板在 .lw-g12 > .lw-c 里面 ✗（grid 单元格默认 align-items:start 不撑高 ✗）
      —— 得把这条链也一起撑开 ✓ */
   .lw-main.fill > .lw-g12 { align-items:stretch; }
+  /* ★★ 长列表页签（今日 / 书签 / 研究方向 / 文件）也要「填满」，但**不能变成 flex** ✗ ★★
+     这四个页签是长列表 ✓：把 .lw-main 改成 flex 列、再给子元素 flex:1 ✗
+     会把内容**裁掉**（tests/life-trends.js 有一条断言专门守这个 ✓），
+     所以用**另一条路**：父级保持 display:block ✓，只给网格一个**下限**✓ ——
+       min-height:100% = 内容区高度（.lw-main 是 flex 项，高度是确定值 ✓，百分比能解析 ✓）。
+     ⇒ 内容比视口**矮**时，网格被撑到内容区高度 ✓ → 最后一行落到底部 ✓ 不留白 ✓；
+        内容比视口**高**时，min-height 不生效 ✓ → 照旧由 .lw-main 自己滚 ✓。
+     一次写法同时满足两种数据量 ✓（这两页的空白与否**取决于用户有多少条数据** ✓，
+     所以「按内容长短切换行为」本来就是对的 ✓，不需要 JS 判断 ✓）。
+     ⚠️ grid 的 align-content 默认 stretch ✓ —— 富余高度会**按行平分**✓，
+        最后一行因此落到底部 ✓（不是只长最后一行 ✓，但底部不会留白 ✓）。 */
+  .lw-main:not(.fill) > .lw-g12 { min-height:100%; }
   .lw-main.fill > .lw-g12 > .lw-c { display:flex; flex-direction:column; min-height:0; }
   .lw-main.fill > .lw-g12 > .lw-c > .lw-nt { flex:1; min-height:0; height:auto; }
-  .lw-g12 { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; align-items:start; }
+  /* ★★★ 2026-10-29 全站改根（用户：「窗口一大一小、空白太多」，个人面板同样中招）★★★
+     ① align-items 从 start ⇒ stretch ✓：
+        原来是「每张卡各自按内容高」✗ ⇒ 同一行的卡高低不齐 ✓
+        （实测 今日 122/123/120/123 ✓、研究方向 229/236 ✓、文件 257/250 ✓、596x411/596x417 ✓），
+        这就是用户说的「一大一小」✓。stretch 之后同一行的卡**等高**✓，
+        多出来的高度留在卡片内部（卡片本来就有 overflow:auto ✓）。
+     ② 轨道从 1fr ⇒ minmax(0,1fr) ✓：
+        1fr 的下限是 auto ✓ ⇒ 卡片里的长路径 / 长命令名能把轨道**顶宽**✗，
+        于是同一行两栏一个宽一个窄 ✓（跨栏卡按 data-span 算 px 时尤其明显 ✗）。
+        minmax(0,1fr) 把下限压成 0 ✓，跨栏宽度就变成**可算**的（span*colW + (span-1)*16 ✓）。
+     ⚠️ 跨栏（data-span 3/4/6/8）不是「一大一小」✗ —— 那是用户自己拖出来的排版意图 ✓，
+        CSS 里 12 轨 + span 的宽度是可算且稳定的 ✓，所以保留 ✓。 */
+  .lw-g12 { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; align-items:stretch; }
   /* ★ 卡片：**拖「边」改大小** ✓（右边改宽 ✓ / 下边改高 ✓ / 右下角一起改 ✓）
      原生 resize 只能拖右下角 ✗ —— 所以改成手写三条热区 ✓。
      热区用绝对定位的细条 ✓，**不占布局** ✓，平时看不见 ✓，hover 时亮起来 ✓。
@@ -2244,7 +2268,10 @@
      空心 = 未收藏 ✓，实心 = 已收藏 ✓（fill 当前色 ✓，描边不变 ✓）。 */
   .lw-inpanel .cs-ico.is-on { fill:currentColor; }
   /* ── KPI 降一档（§9.2）：它们是**参考值** ✓，不该和待办 / 文件抢注意力 ✗ ──── */
-  .lw-inpanel .lw-c.lw-kpi-c { background:color-mix(in srgb, var(--pp-sheet) 42%, var(--pp-page)); box-shadow:none; }
+  /* ★ KPI 卡「降一档」= 底色淡一档 + **阴影用浅档**，而不是**没有阴影** ✗
+     （原来 box-shadow:none ✓ ⇒ 在纸面上像一块贴纸 ✓，「立体感不行」有一半是这里 ✓）。
+     层级关系仍然成立：普通卡 = 浅档，KPI 卡 = 浅档 + 更淡的底 ✓，抬起时才到中档 ✓。 */
+  .lw-inpanel .lw-c.lw-kpi-c { background:color-mix(in srgb, var(--pp-sheet) 42%, var(--pp-page)); box-shadow:var(--pp-shadow), inset 0 1px 0 var(--pp-glow); }
   .lw-inpanel .lw-c.lw-kpi-c > h3 { background:transparent; }
   .lw-inpanel .lw-c.lw-kpi-c:hover { transform:none; box-shadow:var(--pp-shadow), inset 0 1px 0 var(--pp-glow); }
   .lw-inpanel .lw-kpi { padding:10px 13px 11px; }
@@ -4976,7 +5003,22 @@
             const colW = grid && grid.clientWidth > 0 ? (grid.clientWidth - 11 * 16) / 12 : 0;
             if (span && colW > 0) card.style.width = Math.round(span * colW + (span - 1) * 16) + 'px';
             else if (saved.w) card.style.width = saved.w + 'px';
-            if (saved.h) card.style.height = saved.h + 'px';
+            /* ★★ 2026-10-29：存下来的高度从**绝对高度**改成**最小高度**，并且夹在视口内 ★★
+               两个毛病，同一个根因（「把一次拖拽的绝对像素当永久的绝对像素」✓）：
+               · ① 同一行「一大一小」✗ —— 每张卡各自 height:122/123/123/123 ✓，
+                    而且 grid 的 align-items:stretch 对**写了 height 的元素无效** ✗
+                    ⇒ 同一行永远等高不了 ✓。
+               · ② 换小窗口后页面被顶长 ✗ —— STORE 里有 h:1157（在 2328px 宽的屏上拖的 ✓），
+                    换到 749px 高的视口 ⇒ 一张卡就有 1157px ✓ ⇒ 书签页实测溢出 582px ✗
+                    （和上面注释里宽度 c:2328 那个坑**完全同源** ✓，宽度修了、高度漏了 ✗）。
+               ⇒ ① 用 min-height：用户「这块要高一点」的意图保留 ✓，
+                    整行等高交给 grid ✓（内容更多的卡自然把整行顶高 ✓，不会互相压 ✓）；
+                 ② 夹到内容区高度：卡片最��也就是**一屏**✓，不会再凭空顶长页面 ✓。 */
+            if (saved.h) {
+              const mainEl = document.querySelector('.lw-main');
+              const avail = mainEl && mainEl.clientHeight ? Math.round(mainEl.clientHeight - 44) : 0;
+              card.style.minHeight = (avail ? Math.min(saved.h, avail) : saved.h) + 'px';
+            }
             if (saved.span) card.style.gridColumn = saved.span;
           }
           if (card.dataset.rsReady) return;
@@ -4988,6 +5030,10 @@
             lwGrab(h, {
               down: (e) => {
                 h.classList.add('on');
+                /* ⚠️ 必须先把 min-height 摘掉 ✗ ——
+                   恢复尺寸时挂的是 min-height ✓，它比 height 优先级高 ✓，
+                   不摘的话「往下拖变矮」会失效（只能变高 ✓），手感像坏了 ✓。 */
+                card.style.minHeight = '';
                 const x0 = e.clientX, y0 = e.clientY, w0 = card.offsetWidth, h0 = card.offsetHeight;
               /* 用元素索引当持久化 key ✓（卡片顺序稳定 ✓）*/
                 const idx = Array.from(host.querySelectorAll('.lw-c')).indexOf(card);
@@ -5008,8 +5054,18 @@
               },
               up: (ev, sess) => {
                 h.classList.remove('on');
-                STORE[sess.key] = { w: card.offsetWidth, h: card.offsetHeight, span: card.style.gridColumn };
+                /* ⚠️ 高度必须**先读下来**再清 height ✗ ——
+                   清了再读，读到的是内容高度（可能比拖出来的小很多）✓，用户拖的高度就丢了 ✗。 */
+                const upH = card.offsetHeight, upW = card.offsetWidth, upSpan = card.style.gridColumn;
+                STORE[sess.key] = { w: upW, h: upH, span: upSpan };
                 saveStore();
+                /* 松手后把**绝对高度**换成**最小高度** ✓ ——
+                   拖动过程中必须用 height（要能拖着变矮 ✓），
+                   但停在页面上时用 height 会让同一行**永远不等高** ✗（见上面那段注释 ✓）。
+                   换成 min-height 之后，整行等高由 grid 的 align-items:stretch 负责 ✓，
+                   用户拖出来的高度变成「这一行至少这么高」✓，意图仍在 ✓。 */
+                card.style.height = '';
+                card.style.minHeight = upH + 'px';
               },
             });
           });
