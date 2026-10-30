@@ -593,6 +593,33 @@
   .lw-nt-bar .chrome .top-bar-item:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-nt-bar .chrome .top-bar-item svg { width:16px; height:16px; fill:currentColor; }
   .lw-nt-bar .codescope-callout-glyph, .lw-nt-bar .codescope-color-glyph { font-size:12px; }
+  /* ⚠️⚠️ 2026-10-30 修「❝ 点了没反应」：**z-index 陷阱** ✗✗ ——
+     菜单不是没渲染、也不是被塞在隐藏的顶栏子树里 ✓（实测：点完它就 hidden=false、
+     display:grid、172×223 的矩形、body 的直接子节点 ✓）——
+     问题在**层叠**：面板自己是 position:fixed + z-index:8800 ✓（全屏浮层 ✗），
+     而 doc-theme.css 给 .codescope-callout-menu 的是 320 ✓ / app.css 给
+     .codescope-color-menu 的是 260 ✓、.codescope-color-bar 是 265 ✓
+     ⇒ 三个都**在面板下面** ✗，画是画了、用户看不见也点不到 ✓。
+     判据（可复现）：document.elementFromPoint(菜单中心) 返回 DIV.milkdown ✗
+     —— 说明那个点上最顶层的不是菜单 ✓。
+     修法：面板开着时把这三层抬到面板之上、App 级抽屉（8900）/ 命令面板（9700）之下 ✓。
+     ⚠️ 不直接改 doc-theme.css / app.css ✗（全站共用 ✓，改它们会动到阅读视图 / 主编辑区）；
+        用 body.lw-panel-open 限定作用域 ✓（life-workbench.js 的 open / hide 两处加 / 删 ✓）——
+        关掉面板后这三个浮层回到原来的层级 ✓。
+     ⚠️ 用 (0,2,1) 特异性压过 app.css / doc-theme.css 的裸类 ✓（不靠加载顺序 ✓）。 */
+  body.lw-panel-open > .codescope-callout-menu,
+  body.lw-panel-open > .codescope-color-menu,
+  body.lw-panel-open > .codescope-color-bar { z-index:8850; }
+  /* 同一条坑里的 Crepe 自带浮层 ✓（都在 body 上 ✗，z-index 只有 180 上下 ✓）：
+     选中文字后的快捷工具条 / 「/」斜杠菜单 / 块操作手柄 / 链接预览 ——
+     面板一盖，它们和 ❝ 菜单是同一症状「点了没东西」✓。 */
+  body.lw-panel-open > .milkdown-toolbar,
+  body.lw-panel-open > .milkdown-slash-menu,
+  body.lw-panel-open > .milkdown-block-handle,
+  body.lw-panel-open > .milkdown-link-preview,
+  body.lw-panel-open > .milkdown-link-edit,
+  body.lw-panel-open > .milkdown-latex-inline-edit,
+  body.lw-panel-open > .milkdown-ai-instruction { z-index:8840; }
   /* 日记那条栏多出来的三样：分类下拉 / 模板按钮 / 自动套用 */
   .lw-nt-bar select { height:26px; max-width:110px; padding:0 4px; border:1px solid ${T.lineDim}; background:transparent; color:${T.text}; font:600 11px ${UI}; flex:none; outline:none; }
   .lw-nt-bar .autotpl { display:flex; align-items:center; gap:4px; flex:none; font-size:10.5px; color:${T.faint}; cursor:pointer; white-space:nowrap; }
@@ -3043,6 +3070,11 @@
      超出「CJK 一行 30~45 字」的舒适区 ✓；700px ≈ **43 个字** ✓，落在区间内 ✓。
      实测本机 1440 宽时中栏本来就只有 670px ✓，所以这条只在更宽的窗口上才看得见 ✓。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror { --lw-gap: 12px; --lw-gap-lg: 20px; --lw-lh: 1.5; flex: 1 1 auto; }
+/* ★ 2026-10-30 修「正文像缩进了一块 / 不安左」：⑧-g 给 .milkdown 加了 display:flex，
+   而 .ProseMirror 上有 margin:0 auto ⇒ flex 交叉轴的 auto margin 触发 shrink-to-fit，
+   空笔记时列宽算成 0（实测 39 字一行宽 616px、左边界 787 而容器左 607）。
+   补 width:100% 撑满，再靠 max-width + auto margin 居中 ✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror { width: 100%; }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror > :is(ul, ol) { margin: var(--lw-gap) 0; }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror > :is(h1, h2, h3, h4, h5, h6) { margin-top: var(--lw-gap-lg) !important; margin-bottom: var(--lw-gap) !important; }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view li.list-item .content-dom > p { margin: 0; }

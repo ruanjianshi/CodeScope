@@ -143,9 +143,15 @@
     const markdown = opts.markdown == null ? '' : String(opts.markdown);
     const token = ++slot.token;
     const prev = slot.inst;
-    const inst = { key, token, ctrl: null, md: markdown, host: host || null, opts };
+    const inst = { key, token, ctrl: null, md: markdown, host: host || null, opts, menu: null };
     slot.inst = inst;                                              /* ① */
     if (prev && prev.ctrl) { try { prev.ctrl.destroy(); } catch (_) {} }   /* ② */
+    /* ★ 退役旧实例时**顺手收掉它的提示框菜单** ✗✗ —— src/reading-block-editor.js 的
+       destroy() 漏调了 detachCalloutControls（attachColorControls 有 ✓、它没有 ✗；
+       src 是禁改文件）→ 菜单留在 body 上 ✓。实测：每挂一次多一个 14 按钮的浮层 ✓。
+       ⚠️ 必须收在**这里**、不是 create 的 then 里 ✗：源码模式 / 没有 host /
+         加载失败这几条路都在 create 之前就 return 了 ✓，放 then 里就漏 ✓。*/
+    if (prev && prev.menu && prev.menu.isConnected) { try { prev.menu.remove(); } catch (_) {} }
     if (!host) return;
     host.dataset.editorKey = key;
     /* 源码模式：整篇一个 textarea（原样 markdown ✓）—— 没有 Crepe，读 value 就够 ✓ */
@@ -158,6 +164,8 @@
       return;
     }
     if (clearFirst) host.replaceChildren();                        /* ③' */
+    /* 挂之前先记下「body 上已有的提示框菜单」✓（下一步用它认出**新建的那一个** → inst.menu）*/
+    const menusBefore = new Set(Array.from(document.querySelectorAll('body > .codescope-callout-menu')));
     if (typeof loadBlockEditor !== 'function') {
       host.innerHTML = '<div class="lw-memo-err">块级编辑器不可用（loadBlockEditor 缺失）</div>';
       return;
@@ -185,9 +193,24 @@
         if (typeof opts.onStatus === 'function') opts.onStatus('编辑器：' + String((err && err.message) || err));
       },
     })).then((ctrl) => {
-      if (token !== slot.token || !host.isConnected) { try { ctrl.destroy(); } catch (_) {} return; }
+      /* ★ 认领「这一次 create 新建的提示框菜单」✗✗ —— 根因在 src/reading-block-editor.js：
+         attachColorControls 在 destroy() 里有对应的 detach ✓，但 attachCalloutControls
+         **漏了** ✗（src 是禁改文件 ✗）→ 每挂一次，body 上就多留一个 14 按钮的
+         .codescope-callout-menu ✓（实测：点一次「新建」会挂 2 次 → 2 个菜单；
+         切几次页签能堆到 6 个 ✓）。
+         ⚠️ 只认「挂之前不在 body 上的那一个」✓，不按类名全删 ✗ ——
+           阅读视图 / 主编辑区的同名菜单不是我们的 ✓，删了那边就坏 ✓。
+         ⚠️ 必须在**代号淘汰之前**认领 ✗：掉队的那份 create 也会建菜单（实测 ✓），
+           在淘汰分支里也得把它收掉，否则照样漏 ✓。 */
+      const newMenu = Array.from(document.querySelectorAll('body > .codescope-callout-menu')).find((m) => !menusBefore.has(m)) || null;
+      if (token !== slot.token || !host.isConnected) {
+        try { ctrl.destroy(); } catch (_) {}
+        if (newMenu && newMenu.isConnected) { try { newMenu.remove(); } catch (_) {} }
+        return;
+      }
       slot.inst.ctrl = ctrl;
       host.dataset.editorReady = 'true';
+      slot.inst.menu = newMenu;
       /* 挂好了 → 通知面板：它要把顶栏里 CodeScope 自己插的两组搬进自己那条工具栏 ✓ */
       if (typeof opts.onReady === 'function') { try { opts.onReady(host); } catch (_) {} }
     }).catch((err) => {
@@ -240,6 +263,8 @@
     const s = slotOf(host);
     if (!s) return;
     if (s.inst && s.inst.ctrl) { try { s.inst.ctrl.destroy(); } catch (_) {} }
+    /* 退役时把它自己的提示框菜单一并收掉 ✓（同 ③ 上面的理由：src 的 destroy 漏了这一步 ✗）*/
+    if (s.inst && s.inst.menu && s.inst.menu.isConnected) { try { s.inst.menu.remove(); } catch (_) {} }
     s.inst = null;
     s.token += 1;
     if (host) { try { delete host.dataset.editorKey; delete host.dataset.editorReady; } catch (_) {} }

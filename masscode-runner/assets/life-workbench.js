@@ -983,6 +983,11 @@
       view.className = 'lw-inpanel';
       document.body.appendChild(view);
     }
+    /* ★ 面板开着 → body 上打一个类 ✓（life-styles.js 用它把 **body 级**的编辑器浮层
+       抬到面板之上 ✓）：Crepe / CodeScope 的菜单是 appendChild(document.body) 的 ✗，
+       不是面板后代 ✗，而面板是 z-index:8800 的全屏浮层 ✓ →
+       不抬层级就是「点了没反应」（菜单在面板**后面** ✗，实测 ✓）。 */
+    document.body.classList.add('lw-panel-open');
     const btn = document.getElementById('btn-lifework');
     if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.classList.add('on'); }
     /* ⚠️ 立刻先画一次（骨架屏）—— 不能等数据回来才渲染 ✗，
@@ -1014,6 +1019,8 @@
     stopWatchAway();
     const view = document.getElementById('lifework-view');
     if (view) view.remove();
+    /* 和 openInPanel 的 add 成对 ✓：关掉面板后 body 级浮层回到原来的层级 ✓ */
+    document.body.classList.remove('lw-panel-open');
     const btn = document.getElementById('btn-lifework');
     if (btn) { btn.setAttribute('aria-pressed', 'false'); btn.classList.remove('on'); }
   }
