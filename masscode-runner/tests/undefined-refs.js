@@ -53,6 +53,14 @@ const FILES = [
   'assets/arch-zoom.js',
   'assets/arch-ai-view.js',
   'assets/arch-view.js',
+  /* ★ 2026-10-30 拆分（阶段 1 / 阶段 2）：样式数据层与编辑器接入层各成一个文件 ✓ ——
+     它们挂 window.CodeScopeLifeStyles / window.CodeScopeLifeEditor ✓，
+     life-workbench.js 里是**裸引用**（浏览器里靠 window 属性当全局 ✓）✓。
+     不把这两个文件收进名单，那两处就会被误报成「引用了没声明」✗
+     （实测：只报 1 处 CodeScopeLifeStyles，但两处都在同一个坑里 ✓）。
+     和本文件上面的规矩一致：**要么全查，要么别查** ✓。 */
+  'assets/life-styles.js',
+  'assets/life-editor.js',
   'assets/debug-panel.js',
   'assets/code-guide.js',
   'src/system-panel.js',

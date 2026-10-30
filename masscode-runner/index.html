@@ -64,9 +64,11 @@
 <script>
   (function () {
     /* ★ 2026-10-30 拆分：样式层独立成 life-styles.js（纯数据，290KB），
-       life-workbench.js 里引用 window.CodeScopeLifeStyles。
-       ⚠️ 必须**先加载完样式层**再注入面板脚本 ✗：两者都是动态注入，
-          defer 对动态脚本不保证顺序 ⇒ 用 onload 串成链 ✓。 */
+       编辑器接入层独立成 life-editor.js（Crepe 实例 / 挂载代号 / 权威正文），
+       life-workbench.js 里引用 window.CodeScopeLifeStyles / window.CodeScopeLifeEditor。
+       ⚠️ 必须**先加载完样式层、再加载完编辑器层**，最后才注入面板脚本 ✗：
+          三者都是动态注入，defer 对动态脚本不保证顺序 ⇒ 用 onload 串成链 ✓。
+       顺序：life-styles.js → life-editor.js → life-workbench.js ✓（谁挂了都往下走 ✓）。 */
     function loadWorkbench() {
       if (document.getElementById('lw-script')) return;
       function bootPanel() {
@@ -76,13 +78,23 @@
         s.defer = true;
         document.body.appendChild(s);
       }
-      if (window.CodeScopeLifeStyles) return bootPanel();
+      function loadEditor() {
+        if (window.CodeScopeLifeEditor) return bootPanel();
+        if (document.getElementById('lw-editor')) return;
+        var ed = document.createElement('script');
+        ed.id = 'lw-editor';
+        ed.src = '/assets/life-editor.js';
+        ed.onload = bootPanel;
+        ed.onerror = bootPanel;   /* 编辑器层挂了也不能让面板打不开：面板里有兜底判断 */
+        document.body.appendChild(ed);
+      }
+      if (window.CodeScopeLifeStyles) return loadEditor();
       if (document.getElementById('lw-styles')) return;
       var st = document.createElement('script');
       st.id = 'lw-styles';
       st.src = '/assets/life-styles.js';
-      st.onload = bootPanel;
-      st.onerror = bootPanel;   /* 样式层挂了也不能让面板打不开：面板里有兜底判断 */
+      st.onload = loadEditor;
+      st.onerror = loadEditor;   /* 样式层挂了也不能让面板打不开：面板里有兜底判断 */
       document.body.appendChild(st);
     }
     /* 先等 1.5s（用户不可能这么快点开工作台），再等空闲 —— 保证不在首屏关键路径上 ✓ */

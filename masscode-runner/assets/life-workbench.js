@@ -6,6 +6,11 @@
  *
  * 模块：今日 · 待办 · 笔记 · 研究方向 · 论文 · 文件 · 时间 · 邮箱
  *
+ * 拆分（2026-10-30）：这个文件只留**面板渲染与状态** ✓，另外两份是它的依赖：
+ *   assets/life-styles.js  样式数据层（CSS / 令牌，纯数据，阶段 1 ✓）
+ *   assets/life-editor.js  编辑器接入层（Crepe 实例 / 挂载代号 / 权威正文，阶段 2 ✓）
+ * 加载顺序由 index.html 的 onload 串链保证：styles → editor → workbench ✓。
+ *
  * 风格：**深色玻璃卡**（Linear / Vercel 风）——
  *   圆角 14px · 1px 半透明描边 · 极轻阴影 · 青蓝强调 · 数字等宽对齐 ·
  *   16px 网格间距（比上一版更密，避免大片留白）。
@@ -55,6 +60,11 @@
   /* ★ 字体栈同令牌表一起搬到 assets/life-styles.js ✓（理由见上面那段）*/
   const UI = CodeScopeLifeStyles.ui;
   const MONO = CodeScopeLifeStyles.mono;
+  /* ── 正文编辑器：**接入层搬到 assets/life-editor.js**（拆分 · 阶段 2，2026-10-30）──
+     ⚠️ Crepe 的实例 / 挂载代号 / 权威正文（md 缓存）**只住在那边** ✓ ——
+        这里只通过 `window.CodeScopeLifeEditor` 调它（见下面 `Ed()` 那一段 ✓）。
+        两边各存一份必然不同步 ✗，症状是「编辑正常、保存静默失效」（不报错、刷新才发现少了几段）。
+     ⚠️ 加载顺序：life-editor.js 必须在本文件**之前** ✓（index.html 的三段 onload 串链）。*/
   /* ★ 图标位（规范 §9.1）：icon 存的是 **sprite id**（`#i-xxx` 的 xxx 部分）✗ 不再是字符 ✓。
      ⚠️ 原来这里放的是 emoji / 几何字符（☀ ✎ ◈ ❝ ◇ ▦ 📖 ⚙ 🔥 ✉），
         在纸感皮肤里大小与基线都跟正文字体走 ✗，和主界面那套线性图标**不是一套语言** ✗ ✓。
@@ -1817,48 +1827,24 @@
     LIVE_BUF = setTimeout(() => { if (TAB === 'memo') renderMemoList(); }, 200);
   }
 
-  /* ════ 序列化：**唯一入口**（2026-10-30 收敛，换块级内核之前的第一步）═══════════
-     ⚠️ 为什么必须先做这一步 ✗✗：读回 markdown 的代码原来散在 **7 处**
-     （:4120 / :5225 / :5808 / :5939 / :5950 / :5962 / :6013），全是同一个模式
-     —— `querySelectorAll(':scope > .ln')` → 逐行取 textContent/dataset → 手动 join('\n') ✓。
-     只要漏掉任何一处，那条保存链路就还在读旧 DOM ✓ → 换内核之后**静默丢内容** ✗
-     （不报错、不崩页面，刷新才发现少了几段 ✓）。
-     ⇒ 现在全项目只有 `readMemoMarkdown()` 读 `.ln` ✓，谁都别在自己那儿再拼一遍 ✗。
+  /* ════ 正文内核：Crepe 块级编辑器（2026-10-30 换）════════════════════════════
+     ★ 拆分 · 阶段 2（2026-10-30）：**接入层已搬到 assets/life-editor.js** ✓ ——
+       实例 / 挂载代号 / 权威正文（md 缓存）/ 三道防丢保险 全在那边，面板这边
+       一个副本都不留 ✗（两边各存一份必然不同步，症状是「编辑正常、保存静默失效」）。
+       新内核的来龙去脉（为什么从逐行 contenteditable 换成 Crepe、内容怎么进出）也搬过去了 ✓。
 
-     判据统一成 `data-src || textContent` ✓：原来备忘录用 `contenteditable === 'false'`、
-     日记用 `.cur` 类 ✓ —— 在 ceHtml() 产出的 DOM 上二者等价 ✓
-     （渲染行必有**非空** data-src ⟺ textContent 非空 ✓），所以换判据后逐字不变 ✓。 */
-  function readMemoMarkdown(ce) {
-    if (!ce) return '';
-    return Array.from(ce.querySelectorAll(':scope > .ln')).map((el) => {
-      const src = el.dataset ? el.dataset.src : null;
-      return (src != null && src !== '') ? String(src) : String(el.textContent || '');
-    }).join('\n');
-  }
-
-  /* ════ 正文内核：Crepe 块级编辑器（2026-10-30 换）══════════════════════════
-     旧内核是「逐行 contenteditable」：光标行是源码、其他行是渲染结果，
-     所以读回 markdown 只能靠逐行拼（上面那 7 处）✓，而且每一处光标/换行/退格
-     都要自己算（ceLineKey / ceCaretOffset / Enter 切行…）✗。
-     新内核直接用阅读模块那颗现成的 Crepe（`loadBlockEditor()` → `window.CodeScopeBlockEditor`，
-     用法照抄 assets/app-reading.js:1009）✓：块级排版、任务勾选、表格都是编辑器自己的事 ✓。
-
-     ★ 内容怎么进出（**照抄阅读模块的做法，不自己发明**）：
-       · 进：`create({ markdown })` ✓
-       · 出：**只**通过 `onChange(md)` 拿 ✓（和 app-reading.js:1009 一致）；
-             `controller.getMarkdown()` 虽然存在（src/reading-block-editor.js:1010），
-             **故意不用** ✗ —— 它返回的是「编辑器规范化之后」的文本 ✓，
-             而我们没有用户真的编辑过时不该把规范化结果写回存储 ✗
-             （否则「打开一条备忘录」就等于偷偷改写了它的 markdown）。
-       · 所以 `MEMO_CE.md` 是**权威正文**：初值 = 库里那条的正文 ✓，
-         只有 onChange（= 用户真的编辑了）才更新 ✓。 */
+     ★ 走这一个口子拿编辑器层（面板只通过 window.CodeScopeLifeEditor 调它）✓ ——
+       没加载上就返回 null：所有保存路径「这次别写」✗，绝不退回逐行内核（那套已删 ✓），
+       也绝不拿空串覆盖 ✓。 */
+  const Ed = () => window.CodeScopeLifeEditor || null;
   /* Obsidian DOM 契约（spec 10.1）+ **两个默认样式类** ✓：
      h1-align-center / h2-style-twin = preview.html 里 body 上的默认组合 ✓。
      做成容器类名（而不是写死在 CSS 里）→ 以后加开关只要换类名 ✓。
      ⚠️ 这两个类名的规则在 assets/doc-theme.css 的 ㉑ 节 ✓。 */
   const CE_OBS_CLASS = 'markdown-preview-view markdown-rendered h1-align-center h2-style-twin';
-  let MEMO_CE = null;          /* { id, token, ctrl, md } —— md 是权威正文 */
-  let MEMO_CE_TOKEN = 0;       /* 挂载代号：异步竞态里淘汰旧实例（同 app-reading 的 blockMountId）*/
+  /* ★ 编辑器实例 / 挂载代号 / 权威正文（md 缓存）**全部搬到 assets/life-editor.js**
+     （拆分 · 阶段 2）✓ —— 这里**不许**留副本 ✗：两边各存一份必然不同步，
+     症状是「编辑正常、保存静默失效」（不报错、不崩页面，刷新才发现少了几段）。 */
   let MEMO_SAVE_BUF = 0;
 
   /* 正文容器：源码模式 → 一个 textarea（原样 markdown ✓）；
@@ -1872,17 +1858,17 @@
     return '<div class="lw-ce lw-memo-ce ' + CE_OBS_CLASS + '" id="lw-memo-ce" spellcheck="false"></div>';
   }
 
-  /* 正文的**唯一**读出口（memoReadEditor / 导出图 / 撤销 都从这里走）✓ */
+  /* 正文的**唯一**读出口（memoReadEditor / 导出图 / 撤销 都从这里走）✓ ——
+     实体在 assets/life-editor.js 的 `read(host)` ✓（认不出 → null，绝不返回空串 ✓）。 */
   function memoBodyText() {
     const ce = document.getElementById('lw-memo-ce');
-    if (ce && ce.tagName === 'TEXTAREA') return ce.value;        /* 源码模式 ✓ */
-    if (MEMO_CE && MEMO_CE.id && MEMO_CE.id === MEMO_EDITOR_ID) return MEMO_CE.md;
     if (!ce) return null;
-    /* ⚠️ 容器已换成 Crepe 之后里面**没有 .ln 了** ✗ —— 这时候读到的是 '' ✓，
-       而 '' 会被 memoWriteFromEditor 当成「正文被清空」写进库里 ✗✗。
-       → 认不出「已挂载」的 DOM 就返回 null（= 保持原样）✓，宁可不写也不清空 ✓。 */
-    if (!ce.querySelector('.ln, .ProseMirror')) return null;
-    return readMemoMarkdown(ce);                                  /* 兜底（挂载失败时）✓ */
+    /* ★ 守卫：编辑器显示的那一条必须就是「该写的那一条」✓ ——
+       `curMemo()` / 列表空态都会回落到别的条目 ✗，写串就是静默的数据损坏（比丢内容更糟）。
+       认不出 → null（= 这次别写）✓，绝不返回空串（会被当成「正文被清空」✗）。 */
+    if (ce.dataset.editorKey && ce.dataset.editorKey !== MEMO_EDITOR_ID) return null;
+    const ed = Ed();
+    return ed ? ed.read(ce) : null;
   }
 
   /* 把正文整体写回当前那条（不动标题）+ 落盘。给格式按钮 / 清单插入 / 表格用 ✓ */
@@ -1891,51 +1877,19 @@
     const head = String(cur.text || '').split('\n')[0] || '';
     cur.text = head + (body ? '\n' + body : '');
     cur.edit = Date.now();
-    if (MEMO_CE && MEMO_CE.id === cur.id) MEMO_CE.md = body;
+    /* 缓存不用在这里同步 ✓ —— 调用方（memoEditBlock）紧接着 render()，由 mountMemo 按新正文重建 ✓ */
     STORE.memoSaved = true;
     saveStore();
     return true;
   }
 
-  /* 光标所在**块**的纯文本 —— Crepe 不暴露“第几行”，只能这样反查 ✓。
-     `hostId` = 正文容器 id（'lw-memo-ce' / 'lw-j-ce'）✓ —— 备忘录和日记共用这一份 ✓ */
-  function caretBlockText(hostId) {
-    const host = document.getElementById(hostId);
-    const sel = window.getSelection();
-    if (!host || !sel || !sel.rangeCount) return null;
-    /* ⚠️ 必须走到 **.ProseMirror 的直接子节点** 为止 ✗✗ —— 那一层才是「一个块」✓。
-       原来走到「host 的直接子节点」✗：Crepe 的层级是 host > .milkdown > .ProseMirror > 块 ✓，
-       于是停下来的那一刻拿到的是**整篇的文本** ✗ → 行号永远匹配不上 ✓ →
-       「# 标题 / 清单」静默退化成「改第一行」✗（实测踩到：点清单，第一行变任务项 ✓）。 */
-    const prose = host.querySelector('.ProseMirror');
-    if (!prose) return null;
-    let el = sel.getRangeAt(0).startContainer;
-    if (el && el.nodeType === 3) el = el.parentElement;
-    if (!el || !prose.contains(el)) return null;
-    while (el && el.parentElement && el.parentElement !== prose) el = el.parentElement;
-    if (!el || el === prose) return null;
-    return String(el.textContent || '').trim();
-  }
-  /* 「界面上那一块的文本」→「markdown 里第几行」✓ —— 备忘录和日记共用 ✓。
-     ⚠️ **不能直接比字符串** ✗✗：块里的文本是**渲染后**的（列表项就是「任务点我」✓），
-        而 markdown 那一行**带着标记**（「- [ ] 任务点我」✓）→ 永远匹配不上 ✗，
-        于是「# 标题 / 清单」退化成「改第一行」✗（实测踩到：点清单，第一行变成了任务项 ✓）。
-        ⇒ 两边都先去掉行首标记（引用 / 标题 / 列表 / 任务 / 有序列表）再比 ✓。 */
-  function ceBlockIndex(lines, want) {
-    if (!want) return -1;
-    const strip = (s) => String(s == null ? '' : s)
-      .replace(/^\s*>+\s*/, '')
-      .replace(/^\s*(#{1,6}\s+|[-*+]\s+(\[[ xX]\]\s*)?|\d+[.)]\s+)/, '')
-      .trim();
-    return lines.findIndex((l) => strip(l) === want);
-  }
   /* 在正文的第 i 行上做变换（i = 光标那块对应的行；找不到就退回第一行 ✓）。
      `after` 为真时把新行**插在这一行后面**（清单 / 表格用）✓。 */
   function memoEditBlock(fn, after) {
     const body = memoBodyText();
     if (body == null) return false;
     const lines = String(body).split('\n');
-    let i = ceBlockIndex(lines, caretBlockText('lw-memo-ce'));
+    let i = Ed().blockIndex('lw-memo-ce', lines);
     if (i < 0) i = after ? Math.min(0, lines.length - 1) : 0;
     const out = (typeof fn === 'function') ? fn(lines, i) : null;
     if (!memoApplyBody(String(out == null ? lines.join('\n') : out))) return false;
@@ -1944,52 +1898,21 @@
   }
 
   /* 挂 / 换内核。每次 render 之后都会走一遍（bind() 里调）✓。
-     ⚠️ 三件事必须成对做对，少一件就丢内容 ✗：
-       ① **同步**先把 MEMO_CE.md 设成库里那条的正文 ✓ —— 挂载是异步的
-          （首次要拉 2.7MB 的 reading-block-editor.js ✓），这中间用户改标题会触发保存 ✓，
-          不先设好就会读到空正文，把内容清掉 ✗；
-       ② 旧实例要 destroy ✓，且**用代号**判断「回来的是不是最新那次」✗（连点切条目会竞态）；
-       ③ destroy 期间**不清 DOM** ✗ —— 清理可能晚于下一次挂载，一清就把新实例抹掉
-          （src/reading-block-editor.js:1023 那段注释踩过同一个坑）。 */
+     ★ 实体在 assets/life-editor.js 的 `mountMemo` ✓（拆分 · 阶段 2）——
+       实例、挂载代号、权威正文、三道防丢保险全在那边；这里只算「挂哪一条 / 正文是什么 / 谁来回调」。
+     ⚠️ 没有条目 / 没有容器 → 传 null：只退役旧实例（不留副本 ✓），不挂新编辑器 ✓。 */
   function memoMountEditor() {
     const host = document.getElementById('lw-memo-ce');
     const id = MEMO_EDITOR_ID;
     const cur = id ? ((STORE && STORE.memos) || []).find((m) => m.id === id) : null;
-    const token = ++MEMO_CE_TOKEN;
-    const prev = MEMO_CE;
     const body = cur ? String(cur.text || '').split('\n').slice(1).join('\n') : '';
-    MEMO_CE = { id, token, ctrl: null, md: body };
-    if (prev && prev.ctrl) { try { prev.ctrl.destroy(); } catch (_) {} }
-    if (!host || !cur) return;
-    if (host.tagName === 'TEXTAREA') { host.oninput = () => memoCommitSoon(); return; }   /* 源码模式 ✓ */
-    if (typeof loadBlockEditor !== 'function') { host.innerHTML = '<div class="lw-memo-err">块级编辑器不可用（loadBlockEditor 缺失）</div>'; return; }
-    loadBlockEditor().then((api) => api.create({
-      root: host,
-      markdown: body,
-      topBar: true,    /* ★★ 2026-10-30 改回 true：关掉后编辑时**没有任何格式工具栏** ✗ ——
-                          粗体/斜体/标题/列表/引用/表格/图片全在那条自带工具栏上，
-                          而面板自己的按钮只有 Aa / ✓ / ⊞ / 源码 ✓。功能优先于「不重复」✓。 */
-      onChange: (md) => {
-        if (token !== MEMO_CE_TOKEN || !MEMO_CE) return;
-        MEMO_CE.md = md;
-        /* 初始化时 Crepe 会规范化一次并回调 —— 那不是用户编辑，不写回 ✓（同 app-reading.js:522）*/
-        if (!host.contains(document.activeElement)) return;
-        memoCommitSoon();
-      },
-      onError: (err) => {
-        const st = document.getElementById('lw-memo-status');
-        if (st) st.textContent = '编辑器：' + String((err && err.message) || err);
-      },
-    })).then((ctrl) => {
-      if (token !== MEMO_CE_TOKEN || !host.isConnected) { try { ctrl.destroy(); } catch (_) {} return; }
-      MEMO_CE.ctrl = ctrl;
-      host.dataset.editorReady = 'true';
-    }).catch((err) => {
-      if (token !== MEMO_CE_TOKEN) return;
-      /* 加载失败**不回退**到逐行编辑器 ✗（那套已经删了）；把正文原样贴出来，
-         至少能读、能复制，并明确告诉用户保存链路没断 ✓。 */
-      host.innerHTML = '<div class="lw-memo-err">块级编辑器加载失败：' + esc(String((err && err.message) || err)) + '</div>'
-        + '<pre class="lw-memo-fallback">' + esc(body) + '</pre>';
+    const ed = Ed();
+    if (!ed) return;
+    /* 正文变了 → 压撤销快照 + 刷左栏 + 防抖落盘（memoCommitSoon 在面板这边 ✓：
+       它碰的是 STORE / 快照 / 左栏列表，都是面板的事 ✓）；状态条是面板的 DOM ✓ */
+    ed.mountMemo((host && cur) ? host : null, {
+      key: id, markdown: body, topBar: true, onChange: memoCommitSoon,
+      onStatus: (text) => { const st = document.getElementById('lw-memo-status'); if (st) st.textContent = text; },
     });
   }
   /* 正文变了 → 压撤销快照 + 刷左栏 + 防抖落盘（和旧 onEdit 等价 ✓）*/
@@ -2011,22 +1934,20 @@
 
   /* ════ 日记正文内核：**同一颗** Crepe（2026-10-30 换，照抄备忘录那套 ✓）══════════
      迁移前日记是「逐行 contenteditable」（光标行 = 源码、其他行渲染 ✓），所以要自己算
-     换行 / 退格 / caret（applyCeJ / renderCe / ceLineKey / mdShortcut ✓），
-     读回正文靠 readMemoMarkdown 拼 :scope > .ln ✓。换内核之后这些**全交给 ProseMirror** ✓
-     —— 和备忘录迁移时删掉的是同一套东西 ✓，删它们不是丢功能 ✓。
+     换行 / 退格 / caret，读回正文靠 readMemoMarkdown 拼 :scope > .ln ✓。
+     换内核之后这些**全交给 ProseMirror** ✓ —— 和备忘录迁移时删掉的是同一套东西 ✓。
+     ★ 接入层（实例 / 代号 / 权威正文 / 三道防丢保险）已搬到 assets/life-editor.js ✓
+       （拆分 · 阶段 2）：主键（日期字符串）由面板传进去 ✓，日记这边不用再自己存一份 ✓。
 
      ★ 和备忘录的**三处差异**（照抄错一条就丢内容 ✗）：
        ① **存储位置不同**：备忘录正文在 memos[] 那条的 text 里，**第 0 行是标题** ✗；
           日记正文在 journal[] 那条的 text 里，**整篇就是正文** ✓（没有标题行）——
           所以这里**不许 slice(1)** ✓；写回也只走 journalPersist() ✓（存储 key / 字段一个字没换 ✓）。
-       ② **主键不同**：备忘录用 id ✗，日记用**日期字符串** YYYY-MM-DD ✓ ——
-          实例上记的是 date ✓（对应 MEMO_CE.id）✓。
+       ② **主键不同**：备忘录用 id ✗，日记用**日期字符串** YYYY-MM-DD ✓（onMount 的 key）✓。
        ③ **允许「这一天还没写过」** ✓：备忘录取不到那条就干脆不挂编辑器 ✗；
           日记这时初值取**模板**（journalAutoTpl 关掉就是空 ✓）—— 和迁移前 viewJournal
           那一行取值**完全一致** ✓，否则一进日记就把模板吞掉 ✗。
-     其余三道防丢保险和备忘录**逐条对齐** ✓（见下面每条的注释）。 */
-  let JOURNAL_CE = null;        /* { date, token, ctrl, md } —— md 是权威正文 */
-  let JOURNAL_CE_TOKEN = 0;     /* 挂载代号：异步竞态里淘汰旧实例（同 MEMO_CE_TOKEN）*/
+     其余三道防丢保险和备忘录**逐条对齐** ✓（在 life-editor.js 里只有一份 ✓）。 */
   let JOURNAL_SAVE_BUF = 0;
   /* 编辑器正在显示的是**哪一天** ✓ —— 必须和写盘用**同一个公式** ✗：
      journalPersist 在 journalSel 为空时写「今天」并顺手补上 journalSel ✓，
@@ -2043,16 +1964,15 @@
     return !t || t === J_TPL.daily.text.trim() || t === J_TPL.research.text.trim() || t === J_TPL.review.text.trim();
   }
   /* 正文的**唯一**读出口（落盘 / 模板 / # 标题 / 清单 / 保存按钮 全走这里）✓
-     ⚠️ 保险 ③（和 memoBodyText 逐条一致）：**认不出 DOM 就返回 null**（= 这次别写）✗ ——
-        返回 '' 会被 journalPersist 当成「这篇日记被清空」写进库里 ✗✗（不报错、不崩页面 ✓，
-        刷新才发现少了几段 ✗）。 */
+     ★ 认不出就**不写**的守门在 assets/life-editor.js 的 `read(host)`（返回 null）✓；
+       这里再补一道**面板自己的**守卫：编辑器显示的那一天必须就是「该写的那一天」✗
+       （日期悄悄变了而编辑器还没重挂时，绝不能把上一天的正文写进今天 ✓）。 */
   function journalBodyText() {
     const ce = document.getElementById('lw-j-ce');
     if (!ce) return null;
-    if (ce.tagName === 'TEXTAREA') return ce.value;             /* 兜底：万一真被换成 textarea ✓ */
-    if (JOURNAL_CE && JOURNAL_CE.date === journalKey()) return JOURNAL_CE.md;
-    if (ce.querySelector('.ln')) return readMemoMarkdown(ce);   /* 旧内核的 DOM（理论上已不会再出现）✓ */
-    return null;   /* Crepe 已挂 / 仍在异步加载，但实例对不上 → 宁可不写 ✓ */
+    if (ce.dataset.editorKey && ce.dataset.editorKey !== journalKey()) return null;
+    const ed = Ed();
+    return ed ? ed.read(ce) : null;
   }
   /* 写盘：把权威正文落到「这一天」✓ —— 迁移前那个 persist() 原样搬过来，
      只把「读」换成 journalBodyText ✓（存储 key / 字段 / 时间戳一个都没动 ✓）。 */
@@ -2082,75 +2002,40 @@
   /* 把正文整体换成 body（**不落盘** ✓）—— 给模板 / # 标题 / 清单 三个按钮用 ✓。
      语义和迁移前一致：只改**界面上那一份** ✓，等用户真的敲字才由 journalPersist 写进库 ✓
      （所以「只插了模板就走」仍然不会在日历上白点一片 ✓）。
-     ⚠️ Crepe 没暴露 setMarkdown（controller 只有 getMarkdown / focus / destroy ✗）→ 原地重挂 ✓。
-        这里**不**像备忘录那样 render() 整屏重建 ✗：左边日历 / 连续记录 / 最近写过都不用跟着动 ✓。 */
+     ★ 实现在 assets/life-editor.js 的 `write(host, markdown)` ✓（原地重挂 ——
+       Crepe 没暴露 setMarkdown，controller 只有 getMarkdown / focus / destroy ✗）。 */
   function journalApplyBody(body) {
-    journalMountEditor(String(body == null ? '' : body));
-    return true;
+    const ce = document.getElementById('lw-j-ce');
+    const ed = Ed();
+    if (!ce || !ed) return false;
+    return ed.write(ce, String(body == null ? '' : body));
   }
   /* 在光标所在块上做变换（同 memoEditBlock ✓ —— 「# 标题」「清单」两个按钮用）*/
   function journalEditBlock(fn) {
     const body = journalBodyText();
     if (body == null) return false;
     const lines = String(body).split('\n');
-    let i = ceBlockIndex(lines, caretBlockText('lw-j-ce'));
+    let i = Ed().blockIndex('lw-j-ce', lines);
     if (i < 0) i = 0;
     const out = (typeof fn === 'function') ? fn(lines, i) : null;
     return journalApplyBody(String(out == null ? lines.join('\n') : out));
   }
   /* 挂 / 换内核。每次 render 之后都会走一遍（bind() 里调）✓ —— 和 memoMountEditor 逐条对齐：
-       ① **同步**先写好权威正文（下面 body 那几行）✓ —— 挂载是异步的（首次要拉 2.7MB ✓），
-          这中间切分类 / 切日期会触发 JOURNAL_FLUSH ✓，不先设好就读不到（不写 ✓），
-          或者更糟：读到**上一天**的正文写进今天 ✗；
+       ① **同步**先写好权威正文 ✓（编辑器层 mount 时先立 md 缓存，见 life-editor.js）；
        ② 旧实例 destroy + **代号**判断「回来的是不是最新那次」✗（连点日历会竞态）；
-       ③ destroy 期间**不清 DOM** ✗ —— 清理可能晚于下一次挂载，一清就把新实例抹掉
-          （src/reading-block-editor.js 的 destroy 注释踩过同一个坑 ✓）。
-     overrideBody = 「还没写进库、但要先显示出来」的正文（模板 / # 标题 / 清单 ✓）*/
+       ③ destroy 期间**不清 DOM** ✗；日记的原地重挂**前**清空容器 ✓（都是编辑器层的事 ✓）。
+     overrideBody = 「还没写进库、但要先显示出来」的正文（模板 / # 标题 / 清单 ✓）
+     ★ 实体在 assets/life-editor.js 的 `mountJournal` ✓（拆分 · 阶段 2） */
   function journalMountEditor(overrideBody) {
-    const host = document.getElementById('lw-j-ce');
     const key = journalKey();
     const hit = ((STORE && STORE.journal) || []).find((x) => x.date === key) || null;
-    const token = ++JOURNAL_CE_TOKEN;
-    const prev = JOURNAL_CE;
     const body = overrideBody != null ? String(overrideBody)
       : (hit ? String(hit.text == null ? '' : hit.text) : ((STORE && STORE.journalAutoTpl === false) ? '' : J_TPL.daily.text));
-    JOURNAL_CE = { date: key, token, ctrl: null, md: body };     /* ① */
-    if (prev && prev.ctrl) { try { prev.ctrl.destroy(); } catch (_) {} }   /* ② */
-    if (!host) return;
-    /* ③' **挂载前先把容器清空** ✗✗ —— 备忘录那边不需要（每次 render() 给的都是全新节点 ✓），
-       但日记的 journalApplyBody（模板 / # 标题 / 清单）是**原地重挂** ✓：不清的话，
-       Crepe 会往**同一个容器**里再挂一份，屏幕上就成了两套正文叠着（实测踩到 ✓）。
-       清空放在这里（挂载前）而不是 destroy 里 ✓ —— destroy 可能晚于下一次挂载，
-       它一清就把新实例抹掉（src/reading-block-editor.js 的 destroy 注释同一个坑 ✓）。*/
-    host.replaceChildren();
-    if (typeof loadBlockEditor !== 'function') { host.innerHTML = '<div class="lw-memo-err">块级编辑器不可用（loadBlockEditor 缺失）</div>'; return; }
-    loadBlockEditor().then((api) => api.create({
-      root: host,
-      markdown: body,
-      topBar: true,    /* ★★ 2026-10-30 改回 true：关掉后编辑时**没有任何格式工具栏** ✗ ——
-                          粗体/斜体/标题/列表/引用/表格/图片全在那条自带工具栏上，
-                          而面板自己的按钮只有 Aa / ✓ / ⊞ / 源码 ✓。功能优先于「不重复」✓。 */
-      onChange: (md) => {
-        if (token !== JOURNAL_CE_TOKEN || !JOURNAL_CE) return;
-        JOURNAL_CE.md = md;
-        /* 初始化时 Crepe 会规范化一次并回调 —— 那不是用户编辑，不写回 ✓（同备忘录 / app-reading.js:522）*/
-        if (!host.contains(document.activeElement)) return;
-        journalCommitSoon();
-      },
-      onError: (err) => {
-        const s2 = document.getElementById('lw-sub');
-        if (s2) s2.textContent = '编辑器：' + String((err && err.message) || err);
-      },
-    })).then((ctrl) => {
-      if (token !== JOURNAL_CE_TOKEN || !host.isConnected) { try { ctrl.destroy(); } catch (_) {} return; }
-      JOURNAL_CE.ctrl = ctrl;
-      host.dataset.editorReady = 'true';
-    }).catch((err) => {
-      if (token !== JOURNAL_CE_TOKEN) return;
-      /* 加载失败**不回退**到逐行编辑器 ✗（那套已经删了 ✓）：正文原样贴出来，
-         至少能读、能复制，并明确告诉用户保存链路没断 ✓（同 memoMountEditor ✓）。 */
-      host.innerHTML = '<div class="lw-memo-err">块级编辑器加载失败：' + esc(String((err && err.message) || err)) + '</div>'
-        + '<pre class="lw-memo-fallback">' + esc(body) + '</pre>';
+    const ed = Ed();
+    if (!ed) return;
+    ed.mountJournal(document.getElementById('lw-j-ce'), {
+      key: key, markdown: body, topBar: true, onChange: journalCommitSoon,
+      onStatus: (text) => { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = text; },
     });
   }
   /* ── 从界面上读回「标题 + 正文」────────────────────────────────────────
@@ -3325,9 +3210,12 @@
       flushMemo(); clearTimeout(memoBuf);
       if (redoMemo()) flashMemoStatus("↷ 已重做"); else flashMemoStatus("没有可重做的操作");
     };
-    /* 双击正文 → 进入编辑（现在正文默认就可编辑，留着兼容旧交互）*/
+    /* 双击正文 → 进入编辑（现在正文默认就可编辑，留着兼容旧交互）
+       ⚠️ 原来后面还有 `const c3 = MEMO_CE; if (c3 && c3.ctrl) c3.ctrl.focus();` ✗ ——
+       那一段在迁移前**就已经是 no-op**（render() 之后实例刚开始异步挂载、ctrl 还是 null ✓），
+       而实例现在住在 assets/life-editor.js（拆分 · 阶段 2）→ 直接去掉，行为一字不差 ✓。*/
     const prev = q("#lw-nt-prev");
-    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const c3 = MEMO_CE; if (c3 && c3.ctrl) c3.ctrl.focus(); };
+    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); };
     /* 新建 */
   /* ════ 快速捕捉 ✓✓（2026-10-09）════════════════════════════════════════
      ⚠️ 为什么要有 ✗✗：用户说「我需要的是……方便的功能」✓。实测确认：
