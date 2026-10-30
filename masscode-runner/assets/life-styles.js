@@ -67,8 +67,39 @@
   .lw-inpanel, #lw-toast, #lw-savetoast, #lw-ctx, #lw-map-zoom, #lw-ml-pick { /* 深色：哑光墨纸 */ --pp-page:#14120f;   --pp-sheet:#1c1a16;   --pp-sheet2:#232019; --pp-ink:#ece7db;    --pp-ink2:#a49d8e;    --pp-line:rgba(236,231,219,.12); --pp-accent:#d8c9a3; --pp-on-accent:#17140f; --pp-ok:#8fbf8a;     --pp-warn:#d3a24a;    --pp-err:#e0796a; --pp-glow:rgba(255,255,255,.05);   /* 内高光：深色纸很轻，不然发灰 */ --pp-shadow:0 1px 1px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.42), 0 12px 28px rgba(0,0,0,.38); --pp-shadow-lift:0 2px 2px rgba(0,0,0,.45), 0 8px 18px rgba(0,0,0,.55), 0 22px 44px rgba(0,0,0,.50); --pp-shadow-float:0 4px 8px rgba(0,0,0,.45), 0 16px 36px rgba(0,0,0,.55), 0 40px 80px rgba(0,0,0,.50); --pp-inset:inset 0 2px 4px rgba(0,0,0,.55); --pp-scrim:rgba(8,7,5,.62); --pp-hover:rgba(236,231,219,.07); /* App 的语义令牌一起改 ✓ —— 面板里的 <button>/<input> 吃的是 html[data-theme] 那层全局皮肤（app.css:3293-3309 渐变+内高光+抬起/按下）✓， 把这几个值换成纸色，它们就自动变成纸感控件 ✓，不用逐条重写 ✓。 */ --bg:var(--pp-page); --panel:var(--pp-sheet); --panel2:var(--pp-sheet2); --border:var(--pp-line); --text:var(--pp-ink); --dim:var(--pp-ink2); --accent:var(--pp-accent); --ok:var(--pp-ok); --err:var(--pp-err); --control:var(--pp-sheet2); --control-hover:color-mix(in srgb, var(--pp-sheet2) 88%, var(--pp-ink) 12%); --surface-hover:color-mix(in srgb, var(--pp-sheet2) 92%, var(--pp-ink) 8%); --accent-soft:color-mix(in srgb, var(--pp-accent) 14%, transparent); --theme-header:var(--pp-sheet); --theme-side:var(--pp-page); --theme-sub:var(--pp-page); --theme-deep:var(--pp-page); --theme-elevated:var(--pp-sheet); --theme-code:var(--pp-sheet2); --theme-overlay:var(--pp-scrim); }
   /* 浅色 App 主题（light）→ 暖白纸；只换值 ✓ */
   html[data-theme="light"] .lw-inpanel, html[data-theme="light"] #lw-toast, html[data-theme="light"] #lw-savetoast, html[data-theme="light"] #lw-ctx, html[data-theme="light"] #lw-map-zoom, html[data-theme="light"] #lw-ml-pick { --pp-page:#f4f1e8;   --pp-sheet:#fdfbf6;   --pp-sheet2:#f7f3e9; --pp-ink:#221f1b;    --pp-ink2:#6c6659;    --pp-line:rgba(34,31,27,.12); --pp-accent:#2f5d46; --pp-on-accent:#fdfbf6; --pp-ok:#3f7a4f;     --pp-warn:#9a6b1f;    --pp-err:#a23b2a; --pp-glow:rgba(255,255,255,.72); --pp-shadow:0 1px 1px rgba(28,24,16,.10), 0 4px 10px rgba(28,24,16,.09), 0 12px 28px rgba(28,24,16,.08); --pp-shadow-lift:0 2px 2px rgba(28,24,16,.13), 0 8px 18px rgba(28,24,16,.14), 0 22px 44px rgba(28,24,16,.12); --pp-shadow-float:0 4px 8px rgba(28,24,16,.16), 0 16px 36px rgba(28,24,16,.18), 0 40px 80px rgba(28,24,16,.16); --pp-inset:inset 0 2px 4px rgba(28,24,16,.20); --pp-scrim:rgba(34,31,27,.34); --pp-hover:rgba(34,31,27,.06); }
+  /* ── 编辑器纸面令牌（2026-10-31）══════════════════════════════════════════
+     ── 用户报的现象 ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯
+     「背景色彩有些突兀」：面板是暖墨纸（--pp-page / --pp-sheet），
+     而备忘录 / 日记的正文区铺的是 Phycat 的 --doc-bg（四套全是偏冷的灰蓝：
+     #272E33 / #0F111A / #1B1D1B / #282A36）⇒ 两色温相撞，正文区像贴上去的一块玻璃 ✗。
+
+     ── 为什么令牌挂在 .lw-inpanel 上（而不是编辑器容器上）✗
+     正文区 / 工具栏 / 代码块 / 提示框 / 行内代码 / 源码 textarea 分属**不同层级** ✓：
+     工具栏 .lw-nt-bar 在编辑器容器**外面** ✓；源码模式的 .lw-memo-src 又**不是**
+     .markdown-preview-view ✓ —— 挂在容器上的话这两种都取不到变量 ✗。
+     而它们**一定**在 .lw-inpanel 里面（life-workbench.js 只在这一处产出
+     .lw-memo-ce / .lw-j-ce，见 memoEditorHostHtml / viewJournal ✓）→ 挂在面板根上 ✓。
+
+     ── 为什么这四个值不用给浅色再写一遍 ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯
+     全部用 color-mix 从 --pp-* 现算 ✓，而 --pp-page 在**深色和浅色里都是更暗的那一档**
+     （#14120f / #f4f1e8）、--pp-sheet 都是更亮的那一档（#1c1a16 / #fdfbf6）✓ ⇒
+     混色的**方向在两套主题下自动一致** ✓，不用写第二份 ✓。
+     同理：这四个值**一个 --doc-* 都不引用** ✓ ⇒ 切四套 Phycat 配色时底色必不动 ✓
+     （只变字色 / 强调色 / 语法高亮 ✓）。
+
+     ── 四个档位 ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯
+       · --ed-paper  正文区：--pp-sheet 混 3% 暖白(#f0e6d2) → 比面板底高半档 ✓
+         深色 rgb(34,32,28) L=12.2 / 浅色 rgb(253,250,245) L=97.6；
+         与面板底(--pp-page) 的亮度差 5.3% / 4.3%（判据 2%~6% ✓），色相差 4° / 7.5°（判据 ≤12° ✓）。
+         ⚠️ 暖白是**写死的锚点** ✗ 不能改成混 --pp-ink：ink 在深色里是浅的（往上提 ✓），
+            在浅色里却是深的（会往下压 ✗）—— 那样两套主题的层次方向就反了 ✗。
+       · --ed-chrome 工具栏条 / 引用块卡：sheet 与 page 之间 → 比纸面低半档 ✓
+       · --ed-sunk   代码块 / 行内代码 / 提示框底：再低半档 ✓
+       · --ed-hover  块悬停底：纸面混 4% ink（深色变亮 / 浅色变暗，两套都是「抬起来」✓）
+     ⚠️ 这四个只改**颜色** ✓，不碰排版 / 间距 / 字号 ✓（刚定稿）。
+     ═══════════════════════════════════════════════════════════════════════ */
   /* 独立面板：铺满顶栏以下的整个主区域 */
-  .lw-inpanel { position:fixed; left:0; right:0; bottom:0; top:44px; z-index:8800; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden; font-family:inherit; color:${T.text}; font-size:12.5px; letter-spacing:.2px; }
+  .lw-inpanel { position:fixed; left:0; right:0; bottom:0; top:44px; z-index:8800; display:flex; flex-direction:column; background:${T.bg}; overflow:hidden; font-family:inherit; color:${T.text}; font-size:12.5px; letter-spacing:.2px; --ed-paper:color-mix(in srgb, var(--pp-sheet) 97%, #f0e6d2); --ed-chrome:color-mix(in srgb, var(--pp-sheet) 55%, var(--pp-page)); --ed-sunk:color-mix(in srgb, var(--pp-sheet) 20%, var(--pp-page)); --ed-hover:color-mix(in srgb, var(--ed-paper) 96%, var(--pp-ink)); }
   /* 顶栏 */
   /* ⚠️ 加了时钟 / 问候 / 心情三个胶囊之后，窄一点的窗口会挤 ✗ ——
      给 row-gap 并允许换行 ✓（换行也比挤成一坨好 ✓）。 */
@@ -569,7 +600,7 @@
      ⚠️ overflow 保持默认 visible ✗（不设 auto/hidden ✓）：
         popup（更多 / Aa）是栏内的 absolute 元素 ✓，hidden 会把它裁掉 ✓；
         而内容真的溢出时也是「画出去」而不是出横向滚动条 ✓（用户明确不要滚动条 ✓）。 */
-  .lw-nt-bar { display:flex; align-items:center; gap:4px; flex-wrap:nowrap; padding:6px 10px; border-bottom:1px solid ${T.lineDim}; position:relative; min-height:38px; }
+  .lw-nt-bar { display:flex; align-items:center; gap:4px; flex-wrap:nowrap; padding:6px 10px; border-bottom:1px solid ${T.lineDim}; position:relative; min-height:38px; background:var(--ed-chrome); }
   .lw-nt-bar button { height:26px; min-width:26px; padding:0 6px; border:1px solid ${T.lineDim}; background:transparent; flex:none; color:${T.text}; font:600 11px ${UI}; cursor:pointer; line-height:1; white-space:nowrap; }
   .lw-nt-bar button b { font-weight:600; margin-left:4px; }
   .lw-nt-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
@@ -704,7 +735,7 @@
      （挂到 body 上就没有这些变量了 ✗，浮层会变成透明底 ✓）。 */
   .lw-nt-menu.lw-pop { position:absolute; }
   /* 不在这里 overflow:auto —— 正文是 .lw-ce，它自己滚 ✓（两层都滚会互相打架 ✗）*/
-  .lw-nt-body { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .lw-nt-body { flex:1; display:flex; flex-direction:column; min-height:0; background:var(--ed-paper); }
   .lw-nt-meta { padding:12px 20px 0; font-size:11px; color:${T.faint}; text-align:center; }
   .lw-nt-title { border:0; background:transparent; color:${T.text}; font:700 18px ${UI}; padding:6px 20px 4px; outline:none; }
   .lw-nt-title::placeholder { color:${T.faint}; }
@@ -2500,7 +2531,7 @@
    （max-width + margin:auto）落到 .ProseMirror 上 ✓，语义等价 ✓。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
   --file-line-width: 700px;
-  background: var(--doc-bg);
+  background: var(--ed-paper);
   color: var(--doc-text);
   padding: 22px 30px 46px;
   border: 0;
@@ -2594,7 +2625,7 @@
   font-size: 18px !important; display: inline-block; width: fit-content;
   padding: 6px 16px !important; margin: 1.4em 0 .6em;
   border-radius: 8px; border: 0 !important;
-  background: color-mix(in srgb, var(--doc-primary) 18%, var(--doc-bg)) !important;
+  background: color-mix(in srgb, var(--doc-primary) 18%, var(--ed-paper)) !important;
   color: var(--doc-strong) !important;
   box-shadow: 0 2px 5px color-mix(in srgb, var(--doc-primary) 22%, transparent);
   transition: transform .4s ease, box-shadow .4s ease;
@@ -2693,7 +2724,7 @@
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout) {
   position: relative;
   margin: 20px 0; padding: 18px 20px 18px 48px !important;
-  background: color-mix(in srgb, var(--doc-bg) 82%, #fff) !important;
+  background: var(--ed-chrome) !important;
   border: 1px solid color-mix(in srgb, var(--doc-primary) 20%, transparent) !important;
   border-radius: 16px !important;
   color: var(--doc-text-2);
@@ -2720,7 +2751,7 @@
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout) p:last-child { margin-bottom: 0; }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout):hover {
   transform: scale(1.02);
-  background: color-mix(in srgb, var(--doc-primary) 8%, var(--doc-bg)) !important;
+  background: var(--ed-hover) !important;
   border-color: var(--doc-primary) !important;
   box-shadow: 0 8px 20px color-mix(in srgb, var(--doc-primary) 15%, transparent);
 }
@@ -2767,7 +2798,7 @@
   width: 1.2rem; height: 1.2rem;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  background: var(--doc-bg-dim);
+  background: var(--ed-sunk);
   border: 2px solid color-mix(in srgb, var(--doc-text-3) 70%, transparent);
   transition: all .3s var(--doc-ease-back);
 }
@@ -2803,12 +2834,23 @@
        浅色纸 #F4F1E8 → 47,47,47 反而看得见 ✓。
      ⇒ 两条修法**一起上** ✓：
        ① 特异性抬到 0,3,0（多带一个 .ProseMirror ✓）→ 压过 Crepe 那条 ✓，不靠加载顺序 ✓；
-       ② 底色换成**主色 32% 叠加** ✓：任意一套配色下都和纸色**同色系但更亮/更暗** ✓，
-          浅色纸（html[data-theme=light] 把 --doc-primary 重映射成 --pp-accent 深绿 ✓）同样成立 ✓。
-     ⚠️ 只作用于这两个容器（.lw-memo-ce / .lw-j-ce）✗，不写全局 ::selection ✓；
-        源码模式那个 textarea 没有 markdown-preview-view 类 → --doc-primary 取不到 ✓，
-        所以带一个 var(--doc-primary, var(--pp-accent)) 兜底 ✓（面板里 --pp-accent 一定有 ✓）。 */
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror ::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view::selection, :is(.lw-memo-ce,.lw-j-ce).lw-memo-src::selection, :is(.lw-memo-ce,.lw-j-ce) textarea::selection { background: color-mix(in srgb, var(--doc-primary, var(--pp-accent)) 32%, transparent); color: var(--doc-strong, inherit); }
+       ② 底色换成一套**与纸色无关、四套配色共用**的强调蓝 ✓ ——
+          rgb(63 116 216 / .62) 叠在纸面上：
+            深色 rgb(52,84,145) L=38.6（ΔL +26.4 vs 纸面 12.2，对比度 2.19）✓
+            浅色 rgb(135,167,227) L=71.0（ΔL −26.6 vs 纸面 97.6，对比度 2.33）✓
+          判据：ΔL ≥18 或对比度 ≥1.9 ✓ —— 两条都过 ✓（实测见报告）。
+      ★★ 2026-10-31 用户追加：「选中一段后和未选中看上去区别不大」✗ ——
+        上一版是**主色 32% 叠加** ✓，可主色自己就在变 ✗：
+          everforest 绿 32% → ΔL 15.8 ✗（判据 18）、vampire 红 32% → 17.4 ✗、
+          abyss 青 / radiation 绿也都在 16~17 ✓ —— 四套里没有一套真正达标 ✓；
+          而且底色一换配色就换色 ✓（用户要的是「一眼分得开」，不是「每套各有各的淡」✗）。
+        ⇒ 改成**固定蓝** ✓：① 与纸色无关 → 四套配色 + 浅色纸下**完全一致** ✓；
+          ② ΔL≈26 / 对比度 2.19~2.33 ✓；
+          ③ 和行内高亮（暖黄 #efb93c 55%）一眼能分开 ✓ ——
+             蓝 =「我刚选的」，黄 =「我标过的」✓（用户要求两者不许混淆 ✓）。
+      ⚠️ 只作用于这两个容器（.lw-memo-ce / .lw-j-ce）✗，不写全局 ::selection ✓
+         （含源码模式那个 textarea ✓ —— 它没有 markdown-preview-view 类，所以不带 var() ✓）。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror ::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view::selection, :is(.lw-memo-ce,.lw-j-ce).lw-memo-src::selection, :is(.lw-memo-ce,.lw-j-ce) textarea::selection { background: rgb(63 116 216 / .62); color: var(--doc-strong, inherit); }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
 /* ── ⑧-a 加粗（theme.css:5529-5589「Underglow」）─────────────────────────
@@ -2924,24 +2966,43 @@
    ★ 底色必须是**实打实的 background-color** ✗✗ —— 旧的「注水」用的是渐变
       （background-image），computed background-color 是 transparent ✓，
       验收要「可见底色」这一条就过不了 ✓，用户也说「看不出是高亮」✓。
-      所以这里给一层**真的高亮笔底**（#f2c14e 34%），悬停加深 ✓；渐变那套留给
-      尚未被画到的 <a href="#cc-hl">（就是画手跑之前那一帧 ✓，避免闪一下）。 */
+      所以这里给一层**真的高亮笔底** ✓；渐变那套留给
+      尚未被画到的 <a href="#cc-hl">（就是画手跑之前那一帧 ✓，避免闪一下）。
+   ★★ 2026-10-31 用户追加：「行内高亮也偏淡」✗ —— 从 rgb(242 193 78 / .34) 提到
+      rgb(239 185 60 / .55)（悬停 .72）✓。为什么这个数（实测，判据 ΔL ≥15）：
+        · 深色纸 rgb(34,32,28)：合成后 rgb(147,116,46) L=37.8 → ΔL +25.6 ✓（旧值 +17.2）；
+        · 浅色纸 rgb(253,250,245)：合成后 rgb(245,214,143) L=76.1 → ΔL −21.5 ✓（旧值只有 −11.9 ✗）。
+      ⚠️ 浅色纸是旧色**唯一不达标**的那一侧 ✗ —— 深色下 .34 本来就够 ✓，所以这次是按浅色定值 ✓。
+      ★ 四套配色下这个合成色**完全一样** ✓：底色来自 --ed-paper（只跟 --pp-* 走 ✓），
+        黄笔是固定色 ✓ —— 用户要的「四套 + 浅色纸都成立」是同一组数字 ✓。
+      ★ 和选中态（固定蓝 rgb(63 116 216 / .62)）**刻意分色** ✓：
+        蓝 =「刚选的」，黄 =「标过的」✓，一眼能分辨 ✓（用户要求 ✓）。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark {
-  background-color: rgb(242 193 78 / .34); color: inherit; padding: 0 2px; border-radius: 3px;
+  background-color: rgb(239 185 60 / .55); color: inherit; padding: 0 2px; border-radius: 3px;
   text-decoration: none; -webkit-box-decoration-break: clone; box-decoration-break: clone;
   transition: background-color .25s ease;
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark:hover { background-color: rgb(242 193 78 / .55); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark:hover { background-color: rgb(239 185 60 / .72); }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror span[data-cc-color] { text-decoration: none !important; }
 
 /* ── ⑧-e 行内代码：胶囊 + 悬停实心化（theme.css:7193-7236）──────────────
-   常态 = 主色 10% 底 + 主色字 + 主色 15% 描边 + 6px 圆角 ✓；
-   悬停 = **实心主色底 + 白字** + 15px 光晕 + scale(1.05) ✓，
-   曲线 .2s cubic-bezier(.34,1.56,.64,1) 带回弹 ✓（照抄，不换 --mo-*）。 */
+   常态 = 主色字 + 主色 15% 描边 + 6px 圆角 ✓；
+   悬停 = **实心强调色底 + 反色字** + 15px 光晕 + scale(1.05) ✓，
+   曲线 .2s cubic-bezier(.34,1.56,.64,1) 带回弹 ✓（照抄，不换 --mo-*）。
+   ★ 2026-10-31 底色改造（用户：「背景色彩有些突兀」）✗✗：
+     · 常态底原本是 color-mix(--doc-primary 10%, transparent) ✗ —— 那是**铺一层主色** ✓，
+       切四套 Phycat 配色时底色跟着变（绿 / 青 / 绿 / 红）✗；
+       ⇒ 换成 var(--ed-sunk)（面板同一套纸色的下沉半档 ✓，代号见 .lw-inpanel 那段注释 ✓）。
+     · 悬停底原本是**实心 --doc-primary + #fff 字** ✗ —— 同样是拿 --doc-* 铺底 ✓，
+       而且 vampire（#FF5555）下白字对比度只有 2.5 ✗；
+       ⇒ 换成 var(--pp-accent) + var(--pp-on-accent) ✓（面板的强调色 / 反色字成对给的 ✓，
+         深色 #d8c9a3/#17140f、浅色 #2f5d46/#fdfbf6 ✓），底色不再随文档配色跳 ✓。
+     ⚠️ 主色的两处用途**保留** ✓：字色（--doc-primary）和描边（主色 15%）✓ ——
+        用户明确说「--doc-primary 可以继续染字，但不许铺底」✓。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view :not(pre) > code {
   font-family: ui-monospace, SFMono-Regular, Menlo, var(--font-monospace, monospace);
   letter-spacing: .5px;
-  background-color: color-mix(in srgb, var(--doc-primary), transparent 90%);
+  background-color: var(--ed-sunk);
   color: var(--doc-primary) !important;
   border: 1px solid color-mix(in srgb, var(--doc-primary), transparent 85%);
   padding: 2px 6px !important; margin: 0 2px;
@@ -2952,10 +3013,10 @@
               transform .2s cubic-bezier(.34, 1.56, .64, 1);
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view :not(pre) > code:hover {
-  background-color: var(--doc-primary) !important;
-  color: #fff !important;
-  border-color: var(--doc-primary);
-  box-shadow: 0 0 15px color-mix(in srgb, var(--doc-primary), transparent 60%);
+  background-color: var(--pp-accent) !important;
+  color: var(--pp-on-accent) !important;
+  border-color: var(--pp-accent);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--pp-accent), transparent 60%);
   transform: scale(1.05);
   position: relative; z-index: 1;
 }
@@ -2980,8 +3041,8 @@
   position: relative;
   margin: 20px 0 !important;
   padding: 0 !important;
-  background-color: var(--doc-bg-dim) !important;
-  border: 1px solid color-mix(in srgb, var(--doc-line), transparent 50%) !important;
+  background-color: var(--ed-sunk) !important;
+  border: 1px solid var(--pp-line) !important;
   border-radius: 8px !important;
   overflow: hidden;
   box-shadow: none !important;
@@ -2994,18 +3055,18 @@
   position: relative;
   min-height: 32px;
   padding-left: 72px !important;
-  background-color: color-mix(in srgb, var(--doc-primary), transparent 96%);
+  background-color: var(--ed-chrome);
   background-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iNDUwcHgiIGhlaWdodD0iMTMwcHgiPgogIDxlbGxpcHNlIGN4PSI2NSIgY3k9IjY1IiByeD0iNTAiIHJ5PSI1MiIgc3Ryb2tlPSJyZ2IoMjIwLDYwLDU0KSIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJyZ2IoMjM3LDEwOCw5NikiLz4KICA8ZWxsaXBzZSBjeD0iMjI1IiBjeT0iNjUiIHJ4PSI1MCIgcnk9IjUyIiAgc3Ryb2tlPSJyZ2IoMjE4LDE1MSwzMykiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0icmdiKDI0NywxOTMsODEpIi8+CiAgPGVsbGlwc2UgY3g9IjM4NSIgY3k9IjY1IiByeD0iNTAiIHJ5PSI1MiIgIHN0cm9rZT0icmdiKDI3LDE2MSwzNykiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0icmdiKDEwMCwyMDAsODYpIi8+Cjwvc3ZnPg==);
   background-repeat: no-repeat;
   background-size: 54px;
   background-position: 12px center;
-  border-bottom: 1px solid color-mix(in srgb, var(--doc-line), transparent 70%);
+  border-bottom: 1px solid var(--pp-line);
   border-radius: 8px 8px 0 0;
   transition: background-color .3s ease, border-bottom-color .3s ease;
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .tools .language-button {
   background: transparent !important;
-  border-color: color-mix(in srgb, var(--doc-line), transparent 60%) !important;
+  border-color: var(--pp-line) !important;
   color: var(--doc-text-2) !important;
   box-shadow: none !important;
 }
@@ -3030,7 +3091,7 @@
    在浅色纸上像贴了一张黑胶带 ✓）→ 改成主色 6% 的极淡一层 ✓，和 Phycat 的纸面同色系 ✓ */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-activeLine,
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-activeLineGutter {
-  background-color: color-mix(in srgb, var(--doc-primary), transparent 94%) !important;
+  background-color: var(--ed-hover) !important;
 }
 /* 悬停：主色描边 + 投影 + 头栏提亮（官方 pre:hover 与 pre:hover::before 两段 ✓） */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block:hover {
@@ -3038,14 +3099,14 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--doc-primary), transparent 85%);
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block:hover .tools {
-  background-color: color-mix(in srgb, var(--doc-primary), transparent 95%);
+  background-color: color-mix(in srgb, var(--ed-chrome) 82%, var(--pp-ink));
   border-bottom-color: color-mix(in srgb, var(--doc-primary), transparent 80%);
 }
 /* 首帧（还没挂载 CodeMirror 时）的占位 pre：和上面同一张卡，避免闪一下别的颜色 ✓ */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre {
   position: relative;
-  background-color: var(--doc-bg-dim) !important;
-  border: 1px solid color-mix(in srgb, var(--doc-line), transparent 50%) !important;
+  background-color: var(--ed-sunk) !important;
+  border: 1px solid var(--pp-line) !important;
   border-radius: 8px !important;
   padding: 12px 16px !important;
   margin: 20px 0; overflow: hidden;
@@ -3145,7 +3206,7 @@
 
 /* ── ⑨ 源码模式（textarea）也跟着纸面走 ─────────────────────────────── */
 .lw-memo-src {
-  background: var(--doc-bg-dim) !important;
+  background: var(--ed-sunk) !important;
   color: var(--doc-text) !important;
   border: 1px solid var(--doc-line) !important;
   border-radius: 10px; padding: 14px 16px;
@@ -3173,7 +3234,12 @@
      --pp-page:#f4f1e8 / --pp-ink:#221f1b）✓ —— 不接的话，浅色 App 下
    正文会是一张深色纸，和周围面板打架 ✗。
    ✓ 做法：在**这个容器内**把 --doc-* 重映射到 --pp-*（派生量用 color-mix）✓ ——
-     不新增任何色值 ✓、不动那 4 套调色板 ✓（和本文件 ⑩ 的「容器内覆盖令牌」同一手法）。 */
+     不新增任何色值 ✓、不动那 4 套调色板 ✓（和本文件 ⑩ 的「容器内覆盖令牌」同一手法）。
+   ★★ 2026-10-31（底色改造）之后这一段**只管字色 / 线色 / 强调色** ✓：
+     正文纸面改成 --ed-paper（只由 --pp-* 推导 ✓，见 .lw-inpanel 那段注释），
+     已经**没有任何规则**再拿 --doc-bg / --doc-bg-dim 铺底 ✓（grep 可查 ✓）。
+     下面这三行 --doc-bg* 留着当**保险** ✗ 不删：以后若有人又写一条 var(--doc-bg) 铺底，
+     浅色下它会落到 --pp-page（纸面同族 ✓）而不是那张偏冷的 Phycat 纸（#272E33 ✗）。 */
 html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
   --doc-bg: var(--pp-page);
   --doc-bg-dim: color-mix(in srgb, var(--pp-page) 94%, #000);
@@ -3245,8 +3311,8 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
    ═══════════════════════════════════════════════════════════════════════ */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout {
   /* 兜底 = note（也覆盖菜单里能插入、但这里没逐个列出的语气）*/
-  --co-bg: rgba(48, 107, 214, .1);
-  --co-hover: rgba(108, 92, 231, .15);
+  --co-bg: color-mix(in srgb, #306bd6 10%, var(--ed-sunk));
+  --co-hover: color-mix(in srgb, #6c5ce7 15%, var(--ed-sunk));
   --co-title: #6c5ce7;
   --co-wm: #6c5ce7;
   --co-glyph: "📝";
@@ -3343,65 +3409,65 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
 
 /* ── ⑭-b 七种语气的令牌（theme.css:2586-2664 的实际值，逐条抄）────────────── */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.note {
-  --co-bg: rgba(48, 107, 214, .1); --co-hover: rgba(108, 92, 231, .15);
+  --co-bg: color-mix(in srgb, #306bd6 10%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #6c5ce7 15%, var(--ed-sunk));
   --co-title: #6c5ce7; --co-wm: #6c5ce7; --co-glyph: "📝";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.info {
-  --co-bg: rgba(116, 192, 252, .1); --co-hover: rgba(116, 192, 252, .16);
+  --co-bg: color-mix(in srgb, #74c0fc 10%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #74c0fc 16%, var(--ed-sunk));
   --co-title: #74c0fc; --co-wm: #74c0fc; --co-glyph: "ℹ️";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.todo {
-  --co-bg: rgba(80, 250, 123, .1); --co-hover: rgba(80, 250, 123, .16);
+  --co-bg: color-mix(in srgb, #50fa7b 10%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #50fa7b 16%, var(--ed-sunk));
   --co-title: #50fa7b; --co-wm: #50fa7b; --co-glyph: "✅";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.tip {
-  --co-bg: rgba(0, 184, 148, .1); --co-hover: rgba(0, 184, 148, .15);
+  --co-bg: color-mix(in srgb, #00b894 10%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #00b894 15%, var(--ed-sunk));
   --co-title: #00b894; --co-wm: #00b894; --co-glyph: "💡";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.warning {
-  --co-bg: rgba(253, 203, 110, .15); --co-hover: rgba(253, 203, 110, .2);
+  --co-bg: color-mix(in srgb, #fdcb6e 15%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #fdcb6e 20%, var(--ed-sunk));
   --co-title: #e17055; --co-wm: #e17055; --co-glyph: "⚠️";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.important {
-  --co-bg: rgba(255, 118, 117, .12); --co-hover: rgba(255, 118, 117, .18);
+  --co-bg: color-mix(in srgb, #ff7675 12%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #ff7675 18%, var(--ed-sunk));
   --co-title: #ff7675; --co-wm: #ff7675; --co-glyph: "📌";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.caution {
-  --co-bg: rgba(214, 48, 49, .08); --co-hover: rgba(214, 48, 49, .12);
+  --co-bg: color-mix(in srgb, #d63031 8%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #d63031 12%, var(--ed-sunk));
   --co-title: #d63031; --co-wm: #d63031; --co-glyph: "🔥";
 }
 /* 另外 7 类：提示框菜单里也能插（14 个按钮 ✓），不补就是「点出来长得像笔记」✗。
    值同样取自 theme.css:6739-6894 ✓，一个都不是我调的。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.success {
-  --co-bg: rgba(85, 239, 196, .15); --co-hover: rgba(85, 239, 196, .25);
+  --co-bg: color-mix(in srgb, #55efc4 15%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #55efc4 25%, var(--ed-sunk));
   --co-title: #00b894; --co-wm: #00b894; --co-glyph: "🎉";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.question {
-  --co-bg: rgba(253, 203, 110, .15); --co-hover: rgba(253, 203, 110, .25);
+  --co-bg: color-mix(in srgb, #fdcb6e 15%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #fdcb6e 25%, var(--ed-sunk));
   --co-title: #f39c12; --co-wm: #f39c12; --co-glyph: "❓";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.example {
-  --co-bg: rgba(162, 155, 254, .15); --co-hover: rgba(162, 155, 254, .25);
+  --co-bg: color-mix(in srgb, #a29bfe 15%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #a29bfe 25%, var(--ed-sunk));
   --co-title: #6c5ce7; --co-wm: #6c5ce7; --co-glyph: "🧩";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.quote {
-  --co-bg: rgba(178, 190, 195, .15); --co-hover: rgba(178, 190, 195, .25);
+  --co-bg: color-mix(in srgb, #b2bec3 15%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #b2bec3 25%, var(--ed-sunk));
   --co-title: #636e72; --co-wm: #636e72; --co-glyph: "💬";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.danger {
-  --co-bg: rgba(214, 48, 49, .15); --co-hover: rgba(214, 48, 49, .2);
+  --co-bg: color-mix(in srgb, #d63031 15%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #d63031 20%, var(--ed-sunk));
   --co-title: #d63031; --co-wm: #d63031; --co-glyph: "⚡";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.bug {
-  --co-bg: rgba(214, 48, 49, .08); --co-hover: rgba(214, 48, 49, .12);
+  --co-bg: color-mix(in srgb, #d63031 8%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #d63031 12%, var(--ed-sunk));
   --co-title: #d63031; --co-wm: #d63031; --co-glyph: "🐛";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.failure {
-  --co-bg: rgba(45, 52, 54, .05); --co-hover: rgba(45, 52, 54, .1);
+  --co-bg: color-mix(in srgb, #2d3436 10%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #2d3436 12%, var(--ed-sunk));
   --co-title: #c0392b; --co-wm: #c0392b; --co-glyph: "📉";
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.abstract {
-  --co-bg: rgba(129, 236, 236, .2); --co-hover: rgba(129, 236, 236, .3);
+  --co-bg: color-mix(in srgb, #81ecec 20%, var(--ed-sunk)); --co-hover: color-mix(in srgb, #81ecec 30%, var(--ed-sunk));
   --co-title: #00cec9; --co-wm: #00cec9; --co-glyph: "📑";
 }
 /* 浅色纸：胶囊底/描边换回官方亮色那两档（theme.css:2586-2587 ✓） */
