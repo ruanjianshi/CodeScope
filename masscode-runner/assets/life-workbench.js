@@ -2400,7 +2400,7 @@
    ⚠️ Crepe 没有 .markdown-preview-sizer（见上）→ 把 sizer 的两条几何
    （max-width + margin:auto）落到 .ProseMirror 上 ✓，语义等价 ✓。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
-  --file-line-width: 760px;
+  --file-line-width: 700px;
   background: var(--doc-bg);
   color: var(--doc-text);
   padding: 22px 30px 46px;
@@ -2691,7 +2691,7 @@
 
 /* ── ⑧ 正文元素（配色沿用 theme.css:3183-3211，行高沿用 5088）────────── */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view ::selection { background: var(--doc-select); color: var(--doc-strong); }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: .8em 0; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
 /* ── ⑧-a 加粗（theme.css:5529-5589「Underglow」）─────────────────────────
    官方不是「变个色」而已 ✓：常态先给一条 2px 的**透明**下边框占位 ✓，
@@ -2925,7 +2925,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, var(--font-monospace, monospace);
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view hr {
-  border: none; height: 1px; margin: 1.6em 0;
+  border: none; height: 1px; margin: var(--lw-gap-lg, 20px) 0;
   background: linear-gradient(90deg, transparent,
     color-mix(in srgb, var(--doc-primary) 42%, transparent), transparent);
 }
@@ -2935,6 +2935,71 @@
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view th,
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view td { border-color: color-mix(in srgb, var(--doc-text) 10%, transparent); }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view tbody tr:hover td { background: color-mix(in srgb, var(--doc-primary) 7%, transparent); }
+
+/* ── ⑧-g 列表标记对齐 + 纵向节奏（两档）+ 内容列撑满（2026-10-30）─────────
+   ★★ 现象（用户直接指出，2026-10-30）：有序 1. / 无序 · / 任务圆圈 **全都比文字偏高** ✓。
+     **判据是量出来的，不是看图** ✓ —— 备忘 + 日记各取有序/无序/任务 3 条（共 18 个样本），
+     用 getBoundingClientRect 量「标记盒中心 Y − 同一行文字的行盒中心 Y」：
+       改前：-12.29 / -12.30 / -12.30 …（18 条全落在 -12.29 ~ -12.30 ✓，方向一致 ✓）
+       改后：+0.50 / +0.50 / +0.50 …（18 条全是 +0.50 ✓，远小于判据的 ≤2px ✓）
+
+   ★ 为什么正好差 12.3px ✗✗ —— **是我们自己推下去的，不是 Crepe 的锅** ✓：
+     Crepe 的列表项是 flex 布局（node_modules/@milkdown/crepe/lib/theme/common/list-item.css：
+       .milkdown-list-item-block > .list-item { display:flex; align-items:flex-start }）✓
+     标记盒子 .label-wrapper 写死 height:32px、**贴 li 顶边** ✓ → 标记中心 = li 顶 + 16 ✓；
+     而 ⑧ 那条 p 原本是 margin:.8em 0 ✓ —— em 落在 Crepe 的 16px 上 = **上下各 12.8px** ✗，
+     把文字整体往下推了 12.8px ✓ → 文字行盒中心 = li 顶 + 28.3 ✓，差值正是 -12.3 ✓。
+     ⚠️ 阅读模块（.md-doc）里看不出这个 bug ✓：那边用的是浏览器原生列表符号（::marker
+        跟着行盒走 ✓），**没有「独立定位的标记盒子」这层结构** ✓ —— 换到 Crepe 才炸 ✓。
+
+   ★ 修法（缺①差 12px，缺②差 1~2px，两条都必须有）：
+     ① 列表项里的 p 不再带上下 margin ✓（下面第 4 条规则）→ 文字回到 li 顶边 ✓；
+     ② 标记盒高度 = **正文首行行盒高** ✓（第 5 条规则，--lw-lh × 1em）——
+        ✗ 不写死 32px：Crepe 那个 32 是「4+4 padding + 24 行盒」凑出来的 ✓，
+          一旦字号/行高变（⑪ 浅色主题、以后调字号），写死的值立刻又偏 ✓；
+        ✓ 钉成 calc 之后，标记盒中心 ≡ 文字行盒中心 **跟着变** ✓ —— 结构性对齐，不是对数字 ✓。
+        ⚠️ 剩下那 0.5px 是**字体墨迹盒（ink box）**本身比行盒偏下 0.5px（16px 字实测：行盒 24、
+          墨迹盒 17 且起点不在正中 ✓），属于字体几何，不是布局误差 ✓ —— 再往上凑就是挪数字了 ✗。
+
+   ★ 纵向节奏：**只有 12 / 20 两档** ✓（--lw-gap / --lw-gap-lg，定义在 .ProseMirror 上，
+     因为这三个变量只给正文用 ✓）：
+       · 12px = 段落之间、段落↔列表、标题之下 ✓
+       · 20px = 标题之上、引用块上下、代码块上下（⑧-f 的 pre 本来就是 20 ✓）✓
+     ⚠️ 标题的 margin 必须 !important ✗✗ —— Crepe 的 reset.css 给 h1~h6 都写了 margin-top
+        （32 / 28 / 24 / 20 / 16 / 16px ✓），而且那张表**注入在本文件之后** ✓
+        → 同特异性 Crepe 赢 ✓（实测：③ 里写的 h2 margin-top:1.6em 从来没生效过 ✓，
+          量出来一直是 Crepe 的 28px ✓ —— 和 ③ 注释里记的那个坑是同一件事 ✓）。
+     ⚠️ 这里只动 margin-top / margin-bottom **两个长写** ✗ —— 不能写 margin 简写：
+        ② 的 .h1-align-center h1 { margin-left:auto !important; margin-right:auto !important }
+        和本规则**特异性相同** ✓，又是本规则在后 ✓ → 简写会把「H1 居中」顺手干掉 ✗✗。
+     ⚠️ p 的 margin **别加 !important** ✗：Crepe 的 .milkdown * { margin:0 } 是 (0,1,0) ✓，
+        ⑧ 那条 (0,2,1) 本来就赢 ✓；加了反而会顶掉 ⑤ 引用块里那句 p { margin:0 0 .5em } ✗
+        （那条没带 !important ✓）。**padding 反而必须带 !important** ✓ ——
+        Crepe 的 .milkdown .ProseMirror p { padding:4px 0 } 与 ⑧ 同特异性 (0,2,1)、后注入 ✓
+        → 不标 !important 就还是 4px ✗（4+4 会把「段间 12」实测量成 20 ✓，一眼能看出来 ✗）。
+
+   ★ 内容列撑满可视区（底部不留大片空白）✓：
+     .milkdown 设 min-height:100% + flex 列 ✓，.ProseMirror flex:1 吃掉剩下的高度 ✓ ——
+     实测短备忘（正文只有一行）：.ProseMirror 高 **32px → 451.7px** ✓
+     （= 纸面 563.7 − Crepe 顶栏 44 − 上下 padding 68 ✓）。
+     ⚠️ 不能只给 .ProseMirror 写 min-height:100% ✗✗ —— 它的包含块是 .milkdown，
+        而 .milkdown 的高度是「内容撑出来的」(auto) ✓ → 百分比 min-height 按 auto 处理 ✓
+        = **完全不生效** ✓（实测 min-height:100% / calc(100% - 68px) 两种写法，量出来都还是 32px ✓）。
+     ⚠️ .milkdown 变 flex 列**不会**打乱 Crepe 那些浮层 ✓（toolbar / link-preview /
+        link-edit / block-handle / slash-menu 全是绝对定位，不参与 flex ✓ —— 改后实测仍是 0×0 ✓）。
+     ★ 为什么这算「样式」不算「改行为」✓：点击落光标是 ProseMirror 自己的事 ✓，
+       盒子撑满只是让「点正文下面那片空白」也能落到文档末尾 ✓ —— 一行 JS 都没动 ✓。
+
+   ★ 列宽：760px → 700px ✓ —— 正文实测是 16px（Crepe 的 --crepe-base-font-size 默认值 ✓，
+     ① 里那句 14.5px 落不到正文上 ✓），760px 一行能放 **约 47 个汉字** ✗，
+     超出「CJK 一行 30~45 字」的舒适区 ✓；700px ≈ **43 个字** ✓，落在区间内 ✓。
+     实测本机 1440 宽时中栏本来就只有 670px ✓，所以这条只在更宽的窗口上才看得见 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror { --lw-gap: 12px; --lw-gap-lg: 20px; --lw-lh: 1.5; flex: 1 1 auto; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror > :is(ul, ol) { margin: var(--lw-gap) 0; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror > :is(h1, h2, h3, h4, h5, h6) { margin-top: var(--lw-gap-lg) !important; margin-bottom: var(--lw-gap) !important; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view li.list-item .content-dom > p { margin: 0; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view li.list-item > .label-wrapper { height: calc(var(--lw-lh) * 1em); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown { display: flex; flex-direction: column; min-height: 100%; }
 
 /* ── ⑨ 源码模式（textarea）也跟着纸面走 ─────────────────────────────── */
 .lw-memo-src {
@@ -3048,7 +3113,8 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
   --co-pill-border: rgba(255, 255, 255, .1);
   position: relative;
   padding: 12px 16px !important;
-  margin-block: 1em !important;
+  /* 2026-10-30：块间距统一成 12/20 两档（见 ⑧-g）—— 原来是 1em=16px，属于第三档 ✗ */
+  margin-block: var(--lw-gap-lg, 20px) !important;
   border: 0 !important;
   border-radius: 12px !important;
   overflow: hidden;
