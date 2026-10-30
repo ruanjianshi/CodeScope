@@ -4629,7 +4629,9 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
     loadBlockEditor().then((api) => api.create({
       root: host,
       markdown: body,
-      topBar: false,   /* ★ 关掉 Crepe 自带那条工具条（面板自己有 ✓；默认 true，见 src/reading-block-editor.js 的 create）*/
+      topBar: true,    /* ★★ 2026-10-30 改回 true：关掉后编辑时**没有任何格式工具栏** ✗ ——
+                          粗体/斜体/标题/列表/引用/表格/图片全在那条自带工具栏上，
+                          而面板自己的按钮只有 Aa / ✓ / ⊞ / 源码 ✓。功能优先于「不重复」✓。 */
       onChange: (md) => {
         if (token !== MEMO_CE_TOKEN || !MEMO_CE) return;
         MEMO_CE.md = md;
@@ -4788,7 +4790,9 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
     loadBlockEditor().then((api) => api.create({
       root: host,
       markdown: body,
-      topBar: false,   /* ★ 关掉 Crepe 自带那条工具条（面板自己有 ✓；默认 true，见 src/reading-block-editor.js 的 create）*/
+      topBar: true,    /* ★★ 2026-10-30 改回 true：关掉后编辑时**没有任何格式工具栏** ✗ ——
+                          粗体/斜体/标题/列表/引用/表格/图片全在那条自带工具栏上，
+                          而面板自己的按钮只有 Aa / ✓ / ⊞ / 源码 ✓。功能优先于「不重复」✓。 */
       onChange: (md) => {
         if (token !== JOURNAL_CE_TOKEN || !JOURNAL_CE) return;
         JOURNAL_CE.md = md;
