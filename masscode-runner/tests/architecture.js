@@ -248,11 +248,20 @@ const SIZE_CAP = [
      ⚠️ 先登记、再谈拆：这 5 个都不小（life-workbench 12,452 行代码），但它们各自的
         天然边界要先审计过才拆得动 ✓，没登记就等于**放任它继续涨** ✗。 */
   /* 本文件的调整史（按时间，最近的在上）：
+       12,750 → 12,411：清掉旧「逐行 contenteditable」内核的 7 个**零调用方**助手 ✓
+                        （ceHtml / writeMemoMarkdown / ceSetCaret / ceCaretOffset /
+                          ceAlignLineNumbers / mdShortcut / ceLineKey）✓
+                        —— 备忘/日记都换 Crepe 块级内核之后，这 7 个不再有任何调用点 ✓，
+                           只删定义本体与它的文档注释：215 行（含注释），实测代码行
+                           12,563 → 12,411 ✓，所以棘轮跟着**往下拧** ✓（不是往上调）。
+                           ⚠️ ceInline、ceSelRange、ceDeleteSelection、MD_WRAP/MD_WRAP_SHIFT
+                           仍有牵连或不在清单里，这一批**故意没动** ✗ —— 宁可少删 ✓。
        12,452 → 12,200：纸感重做时把 CSS 按「一条规则一行」重排，纯空白变化（归一化后 sha256 相同）✓
        12,200 → 12,600：阶段 2 新增线性图标映射表（emoji → sprite use 约 40 条）与区块层级微调 ✓
        12,600 → 12,750：备忘录与日记先后换 Crepe 块级内核（序列化收敛 + 挂载/回写 + 三道防丢保险）✓
      上限一律取实测代码行数、上调必须写明理由；能往下拧时一律往下拧 ✓ */
-  ['assets/life-workbench.js', 12750],
+  ['assets/life-workbench.js', 12415],   /* 12,411 → 12,415（+4）：修「点进引用块看不到光标」—— caret-color + cursor:text
+                                           + 装饰伪元素 pointer-events:none，三行规则 + 一行注释 ✓ */
   /* ★ 2026-10-30 补登记：src/reading-block-editor.js 是 Crepe 集成源码（924 行代码），
      产物 2.7MB 的 assets/reading-block-editor.js 由它打包而来。它一直是「有实质体量却没人守」的文件 ——
      与本仓已补登记的 knowledge-base.js / ui-kit.css 同一类漏洞。上限取登记实测值，只准往下调。 */

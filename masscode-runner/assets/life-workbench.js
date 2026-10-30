@@ -2519,6 +2519,16 @@
 /* ── ⑤ 引用块：✨ 圆角卡片（theme.css:5178-5260）────────────────────────
    ⚠️ theme.css:5206 的 content:"✨" 是权威写法 ✓ ——
       阅读模块那套用的是 ❝（本文件 ⑥，2026-10-28 的旧移植），这里按 theme.css 来 ✓。 */
+/* ★ 2026-10-30 修「点进去看不到光标」——三个原因一起兜住 ✗：
+   ① blockquote 左侧留了 48px 内边距给 ✨ 装饰，点在空白上不会落光标 ⇒ 整块 cursor:text，
+      并把 padding 区也纳入可点（ProseMirror 会自行把点击映射到最近的文本位置）；
+   ② 装饰性伪元素没设 pointer-events:none ⇒ 它压在文字左上角，点击会命中它而不是文本；
+   ③ 编辑器没显式设 caret-color ⇒ 继承正文色，在纸感底上几乎看不见。
+   ⚠️ caret 用 --doc-primary 而不是正文色：四套配色下它都是高对比强调色，一眼能找到光标。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror { caret-color: var(--doc-primary); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote { cursor: text; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote::before,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote::after { pointer-events: none; }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote {
   position: relative;
   margin: 20px 0; padding: 18px 20px 18px 48px !important;
@@ -4487,15 +4497,6 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
       const src = el.dataset ? el.dataset.src : null;
       return (src != null && src !== '') ? String(src) : String(el.textContent || '');
     }).join('\n');
-  }
-  /* 写侧的对称函数：喂文本 → 重渲染 + 行号对齐。
-     原来有 5 处各自写 `ce.innerHTML = ceHtml(...); ceAlignLineNumbers(ce);` ✓，收敛到这里。
-     `srcOnly` = 整篇当源码显示（备忘录的「◫ 源码」）；日记不传 ✓。 */
-  function writeMemoMarkdown(ce, text, curIdx, srcOnly) {
-    if (!ce) return null;
-    ce.innerHTML = ceHtml(text, curIdx, !!srcOnly);
-    ceAlignLineNumbers(ce);
-    return ce;
   }
 
   /* ════ 正文内核：Crepe 块级编辑器（2026-10-30 换）══════════════════════════
@@ -7140,103 +7141,7 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/#([\u4e00-\u9fa5\w/-]+)/g, '<span class="tag">#$1</span>');
   }
-  function ceHtml(text, curIdx, srcOnly) {
-    const lines = String(text == null ? '' : text).split('\n');
-    /* srcOnly：整篇都当源码显示（备忘录的「◫ 源码」模式 ✓，日记不用 ✓） */
-    if (srcOnly) {
-      return lines.map((raw) => '<div class="ln src" contenteditable="true">' + (esc(raw) || '<br>') + '</div>').join('');
-    }
-    return lines.map((raw, i) => {
-      if (i === curIdx) {
-        return '<div class="ln cur" contenteditable="true">' + (esc(raw) || '<br>') + '</div>';
-      }
-      const L = raw;
-      let cls = 'ln', body = '';
-      const h = L.match(/^(#{1,3})\s+(.*)$/);
-      const ck = L.match(/^\s*[-*+]\s*\[([ xX])\]\s*(.*)$/);
-      const ul = L.match(/^\s*[-*+]\s+(.*)$/);
-      const ol = L.match(/^\s*\d+[.)]\s+(.*)$/);
-      if (/^\s*```/.test(L)) { cls += ' r-code'; body = esc(L); }
-      else if (h) { cls += ' r-h' + h[1].length; body = ceInline(h[2]); }
-      else if (/^\s*>\s?/.test(L)) { cls += ' r-quote'; body = ceInline(L.replace(/^\s*>\s?/, '')); }
-      else if (ck) { const on = ck[1].toLowerCase() === 'x'; cls += ' r-li' + (on ? ' done' : ''); body = '<span class="ckbox">' + (on ? '☑' : '☐') + '</span>' + ceInline(ck[2]); }
-      else if (ul) { cls += ' r-li'; body = '<span class="bullet">•</span>' + ceInline(ul[1]); }
-      else if (ol) { cls += ' r-li'; body = '<span class="bullet">' + esc(L.match(/^\s*(\d+[.)])/)[1]) + '</span>' + ceInline(L.replace(/^\s*\d+[.)]\s+/, '')); }
-      else if (/^\s*(---|\*\*\*|___)\s*$/.test(L)) { cls += ' r-hr'; body = esc(L); }
-      else { body = ceInline(L) || '<br>'; }
-      return '<div class="' + cls + '" contenteditable="false" data-src="' + esc(L) + '">' + body + '</div>';
-    }).join('');
-  }
 
-  /* 把光标放到某个行元素的第 offset 个字符处（不传 offset = 放到行尾）。
-     行内一般是单个文本节点；保险起见按 childNodes 累加找位置 ✓。 */
-  function ceSetCaret(lineEl, offset) {
-    if (!lineEl) return;
-    lineEl.focus();
-    try {
-      const range = document.createRange();
-      if (offset == null) { range.selectNodeContents(lineEl); range.collapse(false); }
-      else {
-        let node = null, left = Math.max(0, offset);
-        for (const child of lineEl.childNodes) {
-          if (child.nodeType === 3) { if (left <= child.nodeValue.length) { node = child; break; } left -= child.nodeValue.length; }
-        }
-        if (node) { range.setStart(node, left); range.collapse(true); }
-        else { range.selectNodeContents(lineEl); range.collapse(false); }
-      }
-      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    } catch (_) {}
-  }
-
-  /* 光标在第 index 行内的**字符偏移**；光标不在这行（或有选区）时返回 null。
-     行首退格 / 行尾 Delete / 回车切分都要用它 ✓。 */
-  function ceCaretOffset(ce, index) {
-    const sel = window.getSelection();
-    if (!ce || !sel || !sel.rangeCount) return null;
-    const range = sel.getRangeAt(0);
-    if (!range.collapsed) return null;
-    const lineEl = Array.from(ce.querySelectorAll(':scope > .ln'))[index];
-    if (!lineEl || !lineEl.contains(range.startContainer)) return null;
-    try {
-      const probe = range.cloneRange();
-      probe.selectNodeContents(lineEl);
-      probe.setEnd(range.startContainer, range.startOffset);
-      return probe.toString().length;
-    } catch (_) { return null; }
-  }
-
-  /* 把每行的**实际行高**写成 CSS 变量 --ln-lh，把**左边框宽度**写成 --ln-bl，
-     供行号对齐用 ✓。每次重建正文后都要调（applyCe / applyCeJ 里已经接好了 ✓）。
-
-     ⚠️ 为什么需要 --ln-lh（垂直）：
-        行号不能靠 CSS 的 line-height:inherit 对齐 —— 标题 / 代码块那些行的行高是**无单位**值
-        （如 1.5），无单位值会按伪元素**自己的** font-size（10px）重算 ✗ →
-        行号行盒 15px、正文行盒 27px，基线对不上（标题行号明显偏高 ✗，实测踩过）。
-        「该行的实际行高」在 CSS 里拿不到，只能渲染后量：getComputedStyle 返回**用后值（px）** ✓。
-
-     ⚠️ 为什么需要 --ln-bl（水平）：
-        绝对定位的 left 是相对 **padding box** 的，而 border-left 在 padding box **之外** ✗ →
-        标题 / 引用 / 代码块带 3px 左边框，它们的行号会被整体**往右推 3px** ✗，
-        和普通行对不齐（用户反馈「行号不对齐」就是它）。量出边框宽度，让行号 left 取负值补偿 ✓。 */
-  function ceAlignLineNumbers(ce) {
-    if (!ce) return;
-    for (const el of ce.querySelectorAll(':scope > .ln')) {
-      const cs = getComputedStyle(el);
-      const lh = cs.lineHeight;
-      if (lh && lh !== 'normal') el.style.setProperty('--ln-lh', lh);
-      else el.style.removeProperty('--ln-lh');
-      const bl = parseFloat(cs.borderLeftWidth) || 0;
-      if (bl > 0) el.style.setProperty('--ln-bl', bl + 'px');
-      else el.style.removeProperty('--ln-bl');
-    }
-  }
-
-  /* ── 行首退格 / 行尾 Delete：**必须自己拦**，不能交给浏览器 ──────────────
-     contenteditable 里在行首按退格，浏览器会去「合并上一个块」，
-     而上一块是 contenteditable="false" 的渲染行 → 浏览器的处理是**毁灭性**的 ✗✗：
-     实测在备忘录里按**一次**退格，4 行直接变 0 行，而且空内容还被存进了服务端 ✗（数据丢失）。
-     这里自己实现「和上一行合并 / 把下一行并上来」，并 preventDefault ✓。
-     opts: { ce, index, readAll, apply(text, idx, keepFocus, caretOffset) } */
   /* ── 选区坐标 → 文本坐标 ✓（2026-10-09 加）─────────────────────────────
      ⚠️⚠️ 为什么需要 ✗✗：用户报「备忘录里**选中内容按 Backspace 删不掉**」✓。
         根因：这个编辑器**每一行都是 `contenteditable="false"` 的渲染块** ✓
@@ -7273,82 +7178,8 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
     };
   }
 
-  /* ════ Markdown 快捷键 ✓✓（2026-10-09）══════════════════════════════════
-     ⚠️⚠️ 为什么要有 ✗✗：用户说「我需要的是提高写代码、看代码、学习、文档、
-        个人管理等等**方便**的功能」✓。于是我在浏览器里**逐个真按**了一遍 ✓ ——
-        备忘录 / 日记编辑器里：
-          ⌘B 加粗 ✗  ⌘I 斜体 ✗  ⌘K 链接 ✗  ⌘⇧7 有序列表 ✗  ⌘⇧8 无序列表 ✗
-        **一个都没有** ✓ —— 写 Markdown 只能手打 `**` ✓，
-        而这是**每天几十次**的动作 ✓。
-
-     ✅ 复用本会话为「选区删除」写的那套 `ceSelRange` ✓ ——
-        它能把 DOM 选区映射成「第几行 + 行内第几个字符」✓，正好拿来包裹 ✓。
-
-     ⚠️ 设计取舍 ✗：**跨行选区只包首尾两行** ✓（和大多数编辑器一致 ✓）；
-        没选区时插入标记并把光标**放到中间** ✓（这样能直接接着打字 ✓）。 */
-  /* ⚠️⚠️ 斜体为什么有**两个**键 ✗✗（2026-10-09 实测）：
-     `⌘I` 在 **Chrome（macOS）里被浏览器自己吃了** —— 它的「Email page location」
-     抢在前面，**连 `dispatchEvent` 的合成事件都到不了页面**
-     （实测：⌘E 有 DBG 日志、⌘I **完全没有**，但 preventDefault 是 true
-     —— 说明是**浏览器层**拦的，不是我们的代码）。
-     → 补一个浏览器不占的 **⌘⇧E**（emphasis），两个都能用：
-       · 桌面 / Electron 版：⌘I 照常用（那边没有浏览器 UI）
-       · Web 版：用 ⌘⇧E */
   const MD_WRAP = { b: ['**', '**', '粗体'], i: ['*', '*', '斜体'], e: ['`', '`', '代码'] };
   const MD_WRAP_SHIFT = { e: ['*', '*', '斜体'] };
-  function mdShortcut(event, opts) {
-    if (!(event.metaKey || event.ctrlKey)) return false;
-    const lower = String(event.key || '').toLowerCase();
-    try { console.log('DBG mdShortcut key=' + JSON.stringify(event.key) + ' lower=' + JSON.stringify(lower) + ' shift=' + event.shiftKey + ' hasWrap=' + !!MD_WRAP[lower]); } catch (_) {}
-    const lines = String(opts.readAll()).split('\n');
-    const sel = ceSelRange(opts.ce);
-    const idx = sel ? sel.si : (opts.index || 0);
-    const line = String(lines[idx] || '');
-
-    /* ① 行内包裹：⌘B / ⌘I / ⌘E ✓ */
-    const wrap = event.shiftKey ? MD_WRAP_SHIFT[lower] : MD_WRAP[lower];
-    if (wrap) {
-      event.preventDefault();
-      const [open, close] = wrap;
-      if (sel && sel.si === sel.ei) {
-        /* 同行选区 → 包起来 ✓ */
-        const head = line.slice(0, sel.so);
-        const body = line.slice(sel.so, sel.eo);
-        const tail = line.slice(sel.eo);
-        /* 已经包过了 → 再按一次就**去掉** ✓（和 Typora / Obsidian 一致 ✓） */
-        const already = head.endsWith(open) && tail.startsWith(close);
-        if (already) {
-          lines[sel.si] = head.slice(0, -open.length) + body + tail.slice(close.length);
-          opts.apply(lines.join('\n'), sel.si, true, Math.max(0, sel.so - open.length));
-        } else {
-          lines[sel.si] = head + open + body + close + tail;
-          opts.apply(lines.join('\n'), sel.si, true, sel.eo + open.length);
-        }
-        return true;
-      }
-      /* 无选区（或跨行）→ 插入标记，光标落在中间 ✓ */
-      const at = sel ? sel.so : line.length;
-      lines[idx] = line.slice(0, at) + open + close + line.slice(at);
-      opts.apply(lines.join('\n'), idx, true, at + open.length);
-      return true;
-    }
-
-    /* ② 行前缀：⌘⇧7 有序 / ⌘⇧8 无序 / ⌘1~3 标题 ✓ */
-    let prefix = null;
-    if (event.shiftKey && lower === '7') prefix = '1. ';
-    else if (event.shiftKey && lower === '8') prefix = '- ';
-    else if (!event.shiftKey && (lower === '1' || lower === '2' || lower === '3')) prefix = '#'.repeat(Number(lower)) + ' ';
-    if (!prefix) return false;
-    event.preventDefault();
-    /* 已经是这个前缀 → 去掉（切换 ✓）；是**别的**前缀 → 换成新的 ✓ */
-    const m = line.match(/^(#{1,6} |\d+\. |- |\* |> )/);
-    const next = m ? (m[0] === prefix ? line.slice(m[0].length) : prefix + line.slice(m[0].length))
-      : prefix + line;
-    lines[idx] = next;
-    const caret = Math.max(0, (sel ? sel.so : line.length) + (next.length - line.length));
-    opts.apply(lines.join('\n'), idx, true, caret);
-    return true;
-  }
 
   /* 有选区时删掉选中的那段 ✓（跨行会把首尾两行接起来 ✓，和普通编辑器一致 ✓）。 */
   function ceDeleteSelection(event, opts, sel) {
@@ -7359,42 +7190,6 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
     const next = lines.slice(0, sel.si).concat([head + tail], lines.slice(sel.ei + 1));
     opts.apply(next.join('\n'), sel.si, true, sel.so);
     return true;
-  }
-
-  function ceLineKey(event, opts) {
-    if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
-    const ce = opts.ce;
-    if (!ce) return false;
-    /* ★ 先看有没有**选区** ✓ —— 有的话必须自己删（详见 ceSelRange 那段注释 ✓）。
-       ⚠️ 顺序很关键 ✗：必须放在 `ceCaretOffset` 之前 ✓ ——
-          `ceCaretOffset` 遇到选区返回 null ✓，要是先判它就直接把球踢给浏览器了 ✓。 */
-    const sel = ceSelRange(ce);
-    if (sel) return ceDeleteSelection(event, opts, sel);
-    const offset = ceCaretOffset(ce, opts.index);
-    if (offset == null) return false;                          /* 光标不在这行 → 交给浏览器 ✓ */
-    const lineEl = Array.from(ce.querySelectorAll(':scope > .ln'))[opts.index];
-    const lineText = String(lineEl ? lineEl.textContent : '');
-    if (event.key === 'Backspace' && offset === 0) {
-      event.preventDefault();
-      if (opts.index <= 0) return true;                       /* 首行行首：什么也不做 ✓（绝不能让它删）*/
-      const lines = String(opts.readAll()).split('\n');
-      const at = String(lines[opts.index - 1] || '').length;
-      lines[opts.index - 1] = String(lines[opts.index - 1] || '') + String(lines[opts.index] || '');
-      lines.splice(opts.index, 1);
-      opts.apply(lines.join('\n'), opts.index - 1, true, at);  /* 光标停在合并处 ✓ */
-      return true;
-    }
-    if (event.key === 'Delete' && offset === lineText.length) {
-      event.preventDefault();
-      const lines = String(opts.readAll()).split('\n');
-      if (opts.index >= lines.length - 1) return true;         /* 末行行尾：什么也不做 ✓ */
-      const at = lineText.length;
-      lines[opts.index] = lineText + String(lines[opts.index + 1] || '');
-      lines.splice(opts.index + 1, 1);
-      opts.apply(lines.join('\n'), opts.index, true, at);
-      return true;
-    }
-    return false;
   }
 
   /* ── 日记：月历 + 选中当天编辑（+ 当天天气）── */
