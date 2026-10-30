@@ -1871,31 +1871,8 @@
     return ed ? ed.read(ce) : null;
   }
 
-  /* 把正文整体写回当前那条（不动标题）+ 落盘。给格式按钮 / 清单插入 / 表格用 ✓ */
-  function memoApplyBody(body) {
-    const cur = memoWriteTarget(); if (!cur) return false;
-    const head = String(cur.text || '').split('\n')[0] || '';
-    cur.text = head + (body ? '\n' + body : '');
-    cur.edit = Date.now();
-    /* 缓存不用在这里同步 ✓ —— 调用方（memoEditBlock）紧接着 render()，由 mountMemo 按新正文重建 ✓ */
-    STORE.memoSaved = true;
-    saveStore();
-    return true;
-  }
-
-  /* 在正文的第 i 行上做变换（i = 光标那块对应的行；找不到就退回第一行 ✓）。
-     `after` 为真时把新行**插在这一行后面**（清单 / 表格用）✓。 */
-  function memoEditBlock(fn, after) {
-    const body = memoBodyText();
-    if (body == null) return false;
-    const lines = String(body).split('\n');
-    let i = Ed().blockIndex('lw-memo-ce', lines);
-    if (i < 0) i = after ? Math.min(0, lines.length - 1) : 0;
-    const out = (typeof fn === 'function') ? fn(lines, i) : null;
-    if (!memoApplyBody(String(out == null ? lines.join('\n') : out))) return false;
-    render();
-    return true;
-  }
+  /* ⚠️ 2026-10-30：memoApplyBody / memoEditBlock 已删 ✓ —— 它们是「在 markdown 文本层改
+     光标那一行」那一套（B 把整行包起来、清单换行首），换成 Crepe 自己的命令后没有调用方了 ✓。 */
 
   /* 挂 / 换内核。每次 render 之后都会走一遍（bind() 里调）✓。
      ★ 实体在 assets/life-editor.js 的 `mountMemo` ✓（拆分 · 阶段 2）——
@@ -1912,9 +1889,25 @@
        它碰的是 STORE / 快照 / 左栏列表，都是面板的事 ✓）；状态条是面板的 DOM ✓ */
     ed.mountMemo((host && cur) ? host : null, {
       key: id, markdown: body, topBar: true, onChange: memoCommitSoon,
+      /* 挂好了就把顶栏里那两组（❝ 提示框 / A·▮ 颜色高亮）搬进唯一那条工具栏 ✓ */
+      onReady: (h) => adoptChrome(h, 'lw-memo-bar'),
       onStatus: (text) => { const st = document.getElementById('lw-memo-status'); if (st) st.textContent = text; },
     });
   }
+
+  /* 把 Crepe 顶栏里 CodeScope 自己插的两组（❝ 提示框 / A·▮ 颜色高亮）搬进我们的工具栏 ✓
+     ⚠️ 为什么必须搬 ✗：顶栏本体在生活面板里被 life-styles.js 设成 display:none ✓（只剩一条栏），
+        而这两组是 **CodeScope 自己**插进顶栏的 ✓，菜单挂在 body 上、按触发器矩形定位 ✓ ——
+        把触发器搬到可见的地方，颜色 / 高亮 / 14 种提示框一行都不用重写 ✓。
+     ⚠️ 每次重挂都要搬一次 ✓：write() / render() 都会重建顶栏 ✓，
+        旧节点跟着我们那条栏的 innerHTML 一起被换掉 ✓，不会越堆越多 ✓。 */
+  function adoptChrome(host, barId) {
+    const bar = document.getElementById(barId);
+    const slot = bar ? bar.querySelector('.chrome') : null;
+    const ed = Ed();
+    return (slot && ed) ? ed.adopt(host, slot) : false;
+  }
+
   /* 正文变了 → 压撤销快照 + 刷左栏 + 防抖落盘（和旧 onEdit 等价 ✓）*/
   function memoCommitSoon() {
     snapMemo('edit');
@@ -2010,16 +2003,8 @@
     if (!ce || !ed) return false;
     return ed.write(ce, String(body == null ? '' : body));
   }
-  /* 在光标所在块上做变换（同 memoEditBlock ✓ —— 「# 标题」「清单」两个按钮用）*/
-  function journalEditBlock(fn) {
-    const body = journalBodyText();
-    if (body == null) return false;
-    const lines = String(body).split('\n');
-    let i = Ed().blockIndex('lw-j-ce', lines);
-    if (i < 0) i = 0;
-    const out = (typeof fn === 'function') ? fn(lines, i) : null;
-    return journalApplyBody(String(out == null ? lines.join('\n') : out));
-  }
+  /* ⚠️ 2026-10-30：journalEditBlock 已删 ✓ —— 它只服务「# 标题 / 清单」两个按钮，
+     那两个按钮并进格式组之后没有调用方了 ✓（journalApplyBody 仍被模板按钮用着 ✓）。 */
   /* 挂 / 换内核。每次 render 之后都会走一遍（bind() 里调）✓ —— 和 memoMountEditor 逐条对齐：
        ① **同步**先写好权威正文 ✓（编辑器层 mount 时先立 md 缓存，见 life-editor.js）；
        ② 旧实例 destroy + **代号**判断「回来的是不是最新那次」✗（连点日历会竞态）；
@@ -2035,6 +2020,8 @@
     if (!ed) return;
     ed.mountJournal(document.getElementById('lw-j-ce'), {
       key: key, markdown: body, topBar: true, onChange: journalCommitSoon,
+      /* 同备忘录：挂好了就把顶栏里那两组搬进唯一那条工具栏 ✓ */
+      onReady: (h) => adoptChrome(h, 'lw-j-bar'),
       onStatus: (text) => { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = text; },
     });
   }
@@ -2769,16 +2756,8 @@
     const mQ = q("#lw-memo-q");
     /* 搜索也要整屏重建（筛掉当前那条时编辑器得换）✓；重建后把焦点和光标还给输入框 ✓ */
     if (mQ) mQ.oninput = () => { STORE.memoQ = mQ.value; render(); const i2 = document.getElementById("lw-memo-q"); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } };
-    /* 「◫ 源码」开关：关（默认）= 逐行实时渲染；开 = 整篇显示源码（方便整段改写 / 复制）。
-       —— 原来这里是「左编辑 / 右预览」分栏的开关，分栏已按需求去掉 ✓ */
-    const srcBtn = q('#lw-nt-live');
-    if (srcBtn) srcBtn.onclick = () => {
-      flushMemo();
-      STORE.memoSource = !STORE.memoSource;
-      saveStore(); render();
-      const s2 = document.getElementById('lw-sub');
-      if (s2) s2.textContent = STORE.memoSource ? '已切到源码模式 ✓' : '已切回实时渲染 ✓';
-    };
+    /* ⚠️ 「◫ 源码」不再是栏里的按钮 ✗（2026-10-30 合并工具栏）——
+       它进了「⋯ 更多」✓（见 bindFmtGroup 的 extras ✓），原来那段 srcBtn 处理器随之删掉 ✓。 */
     /* 视图切换（▤ 文件夹 / ▦ 全部列表）—— 会改变列表范围 → 整屏重建 ✓ */
     const mView = qa("[data-mview]");
     mView.forEach((el) => { el.onclick = () => { flushMemo(); STORE.memoView = el.dataset.mview; saveStore(); render(); }; });
@@ -3146,9 +3125,8 @@
        格式按钮 / 插入清单 / 插入表格改成在 **markdown 文本层**做变换（memoEditBlock ✓），
        做完 render() 重建编辑器 —— 所以这里只需要一个「读正文」的口子 ✓。 */
     const memoBody = () => memoBodyText();
-    /* 兼容旧调用点：格式按钮 / 插清单都是「改光标所在那一行」✓ →
-       交给 memoEditBlock 在 markdown 层做，做完重建编辑器（光标回到开头，可接受 ✓）。 */
-    const editCurrentLine = (fn) => memoEditBlock((lines, i) => { lines[i] = fn(String(lines[i] || '')); return lines.join('\n'); });
+    /* ⚠️ editCurrentLine 已删 ✓（2026-10-30）—— 格式动作改走 Crepe 自己的命令 ✓，
+       不再需要「读出光标那一行、在 markdown 里改、整篇重挂」这一套 ✓。 */
     /* 把界面上的内容写回 cur.text（不落盘、**不删条目**）
        ★★ 守卫：编辑器显示的那条（MEMO_EDITOR_ID）必须和要写的那条（curMemo()）**是同一条** ✓
        为什么必须有：`curMemo()` 在 `memoSel` 为空时会回落到 `STORE.memos[0]` ✗ ——
@@ -3302,47 +3280,30 @@
       STORE.memoSel = id; STORE.memoEditing = id; STORE.memoTag = ""; saveStore(); render();
       const t2 = document.getElementById("lw-memo-title"); if (t2) { t2.focus(); t2.select(); }
     };
-    /* 格式菜单 Aa */
-    const aa = q("#lw-nt-aa");
-    if (aa) aa.onclick = () => { flushMemo(); STORE.memoMenu = !STORE.memoMenu; saveStore(); render(); };
-    qa("[data-mfmt]").forEach((el) => {
-      el.onclick = () => {
-        snapMemo("format");
-        const id = STORE.memoSel;
-        STORE.memoFmt = STORE.memoFmt || {};
-        STORE.memoFmt[id] = el.dataset.mfmt;
-        /* 前缀写进**光标所在行**（不再固定改第二行 ✗），导出 / 渲染都保留语义 ✓ */
-        const pre = { title: "# ", h2: "## ", h3: "### ", mono: "`", ul: "- ", dash: "– ", ol: "1. ", quote: "> " }[el.dataset.mfmt] || "";
-        editCurrentLine((line) => pre + line.replace(/^(#+ |[-–>] |1\. |`)/, ""));
-        STORE.memoMenu = false; saveStore(); render();
-      };
-    });
-    /* 格式按钮（B / I / U / S）：把**光标所在行**整行包起来。
-       正文现在是逐行实时渲染 —— 光标行就是源码，改完立刻重渲染 ✓ */
-    qa("[data-mwrap]").forEach((el) => {
-      el.onclick = () => {
-        snapMemo("format");
-        const w = el.dataset.mwrap;
-        editCurrentLine((line) => {
-          if (!line) return line;
-          /* 已经包着就去掉（再点一次 = 取消），否则包起来 */
-          if (line.length > w.length * 2 && line.startsWith(w) && line.endsWith(w)) return line.slice(w.length, -w.length);
-          return w + line + w;
-        });
-      };
-    });
-    /* 清单 / 表格 快捷插入（都插在光标行上/后面）*/
-    const ck = q("#lw-nt-check");
-    if (ck) ck.onclick = () => {
-      snapMemo("insert");
-      editCurrentLine((line) => line.replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/, "- [ ] "));
-    };
-    const tb = q("#lw-nt-table");
-    if (tb) tb.onclick = () => {
-      snapMemo("insert");
-      /* 在光标那一块**后面**插一张空表 ✓（memoEditBlock 的第二参 = 插在后面）*/
-      memoEditBlock((lines, i) => { lines.splice(i + 1, 0, "| 列1 | 列2 |", "| --- | --- |", "|  |  |", ""); return lines.join('\n'); }, true);
-    };
+    /* ════ 格式动作：**全部交给 Crepe 自己的命令** ✓✓（2026-10-30）
+       ⚠️ 迁移前这一整块是「在 markdown 文本层改光标那一行」✗（B 把**整行**包成 **行**、
+          清单把行首换成 "- [ ] "✓）—— 整行包裹是错的语义：选 3 个字点 B，整行都变粗 ✗。
+          Crepe 有真正的行内命令 ✓（toggleMark / wrapInBlockType），所以改成派发它的顶栏按钮 ✓，
+          选区 / 光标 / 撤销栈全由 ProseMirror 管 ✓，不再需要 render() 重挂 ✓。
+       ⚠️ 不再需要 snapMemo("format") ✗ —— 那条快照是给「改 markdown 文本」用的 ✓；
+          现在一次点击 = 一次可撤销的 ProseMirror 事务 ✓，Crepe 自己的撤销栈接得住 ✓。 */
+    bindFmtGroup(document.getElementById("lw-memo-ce"), q("#lw-memo-bar"), [
+      { sep: true },
+      {
+        k: "image", label: "导出为图片（PNG）",
+        run: () => { if (typeof refreshMemoImage === "function") refreshMemoImage(); },
+      },
+      {
+        k: "source", label: (STORE && STORE.memoSource ? "关掉源码模式" : "源码模式（整篇 markdown）"),
+        run: () => {
+          flushMemo();
+          STORE.memoSource = !STORE.memoSource;
+          saveStore(); render();
+          const s2 = document.getElementById("lw-sub");
+          if (s2) s2.textContent = STORE.memoSource ? "已切到源码模式 ✓" : "已切回实时渲染 ✓";
+        },
+      },
+    ]);
     /* 置顶 / 导出 / 删除 */
     qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { snapMemo("pin"); m.pin = !m.pin; saveStore(); render(); } }; });
     const mExp = q("#lw-memo-export");
@@ -3387,12 +3348,8 @@
       }
       render();
     };
-    const mImg = q("#lw-memo-image");
-    if (mImg) mImg.onclick = () => {
-      if (MEMO_IMG_PREVIEW) { refreshMemoImage(); return; }   /* 已经开着 → 重新生成 ✓ */
-      MEMO_IMG_PREVIEW = { url: "", w: 0, h: 0, blob: null, base: "memo", busy: true, err: "" };
-      refreshMemoImage();
-    };
+    /* ⚠️ 「图片」不再是栏里的按钮 ✗ —— 它和 Crepe 的「插入图片」重复，
+       现在：插入图片在格式组 ✓（Crepe 命令 ✓），导出为图片在「⋯ 更多」✓（直接调 refreshMemoImage ✓）。 */
     const mImgSave = q("#lw-memo-img-save");
     if (mImgSave) mImgSave.onclick = () => {
       if (!MEMO_IMG_PREVIEW || !MEMO_IMG_PREVIEW.blob) return;
@@ -3671,26 +3628,13 @@
     if (jRe2) jRe2.onclick = () => { JOURNAL_FLUSH(); if (!journalRedo()) return; };
     /* ⚠️ 点之前先 `JOURNAL_FLUSH()` ✗：把编辑框里**还没落盘**的字收进条目 ✓，
        否则快照拿到的还是上一次的文本 ✓，「撤销」就等于白撤一步 ✓。 */
-    /* ★ 点按钮**不能抢走编辑器的焦点** ✗✗ —— 焦点一走 DOM 选区就没了 ✓，
-       caretBlockText 返回 null ✓ → 「# 标题 / 清单」会退化成「改第一行」✗（实测踩到 ✓）。
-       mousedown 里 preventDefault 是标准做法（ProseMirror 官方工具栏也这么写 ✓）。 */
-    const noBlur = (el) => { if (el) el.onmousedown = (ev) => ev.preventDefault(); return el; };
-    const jMd2 = noBlur(q('#lw-j-md'));
-    if (jMd2) jMd2.onclick = () => {
-      snapJournal('edit');
-      journalEditBlock((lines, i) => {
-        lines[i] = '## ' + String(lines[i] || '').replace(/^#{1,3}\s*/, '');
-        return lines.join('\n');
-      });
-    };
-    const jCk2 = noBlur(q('#lw-j-ck'));
-    if (jCk2) jCk2.onclick = () => {
-      snapJournal('edit');
-      journalEditBlock((lines, i) => {
-        lines[i] = '- [ ] ' + String(lines[i] || '').replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/, '');
-        return lines.join('\n');
-      });
-    };
+    /* ════ 格式组：**和备忘录同一个绑定** ✓（2026-10-30）
+       ⚠️ 原来的「# 标题 / 清单」两个按钮删掉了 ✗ —— 它们做的是「改 markdown 行首 + 整篇重挂」，
+          格式组的标题 / 任务项做的是**同一个动作**，而且是 ProseMirror 事务 ✓
+          （光标、选区、撤销栈都保住 ✓，不用重挂 ✓）。
+       ⚠️ 焦点保护（mousedown → preventDefault）统一在 bindFmtGroup 里做 ✓ —— 原来这里那份
+          noBlur 只护住了两个按钮，现在护住整组 ✓。 */
+    bindFmtGroup(document.getElementById('lw-j-ce'), q('#lw-j-bar'));
     qa('[data-jtpl]').forEach((btn) => {
       btn.onclick = async () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
@@ -4097,6 +4041,94 @@
     </div>`;
   }
 
+  /* ════ 一条工具栏里的「格式组」—— 备忘录与日记**共用这一份** ✓✓ ═══════════════
+     为什么抽出来 ✗：两块编辑区各写一套按钮，必然出现「备忘录加了、日记忘了」✓（本仓踩过 ✓）。
+     全部走 data-* 属性 + bindFmtGroup 一处绑定 ✓，两边只有「额外的文件动作」不同 ✓。
+     ⚠️ 标签里的 < 一律写成实体 ✓ —— 直接写 </> 会被 HTML 解析器当成结束标签吞掉 ✓。 */
+  function fmtGroupHtml() {
+    const b = (cmd, label, title) => '<button data-lfmt="' + cmd + '" title="' + title + '">' + label + '</button>';
+    return '<button data-lpara="1" title="段落样式：正文 / 标题">Aa</button>'
+      + b('bold', 'B', '粗体') + b('italic', 'I', '斜体') + b('strikethrough', 'S', '删除线')
+      + b('code', '&lt;&gt;', '行内代码')
+      + '<span class="div"></span>'
+      + b('bullet-list', '•', '无序列表') + b('ordered-list', '1.', '有序列表') + b('task-list', '☑', '任务项')
+      + '<span class="div"></span>'
+      + b('quote', '❘', '引用') + b('table', '⊞', '表格') + b('code-block', '&lt;/&gt;', '代码块')
+      + b('image', '▧', '插入图片')
+      + '<button data-lmore="1" title="更多：公式 / 分隔线 / 链接 / 颜色 / 源码">⋯</button>'
+      + '<span class="chrome"></span>';
+  }
+
+  /* 浮层菜单（工具栏的「更多」「Aa」共用 ✓）—— 和 .lw-nt-menu 的样式配套 ✓
+     ⚠️ 挂在**工具栏里面**（不是 body）✗✗ —— 两个原因：
+        ① 主题变量 --pp-* 定义在 .lw-inpanel 上 ✓，挂到 body 就一个都取不到 ✓（浮层变成透明底 ✗）；
+        ② 面板是 position:fixed 的全屏浮层 ✓，内部 absolute 的 z-index 才在面板的层里 ✓。
+     ⚠️ 位置按**父容器的矩形**换算 ✓（不是直接拿 absolute 坐标贴 ✓）：
+        面板若被缩放（transform/zoom），rect 是视觉像素、style 是布局像素 ✓，
+        用 host.clientWidth 折算一下两边都不会错位 ✓（本仓面板实测无缩放，比值恒为 1 ✓）。 */
+  function lwPopover(anchor, items) {
+    document.querySelectorAll('.lw-pop').forEach((x) => x.remove());
+    const host = anchor.closest('.lw-nt-bar') || anchor.parentElement || document.body;
+    const el = document.createElement('div');
+    el.className = 'lw-nt-menu lw-pop';
+    el.innerHTML = items.map((it) => it.sep ? '<div class="sep"></div>'
+      : '<div class="mi" data-k="' + esc(it.k) + '">' + it.label + '</div>').join('');
+    host.appendChild(el);
+    const h = host.getBoundingClientRect();
+    const r = anchor.getBoundingClientRect();
+    const k = host.clientWidth ? (h.width / host.clientWidth) : 1;
+    el.style.left = Math.max(2, Math.min(host.clientWidth - el.offsetWidth, (r.left - h.left) / k)) + 'px';
+    el.style.top = ((r.bottom - h.top) / k + 4) + 'px';
+    const out = (ev) => { if (!el.contains(ev.target) && ev.target !== anchor) close(); };
+    const close = () => { el.remove(); document.removeEventListener('pointerdown', out, true); };
+    document.addEventListener('pointerdown', out, true);
+    el.onclick = (ev) => {
+      const mi = ev.target.closest('[data-k]');
+      if (!mi) return;
+      const hit = items.find((x) => x.k === mi.dataset.k);
+      close();
+      if (hit && typeof hit.run === 'function') hit.run();
+    };
+    return el;
+  }
+
+  /* 绑定格式组（备忘录 / 日记共用 ✓）。extras = 这块面板额外的「更多」项 ✓ */
+  function bindFmtGroup(host, bar, extras) {
+    if (!bar || !host) return;
+    const ed = Ed();
+    /* ⚠️ 按下去**不许抢焦点** ✗✗ —— 焦点一走选区就没了 ✓，而 Crepe 的命令是按当前
+       selection 执行的 ✓（实测：不 preventDefault 时 mark 落到空选区 / 命令直接不生效 ✓）。 */
+    bar.querySelectorAll('[data-lfmt],[data-lpara],[data-lmore]').forEach((el) => {
+      el.onmousedown = (ev) => ev.preventDefault();
+    });
+    bar.querySelectorAll('[data-lfmt]').forEach((el) => {
+      el.onclick = () => { if (ed) ed.exec(host, el.dataset.lfmt); };
+    });
+    const para = bar.querySelector('[data-lpara]');
+    if (para) para.onclick = () => lwPopover(para, [
+      { k: 'para', label: '正文' }, { k: 'h1', label: '标题 1' },
+      { k: 'h2', label: '标题 2' }, { k: 'h3', label: '标题 3' },
+    ].map((it) => ({ k: it.k, label: it.label, run: () => { if (ed) ed.exec(host, it.k); } })));
+    const more = bar.querySelector('[data-lmore]');
+    if (more) more.onclick = () => {
+      /* ⚠️ 这里**故意和栏里的按钮重复** ✓✗ —— 窄屏（容器查询）会把删除线/引用/表格/
+         代码块/图片从栏里收起来 ✓，不收进「更多」就彻底点不到了 ✗。
+         宽屏时两种入口都对 ✓（左边点按钮 / 这里点菜单，命令是同一条 ✓）。 */
+      const go = (k, label) => ({ k, label, run: () => { if (ed) ed.exec(host, k); } });
+      const base = [
+        go('strikethrough', '删除线'),
+        go('quote', '引用'),
+        go('table', '表格'),
+        go('code-block', '代码块'),
+        go('image', '插入图片'),
+        { sep: true },
+        go('math', '公式块'),
+        go('hr', '分隔线'),
+        go('link', '链接'),
+      ];
+      lwPopover(more, base.concat(extras || []));
+    };
+  }
   /* ── 待办 ── */
   /* ── 备忘录：Memos 风格（单列时间线 + Markdown 卡片）── */
   /* ── 备忘录：macOS 备忘录三栏（文件夹/标签 · 时间分组列表 · 编辑区 + 格式菜单）── */
@@ -4225,34 +4257,39 @@
       + '<input id="lw-memo-q" placeholder="搜索（⌘F）" value="' + esc((STORE && STORE.memoQ) || "") + '" /></div>'
       + '<div class="lw-nt-scroll">' + listHtml + '</div></div>';
 
-    /* 格式条：**横排**放在工具栏下面（不再弹浮层 ✗）*/
-    const fmts = [["title", "标题"], ["h2", "小标题"], ["h3", "副标题"], ["body", "正文"], ["mono", "等宽"], ["ul", "• 列表"], ["dash", "– 短划线"], ["ol", "1. 编号"], ["quote", "❘ 引用"]];
-    const curFmt = cur ? ((STORE.memoFmt || {})[cur.id] || "body") : "body";
-    const fmtBar = (cur && STORE.memoMenu) ? '<div class="lw-nt-fmt">'
-      + '<button data-mwrap="**" title="粗体">B</button><button data-mwrap="*" title="斜体">I</button>'
-      + '<button data-mwrap="_" title="下划线">U</button><button data-mwrap="~~" title="删除线">S</button>'
-      + '<span class="div"></span>'
-      + fmts.map((f) => '<button data-mfmt="' + f[0] + '" class="' + (curFmt === f[0] ? "on" : "") + '">' + f[1] + '</button>').join("")
-      + '</div>' : '';
+    /* 原先这里还有「格式条」第二行（Aa 一按就多出一排按钮）—— 已合并进唯一的那条工具栏 ✓ */
 
     const d = cur ? D(cur.edit || cur.at) : null;
     const meta = d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes())) : "";
-    const editor = cur ? '<div class="lw-nt-bar">'
-      + '<button id="lw-memo-new" title="新建（⌘N）">' + ICO('pen') + ' 新建</button>'
-      + '<button id="lw-memo-undo" title="撤销（⌘Z）"' + (canUndo() ? '' : ' disabled') + '>' + ICO('undo') + ' 撤销</button>'
+    /* 窄屏版（省年份）—— 只有这一栏很窄（1280 实测 570px）时才显示 ✓ */
+    const metaShort = d ? ((d.getMonth() + 1) + "月" + d.getDate() + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes())) : "";
+    /* ════ 唯一的一条工具栏 ✓✓（2026-10-30 把四条横栏合成一条）
+       合并前从上到下是四条：① 面板工具栏 ② 日期行 ③ 标题行（正文第 0 行）④ Crepe 自带顶栏。
+       现在：① 与 ④ 合成一条 ✓（④ 由 life-styles.js 的 display:none 藏掉 ✓，
+             它自己插的 ❝ 提示框 / A ▮ 颜色高亮由 life-editor 的 adopt 搬进本栏 ✓）；
+             ② 的日期缩成右侧小字（--pp-ink2 · 11px ✓）；③ 是正文第一行，不是栏 ✓。
+       ⚠️ 这一条**不许换行** ✗（1280 宽实测编辑区只有 570px ✓）——
+          放不下时由 life-styles.js 的容器查询把低频动作收进「⋯ 更多」✓。
+       ⚠️ 去重：原来的 Aa（面板，开第二排格式按钮）+ A（Crepe，颜色）+ Paragraph 下拉
+          三个都表达「格式」→ 现在只留一个 Aa（段落样式浮层 ✓），
+          颜色/高亮由搬进来的 A / ▮ 承担 ✓；原来的 ✓ 清单 / ⊞ 表格与 Crepe 的重复，
+          直接改由 Crepe 的命令执行 ✓（同一功能只留一个按钮 ✓）。 */
+    const editor = cur ? '<div class="lw-nt-bar" id="lw-memo-bar">'
+      + '<button id="lw-memo-new" title="新建（⌘N）">' + ICO('pen') + '<b>新建</b></button>'
+      + '<button id="lw-memo-undo" title="撤销（⌘Z）"' + (canUndo() ? '' : ' disabled') + '>' + ICO('undo') + '</button>'
       + '<button id="lw-memo-redo" title="重做（⌘⇧Z）"' + (canRedo() ? '' : ' disabled') + '>' + ICO('redo') + '</button>'
-      + '<button id="lw-nt-aa" class="' + ((STORE && STORE.memoMenu) ? "on" : "") + '" title="格式">Aa</button>'
-      + '<button id="lw-nt-check" title="插入清单项">' + ICO('check') + '</button>'
-      + '<button id="lw-nt-table" title="插入表格">' + ICO('rows') + '</button>'
-      + '<button id="lw-nt-live" class="' + (STORE.memoSource ? "on" : "") + '" title="显示全部源码（关掉则是实时渲染）">◫ 源码</button>'
+      + '<span class="div"></span>'
+      + fmtGroupHtml()
       + '<span class="sp"></span>'
+      /* 日期：宽屏给完整「2026年10月30日 15:04」，窄屏（容器查询）换成省掉年份的那一版 ✓
+         —— 两版都写在 DOM 里，靠 CSS 切换 ✓（不在 JS 里量宽度 ✓，那样会抖 ✓）。 */
+      + '<span class="dt" id="lw-memo-date"><b class="dt-full">' + esc(meta) + '</b><b class="dt-mini">' + esc(metaShort) + '</b></span>'
       + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status" aria-live="polite">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
-      + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? "" + ICO('star', 'is-on') + "" : "" + ICO('star') + "") + '</button>'
+      + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? ICO('star', 'is-on') : ICO('star')) + '</button>'
       + '<button id="lw-memo-export" title="导出 Markdown（.md）">导出</button>'
-      + '<button id="lw-memo-image" title="导出为图片：把渲染后的内容存成 PNG（含标题与日期）">图片</button>'
-      + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button></div>'
-      + fmtBar
-      + '<div class="lw-nt-body"><div class="lw-nt-meta">' + esc(meta) + '</div>'
+      + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button>'
+      + '</div>'
+      + '<div class="lw-nt-body">'
       + (() => {
         /* 编辑区（标题 + 正文）。图片预览打开时会和预览栏并排成两栏 ✓ */
         const editPane = '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
@@ -4547,20 +4584,23 @@
       + (cur && catOf2(cur) ? ' <span style="color:' + T.accent + '">#' + esc(catOf2(cur)) + '</span>' : '')
       + (catF && (!cur || catOf2(cur) !== catF) ? ' <span style="color:' + T.faint + ';font-weight:400">（不在「' + esc(catF) + '」筛选内）</span>' : '')
       + '<span class="sp"></span><em>' + (cur ? "已写 " + String(cur.text || "").length + " 字" : "还没写") + '</em></h3>'
-      + '<div class="lw-jtpl">模板：' + Object.keys(J_TPL).map((k) => '<button data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + ICO(J_TPL[k].icon) + ' ' + J_TPL[k].name + '</button>').join('')
-      + '<span class="sp"></span><label style="font-size:10.5px;color:' + T.faint + ';display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + ' style="accent-color:' + T.accent + '"/>新建时自动套用</label></div>'
-      + '<div class="lw-live-bar"><span class="brand">✎ 边写边渲染</span>'
-/* ⚠️ 提示语跟着内核改 ✗ —— 这句话写的是**逐行内核**的规则（光标行是源码、其他行渲染 ✓），
-   换成 Crepe 之后是整篇所见即所得 ✓，再说「光标行显示源码」就是错的 ✓。 */
-+ '<span class="hint">整篇所见即所得 · 自动保存</span>'
-+ '<span class="sp"></span>'
-/* ★ 撤销 / 重做 ✓（2026-10-09 加 ✓）—— 和备忘录同一套快照机制 ✓ */
-+ '<button id="lw-j-undo" title="撤销（⌘Z）"' + (canJUndo() ? '' : ' disabled') + '>' + ICO('undo') + ' 撤销</button>'
-+ '<button id="lw-j-redo" title="重做（⌘⇧Z）"' + (canJRedo() ? '' : ' disabled') + '>' + ICO('redo') + ' 重做</button>'
-+ '<select id="lw-j-catsel">'
+      /* ════ 唯一的一条工具栏 ✓✓（2026-10-30 合并 —— 和备忘录同一套）
+         合并前是三条：① 模板行（lw-jtpl）② 边写边渲染行（lw-live-bar）③ Crepe 自带顶栏。
+         现在：① ② 与 ③ 合成一条 ✓（③ 由 life-styles.js 的 display:none 藏掉，
+               它自己插的 ❝ / A / ▮ 由 adopt 搬进来 ✓）。
+         ⚠️ 原来的「# 标题 / 清单」两个按钮**去掉了** ✗ —— 它们做的事（改 markdown 行首）
+            与格式组的标题 / 任务项完全重复，而且改完要整篇重挂、光标必丢 ✓（实测 ✓）。 */
+      + '<div class="lw-nt-bar lw-j-bar" id="lw-j-bar">'
+      /* ★ 撤销 / 重做 —— 和备忘录同一套快照机制 ✓ */
+      + '<button id="lw-j-undo" title="撤销（⌘Z）"' + (canJUndo() ? '' : ' disabled') + '>' + ICO('undo') + '</button>'
+      + '<button id="lw-j-redo" title="重做（⌘⇧Z）"' + (canJRedo() ? '' : ' disabled') + '>' + ICO('redo') + '</button>'
+      + '<span class="div"></span>'
+      + fmtGroupHtml()
+      + '<span class="sp"></span>'
+      + '<select id="lw-j-catsel" title="分类">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf2(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
-      + '<button id="lw-j-md" title="把当前行变成标题"># 标题</button>'
-      + '<button id="lw-j-ck" title="把当前行变成清单项">' + ICO('check') + ' 清单</button>'
+      + Object.keys(J_TPL).map((k) => '<button class="tpl" data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + ICO(J_TPL[k].icon) + '</button>').join('')
+      + '<label class="autotpl" title="新建日记时自动套用今天的模板"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + '/><i>自动套用</i></label>'
       + '</div>'
       + '<div class="lw-ce lw-j-ce ' + CE_OBS_CLASS + '" id="lw-j-ce" spellcheck="false"></div>'
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'

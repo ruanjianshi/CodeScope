@@ -560,22 +560,88 @@
   .lw-nt-row .pin { color:${T.accent}; }
   /* 右：编辑区 */
   .lw-nt-edit { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--pp-sheet); }
-  /* ⚠️ 必须允许换行：按钮没有 flex:none 时会被压成 28px 的空壳（文字被裁掉看不清），
-     加了「图片」按钮之后窄屏（~1100px）更是直接溢出、最右边的「删除」被裁掉点不到。
-     改成「放不下就换到第二行」，任何宽度下每个按钮都完整可点。 */
-  .lw-nt-bar { display:flex; align-items:center; gap:6px; row-gap:7px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid ${T.lineDim}; }
-  .lw-nt-bar button { height:26px; min-width:28px; padding:0 9px; border:1px solid ${T.lineDim}; background:transparent; flex:none; color:${T.text}; font:600 10.5px ${UI}; cursor:pointer; }
+  /* ══ 唯一的一条工具栏 ✓（2026-10-30：四条横栏合并成一条）══
+     ⚠️ 这里**不许换行** ✗✗ —— 用户要求「只剩一条工具栏」✓：
+        · 原来这里是 flex-wrap:wrap ✓（窄屏把溢出的按钮换到第二行「保证每个都点得到」），
+          但那就成了**第二条横栏** ✗，和本次的目标直接冲突 ✓；
+        · 现在改 nowrap + 「放不下就收进 ⋯ 更多」✓（见下面的容器查询 ✓）——
+          1280 宽实测编辑区只有 570px ✓，靠的是把表格/代码块/图片/引用/删除线/置顶收进更多 ✓。
+     ⚠️ overflow 保持默认 visible ✗（不设 auto/hidden ✓）：
+        popup（更多 / Aa）是栏内的 absolute 元素 ✓，hidden 会把它裁掉 ✓；
+        而内容真的溢出时也是「画出去」而不是出横向滚动条 ✓（用户明确不要滚动条 ✓）。 */
+  .lw-nt-bar { display:flex; align-items:center; gap:4px; flex-wrap:nowrap; padding:6px 10px; border-bottom:1px solid ${T.lineDim}; position:relative; min-height:38px; }
+  .lw-nt-bar button { height:26px; min-width:26px; padding:0 6px; border:1px solid ${T.lineDim}; background:transparent; flex:none; color:${T.text}; font:600 11px ${UI}; cursor:pointer; line-height:1; white-space:nowrap; }
+  .lw-nt-bar button b { font-weight:600; margin-left:4px; }
   .lw-nt-bar button:hover { border-color:${T.accent}; color:${T.accent}; }
   .lw-nt-bar button.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
   /* 撤销/重做没有可退的步骤时明确置灰（别让人以为点了没反应） */
   .lw-nt-bar button:disabled { opacity:.35; cursor:default; }
   .lw-nt-bar button:disabled:hover { border-color:${T.lineDim}; color:${T.text}; }
-  .lw-nt-bar .sp { flex:1; }
-  .lw-nt-bar .st { font-size:10px; color:${T.faint}; }
+  .lw-nt-bar .sp { flex:1; min-width:0; }
+  .lw-nt-bar .st { font-size:10px; color:${T.faint}; flex:none; white-space:nowrap; }
   .lw-nt-bar .st.ok { color:${T.ok}; }
   .lw-nt-bar .st.bad { color:${T.red}; }
+  /* 分组竖线 / 日期（日期从「独占一行」改成右侧小字 ✓ --pp-ink2 · 11px ✓）*/
+  .lw-nt-bar .div { flex:none; width:1px; height:16px; background:${T.lineDim}; margin:0 1px; }
+  .lw-nt-bar .dt { flex:none; font-size:11px; color:var(--pp-ink2); white-space:nowrap; }
+  /* 搬进来的 ❝ 提示框 / A ▮ 颜色高亮（原本吃的是 .milkdown .top-bar-item 那套尺寸 ✓）
+     ⚠️ .codescope-color-group 在 app.css 里是 absolute + right/bottom ✓（贴 Crepe 顶栏右下角）
+        —— 搬出来必须改回 static ✗，否则它会飘到我们这条栏的右上角去 ✓。 */
+  .lw-nt-bar .chrome { display:flex; align-items:center; gap:2px; flex:none; }
+  .lw-nt-bar .chrome > div { display:flex; align-items:center; gap:2px; position:static; right:auto; bottom:auto; margin:0; }
+  .lw-nt-bar .chrome .top-bar-item { width:26px; height:26px; min-width:26px; margin:0; padding:0; position:static; display:flex; align-items:center; justify-content:center; border:1px solid ${T.lineDim}; background:transparent; color:${T.text}; cursor:pointer; }
+  .lw-nt-bar .chrome .top-bar-item:hover { border-color:${T.accent}; color:${T.accent}; }
+  .lw-nt-bar .chrome .top-bar-item svg { width:16px; height:16px; fill:currentColor; }
+  .lw-nt-bar .codescope-callout-glyph, .lw-nt-bar .codescope-color-glyph { font-size:12px; }
+  /* 日记那条栏多出来的三样：分类下拉 / 模板按钮 / 自动套用 */
+  .lw-nt-bar select { height:26px; max-width:110px; padding:0 4px; border:1px solid ${T.lineDim}; background:transparent; color:${T.text}; font:600 11px ${UI}; flex:none; outline:none; }
+  .lw-nt-bar .autotpl { display:flex; align-items:center; gap:4px; flex:none; font-size:10.5px; color:${T.faint}; cursor:pointer; white-space:nowrap; }
+  .lw-nt-bar .autotpl input { accent-color:${T.accent}; margin:0; }
+  .lw-nt-bar .autotpl i { font-style:normal; }
+  /* 日期两版：宽屏带年份、窄屏省年份 ✓（只有 .dt-full / .dt-mini 两个 b 切换）*/
+  .lw-nt-bar .dt b { font-weight:400; }
+  .lw-nt-bar .dt .dt-mini { display:none; }
+  /* ══ 容器查询：编辑区窄到放不下时，把**低频**动作收进 ⋯ 更多 ✓
+     ⚠️ 为什么用容器查询而不是媒体查询 ✗：编辑区宽度不跟视口成正比 ✓
+        （左右两栏都能拖宽 ✓），媒体查询会在「栏拖窄了、视口还很宽」时判断错 ✓。
+     ⚠️ 阈值和「收哪几个」都是**实测**出来的 ✓（不是拍脑袋 ✗）：
+        · 1600 视口 → 编辑区 975px：全部 26 个控件一行放得下 ✓（实测 scrollW = clientW ✓）；
+        · 1280 视口 → 编辑区只有 570px：本规则把这 6 个收进「⋯ 更多」✓ + 按钮改紧凑 ✓
+          + 日期换成省年份版 ✓（1280 实测 scrollW = clientW ✓，见测试记录 ✓）。
+     ⚠️ 收起来的每一个都**同时**在「⋯ 更多」里有一项 ✓（不收进去就等于点了没入口 ✗）。
+     ⚠️ 日记那条栏另有取舍 ✓：模板按钮（.tpl）**不能收** ✗ —— 它是日记唯一插模板的入口，
+        没有「更多」里的替代项，收了就彻底点不到 ✓。 */
+  .lw-nt-edit, .lw-jr-edit { container-type: inline-size; }
+  @container (max-width: 760px) {
+    .lw-nt-bar { gap:2px; padding:5px 6px; }
+    .lw-nt-bar button { height:24px; min-width:22px; padding:0 3px; font-size:10.5px; }
+    .lw-nt-bar .chrome { gap:1px; }
+    .lw-nt-bar .chrome .top-bar-item { width:24px; height:24px; min-width:24px; margin:0; }
+    .lw-nt-bar .div { margin:0; }
+    .lw-nt-bar .st { font-size:9.5px; }
+    .lw-nt-bar [data-lfmt="strikethrough"], .lw-nt-bar [data-lfmt="quote"],
+    .lw-nt-bar [data-lfmt="table"], .lw-nt-bar [data-lfmt="code-block"],
+    .lw-nt-bar [data-lfmt="image"], .lw-nt-bar [data-mpin],
+    .lw-nt-bar .dt-full { display:none; }
+    .lw-nt-bar .dt .dt-mini { display:inline; }
+    .lw-nt-bar button b { display:none; }
+  }
+  @container (max-width: 420px) {
+    .lw-nt-bar .chrome { display:none; }
+    .lw-nt-bar .dt { display:none; }
+  }
+  /* ══ 藏掉 Crepe 自带顶栏 ✓（用户原话：「与面板自己的按钮重复，很扎眼」）══
+     ⚠️ 为什么是**藏**、而不是 create({ topBar:false }) ✗✗ —— 读源码确认过：
+        controller 只暴露 { getMarkdown, focus, destroy }（src/reading-block-editor.js:1025 ✓），
+        crepe / commandsCtx 全关在 create() 的闭包里 ✗，而 src 是禁改文件（阅读视图共用 ✗）。
+        而**顶栏那排按钮本身就是命令入口** ✓（onPointerdown → commandsCtx.call ✓）——
+        留着它、只把它藏起来，格式动作才能真正「用 Crepe 自己的命令」✓（见 life-editor.js 的 exec）。
+     ⚠️ CodeScope 自己插进顶栏的两组（❝ 提示框 / A ▮ 颜色高亮）在挂载后由 life-editor 的
+        adopt 搬进我们的工具栏 ✓ —— 所以整条藏掉不会丢功能 ✓。
+     ⚠️ 只作用于生活面板这两个容器 ✓（阅读视图与主编辑区共用同一份内核 ✗，不能误伤 ✓）。 */
+  :is(.lw-memo-ce, .lw-j-ce) .milkdown-top-bar { display:none !important; }
   /* 格式菜单（浮层） */
-  .lw-nt-menu { position:absolute; z-index:20; width:186px; background:var(--pp-sheet2); border:1px solid ${T.line}; box-shadow:var(--pp-shadow-float); }
+  .lw-nt-menu { position:absolute; z-index:60; width:186px; background:var(--pp-sheet2); border:1px solid ${T.line}; box-shadow:var(--pp-shadow-float); }
   .lw-nt-menu .r { display:flex; gap:4px; padding:9px 10px; border-bottom:1px solid ${T.lineDim}; }
   .lw-nt-menu .r button { width:28px; height:26px; border:1px solid ${T.lineDim}; background:transparent; color:${T.text}; font-size:12px; cursor:pointer; }
   .lw-nt-menu .r button:hover { background:${T.accent}; color:${T.accentInk}; border-color:${T.accent}; }
@@ -583,6 +649,9 @@
   .lw-nt-menu .mi:hover { background:${T.accent}; color:${T.accentInk}; }
   .lw-nt-menu .mi.on::before { content:"✓"; font-size:11px; }
   .lw-nt-menu .sep { height:1px; background:${T.lineDim}; margin:4px 0; }
+  /* 工具栏里的浮层（更多 / Aa）：挂在**栏内** ✓ —— 这样 --pp-* 主题变量才解析得到 ✓
+     （挂到 body 上就没有这些变量了 ✗，浮层会变成透明底 ✓）。 */
+  .lw-nt-menu.lw-pop { position:absolute; }
   /* 不在这里 overflow:auto —— 正文是 .lw-ce，它自己滚 ✓（两层都滚会互相打架 ✗）*/
   .lw-nt-body { flex:1; display:flex; flex-direction:column; min-height:0; }
   .lw-nt-meta { padding:12px 20px 0; font-size:11px; color:${T.faint}; text-align:center; }

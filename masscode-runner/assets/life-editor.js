@@ -29,6 +29,14 @@
  *                              —— 面板的「# 标题 / 清单 / 表格」按钮要在 markdown
  *                                文本层做行变换，而「光标在第几块」只有编辑器知道
  *                                （Crepe 不暴露“第几行”，只能反查 DOM）。
+ *   exec(host, cmd)            → 跑一条 **Crepe 自己的**格式命令（true = 发出去了）
+ *                                cmd: bold italic strikethrough code
+ *                                     bullet-list ordered-list task-list
+ *                                     quote table code-block image math hr link
+ *                                     para h1…h6（段落 / 标题）
+ *   adopt(host, target)        → 把 Crepe 顶栏里**CodeScope 自己插的**两组
+ *                                （❝ 提示框 / A·▮ 颜色高亮）搬进面板工具栏 ✓
+ *                                —— 顶栏在生活面板里被 CSS 隐藏，这两组不能跟着丢。
  *
  * ⚠️ host 可以是 null（= 这一屏没有编辑器）：此时只退役旧实例、不留副本 ✓，
  *    和「没选中任何一条备忘录 / 不在日记页」的行为一致。
@@ -113,6 +121,22 @@
        · 备忘录每次 render() 给的都是**全新节点** → 不用清空 ✓；
        · 日记的 apply（模板 / # 标题 / 清单）是**原地重挂** → 必须先清空 ✓，
          不清的话 Crepe 会往同一个容器里再挂一份，屏幕上两套正文叠着（实测踩到 ✓）。 */
+  /* Crepe 的序列化把无序列表写成 "* " ✓（合法 markdown ✓），但本仓别处一律写 "- " ✓
+     （待办统计的正则、用户习惯、验收口径都是 "- [ ]" ✓）——
+     ⇒ 存盘前统一成 "- " ✓（幂等 ✓：再存一次还是 "- " ✓）。
+     ⚠️ 代码围栏里的 "* " **不许碰** ✗（那是正文内容 ✓，改了就是破坏数据 ✓），
+        所以按行扫、遇到 ``` 就整个跳过 ✓。 */
+  function normalizeMd(md) {
+    const lines = String(md == null ? '' : md).split('\n');
+    let fence = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\s*(```|~~~)/.test(lines[i])) { fence = !fence; continue; }
+      if (fence) continue;
+      lines[i] = lines[i].replace(/^(\s*)[*+] /, '$1- ');
+    }
+    return lines.join('\n');
+  }
+
   function mountInto(slot, host, opts, clearFirst) {
     opts = opts || {};
     const key = opts.key == null ? '' : String(opts.key);
@@ -141,16 +165,21 @@
     loadBlockEditor().then((api) => api.create({
       root: host,
       markdown,
-      /* ★★ 2026-10-30 改回 true：关掉后编辑时**没有任何格式工具栏** ✗ ——
-         粗体/斜体/标题/列表/引用/表格/图片全在那条自带工具栏上，
-         而面板自己的按钮只有 Aa / ✓ / ⊞ / 源码 ✓。功能优先于「不重复」✓。 */
+      /* ★★ topBar **必须留 true** ✗✗（2026-10-30 合并工具栏时的结论，推翻了上一版注释）：
+         关掉它 = 连**命令入口**一起关掉 ✓ —— 控制器只暴露 getMarkdown/focus/destroy ✓，
+         外面拿不到 crepe / commandsCtx ✓（src 禁改 ✗），而顶栏那排按钮就是命令入口 ✓。
+         所以留着它、由 life-styles.js 在生活面板里 display:none 藏起来 ✓，
+         面板按钮走 exec() 派发 pointerdown ✓（同一条 Crepe 命令 ✓）。
+         ⚠️ 只有生活面板这么用 ✓：阅读视图与主编辑区不传这个参数 ✓（默认 true ✓ 顶栏照常显示 ✓）。 */
       topBar: opts.topBar !== false,
       onChange: (md) => {
         if (token !== slot.token || !slot.inst) return;
-        slot.inst.md = md;
+        slot.inst.md = normalizeMd(md);
         /* 初始化时 Crepe 会规范化一次并回调 —— 那不是用户编辑，不回调 ✓（同 app-reading.js:522）*/
         if (!host.contains(document.activeElement)) return;
-        if (typeof opts.onChange === 'function') opts.onChange(md);
+        /* ⚠️ 往下传的必须是**归一化后**的那一份 ✗✗ —— 面板拿它直接落盘 ✓，
+           传原始 md 就白归一了 ✓（存进去还是 "* [ ]" ✗）。 */
+        if (typeof opts.onChange === 'function') opts.onChange(slot.inst.md);
       },
       onError: (err) => {
         if (typeof opts.onStatus === 'function') opts.onStatus('编辑器：' + String((err && err.message) || err));
@@ -159,6 +188,8 @@
       if (token !== slot.token || !host.isConnected) { try { ctrl.destroy(); } catch (_) {} return; }
       slot.inst.ctrl = ctrl;
       host.dataset.editorReady = 'true';
+      /* 挂好了 → 通知面板：它要把顶栏里 CodeScope 自己插的两组搬进自己那条工具栏 ✓ */
+      if (typeof opts.onReady === 'function') { try { opts.onReady(host); } catch (_) {} }
     }).catch((err) => {
       if (token !== slot.token) return;
       /* 加载失败**不回退**到逐行编辑器 ✗（那套已经删了 ✓）；把正文原样贴出来，
@@ -219,6 +250,91 @@
     return ceBlockIndex(lines || [], caretBlockText(hostId));
   }
 
+  /* ════ 格式动作：**Crepe 自己的命令**，一条都不重写 ✓✓ ═══════════════════════
+     ★★ 为什么不是 ctrl.exec(cmd) ✗✗ —— 读源码（src/reading-block-editor.js:1025）
+        确认过：控制器**只**暴露三个方法 ✓
+
+            return { getMarkdown, focus, destroy }
+
+        crepe 与 ctx（commandsCtx 就在 ctx 里）全在 create() 的闭包里 ✓，
+        外面一个都拿不到 ✗ —— 而 src 是**禁改文件**（阅读视图共用）✗。
+     ⇒ 不改 src、又能跑**同一条命令**的唯一入口，是 Crepe 顶栏那排按钮本身 ✓：
+        产物里每一项都是 button.top-bar-item + onPointerdown: onRun ✓，
+        onRun 展开就是 ctx.get(commandsCtx).call(...) ✓（顶栏配置里逐条可查 ✓）。
+     ⚠️ 必须是 **pointerdown** ✗✗ —— 实测 click / mousedown 一律无效 ✓
+        （键盘那条更诱人：包里确实有 Mod-b / Mod-i / Mod-e，但合成 keydown 进不了
+         ProseMirror 的 keymap ✓，实测 0 次生效 ✓，所以没走它 ✓）。
+     ⚠️ 顶栏在生活面板里被 life-styles.js 的 display:none 藏掉 ✓ ——
+        dispatchEvent **不看可见性** ✓，命令照跑 ✓（实测 12 条全过 ✓）。
+     ⚠️ 顶栏顺序来自 Crepe 的顶栏配置 ✓（formatting → list → insert → block → more），
+        所以这是个**下标表**；Crepe 升级若加减按钮，这里要跟着改 ✗（exec 里有长度校验 ✓）。 */
+  const TOP_ITEMS = ['bold', 'italic', 'strikethrough', 'code',
+    'bullet-list', 'ordered-list', 'task-list',
+    'link', 'image', 'table',
+    'code-block', 'math',
+    'quote', 'hr'];
+
+  function topBarOf(host) { return host ? host.querySelector('.milkdown-top-bar') : null; }
+
+  /* 顶栏按钮认的是 pointerdown ✓；合成一个「左键按下」就够 ✓。 */
+  function press(el) {
+    if (!el) return false;
+    try {
+      el.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, buttons: 1,
+      }));
+      return true;
+    } catch (_) { return false; }
+  }
+
+  function exec(host, cmd) {
+    const bar = topBarOf(host);
+    const key = cmd == null ? '' : String(cmd);
+    if (!bar || !key) return false;
+    /* 段落 / 标题：Crepe 的 Paragraph 下拉是**两跳**（先开下拉、再点选项 ✓）
+       —— 选项是 Vue 渲染的 ✓，派发后要等一帧才进 DOM ✓（同步读一定是空 ✓）。 */
+    if (key === 'para' || /^h[1-6]$/.test(key)) {
+      const btn = bar.querySelector('.top-bar-heading-button');
+      if (!press(btn)) return false;
+      const want = key === 'para' ? 0 : Number(key.slice(1));
+      const pick = () => {
+        const opts = bar.querySelectorAll('.top-bar-heading-option');
+        if (opts[want]) press(opts[want]);
+      };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(pick);
+      else setTimeout(pick, 16);
+      return true;
+    }
+    const i = TOP_ITEMS.indexOf(key);
+    if (i < 0) return false;
+    const items = bar.querySelectorAll(':scope > .top-bar-inner > button.top-bar-item');
+    /* ⚠️ 只数 top-bar-inner 的**直接子** button ✓ —— CodeScope 自己插的 ❝ / A / ▮
+       住在 div 里（不是 button 直子 ✓），用 button 直子取下标才和 TOP_ITEMS 一一对上 ✓。
+       ⚠️ 数量对不上（Crepe 换了顶栏配置）→ **不乱点** ✓：宁可不做，也不点错一个按钮 ✗。 */
+    if (items.length !== TOP_ITEMS.length) return false;
+    return press(items[i]);
+  }
+
+  /* 顶栏里**CodeScope 自己插的**两组（提示框 / 颜色·高亮）搬上工具栏 ✓。
+     为什么必须搬 ✗：顶栏被隐藏，它们的触发器也跟着看不见 ✓ ——
+     而它们弹出的菜单是 **body 级**、按触发器矩形定位的 ✓（src 里 appendChild 到 body ✓），
+     所以只要把触发器放到可见的地方，功能一行都不用重写 ✓。 */
+  const ADOPT_GROUPS = ['.codescope-callout-group', '.codescope-color-group'];
+
+  function adopt(host, target) {
+    const bar = topBarOf(host);
+    if (!bar || !target) return false;
+    let moved = 0;
+    ADOPT_GROUPS.forEach((sel) => {
+      const g = bar.querySelector(':scope > .top-bar-inner > ' + sel) || bar.querySelector(sel);
+      if (!g || g.parentElement === target) return;
+      g.classList.add('lw-chrome');
+      target.appendChild(g);
+      moved += 1;
+    });
+    return moved > 0;
+  }
+
   window.CodeScopeLifeEditor = {
     mountMemo: mountMemo,
     mountJournal: mountJournal,
@@ -226,5 +342,7 @@
     write: write,
     destroy: destroy,
     blockIndex: blockIndex,
+    exec: exec,
+    adopt: adopt,
   };
 })();
