@@ -221,3 +221,50 @@ html[data-theme=ocean] .lw-inpanel, html[data-theme=midnight] .lw-inpanel, html[
 - **残留 emoji 报告**：数量 + 所在函数名（证明只换了界面位）。
 - `node --check` + `node tests/architecture.js` + `undefined-refs` 输出。
 - 结构清单打勾（左栏 5 组 14 项、KPI 4 张、待办/日记/14 天图、文件表格、文件构成）。
+
+---
+
+## 10. 权威实现来源（2026-10-29 实读，不是看截图）
+
+用户截图来自 Phycat 官方配色生成器。它的预览不是工具自己画的，而是：
+
+- color-generator/index.html 里有一个 iframe，src = preview.html —— 这才是真正的预览文档
+- preview.html 依次引入 preview-base.css、../theme.css（id=phycat-theme，真正主题，>100KB）、preview-layout.css、preview.js
+- preview.js 负责填充样张与左栏文件树
+
+**所以权威规范是 theme.css，不是截图。** 移植时直接抓这些文件：
+
+| 文件 | URL |
+| --- | --- |
+| 预览样张（DOM 契约） | sumruler.github.io/obsidian-theme-phycat/color-generator/preview.html |
+| 主题本体（样式规范） | sumruler.github.io/obsidian-theme-phycat/theme.css |
+| Obsidian 基础排版 | 同上目录 / preview-base.css |
+| H1/H2 变体与布局 | 同上目录 / preview-layout.css |
+| 样张填充 + 文件树 | 同上目录 / preview.js |
+| 颜色推导 | 同上目录 / palette.js 与 palette-data.js |
+
+### 10.1 DOM 契约（必须对齐这套类名）
+
+article.markdown-preview-view.markdown-rendered > div.markdown-preview-sizer，其内为：
+h1..h6、p（含 a.internal-link / a.external-link / strong / em / mark / del）、div.sample-tags > a.tag、blockquote、ul.contains-task-list > li.task-list-item > input.task-list-item-checkbox。
+
+移植策略二选一，优先 (a)：
+(a) 让编辑器渲染出的容器带上这些 Obsidian 类名，再把 theme.css 里对应规则按需摘出来（h1/h2/h3-h6/tag/blockquote/callout/task-checkbox/internal-link），令牌名与现有 --doc-* 对齐；
+(b) 整份引入 theme.css 并加作用域前缀（省事，但要处理它自带的 @settings 注释块与全局 body 变量，风险高）。
+
+### 10.2 截图里那些效果的官方实现位置
+
+| 效果 | 来源 |
+| --- | --- |
+| H1 居中 + 短下划线 | preview-layout.css 的 body.h1-align-center 及其 h1 规则 |
+| H2 双子塔 / 胶囊两种样式 | preview-layout.css 的 body.h2-style-twin / h2-style-capsule |
+| 左栏彩色文件夹图标 | preview.js 生成 folder-tree，配合 theme 的 rainbow-folders + folder-icons 两个 body class |
+| 提示块配色 | app.js 里按 phycat-callout-<type>-background 与 -title-color 两个独立令牌推导 |
+| 圆形任务复选框 | preview-base.css / theme.css 的 .task-list-item-checkbox |
+| 标签胶囊 | .tag 规则 |
+
+### 10.3 要求
+
+- 不许凭截图近似：每个视觉决定都要能指到上面某个文件的某条规则（报告里给文件名 + 选择器）。
+- H1 对齐与 H2 样式是官方工具的两个真实下拉选项 ⇒ 移植也要提供这两个开关，默认取截图那版：H1 居中、H2 双子塔。
+- 若某效果依赖 Obsidian 专属能力（如 rainbow-folders 依赖其 nav 结构），如实说明不可移植，不要硬造。
