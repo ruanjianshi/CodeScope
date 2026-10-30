@@ -268,3 +268,37 @@ h1..h6、p（含 a.internal-link / a.external-link / strong / em / mark / del）
 - 不许凭截图近似：每个视觉决定都要能指到上面某个文件的某条规则（报告里给文件名 + 选择器）。
 - H1 对齐与 H2 样式是官方工具的两个真实下拉选项 ⇒ 移植也要提供这两个开关，默认取截图那版：H1 居中、H2 双子塔。
 - 若某效果依赖 Obsidian 专属能力（如 rainbow-folders 依赖其 nav 结构），如实说明不可移植，不要硬造。
+
+---
+
+## 11. 待补：交互/动效的完整移植（2026-10-30，用户反馈「动态效果、交互感没完全移植过来」）
+
+现状：`MEMO_DOC_CSS` 里已有 29 处 `:hover` / `transition` / `@keyframes`（h1 悬停变色+上移+下划线展开、h2 竖条生长等）。
+但与官方预览相比**明显缺失**，且官方工具页脚自己写着「悬停标题、代码和提示框，查看交互效果」——说明这三类是主题的卖点。
+
+### 11.1 必须补齐的交互清单（逐项去 theme.css 找实现，不许自创）
+
+| 元素 | 要移植的交互 | 去哪找 |
+| --- | --- | --- |
+| `h1` | 悬停：变色 + 上移 + 下划线展开（部分已有） | theme.css 的 h1 段 + `:hover::after` |
+| `h2` | 悬停：竖条生长/发光 | theme.css 的 h2 段 + `::before/::after` 的 hover |
+| `h3`~`h6` | 悬停：变色/微移 | theme.css 对应段 |
+| **代码块 / 行内代码** | 悬停：背景/描边变化（官方明说「悬停代码」有效果） | theme.css 里 `code` / `pre` / `.HyperMD-codeblock` 的 hover |
+| **提示框（callout/blockquote）** | 悬停：边框/背景/发光（官方明说「悬停提示框」） | theme.css 的 `blockquote` / `.callout` 段（含 `✨`、`❝` 等伪元素在 hover 时的变化） |
+| 链接 | 悬停：两侧方括号弹开（部分已有） | theme.css 的 `a` 段 |
+| 标签 | 悬停：底色/描边（若 theme.css 有） | 第 10 节已记：theme.css **没有** `.tag` 规则 ⇒ 如实标注不可移植 |
+| 任务复选框 | 勾选/悬停：圆环变化 + 对勾动画 | theme.css 的 `.task-list-item-checkbox` 段 |
+
+### 11.2 移植纪律
+
+1. **时长与曲线照抄 theme.css**（不要一律换成 `--mo-*`）：交互手感是主题的一部分，改了就不是同一套。
+   若要映射到令牌，**必须在报告里逐个列出「原值 → 令牌值」并说明为什么可以等价**。
+2. 每条规则都要在报告里给出 `theme.css` 的**选择器 + 关键声明**，不许写「参照主题」。
+3. 必须写 `prefers-reduced-motion`：只保留变色，去掉位移/放大。
+4. 悬停不能改变布局（只用 `transform` / `color` / `box-shadow` / `background`），否则编辑时文字会跳。
+
+### 11.3 验收
+
+- 对 h1 / h2 / h3 / 代码 / 引用块 各截**两张对照图**（静止 vs 悬停），文件命名 `xxx-idle.png` / `xxx-hover.png`。
+- 用 `getComputedStyle` 证明悬停前后 `transition-property` 与目标属性确实变了（不是只有 CSS 写着但被更后面的规则覆盖）。
+- `prefers-reduced-motion` 下悬停只剩颜色变化。

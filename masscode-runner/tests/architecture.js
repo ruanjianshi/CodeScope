@@ -260,8 +260,9 @@ const SIZE_CAP = [
        12,200 → 12,600：阶段 2 新增线性图标映射表（emoji → sprite use 约 40 条）与区块层级微调 ✓
        12,600 → 12,750：备忘录与日记先后换 Crepe 块级内核（序列化收敛 + 挂载/回写 + 三道防丢保险）✓
      上限一律取实测代码行数、上调必须写明理由；能往下拧时一律往下拧 ✓ */
-  ['assets/life-workbench.js', 12419],   /* 12,411 → 12,415：修「点进引用块看不到光标」（caret-color + cursor:text + 装饰伪元素
-                                           pointer-events:none）；12,415 → 12,419：恢复 Crepe 自带格式工具栏（topBar 改回 true）✓ */
+  ['assets/life-workbench.js', 12804],   /* 12,419 → 12,804（+385）：Phycat 视觉与交互完整移植 —— 14 种提示框（胶囊标题/淡色底/
+                                           右下水印/悬停升起，数值全部取自 theme.css）+ 加粗/斜体波浪线/高亮注水/删除线
+                                           + h1~h6 与代码块/行内代码/引用块的悬停（曲线照抄字面量，不换 --mo-*）✓ */
   /* ★ 2026-10-30 补登记：src/reading-block-editor.js 是 Crepe 集成源码（924 行代码），
      产物 2.7MB 的 assets/reading-block-editor.js 由它打包而来。它一直是「有实质体量却没人守」的文件 ——
      与本仓已补登记的 knowledge-base.js / ui-kit.css 同一类漏洞。上限取登记实测值，只准往下调。 */

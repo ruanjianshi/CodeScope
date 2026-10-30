@@ -2467,15 +2467,22 @@
   background: var(--doc-primary); opacity: .85;
   box-shadow: 0 0 8px color-mix(in srgb, var(--doc-primary) 50%, transparent);
   transform-origin: left center;
-  transition: height var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out);
+  /* ★ 曲线照抄 theme.css:3597 的 all .4s cubic-bezier(.25,.8,.25,1) ✓ ——
+     这条**故意不换 --mo-*** ✗：官方 h2 双子塔用的就是这条手写曲线，
+     换成 --mo-out 后回弹感没了，悬停时两根柱子会「啪」地跳到位 ✓。 */
+  transition: height .4s cubic-bezier(.25, .8, .25, 1), margin-top .4s cubic-bezier(.25, .8, .25, 1),
+              opacity .4s cubic-bezier(.25, .8, .25, 1);
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2::after {
   content: ''; position: absolute; left: 8px; top: auto; margin-top: .3em;
   width: 2px; height: .6em; border-radius: 2px;
   background: var(--doc-secondary); opacity: .6;
   transform-origin: left center;
-  transition: width var(--mo-2) var(--mo-out), height var(--mo-2) var(--mo-out),
-              background var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out);
+  /* 细线那条官方带 0.05s 延迟（theme.css:3630 的 ... .4s cubic-bezier(.25,.8,.25,1) 0.05s ✓），
+     正是「交错律动」的来源 —— 两条柱子同时到位就没有那个味道了 ✓。 */
+  transition: width .4s cubic-bezier(.25, .8, .25, 1) .05s, height .4s cubic-bezier(.25, .8, .25, 1) .05s,
+              margin-top .4s cubic-bezier(.25, .8, .25, 1) .05s,
+              background .4s cubic-bezier(.25, .8, .25, 1) .05s, opacity .4s cubic-bezier(.25, .8, .25, 1) .05s;
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2:hover { color: var(--doc-primary); text-shadow: var(--doc-glow-text); }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2:hover::before { height: 1.4em; margin-top: 0; opacity: .4; }
@@ -2501,20 +2508,72 @@
 }
 
 /* ── ④ H3 左侧竖条（theme.css:3665-3688）／H4~H6（theme.css:3193-3211 配色）── */
+/* ★ 2026-10-30 H3 悬停：**不改 padding** ✗ ——
+   theme.css:3683 那版是 padding-left 15px → 20px ✓，可 padding 是布局属性 ✗：
+   悬停一下宽度就变（width:fit-content 跟着重算），下面的内容会被推着跳一行 ✓。
+   ✓ 改成视觉等价、零布局的做法：padding 恒为 20px ✓，悬停时
+     h3 整体 translateX(5px)（文字右移 5px ✓）+ ::before 反向 translateX(-5px)（柱子留在原地 ✓）
+     —— 和官方那版的**相对关系一模一样** ✓，但一个像素的布局都没动 ✓。
+   柱子：高 1.3rem → 24px、宽 5px → 7px（theme.css:3690 ✓，绝对定位、不占位 ✓）。
+   曲线照抄官方 all .3s cubic-bezier(.25,.8,.25,1) ✓，不换 --mo-*。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3 {
   font-size: 16px !important; width: fit-content; position: relative;
-  padding: 0 0 0 15px !important; margin: 1.3em 0 .5em;
-  color: var(--doc-primary); transition: padding .3s var(--mo-in-out), color .3s ease;
+  padding: 0 0 0 20px !important; margin: 1.3em 0 .5em;
+  color: var(--doc-primary);
+  transition: transform .3s cubic-bezier(.25, .8, .25, 1), color .3s cubic-bezier(.25, .8, .25, 1);
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3::before {
   content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
   width: 5px; height: 1.3rem; border-radius: 4px; background: var(--doc-primary);
-  transition: background .3s ease;
+  transition: height .3s cubic-bezier(.25, .8, .25, 1), width .3s cubic-bezier(.25, .8, .25, 1),
+              transform .3s cubic-bezier(.25, .8, .25, 1), background .3s cubic-bezier(.25, .8, .25, 1);
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3:hover { padding-left: 20px !important; color: var(--doc-primary); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3:hover { transform: translateX(5px); color: var(--doc-primary); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3:hover::before {
+  transform: translateY(-50%) translateX(-5px); height: 24px; width: 7px;
+}
+/* ★ 2026-10-30 H4~H6：主题里这三级**本来就有装饰点**（实心圆 / 空心圆 / 短横，
+   theme.css:3696-3786 ✓），悬停是「右移 6px + 点放大发光」✓ ——
+   之前这份移植只搬了配色、没搬点 ✗，于是「悬停 H4~H6」无从谈起 ✓（没有可放大的东西）。
+   ✓ 现在补齐：padding-left 恒为 20px ✓、悬停只 translateX + scale + box-shadow ✓ —— 零布局。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6 {
+  position: relative; padding-left: 20px !important;
+  transition: color .3s ease, transform .3s ease;
+}
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4 { font-size: 15px !important; color: var(--doc-strong); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--doc-primary); border: 1px solid var(--doc-primary);
+  transition: transform .3s ease, box-shadow .3s ease;
+}
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5 { font-size: 14px !important; color: var(--doc-text-2); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
+  background: transparent; border: 2px solid var(--doc-primary);
+  transition: transform .3s ease, box-shadow .3s ease, background .3s ease;
+}
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6 { font-size: 13px !important; color: var(--doc-text-3); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6::before {
+  content: '-'; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  color: var(--doc-primary); font-weight: 700; line-height: 1;
+  transition: transform .3s ease;
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4:hover,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5:hover,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6:hover {
+  color: var(--doc-primary); transform: translateX(6px);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4:hover::before {
+  transform: translateY(-50%) scale(1.3); box-shadow: 0 0 0 4px var(--doc-glow);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5:hover::before {
+  background: var(--doc-primary); transform: translateY(-50%) scale(1.2); box-shadow: 0 0 0 3px var(--doc-glow);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6:hover::before { transform: translateY(-50%) scaleX(1.8); }
 
 /* ── ⑤ 引用块：✨ 圆角卡片（theme.css:5178-5260）────────────────────────
    ⚠️ theme.css:5206 的 content:"✨" 是权威写法 ✓ ——
@@ -2526,10 +2585,13 @@
    ③ 编辑器没显式设 caret-color ⇒ 继承正文色，在纸感底上几乎看不见。
    ⚠️ caret 用 --doc-primary 而不是正文色：四套配色下它都是高对比强调色，一眼能找到光标。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror { caret-color: var(--doc-primary); }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote { cursor: text; }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote::before,
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote::after { pointer-events: none; }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote {
+/* ⚠️ 刻意带 :not(.md-callout) —— 提示框在 Crepe 里**也是 blockquote**
+   （实测 DOM：blockquote.md-callout.note ✓，见 ⑭）；不排除的话
+   每个提示框左上角都会多一颗 ✨、内边距被压成 48px ✗。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout) { cursor: text; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout)::before,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout)::after { pointer-events: none; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout) {
   position: relative;
   margin: 20px 0; padding: 18px 20px 18px 48px !important;
   background: color-mix(in srgb, var(--doc-bg) 82%, #fff) !important;
@@ -2539,22 +2601,31 @@
   transition: transform .3s var(--doc-ease-back), background .3s ease,
               box-shadow .3s ease, border-color .3s ease;
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote::before {
+/* ⚠️ 这几行「复位」是**必须的** ✗✗ —— 实测（把命中这个伪元素的规则全 dump 出来）：
+   Crepe 的 reading-block-editor.css 也给同一个伪元素画了东西
+     .milkdown .ProseMirror blockquote::before
+       { width:4px; height:100%; background:rgb(47,47,47); left:0; position:absolute }
+   ⇒ 本规则只改了 content 和定位 ✗，**没清掉那条背景和尺寸** ⇒
+      ✨ 画在一条 4px 的深色竖条上 ✗（第一版截图里那根黑条就是它 ✓）。
+   ✓ 表格里这几条 background/width/height/border 是给「引用块」用的复位 ✓，
+     提示框那边走 ⑭ 的 content:none，两种一块块分开处理 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout)::before {
   content: '✨';
   position: absolute; left: 14px; top: 18px;
+  width: auto; height: auto; background: none; border: 0;
   font-size: 20px; line-height: 1; font-style: normal;
   transform: rotate(30deg);
   transition: transform .3s var(--doc-ease-back), text-shadow .3s ease;
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote p { color: var(--doc-text-2); margin: 0 0 .5em; }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote p:last-child { margin-bottom: 0; }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:hover {
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout) p { color: var(--doc-text-2); margin: 0 0 .5em; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout) p:last-child { margin-bottom: 0; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout):hover {
   transform: scale(1.02);
   background: color-mix(in srgb, var(--doc-primary) 8%, var(--doc-bg)) !important;
   border-color: var(--doc-primary) !important;
   box-shadow: 0 8px 20px color-mix(in srgb, var(--doc-primary) 15%, transparent);
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:hover::before {
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout):hover::before {
   transform: rotate(0deg);
   text-shadow: 0 0 8px var(--doc-primary);
 }
@@ -2621,25 +2692,238 @@
 /* ── ⑧ 正文元素（配色沿用 theme.css:3183-3211，行高沿用 5088）────────── */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view ::selection { background: var(--doc-select); color: var(--doc-strong); }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: .8em 0; }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view strong { color: var(--doc-strong); }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view em { color: var(--doc-secondary); }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view del { color: var(--doc-text-3); }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark {
-  background: color-mix(in srgb, var(--doc-syn-type) 26%, transparent);
-  color: var(--doc-strong); padding: .04em .24em; border-radius: 3px;
+
+/* ── ⑧-a 加粗（theme.css:5529-5589「Underglow」）─────────────────────────
+   官方不是「变个色」而已 ✓：常态先给一条 2px 的**透明**下边框占位 ✓，
+   悬停时把这条边框染成主色 70% 透明 + 文字改主色 + 下方投一层柔光 ✓ ——
+   占位边框是关键 ✗：没有它，悬停一出现边框，行高就会跳一下 ✓。
+   box-decoration-break: clone = 跨行时**每一行**各自画自己的底线 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view strong {
+  color: var(--doc-strong);
+  display: inline; position: relative;
+  border-bottom: 2px solid transparent;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  transition: border-color .3s ease, color .3s ease, text-shadow .3s ease;
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view code {
-  background: color-mix(in srgb, var(--doc-text) 10%, transparent);
-  color: var(--doc-strong); border-radius: 5px;
-  transition: background .2s ease;
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view strong:hover {
+  color: var(--doc-primary) !important;
+  border-bottom-color: color-mix(in srgb, var(--doc-primary), transparent 70%);
+  text-shadow: 0 2px 10px color-mix(in srgb, var(--doc-primary), transparent 60%);
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view code:hover { background: color-mix(in srgb, var(--doc-text) 18%, transparent); }
+
+/* ── ⑧-b 斜体：**流动波浪线**（theme.css:5601-5726）─────────────────────
+   ⚠️ 不是虚线 ✗ —— theme.css 用两段 radial-gradient（上弧 + 下弧）拼一个完整波长，
+      background-size:16px 2px 平铺 ✓：
+        · 第一层圆心 (4px, -7.5px) = 上半弧 ✓
+        · 第二层圆心 (12px, 9.5px) = 下半弧 ✓
+      两层 background-position 差 2px（0 100% / 0 calc(100% - 2px) ✓），
+      在交界处接成连续波浪 ✓ —— 手写 border-bottom:dashed 是山寨 ✗。
+   半线宽由 --italic-wave-half 调（默认 .5px ✓）；
+   悬停动画 memoItalicWaveFlow 每 .8s 平移一个完整波长（16px ✓）→ 波浪流动 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view em {
+  font-style: italic; text-decoration: none !important;
+  display: inline; padding-bottom: 2px;
+  color: var(--doc-secondary);
+  --italic-wave: color-mix(in srgb, var(--doc-secondary), transparent 60%);
+  background-repeat: repeat-x;
+  background-position: 0 100%, 0 calc(100% - 2px);
+  background-size: 16px 2px;
+  background-image:
+    radial-gradient(circle at 4px -7.5px,
+      transparent calc(8.5px - var(--italic-wave-half, .5px)),
+      var(--italic-wave) calc(8.833px - var(--italic-wave-half, .5px)),
+      var(--italic-wave) calc(8.167px + var(--italic-wave-half, .5px)),
+      transparent calc(8.5px + var(--italic-wave-half, .5px))),
+    radial-gradient(circle at 12px 9.5px,
+      transparent calc(8.5px - var(--italic-wave-half, .5px)),
+      var(--italic-wave) calc(8.833px - var(--italic-wave-half, .5px)),
+      var(--italic-wave) calc(8.167px + var(--italic-wave-half, .5px)),
+      transparent calc(8.5px + var(--italic-wave-half, .5px)));
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  transition: color .2s ease, -webkit-text-stroke .2s ease, text-shadow .2s ease;
+}
+@keyframes memoItalicWaveFlow {
+  from { background-position-x: 0; }
+  to { background-position-x: 16px; }
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view em:hover {
+  color: var(--doc-primary);
+  --italic-wave: var(--doc-primary);
+  -webkit-text-stroke: .6px var(--doc-primary);
+  animation: memoItalicWaveFlow .8s linear infinite;
+}
+
+/* ── ⑧-c 删除线（theme.css:5732-5786）───────────────────────────────────
+   常态：字色走 --phycat-strikethrough-color、贯穿线走主色 60% ✓；
+   悬停：文字回到正文色、贯穿线换色，并且 **cursor:not-allowed** ✓ ——
+   「删掉的东西不可点」是一句交互语言 ✓，不是漏写。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view del,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view s {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--doc-primary), transparent 40%);
+  color: var(--doc-text-3);
+  transition: color .3s ease, text-decoration-color .3s ease;
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view del:hover,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view s:hover {
+  color: var(--doc-text) !important;
+  text-decoration-color: var(--doc-secondary);
+  cursor: not-allowed;
+}
+
+/* ── ⑧-d 高亮（theme.css:5394-5466「弹性注水 / Elastic Ink」）──────────
+   ⚠️ 这里**没有 mark** ✗✗ —— 实测 Crepe 的 commonmark 预设不含 mark 节点：
+      写进正文的 ==值得记住的高亮== 原样留在 <p> 里（DOM 实测见报告），
+      整篇文档 querySelector('mark') 返回 null ✓。
+      本仓的高亮走**另一条路**：色板把选中文字包成 [文字](#cc-hl)（链接 mark ✓，
+      见 src/reading-block-editor.js 的 HIGHLIGHT_HREF），所以按
+      a[href^="#cc-hl"] 移植官方那套「注水」✓ —— 视觉与官方 ==高亮== 一致 ✓。
+   官方做法：**不改背景色**，而是铺一层「底部 40% 高」的渐变 ✓，
+      悬停把 background-size 从 40% 弹到 100%（曲线带回弹 ✓）→ 像墨水注满 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view a[href^="#cc-hl"] {
+  padding: 0 2px; margin: 0; border-radius: 4px;
+  color: var(--doc-text); text-decoration: none !important; cursor: text;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-image: linear-gradient(to top, color-mix(in srgb, var(--doc-primary), transparent 80%), transparent);
+  background-size: 100% 40%;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  transition: background-size .4s cubic-bezier(.34, 1.56, .64, 1), color .3s ease,
+              text-shadow .3s ease, box-shadow .3s ease;
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view a[href^="#cc-hl"]:hover {
+  background-size: 100% 100%;
+  background-image: linear-gradient(to top, color-mix(in srgb, var(--doc-primary), transparent 75%), color-mix(in srgb, var(--doc-primary), transparent 92%));
+}
+
+/* ── ⑧-e 行内代码：胶囊 + 悬停实心化（theme.css:7193-7236）──────────────
+   常态 = 主色 10% 底 + 主色字 + 主色 15% 描边 + 6px 圆角 ✓；
+   悬停 = **实心主色底 + 白字** + 15px 光晕 + scale(1.05) ✓，
+   曲线 .2s cubic-bezier(.34,1.56,.64,1) 带回弹 ✓（照抄，不换 --mo-*）。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, var(--font-monospace, monospace);
+  letter-spacing: .5px;
+  background-color: color-mix(in srgb, var(--doc-primary), transparent 90%);
+  color: var(--doc-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--doc-primary), transparent 85%);
+  padding: 2px 6px !important; margin: 0 2px;
+  border-radius: 6px; vertical-align: middle;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  transition: background-color .2s cubic-bezier(.34, 1.56, .64, 1), color .2s cubic-bezier(.34, 1.56, .64, 1),
+              border-color .2s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s cubic-bezier(.34, 1.56, .64, 1),
+              transform .2s cubic-bezier(.34, 1.56, .64, 1);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view :not(pre) > code:hover {
+  background-color: var(--doc-primary) !important;
+  color: #fff !important;
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--doc-primary), transparent 60%);
+  transform: scale(1.05);
+  position: relative; z-index: 1;
+}
+
+/* ── ⑧-f 代码块：Mac 顶栏 + 悬停描边（theme.css:6124-6182）─────────────
+   ★★ 这里有一处**实测出来的坑**，不写清楚下一轮又会踩 ✗✗
+     官方把代码块画在 .markdown-preview-view pre 上 ✓，看起来 Crepe 也有 pre ✓ ——
+     但那是**过渡态**：Crepe 的代码块是**进视口才挂载**的 ✓（懒加载），
+       ① 没进视口： div.milkdown-code-block > pre.milkdown-code-block-placeholder > code
+       ② 一进视口： div.milkdown-code-block[data-v-app]
+                      > div.tools（语言按钮 + 复制按钮）
+                      > div.codemirror-host > div.cm-editor > …
+     实测（滚动前后各 dump 一次 DOM）：pre 的数量 1 → **0** ✓，
+     .cm-editor 0 → 1 ✓。⇒ 只给 pre 上样式 = 只画到**闪一下的那一帧** ✗。
+   ✓ 所以真正要画的是 .milkdown-code-block 这颗容器 + 它里面的 .tools 头栏 + .cm-editor ✓；
+     pre 那几条保留（首帧不跳色 ✓），但**不再给它铺 Mac 三色点** ✗ ——
+     三色点改画在 .tools 的 ::before 上 ✓（= 一直可见的那条头栏 ✓）。
+     官方那段 SVG 原图 base64 原样搬 ✓。
+   悬停：描边转主色 + 0 4px 12px 投影 ✓、头栏底色与分割线同时提一点 ✓；
+   曲线 border-color/box-shadow .3s ease 照抄 ✓ —— 全在边框和阴影上，零布局 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block {
+  position: relative;
+  margin: 20px 0 !important;
+  padding: 0 !important;
+  background-color: var(--doc-bg-dim) !important;
+  border: 1px solid color-mix(in srgb, var(--doc-line), transparent 50%) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: none !important;
+  transition: border-color .3s ease, box-shadow .3s ease;
+}
+/* 头栏：官方 .markdown-preview-view pre::before（32px、主色 4% 底、左侧 54px 三色点）✓
+   ⚠️ 左边要多留 72px —— Crepe 的「js」语言按钮本来贴在最左 ✗，
+      不留位就会被三色点压住 ✓（静态让位，不是悬停位移 ✓）。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .tools {
+  position: relative;
+  min-height: 32px;
+  padding-left: 72px !important;
+  background-color: color-mix(in srgb, var(--doc-primary), transparent 96%);
+  background-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iNDUwcHgiIGhlaWdodD0iMTMwcHgiPgogIDxlbGxpcHNlIGN4PSI2NSIgY3k9IjY1IiByeD0iNTAiIHJ5PSI1MiIgc3Ryb2tlPSJyZ2IoMjIwLDYwLDU0KSIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJyZ2IoMjM3LDEwOCw5NikiLz4KICA8ZWxsaXBzZSBjeD0iMjI1IiBjeT0iNjUiIHJ4PSI1MCIgcnk9IjUyIiAgc3Ryb2tlPSJyZ2IoMjE4LDE1MSwzMykiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0icmdiKDI0NywxOTMsODEpIi8+CiAgPGVsbGlwc2UgY3g9IjM4NSIgY3k9IjY1IiByeD0iNTAiIHJ5PSI1MiIgIHN0cm9rZT0icmdiKDI3LDE2MSwzNykiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0icmdiKDEwMCwyMDAsODYpIi8+Cjwvc3ZnPg==);
+  background-repeat: no-repeat;
+  background-size: 54px;
+  background-position: 12px center;
+  border-bottom: 1px solid color-mix(in srgb, var(--doc-line), transparent 70%);
+  border-radius: 8px 8px 0 0;
+  transition: background-color .3s ease, border-bottom-color .3s ease;
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .tools .language-button {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--doc-line), transparent 60%) !important;
+  color: var(--doc-text-2) !important;
+  box-shadow: none !important;
+}
+/* CodeMirror 那两层自带**深色底**（实测 .cm-editor / .cm-gutters 都是 rgb(18,18,18) ✗）——
+   在浅色纸上一块黑 ✗。拍平成透明、文字改用 --doc-text ✓（和本文件 ⑫ 拍平 .milkdown 同一手法 ✓）。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-editor,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-gutters,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-scroller {
+  background: transparent !important;
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-content,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-line {
+  color: var(--doc-text) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, var(--font-monospace, monospace);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-gutters,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-gutterElement {
+  color: var(--doc-text-3) !important;
+  border: 0 !important;
+}
+/* 当前行的高亮同样是**深色块**（实测 .cm-activeLineGutter 的底色是一块 rgb(60,56,54) ✗，
+   在浅色纸上像贴了一张黑胶带 ✓）→ 改成主色 6% 的极淡一层 ✓，和 Phycat 的纸面同色系 ✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-activeLine,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block .cm-activeLineGutter {
+  background-color: color-mix(in srgb, var(--doc-primary), transparent 94%) !important;
+}
+/* 悬停：主色描边 + 投影 + 头栏提亮（官方 pre:hover 与 pre:hover::before 两段 ✓） */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block:hover {
+  border-color: var(--doc-primary) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--doc-primary), transparent 85%);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .milkdown-code-block:hover .tools {
+  background-color: color-mix(in srgb, var(--doc-primary), transparent 95%);
+  border-bottom-color: color-mix(in srgb, var(--doc-primary), transparent 80%);
+}
+/* 首帧（还没挂载 CodeMirror 时）的占位 pre：和上面同一张卡，避免闪一下别的颜色 ✓ */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre {
-  background: var(--doc-bg-dim); border: 1px solid var(--doc-line);
-  border-left: 3px solid var(--doc-pink); border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  position: relative;
+  background-color: var(--doc-bg-dim) !important;
+  border: 1px solid color-mix(in srgb, var(--doc-line), transparent 50%) !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  margin: 20px 0; overflow: hidden;
+  box-shadow: none !important;
+  transition: border-color .3s ease, box-shadow .3s ease;
 }
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre code { background: none; }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre:hover {
+  border-color: var(--doc-primary) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--doc-primary), transparent 85%);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre code {
+  display: block; overflow-x: auto;
+  background: none !important; color: var(--doc-text) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, var(--font-monospace, monospace);
+}
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view hr {
   border: none; height: 1px; margin: 1.6em 0;
   background: linear-gradient(90deg, transparent,
@@ -2715,6 +2999,277 @@ html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view {
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view.codescope-crepe-host .milkdown {
   background: transparent !important;
   color: var(--doc-text) !important;
+}
+
+/* ── ⑭ 提示框（callout）：7 种语气 + 悬停（2026-10-30）════════════════════
+   ── 为什么不能照抄 theme.css 的选择器 ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯
+   ✗✗ theme.css 那套的骨架是**两级 DOM**：
+        .callout > .callout-title > (.callout-icon + .callout-title-inner)
+                 + .callout-content > p
+      靠 .callout-title 做胶囊、.callout-content 装正文 ✓。
+   而 Crepe 里的提示框是**一条 blockquote + 三个 span**（实测 outerHTML，
+   用的是 src/reading-block-editor.js 里 calloutPlugin 的 Decoration：
+        blockquote.md-callout.note
+          > p > span.cc-callout-prefix              （[!note] 那截，已被全局规则藏掉）
+              + span.cc-callout-title               （标题「笔记」）
+              + span[data-type=hardbreak]           （换行，doc-theme.css 里 display:block）
+              + span.cc-callout-title               （正文）
+   ⇒ **没有** .callout-title / .callout-content / .callout-icon 这三个钩子 ✓。
+   ✓ 做法：胶囊落到「紧跟在 .cc-callout-prefix 后面那个 .cc-callout-title」上 ✓
+     （.cc-callout-prefix + .cc-callout-title 是相邻兄弟选择器，结构上必然命中 ✓，
+       比写 :nth-child(2) 稳 ✓）；正文那个 span 用 hardbreak 做前锚点反向选中 ✓。
+   ✓ 菱形符号用胶囊的 ::before（官方是 .callout-icon 里的 ◇ 字面量 ✓，同字形 ✓）。
+   ✓ 水印就是官方 .callout::after 那一条，原样搬 ✓。
+
+   ── 令牌从哪来（不是我自己调的色 ✓）⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯
+   theme.css 的 :root 里每类有 5 个 --phycat-callout-<type>-* 令牌 ✓；
+   palette.js:256-275 的 'callout' 配方说明 **title-color 是种子色**，
+   background = 种子色 10%（悬停 18%）的低透明度铺底、watermark = 种子色 ✓。
+   所以这里直接取 theme.css:2586-2664 的**实际值**（不是推导值）✓ ——
+   它们是 rgba(…) 半透明色 ✓，铺在深色纸上会自然降饱和 ✓，四套配色都不用改 ✓。
+
+   ⚠️ 已知偏离官方「亮色渲染」的一处，故意这么做（见报告）：
+     theme.css:6618-6648 在亮色下把 info / todo 的底面**并到 note** 上
+     （.theme-light .callout[data-callout="info"]{ background: var(--…-note-background) }），
+     于是官方亮色里 info/todo 和 note 同色 ✗。
+     但 palette-data.js 里 info/todo 各自有独立令牌（#74c0fc 蓝 / #50fa7b 绿 ✓），
+     本项目要的是「7 种语气各自配色」✓ ⇒ 按 token 走，三种颜色是分开的 ✓。
+     要改回官方那种并色，只需把下面 .info / .todo 的 --co-bg / --co-title 换成 note 那两行。
+   ═══════════════════════════════════════════════════════════════════════ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout {
+  /* 兜底 = note（也覆盖菜单里能插入、但这里没逐个列出的语气）*/
+  --co-bg: rgba(48, 107, 214, .1);
+  --co-hover: rgba(108, 92, 231, .15);
+  --co-title: #6c5ce7;
+  --co-wm: #6c5ce7;
+  --co-glyph: "📝";
+  /* 胶囊底/描边：深色纸给「白 6%」，浅色纸在下面单独覆盖成官方那版「白 60%」✓ */
+  --co-pill-bg: rgba(255, 255, 255, .06);
+  --co-pill-border: rgba(255, 255, 255, .1);
+  position: relative;
+  padding: 12px 16px !important;
+  margin-block: 1em !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  background-color: var(--co-bg) !important;
+  /* 官方 .callout 的三条过渡照抄（theme.css:6488-6491 ✓），
+     background-color 那条是悬停换底色的唯一通道 ✓。 */
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1),
+              box-shadow .3s ease, background-color .3s ease;
+}
+/* 悬停：z-index 抬起来（官方 .callout:hover 只做这一件 ✓），底色换成该类的 hover 档 ✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout:hover {
+  z-index: 5;
+  background-color: var(--co-hover) !important;
+}
+/* 正文容器：Crepe 只有这一个 p，⑧ 的 p 上下 margin 必须清掉，
+   否则 12px 内边距会被撑成 30px ✗（同 ⑤ 引用块踩过的坑 ✓）。*/
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout > p {
+  position: relative; z-index: 2;
+  margin: 0 !important; padding: 0 !important;
+  line-height: 1.6; color: var(--doc-text-2);
+}
+/* 胶囊标题：官方 .callout-title（theme.css:6507-6533）逐条搬 ——
+   inline-flex / radius 50px / padding 4px 12px / 700 / .9em / margin-bottom 12px ✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout > p > .cc-callout-prefix + .cc-callout-title {
+  display: inline-flex !important; align-items: center;
+  margin: 0 0 12px !important;
+  padding: 4px 12px !important;
+  border-radius: 50px !important;
+  font-weight: 700 !important; font-size: .9em; line-height: 1.2;
+  color: var(--co-title) !important;
+  background-color: var(--co-pill-bg) !important;
+  border: 1px solid var(--co-pill-border) !important;
+  position: relative; z-index: 2;
+}
+/* 菱形符号：官方 .callout-icon 是 16px 的 ◇ + margin-right 6px（theme.css:6535-6545）✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout > p > .cc-callout-prefix + .cc-callout-title::before {
+  content: '◇'; margin-right: 6px; flex: 0 0 auto;
+  font-weight: 400; line-height: 1; color: currentColor;
+}
+/* 正文那个 span 也带着 .cc-callout-title（同一个 Decoration ✗），
+   而 doc-theme.css:469 给它统一上了「700 + 语气色」⇒ 这里必须按结构反向拆开 ✓，
+   否则正文也是粗体、也是语气色 ✗ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout > p > [data-type="hardbreak"] + .cc-callout-title {
+  display: inline; font-weight: 400 !important; color: var(--doc-text-2) !important;
+}
+/* ⚠️ 必须显式**掐掉** Crepe 自带的引用块左竖条 ✗✗ ——
+   实测（把命中这条 blockquote 的规则全 dump 出来）：那根深色竖条来自
+     reading-block-editor.css 的 .milkdown .ProseMirror blockquote::before
+     （content:"" / width 4px / 背景 rgb(47,47,47) / position:absolute / left:0 ✓）。
+   ⚠️ 本文件 ⑤ 的规则写的是 blockquote:not(.md-callout)::before ✓，
+      正好**放过**了提示框 ✓ ⇒ 不补这一条，每个提示框左边都会多一根黑条 ✗
+      （第一版截图就是这样 ✓）。用 content:none 而不是 display:none：
+      伪元素没内容就整个不生成盒子 ✓，比藏一个 4px 空盒干净 ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout::before {
+  content: none !important;
+}
+/* 水印：官方 .callout::after（theme.css:6561-6592）原样搬 ——
+   ⚠️ 位置是**右下角**（right:-10px / bottom:-15px ✓），不是右上角 ✗；
+      80px、opacity .12、rotate(-15deg)、grayscale(100%)、pointer-events:none ✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout::after {
+  content: var(--co-glyph);
+  position: absolute !important;
+  right: -10px !important; bottom: -15px !important;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 80px !important; line-height: 1; font-style: normal;
+  color: var(--co-wm);
+  opacity: .12 !important;
+  transform: rotate(-15deg);
+  filter: grayscale(100%);
+  pointer-events: none;
+  z-index: 0;
+  transition: transform .4s cubic-bezier(.34, 1.56, .64, 1), opacity .4s cubic-bezier(.34, 1.56, .64, 1),
+              right .4s cubic-bezier(.34, 1.56, .64, 1), bottom .4s cubic-bezier(.34, 1.56, .64, 1),
+              filter .4s cubic-bezier(.34, 1.56, .64, 1);
+}
+/* 悬停：水印回正 + 放大 1.1 + 升起（bottom -15 → -5）+ 恢复彩色 + 变浓 ✓
+   —— 这就是官方页脚说的「悬停提示框，看颜色和水印的变化」✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout:hover::after {
+  transform: rotate(0deg) scale(1.1) !important;
+  opacity: .25 !important;
+  right: 0 !important; bottom: -5px !important;
+  filter: grayscale(0%) !important;
+}
+
+/* ── ⑭-b 七种语气的令牌（theme.css:2586-2664 的实际值，逐条抄）────────────── */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.note {
+  --co-bg: rgba(48, 107, 214, .1); --co-hover: rgba(108, 92, 231, .15);
+  --co-title: #6c5ce7; --co-wm: #6c5ce7; --co-glyph: "📝";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.info {
+  --co-bg: rgba(116, 192, 252, .1); --co-hover: rgba(116, 192, 252, .16);
+  --co-title: #74c0fc; --co-wm: #74c0fc; --co-glyph: "ℹ️";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.todo {
+  --co-bg: rgba(80, 250, 123, .1); --co-hover: rgba(80, 250, 123, .16);
+  --co-title: #50fa7b; --co-wm: #50fa7b; --co-glyph: "✅";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.tip {
+  --co-bg: rgba(0, 184, 148, .1); --co-hover: rgba(0, 184, 148, .15);
+  --co-title: #00b894; --co-wm: #00b894; --co-glyph: "💡";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.warning {
+  --co-bg: rgba(253, 203, 110, .15); --co-hover: rgba(253, 203, 110, .2);
+  --co-title: #e17055; --co-wm: #e17055; --co-glyph: "⚠️";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.important {
+  --co-bg: rgba(255, 118, 117, .12); --co-hover: rgba(255, 118, 117, .18);
+  --co-title: #ff7675; --co-wm: #ff7675; --co-glyph: "📌";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.caution {
+  --co-bg: rgba(214, 48, 49, .08); --co-hover: rgba(214, 48, 49, .12);
+  --co-title: #d63031; --co-wm: #d63031; --co-glyph: "🔥";
+}
+/* 另外 7 类：提示框菜单里也能插（14 个按钮 ✓），不补就是「点出来长得像笔记」✗。
+   值同样取自 theme.css:6739-6894 ✓，一个都不是我调的。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.success {
+  --co-bg: rgba(85, 239, 196, .15); --co-hover: rgba(85, 239, 196, .25);
+  --co-title: #00b894; --co-wm: #00b894; --co-glyph: "🎉";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.question {
+  --co-bg: rgba(253, 203, 110, .15); --co-hover: rgba(253, 203, 110, .25);
+  --co-title: #f39c12; --co-wm: #f39c12; --co-glyph: "❓";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.example {
+  --co-bg: rgba(162, 155, 254, .15); --co-hover: rgba(162, 155, 254, .25);
+  --co-title: #6c5ce7; --co-wm: #6c5ce7; --co-glyph: "🧩";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.quote {
+  --co-bg: rgba(178, 190, 195, .15); --co-hover: rgba(178, 190, 195, .25);
+  --co-title: #636e72; --co-wm: #636e72; --co-glyph: "💬";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.danger {
+  --co-bg: rgba(214, 48, 49, .15); --co-hover: rgba(214, 48, 49, .2);
+  --co-title: #d63031; --co-wm: #d63031; --co-glyph: "⚡";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.bug {
+  --co-bg: rgba(214, 48, 49, .08); --co-hover: rgba(214, 48, 49, .12);
+  --co-title: #d63031; --co-wm: #d63031; --co-glyph: "🐛";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.failure {
+  --co-bg: rgba(45, 52, 54, .05); --co-hover: rgba(45, 52, 54, .1);
+  --co-title: #c0392b; --co-wm: #c0392b; --co-glyph: "📉";
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout.abstract {
+  --co-bg: rgba(129, 236, 236, .2); --co-hover: rgba(129, 236, 236, .3);
+  --co-title: #00cec9; --co-wm: #00cec9; --co-glyph: "📑";
+}
+/* 浅色纸：胶囊底/描边换回官方亮色那两档（theme.css:2586-2587 ✓） */
+html[data-theme="light"] :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout {
+  --co-pill-bg: rgba(255, 255, 255, .6);
+  --co-pill-border: rgba(0, 0, 0, .05);
+}
+
+/* ── ⑮ 减少动态效果（prefers-reduced-motion）════════════════════════════
+   ⚠️ theme.css 自己只有一条 @media（5733 行附近），**只关掉 em 的动画** ✗，
+      其余十几个悬停动效照跑 ✓ —— 这里按「只保留颜色」补齐：
+        · 全部 transition 只留颜色类属性（color / background / border-color /
+          text-decoration-color / opacity / filter）✓
+        · 全部 animation 关掉 ✓
+        · 位移与缩放类的悬停**整个不发生**（不是变快，是不动 ✗）——
+          否则 80px 的水印一瞬飞到角落、标题一瞬右移 6px，对前庭敏感用户
+          依然是一次「跳」 ✓。颜色反馈一个不少 ✓（这才是要保留的那部分 ✓）。
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h1,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h1::after,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2::after,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view strong,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view em,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view del,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view s,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view a,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view a::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view a::after,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view :not(pre) > code,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view pre::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote::before,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout::after {
+    animation: none !important;
+    transition-property: color, background-color, border-color, text-decoration-color, opacity, filter, text-shadow, box-shadow !important;
+    transition-duration: .2s !important;
+    transition-delay: 0s !important;
+  }
+  /* 位移/缩放类悬停：reduced-motion 下原地不动，只变色 ✓ */
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h1:hover,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3:hover,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4:hover,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5:hover,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6:hover,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view :not(pre) > code:hover,
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout):hover {
+    transform: none !important;
+  }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h1:hover::after { width: 40px; }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2:hover::before { height: 1em; margin-top: .2em; opacity: .85; }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h2:hover::after { width: 2px; height: .6em; margin-top: .3em; opacity: .6; background: var(--doc-secondary); }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h3:hover::before { transform: translateY(-50%); height: 1.3rem; width: 5px; }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h4:hover::before { transform: translateY(-50%); }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h5:hover::before { transform: translateY(-50%); }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view h6:hover::before { transform: translateY(-50%); }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote:not(.md-callout):hover::before { transform: rotate(30deg); }
+  /* 波浪线保留（它本来就是静态装饰 ✓），只关掉「流动」与描边增粗 ✓ */
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view em:hover { -webkit-text-stroke: 0; }
+  :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view blockquote.md-callout:hover::after {
+    transform: rotate(-15deg) !important;
+    right: -10px !important; bottom: -15px !important;
+    opacity: .18 !important;
+  }
 }
 `;
 
