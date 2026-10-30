@@ -569,6 +569,8 @@ const CALLOUT_TYPES = [
 
 const attachCalloutControls = (crepe, root) => {
   const topBar = root.querySelector('.milkdown-top-bar')
+  /* 提示框入口只有顶栏那一个 ❝ 按钮（没有浮条替身）✓ ——
+     顶栏被 create({ topBar:false }) 关掉时这里就该整条退出 ✓（备忘录 / 日记两处，见 create 里 topBar 的注释）。 */
   if (!topBar) return () => {}
   for (const stale of topBar.querySelectorAll(':scope > .codescope-callout-group')) stale.remove()
 
@@ -653,8 +655,12 @@ const attachCalloutControls = (crepe, root) => {
 }
 
 const attachColorControls = (crepe, root, options = {}) => {
+  /* ⚠️ 顶栏可以被 create({ topBar:false }) 关掉（生活面板的备忘录 / 日记）✓ ——
+     但**不能**因此整条退出 ✗：色板（panel）和「选中文字后浮出的快捷色板」（bar）
+     **都不挂在顶栏里** ✓，它们照样能用 ✓；跟着顶栏一起消失的只是「顶栏上那两个入口按钮」✓
+     （那本来就是顶栏的一部分，和顶栏同生同死 ✓，不是功能丢失 ✗）。
+     ⇒ 只有「把 group 挂进顶栏」这一段要判断 topBar，别的一律照旧 ✓。 */
   const topBar = root.querySelector('.milkdown-top-bar')
-  if (!topBar) return () => {}
   /* 摘录是宿主（阅读模块）的能力，知识库的区块编辑器不传就没有这个按钮 —— 浮条本身不知道摘录是什么。 */
   const canExcerpt = typeof options.onExcerpt === 'function'
   const swatch = (item) => `<button type="button" data-href="#cc-fg-${item.key}" title="${item.label}色文字" aria-label="${item.label}色文字"><i style="background:${item.value}"></i></button>`
@@ -680,11 +686,13 @@ const attachColorControls = (crepe, root, options = {}) => {
      每次顶栏刷新都可能被 diff 掉；挂在容器下则完全在我们的控制里。
      先清掉同层的旧色板：连续切换模式时旧实例可能把自己的色板挂进了这一份顶栏，
      不去重就会出现两排一模一样的按钮。 */
-  for (const stale of topBar.querySelectorAll(':scope > .codescope-color-group')) stale.remove()
-  /* 也插到 inner 最前：append 到 topBar 末尾会让它在窄容器下被裁掉。 */
-  const innerHost = topBar.querySelector('.top-bar-inner')
-  if (innerHost) innerHost.insertBefore(group, innerHost.firstChild)
-  else topBar.appendChild(group)
+  if (topBar) {
+    for (const stale of topBar.querySelectorAll(':scope > .codescope-color-group')) stale.remove()
+    /* 也插到 inner 最前：append 到 topBar 末尾会让它在窄容器下被裁掉。 */
+    const innerHost = topBar.querySelector('.top-bar-inner')
+    if (innerHost) innerHost.insertBefore(group, innerHost.firstChild)
+    else topBar.appendChild(group)
+  }
 
   const panel = document.createElement('div')
   panel.className = 'codescope-color-menu'
@@ -859,10 +867,18 @@ async function create(options = {}) {
   frontmatter.body = tableLayout.body
   let tableWidths = tableLayout.widths
   const composeMarkdown = (markdown) => frontmatter.prefix + withTableLayout(fromEditorMarkdown(markdown), tableWidths)
+  /* TopBar（Crepe 自带的那条 Heading1 + B/I/U 工具条）**默认开着** ——
+     阅读视图 / 分栏 / 主编辑区都依赖它（assets/app-reading.js:1009 与 assets/app.js:516
+     两处调用只传 root / markdown / onChange，根本没提这个参数）✓，所以默认值**必须**是 true；
+     改成 false 会把阅读模块那条工具条一起弄没 ✗。
+     传 topBar: false 才关 —— 只给「生活面板」的备忘录 .lw-memo-ce 与日记 .lw-j-ce 两处用 ✓：
+     那两处面板自己就有工具栏，Crepe 这条是重复的一整排（用户原话：「与面板自己的按钮重复，很扎眼」）✗。
+     ⚠️ 严格比 options.topBar !== false：不传 / undefined / 其它真值 = **开** ✓（宁可不关，也不误关 ✗）。 */
+  const topBar = options.topBar !== false
   const crepe = new Crepe({
     root,
     defaultValue: toEditorMarkdown(tableLayout.body),
-    features: { [CrepeFeature.TopBar]: true },
+    features: { [CrepeFeature.TopBar]: topBar },
     featureConfigs: {
       [CrepeFeature.Placeholder]: { text: '输入 / 插入区块；拖动左侧手柄调整顺序…', mode: 'block' },
       [CrepeFeature.BlockEdit]: blockEditConfig,
