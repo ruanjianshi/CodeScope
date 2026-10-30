@@ -4266,7 +4266,7 @@
     else if (smart === "today") all = allNoTrash.filter((m) => dayK0(m.edit || m.at) === todayK0);
     else if (smart === "trash") all = raw.filter((m) => m.trash);
     const kw = String((STORE && STORE.memoQ) || "").trim().toLowerCase();
-    const tagF = (STORE && STORE.memoTag) || "";
+    let tagF = (STORE && STORE.memoTag) || "";
     const editing = (STORE && STORE.memoEditing) || "";
     const fmt = (STORE && STORE.memoFmt) || {};
     /* ★ 标签统计里**排除颜色 / 高亮的内部 token** ✗✗（2026-10-30）——
@@ -4289,6 +4289,14 @@
       .map((x) => x.slice(1)).filter((x) => !CC_TAG.test(x) && !CC_HEXTOKEN.test(x));
     const tagCount = {};
     raw.filter((m) => !m.trash).forEach((m) => tagsOf(m.text).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+    /* ★ 2026-10-31 幽灵筛选自愈 —— 用户报「左栏 7 条、列表 0 条」的真因：
+       STORE.memoTag 存的是一个**已不存在的标签**（旧颜色污染留下的 `cc-fg-blue`，实测存在 store 里），
+       于是 `!tagF || tagsOf(...).includes(tagF)` 恒为 false ⇒ 所有笔记被过滤掉，
+       而左栏计数走 m.folder 不受影响 ⇒ 看起来像「数据丢了」✗（其实一条没少 ✓）。
+       处理：筛选标签若不在当前标签表里，就**连筛选状态一起清掉**，不再让用户卡在空列表里 ✓。 */
+    if (tagF && tagCount && !Object.prototype.hasOwnProperty.call(tagCount, tagF)) {
+      tagF = ""; if (STORE) { STORE.memoTag = ""; saveStore(); }
+    }
     let shown = all.filter((m) => (!kw || String(m.text || "").toLowerCase().includes(kw)) && (!tagF || tagsOf(m.text).includes(tagF)));
     shown.sort((a, b) => { if (!!b.pin !== !!a.pin) return (b.pin ? 1 : 0) - (a.pin ? 1 : 0); return (b.edit || b.at || 0) - (a.edit || a.at || 0); });
     const sel = (STORE && STORE.memoSel) || (shown[0] && shown[0].id) || "";

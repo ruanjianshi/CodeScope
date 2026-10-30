@@ -276,7 +276,8 @@ const SIZE_CAP = [
      存储格式改为 <span style="color:#xxx">文字</span> / <mark>文字</mark>；编辑器内部仍用链接标记
      （Crepe 唯一能原样存活的 mark），渲染层用画手转换并用 MutationObserver 守卫避免丢数据。
      面板 10,468 → 10,510、编辑器 225 → 344、样式 2,313 → 2,321 ✓ */
-  ['assets/life-workbench.js', 10510],
+  ['assets/life-workbench.js', 10513],   /* 10510 → 10513（+3）：幽灵筛选自愈 —— 标签筛选指向已不存在的标签时自动清掉，
+                                             否则用户会卡在空列表里、看起来像数据丢了 ✓ */
   ['assets/life-editor.js', 344],   /* 197 → 225（+28）：删掉选中浮层后，主工具栏补「删除块」——
                                          有选区删选区、无选区删当前整块，走原生 execCommand 以便进撤销栈 ✓ */
   ['assets/life-styles.js', 2321],   /* 12,804 → 12,810（+6）：列表标记与文字基线对齐（标记盒高度改成 calc(var(--lw-lh)*1em)，
