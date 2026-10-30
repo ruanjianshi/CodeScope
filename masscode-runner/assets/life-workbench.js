@@ -809,17 +809,41 @@
     while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
     return (v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)) + ' ' + u[i];
   }
+  /* 摘掉**我们自己那两个内联标记**（<span style="color:…"> / <mark>）→ 纯文本 ✓
+     ⚠️ 「只能显示文字」的地方必须先过它一遍 ✗✗：正文里存的是真 HTML ✓，
+        列表预览 / 标题输入框这类地方直接照抄，就会把「<span style="color:#f2…」
+        这串源码显示给用户 ✓（2026-10-30 实测截到，比没颜色还糟 ✗）。
+     （渲染类的地方**不要**用它 —— mdToHtml 里那两个标记是要原样保留的 ✓）*/
+  const plainMd = (s) => String(s == null ? '' : s).replace(/<\/?span\b[^>]*>|<\/?mark\b[^>]*>/gi, '');
   /* 迷你 Markdown 渲染：标题 / 粗体 / 斜体 / 行内码 / 代码块 / 引用 / 列表 / 复选框 / 表格 / 链接 / 分隔线 / #标签 */
   function mdToHtml(src) {
     const lines = String(src == null ? '' : src).split('\n');
     let out = '', inCode = false, inList = '', inTable = false;
-    const inline = (t) => esc(t)
+    const inlineRaw = (t) => esc(t)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
       .replace(/~~([^~]+)~~/g, '<del>$1</del>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/#([\u4e00-\u9fa5\w/-]+)/g, '<span class="tag">#$1</span>');
+    /* ★ 真颜色 / 真高亮要**原样穿过**渲染器 ✗✗（2026-10-30）——
+       正文里存的是 <span style="color:#f2555a">文字</span> / <mark>文字</mark> ✓，
+       而这条迷你渲染器的第一步就是 esc() ✓ → 不特殊处理的话，导出的 PNG 上会
+       明晃晃地印出「&lt;span style=...&gt;」这一串**源码** ✗（比没颜色还糟 ✓）。
+       做法：先摘出来占位（占位符用 \u0001，esc / 各种行内规则都不碰它 ✓），
+       走完再把**已经渲染好**的片段放回去 ✓ —— 顺带解决「#f2555a 被 #标签规则吃掉」✗
+       （颜色值也是 # 开头，不摘出来就会变成 <span class="tag">#f2555a</span> ✓）。 */
+    const inline = (t) => {
+      const keep = [];
+      const held = String(t == null ? '' : t).replace(
+        /<span\b[^>]*?\bstyle\s*=\s*(["'])\s*color\s*:\s*(#[0-9a-fA-F]{3,8})\s*\1[^>]*>([^<]*)<\/span>|<mark\b[^>]*>([^<]*)<\/mark>/gi,
+        (m, q, hex, spanBody, markBody) => {
+          keep.push(hex ? '<span style="color:' + hex.toLowerCase() + '">' + inlineRaw(spanBody) + '</span>'
+            : '<mark>' + inlineRaw(markBody) + '</mark>');
+          return '\u0001' + (keep.length - 1) + '\u0001';
+        });
+      return inlineRaw(held).replace(/\u0001(\d+)\u0001/g, (m, i) => keep[Number(i)] || '');
+    };
     const closeList = () => { if (inList) { out += '</' + inList + '>'; inList = ''; } };
     const closeTable = () => { if (inTable) { out += '</tbody></table>'; inTable = false; } };
     for (let i = 0; i < lines.length; i++) {
@@ -1115,6 +1139,59 @@
     return p;
   }
 
+
+  /* ════ 颜色 / 高亮：假链接 → 真 HTML 的**一次性迁移**（2026-10-30）══════════
+     ⚠️⚠️ 为什么必须迁移 ✗✗：旧色板把选中文字写成了**内部链接** ✓
+        [文字](#cc-fg-red) / [文字](#cc-hl)
+      两个后果都是**坏的**（用户截图指出 ✓）：
+        ① 点上去弹链接预览浮窗 ✓（用户看到的是链接不是颜色 ✓）；
+        ② #cc-fg-blue 是标准标签语法 → 被标签系统当真标签收进索引 ✓
+           （「所有标签」下冒出 # cc-fg-blue 1 ✓ → 数据污染 ✓）。
+     ★ 换成**文字自己的属性**：<span style="color:#f2555a">文字</span> / <mark>文字</mark> ✓
+       —— 不产链接、不产标签、不弹预览 ✓。
+
+     ★★ 三条硬要求，逐条对上 ✓：
+       ① **只走 store 这条落盘链路** ✗ 不碰磁盘上的 vault 文件 ✓ ——
+          改的是内存里的 STORE.memos[].text / STORE.journal[].text ✓，
+          然后调**既有**的 saveStore(true)（300ms 防抖那套的「立刻存」分支 ✓）。
+       ② **幂等** ✓ —— 转换本体是 assets/life-editor.js 的 mdToStore ✓，
+          已经是 <span>/<mark> 的串再走一遍**逐字不变** ✓ → 第二次跑 changed=0
+          → 不写盘、不覆盖备份 ✓。
+       ③ **可回滚** ✓ —— 迁移前把**原文**原样抄一份进 STORE.ccColorBackup
+          （id/date + 迁移前 text ✓）。它就存在本机的 life-workbench.json 里 ✓
+          （本仓没有「写任意 JSON 文件」的接口 ✗，而 vault 是禁写区 ✗ ——
+           存进 store 是自己这条路里唯一合规的落点 ✓），要回滚把 text 抄回去即可 ✓。
+       ④ **不碰普通链接** ✓ —— 只认 #cc-fg-* 与 #cc-hl ✓（用户自己写的 [x](https://…)
+          一个字都不动 ✓），围栏代码块、行内代码里的**示例**也跳过 ✓。
+     ⚠️ 为什么用 ed.mdToStore 而不是在这里再写一份正则 ✗✗：颜色表 + 括号扫描器
+        只该有一份 ✓ —— 两份必然有一天不一致（点了红存成另一个红 ✓）。 */
+  function migrateColorSyntax() {
+    const ed = window.CodeScopeLifeEditor;
+    if (!ed || typeof ed.mdToStore !== 'function' || !STORE) return 0;
+    const lists = [
+      [Array.isArray(STORE.memos) ? STORE.memos : [], 'id'],
+      [Array.isArray(STORE.journal) ? STORE.journal : [], 'date'],
+    ];
+    let changed = 0;
+    const bak = { at: Date.now(), version: 1, memos: [], journal: [] };
+    lists.forEach(([list, keyName], idx) => {
+      list.forEach((row) => {
+        if (!row || typeof row.text !== 'string') return;
+        const next = ed.mdToStore(row.text);
+        if (next === row.text) return;
+        bak[idx ? 'journal' : 'memos'].push({ k: row[keyName], text: row.text });
+        row.text = next;
+        changed += 1;
+      });
+    });
+    if (!changed) return 0;
+    /* ⚠️ 备份**只留最早那份** ✗ —— 覆盖掉就回滚不回去了 ✓（第二次迁移时原文已经变了 ✗）。 */
+    if (!STORE.ccColorBackup) STORE.ccColorBackup = bak;
+    STORE.ccColorMigratedAt = bak.at;
+    saveStore(true);                    /* 走既有落盘链路 ✓（不直接写任何文件 ✓） */
+    return changed;
+  }
+
   async function load(force) {
     if (LOADING) return;
     LOADING = true;
@@ -1143,6 +1220,11 @@
       STORE_LAST_ERROR = '';
       /* ⚠️ 换了内存里那份 → 上次发出去的基线**作废** ✗（不然可能误判「没变」✗） */
       LAST_WORDS_JSON = null; PENDING_WORDS_JSON = null;
+      /* ★ 迁移放在**这里**（读完立刻改内存 ✓，在 render() 之前 ✓）：
+         界面第一次画出来的就已经是干净数据 ✓，不会先闪一下链接语法 ✓。
+         ⚠️ 必须 STORE_READY 已经是 true ✗ —— 不然 saveStore 会被「没读到数据不许存」
+            那道护栏直接拦掉 ✓（等于迁移只在内存里、没落盘 ✓）。 */
+      try { migrateColorSyntax(); } catch (_) { /* 迁移失败不许拖垮面板 ✓（旧数据仍然能读 ✓）*/ }
     } else {
       /* 读失败：**保留上一次的 STORE** ✓（有的话），绝不拿空壳顶替 ✗ */
       STORE_LAST_ERROR = String((store && (store.error || store.message)) || '连不上本机服务（服务没起来 / 网络断了）');
@@ -4064,13 +4146,18 @@
       /* ★ 2026-10-30 补「删除」✓（用户：「缺少删除」）——
          行为：**有选区删选区，无选区删当前整块** ✓（实现见 life-editor.js 的 exec + removeAt ✓：
          走 execCommand('delete') → ProseMirror 收成一条普通事务 → 进撤销栈 + 触发保存 ✓）。
-         ⚠️ title 写「删除选中 / 当前块」而不是只写「删除」✗ —— 这条栏右边还有一颗
-            button#lw-memo-del（**整条备忘录进回收站** ✓，见下面 editor 那一段 ✓），
-            两颗都叫「删除」用户分不清 ✓。
-         ⚠️ 标签用 ⌫ 不用「删除」两个字：窄屏（容器查询）下这排按钮只有 22px 宽 ✓。
+         ⚠️ title 必须写清楚是「**选区 / 当前块**」而不是只写「删除」✗ ——
+            这条栏右边还有一颗 button#lw-memo-del（= **整条笔记移入回收站** ✓，
+            2026-10-30 已改名「回收站」✓）。两颗原来都叫「删除」，用户分不清 ✓，
+            点错的代价还不一样（一颗是删几个字，一颗是整条进回收站 ✓）。
+            ⇒ 现在：⌫ = 「删除选区或当前块」（2026-10-30 按用户要求改的文案 ✓），
+               回收站 = 「把这条笔记移入回收站」✓，一眼能区分 ✓。
+         ⚠️ 标签用 ⌫ 不用「删除」两个字：窄屏（容器查询）下这排按钮只有 22px 宽 ✓
+            （所以**长文案只加在右边那颗**「回收站」上，它本来就带文字 ✓；
+              窄屏到底时那颗会被容器查询整体收起 ✓，见 life-styles.js 的 .lw-nt-bar 查询 ✓）。
          ⚠️ 新按钮和 b('image',…) 挤在**同一行**写：棘轮只数代码行，本文件上限 = 实测值
             10468，多一行代码就红 ✗（注释不数 ✓，所以理由都写在这里 ✓）。 */
-      + b('image', '▧', '插入图片') + b('delete', '⌫', '删除选中 / 当前块')
+      + b('image', '▧', '插入图片') + b('delete', '⌫', '删除选区或当前块')
       + '<button data-lmore="1" title="更多：公式 / 分隔线 / 链接 / 颜色 / 源码">⋯</button>'
       + '<span class="chrome"></span>';
   }
@@ -4182,7 +4269,24 @@
     const tagF = (STORE && STORE.memoTag) || "";
     const editing = (STORE && STORE.memoEditing) || "";
     const fmt = (STORE && STORE.memoFmt) || {};
-    const tagsOf = (t) => (String(t || "").match(/#[\u4e00-\u9fa5\w/-]+/g) || []).map((x) => x.slice(1));
+    /* ★ 标签统计里**排除颜色 / 高亮的内部 token** ✗✗（2026-10-30）——
+       旧色板写进正文的 [文字](#cc-fg-blue) 里，那个 #cc-fg-blue 长得**完全像**一个
+       标准标签 ✓ → 被这里收进索引 ✓ → 用户截图里「所有标签」下面冒出
+       「# cc-fg-blue 1」这种**数据污染** ✓（那不是标签，是颜色）。
+       迁移（migrateColorSyntax）会把正文里的旧语法换成 <span>/<mark> ✓，
+       正常情况下这里一个都扫不到 ✓；这一层是**兜底** ✓ —— 迁移没跑成、或用户
+       从别的设备同步回来一条旧格式 ✓，标签索引也不能脏 ✗。 */
+    /* ⚠️⚠️ 还有**第二处**污染，比第一处更隐蔽（实测踩到 → 测试当场抓到 ✓）：
+       迁移成 <span style="color:#f2555a"> 之后，属性里的 **#f2555a** 照样是一个
+       "# + 单词" ✓ → 标签索引里冒出 f2555a / 5b9cf5 这种**十六进制色值** ✗
+       （实测输出：["f2555a","5b9cf5","写作","复盘"] ✓）。
+       ⇒ 扫标签之前先把**我们自己这两个标签**整段摘掉（<span …> / </span> / <mark> / </mark>）✓，
+         再拿 /^[0-9a-f]{3,8}$/ 兜一道底 ✓（万一格式有出入，色值也不会被当成标签 ✓）。 */
+    const CC_TAG = /^cc-(fg-|hl$)/;
+    const CC_INLINE_TAG = /<\/?span\b[^>]*>|<\/?mark\b[^>]*>/gi;
+    const CC_HEXTOKEN = /^[0-9a-f]{3,8}$/i;
+    const tagsOf = (t) => (String(t || "").replace(CC_INLINE_TAG, "").match(/#[\u4e00-\u9fa5\w/-]+/g) || [])
+      .map((x) => x.slice(1)).filter((x) => !CC_TAG.test(x) && !CC_HEXTOKEN.test(x));
     const tagCount = {};
     raw.filter((m) => !m.trash).forEach((m) => tagsOf(m.text).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
     let shown = all.filter((m) => (!kw || String(m.text || "").toLowerCase().includes(kw)) && (!tagF || tagsOf(m.text).includes(tagF)));
@@ -4212,7 +4316,11 @@
       const d = D(m.edit || m.at);
       const isToday = dayK(m.edit || m.at) === todayK;
       const when = isToday ? (pad(d.getHours()) + ":" + pad(d.getMinutes())) : (d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate());
-      const body = String(m.text || "").split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").replace(/^\s*[-*+]\s*\[[ xX]\]\s*/gm, "").slice(0, 22);
+      /* ⚠️ 列表里这一行是**纯文本预览**（不是渲染）✗✗ —— 正文改成
+         <span style="color:#f2555a">…</span> / <mark>…</mark> 之后，不摘掉这两个标记的话
+         左边列表会明晃晃写着「<span style="color:#f2…」✓（实测截到 ✓，比没颜色更糟）。
+         ⇒ 按长度截断**之前**先摘标签 ✓（顺序不能反：先截 22 字会把半个标签留在行里 ✗）。 */
+      const body = plainMd(m.text).split("\n").slice(1).join(" ").replace(/^[☐☑]\s*/gm, "").replace(/^\s*[-*+]\s*\[[ xX]\]\s*/gm, "").slice(0, 22);
       const td = todoOf(m);
       /* `extra` 描述的是**内容形态**（待办进度 / 有没有表格），**不是文件夹名** ✓
          ⚠️ 以前这里回退成字面量 "备忘录" ✗ —— 和文件夹名撞在一起，
@@ -4225,7 +4333,7 @@
       const folTag = (view === 'all' && (m.folder || '备忘录'))
         ? '<span class="bd" style="color:' + T.accent + '">▤ ' + esc(m.folder || '备忘录') + '</span> · ' : '';
       return '<div class="lw-nt-row ' + (cur && m.id === cur.id ? "on" : "") + '" data-memo="' + m.id + '" draggable="true" title="拖到左边文件夹可移动归属">'
-        + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(String(m.text || "").split("\n")[0].slice(0, 30) || "新备忘录") + '</div>'
+        + '<div class="c"><div class="tt">' + (m.pin ? '<span class="pin">★ </span>' : "") + esc(plainMd(String(m.text || "").split("\n")[0]).slice(0, 30) || "新备忘录") + '</div>'
         + '<div class="mt"><b>' + when + '</b>' + (body ? "  " + esc(body) : "") + '</div>'
         + '<div class="sub">' + folTag + extra + (tagsOf(m.text).length ? " · #" + tagsOf(m.text)[0] : "") + '</div></div></div>';
     };
@@ -4303,12 +4411,26 @@
       + '<span class="st ' + (STORE.memoSaved ? "ok" : "") + '" id="lw-memo-status" aria-live="polite">' + (STORE.memoSaved ? "✓ 已保存" : "自动保存") + '</span>'
       + '<button data-mpin="' + cur.id + '" title="置顶">' + (cur.pin ? ICO('star', 'is-on') : ICO('star')) + '</button>'
       + '<button id="lw-memo-export" title="导出 Markdown（.md）">导出</button>'
-      + '<button id="lw-memo-del" title="移到回收站（可撤销）">删除</button>'
+      /* ★ 2026-10-30 改名「删除」→「回收站」（用户要求）——
+         原来这颗和格式组里的 ⌫ **都叫「删除」** ✗，而两者做的事完全不同：
+           · ⌫（data-fmt="delete"）= 删**选区 / 当前块** ✓（光标处的文字）；
+           · 这颗 = 把**整条备忘录**移进回收站 ✓（数据层面，可撤销 ✓）。
+         用户分不清，点错的代价还不一样大 ✓。⇒ 文案和 title 都写清楚 ✓，
+         **行为一个字节都没动** ✓（onclick 还是 mDel 那段：snapMemo + trash + 落盘 ✓）。
+         ⚠️ 窄屏不能因为「回收站」比「删除」长一个汉字就挤坏这条工具栏 ✗✗（它 nowrap、
+            按钮 flex:none ✓，1280 视口那一档实测正好放满 ✓，多 12px 就会溢出 ✓）——
+            ⇒ 文字 + 图标**两份都写在 DOM 里**，由 life-styles.js 的容器查询二选一 ✓
+              （≤760px 只留 🗑 图标，宽度和改动前一样 ✓；宽屏显示「回收站」三个字 ✓）。
+              和日期 dt-full / dt-mini 是同一套做法 ✓（不在 JS 里量宽度，那样会抖 ✓）。 */
+      + '<button id="lw-memo-del" title="把这条笔记移入回收站"><i class="ico">🗑</i><span class="lbl">回收站</span></button>'
       + '</div>'
       + '<div class="lw-nt-body">'
       + (() => {
         /* 编辑区（标题 + 正文）。图片预览打开时会和预览栏并排成两栏 ✓ */
-        const editPane = '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
+        /* ⚠️ 标题框也只能显示**文字** ✗：标题行万一被染过色（旧数据 / 粘贴），
+           直接把 text 塞进 value 会显示成一串 <span style=…> ✓ → 走 plainMd ✓。
+           注意：用户改标题会把这一行重写成纯文本 ✓（标题本来就不支持颜色 ✓）。 */
+        const editPane = '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(plainMd(String(cur.text || "").split("\n")[0])) + '" placeholder="标题" />'
           + memoEditorHostHtml(cur);
         const pv = MEMO_IMG_PREVIEW;
         if (!pv) return editPane;

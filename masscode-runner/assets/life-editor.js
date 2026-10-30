@@ -52,6 +52,187 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  /* ════ 颜色 / 高亮：**真颜色**层（2026-10-30 重做）═════════════════════════
+     ⚠️⚠️ 这一层解决的是一条**真缺陷**（用户截图指出）：
+       色板（顶栏 A / ▮）原来把选中文字包成**内部链接** ——
+         [文字](#cc-fg-red)   ← 颜色
+         [文字](#cc-hl)        ← 高亮
+       两个后果都不是「不好看」，是**坏的** ✗：
+         ① 点上去弹**链接预览浮窗**（#cc-fg-red + 复制/编辑/删除三颗图标）——
+            用户看到的是链接，不是颜色 ✓；
+         ② #cc-fg-blue 是**标准标签语法** ✗ → 被标签系统当真标签收进索引 ✓
+            （用户截图：「所有标签」下面冒出 # cc-fg-blue 1 这种数据污染 ✓）。
+
+     ★ 目标：颜色 = **文字自己的属性**（内联样式 <span style="color:#ff7675">）、
+        高亮 = **<mark>**；不产出链接、不产出标签、不弹链接预览 ✓。
+     ★ 存储（落进 STORE.memos[].text / STORE.journal[].text 的格式）就是上面那两种 ✓。
+
+     ⚠️⚠️ 为什么不能只改字符串、也不能只改 DOM（实测记录，别重走）：
+       · 只改存储 ✗：编辑器里还是 <a href="#cc-fg-red"> → 仍旧弹链接预览 ✓，验收过不了 ✓。
+       · 只改 DOM ✗✗：把 <a> 就地换成 <span>，ProseMirror 的 DOMObserver 会把这看成
+         「用户把链接标记删掉了」→ 立刻发一条事务 ✓ → 实测 1 秒内 markdown 从
+         [文字](#cc-fg-red) 变成**纯文本**，颜色**真的丢了** ✓（数据损坏，不是样式问题 ✗）。
+       · 想走 EditorView.setProps({markViews}) 也不行 ✗：这个构建里 ViewDesc **不存 view**
+         （实测 pmViewDesc 只有 parent/children/dom/contentDOM/dirty/node/outerDeco/innerDeco ✓），
+         DOM 上也没有 Vue / milkdown 句柄 ✓，外面**拿不到** EditorView ✓。
+       · 改 src ✗（禁改文件）、改构建产物 ✗（不在可改清单）→ 只剩下面这条路 ✓。
+
+     ★★★ 所以：**编辑器文档里保持链接标记（零改动、零丢数据）+ 渲染层改成真样式** ✓
+       ① 挂载时：存储里的 <span>/<mark> → 反编码成 [文字](#cc-fg-red) 交给 Crepe ✓
+          （Crepe 能原样保留的只有链接 mark —— src/reading-block-editor.js:495 那句注释 ✓）；
+       ② 渲染后：把 <a href="#cc-fg-*"> 就地画成 <span style="color:...">、<mark> ✓；
+       ③ 保存时：链接语法 → 存储格式 <span>/<mark> ✓（STORE 里**永远**是真 HTML ✓）；
+       ④ 画的时候用 MutationObserver 守卫屏蔽 ProseMirror 的回调 ✓（见 CC_PAINTING）——
+          编辑器「看不到」这次改动 → 文档一个字节都不动 ✓，颜色不会丢 ✓。
+     ── 实测（2026-10-30，4933 临时实例）─────────────────────────────────
+       · 画完 DOM：<p><span style="color:#f2555a">文字</span></p>，无 <a href="#cc-fg" ✓
+       · getComputedStyle().color = rgb(242, 85, 90)（原色 rgb(211, 198, 170)）✓
+       · 同一时刻 markdown 仍是 [文字](#cc-fg-red) → 文档没被改 ✓
+       · 在色块中间敲字：文字落点正确（颜色守Z卫测试）✓，敲完重绘回 <a>，画手再贴回 <span> ✓
+     ══════════════════════════════════════════════════════════════════════ */
+  /* 色板键 ↔ 真颜色。必须和 src/reading-block-editor.js 的 COLOR_ITEMS **逐字一致** ✗：
+     不一致的话，用户点了「红」，存下来的是另一个红 ✓（迁移映射表也会对不上 ✓）。 */
+  const CC_COLORS = [['red', '#f2555a'], ['orange', '#f0883e'], ['yellow', '#dcb13c'], ['green', '#4bbd7a'],
+    ['cyan', '#3fb6c4'], ['blue', '#5b9cf5'], ['purple', '#a97bf0'], ['pink', '#ef7bb0'], ['gray', '#95a0ae']];
+  const CC_HEX = {}, CC_KEY = {};
+  CC_COLORS.forEach((p) => { CC_HEX[p[0]] = p[1]; CC_KEY[p[1]] = p[0]; });
+  const CC_HL = '#cc-hl';
+  const CC_FG = '#cc-fg-';
+  /* 自己改 DOM 的**屏蔽计数器** ✓（>0 时 ProseMirror 的 mutation 回调整个跳过 ✓）*/
+  let CC_PAINTING = 0;
+  const CC_MO = typeof window.MutationObserver === 'function' ? window.MutationObserver : null;
+  /* ★ 守卫必须装在**编辑器创建之前** ✗✗：MutationObserver 是 View 在构造时 new 出来的 ✓，
+     装晚了它已经拿到原生构造器 → 屏蔽无效 ✓（实测：晚装的守卫一点用都没有，markdown 照样被改 ✓）。
+     这个文件在 life-workbench.js 之前加载 ✓，而备忘录 / 日记的编辑器是**打开面板后**才创建的 ✓，
+     所以这里的时机是够的 ✓。包装是**完全透明**的：CC_PAINTING 为 0 时原样转发 ✓，
+     不会影响任何一个别处的观察者 ✓。 */
+  if (CC_MO) {
+    const Guarded = function (cb) {
+      return new CC_MO(function () {
+        if (CC_PAINTING > 0) return;
+        return cb.apply(this, arguments);
+      });
+    };
+    Guarded.prototype = CC_MO.prototype;
+    try { window.MutationObserver = Guarded; } catch (_) {}
+  }
+  /* 一段普通文本里找 [文字](#cc-fg-<key>) / [文字](#cc-hl)，交给 make 换掉 ✓。
+     ⚠️ 必须按「配对括号 + 反斜杠转义」扫 ✗✗：正文里出现「[注]」这种方括号很常见 ✓，
+        拿 /\[[^\]]+\]/ 一刀切会把 [注] 后面的内容一起吞掉 → **改坏用户内容** ✗。
+     ⚠️ 只认 #cc-fg-* 与 #cc-hl ✗：用户自己写的真链接必须原样留着 ✓（迁移同理 ✓）。 */
+  function ccLinks(seg, make) {
+    let out = '', i = 0;
+    while (i < seg.length) {
+      const c = seg.charAt(i);
+      if (c === '\\') { out += seg.substr(i, 2); i += 2; continue; }
+      if (c !== '[') { out += c; i += 1; continue; }
+      let depth = 0, j = i, close = -1;
+      while (j < seg.length) {
+        const ch = seg.charAt(j);
+        if (ch === '\\') { j += 2; continue; }
+        if (ch === '[') depth += 1;
+        else if (ch === ']') { depth -= 1; if (!depth) { close = j; break; } }
+        j += 1;
+      }
+      if (close < 0) { out += c; i += 1; continue; }
+      const m = /^\((#[^)\s]+)(?:\s+"[^"]*")?\)/.exec(seg.slice(close + 1));
+      const href = m ? m[1] : '';
+      if (!m || (href !== CC_HL && href.indexOf(CC_FG) !== 0) || (href !== CC_HL && !CC_HEX[href.slice(CC_FG.length)])) {
+        out += seg.slice(i, close + 1); i = close + 1; continue;
+      }
+      out += make(seg.slice(i + 1, close), href);
+      i = close + 1 + m[0].length;
+    }
+    return out;
+  }
+  /* 行内代码 `...` 原样跳过 ✓（示例代码里的 [文字](#cc-hl) 不是内容 ✓）*/
+  function ccInline(line, fn) {
+    const s = String(line);
+    if (s.indexOf('`') < 0) return fn(s);
+    return s.split(/(`+[^\`]*`+)/).map((p) => (p && p.charAt(0) === '`') ? p : fn(p)).join('');
+  }
+  /* 逐行做替换，**围栏代码块整段跳过** ✓ —— 理由同 normalizeMd：
+     笔记里本来就可能写着「本仓把 ==高亮== 编码成 [文字](#cc-hl)」这种**示例**
+     （assets/life-styles.js 里就有 ✓），把示例改成 <mark> 就是把正文读坏 ✗。 */
+  function ccMap(md, fn) {
+    const lines = String(md == null ? '' : md).split('\n');
+    let fence = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\s*(```|~~~)/.test(lines[i])) { fence = !fence; continue; }
+      if (fence) continue;
+      lines[i] = ccInline(lines[i], fn);
+    }
+    return lines.join('\n');
+  }
+  /* 编辑器 markdown（链接语法）→ **存储格式**（<span>/<mark>）✓
+     ⚠️ 幂等 ✓：已经是 <span>/<mark> 的字符串再走一遍**逐字不变** ✓ ——
+        迁移要跑两次结果相同，靠的就是这一点 ✓。 */
+  function mdToStore(md) {
+    return ccMap(md, (seg) => ccLinks(seg, (body, href) => (href === CC_HL)
+      ? '<mark>' + body + '</mark>'
+      : '<span style="color:' + CC_HEX[href.slice(CC_FG.length)] + '">' + body + '</span>'));
+  }
+  /* 存储格式 → 编辑器 markdown ✓（挂载时用；认不出的 span 原样留着 ✓，绝不猜颜色 ✗）*/
+  function mdToEditor(md) {
+    return ccMap(md, (seg) => seg
+      .replace(/<span\b[^>]*?\bstyle\s*=\s*(["'])([^"']*)\1[^>]*>([^<]*)<\/span>/gi, (m, q, style, body) => {
+        const c = /color\s*:\s*(#[0-9a-f]{3,8})/i.exec(style);
+        const key = c ? (CC_KEY[c[1].toLowerCase()] || '') : '';
+        return key ? '[' + body + '](' + CC_FG + key + ')' : m;
+      })
+      .replace(/<mark\b[^>]*>([^<]*)<\/mark>/gi, (m, body) => '[' + body + '](' + CC_HL + ')'));
+  }
+  /* 「画手」：把编辑器里渲染出来的假链接**就地画成真样式** ✓
+     ⚠️ 必须包在 CC_PAINTING 里 ✗✗ —— 否则 ProseMirror 会把这次 DOM 改动读成
+        「用户删掉了颜色标记」→ 发事务 → 文档里的标记真被删 → 颜色丢 ✓（实测 ✓）。
+     计数清零放在 setTimeout(0) ✓（不是 Promise）✗：mutation 记录在**当前任务结束**的
+     微任务检查点里派发 ✓，而定时器排在它之后 → 那时清零，自己这批记录一定被屏蔽 ✓。*/
+  function ccPaint(host) {
+    const prose = host && host.querySelector('.ProseMirror');
+    const links = prose ? prose.querySelectorAll('a[href^="#cc-"]') : null;
+    if (!links || !links.length) return 0;
+    CC_PAINTING += 1;
+    try {
+      Array.prototype.forEach.call(links, (a) => {
+        const href = String(a.getAttribute('href') || '');
+        const key = href.indexOf(CC_FG) === 0 ? href.slice(CC_FG.length) : '';
+        const hex = CC_HEX[key] || '';
+        if (!hex && href !== CC_HL) return;
+        const box = document.createElement(hex ? 'span' : 'mark');
+        if (hex) box.setAttribute('style', 'color:' + hex);
+        box.setAttribute('data-cc-color', hex ? key : 'hl');
+        while (a.firstChild) box.appendChild(a.firstChild);
+        a.replaceWith(box);
+      });
+    } finally {
+      setTimeout(() => { CC_PAINTING = 0; }, 0);
+    }
+    return 1;
+  }
+  /* 每个挂载实例一个**自己的**观察者 ✓（用保存下来的原生构造器，不走守卫 ✓）：
+     ProseMirror 每次重绘那一块都会把 <a> 还原 ✓ → 这里立刻补画 ✓。
+     收敛性：没有可画的就**不动 DOM** ✓ → 不产生新记录 → 不会自激 ✓。 */
+  function ccWatch(host, inst) {
+    if (!CC_MO || !host || !inst) return;
+    const draw = () => {
+      if (inst.paintTimer) return;
+      inst.paintTimer = setTimeout(() => {
+        inst.paintTimer = 0;
+        const s = slotOf(host);
+        if (!s || s.inst !== inst || !host.isConnected) return;
+        ccPaint(host);
+      }, 0);
+    };
+    inst.painter = new CC_MO(() => { if (CC_PAINTING > 0) return; draw(); });
+    inst.painter.observe(host, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['href'] });
+    draw();
+  }
+  function ccStop(inst) {
+    if (!inst) return;
+    if (inst.paintTimer) { clearTimeout(inst.paintTimer); inst.paintTimer = 0; }
+    if (inst.painter) { try { inst.painter.disconnect(); } catch (_) {} inst.painter = null; }
+  }
+
   /* ── 两个槽位（备忘录 / 日记）─────────────────────────────────────────────
      一个槽位 = 一份**完整**的编辑器状态：
        inst  = { key, token, ctrl, md, host, opts } —— md 是权威正文 ✓
@@ -155,6 +336,9 @@
        ⚠️ 必须收在**这里**、不是 create 的 then 里 ✗：源码模式 / 没有 host /
          加载失败这几条路都在 create 之前就 return 了 ✓，放 then 里就漏 ✓。*/
     if (prev && prev.menu && prev.menu.isConnected) { try { prev.menu.remove(); } catch (_) {} }
+    /* ★ 旧实例的「画手」也要停 ✗：它观察的是**同一个 host**，不停就会和新实例抢着改 DOM ✓
+       （画出来的东西一样，但两个观察者会互相触发，白烧 CPU ✓）。 */
+    ccStop(prev);
     if (!host) return;
     host.dataset.editorKey = key;
     /* 源码模式：整篇一个 textarea（原样 markdown ✓）—— 没有 Crepe，读 value 就够 ✓ */
@@ -175,7 +359,10 @@
     }
     loadBlockEditor().then((api) => api.create({
       root: host,
-      markdown,
+      /* ★ 交给 Crepe 的是**编辑器语法**（[文字](#cc-fg-red)）✗✗ —— 存储格式里的
+         <span style="color:…"> 它不认（commonmark 预设没有 html 节点 ✓），原样喂进去
+         会被当普通文本留着 / 干脆丢掉 ✓。回来时再由 onChange 转回存储格式 ✓。 */
+      markdown: mdToEditor(markdown),
       /* ★★ topBar **必须留 true** ✗✗（2026-10-30 合并工具栏时的结论，推翻了上一版注释）：
          关掉它 = 连**命令入口**一起关掉 ✓ —— 控制器只暴露 getMarkdown/focus/destroy ✓，
          外面拿不到 crepe / commandsCtx ✓（src 禁改 ✗），而顶栏那排按钮就是命令入口 ✓。
@@ -185,7 +372,10 @@
       topBar: opts.topBar !== false,
       onChange: (md) => {
         if (token !== slot.token || !slot.inst) return;
-        slot.inst.md = normalizeMd(md);
+        /* ★ 存储格式在**这一步**定下来 ✗✗ —— 面板拿 slot.inst.md 直接落盘 ✓，
+           所以 [文字](#cc-fg-red) 必须在这里就变成 <span style="color:#f2555a"> ✓；
+           只在「读出口」转的话，别处照样能把链接语法写进库里（还有别的写入口 ✓）。 */
+        slot.inst.md = mdToStore(normalizeMd(md));
         /* 初始化时 Crepe 会规范化一次并回调 —— 那不是用户编辑，不回调 ✓（同 app-reading.js:522）*/
         if (!host.contains(document.activeElement)) return;
         /* ⚠️ 往下传的必须是**归一化后**的那一份 ✗✗ —— 面板拿它直接落盘 ✓，
@@ -214,6 +404,8 @@
       slot.inst.ctrl = ctrl;
       host.dataset.editorReady = 'true';
       slot.inst.menu = newMenu;
+      /* ★ 挂好了才开「画手」✗：挂之前 .ProseMirror 还不存在 ✓，观察了也没东西可画 ✓。 */
+      ccWatch(host, slot.inst);
       /* 挂好了 → 通知面板：它要把顶栏里 CodeScope 自己插的两组搬进自己那条工具栏 ✓ */
       if (typeof opts.onReady === 'function') { try { opts.onReady(host); } catch (_) {} }
     }).catch((err) => {
@@ -265,6 +457,7 @@
   function destroy(host) {
     const s = slotOf(host);
     if (!s) return;
+    ccStop(s.inst);                                  /* 先停画手 ✓（不然它还在观察已退役的 DOM）*/
     if (s.inst && s.inst.ctrl) { try { s.inst.ctrl.destroy(); } catch (_) {} }
     /* 退役时把它自己的提示框菜单一并收掉 ✓（同 ③ 上面的理由：src 的 destroy 漏了这一步 ✗）*/
     if (s.inst && s.inst.menu && s.inst.menu.isConnected) { try { s.inst.menu.remove(); } catch (_) {} }
@@ -414,6 +607,10 @@
   }
 
   window.CodeScopeLifeEditor = {
+    /* 迁移 / 互转（life-workbench.js 的一次性迁移只走这两个口子 ✓，
+       颜色表和括号扫描器**只留一份** ✗ —— 两份必然有一天对不上 ✓）。 */
+    mdToStore: mdToStore,
+    mdToEditor: mdToEditor,
     mountMemo: mountMemo,
     mountJournal: mountJournal,
     read: read,

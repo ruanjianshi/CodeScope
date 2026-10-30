@@ -584,6 +584,11 @@
   /* 分组竖线 / 日期（日期从「独占一行」改成右侧小字 ✓ --pp-ink2 · 11px ✓）*/
   .lw-nt-bar .div { flex:none; width:1px; height:16px; background:${T.lineDim}; margin:0 1px; }
   .lw-nt-bar .dt { flex:none; font-size:11px; color:var(--pp-ink2); white-space:nowrap; }
+  /* 「回收站」（原「删除」✓ 2026-10-30 改名）：宽屏给三个字，≤760px 交给下面那条
+     容器查询换成 🗑 图标 ✓ —— 图标宽度 = 原来「删除」两个字那档的宽度 ✓，
+     所以 1280 视口那一档（实测正好放满 ✓）不会因为改名多出 12px 而溢出 ✓。 */
+  .lw-nt-bar #lw-memo-del .ico { display:none; font-style:normal; }
+  .lw-nt-bar #lw-memo-del .lbl { white-space:nowrap; }
   /* 搬进来的 ❝ 提示框 / A ▮ 颜色高亮（原本吃的是 .milkdown .top-bar-item 那套尺寸 ✓）
      ⚠️ .codescope-color-group 在 app.css 里是 absolute + right/bottom ✓（贴 Crepe 顶栏右下角）
         —— 搬出来必须改回 static ✗，否则它会飘到我们这条栏的右上角去 ✓。 */
@@ -668,6 +673,9 @@
     .lw-nt-bar .dt-full { display:none; }
     .lw-nt-bar .dt .dt-mini { display:inline; }
     .lw-nt-bar button b { display:none; }
+    /* 「回收站」三个字在这一档换成 🗑 —— 宽度回到改名前的量级 ✓（理由见上面那条注释）*/
+    .lw-nt-bar #lw-memo-del .lbl { display:none; }
+    .lw-nt-bar #lw-memo-del .ico { display:inline; }
   }
   @container (max-width: 420px) {
     .lw-nt-bar .chrome { display:none; }
@@ -2906,6 +2914,25 @@
   background-size: 100% 100%;
   background-image: linear-gradient(to top, color-mix(in srgb, var(--doc-primary), transparent 75%), color-mix(in srgb, var(--doc-primary), transparent 92%));
 }
+
+/* ── ⑧-d-2 **真高亮 <mark>**（2026-10-30，推翻上面那条注释的前半段）────────
+   ⚠️ 上面那段注释说「这里没有 mark」——那是**旧内核**的事实 ✗。现在不一样了 ✓：
+      色板不再把文字包成 [文字](#cc-hl)（假链接 → 点上去弹链接预览 ✗、还被标签系统
+      当成 #cc-hl 收进索引 ✗），改成**存储 <mark>文字</mark>**，由
+      assets/life-editor.js 的「画手」把编辑器里渲染出来的 <a href="#cc-hl"> 就地画成
+      <mark> ✓（机制见那边的长注释 ✓）。
+   ★ 底色必须是**实打实的 background-color** ✗✗ —— 旧的「注水」用的是渐变
+      （background-image），computed background-color 是 transparent ✓，
+      验收要「可见底色」这一条就过不了 ✓，用户也说「看不出是高亮」✓。
+      所以这里给一层**真的高亮笔底**（#f2c14e 34%），悬停加深 ✓；渐变那套留给
+      尚未被画到的 <a href="#cc-hl">（就是画手跑之前那一帧 ✓，避免闪一下）。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark {
+  background-color: rgb(242 193 78 / .34); color: inherit; padding: 0 2px; border-radius: 3px;
+  text-decoration: none; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  transition: background-color .25s ease;
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark:hover { background-color: rgb(242 193 78 / .55); }
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror span[data-cc-color] { text-decoration: none !important; }
 
 /* ── ⑧-e 行内代码：胶囊 + 悬停实心化（theme.css:7193-7236）──────────────
    常态 = 主色 10% 底 + 主色字 + 主色 15% 描边 + 6px 圆角 ✓；
