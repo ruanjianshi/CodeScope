@@ -1979,7 +1979,7 @@
     ed.mountMemo((host && cur) ? host : null, {
       key: id, markdown: body, topBar: true, onChange: memoCommitSoon,
       /* 挂好了就把顶栏里那两组（❝ 提示框 / A·▮ 颜色高亮）搬进唯一那条工具栏 ✓ */
-      onReady: (h) => adoptChrome(h, 'lw-memo-bar'),
+      onReady: (h) => { adoptChrome(h, 'lw-memo-bar'); outlineMountNow(); },
       onStatus: (text) => { const st = document.getElementById('lw-memo-status'); if (st) st.textContent = text; },
     });
   }
@@ -1995,6 +1995,56 @@
     const slot = bar ? bar.querySelector('.chrome') : null;
     const ed = Ed();
     return (slot && ed) ? ed.adopt(host, slot) : false;
+  }
+
+  /* ════ 标题大纲：编辑器左侧那一栏（2026-10-31）════════════════════════════════
+     ★ 面板这边**只画壳 + 开关** ✓ —— 条目怎么来、跟着谁滚、点了怎么定位，
+       全在 assets/life-editor.js 的 `outline`（标题是 Crepe 渲染出来的，面板拿不到 ✓）。
+     ★ 默认**收起** ✓（STORE.outlineOpen 不设 = false ✓）：这一栏一开，编辑区就从 570
+       掉到 382（1280 实测 ✓），所以不能默认占着 ✓。收起时整块 display:none ✓
+       —— 不留「空条」✓（空笔记的占位只在**展开后**显示 ✓）。
+     ★ 开关三个入口 ✓：① 工具栏「⋯ 更多」里的「大纲」✓（零宽度，1280 那条栏实测
+       已经**放满**（+22px 溢出 11px ✓），所以不敢再塞一颗常驻按钮 ✗）；
+       ② ⌥⌘O ✓（和 app.js 的 ⌥O 不冲突：那个不带 ⌘ ✓）；
+       ③ 编辑区够宽（容器 ≥861px）时，栏里另有一颗 ≡ 常驻按钮 ✓（life-styles.js 的
+       容器查询控制显隐 ✓，窄的时候它 display:none、不占宽度 ✓）。
+     ====================================================================== */
+  function outlineHtml(kind) {
+    const on = !!(STORE && STORE.outlineOpen);
+    return '<aside class="lw-outl' + (on ? ' on' : '') + '" id="lw-outl-' + kind + '" aria-label="标题大纲">'
+      + '<div class="lw-outl-hd"><b>大纲</b><span class="sp"></span>'
+      + '<button type="button" class="lw-outl-x" data-outl-close="1" title="收起大纲（⌥⌘O）">×</button></div>'
+      + '<div class="lw-outl-list"><div class="lw-outl-empty">还没有标题</div></div></aside>';
+  }
+  /* 栏里那颗 ≡（宽屏才有宽度 ✓）—— 用 class 不用 id ✗：备忘录和日记两条栏各一颗 ✓ */
+  function outlineToggleHtml() {
+    return '<button type="button" class="lw-outl-tog' + (STORE && STORE.outlineOpen ? ' on' : '')
+      + '" data-outl-tog="1" title="大纲（⌥⌘O）">≡</button>';
+  }
+  /* 把当前页签那一个编辑器接上大纲 ✓（没有编辑器 = 退役旧监听 ✓，绝不留着观察旧 DOM ✗）*/
+  function outlineMountNow() {
+    const ed = Ed();
+    const memo = document.getElementById('lw-memo-ce');
+    const host = memo || document.getElementById('lw-j-ce');
+    const panel = document.getElementById(memo ? 'lw-outl-memo' : 'lw-outl-j');
+    if (!ed || !ed.outline) return false;
+    if (!host || !panel) { ed.outline.stop(); return false; }
+    const x = panel.querySelector('[data-outl-close]');
+    if (x) x.onclick = () => outlineToggle(false);
+    return ed.outline.mount(host, panel);
+  }
+  /* 开关：**不整屏 render** ✓（那会把光标弄丢 ✗）—— 只切 class + 通知编辑器层 ✓ */
+  function outlineToggle(open) {
+    if (!STORE) return;
+    const next = typeof open === 'boolean' ? open : !STORE.outlineOpen;
+    STORE.outlineOpen = next;
+    saveStore();
+    document.querySelectorAll('#lifework-view .lw-outl').forEach((p) => p.classList.toggle('on', next));
+    document.querySelectorAll('#lifework-view [data-outl-tog]').forEach((b) => b.classList.toggle('on', next));
+    if (next) outlineMountNow();
+    else { const ed = Ed(); if (ed && ed.outline) ed.outline.stop(); }
+    const sub = document.getElementById('lw-sub');
+    if (sub) sub.textContent = next ? '大纲已展开 · 点标题跳转 ✓' : '大纲已收起 ✓';
   }
 
   /* 正文变了 → 压撤销快照 + 刷左栏 + 防抖落盘（和旧 onEdit 等价 ✓）*/
@@ -2110,7 +2160,7 @@
     ed.mountJournal(document.getElementById('lw-j-ce'), {
       key: key, markdown: body, topBar: true, onChange: journalCommitSoon,
       /* 同备忘录：挂好了就把顶栏里那两组搬进唯一那条工具栏 ✓ */
-      onReady: (h) => adoptChrome(h, 'lw-j-bar'),
+      onReady: (h) => { adoptChrome(h, 'lw-j-bar'); outlineMountNow(); },
       onStatus: (text) => { const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = text; },
     });
   }
@@ -2964,6 +3014,12 @@
     bindMailCompose();
     /* 左栏 + 中栏的交互（提出来，方便 render() 局部刷新时复用 ✓）*/
     bindMemoSide();
+    /* 标题大纲：每帧 render 之后重新接一次 ✓（面板是真的被重建了 ✗ → 旧节点上的
+       监听/观察者都失效 ✓，所以绑定不能只做一次 ✓）。没有编辑器 = 顺手退役旧监听 ✓ */
+    /* ⚠️ 这里**不能用 q/qa** ✗✗ —— 那两个 const 在 bind() 后面才声明（3232 行 ✓），
+       此刻还在 TDZ 里 ✓（实测会 ReferenceError，整条 bind 挂掉 ✗）。直接用 host ✓。 */
+    host.querySelectorAll("[data-outl-tog]").forEach((el) => { el.onclick = () => outlineToggle(); });
+    outlineMountNow();
     /* ── 卡片：拖「边」改大小 ✓（右边改宽 / 下边改高 / 右下角一起）──
        给每张卡插三条热区 ✓，拖动时实时改宽高 ✓，松手存进 STORE ✓（下次还记得 ✓）。*/
     if (!bind._rs) {
@@ -3379,6 +3435,13 @@
     bindFmtGroup(document.getElementById("lw-memo-ce"), q("#lw-memo-bar"), [
       { sep: true },
       {
+        /* ★ 大纲开关也放这儿 ✓ —— 1280 那条栏**已经放满**（实测再加 22px 溢出 11px ✗），
+           所以不塞常驻按钮 ✗：这里是「编辑器工具栏」里的一个入口 ✓，零宽度 ✓。
+           宽屏另有 ≡ 常驻按钮（life-styles.js 的容器查询 ≥861px 才显示 ✓）。 */
+        k: "outline", label: "大纲（⌥⌘O）",
+        run: () => { outlineToggle(); },
+      },
+      {
         k: "image", label: "导出为图片（PNG）",
         run: () => { if (typeof refreshMemoImage === "function") refreshMemoImage(); },
       },
@@ -3488,6 +3551,10 @@
           const ok = e.shiftKey ? redoMemo() : undoMemo();
           flashMemoStatus(ok ? (e.shiftKey ? "↷ 已重做" : "↶ 已撤销") : (e.shiftKey ? "没有可重做的操作" : "没有可撤销的操作"));
         }
+        /* ⌥⌘O = 大纲开关 ✓（备忘录 / 日记都认）。
+           ⚠️ 和 app.js 的 **⌥O**（不带 ⌘，切源码视图 ✓）不冲突 ✗ ——
+           上面第一行已经要求 metaKey/ctrlKey ✓，那个组合没有 ⌘ ✓。 */
+        else if (k === "o" && e.altKey && (TAB === "memo" || TAB === "journal")) { e.preventDefault(); outlineToggle(); }
       };
       document.addEventListener("keydown", bind._keys);
     }
@@ -3723,7 +3790,11 @@
           （光标、选区、撤销栈都保住 ✓，不用重挂 ✓）。
        ⚠️ 焦点保护（mousedown → preventDefault）统一在 bindFmtGroup 里做 ✓ —— 原来这里那份
           noBlur 只护住了两个按钮，现在护住整组 ✓。 */
-    bindFmtGroup(document.getElementById('lw-j-ce'), q('#lw-j-bar'));
+    bindFmtGroup(document.getElementById('lw-j-ce'), q('#lw-j-bar'), [
+      { sep: true },
+      /* 和备忘录同一项 ✓（零宽度入口；1280 那条栏同样已经放满 ✗）*/
+      { k: 'outline', label: '大纲（⌥⌘O）', run: () => { outlineToggle(); } },
+    ]);
     qa('[data-jtpl]').forEach((btn) => {
       btn.onclick = async () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
@@ -4412,6 +4483,7 @@
       + '<button id="lw-memo-redo" title="重做（⌘⇧Z）"' + (canRedo() ? '' : ' disabled') + '>' + ICO('redo') + '</button>'
       + '<span class="div"></span>'
       + fmtGroupHtml()
+      + outlineToggleHtml()
       + '<span class="sp"></span>'
       /* 日期：宽屏给完整「2026年10月30日 15:04」，窄屏（容器查询）换成省掉年份的那一版 ✓
          —— 两版都写在 DOM 里，靠 CSS 切换 ✓（不在 JS 里量宽度 ✓，那样会抖 ✓）。 */
@@ -4432,6 +4504,8 @@
               和日期 dt-full / dt-mini 是同一套做法 ✓（不在 JS 里量宽度，那样会抖 ✓）。 */
       + '<button id="lw-memo-del" title="把这条笔记移入回收站"><i class="ico">🗑</i><span class="lbl">回收站</span></button>'
       + '</div>'
+      + '<div class="lw-nt-main">'
+      + outlineHtml('memo')
       + '<div class="lw-nt-body">'
       + (() => {
         /* 编辑区（标题 + 正文）。图片预览打开时会和预览栏并排成两栏 ✓ */
@@ -4454,7 +4528,7 @@
           + '<div class="pane img">' + head + '<div class="panebd">' + bodyHtml + '</div></div>'
           + '</div>';
       })()
-      + '</div>'
+      + '</div></div>'
       : '<div class="lw-nt-bar"><button id="lw-memo-new">' + ICO('pen') + ' 新建</button></div><div class="lw-nt-empty"><span class="big">' + ICO('pen') + '</span>选一条备忘录，或点「' + ICO('pen') + ' 新建」</div>';
 
     /* 三栏宽度可拖拽调整（记住到 STORE ✓，双击竖条恢复默认 ✓）*/
@@ -4742,16 +4816,20 @@
       + '<button id="lw-j-redo" title="重做（⌘⇧Z）"' + (canJRedo() ? '' : ' disabled') + '>' + ICO('redo') + '</button>'
       + '<span class="div"></span>'
       + fmtGroupHtml()
+      + outlineToggleHtml()
       + '<span class="sp"></span>'
       + '<select id="lw-j-catsel" title="分类">'
       + '<option value="">无分类</option>' + cats.map((c) => '<option value="' + esc(c) + '"' + (cur && catOf2(cur) === c ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>'
       + Object.keys(J_TPL).map((k) => '<button class="tpl" data-jtpl="' + k + '" title="插入' + J_TPL[k].name + '模板">' + ICO(J_TPL[k].icon) + '</button>').join('')
       + '<label class="autotpl" title="新建日记时自动套用今天的模板"><input type="checkbox" id="lw-j-autotpl"' + (STORE.journalAutoTpl === false ? '' : ' checked') + '/><i>自动套用</i></label>'
       + '</div>'
+      + '<div class="lw-jr-row">'
+      + outlineHtml('j')
+      + '<div class="lw-jr-main">'
       + '<div class="lw-ce lw-j-ce ' + CE_OBS_CLASS + '" id="lw-j-ce" spellcheck="false"></div>'
       + '<div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid ' + T.lineDim + '">'
       + (cur ? '<button class="lw-btn" id="lw-j-del">删除这篇</button>' : "")
-      + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div>'
+      + '<button class="lw-btn" id="lw-j-save">保存</button></div></div></div></div></div>'
       + '</div></div>';
   }
 

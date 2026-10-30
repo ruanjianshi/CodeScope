@@ -606,6 +606,239 @@
     return moved > 0;
   }
 
+  /* ════ 标题大纲（备忘录 / 日记左侧那一栏的数据层）════════════════════════════
+     ★ 为什么放在这个文件：大纲要的东西**只有编辑器这边知道** ✗ ——
+       标题是 Crepe 渲染出来的 `.ProseMirror > h1…h6` ✓（面板拿不到任何 markdown→DOM 的映射 ✓），
+       滚动容器就是正文宿主自己 ✓，点击定位要落在 ProseMirror 的**文档坐标**上 ✓。
+       面板那边只负责画 <aside class="lw-outl"> + 开关 ✓，一行编辑器内部结构都不碰 ✓。
+     ★ 实时性：正文一变就重建条目 ✓ —— 观察 `host` 的 childList/subtree/characterData ✓，
+       防抖 200ms ✓（打字时每个字符都是一条 mutation ✗，不防抖会把 DOM 重建到卡 ✓）。
+       源码模式（整篇 textarea）没有 ProseMirror ✗ → 改成按行解析 markdown ✓ + 监听 input ✓。
+     ★ 高亮跟随：滚动时算「视口上沿略往下那条线（1/5 高，夹 40~120px）以上最后一个标题」✓
+       （贴顶部会停在「上一节」✗、1/3 又会在没滚动时就跳到第二条 ✗ —— 两个都实测过 ✓）。
+       点条目跳转后锁 700ms ✓ ——
+       否则**跳转自己产生的那次 scroll** 会立刻按新位置重算，高亮看起来像没点中 ✓。
+     ★ 光标：按坐标取 DOM 选区（caretRangeFromPoint ✓）再 focus 正文 ✓ ——
+       ⚠️ 合成 mousedown **没用** ✗（实测选区压根不动 ✓，细节见 outlJump 那段注释 ✓）。
+     ⚠️ 本对象状态**只此一份** ✓（同 MEMO/JOURNAL 槽位规矩 ①）：面板不许留副本 ✗。
+     ═══════════════════════════════════════════════════════════════════════════ */
+  const OUTL = { host: null, panel: null, mo: null, timer: 0, items: [], scroll: null, input: null, raf: 0, active: -1, lock: 0 };
+
+  /* 当前正文里的标题：块级模式读 DOM ✓，源码模式读 markdown 行 ✓（围栏代码块整段跳过 ✗）*/
+  function outlHeads(host) {
+    if (!host) return [];
+    if (host.tagName === 'TEXTAREA') {
+      const out = [];
+      let fence = false;
+      String(host.value || '').split('\n').forEach((line, i) => {
+        if (/^\s*(```|~~~)/.test(line)) { fence = !fence; return; }
+        if (fence) return;
+        const m = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+        if (m) out.push({ level: m[1].length, text: m[2].trim() || '未命名标题', line: i });
+      });
+      return out;
+    }
+    const prose = host.querySelector('.ProseMirror');
+    if (!prose) return [];
+    return Array.prototype.map.call(prose.querySelectorAll('h1,h2,h3,h4,h5,h6'), (el) => ({
+      level: Number(String(el.tagName || 'h1').slice(1)) || 1,
+      text: String(el.textContent || '').replace(/\s+/g, ' ').trim() || '未命名标题',
+      el: el,
+    }));
+  }
+
+  /* 重建条目。⚠️ 空笔记 → **占位**「还没有标题」✓（面板展开时不留空条 ✗）*/
+  function outlBuild() {
+    const s = OUTL;
+    const panel = s.panel;
+    if (!panel || !panel.isConnected) return;
+    const list = panel.querySelector('.lw-outl-list');
+    if (!list) return;
+    const items = outlHeads(s.host);
+    s.items = items;
+    const keep = list.scrollTop;
+    list.innerHTML = items.length
+      ? items.map((h, i) => '<button type="button" class="lw-outl-i lv' + h.level + '" data-oi="' + i
+        + '" style="padding-left:' + (8 + (h.level - 1) * 12) + 'px" title="' + esc(h.text) + '">' + esc(h.text) + '</button>').join('')
+      : '<div class="lw-outl-empty">还没有标题</div>';
+    list.scrollTop = keep;
+    outlMark();
+  }
+
+  /* 判「当前在哪一节」：**视口上沿略往下**那条线以上最后一个标题 ✓；滚到底 → 最后一条 ✓
+     （不然末尾一节永远点不亮 ✗）。
+     ⚠️ 基准为什么不是容器顶部、也不是 1/3 ✗✗（两个都实测过 ✓）：
+        · 贴顶部（0px）：刚打开时第一条标题就压在线上 → 永远停在**上一节** ✓；
+        · 1/3（498 高 = 166px）：本仓正文标题间距密（实测 H1@42 / H2@141 ✓）→
+          **一条都还没滚，H2 就已经越线了** ✓（截图里高亮停在第二条，和眼睛看到的第一节对不上 ✗）。
+        ⇒ 取视口高度的 1/5、夹在 40~120px ✓：打开时停在第一节 ✓，
+          滚动时「刚滑出上沿的那一节」保持高亮 ✓（和 VS Code / Obsidian 的观感一致 ✓）。 */
+  function outlPick() {
+    const s = OUTL;
+    const host = s.host;
+    if (!host || !s.items.length) return -1;
+    if (host.tagName === 'TEXTAREA' || !host.clientHeight) return s.active;
+    if (host.scrollTop + host.clientHeight >= host.scrollHeight - 2) return s.items.length - 1;
+    const box = host.getBoundingClientRect();
+    /* ⚠️ 用 box.height（视觉 px ✓）而不是 clientHeight（布局 px ✗）：后面比的是矩形顶边，
+       两者必须同一套单位 ✓（大屏 zoom 0.88 下混用会差 12px ✓）。 */
+    const ref = box.top + Math.max(40, Math.min(120, box.height * 0.2));
+    let idx = 0;
+    for (let i = 0; i < s.items.length; i++) {
+      const el = s.items[i].el;
+      if (!el || !el.isConnected) continue;
+      if (el.getBoundingClientRect().top <= ref) idx = i; else break;
+    }
+    return idx;
+  }
+
+  /* 只动 class ✓（不重建 DOM ✗：滚动时每帧重建会闪、也会打断用户在大纲里拖动 ✓）*/
+  function outlApply(i) {
+    const s = OUTL;
+    const list = s.panel && s.panel.querySelector('.lw-outl-list');
+    if (!list) return;
+    s.active = i;
+    Array.prototype.forEach.call(list.children, (el) => {
+      if (!el.getAttribute || el.getAttribute('data-oi') == null) return;
+      const on = Number(el.getAttribute('data-oi')) === i;
+      if (on !== el.classList.contains('cur')) el.classList.toggle('cur', on);
+    });
+    const cur = i >= 0 ? list.querySelector('[data-oi="' + i + '"]') : null;
+    if (!cur) return;
+    /* 当前项在被滚出去的大纲里 → 拉回可视区 ✓（**只滚这一栏** ✗，不碰页面 ✓）
+       ⚠️ 同样要换算单位 ✗（rect 是视觉 px、scrollTop 是布局 px ✓，大屏被缩到 0.88 ✓）*/
+    const lb = list.getBoundingClientRect(), cb = cur.getBoundingClientRect();
+    const ls = (list.clientWidth && lb.width) ? (lb.width / list.clientWidth) : 1;
+    if (cb.top < lb.top) list.scrollTop -= ((lb.top - cb.top) + 4) / ls;
+    else if (cb.bottom > lb.bottom) list.scrollTop += ((cb.bottom - lb.bottom) + 4) / ls;
+  }
+
+  function outlMark() {
+    const s = OUTL;
+    if (!s.items.length) { outlApply(-1); return; }
+    const locked = Date.now() < s.lock && s.active >= 0;
+    outlApply(locked ? Math.min(s.active, s.items.length - 1) : outlPick());
+  }
+
+  /* 点条目：先滚到该标题 ✓，再把**光标**放进去 ✓ */
+  function outlJump(i) {
+    const s = OUTL;
+    const h = s.items[i];
+    const host = s.host;
+    if (!h || !host) return false;
+    if (host.tagName === 'TEXTAREA') {
+      const lines = String(host.value || '').split('\n');
+      if (h.line == null || h.line >= lines.length) return false;
+      let pos = 0;
+      for (let k = 0; k < h.line; k++) pos += lines[k].length + 1;
+      host.focus();
+      host.setSelectionRange(pos, pos + lines[h.line].length);
+      const lh = parseFloat(getComputedStyle(host).lineHeight) || 19;
+      host.scrollTop = Math.max(0, h.line * lh - host.clientHeight / 3);
+      s.lock = Date.now() + 400;
+      s.active = i; outlApply(i);
+      return true;
+    }
+    const el = h.el;
+    if (!el || !el.isConnected) return false;
+    const box = host.getBoundingClientRect();
+    /* ⚠️ 两个单位不一样 ✗✗：`scrollTop` 是**布局**像素（不受 ancestors 的 zoom 影响 ✓），
+       `getBoundingClientRect` 是**视觉**像素 ✓ —— 本仓大屏（低像素密度）默认
+       把整个界面缩到 0.88（index.html 的 cs-ui-scale ✓，实测 1600 宽下 rect/clientWidth = .878 ✓）。
+       直接相加的话跳转会偏 ✗（1280 不缩放，所以那一档测不出来 ✗）→ 先求比例再换算 ✓。 */
+    const scale = (host.clientWidth && box.width) ? (box.width / host.clientWidth) : 1;
+    const top = host.scrollTop + (el.getBoundingClientRect().top - box.top) / scale - 10;
+    host.scrollTop = Math.max(0, Math.min(host.scrollHeight - host.clientHeight, top));
+    const prose = host.querySelector('.ProseMirror');
+    const r = el.getBoundingClientRect();
+    const x = Math.min(r.left + 8, Math.max(r.left + 1, r.right - 2));
+    const y = r.top + Math.max(2, Math.min(8, r.height / 2));
+    /* ★★ 光标落点：**按坐标取 DOM 选区** ✓✓（2026-10-31 实测换过一版）
+       ⚠️ 上一版是「合成一次带坐标的 mousedown，让 ProseMirror 自己定位」✗ ——
+          实测**完全没用** ✗：mousedown 派发进去了，选区还停在原文开头（H1 的第一个字 ✓），
+          文档里敲字也进不了目标标题 ✓。合成事件对 PM 的 mousedown 处理器不算数 ✗。
+       ✅ 现在走 document.caretRangeFromPoint(x,y) ✓（Chrome / Safari ✓；
+          Firefox 是 caretPositionFromPoint ✓，两条都写了 ✓）——
+          拿到的 range 起点必须在**目标标题内部**才采用 ✓（坐标落偏了宁可不动 ✗），
+          然后 focus 正文 + 设选区 ✓：PM 会跟着同步（实测 activeElement 是 .ProseMirror ✓）。
+       ⚠️ 兜底保留 mousedown ✓ —— 两个 API 都没有的宿主上至少让编辑器拿到焦点 ✓。 */
+    let placed = false;
+    try {
+      const doc = host.ownerDocument || document;
+      let range = null;
+      if (typeof doc.caretRangeFromPoint === 'function') range = doc.caretRangeFromPoint(x, y);
+      else if (typeof doc.caretPositionFromPoint === 'function') {
+        const cp = doc.caretPositionFromPoint(x, y);
+        if (cp) { range = doc.createRange(); range.setStart(cp.offsetNode, cp.offset); range.collapse(true); }
+      }
+      if (range && el.contains(range.startContainer)) {
+        if (prose) { try { prose.focus({ preventScroll: true }); } catch (_) { try { prose.focus(); } catch (_) {} } }
+        const sel = window.getSelection();
+        if (sel) { sel.removeAllRanges(); sel.addRange(range); placed = true; }
+      }
+    } catch (_) {}
+    if (!placed) {
+      try {
+        el.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0,
+        }));
+      } catch (_) {}
+      if (prose && document.activeElement !== prose) {
+        try { prose.focus({ preventScroll: true }); } catch (_) { try { prose.focus(); } catch (_) {} }
+      }
+    }
+    s.lock = Date.now() + 700;
+    outlApply(i);
+    return true;
+  }
+
+  function outlStop() {
+    const s = OUTL;
+    if (s.mo) { try { s.mo.disconnect(); } catch (_) {} s.mo = null; }
+    if (s.timer) { clearTimeout(s.timer); s.timer = 0; }
+    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
+    if (s.scroll && s.host) s.host.removeEventListener('scroll', s.scroll);
+    if (s.input && s.host) s.host.removeEventListener('input', s.input);
+    if (s.host) { s.host = null; }
+    s.panel = null; s.items = []; s.scroll = null; s.input = null; s.active = -1; s.lock = 0;
+  }
+
+  /* 挂上（同一个 host+panel 再调 = 只重建 ✓，不重复装监听 ✗）*/
+  function outlMount(host, panel) {
+    const s = OUTL;
+    if (!host || !panel) { outlStop(); return false; }
+    if (s.host === host && s.panel === panel) { outlBuild(); return true; }
+    outlStop();
+    s.host = host;
+    s.panel = panel;
+    const list = panel.querySelector('.lw-outl-list');
+    if (list) {
+      list.onclick = (ev) => {
+        const b = ev.target && ev.target.closest ? ev.target.closest('[data-oi]') : null;
+        if (b) outlJump(Number(b.getAttribute('data-oi')));
+      };
+    }
+    const kick = () => {
+      if (s.timer) clearTimeout(s.timer);
+      s.timer = setTimeout(outlBuild, 200);
+    };
+    s.scroll = () => {
+      if (s.raf) return;
+      s.raf = requestAnimationFrame(() => { s.raf = 0; outlMark(); });
+    };
+    host.addEventListener('scroll', s.scroll, { passive: true });
+    if (host.tagName === 'TEXTAREA') {
+      s.input = kick;
+      host.addEventListener('input', s.input);
+    } else if (CC_MO) {
+      /* 守卫构造器 ✓：ccPaint 自己改 DOM 那一批 mutation 不重建（见文件顶部 ✓）*/
+      s.mo = new CC_MO(kick);
+      s.mo.observe(host, { childList: true, subtree: true, characterData: true });
+    }
+    outlBuild();
+    return true;
+  }
+
   window.CodeScopeLifeEditor = {
     /* 迁移 / 互转（life-workbench.js 的一次性迁移只走这两个口子 ✓，
        颜色表和括号扫描器**只留一份** ✗ —— 两份必然有一天对不上 ✓）。 */
@@ -619,5 +852,7 @@
     blockIndex: blockIndex,
     exec: exec,
     adopt: adopt,
+    /* 标题大纲：面板只调这几个（mount / stop / refresh），内部结构一律不暴露 ✓ */
+    outline: { mount: outlMount, stop: outlStop, refresh: outlBuild },
   };
 })();

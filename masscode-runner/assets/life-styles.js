@@ -736,6 +736,49 @@
   .lw-nt-menu.lw-pop { position:absolute; }
   /* 不在这里 overflow:auto —— 正文是 .lw-ce，它自己滚 ✓（两层都滚会互相打架 ✗）*/
   .lw-nt-body { flex:1; display:flex; flex-direction:column; min-height:0; background:var(--ed-paper); }
+  /* ══ 标题大纲（编辑器左侧那一栏 · 2026-10-31）══════════════════════════════
+     ★ 视觉语言照 Phycat 侧栏那一套 ✓（和 .lw-nt-side / .lw-nt-list 一致）：
+       底色 --pp-page、右侧一条 --pp-line 分线、当前项 = 2px 强调色竖条 + 10% accent 底 ✓。
+     ★ 为什么包一层 .lw-nt-main / .lw-jr-row ✗：大纲要在**工具栏之下、正文之左** ✓，
+       而 .lw-nt-body 是纵向 flex（标题 + 正文）✗、.lw-ce 自己 flex:1 ✓ ——
+       所以外面套一个**横排**容器，正文那一块**一个字都没改** ✓（还是原来的 flex:1）。
+     ⚠️ 默认 display:none ✓ —— 一开就从 570 掉到 382（1280 实测 ✓），不能默认占着 ✗；
+        收起时**不留空条** ✓（空笔记的「还没有标题」只在展开后显示 ✓）。
+     ═══════════════════════════════════════════════════════════════════════ */
+  .lw-nt-main { flex:1; min-height:0; display:flex; }
+  .lw-nt-main > .lw-nt-body { min-width:0; }
+  .lw-jr-row { flex:1; min-height:0; display:flex; }
+  .lw-jr-main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+  .lw-outl { display:none; flex:none; width:188px; min-width:0; flex-direction:column; background:var(--pp-page); border-right:1px solid ${T.lineDim}; }
+  .lw-outl.on { display:flex; }
+  .lw-outl-hd { display:flex; align-items:center; gap:6px; padding:8px 8px 6px 10px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-outl-hd b { font-size:9.5px; font-weight:700; letter-spacing:1px; color:${T.faint}; }
+  .lw-outl-hd .sp { flex:1; }
+  .lw-outl-x { flex:none; width:18px; height:18px; padding:0; border:1px solid transparent; background:transparent; color:${T.faint}; font:12px/1 ${UI}; cursor:pointer; border-radius:4px; }
+  .lw-outl-x:hover { background:var(--pp-sheet2); border-color:${T.lineDim}; color:${T.text}; }
+  .lw-outl-list { flex:1; min-height:0; overflow:auto; padding:3px 6px 10px; }
+  .lw-outl-empty { padding:10px 6px; font-size:11px; color:${T.faint}; }
+  /* 条目：行高 24px / 圆角 6px ✓；层级靠**缩进（JS 写 padding-left）+ 字号/字重递减** ✓ */
+  /* ⚠️ min-height 必须**显式写 24px** ✗✗ —— app.css 里有一条全局的
+     button { min-height:30px } ✓，不覆盖的话每一行都变成 30px（实测 ✓），
+     「行高 24px」就不成立了 ✗。（本文件是模板字符串：注释里不写反引号 ✗）*/
+  .lw-outl-i { position:relative; display:block; width:100%; min-width:0; height:24px; min-height:24px; line-height:24px; margin:0 0 1px; padding:0 8px; border:0; border-radius:6px; background:transparent; color:${T.dim}; font-family:${UI}; font-weight:400; font-size:11px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .lw-outl-i.lv1 { font-size:13px; font-weight:700; color:${T.text}; }
+  .lw-outl-i.lv2 { font-size:12.5px; font-weight:600; color:${T.text}; }
+  .lw-outl-i.lv3 { font-size:12px; font-weight:600; }
+  .lw-outl-i.lv4 { font-size:11.5px; font-weight:500; }
+  .lw-outl-i.lv5 { font-size:11px; font-weight:500; }
+  .lw-outl-i.lv6 { font-size:11px; font-weight:400; }
+  .lw-outl-i:hover { background:var(--pp-sheet2); color:var(--pp-ink); }
+  /* ⚠️ .cur 必须写在 .lv* / :hover **之后** ✗ —— 同优先级下靠后来者覆盖 ✓，
+     否则当前项的「加粗 + 提亮」会被层级样式盖回去 ✓ */
+  .lw-outl-i.cur { background:color-mix(in srgb, var(--pp-accent) 10%, transparent); color:var(--pp-ink); font-weight:700; }
+  .lw-outl-i.cur::before { content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:1px; background:${T.accent}; }
+  /* ≡ 开关：默认不占宽度 ✓ —— 1280 那条栏实测**已放满**（再加 22px 溢出 11px ✗），
+     所以只在编辑区够宽（容器 ≥861px）时才出现 ✓；窄屏走「⋯ 更多」/ ⌥⌘O ✓。 */
+  .lw-nt-bar .lw-outl-tog { display:none; }
+  .lw-nt-bar .lw-outl-tog.on { background:${T.accent}; border-color:${T.accent}; color:${T.accentInk}; }
+  @container (min-width: 861px) { .lw-nt-bar .lw-outl-tog { display:inline-flex; align-items:center; justify-content:center; } }
   .lw-nt-meta { padding:12px 20px 0; font-size:11px; color:${T.faint}; text-align:center; }
   .lw-nt-title { border:0; background:transparent; color:${T.text}; font:700 18px ${UI}; padding:6px 20px 4px; outline:none; }
   .lw-nt-title::placeholder { color:${T.faint}; }
