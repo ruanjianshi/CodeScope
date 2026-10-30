@@ -2348,6 +2348,384 @@
   }
   `;
 
+  /* ══════════════════════════════════════════════════════════════════════
+     备忘录正文 · Crepe 块级内核的 Phycat 主题规则（2026-10-30）
+     ----------------------------------------------------------------------
+     ⚠️ 为什么这些规则写在**这个文件**里，而不是 assets/doc-theme.css ✗：
+        doc-theme.css 有代码行棘轮（tests/architecture.js:208 的 692）✓ 且**正好顶满** ✓
+        —— 往里加规则必然把它顶红 ✗，而那条棘轮只准往下调 ✓（见 architecture.js 第 79 行注释）。
+        本文件的棘轮是 12,600 行 ✓，还有余量 ✓，所以放在这里 ✓。
+     ⚠️ 令牌一个都没新增 ✓ —— 全部用 doc-theme.css 的 --doc-* 与面板的 --pp-* ✓。
+     ⚠️ 必须走 lifework-style 这条注入 ✓（和面板 CSS 同一张 style 表 ✓），
+        而不是改 doc-theme.css：运行时注入在 head 末尾 ✓，正好压在 Crepe
+        运行时注入的那张表**之前**——所以下面凡是跟 Crepe 抢的地方都多带了一级选择器 ✓。 */
+  const MEMO_DOC_CSS = `/* ═══════════════════════════════════════════════════════════════════════
+   ㉑ 备忘录正文 · Crepe 块级内核的 Phycat 移植（2026-10-30）
+   -----------------------------------------------------------------------
+   作用域只到 .lw-memo-ce（= 生活面板备忘录的正文容器）✓ ——
+   阅读模块那几套（.md-doc / .reading-md-*）**一个字都没动** ✓。
+
+   ★ 规则来源（每条都指到文件和选择器，spec 第 10 节要求）：
+     · H1 居中 + 40px 短线 + 悬停展开 …… theme.css:3348-3396
+       （.theme-light .markdown-preview-view h1 / h1::after / h1:hover::after）
+     · H2 双子塔（两条错位竖线，悬停互换）…… theme.css:3549-3655
+       （.theme-light.h2-style-twin .markdown-preview-view h2 + h2::before + h2::after）
+     · H2 胶囊（可选样式，默认关闭）…… theme.css:3507-3537
+       （.theme-light.h2-style-capsule .markdown-preview-view h2）
+     · H3 左侧竖条 …… theme.css:3665-3688
+     · 引用块 ✨ 圆角卡片 …… theme.css:5178-5260
+     · 行内链接方括号呼吸 …… theme.css:5269-5360
+     · 圆形任务复选框 …… theme.css:4807-4908（**选择器不可直接移植**，见 ⑦）
+     · 纸面居中列 …… preview-layout.css 的 .markdown-preview-view /
+       .markdown-preview-sizer { max-width:var(--file-line-width) }
+
+   ★★ 为什么**不能**直接把 theme.css 的选择器抄过来（实测，不是猜）：
+     Crepe 产出的 DOM 与 Obsidian 的 DOM 契约不同 ✗ ——
+       实测一条含 h1/h2/列表/任务/引用/表格的备忘录，ProseMirror 里是：
+         <h1 id="…"> <h2> <p> <ul> <li class="list-item">
+         <blockquote> <div class="milkdown-table-block">
+         任务项 = <li class="list-item"> + <span class="milkdown-icon label unchecked"><svg></span>
+       而 spec 10.1 要求的 input.task-list-item-checkbox / a.tag / .markdown-preview-sizer
+       **一个都不存在** ✗。
+     ⇒ 能用类名对上的（h1/h2/h3/blockquote/a）照规则移植 ✓；
+        对不上的（复选框 / .tag / sizer）逐条标明改成什么或为什么做不到 ✓，不假装抄到 ✓。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 纸面：容器 + 居中列 ──────────────────────────────────────────────
+   来源 preview-layout.css：.markdown-preview-view{padding:24px 30px 45px}、
+   .markdown-preview-sizer{max-width:var(--file-line-width,900px);margin:auto}。
+   ⚠️ Crepe 没有 .markdown-preview-sizer（见上）→ 把 sizer 的两条几何
+   （max-width + margin:auto）落到 .ProseMirror 上 ✓，语义等价 ✓。 */
+.lw-memo-ce.markdown-preview-view {
+  --file-line-width: 760px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  padding: 22px 30px 46px;
+  border: 0;
+  border-radius: 0;
+  font-size: 14.5px;
+  line-height: 1.78;
+  overflow: auto;
+}
+.lw-memo-ce.markdown-preview-view .ProseMirror {
+  max-width: var(--file-line-width);
+  margin: 0 auto;
+  padding: 0;
+  /* Crepe 自带 border-radius:16px + 边框 + 投影（见本文件 ⑩ 的注释）→ 拍平 */
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: var(--doc-text);
+}
+
+/* ── ② 标题：H1 居中短线（theme.css:3348-3396）─────────────────────────
+   默认容器类 = h1-align-center（= preview.html 里 body 的默认值）✓。 */
+.lw-memo-ce.markdown-preview-view h1 {
+  display: block; width: 100%; min-width: 0;
+  font-size: 26px !important; font-weight: 700; line-height: 1.4;
+  margin: 1.6em 0 .9em; padding: 0 0 12px !important;
+  border: 0; background: none; color: var(--doc-strong);
+  position: relative;
+  transition: color .3s ease, transform .3s ease;
+}
+.lw-memo-ce.h1-align-center.markdown-preview-view h1 {
+  text-align: center;
+  margin-left: auto !important; margin-right: auto !important;
+}
+.lw-memo-ce.markdown-preview-view h1::after {
+  content: '';
+  position: absolute; bottom: 0; left: 50%;
+  width: 40px; height: 4px; border-radius: 4px;
+  background: var(--doc-primary);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--doc-primary) 20%, transparent);
+  transform: translateX(-50%);
+  transition: width .3s var(--doc-ease-smooth), box-shadow .3s ease;
+  pointer-events: none;
+}
+.lw-memo-ce.markdown-preview-view h1:hover { color: var(--doc-primary); transform: translateY(-2px); }
+.lw-memo-ce.markdown-preview-view h1:hover::after { width: 100%; box-shadow: 0 0 15px var(--doc-primary); }
+
+/* ── ③ H2 双子塔（theme.css:3549-3655）—— 默认样式 ────────────────────── */
+.lw-memo-ce.markdown-preview-view h2 {
+  font-size: 19px !important; font-weight: 700; line-height: 1.5;
+  position: relative; display: block; width: 100%;
+  /* ⚠️ padding 必须 !important：Crepe 的标题样式是运行时注入到 head 末尾的，
+     比本文件晚 → 同特异性它会赢 ✗（本文件 ④ 的 H2 踩过同一个坑）。 */
+  padding: 0 0 .12em 20px !important;
+  margin: 1.6em 0 .6em;
+  border: 0; background: none; border-radius: 0;
+  color: var(--doc-text);
+  transition: color .3s ease, text-shadow .3s ease;
+}
+.lw-memo-ce.markdown-preview-view h2::before {
+  content: ''; position: absolute; left: 0; top: auto; margin-top: .2em;
+  width: 5px; height: 1em; border-radius: 4px;
+  background: var(--doc-primary); opacity: .85;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--doc-primary) 50%, transparent);
+  transform-origin: left center;
+  transition: height var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out);
+}
+.lw-memo-ce.markdown-preview-view h2::after {
+  content: ''; position: absolute; left: 8px; top: auto; margin-top: .3em;
+  width: 2px; height: .6em; border-radius: 2px;
+  background: var(--doc-secondary); opacity: .6;
+  transform-origin: left center;
+  transition: width var(--mo-2) var(--mo-out), height var(--mo-2) var(--mo-out),
+              background var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out);
+}
+.lw-memo-ce.markdown-preview-view h2:hover { color: var(--doc-primary); text-shadow: var(--doc-glow-text); }
+.lw-memo-ce.markdown-preview-view h2:hover::before { height: 1.4em; margin-top: 0; opacity: .4; }
+.lw-memo-ce.markdown-preview-view h2:hover::after {
+  width: 4px; height: 1.1em; margin-top: .15em; opacity: 1;
+  background: var(--doc-primary); transition-delay: 40ms;
+}
+/* 容器类 h2-style-capsule = 换成 theme.css:3507 那版胶囊（默认不开 ✓） */
+.lw-memo-ce.h2-style-capsule.markdown-preview-view h2 {
+  font-size: 18px !important; display: inline-block; width: fit-content;
+  padding: 6px 16px !important; margin: 1.4em 0 .6em;
+  border-radius: 8px; border: 0 !important;
+  background: color-mix(in srgb, var(--doc-primary) 18%, var(--doc-bg)) !important;
+  color: var(--doc-strong) !important;
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--doc-primary) 22%, transparent);
+  transition: transform .4s ease, box-shadow .4s ease;
+}
+.lw-memo-ce.h2-style-capsule.markdown-preview-view h2::before,
+.lw-memo-ce.h2-style-capsule.markdown-preview-view h2::after { content: none; }
+.lw-memo-ce.h2-style-capsule.markdown-preview-view h2:hover {
+  transform: scale(1.01);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--doc-primary) 26%, transparent);
+}
+
+/* ── ④ H3 左侧竖条（theme.css:3665-3688）／H4~H6（theme.css:3193-3211 配色）── */
+.lw-memo-ce.markdown-preview-view h3 {
+  font-size: 16px !important; width: fit-content; position: relative;
+  padding: 0 0 0 15px !important; margin: 1.3em 0 .5em;
+  color: var(--doc-primary); transition: padding .3s var(--mo-in-out), color .3s ease;
+}
+.lw-memo-ce.markdown-preview-view h3::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 5px; height: 1.3rem; border-radius: 4px; background: var(--doc-primary);
+  transition: background .3s ease;
+}
+.lw-memo-ce.markdown-preview-view h3:hover { padding-left: 20px !important; color: var(--doc-primary); }
+.lw-memo-ce.markdown-preview-view h4 { font-size: 15px !important; color: var(--doc-strong); }
+.lw-memo-ce.markdown-preview-view h5 { font-size: 14px !important; color: var(--doc-text-2); }
+.lw-memo-ce.markdown-preview-view h6 { font-size: 13px !important; color: var(--doc-text-3); }
+
+/* ── ⑤ 引用块：✨ 圆角卡片（theme.css:5178-5260）────────────────────────
+   ⚠️ theme.css:5206 的 content:"✨" 是权威写法 ✓ ——
+      阅读模块那套用的是 ❝（本文件 ⑥，2026-10-28 的旧移植），这里按 theme.css 来 ✓。 */
+.lw-memo-ce.markdown-preview-view blockquote {
+  position: relative;
+  margin: 20px 0; padding: 18px 20px 18px 48px !important;
+  background: color-mix(in srgb, var(--doc-bg) 82%, #fff) !important;
+  border: 1px solid color-mix(in srgb, var(--doc-primary) 20%, transparent) !important;
+  border-radius: 16px !important;
+  color: var(--doc-text-2);
+  transition: transform .3s var(--doc-ease-back), background .3s ease,
+              box-shadow .3s ease, border-color .3s ease;
+}
+.lw-memo-ce.markdown-preview-view blockquote::before {
+  content: '✨';
+  position: absolute; left: 14px; top: 18px;
+  font-size: 20px; line-height: 1; font-style: normal;
+  transform: rotate(30deg);
+  transition: transform .3s var(--doc-ease-back), text-shadow .3s ease;
+}
+.lw-memo-ce.markdown-preview-view blockquote p { color: var(--doc-text-2); margin: 0 0 .5em; }
+.lw-memo-ce.markdown-preview-view blockquote p:last-child { margin-bottom: 0; }
+.lw-memo-ce.markdown-preview-view blockquote:hover {
+  transform: scale(1.02);
+  background: color-mix(in srgb, var(--doc-primary) 8%, var(--doc-bg)) !important;
+  border-color: var(--doc-primary) !important;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--doc-primary) 15%, transparent);
+}
+.lw-memo-ce.markdown-preview-view blockquote:hover::before {
+  transform: rotate(0deg);
+  text-shadow: 0 0 8px var(--doc-primary);
+}
+
+/* ── ⑥ 行内链接：两侧方括号，悬停向两侧弹开（theme.css:5269-5360）──────
+   ⚠️ 必须排除 #cc- 开头的锚点（{红|文字} / ==高亮== 的行内标注，见本文件 ⑦）。 */
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"]) {
+  color: var(--doc-secondary); text-decoration: none; font-weight: 500;
+  transition: color .3s ease, background .3s ease;
+}
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"])::before,
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"])::after {
+  color: var(--doc-text-3); opacity: .7;
+  transition: transform .3s var(--doc-ease-back), color .3s, opacity .3s;
+}
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"])::before { content: '['; display: inline-block; margin-right: 1px; }
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"])::after { content: ']'; display: inline-block; margin-left: 1px; }
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"]):hover {
+  color: var(--doc-primary); background: color-mix(in srgb, var(--doc-primary) 8%, transparent);
+}
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"]):hover::before { transform: translateX(-4px); color: var(--doc-primary); opacity: 1; }
+.lw-memo-ce.markdown-preview-view a:not([href^="#cc-"]):hover::after { transform: translateX(4px); color: var(--doc-primary); opacity: 1; }
+
+/* ── ⑦ 任务复选框：**选择器不可移植，视觉搬过来** ─────────────────────
+   ✗ theme.css:4807 / 4839 / 4873 三条规则全部以 input[type=checkbox] /
+     .task-list-item-checkbox 为锚点 ✓，而 Crepe 的清单项是
+     <li class="list-item"> + <span class="milkdown-icon label unchecked|checked"><svg> ✗
+     （实测 DOM，见本节开头）→ 那三条规则在这里 0 命中 ✓。
+   ✓ 做法：把同一套视觉（4839 圆形底座 + 4860 选中变主题色 + 4873 白色对勾）
+     画到 Crepe 的 label 图标上 ✓，令牌按 spec 10.1 对齐到 --doc-* ✓：
+       --checkbox-bg-unchecked     → var(--doc-bg-dim)
+       --checkbox-border-unchecked → --doc-text-3 混色
+       --checkbox-bg-checked       → --doc-primary 混色
+       --phycat-primary-color（边框/对勾）→ var(--doc-primary)
+   ⚠️ 只命中 .unchecked/.checked ✗ —— 不能写 .milkdown-icon.label ✓：
+      普通列表项用的是 .milkdown-icon.label.bullet ✓，一起命中的话每条列表前面
+      都会多出一个圆圈（实测 DOM 里两类共用同一个 label 类 ✗）。 */
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.unchecked,
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.checked {
+  width: 1.2rem; height: 1.2rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--doc-bg-dim);
+  border: 2px solid color-mix(in srgb, var(--doc-text-3) 70%, transparent);
+  transition: all .3s var(--doc-ease-back);
+}
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.checked {
+  border: 1px solid var(--doc-primary);
+  background: color-mix(in srgb, var(--doc-primary) 22%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--doc-primary) 30%, transparent);
+}
+/* Crepe 自带的方块/对勾 SVG 要藏掉，否则圆圈里叠一个原生图标 ✗ */
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.unchecked > svg,
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.checked > svg { display: none; }
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.checked::after {
+  content: '';
+  width: .45rem; height: .25rem;
+  border: 2.5px solid var(--doc-strong);
+  border-top: 0; border-right: 0;
+  transform: translateY(-1px) rotate(-45deg);
+}
+.lw-memo-ce.markdown-preview-view li.list-item .milkdown-icon.label.bullet { color: var(--doc-primary); }
+
+/* ── ⑧ 正文元素（配色沿用 theme.css:3183-3211，行高沿用 5088）────────── */
+.lw-memo-ce.markdown-preview-view ::selection { background: var(--doc-select); color: var(--doc-strong); }
+.lw-memo-ce.markdown-preview-view p { margin: .8em 0; }
+.lw-memo-ce.markdown-preview-view strong { color: var(--doc-strong); }
+.lw-memo-ce.markdown-preview-view em { color: var(--doc-secondary); }
+.lw-memo-ce.markdown-preview-view del { color: var(--doc-text-3); }
+.lw-memo-ce.markdown-preview-view mark {
+  background: color-mix(in srgb, var(--doc-syn-type) 26%, transparent);
+  color: var(--doc-strong); padding: .04em .24em; border-radius: 3px;
+}
+.lw-memo-ce.markdown-preview-view code {
+  background: color-mix(in srgb, var(--doc-text) 10%, transparent);
+  color: var(--doc-strong); border-radius: 5px;
+  transition: background .2s ease;
+}
+.lw-memo-ce.markdown-preview-view code:hover { background: color-mix(in srgb, var(--doc-text) 18%, transparent); }
+.lw-memo-ce.markdown-preview-view pre {
+  background: var(--doc-bg-dim); border: 1px solid var(--doc-line);
+  border-left: 3px solid var(--doc-pink); border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+}
+.lw-memo-ce.markdown-preview-view pre code { background: none; }
+.lw-memo-ce.markdown-preview-view hr {
+  border: none; height: 1px; margin: 1.6em 0;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--doc-primary) 42%, transparent), transparent);
+}
+.lw-memo-ce.markdown-preview-view th {
+  background: color-mix(in srgb, var(--doc-primary) 12%, transparent); color: var(--doc-strong);
+}
+.lw-memo-ce.markdown-preview-view th,
+.lw-memo-ce.markdown-preview-view td { border-color: color-mix(in srgb, var(--doc-text) 10%, transparent); }
+.lw-memo-ce.markdown-preview-view tbody tr:hover td { background: color-mix(in srgb, var(--doc-primary) 7%, transparent); }
+
+/* ── ⑨ 源码模式（textarea）也跟着纸面走 ─────────────────────────────── */
+.lw-memo-src {
+  background: var(--doc-bg-dim) !important;
+  color: var(--doc-text) !important;
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 10px; padding: 14px 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.75;
+  width: 100%; resize: vertical; min-height: 320px; outline: none;
+}
+
+/* ── ⑩ 加载失败时的兜底展示（不静默 ✗，见 life-workbench.js 的 memoMountEditor）── */
+.lw-memo-err {
+  margin: 0 0 10px; padding: 8px 12px; border-radius: 8px;
+  background: color-mix(in srgb, #E67E80 16%, transparent);
+  border: 1px solid color-mix(in srgb, #E67E80 45%, transparent);
+  color: var(--doc-text); font-size: 12px;
+}
+.lw-memo-fallback {
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+  color: var(--doc-text-2); font-size: 12.5px;
+}
+
+/* ── ⑪ 浅色 App 主题（html[data-theme="light"]）→ 正文纸色跟着面板走 ────
+   为什么必须单独一段 ✗：--doc-* 那 4 套**全是深色** ✓（本文件开头写着：
+     亮色 8 套要整套反色、没做，半套的亮色主题比没有更糟 ✓）。
+   而备忘录面板自己**有**浅色纸（life-workbench.js:90 的 --pp-*，实测
+     --pp-page:#f4f1e8 / --pp-ink:#221f1b）✓ —— 不接的话，浅色 App 下
+   正文会是一张深色纸，和周围面板打架 ✗。
+   ✓ 做法：在**这个容器内**把 --doc-* 重映射到 --pp-*（派生量用 color-mix）✓ ——
+     不新增任何色值 ✓、不动那 4 套调色板 ✓（和本文件 ⑩ 的「容器内覆盖令牌」同一手法）。 */
+html[data-theme="light"] .lw-memo-ce.markdown-preview-view {
+  --doc-bg: var(--pp-page);
+  --doc-bg-dim: color-mix(in srgb, var(--pp-page) 94%, #000);
+  --doc-bg-soft: var(--pp-sheet);
+  --doc-text: var(--pp-ink);
+  --doc-text-2: var(--pp-ink2);
+  --doc-text-3: color-mix(in srgb, var(--pp-ink2) 72%, transparent);
+  --doc-strong: var(--pp-ink);
+  --doc-primary: var(--pp-accent);
+  --doc-secondary: color-mix(in srgb, var(--pp-accent) 62%, var(--pp-ink2));
+  --doc-line: var(--pp-line);
+  --doc-select: color-mix(in srgb, var(--pp-accent) 22%, transparent);
+  --doc-pink: color-mix(in srgb, var(--pp-accent) 30%, transparent);
+  /* 派生量在 :root 上算（用的是深色 primary）→ 这里必须重算一遍 ✗ */
+  --doc-glow: color-mix(in srgb, var(--pp-accent) 22%, transparent);
+  --doc-glow-text: 0 0 14px color-mix(in srgb, var(--pp-accent) 50%, transparent);
+}
+
+/* ── ⑫ Crepe 自己的深色底 + 顶部工具条 → 必须一起接管 ✗✗
+   实测（浅色 App 主题下量出来的）：容器背景已经是 #f4f1e8 ✓，
+   但里面 .milkdown 这一层是 rgb(26,26,26) ✗、.milkdown-top-bar 是 rgb(18,18,18) ✗
+   —— 那是 Crepe 自带的深色底色，连文字一起盖住，于是整块看起来还是一张黑纸 ✗
+   （第一版截图就是这样：面板白了、正文还是黑的）。
+   ⚠️ 选择器里多带一个 .codescope-crepe-host（= 区块编辑器自己加在 root 上的类 ✓，
+      见 src/reading-block-editor.js:853）：提一级特异性 ✓，不用跟 Crepe 赌注入顺序 ✓。
+   ⚠️ TopBar 关不掉 ✗ —— create() 里 features.TopBar 是硬编码 true 的
+      （src/reading-block-editor.js:865），所以我们只能给它上色 ✓。 */
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown {
+  background: transparent !important;
+  color: var(--doc-text) !important;
+}
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar {
+  background: color-mix(in srgb, var(--doc-bg) 90%, var(--doc-text)) !important;
+  color: var(--doc-text) !important;
+  border-bottom: 1px solid var(--doc-line) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar button,
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar .top-bar-item,
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar .top-bar-heading-button {
+  background: transparent !important;
+  color: var(--doc-text) !important;
+}
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar button:hover,
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar .top-bar-item:hover {
+  background: color-mix(in srgb, var(--doc-primary) 14%, transparent) !important;
+  color: var(--doc-primary) !important;
+}
+.lw-memo-ce.markdown-preview-view.codescope-crepe-host .milkdown-top-bar .editor {
+  background: transparent !important;
+  color: var(--doc-text) !important;
+}
+`;
+
   /* ★ 图标位（规范 §9.1）：icon 存的是 **sprite id**（`#i-xxx` 的 xxx 部分）✗ 不再是字符 ✓。
      ⚠️ 原来这里放的是 emoji / 几何字符（☀ ✎ ◈ ❝ ◇ ▦ 📖 ⚙ 🔥 ✉），
         在纸感皮肤里大小与基线都跟正文字体走 ✗，和主界面那套线性图标**不是一套语言** ✗ ✓。
@@ -3203,7 +3581,7 @@
     if (!document.getElementById('lifework-style')) {
       const st = document.createElement('style');
       st.id = 'lifework-style';
-      st.textContent = CSS;
+      st.textContent = CSS + MEMO_DOC_CSS;   /* ★ 备忘录正文的 Phycat 规则（见 MEMO_DOC_CSS）*/
       document.head.appendChild(st);
     }
     /* ⚠️ 挂载要快 ✗ —— 原来用 setInterval(600ms) 轮询 ✗，
@@ -4110,18 +4488,191 @@
     LIVE_BUF = setTimeout(() => { if (TAB === 'memo') renderMemoList(); }, 200);
   }
 
+  /* ════ 序列化：**唯一入口**（2026-10-30 收敛，换块级内核之前的第一步）═══════════
+     ⚠️ 为什么必须先做这一步 ✗✗：读回 markdown 的代码原来散在 **7 处**
+     （:4120 / :5225 / :5808 / :5939 / :5950 / :5962 / :6013），全是同一个模式
+     —— `querySelectorAll(':scope > .ln')` → 逐行取 textContent/dataset → 手动 join('\n') ✓。
+     只要漏掉任何一处，那条保存链路就还在读旧 DOM ✓ → 换内核之后**静默丢内容** ✗
+     （不报错、不崩页面，刷新才发现少了几段 ✓）。
+     ⇒ 现在全项目只有 `readMemoMarkdown()` 读 `.ln` ✓，谁都别在自己那儿再拼一遍 ✗。
+
+     判据统一成 `data-src || textContent` ✓：原来备忘录用 `contenteditable === 'false'`、
+     日记用 `.cur` 类 ✓ —— 在 ceHtml() 产出的 DOM 上二者等价 ✓
+     （渲染行必有**非空** data-src ⟺ textContent 非空 ✓），所以换判据后逐字不变 ✓。 */
+  function readMemoMarkdown(ce) {
+    if (!ce) return '';
+    return Array.from(ce.querySelectorAll(':scope > .ln')).map((el) => {
+      const src = el.dataset ? el.dataset.src : null;
+      return (src != null && src !== '') ? String(src) : String(el.textContent || '');
+    }).join('\n');
+  }
+  /* 写侧的对称函数：喂文本 → 重渲染 + 行号对齐。
+     原来有 5 处各自写 `ce.innerHTML = ceHtml(...); ceAlignLineNumbers(ce);` ✓，收敛到这里。
+     `srcOnly` = 整篇当源码显示（备忘录的「◫ 源码」）；日记不传 ✓。 */
+  function writeMemoMarkdown(ce, text, curIdx, srcOnly) {
+    if (!ce) return null;
+    ce.innerHTML = ceHtml(text, curIdx, !!srcOnly);
+    ceAlignLineNumbers(ce);
+    return ce;
+  }
+
+  /* ════ 正文内核：Crepe 块级编辑器（2026-10-30 换）══════════════════════════
+     旧内核是「逐行 contenteditable」：光标行是源码、其他行是渲染结果，
+     所以读回 markdown 只能靠逐行拼（上面那 7 处）✓，而且每一处光标/换行/退格
+     都要自己算（ceLineKey / ceCaretOffset / Enter 切行…）✗。
+     新内核直接用阅读模块那颗现成的 Crepe（`loadBlockEditor()` → `window.CodeScopeBlockEditor`，
+     用法照抄 assets/app-reading.js:1009）✓：块级排版、任务勾选、表格都是编辑器自己的事 ✓。
+
+     ★ 内容怎么进出（**照抄阅读模块的做法，不自己发明**）：
+       · 进：`create({ markdown })` ✓
+       · 出：**只**通过 `onChange(md)` 拿 ✓（和 app-reading.js:1009 一致）；
+             `controller.getMarkdown()` 虽然存在（src/reading-block-editor.js:1010），
+             **故意不用** ✗ —— 它返回的是「编辑器规范化之后」的文本 ✓，
+             而我们没有用户真的编辑过时不该把规范化结果写回存储 ✗
+             （否则「打开一条备忘录」就等于偷偷改写了它的 markdown）。
+       · 所以 `MEMO_CE.md` 是**权威正文**：初值 = 库里那条的正文 ✓，
+         只有 onChange（= 用户真的编辑了）才更新 ✓。 */
+  /* Obsidian DOM 契约（spec 10.1）+ **两个默认样式类** ✓：
+     h1-align-center / h2-style-twin = preview.html 里 body 上的默认组合 ✓。
+     做成容器类名（而不是写死在 CSS 里）→ 以后加开关只要换类名 ✓。
+     ⚠️ 这两个类名的规则在 assets/doc-theme.css 的 ㉑ 节 ✓。 */
+  const MEMO_OBS_CLASS = 'markdown-preview-view markdown-rendered h1-align-center h2-style-twin';
+  let MEMO_CE = null;          /* { id, token, ctrl, md } —— md 是权威正文 */
+  let MEMO_CE_TOKEN = 0;       /* 挂载代号：异步竞态里淘汰旧实例（同 app-reading 的 blockMountId）*/
+  let MEMO_SAVE_BUF = 0;
+
+  /* 正文容器：源码模式 → 一个 textarea（原样 markdown ✓）；
+     块级模式 → **空**的挂载点，由 bind() 里的 memoMountEditor() 异步挂 Crepe。 */
+  function memoEditorHostHtml(cur) {
+    const body = String(cur.text || '').split('\n').slice(1).join('\n');
+    if (STORE && STORE.memoSource) {
+      return '<textarea class="lw-ce lw-memo-ce lw-memo-src" id="lw-memo-ce" spellcheck="false"'
+        + ' placeholder="整篇 markdown 源码 · 改完自动保存">' + esc(body) + '</textarea>';
+    }
+    return '<div class="lw-ce lw-memo-ce ' + MEMO_OBS_CLASS + '" id="lw-memo-ce" spellcheck="false"></div>';
+  }
+
+  /* 正文的**唯一**读出口（memoReadEditor / 导出图 / 撤销 都从这里走）✓ */
+  function memoBodyText() {
+    const ce = document.getElementById('lw-memo-ce');
+    if (ce && ce.tagName === 'TEXTAREA') return ce.value;        /* 源码模式 ✓ */
+    if (MEMO_CE && MEMO_CE.id && MEMO_CE.id === MEMO_EDITOR_ID) return MEMO_CE.md;
+    if (!ce) return null;
+    /* ⚠️ 容器已换成 Crepe 之后里面**没有 .ln 了** ✗ —— 这时候读到的是 '' ✓，
+       而 '' 会被 memoWriteFromEditor 当成「正文被清空」写进库里 ✗✗。
+       → 认不出「已挂载」的 DOM 就返回 null（= 保持原样）✓，宁可不写也不清空 ✓。 */
+    if (!ce.querySelector('.ln, .ProseMirror')) return null;
+    return readMemoMarkdown(ce);                                  /* 兜底（挂载失败时）✓ */
+  }
+
+  /* 把正文整体写回当前那条（不动标题）+ 落盘。给格式按钮 / 清单插入 / 表格用 ✓ */
+  function memoApplyBody(body) {
+    const cur = memoWriteTarget(); if (!cur) return false;
+    const head = String(cur.text || '').split('\n')[0] || '';
+    cur.text = head + (body ? '\n' + body : '');
+    cur.edit = Date.now();
+    if (MEMO_CE && MEMO_CE.id === cur.id) MEMO_CE.md = body;
+    STORE.memoSaved = true;
+    saveStore();
+    return true;
+  }
+
+  /* 光标所在**块**的纯文本 —— Crepe 不暴露“第几行”，只能这样反查 ✓ */
+  function memoCaretBlockText() {
+    const host = document.getElementById('lw-memo-ce');
+    const sel = window.getSelection();
+    if (!host || !sel || !sel.rangeCount) return null;
+    let el = sel.getRangeAt(0).startContainer;
+    if (el && el.nodeType === 3) el = el.parentElement;
+    if (!el || !host.contains(el)) return null;
+    while (el && el.parentElement && el.parentElement !== host) el = el.parentElement;
+    if (!el || el === host) return null;
+    return String(el.textContent || '').trim();
+  }
+  /* 在正文的第 i 行上做变换（i = 光标那块对应的行；找不到就退回第一行 ✓）。
+     `after` 为真时把新行**插在这一行后面**（清单 / 表格用）✓。 */
+  function memoEditBlock(fn, after) {
+    const body = memoBodyText();
+    if (body == null) return false;
+    const lines = String(body).split('\n');
+    const want = memoCaretBlockText();
+    let i = want ? lines.findIndex((l) => l.trim() === want) : -1;
+    if (i < 0) i = after ? Math.min(0, lines.length - 1) : 0;
+    const out = (typeof fn === 'function') ? fn(lines, i) : null;
+    if (!memoApplyBody(String(out == null ? lines.join('\n') : out))) return false;
+    render();
+    return true;
+  }
+
+  /* 挂 / 换内核。每次 render 之后都会走一遍（bind() 里调）✓。
+     ⚠️ 三件事必须成对做对，少一件就丢内容 ✗：
+       ① **同步**先把 MEMO_CE.md 设成库里那条的正文 ✓ —— 挂载是异步的
+          （首次要拉 2.7MB 的 reading-block-editor.js ✓），这中间用户改标题会触发保存 ✓，
+          不先设好就会读到空正文，把内容清掉 ✗；
+       ② 旧实例要 destroy ✓，且**用代号**判断「回来的是不是最新那次」✗（连点切条目会竞态）；
+       ③ destroy 期间**不清 DOM** ✗ —— 清理可能晚于下一次挂载，一清就把新实例抹掉
+          （src/reading-block-editor.js:1023 那段注释踩过同一个坑）。 */
+  function memoMountEditor() {
+    const host = document.getElementById('lw-memo-ce');
+    const id = MEMO_EDITOR_ID;
+    const cur = id ? ((STORE && STORE.memos) || []).find((m) => m.id === id) : null;
+    const token = ++MEMO_CE_TOKEN;
+    const prev = MEMO_CE;
+    const body = cur ? String(cur.text || '').split('\n').slice(1).join('\n') : '';
+    MEMO_CE = { id, token, ctrl: null, md: body };
+    if (prev && prev.ctrl) { try { prev.ctrl.destroy(); } catch (_) {} }
+    if (!host || !cur) return;
+    if (host.tagName === 'TEXTAREA') { host.oninput = () => memoCommitSoon(); return; }   /* 源码模式 ✓ */
+    if (typeof loadBlockEditor !== 'function') { host.innerHTML = '<div class="lw-memo-err">块级编辑器不可用（loadBlockEditor 缺失）</div>'; return; }
+    loadBlockEditor().then((api) => api.create({
+      root: host,
+      markdown: body,
+      onChange: (md) => {
+        if (token !== MEMO_CE_TOKEN || !MEMO_CE) return;
+        MEMO_CE.md = md;
+        /* 初始化时 Crepe 会规范化一次并回调 —— 那不是用户编辑，不写回 ✓（同 app-reading.js:522）*/
+        if (!host.contains(document.activeElement)) return;
+        memoCommitSoon();
+      },
+      onError: (err) => {
+        const st = document.getElementById('lw-memo-status');
+        if (st) st.textContent = '编辑器：' + String((err && err.message) || err);
+      },
+    })).then((ctrl) => {
+      if (token !== MEMO_CE_TOKEN || !host.isConnected) { try { ctrl.destroy(); } catch (_) {} return; }
+      MEMO_CE.ctrl = ctrl;
+      host.dataset.editorReady = 'true';
+    }).catch((err) => {
+      if (token !== MEMO_CE_TOKEN) return;
+      /* 加载失败**不回退**到逐行编辑器 ✗（那套已经删了）；把正文原样贴出来，
+         至少能读、能复制，并明确告诉用户保存链路没断 ✓。 */
+      host.innerHTML = '<div class="lw-memo-err">块级编辑器加载失败：' + esc(String((err && err.message) || err)) + '</div>'
+        + '<pre class="lw-memo-fallback">' + esc(body) + '</pre>';
+    });
+  }
+  /* 正文变了 → 压撤销快照 + 刷左栏 + 防抖落盘（和旧 onEdit 等价 ✓）*/
+  function memoCommitSoon() {
+    snapMemo('edit');
+    refreshMemoDerived();
+    clearTimeout(MEMO_SAVE_BUF);
+    MEMO_SAVE_BUF = setTimeout(() => {
+      const cur = memoWriteTarget();
+      if (!cur || !memoWriteFromEditor(cur)) return;
+      if (!String(cur.text || '').trim() || String(cur.text || '').trim() === '新备忘录') {
+        STORE.memos = (STORE.memos || []).filter((x) => x.id !== cur.id);
+        if (STORE.memoSel === cur.id) STORE.memoSel = '';
+        saveStore(); return;
+      }
+      STORE.memoSaved = true; saveStore();
+    }, 600);
+  }
+
   /* ── 从界面上读回「标题 + 正文」────────────────────────────────────────
-     正文是逐行实时渲染的 contenteditable：**可编辑行取 textContent、渲染行取 data-src**。
+     正文怎么读**只**走 memoBodyText() ✓（内核换了也不变 ✓）。
      bind()（编辑器）和 bindMemoSide()（切文件夹/标签前的保存）都要用 → 放模块作用域。 */
   function memoReadEditor() {
     const ti = document.getElementById('lw-memo-title');
-    const ce = document.getElementById('lw-memo-ce');
-    const body = ce
-      ? Array.from(ce.querySelectorAll(':scope > .ln')).map((el) =>
-          el.getAttribute('contenteditable') === 'false' ? String(el.dataset.src || '') : String(el.textContent || '')
-        ).join('\n')
-      : null;
-    return { title: ti ? ti.value : null, body };
+    return { title: ti ? ti.value : null, body: memoBodyText() };
   }
   /* 把界面内容写回 cur.text（只改内存、不落盘）。没有编辑器时返回 null（= 保持原样）。 */
   function memoWriteFromEditor(cur) {
@@ -5218,39 +5769,15 @@
        ⚠️ 打字时**绝不重渲染** —— 那会把光标重置到行尾，快打时字符会跑到错误的位置 ✗。
           当前行本来就是源码、其他行也没变 → 只存盘就够了 ✓。
           只有「换行 / 点别的行 / 切源码模式」才重渲染 ✓。 */
-    let memoCeIdx = (STORE && STORE.memoCurLine) || 0;
-    const memoCeEl = () => q('#lw-memo-ce');
-    const readCe = () => {
-      const ce = memoCeEl(); if (!ce) return null;
-      return Array.from(ce.querySelectorAll(':scope > .ln')).map((el) =>
-        el.getAttribute('contenteditable') === 'false' ? String(el.dataset.src || '') : String(el.textContent || '')
-      ).join('\n');
-    };
-    /* 用给定的文本重渲染（并可选把光标放回第 idx 行）。
-       ⚠️ 不要用 renderMemoCe 来「先改后渲染」—— 它会先 readCe() 把**旧 DOM** 读回来，
-          你刚改的东西会被覆盖掉 ✗。要改内容就用这个直接喂文本。 */
-    const applyCe = (text, idx, keepFocus, caretOffset) => {
-      const ce = memoCeEl(); if (!ce) return;
-      const lines = String(text == null ? '' : text).split('\n');
-      if (idx >= lines.length) idx = lines.length - 1;
-      if (idx < 0) idx = 0;
-      memoCeIdx = idx;
-      ce.innerHTML = ceHtml(lines.join('\n'), idx, !!STORE.memoSource);
-      STORE.memoCurLine = idx;
-      ceAlignLineNumbers(ce);            /* 行号垂直对齐（各语法行高不同）✓ */
-      if (!keepFocus) return;
-      const all = Array.from(ce.querySelectorAll(':scope > .ln'));
-      ceSetCaret(all[idx] || all[all.length - 1], caretOffset);
-    };
-    const renderMemoCe = (keepFocus) => applyCe(readCe() == null ? '' : readCe(), memoCeIdx, keepFocus);
-    /* 对「光标所在行」做一次变换（格式按钮 / 插入清单 / 插入表格都用它）*/
-    const editCurrentLine = (fn) => {
-      const lines = String(readCe() == null ? '' : readCe()).split('\n');
-      const i = Math.min(Math.max(0, memoCeIdx), Math.max(0, lines.length - 1));
-      lines[i] = fn(String(lines[i] || ''));
-      applyCe(lines.join('\n'), i, true);
-      saveMemoText();
-    };
+    /* ⚠️ 逐行编辑器那一整套（memoCeIdx / readCe / applyCe / renderMemoCe /
+       editCurrentLine / Enter 切行 / ceLineKey / mdShortcut）**已随内核一起删掉** ✗ ——
+       Crepe 自己管光标、换行、退格和行内 markdown ✓。
+       格式按钮 / 插入清单 / 插入表格改成在 **markdown 文本层**做变换（memoEditBlock ✓），
+       做完 render() 重建编辑器 —— 所以这里只需要一个「读正文」的口子 ✓。 */
+    const memoBody = () => memoBodyText();
+    /* 兼容旧调用点：格式按钮 / 插清单都是「改光标所在那一行」✓ →
+       交给 memoEditBlock 在 markdown 层做，做完重建编辑器（光标回到开头，可接受 ✓）。 */
+    const editCurrentLine = (fn) => memoEditBlock((lines, i) => { lines[i] = fn(String(lines[i] || '')); return lines.join('\n'); });
     /* 把界面上的内容写回 cur.text（不落盘、**不删条目**）
        ★★ 守卫：编辑器显示的那条（MEMO_EDITOR_ID）必须和要写的那条（curMemo()）**是同一条** ✓
        为什么必须有：`curMemo()` 在 `memoSel` 为空时会回落到 `STORE.memos[0]` ✗ ——
@@ -5258,10 +5785,7 @@
        这一写就会把**界面上的内容灌进另一条备忘录** ✗✗（静默的数据损坏，比丢内容更糟）。
        宁可这次不写（用户下次操作会重建编辑器并重新同步），也绝不写错条目 ✓。 */
     const writeMemo = () => memoWriteFromEditor(memoWriteTarget());
-    /* 只写不删的保存：光标操作 / 换行用它。
-       ⚠️ 不能直接用 flushMemo —— 它在内容为空时会把整条删掉 ✗，
-          那条规则是给「切走」用的，光标动一下就触发就完了。 */
-    const saveMemoText = () => { if (writeMemo()) saveStore(); };
+    /* （原来还有个 saveMemoText：只写不删、给光标操作/换行用 —— 换内核后没有这些动作了 ✗，删。）*/
     /* 保存当前编辑内容（自动保存 / 切走 / 撤销前都用它）*/
     const flushMemo = () => {
       const cur = writeMemo(); if (!cur) return;
@@ -5285,67 +5809,13 @@
        refreshMemoDerived 只碰列表，不重建编辑器 ✓（光标/选区不丢）。 */
     const onEdit = () => { snapMemo("edit"); refreshMemoDerived(); autoSave(); };
     if (ti) ti.oninput = onEdit;
-    /* ⚠️ 变量名别用 `ce` —— 下面日记那段已经用了同名 const，同一个函数作用域会撞 ✗ */
-    const memoCeNode = memoCeEl();
-    if (memoCeNode) {
-      memoCeNode.oninput = onEdit;
-      /* 点别的行 → 那行变「当前行」（显示源码 ✓）*/
-      memoCeNode.onmousedown = (e) => {
-        if (STORE.memoSource) return;   /* 源码模式下每行都可编辑，不需要切换 ✗ */
-        const ln = e.target && e.target.closest ? e.target.closest('.ln') : null;
-        if (!ln || ln.classList.contains('cur')) return;
-        e.preventDefault();
-        saveMemoText();
-        const all = Array.from(memoCeNode.querySelectorAll(':scope > .ln'));
-        memoCeIdx = all.indexOf(ln);
-        renderMemoCe(true);
-      };
-      /* Enter 换行：在光标行后面插一行空的，然后重渲染并把光标放过去
-         ⚠️ 必须用 applyCe 直接喂新文本 —— 用 renderMemoCe 的话它会**再读一次旧 DOM**，
-            刚 splice 出来的新行会被覆盖掉 ✗（实测踩过：按回车没反应、字全挤在一行）。 */
-      memoCeNode.onkeydown = (e) => {
-        /* ★ ⌘Z / ⌘⇧Z ✓ —— 按钮 title 一直写着「撤销（⌘Z）」✓ 但没实现 ✗。
-           为什么不用浏览器的原生撤销 ✗：这套编辑器是**逐行重建 DOM** ✓，
-           浏览器的撤销栈对不上 ✓（撤了会错乱）→ 走我们自己的快照栈 ✓。 */
-        if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'z') {
-          e.preventDefault();
-          if (e.shiftKey) redoMemo(); else undoMemo();
-          return;
-        }
-        /* ★ Markdown 快捷键 ✓（⌘B / ⌘I / ⌘K / ⌘E / ⌘⇧7 / ⌘⇧8 / ⌘1~3 ✓）*/
-        if (mdShortcut(e, {
-          ce: memoCeNode,
-          index: memoCeIdx,
-          readAll: () => (readCe() == null ? '' : readCe()),
-          apply: (text, idx, keepFocus, caret) => { snapMemo('edit'); applyCe(text, idx, keepFocus, caret); saveMemoText(); },
-        })) return;
-        /* ★ 行首退格 / 行尾 Delete 必须自己处理 —— 交给浏览器会把内容整片删掉 ✗
-           （实测：按一次退格 4 行变 0 行）。详见 ceLineKey 的注释。 */
-        if (ceLineKey(e, {
-          ce: memoCeNode,
-          index: memoCeIdx,
-          readAll: () => (readCe() == null ? '' : readCe()),
-          apply: (text, idx, keepFocus, caret) => { snapMemo('edit'); applyCe(text, idx, keepFocus, caret); saveMemoText(); },
-        })) return;
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        snapMemo('edit');   /* Enter 换行也改内容 ✓ 得进撤销栈 ✓ */
-        saveMemoText();
-        const lines = String(readCe() == null ? '' : readCe()).split('\n');
-        /* ★ 在**光标处**把当前行切成两半，后半段移到新行 ✓。
-           以前只会「在下面插一个空行」✗ —— 光标在行中间按回车时，后面的文字不跟着换行
-           （用户反馈的「文字不跟着换行」）。光标取不到时退回行尾（= 老行为）✓。 */
-        const curLine = String(lines[memoCeIdx] || '');
-        const caretAt = ceCaretOffset(memoCeNode, memoCeIdx);
-        const cut = caretAt == null ? curLine.length : Math.max(0, Math.min(caretAt, curLine.length));
-        lines[memoCeIdx] = curLine.slice(0, cut);
-        lines.splice(memoCeIdx + 1, 0, curLine.slice(cut));
-        applyCe(lines.join('\n'), memoCeIdx + 1, true, 0);   /* 光标落到新行开头 ✓ */
-        saveMemoText();
-      };
-      /* 初始化：把光标放到上次那一行（存过就恢复 ✓）*/
-      renderMemoCe(true);
-    }
+    /* ★ 挂内核（Crepe）—— 这里只剩「挂上去」一件事 ✓
+       ⚠️ 下面这四件事**原来由旧内核自己兜** ✗，现在都交给 ProseMirror 原生处理 ✓：
+         · oninput（逐行时每敲一个字都要自己收内容）· onmousedown（点哪行哪行变源码）
+         · onkeydown 里的 mdShortcut / ceLineKey（行首退格、行尾 Delete、行内 markdown 快捷键）
+         · Enter（自己把当前行在光标处切两半）
+       删掉它们不是「丢功能」✓：Crepe 全都原生支持 ✓（见 assets/app-reading.js:1009 的用法）。 */
+    memoMountEditor();
     /* 撤销 / 重做：先把待保存的正文落进 cur.text，再回退（否则 REDO 那一帧是旧的 ✗） */
     /* 状态提示：⚠️ 定时器放**模块作用域** —— bind() 每次渲染都会重跑，
        放函数里的话快捷键处理器（只绑一次、捕获的是第一次的闭包）
@@ -5371,7 +5841,7 @@
     };
     /* 双击正文 → 进入编辑（现在正文默认就可编辑，留着兼容旧交互）*/
     const prev = q("#lw-nt-prev");
-    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const t2 = document.getElementById("lw-memo-ce"); if (t2) t2.focus(); };
+    if (prev) prev.ondblclick = () => { flushMemo(); STORE.memoEditing = STORE.memoSel; saveStore(); render(); const c3 = MEMO_CE; if (c3 && c3.ctrl) c3.ctrl.focus(); };
     /* 新建 */
   /* ════ 快速捕捉 ✓✓（2026-10-09）════════════════════════════════════════
      ⚠️ 为什么要有 ✗✗：用户说「我需要的是……方便的功能」✓。实测确认：
@@ -5496,11 +5966,8 @@
     const tb = q("#lw-nt-table");
     if (tb) tb.onclick = () => {
       snapMemo("insert");
-      const lines = String(readCe() == null ? '' : readCe()).split('\n');
-      const i = Math.min(Math.max(0, memoCeIdx), Math.max(0, lines.length - 1));
-      lines.splice(i + 1, 0, "| 列1 | 列2 |", "| --- | --- |", "|  |  |", "");
-      applyCe(lines.join('\n'), i + 1, true);
-      saveMemoText();
+      /* 在光标那一块**后面**插一张空表 ✓（memoEditBlock 的第二参 = 插在后面）*/
+      memoEditBlock((lines, i) => { lines.splice(i + 1, 0, "| 列1 | 列2 |", "| --- | --- |", "|  |  |", ""); return lines.join('\n'); }, true);
     };
     /* 置顶 / 导出 / 删除 */
     qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { snapMemo("pin"); m.pin = !m.pin; saveStore(); render(); } }; });
@@ -5805,10 +6272,7 @@
     if (ce) {
       let ceIdx = (STORE.journalCurLine || 0);
       /* 把 DOM 读回源码：当前行取 textContent ✓，其他行取 data-src ✓ */
-      const readAll = () => Array.from(ce.querySelectorAll(':scope > .ln')).map((el) => {
-        const isCur = el.classList.contains('cur');
-        return isCur ? String(el.textContent || '') : String(el.dataset.src || el.textContent || '');
-      }).join('\n');
+      const readAll = () => readMemoMarkdown(ce);  /* ★ 唯一入口（见 readMemoMarkdown 的注释）*/
       const persist = () => {
         const txt = readAll().replace(/\s+$/, '');
         /* ⚠️ journalSel 为空时**不能**写出 date 缺失的条目 ——
@@ -5828,9 +6292,8 @@
         if (idx >= lines.length) idx = lines.length - 1;
         if (idx < 0) idx = 0;
         ceIdx = idx;
-        ce.innerHTML = ceHtml(lines.join('\n'), idx);
+        writeMemoMarkdown(ce, lines.join('\n'), idx);
         STORE.journalCurLine = idx;
-        ceAlignLineNumbers(ce);          /* 行号垂直对齐（各语法行高不同）✓ */
         if (keepFocus) ceSetCaret(ce.querySelectorAll(':scope > .ln')[idx], caretOffset);
       };
       const renderCe = (keepFocus) => applyCeJ(readAll(), ceIdx, keepFocus);
@@ -5936,22 +6399,20 @@
     const jMd2 = q('#lw-j-md');
     if (jMd2) jMd2.onclick = () => {
       const c2 = q('#lw-j-ce'); if (!c2) return;
-      const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
+      const lines = readMemoMarkdown(c2).split('\n');
       const i = STORE.journalCurLine || 0;
       lines[i] = '## ' + String(lines[i] || '').replace(/^#{1,3}\s*/, '');
-      c2.innerHTML = ceHtml(lines.join('\n'), i);
-      ceAlignLineNumbers(c2);
+      writeMemoMarkdown(c2, lines.join('\n'), i);
       const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
       JOURNAL_FLUSH();
     };
     const jCk2 = q('#lw-j-ck');
     if (jCk2) jCk2.onclick = () => {
       const c2 = q('#lw-j-ce'); if (!c2) return;
-      const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
+      const lines = readMemoMarkdown(c2).split('\n');
       const i = STORE.journalCurLine || 0;
       lines[i] = '- [ ] ' + String(lines[i] || '').replace(/^\s*[-*+]\s*(\[[ xX]\]\s*)?/, '');
-      c2.innerHTML = ceHtml(lines.join('\n'), i);
-      ceAlignLineNumbers(c2);
+      writeMemoMarkdown(c2, lines.join('\n'), i);
       const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
       JOURNAL_FLUSH();
     };
@@ -5959,8 +6420,7 @@
       btn.onclick = async () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;
         const c2 = document.getElementById('lw-j-ce'); if (!c2) return;
-        const lines = Array.from(c2.querySelectorAll(':scope > .ln')).map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''));
-        const curTxt = lines.join('\n').trim();
+        const curTxt = readMemoMarkdown(c2).trim();
         let next = tpl.text;
         if (curTxt) {
           /* ★★ 这里原来是 `confirm`：**确定 = 替换、取消 = 追加** ✗✗ ——
@@ -5979,8 +6439,7 @@
           if (how === null) return;
           if (how === 'append') next = curTxt.replace(/\s*$/, '') + '\n\n' + tpl.text;
         }
-        c2.innerHTML = ceHtml(next, 0);
-        ceAlignLineNumbers(c2);
+        writeMemoMarkdown(c2, next, 0);
         STORE.journalCurLine = 0;
         const cur = c2.querySelector(':scope > .ln.cur'); if (cur) cur.focus();
         JOURNAL_FLUSH();
@@ -6010,9 +6469,7 @@
     if (jSave) jSave.onclick = () => {
       const k = STORE.journalSel;
       const c2 = document.getElementById('lw-j-ce');
-      const text = c2 ? Array.from(c2.querySelectorAll(':scope > .ln'))
-        .map((el) => el.classList.contains('cur') ? String(el.textContent || '') : String(el.dataset.src || ''))
-        .join('\n').replace(/\s+$/, '') : '';
+      const text = c2 ? readMemoMarkdown(c2).replace(/\s+$/, '') : '';
       /* 只填了模板、没动过 → 不算写 ✓（免得日历上白点一片 ✗）*/
       if (jIsTplOnly(text)) {
         const s2 = document.getElementById('lw-sub'); if (s2) s2.textContent = '还只填了模板 —— 补两句再保存 ✓';
@@ -6524,9 +6981,7 @@
       + (() => {
         /* 编辑区（标题 + 正文）。图片预览打开时会和预览栏并排成两栏 ✓ */
         const editPane = '<input class="lw-nt-title" id="lw-memo-title" value="' + esc(String(cur.text || "").split("\n")[0]) + '" placeholder="标题" />'
-          + '<div class="lw-ce lw-memo-ce" id="lw-memo-ce" contenteditable="true" spellcheck="false">'
-          + ceHtml(String(cur.text || "").split("\n").slice(1).join("\n"), STORE.memoCurLine || 0, !!STORE.memoSource)
-          + '</div>';
+          + memoEditorHostHtml(cur);
         const pv = MEMO_IMG_PREVIEW;
         if (!pv) return editPane;
         const head = '<div class="panehd">◫ 图片预览<span class="sp"></span>'
