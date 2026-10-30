@@ -620,6 +620,22 @@
   body.lw-panel-open > .milkdown-link-edit,
   body.lw-panel-open > .milkdown-latex-inline-edit,
   body.lw-panel-open > .milkdown-ai-instruction { z-index:8840; }
+  /* ══ 选中文字后弹的**两条浮动工具条**：生活面板里一律不弹 ✓✓（用户明确不要 ✗）══
+     · 颜色条 .codescope-color-bar —— CodeScope 自己建的（src/reading-block-editor.js 的
+       attachColorControls：**无条件**创建 + document.body.appendChild ✓，选中文字后由
+       positionBar() 弹出 ✓，内容 = 10 个色块 + ▮ 高亮 + ⌫ 清除 ✓）。
+     · .milkdown-toolbar —— Crepe 自带的选区工具条（B I S 行内代码 Σ 链接 ✓）。
+     ⚠️ 为什么只能 CSS、不能用 option 关 ✗✗：读 src 的 create(options) 确认过，
+        它**只认 root / markdown / topBar / onChange / onError** 这几个键 ✓ ——
+        没有 selectionToolbar / colorBar / features 之类的开关 ✓，而 src 是禁改文件
+        （阅读视图共用 ✗）。⇒ 隐藏 ✓，并且**只隐藏这两处容器里的** ✓：
+        · body.lw-panel-open 只由 life-workbench 的 open/hide 加删 ✓（关掉面板就恢复 ✓）；
+        · 后两条  :is(.lw-memo-ce,.lw-j-ce)  兜住「顶栏被搬走 / body 类没来得及加」的时序 ✓。
+     ⚠️ 阅读视图 / 主编辑区**一个字都没动** ✗：它们既不是 .lw-memo-ce/.lw-j-ce，
+        也不会带上 lw-panel-open ✓ → 两处浮条照旧 ✓。
+     ⚠️ 用 display:none（不是 visibility / opacity）✗：positionBar 会量 offsetWidth 定位 ✓，
+        尺寸为 0 时它算出来的坐标无所谓 ✓（反正不显示 ✓），也不会盖住别的浮层 ✓。 */
+  body.lw-panel-open > .codescope-color-bar, body.lw-panel-open > .milkdown-toolbar, :is(.lw-memo-ce,.lw-j-ce) .codescope-color-bar, :is(.lw-memo-ce,.lw-j-ce) .milkdown-toolbar { display:none !important; }
   /* 日记那条栏多出来的三样：分类下拉 / 模板按钮 / 自动套用 */
   .lw-nt-bar select { height:26px; max-width:110px; padding:0 4px; border:1px solid ${T.lineDim}; background:transparent; color:${T.text}; font:600 11px ${UI}; flex:none; outline:none; }
   .lw-nt-bar .autotpl { display:flex; align-items:center; gap:4px; flex:none; font-size:10.5px; color:${T.faint}; cursor:pointer; white-space:nowrap; }
@@ -2765,7 +2781,26 @@
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view li.list-item .milkdown-icon.label.bullet { color: var(--doc-primary); }
 
 /* ── ⑧ 正文元素（配色沿用 theme.css:3183-3211，行高沿用 5088）────────── */
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view ::selection { background: var(--doc-select); color: var(--doc-strong); }
+/* ⚠️⚠️ 「选中态不明显」的**真正根因**（实测像素采样，2026-10-30）✗✗：
+     原来这条写的是 background: var(--doc-select) ✓ —— 四套 Phycat 配色各给一个值 ✓，
+     可**它根本没生效** ✗：Crepe 自己也有一条选区规则
+       .milkdown .ProseMirror *::selection { background: var(--crepe-color-selected) }
+     （node_modules/@milkdown/crepe/lib/theme/common/reset.css:52 ✓，!important 都没有 ✓），
+     特异性 0,2,0 —— 和原来那条**一模一样** ✗，而它的样式表是**编辑器挂载时**才注入的 ✓
+     （life-styles.js 的样式早就进 head 了 ✗）→ 平手时后注入的赢 ✗ →
+     选区的底色一直是 Crepe 的 --crepe-color-selected = **#2f2f2f**（frame-dark 主题 ✓）。
+     证据：四套配色 + 浅色纸下把「选中 / 未选中」两张截图做像素众数统计 ✓，
+     选中那一带的底色**恒为 rgb(47,47,47)** ✓，与纸色无关 ✓：
+       everforest #272E33 → 47,47,47 几乎同色 → 看不见 ✗（用户就是这么发现问题的 ✓）；
+       浅色纸 #F4F1E8 → 47,47,47 反而看得见 ✓。
+     ⇒ 两条修法**一起上** ✓：
+       ① 特异性抬到 0,3,0（多带一个 .ProseMirror ✓）→ 压过 Crepe 那条 ✓，不靠加载顺序 ✓；
+       ② 底色换成**主色 32% 叠加** ✓：任意一套配色下都和纸色**同色系但更亮/更暗** ✓，
+          浅色纸（html[data-theme=light] 把 --doc-primary 重映射成 --pp-accent 深绿 ✓）同样成立 ✓。
+     ⚠️ 只作用于这两个容器（.lw-memo-ce / .lw-j-ce）✗，不写全局 ::selection ✓；
+        源码模式那个 textarea 没有 markdown-preview-view 类 → --doc-primary 取不到 ✓，
+        所以带一个 var(--doc-primary, var(--pp-accent)) 兜底 ✓（面板里 --pp-accent 一定有 ✓）。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror ::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view::selection, :is(.lw-memo-ce,.lw-j-ce).lw-memo-src::selection, :is(.lw-memo-ce,.lw-j-ce) textarea::selection { background: color-mix(in srgb, var(--doc-primary, var(--pp-accent)) 32%, transparent); color: var(--doc-strong, inherit); }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
 /* ── ⑧-a 加粗（theme.css:5529-5589「Underglow」）─────────────────────────

@@ -34,6 +34,9 @@
  *                                     bullet-list ordered-list task-list
  *                                     quote table code-block image math hr link
  *                                     para h1…h6（段落 / 标题）
+ *                                ★ 另加一条**不是** Crepe 命令的 delete ✓（2026-10-30，补「缺少删除」）：
+ *                                  「有选区删选区，无选区删当前整块」（源码模式下 = 删光标那一行）。
+ *                                  走浏览器原生 execCommand('delete')，理由见 removeAt 的注释 ✓
  *   adopt(host, target)        → 把 Crepe 顶栏里**CodeScope 自己插的**两组
  *                                （❝ 提示框 / A·▮ 颜色高亮）搬进面板工具栏 ✓
  *                                —— 顶栏在生活面板里被 CSS 隐藏，这两组不能跟着丢。
@@ -312,9 +315,59 @@
     } catch (_) { return false; }
   }
 
+  /* ════ 「删除」：有选区删选区，无选区删**当前整块** ✓✓ ═════════════════════════
+     ⚠️ 为什么不用 Crepe 命令 ✗✗：顶栏那 14 项（TOP_ITEMS）**没有**「删块」一项 ✓，
+        commandsCtx 又在 create() 的闭包里拿不到（src 禁改 ✓，理由同上面 exec）✗。
+     ⇒ 走**浏览器原生编辑** execCommand('delete') ✓ —— 它产生的是**真实输入**：
+        ProseMirror 的 DOM 观察器（readDOMChange）把这次改动收成一条**普通事务** ✓
+        （prosemirror-view 1.42.3 的 readDOMChange **不带** addToHistory:false ✓
+         → 这条事务进撤销栈 ✓ → ⌘Z 能撤 ✓），markdownUpdated 照常触发 ✓
+        → 面板的 onChange（memoCommitSoon / journalCommitSoon）压快照 + 防抖落盘 ✓。
+     ⚠️ 不能用「合成 keydown 派发 Backspace」✗：实测进不了 ProseMirror 的 keymap
+        （见上面 exec 那段注释：试过，0 次生效 ✗）。
+     ⚠️ 「当前整块」的边界 = **.ProseMirror 的直接子节点** ✓（判据和 caretBlockText 一致 ✗，
+        否则列表项 / 引用块会被算成「整篇」✓）。
+     ⚠️ 选区必须是**真 DOM 选区**再让浏览器去删 ✗ —— 直接 el.remove() 属于外部 DOM 改动，
+        ProseMirror 有可能整片重渲染（改动被丢掉 ✓），走 execCommand 才是它会认的输入 ✓。 */
+  function removeAt(host) {
+    if (host.tagName === 'TEXTAREA') return removeLineInTextarea(host);
+    const prose = host.querySelector('.ProseMirror'), sel = window.getSelection();
+    if (!prose || !sel || !sel.rangeCount) return false;
+    if (!sel.isCollapsed) return document.execCommand('delete');
+    const anchor = sel.anchorNode;
+    let el = anchor && anchor.nodeType === 3 ? anchor.parentElement : anchor;
+    if (!el || !prose.contains(el)) return false;
+    while (el.parentElement && el.parentElement !== prose) el = el.parentElement;
+    const kids = prose.childNodes, i = Array.prototype.indexOf.call(kids, el), range = document.createRange();
+    if (i > 0) { range.setStart(kids[i - 1], kids[i - 1].childNodes.length); range.setEnd(el, el.childNodes.length); }
+    else if (kids.length > 1) { range.setStart(el, 0); range.setEnd(kids[1], 0); }
+    else range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return document.execCommand('delete');
+  }
+
+  /* 源码模式（整篇一个 textarea）：有选区删选区，无选区删**光标那一行** ✓。
+     同样走 execCommand ✓（原生撤销栈认它 ✓ 而 setRangeText 不认 ✗）。 */
+  function removeLineInTextarea(ta) {
+    const value = ta.value, from = ta.selectionStart, to = ta.selectionEnd;
+    if (from !== to) return document.execCommand('delete');
+    let start = value.lastIndexOf('\n', Math.max(0, from - 1)) + 1, end = value.indexOf('\n', from);
+    end = end < 0 ? value.length : end + 1;
+    /* ⚠️ 块之间的空行是 markdown 的分隔符 ✓：只删「本行 + 它自己的换行」会**多留一个空段**
+       （实测：删掉「第三段」之后，第二段和第四段之间变成两条空行 ✗）→ 尾随空行一起吃掉 ✓；
+       光标在最后一行时改成把**前面**那条换行吃掉 ✓（否则末尾留一个空行 ✗）。 */
+    if (value[end] === '\n') end += 1;
+    else if (end >= value.length && start > 1) start -= 1;
+    ta.setSelectionRange(start, end);
+    return document.execCommand('delete');
+  }
+
   function exec(host, cmd) {
-    const bar = topBarOf(host);
     const key = cmd == null ? '' : String(cmd);
+    /* 「删除」不是 Crepe 命令（见 removeAt 的注释）→ 先在这里分出去 ✓ */
+    if (host && key === 'delete') return removeAt(host);
+    const bar = topBarOf(host);
     if (!bar || !key) return false;
     /* 段落 / 标题：Crepe 的 Paragraph 下拉是**两跳**（先开下拉、再点选项 ✓）
        —— 选项是 Vue 渲染的 ✓，派发后要等一帧才进 DOM ✓（同步读一定是空 ✓）。 */

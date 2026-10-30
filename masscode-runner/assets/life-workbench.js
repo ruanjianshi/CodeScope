@@ -4061,7 +4061,16 @@
       + b('bullet-list', '•', '无序列表') + b('ordered-list', '1.', '有序列表') + b('task-list', '☑', '任务项')
       + '<span class="div"></span>'
       + b('quote', '❘', '引用') + b('table', '⊞', '表格') + b('code-block', '&lt;/&gt;', '代码块')
-      + b('image', '▧', '插入图片')
+      /* ★ 2026-10-30 补「删除」✓（用户：「缺少删除」）——
+         行为：**有选区删选区，无选区删当前整块** ✓（实现见 life-editor.js 的 exec + removeAt ✓：
+         走 execCommand('delete') → ProseMirror 收成一条普通事务 → 进撤销栈 + 触发保存 ✓）。
+         ⚠️ title 写「删除选中 / 当前块」而不是只写「删除」✗ —— 这条栏右边还有一颗
+            button#lw-memo-del（**整条备忘录进回收站** ✓，见下面 editor 那一段 ✓），
+            两颗都叫「删除」用户分不清 ✓。
+         ⚠️ 标签用 ⌫ 不用「删除」两个字：窄屏（容器查询）下这排按钮只有 22px 宽 ✓。
+         ⚠️ 新按钮和 b('image',…) 挤在**同一行**写：棘轮只数代码行，本文件上限 = 实测值
+            10468，多一行代码就红 ✗（注释不数 ✓，所以理由都写在这里 ✓）。 */
+      + b('image', '▧', '插入图片') + b('delete', '⌫', '删除选中 / 当前块')
       + '<button data-lmore="1" title="更多：公式 / 分隔线 / 链接 / 颜色 / 源码">⋯</button>'
       + '<span class="chrome"></span>';
   }
