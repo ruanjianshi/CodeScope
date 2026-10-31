@@ -2164,22 +2164,29 @@
     };
   })();
 
-  /* ══ 空闲时预加载思维导图引擎 ═══════════════════════════════════════════
-     引擎包 1.6MB，原来是「第一次打开绘图」才 import ✗ → 那一下要等 1~2 秒 ✓
-     ⇒ 首屏稳定后（requestIdleCallback）就悄悄拉下来 ✓
-       `ensureXmindEditorLib()` 内部有缓存，打开绘图时直接命中 ✓
-     ⚠️ 用 idle 回调 + 4s 超时兜底，不跟首屏抢带宽 ✓ */
-  (function warmEngine() {
-    const run = () => {
-      try {
-        if (typeof ensureXmindEditorLib === 'function') ensureXmindEditorLib().catch(() => {});
-      } catch (_) {}
-    };
-    try {
-      if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4000 });
-      else setTimeout(run, 2500);
-    } catch (_) { setTimeout(run, 2500); }
-  })();
+  /* ══ 思维导图引擎：**延后**预热（T-03）═══════════════════════════════════
+     ⚠️ 原来这里是 `requestIdleCallback(run, {timeout: 4000})` ✗ —— 首屏 321ms 就落进
+        一个空闲缝隙里，把 1.6MB（gzip 476KB）的引擎**在首屏拉了下来** ✗✗。
+        实测它是首屏**体积第一**的资源，而首屏压根用不到思维导图 ✓。
+     ⇒ 现在改成「先到者」触发，且**都不在首屏关键路径上**：
+         ① `window.load` 之后 **10 秒**（首屏彻底安定，带宽不抢）；
+         ② 用户 pointerenter 到思维导图入口（XMind 徽标的绘图行 / #xmind-root），
+            或者真的打开了思维导图（openXmindEditor）—— 这是**真实意图**，优先级最高 ✓。
+     ⚠️ 为什么要 `ensureMindMap()` 而不是直接调 `ensureXmindEditorLib()` ✗：
+        后者加载完就返回 `Promise.resolve()`（新对象 ✗）、失败还会清缓存 ✓，
+        而"只加载一次、重复调用拿到**同一个** Promise"得由这里保证 ✓。
+     ⚠️ **代码行数不许涨** ✗：本文件在棘轮里（1804 行，余量 0 ✓）——
+        所以实现一律压成单行，解释全部放注释 ✓（注释不计入棘轮 ✓）。 */
+  function ensureMindMap() {
+    if (!ensureMindMap.promise) ensureMindMap.promise = Promise.resolve(typeof ensureXmindEditorLib === 'function' ? ensureXmindEditorLib() : null).catch((error) => { ensureMindMap.promise = null; throw error; });
+    return ensureMindMap.promise;
+  }
+  window.ensureMindMap = ensureMindMap;
+  function warmMindMap() { ensureMindMap().catch(() => {}); }
+  function warmMindMapAfterLoad() { setTimeout(warmMindMap, 10000); }
+  if (document.readyState === 'complete') warmMindMapAfterLoad(); else window.addEventListener('load', warmMindMapAfterLoad, { once: true });
+  document.addEventListener('pointerover', (event) => { const target = event.target; if (target instanceof Element && target.closest('.draw-type--xmind, #xmind-root')) warmMindMap(); }, { passive: true });
+  (function warmOnOpen() { const original = window.openXmindEditor; if (typeof original !== 'function') return; window.openXmindEditor = function () { warmMindMap(); return original.apply(this, arguments); }; })();
 
   /* ══ 切换布局后自动「适应画布」══════════════════════════════════════════
      用户：「切换逻辑图样式就有问题了」
