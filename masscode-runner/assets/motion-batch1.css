@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   码境 CodeScope · 动效审计第一批（P-01 / P-02 / P-03）
+   码境 CodeScope · 动效审计第一批（P-01 / P-02 / P-03 / P-04 / P-05）
    计划与实测依据：plans/motion-audit-2026-10.md（审计基线 HEAD 304ee9b，
    本次落盘时 HEAD = 42346d6，行号按选择器复核过，未漂移）
-   本文件只做三件事，全部是「补过渡」：不改结构、不改几何、不改配色、不改布局。
+   本文件只做五件事，全部是「补过渡 / 补层级」：不改结构、不改几何、不改配色、不改布局。
    ───────────────────────────────────────────────────────────────────────────
    为什么新开一个文件（而不是写回 app.css / motion.css）：
    11 个受棘轮管制的文件余量**全是 0**（app.css 4212/4212、motion.css 273/273、
@@ -14,8 +14,10 @@
    ───────────────────────────────────────────────────────────────────────────
    三条硬约束（审计文档 §0.3）与本文的对应：
    ① 棘轮零余量 → 新文件 ② 特异性写死 → 每条都写清了压的是谁
-   ③ 禁止区不加动画 → 本文**没有** #comp-pop / #sym-modal-box / #editor-find /
-      .empty-state / Monaco / xterm / PTY 的任何一条选择器 ✓
+   ③ 禁止区不加动画 → 本文**没有** #comp-pop / #editor-find / .empty-state /
+      Monaco / xterm / PTY 的任何一条选择器 ✓
+      ★ 唯一例外（P-05，第 6 节）：#sym-modal-box 只多了一条 **box-shadow**（附带它的
+        过渡）—— 改阴影不是加动画：没有 animation / transform / opacity ✓
    ═══════════════════════════════════════════════════════════════════════════ */
 
 
@@ -126,8 +128,9 @@ html[data-theme] .editor-group-divider.active::after {
      （app.css:2628 / :3042 / :3249 / :3387），逐条镜像会在皮肤层留 4 份副本；
      opacity 与颜色无关。代价是面板也跟着淡 120ms（约 2 帧）——
      审计 P-03 已把这个代价写成有意的取舍。
-   ★ **不给 #sym-modal-box 加任何东西**：⌘K 是 100+/天的动作，面板与结果列表
+   ★ **不给 #sym-modal-box 加任何动效**：⌘K 是 100+/天的动作，面板与结果列表
      必须第一帧就完全可读（不加 scale、不加 translate、不加 fade）✓
+     （P-05 在第 6 节给它换过 box-shadow —— 那是静态视觉层级，不是动效 ✓）
    ★ 曲线 linear、时长 120ms：这是「整屏压暗」的性质变化，不是"落位"，
      两头缓入缓出会读成迟疑（Raycast 口径：遮罩只负责不刺眼）。
    ★ 键帧名带 batch1 前缀：motion-canvas.css:362 已经有同名 @keyframes mo-overlay-in，
@@ -181,6 +184,99 @@ body.git-open #side > #pane-git {
 }
 
 
+/* ═════════════ 6. P-05 · elevation 三档：面板 / 浮层 / 抽屉分层 ═══════════ */
+
+/* 现象（审计实测；本次在 49xx 独立实例上复核过）：欢迎页 481 个渲染元素里 87 个带阴影、
+   去重后 14 种；而整棵 DOM（含隐藏浮层）的 computed box-shadow 有 **47 种互不相同的值**
+   —— 审计基线记 50，量级一致（同一次加载里把本节的三条规则删掉再数 = 46：分组变了，
+   ±1 是预期的；三档没有把总数继续推高 ✓）。
+   光「浮层类」就挤着 6 组近似值：
+     0 8px 24 / 0 12px 40 / 0 16px 40 / 0 18px 50 / 0 24px 40 / 0 6px 16
+   改前这三处的 computed 值就是「层级糊」的直接证据：
+     #pane-git       → rgba(0,0,0,.48) -14px 0 36px       ← 向左的单向投影
+     #sym-modal-box  → rgba(0,0,0,.34) 0 18px 50px        ← = var(--shadow)（暗色）
+     .ctx-menu       → rgba(0,0,0,.70) 0 16px 40px + 0 2px 4px + inset
+   ⇒ 右键菜单（.70 alpha / 40px 模糊）反而比命令面板（.34 / 50px）更「重」：
+     「谁真的在上面」与「谁看起来更重」是两套互相矛盾的数值语言 —— 这就是「立体感糊」。
+   ─────────────────────────────────────────────────────────────────────────
+   做法：三档令牌，只落在三个「学费最高」的面上（第一轮不做其余 47 处全量重写 ——
+   那会是一份不可评审的 diff）。三档在**偏移与模糊两个维度同时单调递增**，
+   所以 computed 值可以机器比对：
+
+     档位      近处层 blur/y/alpha      远处层 blur/y/alpha     顶部内高光
+     --el-1        2px / 1px / .18             6px / 2px / .10          .06
+     --el-2       12px / 4px / .24            28px / 12px / .18         .08
+     --el-3       24px / 8px / .30            56px / 24px / .26         .10
+
+   ★ 为什么是「两层外阴影 + 一条顶部内高光」，而不是单层：
+     单层阴影只能表达「有多黑」，表达不了「离纸面多远」。近处那层（小模糊、大 alpha）
+     压出接触面，远处那层（大模糊、低 alpha）把物体举起来；顶部 1px 内高光让上边缘
+     「立」起来（.06 / .08 / .10 随档位递增）—— Material 与 Raycast 用的是同一手法。
+   ★ 起点值来自派单，只把「顶部内高光」补进了令牌（派单正文明确要求了它、示例值里漏了）；
+     四组外阴影数字一个没动，保证「按第一个模糊半径排序 2 < 12 < 24」成立 ✓。
+   ★ 命名用 --el-*（elevation）而不是 --mo-e*：这三档是**静态视觉层级**，不是时长令牌；
+     以后 --mo-* 那族要改单位/收敛档位时，不会把阴影一起带走 ✓。 */
+
+:root {
+  /* ① 卡片 / 面板：贴着纸面，只压出一道细边 */
+  --el-1: 0 1px 2px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.06);
+  /* ② 浮层 / 右键菜单：离开纸面一层，能盖住内容但仍是「指针旁的附件」 */
+  --el-2: 0 4px 12px rgba(0,0,0,.24), 0 12px 28px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.08);
+  /* ③ 抽屉 / 对话框：整个工作区让位，最高档 */
+  --el-3: 0 8px 24px rgba(0,0,0,.30), 0 24px 56px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.10);
+}
+
+/* ① 抽屉：#pane-git —— 从右侧压过来的一整块，最高档。
+   抢权者是 ui-kit.css:386 的 `body.git-open #side > #pane-git`（特异性 2,1,1）里的
+   `box-shadow: -14px 0 36px rgba(0,0,0,.48)`。本文件的选择器**与它一字不差**、且排在
+   ui-kit.css 之后 ⇒ 同特异性靠「后出现」取胜，全程没有 !important ✓。
+   ★ 原来的单向投影（-14px）换成正下方两层：抽屉已经从「右边一条」变成「一层板」，
+     单向投影只会在左边缘留一道深沟；两层 y-offset 让底部也有接触感
+     （底部正好被视口裁掉，真正的读感来自左边缘的 24 / 56 模糊）✓。
+   ★ transition 160ms：比 --mo-1（120ms）慢半拍 —— 阴影的面积比颜色大得多，
+     同样的 120ms 在阴影上会读成「边缘跳变」（P-01 取 120ms 是因为那里变的是透明度，
+     这里变的是边缘）。160ms 是派单给定值，全文件只此一条表外时长 ✓。 */
+body.git-open #side > #pane-git {
+  box-shadow: var(--el-3);
+  transition: box-shadow 160ms var(--mo-out);
+}
+
+/* ② 命令面板：#sym-modal-box 的**外框**（不是内部 —— 内部一行不许动）。
+   抢权清单（改前实测，三份互相打架的阴影，全都只到 (1,0,0)，且都在 app.css 顶层）：
+     app.css:2630  #sym-modal-box                              → 0 8px 40px .55
+     app.css:3043  #sym-modal-box                              → 0 24px 40px .55
+     app.css:3250  #new-dialog .nd-panel, … #sym-modal-box     → var(--shadow)
+   本文件用同一个 `#sym-modal-box`（(1,0,0)）后加载即全胜 ✓ —— 不需要 html[data-theme]
+   前缀，也不需要 !important。app.css:3389 的 `html[data-theme] #sym-modal-box` 只写
+   背景与边框、不写阴影，不参与这场竞争 ✓。
+   ⚠️ 审计把 #sym-modal-box 列进「禁止加动画」名单：**改阴影不是加动画** ——
+     这里没有 animation、没有 transform、没有 opacity，只有 box-shadow 与它的过渡 ✓。 */
+#sym-modal-box {
+  box-shadow: var(--el-3);
+  transition: box-shadow 160ms var(--mo-out);
+}
+
+/* ③ 右键菜单：.ctx-menu —— 浮层，第二档。
+   app.css:508 的 `.ctx-menu`（0,1,0）写着 0 16px 40px .70 + 0 2px 4px .32 + inset。
+   只写 `.ctx-menu` 后加载也能赢（同特异性），但这里**加 html[data-theme] 前缀**（0,2,0）
+   把话说死：将来谁再往主题块里补一条 .ctx-menu 阴影，都不会把它顶掉 ✓。
+   ⚠️ transition 必须**把 opacity / transform 一起写上**：motion.css:351 在
+     `@supports (transition-behavior: allow-discrete)` 里给 .ctx-menu 写过
+     `transition: opacity var(--mo-1) var(--mo-out), transform var(--mo-1) var(--mo-out)`。
+     transition 是**整体替换**而不是追加（P-01 踩过同一个坑）—— 只写 box-shadow 会把
+     菜单的入场过渡静默删掉，菜单会退回「瞬间弹出」✗。三条一起写，后两条与 motion.css
+     逐值相同（--mo-1 120ms + --mo-out）⇒ 入场观感零变化 ✓。
+   ★ 为什么菜单降到第二档而不是第三档：菜单是「指针旁边的一张纸」，面板是「整屏让位的
+     一层门」。改前菜单 .70 alpha 反而比面板更重，正是要修的那处倒挂 ✓。 */
+html[data-theme] .ctx-menu {
+  box-shadow: var(--el-2);
+  transition:
+    box-shadow 160ms var(--mo-out),
+    opacity var(--mo-1) var(--mo-out),
+    transform var(--mo-1) var(--mo-out);
+}
+
+
 /* ═════════════ 4. 无障碍兜底：prefers-reduced-motion ════════════════════ */
 
 /* app.css:3828 有一条全局兜底（* 选择器压 duration + iteration-count），但它管不了
@@ -223,5 +319,19 @@ body.git-open #side > #pane-git {
      这里只关动画名，不跟 app.css:3828 那条全局 duration 抢（两条管不同长属性）✓。 */
   body.git-open #side > #pane-git {
     animation: none;
+  }
+
+  /* P-05：阴影是**视觉层级**，不是动效 ⇒ reduced-motion 下三档阴影原样保留
+     （这里一条 box-shadow 都没有，就是「不动它」的意思 ✓）。
+     只把过渡关掉：transition:none 把 property 置 none，那条 160ms 就不再有意义；
+     app.css:3828 的全局兜底（`* { transition-duration:.01ms !important }`）仍会把
+     duration 报成 1e-05s —— 这是**期望值**（证明没有残余动效），不是漏网的过渡 ✓。
+     ⚠️ .ctx-menu 也要写：motion.css:351 的入场过渡在 reduced-motion 下由
+        motion.css:533 那条 `.01ms !important` 压住；本文件把 transition 整体置 none，
+        结果一致（时长都不可见），但语义上更彻底 ✓。 */
+  body.git-open #side > #pane-git,
+  #sym-modal-box,
+  html[data-theme] .ctx-menu {
+    transition: none;
   }
 }
