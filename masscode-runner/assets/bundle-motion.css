@@ -1,0 +1,1980 @@
+/* ============================================================================
+   motion-lw.css —— 「生活工作台」面板（life-workbench.js）的微交互叠加层
+
+   为什么要有这个文件
+   ----------------------------------------------------------------------------
+   assets/life-workbench.js（16,271 行）是顶栏的「生活工作台」面板：10 个互不相关的
+   页签、自建 DOM、自建 CSS。它自己的 CSS 在启动时**运行时注入**：
+       life-workbench.js:3392-3396  document.head.appendChild(<style id="lifework-style">)
+   也就是说，它永远出现在 <head> 里所有 <link> 的**后面** ✗。
+   同特异性下后出现者胜 ⇒ 想在这里加过渡，**不能靠"后加载"**，只能靠特异性 ✓。
+
+   本文件在 head 里是 <link>（排在 motion.css 之后、lifework-style 之前）。
+   于是这里的每一条规则都要先回答一个问题：
+       "我要动的这个属性，子系统自己写过吗？"
+     · 写过（transition 已在 .lw-nav button / .lw-btn / .lw-bk .ops / .lw-ep-art .ops 上）
+       → 它会用"同特异性 + 后出现"把我盖掉 ✗，必须靠**重复类名/加深祖先**把特异性抬上去 ✓。
+       → 同时还要压过 motion.css 里那层通用按钮/输入框规则（第 0 节有清单）。
+     · 没写过（绝大多数列表行、卡片、标签只换了 hover 的颜色，没有 transition）
+       → 没有任何竞争规则，普通特异性就够 ✓，不必无脑加倍 ✗（加倍会让日后的维护者
+         以为"这里一定在打架"，也会把无关属性的未来改动一起锁死）。
+
+   一条贯穿全文件的产品判断（和 motion.css 完全一致）
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 按下 / 点页签 / 打开菜单）才允许 --mo-back 回弹；
+   状态同步、轮询刷新、自动更新一律 --mo-out 平滑。
+   这个面板确实在定时刷新：CLOCK_TIMER 每 1s（:6302）、QUOTE_TIMER 每 20s（:6351）、
+   MAIL_STATUS_TIMER 每 75s（:7831）、备忘录列表 live 防抖 200ms 重建（:4254）。
+   ⇒ 本文件里**没有一条**"行入场 / 列表逐项出现"的动画 ✗；
+     给数据更新加动画会变成连续抽筋，这就是铁律本身。
+   ============================================================================ */
+
+
+/* ═══════════════════ 0. 先说清"跟谁抢"：竞争清单 ══════════════════════════
+
+   ① 子系统自己会抢的属性（必须抬特异性）
+        .lw-nav button        transition:all .12s              (0,1,1)
+        .lw-btn               transition:background/color .12s (0,1,0)
+        .lw-bk .ops           transition:opacity .12s          (0,2,0)
+        .lw-ep-art .ops       transition:opacity .12s          (0,2,0)
+        .lw-ep-art .ops       （同上，ops 容器）
+        .lw-c                 transition:border-color/box-shadow .14s (0,1,0)
+   ② motion.css 的通用层（load 更早，但特异性不低，同样会抢）
+        html[data-theme] button           (0,1,2)   ← 抢**每一个** <button> 的 transition
+        input, select, textarea           (0,0,1)
+   ③ 结论：对 <button> 想把 opacity 之类"motion.css 清单里没有"的属性加进 transition，
+      至少要到 (0,2,x) ✓ —— 这正是本文件里 .lw-mo-card .lw-mo-head button 那条的由来。
+
+   ⚠️ 不写规则的两个类（普查后发现是死代码 ✗）：
+      .lw-rd-empty、.lw-nt-menu 在 life-workbench.js 里**只有 CSS 定义、从未被创建**
+      （全仓 grep 只命中 CSS 行）。给它们写规则就是往仓库里种死代码 ✗。
+   也不重复写的：.lw-c 卡片 —— 子系统自己已经有 border-color/box-shadow 过渡 + hover 阴影，
+      再写一遍只会制造两份真相 ✗。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════ 1. 导航页签（10 个页签的那一条） ═══════════════════════ */
+
+/* 页签是 <button>（life-workbench.js:4174 的 .lw-nav 里）。子系统只写了
+   transition:all .12s（.lw-nav button，(0,1,1)），而 motion.css 的
+   html[data-theme] button 是 (0,1,2) —— 今天真正生效的其实是 motion.css 那层。
+   我用 .lw-inpanel .lw-nav button (0,2,1) 同时压过两者 ✓（与加载顺序无关 ✓）。
+
+   为什么写上 transform：motion.css 的按下反馈（translateY(.5px) scale(.985)）要靠
+   transition 里的 transform 才弹得回来 ✓。只抄 background/color 两条会把按压变成瞬变 ✗。
+   为什么用 background-color 而不是 background：子系统 .on 写的是 background 简写，
+   计算值落到 background-color 上，过渡长名才真的动 ✓。 */
+.lw-inpanel .lw-nav button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停：整条页签右移 2px。位移**不参与布局** ✓，也不会把右边的内容挤动 ✓。
+   曲线用 --mo-out 而不是 --mo-back：悬停是"状态跟随"，不是"人手按下去"，
+   每次掠过都回弹会像弹簧门 ✗。
+
+   ⚠️ 这里的 :not(:disabled) 不是为了禁用态，是为了**特异性**（实测踩过）：
+      app.css:3290 的 html[data-theme] button:hover:not(:disabled) 是 **(0,3,2)** ——
+      比裸的 .lw-inpanel .lw-nav button:hover (0,2,2) 高 ✗。第一版没带这个后缀，
+      实测页签悬停拿到的是 app.css 的 translateY(-1px)（整个按钮上浮），
+      我的 translateX(2px) 根本没生效 ✗。补上之后同为 (0,3,2)，
+      而本文件在 styleSheets 里的序号更大（实测 10 vs app.css 6）⇒ 后出现者胜 ✓。
+      （这条同样不需要 !important ✓） */
+.lw-inpanel .lw-nav button:hover:not(:disabled) { transform: translateX(2px); }
+
+/* 选中态（.on）原本是硬切：background:accent + color:accentInk 一帧跳过去 ✗。
+   上面那条 transition 已经把它变成 120ms 的淡入 ✓ —— 这就是"平滑选中态"，
+   不需要额外造一条指示条：普查确认 .lw-nav 里**没有任何** ::before/::after 指示条
+   （.lw-nav 的规则只有 button / .grp / .badge / .foot），凭空加一条会改变这个面板的
+   视觉语言，越权 ✗。
+   图标补一下手感：选中时放大 6%，给"我点中了这一项"一个落点 ✓。
+   --mo-back 在这里是允许的：选中态的变化**只**由人点页签触发 ✓。 */
+.lw-inpanel .lw-nav button .ic { transition: transform var(--mo-2) var(--mo-back); }
+.lw-inpanel .lw-nav button.on .ic { transform: scale(1.08); }
+
+
+/* ═══════════════════ 2. 列表行（书签/日记/文章/笔记/邮件/单词…） ══════════════ */
+
+/* 这十几类行都是 <div>，hover 只换背景色、没有任何 transition（普查逐条确认）⇒
+   没有任何竞争规则，普通特异性就够 ✓，所以这里**没有**加倍类名。
+
+   为什么统一到 --mo-1：这是"指针划过一整列"的高频反馈，必须比 --mo-2 更快，
+   否则快速扫视时一行行拖影 ✗。120ms 刚好在"看得见"和"跟不上手"之间。
+   为什么同时过渡 border-color：这些行的选中态全是左侧 2~3px 指示条
+   （.lw-rd-row.on / .lw-rm-row.on / .lw-fl-row.on / .lw-wd-row.on 用 border-left-color，
+    .lw-bk.on / .lw-hl-it.on 用 inset 阴影，.lw-ml-item.on 用 border-left）——
+   过渡颜色就能让指示条淡入 ✓。
+   ⚠️ 故意**不**过渡 border-left-width：宽度一变就是重排，行内的日期/计数会抖 ✗。
+   ⚠️ 故意不做任何"行入场"动画：这些列表会被 render*() 整块重建，入场动画会跟着
+      轮询/自动保存一遍遍重放 ✗（铁律）。 */
+.lw-rd-row,
+.lw-rm-row,
+.lw-fl-row,
+.lw-fl-pal,
+.lw-wd-row,
+.lw-hl-it,
+.lw-ml-item,
+.lw-ml-acct,
+.lw-ml-box,
+.lw-nt-row,
+.lw-nt-side .it,
+.lw-eb-tocrow,
+.lw-mrow,
+.lw-bk,
+.lw-hotrow,
+.lw-todo,
+.lw-jrow,
+.lw-ep-art,
+.lw-ep-s {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 3. 按钮族 ═════════════════════════════════════════════ */
+
+/* 主按钮 .lw-btn 的悬停是"底色整体反相"（background→accent，color→accentInk），
+   这层反相本身已经在淡入了（由上面第 0 节①的通用层提供），我再叠一条 6% 提亮，
+   让"手放上去"比"状态改变"多一点点光 ✓ —— 这就是"微提亮"。
+   子系统的 .lw-btn:hover 只写 background/color，没有 filter ⇒ 我这条没有对手 ✓，
+   不需要 .lw-btn.lw-btn 加倍 ✓。filter 的过渡时长也在通用层里（--mo-1）✓。 */
+.lw-btn:hover { filter: brightness(1.06); }
+
+/* 行内操作按钮（✎ / 🗑 / ⋯）：平时 opacity:0，悬停到**卡片或行**上才出现。
+   问题是淡入只有 opacity 一条属性，而 opacity 不在 motion.css 通用按钮的 transition
+   清单里 ⇒ 现在是"啪"地蹦出来 ✗（实测 base 值 0 → hover 1 是瞬变）。
+
+   要补 opacity 就必须压过 html[data-theme] button 的 (0,1,2) ✗ ——
+   这就是本文件唯一一处必须加倍祖先的地方：
+     .lw-mo-card .lw-mo-head button        (0,2,1) ✓ 压过 (0,1,2)
+     .lw-bk-card .ops / .lw-bk .ops / .lw-ep-art .ops 是**容器**，不是按钮，
+       通用层管不到它们，但其中 .lw-bk .ops / .lw-ep-art .ops 子系统自己写了
+       transition（(0,2,0)）⇒ 加 .lw-inpanel 前缀到 (0,3,0) 才盖得住 ✓。
+   ⚠️ 覆盖 transition 时必须把通用层原有的那几条一起抄回来，否则会把按压与变色
+      的过渡一起弄丢 ✗（只抄 opacity 是常见错法）。 */
+.lw-mo-card .lw-mo-head button {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.lw-bk-card .ops { transition: opacity var(--mo-1) var(--mo-out); }
+.lw-inpanel .lw-bk .ops { transition: opacity var(--mo-1) var(--mo-out); }
+.lw-inpanel .lw-ep-art .ops { transition: opacity var(--mo-1) var(--mo-out); }
+
+
+/* ═══════════════════ 4. 输入框 / 文本框 ════════════════════════════════════ */
+
+/* 只过渡 border-color 与 box-shadow ✓，**不动** border 宽度、圆角、尺寸、内边距 ✗ ——
+   这个面板里输入框有两种密度（工具条里 26px/1px 边框，邮件表单里 32px/2px 边框），
+   抹平会让密集表单瞬间变挤。
+   时长用 --mo-2（180ms）而不是通用层的 --mo-1：聚焦是"我现在要在这里打字"的
+   一次状态升级，比掠过式的悬停值得多 60ms ✓。
+   特异性 (0,3,1) 起步，稳稳压过通用层 input,select,textarea 的 (0,0,1) ✓。 */
+.lw-inpanel :is(.lw-rd-tools, .lw-hl-tools, .lw-rd-quick, .lw-nt-list .top,
+                .lw-memo-search, .lw-ep-add, .lw-mail-send, .lw-bk-write,
+                .lw-eb-drawer .find) :is(input, textarea, select) {
+  transition:
+    border-color var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 5. 空状态 ═════════════════════════════════════════════ */
+
+/* 空状态是"这一屏真的没有数据"，属于一次性的结果呈现 ⇒ 值得淡入 ✓（--mo-3 = 260ms）。
+   位移只有 3px：再大会像一块东西掉下来 ✗。
+
+   ⚠️ 这里刻意只挑**三处**，因为铁律比"好看"重要：
+     ✓ .lw-nt-empty  备忘录/笔记的空列表（:6554/:6642，只在数据或筛选变化时重画）
+     ✓ .lw-mo-empty  书签的空列表（:6700，同上）
+     ✓ .lw-fl-empty  文件画布的居中空提示（:1264，静态容器）
+     ✗ .lw-empty     它被当成"占位符"在用：天气加载中（:7110）、正在自动搜热点（:7201）
+                     —— 那是**定时刷新**会反复替换的内容，做入场动画就是每轮都闪 ✗
+     ✗ .lw-ml-empty  邮箱列表，MAIL_STATUS_TIMER 每 75s 轮询重画一次（:7831）✗
+
+   诚实标注：.lw-nt-empty 所在的备忘录列表有 200ms 的 live 防抖重建（:4254），
+   如果列表已经空着、用户又继续改数据，这次重建会让 260ms 淡入再放一次。
+   这是"空→空"的极窄场景，且每次只有 260ms，可以接受 ✓；换成"绝不重放"的唯一办法
+   是让 JS 记住"已经出现过"，而本任务不许改 JS ✗。 */
+@keyframes lw-motion-empty-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+.lw-nt-empty,
+.lw-mo-empty,
+.lw-fl-empty {
+  animation: lw-motion-empty-in var(--mo-3) var(--mo-out) both;
+}
+
+
+/* ═══════════════════ 6. 卡片 / 标签 / 分段控件 ═════════════════════════════ */
+
+/* 卡片：悬停只提亮描边（子系统已有 border-color 的 hover 值，只是没有过渡）⇒
+   我**不写**任何颜色值，只补过渡 ✓ —— 外观仍然由子系统唯一决定，这里不制造第二份真相。
+   180ms 是"描边亮度变化"的合适速度：比 --mo-1 缓，才看得出是"灯亮了"而不是"闪了"。 */
+.lw-mo-card,
+.lw-bk-card {
+  transition:
+    border-color var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 标签 / 分段控件 / 心情格 / 选择项：都是伪装成按钮的 <div>，motion.css 的通用按钮层
+   （选择器是 button）根本管不到它们 ⇒ 这里是**唯一**能给它们做按压缩放的地方 ✓。
+   把 transform 放进 transition 列表：按下用 --mo-back 弹回来 ✓（人手按的，合规 ✓）。
+   为什么 --mo-back 在这里是对的：这些控件没有"定时刷新"一说，它们的每一次变化都由人发起 ✓。 */
+.lw-rd-chip,
+.lw-chip,
+.lw-rd-modes .seg,
+.lw-moodpick div,
+.lw-ml-pick .it {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.lw-rd-chip:active,
+.lw-rd-modes .seg:active,
+.lw-moodpick div:active,
+.lw-ml-pick .it:active {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+
+
+/* ═══════════════════ 7. 浮层 / 抽屉 / 弹层 ═════════════════════════════════ */
+
+/* 三个真的会被动态创建-销毁的浮层：
+     .lw-moodpick    心情选择网格（:2224 生成，:3758/:3764 getElementById 后开关）
+     .lw-eb-drawer   阅读器的目录抽屉（:6259 生成，:9441 关掉）
+     .lw-ml-pickwrap + .lw-ml-pick  选账号的居中弹层（:13364 现建）
+   （.lw-nt-menu 不在列：普查发现它只有 CSS、从未被创建 ✗）
+
+   用 @starting-style 而不是 JS 加类 ✓：浮层是 innerHTML 现造现插的，
+   "入场前状态"只能由浏览器在元素第一次计算样式时提供 ✓。
+   ⚠️ 整段包在 @supports (transition-behavior: allow-discrete) 里：
+      不支持的环境下这些声明整块被忽略 ⇒ 退化成今天的"直接出现"，**不会坏** ✓。
+      这也是为什么可以放心把 display 写进过渡：只有支持离散过渡的浏览器才看得到这条。
+
+   曲线用 --mo-out（平滑）而不是 --mo-back：motion.js 对面板入场做过同样的判断
+   （面板是"状态变化"，不是"人点的按钮"），回弹留给页签图标与按压 ✓。 */
+@supports (transition-behavior: allow-discrete) {
+  .lw-moodpick,
+  .lw-eb-drawer,
+  .lw-ml-pickwrap,
+  .lw-ml-pick {
+    transition:
+      opacity var(--mo-2) var(--mo-out),
+      transform var(--mo-3) var(--mo-out),
+      display var(--mo-3) allow-discrete;
+  }
+  @starting-style {
+    .lw-moodpick { opacity: 0; transform: translateY(-4px); }
+    .lw-eb-drawer { opacity: 0; transform: translateX(-10px); }
+    .lw-ml-pickwrap { opacity: 0; }
+    .lw-ml-pick { opacity: 0; transform: translateY(6px) scale(.99); }
+  }
+}
+
+
+/* ═══════════════════ 8. 无障碍：prefers-reduced-motion ═════════════════════ */
+
+/* motion.css:481 那条 reduced-motion 只列了 .md-doc / .tab / #toolbar 等**主界面**的
+   类，一个 lw- 前缀都没有（全文件 grep "lw-" = 0 命中）⇒ 管不到本面板，必须自己写 ✓。
+
+   三条铁律（和 motion.css:481 那段的尺度完全一致）：
+     ① 我引入的全部 animation → none !important
+     ② 我引入的全部 transition → .01ms !important（保留声明，只是压到看不见；
+        直接删 transition 会让属性变化重新变成"硬切"，那不是减少动效而是换了种跳 ✗）
+     ③ 我加的全部 transform（页签右移、图标放大、标签按压、浮层入场位移）→ none !important
+   本文件其余地方**没有任何 !important** ✓（项目禁止用 !important 抢外观）。 */
+@media (prefers-reduced-motion: reduce) {
+  .lw-nt-empty,
+  .lw-mo-empty,
+  .lw-fl-empty {
+    animation: none !important;
+  }
+
+  .lw-inpanel .lw-nav button,
+  .lw-inpanel .lw-nav button .ic,
+  .lw-mo-card .lw-mo-head button,
+  .lw-bk-card .ops,
+  .lw-inpanel .lw-bk .ops,
+  .lw-inpanel .lw-ep-art .ops,
+  .lw-mo-card,
+  .lw-bk-card,
+  .lw-rd-row,
+  .lw-rm-row,
+  .lw-fl-row,
+  .lw-fl-pal,
+  .lw-wd-row,
+  .lw-hl-it,
+  .lw-ml-item,
+  .lw-ml-acct,
+  .lw-ml-box,
+  .lw-nt-row,
+  .lw-nt-side .it,
+  .lw-eb-tocrow,
+  .lw-mrow,
+  .lw-bk,
+  .lw-hotrow,
+  .lw-todo,
+  .lw-jrow,
+  .lw-ep-art,
+  .lw-ep-s,
+  .lw-rd-chip,
+  .lw-chip,
+  .lw-rd-modes .seg,
+  .lw-moodpick div,
+  .lw-ml-pick .it,
+  .lw-inpanel :is(.lw-rd-tools, .lw-hl-tools, .lw-rd-quick, .lw-nt-list .top,
+                  .lw-memo-search, .lw-ep-add, .lw-mail-send, .lw-bk-write,
+                  .lw-eb-drawer .find) :is(input, textarea, select),
+  .lw-moodpick,
+  .lw-eb-drawer,
+  .lw-ml-pickwrap,
+  .lw-ml-pick {
+    transition-duration: .01ms !important;
+  }
+
+  .lw-inpanel .lw-nav button:hover,
+  .lw-inpanel .lw-nav button.on .ic,
+  .lw-rd-chip:active,
+  .lw-rd-modes .seg:active,
+  .lw-moodpick div:active,
+  .lw-ml-pick .it:active {
+    transform: none !important;
+  }
+
+  /* @starting-style 里那几条位移同样要压掉：否则浮层会在
+     "位移 0 → 位移 0" 之间空跑 260ms，虽然看不见，但会和 display 的离散过渡叠出延迟 ✗。 */
+  @starting-style {
+    .lw-moodpick,
+    .lw-eb-drawer,
+    .lw-ml-pickwrap,
+    .lw-ml-pick {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+/* ============================================================================
+   motion-sp.css —— 「系统面板 / 本机管家」的微交互叠加层
+   （上游令牌层：assets/motion.css；本文件不定义任何令牌，只消费 --mo-*）
+
+   ★ 这个文件为什么不能靠「后出现者胜」
+   ----------------------------------------------------------------------------
+   全站其它叠加层（motion.css）靠「同特异性 + 后加载」取胜 ✓，这一层不行 ✗：
+   系统面板的 CSS 是运行时注入的 —— src/system-panel.js:1292 injectStyle() 会
+   document.head.appendChild(<style id="codescope-system-panel-style">)，
+   它的插入位置在 index.html 的 <link href="/assets/motion-*.css"> 之后 ⇒
+   同特异性下永远是它赢 ✗，.sp-btn 的 transition 会被原样吃掉 ✓。
+   ⇒ 本文件只有一条出路：靠特异性取胜，与插入顺序无关 ✓、也不需要 !important ✓
+     （项目禁止用 !important 抢外观；本文件只在文末 reduced-motion 段出现 !important ✓）。
+
+   加倍写法：把同一个类名写两次 —— .sp-btn.sp-btn 的 (0,2,0) 压过 .sp-btn 的 (0,1,0) ✓。
+   重复类名不需要 HTML 里真写两次：复合选择器里两个 .x 都命中同一个 class 列表 ✓。
+   系统面板自带的选择器统一带 #system-workspace 祖先（少数浮层例外，见第 2 节），
+   所以这里的基线是 (1,1,0)，加倍后 (1,2,0) ✓；hover / focus 再 +1 层 (1,3,0) ✓。
+
+   ⚠️ 但不是所有规则都要加倍 ✗。判断标准只有一条：
+       —— 子系统有没有对同一个属性声明过 transition / 有没有同一个伪状态？
+     · 声明过（真冲突）→ 必须加倍，否则被覆盖 ✓  例：.sp-btn / .sp-input / .sp-viz-seg
+     · 没声明过（空位）→ 普通特异性就够 ✓，加倍只是噪声 ✗  例：.sp-table td / .sp-bar i / .sp-tag
+   逐条的判定结果写在对应规则上方，可对照复查。
+
+   ★ 本文件的产品铁律（写之前先读）
+   ----------------------------------------------------------------------------
+   刷新节奏（src/system-panel.js:2366 schedule()）：概览页 1.5 秒、其它视图 4 秒。
+   但两者的渲染方式完全不同，这一点决定了哪些动画能写、哪些不能：
+     · 概览：renderOverview() 首帧建结构，之后走 patchOverview()（:2796）就地改数值
+       —— 环弧 setAttribute('stroke-dashoffset')、条宽 style.width、曲线 points，
+       DOM 不重建 ✓（源码原话：「绝不能每 1.5 秒都重建 —— 那正是页面在闪的老毛病」）。
+       ⇒ 这里的数值过渡是真的在播 ✓，也是第 5 节那些 width / 弧长过渡的价值所在。
+     · 其它视图：refresh() 里直接 body.innerHTML = …（:3153 / :3304 / :3457 …）
+       整块重建 ✓（实测：存储页 5 秒窗口内 #system-body 移除了 18 个子节点，
+       打了标记的节点在 1081ms 后已是另一个对象）。
+   ⇒ 任何随重建重播的入场动画都会变成每隔几秒抖一下 ✗ —— 所以：
+     · 所有过渡只服务于人主动做的动作（悬停 / 按下 / 输入聚焦）✓，一律 --mo-out；
+     · 唯一一条 animation 只挂在 #system-body 的直接子元素加载态上（见第 7 节，
+       那是「整页正在读取…」，数据到手后被真内容替换，不会再随轮询复现）✓；
+     · body 内部那些「没有读到应用」式的 .sp-empty / .sp-note / .sp-hint 一条动画都没有 ✗
+       —— 它们每个轮询周期都会被重建，加淡入＝每 1.5 秒闪一次 ✓（证据见任务报告）；
+     · 数值条只过渡 width / stroke-dashoffset，不过渡 color / opacity ✗
+       —— 水位色是按阈值变的周期性数据，给它加过渡等于让颜色每 1.5 秒呼吸一次 ✗。
+   ============================================================================ */
+
+
+/* ═══════════════════ 1. 页签 / 分段控件 ═════════════════════════════════════ */
+
+/* 真实的「页签」是两处（普查结论，不是猜的）：
+     · #system-nav-list button   左侧分区（概览/性能/文件/存储/系统/软件/设置）
+     · #system-subnav   button   分区内的胶囊子视图
+   选中态都是 .on 类。两者子系统都写了 transition（各 100ms ease）⇒ 真冲突 ✗：
+     #system-nav-list button 、#system-subnav button 都是 (1,0,1)，transition: background, color
+   要压过它们只能再借一层祖先 → (2,0,1) ✓。借 #system-workspace 而不是 !important，
+   是因为子系统自己就是这么写祖先的，结构稳定（section#system-workspace 由 :1441 建一次）。
+   ⚠️ 只重定时长与曲线，不动任何背景/颜色 —— 悬停底色归子系统，本文件不抢外观 ✓。 */
+#system-workspace #system-nav-list button,
+#system-workspace #system-subnav button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+
+/* 页签里的图标（.nav 的 <i>）：子系统那条 (1,0,2) 规则里也写了
+   transition: background, color var(--sp-ease=100ms ease)（源码 :381-383，藏在一个跨行
+   声明的末尾，读源码时极易漏看 ✗）⇒ 真冲突。
+   ⚠️ 这是被实测纠正过的一处：最初按「看起来没写 transition」写成裸的
+      #system-nav-list button i，真实页面里读到的仍是 100ms ease（被子系统以同特异性
+      后置覆盖 ✗）。改成借一层祖先的 (2,0,2) 之后才真的生效 ✓。
+      教训：判定表以 computed style 为准，不以源码观感为准。 */
+#system-workspace #system-nav-list button i {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 选中态（.on）为什么这里没有过渡 ✗：renderNav()/renderSubnav() 是
+   list.innerHTML = …（:1566 / :1593）整段重建，新节点上没有「旧状态」可插值 ✓。
+   要做得出来就得改 JS 或换外观实现，超出「只新建一个文件」的边界 —— 记录为已知限制。 */
+
+
+/* ═══════════════════ 2. 按钮 ═════════════════════════════════════════════ */
+
+/* .sp-btn 自己就写了 transition（140ms ×4 + transform 90ms，且带 #system-workspace 祖先
+   =(1,1,0)）⇒ 真冲突 ✗，必须加倍。浮层里的按钮挂在 body 上（源码 :986 的
+   body .fsv-menu 是证据），不在 #system-workspace 里面，所以并列三条 (0,3,0) ✓。 */
+#system-workspace .sp-btn.sp-btn,
+.fsv-menu .sp-btn.sp-btn,
+.fsv-preview .sp-btn.sp-btn {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back),   /* 回弹只服务「按下→松开」这一下 ✓ */
+    filter var(--mo-1) var(--mo-out);       /* 见下一条：hover 提亮走 filter */
+}
+
+/* hover「微提亮」为什么必须另走 filter、不能靠 background 渐变：
+   子系统的 .sp-btn 底色是 linear-gradient，hover 时换成另一条 gradient；
+   渐变之间不可插值，所以它写的 transition: background 140ms 对提亮实际是空转 ✗，
+   提亮一直是硬切 ✓。filter: brightness() 可插值 ⇒ 这才是真的会淡入的提亮 ✓。
+   幅度取 1.04：子系统自己的 gradient 已经提亮约 10%，再叠同样的量会过曝 ✗。
+   只作用于按钮自身渲染，不改底色、不改布局，删除本文件即回到原样 ✓。 */
+#system-workspace .sp-btn.sp-btn:hover,
+.fsv-menu .sp-btn.sp-btn:hover,
+.fsv-preview .sp-btn.sp-btn:hover {
+  filter: brightness(1.04);
+}
+
+/* 按下：子系统 .sp-btn:active 是 translateY(1px)(1,2,0)；.sp-btn.primary:active 是
+   (1,3,0)。这里用 (1,4,0) 一次性压过两者，保留它们的 1px 下沉与内凹阴影（外观不动 ✓），
+   只补 1.5% 的 scale —— 真正的「按下去」手感在这 1.5% 里 ✓。
+   :not([disabled]) 是为了不和 .sp-btn[disabled]{transform:none} 打架 ✓。 */
+#system-workspace .sp-btn.sp-btn:active:not([disabled]),
+.fsv-menu .sp-btn.sp-btn:active:not([disabled]),
+.fsv-preview .sp-btn.sp-btn:active:not([disabled]) {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+
+/* 页头两颗按钮（← 返回 / ↻ 刷新）不是 .sp-btn，走的是 #system-head button (1,0,1)，
+   自带 transform 90ms 的短过渡 ⇒ 真冲突，同样借一层祖先压到 (2,0,1) ✓。 */
+#system-workspace #system-head button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+#system-workspace #system-head button:active:not([disabled]) {
+  transform: translateY(1px) scale(var(--mo-press));
+}
+
+/* 行内按钮（.sp-rowbtn：鼠标进到这一行才浮出来）子系统写了 (1,2,0) 的
+   transition: opacity 100ms ⇒ 真冲突，加倍到 (1,3,0) ✓。
+   100ms → --mo-2 的理由：这是「一整行的次要动作浮现」，不是点按反馈，用它才会和
+   按钮族的 180ms 对齐；仍走 --mo-out —— 悬停是人的动作，但按钮本体没有位移，
+   给它回弹只会让按钮「弹出来」，反而吵 ✗。 */
+#system-workspace .sp-li .sp-rowbtn.sp-rowbtn,
+#system-workspace .sp-pitem .sp-rowbtn.sp-rowbtn {
+  transition: opacity var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 3. 表格行 ═══════════════════════════════════════════ */
+
+/* 系统面板最高频的交互：读表格时鼠标从上往下扫。
+   悬停底色写在 #system-workspace .sp-table tr:hover td（(1,2,2)）上，
+   但 td 本身没有任何 transition ⇒ 空位 ✓ → 普通特异性就够，不加倍（加倍的只是噪声 ✗）。
+   ⚠️ 为什么加到 td 而不是 tr：hover 规则改的是 td 的背景，过渡必须声明在同一个元素上，
+      写在 tr 上不生效 ✗（颜色是从 td 的 transparent 变到 tint）。
+   ⚠️ 刻意不做行入场动画：tbody 每个轮询周期整块重建，逐项淡入＝每秒抽筋一次 ✗。 */
+#system-workspace .sp-table td {
+  transition: background-color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════════════ 4. 输入框 ═══════════════════════════════════════════ */
+
+/* .sp-input 自带 transition: border-color, background var(--sp-ease=100ms ease) (1,1,0)
+   ⇒ 真冲突，加倍到 (1,2,0) ✓。
+   按要求只过渡 border-color / box-shadow ✓：主动去掉 background 的过渡 ✗
+   —— 聚焦时底色从 surface-2 切到 surface，那是一次性的状态变化、不是周期性数据，
+      硬切没有闪烁风险，而少一条过渡就少一条每帧要算的属性 ✓。 */
+#system-workspace .sp-input.sp-input {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 焦点环：子系统给按钮写了 :focus-visible，输入框却只有 1px 边框变色（浅色主题下很淡 ✗）。
+   这里补一圈柔光，用 box-shadow 而不是 outline —— 它不参与布局、不会把同行按钮挤动 ✓。
+   (1,3,0) 压过 .sp-input:focus 的 (1,2,0)；虽然那条没写 box-shadow，保持层级一致更安全 ✓。 */
+#system-workspace .sp-input.sp-input:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+
+/* ═══════════════════ 5. 进度条 / 占用率条 ════════════════════════════════ */
+
+/* ★ 这是「数据在动」的正确做法：平滑，不弹 ✓ —— 数值条一律 --mo-3 + --mo-out，
+   绝不 --mo-back（--mo-back 只属于人按下的那一下）✓。
+
+   (1) .sp-bar i（磁盘卷 / 缓存 / 内存占用条）：子系统没有 transition ⇒ 空位 ✓，
+      普通特异性即可。它的宽度是就地更新的 —— 实测 src/system-panel.js:2877
+      barFill.style.width = capacity + '%' 直接改已存在节点的 inline style，
+      所以这条过渡是真会动的 ✓（不是给重建节点看的摆设）。
+      这也是这里值得写的理由：不加的话，磁盘占用每 1.5 秒跳一格 ✗。 */
+#system-workspace .sp-bar i {
+  transition: width var(--mo-3) var(--mo-out);
+}
+
+/* (2) .sp-viz-seg（空间分析的占比条）
+   (3) .sp-temp .sp-tempbar i（温度条）
+   (4) .sp-gauge-ring .value（环形仪表弧长）
+   三个都自带 transition: … 420ms cubic-bezier(.22,.61,.36,1)
+   （各 (1,1,0) / (1,2,1) / (1,2,0)）⇒ 真冲突，逐个加倍压到 (1,2,0) / (1,3,1) / (1,3,0) ✓。
+   统一到 --mo-3 的理由：420ms 不在令牌表里，是全站唯一的超档散值 ✗；
+   数值变化属于「需要看清过程」的第三档（260ms）✓，再长就追不上 1.5 秒的刷新间隔。
+   ⚠️ 环弧这条不是摆设：patchOverview()（:2803 setGauge）每 1.5 秒对 circle.value
+      调一次 setAttribute('stroke-dashoffset', …)，走的就是这条过渡 ✓
+      —— 真实页面里读到 transition-duration 0.26s，且起了一条 stroke-dashoffset 过渡。
+   ⚠️ 温度条原本还过渡了 background ✗ —— 那是绿→黄→红的阈值切换，
+      属于周期性数据变化，按铁律去掉，只留 width ✓。 */
+#system-workspace .sp-viz-seg.sp-viz-seg,
+#system-workspace .sp-temp .sp-tempbar.sp-tempbar i {
+  transition: width var(--mo-3) var(--mo-out);
+}
+
+/* 环弧用 stroke-dashoffset 而不是 width（SVG 圆），单独一条以免被上面的 width 盖掉 ✓ */
+#system-workspace .sp-gauge-ring .value.value {
+  transition: stroke-dashoffset var(--mo-3) var(--mo-out);
+}
+
+/* 每核小条（.sp-core i）刻意不做过渡 ✗：它的高度只在整块重建时写入
+   （:2971 的 inline style），没有就地更新路径，加了也只是死规则 ✓。 */
+
+
+/* ═══════════════════ 6. 标签 / 徽标 ═════════════════════════════════════ */
+
+/* .sp-tag 子系统只写了静态外观（底色/圆角/水位配色），没有任何 :hover、也没有 transition
+   ⇒ 空位 ✓，普通特异性就够，不加倍 ✓。
+   hover 只抬 1px（--mo-lift）+ 一层极淡投影：标签是信息角标不是按钮，
+   抬太多会让人以为可点 ✗。用 --mo-back 是合规的 —— 悬停是人主动的动作 ✓。 */
+#system-workspace .sp-tag {
+  transition:
+    transform var(--mo-2) var(--mo-back),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+#system-workspace .sp-tag:hover {
+  transform: translateY(var(--mo-lift));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+
+/* ═══════════════════ 7. 空状态 / 提示 ═══════════════════════════════════ */
+
+/* 本文件唯一一条 animation，而且只给 #system-body 的直接子元素 ✓。
+   为什么必须是直接子元素：整页加载态是 body.innerHTML = '<div class="sp-empty">正在读取…</div>'
+   （:2962 / :3139 / :3446 / :3553 / :3669 / :3767）—— 它是 body 的唯一孩子；
+   数据一到就被真内容替换，之后再轮询也不会重现 ✓ ⇒「淡入一次」成立 ✓。
+   而 body 内部嵌套的 .sp-empty（「没有读到应用」:2245）、.sp-note、.sp-hint 每个轮询周期
+   都被重建，给它们加动画等于每 1.5 秒闪一次 ✗ —— 所以那三类故意一条动画都没有 ✓。
+   曲线用 --mo-out 不用 --mo-back：切页签时它在告诉人「正在取数」，不是人按下了什么 ✓。 */
+@keyframes msp-loading-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+#system-body > .sp-empty {
+  animation: msp-loading-in var(--mo-3) var(--mo-out) both;
+}
+
+/* 提示文本（.sp-note / .sp-hint）只做「不闪」的保底：它们没有任何动画与过渡，
+   连颜色变化都交给子系统（那是阈值触发的状态色，跟着数据走）✓。 */
+
+
+/* ═══════════════════ 8. 无障碍：reduced-motion ═══════════════════════════ */
+
+/* 前提（实测）：子系统自己在 CSS 末尾已有
+       @media (prefers-reduced-motion:reduce){ #system-workspace *{transition:none !important} … }
+   ⇒ #system-workspace 内部那堆过渡它已经全关了，这里不重复写一遍 ✗。
+   但有三个缺口必须由本文件补 ✓：
+     (1) #system-workspace * 管不到挂在 body 上的浮层（.fsv-menu / .fsv-preview，源码 :986）；
+     (2) 本文件引入的那条 animation 它管不到（它的段里只关 .sp-skel 的 pulse）；
+     (3) 本文件新加的位移（按压缩放 / 标签抬升）必须归零，否则前庭敏感的用户照样难受。
+   !important 只出现在这一节，而且是为了和子系统同层级的 *{…!important} 对齐 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  /* (1)(2) 关过渡与动画 */
+  .fsv-menu .sp-btn.sp-btn,
+  .fsv-preview .sp-btn.sp-btn,
+  #system-workspace #system-head button {
+    transition: none !important;
+  }
+  #system-body > .sp-empty {
+    animation: none !important;
+    opacity: 1 !important;      /* 动画关掉后不要停在 from 帧 ✓ */
+  }
+
+  /* (3) 位移归零：按压的 1.5%、标签的 1px 全部取消 */
+  #system-workspace .sp-btn.sp-btn:active:not([disabled]),
+  .fsv-menu .sp-btn.sp-btn:active:not([disabled]),
+  .fsv-preview .sp-btn.sp-btn:active:not([disabled]),
+  #system-workspace #system-head button:active:not([disabled]),
+  #system-workspace .sp-tag:hover {
+    transform: none !important;
+  }
+}
+/* ============================================================================
+   motion-study.css —— 「学习工作台」(study) 的微交互叠加层
+   （上游令牌层：assets/motion.css；本文件不定义任何令牌，只消费 --mo-*）
+
+   这个文件负责什么
+   ----------------------------------------------------------------------------
+   学习工作台是 CodeScope 里唯一「自建 DOM/CSS + golden-layout」的子系统：
+   源文件 src/study-workspace.js（1,072 行）→ esbuild 产物 assets/study-workspace.js，
+   样式是独立外链 assets/study-workspace.css（192 行，index.html:15 引入，**早于**
+   app.css:81）。所以本文件排在最后加载时，同特异性就够 ✓；
+   但**不把顺序当契约** ✗ —— 下面每条规则都靠「重复类名 / #workspace 祖先」把特异性
+   提到 (1,x,0) 以上，与插入顺序无关、也不必用 !important ✓。
+
+   ⚠️ 一个字母都不能碰的东西：golden-layout 的 lm_ 前缀类
+      （.lm_goldenlayout / .lm_stack / .lm_header / .lm_tab / .lm_splitter /
+        .lm_dropTargetIndicator / .lm_transition_indicator）。
+      那是库的行为层：tab 拖拽、分割线拖拽全靠它自己的 pointer 事件与几何计算，
+      在这里改 transition/transform 会让拖拽跟手位置漂移 ✗。本文件 0 条 lm_ 规则 ✓。
+
+   ★ 产品铁律：只有「人主动做的动作」才允许 --mo-back 回弹
+   ----------------------------------------------------------------------------
+   状态同步、轮询刷新、自动更新一律 --mo-out 平滑，绝不弹 ✓。
+   判断依据是**实测**，不是观感。隔离实例（CODESCOPE_PORT=4903 + Playwright + Chrome）
+   跑出来两组数字，本文件的每条 animation / transition 都由它们决定：
+
+   ① 空闲 12 秒窗口（覆盖 /api/system/status 的 6 次轮询）—— 元素身份追踪：
+        .study-pane      建 4 个 → 存活 4 个，移除 0、新增 0
+        .study-pdf-empty     1 → 1，移除 0、新增 0
+        .study-code-empty    1 → 1，移除 0、新增 0
+        .study-bookmark      4 → 4，移除 0、新增 0
+        .site-category      17 → 17，移除 0、新增 0
+        .quick-site          4 → 4，移除 0、新增 0
+        .study-note-head button 3 → 3，移除 0、新增 0
+      ⇒ 学习工作台**不随轮询重建** ✓（它只在打开工作台 / 加窗格 / 换内容时新建）。
+      同一个 10 秒窗口里 #study-layout 的 childList 计数也是 0 ✓。
+
+   ② 用户动作下的重建频率 —— 网址菜单搜索框敲 3 个字符：
+        #quick-sites 内 .quick-site 节点被新增 **54** 次。
+      ⇒ 列表是「每敲一个字整块重建」的 ✗。给 .quick-site / .site-category 加入场动画
+        会变成每敲一个字闪一次 ✓ —— 所以本文件**一条列表入场动画都没有** ✓。
+        （.study-bookmark 同理：renderBookmarks() 会在初始化、每次打开工作台、
+         每次 scheduleSave 后用 replaceChildren 整批换新，也不做入场 ✓。）
+
+   ⇒ 结论：入场动画只留给「一次会话里只出现一次」的空状态（第 5 节），
+      过渡只服务于人的悬停/按下/聚焦（第 1~4 节），状态类的变化一律 --mo-out（第 7 节）。
+   ============================================================================ */
+
+
+/* ═══════════ 1. 面板头与工具条：按钮已被全站接管，select 是缺口 ═══════════ */
+
+/* 先给结论，避免"两份真相"✓（motion.css 开头也立了同一条规矩）：
+   #study-head button（返回/＋网址/专注）与 .study-pane-toolbar / .study-note-head 里的
+   普通 <button>，**已经**被 motion.css 的 button 层接过手了 —— 实测（真实页面 readback）：
+     · 悬停：#study-back 底色 rgb(23,32,43) → rgb(32,45,59)、
+             transform 变 matrix(1,0,0,1,0,-1.03)（就是 --mo-lift 的 -1px）✓
+     · 按下：#study-focus transform = matrix(0.984…, 0, 0, 0.984…, 0, 0.59)（--mo-press）✓
+             #study-back 按下 = matrix(0.985, 0, 0, 0.985, 0, 0.5) ✓
+   ⇒ 本文件**不重写**这些按钮的底色/过渡（重复声明只会制造两份真相 ✗）。
+
+   真正的缺口是**两个 select**（＋添加内容 / 布局预设）：实测把它们悬停，
+   border-color 与 background-color **一个像素都不变**（rgb(39,50,65) → rgb(39,50,65)），
+   而 index.html:407/409 明确把「向布局添加内容」「选择布局预设」当按钮用。
+   这里补的就是这一条：边框与底色一起微提亮（--mo-1，比按钮的 180ms 更快一点：
+   下拉框打开是系统原生弹层，指针移上去的"我开得了"必须立刻确认 ✓）。
+   只改颜色，不动 padding / 高度 —— 头部是 48px 高、flex 换行敏感区 ✗。 */
+#study-workspace #study-head select {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+#study-workspace #study-head select:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, #273241);
+  background-color: color-mix(in srgb, var(--accent) 9%, #090f16);
+}
+
+/* 工具栏里的「视频工具组」按钮用 !important 钉死了紫/粉/金色皮肤
+   （study-workspace.css:119-123）。本文件不碰它们的颜色 —— 想提亮只能用 filter，
+   而 filter 已经在 motion.css 的通用过渡表里 ✓，所以这里**什么都不写** ✓。
+   （写 border-color 也压不过 !important，只会留下一段永远不生效的死规则 ✗。） */
+
+
+/* ═══════════ 2. 视图切换：编辑 / 阅读（笔记窗格头） ═══════════════════════ */
+
+/* 真实的「视图切换」只有一处：Markdown 笔记窗格头的「编辑 / 阅读」两个按钮
+   （src/study-workspace.js:431-432 建、:450 用 classList.toggle('on') 切）。
+   ⚠️ 选中态**已经存在**：app.css:3063 的 button.on 给了底色+描边+字色
+      （实测 .study-note-head button.on 底色 rgba(120,169,255,.13)、描边 #568aaf），
+      过渡也已被 motion.css 的 button 层覆盖（实测 0.12s / --mo-out）✓
+   ⇒ 所以这里不重做"选中长什么样"，只补一件它缺的事：**选中是哪一个**读得太弱
+      （只是底色深浅不同，两个 10px 字的小按钮并排时几乎分不出来 ✗）。
+      加一条 2px 的底部指示条：从中间"长出来"（scaleX .4→1 + 淡入）。
+      为什么用 transform/opacity 而不是 border-bottom：border 会参与布局，
+      按钮高度会跳 2px、整行工具条跟着抖 ✗；::after 绝对定位不占位 ✓。
+      曲线用 --mo-out **不是** --mo-back：点完切换，状态应该稳稳停住 ✓，
+      弹一下会让人以为还没结束 ✗（这正是铁律里"状态切换不许弹"的那一类）。 */
+.study-note-head button {
+  position: relative;
+}
+.study-note-head button::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 3px;
+  left: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;   /* 跟着按钮字色（选中时是 accent 系）✓ */
+  opacity: 0;
+  transform: scaleX(.4);
+  transition:
+    opacity var(--mo-2) var(--mo-out),
+    transform var(--mo-3) var(--mo-out);
+  pointer-events: none;       /* 只是指示条，绝不能吃掉按钮的点击 ✗ */
+}
+#study-workspace .study-note-head button.on::after {
+  opacity: .9;
+  transform: none;
+}
+
+
+/* ═══════════ 3. 列表项 / 卡片 ═════════════════════════════════════════════ */
+
+/* 本子系统真实存在的「列表项」只有三处（普查结论，不是猜的）：
+     · .quick-site      网址卡片（src/study-workspace.js:914 建，2 列网格）
+     · .site-category   网址分类行（:891 建，左侧 17 行）
+     · .study-readable-nav a  阅读视图的网页目录（:139 的 <a>）
+     · .study-bookmark  头部常用网址 chips（:697 建）
+   —— **一条入场动画都不给**。证据就是文件头那组实测：搜索框敲 3 个字符，
+      .quick-site 被新增 54 次 ✓ ⇒ 入场动画 = 每敲一个字闪一次 ✗。
+
+   3.1 .quick-site：子系统自己写了 transition（study-workspace.css:42）
+       transition:border-color .12s,background .12s,color .12s,transform .12s ——
+       实测 computed 是 "0.12s / ease ×4"：
+         ✗ 时长硬编码，没走令牌（本文件存在的理由之一）
+         ✗ 抬升用的是 ease，不是 --mo-back —— 悬停是人的主动动作 ✓ 该弹
+       用「重复类名」把特异性抬到 (0,2,0) 压过它，与加载顺序无关 ✓。 */
+.quick-site.quick-site {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+/* 卡片是 <div role="button">（:914）—— 全站的 button:active 规则**碰不到它** ✗，
+   所以按下时没有任何反馈。这里单独补：手指按住就陷 1.5%（--mo-press）✓。 */
+.quick-site.quick-site:active {
+  transform: translateY(0) scale(var(--mo-press));
+}
+
+/* 3.2 .site-category：悬停/按下已被 motion.css 的 button 层覆盖（它是 <button>），
+       实测悬停底色 rgb(23,32,43)→rgb(32,45,59)、按下 matrix(0.984…) ✓ ⇒ 不重写。
+       只补「选中左侧指示」：.on 现在的选中态只有一段渐变底（:32），在 17 行里
+       不算突出 ✗。加 2px 竖条，和 app.css:3094（.item.active::before）同一手法 ✓。
+       ⚠️ .site-category 是 display:grid（:30，4 列），::before 若当网格项会多占一格、
+          把图标挤歪 ✗ —— 所以 absolute + pointer-events:none，绝不参与布局 ✓。
+       ⚠️ opacity 过渡走 --mo-out：选中是状态，不是"人按住"那个瞬间 ✓。 */
+.site-category.site-category {
+  position: relative;
+}
+.site-category.site-category::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--mo-2) var(--mo-out);
+  pointer-events: none;
+}
+#site-menu-panel .site-category.on::before {
+  opacity: .95;
+}
+
+/* 3.3 .study-readable-nav a（网页目录）：子系统只在 :140 写了一句
+       a:hover{background:#182536}，但**没有任何 transition** ——
+       实测 computed transition 是 "all 0s" ⇒ 悬停是硬切 ✗。
+       这里补背景/字色的淡入。层级用 #study-workspace 祖先压过 (0,1,1) ✓。 */
+#study-workspace .study-readable-nav a {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════ 4. 输入区：只过渡 border-color / box-shadow ═════════════════ */
+
+/* 4.1 已经有的**不重写**（实测 focus 之后 420ms 回读）：
+        .study-url:focus          border rgb(39,50,65) → rgb(91,147,255)、
+                                  shadow → 0 0 0 2px rgba(79,140,255,.13) ✓
+        #study-title:focus        border → rgb(91,147,255)、底色 → rgb(13,20,30) ✓
+        .study-note-editor:focus  border → rgb(91,147,255)、shadow 2px ✓
+        三者都已有 0.12s/0.18s 过渡 ✓  ⇒ 本文件不动它们。
+
+   4.2 真缺口 A：网址菜单的搜索框外壳 .site-menu-search-wrap（:24-25 写了 focus-within
+       的描边 + 3px 光晕），但**没有 transition**（实测 "all 0s"）⇒ 聚焦时光晕是硬跳 ✗。
+       层级用 #site-menu-panel 祖先（它就是壳的父级，结构稳定）✓。 */
+#site-menu-panel .site-menu-search-wrap {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 4.3 真缺口 B：阅读视图的目录筛选框 .study-readable-filter（:135）**根本没有 focus 样式**
+       —— 实测 focus 前后 border/box-shadow 完全一致，打字时看不出光标在哪个框里 ✗。
+       补一条和 .study-url:focus (:107) 完全同款的环：border #5b91da + 2px 淡光晕，
+       保证同一屏里两个输入框的"聚焦长什么样"是一致的 ✓。
+       只写 border-color / box-shadow：**不许**动 width/height/padding，
+       .study-readable-view 是 grid（:131），尺寸一变左栏就会抖 ✗。 */
+#study-workspace .study-readable-filter:focus {
+  border-color: #5b91da;
+  box-shadow: 0 0 0 2px rgba(79, 140, 255, .13);
+}
+
+/* 4.4 .study-code-editor 常驻 disabled（没选代码片段时 src/study-workspace.js:502
+       会 editor.disabled = true），disabled 元素本来就不会 :focus ⇒ 不给它写焦点环 ✓，
+       写了也永远不生效 ✗。 */
+
+
+/* ═══════════ 5. 空状态 / 提示：只有"出现一次"的才淡入 ═════════════════════ */
+
+/* 实测（文件头 ① 组）：.study-code-empty / .study-pdf-empty / .study-web-failed
+   在 12 秒空闲窗口里 **移除 0、新增 0**，元素身份 1→1 存活 ✓。
+   它们只在「新建窗格 / 切换资料的失败与空集」时被建一次（:245 :556 :558 :568 :368），
+   之后不会随任何轮询复现 ⇒ 淡入一次成立 ✓。
+   曲线 --mo-out、时长 --mo-3：这是在说"这里现在没有内容"，不是人手按了什么 ✓，
+   所以绝不能 --mo-back（弹一下会像"操作成功了" ✗）。 */
+@keyframes mst-empty-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.study-code-empty,
+.study-pdf-empty,
+.study-web-failed {
+  animation: mst-empty-in var(--mo-3) var(--mo-out) both;
+}
+
+/* 故意**不**做的两处，附实测理由：
+   ✗ .site-menu-empty（:935，搜索无结果时出现）——它跟着 #quick-sites 一起重建，
+     实测敲 3 个字符整块新增 54 个节点 ⇒ 加淡入 = 每个字闪一次 ✗。
+   ✗ #study-empty（:80）——查明它 CSS 就是 display:none，永远不会出现，
+     给它写动画是一条永远不执行的死代码 ✗。 */
+
+/* 状态条 #study-status（:75-76）是**状态同步**的典型：
+   每载入一个网页、每次保存都会改文案与 .ok/.err 配色，实测 computed transition "all 0s"
+   ⇒ 颜色是硬跳的。这里只过渡 color（--mo-1 --mo-out），
+   并且**不给它任何 animation**：它每几秒就变一次，闪一下就是噪音 ✗。 */
+#study-workspace #study-status {
+  transition: color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════ 6. 抽屉 / 浮层：@starting-style 入场（不支持则退化为无动画） ═══ */
+
+/* 真缺口（实测）：#site-menu-panel / #study-bookmark-dialog / #study-category-dialog
+   打开时 getAnimations() 返回空数组、opacity 直接就是 1 ⇒ 现在是硬切 ✗。
+
+   ⚠️ 这两类浮层都是「display:none ↔ display:flex/grid」靠 class 切换的（:15 :182），
+      普通 transition 抓不到"从 display:none 变出来"的那一帧 ——
+      只有 @starting-style 能 ✓（与 motion.css §6/§7 同一手法）。
+      @starting-style 与 transition-behavior: allow-discrete 同批落地（Chromium 117+），
+      所以用后者当探针把整段包起来：不支持时整段被丢弃，
+      抽屉照旧瞬间出现，功能一点不变 ✓（"不能坏"是底线，动画是加分项）。
+
+   ⚠️⚠️ #site-menu-panel 的居中靠 transform:translateX(-50%) 且是 inline 计算出来的
+      （实测 computed transform = matrix(1,0,0,1,-409.996,0)，因为宽度是 min(820px,100vw-24px)）。
+      若在这里写 transform 做位移，会把居中一起吃掉 ✗✗。
+      ⇒ 位移一律用**独立的 translate 长手属性** ✓：它和 transform 叠加，不改 transform 的语义。
+
+   出场不做：两者都是 display:none 硬关（:15 :182），做出场得改 JS（延时移除 + 挡点击），
+   属于行为改动，不在本文件范围 —— 与 motion.css §7 的判断保持一致 ✓。 */
+@supports (transition-behavior: allow-discrete) {
+  #site-menu-panel {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+      opacity var(--mo-2) var(--mo-out),
+      translate var(--mo-3) var(--mo-out);
+  }
+  /* 8px 是"从上方掉下来一点点"的最小可感知距离；
+     再大就变成抽屉在飞，820px 宽的面板会显得不可控 ✗。 */
+  @starting-style {
+    #site-menu-panel:not(.hidden) {
+      opacity: 0;
+      translate: 0 -8px;
+    }
+  }
+
+  /* 两个网址对话框：遮罩淡入 + 卡片从 98% 缩放回来
+     （不是 .9：缩太多像缩略图弹开，太重 ✗，与 motion.css:353 同一取舍）。 */
+  #study-bookmark-dialog,
+  #study-category-dialog {
+    opacity: 1;
+    transition: opacity var(--mo-3) var(--mo-out);
+  }
+  #study-bookmark-dialog .study-dialog-card,
+  #study-category-dialog .study-dialog-card {
+    transition:
+      opacity var(--mo-3) var(--mo-out),
+      transform var(--mo-3) var(--mo-out);
+  }
+  @starting-style {
+    #study-bookmark-dialog.open,
+    #study-category-dialog.open {
+      opacity: 0;
+    }
+    #study-bookmark-dialog.open .study-dialog-card,
+    #study-category-dialog.open .study-dialog-card {
+      opacity: 0;
+      transform: scale(.98);
+    }
+  }
+}
+
+
+/* ═══════════ 7. 窗格焦点环：状态同步，只许平滑 ═════════════════════════════ */
+
+/* .study-pane.active（:102，由 pointerdown / focusin 挂上，src/study-workspace.js:111-118）
+   是「现在键盘/插入符在哪一格」的指示。它每点一下就换一格，属于**状态同步** ✓：
+   过渡 box-shadow（--mo-2 --mo-out），
+   ✗ 不加 transform / 不加 --mo-back —— 一块 700px 宽的窗格弹一下，整块内容都会跟着晃。
+   实测基线：.study-pane 的 computed transition 是 "all 0s"（硬切）⇒ 这条是真补漏 ✓。 */
+#study-workspace .study-pane {
+  transition: box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════ 8. 无障碍：reduced-motion ═════════════════════════════════════ */
+
+/* 前庭敏感的用户要的是"结果不变、过程别动" ✓。
+   这里做三件事，反过来任何一条漏掉都会让上面的动画绕过设置：
+     (1) 过渡压到 .01ms —— 状态照样到终态，但看不见过程 ✓
+         （不能用 none：removeClass 之后有些属性会停在起始值 ✗）
+     (2) 本文件引入的 animation 全部 none ✓，并把 opacity 复位到 1
+         （keyframes 用了 both，关掉动画会停在 from 帧的 opacity:0 ⇒ 内容消失 ✗✗）
+     (3) 我加的位移（按压缩放 / 选中指示条的 scaleX / 卡片 scale / 抽屉 translate）
+         全部归零 ✓
+   !important 只出现在这一节，和 motion.css / motion-sp.css 的做法一致 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  #study-workspace #study-head select,
+  #study-workspace #study-head select:hover,
+  #study-workspace .study-readable-nav a,
+  .study-note-head button::after,
+  .quick-site.quick-site,
+  .site-category.site-category::before,
+  #site-menu-panel .site-menu-search-wrap,
+  #study-workspace #study-status,
+  #study-workspace .study-pane,
+  #site-menu-panel,
+  #study-bookmark-dialog,
+  #study-category-dialog,
+  #study-bookmark-dialog .study-dialog-card,
+  #study-category-dialog .study-dialog-card {
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .study-code-empty,
+  .study-pdf-empty,
+  .study-web-failed {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .quick-site.quick-site:active,
+  .study-note-head button::after,
+  #study-bookmark-dialog .study-dialog-card,
+  #study-category-dialog .study-dialog-card {
+    transform: none !important;
+  }
+
+  /* ⚠️ 抽屉**只许**清掉 translate，绝不能写 transform:none ✗✗ ——
+     它的水平居中就是 transform:translateX(-50%)（实测 computed
+     matrix(1,0,0,1,-409.996,0)）。把 transform 一起归零，面板会整体右移半屏，
+    这属于"动画关掉了，界面也坏了"的那一类 ✗。 */
+  #site-menu-panel {
+    translate: none !important;
+  }
+}
+/* ============================================================================
+   motion-cg.css —— 码境 CodeScope 的「代码向导」浮层（cg-*）微交互
+
+   这个文件管的是什么
+   ----------------------------------------------------------------------------
+   assets/code-guide.js（2,970 行，纯前端经典脚本，index.html:48 以普通 <script> 引入）
+   在 Monaco 上做的「查 / 找 / 拆」浮层：/api/graph、/api/lsp/query、/api/logic/*、
+   /api/ai/chat。它是一扇**贴着编辑器的小窗口**（无遮罩、pointer-events:none 兜底），
+   用户一边写代码一边查 —— 所以这里的动效只有一个目的：
+   让「我点了什么」和「它正在干什么」看得见，同时**不许挡住编辑器** ✗。
+
+   ★ 为什么必然要提特异性（这是本文件存在的全部技术理由）
+   ----------------------------------------------------------------------------
+   code-guide.js:2554-2559 在运行时 createElement('style') 注入 <style id="cgx-style">
+   并 appendChild 到 head 末尾 ⇒ 它排在 motion.css / 本文件的 <link> **之后** ✓。
+   同特异性下「后出现的赢」⇒ 子系统自己写的 .cg-tab{transition:.13s} 会压掉本文件
+   的 .cg-tab{transition:…} ✗。实测（Playwright：head.children 里 cgx-style 在索引 38，
+   排在所有 <link> 之后）确实如此 ✓。
+   ⇒ 所以本文件用**重复类名**取胜（.cg-tab.cg-tab → (0,2,0) 压 (0,1,0)），
+     不使用 !important ✓（全文 !important 只允许出现在末尾的 reduced-motion 段）。
+
+   ⚠️ 但**不无脑加倍** ✗✗ —— 判断依据一律是 **computed style**，不是读源码观感
+      （上一轮的教训：源码里「看起来没写」的 transition 藏在跨行声明的末尾）：
+      · 实测 .cg-btn 的 computed transition 已经是
+          background-color / border-color / color / filter / box-shadow / transform，
+          且 transform 那条曲线是 cubic-bezier(0.34,1.56,0.64,1)（= --mo-back）✓
+        → 它已经被 motion.css 的 html[data-theme] button（特异性 (0,1,2)）接走了 ✓，
+          本文件**不重写它的 transition / :active** ✗（写了就是两份真相，
+          而且会用较低特异性去抢已被 (0,1,2) 拿走的那条 ✓）。
+      · 实测 .cg-tab / .cg-head .hb / .cg-row 的 computed transition 还是 0.13s ease
+        （子系统自己的硬编码；且 .cg-tab 是 <span> 不是 button，
+         motion.css 的 button 层根本管不到它 ✓）
+        → 这几个**必须**加倍类名才改得动 ✓。
+      ⇒ 每个选择器下面的注释都写明了它属于哪一类。
+
+   ★ 产品铁律与本文件的取舍（实测数字，不是观感）
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 按下 / 打开）才允许 --mo-back 回弹；
+   状态同步、加载、提示一律 --mo-out 平滑。
+   ⚠️ 更关键的一条：**不给「每次渲染都会发生」的东西加入场动画** ✗。
+   实测（隔离实例 + Playwright + MutationObserver，量 #cgx-body 的 childList 批次）：
+      · 浮层开着、空闲 4 秒     → 0 次重建 ✓（没有轮询，不会自己闪 ✓）
+      · 主动查一次、观察 7 秒   → 5 次整块重建（移除 9 个节点 / 新增 7 个，
+                                  样本 [4,1] [1,1] [1,2] [2,1] [1,2]）
+   原因在 cgRender()（code-guide.js:2132）：每次重绘都是
+   box.innerHTML = cgBodyHtml() —— **整块换掉** ✓。
+   ⇒ 所以结果卡片 / 空态 / 忙碌条**一律不做逐项入场** ✗：
+     一次查询里会重播 5 次，肉眼看到的就是「抽筋」。
+     本文件只给它们做 **hover / 按下的状态过渡**（状态切换不会重播动画 ✓）。
+
+   ★ 绝对不碰的东西
+   ----------------------------------------------------------------------------
+   位置、层级、尺寸、flex、display —— 一律不碰 ✗。
+   这个浮层就贴在 Monaco 上：.cg-mask 是 z-index:9990 / pointer-events:none，
+   .cg-box 是 position:fixed、由 JS 摆位（cgPlace）。任何「顺手改一下定位 / z-index」
+   的念头都会让它挡住编辑器操作 ✗。本文件只写 transition、hover 视觉，以及 ≤1px 的
+   transform（不参与定位 ✓）。
+   ⚠️ 本文件也**不重新定义任何令牌 / :root 变量** ✗ —— --mo-* 全部来自 motion.css。
+   ============================================================================ */
+
+
+/* ═══════════════════════════ 1. 浮层入场 ════════════════════════════════ */
+
+/* 「查一下」的入口（⌘I / 菜单）—— 窗口是**硬切**出现的（.cg-mask 从 display:none
+   变 block，见 code-guide.js:2247-2248），一条过渡都没有 ✗。
+   这里补一次清楚的入场：淡入 + 下移 6px + 98.5% 缩放 ✓。
+   ⚠️ 用 @starting-style 而不是「JS 加个类」✓：浮层是 cgBuild() 一次建好、之后只切
+     .on 的常驻元素 ✓ —— display 由 none 变 block 的那一帧，普通 transition 抓不到
+     起始值，只有 @starting-style 能 ✓。
+   ⚠️ 整段包在 @supports (transition-behavior: allow-discrete) 里 ✓：
+     它和 @starting-style 同批落地（Chromium 117+），拿它当探针；不支持时整段被丢弃
+     ⇒ 窗口照旧瞬间出现，功能完全不受影响 ✓（「不能坏」是底线，动画是加分项 ✓）。
+     这和 motion.css 里菜单 / 对话框用的是同一个探针 ✓。
+   ⚠️ 为什么是 --mo-out 而不是 --mo-back ✗：窗口出现是**状态变化**，不是手指按下去
+     的那一下 —— 回弹的过冲会让这个浮窗在代码上方抖一下 ✓，而它就贴着编辑器，
+     抖这一下最碍事 ✗。
+   ⚠️ 出场（关掉时）不做 ✗：.cg-mask 直接 display:none，要做退场得改 JS
+     （allow-discrete + 延时移除），属于行为改动，不在本文件范围 ✓。 */
+@supports (transition-behavior: allow-discrete) {
+  .cg-mask.on .cg-box {
+    transition:
+      opacity var(--mo-3) var(--mo-out),
+      transform var(--mo-3) var(--mo-out);
+  }
+  /* 起始值只作用于「刚进入渲染树」的那一帧 ✓。
+     6px 是「从代码上面浮起来」的最小可感知距离；再大就像抽屉而不是小窗口了 ✗。 */
+  @starting-style {
+    .cg-mask.on .cg-box {
+      opacity: 0;
+      transform: translateY(6px) scale(.985);
+    }
+  }
+}
+
+
+/* ═══════════════════════════ 2. 页签（.cg-tab 是 <span>）════════════════ */
+
+/* ⚠️ 实测这是全浮层里**最硬的一处**：.cg-tab 的 computed transition 是
+     background 0.13s / border-color 0.13s / color 0.13s（ease，不是令牌曲线），
+   而它的 :active 是 transform: translateY(1px) —— **transform 不在过渡列表里** ✗
+   ⇒ 按下时位移是**瞬跳** ✓，配上悬停只有变色 ✓，「悬停」和「按下」读起来几乎一样 ✗
+   （这正是用户抱怨过的：「高亮和按下都分不清」✓）。
+   ⇒ 这里把 transform 收进过渡（--mo-2 / --mo-back：人按下去那一下允许回弹 ✓），
+     并把 0.13s 换成 --mo-1 ✓。
+   ⚠️ 加倍到 .cg-tab.cg-tab ✓ 是因为子系统**对同一属性写过 transition 和 :active**
+     （computed style 已确认生效的是它那条）⇒ 不加深压不过 ✗。 */
+.cg-tab.cg-tab {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+/* 按下：和全站按钮同一手感（陷 1.5% + 半像素下沉）✓。
+   原来那个 translateY(1px) 只有位移没有缩放，摸起来像「整块掉了一下」✗。 */
+.cg-tab.cg-tab:active {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+
+/* ═══════════ 3. 顶栏按钮（🕘 / — / ▢ / ✕，也是 <span>）══════════════════ */
+
+/* 同一类问题：.cg-head .hb 是 (0,2,0)、computed 还是 0.13s ease；
+   :active 只有 translateY(1px)，且 transform 不在过渡列表里 ⇒ 瞬跳 ✗。
+   ⚠️ 加倍的是**祖先**（.cg-head.cg-head）而不是 .hb.hb —— 顶栏本身是稳定类名，
+     这样写读起来还是「顶栏里的按钮」✓，(0,3,0) 压过 (0,2,0) ✓。 */
+.cg-head.cg-head .hb {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cg-head.cg-head .hb:active {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+
+/* ═══════════════════════════ 4. 输入行 ═════════════════════════════════ */
+
+/* 搜索框：computed transition 只有 border-color 0.13s ✗ —— 但它的 :focus 还会加一圈
+   box-shadow 焦点环（.cg-search input:focus ✓）⇒ 那圈环是**瞬现**的，
+   在深色底上尤其像闪了一下 ✗。这里把箱阴影和底色一起收进过渡 ✓。
+   加倍 .cg-search.cg-search（(0,2,1) 压 (0,1,1)）✓ —— 它确实对 border-color 写过
+   transition（同一属性的过渡必须先压过它，否则时长还是 0.13s）✓。 */
+.cg-search.cg-search input {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 「存到知识库」那两行（输入框 / 下拉）：**一条 transition 都没有** ✗
+   （computed transition-duration: 0s ⇒ 变色是瞬跳 ✓）。
+   它们只在自己的 :focus 里换 border-color，所以只补 border-color + 底色就够 ✓。
+   ⚠️ 这里**不加倍** ✓ —— 子系统对这两个选择器没写过 transition，加了也是为以后
+     维护埋一个「为什么加倍」的谜 ✗。 */
+.cg-ask-row input,
+.cg-ask-row select {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+
+
+/* ═══════════════ 5. 结果卡片 / 查阅历史行（可点的「块」）═════════════════ */
+
+/* .cg-row：查 / 拆出来的每一张结果卡（code-guide.js cgRowHtml ✓）。
+   computed 是 border-color 0.13s / box-shadow 0.13s（ease）⇒ 0.13s 不属四档、
+   曲线也不是令牌 ✗ ⇒ 加倍到 (0,2,0) 重挂过渡 ✓。
+   悬停加 1px 抬升 ✓：卡片是「可以点进去的实体」，给一点位移它才像能按的东西 ✓
+   （transform 不触发重排，一次悬停只有一张卡在动 ✓）。
+   ⚠️ 卡片是**整块重建**的（实测一次查询 5 次 ✓ 见文件头）⇒ 只做 hover，
+     **不做逐项入场** ✗ —— 否则每次重绘都会重播一遍淡入。 */
+.cg-row.cg-row {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cg-row.cg-row:hover {
+  transform: translateY(var(--mo-lift));
+}
+
+/* 查阅历史的一行（整行可点 ✓）：
+   computed 是 border-color .13s / background .13s / transform .06s ⇒ 那个 .06s 是
+   「按下去」的时长 ✓ 但它短到看不出过程 ✗，而且悬停没有任何位移 ✓。
+   ⇒ 悬停抬 1px（--mo-back：人主动）✓；按下收回 + 缩 1.5% ✓（和全站按钮同手感 ✓）。 */
+.cg-hist-row.cg-hist-row {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cg-hist-row.cg-hist-row:hover {
+  transform: translateY(var(--mo-lift));
+}
+.cg-hist-row.cg-hist-row:active {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+/* 历史 chip（空态下面那排「最近查过」）：
+   computed 是 border-color .13s / color .13s / background .13s，**没有 :active** ✗
+   ⇒ 一个只有悬停、按下去毫无反应的小药丸 ✓，点完不知道点没点上 ✗。
+   补：令牌化过渡 + 按下缩放 ✓。 */
+.cg-hist-chip.cg-hist-chip {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cg-hist-chip.cg-hist-chip:active {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+
+/* ═══════════════════════ 6. 按钮族（button 元素）════════════════════════ */
+
+/* ⚠️ 这里**不重写 transition / 不重写 :active** ✗✗ —— 见文件头的实测：
+   .cg-btn 的 computed 过渡已经是 motion.css 那一套（0.12s / 0.18s + --mo-out / --mo-back）✓，
+   按下已经是 translateY(.5px) scale(.985) ✓。再写一遍只会：① 制造两份真相；
+   ② 用较低特异性去抢已被 (0,1,2) 拿走的那条，抢不到还留个假的 ✗。
+   ⇒ 只补一件它没有的事：**悬停时抬起 1px** ✓。
+   ⚠️ 特异性刻意保持 (0,3,0)（裸 .cg-btn:hover:not(:disabled)，不加倍）✓：
+     全站按钮的按下是 (0,4,1)（html[data-theme] button:active:not(:disabled)）✓
+     ⇒ 按住时「按下」那条仍然赢，抬起会让位给「陷下去」✓；
+        如果这里加倍到 (0,5,0)，悬停就会反过来压住按下 ✗ —— 那才是「高亮和按下分不清」。
+   为什么允许 --mo-back：悬停是**人主动做的动作** ✓，而这条过渡的曲线本来就来自
+   motion.css 的 transform 那一条（--mo-back）✓，不需要在这里另写曲线。 */
+.cg-btn:hover:not(:disabled) {
+  transform: translateY(var(--mo-lift));
+}
+/* 两处例外：**不要**让按钮在「自己会浮动的容器里」再浮一次 ✗ ——
+   ① .cg-views 是分段控件（一行 5 个按钮 + 外层 5px 内边距），
+      单个按钮跳出来会把整条读成「没对齐」✗；
+   ② .cg-hist-row 整行已经抬 1px ✓，里面那个 📥 再抬 = 两段各自上浮，看着像在抖 ✗。
+   ⚠️ 这两条必须写在上面那条**之后** ✓：同特异性 (0,3,0) 时后出现的赢 ✓。 */
+.cg-views .cg-btn:hover:not(:disabled),
+.cg-hist-row .cg-btn:hover:not(:disabled) {
+  transform: none;
+}
+
+
+/* ═══════════════════ 7. 思维导图节点 / 流程步骤 ════════════════════════ */
+
+/* 导图节点是**绝对定位的 HTML**（code-guide.js:1059 cgDrawMind ✓），连线是一层 SVG ✓。
+   computed 是 border-color .13s / box-shadow .13s ⇒ 0.13s 硬编码 ✗。
+   ⇒ 加倍重挂过渡（(0,2,0) 压 (0,1,0)）✓，悬停抬 1px ✓。
+   ⚠️ 为什么抬 1px 不会把连线「拽断」✗（这是唯一要小心的地方）：
+     连线是从节点**左边缘**连过来的（path 终点 x = 节点左边界，见 cgDrawMind 里
+     path(x0, …, X[1], by) ✓）；垂直移动 1px 后终点仍在节点左边缘的竖直范围内
+     （节点本身高 ≥ 26px ✓）⇒ 看不出来 ✓。反过来说，如果这里有**横向**位移就一定露馅 ✗。
+   ⚠️ 回弹（--mo-back）在这里是**允许**的 ✓：悬停是人主动做的动作；
+     导图节点也不是「状态同步」出来的东西（只在点「让 AI 拆解」后画一次 ✓）。 */
+.cg-mind-node.cg-mind-node {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+.cg-mind-node.cg-mind-node:hover {
+  transform: translateY(var(--mo-lift));
+}
+
+/* 流程步骤（.cg-flow 里那一列卡片 + ↓ 箭头，cgDrawFlow ✓）：
+   ⚠️ 子系统对 .cg-step 写过的只有**外观**（.cg-flow 容器上的 border-color，
+     以及 .cg-step.k-branch 的 (0,2,0) 换边框色）✓ —— **没有任何 transition / hover** ✗
+   ⇒ 按规则这里**不加倍** ✓（裸 .cg-step 就够，过渡不存在抢不抢的问题）。
+   但 :hover 的边框色必须写 .cg-step.cg-step:hover (0,3,0) ✓ ——
+   否则压不过 .cg-step.k-branch 的 (0,2,0)，**分支步骤悬停时不会亮** ✗。
+   （这是「该加倍时才加倍」的另一面：不是为 transition 加倍，是为**状态变体**加倍。）
+   为什么不给步骤加位移 ✗：步骤之间夹着 .cg-arrow 箭头，卡片一浮就和箭头脱开 ✓；
+   一列竖排的东西上下动，读起来像在重新排序 ✗。 */
+.cg-step {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.cg-step.cg-step:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .16);
+}
+
+
+/* ═══════════════════ 8. 手册正文（只做「读起来不费劲」）═════════════════ */
+
+/* 手册（.cg-man）是用户在**读文档**，不是在对它动手 ✓ ——
+   所以这一段只做两件事：代码块悬停时描边提亮（「这块是独立的一整段代码」✓）、
+   表格行悬停时横向跟着亮（长表格跨列读会串行 ✓）。
+   ⚠️ 一律**不变形、不离位** ✗：代码块一浮起来，正在读的那行就会跟着动 ✓，
+     读到一半被打断是这个浮层最不该有的体验 ✗。
+
+   代码块：子系统没给它写过 transition ✓（computed transition-duration: 0s）
+   ⇒ 裸类名，不加倍 ✓。 */
+.cg-man-code {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+.cg-man-code:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+/* 「常用成员」表：.cg-man-api td 只有 border-bottom，没有底色过渡 ✓（不加倍 ✓）。
+   只过渡 background-color —— 行高 / 边框一个字不动，表格不会在手滑时抖 ✓。 */
+.cg-man-api td {
+  transition: background-color var(--mo-1) var(--mo-out);
+}
+.cg-man-api tr:hover td {
+  background-color: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+/* ⚠️ 「链接 hover」在这里**不适用** ✗，不是漏了：
+   全文检索 a 标签的结果是 **0 处** ✓ —— 手册正文里没有任何链接元素
+   （AI 给的文字走 esc() + 换行，不解析 markdown ✓）。没有可悬停的链接，
+   就不写一条假规则 ✗。 */
+
+
+/* ═══════════════════ 9. 缩放手柄 + 轻提示 ══════════════════════════════ */
+
+/* 右下角把手（.cg-rs）：悬停时 ::after 从 45% 透明度亮到 95% ✓ ——
+   computed transition-duration: 0s ⇒ **瞬跳** ✗。
+   ⇒ 加倍到 (0,2,1)（.cg-rs.cg-rs::after 压 .cg-rs::after 的 (0,1,1)）✓。
+   ⚠️ 只动 opacity / border-color，**不动 width/height** ✗：那是命中区，
+     一改就和鼠标位置对不上 ✓（和分隔条那条同一个理由 ✓）。 */
+.cg-rs.cg-rs::after {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+
+/* 轻提示（.cg-toast，code-guide.js:133 自建）：子系统写的是 transition: .18s ✓
+   —— 唯一一条没写属性名的过渡（等价于 all）✗。
+   ⇒ 加倍换成显式的两条属性 + 令牌 ✓。
+   ⚠️ 用 --mo-2 + --mo-out，**不用回弹** ✓：提示是「告诉你一件事」的状态反馈，
+     不是人主动按的那一下 ✓ —— 一条从底下弹上来的 toast 会抢走正在写的那行字的
+     注意力 ✗。 */
+.cg-toast.cg-toast {
+  transition:
+    opacity var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════════ 10. 故意不做的事（附理由，别「顺手补上」）════════════ */
+
+/* ① 结果卡片 / 空态 / 忙碌条的**逐项入场** ✗
+      实测一次查询里 #cgx-body 被整块换掉 5 次（样本 [4,1][1,1][1,2][2,1][1,2]）✓，
+      任何逐项动画都会跟着重播 5 遍 ✓。而空闲状态实测 4 秒 0 次 ✓ ——
+      所以「不做」也不会显得死气沉沉：那里本来就该安静 ✓。
+   ② 加载态**不重复做** ✗ —— 子系统已经有 .cg-spin 的
+      animation: cg-spin .7s linear infinite（computed animation-name 实测生效 ✓），
+      忙碌按钮里就带着那个转圈 ✓；再叠一层脉冲就是两次呼吸不同步 ✗，比没有更糟。
+   ③ 折叠（.cg-box.min）不做高度动画 ✗ ——
+      cgDrawMind / cgDrawFlow 靠**量 offsetHeight** 摆位置（code-guide.js:1080 起 ✓），
+      动画期间量到的是中途值 ⇒ 导图会摆成一堆重叠方块 ✗
+      （子系统自己的注释里就记着「折一下再展开，导图就塌了」这个坑 ✓）。宁可不做。
+   ④ 关闭时的出场动画 ✗ —— .cg-mask 直接 display:none（cgClose ✓），
+      要做退场得改 JS（allow-discrete + 延时移除），那是行为改动，不是样式 ✓。
+   ⑤ 顶栏拖动时的阴影加深 ✗ —— .cg-box 的 box-shadow 已经是
+      0 26px 80px rgba(0,0,0,.5)，再深肉眼看不出来 ✓；而拖动时窗口本身跟着手走 ✓，
+      反馈已经足够 ✓。为一条看不见的规则给 .cg-box 挂第二条过渡，不值 ✓。
+   ⑥ z-index / position / 尺寸：**一个字都不写** ✗ —— 见文件头那一段 ✓。 */
+
+
+/* ═══════════════════ 11. 无障碍：prefers-reduced-motion ════════════════ */
+
+/* 本文件引入的 animation：**0 条 @keyframes** ✓（入场走 transition + @starting-style）。
+   所以下面那条 animation:none 只是「将来加了动画也自动被关」的兜底，
+   作用域**只限我自己那条入场选择器** ✓ ——
+   ⚠️ 千万不要写成通配 ✗：.cg-spin 的转圈是这个浮层唯一的「正在干活」指示 ✓，
+     停掉它用户就以为卡死了 ✗。 */
+@media (prefers-reduced-motion: reduce) {
+  .cg-mask.on .cg-box {
+    animation: none !important;
+  }
+
+  /* 过渡压到不可见（本段是全文件唯一允许出现 !important 的地方 ✓） */
+  .cg-mask.on .cg-box,
+  .cg-tab.cg-tab,
+  .cg-head.cg-head .hb,
+  .cg-search.cg-search input,
+  .cg-ask-row input,
+  .cg-ask-row select,
+  .cg-row.cg-row,
+  .cg-hist-row.cg-hist-row,
+  .cg-hist-chip.cg-hist-chip,
+  .cg-mind-node.cg-mind-node,
+  .cg-step,
+  .cg-man-code,
+  .cg-man-api td,
+  .cg-rs.cg-rs::after,
+  .cg-toast.cg-toast {
+    transition-duration: .01ms !important;
+  }
+
+  /* 我加的 transform 全部取消：前庭敏感的用户受不了「上浮 / 按压 / 缩放入场」，
+     哪怕只有 1px / 1.5% ✓。这里列的是**我自己写过的每一条** transform，
+     漏一条就等于漏一个会动的控件 ✗。 */
+  .cg-mask.on .cg-box,
+  .cg-tab.cg-tab:active,
+  .cg-head.cg-head .hb:active,
+  .cg-row.cg-row:hover,
+  .cg-hist-row.cg-hist-row:hover,
+  .cg-hist-row.cg-hist-row:active,
+  .cg-hist-chip.cg-hist-chip:active,
+  .cg-mind-node.cg-mind-node:hover,
+  .cg-btn:hover:not(:disabled) {
+    transform: none !important;
+  }
+
+  /* @starting-style 里那两行同样要压掉 ✗：否则浮层会在「0 → 0」之间空跑 260ms，
+     虽然看不见，但会和 display 的离散过渡叠出一段「点了没反应」的延迟 ✓
+     （motion-lw.css 里踩过同一个坑，见它 reduced-motion 段末尾那条注释 ✓）。 */
+  @starting-style {
+    .cg-mask.on .cg-box {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* ============================================================================
+   motion-dbg.css —— 调试面板（debug-panel.js）的微交互层
+
+   它管什么
+   ----------------------------------------------------------------------------
+   assets/debug-panel.js（888 行）自己**一行样式都不注入** ✓（实测
+   grep 「createElement('style') / appendChild(style) / insertRule / adoptedStyleSheets」
+   命中 0 处 ✓）—— 它的外观**全部**在 app.css:4195-4400（断点 / 调试条 / 变量表）
+   和 app.css:4698-4809（问题面板）里 ✓。所以这一层只补「手感」：
+   时长、曲线、悬停淡入、按压缩放；外观一个字不改 ✓。
+
+   加载顺序（重要）
+   ----------------------------------------------------------------------------
+   本文件必须排在 motion.css **之后**（由调度方在 index.html 里加一行
+   <link rel="stylesheet" href="/assets/motion-dbg.css">）。
+   前提：debug-panel.js 不注入 <style> ✓ → 不存在「运行时 <style> 永远排最后」
+   的抢占问题 ✓（这正是 motion-lw.css / motion-sp.css 必须用「重复类名」提权的原因 ✗，
+   本文件不需要 ✓）。
+
+   ⚠️ 但有两处**必须**提权，不能靠后加载赢 ✗（原因见各条注释）：
+      · #dbg-bar button         —— app.css 用的是 ID 选择器 (1,0,1)
+      · #problem-panel .prob-row —— app.css 自己写明要 (1,1,0) 才压得住
+        主题皮肤那条 html[data-theme] button (0,1,2)
+   两处都按「同特异性 + 后加载」处理 ✓，全文不使用 !important ✓（最后一段除外 ✓）。
+
+   一条贯穿全文件的产品判断（实测支撑，不是观感）
+   ----------------------------------------------------------------------------
+   ★ 这三个容器都是**整块重建**，所以一条入场动画都没有 ✓
+     （下面每个数字都是 MutationObserver 在真页面上数出来的，不是观感）：
+     · #var-panel .var-body：debug-panel.js:706/707/837 先 innerHTML = '' ✓
+       再 appendChild 新 <table> ✓ → 每次刷新（含单步后的自动刷新 ✓）整表换新 ✓
+       实测：3 次刷新（5.3s）＝ 移除 3 个 <table> / 新增 3 个 <table>（节点增删各 9 个）
+       ⇒ 行入场动画会每步闪一次 ✗
+     · #out-body：app.js:11944 先 b.innerHTML = '' 再逐行 append ✓ → 每次运行整块换新 ✓
+       实测：2 次运行 ＝ 移除 1 个 <pre> / 新增 2 个 <pre>（旧块整体被换掉）
+     · #problem-panel：app.js:12533 先 host.replaceChildren() 再重建 ✓ → 每次渲染整块换新 ✓
+     · 空状态 .var-empty 也不是「只出现一次」✗：2 次刷新里被新建 4 次 ✓
+       （「正在读取…」占位每轮都插一次 ✓）→ 所以它也**不做**淡入 ✓
+   给这三处的「行」加入场动画 = 每隔几秒整屏闪一下 ✗。
+   所以本文件只给**状态切换**做过渡（悬停 / 按下 / 焦点），不给**节点出现**做动画 ✓。
+
+   ★ 回弹（--mo-back）只出现在**人主动按下 / 悬停**的地方 ✓：
+     单步按钮的按压、变量面板标题栏按钮、类型徽标的悬停抬升。
+     状态同步（dbg-state 从「调试中 · 第 3 行」跳到「第 4 行」✓）走 --mo-out ✓ ——
+     它每单步都会发生 ✓，弹一下就成了「一直在抖」✗。
+   ============================================================================ */
+
+
+/* ═══════════════════════ 1. 单步工具条（#dbg-bar） ═══════════════════════ */
+
+/* 为什么这里必须写 ID 选择器 ✗：样式源是 app.css:4207 的 #dbg-bar button (1,0,1) ✓，
+   裸 button 的 (0,0,1) 压不过它 ✓。而它**没有声明 transition** ✗ ——
+   于是按钮的过渡实际来自 app.css:3288 的 html[data-theme] button (0,1,2)：
+   写死的背景 .16s / border-color .16s / color .16s / box-shadow .16s /
+   transform .18s cubic-bezier(.32,.72,0,1) ✓ —— 五条过渡三个值，且按下不回弹。
+   这里收成 3 档令牌 ✓：变色走 --mo-1（即时）✓、抬升/阴影走 --mo-2 ✓、
+   transform 用 --mo-back ✓ —— 单步是**最高频的人主动动作** ✓，
+   手指该在这里得到整个面板里唯一一处「弹回来」的反馈 ✓。 */
+#dbg-bar button {
+  transition:
+    background var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停提亮：app.css:4209 只换了描边和字色 ✓、底色仍是 transparent ✓；
+   主题层那条 hover 底色 (0,2,2) 被 #dbg-bar button 的 transparent (1,0,1) 挡住 ✗ ——
+   结果是「悬停时文字变蓝、底子一动不动」✓，读起来像纯文本链接、不像按钮 ✗。
+   给一层极淡的强调色底 ✓（14%：够看出「这块能按」✓，又不会抢掉字色 ✓）。
+   特异性 (1,2,1) 与 app.css:4209 完全相同 → 靠后加载赢 ✓。 */
+#dbg-bar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* 按下：保留下沉半像素（那属于 macOS 质感 ✓，见 app.css:3297 / motion.css:87），
+   只把缩放换成令牌 ✓。特异性 (1,2,1) 高于 motion.css 那条
+   html[data-theme] button:active:not(:disabled) (0,2,2)（ID 赢）✓，
+   所以这里写下的就是最终生效的那一版 ✓ —— 曲线由上面的 --mo-back 给 ✓。 */
+#dbg-bar button:active:not(:disabled) {
+  transform: translateY(.5px) scale(var(--mo-press));
+}
+
+/* 状态同步：文字从「调试中 · 第 3 行」跳到「第 4 行」✓ —— 这是**自动**变化 ✗，
+   不是人按出来的 ✓ → 只做颜色过渡（--mo-out 平滑），**绝不回弹** ✓。
+   showDbgBar()（debug-panel.js:44-94）只改 textContent / className ✓，
+   节点不换 ✓ → 过渡真的会跑 ✓（在整块重建的容器上做过渡是白写 ✗）。 */
+#dbg-bar .dbg-state {
+  transition: color var(--mo-2) var(--mo-out);
+}
+
+
+/* ═════════════════ 2. 变量面板标题栏按钮（.var-bar button） ═════════════════ */
+
+/* 刷新 / 靠右 / 关闭三颗按钮 ✓（debug-panel.js:612-631 创建 ✓）——
+   全是人主动按的 ✓。app.css:4278 的 .var-bar button 只给了边框和透明底 ✓，
+   底色实际由主题层 html[data-theme] button (0,1,2) 的渐变提供 ✓。
+   ⚠️ 要提权：主题层是 (0,1,2) ✓，.var-bar button 只有 (0,0,2) ✗ → 压不过 ✓。
+   写成 html[data-theme] .var-bar button 是 (0,2,2) ✓，稳过主题层 ✓，
+   也不去动它的渐变（只改悬停底色与位移）✓。 */
+html[data-theme] .var-bar button {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out),
+    transform var(--mo-2) var(--mo-back);
+}
+
+/* 悬停：标题栏是一条渐变横条 ✓，透明底 + 细边框的按钮在上面几乎看不出边界 ✗
+   → 给一点强调色底 + 抬起 1px ✓（--mo-lift 就是为「悬停抬升」定的 ✓）。
+   特异性 (0,3,2) > 主题层 hover (0,2,2) ✓。 */
+html[data-theme] .var-bar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  transform: translateY(var(--mo-lift));
+}
+
+/* 按下：这才是 --mo-back 该出现的地方 —— 手指按下去、松开弹回来 ✓。
+   不加 translateY(.5px)：这几颗是 1px 边框的小圆角钮 ✓，半像素下沉会让
+   12px 字号的文字基线发虚 ✗（单步按钮有 3px 内边距、是宽钮 ✓ 可以有那半像素 ✓）。 */
+html[data-theme] .var-bar button:active:not(:disabled) {
+  transform: scale(var(--mo-press));
+}
+
+
+/* ═══════════════════════ 3. 变量表（.var-table） ═══════════════════════ */
+
+/* ★ 行悬停淡入 ✓
+   app.css:4300 的 .var-table tbody tr:hover td 底色是**硬切**的 ✓（没有 transition ✗）——
+   鼠标在行间扫过去时每行都是「啪」一下变色 ✗，长表格里很吵 ✓。
+   过渡挂在 td 上而不是 tr ✗：斑马纹（app.css:4299）画在 td 上 ✓，
+   tr 自己的 background 会被 td 底色盖住 ✗ → 只有 td 上的过渡看得见 ✓。
+   ⚠️ 只过渡 background-color / color ✓ —— 不碰 width / padding / table-layout ✓，
+      所以宽表（横向滚动）的列宽一个像素都不会动 ✓。 */
+.var-table tbody tr > td {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 行号胶囊（可点 → 跳到源码那一行 ✓，debug-panel.js:761-775 ✓）：悬停换底也是硬切 ✗
+   → 补过渡 ✓。这里**不加位移**：胶囊在等宽表格里上下跳会带着整行文字一起抖 ✓，
+   而它离行基线只有 7px 内边距的余量 ✓，抬起来反而像没对齐 ✗。 */
+.var-table td.var-line span {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 值单元格（可点复制 ✓，debug-panel.js:798-824 ✓）：悬停换底同样是硬切 ✗ → 补过渡 ✓。
+   按下时给一圈内描边 ✓ —— 这是这面板里唯一「点中了哪一格」的确认 ✓
+   （复制成功的反馈在面板顶部状态条 ✓，调试时眼睛不在那儿 ✓）。
+   ⚠️ 用 box-shadow 而不是 border ✗：border 会改盒模型 ✓ → 固定列宽下整列抖 1px ✓。 */
+.var-table td.var-copyable {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-1) var(--mo-out);
+}
+.var-table td.var-copyable:active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+/* ★ 类型徽标悬停抬升 ✓（app.css:4317-4323 的 t-num / t-str / t-seq / t-fn / t-mod ✓）
+   为什么可以用 --mo-back 回弹 ✓：这是**人把鼠标移上去** ✓，不是渲染行为 ✓。
+   1px 就够 —— 徽标只有 11px 字号 ✓，2px 会让它在行里显得脱队 ✗。
+   只动 transform / box-shadow ✓，不改 padding / font-size ✓（行高不抖 ✓）。 */
+.var-table td.var-type span {
+  transition:
+    transform var(--mo-2) var(--mo-back),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+.var-table td.var-type span:hover {
+  transform: translateY(var(--mo-lift));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .28);
+}
+
+/* 表头的列宽拖拽提示（app.css:4356-4359 ✓，人在表头右边缘 8px 内按下就开拖 ✓）：
+   那条 1px 竖线原本是「悬停瞬间出现」✗ → 给 transition，显形 / 消失都变渐变 ✓。
+   只是颜色过渡 ✓，没有位移 ✓ —— 拖拽要的是精确，不是手感 ✓。 */
+.var-table th.var-th-grip::after {
+  transition: border-right-color var(--mo-1) var(--mo-out);
+}
+
+/* 面板右下角缩放把手（app.css:4283-4284 ✓）：透明度 / 描边也是硬切 ✗ → 补过渡 ✓。
+   它和 app.css 里图片浮窗 / 代码向导的把手是同一套交互 ✓，手感该一致 ✓。 */
+.var-rs::after {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    border-color var(--mo-1) var(--mo-out);
+}
+
+/* 变量面板的横向滚动条（宽表才有 ✓）：全局 *::-webkit-scrollbar（app.css:3806 ✓）
+   给的是中性灰 ✓。这里**只染拇指颜色** ✗ —— 改宽度会改 .var-body 的可用宽度 ✓，
+   固定列宽的表会被迫重算 ✓（正是 brief 明令不许动的东西 ✗）。 */
+#var-panel .var-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+/* 选中文字：变量值经常要手动拖选复制 ✓，浏览器默认的亮蓝在深色面板上刺眼 ✓
+   → 用强调色 ✓（纯静态美化，不涉及动效 ✓）。 */
+#var-panel ::selection {
+  background: color-mix(in srgb, var(--accent) 36%, transparent);
+  color: var(--text);
+}
+
+
+/* ═══════════════════════ 4. 输出区（#out-body） ═══════════════════════ */
+
+/* ⚠️ 这里**故意没有任何入场动画** ✗（产品铁律第一条）——
+   app.js:11944 先 b.innerHTML = '' 再逐行 append 所有行 ✓：
+   每运行一次，整个输出区都是**一批新节点** ✓。给 .out-line 加入场动画 =
+   每次运行、每次调试输出刷新都整块闪一下 ✗（实测数字见报告）。
+   只做「鼠标扫过」这种**人主动**的过渡 ✓ —— 它只在指针移动时触发 ✓，
+   节点重建时不会自己播 ✓。 */
+#out-body pre .out-line {
+  transition: background-color var(--mo-1) var(--mo-out);
+}
+
+/* 悬停时把行号提亮一档 ✓（行号是 ::before 生成的 ✓，app.css:4247 ✓）——
+   长输出里眼睛靠行号定位 ✓，悬停给出「我指的是这一行」的锚 ✓。 */
+#out-body pre .out-line::before {
+  transition: color var(--mo-1) var(--mo-out);
+}
+#out-body pre .out-line:hover::before {
+  color: color-mix(in srgb, var(--accent) 78%, var(--dim));
+}
+
+/* 输出区选中文字 ✓（复制程序输出是这面板的主要用途之一 ✓）——
+   同样只染强调色，不改任何尺寸 ✓。 */
+#out-body ::selection {
+  background: color-mix(in srgb, var(--accent) 36%, transparent);
+  color: var(--text);
+}
+
+
+/* ═══════════════════════ 5. 问题面板（.prob-row） ═══════════════════════ */
+
+/* ★ 为什么必须带 #problem-panel 前缀 ✗：app.css:4726-4732 自己写明了原因 ——
+   主题皮肤 html[data-theme] button (0,1,2) 比 .prob-row (0,1,0) 更具体 ✓，
+   会把每一行画成一颗凸起按钮 ✓；app.css 用 #problem-panel .prob-row (1,1,0) 才压住 ✓。
+   **同一个坑会原样落到本文件的过渡上** ✓：.prob-row 是 <button> ✓，
+   它的 transition 实际来自主题层 (0,1,2)（.16s × 4 + transform .18s）✓ ——
+   本文件若只写 .prob-row (0,1,0) 就**完全不生效** ✗（实测 computed
+   transition-property 仍是被主题层那四条 ✓）。所以照抄 (1,1,0) ✓。 */
+#problem-panel .prob-row {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    border-top-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 行号列 / 规则名 chip 的提亮也是硬切的 ✓（app.css:4767 / :4799）→ 补过渡 ✓。
+   这里**不加位移**：.prob-row 是 4 列 grid ✓，抬升任何一列都会让整行看起来歪 ✓。 */
+#problem-panel .prob-row .where {
+  transition: color var(--mo-1) var(--mo-out);
+}
+#problem-panel .prob-row .src {
+  transition:
+    opacity var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out);
+}
+
+/* 异常标记（严重度：错误 ● / 警告 ▲ ✓，app.js:12629-12630 ✓）：
+   悬停整行时抬起来 1px ✓ —— 这是**人指到这一行**才发生 ✓，不是渲染行为 ✓。
+   .sev 是 grid 的直接子项 ✓（不是 inline ✓），transform 在这里确实生效 ✓。
+   只动 transform ✓，颜色仍归 app.css 管 ✓（错误红 / 警告黄是语义色 ✓，不抢 ✓）。 */
+#problem-panel .prob-row .sev {
+  transition: transform var(--mo-2) var(--mo-back);
+}
+#problem-panel .prob-row:hover .sev {
+  transform: translateY(var(--mo-lift));
+}
+
+
+/* ═════════════ 6. prefers-reduced-motion（文件最后一段） ═════════════ */
+
+/* 这一段的 !important 是必要的 ✓：上面每条都靠「同特异性 + 后加载」取胜 ✓，
+   而系统级降低动效必须**无条件**赢 ✓（用户开了这个开关，任何一点位移都可能不适 ✓）。
+   为什么过渡压到 .01ms 而不是 0s ✗：0s 在部分引擎里 transitionend 不触发 ✓，
+   .01ms 仍会触发 ✓（与 motion.css 的处理一致 ✓）。
+   —— 本文件**没有引入任何 @keyframes / animation** ✓，
+      下面那条 animation: none 只是把这一层「锁死」写明白 ✓，
+      免得日后有人往这里加入场动画时忘了它和「整块重建」相撞 ✗。 */
+@media (prefers-reduced-motion: reduce) {
+  #dbg-bar button,
+  #dbg-bar .dbg-state,
+  html[data-theme] .var-bar button,
+  .var-table tbody tr > td,
+  .var-table td.var-line span,
+  .var-table td.var-copyable,
+  .var-table td.var-type span,
+  .var-table th.var-th-grip::after,
+  .var-rs::after,
+  #out-body pre .out-line,
+  #out-body pre .out-line::before,
+  #problem-panel .prob-row,
+  #problem-panel .prob-row .where,
+  #problem-panel .prob-row .src,
+  #problem-panel .prob-row .sev {
+    transition: .01ms !important;
+    animation: none !important;
+  }
+  #dbg-bar button:hover:not(:disabled),
+  #dbg-bar button:active:not(:disabled),
+  html[data-theme] .var-bar button:hover:not(:disabled),
+  html[data-theme] .var-bar button:active:not(:disabled),
+  .var-table td.var-type span:hover,
+  #problem-panel .prob-row:hover .sev {
+    transform: none !important;
+  }
+}
+/* ============================================================================
+   motion-monaco.css —— Monaco 编辑器「外壳」的微交互层
+   （上游令牌层：assets/motion.css；本文件不定义任何令牌，只消费 --mo-*）
+
+   这个文件管哪一层
+   ----------------------------------------------------------------------------
+   Monaco 是第三方内核（node_modules/monaco-editor，经 /monaco/vs/ 由服务端同源
+   提供），我们**不动它的渲染层**：.view-lines / .view-line / .view-overlays 里
+   每一行都是它自己按视口重绘的，任何 transition/animation 都会让"打字→重排→动画"
+   三件事排队，卡顿是必然的 ✗（这正是任务书里点名不许碰的地方）。
+   能改的只有**外壳**：容器的分隔线、滚动条、小地图、右侧概览条，以及**产品自己写**
+   的编辑器工具条（index.html 的 #primary-group-bar / app.js:8967 建的
+   .split-editor-head）。
+
+   ⚠️ 加载顺序救不了这个文件 —— 必须靠特异性
+   ----------------------------------------------------------------------------
+   和 motion.css 的处境不同：Monaco 的 editor.main.css **不是**开头 <link> 进来的，
+   而是 AMD loader 在编辑器初始化时把 <style> 追加到 <head> **末尾**（实测
+   index.html 里只有 /monaco/vs/loader.js，样式表在编辑器建好后才出现在 head 最后）。
+   也就是说引擎样式永远排在本文件**之后** ✗ —— 同样特异性的规则，赢的是它 ✗。
+   ⇒ 本文件每条规则都带 :is(#monaco-main, .split-monaco-host, .reading-html-source)
+      前缀（三处**真实存在**的 Monaco 宿主：主编辑栏 / 分栏 / 阅读器的 HTML 源码），
+      特异性 (1,x,0) 起步，稳稳压过引擎那几条 (0,2,0)~(0,3,0) ✓，与加载顺序无关，
+      也不必用 !important（reduced-motion 段除外）。
+      （先例：assets/motion-lw.css 对同样"运行时注入样式"的子系统用了同一招 ✓。）
+
+   ★ 产品铁律（与 motion.css 一致）
+   ----------------------------------------------------------------------------
+   只有「人主动做的动作」（悬停 / 刷新小地图 / 拖动分栏 / 布局切换）才允许 --mo-back
+   回弹；状态同步（保存提示、焦点变化）一律 --mo-out 平滑 ✓。
+   ============================================================================ */
+
+
+/* ═════════ 1. 外壳容器：只给 1px 分隔线做焦点提示，绝不动尺寸 ═════════ */
+
+/* app.css:2015 给 .monaco-editor .margin 加了 1px 右边框（编辑区和行号区之间的线）。
+
+   ★★ 2026-10-28 撤掉「聚焦时把这根线提成主色」那条（用户反馈）✗：
+     原意是「一像素的强调，比给整个编辑器加发光边框克制」✓，听起来很合理 ✓ ——
+     但实际观感是「点一下代码，行号和正文之间就出现一条亮竖线」✓，
+     而且**只在聚焦后出现**（刚打开时没有）✓ ⇒ 用户第一反应是「这是不是坏了/接缝」✗，
+     而不是「哦编辑器被选中了」✗ —— 一个提示如果会被误读成故障，它就不该存在 ✓。
+
+   ⇒ 现在整条规则删除 ✓：分隔线保持 app.css 给的原始颜色（var(--border) 混 72%）✓，
+     不随焦点变化 ✓。**也不再有 border-color 过渡** ✓ —— 没有颜色变化就没有过渡可言，
+     留着只是一条空转的过渡声明 ✗。 */
+
+/* ⚠️ 为什么不给 .monaco-editor / .overflow-guard 写 transition ✗ ——
+   它们的 width/height 是 Monaco 的 automaticLayout 用 ResizeObserver 一帧一帧
+   写内联样式的（实测 inline="width: 748px; height: 505px;"）。给它们加尺寸过渡，
+   等于让"指针拖动分栏"和"编辑器重新排版"之间插一段插值：文字会追不上分栏线，
+   拖完还要再滑一下 ✗。外壳的宽度必须**立刻**等于布局给的值。 */
+
+
+/* ═════════ 2. 滚动条：只加时长，颜色仍归 Monaco 的主题变量 ═════════ */
+
+/* Monaco 的 sliders 已经自带 hover/active 三档颜色：
+     .monaco-scrollable-element>.scrollbar>.slider{background:var(--vscode-scrollbarSlider-background)}
+     ...>.slider:hover{background:var(--vscode-scrollbarSlider-hoverBackground)}
+   这三档来自编辑器主题（产品用的是 vs-dark + 自己的 --vscode-* 注入），
+   本文件**一个颜色都不写** ✓ —— 写了就是"两份真相"，主题一换这里立刻不跟。
+   唯一的缺口是它们**没有过渡**（实测 computed transition 是默认的 all 0s）⇒
+   悬停提亮是硬切。这里只补时长与曲线 ✓。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .scrollbar > .slider {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* ⚠️ 滚动条的「出现/消失」不归这里管 ✗ ——
+   Monaco 用 .visible / .invisible(.fade) 类切换控制 opacity，并自己写了
+   .1s / .8s 两档（editor.main.css）。那是引擎的状态机：覆盖 opacity 过渡会让
+   "滚动时浮现"和 JS 加类的时机错位（滑条晚到、或该消失时还挂着）✗。
+   这里只动「已经出现之后，鼠标放上去」的那一下 ✓。 */
+
+
+/* ═════════ 3. 右侧概览条（decorationsOverviewRuler）：透明度归 CSS ═════════ */
+
+/* 实测（隔离实例 · 真实 Monaco）它的内联样式**只有**几何：
+     position/transform/contain/top/right/width/height/display + canvas 尺寸，
+   opacity 从头到尾没有被 JS 写过 ✓ —— 所以这一项可以放心用 CSS 接管。
+   用途：不聚焦时把错误/修改标记压到 72%（"这排标记在那儿，但不抢戏"），
+   光标进编辑器时放到 100%（"你现在就在这排标记里"）✓。
+   这是**焦点状态同步**，不是人按出来的动作 ⇒ 用 --mo-out，不回弹 ✓。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .decorationsOverviewRuler {
+  opacity: .72;
+  transition: opacity var(--mo-2) var(--mo-out);
+}
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor:focus-within .decorationsOverviewRuler {
+  opacity: 1;
+}
+
+
+/* ═════════ 4. 小地图：0.5s 是全场最慢的一次淡入，收回令牌 ═════════ */
+
+/* 这个产品的 Monaco 开着 minimap.autohide（实测 class="minimap slider-mouseover autohide"，
+   computed opacity:0）⇒ 小地图平时是隐形的，鼠标移进去才浮出来。
+   引擎给的入场时长是 **0.5s**（editor.main.css: .minimap.autohide{transition:opacity .5s}）——
+   比本套令牌最慢的 --mo-4(400ms) 还慢，在"移过去→想看清"的场景里就是没反应 ✗。
+   ⇒ 只改时长/曲线，**不改 opacity 的 0/1 两个值**（那是引擎 .autohide:hover 决定的行为，
+     覆盖它会让小地图永远不出来 / 永远占着位置，属于"修好动画、弄坏功能" ✗）。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .minimap.autohide {
+  transition: opacity var(--mo-3) var(--mo-out);
+}
+/* 小地图上的「当前视口」滑块：引擎写的是 .1s linear。
+   linear 在 100ms 这个尺度上看不出减速，但换成 --mo-out 后"进出"会更轻 ✓；
+   时长保持 --mo-1 档 —— 它跟手，不能比指针慢。 */
+:is(#monaco-main, .split-monaco-host, .reading-html-source)
+  .monaco-editor .minimap.slider-mouseover .minimap-slider {
+  transition: opacity var(--mo-1) var(--mo-out);
+}
+
+
+/* ═════════ 5. 产品自加的编辑器工具条（不是 Monaco 的 UI）═════════ */
+
+/* 先说清楚**哪些不写**，避免制造两份真相 ✓：
+   · #primary-group-bar .name.split-name-pick / .split-editor-head .name.split-name-pick
+     是产品做的"片段下拉按钮"。实测（真实页面 readback）它们的 computed transition
+     **已经**是 motion.css 那一套了 ——
+       background-color/border-color/color/filter 120ms --mo-out + box-shadow/transform 180ms --mo-back
+     ⇒ 本文件不重复声明 ✓。
+     而且 app.css:2077/2087 明确写了 .split-name-pick:active { transform: none }：
+     产品主动**否决**了这颗按钮的按压缩放（它在 32px 栏头里，缩小会让文件名跟着抖）。
+     这是既有产品判断，motion 层不该翻案 ⇒ 这里也不补 :active ✗。
+   · .tag / .lang / .hint 是纯标签，没有交互 ⇒ 不写。
+
+   真正缺的是下面三处： */
+
+/* ① 主编辑栏头（#primary-group-bar）：它只在「多栏编辑」时出现（app.css:2060
+   #code-wrap.split-primary #primary-group-bar{display:flex}），原来是硬切出现。
+   一次会话里只在"切换单栏/多栏"时发生一次 ⇒ 允许一次性入场 ✓。
+   ⚠️ 只动 opacity，不动 transform：这条栏是 position:absolute 贴顶、靠
+      border-bottom 和编辑器衔接，transform 会给它建立新的包含块，
+      里面绝对定位的子元素（下拉指示 ::after 等）定位基准会变 ✗。 */
+@keyframes mo-monaco-bar-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+#code-wrap.split-primary #primary-group-bar {
+  animation: mo-monaco-bar-in var(--mo-3) var(--mo-out) both;
+}
+
+/* ② 分栏栏头的保存提示（.split-editor-head .saved）：文字内容在"已保存"等状态之间
+   跳变是**状态同步**，不是人按出来的 ⇒ 颜色/透明度走 --mo-2 平滑，绝不弹 ✓。
+   注意只过渡颜色：这个 span 的文本会变长变短（"已保存"/"保存中"/空），
+   给宽度做过渡会让栏头里的文件名跳位 ✗。 */
+.split-editor-head .saved {
+  transition:
+    color var(--mo-2) var(--mo-out),
+    opacity var(--mo-2) var(--mo-out);
+}
+
+/* ③ 分栏之间的拖动把手（.editor-group-divider::after）：app.css:3965 写死了
+   .14s ease —— 全站唯一还活着的非令牌时长（motion.css 的分隔条清单里有
+   #split-v / #split-h / #split-v2 / .hsplit / #edit-split-v，**独独漏了
+   .editor-group-divider**）。它是编辑器的栏间把手，属于这一层 ✓。
+   ⚠️ 必须带 html[data-theme] 前缀：app.css 那条就是 (1,1,1) 的
+      html[data-theme] .editor-group-divider::after，裸 .editor-group-divider::after
+      是 (0,1,1)，压不过它 ✗（motion.css 头部记过同一个坑）。 */
+html[data-theme] .editor-group-divider::after {
+  transition:
+    width var(--mo-2) var(--mo-out),
+    background var(--mo-2) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+
+/* ═══════════════ 6. 无障碍：reduced-motion ═══════════════ */
+
+/* app.css:3817 有一条全局兜底，但它对 animation 只是压到 .01ms（动画还在跑）✗，
+   而本文件引入的 @keyframes 必须自己关 ✓。Monaco 的引擎样式不在那条兜底的
+   选择器范围内，所以上面几条过渡也要在这里显式压掉。 */
+@media (prefers-reduced-motion: reduce) {
+  #code-wrap.split-primary #primary-group-bar {
+    animation: none !important;
+  }
+
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .margin,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .scrollbar > .slider,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .decorationsOverviewRuler,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .minimap.autohide,
+  :is(#monaco-main, .split-monaco-host, .reading-html-source) .monaco-editor .minimap.slider-mouseover .minimap-slider,
+  .split-editor-head .saved,
+  html[data-theme] .editor-group-divider::after {
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  /* 概览条的 72% 也是"压低可见度"的一种动效，reduced-motion 下直接给满 ——
+     诊断标记本来就该始终可读 ✓ */
+  :is(#monaco-main, .split-monaco-host, .reading-html-source)
+    .monaco-editor .decorationsOverviewRuler {
+    opacity: 1 !important;
+  }
+}

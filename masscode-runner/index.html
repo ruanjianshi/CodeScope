@@ -170,23 +170,43 @@ window.csLoadScripts = function (list) {
         排在这两行之后，同特异性下它们赢 ✓。所以文件里用「重复类名」提升特异性
         （.lw-btn.lw-btn → (0,2,0) 压 (0,1,0)），与加载顺序无关、也不必用 !important ✓。
      放在这里只为统一管理；真正决定胜负的是特异性 ✓。 -->
-<link rel="stylesheet" href="/assets/motion-lw.css?v=20261028a">
-<link rel="stylesheet" href="/assets/motion-sp.css?v=20261028a">
+<!-- ★★ T-08 批一（2026-11-01）：六个子系统微交互表合并成一个 bundle ✓
+     motion-lw / motion-sp / motion-study / motion-cg / motion-dbg / motion-monaco ——
+     它们原来就是**连续的六条 link**（分别在上一段结尾两行、下面 study/cg/dbg 三行、
+     以及 monaco 那一行），现在压成一条：首屏 link[rel=stylesheet] **17 → 12** ✓。
+     ⚠️ 这是**级联等价**的合并，不是为了凑数字 ✗：
+        · 六条 link 原本相邻 ⇒ 拼接不改变任何一条规则相对其它文件的先后 ✓；
+        · 六个源文件里没有 @charset / @import / 相对 url() ✓（实测 grep 全空）
+          ⇒ 直接字节拼接没有任何路径或解析语义变化 ✓；
+        · 实测验收：合并前后把 cssRules 逐条 cssText 取出来比对，275 条 /
+          sha256 cf4208f8829491bd **完全相同**；六个文件的探针 computed 也逐项相同
+          （plans/017 报告 §B）✓。
+     ⚠️ 位置**不能挪** ✗：bundle 必须在 motion.css 之后、editor-chrome.css 之前
+        （editor-chrome 依赖「在 motion-monaco 之后」落最终外观）✓。
+     ⚠️ app.css / ui-kit.css / doc-theme.css / motion.css / motion-batch1.css **不参与**
+        这次合并 ✗ —— 它们之间是「同特异性 + 后出现」的硬链，动一下就是静默改外观 ✗。
+     ⚠️ 六个源文件**一字未改**、仍在仓库里（棘轮逐个守着）✓。回滚 = 删掉这一条、
+        恢复六条。再生成 bundle（在 masscode-runner/ 下执行，逐字节等价）：
+          cat assets/motion-lw.css assets/motion-sp.css assets/motion-study.css \
+              assets/motion-cg.css assets/motion-dbg.css assets/motion-monaco.css \
+              > assets/bundle-motion.css -->
+<link rel="stylesheet" href="/assets/bundle-motion.css?v=20261101a">
 <!-- ★ 其余三个子系统的微交互（2026-10-28）：学习工作台 study-* / 代码指南浮层 cg-* /
      调试面板 .var-*。三者机制不同，所以写法也不同（各自的文件头都写了理由）：
        · 学习工作台：样式是**外链**且比 app.css 还早 ⇒ 我们最后加载就赢，用 #id 前缀兜住
          app.css 里 html[data-theme] button 那条 (0,1,2)；
        · 代码指南：运行时 createElement('style') 注入 ⇒ 必须靠重复类名提特异性；
-       · 调试面板：样式就在 app.css 里 ⇒ 同样靠后加载 + 局部提特异性。 -->
-<link rel="stylesheet" href="/assets/motion-study.css?v=20261028a">
-<link rel="stylesheet" href="/assets/motion-cg.css?v=20261028a">
-<link rel="stylesheet" href="/assets/motion-dbg.css?v=20261028a">
+       · 调试面板：样式就在 app.css 里 ⇒ 同样靠后加载 + 局部提特异性。
+     ⚠️ 2026-11-01（T-08）：这三个文件的 <link> 已并进上面的 bundle-motion.css ✓，
+        在 bundle 里的先后仍是 study → cg → dbg ✓ —— 机制解释原样保留 ✓。 -->
 <!-- ★ Monaco 外壳微交互（2026-10-28）：只做外壳（滚动条 / overview ruler / 工具条）。
      ⚠️ 绝不碰 .view-lines / .view-line ✗ —— Monaco 自己会重绘，给那里加任何过渡/动画
         都会变成逐帧抖动（实测体感比没有动效差得多）✗。
      注：画布那份 motion-canvas.css 不在这里引入 ✓ —— 画布是独立 iframe，
-         由 assets/canvas/index.html 自己引 ✓。 -->
-<link rel="stylesheet" href="/assets/motion-monaco.css?v=20261028a">
+         由 assets/canvas/index.html 自己引 ✓。
+     ⚠️ 2026-11-01（T-08）：本文件的 <link> 已并进上面的 bundle-motion.css ✓，
+        在 bundle 里排最后一位 ⇒ 相对 editor-chrome.css 的「先 monaco、后 chrome」
+        顺序一点没变 ✓。 -->
 <!-- ★ 代码区卡片质感（2026-10-28，一期）：圆角 + 细边 + 投影 + 内高光，颜色走 --doc-*，
      换文档配色时外框跟着变 ✓。
      ⚠️ 刻意**不给** #code-wrap 加 overflow:hidden ✓ —— Monaco 的补全/hover/参数提示

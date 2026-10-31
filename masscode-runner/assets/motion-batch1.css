@@ -254,8 +254,8 @@ body.git-open #side > #pane-git {
 /* ── 016 修（真缺陷 #2）：1px 内描边的**绘制层**从 inset box-shadow 换成 outline ──
    本轮 A/B 实测（面内裁剪取元素左上角，顶边 4px 带，三态显式注入后对比，见 016 §11）：
      抽屉 #pane-git        改前 maxΔ **1** /255 → 改后 **29**（左边 31）
-     命令面板 #sym-modal-box 改前 maxΔ **15**/255 → 改后 **26**（左边 26）
-     右键菜单 .ctx-menu    改前 maxΔ **16**/255 → 改后 **27**（左边 27）
+     命令面板 #sym-modal-box 改前 maxΔ **15** /255 → 改后 **26**（左边 26）
+     右键菜单 .ctx-menu    改前 maxΔ **16** /255 → 改后 **27**（左边 27）
    原因两条，缺一不可：
      ① **层的顺序**：inset box-shadow 画在「内容盒内侧、边框之下」。两个面各被不同的东西占住
         最外那 1 行：抽屉顶边是**不透明的子元素** #git-head（实测改前 0.4% 像素、maxΔ=1，
@@ -882,3 +882,77 @@ body:has(#save-tick.idle.show) #autosave-hint::before {
     animation-delay: 0s !important;
   }
 }
+
+/* ═════════════ 9. P-05 落地 · --el-1 铺到「卡片」（环境面板一族） ═══════════ */
+
+/* 现状（P-05 遗留）：--el-1 只有定义、**零落点** ✓ —— 现有三个落点是 el-2 / el-3
+   （右键菜单 / 命令面板 / Git 抽屉），「卡片 / 面板」这一档从来没被用过 ✓。
+   本节把它落到真卡片上，但**只落一族** ✓（派单明确要求不要全站铺开）。
+   ─────────────────────────────────────────────────────────────────────────
+   为什么是**环境面板一族**（.env-card / .env-dsh-card / .env-sync-card），
+   而不是派单举例里的 .lw-c / .sp-band / .pane / .side ✗ —— 那四类**都不能碰**：
+
+     · .lw-c（生活工作台卡片）：样式由 life-styles.js 在**运行时**注入到 head 末尾 ✓，
+       且它自己已经有 `--pp-shadow-lift` + inset 内高光（`--pp-glow`）+ hover 抬升 ✓。
+       要压过它得提到 (0,3,0)；赢了就等于**删掉它自己的抬升与内高光** ✗ —— 那是回归，
+       不是统一。
+     · .sp-band（系统面板分区）：同一注入机制 ✓，自带
+       `box-shadow: var(--sp-ring), var(--sp-hi), var(--sp-shadow)` ✓ —— 换成 el-1 会把
+       sp-ring（1px 环）与 sp-hi（内高光）一起抹掉 ✗。
+     · #pane-tree / #pane-draw / #pane-office / #pane-reading、#side：圆角是 **0**
+       且上下**紧贴**成一列 ✓ —— 给 0 圆角的相邻块加投影，接缝处会压出比块本身更大的
+       一道深沟 ✗（和 P-05 记录过的「单向投影在边缘留深沟」是同一个毛病）。
+     · #code-wrap：editor-chrome.css 已经给了 0 6px 22px + inset 的卡片质感 ✓，
+       再盖一层 el-1 是把两套阴影语言叠在一起 ✗。
+
+   而环境面板这三个类，改前的 computed 实测是 **box-shadow: none / transition: all 0s**
+   ✓：它们只有 1px 边框 + 8px 圆角，没有任何自己的影子 ✓ —— 这才是 el-1 该落的地方，
+   加上去是**净增**而不是覆盖 ✓。
+   ─────────────────────────────────────────────────────────────────────────
+   档位映射（派单要求「悬停抬起一档」）：
+     静止 = --el-1（近层 2px / 远层 6px / 顶部内高光 .06 —— 贴着纸面）
+     悬停 = --el-2（12px / 28px / .08）—— 三档里 el-1 的**下一档就是 el-2** ✓，
+            没有中间档 ✓，与 P-05「三档在偏移与模糊两个维度同时单调递增」的定义一致 ✓。
+   ⚠️ 悬停借用 el-2 只是借它的**数值**（下一档），不是借它的语义（浮层 / 右键菜单）✓ ——
+      所以写在选择器上，不新增令牌 ✓。将来若要分开，加 --el-1h 即可，本节是唯一改动点 ✓。
+   ⚠️ transition **只写 box-shadow** ✓：这三个类原本是 `transition: all 0s`（等于没有过渡）✓，
+      没有别的过渡会被整体替换掉，不存在 P-01 那个「transition 整体替换」的坑 ✓。
+      160ms 与 P-05 那三处（#pane-git / #sym-modal-box / .ctx-menu）一致 ✓ ——
+      阴影面积大，120ms 会读成「边缘跳变」 ✓。
+   ⚠️ 特异性：`html[data-theme] .env-card` = (0,2,1) ✓，压 app.css:2404 的 `.env-card`
+      (0,1,0) ✓；与 app.css:3381 那条 `html[data-theme] .env-card`（只写 background /
+      border-color，**不写 box-shadow**）同特异性但本文件在后 ⇒ 不冲突 ✓。
+      加 [data-theme] 前缀的理由同 P-05 ③：将来谁往主题块里补一条 .env-card 阴影，
+      都压不掉它 ✓。
+   ★ 不碰几何：box-shadow 不参与布局 ✓。实测「挂 el-1 / 悬停 el-2 / 强制 box-shadow:none」
+     三态的 offsetWidth·offsetHeight·clientWidth·clientHeight·scrollWidth·scrollHeight
+     与 getBoundingClientRect **逐值相等**（见 plans/017 报告 §A.4）✓。 */
+
+html[data-theme] .env-card,
+html[data-theme] .env-dsh-card,
+html[data-theme] .env-sync-card {
+  box-shadow: var(--el-1);
+  transition: box-shadow 160ms var(--mo-out);
+}
+
+html[data-theme] .env-card:hover,
+html[data-theme] .env-dsh-card:hover,
+html[data-theme] .env-sync-card:hover {
+  box-shadow: var(--el-2);
+}
+
+/* ♿ reduced-motion：**影子保留、只去过渡** ✓ ——
+   阴影是静态视觉层级，不是动效 ✓；前庭敏感的用户要关掉的是「变化」，不是「层级」✗。
+   所以这里只把过渡拿掉，上面两条 box-shadow 原样留着 ✓。
+   ⚠️ 必须 !important：app.css:3828 的全局兜底给的是 `transition-duration:.01ms !important`
+      —— 只写 `transition:none` 会被它的 duration 顶掉，computed 里仍留着 1e-05s ✗
+      （基线实测就是 `all / 1e-05s`，见报告 §A.5）；显式 !important 才能得到真正的 none ✓。
+      本文件已有的几处 reduced-motion 兜底同样用 !important ✓，同一规矩 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] .env-card,
+  html[data-theme] .env-dsh-card,
+  html[data-theme] .env-sync-card {
+    transition: none !important;
+  }
+}
+
