@@ -2037,7 +2037,11 @@
     if (!host || !panel) { ed.outline.stop(); return false; }
     const x = panel.querySelector('[data-outl-close]');
     if (x) x.onclick = () => outlineToggle(false);
-    return ed.outline.mount(host, panel);
+    return ed.outline.mount(host, panel, {
+      key: (memo ? 'm::' : 'j::') + (memo ? MEMO_EDITOR_ID : journalKey()),
+      get: () => (STORE && STORE.outlCollapsed) || {},
+      set: (v) => { if (!STORE) return; STORE.outlCollapsed = v; saveStore(); },
+    });
   }
   /* 开关：**不整屏 render** ✓（那会把光标弄丢 ✗）—— 只切 class + 通知编辑器层 ✓ */
   function outlineToggle(open) {

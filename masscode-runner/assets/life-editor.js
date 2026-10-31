@@ -622,7 +622,7 @@
        ⚠️ 合成 mousedown **没用** ✗（实测选区压根不动 ✓，细节见 outlJump 那段注释 ✓）。
      ⚠️ 本对象状态**只此一份** ✓（同 MEMO/JOURNAL 槽位规矩 ①）：面板不许留副本 ✗。
      ═══════════════════════════════════════════════════════════════════════════ */
-  const OUTL = { host: null, panel: null, mo: null, timer: 0, items: [], scroll: null, input: null, raf: 0, active: -1, lock: 0 };
+  const OUTL = { host: null, panel: null, mo: null, timer: 0, items: [], scroll: null, input: null, raf: 0, active: -1, lock: 0, key: '', getC: null, setC: null, collapsed: {} };
 
   /* 当前正文里的标题：块级模式读 DOM ✓，源码模式读 markdown 行 ✓（围栏代码块整段跳过 ✗）*/
   function outlHeads(host) {
@@ -663,22 +663,26 @@
         同一个数字两种用法，CSS 各写一条，JS 一个字都不用判 ✓。
      ★ 分支色：内联 --bc（分支色）+ 属性 data-br（分支序号 0~6）✓ ——
         CSS 只用 var(--bc) ✓（需求原话 ✓），data-br 留给排查 / 测量用 ✓。
-     ★ 折叠箭头：只有**分支级且紧跟更深标题**（lv1/lv2）才进 DOM ✓ ——
+     ★ 折叠箭头：**任何层级**只要紧跟更深标题就进 DOM ✓（H1→H2→H3→H4 每级都能折 ✓）——
         无子级条目在 DOM 里**根本没有** .lw-outl-ar ✓（验收按 DOM 计数 ✓，不是 display:none ✓）。
-     ⚠️ 图标用 index.html 里**现成的 sprite** ✓（H1~H3 = i-folder 文件夹 / H4~H6 = i-file 文档 ✓），
-        不引图片、不引字体 ✓；上色交给 CSS 的 --bc（走 currentColor ✓）。 */
+     ⚠️ 图标用 index.html 里**现成的 sprite** ✓（H1/H2 = i-folder 文件夹 / H3~H6 = i-file 文档 ✓），
+        不引图片、不引字体 ✓；上色交给 CSS 的 --bc（走 currentColor ✓）。
+     ★ 折叠渲染：folded / is-hidden 两个类都写在**这一条**上 ✓（CSS 只管显隐与箭头旋转 ✓），
+        数据层算好（见 outlBuild ✓），渲染层不做判断 ✓。 */
   function outlItemHtml(h, i, all) {
-    const ico = h.level <= 3 ? 'i-folder' : 'i-file';
+    const ico = h.level <= 2 ? 'i-folder' : 'i-file';
     const nx = all && all[i + 1];
-    const kid = !!(nx && nx.level > h.level && h.level <= 2);
+    const kid = !!(nx && nx.level > h.level);
     const br = (Number(h.br) || 0) % OUTL_BR.length;
     return '<button type="button" class="lw-outl-i lv' + h.level
       + (kid ? ' has-kid' : '') + (h.brEnd ? ' br-end' : '')
-      + '" data-oi="' + i + '" data-br="' + br
-      + '" style="--ind:' + (h.level - 1) * 12 + 'px;--bc:' + OUTL_BR[br] + '" title="' + esc(h.text) + '">'
+      + (h.folded ? ' folded' : '') + (h.hid ? ' is-hidden' : '')
+      + '" data-oi="' + i + '" data-br="' + br + '"'
+      + (kid ? ' data-ck="' + esc(h.fk) + '" aria-expanded="' + (h.folded ? 'false' : 'true') + '"' : '')
+      + ' style="--ind:' + (h.level - 1) * 12 + 'px;--bc:' + OUTL_BR[br] + '" title="' + esc(h.text) + '">'
       + '<svg class="lw-outl-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#' + ico + '"/></svg>'
       + '<span class="lw-outl-tx">' + esc(h.text) + '</span>'
-      + (kid ? '<span class="lw-outl-ar" aria-hidden="true">▾</span>' : '')
+      + (kid ? '<span class="lw-outl-ar" title="折叠 / 展开子标题">▾</span>' : '')
       + '</button>';
   }
 
@@ -702,6 +706,27 @@
       h.br = Math.max(0, br);
       const nxt = items[i + 1];
       h.brEnd = !nxt || nxt.level === 1;
+      h.kid = !!(nxt && nxt.level > h.level);
+    });
+    /* ★ 折叠状态：STORE.outlCollapsed 是**整份**映射，这里只取本条笔记那批键 ✓
+       键 = 笔记 id + '::' + 标题层级路径（祖先标题 › 本条标题 ✓）。
+       ⚠️ 用**标题文本路径**而不是「层级数组」✗：层级数组分不清同级的两个 H2 ✓；
+          文本路径能把「同名 H2 在不同父级下」分开 ✓（同父级同名兄弟会一起折叠 ✓，已记录）。
+       ⚠️ 祖先折叠 → 本条 is-hidden ✓；自己的 folded 只影响它**下面**的条目 ✓。 */
+    const all = (s.getC ? s.getC() : s.collapsed) || {};
+    const pre = (s.key || '') + '::';
+    const col = {};
+    Object.keys(all).forEach((k) => { if (k.indexOf(pre) === 0) col[k] = 1; });
+    s.collapsed = col;
+    const stack = [];
+    items.forEach((h, i) => {
+      while (stack.length && stack[stack.length - 1].level >= h.level) stack.pop();
+      const up = stack.length ? stack[stack.length - 1] : null;
+      h.par = up ? up.i : -1;
+      h.fk = pre + stack.map((a) => a.text).concat(h.text).join(' › ');
+      h.folded = !!(col[h.fk] && h.kid);
+      h.hid = !!(up && (up.hid || up.folded));
+      stack.push({ level: h.level, text: h.text, i: i, folded: h.folded, hid: h.hid });
     });
     s.items = items;
     const keep = list.scrollTop;
@@ -760,11 +785,23 @@
     else if (cb.bottom > lb.bottom) list.scrollTop += ((cb.bottom - lb.bottom) + 4) / ls;
   }
 
+  /* ★ 跟随与折叠冲突：**退化为高亮最近可见祖先** ✓（不自动展开 ✗）
+     ⚠️ 为什么不自动展开祖先 ✗✗：用户刚把一节折起来，往下滚一下它就自己弹回去 ——
+        折叠等于白折，而且边滚边变、观感像 bug ✓。
+        退化成祖先高亮既守住「当前在哪一节」的语义 ✓，又完全不推翻用户的操作 ✓。
+     ⚠️ 祖先链只可能是**未隐藏**的条目（隐藏的条目一定有更上面某个祖先被折叠 ✓，
+        而最顶层条目永远不会 hidden ✓）→ 循环一定收敛 ✓。 */
+  function outlVis(i) {
+    const s = OUTL;
+    let k = i;
+    while (k >= 0 && s.items[k] && s.items[k].hid) k = s.items[k].par;
+    return k >= 0 && s.items[k] ? k : i;
+  }
   function outlMark() {
     const s = OUTL;
     if (!s.items.length) { outlApply(-1); return; }
     const locked = Date.now() < s.lock && s.active >= 0;
-    outlApply(locked ? Math.min(s.active, s.items.length - 1) : outlPick());
+    outlApply(outlVis(locked ? Math.min(s.active, s.items.length - 1) : outlPick()));
   }
 
   /* 点条目：先滚到该标题 ✓，再把**光标**放进去 ✓ */
@@ -839,6 +876,27 @@
     return true;
   }
 
+  /* 折叠 / 展开一条：改**本条笔记**的折叠键集合 → 整份写回 STORE.outlCollapsed ✓
+     ⚠️ 写回时**只删本条笔记前缀那批键** ✗ 不动别的笔记 ✓（多笔记隔离）——
+        整份覆盖会把另一条笔记的折叠状态抹掉 ✓。
+     ★ 写盘走面板传进来的 setC（= STORE.outlCollapsed = next + saveStore ✓），
+        300ms 防抖那条既有链路一个字都不用改 ✓。 */
+  function outlFold(i) {
+    const s = OUTL;
+    const h = s.items[i];
+    if (!h || !h.kid) return false;
+    const next = Object.assign({}, s.collapsed);
+    if (next[h.fk]) delete next[h.fk]; else next[h.fk] = 1;
+    s.collapsed = next;
+    const all = (s.getC && s.getC()) || {};
+    const pre = (s.key || '') + '::';
+    Object.keys(all).forEach((k) => { if (k.indexOf(pre) === 0) delete all[k]; });
+    Object.keys(next).forEach((k) => { all[k] = 1; });
+    if (s.setC) s.setC(all);
+    outlBuild();
+    return true;
+  }
+
   function outlStop() {
     const s = OUTL;
     if (s.mo) { try { s.mo.disconnect(); } catch (_) {} s.mo = null; }
@@ -848,21 +906,38 @@
     if (s.input && s.host) s.host.removeEventListener('input', s.input);
     if (s.host) { s.host = null; }
     s.panel = null; s.items = []; s.scroll = null; s.input = null; s.active = -1; s.lock = 0;
+    s.key = ''; s.getC = null; s.setC = null; s.collapsed = {};
   }
 
   /* 挂上（同一个 host+panel 再调 = 只重建 ✓，不重复装监听 ✗）*/
-  function outlMount(host, panel) {
+  function outlMount(host, panel, opts) {
     const s = OUTL;
     if (!host || !panel) { outlStop(); return false; }
-    if (s.host === host && s.panel === panel) { outlBuild(); return true; }
+    const key = (opts && opts.key) || '';
+    if (s.host === host && s.panel === panel && s.key === key) {
+      s.getC = (opts && opts.get) || null;
+      s.setC = (opts && opts.set) || null;
+      outlBuild();
+      return true;
+    }
     outlStop();
     s.host = host;
     s.panel = panel;
+    s.key = key;
+    s.getC = (opts && opts.get) || null;
+    s.setC = (opts && opts.set) || null;
     const list = panel.querySelector('.lw-outl-list');
     if (list) {
+      /* ★ 点击分区：**右侧箭头 = 折叠**，其余（文字 / 行内空白）= 跳转 ✓
+         —— 用户在大纲里点文字是想跳过去，点箭头是想收起来 ✓，两者不能混 ✓。
+         ⚠️ 双击整行折叠**没做**（任务里是可选项 ✓）：行上的 click 已经先跳转两次了，
+            再做 doubleclick 折叠 = 跳转 + 折叠一起发生 ✓，观感比不做更差 ✗。 */
       list.onclick = (ev) => {
         const b = ev.target && ev.target.closest ? ev.target.closest('[data-oi]') : null;
-        if (b) outlJump(Number(b.getAttribute('data-oi')));
+        if (!b) return;
+        const i = Number(b.getAttribute('data-oi'));
+        if (ev.target.closest('.lw-outl-ar')) outlFold(i);
+        else outlJump(i);
       };
     }
     const kick = () => {

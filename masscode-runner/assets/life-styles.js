@@ -797,7 +797,21 @@
   /* 条目里的图标与文本壳：**极简样式里必须完全隐形** ✓
      ⚠️ 图标 display:none（否则极简每行左侧多出 11px + gap ✗，观感就和定稿那版不一样了 ✓）；
         文本壳是裸 span（不加任何声明）✓ —— 这样极简那套的行盒、省略号、行高一个字都没变 ✓。 */
-  .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ic, .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ar { display:none; }
+  .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ic { display:none; }
+  /* ★ 折叠箭头（极简样式）：默认这里也**显示** ✓ —— 用户报的「怎么没法折叠收起来」就是
+     极简下箭头整个 display:none（只有胶囊才有 ▾ ✓），点了当然没反应 ✗。
+     极简的箭头是**绝对定位**在行右端 ✓（不占文字流、不改变行盒高度 ✓），
+     有子级的行右侧多留 20px 内边距，省略号不会压到箭头上 ✓。
+     ⚠️ 选择器都写到（0-4-0）以上 ✓：全站 button（0-1-1）与本文件条目（0-3-0）都压不住它 ✓。 */
+  .lw-outl .lw-outl-list .lw-outl-i.has-kid { padding-right:20px; }
+  .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ar { display:none; }
+  .lw-outl .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:block; position:absolute; right:2px; top:0; width:16px; height:22px; line-height:22px; text-align:center; font-size:10px; color:var(--pp-ink2); opacity:.55; cursor:pointer; transition:transform .12s ease,opacity .12s ease; }
+  .lw-outl .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar:hover { opacity:1; color:var(--pp-ink); }
+  .lw-outl .lw-outl-list .lw-outl-i.folded .lw-outl-ar { transform:rotate(-90deg); }
+  /* 折叠时本条文字降一档权重 ✓（任务要求：用 --pp-ink2 以示区别 ✓）*/
+  .lw-outl .lw-outl-list .lw-outl-i.folded .lw-outl-tx { color:var(--pp-ink2); opacity:.7; }
+  /* 被祖先折叠盖住的条目：**不占行高**地消失 ✓（验收按「可见条目数」数 ✓）*/
+  .lw-outl .lw-outl-list .lw-outl-i.is-hidden { display:none; }
   /* ══ 大纲宽度：右侧拖动条（2026-10-31）══════════════════════════════════
      ★ 4px 热区**整条压在栏内**（right:0 ✓）：一开始写的 right:-2px（探出去 2px，更好抓）✗，
        实测 aside 自己的 scrollWidth 立刻从 187 变成 189 ✓（绝对定位的子元素溢出也算进
@@ -815,11 +829,11 @@
        上面那套极简规则**一个字都没改** ✓，两种样式并存 ✓。
      ★ 这一版和上一版（已被否 ✗）的区别，正是用户点名的四条：
         ① 上一版**每一行都是胶囊** ✗ → 现在只有**分支级**（lv1/lv2）是胶囊 ✓，
-           lv3 及更深是**纯文字** ✓（无底色 / 无边框 / 无圆角 ✓，只靠缩进 + 引导线体现层级 ✓）；
+           lv3 及更深是**无底色的文字行** ✓（+ 一枚灰色小文档图标 ✓，靠缩进 + 引导线 + 逐级变淡体现层级 ✓）；
         ② 上一版颜色**按层级轮转** ✗（lv1/lv4 同色、lv2/lv5 同色…）→ 现在按**分支**给 ✓：
            第 N 个 H1 取 7 色盘的第 N 色 ✓（JS 写 --bc + data-br ✓），
-           该分支下的 H2 **继承同一个 --bc** ✓，lv3 及更深一律中性色（CSS 根本不读 --bc ✓）；
-        ③ 上一版没有折叠箭头 ✗ → 现在**有子级的 lv1/lv2** 才在 DOM 里生成 ▾ ✓；
+           该分支下的 H2 **继承同一个 --bc** ✓，lv3 及更深走中性色 + 淡分支色图标 ✓；
+        ③ 上一版没有折叠箭头 ✗ → 现在**任何层级只要有子级**就在 DOM 里生成 ▾ ✓（点击折叠 ✓）；
         ④ 上一版子级也带底色和圆角 ✗ → 现在子级透明 ✓，不和父级抢视觉 ✓。
      ★ 数值来源：Phycat theme.css 的**源码规格**（父级抓的权威版 ✓，不是观感近似 ✓）——
          folder 行（theme.css:8514-8533）：圆角 10px / padding 6px 10px / 底色 92~95% 透明 ✓；
@@ -854,12 +868,31 @@
   .lw-outl.pill .lw-outl-list .lw-outl-i.lv3, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 8px; border-radius:8px; background:transparent; color:var(--pp-ink2); font-weight:400; font-size:11px; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.br-end { margin-bottom:10px; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.lv1 .lw-outl-ic, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2 .lw-outl-ic { display:block; flex:none; width:12px; height:12px; color:var(--bc, var(--pp-accent)); fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:block; flex:0 0 16px; width:16px; margin-left:8px; text-align:center; font-size:12px; line-height:1; color:var(--pp-ink2); opacity:.65; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:block; flex:0 0 16px; width:16px; margin-left:8px; text-align:center; font-size:12px; line-height:1; color:var(--pp-ink2); opacity:.65; cursor:pointer; transition:transform .12s ease,opacity .12s ease; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar:hover { opacity:1; color:var(--pp-ink); }
+  /* 折叠：同一颗 ▾ 转 -90°（= ▸ ✓），120ms 过渡 ✓ —— 不换字符，状态只改一个 transform ✓ */
+  .lw-outl.pill .lw-outl-list .lw-outl-i.folded .lw-outl-ar { transform:rotate(-90deg); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.folded .lw-outl-tx { color:var(--pp-ink2); opacity:.72; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.is-hidden { display:none; }
   .lw-outl.pill .lw-outl-list .lw-outl-i .lw-outl-tx { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.lv1:hover, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2:hover, .lw-outl.pill .lw-outl-list .lw-outl-i.lv1:active, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2:active { background:color-mix(in srgb, var(--bc, var(--pp-accent)) 10%, transparent); color:var(--pp-ink); box-shadow:none; transform:none; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.cur:hover, .lw-outl.pill .lw-outl-list .lw-outl-i.cur:active { background:color-mix(in srgb, var(--pp-accent) 12%, transparent); color:var(--pp-accent); font-weight:500; box-shadow:none; transform:none; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.lv3.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6.cur { background:transparent; color:var(--pp-ink); font-weight:500; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.lv2::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv3::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6::before { left:-10px; width:1px; top:-3px; bottom:-3px; background-repeat:no-repeat; background-image:none; background-color:color-mix(in srgb, var(--pp-line) 55%, transparent); }
+  /* ══ 子级（lv3~lv6）：**有图标、有逐级递减**，但仍然无底色、无胶囊 ══════════════
+     ★ 照 Phycat theme.css 的原则：「颜色只出现在标题行和图标里，展开内容保持通透」✓
+       —— 所以 lv3+ 依旧**不上底色**（只有缩进 + 引导线）✓，我们补的是当初漏掉的那块：
+       ① 图标：灰色小文档（i-file ✓），颜色 = 分支色 45% + ink2 55% ✓（淡淡透出分支色）；
+       ② 尺寸随层级递减：11 / 10 / 9 / 8px ✓（lv1/lv2 的 12px 略小 ✓）；
+       ③ 文字逐级变淡：ink2 → 88% → 78% → 70% ✓（最深一级仍是可读的次要文字 ✓，不是灰到看不见）。
+     ⚠️ 层级色这几条是（0-5-0）✓、图标是（0-6-0）✓：前者写在 lv3~lv6 基础色（也是 0-5-0）之后 ✓，
+        所以能覆盖它 ✓；而 .cur 那几条（0-6-0）虽然写在本段**之前**，
+        但特异性比（0-5-0）高 ✓ —— 当前项照样被提亮成 --pp-ink ✓，不靠顺序 ✓。 */
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3 { --isz:11px; color:var(--pp-ink2); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv4 { --isz:10px; color:color-mix(in srgb, var(--pp-ink2) 88%, transparent); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv5 { --isz:9px; color:color-mix(in srgb, var(--pp-ink2) 78%, transparent); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { --isz:8px; color:color-mix(in srgb, var(--pp-ink2) 70%, transparent); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3 .lw-outl-ic, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4 .lw-outl-ic, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5 .lw-outl-ic, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 .lw-outl-ic { display:block; flex:none; width:var(--isz,11px); height:var(--isz,11px); color:color-mix(in srgb, var(--bc, var(--pp-ink2)) 45%, var(--pp-ink2)); fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   /* ≡ 开关：默认不占宽度 ✓ —— 1280 那条栏实测**已放满**（再加 22px 溢出 11px ✗），
      所以只在编辑区够宽（容器 ≥861px）时才出现 ✓；窄屏走「⋯ 更多」/ ⌥⌘O ✓。 */
   .lw-nt-bar .lw-outl-tog { display:none; }
