@@ -3033,6 +3033,15 @@
       ⚠️ 只作用于这两个容器（.lw-memo-ce / .lw-j-ce）✗，不写全局 ::selection ✓
          （含源码模式那个 textarea ✓ —— 它没有 markdown-preview-view 类，所以不带 var() ✓）。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror ::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror::selection, :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view::selection, :is(.lw-memo-ce,.lw-j-ce).lw-memo-src::selection, :is(.lw-memo-ce,.lw-j-ce) textarea::selection { background: rgb(63 116 216 / .62); color: var(--doc-strong, inherit); }
+/* ★ 2026-10-31 加粗不明显（用户：和没加粗没多大差距）——
+   编辑器作用域里原来**没有任何 font-weight 规则**，全靠浏览器对 <strong> 的默认 bold；
+   而中文系统字体（PingFang/思源）在 600 与 700 之间的字重差极小，配上我们偏暗的正文色就看不出 ✗。
+   三重加强：字重拉到 800 + 正文色提到最亮档 + 极细描边补足笔画厚度（0.28px，肉眼几乎不糊）✓ */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror strong,
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror b {
+  font-weight: 800; color: var(--pp-ink);
+  -webkit-text-stroke: .28px currentColor;
+}
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
 /* ── ⑧-a 加粗（theme.css:5529-5589「Underglow」）─────────────────────────
