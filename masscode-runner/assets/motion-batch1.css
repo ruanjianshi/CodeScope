@@ -368,3 +368,358 @@ html[data-theme] .ctx-menu {
     transition: none;
   }
 }
+
+
+/* ═════════════ 7. P-07 · 浮层入场统一（位移方向跟随「来向」） ═══════════ */
+
+/* 这一节只做一件事：把「瞬间出现」的浮层补上 120~180ms 的就位动作，
+   方向必须与它**从哪一侧弹出来**一致（审计 P-07：从下方弹出就别从右滑入）。
+   ─────────────────────────────────────────────────────────────────────────
+   改前实测（2026-10-31，隔离实例 CODESCOPE_PORT=4977，临时 vault；逐元素读
+   getComputedStyle(el).transitionProperty / transitionDuration）：
+     硬切（transition-property:all、duration:0s）——
+       #env-panel / #remote-panel / #project-panel（固定右栏，.open 显示）
+       #code-actions-pop（JS 内联 display:block）
+       #definition-peek / #lsp-problems / #xmind-shortcuts / #xmind-theme-menu
+       #code-ref-targets / #knowledge-launch-menu / #workspace-launch-menu
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 任务清单里另外 6 项**改前就已经有过场**，本节一个字都不改（如实写进报告）：
+       #theme-menu         app.css:3405   0.12s（translateY(-4px) scale(.96)，原点 100% 0%）
+       #sysmon-detail      app.css:33     0.12s / 0.18s（同上手势，原点 100% 0%）
+       .nd-panel ×5        motion.css:394 0.26s（scale(.98)，居中弹层无方向位移）
+       #backlink-panel     motion.css:395 0.26s（同上）
+       .review-panel       motion.css:396 0.26s（同上）
+       #lw-ctx             life-styles.js:2637  pp-layer-in + --mo-4（个人面板整套皮肤自带）
+   ★ 禁止区（审计明令）：#comp-pop / #sym-modal-box / #editor-find / .empty-state /
+     Monaco / xterm / PTY —— 本节**没有**它们任何一条选择器。
+     ⚠️ #comp-pop 同时出现在「未覆盖清单」和「禁止区」，按任务书以禁止区为准：
+        它的 transition-duration 必须**保持 0s**（每次按键都可能重开，100+ 次/天，
+        给补全菜单加入场＝每敲一个字都闪一下）。实测值见报告的反向判据。
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 手法：@starting-style + transition（不是 animation）。
+     理由与 motion.css:341 / :387 同批：这些浮层**没有统一的显示类**（.open / .on /
+     移除 .hidden / 内联 display:block 四种混着用），而它们都不是 motion.js 的
+     PANEL_IDS 成员 ⇒ 挂 .mo-enter 类需要改 JS（本轮硬约束：不许改 src/ lib/
+     server.js 与 assets/life-*.js）✗。@starting-style 只吃 CSS，且给的是**同一套语义**
+     （淡入 + 从触发器一侧就位 4~14px），所以这里用「等价实现」而不是复制类名 ✓。
+   ★ @supports 探针与 motion.css 同款：不支持 transition-behavior 的浏览器整段丢弃
+     ⇒ 退回「瞬间出现」，功能零影响（"不能坏"是底线，动画是加分项）✓。 */
+@supports (transition-behavior: allow-discrete) {
+  /* ① 三块固定右栏：从**右边缘**滑入。
+     #env-panel（本机环境 460px，right:0）/ #remote-panel（远程开发，inset:auto 0 0 auto）/
+     #project-panel（工程工具 600px，inset:0 0 0 auto）—— 三者 display:none → .open
+     变 flex，且 app.css:3386 把它们的底色写在同一组规则里 ⇒ 同族同向。
+     方向：来向 = 右边缘，所以起始位置比终点**往右 14px**（不是往左）✓。
+     时长 --mo-2（180ms）：整块面板不是小菜单，120ms 会读成"闪一下"；也**不开** --mo-3
+     （260ms）—— 那是给"要看清过程"的展开，侧栏只要"知道它从哪来" ✓。
+     ⚠️ 不写 transform: 基态 —— #env-panel 在 app.css:2397 有 transform:translateZ(0)
+        （避免亚像素文字重排的合成层技巧），覆盖它会丢掉这层。只在 starting-style
+        里给位移，过渡照样成立（transform 列表不一致时由浏览器按矩阵插值）✓。 */
+  :is(#env-panel, #remote-panel, #project-panel) {
+    transform-origin: 100% 50%;
+    transition:
+      opacity var(--mo-2) var(--mo-out),
+      transform var(--mo-2) var(--mo-out);
+  }
+  @starting-style {
+    :is(#env-panel.open, #remote-panel.open, #project-panel.open) {
+      opacity: 0;
+      transform: translateX(14px);
+    }
+  }
+
+  /* ② 定义预览 #definition-peek：从**底部**升起。
+     实测位置：position:absolute、left/right 各 inset clamp(18px,8%,120px)、bottom:18px
+     —— 它是贴着编辑器**底边**的一层，所以来向是"下面"，起点比终点**低 10px**。
+     不缩放：宽度接近全宽，scale 会让正文重新栅格化（读代码时最刺眼）✓。 */
+  #definition-peek {
+    transition:
+      opacity var(--mo-2) var(--mo-out),
+      transform var(--mo-2) var(--mo-out);
+  }
+  @starting-style {
+    #definition-peek:not(.hidden) {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+
+  /* ③ 代码操作菜单 #code-actions-pop：从**上方**落下 + 从光标处展开。
+     实测位置（app.js:10571）：left = 光标 x、top = 光标行底 + 5px ⇒ 菜单在光标**下方**
+     展开 ⇒ 来向是"上面"，起点上移 4px（不是从右边滑）✓。
+     scale(.98) 不是 .96：这是 460px 宽的菜单，缩太多像缩略图弹开（同 motion.css:376 的判断）✓。
+     时长 --mo-1（120ms）：审计 §2 给 "tooltips, small popovers" 的预算是 125~200ms，
+     120ms 落在下沿 —— 它是 ⌘. 偶发动作，不是每键，可以给完整入场 ✓。 */
+  #code-actions-pop {
+    transform-origin: 0 0;
+    transition:
+      opacity var(--mo-1) var(--mo-out),
+      transform var(--mo-1) var(--mo-out);
+  }
+  @starting-style {
+    #code-actions-pop {
+      opacity: 0;
+      transform: translateY(-4px) scale(.98);
+    }
+  }
+
+  /* ④ 诊断列表 #lsp-problems：从**上方**落下。
+     实测位置（app.css:670）：position:absolute、top:calc(100% + 5px)、right:8px
+     —— 挂在 #code-context-bar 的 LSP 按钮**下面** ⇒ 来向是"上面"，原点 100% 0%（右上角
+     那颗按钮），起点上移 4px ✓。 */
+  #lsp-problems {
+    transform-origin: 100% 0%;
+    transition:
+      opacity var(--mo-1) var(--mo-out),
+      transform var(--mo-1) var(--mo-out);
+  }
+  @starting-style {
+    #lsp-problems:not(.hidden) {
+      opacity: 0;
+      transform: translateY(-4px) scale(.98);
+    }
+  }
+
+  /* ⑤ XMind 两块：快捷键面板 #xmind-shortcuts（top:54px）与外观菜单 #xmind-theme-menu
+     （top:calc(100% + 7px)、right:0）—— 都在导图面板**顶部**，且共用 app.css:1946 同一条
+     display:none 规则 ⇒ 同族同向：从上方落下，原点右上，起点上移 5~6px ✓。
+     外观菜单比快捷键面板小，给 5px / 快捷键面板是整块说明给 6px。 */
+  #xmind-shortcuts,
+  #xmind-theme-menu {
+    transform-origin: 100% 0%;
+    transition:
+      opacity var(--mo-1) var(--mo-out),
+      transform var(--mo-1) var(--mo-out);
+  }
+  @starting-style {
+    #xmind-shortcuts:not(.hidden),
+    #xmind-theme-menu:not(.hidden) {
+      opacity: 0;
+      transform: translateY(-6px) scale(.98);
+    }
+  }
+
+  /* ⑥ 代码引用目标菜单 #code-ref-targets：与 #code-actions-pop 同机制、同族
+     （position:absolute、top:calc(100% + 6px)、right:0、.hidden 显示）⇒ 从上方落下，
+     原点右上，起点上移 4px ✓。 */
+  #code-ref-targets {
+    transform-origin: 100% 0%;
+    transition:
+      opacity var(--mo-1) var(--mo-out),
+      transform var(--mo-1) var(--mo-out);
+  }
+  @starting-style {
+    #code-ref-targets:not(.hidden) {
+      opacity: 0;
+      transform: translateY(-4px) scale(.98);
+    }
+  }
+
+  /* ⑦ 顶栏两个下拉菜单 #knowledge-launch-menu / #workspace-launch-menu：
+     top:calc(100% + 8px)、left:50%，本来就靠 transform:translateX(-50%) 居中
+     ⇒ 起始位移**必须把 -50% 一起带上**，否则菜单会先横跳半个身位再淡入 ✗
+     （这是最容易写错的一处：只写 translateY(-6px) 会覆盖掉居中）。
+     方向：挂在按钮下方 ⇒ 从上方落下 ✓。 */
+  #knowledge-launch-menu,
+  #workspace-launch-menu {
+    transform-origin: 50% 0%;
+    transition:
+      opacity var(--mo-1) var(--mo-out),
+      transform var(--mo-1) var(--mo-out);
+  }
+  @starting-style {
+    #knowledge-launch-menu:not([hidden]),
+    #workspace-launch-menu:not([hidden]) {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-6px);
+    }
+  }
+}
+
+
+/* ═════════════ 8. P-09 · 可点行 / 菜单项的按下反馈 ══════════════════════ */
+
+/* 现状（审计 I4 + 本轮实测）：全站只有 button / .tchip / #list .item,.fnode 有按下态。
+   办公行、阅读项目行、阅读行、绘图行、生活页热榜行、符号结果行、右键菜单项**按下零变化**
+   —— 在这些页面里，手指按下去得到的唯一反馈是"行选中了"，没有"按到了"这一层 ✓。
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 为什么用 translateY(1px) 而不是 scale(.99)：
+     行的行高只有 28~31px，2~3% 缩放会让行内 13px 文字重新栅格化 ⇒ 读成"抖一下"
+     （motion.css:233 对树行否决过同一做法）。1px 下沉**不触碰布局、不改宽高**，
+     getBoundingClientRect 的 width/height 按下前后逐字节相同 ✓ —— 这也是验收判据
+     「几何尺寸不变」唯一能过的写法（scale 会让 rect 缩 1% ✗）。
+   ★ 主反馈仍是颜色：内阴影（inset）+ 1px 强调色描边，深浅两套主题下都在 ✓
+     （纯黑色内阴影在深色主题里几乎看不见，所以必须带一圈 accent）。
+   ★ .symr / .ctx-item **只给过渡 + 内阴影，不给 transform**：它们是键盘 ↑↓ 移动的
+     "当前项"，任何位移/缩放都会让高亮框跟着跳（审计 I4 明确要求，100+/天 的档） ✓。 */
+.office-row,
+.reading-project,
+#reading-list .reading-row,
+.draw-row,
+.lw-hotrow,
+.symr,
+.ctx-menu .ctx-item {
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-2) var(--mo-out);
+}
+
+/* 行类：按下 = 下沉 1px + 内阴影。五类来自审计 I4 的实测清单，
+   #reading-list .reading-row 带 ID 前缀（(1,1,0)）才能压过 app.css:3662 的悬停规则。 */
+.office-row:active,
+.reading-project:active,
+#reading-list .reading-row:active,
+.draw-row:active,
+.lw-hotrow:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / .32),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  transition:
+    background-color var(--mo-1) var(--mo-out),
+    color var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-1) var(--mo-out),
+    transform var(--mo-1) var(--mo-out);
+}
+
+/* 选中行按下去时**不能丢掉左侧强调条**：app.css:3666 给 .on/.active 写的是
+   inset 3px 0 0 accent + 1px accent 描边，上面那条 :active 会把 box-shadow 整体替换，
+   选中条会在按住的那 120ms 里消失（看起来像"选中丢了"）✗。
+   这里把原值原样抄回来，只在末尾追加按下用的内阴影 ✓。 */
+.office-row.on:active,
+.draw-row.on:active,
+.draw-row.active:active,
+.reading-row.active:active,
+.reading-project.on:active {
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent),
+    inset 0 1px 3px rgb(0 0 0 / .32);
+}
+
+/* 菜单项：只补颜色层（内阴影 + 描边），transform 保持 none —— 见本节开头。 */
+.symr:active,
+.ctx-menu .ctx-item:active {
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / .32),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+
+/* ═════════════ 9. P-07 / P-09 的 reduced-motion 兜底 ════════════════════ */
+
+/* 只保留颜色：浮层的**位移/缩放**全部去掉（淡入本身是 opacity，属于"颜色"这一层，
+   保留它不会造成前庭不适）；按下态去掉 1px 下沉，保留内阴影（那是静态颜色）✓。
+   @starting-style 里把 transform 收成 none 就等于"没有位移" —— 比关掉 transition 更彻底：
+   关 transition 只是让它瞬间到位，起始帧仍可能是歪的（浏览器会给一帧）✗。 */
+@media (prefers-reduced-motion: reduce) {
+  @starting-style {
+    :is(#env-panel.open, #remote-panel.open, #project-panel.open),
+    #definition-peek:not(.hidden),
+    #code-actions-pop,
+    #lsp-problems:not(.hidden),
+    #xmind-shortcuts:not(.hidden),
+    #xmind-theme-menu:not(.hidden),
+    #code-ref-targets:not(.hidden) {
+      transform: none;
+    }
+    :is(#knowledge-launch-menu:not([hidden]), #workspace-launch-menu:not([hidden])) {
+      transform: translateX(-50%);
+    }
+  }
+
+  .office-row:active,
+  .reading-project:active,
+  #reading-list .reading-row:active,
+  .draw-row:active,
+  .lw-hotrow:active {
+    transform: none;
+  }
+}
+
+
+/* ═════════════ 5. P-06 · 永动状态点降级（静息不脉动 / 有活动才流动） ═══════════ */
+
+/* 现象（改前实测，Playwright 枚举 document.getAnimations）：整页**只有一条**
+   静息态仍在跑的 CSS 动画 —— #autosave-hint::before 的 asave-pulse（2200ms、
+   infinite）；其余无限动画都挂在「真在忙」的元素上（.typing / .building /
+   .env-svc-dot[data-state=busy]），随元素出现而出现、消失而消失。
+   根因：app.css:2165 的 `animation: asave-pulse 2.2s infinite` + :2166 的键帧；
+   同一元素 .dirty 时又换成 :3509 的 saveModePulse 1.5s。两处都写在常驻元素上
+   （审计 I3：日看千次的小圆点，任何持续运动都读成「有东西在闪」）。
+   产品决策（已定，= 审计 §4 P-06 方案 A 再收一档）：
+     静息 = 静态绿点 + 内发光（box-shadow inset），看着还有「活」，但不耗一帧；
+     活动 = 才脉动，活动结束自动回静息。
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 「有活动」的判定信号：两条，都是仓库里现成的状态，没有新造心跳 ——
+       ① #autosave-hint.dirty：app.js:11533 在手动模式有未保存修改时打类，
+          app.js:11581 在保存成功后立刻摘类。语义 =「有真实、尚未落盘的编辑」；
+          它出现才动，落盘即停（窗口长，肉眼看得见）。
+       ② #save-tick.idle.show：app.js:11612 保存开始时把底部保存条切成
+          `pill idle show`（「保存中…」），:11620 成功后换成 `pill ok show`。
+          自动模式（默认）里唯一的「保存进行中」标记，也是真实活动。
+          保存条在底部面板、绿点在工具栏，这里用 body:has() 读这个**已存在**的类
+          把它接过来 —— 仓库里 :has() 已有 25 处先例（doc-theme.css:859、
+          ui-kit.css:221…），不改 DOM、也不往 app.js 里加一行（它零余量）。
+          ⚠️ 只认 .idle.show，**不认** .ok.show：「已保存」是回执，还会在屏幕上
+             再留 2s（:11622）；拿它当活动会让点在自己停后继续抖 2s ✗。
+   ★ 为什么不接 SSE / 流式输出 / syncLoop 的活跃：审计 I3 写明这颗点的语义是
+     「自动保存已开启」，不是「正在录制 / 有数据在流」。把数据流的活跃挂到它身上，
+     等于造出第二个「绿点 = 有东西在动」的假语义 —— 正是这次要消灭的那个。
+     那些活动各有自己的指示器（.typing / .building / .env-svc-dot），本来就只在忙时出现。
+   ★ 不新增键帧：活动态直接复用 app.css:3510 的 saveModePulse（1.5s、opacity 1↔.6）。
+     它与 :3509 给整个按钮的脉动逐值相同 ⇒ 两者同相，是**一次**呼吸而不是两个周期
+     （审计 D2 记的「失拍」正是两个不同周期并排，这里不再造第二个）。
+   ★ 只有颜色/不透明度，没有位移与缩放：整段规则只有 animation + box-shadow ✓。
+   ★ 发光颜色跟着「点本色」走，不用 currentColor：点的底色在 app.css 里只有两个来源
+     —— :2165 的 background:var(--ok)（绿）、:3508 手动模式改成 var(--syntax-number)（琥珀）。
+     而按钮的**文字色**是另一条链（toolbar 那组规则会改写它，实测 computed color 是 --dim 灰，
+     不是 --ok）⇒ 拿 currentColor 会让绿点配一圈灰光。这里用一个局部令牌 --p06-dot
+     把上面两个来源转一手，发光跟着换色、也不受按钮文字色影响 ✓。 */
+
+#autosave-hint { --p06-dot: var(--ok); }
+#autosave-hint.manual { --p06-dot: var(--syntax-number, #d99a43); }
+
+#autosave-hint::before {
+  /* 压 app.css:2165 的 asave-pulse：同特异性 + 本文件后加载 ⇒ 后出现者胜，
+     全程没有 !important（与第 1–3 节同一手法）✓。 */
+  animation: none;
+  /* 「还活着」只靠静态光：1px 内描边环（边缘像素）+ 2 层 inset 内发光。
+     6px 的圆点上，外阴影只会糊成一小团，内发光才能读出「这颗点有内里」。 */
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / .26),
+    inset 0 0 4px 0 color-mix(in srgb, var(--p06-dot) 78%, transparent),
+    0 0 5px -1px color-mix(in srgb, var(--p06-dot) 45%, transparent);
+}
+
+/* 活动态：有未保存修改（手动模式），或保存正在进行中（自动/手动都一样）→ 才脉动。
+   与按钮本体的 saveModePulse 同相；两条选择器合写，避免同一套发光值抄两遍。 */
+html[data-theme] #autosave-hint.dirty::before,
+body:has(#save-tick.idle.show) #autosave-hint::before {
+  animation: saveModePulse 1.5s ease-in-out infinite;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / .34),
+    inset 0 0 5px 1px color-mix(in srgb, var(--p06-dot) 92%, transparent),
+    0 0 7px 0 color-mix(in srgb, var(--p06-dot) 62%, transparent);
+}
+
+
+/* ═════════════ 6. 无障碍兜底：P-06 活动态只留颜色 ════════════════════════ */
+
+/* 静息态本来就是静态值，不归这段管；这里只管「活动态」：
+   reduced-motion 下不播脉动（不透明度呼吸也是一种动），把「有未保存修改」
+   表达成**静态的颜色加强**（内发光更亮一档）—— 与常态一样是静止的，只是颜色变了。
+   ⚠️ 全段没有 transform / scale：不仅现在没有，也不允许后人往这里加。
+   ⚠️ 只关 animation-name，不跟 app.css:3828 那条全局 duration/iteration 抢
+      （那两条是 !important，管的是时长；这里管的是「有没有这条动画」）。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] #autosave-hint.dirty::before,
+  body:has(#save-tick.idle.show) #autosave-hint::before {
+    animation: none;
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / .34),
+      inset 0 0 5px 1px color-mix(in srgb, var(--p06-dot) 92%, transparent),
+      0 0 6px 0 color-mix(in srgb, var(--p06-dot) 58%, transparent);
+  }
+}

@@ -124,15 +124,15 @@ html[data-doc-theme="vampire"] {
 }
 .md-doc h1::after, .reading-md-editor h1::after, .reading-md-block h1::after, .reading-md-editor h1::after, .reading-md-block h1::after {
   content:''; position:absolute; bottom:0; left:50%;
-  width:40px; height:4px; border-radius:4px;
+  width:100%; height:4px; border-radius:4px;
   background:var(--doc-primary);
   box-shadow:0 0 5px color-mix(in srgb,var(--doc-primary) 20%,transparent);
-  transform:translateX(-50%);
-  transition:width .3s var(--doc-ease-smooth), box-shadow .3s ease;
+  transform:translateX(-50%); clip-path:inset(0 calc(50% - 20px));
+  transition:clip-path var(--mo-3) var(--mo-out), box-shadow var(--mo-2) var(--mo-out);
   pointer-events:none;
 }
 .md-doc h1:hover, .reading-md-editor h1:hover { text-shadow:var(--doc-glow-text); }
-.md-doc h1:hover::after, .reading-md-editor h1:hover::after { width:100%; box-shadow:0 0 15px var(--doc-primary); }
+.md-doc h1:hover::after, .reading-md-editor h1:hover::after { clip-path:inset(0 0 0 0); box-shadow:0 0 15px var(--doc-primary); }
 
 /* ── ④ H2：两条错位竖线，悬停时互换角色（粗线铺底变淡 / 细线变粗发光）── */
 .md-doc h2, .reading-md-editor h2, .reading-md-block h2, .reading-md-editor h2 {
@@ -190,14 +190,14 @@ html[data-doc-theme="vampire"] {
   background:color-mix(in srgb,var(--doc-bg) 60%,#000);
   border:1px solid color-mix(in srgb,var(--doc-secondary) 30%,transparent);
   border-radius:16px;
-  transition:all .3s ease;
+  transition:border-color var(--mo-2) var(--mo-out), background-color var(--mo-2) var(--mo-out), box-shadow var(--mo-2) var(--mo-out), transform var(--mo-2) var(--mo-out);
 }
 .md-doc blockquote::before, .reading-md-editor blockquote::before {
   content:'❝'; position:absolute; left:14px; top:14px;
   font-size:20px; line-height:1; font-style:normal;
   color:var(--doc-secondary); opacity:.8;
   transform:rotate(30deg);
-  transition:all .3s var(--doc-ease-back);
+  transition:transform var(--mo-2) var(--mo-back), color var(--mo-2) var(--mo-out), opacity var(--mo-2) var(--mo-out), text-shadow var(--mo-2) var(--mo-out);
 }
 .md-doc blockquote:hover, .reading-md-editor blockquote:hover {
   border-color:var(--doc-primary);
@@ -216,7 +216,7 @@ html[data-doc-theme="vampire"] {
       给它们套方括号会变成乱码一样的显示。 */
 .md-doc a:not([href^="#cc-"]), .reading-md-editor a:not([href^="#cc-"]) {
   color:var(--doc-secondary); text-decoration:none;
-  transition:all .3s ease;
+  transition:color var(--mo-1) var(--mo-out), background-color var(--mo-1) var(--mo-out);
 }
 .md-doc a:not([href^="#cc-"])::before, .reading-md-editor a:not([href^="#cc-"])::before {
   content:'['; display:inline-block; margin-right:1px;
