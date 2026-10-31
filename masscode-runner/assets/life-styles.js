@@ -800,12 +800,25 @@
   .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ic { display:none; }
   /* ★ 折叠箭头（极简样式）：默认这里也**显示** ✓ —— 用户报的「怎么没法折叠收起来」就是
      极简下箭头整个 display:none（只有胶囊才有 ▾ ✓），点了当然没反应 ✗。
-     极简的箭头是**绝对定位**在行右端 ✓（不占文字流、不改变行盒高度 ✓），
-     有子级的行右侧多留 20px 内边距，省略号不会压到箭头上 ✓。
+     ★★ 2026-10-31 修「折叠箭头位置不对」（用户截图：箭头浮在胶囊右边缘之外、各层还错位）：
+        原来这条是「top:0; height:22px; line-height:22px」✗ —— 绝对定位 + **写死 22px 高**，
+        而实际行高是：极简 22px ✓、胶囊 lv3+ 30px ✓、胶囊 lv1/lv2 34px ✓。
+        ⇒ 箭头盒**永远贴在行顶**：34px 胶囊里中心比行中心高 6px ✓、30px 行里高 4px ✓（改前实测），
+          各层偏得还不一样 = 视觉上一条**歪斜的阶梯** ✓；
+          再叠加 10px 圆角 —— 6px 上偏正好把 ▾ 送到**右上角的圆角弧上** ✓，
+          弧外就是面板底色 → 看起来像「掉到胶囊外面」✓（= 用户截图那张 ✓）。
+        ⇒ 现在 top:0 + bottom:0 + height:auto = **撑满整行**，行内 flex 垂直居中 ✓
+          （transform-origin 居中 ✓；折叠态 rotate(-90deg) 与 120ms 过渡**原样保留** ✓）。
+          不再写死行高：以后行高再变，它也自己跟着居中 ✓。
+     ★ 右端定位：right:2px + width:14px ⇒ 箭头**中心**距行右边缘 = 2 + 7 = **9px** ✓
+       （验收要 8~10px ✓）。取 9 不取 10 是给「整屏 0.88 缩放」这类场景留余量 ✓（rect 会带小数 ✓）。
+     ★ 有子级的行右侧留 **22px** 内边距（箭头左缘在 16px 处 ✓）⇒ 文字盒右缘永远比箭头左缘
+       再左 6px ✓，超出部分走省略号 ✓（极简的省略号是行级 text-overflow ✓）。
+       ⚠️ 胶囊样式自己的 padding 会盖掉这条 ✗，所以那边两条 padding 里也写了 22px ✓。
      ⚠️ 选择器都写到（0-4-0）以上 ✓：全站 button（0-1-1）与本文件条目（0-3-0）都压不住它 ✓。 */
-  .lw-outl .lw-outl-list .lw-outl-i.has-kid { padding-right:20px; }
+  .lw-outl .lw-outl-list .lw-outl-i.has-kid { padding-right:22px; }
   .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ar { display:none; }
-  .lw-outl .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:block; position:absolute; right:2px; top:0; width:16px; height:22px; line-height:22px; text-align:center; font-size:10px; color:var(--pp-ink2); opacity:.55; cursor:pointer; transition:transform .12s ease,opacity .12s ease; }
+  .lw-outl .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:flex; position:absolute; right:2px; top:0; bottom:0; width:14px; height:auto; align-items:center; justify-content:center; line-height:1; transform-origin:center; text-align:center; font-size:10px; color:var(--pp-ink2); opacity:.55; cursor:pointer; transition:transform .12s ease,opacity .12s ease; }
   .lw-outl .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar:hover { opacity:1; color:var(--pp-ink); }
   .lw-outl .lw-outl-list .lw-outl-i.folded .lw-outl-ar { transform:rotate(-90deg); }
   /* 折叠时本条文字降一档权重 ✓（任务要求：用 --pp-ink2 以示区别 ✓）*/
@@ -863,12 +876,19 @@
         → 线会被整条裁掉 ✓（上一版实测过 ✓）。所以这里 overflow:visible ✓，
         省略号交给 .lw-outl-tx（它自己 overflow:hidden ✓）。
      （本文件是模板字符串：注释里不写反引号 ✗）*/
-  .lw-outl.pill .lw-outl-list .lw-outl-i { --pi:calc(var(--ind,0px) * 5 / 3); display:flex; align-items:center; gap:6px; width:calc(100% - var(--pi,0px)); min-width:0; height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 8px; border:0; border-radius:8px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font-family:${UI}; font-weight:400; font-size:11px; text-align:left; white-space:nowrap; overflow:visible; text-overflow:clip; cursor:pointer; transition:background-color .16s ease,color .16s ease; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2 { height:34px; min-height:34px; margin:2px 0 2px var(--pi,0px); padding:6px 10px; border-radius:10px; background:color-mix(in srgb, var(--bc, var(--pp-accent)) var(--pp-pill-bg, 8%), transparent); color:var(--pp-ink); font-weight:500; font-size:12px; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 8px; border-radius:8px; background:transparent; color:var(--pp-ink2); font-weight:400; font-size:11px; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i { --pi:calc(var(--ind,0px) * 5 / 3); display:flex; align-items:center; gap:6px; width:calc(100% - var(--pi,0px)); min-width:0; height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 22px 5px 8px; border:0; border-radius:8px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font-family:${UI}; font-weight:400; font-size:11px; text-align:left; white-space:nowrap; overflow:visible; text-overflow:clip; cursor:pointer; transition:background-color .16s ease,color .16s ease; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2 { height:34px; min-height:34px; margin:2px 0 2px var(--pi,0px); padding:6px 22px 6px 10px; border-radius:10px; background:color-mix(in srgb, var(--bc, var(--pp-accent)) var(--pp-pill-bg, 8%), transparent); color:var(--pp-ink); font-weight:500; font-size:12px; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 22px 5px 8px; border-radius:8px; background:transparent; color:var(--pp-ink2); font-weight:400; font-size:11px; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.br-end { margin-bottom:10px; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.lv1 .lw-outl-ic, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2 .lw-outl-ic { display:block; flex:none; width:12px; height:12px; color:var(--bc, var(--pp-accent)); fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:block; flex:0 0 16px; width:16px; margin-left:8px; text-align:center; font-size:12px; line-height:1; color:var(--pp-ink2); opacity:.65; cursor:pointer; transition:transform .12s ease,opacity .12s ease; }
+  /* ★ 胶囊的箭头**只覆盖外观**（字号 / 颜色 / 透明度）✗ 不再自带 position / top / height / width / margin ✗✗
+     —— 改前这里写的是「display:block; flex:0 0 16px; width:16px; margin-left:8px」✓，
+        可**定位三件套（position/top/right/height）全留在基础规则里** ✓（0-5-0 那条），
+        于是胶囊里箭头还是「贴行顶、高 22px」✗ → 34px 胶囊偏 6px、30px 行偏 4px ✓（改前实测）✓。
+        现在定位与居中**只有一份**（基础规则 ✓），这里再想改也不会把它拆成两半 ✓。
+     ⚠️ display 必须跟着写 flex ✗：这条（0-6-0）比基础规则（0-5-0）高 ✓，
+        留 display:block 会把行内居中整条打回原形 ✗。 */
+  .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:flex; text-align:center; font-size:12px; line-height:1; color:var(--pp-ink2); opacity:.65; cursor:pointer; transition:transform .12s ease,opacity .12s ease; }
   .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar:hover { opacity:1; color:var(--pp-ink); }
   /* 折叠：同一颗 ▾ 转 -90°（= ▸ ✓），120ms 过渡 ✓ —— 不换字符，状态只改一个 transform ✓ */
   .lw-outl.pill .lw-outl-list .lw-outl-i.folded .lw-outl-ar { transform:rotate(-90deg); }
