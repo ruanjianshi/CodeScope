@@ -3043,9 +3043,13 @@
      但中文系统字体**没有 800 这一档**，浏览器把 700 与 800 合成为同一厚度 ⇒ 小字号下看不出 ✗。
      用户观察「只有鼠标放上去才明显」正好点明关键：悬停时那条 text-shadow 发光才是可见来源 ✓。
      所以把发光**常驻**（两层 .45px 微阴影把笔画撑厚），描边同步提到 .4px ✓。 */
-  font-weight: 800; color: var(--pp-ink);
-  -webkit-text-stroke: .4px currentColor;
-  text-shadow: 0 0 .45px currentColor, 0 0 .45px currentColor;
+  /* ★ 2026-10-31 二次回调（用户：加粗泛白严重）：上一版把发光常驻 + 描边 .4px + 颜色提到最亮档，
+     三者叠加在深色底上产生了一圈**白晕** ✗ —— 笔画确实厚了，但整体发灰发白，比正文还虚。
+     收敛为：颜色不再用最亮档（mix 到 ink2 与 ink 之间）、描边走 .3px、**去掉 text-shadow**（白晕就是它造成的），
+     厚度靠字重本身 + 细描边表达 ✓。 */
+  font-weight: 800;
+  color: color-mix(in srgb, var(--pp-ink) 62%, var(--pp-ink2));
+  -webkit-text-stroke: .3px currentColor;
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
@@ -3078,7 +3082,9 @@
    悬停动画 memoItalicWaveFlow 每 .8s 平移一个完整波长（16px ✓）→ 波浪流动 ✓。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view em {
   font-style: italic; text-decoration: none !important;
-  display: inline; padding-bottom: 2px;
+  /* ★ 2026-10-31 斜体与相邻文字贴太近（用户截图）：中文斜体是合成的，倾斜后字形向右探出，
+     而这里是 display:inline + 无左右内边距 ⇒ 右端会压到下一个字。补 2px 左右呼吸 + 极轻字距 ✓ */
+  display: inline; padding-bottom: 2px; padding-inline: 2px; margin-inline: 1px; letter-spacing: .01em;
   color: var(--doc-secondary);
   --italic-wave: color-mix(in srgb, var(--doc-secondary), transparent 60%);
   background-repeat: repeat-x;
