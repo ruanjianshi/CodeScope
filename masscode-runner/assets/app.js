@@ -744,14 +744,14 @@ $('sm-cpu').onclick = (e) => { e.stopPropagation(); toggleSystemDetail(); loadSy
 $('sysmon-detail').onclick = (e) => e.stopPropagation();
 document.addEventListener('click', () => toggleSystemDetail(false));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggleSystemDetail(false); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) loadSystemStatus(); });
-/* ★ 2026-10-31 性能审计 T-02：「电脑状态」这块**不在屏幕上时不再轮询** ——
-   原来只挡了 document.hidden（后台标签页 ✓）；窗口一窄到把 #sysmon 用 CSS 收起来
-   （app.css:3898 / 3924 的响应式规则 ✓）或面板被关掉时，它照样每 3 秒发一次
-   /api/system/status ✓ —— 每次服务端都要拉 vm_stat / df 两个子进程。
-   判据用 getClientRects().length（元素真的渲染着 ✓，display:none 时为 0 ✓）；
-   重新出现后下一次 tick（≤3s）自动恢复 ✓，不会一直显示旧值 ✓。 */
-setInterval(() => { const mon = $('sysmon'); if(!document.hidden && mon && mon.getClientRects().length) loadSystemStatus(); }, 3000);
+const sysmonTick = () => { const mon = $('sysmon'); if(!document.hidden && mon && mon.getClientRects().length) loadSystemStatus(); }; let sysmonShown = true;
+/* ★ T-02（2026-10-31）：「电脑状态」不在屏幕上时不再轮询 —— 判据 getClientRects().length
+   （display:none 时为 0 ✓）；后台标签页由 tick 里的 document.hidden 挡掉 ✓ —— 两者都实测过。
+   ★ 2026-11-01 补「恢复即刷新」：上一版要等下一次 tick（实测 2815ms）才恢复 ✗；
+   加 IntersectionObserver 只认 0→1 那个沿 ⇒ 面板重新出现的当帧就刷一次（实测 28ms）✓，
+   首个回调（启动时本已在屏上）不触发，开局那次由下面的 loadSystemStatus() 负责 ✓。
+   ⚠️ 轮询间隔仍是 3000ms、接口契约未动：只改「何时算一次」，不改「多久一次」✓。 */
+new IntersectionObserver((rows) => { const on = rows[0] ? rows[0].isIntersecting : false; if (on && !sysmonShown) sysmonTick(); sysmonShown = on; }).observe($('sysmon')); document.addEventListener('visibilitychange', sysmonTick); setInterval(sysmonTick, 3000);
 loadSystemStatus();
 
 function setSync(on) { const el = $('sync-ind'); if (el) el.classList.toggle('off', !on); }   /* 顶部「实时同步」已合并进保存模式开关 */

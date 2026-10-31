@@ -142,6 +142,45 @@ html[data-theme] .editor-group-divider.active::after {
 }
 
 
+/* ═════════════ 5. P-04 · git 抽屉接管 --mo-drawer 曲线 ═══════════════════ */
+
+/* 现象（改前实测，body.git-open 时读 #pane-git 的 computed style）：
+     animation-name: cs-drawer-in ／ animation-duration: 0.16s ／ timing: ease-out
+   来源是 ui-kit.css:377 那条 `body.git-open #side > #pane-git`（特异性 2,1,1）里的
+   :387 `animation: cs-drawer-in .16s ease-out` ✓。
+   而 motion.js 给面板挂的 `.mo-enter`（motion.css:500，特异性 0,1,0）压不过它 ✗ ⇒
+   `--mo-drawer`（motion.css:49，iOS 抽屉曲线）**名存实亡**：全站唯一「大块进出」的
+   抽屉，实际用的是 160ms + ease-out 的字面值 ✓。
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 为什么不按审计原计划删 ui-kit.css:387-389：本轮硬约束只准改 app.js 与本文件，
+     ui-kit.css 在禁区里 ✓。所以这里换成**同款特异性 + 后加载**接管（本文件在
+     index.html:152，排在 ui-kit.css 之后 ✓），ui-kit 那两行就此成为不生效的历史 ✓。
+   ★ 选择器与抢权者**一字不差**（`body.git-open #side > #pane-git`，2,1,1）——
+     特异性打平时靠「后出现」取胜，比较结果没有悬念 ✓。
+     ⚠️ 别简化成 `body.git-open #pane-git`（1,2,1）：那是**输**给抢权者的写法 ✗。
+   ★ 位移 18px → 24px、起始不透明度 .55 → 0：400px 宽的抽屉上 18px 读不出方向，
+     .55 起步像是「本来就在、只是暗了一下」✓。
+   ★ 时长取 --mo-3（260ms）不用 --mo-4（400ms）：抽屉是每天几十次的查看动作，
+     400ms 会让每次打开都等半拍；260ms 与「面板入场」同档，节奏统一 ✓。
+   ★ 抢权清单（同一次普查：`animation:` 声明逐条按选择器核对，含 id 的只有这一条）：
+     · #pane-git        ← ui-kit.css:387 抢权，**本段接管** ✓
+     · #pane-tags          body.tags-open 那条规则**没有** animation 声明 ⇒ 它一直按
+                           .mo-enter（0,1,0）入场，不属抢权。本次不动：浮层入场归 P-07，
+                           且它是从搜索框下方展开，横向位移方向不对 ✗。
+     · #pane-tree / #pane-draw / #pane-office / #pane-reading / #output /
+       #outline-panel     同样没有 id 规则声明 animation ⇒ 无抢权，不动 ✓。
+     · #sysmon-detail      走 @starting-style + transition，不是 animation ✓。
+     · #code-wrap.mo-enter（motion.css:504）是**故意的显式退出记录**，不是抢权 ✓。 */
+body.git-open #side > #pane-git {
+  animation: mo-drawer-in var(--mo-3) var(--mo-drawer) both;
+}
+
+@keyframes mo-drawer-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: none;             opacity: 1; }
+}
+
+
 /* ═════════════ 4. 无障碍兜底：prefers-reduced-motion ════════════════════ */
 
 /* app.css:3828 有一条全局兜底（* 选择器压 duration + iteration-count），但它管不了
@@ -176,6 +215,13 @@ html[data-theme] .editor-group-divider.active::after {
   /* P-03：整屏不透明度阶跃在 reduced-motion 下直接到位（不淡入）。
      不加 !important —— 动画名与全局的 duration 是两条不同的长属性，互不覆盖。 */
   #sym-modal.open {
+    animation: none;
+  }
+
+  /* P-04：抽屉的入场是**纯位移**（translateX 24px），reduced-motion 下必须去掉位移。
+     颜色 / 边框 / 阴影本来就是静态值 ⇒「只保留颜色」等价于直接到位，不播动画 ✓。
+     这里只关动画名，不跟 app.css:3828 那条全局 duration 抢（两条管不同长属性）✓。 */
+  body.git-open #side > #pane-git {
     animation: none;
   }
 }
