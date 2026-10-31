@@ -26,14 +26,56 @@
     document.documentElement.dataset.theme = theme;
   })();
 </script>
+<!-- ═══ 子系统按需注入 · 幂等 loader（性能审计 2026-10 · T-10）══════════════════
+     背景：首屏原来就请求了**当前视图根本用不到**的子系统 ——
+       本机管家 81.1 KB、代码向导 47.2 KB、学习工作台 39.6 KB、PDF 阅读器 26.9 KB、
+       思维导图交互层 26.6 KB、架构视图 6 件 24.3 KB —— 实测 **12 个请求 / 245.7 KB**
+       （原数 79 请求 / 1328.1 KB ⇒ 67 请求 / 1082.4 KB）。
+     它们全部只在「某个视图 / 浮层被打开」时才需要 ✓ → 改成打开时注入 ✓。
+
+     ★ 幂等：同一个 URL 只插一次 script 标签，重复调用返回**同一个 Promise** ✓
+       —— 两处同时要它（比如先悬停再看点击）也只发一个请求 ✓。
+     ★ 失败可重试：onerror 时把条目从表里**删掉**再 reject ✓ ——
+       不删的话一次网络抖动会把这个 URL 永久钉成「已失败」✗（之后谁都拿不到新 Promise）。
+     ★ 顺序：csLoadScripts 逐个串起来 ✓ —— 架构视图那 6 件的**加载顺序是硬约束**
+       （布局 → 画图 → 面板，见文末注释），靠动态插入的文档序太脆 ✗。
+     ★ CSP 不用动：'self' 已经允许同源脚本 ✓。 -->
+<script>
+window.csLoadScript = (function () {
+  var pending = new Map();
+  return function csLoadScript(url) {
+    if (pending.has(url)) return pending.get(url);
+    var promise = new Promise(function (resolve, reject) {
+      var el = document.createElement('script');
+      el.src = url;
+      el.onload = function () { resolve(url); };
+      el.onerror = function () { pending.delete(url); reject(new Error('按需加载失败：' + url)); };
+      (document.head || document.documentElement).appendChild(el);
+    });
+    pending.set(url, promise);
+    return promise;
+  };
+})();
+window.csLoadScripts = function (list) {
+  return list.reduce(function (chain, url) {
+    return chain.then(function () { return window.csLoadScript(url); });
+  }, Promise.resolve());
+};
+</script>
 <script src="/assets/highlight.min.js" defer></script>
 <!-- xterm 必须在正文中的 Monaco AMD loader 注册 window.define 之前执行，否则 UMD 会被误判为 AMD 模块。 -->
 <script src="/assets/xterm.js"></script>
-<script src="/assets/study-workspace.js" defer></script>
+<!-- ⊘ 学习工作台（study-workspace.js，39.6 KB）→ **按需注入**（T-10）：
+     只有进「学习工作台」才需要 ✓，首屏一个字节都用不到 ✓。
+     触发点见文末「子系统按需注入 · 懒转发」那段（隐藏的 #btn-study 上挂了个「先注入再代点」）✓。 -->
 <!-- 本机管家：一站式本机管理面板（进程/磁盘缓存/软件/服务端口/Docker/开发环境）。
      按钮、面板、样式都由这个脚本在运行时自建，所以 index.html 只留这一行，
      和编辑工作台那边的改动互不覆盖。 -->
-<script src="/assets/system-panel.js" defer></script>
+<!-- ⊘ 本机管家（system-panel.js，81.1 KB）→ **按需注入**（T-10）：
+     ⚠️ 它**自己在 load 时**创建 #btn-system / #system-workspace（ke() / ct()）——
+     所以在它加载之前，欢迎页那句 `$('btn-system').click()` 会是
+     `null.click()` → TypeError（点了没反应）✗ →
+     欢迎页那个按钮改在**捕获阶段**被接住：注入完再代点真的 #btn-system ✓。 -->
 <!-- 我的工作台：个人管理系统（今日/研究方向/论文/文件/时间）。
      和 system-panel.js 一样自建 UI + 样式，不动主界面。 -->
 <!-- 共享的纯逻辑模块（双栖 ✓：Node 里 require、浏览器里挂 window.LW_xxx）。
@@ -50,7 +92,11 @@
 <script type="module" src="/lib/flow-schedule.js"></script>
 <script type="module" src="/lib/en-sources.js"></script>
 <script type="module" src="/lib/roots.js"></script>
-<script src="/assets/code-guide.js" defer></script>
+<!-- ⊘ 代码向导（code-guide.js，47.2 KB）→ **按需注入**（T-10）：
+     入口是 Ctrl/⌘+I 和命令面板的 codescope.codeGuide（app.js:390 那句已被
+     `if (window.__CODE_GUIDE)` 守卫 ✓ 所以不会 ReferenceError ✓）。
+     ⚠️ 它**自己**在 capture 阶段注册 Ctrl+I ✓ —— 它没加载时这条快捷键没人接 ✗
+     （按了没反应、也没有别的触发点），所以文末那段先接住这个键再注入 ✓。 -->
 <script src="/assets/cs-lan-chip.js" defer></script>
 <script src="/assets/cs-sidebar.js" defer></script>
 <!-- 界面缩放：低像素密度大屏默认由 ui-kit.css 的 media query 收到 0.88；
@@ -1228,6 +1274,151 @@
      本文件只包 window.fetch ✓，不依赖任何 app.js 的绑定 ✓。 -->
 <script src="/assets/cs-auth.js"></script>
 <script src="/assets/app.js"></script>
+<!-- ═══ 子系统按需注入 · 懒转发与触发点（性能审计 2026-10 · T-10）════════════════════
+     原则：**一个调用点都不改** ✓ —— app.js / app-reading.js / app-draw.js 里那些同步调用
+     读的都是 window 上的名字 ✓，所以把「模块全局」换成一个**懒转发 stub** 就够了 ✓。
+     app.js 因此 0 行改动（棘轮「13,000 行代码」一分没涨 ✓）。
+     真模块加载完会**自己覆盖**同名全局 ✓（经典脚本顶层的函数声明 / 赋值都写 window 属性 ✓），
+     所以转发只发生第一次，之后零开销 ✓。
+
+     ⚠️ 三个反直觉的点，都是先想清楚才敢写的：
+       ① stub 里**不能**「读 window 上的名字再调」✗ —— 模块加载后那个名字可能已经变成
+          另一个包装（xmind-interaction.js 就是现成例子：它加载时又包了一层
+          window.openXmindEditor），那样会自己调自己 ✗。判据用「还是不是我这个 stub」✓。
+       ② 事件类入口（欢迎页按钮 / 快捷键）挂在**捕获阶段** ✓：真干活的是元素自己的
+          onclick（app.js 赋的），它在目标阶段才跑 —— 捕获阶段先接住才拦得下来 ✓。
+       ③ 代点时点**真的那个元素**（#btn-system / #btn-study），不要重放原事件 ✗ ——
+          重放会让 app.js 的 onclick 再跑一次，有死循环风险 ✓。
+     ⚠️ 所有 stub 都带**失败兜底**：加载挂了就安静退出（console.error 留一行），
+        绝不把 Promise 的 rejection 冒出去 ✗ —— 那会变成 pageerror，
+        而「打开某个视图失败」不该被记成「页面崩了」✓。 -->
+<script>
+(function () {
+  'use strict';
+  var noop = function () {};
+  function warn(url) {
+    return function (err) {
+      try { console.error('[CodeScope] 按需加载失败：' + url, err); } catch (_) {}
+    };
+  }
+  /* 懒转发：把 window[name] 换成一个「先注入、再转发给真函数」的 stub */
+  function lazyForward(load, name) {
+    var stub = function () {
+      var args = arguments, self = this;
+      return load().catch(warn(name)).then(function () {
+        var fn = window[name];
+        if (fn === stub) return;          /* 加载失败：stub 还在 → 安静退出，不递归 */
+        return fn.apply(self, args);
+      });
+    };
+    window[name] = stub;
+    return stub;
+  }
+
+  /* ── ① 架构视图 6 件（24.3 KB，顺序硬约束：布局 → 画图 → 面板）──────────
+        app.js:6054 是唯一同步入口：
+          if (CG_VIEW === 'arch') { renderArchIntoPane(body); return; }
+        裸标识符 → 解析到 window.renderArchIntoPane ✓ */
+  var ARCH = ['/assets/arch-layout.js', '/assets/arch-round.js', '/assets/arch-graph-svg.js',
+              '/assets/arch-zoom.js', '/assets/arch-ai-view.js', '/assets/arch-view.js'];
+  var archLoad = function () { return window.csLoadScripts(ARCH); };
+  lazyForward(archLoad, 'renderArchIntoPane');
+  /* 悬停 / 聚焦「▦ 架构」就先把这 6 件注入 —— 点下去时通常已经就绪 ✓；
+     不悬停也照样能用，只是那一次渲染要多等一个 RTT（本机 <20ms）✓。 */
+  var archTab = document.getElementById('cg-view-arch');
+  if (archTab) {
+    ['pointerenter', 'focus', 'touchstart'].forEach(function (type) {
+      archTab.addEventListener(type, function () { archLoad().catch(noop); }, { passive: true });
+    });
+  }
+
+  /* ── ② PDF 阅读器（26.9 KB）────────────────────────────────────────────
+        app-reading.js:1194 先看 window.__pdfViewerReady，再调 renderPdfViewer ✓。
+        这个标志置 true 是**诚实的**：模块随时可以渲染，只是首次调用才注入 ✓。
+        绝不能让它掉进 else 分支 ✗ —— 那是拿 <iframe> 直接显示原始 PDF，
+        没有文本层就没有划词 / 标注 / AI 抽取，功能等于掉一档 ✓。 */
+  lazyForward(function () { return window.csLoadScript('/assets/app-pdf.js'); }, 'renderPdfViewer');
+  window.__pdfViewerReady = true;
+
+  /* ── ③ 代码向导（47.2 KB）─────────────────────────────────────────────
+        app.js:390 是 if (window.__CODE_GUIDE) window.__CODE_GUIDE.open('look')
+        —— 已经被守卫 ✓，所以 stub 在不在都不会 ReferenceError ✓。
+        但日常生活里的入口是 **Ctrl/⌘+I**，而那个键是 code-guide.js **自己**在
+        capture 阶段注册的 ✗ → 它没加载时没人接，用户按了没反应，也没有别的触发点 ✗
+        → 下面这段先接住这个键，注入完再把一次「等价的按键」发出去 ✓。 */
+  var CG_READY = false;
+  function cgLoad() {
+    return CG_READY ? Promise.resolve() : window.csLoadScript('/assets/code-guide.js').then(function () { CG_READY = true; });
+  }
+  window.__CODE_GUIDE = {
+    open: function (mode) { return cgLoad().then(function () { return window.__CODE_GUIDE.open(mode); }); },
+    toggle: function () { return cgLoad().then(function () { return window.__CODE_GUIDE.toggle(); }); },
+    close: function () { if (CG_READY) window.__CODE_GUIDE.close(); }
+  };
+  document.addEventListener('keydown', function (e) {
+    if (CG_READY || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+    if (String(e.key || '').toLowerCase() !== 'i') return;
+    e.preventDefault();
+    e.stopPropagation();
+    cgLoad().then(function () {
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'i', ctrlKey: true, metaKey: !!e.metaKey, bubbles: true, cancelable: true
+      }));
+    }).catch(noop);
+  }, true);
+
+  /* ── ④ 本机管家（81.1 KB）─────────────────────────────────────────────
+        ⚠️ 它**自己在 load 时**建 #btn-system（ke()）—— 在它加载之前，
+        欢迎页那句 $('welcome-system').onclick = () => $('btn-system').click()
+        就是 null.click() → TypeError ✗（用户看到的正是「点了没反应」）。
+        所以欢迎页那个按钮在**捕获阶段**被接住：注入完再代点真的 #btn-system ✓。
+        （别的入口没有：全仓只有 life-workbench.js:981 拿 #btn-system 当插入锚点，
+          没有任何地方 programmatic 地打开这个面板 ✓）*/
+  var SP_READY = false;
+  function spLoad() {
+    return SP_READY ? Promise.resolve() : window.csLoadScript('/assets/system-panel.js').then(function () { SP_READY = true; });
+  }
+  window.CodeScopeSystemPanel = {
+    version: '1.0.0',
+    open: function () { return spLoad().then(function () { return window.CodeScopeSystemPanel.open(); }); },
+    close: function () { if (SP_READY) window.CodeScopeSystemPanel.close(); }
+  };
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (SP_READY || !t || typeof t.closest !== 'function' || !t.closest('#welcome-system')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    spLoad().then(function () {
+      var btn = document.getElementById('btn-system');
+      if (btn) btn.click(); else window.CodeScopeSystemPanel.open();
+    }).catch(noop);
+  }, true);
+
+  /* ── ⑤ 学习工作台（39.6 KB）───────────────────────────────────────────
+        #btn-study 是 index.html 里那个**隐藏的**按钮（259 行）✓：
+        欢迎页和启动菜单都是 $('btn-study').click() ✓，而它的 onclick 是
+        study-workspace.js **自己**在加载时绑的 ✓ →
+        先挂一个「先注入再代点」的临时 onclick，模块加载后会把它整个覆盖掉 ✓。
+        ⚠️ 必须防重入：模块万一没接手 onclick，代点会再进这个函数 ✗ →
+           用「还是不是我这个 handler」判据 + __csBusy 双重保险：宁可这次不弹，也不死循环 ✓。 */
+  var ST_READY = false;
+  function stLoad() {
+    return ST_READY ? Promise.resolve() : window.csLoadScript('/assets/study-workspace.js').then(function () { ST_READY = true; });
+  }
+  var studyBtn = document.getElementById('btn-study');
+  if (studyBtn) {
+    var studyHandler = function () {
+      if (studyBtn.onclick !== studyHandler || studyBtn.__csBusy) return;
+      studyBtn.__csBusy = true;
+      stLoad().then(function () {
+        studyBtn.__csBusy = false;
+        if (studyBtn.onclick !== studyHandler) studyBtn.click();   /* 真模块接手了 → 代点开面板 */
+      }).catch(function () { studyBtn.__csBusy = false; });
+    };
+    studyBtn.onclick = studyHandler;
+  }
+})();
+</script>
 <!-- ★ 思维导图交互层（2026-10-26 从 app.js 抽出来的鼠标/键盘/框选/平移）——
      用户：「无法选中，怎么鼠标左边是移动画布，设计不合理，调研成熟的思维导图设计，重构」。
      ⚠️ 必须在 app.js **之后** ✓：它直接用 app.js 的顶层绑定（XMIND_MAP / xmindFind / ...），
@@ -1235,19 +1426,25 @@
 <script src="/assets/xmind-interaction.js" defer></script>
 <!-- ★ 架构视图（2026-10-11 从 app.js 抽出来的 409 行）——
      抽出来是因为棘轮（app.js ≤ 16581 行）顶到了：重写走线涨了 156 行 → 测试红。
-     ⚠️ 放在 app.js **之后** ✓：它只声明函数，app.js 里是**调用时才找**
-        `renderArchIntoPane` ✓，所以先后无所谓；但放在后面更符合"依赖 app.js"的直觉。 -->
-<!-- ⚠️ 顺序要紧：archGraphSvg 会调 archLayout ✓，renderArchIntoPane 会调 archGraphSvg ✓ ——
-     **必须按 布局 → 画图 → 面板 这个顺序加载** ✓。defer 只把这 7 个整体后移到「解析完、
-     DOMContentLoaded 之前」，**相互顺序仍是文档顺序** ✓；app.js 只在点「▦ 架构」时才调
-     renderArchIntoPane（加载期可达引用 = 0）→ 这 6 个 + app-pdf.js 都能 defer ✓。 -->
-<script src="/assets/arch-layout.js" defer></script>
-<script src="/assets/arch-round.js" defer></script>
-<script src="/assets/arch-graph-svg.js" defer></script>
-<script src="/assets/arch-zoom.js" defer></script>
-<script src="/assets/arch-ai-view.js" defer></script>
-<script src="/assets/arch-view.js" defer></script>
-<script src="/assets/app-pdf.js" defer></script>
+     ⚠️ 顺序要紧：archGraphSvg 会调 archLayout ✓，renderArchIntoPane 会调 archGraphSvg ✓ ——
+        **必须按 布局 → 画图 → 面板 这个顺序加载** ✓。
+     ★ 2026-11 起不再用 defer 占位：这 6 件改成**按需注入**，顺序改由
+        csLoadScripts 的 Promise 链逐级 await 保证（见 app.js 之后那段脚本）✓。
+        app.js 只在这条路上找它：`if (CG_VIEW === 'arch') { renderArchIntoPane(body); return; }`
+        —— 裸标识符 → 解析到 window.renderArchIntoPane → 那里蹲着懒转发 stub ✓。 -->
+<!-- ⊘ 架构视图 6 件（24.3 KB）+ PDF 阅读器（26.9 KB）→ **按需注入**（T-10）。
+     原来这 7 个是 defer ✓（「加载期可达引用 = 0」那条判断本身没错 ✓），
+     但它们**首屏一次都用不到** ✗：架构视图要等你点「代码图谱 → ▦ 架构」，
+     PDF 阅读器要等你打开一份 PDF ✓。
+     ⚠️ 顺序仍然是硬约束、而且只强不弱 ✓：csLoadScripts 逐个 await，
+        「布局 → 画图 → 面板」的先后由 Promise 链保证 ✓，不再依赖 defer 的文档序。
+     ⚠️⚠️ 顺带记一笔**保守未改**的另一半：xmind-interaction.js 仍然同步留在上面 ✗✓ ——
+        它唯一的接线点是 app-draw.js:1136 那句
+        `if(window.__csXmindInteraction)window.__csXmindInteraction.bind(engine, XMIND_MAP)`，
+        而它跑在**导图渲染路径里**、守卫是「没有就静默跳过」✗ ——
+        模块没加载时 bind 不执行、之后也不会补绑 ✗ → 导图变成「点不动、框选不了」
+        （正是 2026-10-26 用户报的那个 bug ✓）。它没有单一的同步全局入口可懒转发，
+        所以用 26.6 KB 换零回归风险 ✓。 -->
 
 
 <!-- 新建文件 / 文件夹 对话框 -->

@@ -723,3 +723,71 @@ body:has(#save-tick.idle.show) #autosave-hint::before {
       0 0 6px 0 color-mix(in srgb, var(--p06-dot) 58%, transparent);
   }
 }
+
+
+/* ═════════════ 7. 首屏 stagger 补到 12 项（性能审计 2026-10 · P-10）══════════ */
+
+/* ▸ 问题（审计 P-10）——
+   app.css:3785 那条是 `…>button:nth-child(-n+8)`，只覆盖**每组前 8 个** ✓，
+   而「更多能力」那一组（.welcome-actions.more）有 **12 个按钮** ✗ ——
+   第 9~12 个既没有 animation、也没有 animation-delay ✓ →
+   整组入场走到它们那里时是「啪」地突然出现（后 4 个没有入场，直接就在终点）✗。
+
+   ▸ 修法：把这 4 个补上 —— 只补 **animation + animation-delay** 两样 ✓：
+     · 步进沿用原规则 40ms/个（第 8 个是 280ms ✓）→ 第 9~12 = 320 / 360 / 400 / 440ms ✓
+     · **一个布局属性都没碰** ✗：没有 margin / height / width / grid-* / transform ✓
+     · 动画用的是 app.css 已经在用的**同一套**（mo-stagger-in + 同一组令牌）✓ ——
+       不新增关键帧、不新增时长档位 ✓（mo-stagger-in 只动 opacity + translateY(3px)，
+       两者都不参与布局 ✓）
+     · 选择器写成 nth-child(n+9):nth-child(-n+12) 而**不是** n+9 ✗ ——
+       钉死上限，将来那组按钮再多几个也不会莫名其妙继承 0ms 延迟 ✓
+
+   ▸ 为什么写在 motion-batch1.css 而不去把 app.css 的 -n+8 改成 -n+12 ✗：
+     app.css 上了棘轮（4,212 行代码，全满）✓ —— 只能靠「同特异性 + 后出现」覆盖 ✓
+     （本文件在 index.html 里排在 app.css 之后 ✓）。
+
+   ⚠️⚠️ 这一段踩过**两次**坑，都写下来免得后人再踩 ✗：
+
+     坑一：animation **简写**会顺手把它包含的全部子属性一起重置，animation-delay 也在其中 ✗。
+       第一版正是这样：第 9~12 项有了动画，却一点延迟都没有
+       （浏览器实测 animation-delay 全是 0s ✗）。
+
+     坑二：想靠「多挂一个类」把简写写得更强（.more + 两个伪类 ⇒ 特异性 (1,4,1)）来压 app.css ✗，
+       结果把自己那 4 条 (1,3,1) 的延迟规则也一起压掉了 ✗。
+       第二版又改回和 app.css 同形的 -n+12，特异性 (1,3,1) 但排在 app.css **之后** ⇒
+       连**前 8 项**的延迟也被重置回 0s ✗ —— 那是一次真回归
+       （浏览器实测：1~8 的 0 / 40 / … / 280ms 步进全没了 ✗）。
+
+     ⇒ 最终写法：**只用长写（longhand），完全不碰 animation 简写** ✓ ——
+       animation-name / -duration / -timing-function / -fill-mode 这四件
+       **都不会动 animation-delay** ✓，于是：
+         · app.css 给第 1~8 项的 40ms 步进（0 / 40 / … / 280ms）**原样保留** ✓
+         · 这里只给第 9~12 项补上动画本体 + 320 / 360 / 400 / 440ms 的延迟 ✓
+       选择器钉死 n+9 到 -n+12（不是裸 n+9）✓ —— 将来那组按钮再多几个，
+       也不会莫名其妙继承 0ms 延迟 ✓。 */
+#workspace-welcome:not([hidden]) .welcome-actions.more>button:nth-child(n+9):nth-child(-n+12) {
+  animation-name: mo-stagger-in;
+  animation-duration: var(--mo-3);
+  animation-timing-function: var(--mo-out);
+  animation-fill-mode: both;
+}
+#workspace-welcome:not([hidden]) .welcome-actions.more>button:nth-child(9) { animation-delay: 320ms; }
+#workspace-welcome:not([hidden]) .welcome-actions.more>button:nth-child(10) { animation-delay: 360ms; }
+#workspace-welcome:not([hidden]) .welcome-actions.more>button:nth-child(11) { animation-delay: 400ms; }
+#workspace-welcome:not([hidden]) .welcome-actions.more>button:nth-child(12) { animation-delay: 440ms; }
+
+
+/* ═════════════ 8. 无障碍兜底：P-10 逐项入场整组关掉 ══════════════════════ */
+
+/* 前庭敏感的用户不看这套逐项入场 ✓。
+   ⚠️ app.css:3828 那条全局兜底**只压 duration / iteration-count** ✓ ——
+      动画还在跑，只是快到看不见；这里要的是「**没有**这条动画」✓，
+      所以显式 animation:none（和本文件第 4 / 6 节同一条规矩 ✓）。
+   覆盖**两组共 20 个**按钮（不只新补的 4 个）✓ —— 同一块版面里
+   一半有入场、一半没有，本身就是不一致 ✗。 */
+@media (prefers-reduced-motion: reduce) {
+  #workspace-welcome:not([hidden]) .welcome-actions>button {
+    animation: none !important;
+    animation-delay: 0s !important;
+  }
+}
