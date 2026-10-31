@@ -3039,8 +3039,13 @@
    三重加强：字重拉到 800 + 正文色提到最亮档 + 极细描边补足笔画厚度（0.28px，肉眼几乎不糊）✓ */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror strong,
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror b {
+  /* ★ 二次加强（实测驱动的修正）：样式其实都生效了（weight 800 / ink / stroke .28px 都量到），
+     但中文系统字体**没有 800 这一档**，浏览器把 700 与 800 合成为同一厚度 ⇒ 小字号下看不出 ✗。
+     用户观察「只有鼠标放上去才明显」正好点明关键：悬停时那条 text-shadow 发光才是可见来源 ✓。
+     所以把发光**常驻**（两层 .45px 微阴影把笔画撑厚），描边同步提到 .4px ✓。 */
   font-weight: 800; color: var(--pp-ink);
-  -webkit-text-stroke: .28px currentColor;
+  -webkit-text-stroke: .4px currentColor;
+  text-shadow: 0 0 .45px currentColor, 0 0 .45px currentColor;
 }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
