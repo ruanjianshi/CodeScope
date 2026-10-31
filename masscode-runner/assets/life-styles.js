@@ -3037,8 +3037,7 @@
    编辑器作用域里原来**没有任何 font-weight 规则**，全靠浏览器对 <strong> 的默认 bold；
    而中文系统字体（PingFang/思源）在 600 与 700 之间的字重差极小，配上我们偏暗的正文色就看不出 ✗。
    三重加强：字重拉到 800 + 正文色提到最亮档 + 极细描边补足笔画厚度（0.28px，肉眼几乎不糊）✓ */
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror strong,
-:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror b {
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view .ProseMirror b {   /* 与下面主题那条 strong 合流，此处只补 b */
   /* ★ 二次加强（实测驱动的修正）：样式其实都生效了（weight 800 / ink / stroke .28px 都量到），
      但中文系统字体**没有 800 这一档**，浏览器把 700 与 800 合成为同一厚度 ⇒ 小字号下看不出 ✗。
      用户观察「只有鼠标放上去才明显」正好点明关键：悬停时那条 text-shadow 发光才是可见来源 ✓。
@@ -3051,6 +3050,17 @@
   color: color-mix(in srgb, var(--pp-ink) 62%, var(--pp-ink2));
   -webkit-text-stroke: .3px currentColor;
 }
+/* ★ 2026-10-31 高亮「和参考不一样」：编辑器作用域里**从来没有 mark 规则** ⇒ 用的是浏览器默认整块黄底 ✗。
+   参考（theme.css:5429-5466）是**下半部注水**：linear-gradient(to top, 主色 30%, transparent) + background-size 100% 42%，
+   悬停注满 100%（cubic-bezier(.34,1.56,.64,1)）⇒ 形态是「划一道线」而不是「涂一个块」✓。 */
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark {
+  background-color: transparent; color: inherit;
+  background-image: linear-gradient(to top, color-mix(in srgb, var(--doc-primary) 30%, transparent), transparent);
+  background-repeat: no-repeat; background-size: 100% 42%; background-position: 0 100%;
+  border-radius: 2px; padding: 0 1px;
+  transition: background-size .4s cubic-bezier(.34,1.56,.64,1);
+}
+:is(.lw-memo-ce,.lw-j-ce).markdown-preview-view mark:hover { background-size: 100% 100%; }
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view p { margin: var(--lw-gap, 12px) 0; padding: 0 !important; line-height: var(--lw-lh, 1.5); }
 
 /* ── ⑧-a 加粗（theme.css:5529-5589「Underglow」）─────────────────────────
@@ -3058,8 +3068,11 @@
    悬停时把这条边框染成主色 70% 透明 + 文字改主色 + 下方投一层柔光 ✓ ——
    占位边框是关键 ✗：没有它，悬停一出现边框，行高就会跳一下 ✓。
    box-decoration-break: clone = 跨行时**每一行**各自画自己的底线 ✓。 */
+/* ★ 2026-10-31 加粗「和参考不一样」的真相：这里有**两条** strong 规则 —— 我 Earlier 加的那条在 3040 行，
+   而主题移植的这条在更后面 ⇒ 同特异性下后者胜，我的字重/描边全被它盖掉 ✗。已把加强项合并进这一条 ✓。
+   参考图的加粗是「又厚又亮」：字重 800 + 颜色比正文亮一档 + 细描边补厚度（不要 text-shadow，深色底会发白晕 ✗）。 */
 :is(.lw-memo-ce,.lw-j-ce).markdown-preview-view strong {
-  color: var(--doc-strong);
+  color: var(--pp-ink); font-weight: 800; -webkit-text-stroke: .35px currentColor;
   display: inline; position: relative;
   border-bottom: 2px solid transparent;
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
