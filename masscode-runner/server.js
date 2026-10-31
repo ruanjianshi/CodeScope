@@ -4580,7 +4580,7 @@ async function projectHealth() {
 
 /* --------------------------------- HTTP 服务 ---------------------------------- */
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.xmind': 'application/vnd.xmind.workbook', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xls': 'application/vnd.ms-excel', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.ppt': 'application/vnd.ms-powerpoint', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.xmind': 'application/vnd.xmind.workbook', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xls': 'application/vnd.ms-excel', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '.ppt': 'application/vnd.ms-powerpoint', '.otf': 'font/otf', '.ttf': 'font/ttf', '.ttc': 'font/collection', '.woff': 'font/woff', '.woff2': 'font/woff2', '.bib': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8' };
 
 let INDEX_CACHE = null;
 function indexAsset() {
@@ -4593,6 +4593,7 @@ function indexAsset() {
       size: stat.size,
       raw,
       gzip: zlib.gzipSync(raw, { level: zlib.constants.Z_BEST_SPEED }),
+      br: zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }),
       etag: `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`,
     };
   }
@@ -4604,42 +4605,46 @@ function sendIndex(req, res) {
     res.writeHead(304, { ETag: asset.etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding' });
     return res.end();
   }
-  const gzip = /(?:^|,)\s*gzip\s*(?:,|$)/i.test(String(req.headers['accept-encoding'] || ''));
-  const body = gzip ? asset.gzip : asset.raw;
+  const ae = String(req.headers['accept-encoding'] || '');
+  const encoding = /(?:^|,)\s*br\s*(?:,|$)/i.test(ae) ? 'br' : /(?:^|,)\s*gzip\s*(?:,|$)/i.test(ae) ? 'gzip' : '';
+  const body = asset[encoding] || asset.raw;
   res.writeHead(200, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': body.length,
     'Cache-Control': 'no-cache',
     ETag: asset.etag,
     Vary: 'Accept-Encoding',
-    ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
+    ...(encoding ? { 'Content-Encoding': encoding } : {}),
   });
   if (req.method === 'HEAD') return res.end();
   res.end(body);
 }
-/* 静态资源 gzip 缓存：/assets 下的 JS/CSS 未压缩合计约 4.8MB（reading-block-editor.js 2.7MB、
-   xterm.js 277KB、highlight 119KB…），原先这些一律原样发送。按 文件+大小+mtime 缓存压缩结果，
-   用 Z_BEST_SPEED（本地回环场景下省下的传输时间远大于多花的一点 CPU）。 */
-const STATIC_GZIP_CACHE = new Map();
-const STATIC_GZIP_CACHE_MAX = 40;
-const STATIC_GZIP_MIN_BYTES = 1024;
-const STATIC_GZIP_TYPES = /^(?:text\/|application\/(?:javascript|json|xml|manifest\+json)|image\/svg\+xml)/;
-function gzipStaticFile(file, stat, callback) {
-  const key = file + ':' + stat.size + ':' + Math.floor(stat.mtimeMs);
-  const hit = STATIC_GZIP_CACHE.get(key);
-  if (hit) {
-    STATIC_GZIP_CACHE.delete(key); STATIC_GZIP_CACHE.set(key, hit);
-    return callback(hit);
-  }
+/* 静态资源压缩缓存（br 优先 / gzip 兜底）：/assets 下的 JS/CSS 未压缩合计约 4.8MB
+   （reading-block-editor.js 2.7MB、xterm.js 277KB、highlight 119KB…），原先这些一律原样发送。
+   按「编码 + 文件 + 大小 + mtime」缓存压缩结果 —— 同一份文件只压一次，之后直接复用
+   （热请求不再重压；换版后 key 变，自然重压）。
+   ★ gzip 仍用 Z_BEST_SPEED（本地回环场景下省下的传输时间远大于多花的一点 CPU）。
+   ★ brotli 分两档（2026-10-31 T-04 收口）：
+     · ≤2MiB 走 **q11** —— 首屏 9 个文件 br5→br11 实测再省 163.8KB
+       （app.js −31.9 / life-workbench −33.3 / simpleMindMap −48.7 / app.css −14.8 …）；
+     · >2MiB 降 **q5**（交给 lib/static-compress.js 那份缓存）—— q11 对 2.7MB 的
+       reading-block-editor.js 要 3.6 秒，而它是**懒加载**的，不值得为 114KB 等三秒半。
+   ★ Content-Encoding 与 Vary: Accept-Encoding 由调用点写（sendIndex / streamStatic），
+     这里只管「按编码给出压缩后的字节」。 */
+const STATIC_COMPRESS_CACHE = new Map(); const STATIC_COMPRESS_CACHE_MAX = 40;
+const STATIC_COMPRESS_MIN_BYTES = 1024; const STATIC_COMPRESS_BR_MAX_Q11 = 2 * 1024 * 1024;
+const STATIC_COMPRESS_TYPES = /^(?:text\/|application\/(?:javascript|json|xml|manifest\+json)|image\/svg\+xml)/;
+function compressStaticFile(file, stat, encoding, callback) {
+  const key = encoding + '|' + file + ':' + stat.size + ':' + Math.floor(stat.mtimeMs);
+  const hit = STATIC_COMPRESS_CACHE.get(key);
+  if (hit) { STATIC_COMPRESS_CACHE.delete(key); STATIC_COMPRESS_CACHE.set(key, hit); return callback(hit); }
   fs.readFile(file, (error, raw) => {
     if (error) return callback(null);
-    zlib.gzip(raw, { level: zlib.constants.Z_BEST_SPEED }, (gzipError, gz) => {
-      // 压不动（已经很小的资源、已压缩过的二进制）就照常流式发送，避免白费 CPU 反而变大。
-      if (gzipError || !gz || gz.length >= raw.length) return callback(null);
-      STATIC_GZIP_CACHE.set(key, gz);
-      while (STATIC_GZIP_CACHE.size > STATIC_GZIP_CACHE_MAX) STATIC_GZIP_CACHE.delete(STATIC_GZIP_CACHE.keys().next().value);
-      callback(gz);
-    });
+    // 压不动（已经很小的资源、已压缩过的二进制）就照常流式发送，避免白费 CPU 反而变大。
+    const done = (failure, out) => { if (failure || !out || out.length >= raw.length) return callback(null); STATIC_COMPRESS_CACHE.set(key, out); while (STATIC_COMPRESS_CACHE.size > STATIC_COMPRESS_CACHE_MAX) STATIC_COMPRESS_CACHE.delete(STATIC_COMPRESS_CACHE.keys().next().value); callback(out); };
+    if (encoding !== 'br') return zlib.gzip(raw, { level: zlib.constants.Z_BEST_SPEED }, done);
+    if (raw.length > STATIC_COMPRESS_BR_MAX_Q11) return brotliStaticFile(file, stat, (out) => done(null, out));
+    zlib.brotliCompress(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }, done);
   });
 }
 /* ⚠️⚠️ 这个函数**必须返回 true** ✗✗（2026-10-11 实测修）——
@@ -4659,7 +4664,7 @@ function streamStatic(req, res, root, relative, options = {}) {
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
     const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
     const cacheControl = options.cacheControl || 'no-cache';
-    const accepts = String(req.headers['accept-encoding'] || ''); const compressible = stat.size >= STATIC_GZIP_MIN_BYTES && STATIC_GZIP_TYPES.test(type);
+    const accepts = String(req.headers['accept-encoding'] || ''); const compressible = stat.size >= STATIC_COMPRESS_MIN_BYTES && STATIC_COMPRESS_TYPES.test(type);
     const canGzip = compressible && /(?:^|,)\s*gzip\s*(?:,|$)/i.test(accepts); const canBr = compressible && /(?:^|,)\s*br\s*(?:,|$)/i.test(accepts);
     if (req.headers['if-none-match'] === etag) {
       res.writeHead(304, { ETag:etag, 'Cache-Control':cacheControl, ...(compressible ? { Vary:'Accept-Encoding' } : {}) });
@@ -4691,8 +4696,8 @@ function streamStatic(req, res, root, relative, options = {}) {
       input.on('error', () => { if (!res.headersSent) send(res, 500, { ok:false, error:'读取静态资源失败' }); else res.destroy(); });
       input.pipe(res);
     };
-    const fallbackGzip = () => (canGzip ? gzipStaticFile(file, stat, (g) => finish(g, 'gzip')) : finish(null));
-    if (canBr) brotliStaticFile(file, stat, (b) => (b ? finish(b, 'br') : fallbackGzip())); else fallbackGzip();
+    const fallbackGzip = () => (canGzip ? compressStaticFile(file, stat, 'gzip', (g) => finish(g, 'gzip')) : finish(null));
+    if (canBr) compressStaticFile(file, stat, 'br', (b) => (b ? finish(b, 'br') : fallbackGzip())); else fallbackGzip();
   });
   return true;   /* 发了就算吃掉 ✓ */
 }
