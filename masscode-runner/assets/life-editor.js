@@ -647,22 +647,39 @@
     }));
   }
 
-  /* 一条大纲条目的 HTML ✓（2026-10-31 起：图标 + 文本各一个 span，给「胶囊」样式用）
+  /* 分支色盘：7 色一循环 ✓ —— 顺序照 Phycat theme.css:8487-8501 的 nth-child(7n+N) ✓
+     N=1 pink / 2 cyan / 3 orange / 4 green / 5 purple / 6 red / 7 blue ✓
+     ⚠️ 颜色跟**第几个 H1 分支**走 ✗ 不跟层级走 —— 同一分支下的 H2 继承同一个 --bc ✓；
+        lv3 及更深一律中性色（CSS 侧根本不读 --bc ✓）。 */
+  const OUTL_BR = ['#ef7bb0', '#3fb6c4', '#f0883e', '#4bbd7a', '#a97bf0', '#f2555a', '#5b9cf5'];
+
+  /* 一条大纲条目的 HTML ✓（图标 + 文本 + 折叠箭头，给「胶囊」样式用）
      ⚠️ 结构在**两种样式下完全一样** ✗（JS 不判断样式 ✓）——
-        极简样式里 .lw-outl-ic 是 display:none ✓、.lw-outl-tx 是裸 inline ✓，
+        极简样式里 .lw-outl-ic / .lw-outl-ar 都是 display:none ✓、.lw-outl-tx 是裸 inline ✓，
         所以极简那套的 computed 与改之前逐项相同 ✓（探针实测对照过 ✓）。
      ⚠️ 缩进原来内联写 padding-left ✗ → 现在写自定义属性 --ind ✓：
         极简用 padding-left:calc(8px + var(--ind)) 复现原值（8/20/32/44 ✓），
-        胶囊用 margin-left:var(--ind) 让「胶囊本身」缩进 ✓（胶囊的内边距必须固定 2px 8px ✗）。
+        胶囊用 margin-left:var(--ind) 让「胶囊本身」缩进 ✓（胶囊的内边距必须固定 6px 10px ✗）。
         同一个数字两种用法，CSS 各写一条，JS 一个字都不用判 ✓。
+     ★ 分支色：内联 --bc（分支色）+ 属性 data-br（分支序号 0~6）✓ ——
+        CSS 只用 var(--bc) ✓（需求原话 ✓），data-br 留给排查 / 测量用 ✓。
+     ★ 折叠箭头：只有**分支级且紧跟更深标题**（lv1/lv2）才进 DOM ✓ ——
+        无子级条目在 DOM 里**根本没有** .lw-outl-ar ✓（验收按 DOM 计数 ✓，不是 display:none ✓）。
      ⚠️ 图标用 index.html 里**现成的 sprite** ✓（H1~H3 = i-folder 文件夹 / H4~H6 = i-file 文档 ✓），
-        不引图片、不引字体 ✓；上色交给 CSS 的 --pill-c（走 currentColor ✓）。 */
-  function outlItemHtml(h, i) {
+        不引图片、不引字体 ✓；上色交给 CSS 的 --bc（走 currentColor ✓）。 */
+  function outlItemHtml(h, i, all) {
     const ico = h.level <= 3 ? 'i-folder' : 'i-file';
-    return '<button type="button" class="lw-outl-i lv' + h.level + '" data-oi="' + i
-      + '" style="--ind:' + (h.level - 1) * 12 + 'px" title="' + esc(h.text) + '">'
+    const nx = all && all[i + 1];
+    const kid = !!(nx && nx.level > h.level && h.level <= 2);
+    const br = (Number(h.br) || 0) % OUTL_BR.length;
+    return '<button type="button" class="lw-outl-i lv' + h.level
+      + (kid ? ' has-kid' : '') + (h.brEnd ? ' br-end' : '')
+      + '" data-oi="' + i + '" data-br="' + br
+      + '" style="--ind:' + (h.level - 1) * 12 + 'px;--bc:' + OUTL_BR[br] + '" title="' + esc(h.text) + '">'
       + '<svg class="lw-outl-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#' + ico + '"/></svg>'
-      + '<span class="lw-outl-tx">' + esc(h.text) + '</span></button>';
+      + '<span class="lw-outl-tx">' + esc(h.text) + '</span>'
+      + (kid ? '<span class="lw-outl-ar" aria-hidden="true">▾</span>' : '')
+      + '</button>';
   }
 
   /* 重建条目。⚠️ 空笔记 → **占位**「还没有标题」✓（面板展开时不留空条 ✗）*/
@@ -673,6 +690,19 @@
     const list = panel.querySelector('.lw-outl-list');
     if (!list) return;
     const items = outlHeads(s.host);
+    /* ★ 分支编号 / 分支末标记 ✓（只在数据层算一遍，渲染层直接用 ✓）
+       · br：从 0 起，**遇到 H1 才 +1** ⇒ 第一个分支（含它下面的 H2/H3…）全是 0 ✓；
+         H1 之前若直接有 H2/H3，归到 0 ✓（不造空分支前缀 ✓）。
+       · brEnd：下一条是新的 H1（或没有下一条）= 本分支的最后一条 ✓ ——
+         胶囊样式据此给 10px 分组间距 ✓（分支内部只有 2px ✓）。
+       两个字段每轮重建都重算 ✓（不缓存 ✗，正文一改就全对 ✓）。 */
+    let br = -1;
+    items.forEach((h, i) => {
+      if (h.level === 1) br += 1;
+      h.br = Math.max(0, br);
+      const nxt = items[i + 1];
+      h.brEnd = !nxt || nxt.level === 1;
+    });
     s.items = items;
     const keep = list.scrollTop;
     list.innerHTML = items.length

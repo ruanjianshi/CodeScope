@@ -64,9 +64,9 @@
         A 块 = 深色默认值 + App 语义令牌映射；B 块 = 浅色主题只换值 ✓。
         因为 A 块的选择器在**任何**主题下都命中同一个元素 ✓，
         --pp-* 的延迟求值保证 B 块换值后映射自动跟上 ✓，不用复制整套样式 ✓。 */
-  .lw-inpanel, #lw-toast, #lw-savetoast, #lw-ctx, #lw-map-zoom, #lw-ml-pick { /* 深色：哑光墨纸 */ --pp-page:#14120f;   --pp-sheet:#1c1a16;   --pp-sheet2:#232019; --pp-ink:#ece7db;    --pp-ink2:#a49d8e;    --pp-line:rgba(236,231,219,.12); --pp-accent:#d8c9a3; --pp-on-accent:#17140f; --pp-ok:#8fbf8a;     --pp-warn:#d3a24a;    --pp-err:#e0796a; --pp-glow:rgba(255,255,255,.05);   /* 内高光：深色纸很轻，不然发灰 */ --pp-shadow:0 1px 1px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.42), 0 12px 28px rgba(0,0,0,.38); --pp-shadow-lift:0 2px 2px rgba(0,0,0,.45), 0 8px 18px rgba(0,0,0,.55), 0 22px 44px rgba(0,0,0,.50); --pp-shadow-float:0 4px 8px rgba(0,0,0,.45), 0 16px 36px rgba(0,0,0,.55), 0 40px 80px rgba(0,0,0,.50); --pp-inset:inset 0 2px 4px rgba(0,0,0,.55); --pp-scrim:rgba(8,7,5,.62); --pp-hover:rgba(236,231,219,.07); /* App 的语义令牌一起改 ✓ —— 面板里的 <button>/<input> 吃的是 html[data-theme] 那层全局皮肤（app.css:3293-3309 渐变+内高光+抬起/按下）✓， 把这几个值换成纸色，它们就自动变成纸感控件 ✓，不用逐条重写 ✓。 */ --bg:var(--pp-page); --panel:var(--pp-sheet); --panel2:var(--pp-sheet2); --border:var(--pp-line); --text:var(--pp-ink); --dim:var(--pp-ink2); --accent:var(--pp-accent); --ok:var(--pp-ok); --err:var(--pp-err); --control:var(--pp-sheet2); --control-hover:color-mix(in srgb, var(--pp-sheet2) 88%, var(--pp-ink) 12%); --surface-hover:color-mix(in srgb, var(--pp-sheet2) 92%, var(--pp-ink) 8%); --accent-soft:color-mix(in srgb, var(--pp-accent) 14%, transparent); --theme-header:var(--pp-sheet); --theme-side:var(--pp-page); --theme-sub:var(--pp-page); --theme-deep:var(--pp-page); --theme-elevated:var(--pp-sheet); --theme-code:var(--pp-sheet2); --theme-overlay:var(--pp-scrim); }
+  .lw-inpanel, #lw-toast, #lw-savetoast, #lw-ctx, #lw-map-zoom, #lw-ml-pick { /* 深色：哑光墨纸 */ --pp-page:#14120f;   --pp-sheet:#1c1a16;   --pp-sheet2:#232019; --pp-ink:#ece7db;    --pp-ink2:#a49d8e;    --pp-line:rgba(236,231,219,.12); --pp-accent:#d8c9a3; --pp-on-accent:#17140f; --pp-ok:#8fbf8a;     --pp-warn:#d3a24a;    --pp-err:#e0796a; --pp-glow:rgba(255,255,255,.05);   /* 内高光：深色纸很轻，不然发灰 */ --pp-shadow:0 1px 1px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.42), 0 12px 28px rgba(0,0,0,.38); --pp-shadow-lift:0 2px 2px rgba(0,0,0,.45), 0 8px 18px rgba(0,0,0,.55), 0 22px 44px rgba(0,0,0,.50); --pp-shadow-float:0 4px 8px rgba(0,0,0,.45), 0 16px 36px rgba(0,0,0,.55), 0 40px 80px rgba(0,0,0,.50); --pp-inset:inset 0 2px 4px rgba(0,0,0,.55); --pp-scrim:rgba(8,7,5,.62); --pp-hover:rgba(236,231,219,.07); /* App 的语义令牌一起改 ✓ —— 面板里的 <button>/<input> 吃的是 html[data-theme] 那层全局皮肤（app.css:3293-3309 渐变+内高光+抬起/按下）✓， 把这几个值换成纸色，它们就自动变成纸感控件 ✓，不用逐条重写 ✓。 */ --bg:var(--pp-page); --panel:var(--pp-sheet); --panel2:var(--pp-sheet2); --border:var(--pp-line); --text:var(--pp-ink); --dim:var(--pp-ink2); --accent:var(--pp-accent); --ok:var(--pp-ok); --err:var(--pp-err); --control:var(--pp-sheet2); --control-hover:color-mix(in srgb, var(--pp-sheet2) 88%, var(--pp-ink) 12%); --surface-hover:color-mix(in srgb, var(--pp-sheet2) 92%, var(--pp-ink) 8%); --accent-soft:color-mix(in srgb, var(--pp-accent) 14%, transparent); --theme-header:var(--pp-sheet); --theme-side:var(--pp-page); --theme-sub:var(--pp-page); --theme-deep:var(--pp-page); --theme-elevated:var(--pp-sheet); --theme-code:var(--pp-sheet2); --theme-overlay:var(--pp-scrim); --pp-pill-bg:8%; }
   /* 浅色 App 主题（light）→ 暖白纸；只换值 ✓ */
-  html[data-theme="light"] .lw-inpanel, html[data-theme="light"] #lw-toast, html[data-theme="light"] #lw-savetoast, html[data-theme="light"] #lw-ctx, html[data-theme="light"] #lw-map-zoom, html[data-theme="light"] #lw-ml-pick { --pp-page:#f4f1e8;   --pp-sheet:#fdfbf6;   --pp-sheet2:#f7f3e9; --pp-ink:#221f1b;    --pp-ink2:#6c6659;    --pp-line:rgba(34,31,27,.12); --pp-accent:#2f5d46; --pp-on-accent:#fdfbf6; --pp-ok:#3f7a4f;     --pp-warn:#9a6b1f;    --pp-err:#a23b2a; --pp-glow:rgba(255,255,255,.72); --pp-shadow:0 1px 1px rgba(28,24,16,.10), 0 4px 10px rgba(28,24,16,.09), 0 12px 28px rgba(28,24,16,.08); --pp-shadow-lift:0 2px 2px rgba(28,24,16,.13), 0 8px 18px rgba(28,24,16,.14), 0 22px 44px rgba(28,24,16,.12); --pp-shadow-float:0 4px 8px rgba(28,24,16,.16), 0 16px 36px rgba(28,24,16,.18), 0 40px 80px rgba(28,24,16,.16); --pp-inset:inset 0 2px 4px rgba(28,24,16,.20); --pp-scrim:rgba(34,31,27,.34); --pp-hover:rgba(34,31,27,.06); }
+  html[data-theme="light"] .lw-inpanel, html[data-theme="light"] #lw-toast, html[data-theme="light"] #lw-savetoast, html[data-theme="light"] #lw-ctx, html[data-theme="light"] #lw-map-zoom, html[data-theme="light"] #lw-ml-pick { --pp-page:#f4f1e8;   --pp-sheet:#fdfbf6;   --pp-sheet2:#f7f3e9; --pp-ink:#221f1b;    --pp-ink2:#6c6659;    --pp-line:rgba(34,31,27,.12); --pp-accent:#2f5d46; --pp-on-accent:#fdfbf6; --pp-ok:#3f7a4f;     --pp-warn:#9a6b1f;    --pp-err:#a23b2a; --pp-glow:rgba(255,255,255,.72); --pp-shadow:0 1px 1px rgba(28,24,16,.10), 0 4px 10px rgba(28,24,16,.09), 0 12px 28px rgba(28,24,16,.08); --pp-shadow-lift:0 2px 2px rgba(28,24,16,.13), 0 8px 18px rgba(28,24,16,.14), 0 22px 44px rgba(28,24,16,.12); --pp-shadow-float:0 4px 8px rgba(28,24,16,.16), 0 16px 36px rgba(28,24,16,.18), 0 40px 80px rgba(28,24,16,.16); --pp-inset:inset 0 2px 4px rgba(28,24,16,.20); --pp-scrim:rgba(34,31,27,.34); --pp-hover:rgba(34,31,27,.06); --pp-pill-bg:5%; }
   /* ── 编辑器纸面令牌（2026-10-31）══════════════════════════════════════════
      ── 用户报的现象 ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯ ⋯⋯
      「背景色彩有些突兀」：面板是暖墨纸（--pp-page / --pp-sheet），
@@ -797,7 +797,7 @@
   /* 条目里的图标与文本壳：**极简样式里必须完全隐形** ✓
      ⚠️ 图标 display:none（否则极简每行左侧多出 11px + gap ✗，观感就和定稿那版不一样了 ✓）；
         文本壳是裸 span（不加任何声明）✓ —— 这样极简那套的行盒、省略号、行高一个字都没变 ✓。 */
-  .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ic { display:none; }
+  .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ic, .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ar { display:none; }
   /* ══ 大纲宽度：右侧拖动条（2026-10-31）══════════════════════════════════
      ★ 4px 热区**整条压在栏内**（right:0 ✓）：一开始写的 right:-2px（探出去 2px，更好抓）✗，
        实测 aside 自己的 scrollWidth 立刻从 187 变成 189 ✓（绝对定位的子元素溢出也算进
@@ -810,47 +810,56 @@
   .lw-outl .lw-outl-grip[data-outl-grip] { position:absolute; top:0; right:0; bottom:0; width:4px; z-index:3; cursor:col-resize; background:transparent; touch-action:none; }
   .lw-outl .lw-outl-grip[data-outl-grip]::after { content:''; position:absolute; top:0; bottom:0; right:0; width:1px; background:transparent; transition:background-color .12s ease; }
   .lw-outl .lw-outl-grip[data-outl-grip]:hover::after, .lw-outl .lw-outl-grip[data-outl-grip].on::after { background:var(--pp-accent); }
-  /* ══ 大纲第二种视觉：胶囊树形（Phycat 文件树观感 · 2026-10-31）═════════════════
-     ★ 只在 .lw-outl.pill 下生效 ✓（「⋯ 更多 → 大纲样式：极简 / 胶囊」切换，默认极简 ✓）——
-       上面那套极简的规则一个字都没改 ✓，所以两种样式**并存** ✓。
-     ★ 配色（需求 ②）：三个色相**按层级轮转** ✓ ——
-         H1/H4 = --doc-primary（森林绿）、H2/H5 = --doc-secondary（青）、H3/H6 = --pp-accent（沙）✓，
-         常态底 = 该色相 9%（需求 8%~10% 之间 ✓）。
-       当前项（需求 ⑤）= 同一个色相提到 17%（需求 16%~18% ✓）+ 左侧 2px 强调竖条 + 字重 600 ✓。
-       ⚠️ --doc-* 定义在 :root（assets/doc-theme.css ✓）、--pp-* 定义在 .lw-inpanel ✓，
-          大纲栏就在面板里 ✓ 三个都解析得到（探针实测 computed 有值 ✓）。
-     ★ 缩进（需求 ④）：极简靠 padding-left，胶囊**必须**靠 margin-left ✗ ——
-       胶囊的内边距是固定的 2px 8px（需求 ①），缩进只能由外距给 ✓；
-       两边共用 JS 写的 --ind（0/12/24/36…px）✓，所以层级节奏没变 ✓。
-     ★ 引导线（需求 ④）：沿用极简那条 repeating-linear-gradient ✓，只把 left 从 6px 改成 calc(6px - var(--ind)) ✓
-       —— 线的**绝对位置**（6 / 18 / 30…）和极简完全一样 ✓，而且正好落在胶囊左侧的缩进槽里，
-       视觉上就是「从父项胶囊底下连下来」✓；top 收到 -2px（= 下边距）✓，
-       相邻两条的线就能首尾相接、一路连到父项胶囊的底边 ✓。
-       ⚠️ 颜色是**唯一刻意不同**的一处：极简那条是 --pp-line 60%（≈7% 白）✗ ——
-          极简没有底色，7% 够用 ✓；胶囊每行都有 9% 的色块压着，7% 的线在缩进槽里
-          **肉眼几乎看不见** ✓（截图对照过 ✓）→ 胶囊这套用 --pp-ink2 30%（中性灰 ✓），
-          节奏（1px / 12px）一格没动 ✓。
-     ⚠️ 选择器一律 ≥（0-4-0）级 ✓：极简的 .lv* 是（0-4-0）、:hover 是（0-4-0）、.cur 是（0-4-0），
-        这里每条都带 .pill（+1 类）→（0-5-0），靠特异性赢，**不用 !important** ✓。
-     ⚠️ 顺序也是规矩 ✗：.cur 必须写在 :hover 后面（同为 0-5-0，靠后来者覆盖 ✓），
-        和极简那段是同一个道理 ✓。
+  /* ══ 大纲第二种视觉：分支胶囊树（Phycat 文件侧栏 · 2026-10-31 重做）═══════════════
+     ★ 只在 .lw-outl.pill 下生效 ✓（「⋯ 更多 → 大纲样式：极简 / 胶囊」，默认极简 ✓）——
+       上面那套极简规则**一个字都没改** ✓，两种样式并存 ✓。
+     ★ 这一版和上一版（已被否 ✗）的区别，正是用户点名的四条：
+        ① 上一版**每一行都是胶囊** ✗ → 现在只有**分支级**（lv1/lv2）是胶囊 ✓，
+           lv3 及更深是**纯文字** ✓（无底色 / 无边框 / 无圆角 ✓，只靠缩进 + 引导线体现层级 ✓）；
+        ② 上一版颜色**按层级轮转** ✗（lv1/lv4 同色、lv2/lv5 同色…）→ 现在按**分支**给 ✓：
+           第 N 个 H1 取 7 色盘的第 N 色 ✓（JS 写 --bc + data-br ✓），
+           该分支下的 H2 **继承同一个 --bc** ✓，lv3 及更深一律中性色（CSS 根本不读 --bc ✓）；
+        ③ 上一版没有折叠箭头 ✗ → 现在**有子级的 lv1/lv2** 才在 DOM 里生成 ▾ ✓；
+        ④ 上一版子级也带底色和圆角 ✗ → 现在子级透明 ✓，不和父级抢视觉 ✓。
+     ★ 数值来源：Phycat theme.css 的**源码规格**（父级抓的权威版 ✓，不是观感近似 ✓）——
+         folder 行（theme.css:8514-8533）：圆角 10px / padding 6px 10px / 底色 92~95% 透明 ✓；
+         file 行（theme.css:8597-8612）：圆角 8px / padding 5px 8px / **默认透明** / 文字 muted ✓；
+         箭头（.collapse-icon）：靠右、16px 宽、颜色 muted、opacity .65 ✓；
+         分组间距：Phycat 的 .nav-folder 是**真嵌套**（标题 + children 容器）✗，
+         我们的是**扁平标题流** ✗ → 10px 只标在「每个分支的最后一条」上 ✓（JS 写 .br-end ✓），
+         这样它只出现在分支之间、不会把 H1 和它自己的 H2 拆开 ✓。
+     ★ 缩进：极简靠 padding-left（--ind × 12px ✓），胶囊必须靠 margin-left ✓ ——
+         胶囊的内边距是规格写死的 6px 10px ✗，缩进只能给外距 ✓。
+         胶囊的台阶是 **20px**（= --ind × 5/3 ✓，见 --pi）而不是 12px ✓：
+         因为 folder 行多一个 12px 图标 + 6px 间距 ✓，用 12px 台阶的话
+         H3 文字（32px）会跑到父级 H2 文字（44px）的**左边**，层级看着是反的 ✗；
+         20px 台阶下 H3 文字 = 40 + 8 = 48px ✓，正好和父级 H2 的文字左缘对齐 ✓。
+     ★ 引导线：沿用极简那条 ::before（一条伪元素、1px 竖线 ✓），但——
+         · 位置改成**每一级自己的父级列** ✓：left 固定 -10px ✓（= 缩进台阶 20px 时
+           父级图标左缘相对本条目的位置 ✓），所以 lv2 的线落在 10px、lv3 的线落在 30px ✓；
+         · 宽度 1px（不再用 --gw 的多列渐变 ✓）—— 参考图里子级只有**一条**竖线 ✓；
+         · 颜色 color-mix(--pp-line 55%, transparent) ✓（用户指定 ✓，比极简的 60% 淡一档 ✓）；
+         · top/bottom 各探出 3px ✓ —— 相邻两行之间只有 1~2px 外边距 ✓，
+           探出 3px 才能首尾相接、看起来是一条连续的线 ✓（不是每行一段 ✓）。
+     ⚠️ 选择器一律（0-4-0）以上 ✓：极简的条目是（0-3-0）、:hover 是（0-4-0）、.cur 是（0-4-0）✓，
+        这里每条都带 .pill（+1 类）→（0-5-0）/（0-6-0）✓，靠特异性赢，**不用 !important** ✓。
+     ⚠️ 顺序也是规矩 ✗：:hover 写在条目之后、.cur 写在 :hover 之后 ✓（靠后来者覆盖 ✓）。
+     ⚠️ overflow 必须放开 ✗✗ —— 极简的 ::before 画在条目**框内** ✓；胶囊的条目右移了 --pi，
+        同一条线落到框**外面**（left 为负数 ✓），条目上原本有 overflow:hidden（为了省略号 ✗）
+        → 线会被整条裁掉 ✓（上一版实测过 ✓）。所以这里 overflow:visible ✓，
+        省略号交给 .lw-outl-tx（它自己 overflow:hidden ✓）。
      （本文件是模板字符串：注释里不写反引号 ✗）*/
-  .lw-outl.pill .lw-outl-list .lw-outl-i { display:flex; align-items:center; gap:6px; width:calc(100% - var(--ind,0px)); height:24px; min-height:24px; line-height:24px; margin:0 0 2px var(--ind,0px); padding:2px 8px; border-radius:8px; background:color-mix(in srgb, var(--pill-c, var(--pp-accent)) 9%, transparent); }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4 { --pill-c:var(--doc-primary); }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.lv2, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5 { --pill-c:var(--doc-secondary); }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { --pill-c:var(--pp-accent); }
-  /* ⚠️ overflow 必须放开 ✗✗ —— 极简那套的引导线画在条目**框内**（padding-left 留出的槽 ✓），
-     胶囊这套的条目整体右移了 var(--ind)，同一条线就落到了框**外面**（left 为负数 ✓），
-     而 .lw-outl-i 上有 overflow:hidden（为了省略号 ✗）→ 线被整条裁掉 ✓
-     （第一版实测：computed 里 background-image 明明有值，屏幕上一条都看不见 ✓）。
-     → 胶囊条目 overflow:visible ✓；省略号交给 .lw-outl-tx（它自己 overflow:hidden ✓）。 */
-  .lw-outl.pill .lw-outl-list .lw-outl-i { overflow:visible; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i::before { left:calc(6px - var(--ind,0px)); top:-2px; background-image:repeating-linear-gradient(to right, color-mix(in srgb, var(--pp-ink2) 30%, transparent) 0 1px, transparent 1px 12px); }
-  .lw-outl.pill .lw-outl-list .lw-outl-i .lw-outl-ic { flex:none; display:block; width:11px; height:11px; color:var(--pill-c, var(--pp-accent)); fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i { --pi:calc(var(--ind,0px) * 5 / 3); display:flex; align-items:center; gap:6px; width:calc(100% - var(--pi,0px)); min-width:0; height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 8px; border:0; border-radius:8px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font-family:${UI}; font-weight:400; font-size:11px; text-align:left; white-space:nowrap; overflow:visible; text-overflow:clip; cursor:pointer; transition:background-color .16s ease,color .16s ease; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2 { height:34px; min-height:34px; margin:2px 0 2px var(--pi,0px); padding:6px 10px; border-radius:10px; background:color-mix(in srgb, var(--bc, var(--pp-accent)) var(--pp-pill-bg, 8%), transparent); color:var(--pp-ink); font-weight:500; font-size:12px; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { height:30px; min-height:30px; margin:1px 0 1px var(--pi,0px); padding:5px 8px; border-radius:8px; background:transparent; color:var(--pp-ink2); font-weight:400; font-size:11px; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.br-end { margin-bottom:10px; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1 .lw-outl-ic, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2 .lw-outl-ic { display:block; flex:none; width:12px; height:12px; color:var(--bc, var(--pp-accent)); fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.has-kid .lw-outl-ar { display:block; flex:0 0 16px; width:16px; margin-left:8px; text-align:center; font-size:12px; line-height:1; color:var(--pp-ink2); opacity:.65; }
   .lw-outl.pill .lw-outl-list .lw-outl-i .lw-outl-tx { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i:hover, .lw-outl.pill .lw-outl-list .lw-outl-i:active { background:color-mix(in srgb, var(--pill-c, var(--pp-accent)) 14%, transparent); box-shadow:none; transform:none; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.cur { background:color-mix(in srgb, var(--pill-c, var(--pp-accent)) 17%, transparent); color:var(--pp-ink); font-weight:600; }
-  .lw-outl.pill .lw-outl-list .lw-outl-i.cur::after { top:3px; bottom:3px; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1:hover, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2:hover, .lw-outl.pill .lw-outl-list .lw-outl-i.lv1:active, .lw-outl.pill .lw-outl-list .lw-outl-i.lv2:active { background:color-mix(in srgb, var(--bc, var(--pp-accent)) 10%, transparent); color:var(--pp-ink); box-shadow:none; transform:none; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.cur:hover, .lw-outl.pill .lw-outl-list .lw-outl-i.cur:active { background:color-mix(in srgb, var(--pp-accent) 12%, transparent); color:var(--pp-accent); font-weight:500; box-shadow:none; transform:none; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5.cur, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6.cur { background:transparent; color:var(--pp-ink); font-weight:500; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv2::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv3::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5::before, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6::before { left:-10px; width:1px; top:-3px; bottom:-3px; background-repeat:no-repeat; background-image:none; background-color:color-mix(in srgb, var(--pp-line) 55%, transparent); }
   /* ≡ 开关：默认不占宽度 ✓ —— 1280 那条栏实测**已放满**（再加 22px 溢出 11px ✗），
      所以只在编辑区够宽（容器 ≥861px）时才出现 ✓；窄屏走「⋯ 更多」/ ⌥⌘O ✓。 */
   .lw-nt-bar .lw-outl-tog { display:none; }
