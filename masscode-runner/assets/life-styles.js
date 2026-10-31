@@ -749,7 +749,7 @@
   .lw-nt-main > .lw-nt-body { min-width:0; }
   .lw-jr-row { flex:1; min-height:0; display:flex; }
   .lw-jr-main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  .lw-outl { display:none; flex:none; width:188px; min-width:0; flex-direction:column; background:var(--pp-page); border-right:1px solid ${T.lineDim}; }
+  .lw-outl { position:relative; display:none; flex:none; width:188px; min-width:0; flex-direction:column; background:var(--pp-page); border-right:1px solid ${T.lineDim}; }
   .lw-outl.on { display:flex; }
   .lw-outl-hd { display:flex; align-items:center; gap:6px; padding:9px 8px 7px 10px; border-bottom:1px solid ${T.lineDim}; }
   .lw-outl-hd b { font-size:12px; font-weight:600; letter-spacing:0; color:var(--pp-ink2); } .lw-outl-hd .sp { flex:1; }
@@ -775,7 +775,7 @@
      ⚠️ 底色一律用 background / background-color 声明 ✗ 不用 background-image：
         条目自己的 background-image 要留给引导线之外的东西吗？不用 —— 引导线画在 ::before 上 ✓。
      （本文件是模板字符串：注释里不写反引号 ✗）*/
-  .lw-outl .lw-outl-list .lw-outl-i { position:relative; display:block; width:100%; min-width:0; height:22px; min-height:22px; line-height:22px; margin:0; padding:0 8px; border:0; border-radius:4px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font-family:${UI}; font-weight:400; font-size:12px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; transition:background-color .12s ease,color .12s ease; }
+  .lw-outl .lw-outl-list .lw-outl-i { position:relative; display:block; width:100%; min-width:0; height:22px; min-height:22px; line-height:22px; margin:0; padding:0 8px; padding-left:calc(8px + var(--ind,0px)); border:0; border-radius:4px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font-family:${UI}; font-weight:400; font-size:12px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; transition:background-color .12s ease,color .12s ease; }
   /* 层级：字号 12 / 11.5 / 11 / 10.5 / 10 / 10 ✓；同时把「这一级要画几条引导线」写进 --gw ✓
      （= 祖先层数 × 12px；最深一级不画自己的线，所以 lv6 只有 5 条 ✓）*/
   .lw-outl .lw-outl-list .lw-outl-i.lv1 { --gw:0px; font-size:12px; font-weight:600; }
@@ -794,6 +794,63 @@
      ⚠️ 必须写在 .lv* / :hover **之后** ✗ —— 同为（0-4-0）靠后来者覆盖 ✓ */
   .lw-outl .lw-outl-list .lw-outl-i.cur { border:0; background:color-mix(in srgb, var(--pp-accent) 12%, transparent); box-shadow:none; transform:none; color:var(--pp-accent); font-weight:600; }
   .lw-outl .lw-outl-list .lw-outl-i.cur::after { content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:1px; background:var(--pp-accent); pointer-events:none; }
+  /* 条目里的图标与文本壳：**极简样式里必须完全隐形** ✓
+     ⚠️ 图标 display:none（否则极简每行左侧多出 11px + gap ✗，观感就和定稿那版不一样了 ✓）；
+        文本壳是裸 span（不加任何声明）✓ —— 这样极简那套的行盒、省略号、行高一个字都没变 ✓。 */
+  .lw-outl .lw-outl-list .lw-outl-i .lw-outl-ic { display:none; }
+  /* ══ 大纲宽度：右侧拖动条（2026-10-31）══════════════════════════════════
+     ★ 4px 热区**整条压在栏内**（right:0 ✓）：一开始写的 right:-2px（探出去 2px，更好抓）✗，
+       实测 aside 自己的 scrollWidth 立刻从 187 变成 189 ✓（绝对定位的子元素溢出也算进
+       scrollWidth ✓）→ 「拖到最窄也不许出现横向滚动条」那条当场就挂 ✓，所以收回框内 ✓。
+       平时**全透明** ✓（不占视觉），悬停 / 拖动中才露出右缘那条 1px 强调色线 ✓。
+     ★ touch-action:none 必须写 ✗ —— 触屏上不写的话，手指按下去会先被浏览器当成
+       滚动手势抢走 ✓，pointermove 收不到 ✓（拖动这条栏在平板上等于没做 ✗）。
+     ★ 选择器写到（0-3-0）✓：类 + 类 + 属性；它不是 <button>，本来就躲得开
+       html[data-theme] button（0-1-1），但和本文件其余条目**同一规矩** ✓，不吃亏。 */
+  .lw-outl .lw-outl-grip[data-outl-grip] { position:absolute; top:0; right:0; bottom:0; width:4px; z-index:3; cursor:col-resize; background:transparent; touch-action:none; }
+  .lw-outl .lw-outl-grip[data-outl-grip]::after { content:''; position:absolute; top:0; bottom:0; right:0; width:1px; background:transparent; transition:background-color .12s ease; }
+  .lw-outl .lw-outl-grip[data-outl-grip]:hover::after, .lw-outl .lw-outl-grip[data-outl-grip].on::after { background:var(--pp-accent); }
+  /* ══ 大纲第二种视觉：胶囊树形（Phycat 文件树观感 · 2026-10-31）═════════════════
+     ★ 只在 .lw-outl.pill 下生效 ✓（「⋯ 更多 → 大纲样式：极简 / 胶囊」切换，默认极简 ✓）——
+       上面那套极简的规则一个字都没改 ✓，所以两种样式**并存** ✓。
+     ★ 配色（需求 ②）：三个色相**按层级轮转** ✓ ——
+         H1/H4 = --doc-primary（森林绿）、H2/H5 = --doc-secondary（青）、H3/H6 = --pp-accent（沙）✓，
+         常态底 = 该色相 9%（需求 8%~10% 之间 ✓）。
+       当前项（需求 ⑤）= 同一个色相提到 17%（需求 16%~18% ✓）+ 左侧 2px 强调竖条 + 字重 600 ✓。
+       ⚠️ --doc-* 定义在 :root（assets/doc-theme.css ✓）、--pp-* 定义在 .lw-inpanel ✓，
+          大纲栏就在面板里 ✓ 三个都解析得到（探针实测 computed 有值 ✓）。
+     ★ 缩进（需求 ④）：极简靠 padding-left，胶囊**必须**靠 margin-left ✗ ——
+       胶囊的内边距是固定的 2px 8px（需求 ①），缩进只能由外距给 ✓；
+       两边共用 JS 写的 --ind（0/12/24/36…px）✓，所以层级节奏没变 ✓。
+     ★ 引导线（需求 ④）：沿用极简那条 repeating-linear-gradient ✓，只把 left 从 6px 改成 calc(6px - var(--ind)) ✓
+       —— 线的**绝对位置**（6 / 18 / 30…）和极简完全一样 ✓，而且正好落在胶囊左侧的缩进槽里，
+       视觉上就是「从父项胶囊底下连下来」✓；top 收到 -2px（= 下边距）✓，
+       相邻两条的线就能首尾相接、一路连到父项胶囊的底边 ✓。
+       ⚠️ 颜色是**唯一刻意不同**的一处：极简那条是 --pp-line 60%（≈7% 白）✗ ——
+          极简没有底色，7% 够用 ✓；胶囊每行都有 9% 的色块压着，7% 的线在缩进槽里
+          **肉眼几乎看不见** ✓（截图对照过 ✓）→ 胶囊这套用 --pp-ink2 30%（中性灰 ✓），
+          节奏（1px / 12px）一格没动 ✓。
+     ⚠️ 选择器一律 ≥（0-4-0）级 ✓：极简的 .lv* 是（0-4-0）、:hover 是（0-4-0）、.cur 是（0-4-0），
+        这里每条都带 .pill（+1 类）→（0-5-0），靠特异性赢，**不用 !important** ✓。
+     ⚠️ 顺序也是规矩 ✗：.cur 必须写在 :hover 后面（同为 0-5-0，靠后来者覆盖 ✓），
+        和极简那段是同一个道理 ✓。
+     （本文件是模板字符串：注释里不写反引号 ✗）*/
+  .lw-outl.pill .lw-outl-list .lw-outl-i { display:flex; align-items:center; gap:6px; width:calc(100% - var(--ind,0px)); height:24px; min-height:24px; line-height:24px; margin:0 0 2px var(--ind,0px); padding:2px 8px; border-radius:8px; background:color-mix(in srgb, var(--pill-c, var(--pp-accent)) 9%, transparent); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv1, .lw-outl.pill .lw-outl-list .lw-outl-i.lv4 { --pill-c:var(--doc-primary); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv2, .lw-outl.pill .lw-outl-list .lw-outl-i.lv5 { --pill-c:var(--doc-secondary); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.lv3, .lw-outl.pill .lw-outl-list .lw-outl-i.lv6 { --pill-c:var(--pp-accent); }
+  /* ⚠️ overflow 必须放开 ✗✗ —— 极简那套的引导线画在条目**框内**（padding-left 留出的槽 ✓），
+     胶囊这套的条目整体右移了 var(--ind)，同一条线就落到了框**外面**（left 为负数 ✓），
+     而 .lw-outl-i 上有 overflow:hidden（为了省略号 ✗）→ 线被整条裁掉 ✓
+     （第一版实测：computed 里 background-image 明明有值，屏幕上一条都看不见 ✓）。
+     → 胶囊条目 overflow:visible ✓；省略号交给 .lw-outl-tx（它自己 overflow:hidden ✓）。 */
+  .lw-outl.pill .lw-outl-list .lw-outl-i { overflow:visible; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i::before { left:calc(6px - var(--ind,0px)); top:-2px; background-image:repeating-linear-gradient(to right, color-mix(in srgb, var(--pp-ink2) 30%, transparent) 0 1px, transparent 1px 12px); }
+  .lw-outl.pill .lw-outl-list .lw-outl-i .lw-outl-ic { flex:none; display:block; width:11px; height:11px; color:var(--pill-c, var(--pp-accent)); fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i .lw-outl-tx { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i:hover, .lw-outl.pill .lw-outl-list .lw-outl-i:active { background:color-mix(in srgb, var(--pill-c, var(--pp-accent)) 14%, transparent); box-shadow:none; transform:none; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.cur { background:color-mix(in srgb, var(--pill-c, var(--pp-accent)) 17%, transparent); color:var(--pp-ink); font-weight:600; }
+  .lw-outl.pill .lw-outl-list .lw-outl-i.cur::after { top:3px; bottom:3px; }
   /* ≡ 开关：默认不占宽度 ✓ —— 1280 那条栏实测**已放满**（再加 22px 溢出 11px ✗），
      所以只在编辑区够宽（容器 ≥861px）时才出现 ✓；窄屏走「⋯ 更多」/ ⌥⌘O ✓。 */
   .lw-nt-bar .lw-outl-tog { display:none; }

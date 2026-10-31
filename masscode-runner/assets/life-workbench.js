@@ -2011,10 +2011,11 @@
      ====================================================================== */
   function outlineHtml(kind) {
     const on = !!(STORE && STORE.outlineOpen);
-    return '<aside class="lw-outl' + (on ? ' on' : '') + '" id="lw-outl-' + kind + '" aria-label="标题大纲">'
+    return '<aside class="lw-outl' + (on ? ' on' : '') + (outlVisual() === 'pill' ? ' pill' : '') + '" id="lw-outl-' + kind + '" aria-label="标题大纲">'
       + '<div class="lw-outl-hd"><b>大纲</b><span class="sp"></span>'
       + '<button type="button" class="lw-outl-x" data-outl-close="1" title="收起大纲（⌥⌘O）">×</button></div>'
-      + '<div class="lw-outl-list"><div class="lw-outl-empty">还没有标题</div></div></aside>';
+      + '<div class="lw-outl-list"><div class="lw-outl-empty">还没有标题</div></div>'
+      + '<div class="lw-outl-grip" data-outl-grip="1" title="拖动调宽 · 双击复位"></div></aside>';
   }
   /* 栏里那颗 ≡（宽屏才有宽度 ✓）—— 用 class 不用 id ✗：备忘录和日记两条栏各一颗 ✓ */
   function outlineToggleHtml() {
@@ -2046,6 +2047,86 @@
     const sub = document.getElementById('lw-sub');
     if (sub) sub.textContent = next ? '大纲已展开 · 点标题跳转 ✓' : '大纲已收起 ✓';
   }
+  /* ════ 大纲：可拖拽调宽 + 两种视觉（2026-10-31）════════════════════════════════
+     ★ 宽度：140~320px，默认 188（= life-styles.js 里 .lw-outl 的 width ✓）——
+       存 STORE.outlW（**布局像素** ✓ 不是 rect 视觉像素 ✓）；读回来时再夹一遍 ✓，
+       因为 STORE 是用户可改的文件 ✗（上一轮卡片尺寸就被一个 2328px 的旧值坑过 ✓）。
+     ★ 拖动走 lwGrab ✓（同一套 pointerdown/move/up + setPointerCapture ✓）：
+       触屏 / 触控笔 / 无鼠标都不报错 ✓，pointercancel / 失焦 / 切标签页都收得干净 ✓。
+       ⚠️ 位移要用**比例换算** ✗：本仓大屏（低像素密度）会把整个界面缩到 0.88 ✓，
+          rect 是视觉像素、style.width 是布局像素 ✓，不换算的话拖 100 只涨 88 ✗。
+     ★ 改宽度只改 aside 自己 ✓ —— 它是 .lw-nt-main / .lw-jr-row 里的 flex:none 项 ✓，
+       一变宽，右边 flex:1 的正文自动让位 ✓（正文那边一个字都不用通知 ✓）。
+     ★ 样式：STORE.outlStyle = 'min'（默认 ✓）| 'pill' ✓ —— 只切 aside 上的一个类 ✗，
+       绝不 render ✓（render 会重挂编辑器，光标和选区全丢 ✗）。
+     ═══════════════════════════════════════════════════════════════════════ */
+  const OUTL_W_MIN = 140, OUTL_W_MAX = 320, OUTL_W_DEF = 188;
+  function outlW() {
+    const n = Math.round(Number(STORE && STORE.outlW) || 0);
+    return n ? Math.max(OUTL_W_MIN, Math.min(OUTL_W_MAX, n)) : OUTL_W_DEF;
+  }
+  function outlVisual() { return (STORE && STORE.outlStyle === 'pill') ? 'pill' : 'min'; }
+  function outlineBindGrip() {
+    document.querySelectorAll('#lifework-view .lw-outl').forEach((panel) => {
+      if (!panel.dataset.outlw) { panel.dataset.outlw = '1'; panel.style.width = outlW() + 'px'; }
+      const grip = panel.querySelector('[data-outl-grip]');
+      if (!grip || grip.dataset.grab) return;
+      grip.dataset.grab = '1';
+      /* ⚠️ 写宽度**必须每次重新取活的节点** ✗✗：拖动期间面板有可能被 render 重建
+         （保存成功、外部同步都会 render ✓），抓在闭包里的 panel 会变成**离线节点** ✓ ——
+         写到离线节点上 = 屏幕上那条栏纹丝不动 ✗，而 STORE 已经存了新值 ✓，
+         症状是「松手弹回去、刷新又对了」✓（第一版实测就是这个 ✓）。 */
+      const live = () => (grip.isConnected && grip.parentElement) ? grip.parentElement : (document.getElementById(panel.id) || panel);
+      lwGrab(grip, {
+        down: (ev) => {
+          grip.classList.add('on');
+          const p = live();
+          const r = p.getBoundingClientRect();
+          const k = (p.offsetWidth && r.width) ? r.width / p.offsetWidth : 1;
+          return { x: ev.clientX, k: k || 1, w: Math.round(p.offsetWidth) };
+        },
+        move: (ev, sess) => {
+          const w = Math.max(OUTL_W_MIN, Math.min(OUTL_W_MAX, Math.round(sess.w + (ev.clientX - sess.x) / (sess.k || 1))));
+          sess.last = w;
+          live().style.width = w + 'px';
+        },
+        up: (ev, sess) => {
+          grip.classList.remove('on');
+          if (!STORE) return;
+          const p = live();
+          const w = Math.max(OUTL_W_MIN, Math.min(OUTL_W_MAX, (sess && sess.last) || Math.round(p.offsetWidth)));
+          STORE.outlW = w;
+          p.style.width = w + 'px';
+          saveStore();
+        },
+      });
+      grip.ondblclick = () => {
+        if (!STORE) return;
+        STORE.outlW = OUTL_W_DEF;
+        live().style.width = OUTL_W_DEF + 'px';
+        saveStore();
+      };
+    });
+  }
+  function outlineVisual(v) {
+    if (!STORE) return;
+    const next = v === 'pill' ? 'pill' : 'min';
+    STORE.outlStyle = next;
+    saveStore();
+    document.querySelectorAll('#lifework-view .lw-outl').forEach((p) => p.classList.toggle('pill', next === 'pill'));
+    const sub = document.getElementById('lw-sub');
+    if (sub) sub.textContent = next === 'pill' ? '大纲样式：胶囊 ✓' : '大纲样式：极简 ✓';
+  }
+  /* 菜单项：两种样式**各一条** ✓（当前那条打 ✓ ✓）—— 比「一条来回切」好认 ✓ */
+  function outlineVisualItems() {
+    const cur = outlVisual();
+    return [
+      { sep: true },
+      { k: 'outl-min', label: '大纲样式：极简' + (cur === 'min' ? ' ✓' : ''), run: () => outlineVisual('min') },
+      { k: 'outl-pill', label: '大纲样式：胶囊' + (cur === 'pill' ? ' ✓' : ''), run: () => outlineVisual('pill') },
+    ];
+  }
+
 
   /* 正文变了 → 压撤销快照 + 刷左栏 + 防抖落盘（和旧 onEdit 等价 ✓）*/
   function memoCommitSoon() {
@@ -3019,6 +3100,7 @@
     /* ⚠️ 这里**不能用 q/qa** ✗✗ —— 那两个 const 在 bind() 后面才声明（3232 行 ✓），
        此刻还在 TDZ 里 ✓（实测会 ReferenceError，整条 bind 挂掉 ✗）。直接用 host ✓。 */
     host.querySelectorAll("[data-outl-tog]").forEach((el) => { el.onclick = () => outlineToggle(); });
+    outlineBindGrip();
     outlineMountNow();
     /* ── 卡片：拖「边」改大小 ✓（右边改宽 / 下边改高 / 右下角一起）──
        给每张卡插三条热区 ✓，拖动时实时改宽高 ✓，松手存进 STORE ✓（下次还记得 ✓）。*/
@@ -3455,7 +3537,7 @@
           if (s2) s2.textContent = STORE.memoSource ? "已切到源码模式 ✓" : "已切回实时渲染 ✓";
         },
       },
-    ]);
+    ].concat(outlineVisualItems()));
     /* 置顶 / 导出 / 删除 */
     qa("[data-mpin]").forEach((el) => { el.onclick = () => { const m = memoById(el.dataset.mpin); if (m) { snapMemo("pin"); m.pin = !m.pin; saveStore(); render(); } }; });
     const mExp = q("#lw-memo-export");
@@ -3794,7 +3876,7 @@
       { sep: true },
       /* 和备忘录同一项 ✓（零宽度入口；1280 那条栏同样已经放满 ✗）*/
       { k: 'outline', label: '大纲（⌥⌘O）', run: () => { outlineToggle(); } },
-    ]);
+    ].concat(outlineVisualItems()));
     qa('[data-jtpl]').forEach((btn) => {
       btn.onclick = async () => {
         const tpl = J_TPL[btn.dataset.jtpl]; if (!tpl) return;

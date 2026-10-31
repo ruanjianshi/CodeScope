@@ -647,6 +647,24 @@
     }));
   }
 
+  /* 一条大纲条目的 HTML ✓（2026-10-31 起：图标 + 文本各一个 span，给「胶囊」样式用）
+     ⚠️ 结构在**两种样式下完全一样** ✗（JS 不判断样式 ✓）——
+        极简样式里 .lw-outl-ic 是 display:none ✓、.lw-outl-tx 是裸 inline ✓，
+        所以极简那套的 computed 与改之前逐项相同 ✓（探针实测对照过 ✓）。
+     ⚠️ 缩进原来内联写 padding-left ✗ → 现在写自定义属性 --ind ✓：
+        极简用 padding-left:calc(8px + var(--ind)) 复现原值（8/20/32/44 ✓），
+        胶囊用 margin-left:var(--ind) 让「胶囊本身」缩进 ✓（胶囊的内边距必须固定 2px 8px ✗）。
+        同一个数字两种用法，CSS 各写一条，JS 一个字都不用判 ✓。
+     ⚠️ 图标用 index.html 里**现成的 sprite** ✓（H1~H3 = i-folder 文件夹 / H4~H6 = i-file 文档 ✓），
+        不引图片、不引字体 ✓；上色交给 CSS 的 --pill-c（走 currentColor ✓）。 */
+  function outlItemHtml(h, i) {
+    const ico = h.level <= 3 ? 'i-folder' : 'i-file';
+    return '<button type="button" class="lw-outl-i lv' + h.level + '" data-oi="' + i
+      + '" style="--ind:' + (h.level - 1) * 12 + 'px" title="' + esc(h.text) + '">'
+      + '<svg class="lw-outl-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#' + ico + '"/></svg>'
+      + '<span class="lw-outl-tx">' + esc(h.text) + '</span></button>';
+  }
+
   /* 重建条目。⚠️ 空笔记 → **占位**「还没有标题」✓（面板展开时不留空条 ✗）*/
   function outlBuild() {
     const s = OUTL;
@@ -658,8 +676,7 @@
     s.items = items;
     const keep = list.scrollTop;
     list.innerHTML = items.length
-      ? items.map((h, i) => '<button type="button" class="lw-outl-i lv' + h.level + '" data-oi="' + i
-        + '" style="padding-left:' + (8 + (h.level - 1) * 12) + 'px" title="' + esc(h.text) + '">' + esc(h.text) + '</button>').join('')
+      ? items.map(outlItemHtml).join('')
       : '<div class="lw-outl-empty">还没有标题</div>';
     list.scrollTop = keep;
     outlMark();
