@@ -277,13 +277,13 @@
   #bp-split-v.on, #lg-split-v.on, #cg-split-v.on { display: block; }
   #bp-split-v::after, #lg-split-v::after, #cg-split-v::after {
     content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
-    transform: translateX(-50%); background: var(--border); transition: background .15s, width .15s; }
+    transform: translateX(-50%); background: var(--border); transition: background .15s; }
   #bp-split-v::before, #lg-split-v::before, #cg-split-v::before {
     content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 22px;
     transform: translate(-50%, -50%); border-radius:2px;
     background: repeating-linear-gradient(to bottom, var(--dim) 0 3px, transparent 3px 6px); opacity: .55; }
   #bp-split-v:hover::after, #lg-split-v:hover::after, #cg-split-v:hover::after,
-  #bp-split-v.active::after, #lg-split-v.active::after, #cg-split-v.active::after { background: var(--accent); width: 2px; }
+  #bp-split-v.active::after, #lg-split-v.active::after, #cg-split-v.active::after { background: var(--accent); }
   #bp-split-v:hover::before, #lg-split-v:hover::before, #cg-split-v:hover::before,
   #bp-split-v.active::before, #lg-split-v.active::before, #cg-split-v.active::before { opacity: 1; }
   /* 图形化编程（积木）右栏 */
@@ -298,11 +298,11 @@
   #bp-main { flex: 1 1 auto; min-height: 0; display: flex; }
   #bp-inner-split { flex: none; width: 9px; cursor: col-resize; position: relative; background: transparent; }
   #bp-inner-split::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
-    transform: translateX(-50%); background: var(--border); transition: background .15s, width .15s; }
+    transform: translateX(-50%); background: var(--border); transition: background .15s; }
   #bp-inner-split::before { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 22px;
     transform: translate(-50%, -50%); border-radius:2px;
     background: repeating-linear-gradient(to bottom, var(--dim) 0 3px, transparent 3px 6px); opacity: .55; }
-  #bp-inner-split:hover::after, #bp-inner-split.active::after { background: var(--accent); width: 2px; }
+  #bp-inner-split:hover::after, #bp-inner-split.active::after { background: var(--accent); }
   #bp-inner-split:hover::before, #bp-inner-split.active::before { opacity: 1; }
   #bp-workspace { flex: 1.6; min-width: 0; height: 100%; }
   #bp-code .bpc-kw { color: #ff7b72; }
@@ -1174,7 +1174,7 @@
   .reading-html-split { width:7px; cursor:col-resize; position:relative; background:transparent; }
   /* 默认就画出分栏线：源码与 HTML 预览常常都是深色，透明分隔条会让人以为两栏没有真正分开 */
   .reading-html-split::after { content:''; position:absolute; top:0; bottom:0; left:50%; width:1px; transform:translateX(-50%); background:var(--border); }
-  .reading-html-split:hover::after, .reading-html-split.active::after { width:2px; background:var(--accent); }
+  .reading-html-split:hover::after, .reading-html-split.active::after { background:var(--accent); }
   .reading-html-preview-wrap { min-width:0; min-height:0; overflow:auto; background:#fff; }
   .reading-html-preview { display:block; width:100%; height:100%; min-height:600px; border:0; background:#fff; }
   .reading-html-fallback { width:100%; height:100%; min-height:0; resize:none; box-sizing:border-box; padding:16px 18px; border:0; outline:0; background:transparent; color:var(--text); font:12px/1.6 var(--mono); tab-size:2; }
@@ -2071,8 +2071,8 @@
   #code-wrap.split-primary #editor-find { top:40px; }
   /* 分隔条：克制的凹槽，悬停/拖动时亮起 2px 强调线 */
   .editor-group-divider { flex:none; position:relative; width:7px; cursor:col-resize; background:color-mix(in srgb,var(--panel) 55%,var(--bg)); }
-  .editor-group-divider::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:1px; background:color-mix(in srgb,var(--border) 72%,transparent); transition:background .12s,width .12s; }
-  .editor-group-divider:hover::after, .editor-group-divider.active::after { width:2px; background:var(--accent); }
+  .editor-group-divider::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:1px; background:color-mix(in srgb,var(--border) 72%,transparent); transition:background .12s; }
+  .editor-group-divider:hover::after, .editor-group-divider.active::after { background:var(--accent); }
   .split-editor-group { flex:1; display:flex; flex-direction:column; min-width:120px; min-height:0; overflow:hidden; border:0; background:var(--theme-code,var(--panel2)); }
   /* 分栏子列与主编辑栏 #code-wrap 保持同一套卡片外形（同样的内缩/圆角/描边），左右才对齐 */
   html[data-theme] .split-editor-group { margin:7px 8px 0; border:1px solid color-mix(in srgb,var(--border) 72%,transparent); border-radius:var(--ui-radius); }

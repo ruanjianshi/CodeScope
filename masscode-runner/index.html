@@ -142,6 +142,14 @@
         都渲染在编辑器 DOM 内部，裁切会把它们切一半 ✗（只在圆角附近出现，很难查）✓。
      必须排在 motion-monaco.css 之后 ✓：那里给外壳写过过渡与描边，这里要在它之上落最终外观 ✓。 -->
 <link rel="stylesheet" href="/assets/editor-chrome.css?v=20261028a">
+<!-- ★ 动效审计第一批（2026-10-31）：P-01 拖拽态过渡 / P-02 六条分隔条收编 /
+     P-03 ⌘K 遮罩淡入。见 plans/motion-audit-2026-10.md。
+     ⚠️ 必须排在 **所有** 老 CSS 之后（这里就是最后一行）✓：受棘轮管制的 11 个文件
+        余量全是 0（app.css 4212/4212 …），所以新增规则只能落在不受管制的新文件里 ✓；
+        与旧规则同特异性时一律靠「后出现」取胜 ✓，全程不用 !important ✓。
+     ⚠️ 不要挪到 editor-chrome.css 之前 ✗：它会压掉 motion-monaco.css:164 给
+        .editor-group-divider::after 写的 width 过渡，正是本批要修的那一条 ✓。 -->
+<link rel="stylesheet" href="/assets/motion-batch1.css?v=20261031a">
 <!-- 文档配色切换器：独立文件，不占 app.js 的棘轮预算；defer 保证 DOM 就绪 -->
 <script src="/assets/doc-theme.js?v=20261028d" defer></script>
 <!-- ★ 动效的行为层（2026-10-28）：CSS 做不到的三件事 —— 面板显隐的入场类、

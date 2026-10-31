@@ -1,0 +1,181 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   码境 CodeScope · 动效审计第一批（P-01 / P-02 / P-03）
+   计划与实测依据：plans/motion-audit-2026-10.md（审计基线 HEAD 304ee9b，
+   本次落盘时 HEAD = 42346d6，行号按选择器复核过，未漂移）
+   本文件只做三件事，全部是「补过渡」：不改结构、不改几何、不改配色、不改布局。
+   ───────────────────────────────────────────────────────────────────────────
+   为什么新开一个文件（而不是写回 app.css / motion.css）：
+   11 个受棘轮管制的文件余量**全是 0**（app.css 4212/4212、motion.css 273/273、
+   ui-kit.css 785/785…，tests/architecture.js:codeLines() 的算法）。新文件不进棘轮
+   清单，一条都不占额度 ✓。
+   加载顺序：index.html 里排在 editor-chrome.css（第 144 行）**之后** —— 那里是全站
+   CSS 的最后一行，本文件的规则与旧规则同特异性时靠「后出现」取胜 ✓，
+   **全程没有 !important** ✓。
+   ───────────────────────────────────────────────────────────────────────────
+   三条硬约束（审计文档 §0.3）与本文的对应：
+   ① 棘轮零余量 → 新文件 ② 特异性写死 → 每条都写清了压的是谁
+   ③ 禁止区不加动画 → 本文**没有** #comp-pop / #sym-modal-box / #editor-find /
+      .empty-state / Monaco / xterm / PTY 的任何一条选择器 ✓
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ═════════════ 1. P-01 · 拖拽中的面板不再「硬跳」 ════════════════════════ */
+
+/* 现象（改前实测）：#ai-panel 加 .dragging 的**同一帧**就 opacity .42、
+   filter saturate(.7)，computed transition-duration = 0s、transition-property = all
+   ⇒ 抓起来的瞬间整块闪一下，松手又闪回来。这是「跟不跟手」最敏感的一帧。
+   根因：app.css:2969 只写了 .stack-pane.dragging, #ai-panel.dragging 的两个状态值，
+   没有任何过渡声明。
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 过渡必须挂在**基态**上（.stack-pane / #ai-panel），不能挂在 .dragging 上：
+     加类那一帧元素没有 before-change style，过渡根本不会启动（CSS transition
+     的硬规则，与写法偏好无关）。
+   ★ 时长用 --mo-1（120ms）而不是审计草稿里提过的 160ms：160ms 不在令牌表上
+     （120/180/260/400），为一条规则开一个表外散值正是本轮要消灭的病。
+     120ms 是「即时反馈」档：260ms 会让「抓起来」慢半拍。
+   ★ 曲线用 --mo-out 而不是 --mo-back：拖拽中的回弹会跟着鼠标一起抖
+     （motion.css:247 对树行按下记过同一条判断）。
+   ★ **松手不加长**：同一个 120ms 反向回来（实测 ≤ 200ms 达标），
+     不给结束单独写一条更慢的过渡 —— 那会让"放下"比"抓起"更迟钝。
+   ★ 这里把 app.css:2967 原有的 border-color / background 两条一起带上：
+     只写 opacity / filter 会把它们顶掉（同一属性 transition 是整体覆盖，不是追加）。
+     两条原值都是 .12s，与 --mo-1 相等，所以观感零变化。 */
+.stack-pane,
+#ai-panel {
+  transition:
+    border-color var(--mo-1) var(--mo-out),
+    background var(--mo-1) var(--mo-out),
+    opacity var(--mo-1) var(--mo-out),
+    filter var(--mo-1) var(--mo-out);
+}
+
+
+/* ═════════════ 2. P-02 · 六条分隔条收编（只改粗细的表达方式） ═════════════ */
+
+/* 现象（改前实测）：
+     #bp-split-v / #lg-split-v / #cg-split-v / #bp-inner-split::after
+       → transition-property: background, width；hover 时 width: 1px → 2px
+     .reading-html-split::after   → 根本没有 transition，hover 时 width: 1px → 2px
+     .editor-group-divider::after → motion-monaco.css:164-169 显式把 width 列进过渡
+   根因：1px 绝对定位伪元素改 width 不是布局抖动（它不推兄弟节点），真正的毛病是
+   ① 1px→2px 在 HiDPI 上是**整像素跳变**，浏览器不给 1px 线抗锯齿过渡 ⇒ 看起来是
+      「闪粗」而不是「长出来」；② 全站同类控件里已收编的那批（app.css:3967-3993 的
+      主题层）用的是 transform: scaleX(2)，同一手势两种节奏。
+   ─────────────────────────────────────────────────────────────────────────
+   做法：几何一行不动（width 恒 1px、命中区 width:9px/7px、cursor、::before 抓手点
+   全部保持原样），把「变粗」交给 transform: scaleX(2)，与已收编那批**完全同一手法、
+   同一时长、同一曲线、同一发光** ✓ —— 这就是「保持同一手感」的字面意思。
+   ★ 竖向 6 条全是「top:0; bottom:0; left:50%; width:1px」的竖线 ⇒ 只需要 scaleX。
+     全站没有这 6 个里的横向条（横向的 .hsplit / #split-h / #remote-resizer-y
+     早已被 app.css:4008-4024 收编），所以本文不写 scaleY 分支。
+   ★ 没有动 #remote-resizer / #remote-resizer-y：改前实测它们的
+     transition-property 已经是 transform, background, box-shadow（0.12s）——
+     主题层早就收编了，动它们只会把已成立的事情再写一遍。 */
+#bp-split-v::after,
+#lg-split-v::after,
+#cg-split-v::after,
+#bp-inner-split::after,
+.reading-html-split::after,
+html[data-theme] .editor-group-divider::after {
+  /* 与 app.css:279 / :300 / :1176 / :3974 的 translateX(-50%) 合成一次，
+     显式写出 scaleX(1)：过渡的起点必须是「有 scale 的形状」，
+     这样 1→2 才是在同一个函数列表上插值，而不是退化成矩阵插值。 */
+  transform: translateX(-50%) scaleX(1);
+  transition:
+    transform var(--mo-1) var(--mo-out),
+    background var(--mo-1) var(--mo-out),
+    box-shadow var(--mo-1) var(--mo-out);
+}
+
+/* 悬停 / 拖拽中（.active 是 app.js 的 makeResizer 挂的，与 :hover 同档）：
+   ★ width: 1px 是**复位**，不是新几何 —— app.css:286 / :305 / :1177 / :2075
+     的 hover 里还有 width:2px（本轮已在 app.css 里删掉，这里再钉一次，
+     防止那条规则哪天被恢复回来又把整像素跳变带回来）。 */
+#bp-split-v:hover::after,
+#bp-split-v.active::after,
+#lg-split-v:hover::after,
+#lg-split-v.active::after,
+#cg-split-v:hover::after,
+#cg-split-v.active::after,
+#bp-inner-split:hover::after,
+#bp-inner-split.active::after,
+.reading-html-split:hover::after,
+.reading-html-split.active::after,
+html[data-theme] .editor-group-divider:hover::after,
+html[data-theme] .editor-group-divider.active::after {
+  width: 1px;
+  transform: translateX(-50%) scaleX(2);
+  background: var(--accent);
+  /* 与 app.css:3993 已收编那批同一条 3px 光环：拖拽锚点要「亮起来」，
+     不是「长粗」—— 抓得住的信号主要来自这圈颜色。 */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+
+/* ═════════════ 3. P-03 · ⌘K 遮罩 120ms 淡入（面板本体不动） ══════════════ */
+
+/* 现象（改前实测）：按 ⌘K 后每 40ms 采一帧，6 帧的 #sym-modal opacity 全是 1、
+   transition-duration 0s、animation-name none ⇒ 整个视口在同一帧被
+   rgba(3,7,12,.73) + backdrop-filter:blur(7px) 铺满，是标准的 jarring change。
+   根因：app.css:2628-2629 只有 display:none → flex，没有任何过渡；
+   motion.css:387-414 收编了 7 种弹窗，**名单里没有 #sym-modal**。
+   ─────────────────────────────────────────────────────────────────────────
+   ★ 遮罩层就是 #sym-modal 自己（index.html:1003 是它的直接容器，
+     没有独立的蒙版节点），所以淡入只能落在它身上。
+   ★ 为什么是 opacity 而不是 background-color：遮罩颜色在 4 个主题块里各有一份
+     （app.css:2628 / :3042 / :3249 / :3387），逐条镜像会在皮肤层留 4 份副本；
+     opacity 与颜色无关。代价是面板也跟着淡 120ms（约 2 帧）——
+     审计 P-03 已把这个代价写成有意的取舍。
+   ★ **不给 #sym-modal-box 加任何东西**：⌘K 是 100+/天的动作，面板与结果列表
+     必须第一帧就完全可读（不加 scale、不加 translate、不加 fade）✓
+   ★ 曲线 linear、时长 120ms：这是「整屏压暗」的性质变化，不是"落位"，
+     两头缓入缓出会读成迟疑（Raycast 口径：遮罩只负责不刺眼）。
+   ★ 键帧名带 batch1 前缀：motion-canvas.css:362 已经有同名 @keyframes mo-overlay-in，
+     虽然那份在画布 iframe 里、主文档不会加载，两处同名仍是隐患（审计 §0.2
+     的加载顺序推论也提醒过这点）✓ */
+#sym-modal.open {
+  animation: mo-batch1-overlay-in 120ms linear both;
+}
+
+@keyframes mo-batch1-overlay-in {
+  from { opacity: 0; }
+}
+
+
+/* ═════════════ 4. 无障碍兜底：prefers-reduced-motion ════════════════════ */
+
+/* app.css:3828 有一条全局兜底（* 选择器压 duration + iteration-count），但它管不了
+   **几何**：@media 里改的 scaleX(2) 是实打实的缩放，全局那条不会碰它。
+   所以三条各自在这里明确表态：只保留颜色，去掉位移/缩放。
+   （本条与全局兜底不冲突：全局那条用 !important 压时长，这里压的是「有没有形变」。） */
+@media (prefers-reduced-motion: reduce) {
+  /* P-01：拖拽态本来就是纯颜色变化（变淡 + 降饱和），没有位移可言；
+     时长交给 app.css:3828 的全局兜底压到 .01ms —— 这里只需保证不产生形变。 */
+  .stack-pane,
+  #ai-panel {
+    transform: none;
+  }
+
+  /* P-02：保留「亮起来」（背景色 + 光环是颜色），去掉「长粗」（scaleX 是缩放）。
+     transform 回到只有 translateX(-50%) 的静止值 —— 线宽恒 1px，与常态逐像素一致。 */
+  #bp-split-v:hover::after,
+  #bp-split-v.active::after,
+  #lg-split-v:hover::after,
+  #lg-split-v.active::after,
+  #cg-split-v:hover::after,
+  #cg-split-v.active::after,
+  #bp-inner-split:hover::after,
+  #bp-inner-split.active::after,
+  .reading-html-split:hover::after,
+  .reading-html-split.active::after,
+  html[data-theme] .editor-group-divider:hover::after,
+  html[data-theme] .editor-group-divider.active::after {
+    transform: translateX(-50%) scaleX(1);
+  }
+
+  /* P-03：整屏不透明度阶跃在 reduced-motion 下直接到位（不淡入）。
+     不加 !important —— 动画名与全局的 duration 是两条不同的长属性，互不覆盖。 */
+  #sym-modal.open {
+    animation: none;
+  }
+}
