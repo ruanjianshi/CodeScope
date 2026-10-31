@@ -6,6 +6,12 @@ const $ = (id) => document.getElementById(id);
    而 d3 transition 是逐帧改 transform、跟 CSS 动画无关 ✗。
    容错式读取照仓库惯例（同一个 catch 风格，见 tabs 的 pageBy）✓。 */
 function prefersReducedMotion() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
+/* ★ T-07：**非首屏必需**的接口延后到 load 之后 + 空闲时再发 ✓ —— 但它们**必须有上限** ✗：
+   只等 «空闲» 会在页面一直忙时无限期不发 ✓，所以 requestIdleCallback 带 timeout=2000
+   （= load + 2s 必发 ✓）；不支持 rIC 的浏览器退化成 load+200ms ✓。
+   ⚠️ 只准包「首屏不渲染入口」的接口（office / git / compile-db / remote / ai 配置）✗ ——
+   snippets / version / rev / env 这些首屏正文要用，包了就是白屏 ✓。 */
+function afterLoad(fn) { const run = () => { try { fn(); } catch (_) {} }; if (document.readyState === 'complete') return void setTimeout(run, 0); const kick = () => (typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(run, { timeout: 2000 }) : setTimeout(run, 200)); window.addEventListener('load', kick, { once: true }); }
 let SNIPPETS = [], TAGS = [], FOLDERS = [], RESOURCES = [], CURRENT = null, CINDEX = 0, lastRev = null;
 let RESOURCE_CURRENT = null, RESOURCE_UPLOAD_FOLDER = '';
 let RUN_INPUT_KEY = '';
@@ -1592,7 +1598,6 @@ function finishConfirm(ok) {
   if (ok && onOk) onOk($('cd-input').value);
   if (onClose) onClose(!!ok);
 }
-function closeConfirm() { finishConfirm(false); }
 /* 原生 prompt/confirm 会阻塞事件循环、无法统一视觉、也没法自动化测试。
    下面两个 promise 包装复用上面这套弹窗（同一份样式与键盘行为）。 */
 function askConfirm(opt) {
@@ -1840,7 +1845,7 @@ async function probeOnlyOffice(){try{const response=await fetch('/api/office/pro
 function applyOfficeServiceStatus(service){const state=$('office-service-state'),start=$('office-service-start'),stop=$('office-service-stop');if(!state||!start||!stop)return;const running=!!(service&&service.running),healthy=service&&service.health==='healthy',memory=running&&service.memory?String(service.memory).split('/')[0].trim():'';state.className='office-service '+(running?'running':'stopped');state.textContent=!service||!service.dockerAvailable?'Docker · 不可用':!service.installed?'容器 · 未安装':running?'容器 · '+(healthy?'健康':'启动中')+(memory?' · '+memory:''):'容器 · 已关闭';state.title=service&&service.error?service.error:(running?'ONLYOFFICE 正在运行'+(service.cpu?'，CPU '+service.cpu:''):'ONLYOFFICE 已停止，不占用运行内存');start.disabled=OFFICE_SERVICE_BUSY||!service||!service.dockerAvailable||!service.installed||running;stop.disabled=OFFICE_SERVICE_BUSY||!running;}
 async function loadOfficeServiceStatus(silent=false){try{const response=await fetch('/api/office/service',{cache:'no-store'}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'无法读取 ONLYOFFICE 服务状态');applyOfficeServiceStatus(result.service);return result.service;}catch(error){applyOfficeServiceStatus({dockerAvailable:false,error:String(error.message||error)});if(!silent)officeStatus(String(error.message||error),true);return null;}}
 async function controlOfficeService(action){if(OFFICE_SERVICE_BUSY)return;if(action==='stop'&&OFFICE_CURRENT&&!await askConfirm({ title:'关闭 ONLYOFFICE', message:'关闭 ONLYOFFICE 会中断当前文档编辑。请确认文档已经自动保存，是否继续？', okLabel:'继续' }))return;OFFICE_SERVICE_BUSY=true;applyOfficeServiceStatus({dockerAvailable:true,installed:true,running:action==='stop'});$('office-service-start').disabled=true;$('office-service-stop').disabled=true;officeStatus(action==='start'?'正在启动 ONLYOFFICE…':'正在关闭 ONLYOFFICE…');try{if(action==='stop')destroyOnlyOffice();const response=await fetch('/api/office/service',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'服务操作失败');applyOfficeServiceStatus(result.service);if(action==='start'){let service=result.service;for(let attempt=0;attempt<30&&service&&service.running&&service.health!=='healthy';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));service=await loadOfficeServiceStatus(true);}const ready=await probeOnlyOffice();officeStatus(ready?'ONLYOFFICE 已启动，可以打开文档':'容器已启动，Document Server 仍在初始化');if(ready&&OFFICE_CURRENT)await openOffice(OFFICE_CURRENT);}else{OFFICE_HIGH_FIDELITY_READY=false;officeSetEngine('disconnected','ONLYOFFICE · 已关闭');officeStatus('ONLYOFFICE 已关闭，运行内存已释放');if(OFFICE_CURRENT)await officeConnectionScreen('ONLYOFFICE 本机服务已关闭');}}catch(error){officeStatus(String(error.message||error),true);}finally{OFFICE_SERVICE_BUSY=false;await loadOfficeServiceStatus(true);}}
-function wireOfficePanel(){const pane=$('pane-office');pane.classList.toggle('collapsed',!OFFICE_OPEN);$('office-head').onclick=()=>{OFFICE_OPEN=!OFFICE_OPEN;pane.classList.toggle('collapsed',!OFFICE_OPEN);try{localStorage.setItem('mc-office-open',OFFICE_OPEN?'1':'0');}catch(_){}};$('office-new').onclick=(event)=>{event.stopPropagation();openOfficeDialog('document');};$('office-new-folder').onclick=(event)=>{event.stopPropagation();openOfficeDialog('folder');};$('office-import').onclick=(event)=>{event.stopPropagation();$('office-file-input').click();};$('office-file-input').onchange=(event)=>{importOfficeFiles([...event.target.files]);event.target.value='';};$('office-nd-cancel').onclick=closeOfficeDialog;$('office-nd-submit').onclick=submitOfficeDialog;$('office-nd-name').onkeydown=(event)=>{if(event.key==='Enter')submitOfficeDialog();};$('office-ndialog').onmousedown=(event)=>{if(event.target===$('office-ndialog'))closeOfficeDialog();};$('office-back').onclick=()=>closeOffice();$('office-service-start').onclick=()=>controlOfficeService('start');$('office-service-stop').onclick=()=>controlOfficeService('stop');$('office-reconnect').onclick=()=>{document.body.classList.add('office-mode');officeConnectionScreen();};$('office-refresh').onclick=()=>OFFICE_CURRENT?openOffice(OFFICE_CURRENT):loadOffice();$('office-save').onclick=saveOfficeCurrent;$('office-download').onclick=()=>{if(!OFFICE_CURRENT)return;const link=document.createElement('a');link.href='/api/office/file?download=1&path='+encodeURIComponent(OFFICE_CURRENT);link.download=officeBase(OFFICE_CURRENT);link.click();};$('office-rename-current').onclick=()=>{if(OFFICE_ITEM)renameOfficeNode(OFFICE_ITEM);};$('office-list').addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();$('office-list').classList.add('root-drop');}});$('office-list').addEventListener('dragleave',(event)=>{if(!$('office-list').contains(event.relatedTarget))$('office-list').classList.remove('root-drop');});$('office-list').addEventListener('drop',async(event)=>{if(event.target.closest('.office-row'))return;event.preventDefault();$('office-list').classList.remove('root-drop');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}const result=await api('/api/office/move',{path:value.path,toFolder:''});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});loadOffice(true);probeOnlyOffice();loadOfficeServiceStatus(true);}
+function wireOfficePanel(){const pane=$('pane-office');pane.classList.toggle('collapsed',!OFFICE_OPEN);$('office-head').onclick=()=>{OFFICE_OPEN=!OFFICE_OPEN;pane.classList.toggle('collapsed',!OFFICE_OPEN);try{localStorage.setItem('mc-office-open',OFFICE_OPEN?'1':'0');}catch(_){}};$('office-new').onclick=(event)=>{event.stopPropagation();openOfficeDialog('document');};$('office-new-folder').onclick=(event)=>{event.stopPropagation();openOfficeDialog('folder');};$('office-import').onclick=(event)=>{event.stopPropagation();$('office-file-input').click();};$('office-file-input').onchange=(event)=>{importOfficeFiles([...event.target.files]);event.target.value='';};$('office-nd-cancel').onclick=closeOfficeDialog;$('office-nd-submit').onclick=submitOfficeDialog;$('office-nd-name').onkeydown=(event)=>{if(event.key==='Enter')submitOfficeDialog();};$('office-ndialog').onmousedown=(event)=>{if(event.target===$('office-ndialog'))closeOfficeDialog();};$('office-back').onclick=()=>closeOffice();$('office-service-start').onclick=()=>controlOfficeService('start');$('office-service-stop').onclick=()=>controlOfficeService('stop');$('office-reconnect').onclick=()=>{document.body.classList.add('office-mode');officeConnectionScreen();};$('office-refresh').onclick=()=>OFFICE_CURRENT?openOffice(OFFICE_CURRENT):loadOffice();$('office-save').onclick=saveOfficeCurrent;$('office-download').onclick=()=>{if(!OFFICE_CURRENT)return;const link=document.createElement('a');link.href='/api/office/file?download=1&path='+encodeURIComponent(OFFICE_CURRENT);link.download=officeBase(OFFICE_CURRENT);link.click();};$('office-rename-current').onclick=()=>{if(OFFICE_ITEM)renameOfficeNode(OFFICE_ITEM);};$('office-list').addEventListener('dragover',(event)=>{if(event.dataTransfer.types.includes('application/x-codescope-office')){event.preventDefault();$('office-list').classList.add('root-drop');}});$('office-list').addEventListener('dragleave',(event)=>{if(!$('office-list').contains(event.relatedTarget))$('office-list').classList.remove('root-drop');});$('office-list').addEventListener('drop',async(event)=>{if(event.target.closest('.office-row'))return;event.preventDefault();$('office-list').classList.remove('root-drop');let value;try{value=JSON.parse(event.dataTransfer.getData('application/x-codescope-office'));}catch(_){return;}const result=await api('/api/office/move',{path:value.path,toFolder:''});if(!result.ok)return officeStatus(result.error,true);if(OFFICE_CURRENT===value.path)OFFICE_CURRENT=result.path;await loadOffice();});afterLoad(() => { loadOffice(true); probeOnlyOffice(); loadOfficeServiceStatus(true); }); }
 window.addEventListener('DOMContentLoaded',wireOfficePanel);
 
 /* ------------------------- 阅读文库 / 知识库 / 绘图：已抽成独立文件 ------------------------- */
@@ -3545,7 +3550,7 @@ function wireAiPanel() {
   /* ★ 服务端那份可能才是「有的那份」✓ —— 新机器（云服务器）上本地 localStorage
      是空的 ✓，而服务端存着一份 ✓ → 拿到之后**再填一次** ✓。
      ⚠️ 只在本地为空时才会覆盖 ✗（见 hydrateAiCfgFromServer 里的判断 ✓）。 */
-  hydrateAiCfgFromServer().then((got) => { if (got) fillAiInputs(); });
+  afterLoad(() => hydrateAiCfgFromServer().then((got) => { if (got) fillAiInputs(); }));
   $('ai-cfg-toggle').onclick = () => $('ai-cfg').classList.toggle('hidden');
   $('ai-cfg-save').onclick = () => {
     AI_CFG = aiCfgFromInputs();
@@ -8691,7 +8696,6 @@ function renderSymResults(q) {
   $('sym-modal-status').textContent = SYM_RESULTS.length ? SYM_RESULTS.length + ' 条 · ' + (performance.now() - t0).toFixed(0) + 'ms' : '无匹配';
   if (!SYM_RESULTS.length) box.innerHTML = '<span class="ol-empty">没有匹配的符号</span>';
 }
-function openSnippetForSym(sym) { goToSymbol(sym); }
 function openSymModal(mode = 'ai') {
   $('sym-modal').classList.add('open'); SYM_SEARCH_KIND = 'all';
   $('sym-filter').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.kind === 'all'));
@@ -13438,7 +13442,7 @@ restoreRemoteFields();
 remoteTab(REMOTE_TAB);
 restoreRemotePanelSize();
 initRemotePanelResize();
-loadRemoteStatus();
+afterLoad(loadRemoteStatus);
 
 $('btn-run').onclick = doRun;
 /* ★ `%%` 段运行 ✓✓（2026-10-09）—— 按钮 + 快捷键 */
@@ -14277,7 +14281,7 @@ $('rc-yes').onclick = gitReset;
 $('rc-no').onclick = hideResetConfirm;
 $('git-body').classList.toggle('hidden', !GIT_OPEN);
 $('git-head').classList.toggle('collapsed', !GIT_OPEN);
-if (GIT_OPEN) refreshGit();
+if (GIT_OPEN) afterLoad(() => refreshGit());
 
 // 实时同步：页面可见时每 3s 探测 vault 版本指纹，变了就静默刷新（保留选中与输出）
 async function syncLoop() {
@@ -14858,7 +14862,7 @@ new MutationObserver(()=>{if(document.body.classList.contains('knowledge-mode')&
 initAppThemes();
 initEditorGroups();
 refresh(false);
-api('/api/project/compile-db').then((data) => { if (data && data.ok) { COMPILE_DB=data; PROJECT_DATA.compile=data; COMP_IDX_FILE=''; } }).catch(() => {});
+afterLoad(() => api('/api/project/compile-db').then((data) => { if (data && data.ok) { COMPILE_DB=data; PROJECT_DATA.compile=data; COMP_IDX_FILE=''; } }).catch(() => {}));
 loadEnv(false, true);
 setInterval(() => { if(!document.hidden) loadEnv(true, true); }, 60000);
 

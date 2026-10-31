@@ -2771,16 +2771,14 @@ function retagSnippets(fromId, toId) {
 
 /* 版本指纹：所有片段文件的 路径+mtime+大小 的哈希，用于前端实时同步检测。
    也纳入 state.json（标签/计数）与 .meta.yaml（文件夹元数据），保证新增/改名标签也能触发同步 */
+/* ★ 2026-11 T-05 记忆化 ✓：key 就是**哈希输入串本身**（排序后的 path:mtime:size 全量拼接），
+   不是「目录 mtime + 条目数」那种聚合 ✗：**原地改文件不会改父目录 mtime** ✓，用目录聚合会让
+   「编辑器保存后 rev 不变」✗，正好吃掉前端 syncLoop 的变更检测 ✓。串相同 ⇔ 输入相同 ⇔ rev 必然
+   相同 ✓（零碰撞、零误判）；代价是遍历与 stat 一步都省不掉（实测 81% 成本在那里 ✓），只省哈希那段 ✓。 */
+let REV_CACHE = null;
 function computeRev() {
-  const vault = vaultPath();
-  const codeRoot = path.join(vault, 'code');
-  const parts = [];
-  const addFile = (p) => {
-    try {
-      const st = fs.statSync(p);
-      parts.push(p + ':' + st.mtimeMs + ':' + st.size);
-    } catch (_) {}
-  };
+  const codeRoot = path.join(vaultPath(), 'code'), parts = [];
+  const add = (p) => { try { const st = fs.statSync(p); parts.push(p + ':' + st.mtimeMs + ':' + st.size); } catch (_) {} };
   const walk = (dir) => {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -2788,15 +2786,17 @@ function computeRev() {
       if (e.name.startsWith('.') && e.name !== '.masscode') continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) walk(full);
-      else addFile(full);
+      else add(full);
     }
   };
   walk(codeRoot);
-  addFile(path.join(codeRoot, '.masscode/state.json'));
+  add(path.join(codeRoot, '.masscode/state.json'));
   const s = parts.sort().join('|');
+  if (REV_CACHE && REV_CACHE.s === s) return REV_CACHE.rev;
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
-  return h.toString(36);
+  REV_CACHE = { s, rev: h.toString(36) };
+  return REV_CACHE.rev;
 }
 
 /* --------------------------------- 执行引擎 ---------------------------------- */
