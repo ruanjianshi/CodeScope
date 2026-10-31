@@ -2013,6 +2013,11 @@
     const on = !!(STORE && STORE.outlineOpen);
     return '<aside class="lw-outl' + (on ? ' on' : '') + (outlVisual() === 'pill' ? ' pill' : '') + '" id="lw-outl-' + kind + '" aria-label="标题大纲">'
       + '<div class="lw-outl-hd"><b>大纲</b><span class="sp"></span>'
+      /* ★ 2026-10-31 用户报「大纲怎么没有变」—— 胶囊样式的入口原本只藏在「⋯ 更多」菜单里，
+         看不见就等于没有 ✓。这里在头部放一颗常驻切换键，一眼能看见、一下能切 ✓。
+         图标用 ⊞/☰ 区分两种样式，title 写明当前状态 ✓。 */
+      + '<button type="button" class="lw-outl-v" data-outl-visual="1" title="切换大纲样式（当前：'
+      + (outlVisual() === 'pill' ? '胶囊' : '极简') + '）">' + (outlVisual() === 'pill' ? '☰' : '⊞') + '</button>'
       + '<button type="button" class="lw-outl-x" data-outl-close="1" title="收起大纲（⌥⌘O）">×</button></div>'
       + '<div class="lw-outl-list"><div class="lw-outl-empty">还没有标题</div></div>'
       + '<div class="lw-outl-grip" data-outl-grip="1" title="拖动调宽 · 双击复位"></div></aside>';
@@ -2108,6 +2113,17 @@
       };
     });
   }
+  /* 头部那颗切换键：极简 ⇄ 胶囊（点击后重渲染大纲头，图标随之变 ✓）*/
+  document.addEventListener('click', (ev) => {
+    const btn = ev.target && ev.target.closest ? ev.target.closest('[data-outl-visual]') : null;
+    if (!btn) return;
+    ev.preventDefault(); ev.stopPropagation();
+    outlineVisual(outlVisual() === 'pill' ? 'min' : 'pill');
+    document.querySelectorAll('#lifework-view .lw-outl').forEach((p) => {
+      const v = p.querySelector('[data-outl-visual]');
+      if (v) { v.textContent = outlVisual() === 'pill' ? '☰' : '⊞'; v.title = '切换大纲样式（当前：' + (outlVisual() === 'pill' ? '胶囊' : '极简') + '）'; }
+    });
+  }, true);
   function outlineVisual(v) {
     if (!STORE) return;
     const next = v === 'pill' ? 'pill' : 'min';
