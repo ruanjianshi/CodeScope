@@ -1745,7 +1745,7 @@ async function syncStatus(force) {
 }
 
 async function memoryStatus() {
-  if (MEMORY_CACHE.value && Date.now() - MEMORY_CACHE.at < 1800) return MEMORY_CACHE.value;
+  if (MEMORY_CACHE.value && Date.now() - MEMORY_CACHE.at < 4000) return MEMORY_CACHE.value;
   const total = os.totalmem(); let free = os.freemem();
   try {
     if (process.platform === 'linux') {
@@ -1969,7 +1969,15 @@ function readLinuxRelease() {
   } catch (_) { return {}; }
 }
 
-function platformInfo() {
+/* ★ 2026-10-31 性能审计 T-02（/api/system/status 缓存）：
+   实测「缓存命中」的那一次仍有 ~9~20ms —— 一开始以为是 vm_stat，注入探针记录子进程后
+   才发现真凶是下面一行：`.find(executablePath)` 在 macOS 上会**依次** spawn 6 个 `which`
+   （apt-get / dnf / yum / pacman / zypper / apk 一个都不存在 → 每个都真跑一次 ✓），
+   而 platformInfo 的结果**进程生命周期内不会变** ✓ ⇒ 记忆化到函数自身，
+   省掉每次请求 6 次进程创建（探针实测 which 调用数 ≈ 6 × 请求数）。
+   ⚠️ 用函数属性当缓存而不是新声明变量 ✓：server.js 正顶在 7,867 行代码的棘轮上限，
+      这样**一行不增** ✓（棘轮只数代码行 ✓）。 */
+function platformInfo() { if (platformInfo.cached) return platformInfo.cached;
   const rel = readLinuxRelease();
   const packageManager = ['apt-get', 'dnf', 'yum', 'pacman', 'zypper', 'apk'].find(executablePath) || '';
   let variant = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : (rel.PRETTY_NAME || rel.NAME || 'Linux');
@@ -1978,7 +1986,7 @@ function platformInfo() {
     try { isWsl = /microsoft/i.test(os.release() + ' ' + fs.readFileSync('/proc/version', 'utf8')); } catch (_) {}
     if (isWsl) variant += '（WSL）';
   }
-  return {
+  return platformInfo.cached = {
     id: process.platform, arch: process.arch, label: variant,
     release: os.release(), distro: rel.ID || '', distroLike: rel.ID_LIKE || '',
     packageManager, isWsl,

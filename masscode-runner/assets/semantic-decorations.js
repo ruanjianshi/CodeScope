@@ -97,15 +97,20 @@
     schedule();
   }
 
-  /* 等 Monaco；每 400ms 扫一次编辑器列表，给新出现的编辑器挂上（幂等） */
-  var tries = 0;
-  (function loop() {
-    if (window.monaco && window.monaco.editor && window.monaco.editor.getEditors) {
-      var all = [];
-      try { all = window.monaco.editor.getEditors(); } catch (_) {}
-      for (var i = 0; i < all.length; i++) { try { attach(window.monaco, all[i]); } catch (_) {} }
-    }
-    if (tries++ > 900) return;   /* 最多 6 分钟，之后不再轮询 */
-    setTimeout(loop, 400);
-  })();
+  /* ★ 2026-10-31 性能审计 T-01：这里原来是「每 400ms 扫一遍编辑器列表」
+     （最长扫 6 分钟 = 900 次定时器唤醒 ✓，实测空载时它占唤醒的大头之一）。
+     现在拆成两半，都是事件驱动、零轮询：
+       ① Monaco 就绪 → app.js 的 ensureMonaco() 派发 cs:monaco-ready ⇒ 给**已有**的编辑器挂上；
+       ② 之后**新建**的编辑器 → 钩 monaco.editor.create（app.js / app-reading.js 都走它）✓。
+     ⚠️ 只在 monaco 真就绪后钩 create ✓：早了没有 create 可钩，晚了会漏掉第一个编辑器。
+     ⚠️ attach 本身幂等（ed.__csSemAttached）✓，钩子只装一次（__csSemHooked）✓。 */
+  function hook(monaco) {
+    try { monaco.editor.getEditors().forEach(function (ed) { attach(monaco, ed); }); } catch (_) {}
+    var create = monaco.editor.create;
+    if (!create || create.__csSemHooked) return;
+    var wrapped = function () { var ed = create.apply(this, arguments); try { attach(monaco, ed); } catch (_) {} return ed; };
+    wrapped.__csSemHooked = true; monaco.editor.create = wrapped;
+  }
+  if (window.monaco && window.monaco.editor && window.monaco.editor.create) hook(window.monaco);
+  else window.addEventListener('cs:monaco-ready', function () { if (window.monaco) hook(window.monaco); }, { once: true });
 })();

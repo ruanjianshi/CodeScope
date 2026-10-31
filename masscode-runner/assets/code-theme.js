@@ -264,14 +264,18 @@
     new MutationObserver(function () {
       try { orig(activeThemeName()); } catch (_) {}
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-doc-theme'] });
+    /* 通知 code-theme-picker.js：API 与主题都就位了（它原来靠 200ms 轮询等这一下）✓ */
+    window.dispatchEvent(new Event('cs:code-theme-ready'));
   }
 
-  /* Monaco 是懒加载的（require 之后才挂到 window 上）—— 轻量轮询等它出现。
-     ⚠️ 不用永久 setInterval：拿到就停，2 分钟还没加载就放弃（那时用户也没在用编辑器）。 */
-  var tries = 0;
-  (function wait() {
-    if (window.monaco && window.monaco.editor && window.monaco.editor.defineTheme) { install(window.monaco); return; }
-    if (tries++ > 600) return;
-    setTimeout(wait, 200);
-  })();
+  /* ★ 2026-10-31 性能审计 T-01：**事件驱动**代替 200ms 轮询 ——
+     原来这里 setTimeout(wait,200) 一路空转到 Monaco 出现（最长 2 分钟），
+     实测空载 10 秒装 40 次 200ms 定时器、三个文件合计唤醒 11.4 次/秒。
+     现在：app.js 的 ensureMonaco() 在 Monaco 真正就绪的那一刻派发 cs:monaco-ready
+     （见 app.js:333 的注释 ✓），三个旁挂文件都只监听它 ⇒ 空闲时**零唤醒** ✓。
+     ⚠️ 绝不能在这里调 ensureMonaco() ✗：那个函数会**立刻开始加载 Monaco**，
+        等于把懒加载变成首屏加载（也违反「没开编辑器时 window.monaco 始终 undefined」）。
+     ⚠️ 开头仍查一次 window.monaco：万一它在本脚本执行前就已经就绪 ✓（例如别的路径预载过）✓。 */
+  if (window.monaco && window.monaco.editor && window.monaco.editor.defineTheme) install(window.monaco);
+  else window.addEventListener('cs:monaco-ready', function () { if (window.monaco) install(window.monaco); }, { once: true });
 })();

@@ -79,13 +79,11 @@
     return true;
   }
 
-  /* 等两样东西：菜单 DOM + code-theme.js 的 API（后者要等 Monaco 起来） */
-  var tries = 0;
-  (function loop() {
-    var ok = false;
-    try { ok = build(); } catch (_) {}
-    if (ok) return;
-    if (tries++ > 900) return;   /* 最多 3 分钟 */
-    setTimeout(loop, 200);
-  })();
+  /* ★ 2026-10-31 性能审计 T-01：原来「每 200ms 试一次 build()，最多 3 分钟」
+     （900 次定时器唤醒 ✓）。它真正等的只有一件事：code-theme.js 里的 window.__csCodeTheme
+     （那个 API 要等 Monaco 起来才建 ✓）—— 而 code-theme.js 装好后会派发 cs:code-theme-ready ✓。
+     菜单 DOM 是本文件 defer 执行时就已经解析完的静态标记 ✓，不需要等 ✓。
+     ⚠️ 开头仍试一次：万一本脚本执行时 API 已经在了（脚本加载顺序变化 / 热重载）✓。 */
+  if (window.__csCodeTheme) { try { build(); } catch (_) {} }
+  else window.addEventListener('cs:code-theme-ready', function () { try { build(); } catch (_) {} }, { once: true });
 })();
