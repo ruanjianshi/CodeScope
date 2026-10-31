@@ -251,10 +251,33 @@ body.git-open #side > #pane-git {
    ★ 只覆盖令牌 ⇒ 只影响**用 --el-* 的三个面**（#pane-git / #sym-modal-box / .ctx-menu）；
      --el-1 目前没有落点（P-05 遗留），一起跟上是为了三档语义一致。
    ★ 阴影与描边都是**静态视觉**，不是动效 ⇒ reduced-motion 下原样保留（见文件末尾那段）。 */
+/* ── 016 修（真缺陷 #2）：1px 内描边的**绘制层**从 inset box-shadow 换成 outline ──
+   本轮 A/B 实测（面内裁剪取元素左上角，顶边 4px 带，三态显式注入后对比，见 016 §11）：
+     抽屉 #pane-git        改前 maxΔ **1** /255 → 改后 **29**（左边 31）
+     命令面板 #sym-modal-box 改前 maxΔ **15**/255 → 改后 **26**（左边 26）
+     右键菜单 .ctx-menu    改前 maxΔ **16**/255 → 改后 **27**（左边 27）
+   原因两条，缺一不可：
+     ① **层的顺序**：inset box-shadow 画在「内容盒内侧、边框之下」。两个面各被不同的东西占住
+        最外那 1 行：抽屉顶边是**不透明的子元素** #git-head（实测改前 0.4% 像素、maxΔ=1，
+        等于完全看不见），命令面板/菜单顶边是 1px 边框（app.css:3250 border-color:#34465c），
+        环被挤到内侧第二行、只剩一条 15~16 的淡线。**它们不是「没画」，是「画在了别人后面」**；
+     ② **颜色太淡**：环色是 color-mix(--border 70%)，而暗色 --border 本身只比底色亮一点点
+        （--border #273241 vs 面底 #121a24），乘 0.7 后每通道只剩十几级 —— 这就是 15/16 的来源。
+   ⚠️ 016 §2.2 那张表里「命令面板顶边/左边 0 像素变化」本轮**没复现**（同一切法下改前是 15），
+      差异来自当时对比的是「当前 vs P-05 提交」而不是「有环 vs 无环」的显式注入；
+      结论方向不变，但**以本节的三态 A/B 数字为准**。
+   ⇒ 令牌里**去掉** inset 环（只留外阴影 + 顶部内高光），环改由下面那条 outline 规则画。
+   ★ 为什么是 outline 而不是再加一层 inset：
+        outline 画在**边框之上**（CSS 绘制顺序里 outline 晚于 border），且 outline-offset:-1px
+        让它落在边框那个 1px 里 —— 既不被盖住，又**不参与布局**（不改变盒模型，
+        getBoundingClientRect 一个字节都不同）。border 与它的区别正在这里：border 会推内容 ✗。
+   ★ 也考虑过 ::after 覆盖层：需要给每个面加 position/inset:0/border-radius:inherit/
+     pointer-events:none，且 #pane-git / #sym-modal-box 已是 fixed/absolute 定位，
+     ::after 会参与堆叠上下文排序、可能压住内容。outline 一行就够，优先用 ✓。 */
 html[data-theme]:not([data-theme="light"]) {
-  --el-1: var(--el-out-1), inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.10);
-  --el-2: var(--el-out-2), inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.14);
-  --el-3: var(--el-out-3), inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.18);
+  --el-1: var(--el-out-1), inset 0 1px 0 rgba(255,255,255,.10);
+  --el-2: var(--el-out-2), inset 0 1px 0 rgba(255,255,255,.14);
+  --el-3: var(--el-out-3), inset 0 1px 0 rgba(255,255,255,.18);
 }
 
 /* ① 抽屉：#pane-git —— 从右侧压过来的一整块，最高档。
@@ -307,6 +330,33 @@ html[data-theme] .ctx-menu {
     transform var(--mo-1) var(--mo-out);
 }
 
+/* ④ 016 修（真缺陷 #2 的主体）：暗色 1px 内描边环改用 **outline** 画。
+   ─────────────────────────────────────────────────────────────────────────
+   为什么不是 border：border 参与盒模型（内容宽度 −2px、出现布局位移），这一轮只允许改
+      「视觉层级」，不许改几何 —— outline 不占布局，正是这一点让它合格 ✓。
+   为什么不用 inset box-shadow（改前的写法）：**画在边框之下**。三个面里
+      #pane-git 顶边压着不透明子元素 #git-head、#sym-modal-box 与 .ctx-menu 压着 1px 边框
+      —— 环被挤到看不见（改前顶边 maxΔ 实测 1 / 15 / 16，见本节 ④ 上方那段）。
+   outline-offset:-1px 的几何含义：outline 的**外缘**从边框盒边缘向内收 1px，
+      于是这条 1px 的线正好压在原来那 1px 边框的位置上 —— 同一条边，换到更晚的绘制层，
+      所以看得见了，而元素尺寸、内容位置一律不变 ✓。
+   颜色：color-mix(in srgb, var(--text) 14%, transparent)。
+      ocean 的 --text 是 #e8edf4、面底色 #121a24 ⇒ 每通道约 +0.14×(232−18) ≈ +30/255，
+      实测边缘 max Δ 29/26/27（要求 ≥12）。改前那条是 --border 70%：--border #273241 与底色
+      只差十几级，再乘 .7 就只剩 15~16/255 —— 这就是「读不出」的量化解释 ✓。
+   ★ 特异性 (1,2,1)：html(0,0,1) + [data-theme](0,1,0) + :not([data-theme=light])(0,1,0) + #id(1,0,0)。
+     高于项目里任何一条 outline 规则（ui-kit.css:185 的 :focus-visible 只有 (0,1,0)）⇒
+     不会出现「聚焦时环被 focus 描边顶掉/顶掉 focus 描边」的互踩。
+     ⚠️ 已知取舍：这三个面**不可聚焦**（div + 无 tabindex），所以压住 :focus-visible 不产生
+        可达性损失；若将来给它们加 tabindex，需要补一条 :focus-visible 例外（见报告 §限制）。
+   ★ 只落在三个**用 --el-* 的面**上，与 P-05 的覆盖面严格一致，不多改一处 ✓。 */
+html[data-theme]:not([data-theme="light"]) #pane-git,
+html[data-theme]:not([data-theme="light"]) #sym-modal-box,
+html[data-theme]:not([data-theme="light"]) .ctx-menu {
+  outline: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  outline-offset: -1px;
+}
+
 
 /* ═════════════ 4. 无障碍兜底：prefers-reduced-motion ════════════════════ */
 
@@ -355,7 +405,7 @@ html[data-theme] .ctx-menu {
   /* P-05：阴影是**视觉层级**，不是动效 ⇒ reduced-motion 下三档阴影原样保留
      （这里一条 box-shadow 都没有，就是「不动它」的意思 ✓）。
      P-06 的暗色「内高光 + 1px 内描边」同样只是静态视觉 ⇒ 一并保留 ✓
-     （它们和阴影一样写在 --el-* 里，这段没碰令牌，所以天然不受影响 ✓）。
+     （内高光写在 --el-* 里，这段没碰令牌，所以天然不受影响 ✓；016 之后 1px 内描边是**独立的一条 outline 规则**（第 6 节 ④），reduced-motion 下没有任何一条规则把它置 none ⇒ 环照旧存在 ✓）。
      只把过渡关掉：transition:none 把 property 置 none，那条 160ms 就不再有意义；
      app.css:3828 的全局兜底（`* { transition-duration:.01ms !important }`）仍会把
      duration 报成 1e-05s —— 这是**期望值**（证明没有残余动效），不是漏网的过渡 ✓。
@@ -565,13 +615,32 @@ html[data-theme] .ctx-menu {
     box-shadow var(--mo-2) var(--mo-out);
 }
 
-/* 行类：按下 = 下沉 1px + 内阴影。五类来自审计 I4 的实测清单，
-   #reading-list .reading-row 带 ID 前缀（(1,1,0)）才能压过 app.css:3662 的悬停规则。 */
-.office-row:active,
-.reading-project:active,
-#reading-list .reading-row:active,
-.draw-row:active,
-.lw-hotrow:active {
+/* 行类：按下 = 下沉 1px + 内阴影（**不缩放、不改几何**：只 translateY + inset）。
+   ─────────────────────────────────────────────────────────────────────────
+   ★★ 016 修（2026-11-01）：上一版这里写的是 .office-row:active 等**裸类选择器**，
+      而真正的抢权者**不是** app.css:3353 的 `html[data-theme] .office-row:hover`(0,3,1)，
+      是 app.css:3661 的 `#office-list .office-row:hover:not(.dragging)` = **(1,3,0)** ——
+      ID 数 1 > 0，**只加 html[data-theme] 前缀（(0,3,1)/(0,4,1)）照样输**。
+      实测：按住 .office-row 时 computed box-shadow = `rgba(255,255,255,.043) 0 0 0 1px inset`
+      （hover 作者值 .045 在过渡中），作者写的两条 inset 一条都没出现。
+   ★ 所以每条按下规则都写成「html[data-theme] + 面板 ID + :active」，逐条对着抢权者算：
+        html[data-theme] #office-list  .office-row:active  → (1,3,1) > (1,3,0) ✓
+        html[data-theme] #draw-list    .draw-row:active    → (1,3,1) > (1,3,0) ✓
+        html[data-theme] #reading-list .reading-row:active → (1,2,1) > (1,2,0) ✓  #reading-list .reading-row:hover
+        html[data-theme] .reading-project:active           → (0,3,1)，hover 侧不写 box-shadow ✓
+        html[data-theme] .lw-hotrow:active                 → (0,3,1)，life-styles 的 hover (0,1,1) ✓
+     同一规则里并列的弱一档选择器（`html[data-theme] .office-row:active`）只是兜住
+     「行不在面板 ID 里」的边角，不承担主要胜负；选择器组按**逐条**特异性比较，互不拖累 ✓。
+   ★ transform 不需要前缀：没有任何 hover 规则写 transform，它本来就是唯一声明；
+     这里加前缀只为「同一条规则里不出现两种特异性写法」的可读性 ✓。 */
+html[data-theme] #office-list .office-row:active,
+html[data-theme] #draw-list .draw-row:active,
+html[data-theme] #reading-list .reading-row:active,
+html[data-theme] .office-row:active,
+html[data-theme] .draw-row:active,
+html[data-theme] .reading-row:active,
+html[data-theme] .reading-project:active,
+html[data-theme] .lw-hotrow:active {
   transform: translateY(1px);
   box-shadow:
     inset 0 1px 3px rgb(0 0 0 / .32),
@@ -586,21 +655,43 @@ html[data-theme] .ctx-menu {
 /* 选中行按下去时**不能丢掉左侧强调条**：app.css:3666 给 .on/.active 写的是
    inset 3px 0 0 accent + 1px accent 描边，上面那条 :active 会把 box-shadow 整体替换，
    选中条会在按住的那 120ms 里消失（看起来像"选中丢了"）✗。
-   这里把原值原样抄回来，只在末尾追加按下用的内阴影 ✓。 */
-.office-row.on:active,
-.draw-row.on:active,
-.draw-row.active:active,
-.reading-row.active:active,
-.reading-project.on:active {
+   这里把原值原样抄回来，只在末尾追加按下用的内阴影 ✓。
+   ★ 016 修：前缀必须比「上面那条基态按下规则」再高一档，否则会被自家规则反压
+     （(0,4,1) 的 .office-row.on:active 会被 (1,3,1) 的 #office-list .office-row:active 顶掉 ——
+      选中条又会消失）。所以带面板 ID 的写成 (1,4,1)/(1,5,1)，逐条压住自己的基态规则 ✓。 */
+html[data-theme] #office-list .office-row.on:active,
+html[data-theme] #draw-list .draw-row.on:active,
+html[data-theme] #draw-list .draw-row.active:active,
+html[data-theme] #reading-list .reading-row.active:active,
+html[data-theme] .office-row.on:active,
+html[data-theme] .draw-row.on:active,
+html[data-theme] .draw-row.active:active,
+html[data-theme] .reading-row.active:active,
+html[data-theme] .reading-project.on:active {
   box-shadow:
     inset 3px 0 0 var(--accent),
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent),
     inset 0 1px 3px rgb(0 0 0 / .32);
 }
 
-/* 菜单项：只补颜色层（内阴影 + 描边），transform 保持 none —— 见本节开头。 */
-.symr:active,
-.ctx-menu .ctx-item:active {
+/* 菜单项 / 符号结果行：**只补颜色层（内阴影 + 描边），transform 必须 none**。
+   ─────────────────────────────────────────────────────────────────────────
+   ★★ 016 修（真 bug）：抢权者是 app.css:3305 的
+      `html[data-theme] button:active:not(:disabled)` = **(0,3,2)**（类型 2 个：html+button）。
+      上一版 `.ctx-menu .ctx-item:active` 只有 (0,3,0)，实测输掉 —— 按住菜单项时
+      transform 拿到的是 **matrix(.985,…)**（= --mo-press .985 + translateY(.5px)），
+      rect 151.1×24.6 → 148.8×24.2，**高亮框跟着缩 1.5%**，与 P-09 注释里的初衷正相反 ✗。
+   ★ 修法：显式写 `transform: none` 把全局按钮的缩放**反向声明掉**，特异性必须过 (0,3,2)：
+        html[data-theme] .ctx-menu .ctx-item:active           → (0,4,1) ✓
+        html[data-theme] .symr:active:not(:disabled)          → (0,4,1) ✓
+     注意 `.symr` 若只写 `html[data-theme] .symr:active` 是 **(0,3,1) —— 类型数 1 < 2，仍输**，
+     这是 016 里最容易看漏的一条（同源问题、但特异性算错就白改）✓。
+   ★ .symr 与 .ctx-item 同源（同为 button），一并修 —— 上一轮没取到 .symr 可见实例，
+     属于「没实测但风险同源」，本轮已按 016 §10.5 的建议一并处理 ✓。 */
+html[data-theme] .ctx-menu .ctx-item:active,
+html[data-theme] .symr:active,
+html[data-theme] .symr:active:not(:disabled) {
+  transform: none;
   box-shadow:
     inset 0 1px 3px rgb(0 0 0 / .32),
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
