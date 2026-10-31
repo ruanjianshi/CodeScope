@@ -751,29 +751,49 @@
   .lw-jr-main { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
   .lw-outl { display:none; flex:none; width:188px; min-width:0; flex-direction:column; background:var(--pp-page); border-right:1px solid ${T.lineDim}; }
   .lw-outl.on { display:flex; }
-  .lw-outl-hd { display:flex; align-items:center; gap:6px; padding:8px 8px 6px 10px; border-bottom:1px solid ${T.lineDim}; }
-  .lw-outl-hd b { font-size:9.5px; font-weight:700; letter-spacing:1px; color:${T.faint}; }
-  .lw-outl-hd .sp { flex:1; }
-  .lw-outl-x { flex:none; width:18px; height:18px; padding:0; border:1px solid transparent; background:transparent; color:${T.faint}; font:12px/1 ${UI}; cursor:pointer; border-radius:4px; }
-  .lw-outl-x:hover { background:var(--pp-sheet2); border-color:${T.lineDim}; color:${T.text}; }
-  .lw-outl-list { flex:1; min-height:0; overflow:auto; padding:3px 6px 10px; }
-  .lw-outl-empty { padding:10px 6px; font-size:11px; color:${T.faint}; }
-  /* 条目：行高 24px / 圆角 6px ✓；层级靠**缩进（JS 写 padding-left）+ 字号/字重递减** ✓ */
-  /* ⚠️ min-height 必须**显式写 24px** ✗✗ —— app.css 里有一条全局的
-     button { min-height:30px } ✓，不覆盖的话每一行都变成 30px（实测 ✓），
-     「行高 24px」就不成立了 ✗。（本文件是模板字符串：注释里不写反引号 ✗）*/
-  .lw-outl-i { position:relative; display:block; width:100%; min-width:0; height:24px; min-height:24px; line-height:24px; margin:0 0 1px; padding:0 8px; border:0; border-radius:6px; background:transparent; color:${T.dim}; font-family:${UI}; font-weight:400; font-size:11px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
-  .lw-outl-i.lv1 { font-size:13px; font-weight:700; color:${T.text}; }
-  .lw-outl-i.lv2 { font-size:12.5px; font-weight:600; color:${T.text}; }
-  .lw-outl-i.lv3 { font-size:12px; font-weight:600; }
-  .lw-outl-i.lv4 { font-size:11.5px; font-weight:500; }
-  .lw-outl-i.lv5 { font-size:11px; font-weight:500; }
-  .lw-outl-i.lv6 { font-size:11px; font-weight:400; }
-  .lw-outl-i:hover { background:var(--pp-sheet2); color:var(--pp-ink); }
-  /* ⚠️ .cur 必须写在 .lv* / :hover **之后** ✗ —— 同优先级下靠后来者覆盖 ✓，
-     否则当前项的「加粗 + 提亮」会被层级样式盖回去 ✓ */
-  .lw-outl-i.cur { background:color-mix(in srgb, var(--pp-accent) 10%, transparent); color:var(--pp-ink); font-weight:700; }
-  .lw-outl-i.cur::before { content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:1px; background:${T.accent}; }
+  .lw-outl-hd { display:flex; align-items:center; gap:6px; padding:9px 8px 7px 10px; border-bottom:1px solid ${T.lineDim}; }
+  .lw-outl-hd b { font-size:12px; font-weight:600; letter-spacing:0; color:var(--pp-ink2); } .lw-outl-hd .sp { flex:1; }
+  /* 头部关闭键：改成**幽灵图标**（无边框无底色，悬停才有底色）✓
+     ⚠️ 为什么选择器要写到 .lw-outl .lw-outl-hd .lw-outl-x（0-3-0）✗✗：
+       全站有 html[data-theme] button（0-1-1：1px 边框 + 渐变底 + 内高光 + 接触阴影），
+       只写 .lw-outl-x（0-1-0）**从来没赢过** —— 用户截图里「每一项都是实心按钮」就是这个 ✓。
+       :hover 那条全站是（0-3-2），所以这里必须再高一级到（0-4-0）才压得住 ✓。 */
+  .lw-outl .lw-outl-hd .lw-outl-x { flex:none; width:20px; height:20px; min-height:20px; padding:0; border:0; border-radius:4px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font:14px/1 ${UI}; cursor:pointer; transition:background-color .12s ease,color .12s ease; }
+  .lw-outl .lw-outl-hd .lw-outl-x:hover { border:0; background:var(--pp-hover); box-shadow:none; transform:none; color:var(--pp-ink); }
+  .lw-outl-list { flex:1; min-height:0; overflow:auto; padding:4px 6px 10px; }
+  .lw-outl-empty { padding:10px 6px; font-size:11px; color:var(--pp-ink2); }
+  /* 条目：**纯文本行**（无边框无底色，宽度一律 100% 右缘齐平）✓
+     ★ 行高 22px / 字号 12px / 圆角 4px ✓；层级只靠**缩进（JS 写 padding-left）+ 字号**，
+       不用颜色区分 ✓ —— 颜色只区分「当前项 / 悬停」✓。
+     ⚠️⚠️ 这里所有选择器都必须写到 .lw-outl .lw-outl-list .lw-outl-i 这一级（0-3-0）✗✗：
+       全站的 html[data-theme] button（0-1-1）会给每个 <button> 套 1px 边框 + 6px 圆角 +
+       linear-gradient 底色 + 内高光阴影 + 悬停上浮 1px，正是用户说的「一堆实心按钮」✓。
+       ⚠️ 所以一条 0-1-0 的 .lw-outl-i 根本没资格覆盖它 ✓。
+       :hover / :active 全站是（0-3-2），所以状态规则写到（0-4-0）✓。
+     ⚠️ min-height 必须**显式写 22px** ✗✗ —— app.css 里有一条全局的
+        button { min-height:30px } ✓，不覆盖的话每一行都变成 30px（实测 ✓）。
+     ⚠️ 底色一律用 background / background-color 声明 ✗ 不用 background-image：
+        条目自己的 background-image 要留给引导线之外的东西吗？不用 —— 引导线画在 ::before 上 ✓。
+     （本文件是模板字符串：注释里不写反引号 ✗）*/
+  .lw-outl .lw-outl-list .lw-outl-i { position:relative; display:block; width:100%; min-width:0; height:22px; min-height:22px; line-height:22px; margin:0; padding:0 8px; border:0; border-radius:4px; background:transparent; box-shadow:none; transform:none; color:var(--pp-ink2); font-family:${UI}; font-weight:400; font-size:12px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; transition:background-color .12s ease,color .12s ease; }
+  /* 层级：字号 12 / 11.5 / 11 / 10.5 / 10 / 10 ✓；同时把「这一级要画几条引导线」写进 --gw ✓
+     （= 祖先层数 × 12px；最深一级不画自己的线，所以 lv6 只有 5 条 ✓）*/
+  .lw-outl .lw-outl-list .lw-outl-i.lv1 { --gw:0px; font-size:12px; font-weight:600; }
+  .lw-outl .lw-outl-list .lw-outl-i.lv2 { --gw:12px; font-size:11.5px; font-weight:500; }
+  .lw-outl .lw-outl-list .lw-outl-i.lv3 { --gw:24px; font-size:11px; font-weight:400; }
+  .lw-outl .lw-outl-list .lw-outl-i.lv4 { --gw:36px; font-size:10.5px; font-weight:400; }
+  .lw-outl .lw-outl-list .lw-outl-i.lv5 { --gw:48px; font-size:10px; font-weight:400; }
+  .lw-outl .lw-outl-list .lw-outl-i.lv6 { --gw:60px; font-size:10px; font-weight:400; }
+  /* 层级引导线：一条 ::before 里用 12px 周期的重复渐变画出**这一级所有祖先的竖线** ✓
+     —— 每条线 1px、颜色 color-mix(--pp-line 60%, transparent)，位置 6 / 18 / 30 / 42 / 54px ✓
+     （left:6px 是缩进 8px 的上一级文字左缘再往左 2px，视觉上贴着祖先那一列 ✓）*/
+  .lw-outl .lw-outl-list .lw-outl-i::before { content:''; position:absolute; left:6px; top:0; bottom:0; width:var(--gw,0px); pointer-events:none; background-repeat:no-repeat; background-image:repeating-linear-gradient(to right, color-mix(in srgb, var(--pp-line) 60%, transparent) 0 1px, transparent 1px 12px); }
+  /* 悬停 / 按下：**极淡强调底 + 文字提亮，不加边框** ✓ */
+  .lw-outl .lw-outl-list .lw-outl-i:hover, .lw-outl .lw-outl-list .lw-outl-i:active { border:0; background:color-mix(in srgb, var(--pp-accent) 6%, transparent); box-shadow:none; transform:none; color:var(--pp-ink); }
+  /* 当前项：12% 强调底 + 左侧 2px 竖条 + 强调色文字 + 600 ✓（**不是实心深色块** ✗）
+     ⚠️ 必须写在 .lv* / :hover **之后** ✗ —— 同为（0-4-0）靠后来者覆盖 ✓ */
+  .lw-outl .lw-outl-list .lw-outl-i.cur { border:0; background:color-mix(in srgb, var(--pp-accent) 12%, transparent); box-shadow:none; transform:none; color:var(--pp-accent); font-weight:600; }
+  .lw-outl .lw-outl-list .lw-outl-i.cur::after { content:''; position:absolute; left:0; top:4px; bottom:4px; width:2px; border-radius:1px; background:var(--pp-accent); pointer-events:none; }
   /* ≡ 开关：默认不占宽度 ✓ —— 1280 那条栏实测**已放满**（再加 22px 溢出 11px ✗），
      所以只在编辑区够宽（容器 ≥861px）时才出现 ✓；窄屏走「⋯ 更多」/ ⌥⌘O ✓。 */
   .lw-nt-bar .lw-outl-tog { display:none; }
