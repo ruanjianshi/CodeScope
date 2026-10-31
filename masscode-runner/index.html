@@ -7,7 +7,12 @@
 <title>码境 CodeScope · 工程代码工作台</title>
 <meta name="application-name" content="码境 CodeScope">
 <meta name="theme-color" content="#16181d">
-<link rel="icon" href="/assets/codescope.svg" type="image/svg+xml">
+<!-- ★ favicon 内联（性能审计 2026-10 · T-12）——
+     首屏那份 /assets/codescope.svg 原来被请求两次：一次是这里的 <link rel=icon> ✓，
+     一次是正文 .brand-mark / .welcome-mark 的 <img>（这两处共用同一个 URL，只发一个请求）✓。
+     图标只有 576 B，内联成 data: URI 之后图标那次请求消失 ✓（两个 <img> 仍共用 1 个请求），
+     CSP 的 img-src 本来就含 data: ✓。 -->
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iOCIgeTE9IjQiIHgyPSI1NiIgeTI9IjYwIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiM4YmJhZmYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNGQ3OGQ0Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB4PSIzIiB5PSIzIiB3aWR0aD0iNTgiIGhlaWdodD0iNTgiIHJ4PSIxNyIgZmlsbD0idXJsKCNiZykiLz4KICA8cGF0aCBkPSJtMjUgMjAtMTEgMTIgMTEgMTJNMzkgMjBsMTEgMTItMTEgMTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzA5MTMyMSIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSI1IiBmaWxsPSIjZWFmM2ZmIiBzdHJva2U9IiMwOTEzMjEiIHN0cm9rZS13aWR0aD0iMyIvPgo8L3N2Zz4K" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/hljs-theme.css">
 <link rel="stylesheet" href="/assets/xterm.css">
 <link rel="stylesheet" href="/assets/pdfjs/pdf_viewer.css">
@@ -1181,15 +1186,28 @@
   <div id="vnc-screen"></div>
   <textarea id="vnc-keyboard-input" aria-label="VNC 键盘输入" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
 </div>
+<!-- ★ 首屏阻塞脚本的 defer 判定（性能审计 2026-10 · T-06）——
+     判据不是「这个脚本首屏用不用得到」，而是**DOMContentLoaded 之前有没有别的同步代码直接摸它** ✗：
+        · 普通经典脚本按文档顺序执行 ✓，defer 要等解析完才执行 ✓ ——
+          所以给「排在 app.js 之前」的脚本加 defer，等于把它挪到 app.js **之后**
+          （审计计划里「加 defer 后顺序仍是文档顺序」只在这两个都 defer 时才成立 ✗）；
+        · 于是只有「顶层只声明 / 只在运行时被调用」的那批才加 ✓（下面带 defer 的 11 个）；
+        · 每个都做过静态核对（顶层声明名 + 加载期可达调用链里没有任何引用）+ 浏览器回归 ✓；
+        · 拿不准的一律**保持同步**：xterm.js / monaco loader / debug-panel.js / cs-icons.js /
+          app-draw.js / app-reading.js / cs-auth.js / app.js（理由见各自注释）✓。 -->
 <script src="/monaco/vs/loader.js"></script>
 <!-- ★ 调试面板（2026-10-11 从 app.js 抽出来的 879 行）——
      ⚠️ **必须在 app.js 之前** ✗✓：app.js 启动时就会调 showDbgBar() /
         scanDebugOutput()，那两个是函数声明（有提升），先加载才调得到。 -->
 <script src="/assets/debug-panel.js"></script>
-<script src="/assets/run-history.js"></script>
+<!-- 运行历史 / 绘图文件夹菜单 / 画布内嵌：三者只在**用户操作时**被读
+     （window.CS_RUNS、window.__drawFolderMenu、window.__openCanvasEditor；
+       app.js 里只有运行时调用点，加载期可达引用 = 0）→ 可以 defer ✓。
+     ⚠️ cs-icons.js **不能**加：app.js 起手就渲染树行，sideGlyphMarkup() 必须先定义 ✓。 -->
+<script src="/assets/run-history.js" defer></script>
 <script src="/assets/cs-icons.js"></script>
-<script src="/assets/draw-folder.js"></script>
-<script src="/assets/draw-canvas-embed.js"></script>
+<script src="/assets/draw-folder.js" defer></script>
+<script src="/assets/draw-canvas-embed.js" defer></script>
 <!-- ★ 绘图 + XMind 渲染层（2026-10-28 从 app.js 抽出来的 1,178 行）——
      ⚠️ **必须在 app.js 之前** ✓：它顶层声明 `let DRAW_* / XMIND_* / LIB_*`（不是 window 属性 ✗），
         app.js 和 xmind-interaction.js 都在**运行时**读这些绑定 ✓ —— 先初始化才不会踩 TDZ ✓。
@@ -1214,20 +1232,22 @@
      用户：「无法选中，怎么鼠标左边是移动画布，设计不合理，调研成熟的思维导图设计，重构」。
      ⚠️ 必须在 app.js **之后** ✓：它直接用 app.js 的顶层绑定（XMIND_MAP / xmindFind / ...），
         而且是 app.js 里 `window.__csXmindInteraction.bind(...)` 在运行时才去找它 ✓。 -->
-<script src="/assets/xmind-interaction.js"></script>
+<script src="/assets/xmind-interaction.js" defer></script>
 <!-- ★ 架构视图（2026-10-11 从 app.js 抽出来的 409 行）——
      抽出来是因为棘轮（app.js ≤ 16581 行）顶到了：重写走线涨了 156 行 → 测试红。
      ⚠️ 放在 app.js **之后** ✓：它只声明函数，app.js 里是**调用时才找**
         `renderArchIntoPane` ✓，所以先后无所谓；但放在后面更符合"依赖 app.js"的直觉。 -->
 <!-- ⚠️ 顺序要紧：archGraphSvg 会调 archLayout ✓，renderArchIntoPane 会调 archGraphSvg ✓ ——
-     **必须按 布局 → 画图 → 面板 这个顺序加载** ✓。 -->
-<script src="/assets/arch-layout.js"></script>
-<script src="/assets/arch-round.js"></script>
-<script src="/assets/arch-graph-svg.js"></script>
-<script src="/assets/arch-zoom.js"></script>
-<script src="/assets/arch-ai-view.js"></script>
-<script src="/assets/arch-view.js"></script>
-<script src="/assets/app-pdf.js"></script>
+     **必须按 布局 → 画图 → 面板 这个顺序加载** ✓。defer 只把这 7 个整体后移到「解析完、
+     DOMContentLoaded 之前」，**相互顺序仍是文档顺序** ✓；app.js 只在点「▦ 架构」时才调
+     renderArchIntoPane（加载期可达引用 = 0）→ 这 6 个 + app-pdf.js 都能 defer ✓。 -->
+<script src="/assets/arch-layout.js" defer></script>
+<script src="/assets/arch-round.js" defer></script>
+<script src="/assets/arch-graph-svg.js" defer></script>
+<script src="/assets/arch-zoom.js" defer></script>
+<script src="/assets/arch-ai-view.js" defer></script>
+<script src="/assets/arch-view.js" defer></script>
+<script src="/assets/app-pdf.js" defer></script>
 
 
 <!-- 新建文件 / 文件夹 对话框 -->

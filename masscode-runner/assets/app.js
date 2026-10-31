@@ -1934,7 +1934,7 @@ async function moveLatexResource(resourcePath, toFolder, targetKind) {
 const GIT_STATUS_LABEL = { M: '改', A: '增', D: '删', '??': '新', R: '移', C: '拷' };
 const GIT_STATUS_CLS = { M: 'st-m', A: 'st-a', D: 'st-d', '??': 'st-u', R: 'st-r', C: 'st-c' };
 let GIT_OPEN = (() => { try { return localStorage.getItem('mc-git-open') !== '0'; } catch (_) { return true; } })();
-let GIT_LAST_TICK = 0;
+let GIT_LAST_TICK = Date.now();   /* T-12：起手是 0 时，syncLoop 的第一轮 tick（+3s）会再拉一次 /api/git —— 和启动那次（14280 行）完全是同一份数据 ✗；取加载时刻的值，首轮 tick 就落在「>6000ms」判据之外，cadence 仍是 ~6s ✓ */
 
 function gitMsg(text, isErr) {
   const el = $('git-result'); if (!el) return;

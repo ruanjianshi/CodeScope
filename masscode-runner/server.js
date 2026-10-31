@@ -64,6 +64,12 @@ const pyRoute = require('./lib/routes/py');
 const figRoute = require('./lib/routes/fig');
 const matlabRoute = require('./lib/routes/matlab');
 const envRoute = require('./lib/routes/env');
+/* ★ T-11（性能审计 2026-10）：`/api/env` 的**响应**缓存（TTL 20s，`?refresh=1` 绕过）——
+   实测单次 9.8~10.3ms（审计 P13），而环境探测结果 20 秒内不会变（getEnv 自己也是常驻缓存 ✓）。
+   ⚠️ 只缓存 200 的响应体、结构一字不改 ✓；带 `?refresh=1` 时**整条绕过**（用户点「重新检测」必须真探测）。
+   ⚠️ 处理函数在 lib/routes/env.js（这次不许动），所以缓存挂在**挂载点**：包一个 send 抓响应体 ✓。 */
+const ENV_RESP_CACHE = { at: 0, body: '', ttl: 20000 };
+const cacheEnvSend = (send) => (res2, code, payload) => { if (code === 200) { ENV_RESP_CACHE.at = Date.now(); ENV_RESP_CACHE.body = JSON.stringify(payload); } return send(res2, code, payload); };
 const integrationsRoute = require('./lib/routes/integrations');
 const officeRoute = require('./lib/routes/office');
 const versionRoute = require('./lib/routes/version');
@@ -8091,7 +8097,8 @@ const server = http.createServer(async (req, res) => {
       if (await integrationsRoute.handle(req, res, u, { send, DSH, readBody, server, codeServerStatus, VSCODE_PROXY, VSCODE, OPENCODE }) || res.writableEnded) return;
       /* ★ env 路由抽到 lib/routes/env.js（2026-10-11）*/
       if (await require('./lib/routes/lan').handle(req, res, u, { send, vaultPath })) return;
-      if (await envRoute.handle(req, res, u, { ONLYOFFICE_CONNECTION, readOnlyOfficeConnection, getEnv, runtimeReadiness, onlyOfficeHealth, XLSX, path, Document, DSH, installHint, platformInfo, send, APP_VERSION, APP_MODE, deploymentInfo, vaultPath }) || res.writableEnded) return;
+      if (req.method === 'GET' && u.pathname === '/api/env' && u.searchParams.get('refresh') !== '1' && ENV_RESP_CACHE.body && Date.now() - ENV_RESP_CACHE.at < ENV_RESP_CACHE.ttl) return send(res, 200, JSON.parse(ENV_RESP_CACHE.body));
+      if (await envRoute.handle(req, res, u, { ONLYOFFICE_CONNECTION, readOnlyOfficeConnection, getEnv, runtimeReadiness, onlyOfficeHealth, XLSX, path, Document, DSH, installHint, platformInfo, send: cacheEnvSend(send), APP_VERSION, APP_MODE, deploymentInfo, vaultPath }) || res.writableEnded) return;
       /* ★ latex 路由抽到 lib/routes/latex.js（2026-10-11）——
          样板见那个文件的文件头。 */
       if (await latexRoute.handle(req, res, u, { readBody, send, resolveLatexResource, compileLatex, LATEX_TEXT_EXTS, writeFileAtomicSync, MIME }) || res.writableEnded) return;

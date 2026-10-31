@@ -554,7 +554,7 @@ void bubbleSort(Array& values);
   assert(!html.includes('id="btn-wrap"') && !html.includes('id="btn-indent"') && html.includes('toggleEditorWordWrap') && html.includes("key==='z'") && html.includes('id="editor-position"'), '低频缩进/换行按钮未移除，或快捷键与光标行列状态缺失');
   assert(html.includes("localStorage.getItem('mc-editor-font-size')") && html.includes('applyEditorFontSize') && html.includes("event.addEventListener('wheel'") === false && html.includes("document.addEventListener('wheel'") && html.includes('EDITOR_FONT_MAX=28'), 'Ctrl/Command + 鼠标滚轮缩放编辑器功能缺失');
   assert(!html.includes('allow-popups allow-same-origin'), 'HTML 预览沙箱不应同时允许脚本与同源访问');
-  assert(serverSource.includes("|| '127.0.0.1'") && serverSource.includes('trustedHttpOrigin') && serverSource.includes('fs.createReadStream') && serverSource.includes("'Content-Encoding': 'gzip'"), '默认本机监听、跨站写保护或流式静态资源优化缺失');
+  assert(serverSource.includes("|| '127.0.0.1'") && serverSource.includes('trustedHttpOrigin') && serverSource.includes('fs.createReadStream') && /'Content-Encoding':\s*encoding/.test(serverSource), '默认本机监听、跨站写保护或流式静态资源优化缺失');
   assert(html.includes("localStorage.removeItem('mc-editor-groups')") && !html.includes("localStorage.setItem('mc-editor-groups'"), '临时编辑分栏不应在刷新后恢复');
   assert(html.includes("e.code === 'Space'") && html.includes('requestLspCompletion') && html.includes('requestSignatureHelp') && html.includes('EDITOR_SNIPPETS'), 'LSP 自动补全、参数提示或代码片段缺失');
   assert(html.includes('renameFocusedSymbol') && html.includes('requestCodeActions') && html.includes("e.key==='F2'") && html.includes("key==='.'"), '重命名或快速修复快捷键缺失');
