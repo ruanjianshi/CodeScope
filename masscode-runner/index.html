@@ -71,11 +71,14 @@ window.csLoadScripts = function (list) {
 <!-- 本机管家：一站式本机管理面板（进程/磁盘缓存/软件/服务端口/Docker/开发环境）。
      按钮、面板、样式都由这个脚本在运行时自建，所以 index.html 只留这一行，
      和编辑工作台那边的改动互不覆盖。 -->
-<!-- ⊘ 本机管家（system-panel.js，81.1 KB）→ **按需注入**（T-10）：
-     ⚠️ 它**自己在 load 时**创建 #btn-system / #system-workspace（ke() / ct()）——
-     所以在它加载之前，欢迎页那句 `$('btn-system').click()` 会是
-     `null.click()` → TypeError（点了没反应）✗ →
-     欢迎页那个按钮改在**捕获阶段**被接住：注入完再代点真的 #btn-system ✓。 -->
+<!-- ★ 2026-11-01 回退 T-10 对这一条的懒加载：**它是「自建 UI」型脚本** ——
+     #btn-system 与 #system-workspace 都由 system-panel.js 在 load 时创建（ke() / ct()），
+     所以把它改成按需注入就等于**顶栏那个「本机管家」入口不存在**，
+     而且没有任何东西能在加载前触发加载它（鸡生蛋）✗ —— 用户报「本机管家没了」即此。
+     ⇒ 恢复为同步 defer 加载（+81.1KB 首屏），其余 9 个子系统仍按需注入 ✓。
+     ⚠️ 以后要再省这 81KB，必须先由 index.html **自己**渲染一个静态入口按钮，
+        由它触发 csLoadScript，而不是指望被注入的脚本自建入口。 -->
+<script src="/assets/system-panel.js" defer></script>
 <!-- 我的工作台：个人管理系统（今日/研究方向/论文/文件/时间）。
      和 system-panel.js 一样自建 UI + 样式，不动主界面。 -->
 <!-- 共享的纯逻辑模块（双栖 ✓：Node 里 require、浏览器里挂 window.LW_xxx）。
