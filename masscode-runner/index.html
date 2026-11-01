@@ -160,8 +160,17 @@ window.csLoadScripts = function (list) {
        ⚠️ 与「本机管家」不同：这里不是自建入口导致不存在，而是**入口被延迟创建**。
        改法：去掉那 1500ms 的硬等，直接进空闲队列（上限 600ms）；仍不在首屏关键路径上 ✓，
        但按钮通常在 300~600ms 内就出现 ✓。若首屏更忙，requestIdleCallback 会自动让路。 */
-    if ('requestIdleCallback' in window) requestIdleCallback(loadWorkbench, { timeout: 600 });
-    else setTimeout(loadWorkbench, 120);
+    /* ★★ 2026-11-01 修「外刊精读报『共享模块没加载上』」——
+       life-workbench.js 在**求值那一刻**就把 `window.LW_EN_TEXT / LW_SRS` 读进常量（:634/:635），
+       而这两个是 `<script type="module">`（line 95/96），**模块的执行时机在解析完成之后**。
+       上一版直接 requestIdleCallback(600ms) 可能**早于模块执行** ⇒ 面板读到的 EN/SRS 恒为 null ⇒ 外刊精读永远报错 ✗。
+       ⇒ 必须等 window.load（模块此时已全部执行完）再进空闲队列；首屏关键路径上仍然什么都不做 ✓。 */
+    function scheduleWorkbench() {
+      if ('requestIdleCallback' in window) requestIdleCallback(loadWorkbench, { timeout: 600 });
+      else setTimeout(loadWorkbench, 120);
+    }
+    if (document.readyState === 'complete') scheduleWorkbench();
+    else window.addEventListener('load', scheduleWorkbench, { once: true });
   })();
 </script>
 <link rel="stylesheet" href="/assets/app.css?v=20261028a">
