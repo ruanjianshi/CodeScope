@@ -1407,49 +1407,58 @@ window.csLoadScripts = function (list) {
   }, true);
 
   /* ── ④ 本机管家（81.1 KB）─────────────────────────────────────────────
-        ⚠️ 它**自己在 load 时**建 #btn-system（ke()）—— 在它加载之前，
+        ⚠️ #btn-system 是 system-panel.js **自己**建的（ke()）—— 在它执行之前，
         欢迎页那句 $('welcome-system').onclick = () => $('btn-system').click()
-        就是 null.click() → TypeError ✗（用户看到的正是「点了没反应」）。
-        所以欢迎页那个按钮在**捕获阶段**被接住：注入完再代点真的 #btn-system ✓。
-        （别的入口没有：全仓只有 life-workbench.js:981 拿 #btn-system 当插入锚点，
-          没有任何地方 programmatic 地打开这个面板 ✓）*/
-  var SP_READY = false;
-  function spLoad() {
-    return SP_READY ? Promise.resolve() : window.csLoadScript('/assets/system-panel.js').then(function () { SP_READY = true; });
+        就是 null.click() → TypeError ✗。所以这里在**捕获阶段**接住它，
+        等 defer 执行完再代点真的 #btn-system ✓（它已在就直接放行，不拦 ✓）。
+  /* ★★ 2026-11-01 自检修复（第 2 类回归的残留变体）——
+     ⚠️ 原来这里用 SP_READY 判「模块到没到」，而 SP_READY **只由 spLoad 自己置位** ✗，
+        可 system-panel.js 现在是 index.html:84 的 <script defer> ✓ —— 它从没经过
+        csLoadScript ✓ ⇒ 标志**永远是 false** ⇒ 每次点「本机管家」都会
+        **再插一个同样的 <script>，把 81 KB 模块整个执行第二遍** ✗
+        （实测：点之前 script[src*=system-panel] 是 1 个，点完变成 2 个 ✓；
+          #btn-system 有 if(!d("btn-system")) 守卫，所以不会出现两个按钮 ✓，但白跑一遍不划算 ✗）。
+     ⇒ 判据换成**「真入口在不在」**：在 → 什么都不做，交给 app.js 自己的 onclick ✓；
+        不在（只有 defer 还没执行的那一小段窗口）→ 等 DOMContentLoaded 再代点 ✓。
+        **全程不注入** ✓。 */
+  function afterStatic() {
+    if (document.readyState !== 'loading') return Promise.resolve();
+    return new Promise(function (resolve) { document.addEventListener('DOMContentLoaded', resolve, { once: true }); });
   }
-  window.CodeScopeSystemPanel = {
+  var SP_STUB = {
     version: '1.0.0',
-    open: function () { return spLoad().then(function () { return window.CodeScopeSystemPanel.open(); }); },
-    close: function () { if (SP_READY) window.CodeScopeSystemPanel.close(); }
+    /* ⚠️ 递归判据和 lazyForward 一样用**对象身份** ✗：真模块到了会整体覆盖这个全局 ✓，
+       还是它自己就说明没到，此时不能再调自己（会无限循环）✓。 */
+    open: function () { return afterStatic().then(function () { if (window.CodeScopeSystemPanel !== SP_STUB) return window.CodeScopeSystemPanel.open(); }); },
+    close: function () { if (window.CodeScopeSystemPanel !== SP_STUB) window.CodeScopeSystemPanel.close(); }
   };
+  window.CodeScopeSystemPanel = SP_STUB;
   document.addEventListener('click', function (e) {
     var t = e.target;
-    if (SP_READY || !t || typeof t.closest !== 'function' || !t.closest('#welcome-system')) return;
+    if (!t || typeof t.closest !== 'function' || !t.closest('#welcome-system')) return;
+    if (document.getElementById('btn-system')) return;      /* 真入口已在 → 不拦，走 app.js 的 onclick */
     e.preventDefault();
     e.stopPropagation();
-    spLoad().then(function () {
+    afterStatic().then(function () {
       var btn = document.getElementById('btn-system');
       if (btn) btn.click(); else window.CodeScopeSystemPanel.open();
     }).catch(noop);
   }, true);
 
   /* ── ⑤ 学习工作台（39.6 KB）───────────────────────────────────────────
-        #btn-study 是 index.html 里那个**隐藏的**按钮（259 行）✓：
-        欢迎页和启动菜单都是 $('btn-study').click() ✓，而它的 onclick 是
-        study-workspace.js **自己**在加载时绑的 ✓ →
-        先挂一个「先注入再代点」的临时 onclick，模块加载后会把它整个覆盖掉 ✓。
+        #btn-study 是 index.html 里那个**隐藏的**按钮 ✓：欢迎页和启动菜单都是
+        $('btn-study').click() ✓，而它的 onclick 是 study-workspace.js **自己**绑的 ✓。
         ⚠️ 必须防重入：模块万一没接手 onclick，代点会再进这个函数 ✗ →
            用「还是不是我这个 handler」判据 + __csBusy 双重保险：宁可这次不弹，也不死循环 ✓。 */
-  var ST_READY = false;
-  function stLoad() {
-    return ST_READY ? Promise.resolve() : window.csLoadScript('/assets/study-workspace.js').then(function () { ST_READY = true; });
-  }
+  /* ⚠️ 同 ④：study-workspace.js 也是 index.html:73 的 <script defer> ✓，
+     所以这里同样**只等不注入** ✗（原来 stLoad 会再插一份）。它在 DOMContentLoaded 时
+     就会把这个临时 onclick 整个覆盖掉 ✓，之后走的就是它自己的开关 ✓。 */
   var studyBtn = document.getElementById('btn-study');
   if (studyBtn) {
     var studyHandler = function () {
       if (studyBtn.onclick !== studyHandler || studyBtn.__csBusy) return;
       studyBtn.__csBusy = true;
-      stLoad().then(function () {
+      afterStatic().then(function () {
         studyBtn.__csBusy = false;
         if (studyBtn.onclick !== studyHandler) studyBtn.click();   /* 真模块接手了 → 代点开面板 */
       }).catch(function () { studyBtn.__csBusy = false; });
