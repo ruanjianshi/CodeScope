@@ -1290,7 +1290,7 @@ html[data-theme] .env-sync-card:hover {
    现在：无边框、radius 10px、静止 --el-1（贴着纸面）、悬停 --el-2 + 抬 1px。 */
 #site-menu-panel #quick-sites .quick-site {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 52px;
@@ -1317,18 +1317,44 @@ html[data-theme] .env-sync-card:hover {
   transform: translateY(0) scale(var(--mo-press));
 }
 
-/* 彩点 → 20px 的图标格：2 成强调底的圆角方块 + 中间 7px 实心点。
+/* 彩点 → 22px 的图标格：圆角衬底 chip + 中间 7px 实心点（兜底态）。
    原来是 7px 竖排小点 + 10px 外发光 —— 一列看下去就是「语义不明的彩点」，
    尺寸也只有 7px（对不齐 11px 的字）。 */
+/* 10.7a 图标位 = 中性衬底 chip（「图标与卡片背景同色 ⇒ 看不见」的修法本体）-----
+   问题：真图标到位时 10.7b 那条把 background 改成 transparent，图标直接贴在卡片
+   底色上 —— GitHub 的黑色猫 / arXiv 的黑色 X 在深色卡上几乎消失，白色图标也没有边界。
+
+   修法：衬底不再跟着站点色走，改成【和正文墨色同源、只取一小部分透明度】的中间调：
+     · 深色卡上 --text 是浅色 ⇒ 14% 混合后 chip 比卡片更亮
+       ⇒ 深色图标靠「自己比 chip 暗」被看见；
+     · 浅色卡上 --text 是深色 ⇒ 10% 混合后 chip 比卡片更暗（下面 10.7a-light）
+       ⇒ 白色图标靠「自己比 chip 亮」被看见；
+     · 再加一条 12% 的 inset 1px 内描边当边界，两极都有一圈明确的轮廓。
+   ⚠️ 全程不给 img 加 filter: invert 之类的启发式 —— 彩色 logo 会被弄坏。
+   ⚠️ 这个 chip 属于【图标位本身】，不只是真图标那一态：10.7b 和兜底彩点共用同一个
+      方形衬底，所以断网 / 加载失败回落彩点时，chip 原位保留，不会留下空洞。 */
 #site-menu-panel #quick-sites .quick-site>i {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 2px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--site-color, #4f8cff) 20%, transparent);
-  box-shadow: none;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
   font-style: normal;
+  overflow: hidden;
+}
+/* 10.7a-light 浅色主题：同一个 --text 在浅色主题里是深色，
+   所以同一套 color-mix 自然落到「比卡片暗」的一侧；单独写成 10%（略低一档，
+   免得 14% 在浅底上显得发灰、压住彩色 logo）。 */
+html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
+  /* ★ 2026-11-01 10% → 18%：实测浅色主题下「透明底纯白 logo」与 chip 只差 8/255（<12 的辨识线），
+     18% 时差 24.2 ✅。今天默认站点里没有这类图标（MDN 自带深底板），但这是真实存在的一极，
+     不追求极限但也不留已知盲点 ⇒ 取 18%。深色主题的 14% 不动（实测 GitHub 黑猫 Δ21.1 已过线）。 */
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
 }
 #site-menu-panel #quick-sites .quick-site>i::after {
   content: '';
@@ -1342,15 +1368,17 @@ html[data-theme] .env-sync-card:hover {
    ⚠️ 这是「替换图标位内容」，不是新控件：
       · 由 assets/site-icons.js 在图片加载成功之后才 append（onerror 不挂），
         所以「拿不到图标」时这里一条规则都不生效 —— 卡片还是原来的彩点，不存在破图；
-      · 尺寸写死 20×20（img 上还带 width/height 属性，CSS 未生效前也不会撑破网格列）；
-      · 圆角 5px、object-fit: cover —— 非正方形 favicon 会被裁切而不是拉变形；
+      · 图标 18×18（= chip 22px − 2px×2 padding），由 10.7a 的 chip 托底；
+        img 上仍带 width/height 属性，CSS 未生效前也不会撑破网格列；
+      · 圆角 4px、object-fit: cover —— 非正方形 favicon 会被裁切而不是拉变形；
       · 卡片本身 draggable=true 做拖拽排序，图片必须让开指针与拖动权，
         否则从图标位置按下去会变成「拖图片」而不是「拖卡片」。
    动效：本节没有 transition / animation / transform —— 图标是静态的，
    连 prefers-reduced-motion 都不用另开分支（第 10.10 节的兜底照旧覆盖卡片本身）。 */
 #site-menu-panel #quick-sites .quick-site>i.quick-site-icon {
-  border-radius: 5px;
-  background: transparent;
+  border-radius: 6px;
+  /* 不再写 background: transparent —— chip 必须一直在（深浅两极都靠它）。
+     这里只把「真图标态」特有的溢出裁切留下：img 要能被 6px 圆角切齐。 */
   overflow: hidden;
 }
 /* 图标在位时把那颗 7px 彩点收掉（::after 会盖在图片上方，必须显式关掉）*/
@@ -1359,9 +1387,12 @@ html[data-theme] .env-sync-card:hover {
 }
 #site-menu-panel #quick-sites .quick-site>i>img.quick-site-favicon {
   display: block;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
+  /* chip 22px − padding 2px×2 = 18px 的内容盒；写 100% 而不是硬编码，
+     免得以后改 chip 尺寸时 img 溢出被 overflow:hidden 裁掉一条边。
+     （img 上的 width/height 属性仍是 20，CSS 优先，布局在 CSS 生效前也不会跳。） */
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;              /* 6px 外圆角 − 2px padding */
   object-fit: cover;
   pointer-events: none;
   -webkit-user-drag: none;
