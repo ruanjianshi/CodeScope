@@ -1585,5 +1585,11 @@ window.csLoadScripts = function (list) {
   try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
 })();
 </script>
+<!-- ★ 网址导航卡片的真图标（2026-11-01）：卡片图标位原本只有 --site-color 彩点，
+     站点数据里没有 icon 字段，只能在渲染之后补。所以这一层**必须**排在
+     study-workspace.js 之后、且用 defer（等 DOM 就绪再挂 MutationObserver 观察
+     #quick-sites）；它只替换图标位内容，失败一律回落到彩点，不动打包产物。
+     详见 assets/site-icons.js 文件头（图标源选型 / 缓存 / 6 并发闸门）。 -->
+<script src="/assets/site-icons.js" defer></script>
 </body>
 </html>

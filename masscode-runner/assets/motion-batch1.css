@@ -1337,6 +1337,37 @@ html[data-theme] .env-sync-card:hover {
   border-radius: 50%;
   background: var(--site-color, #4f8cff);
 }
+
+/* 10.7b 真图标位：彩点 → 站点自己的 favicon（assets/site-icons.js 写入）-----------
+   ⚠️ 这是「替换图标位内容」，不是新控件：
+      · 由 assets/site-icons.js 在图片加载成功之后才 append（onerror 不挂），
+        所以「拿不到图标」时这里一条规则都不生效 —— 卡片还是原来的彩点，不存在破图；
+      · 尺寸写死 20×20（img 上还带 width/height 属性，CSS 未生效前也不会撑破网格列）；
+      · 圆角 5px、object-fit: cover —— 非正方形 favicon 会被裁切而不是拉变形；
+      · 卡片本身 draggable=true 做拖拽排序，图片必须让开指针与拖动权，
+        否则从图标位置按下去会变成「拖图片」而不是「拖卡片」。
+   动效：本节没有 transition / animation / transform —— 图标是静态的，
+   连 prefers-reduced-motion 都不用另开分支（第 10.10 节的兜底照旧覆盖卡片本身）。 */
+#site-menu-panel #quick-sites .quick-site>i.quick-site-icon {
+  border-radius: 5px;
+  background: transparent;
+  overflow: hidden;
+}
+/* 图标在位时把那颗 7px 彩点收掉（::after 会盖在图片上方，必须显式关掉）*/
+#site-menu-panel #quick-sites .quick-site>i.quick-site-icon::after {
+  content: none;
+}
+#site-menu-panel #quick-sites .quick-site>i>img.quick-site-favicon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+  user-select: none;
+}
 #site-menu-panel #quick-sites .quick-site strong {
   color: var(--text);
   font-size: 13px;
