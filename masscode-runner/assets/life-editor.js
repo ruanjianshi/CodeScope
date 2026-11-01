@@ -92,8 +92,7 @@
      ══════════════════════════════════════════════════════════════════════ */
   /* 色板键 ↔ 真颜色。必须和 src/reading-block-editor.js 的 COLOR_ITEMS **逐字一致** ✗：
      不一致的话，用户点了「红」，存下来的是另一个红 ✓（迁移映射表也会对不上 ✓）。 */
-  const CC_COLORS = [['red', '#f2555a'], ['orange', '#f0883e'], ['yellow', '#dcb13c'], ['green', '#4bbd7a'],
-    ['cyan', '#3fb6c4'], ['blue', '#5b9cf5'], ['purple', '#a97bf0'], ['pink', '#ef7bb0'], ['gray', '#95a0ae']];
+  const CC_COLORS = [['red', '#f2555a'], ['orange', '#f0883e'], ['yellow', '#dcb13c'], ['green', '#4bbd7a'], ['cyan', '#3fb6c4'], ['blue', '#5b9cf5'], ['purple', '#a97bf0'], ['pink', '#ef7bb0'], ['gray', '#95a0ae']];
   const CC_HEX = {}, CC_KEY = {};
   CC_COLORS.forEach((p) => { CC_HEX[p[0]] = p[1]; CC_KEY[p[1]] = p[0]; });
   const CC_HL = '#cc-hl';
@@ -137,9 +136,7 @@
       if (close < 0) { out += c; i += 1; continue; }
       const m = /^\((#[^)\s]+)(?:\s+"[^"]*")?\)/.exec(seg.slice(close + 1));
       const href = m ? m[1] : '';
-      if (!m || (href !== CC_HL && href.indexOf(CC_FG) !== 0) || (href !== CC_HL && !CC_HEX[href.slice(CC_FG.length)])) {
-        out += seg.slice(i, close + 1); i = close + 1; continue;
-      }
+      if (!m || (href !== CC_HL && href.indexOf(CC_FG) !== 0) || (href !== CC_HL && !CC_HEX[href.slice(CC_FG.length)])) { out += seg.slice(i, close + 1); i = close + 1; continue; }
       out += make(seg.slice(i + 1, close), href);
       i = close + 1 + m[0].length;
     }
@@ -221,6 +218,7 @@
         const s = slotOf(host);
         if (!s || s.inst !== inst || !host.isConnected) return;
         ccPaint(host);
+        lwImgGuard(host);
       }, 0);
     };
     inst.painter = new CC_MO(() => { if (CC_PAINTING > 0) return; draw(); });
@@ -232,6 +230,29 @@
     if (inst.paintTimer) { clearTimeout(inst.paintTimer); inst.paintTimer = 0; }
     if (inst.painter) { try { inst.painter.disconnect(); } catch (_) {} inst.painter = null; }
   }
+
+  /* ════ 粘贴 / 拖拽图片：**落盘再引用** ✓✓（2026-11-01 第二轮，用户报「刷新变破图」）════
+     痛点 ✗：Crepe 自带的图片上传是 `URL.createObjectURL(file)` ✓ ⇒ 正文里写进
+       `![1.00](blob:http://127.0.0.1:4877/…)` ✓。blob URL **只属于当次页面会话** ✗ ——
+       刷新即失效 ✓，而这份 markdown 已经被存进 life-workbench.json ✓ ⇒ **永久死链** ✗✗。
+     ✅ 做法：不碰内核 ✓（src/reading-block-editor.js 是禁改文件 ✓），只给它喂 onImage ✓ ——
+        它本来就为这种情况留了口子（paste / drop 里先拦图片文件 ✓，有 onImage 才 preventDefault ✓，
+        否则才落到 Crepe 的 blob 上传 ✓，**blob 就是这么来的** ✓）。
+        我们这一步：FileReader → base64 → `POST /api/life/image` ✓ → 只把**稳定 URL**
+        交给它 ✓ ⇒ 插进正文的永远是 `![图片](/api/life/image/<内容哈希>.<ext>)` ✓。
+     ⚠️ 大小 / MIME 客户端也判一道 ✓（体验：超 10MB 立刻说清楚 ✓），
+        但**权威校验在服务端** ✓（手搓请求拦不住 ✗）。
+     ⚠️ 存不进盘时**必须抛错** ✗✗ —— 内核会调 onError → 面板状态栏报原因 ✓；
+        绝不能 catch 完返回一个假 URL ✓（那等于又造一个死链 ✗）。
+     ⚠️ 读旧笔记时正文里还躺着当年的 `blob:`（历史数据 ✓）：**不许显示破图** ✗ ——
+        渲染后由 lwImgGuard 换成灰底占位「图片已失效（当时存的是临时地址）」✓，
+        同时把那个 image-block 藏掉 ✓。占位是**纯 DOM 层**的 ✓（像「画手」一样包在
+        CC_PAINTING 里 ✓ → ProseMirror 看不到这次改动 ✓ → 正文一个字节都不变 ✓：
+        用户不编辑就不会把占位文字存进笔记 ✗✓）。 */
+  function lwImgBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || '').replace(/^data:[^,]*,/, '')); reader.onerror = () => reject(reader.error || new Error('读取图片失败')); reader.readAsDataURL(file); }); }
+  async function lwImgUpload(file) { if (!file || !/^image\//.test(String(file.type || ''))) throw new Error('只支持图片文件'); if (file.size > 10 * 1024 * 1024) throw new Error('图片超过 10MB，未保存'); const res = await fetch('/api/life/image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name || '', type: file.type || '', data: await lwImgBase64(file) }) }); const json = await res.json().catch(() => null); if (!res.ok || !json || !json.url) throw new Error((json && json.error) || ('图片保存失败（HTTP ' + res.status + '）')); return { url: json.url, markdown: '![图片](' + json.url + ')' }; }
+  function lwImgDead(img) { if (!img || img.dataset.lwDead === '1') return false; const block = (img.closest && img.closest('.milkdown-image-block')) || img.parentElement || img; CC_PAINTING += 1; try { img.dataset.lwDead = '1'; block.classList.add('lw-img-dead-block'); const ph = document.createElement('div'); ph.className = 'lw-img-dead'; ph.setAttribute('contenteditable', 'false'); ph.textContent = '图片已失效（当时存的是临时地址）'; block.insertAdjacentElement('afterend', ph); } finally { setTimeout(() => { CC_PAINTING = 0; }, 0); } return true; }
+  function lwImgGuard(host) { const prose = host && host.querySelector('.ProseMirror'); if (!prose || !prose.querySelectorAll) return 0; let n = 0; Array.prototype.forEach.call(prose.querySelectorAll('img'), (img) => { if (!img || img.dataset.lwGuard === '1' || img.dataset.lwDead === '1') return; img.dataset.lwGuard = '1'; n += 1; if (/^blob:/i.test(String(img.getAttribute('src') || ''))) return lwImgDead(img); img.addEventListener('error', () => lwImgDead(img)); if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) lwImgDead(img); }); return n; }
 
   /* ── 两个槽位（备忘录 / 日记）─────────────────────────────────────────────
      一个槽位 = 一份**完整**的编辑器状态：
@@ -359,6 +380,9 @@
     }
     loadBlockEditor().then((api) => api.create({
       root: host,
+      /* ★ 粘贴 / 拖拽的图片走**我们自己的落盘口** ✓（见 lwImgUpload 上面那段）——
+         不传它，内核就用自己的 createObjectURL ⇒ 正文里写 blob: ⇒ 刷新必破图 ✗✗ */
+      onImage: lwImgUpload,
       /* ★ 交给 Crepe 的是**编辑器语法**（[文字](#cc-fg-red)）✗✗ —— 存储格式里的
          <span style="color:…"> 它不认（commonmark 预设没有 html 节点 ✓），原样喂进去
          会被当普通文本留着 / 干脆丢掉 ✓。回来时再由 onChange 转回存储格式 ✓。 */
@@ -489,11 +513,7 @@
         dispatchEvent **不看可见性** ✓，命令照跑 ✓（实测 12 条全过 ✓）。
      ⚠️ 顶栏顺序来自 Crepe 的顶栏配置 ✓（formatting → list → insert → block → more），
         所以这是个**下标表**；Crepe 升级若加减按钮，这里要跟着改 ✗（exec 里有长度校验 ✓）。 */
-  const TOP_ITEMS = ['bold', 'italic', 'strikethrough', 'code',
-    'bullet-list', 'ordered-list', 'task-list',
-    'link', 'image', 'table',
-    'code-block', 'math',
-    'quote', 'hr'];
+  const TOP_ITEMS = ['bold', 'italic', 'strikethrough', 'code', 'bullet-list', 'ordered-list', 'task-list', 'link', 'image', 'table', 'code-block', 'math', 'quote', 'hr'];
 
   function topBarOf(host) { return host ? host.querySelector('.milkdown-top-bar') : null; }
 

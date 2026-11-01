@@ -1196,9 +1196,7 @@ CPU_SAMPLE_TIMER.unref();
 
 let DISK_CACHE = { at: 0, value: null };
 let MEMORY_CACHE = { at: 0, value: null };
-function execFileText(command, args, timeout) {
-  return new Promise((resolve, reject) => execFile(command, args, { encoding: 'utf8', timeout: timeout || 5000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => err ? reject(new Error(String(stderr || err.message))) : resolve(String(stdout || ''))));
-}
+function execFileText(command, args, timeout) { return new Promise((resolve, reject) => execFile(command, args, { encoding: 'utf8', timeout: timeout || 5000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => err ? reject(new Error(String(stderr || err.message))) : resolve(String(stdout || '')))); }
 /* ══ ★★★★ ONLYOFFICE 服务状态：**加一层缓存** ✗✗（2026-10-08 性能体检）══════
    实测：这个接口在本机（**Docker 没开** ✓）要 **1.1~1.9 秒**才返回 ✗ ——
    因为 `docker info` 要 spawn 一个 docker 进程 ✓、再等它跟守护进程握手失败 ✓。
@@ -2052,8 +2050,6 @@ function runtimeReadiness() {
     dependencies:dependency,
   };
 }
-
-function shellQuote(value) { return "'" + String(value).replace(/'/g, "'\\''") + "'"; }
 
 function deploymentInfo(env, requiredKeys) {
   const missing = [...requiredKeys].filter((key) => {
@@ -3984,9 +3980,7 @@ function withSftp(body, work) {
   });
 }
 
-function sftpCall(sftp, method, ...args) {
-  return new Promise((resolve, reject) => sftp[method](...args, (error, value) => error ? reject(error) : resolve(value)));
-}
+function sftpCall(sftp, method, ...args) { return new Promise((resolve, reject) => sftp[method](...args, (error, value) => error ? reject(error) : resolve(value))); }
 
 async function remoteList(body) {
   const target = remoteFilePath(body && body.path);
@@ -4060,9 +4054,7 @@ function connectSshClient(body) {
   });
 }
 
-function clientSftp(client) {
-  return new Promise((resolve, reject) => client.sftp((error, sftp) => error ? reject(error) : resolve(sftp)));
-}
+function clientSftp(client) { return new Promise((resolve, reject) => client.sftp((error, sftp) => error ? reject(error) : resolve(sftp))); }
 
 async function sftpMkdirp(sftp, target) {
   const normalized = path.posix.normalize(target || '.');
@@ -4117,9 +4109,7 @@ async function streamRemoteUpload(req, res) {
   }
 }
 
-function shellQuote(value) {
-  return "'" + String(value).replace(/'/g, "'\"'\"'") + "'";
-}
+function shellQuote(value) { return "'" + String(value).replace(/'/g, "'\"'\"'") + "'"; }
 
 function downloadHeaders(res, name, contentType, size) {
   const safeName = String(name || 'download').replace(/[\r\n]/g, '_');
@@ -4521,9 +4511,7 @@ function findCompileDatabase(projectFiles) {
   if (direct) return direct;
   return ((projectFiles || walkProject(3000)).find((item) => item.name === 'compile_commands.json') || {}).full || '';
 }
-function shellWords(command) {
-  return String(command || '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((v) => v.replace(/^(?:"(.*)"|'(.*)')$/, '$1$2')) || [];
-}
+function shellWords(command) { return String(command || '').match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((v) => v.replace(/^(?:"(.*)"|'(.*)')$/, '$1$2')) || []; }
 function compileDatabaseInfo(projectFiles) {
   const file = findCompileDatabase(projectFiles);
   if (!file) return { ok: true, found: false, entries: 0, path: '', includePaths: [], defines: [], languages: {} };
@@ -5144,9 +5132,7 @@ function readingMetaFile(rel) {
   return path.join(readingsDir(), '.codescope', id + '.json');
 }
 function readingHasMeta(rel) { return /\.(?:pdf|url)$/i.test(String(rel || '')); }
-function defaultReadingMeta(rel) {
-  return { version:1, path:rel, page:1, view:'original', translations:{}, fragments:[], updatedAt:0 };
-}
+function defaultReadingMeta(rel) { return { version:1, path:rel, page:1, view:'original', translations:{}, fragments:[], updatedAt:0 }; }
 function loadReadingMeta(rel) {
   try {
     const parsed = JSON.parse(fs.readFileSync(readingMetaFile(rel), 'utf8'));
@@ -5431,9 +5417,7 @@ function searchReadingLibrary(query, sensitive) {
   return hits;
 }
 
-function decodeWorkspaceRef(value) {
-  try { return decodeURIComponent(String(value || '')); } catch (_) { return String(value || ''); }
-}
+function decodeWorkspaceRef(value) { try { return decodeURIComponent(String(value || '')); } catch (_) { return String(value || ''); } }
 function workspaceBacklinks(kind, targetPath, targetFragment) {
   const hits = [], wanted = String(targetPath || ''), wantedFragment = Number(targetFragment);
   const addMatches = (content, source) => {
@@ -5481,9 +5465,7 @@ const OFFICE_EXTS = new Set(['.docx', '.xlsx', '.xls', '.csv', '.pptx']);
 const ONLYOFFICE_CONTAINER_HOST = String(process.env.CODESCOPE_ONLYOFFICE_CONTAINER_HOST || 'host.docker.internal').trim();
 const ONLYOFFICE_ACCESS_SECRET = crypto.randomBytes(32);
 const ONLYOFFICE_READING_SESSIONS = new Map();
-function onlyOfficeToken(rel, purpose) {
-  return crypto.createHmac('sha256', ONLYOFFICE_ACCESS_SECRET).update(String(purpose || '') + '\0' + String(rel || '')).digest('hex');
-}
+function onlyOfficeToken(rel, purpose) { return crypto.createHmac('sha256', ONLYOFFICE_ACCESS_SECRET).update(String(purpose || '') + '\0' + String(rel || '')).digest('hex'); }
 function onlyOfficeTokenValid(rel, purpose, token) {
   const expected = Buffer.from(onlyOfficeToken(rel, purpose)), actual = Buffer.from(String(token || ''));
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
@@ -5505,9 +5487,7 @@ function onlyOfficeBrowserUrl(req) {
   service.hostname = requestHost;
   return service.toString().replace(/\/$/, '');
 }
-async function onlyOfficeHealth() {
-  return OFFICE_ENGINE.probeOnlyOffice();
-}
+async function onlyOfficeHealth() { return OFFICE_ENGINE.probeOnlyOffice(); }
 /* ONLYOFFICE 自动准备：npm 的 prestart/preweb 只在 `npm start` 时执行，
    直接 `node server.js`、start.command 或桌面端启动都会跳过，因此服务端启动时自行补一次。
    设置 CODESCOPE_AUTO_OFFICE=0（测试/CI）或在 CODESCOPE_ONLYOFFICE_URL 显式指定地址时不代管。 */
@@ -5576,9 +5556,7 @@ function onlyOfficeDocumentType(kind) {
       而 JWT 的错一个字符都表现为「编辑器白屏」✗，根本查不出来 ✗。
    ⚠️ 密钥从 onlyOfficeJwtSecret() 取（不是直接读字段 ✗）：
       容器确认是旧配置（JWT_ENABLED≠true）时它会返回 '' ✓ → 退回不签名模式 ✓（可降级 ✓）。 */
-function signOnlyOfficeConfig(payload) {
-  return signOnlyOfficeJwt(payload, onlyOfficeJwtSecret());
-}
+function signOnlyOfficeConfig(payload) { return signOnlyOfficeJwt(payload, onlyOfficeJwtSecret()); }
 function onlyOfficeConfig(rel, file) {
   const stat = fs.statSync(file), ext = path.extname(rel).slice(1).toLowerCase(), kind = officeKind(rel);
   const internal = onlyOfficeContainerBase(), documentToken = onlyOfficeToken(rel, 'document'), callbackToken = onlyOfficeToken(rel, 'callback');
@@ -6205,6 +6183,30 @@ function proxyAuthGate(req) {
       日志是可数的证据 ✓（命中缓存**不打** ✓，所以「没有新增行」本身就是证据 ✓）。
    ══════════════════════════════════════════════════════════════════════════ */
 const FAVICON_DIR = path.join(applicationDataRoot(), 'favicons'), FAVICON_TYPE = { '.ico': 'image/x-icon', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }, FAVICON_HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/, FAVICON_ORIGIN = process.env.CODESCOPE_FAVICON_ORIGIN || 'https://favicon.im/', faviconSend = (res, buf, type, from) => { res.writeHead(200, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=2592000', 'X-Content-Type-Options': 'nosniff', 'X-Favicon-Source': from }); res.end(buf); return true; };
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ 备忘录 / 日记的**粘贴图片**：落盘再引用 ✓✓（2026-11-01 第二轮）
+   ══════════════════════════════════════════════════════════════════════════
+   痛点 ✗（用户报「粘贴图片，刷新页面变破图」）：Crepe 自带的图片上传是
+     `URL.createObjectURL(file)` ✓ ⇒ 正文里写进 `![…](blob:http://127.0.0.1:4877/…)` ✓。
+     blob URL **只属于当次页面会话** ✗ —— 刷新即失效 ✓，而这份 markdown 被
+     存进了 life-workbench.json ✓ ⇒ **永久存了一个死链接** ✗✗。
+   ⇒ 粘贴 / 拖拽的图片一律**先落盘**（客户端 base64 → `POST /api/life/image` ✓），
+     正文里只写**稳定 URL** `/api/life/image/<内容哈希>.<ext>` ✓；
+     `GET /api/life/image/<name>` 直接从 `<数据目录>/life-images/` 读字节 ✓。
+   ⚠️ **name 是安全边界** ✗：它是「把用户给的名字拼进路径」的典型口子 ✓
+      （`../../etc/passwd` / `%2e%2e` 都能读到数据目录外面 ✗）。
+      只认 `[a-f0-9]{8,64}\.(png|jpe?g|gif|webp|svg)` ✓ —— 花括号里的点是真的点 ✓，
+      斜杠 / 反斜杠 / 点段在正则这一关就死 ✓（**先解码再校验**，同 /api/favicon ✓）。
+   ⚠️ 文件名 = **内容 sha256 前 32 位** ✓ ⇒ 同一张图粘两次只落一个文件（天然去重 ✓），
+      而且名字和内容一一对应 ✓ ⇒ 可以放心给 `immutable` 的**一年**缓存 ✓。
+   ⚠️ 单张 ≤ **10MB** ✓、只收图片 MIME ✓（扩展名按 MIME 定 ✓，不信客户端文件名 ✗）——
+      服务端要**自己**判（客户端拦一次只是体验 ✓，挡不住手搓请求 ✗）。
+   ⚠️ SVG 要单发一条 CSP ✓：`<img src>` 里的脚本本来不执行 ✓，但**直接打开**同一个
+      URL 就是本站同源文档 ✓ —— 没有 CSP 的话一张「图片」就能在本站跑脚本 ✗✗。
+   ⚠️ 失败一律走 `send()`（`no-store` ✓）：错误不能被浏览器按一年缓存 ✗。
+   ══════════════════════════════════════════════════════════════════════════ */
+const LIFE_IMAGE_DIR = path.join(applicationDataRoot(), 'life-images'), LIFE_IMAGE_NAME = /^[a-f0-9]{8,64}\.(png|jpe?g|gif|webp|svg)$/, LIFE_IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }, LIFE_IMAGE_TYPE = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg' }, LIFE_IMAGE_MAX = 10 * 1024 * 1024;
+function lifeImageSend(res, buf, name) { const ext = name.split('.').pop().toLowerCase(), headers = { 'Content-Type': LIFE_IMAGE_MIME[ext] || 'application/octet-stream', 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' }; if (ext === 'svg') headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'"; res.writeHead(200, headers); res.end(buf); return true; }
 async function handleFavicon(req, res, u) {
   const host = String(u.searchParams.get('host') || '').toLowerCase(); if (!FAVICON_HOST.test(host) || host.length > 253) return send(res, 400, { ok: false, error: 'host 只允许合法域名（[a-z0-9.-]，不能带协议或路径）' }); for (const ext of Object.keys(FAVICON_TYPE)) { let hit = null; try { hit = fs.readFileSync(path.join(FAVICON_DIR, host + ext)); } catch (_) { } if (hit && hit.length) return faviconSend(res, hit, FAVICON_TYPE[ext], 'cache'); }
   try { const response = await fetch(FAVICON_ORIGIN + host, { redirect: 'follow', signal: AbortSignal.timeout(3000) }), buf = response.ok ? Buffer.from(await response.arrayBuffer()) : null; if (!buf || !buf.length || buf.length > 524288) return send(res, 404, { ok: false, error: '图标回源失败' }); const given = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase(), ext = Object.keys(FAVICON_TYPE).find((e) => FAVICON_TYPE[e] === given) || (buf[0] === 0x89 ? '.png' : buf[0] === 0x3c ? '.svg' : '.ico'); console.log('[favicon] origin ' + host + ' ' + buf.length + 'B ' + FAVICON_TYPE[ext]); try { fs.mkdirSync(FAVICON_DIR, { recursive: true }); fs.writeFileSync(path.join(FAVICON_DIR, host + ext), buf); } catch (error) { console.log('[favicon] write failed ' + host + ' ' + ((error && error.message) || error)); } return faviconSend(res, buf, FAVICON_TYPE[ext], 'origin'); } catch (error) { console.log('[favicon] fail ' + host + ' ' + ((error && error.message) || error)); return send(res, 404, { ok: false, error: '图标回源失败' }); } }
@@ -6287,6 +6289,26 @@ const server = http.createServer(async (req, res) => {
     /* 网址导航图标：本机代理 + 磁盘缓存 ✓（实现在上面 handleFavicon ✓ / 为什么这样设计见那段注释 ✓）。
        ⚠️ 放在**鉴权闸门之后** ✓（局域网要访问码 ✓，回环放行 ✓），也和别的静态资源同层 ✓。 */
     if (req.method === 'GET' && u.pathname === '/api/favicon') return handleFavicon(req, res, u);
+    /* 粘贴图片：**落盘 + 稳定 URL** ✓（设计 / 安全边界见上面那段注释 ✓）。
+       ⚠️ 放在**鉴权闸门之后** ✓（和 /api/favicon 同一层 ✓）——
+          远端没访问码时连上传都不该通 ✓（这条写请求同样受 trustedHttpOrigin 管 ✓）。 */
+    if (u.pathname === '/api/life/image' && req.method === 'POST') {
+      let body = null; try { body = await readBody(req, 15e6); } catch (error) { return send(res, error.statusCode || 400, { ok: false, error: String((error && error.message) || error) }); }
+      const type = String((body && body.type) || '').split(';')[0].trim().toLowerCase(), ext = LIFE_IMAGE_TYPE[type] || '';
+      if (!ext) return send(res, 400, { ok: false, error: '只接受图片文件（png / jpeg / gif / webp / svg）' });
+      let buf = null; try { buf = Buffer.from(String((body && body.data) || '').replace(/^data:[^,]*,/, '').replace(/\s+/g, ''), 'base64'); } catch (_) { buf = null; }
+      if (!buf || !buf.length) return send(res, 400, { ok: false, error: '图片内容为空或 base64 损坏' });
+      if (buf.length > LIFE_IMAGE_MAX) return send(res, 413, { ok: false, error: '单张图片不能超过 10MB' });
+      const name = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 32) + '.' + ext, file = path.join(LIFE_IMAGE_DIR, name);
+      try { fs.mkdirSync(LIFE_IMAGE_DIR, { recursive: true }); if (!fs.existsSync(file)) fs.writeFileSync(file, buf); } catch (error) { return send(res, 500, { ok: false, error: '图片写入失败：' + String((error && error.message) || error) }); }
+      return send(res, 200, { ok: true, url: '/api/life/image/' + name, name, bytes: buf.length, type });
+    }
+    if (u.pathname.indexOf('/api/life/image/') === 0) {
+      let name = ''; try { name = decodeURIComponent(u.pathname.slice('/api/life/image/'.length)); } catch (_) { }
+      if (!LIFE_IMAGE_NAME.test(name)) return send(res, 400, { ok: false, error: '图片名不合法（只认 <内容哈希>.<png|jpg|jpeg|gif|webp|svg>）' });
+      if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Method Not Allowed' });
+      try { return lifeImageSend(res, fs.readFileSync(path.join(LIFE_IMAGE_DIR, name)), name); } catch (_) { return send(res, 404, { ok: false, error: '没有这张图片' }); }
+    }
     /* ★ 把**共享的纯逻辑**暴露给浏览器 ✓ —— 只开白名单里那几个文件 ✗（不是把整个 lib/ 敞开 ✗）。
        它们是**双栖**的 ✓（Node 里 require ✓ / 浏览器里挂 window.LW_xxx ✓），
        于是「服务端抽正文」和「前端逐句渲染」用的是**同一份**分句器 ✓、

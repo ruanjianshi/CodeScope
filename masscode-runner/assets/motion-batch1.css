@@ -1574,3 +1574,38 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
     transform: none !important;
   }
 }
+
+/* ── 10.11 备忘录 / 日记的**死链占位**（2026-11-01 第二轮）────────────────────
+   背景：老数据里躺着当年的 `![1.00](blob:http://127.0.0.1:4877/…)` ✓ ——
+   blob URL 只属于当次页面会话 ⇒ 刷新后 **必然** 是破图 ✓（用户看到的就是一个破图标 ✗）。
+   assets/life-editor.js 的 lwImgDead 会把那个 image-block 藏掉、在它原位后面插一块
+   .lw-img-dead（灰底 + 虚线框 + 一句话 ✓）⇒ 用户知道「这里本来有张图、它失效了」✓，
+   而不是对着一个破图标猜 ✗。正文 markdown **一个字节都不改** ✓（占位只在 DOM 层）✓。
+   ⚠️ 必须写在这里 ✗：app.css / ui-kit.css / motion.css 受棘轮管制且余量全是 0 ✓；
+      本文件是 index.html 里**最后一条** <link> ✓（同特异性靠后出现取胜 ✓）。
+   ⚠️ 特异性用「重复类名」提一档 ✓（.lw-img-dead.lw-img-dead = 0,2,0）——
+      生活面板的 <style> 是运行时追加到 head 末尾的 ✓（比本文件更晚 ✓），
+      只写一个类名的话，同特异性下会被它的 img / 块规则压掉 ✓。 */
+/* ⚠️ 选择器必须**带上 .milkdown 前缀 + 重复类名** ✗✗（2026-11-01 实测）：
+   Crepe 的 reading-block-editor.css 是**动态加载**的 ✓（loadBlockEditor 之后才挂 <link> ✓，
+   比本文件晚 ✓），里面写着 `.milkdown .milkdown-image-block{display:block}`（0,2,0）✓ ——
+   同特异性下**晚出现的赢** ✓ → 只写 .lw-img-dead-block(.lw-img-dead-block) 时这条
+   display:none 会静默失效 ✓（实测踩到：占位出来了、破图也还在 ✗）。
+   ⇒ 前缀 .milkdown 对齐 + 重复类名再提两档（0,4,0）✓，与加载顺序无关 ✓。 */
+.milkdown .milkdown-image-block.lw-img-dead-block.lw-img-dead-block {
+  display: none;
+}
+.lw-img-dead.lw-img-dead {
+  margin: 10px 0;
+  padding: 14px 16px;
+  border: 1px dashed rgba(164, 152, 132, .5);
+  border-radius: 10px;
+  background: rgba(128, 118, 102, .16);
+  color: #a89e8d;
+  font-size: 13px;
+  line-height: 1.5;
+  user-select: none;
+}
+.lw-img-dead.lw-img-dead::before {
+  content: "⚠ ";
+}
