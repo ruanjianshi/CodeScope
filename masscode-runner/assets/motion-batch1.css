@@ -1609,3 +1609,233 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
 .lw-img-dead.lw-img-dead::before {
   content: "⚠ ";
 }
+
+/* ═════════ 12. 欢迎页（编辑工作台）主次重做 · 2026-11-01 ═════════════════════════
+   ▸ 用户看到的问题（截图）：8 张主操作卡与 12 张「更多能力」卡**完全同级** ——
+     同样 1px 描边、同样大小、同样悬停位移，眼睛不知道先看哪；底部快捷键是裸文字。
+   ▸ 根因（实测 computed，不是猜）：app.css:3796 的「.welcome-actions button」
+     只有 **(0,1,1)**，而主题皮肤「html[data-theme] button」（app.css:3293）是 **(0,1,2)** ——
+     欢迎页自己写的 border-color / background / box-shadow **一条都没生效** ✗，
+     卡面真正的画法是皮肤给的：1px 描边 + 渐变底 + 三行内阴影。
+     悬停同理：「.welcome-actions button:hover:not(:disabled)」(0,3,1) 也输给皮肤的
+     「html[data-theme] button:hover:not(:disabled)」(0,3,2) ⇒ 那句 translateY(-2px)
+     从来没有出现过（实测悬停 transform = matrix(1,0,0,1,0,0)）。
+   ⇒ 本节选择器一律带「#workspace-welcome」（ID 级 (1,x,y)），一次压过皮肤，
+     **不写 !important**。本文件是 index.html 里最后一条 stylesheet
+     （app.css 在 167 行、本文件在 232 行）⇒ 特异性与顺序两边都站在本节这边 ✓。
+
+   ▸ 层级语言（对齐本文件 §9 / §10 已建立的 --el-1 / --el-2 / --el-3 三档阴影）：
+     主操作 8 卡 = 纸面上的**一张卡** → 静止 --el-1，悬停抬一档 --el-2；
+     更多能力 12 行 = **纸本身** → 无边框、无阴影，悬停只给 --accent 6% 的极淡底。
+     两组的差别因此不是「颜色深浅」，而是**有没有离开纸面** ✓。
+   ▸ 间距只留两档：组内 10px、组间 20px；两组之间一条 1px 分隔线。
+   ▸ 特异性一览（本节全部，写下来免得后人重算）：
+       #workspace-welcome .welcome-actions:not(.more) > button                      (1,2,1)
+       #workspace-welcome .welcome-actions:not(.more) > button.primary              (1,3,1)
+       #workspace-welcome .welcome-actions:not(.more) > button:hover:not(:disabled) (1,4,1)
+       #workspace-welcome .welcome-actions.more > button                            (1,2,1)
+       #workspace-welcome .welcome-actions.more > button:hover:not(:disabled)       (1,4,1)
+       #workspace-welcome:not([hidden]) .welcome-actions > button:nth-child(n)       (1,3,1)
+       #workspace-welcome:not([hidden]) .welcome-actions.more > button:nth-child(n+9):nth-child(-n+12)
+                                                                                    (1,5,1)
+     皮肤是 (0,1,2) / (0,3,2)，app.css 的欢迎页组是 (0,1,1) / (0,3,1) / (0,2,1) —— 全部被压过 ✓。 */
+
+/* ── 12.1 标题区收紧：mark→标题 12、标题→副标题 8、整块→第一组 20 ─────────────
+   改动只有三个 margin，字号一个都没动（派单：「标题不必再加大，靠留白建立呼吸」）✓。 */
+#workspace-welcome .welcome-mark {
+  margin-bottom: 12px;
+}
+#workspace-welcome>p {
+  margin: 8px auto 20px;
+}
+
+/* ── 12.2 组间距只留两档：组内 10px（显式写下，将来改 app.css 也不会飘）───────── */
+#workspace-welcome .welcome-actions {
+  gap: 10px;
+}
+
+/* ── 12.3 主操作 8 卡 = el-1 卡片 ───────────────────────────────────────────────
+   ① 去掉 1px 描边（border:0）：把卡面从「皮肤按钮」改成「一张纸」。
+      注意 border 会改盒模型（每边 −1px），但栅格列宽是定值 ⇒ 只是内容区宽了 2px，
+      没有布局位移 ✓。
+   ② 阴影换 --el-1：两层外阴影 + 顶部内高光，与 §9 的三档语言同源。
+   ③ transition 只留 box-shadow / transform / background-color / color 四件
+      （皮肤原来那串 border-color / filter 已经没有落点）—— transition 是**整体替换**，
+      这里是显式接管，不是丢声明（P-01 踩过的坑）✓。 */
+#workspace-welcome .welcome-actions:not(.more)>button {
+  border: 0;
+  padding: 12px;
+  min-height: 64px;
+  border-radius: 8px;
+  background: var(--panel2);
+  box-shadow: var(--el-1);
+  transition:
+    box-shadow 160ms var(--mo-out),
+    transform 160ms var(--mo-out),
+    background-color 160ms var(--mo-out),
+    color 160ms var(--mo-out);
+}
+/* 首卡（查找内容）保留原有的强调色底 —— 它是「先看哪」的第一落点 ✓。 */
+#workspace-welcome .welcome-actions:not(.more)>button.primary {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel2));
+}
+/* 悬停：抬一档（--el-2）+ 抬 1px。两件都是「离开纸面」的同一句话 ✓。 */
+#workspace-welcome .welcome-actions:not(.more)>button:hover:not(:disabled) {
+  box-shadow: var(--el-2);
+  transform: translateY(-1px);
+}
+/* 按下：留在纸面上（回到 --el-1、不位移）——
+   皮肤的按下态是 inset 重内阴影 + scale(.985)，和 el-1 的「纸面语言」不是一套，
+   这里显式接管，免得按下时卡片忽然变成一颗内凹的按钮 ✗。 */
+#workspace-welcome .welcome-actions:not(.more)>button:active:not(:disabled) {
+  box-shadow: var(--el-1);
+  transform: none;
+}
+
+/* ▸ 图标：36px 的「按钮图标块」→ 24px 圆角 tinted chip（--accent 12%）。
+      b 里的 .cs-ico 默认 1em（ui-kit.css:56），ui-kit.css:198 又把它钉成 18px(0,2,2)
+      ⇒ 这里用 (1,2,2) 收到 14px，恰好落在 24px chip 中央 ✓。
+      字形颜色**不写**：data-tone 的四套配色 (0,2,1) 因此原样保留（AI 紫 / Office 绿 /
+      工程琥珀 / 远程青），只有 chip 底色统一成 accent 12% ✓。 */
+#workspace-welcome .welcome-actions:not(.more)>button>b {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 12px;
+}
+#workspace-welcome .welcome-actions:not(.more)>button>b>.cs-ico {
+  width: 14px;
+  height: 14px;
+}
+
+/* ▸ 文字：13px/600 主行 + 11px/--dim 说明（原来是 12 / 10，太挤） */
+#workspace-welcome .welcome-actions:not(.more)>button>span>strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+#workspace-welcome .welcome-actions:not(.more)>button>span>small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* ── 12.4 「更多能力」12 卡降一档：无边框列表行 ──────────────────────────────────
+   样式全部**反向**写：border:0 + background:transparent + box-shadow:none。
+   不是「淡一点的卡片」，而是「没有卡片」—— 这样层级差才是结构性的，不是灰阶差 ✓。
+   行高收在 44px（12.5 + 11 两行文字 + 上下 6px 内边距）；栅格列不变，
+   12 项仍按原来的列数排，只是从「卡」变成「行」。 */
+#workspace-welcome .welcome-actions.more>button {
+  border: 0;
+  padding: 6px 8px;
+  min-height: 44px;
+  border-radius: 6px;
+  gap: 10px;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 160ms var(--mo-out);
+}
+/* 悬停：只有极淡底（--accent 6%）。**不给阴影、不给位移** ——
+   两条都显式写死 0/none，因为皮肤的 hover (0,3,2) 会同时塞渐变底、大阴影和 -1px，
+   不写死就会漏进来 ✗。 */
+#workspace-welcome .welcome-actions.more>button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+/* 按下也不位移：这一组是「列表行」，按下只留底色反馈 ✓。 */
+#workspace-welcome .welcome-actions.more>button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+
+/* ▸ 左图标 16px、无 chip、无底色：靠**去掉底板**再降一档 ✓
+      （tone 配色同样不写颜色，四套色仍生效） */
+#workspace-welcome .welcome-actions.more>button>b {
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  background: none;
+  font-size: 12.5px;
+}
+#workspace-welcome .welcome-actions.more>button>b>.cs-ico {
+  width: 15px;
+  height: 15px;
+}
+/* 主行 12.5px/500（比主操作的 13px/600 轻一档）、说明 11px/--dim */
+#workspace-welcome .welcome-actions.more>button>span>strong {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+#workspace-welcome .welcome-actions.more>button>span>small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* ── 12.5 两组之间：一条 1px 分隔线 + 20px 呼吸 ──────────────────────────────────
+   原来的 .welcome-more-title 是 margin:22px 0 10px 的裸小标题，既不是分隔也不是标题。
+   现在把它当成「分区标头」：上边 20px 留白 + 1px 线（--text 8%）+ 线下 20px，
+   下面 10px 接第二组 —— 于是全页只剩 20（组间）与 10（组内/标头下）两档 ✓。 */
+#workspace-welcome .welcome-more-title {
+  margin: 20px 0 10px;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+/* ── 12.6 底部快捷键：裸文字 → kbd 小胶囊 ────────────────────────────────────────
+   圆角 4px、--text 8% 底、11px，整行 --dim（原来 10px + 1px 描边 + 2px 下边框，
+   比上面的卡片还抢眼，正好和「主次」相反 ✗）。 */
+#workspace-welcome .welcome-shortcuts {
+  margin-top: 20px;
+  color: var(--dim);
+  font-size: 11px;
+}
+#workspace-welcome .welcome-shortcuts kbd {
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: color-mix(in srgb, var(--text) 88%, transparent);
+  font: 600 11px/1 var(--mono);
+}
+
+/* ── 12.7 ⚠️ 入场动画的 fill-mode：悬停位移真正的拦路虎 ─────────────────────────
+   app.css:3785 写的是 animation: mo-stagger-in … both (1,3,1) ⇒ 动画**结束后**
+   终点帧 to{transform:none} 仍然继续生效（fill-mode:both 的 forwards 语义），
+   于是 :hover 的 translateY(-1px) 永远被动画值压住 ✗。
+   实测证据：把 animation-fill-mode 从 both 改成 backwards 之后，同一位置悬停
+   computed transform 才是 matrix(1,0,0,1,0,-1)。
+   ⇒ 这里只改 fill-mode 一个长写属性（**不碰 animation 简写**，见 §7 踩过的两次坑：
+     简写会顺手重置 animation-delay，那 40ms 步进就没了 ✗）。
+   ⚠️ 特异性这里算了三轮才对，账记下来（§7 那条其实是 (1,5,1)，不是 (1,4,1)）：
+      · app.css:3785 是 (1,3,1) ⇒ 写一个 :nth-child(n) 到 (1,3,1)、靠后加载就赢 ✓；
+      · 但本文件 §7 给 9~12 项补入场的是
+        #…:not([hidden]) .welcome-actions.more>button:nth-child(n+9):nth-child(-n+12)
+        = ID 1 + 类 5（[hidden] / .welcome-actions / .more / 两个 :nth-child）+ button
+        = **(1,5,1)** ⇒ 只到 (1,4,1) 的 fill-mode 会被它压掉，那 4 项继续 fill:both
+        锁住 transform（实测：9~12 项停在 matrix(1,0,0,1,0,0)，1~8 项才是 none）✗。
+      ⇒ 分两条写：一条 (1,3,1) 压 app.css，一条**与 §7 逐字同形**的 (1,5,1) 压 §7 自身，
+        两条都靠「本文件后出现」同分取胜 —— 仍然没有 !important ✓。
+      合起来覆盖两组的 20 个按钮（包括 §7 补的 9~12 项），方向一致 ✓。 */
+#workspace-welcome:not([hidden]) .welcome-actions>button:nth-child(n) {
+  animation-fill-mode: backwards;
+}
+#workspace-welcome:not([hidden]) .welcome-actions.more>button:nth-child(n+9):nth-child(-n+12) {
+  animation-fill-mode: backwards;
+}
+
+/* ── 12.8 ♿ prefers-reduced-motion：去位移、保留阴影与颜色 ──────────────────────
+   与 §10.10 / §8 同一套规矩：静态视觉（el-1 → el-2 的层级、accent 底色）照常保留，
+   只把「抬 1px」这一跳去掉，并且把过渡也关掉（没有位移就没有需要补间的量）✓。
+   主操作悬停仍然从 el-1 换到 el-2 = 颜色/阴影变化，不是动效 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  #workspace-welcome .welcome-actions>button {
+    transition: none !important;
+  }
+  #workspace-welcome .welcome-actions:not(.more)>button:hover:not(:disabled),
+  #workspace-welcome .welcome-actions:not(.more)>button:active:not(:disabled) {
+    transform: none !important;
+  }
+}
