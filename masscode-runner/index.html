@@ -151,11 +151,14 @@ window.csLoadScripts = function (list) {
       st.onerror = loadEditor;   /* 样式层挂了也不能让面板打不开：面板里有兜底判断 */
       document.body.appendChild(st);
     }
-    /* 先等 1.5s（用户不可能这么快点开工作台），再等空闲 —— 保证不在首屏关键路径上 ✓ */
-    setTimeout(function () {
-      if ('requestIdleCallback' in window) requestIdleCallback(loadWorkbench, { timeout: 2000 });
-      else loadWorkbench();
-    }, 1500);
+    /* ★ 2026-11-01 修「个人管理面板入口出现得比别的慢」——
+       原来先 setTimeout 1500ms 再等空闲（空闲超时又 2000ms）⇒ 按钮最坏 3.5s 才出现，
+       用户刷新后看到顶栏少一个入口，体感是「加载慢」✗。
+       ⚠️ 与「本机管家」不同：这里不是自建入口导致不存在，而是**入口被延迟创建**。
+       改法：去掉那 1500ms 的硬等，直接进空闲队列（上限 600ms）；仍不在首屏关键路径上 ✓，
+       但按钮通常在 300~600ms 内就出现 ✓。若首屏更忙，requestIdleCallback 会自动让路。 */
+    if ('requestIdleCallback' in window) requestIdleCallback(loadWorkbench, { timeout: 600 });
+    else setTimeout(loadWorkbench, 120);
   })();
 </script>
 <link rel="stylesheet" href="/assets/app.css?v=20261028a">
