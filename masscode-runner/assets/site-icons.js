@@ -25,22 +25,26 @@
      ⇒ 所以内网 / 回环 / 保留地址（192.0.2.0/24、*.local、IP 字面量等）一律不发请求，
        直接留彩点（见 isPublicHost）。目录里那些内网端口表不会被送出去。
 
-   ★ 缓存到底存什么、请求数为什么掉得下来（实测口径，别想当然）
-     成功之后按 host 记一条 localStorage：{ src:<这次真正用的图标 URL>, at:<时间戳> }，
-     TTL 30 天；同一个 host 再出现就直接复用该 URL，不重新拼服务地址。
-     服务端实测带 cache-control: public, max-age=765923（约 8.8 天），
-     而 URL 一模一样 ⇒ 浏览器 HTTP 缓存直接供图。
-     实测（featured 4 张图标）：第一次打开 8 个网络请求（每张 302 + 200 各一次），
-     关掉再开第二 / 第三次都是 0 个网络请求；20+ 站分类首次是每张 2 个请求、
-     图标加载并发峰值 6。
-     ⚠️ 为什么不把「302 之后的 a.favicon.im/<host>」也缓存下来省掉那一跳（试过，做不到）：
-        · img.currentSrc 报的是 302 之前 的地址（实测）；
-        · performance 的 resource 条目也只有原地址，redirectStart = 0
-          （跨域重定向不暴露时间线，拿不到最终 URL）；
-        · 也拿不到图片字节：favicon.im 不回 access-control-allow-origin
-          （带 Origin 头实测也没有），fetch() 过不了 CORS，canvas 会被污染。
-       ⇒ 缓存的是「按 host 的图标 URL」+ 浏览器 HTTP 缓存，不是 data:URL。
-         这是这套图标源能拿到的最强缓存，报告里照实写。
+   ★ 图标从哪来、为什么现在快了（2026-11-01 改成本机代理）
+     现在的链路是「浏览器 → 本机 /api/favicon?host=<host> → （首次）favicon.im → 磁盘」✓：
+       · 首次：本机没缓存 → 服务端回源一次 ✓（3s 超时 ✓）→ 写进
+         <数据目录>/favicons/<host>.<ext> ✓ → 再把字节发给浏览器 ✓；
+       · 之后：服务端直接读盘 ✓（毫秒级 ✓、**零外部请求** ✓），响应还带
+         Cache-Control: public, max-age=2592000（30 天 ✓）⇒ 浏览器连本机都不用问 ✓；
+       · 断网：盘上有缓存就照样出图 ✓（这条以前做不到 ✗ —— 字节在第三方手里，
+         断网必回落彩点 ✓）；盘上没有 → 服务端回源失败回 404 ✓ → 回落彩点 ✓。
+     ⇒ localStorage 里那条 URL 仍然留着 ✓（同 host 不重复拼地址 ✓），但它**不再是**缓存主体：
+       主体是「服务端磁盘」（跨浏览器 ✓、断网可用 ✓）+「浏览器 HTTP 缓存」（零网络 ✓）。
+     ⚠️ 以前那套「缓存 302 之后的最终 URL」为什么放弃 ✗（试过，做不到 ✓）：
+        img.currentSrc / performance 都只报**重定向之前**的地址 ✗（跨域重定向不暴露时间线 ✓），
+        也拿不到图片字节 ✗（favicon.im 不回 access-control-allow-origin ✓，fetch 过不了 CORS ✓）。
+        改成本机代理之后两个限制同时消失 ✓ —— 字节由本机服务端返回 ✓，
+        对浏览器而言 URL 只有一条（/api/favicon?host=… ✓），302 在服务端内部发生 ✓。
+     ⚠️ 淡入（120ms opacity）为什么值得写 ✓：图标是**加载成功之后**才挂上去的 ✓，
+        「彩点 → 图标」只有一帧交接 ✓ —— 直接 append 是硬切 ✓（用户说的「先白框后图标」
+        的跳动就是硬切那一帧 ✓）；淡入把它拉成 120ms ✓，彩点在底下透出来 ✓
+        （img 有 z-index:1 盖在 ::after 之上 ✓，过渡结束才收彩点 ✓），
+        prefers-reduced-motion 下 CSS 直接 opacity:1 ✓（JS 也不排帧 ✓）。
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -48,12 +52,18 @@
   /* ── 常量 ──────────────────────────────────────────────────────────────── */
   var CONTAINER_ID = 'quick-sites';        /* 结果区（右栏网格），卡片都在这里面 */
   var CARD_SELECTOR = '.quick-site';       /* study-workspace.js 渲染的卡片类名 */
-  var SERVICE = 'https://favicon.im/';     /* ② 图标服务（见文件头选型） */
+  var SERVICE = '/api/favicon?host=';      /* ② 本机代理端点（磁盘缓存 + 30 天长缓存头，见文件头） */
   var CONCURRENCY = 6;                     /* ③ 同时最多 6 个图标请求 */
   var CACHE_PREFIX = 'codescope.site-icons.v1:';  /* localStorage 键前缀，按 host 一条 */
   var CACHE_TTL = 30 * 24 * 3600 * 1000;   /* 30 天；过期的条目下次走一遍 302 回源 */
   var NEGATIVE_TTL = 60 * 1000;            /* 失败不进 localStorage，只在内存里记 60s */
   var LOAD_TIMEOUT = 12000;                /* 兜底：网络卡住时别把 6 个坑位占死 */
+  var FADE_MS = 120;                       /* 淡入时长（真值在 motion-batch1.css，这里只用于兜底收彩点）*/
+
+  /* 代理 URL 只有一个形状：/api/favicon?host=<host> ✓ —— 一律 encodeURIComponent：
+     以后即使目录里出现 punycode / 带 _ 的主机名，不编码就会拼出**另一个** query ✓；
+     服务端拿到后解码再严格校验 ✓（见 server.js 的 handleFavicon / FAVICON_HOST）。 */
+  function iconUrl(host) { return SERVICE + encodeURIComponent(host); }
 
   /* ── ① 项目内已有映射（今天是空的，入口留着）──────────────────────────────
      仓库里没有站点级 icon 数据，所以这张表为空 —— 不是没做，是无数据可映射：
@@ -78,6 +88,7 @@
     cached: 0,       /* 从 memory / localStorage 拿到图标的次数 */
     reused: 0,       /* 直接复用已解码 <img> 元素（0 请求）的次数 */
     loaded: 0,       /* 真加载成功 */
+    faded: 0,        /* 真跑过淡入的次数（reduceMotion / 复用已淡入元素时不加）*/
     failed: 0,       /* 加载失败（回落彩点）*/
     skipped: 0,      /* 非公网 host，直接不请求 */
     peak: 0          /* 在飞峰值的观察值（不超过 6 才算守住并发）*/
@@ -202,7 +213,12 @@
 
   /* 成功才挂 <img>：先 new Image() 预加载，load 之后才 append 进 DOM ——
      这样挂上去的一定是已经解码好的图，不存在「破图闪一下」的中间态；
-     而且同一个元素 append 不会触发第二次请求。 */
+     而且同一个元素 append 不会触发第二次请求。
+     挂上去之后做一次 120ms 淡入（样式在 motion-batch1.css 的 10.7b）：
+       · 起始 opacity:0（img 规则里的默认值）→ 下一帧加 .is-in 才变 1 ✓；
+       · 这 120ms 里彩点**还在**（::after 未收 ✓，img 用 z-index:1 盖在它上面 ✓）
+         ⇒ 「彩点 → 图标」是渐变换替，不是硬切 ✓；
+       · 过渡走完（或 FADE_MS + 60 兜底）再加 .is-loaded ⇒ CSS 这时才收掉彩点 ✓。 */
   function attach(slot, img) {
     img.className = 'quick-site-favicon';
     img.alt = '';                     /* 装饰性：卡片本身有站名文字，读屏器别重复念 */
@@ -227,6 +243,24 @@
     slot.appendChild(img);
     slot.classList.add('quick-site-icon');
     mark(slot, 'ok');
+    /* 复用 memory 里那个**已经淡入过**的元素（同一个 host 再挂一次）：它本来就已不透明 ✓，
+       直接给终态、不重放 ✓ —— 否则每开一次弹窗图标都要先暗一下 ✗。
+       reduceMotion 同理：CSS 里 opacity 恒为 1 ✓，这里也不必排帧 ✓。 */
+    if (reduceMotion || img.classList.contains('is-in')) {
+      img.classList.add('is-in');
+      slot.classList.add('is-loaded');
+      return;
+    }
+    requestAnimationFrame(function () {
+      /* 双 rAF ✗✓：同一帧里 append + 改类会被合成一次 ✓，浏览器看不到 opacity:0 这个起点 ✓
+         ⇒ 直接跳终态、没有过渡 ✓（CSS transition 的经典坑 ✓）。 */
+      requestAnimationFrame(function () {
+        if (!img.isConnected) return;
+        stats.faded += 1;
+        img.classList.add('is-in');
+        setTimeout(function () { slot.classList.add('is-loaded'); }, FADE_MS + 60);
+      });
+    });
   }
 
   /* ① 项目内映射（本地、不联网）：优先于任何网络源 */
@@ -271,15 +305,15 @@
         settled = true;
         clearTimeout(timer);
         stats.failed += 1;
-        /* 缓存里的最终 URL 失效了（服务端换了 CDN / 过期）：丢缓存，用服务 URL 重试一次 */
-        if (cached && host) {
+        /* 服务端已经把回源那一跳试过了 ✓（3s 超时 + 404 ✓）—— 它说拿不到就是真拿不到 ✓，
+           **不再重试** ✗：以前缓存的是第三方 URL ✓，「缓存失效 → 用服务地址再问一次」有意义 ✓；
+           现在缓存的就是同一个本机 URL ✓，重试只会把 404 再问一遍 ✓，白多一次请求 ✗。
+           只把本地那条记录清掉（服务端将来补上盘上缓存后还能再试 ✓），然后回落彩点 ✓。 */
+        if (host) {
           dropCache(host);
-          mark(slot, 'loading');
-          request(slot, host, SERVICE + host, false);
-        } else {
-          if (host) memory[host] = { src: '', ok: false, at: Date.now() };
-          mark(slot, 'failed');      /* 回落：<i> 里那颗彩点原样留着 */
+          memory[host] = { src: '', ok: false, at: Date.now() };
         }
+        mark(slot, 'failed');      /* 回落：<i> 里那颗彩点原样留着 */
         next();
       };
 
@@ -347,9 +381,9 @@
       return true;
     }
 
-    /* ② 冷启动：走图标服务（favicon.im 会 302 到 a.favicon.im，最终 URL 事后入缓存）*/
+    /* ② 冷启动：走本机代理 ✓（首次它替我们回源一次 ✓ 并写盘 ✓；之后就是纯读盘 ✓）*/
     mark(slot, 'loading');
-    request(slot, host, SERVICE + host, false);
+    request(slot, host, iconUrl(host), false);
     return true;
   }
 
@@ -394,8 +428,10 @@
 
   /* ── 调试 / 取证接口（验收用：DOM 证据、请求计数、并发峰值）────────────── */
   window.__siteIcons = {
-    version: 1,
+    version: 2,                       /* 2 = 走本机 /api/favicon 代理（磁盘缓存）*/
     source: SERVICE,
+    endpoint: function (host) { return iconUrl(host); },
+    fadeMs: FADE_MS,
     concurrency: CONCURRENCY,
     reduceMotion: reduceMotion,
     stats: function () {
@@ -403,7 +439,7 @@
         opens: stats.opens, cards: stats.cards, attempts: stats.attempts,
         serviceHits: stats.serviceHits, cachedHits: stats.cachedHits,
         localHits: stats.localHits, cached: stats.cached, reused: stats.reused, loaded: stats.loaded,
-        failed: stats.failed, skipped: stats.skipped,
+        failed: stats.failed, skipped: stats.skipped, faded: stats.faded,
         peak: stats.peak, inflight: active, queued: queue.length,
         cacheSize: cacheSize()
       };

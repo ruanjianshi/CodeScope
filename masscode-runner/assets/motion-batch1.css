@@ -1373,16 +1373,24 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
       · 圆角 4px、object-fit: cover —— 非正方形 favicon 会被裁切而不是拉变形；
       · 卡片本身 draggable=true 做拖拽排序，图片必须让开指针与拖动权，
         否则从图标位置按下去会变成「拖图片」而不是「拖卡片」。
-   动效：本节没有 transition / animation / transform —— 图标是静态的，
-   连 prefers-reduced-motion 都不用另开分支（第 10.10 节的兜底照旧覆盖卡片本身）。 */
+   动效（★ 2026-11-01 新增淡入，用户报「先白框后图标」的跳动）：
+     · img 默认 opacity:0 + 120ms 的 opacity 过渡 → 加 .is-in 才变 1（类由 site-icons.js 排双帧加）；
+     · 这 120ms 里彩点**不收回** ⇒ 彩点透过半透明的图标继续可见 ⇒ 交接是渐变、不是硬切；
+     · 过渡走完 JS 才加 .is-loaded ⇒ 下面那条 ::after 规则这时才把彩点收掉；
+     · prefers-reduced-motion: reduce ⇒ 直接 opacity:1、无过渡（本节末尾单独写，见 10.7b-rm）。
+   ⚠️ 只有 opacity 在动：不加 transform / 不加布局属性 ⇒ 不触发重排 ✓（22px 的 chip 里重排
+      一次就是一次 grid 重算 ✓，而这里每秒可能同时进来 6 张图 ✓）。 */
 #site-menu-panel #quick-sites .quick-site>i.quick-site-icon {
   border-radius: 6px;
   /* 不再写 background: transparent —— chip 必须一直在（深浅两极都靠它）。
      这里只把「真图标态」特有的溢出裁切留下：img 要能被 6px 圆角切齐。 */
   overflow: hidden;
 }
-/* 图标在位时把那颗 7px 彩点收掉（::after 会盖在图片上方，必须显式关掉）*/
-#site-menu-panel #quick-sites .quick-site>i.quick-site-icon::after {
+/* 图标**淡入结束**之后才把那颗 7px 彩点收掉 ✓（::after 在 img 之上，不收就会盖在图标上 ✗）——
+   ⚠️ 以前挂在 .quick-site-icon 上 ✗：append 的一瞬间彩点就没了 ✗，而 img 正从 opacity:0 淡入 ✓
+      ⇒ 那 120ms 里图标位是**空的** ✓，正是用户说的「先白框后图标」✓。
+      现在改成 .is-loaded（JS 在过渡结束后才加 ✓）⇒ 彩点撑到图标不透明的那一刻 ✓。 */
+#site-menu-panel #quick-sites .quick-site>i.quick-site-icon.is-loaded::after {
   content: none;
 }
 #site-menu-panel #quick-sites .quick-site>i>img.quick-site-favicon {
@@ -1398,6 +1406,24 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
   -webkit-user-drag: none;
   user-drag: none;
   user-select: none;
+  /* 淡入的起点：JS 排双帧后加 .is-in 才走到 1（见 site-icons.js 的 attach）*/
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  /* 定位只为 z-index：让 img 盖在 chip 的 ::after（那颗彩点）**之上** ✓ ——
+     否则彩点画在图标上面 ✓，淡入期间会看到「彩点上浮着一层图标」✗。
+     grid 子项写 position:relative 不改变布局 ✓。 */
+  position: relative;
+  z-index: 1;
+}
+#site-menu-panel #quick-sites .quick-site>i>img.quick-site-favicon.is-in {
+  opacity: 1;
+}
+/* 10.7b-rm 减少动效：不做淡入，图标直接出现，彩点立刻收掉（JS 侧也不排帧）*/
+@media (prefers-reduced-motion: reduce) {
+  #site-menu-panel #quick-sites .quick-site>i>img.quick-site-favicon {
+    opacity: 1;
+    transition: none;
+  }
 }
 #site-menu-panel #quick-sites .quick-site strong {
   color: var(--text);

@@ -6178,6 +6178,36 @@ function proxyAuthGate(req) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ 网址导航图标：**本地代理 + 磁盘缓存** ✓✓（2026-11-01，用户：「图标加载有些慢」）
+   ══════════════════════════════════════════════════════════════════════════
+   痛点 ✗：`assets/site-icons.js` 里每张卡直接 `<img src="https://favicon.im/<host>">` ✓ ——
+     20 个站点 = 20 次**外部**请求 ✓（favicon.im 一次 302 + 一次 200 ✓，实测单站 0.3~1.4s ✓），
+     而 localStorage 只记了 URL ✗、**没缓存图片字节** ✗ ⇒ 每次开面板全部回源 ✓，
+     断网时只能回落彩点 ✗。
+   ⇒ 改成「浏览器只跟本机说话」✓：
+     · 命中 `<数据目录>/favicons/<host>.<ext>` → 直接发字节 ✓ + 长缓存头 30 天 ✓；
+     · 未命中 → 回源 `https://favicon.im/<host>` ✓，**3s 超时** ✓，成功写盘再返回 ✓；
+     · 回源失败 → **404**（前端据此回落彩点 ✓），绝不 500 / 绝不空 body ✗。
+   ⚠️ **host 是安全边界** ✓：只接受合法域名字符（`[a-z0-9.-]` ✓，每段 1~63 ✓，至少两段 ✓），
+      `../../etc/passwd` / `http://evil` / 空串一律 **400** ✓ —— 它同时是两个危险面的入口：
+      ① 磁盘路径（`path.join` 前不校验 = 任意读 ✓）；② 回源 URL（拼进 origin 前不校验 = 协议注入 / SSRF ✓）。
+      ⚠️ 必须先 `searchParams.get()` **解码后**再校验 ✗：`host=..%2F..%2Fetc%2Fpasswd` 解出来就是穿越串 ✓，
+         正则挂在这一步之后才拦得住 ✓。
+   ⚠️ 为什么失败要 404 而不是 500 ✗：前端 `img.onerror` 拿不到状态码 ✓，它能做的只有回落 ✓；
+      而 404 走 `send()` ⇒ `Cache-Control: no-store` ✓ —— 失败**不会被浏览器缓存 30 天** ✓
+      （否则一次网络抖动 = 一天没图标 ✗）。
+   ⚠️ 为什么缓存文件带扩展名 ✗：`Content-Type` 要和字节对得上 ✓（SVG 必须是 `image/svg+xml` ✓，
+      配上 `nosniff` 错一个就整张不显示 ✗）；扩展名按回源响应头定 ✓，认不出来才看魔数（PNG/SVG）✓。
+   ⚠️ `CODESCOPE_FAVICON_ORIGIN` 是**自测口** ✓（默认就是 favicon.im ✓）：指向一个连不上的地址，
+      就能证明「已缓存的站点照样出图（纯本地读盘 ✓）、未缓存的回落彩点 ✓」。
+   ⚠️ 回源成功打一行日志 `[favicon] origin <host>` ✓ —— 验收要「第二次打开零回源」这个数字 ✓，
+      日志是可数的证据 ✓（命中缓存**不打** ✓，所以「没有新增行」本身就是证据 ✓）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const FAVICON_DIR = path.join(applicationDataRoot(), 'favicons'), FAVICON_TYPE = { '.ico': 'image/x-icon', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }, FAVICON_HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/, FAVICON_ORIGIN = process.env.CODESCOPE_FAVICON_ORIGIN || 'https://favicon.im/', faviconSend = (res, buf, type, from) => { res.writeHead(200, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=2592000', 'X-Content-Type-Options': 'nosniff', 'X-Favicon-Source': from }); res.end(buf); return true; };
+async function handleFavicon(req, res, u) {
+  const host = String(u.searchParams.get('host') || '').toLowerCase(); if (!FAVICON_HOST.test(host) || host.length > 253) return send(res, 400, { ok: false, error: 'host 只允许合法域名（[a-z0-9.-]，不能带协议或路径）' }); for (const ext of Object.keys(FAVICON_TYPE)) { let hit = null; try { hit = fs.readFileSync(path.join(FAVICON_DIR, host + ext)); } catch (_) { } if (hit && hit.length) return faviconSend(res, hit, FAVICON_TYPE[ext], 'cache'); }
+  try { const response = await fetch(FAVICON_ORIGIN + host, { redirect: 'follow', signal: AbortSignal.timeout(3000) }), buf = response.ok ? Buffer.from(await response.arrayBuffer()) : null; if (!buf || !buf.length || buf.length > 524288) return send(res, 404, { ok: false, error: '图标回源失败' }); const given = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase(), ext = Object.keys(FAVICON_TYPE).find((e) => FAVICON_TYPE[e] === given) || (buf[0] === 0x89 ? '.png' : buf[0] === 0x3c ? '.svg' : '.ico'); console.log('[favicon] origin ' + host + ' ' + buf.length + 'B ' + FAVICON_TYPE[ext]); try { fs.mkdirSync(FAVICON_DIR, { recursive: true }); fs.writeFileSync(path.join(FAVICON_DIR, host + ext), buf); } catch (error) { console.log('[favicon] write failed ' + host + ' ' + ((error && error.message) || error)); } return faviconSend(res, buf, FAVICON_TYPE[ext], 'origin'); } catch (error) { console.log('[favicon] fail ' + host + ' ' + ((error && error.message) || error)); return send(res, 404, { ok: false, error: '图标回源失败' }); } }
 const server = http.createServer(async (req, res) => {
   /* ★ 把 req 挂到 res 上 ✓ —— `send()` 只拿到 res ✗，但它要看 `Accept-Encoding` 决定压不压 ✓。
      改 `send()` 的签名要动**几百个调用点** ✗，挂一个字段最省 ✓。 */
@@ -6254,6 +6284,9 @@ const server = http.createServer(async (req, res) => {
       const rel = u.pathname.slice('/assets/'.length);
       return streamStatic(req, res, assetsRoot, rel, { cacheControl: /^vendor\/tldraw-assets\//.test(rel) ? 'public, max-age=31536000, immutable' : 'no-cache' });
     }
+    /* 网址导航图标：本机代理 + 磁盘缓存 ✓（实现在上面 handleFavicon ✓ / 为什么这样设计见那段注释 ✓）。
+       ⚠️ 放在**鉴权闸门之后** ✓（局域网要访问码 ✓，回环放行 ✓），也和别的静态资源同层 ✓。 */
+    if (req.method === 'GET' && u.pathname === '/api/favicon') return handleFavicon(req, res, u);
     /* ★ 把**共享的纯逻辑**暴露给浏览器 ✓ —— 只开白名单里那几个文件 ✗（不是把整个 lib/ 敞开 ✗）。
        它们是**双栖**的 ✓（Node 里 require ✓ / 浏览器里挂 window.LW_xxx ✓），
        于是「服务端抽正文」和「前端逐句渲染」用的是**同一份**分句器 ✓、
