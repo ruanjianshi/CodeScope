@@ -956,3 +956,533 @@ html[data-theme] .env-sync-card:hover {
   }
 }
 
+
+
+/* ═════════════ 10. 网址导航弹窗「去边框 + 三档阴影」重做（只改视觉） ═════════ */
+
+/* 派单背景（2026-11-01，用户：目前设计太丑）——四条可量化的病：
+     ① 左侧 13 个分类都是【带描边的实心胶囊】（.site-category 全被 html[data-theme] button
+        的皮肤画成「凸起按钮」），一列看下去没有层级，像 13 个并列的按钮；
+     ② 右侧卡片 4 张占满整块（实测 2 列 × 298.5px、min-height 58px），每张只有
+        名称 + 一个「常用」+ 一个语义不明的彩点，信息密度极低；
+     ③ 搜索框是整条大描边（1px #354459 + 38px 高），视觉重量压过内容；
+     ④ 边框到处都是：面板 1px、头部下边 1px、body 上边 1px、左列右边 1px、卡片 1px、
+        页脚上边 1px + 投影 —— 而项目已经有一套三档阴影 --el-1/2/3（本文件 §6 定义），
+        这里一个都没用上。
+   本节只做「视觉」：不改 DOM、不改 JS、不动打包产物，全部靠 #site-menu-panel 前缀
+   覆盖；数量（分类数 / 每类卡片数）改前改后必须逐值相等 —— 见实测报告。
+
+   ── 特异性为什么写这么长 ────────────────────────────────────────────────
+   .site-category 是 <button>、.site-category-manage / .quick-site-manage 也是，
+   它们【同时】吃两层皮：
+     · app.css:3293 的 html[data-theme] button（0,1,2）：border + 分层渐变底 +
+       inset 高光 + transition，把每一行画成「凸起按钮」；
+     · 同文件 .site-category（0,1,0）/ .quick-site（0,1,0）这些系统自己的规则【压不过】
+       上面那条（0,1,2）—— 所以「去边框」必须自己提权，不能只写类名。
+   ⇒ 本节一律 #site-menu-panel #id .class（≥ (2,1,0)），比 (0,1,2) / (0,3,2) 都高，
+     与加载顺序无关，全程不用 !important（只有 §10.9 的 reduced-motion 兜底用，
+     理由同本文件 §9）。 */
+
+/* 10.1 面板本体：el-3（最高档，整块让位的那一层），去 1px 外框 -------------
+   抢权者：study-workspace.css:14 的 #site-menu-panel（1,0,0，border 1px #3a485c +
+   0 26px 90px 的野蛮投影）。本节同特异性、排在后面 ⇒ 后出现取胜 ✓。
+   ⚠️ 宽度 820 → 980：820 时右栏只有 628px，repeat(auto-fill,minmax(220px,1fr))
+      只能排出 2 列（实测 298.5px ×2），而派单要的正是「更紧凑、别过大过空」。
+      980 时右栏 784px ⇒ 3 列、每张 ~246px；1440 视口下仍只占 68%。 */
+#site-menu-panel {
+  width: min(980px, calc(100vw - 32px));
+  height: min(676px, calc(100vh - 88px));
+  border: 0;
+  border-radius: 14px;
+  background: var(--theme-elevated, var(--panel));
+  box-shadow: var(--el-3);
+  color: var(--text);
+}
+
+/* 10.2 头部：去下边框 + 去渐变底，靠间距分组 -------------------------------
+   原来头部是「下 1px 线 + 竖向渐变」的色带；现在弹窗是一整块面，
+   标题 14/600、说明 11/--dim，中间 16px 间距，再往下 10px 就是搜索框。 */
+#site-menu-panel .site-menu-head {
+  min-height: 0;
+  gap: 12px;
+  padding: 14px 12px 10px 20px;
+  border-bottom: 0;
+  background: none;
+}
+#site-menu-panel .site-menu-head strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+#site-menu-panel .site-menu-head span {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+/* 头部的三个按钮（新建分类 / 添加网址 / 关闭）：ghost，只在悬停时给一层 7% 底。
+   ⚠️ 必须连 box-shadow 与 transform 一起复位：主题层悬停是 (0,3,2) 的
+      transform:translateY(-1px) + 三层投影 —— 一个 26px 的小按钮被抬起 1px、
+      再加 8px 模糊的外投影，正是「边框用得太多」的另一半来源。 */
+#site-menu-panel .site-menu-head>button {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 500;
+  transform: none;
+  transition:
+    background-color 140ms var(--mo-out),
+    color 140ms var(--mo-out);
+}
+#site-menu-panel .site-menu-head>button:hover:not(:disabled) {
+  border: 0;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: none;
+  color: var(--text);
+  transform: none;
+}
+#site-menu-panel .site-menu-head>button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+/* 关闭按钮在 study-workspace.css:22 有 width:30px;margin-left:auto（1,0,0）——
+   这里只收小尺寸，margin-left:auto 原样保留（不写就不会被覆盖）✓。 */
+#site-menu-panel #site-menu-close {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+/* 10.3 搜索框：轻量化（圆角 10px、无重描边），聚焦时 1px 强调色环 -----------
+   原状：1px #354459 描边 + #0c131d 深底 + focus 时 3px 淡光晕 ⇒ 一整条「重框」。
+   现在：无描边的浅色块（--text 6%），聚焦才出现的 1px --accent 环。
+   ⚠️ 环用 box-shadow 而不是 border：border 会改变盒模型（focus 时内容跳 2px）✗；
+      本节所有「状态环」都遵循这条，和 §6 用 outline 避开布局位移是同一个理由。 */
+#site-menu-panel .site-menu-search-wrap {
+  height: 34px;
+  margin: 0 20px 12px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow: none;
+  color: var(--dim);
+  transition:
+    background-color 160ms var(--mo-out),
+    box-shadow 160ms var(--mo-out),
+    color 160ms var(--mo-out);
+}
+#site-menu-panel .site-menu-search-wrap:focus-within {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: 0 0 0 1px var(--accent);
+  color: var(--text);
+}
+#site-menu-panel #site-menu-search {
+  height: 34px;
+  color: var(--text);
+  font-size: 12px;
+}
+#site-menu-panel #site-menu-search::placeholder {
+  color: var(--dim);
+  opacity: .8;
+}
+
+/* 10.4 两栏：去 body 上边框 + 去左列右边框，改由「20px 外缘 / 8px 内距」分组 ----
+   原来这里是三条 1px 线（body 上、nav 右、卡片外框）把弹窗切成 4 个盒子；
+   现在一条线都不留，靠留白本身表达「左列 / 右卡片区」。 */
+#site-menu-panel .site-menu-body {
+  grid-template-columns: 196px minmax(0, 1fr);
+  border-top: 0;
+}
+#site-menu-panel #site-menu-categories {
+  gap: 1px;
+  padding: 2px 6px 16px 20px;
+  border-right: 0;
+  background: none;
+}
+
+/* 10.5 左侧分类行：无边框列表行（28px 行高），当前项 = 2px 竖条 + 10% 强调底 + 600 --
+   ── 为什么必须把 border / background / box-shadow / transform 四条全写死 ──
+   改前实测（本机 4913 隔离实例，computed）：
+     .site-category（非当前）  background-color rgb(23,32,43)、border-width 1px
+       ⇒ 那个底色根本不是这几行写的，是 html[data-theme] button 的 var(--control)
+          渐变底；它是不透明的，所以看起来「13 个实心胶囊」。
+     悬停（主题层 (0,3,2)）还会 translateY(-1px) + 三层外投影 ⇒ 一列 13 行都在跳。
+   ⇒ 四条一起复位，再给本节自己的「极淡底 + 变色」，全程无边框、无位移。 */
+#site-menu-panel #site-menu-categories .site-category {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dim);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  transform: none;
+  transition:
+    background-color 140ms var(--mo-out),
+    color 140ms var(--mo-out);
+}
+#site-menu-panel #site-menu-categories .site-category:hover:not(:disabled) {
+  border: 0;
+  background-color: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: none;
+  color: var(--text);
+  transform: none;
+}
+#site-menu-panel #site-menu-categories .site-category:active:not(:disabled) {
+  background-color: color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+/* 当前项：10% 强调底 + 600。⚠️ 10% 用 color-mix 显式写，不用 --accent-soft ——
+   后者是 11%/14% 的「语义令牌」，而这一版的设计值就是要 10%（computed 读得到）。 */
+#site-menu-panel #site-menu-categories .site-category.on {
+  border: 0;
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: none;
+  color: var(--text);
+  font-weight: 600;
+  transform: none;
+}
+#site-menu-panel #site-menu-categories .site-category.on:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* 左侧 2px 强调色竖条。沿用 motion-study.css:162 已经建好的 ::before（它已经是
+   absolute + pointer-events:none，不会像网格项那样多占一格、把图标挤歪），
+   只改位置与铺满方式：left:3px→0、top/bottom:6px→5px、opacity .95→1。
+   特异性：(2,1,2) > 原规则的 (1,2,2) ✓。 */
+#site-menu-panel #site-menu-categories .site-category::before {
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 140ms var(--mo-out);
+}
+#site-menu-panel #site-menu-categories .site-category.on::before {
+  opacity: 1;
+}
+/* 拖拽落点：别因为「去底色」把这个状态一起弄没了（原样式是 22% 强调底）。 */
+#site-menu-panel #site-menu-categories .site-category.drag-target {
+  border: 0;
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+/* 分类名：单行省略。
+   ⚠️ 必须写：行高 28px 是固定的（派单要 26~28px 的紧凑行），而名字里有
+      「NAT 服务器（占位）」这种会被 196px 栏宽折成两行的串 —— 实测折行后文字直接压到
+      下一行上（28px 的盒子装不下 2×18.75px 的行盒），这是改完第一版真实出现的缺陷 ✓。
+      这里用 nowrap + ellipsis 把「折行」换成「省略」，高度不参与布局 ⇒ 行高仍精确 28px ✓。
+   ⚠️ 选 span 时只选没有 class 的那个：分类行里 4 个格子的顺序是
+      span.site-category-icon / span（名字，无 class）/ small（计数）/ span.site-category-manage，
+      用 :not([class]) 排除法才不会把图标或 ⋯ 一起当成名字截断 ✓。 */
+#site-menu-panel #site-menu-categories .site-category>span:not([class]) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* emoji 图标：统一 18×18 的格子（原来是 22×22 + 一块 3.5% 的白底 ⇒ 一排「小方块」），
+   去掉方块底色后 13px 的字形才是对齐的主体；字形统一 13px、行高 1、grid 居中。 */
+#site-menu-panel #site-menu-categories .site-category-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 13px;
+  font-style: normal;
+  line-height: 1;
+  opacity: .85;
+}
+#site-menu-panel #site-menu-categories .site-category.on .site-category-icon {
+  opacity: 1;
+}
+
+/* 计数：11px、--dim（派单里的 --pp-ink2 是生活工作台【容器内】的纸感令牌，
+   在网址导航里解析不到 ⇒ 用 App 层的等价令牌 --dim，理由见报告 §偏差）。 */
+#site-menu-panel #site-menu-categories .site-category>small {
+  min-width: 16px;
+  color: var(--dim);
+  font: 500 11px/1 var(--mono);
+  text-align: right;
+  opacity: .75;
+}
+#site-menu-panel #site-menu-categories .site-category.on>small {
+  color: var(--text);
+  font-weight: 600;
+  opacity: .7;
+}
+
+/* 分类行的「⋯」（只有自定义分类有）：默认不显示、悬停才出现，
+   与右侧卡片是同一套规矩。⚠️ 它也是 <button>，所以要显式去边框/去底/去阴影。 */
+#site-menu-panel #site-menu-categories .site-category-manage {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  transform: none;
+  transition:
+    opacity 140ms var(--mo-out),
+    background-color 140ms var(--mo-out),
+    color 140ms var(--mo-out);
+}
+#site-menu-panel #site-menu-categories .site-category:hover .site-category-manage,
+#site-menu-panel #site-menu-categories .site-category .site-category-manage:focus-visible {
+  opacity: 1;
+  color: var(--text);
+}
+#site-menu-panel #site-menu-categories .site-category-manage:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+
+/* 10.6 右栏：结果摘要 11px/--dim，卡片网格 auto-fill 220px ------------------ */
+#site-menu-panel .site-menu-results-wrap {
+  padding: 2px 20px 0 8px;
+}
+#site-menu-panel #site-menu-result-summary {
+  padding: 0 0 8px;
+  color: var(--dim);
+  font: 500 11px/1.4 var(--ui);
+}
+#site-menu-panel #quick-sites {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  padding: 0 0 16px;
+}
+
+/* 10.7 卡片：20px 彩点 + 名称 13/600 + 域名 11/--dim + 悬停才出现的 ⋯，阴影二档 --
+   改前实测：border 1px、border-radius 7px、box-shadow none、min-height 58px、
+   2 列 298.5px、transition 里 4 个 0.12s 硬编码时长 —— 卡片又大又空、还没有层级。
+   现在：无边框、radius 10px、静止 --el-1（贴着纸面）、悬停 --el-2 + 抬 1px。 */
+#site-menu-panel #quick-sites .quick-site {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  box-shadow: var(--el-1);
+  color: var(--text);
+  text-align: left;
+  transition:
+    box-shadow 160ms var(--mo-out),
+    transform 160ms var(--mo-out),
+    background-color 160ms var(--mo-out);
+}
+#site-menu-panel #quick-sites .quick-site:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow: var(--el-2);
+  transform: translateY(-1px);
+}
+/* 按下：保留 motion-study.css:148 那套「陷 1.5%」的反馈（--mo-press），
+   但要压过本节的 :hover 位移 —— 否则 hover 的 (2,2,0) 会把 (0,3,0) 的按下盖掉 ✗。 */
+#site-menu-panel #quick-sites .quick-site:active {
+  transform: translateY(0) scale(var(--mo-press));
+}
+
+/* 彩点 → 20px 的图标格：2 成强调底的圆角方块 + 中间 7px 实心点。
+   原来是 7px 竖排小点 + 10px 外发光 —— 一列看下去就是「语义不明的彩点」，
+   尺寸也只有 7px（对不齐 11px 的字）。 */
+#site-menu-panel #quick-sites .quick-site>i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--site-color, #4f8cff) 20%, transparent);
+  box-shadow: none;
+  font-style: normal;
+}
+#site-menu-panel #quick-sites .quick-site>i::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--site-color, #4f8cff);
+}
+#site-menu-panel #quick-sites .quick-site strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+#site-menu-panel #quick-sites .quick-site small {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+#site-menu-panel #quick-sites .quick-site em {
+  font-size: 10px;
+}
+
+/* 卡片的 ⋯：默认 opacity:0，悬停 / 键盘聚焦才出现（派单要求）。
+   ⚠️ pointer-events:none 是为了「看不见的时候别吃到误点」；
+      悬停时父级已经把它变成 auto，:focus-visible 也单独放行 ⇒ 键盘路径不受影响 ✓。 */
+#site-menu-panel #quick-sites .quick-site .quick-site-manage {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: none;
+  transition:
+    opacity 140ms var(--mo-out),
+    background-color 140ms var(--mo-out),
+    color 140ms var(--mo-out);
+}
+#site-menu-panel #quick-sites .quick-site:hover .quick-site-manage,
+#site-menu-panel #quick-sites .quick-site:focus-within .quick-site-manage,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--text);
+}
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+
+/* 空态：11px/--dim，和摘要同一档字号（原来是 12/10 两级）。 */
+#site-menu-panel .site-menu-empty b {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+#site-menu-panel .site-menu-empty span {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+/* 10.8 页脚：只留一条 1px 分隔线（去掉 -8px 的外投影） --------------------
+   原状：border-top 1px + 0 -8px 20px rgba(0,0,0,.18) 的向上投影 + 9px 字。
+   派单要「提示 11px / 次要墨色，分隔用一条 1px 线，不用投影」。 */
+#site-menu-panel>footer {
+  min-height: 44px;
+  padding: 8px 20px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background: none;
+  box-shadow: none;
+  color: var(--dim);
+  font-size: 11px;
+}
+#site-menu-panel>footer button {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  transform: none;
+  transition:
+    background-color 140ms var(--mo-out),
+    color 140ms var(--mo-out);
+}
+#site-menu-panel>footer button:hover:not(:disabled) {
+  border: 0;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: none;
+  color: var(--accent);
+  transform: none;
+}
+
+/* 10.9 窄屏：把本节自己写的两条几何覆盖在 760px 以下收回去 ----------------
+   ⚠️ 这是本节唯一必须补的一块：study-workspace.css:192 的媒体查询里有
+      .site-menu-body{grid-template-columns:128px minmax(0,1fr)}（0,1,0）和
+      #quick-sites{grid-template-columns:minmax(0,1fr)}（1,0,0）。
+      本节把 .site-menu-body 提到 (1,1,0) ⇒ **会压掉那条 128px**，
+      375px 宽的窗口里左列就会占掉一半多 —— 那是我自己引入的回归，必须在这里收回来。
+      （#quick-sites 不用管：auto-fill minmax(220px,1fr) 在窄屏本来就是 1 列。）
+   ⚠️ 特异性相同时靠「后出现」取胜 ✓（本节在文件最后）。 */
+@media (max-width: 760px) {
+  #site-menu-panel .site-menu-body {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+  #site-menu-panel .site-menu-head {
+    padding: 12px 10px 8px 14px;
+  }
+  #site-menu-panel .site-menu-search-wrap {
+    margin: 0 14px 10px;
+  }
+  #site-menu-panel #site-menu-categories {
+    padding: 2px 4px 12px 14px;
+  }
+  #site-menu-panel .site-menu-results-wrap {
+    padding: 2px 14px 0 6px;
+  }
+  #site-menu-panel>footer {
+    padding: 8px 14px;
+  }
+}
+
+/* 10.10 ♿ reduced-motion：去位移、保留阴影与颜色 --------------------------
+   派单要求：前庭敏感的用户不该看到「卡片抬 1px」这种位移，但静止/悬停的阴影层级
+   与配色是静态视觉，必须原样保留（与 §9 的规矩一致）。
+   ⚠️ 必须 !important：app.css:3828 的全局兜底只把 duration 压到 .01ms，
+      这里要的是「真的没有这一跳」，显式 none 才能拿到 computed transition:none。
+   ⚠️ 只清 transform，不清 box-shadow —— 悬停时 el-1 → el-2 的层级变化照常发生 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  #site-menu-panel .site-menu-head>button,
+  #site-menu-panel .site-menu-search-wrap,
+  #site-menu-panel #site-menu-categories .site-category,
+  #site-menu-panel #site-menu-categories .site-category::before,
+  #site-menu-panel #site-menu-categories .site-category-manage,
+  #site-menu-panel #quick-sites .quick-site,
+  #site-menu-panel #quick-sites .quick-site .quick-site-manage,
+  #site-menu-panel>footer button {
+    transition: none !important;
+  }
+  #site-menu-panel #quick-sites .quick-site:hover,
+  #site-menu-panel #quick-sites .quick-site:active {
+    transform: none !important;
+  }
+}
