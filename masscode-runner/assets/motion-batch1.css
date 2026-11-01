@@ -1839,3 +1839,332 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
     transform: none !important;
   }
 }
+
+/* ═════════════ 13. 全站图标按钮统一（2026-11-01 · 派单「关系图那两颗很突兀」）════
+   现象（用户原话）：关系图面板标题条右侧两颗图标按钮 ▾ / ↩ 「各自带边框、尺寸不一、
+   圆角与其它按钮不统一」，在深色标题条上很突兀。
+
+   ▸ 审计实测（49xx 隔离实例，CDP 强制四态，18 颗图标按钮）：
+     · 圆角：**5 种** —— 4px（#btn-tag-filter）/ 5px（分类行 ⋯）/ 6px（面板头、顶栏 git）/
+       7px（网址面板关闭）/ 8px（树头两个）；
+     · 尺寸：**8 种** —— 18×18 / 20×20 / 21×30 / 22×22 / 26×26 / 27×30 / 28×26 / 35×30.8；
+       最刺眼的就是同一根标题条上相邻的两颗：▾ 是 **21×30**（SVG + padding 0 4px），
+       ↩ 是 **27×30**（裸字 + padding 2px 7px）—— 一颗定尺寸、一颗靠字体撑开，
+       宽度天然差 6px，这就是「尺寸不一」的根因 ✓；
+     · 边框：0 与 1px 混用（面板头 1px、树头 1px、其余 0）—— 用户说的「那圈描边」；
+     · 悬停：一半带 translateY(-1px) + 三到四层外投影（主题皮
+       html[data-theme] button:hover:not(:disabled) = (0,3,2)），
+       另一半被更具体的选择器按住不动 ⇒ 同一排按钮手感都不一样 ✗。
+
+   ▸ 本节只做一件事：把这 18 颗收成**一套语言**，全部靠选择器覆盖 ——
+     不改 DOM、不改 JS、不改任何受棘轮管制的文件 ✓。
+
+   ⚠️ 特异性账（本项目在这上面栽过 9 次，逐条写清楚）：
+      · 主题皮按钮层 html[data-theme] button = **(0,1,2)**；
+        它的 hover / active = html[data-theme] button:hover:not(:disabled) = **(0,3,2)**；
+      · 所以静止态只要 ≥ (0,2,0) 就赢（类数 2 > 1），
+        hover / active 必须再带 :not(:disabled) 才到 (0,4,x) > (0,3,2) ✓；
+      · 但有几处**历史选择器比主题皮更狠**，逐个点名：
+        · #tree-head .side-head-actions button = (1,1,1)（app.css:3598）
+          ⇒ 树头两个必须写成 #tree-head .side-head-actions #btn-collapse-all = (2,1,0)；
+        · #toolbar button = (1,0,1)（app.css:3497）压得住裸 ID (1,0,0)
+          ⇒ 工具栏两个必须写成 #toolbar #btn-nav-back = (2,0,0)；
+        · #pane-tree > #btn-tag-filter = (2,0,0)（ui-kit.css:421）
+          ⇒ 树行那个用同一条 (2,0,0)，靠「本文件在最后加载」取胜 ✓；
+        · #site-menu-panel #site-menu-close = (2,0,0)（本文件 §10.2）
+          ⇒ 写成 #site-menu-panel button#site-menu-close = (2,0,1)；
+        · #site-menu-panel #quick-sites .quick-site .quick-site-manage = (2,2,0)（§10.7）
+          ⇒ 同分靠后出现，**且本节刻意不写 color**（见 13.3 末的说明）；
+        · #site-menu-panel #site-menu-categories .site-category-manage = (2,1,0)（§10.5）
+          ⇒ 本节 (2,2,0) 直接赢 ✓；
+        · #ai-head button = (1,0,1)（app.css:102）把 AI 面板那两颗的字号钉在 11px ——
+          第一版就栽在这：图标量出来还是 11×11（ID 数 1 > 类数 2，裸类选择器压不住）✗
+          ⇒ 必须写成 #ai-head .ai-title-row > .pane-fold = (1,2,0)。
+      · 三个 !important 例外（只在被锁死的几何上）：#btn-git-panel / #btn-tag-filter 的
+        width / height 在 ui-kit.css 里带 !important（22px / 20px），
+        不用 !important 就改不动尺寸 —— 只加在 width/height 两条上，不外溢 ✓。
+      · 全程**没有**改 display 的地方：.pane-merge 的 display 由
+        #outline-list.stack-on > .stack-pane:not(.dock-hidden) .pane-merge (1,3,0) 的显隐规则管，
+        本节一旦写 display 就会把那颗按钮在「不该出现的时候」放出来 ✗（试过，已避开）。
+
+   ▸ 尺寸三档（按所在容器密度选，**同一区域只用一档**）：
+      26px → 面板头（.pane-title / .ai-title-row）、树头（#tree-head）;
+      24px → 树行（#btn-tag-filter）、顶栏（#btn-git-panel）、卡片 ⋯、分类 ⋯;
+      28px → 工具栏（#btn-nav-back / -forward）、弹窗关闭（⌘K 面板 / 网址面板）。
+   ▸ 图标 14~16px（跟着 font-size 走 1em）、颜色 --dim；
+     圆角一律 6px、静止一律「透明底 + 0 边框 + 0 阴影」。 */
+
+/* ── 13.1 底座：几何 / 静止态 / 过渡（18 颗共用一份） ─────────────────────────
+   ⚠️ 这里**不写** line-height 和 font-size —— 它们跟尺寸档走，见 13.2；
+      也不写 display：原因见文件头「没有改 display 的地方」。 */
+.pane-title > .pane-fold,
+.pane-title > .pane-merge,
+#ai-head .ai-title-row > .pane-fold,
+#ai-head .ai-title-row > .pane-merge,
+#tree-head .side-head-actions #btn-collapse-all,
+#tree-head .side-head-actions #btn-expand-all,
+#pane-tree > #btn-tag-filter,
+#toolbar #btn-nav-back,
+#toolbar #btn-nav-forward,
+#btn-git-panel,
+#sym-modal #sym-modal-close,
+#site-menu-panel button#site-menu-close,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage,
+#site-menu-panel #site-menu-categories .site-category-manage {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  color: var(--dim);
+  font-weight: 500;
+  text-align: center;
+  transition:
+    background-color 160ms var(--mo-out),
+    color 160ms var(--mo-out),
+    border-color 160ms var(--mo-out),
+    box-shadow 160ms var(--mo-out),
+    outline-color 160ms var(--mo-out);
+}
+
+/* 有 SVG 的那 15 颗：改成 flex 居中（原来是 inline-grid / 靠 baseline 对齐，混着来）
+   ⚠️ .pane-fold 可以安全给 display —— 它唯一的显隐规则
+      #ai-panel:not(.is-detached) #ai-pane-fold (2,1,0) 仍然压得住这里 (1,2,0) ✓ */
+.pane-title > .pane-fold,
+#ai-head .ai-title-row > .pane-fold,
+#pane-tree > #btn-tag-filter,
+#toolbar #btn-nav-back,
+#toolbar #btn-nav-forward,
+#btn-git-panel,
+#sym-modal #sym-modal-close,
+#site-menu-panel button#site-menu-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 13.2 三档尺寸 ────────────────────────────────────────────────────────── */
+
+/* 26px：面板头（大纲 / 符号 / 关系图 + AI 面板）与树头 —— 这两个区域都是一行标题条，
+   高度 34~37px，26px 的按钮四周还留得出 4~5px 呼吸 ✓。 */
+.pane-title > .pane-fold,
+.pane-title > .pane-merge,
+#ai-head .ai-title-row > .pane-fold,
+#ai-head .ai-title-row > .pane-merge,
+#tree-head .side-head-actions #btn-collapse-all,
+#tree-head .side-head-actions #btn-expand-all {
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 26px;
+}
+/* 树头的图标是 .sb-ico > svg（14px，app.css:3628 定的），不是 .cs-ico ⇒ 落在 14~16 区间 ✓ */
+
+/* 24px：树行 / 顶栏 / 卡片 ⋯ / 分类 ⋯ —— 都贴在 20~28px 的密集行里。 */
+#pane-tree > #btn-tag-filter,
+#btn-git-panel,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage,
+#site-menu-panel #site-menu-categories .site-category-manage {
+  width: 24px !important;   /* !important：ui-kit.css:423 / 455 把它锁成 20 / 22px */
+  height: 24px !important;
+  font-size: 14px;
+  line-height: 24px;
+}
+/* ⚠️ 树行那颗是**绝对定位**在搜索框右端的（ui-kit.css:421-423）：
+   20 → 24 时中心会自己往右下跑 2px，所以把 right/top 各回退 2px，
+   保住原来「24px 处」的视觉中心 ✓（不然放大后图标看起来像歪了）。 */
+#pane-tree > #btn-tag-filter {
+  right: 12px;
+  top: 14px;
+}
+
+/* 28px：工具栏（导航后退 / 前进）与两处弹窗关闭键。
+   工具栏本身的按钮是 30px 高（app.css:3497），28px 刚好比它们矮半档 ✓。 */
+#toolbar #btn-nav-back,
+#toolbar #btn-nav-forward,
+#sym-modal #sym-modal-close,
+#site-menu-panel button#site-menu-close {
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 28px;
+}
+
+/* .cs-ico 是 1em 见方（ui-kit.css:56-58），上面把 font-size 定成 15/14/16
+   ⇒ 图标自然跟着到 15/14/16px。但这两颗在 ui-kit 里被写死了像素尺寸，
+   必须原地改回 1em，否则 font-size 白调 ✗（实测：#btn-tag-filter 停在 12px）。 */
+#btn-git-panel .cs-ico,
+#btn-tag-filter .cs-ico {
+  width: 1em;
+  height: 1em;
+}
+
+/* 裸字按钮（面板头的 ↩、卡片/分类的 ⋯）没有 SVG 撑盒子，靠字号 + 行高居中。
+   两处 .pane-merge 都是 display:inline-block（显隐规则给的），
+   line-height = height ⇒ 字形垂直居中 ✓（不写 display，原因见文件头）。 */
+.pane-title > .pane-merge,
+#ai-head .ai-title-row > .pane-merge,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage,
+#site-menu-panel #site-menu-categories .site-category-manage {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ⚠️ AI 面板那颗写的是「↩ 合并」（四个字符，见 index.html:1019），
+   而旁边的大纲/符号/关系是单字符「↩」。26px 的方盒子塞不下四个字，
+   又不允许改 DOM ⇒ 这里用 overflow:hidden 把多余的「合并」裁掉、
+   留出 6px 左内距让那颗 ↩ 落在视觉中心（26-14=12 ⇒ 一半是 6）。
+   实测 scrollWidth > clientWidth，即确实裁掉了；这是**唯一**一处靠裁切换来的统一，
+   真要彻底干净得把一个字写进 HTML —— 那属于 DOM 改动，本批不做（报告里列为遗留）。 */
+#ai-head .ai-title-row > .pane-merge {
+  text-align: left;
+  padding-left: 6px;
+}
+
+/* ── 13.3 悬停：只提一层 8% 底色 + 图标提到 --text ───────────────────────────
+   ⚠️ 三件「不加」是硬要求：不加边框、不加位移、不加阴影 ——
+      而主题皮 hover (0,3,2) 恰好三件全加（border-color / translateY(-1px) /
+      4 层投影），历史规则 #tree-head .side-head-actions button:hover 也一样
+      （translateY(-1px) + 0 8px 16px）⇒ 必须在这里逐条复位，光写背景是压不住的 ✗。 */
+.pane-title > .pane-fold:hover:not(:disabled),
+.pane-title > .pane-merge:hover:not(:disabled),
+#ai-head .ai-title-row > .pane-fold:hover:not(:disabled),
+#ai-head .ai-title-row > .pane-merge:hover:not(:disabled),
+#tree-head .side-head-actions #btn-collapse-all:hover:not(:disabled),
+#tree-head .side-head-actions #btn-expand-all:hover:not(:disabled),
+#pane-tree > #btn-tag-filter:hover:not(:disabled),
+#toolbar #btn-nav-back:hover:not(:disabled),
+#toolbar #btn-nav-forward:hover:not(:disabled),
+#btn-git-panel:hover:not(:disabled),
+#sym-modal #sym-modal-close:hover:not(:disabled),
+#site-menu-panel button#site-menu-close:hover:not(:disabled),
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:hover:not(:disabled),
+#site-menu-panel #site-menu-categories .site-category-manage:hover:not(:disabled) {
+  border: 0;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: none;
+  transform: none;
+  color: var(--text);
+}
+
+/* 卡片 / 分类的 ⋯ 是「行悬停才淡入」的：§10.5 / §10.7 在父级悬停时把它染成 --text，
+   而本节 13.1 的静止态 (2,2,0) 在那之后 ⇒ 会把那份 --text 又拉回 --dim ✗。
+   这里把「父级悬停 / 键盘聚焦」那一条补回来（同分 + 更靠后 ⇒ 赢）✓。 */
+#site-menu-panel #quick-sites .quick-site:hover .quick-site-manage,
+#site-menu-panel #quick-sites .quick-site:focus-within .quick-site-manage,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:focus-visible,
+#site-menu-panel #site-menu-categories .site-category:hover .site-category-manage,
+#site-menu-panel #site-menu-categories .site-category .site-category-manage:focus-visible {
+  color: var(--text);
+}
+
+/* ── 13.4 按下：12% 底 + 1px 内阴影，**不缩放** ──────────────────────────────
+   ⚠️「不许缩放」是派单硬要求（会抖）：主题皮 active 是
+      transform:translateY(.5px) scale(.985)（0,3,2），树头那份是 scale(.985)。
+      实测改前按住一颗 26px 的按钮，transform 一直在
+      matrix(0.983906,…) 和 matrix(1,…) 之间插值 —— 那就是「抖」的字面来源 ✓。
+      这里 transform:none 一句压死，反馈只剩颜色 + inset。 */
+.pane-title > .pane-fold:active:not(:disabled),
+.pane-title > .pane-merge:active:not(:disabled),
+#ai-head .ai-title-row > .pane-fold:active:not(:disabled),
+#ai-head .ai-title-row > .pane-merge:active:not(:disabled),
+#tree-head .side-head-actions #btn-collapse-all:active:not(:disabled),
+#tree-head .side-head-actions #btn-expand-all:active:not(:disabled),
+#pane-tree > #btn-tag-filter:active:not(:disabled),
+#toolbar #btn-nav-back:active:not(:disabled),
+#toolbar #btn-nav-forward:active:not(:disabled),
+#btn-git-panel:active:not(:disabled),
+#sym-modal #sym-modal-close:active:not(:disabled),
+#site-menu-panel button#site-menu-close:active:not(:disabled),
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:active:not(:disabled),
+#site-menu-panel #site-menu-categories .site-category-manage:active:not(:disabled) {
+  border: 0;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25);
+  transform: none;
+  color: var(--text);
+}
+
+/* ── 13.5 聚焦可见：1px accent 环 ───────────────────────────────────────────
+   用 outline 不用 box-shadow / border：都不参与盒模型 ⇒ 聚焦时按钮不跳 ✓。
+   ⚠️ 必须排在上面 :hover / :active 之后、而且带 :focus-visible 才够分
+      （(0,4,1) 起，压得住主题皮 (0,3,2) 与 #tree-head…:focus-visible (1,1,1)）；
+      树头那份写的是 outline:none + 3px 光晕（app.css:3619-3622）⇒ 这里要连
+      box-shadow 一起复位，否则会同时出现「光晕 + 环」两层 ✗。 */
+.pane-title > .pane-fold:focus-visible,
+.pane-title > .pane-merge:focus-visible,
+#ai-head .ai-title-row > .pane-fold:focus-visible,
+#ai-head .ai-title-row > .pane-merge:focus-visible,
+#tree-head .side-head-actions #btn-collapse-all:focus-visible,
+#tree-head .side-head-actions #btn-expand-all:focus-visible,
+#pane-tree > #btn-tag-filter:focus-visible,
+#toolbar #btn-nav-back:focus-visible,
+#toolbar #btn-nav-forward:focus-visible,
+#btn-git-panel:focus-visible,
+#sym-modal #sym-modal-close:focus-visible,
+#site-menu-panel button#site-menu-close:focus-visible,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:focus-visible,
+#site-menu-panel #site-menu-categories .site-category-manage:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  box-shadow: none;
+}
+
+/* ── 13.6 禁用 ──────────────────────────────────────────────────────────────
+   18 颗里能禁用的其实是工具栏那两颗（#btn-nav-back / -forward，没有历史可回退时
+   app.js 会 disabled=true ✓）。规矩统一写全，其余颗位将来加禁用也自动生效 ✓。 */
+.pane-title > .pane-fold:disabled,
+.pane-title > .pane-merge:disabled,
+#ai-head .ai-title-row > .pane-fold:disabled,
+#ai-head .ai-title-row > .pane-merge:disabled,
+#tree-head .side-head-actions #btn-collapse-all:disabled,
+#tree-head .side-head-actions #btn-expand-all:disabled,
+#pane-tree > #btn-tag-filter:disabled,
+#toolbar #btn-nav-back:disabled,
+#toolbar #btn-nav-forward:disabled,
+#btn-git-panel:disabled,
+#sym-modal #sym-modal-close:disabled,
+#site-menu-panel button#site-menu-close:disabled,
+#site-menu-panel #quick-sites .quick-site .quick-site-manage:disabled,
+#site-menu-panel #site-menu-categories .site-category-manage:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── 13.7 ♿ prefers-reduced-motion：去过渡、保留颜色 ─────────────────────────
+   本节全部的过渡只作用在颜色 / 内阴影 / 环色上，没有位移也没有缩放 ⇒
+   「保留颜色」= 把 transition 关掉即可，静止/悬停/按下的**终点值**一点不动 ✓。 */
+@media (prefers-reduced-motion: reduce) {
+  .pane-title > .pane-fold,
+  .pane-title > .pane-merge,
+  #ai-head .ai-title-row > .pane-fold,
+  #ai-head .ai-title-row > .pane-merge,
+  #tree-head .side-head-actions #btn-collapse-all,
+  #tree-head .side-head-actions #btn-expand-all,
+  #pane-tree > #btn-tag-filter,
+  #toolbar #btn-nav-back,
+  #toolbar #btn-nav-forward,
+  #btn-git-panel,
+  #sym-modal #sym-modal-close,
+  #site-menu-panel button#site-menu-close,
+  #site-menu-panel #quick-sites .quick-site .quick-site-manage,
+  #site-menu-panel #site-menu-categories .site-category-manage {
+    transition: none !important;
+  }
+}
+
+/* ── 13.8 跳过项（必须改 DOM 才统一，本批不动）────────────────────────────────
+   · #btn-new-file / #btn-new-latex / #btn-new-folder（树头「文件 / TeX / 文件夹」）
+     与 #draw-new-manual / #office-new / #reading-import 等：
+     **带文字的按钮**（.sb-ico + .sb-label 两截），不是纯图标按钮 —— 塞进 26px 方盒子
+     会把标签裁没。要统一得把标签改成 tooltip，属于结构改动 ⇒ 跳过 ✓。
+   · #ai-pane-merge 的「合并」二字同理：本节只做到「用 overflow 裁掉多余字」，
+     真正的修法是把它写成一个字符（index.html:1019）—— 属 DOM，跳过 ✓。
+   · #sym-tabs button / #ai-chats-btn 等：同样是文字标签按钮 ✓。
+   · .xmind-toggle / .xmind-grip（思维导图大纲）：那一套自己有一份带 !important 的
+     皮肤（ui-kit.css:530-546），且只在导图浮层里出现，与主界面不同区域 ⇒ 不在本批 ✓。 */
