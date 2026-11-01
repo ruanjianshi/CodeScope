@@ -1883,9 +1883,11 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
       · 三个 !important 例外（只在被锁死的几何上）：#btn-git-panel / #btn-tag-filter 的
         width / height 在 ui-kit.css 里带 !important（22px / 20px），
         不用 !important 就改不动尺寸 —— 只加在 width/height 两条上，不外溢 ✓。
-      · 全程**没有**改 display 的地方：.pane-merge 的 display 由
-        #outline-list.stack-on > .stack-pane:not(.dock-hidden) .pane-merge (1,3,0) 的显隐规则管，
-        本节一旦写 display 就会把那颗按钮在「不该出现的时候」放出来 ✗（试过，已避开）。
+      · display **只有一处例外**（§13.2b 末那条 AI 面板头图标键）：.pane-merge 的 display
+        由 app.css:2983（基础态 display:none）+ app.css:2985-2986 的显隐规则管，
+        在**无条件处**写 display 就会把按钮在「不该出现的时候」放出来 ✗（试过 ✗）。
+        那一处把显隐条件（#outline-list.stack-on > #ai-panel.is-detached）原样镜像进来，
+        只命中「本来就显示」的那一支 ⇒ 放不出来 ✓。其余各颗一律不写 display ✓。
 
    ▸ 尺寸三档（按所在容器密度选，**同一区域只用一档**）：
       26px → 面板头（.pane-title / .ai-title-row）、树头（#tree-head）;
@@ -1895,8 +1897,8 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
      圆角一律 6px、静止一律「透明底 + 0 边框 + 0 阴影」。 */
 
 /* ── 13.1 底座：几何 / 静止态 / 过渡（18 颗共用一份） ─────────────────────────
-   ⚠️ 这里**不写** line-height 和 font-size —— 它们跟尺寸档走，见 13.2；
-      也不写 display：原因见文件头「没有改 display 的地方」。 */
+   ⚠️ 这里**不写** line-height 和 font-size —— 它们跟尺寸档走，见 13.2 / 13.2b；
+      也不写 display：原因见文件头「display 只有一处例外」。 */
 .pane-title > .pane-fold,
 .pane-title > .pane-merge,
 #ai-head .ai-title-row > .pane-fold,
@@ -1950,9 +1952,11 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
 /* ── 13.2 三档尺寸 ────────────────────────────────────────────────────────── */
 
 /* 26px：面板头（大纲 / 符号 / 关系图 + AI 面板）与树头 —— 这两个区域都是一行标题条，
-   高度 34~37px，26px 的按钮四周还留得出 4~5px 呼吸 ✓。 */
+   高度 34~37px，26px 的按钮四周还留得出 4~5px 呼吸 ✓。
+   ⚠️ **只放图标型**：.pane-fold 全是 <svg>，AI 面板头那颗 .pane-merge 这一轮也换成了
+      sprite 图标（index.html:1019 ⇒ #i-swap）✓。文字型 .pane-merge（大纲/符号/关系图）
+      不在这条里，见 13.2b「分型几何」—— 它们的宽高跟着内容走，不再被钉成 26×26 ✗。 */
 .pane-title > .pane-fold,
-.pane-title > .pane-merge,
 #ai-head .ai-title-row > .pane-fold,
 #ai-head .ai-title-row > .pane-merge,
 #tree-head .side-head-actions #btn-collapse-all,
@@ -2003,26 +2007,37 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
   height: 1em;
 }
 
-/* 裸字按钮（面板头的 ↩、卡片/分类的 ⋯）没有 SVG 撑盒子，靠字号 + 行高居中。
-   两处 .pane-merge 都是 display:inline-block（显隐规则给的），
-   line-height = height ⇒ 字形垂直居中 ✓（不写 display，原因见文件头）。 */
-.pane-title > .pane-merge,
-#ai-head .ai-title-row > .pane-merge,
-#site-menu-panel #quick-sites .quick-site .quick-site-manage,
-#site-menu-panel #site-menu-categories .site-category-manage {
-  overflow: hidden;
+/* ── 13.2b 分型几何：图标型 26×26 / 文字型「内容 + padding」──────────────────────
+   ⚠️ 上一轮这里是**一刀切**：所有 .pane-merge 都钉 26×26。而 AI 面板那颗旧写法是
+      「↩ 合并」四个字符（旧 index.html:1019），26px 的方盒子塞不下 ⇒ 靠
+      overflow:hidden + padding-left:6px 把「合并」两个字硬裁掉 ✗
+      （实测 scrollWidth > clientWidth，视觉上只剩半个字 ⇒ 不可接受）。
+   这一轮 AI 那颗换成了 sprite 图标（index.html:1019 → #i-swap）⇒ 几何按**内容类型**分档：
+      · 图标型（有 <svg class="cs-ico"> 撑盒子）：26×26，见 13.2 ✓；
+      · 文字型（大纲 / 符号 / 关系图那三颗单字符「↩」）：width 跟着内容走、
+        min-width 兜住 26px、两侧 padding 给呼吸 ⇒ 既不裁剪也不变形 ✓。
+   ⇒ overflow:hidden **整条取消**：它原来还同时挂在卡片/分类的 ⋯ 上
+      （24×24、单字符、本来就不需要裁），现在没有任何一处还需要它 ✓。 */
+.pane-title > .pane-merge {
+  width: auto;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 26px;
   white-space: nowrap;
 }
 
-/* ⚠️ AI 面板那颗写的是「↩ 合并」（四个字符，见 index.html:1019），
-   而旁边的大纲/符号/关系是单字符「↩」。26px 的方盒子塞不下四个字，
-   又不允许改 DOM ⇒ 这里用 overflow:hidden 把多余的「合并」裁掉、
-   留出 6px 左内距让那颗 ↩ 落在视觉中心（26-14=12 ⇒ 一半是 6）。
-   实测 scrollWidth > clientWidth，即确实裁掉了；这是**唯一**一处靠裁切换来的统一，
-   真要彻底干净得把一个字写进 HTML —— 那属于 DOM 改动，本批不做（报告里列为遗留）。 */
-#ai-head .ai-title-row > .pane-merge {
-  text-align: left;
-  padding-left: 6px;
+/* AI 面板头那颗现在是**图标型**：居中靠 flex 而不是 line-height。
+   ⚠️ display **只写在「这颗按钮本来就该显示」的条件里** —— 原样镜像 app.css:2986 的
+      #outline-list.stack-on > #ai-panel.is-detached .pane-merge。绝不在无条件处写 display：
+      .pane-merge 的基础态是 display:none（app.css:2983，(0,1,0)），而
+      #ai-head .ai-title-row > .pane-merge 是 (1,2,0) ⇒ 无条件写就会把它在标签模式下
+      放出来 ✗（上一轮正因此不敢写）。本规则 (3,3,0) 只命中「已经显示」的那一支 ⇒ 放不出来 ✓。 */
+#outline-list.stack-on > #ai-panel.is-detached #ai-head .ai-title-row > .pane-merge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── 13.3 悬停：只提一层 8% 底色 + 图标提到 --text ───────────────────────────
@@ -2163,8 +2178,15 @@ html[data-theme="light"] #site-menu-panel #quick-sites .quick-site>i {
      与 #draw-new-manual / #office-new / #reading-import 等：
      **带文字的按钮**（.sb-ico + .sb-label 两截），不是纯图标按钮 —— 塞进 26px 方盒子
      会把标签裁没。要统一得把标签改成 tooltip，属于结构改动 ⇒ 跳过 ✓。
-   · #ai-pane-merge 的「合并」二字同理：本节只做到「用 overflow 裁掉多余字」，
-     真正的修法是把它写成一个字符（index.html:1019）—— 属 DOM，跳过 ✓。
-   · #sym-tabs button / #ai-chats-btn 等：同样是文字标签按钮 ✓。
+   · #ai-panel .pane-merge 的「↩ 合并」**本轮已修**（不再是遗留 ✗）：允许改 index.html
+     之后，index.html:1019 换成了 sprite 图标（#i-swap）+ title/aria-label「停靠到标签栏」，
+     几何走 13.2b 的「图标型 26×26」，上一轮的 overflow:hidden 整条删掉 ✓
+     （实测 scrollWidth === clientWidth，不再裁剪 ✓）。
+   · #sym-tabs button（大纲/符号/关系/AI 四颗标签）/ #ai-chats-btn（📋 对话）/
+     #review-close（差异面板「关闭」）：本轮**实测不适用** —— 它们从来不在 26px 方盒子名单里，
+     宽度由内容撑开（各自既有 padding：标签 6px 6px 8px / 对话 3px 7px / 关闭 6px 10px），
+     实测 scrollWidth === clientWidth ⇒ 没有「文字被裁」这回事，保持原样 ✓（附实测宽高）。
+   · 卡片 / 分类的 ⋯（.quick-site-manage / .site-category-manage，24×24）：上一轮那条
+     overflow:hidden 也挂在它们身上，本轮一起撤了 —— 单字符「⋯」14px 在 24px 盒里本来就不裁 ✓。
    · .xmind-toggle / .xmind-grip（思维导图大纲）：那一套自己有一份带 !important 的
      皮肤（ui-kit.css:530-546），且只在导图浮层里出现，与主界面不同区域 ⇒ 不在本批 ✓。 */

@@ -1016,7 +1016,8 @@ window.csLoadScripts = function (list) {
           <div class="ai-title-row">
             <span>🤖 AI 助手</span><span class="sp"></span>
             <button class="pane-fold" id="ai-pane-fold" title="收起 / 展开">▾</button>
-            <button class="pane-merge" title="合并回横向标签栏">↩ 合并</button>
+            <!-- 停靠回标签栏：图标型（sprite #i-swap），几何走 26×26，不再是「↩ 合并」四个字塞方盒子 -->
+            <button class="pane-merge" title="停靠到标签栏" aria-label="停靠到标签栏"><svg class="cs-ico" aria-hidden="true"><use href="#i-swap"/></svg></button>
             <span class="grip">⠿</span>
           </div>
           <div class="ai-actions-row">
