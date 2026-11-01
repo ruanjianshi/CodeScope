@@ -65,9 +65,12 @@ window.csLoadScripts = function (list) {
 <script src="/assets/highlight.min.js" defer></script>
 <!-- xterm 必须在正文中的 Monaco AMD loader 注册 window.define 之前执行，否则 UMD 会被误判为 AMD 模块。 -->
 <script src="/assets/xterm.js"></script>
-<!-- ⊘ 学习工作台（study-workspace.js，39.6 KB）→ **按需注入**（T-10）：
-     只有进「学习工作台」才需要 ✓，首屏一个字节都用不到 ✓。
-     触发点见文末「子系统按需注入 · 懒转发」那段（隐藏的 #btn-study 上挂了个「先注入再代点」）✓。 -->
+<!-- ★ 2026-11-01 回退 T-10 对这一条的懒加载：**顶栏「常用网址」也归它** ——
+     #site-menu-trigger / #site-menu-panel 的交互与 /api/study/site-catalog 的加载都在 study-workspace.js 里，
+     所以懒加载后按钮在、点了没反应、徽标恒为 0（用户报「常用网址出问题了」）✗。
+     与本机管家同一类：**「自建 UI + 顶栏入口」型脚本不能按需注入**，否则入口存在但失效。
+     ⇒ 恢复为同步 defer（+39.6KB 首屏）。其余子系统仍按需注入 ✓。 -->
+<script src="/assets/study-workspace.js" defer></script>
 <!-- 本机管家：一站式本机管理面板（进程/磁盘缓存/软件/服务端口/Docker/开发环境）。
      按钮、面板、样式都由这个脚本在运行时自建，所以 index.html 只留这一行，
      和编辑工作台那边的改动互不覆盖。 -->
